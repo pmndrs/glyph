@@ -45,6 +45,15 @@ pub(crate) struct UpdateBatchResult {
     pub status: u32,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct FailureInfo {
+    pub status: u32,
+    pub fault: FrameFault,
+    pub required_request_capacity: u32,
+    pub required_result_capacity: u32,
+    pub flags: u32,
+}
+
 #[derive(Default)]
 pub(crate) struct UpdateBatchTransport {
     arena: AlignedArena,
@@ -333,21 +342,18 @@ impl FrameTransport {
         &mut self,
         root_id: u32,
         revision: RootRevision,
-        status: u32,
-        fault: FrameFault,
-        required_request_capacity: u32,
-        required_result_capacity: u32,
+        failure: FailureInfo,
     ) -> usize {
         self.write_header(HeaderValues {
-            status,
-            fault,
-            flags: 0,
+            status: failure.status,
+            fault: failure.fault,
+            flags: failure.flags,
             root_id,
             revision,
             required_base_revision: revision.root,
             publication_generation: self.publication_generation,
-            required_request_capacity,
-            required_result_capacity,
+            required_request_capacity: failure.required_request_capacity,
+            required_result_capacity: failure.required_result_capacity,
             codec_handle: 0,
             capability_set: 0,
             codec_fingerprint: 0,
@@ -786,10 +792,11 @@ mod tests {
         let failure = transport.publish_failure(
             3,
             RootRevision { engine: 1, root: 1 },
-            STATUS_INVALID_REQUEST,
-            FrameFault::default(),
-            512,
-            0,
+            FailureInfo {
+                status: STATUS_INVALID_REQUEST,
+                required_request_capacity: 512,
+                ..FailureInfo::default()
+            },
         );
         assert_eq!(failure, first);
         assert_eq!(transport.publication_generation, 1);

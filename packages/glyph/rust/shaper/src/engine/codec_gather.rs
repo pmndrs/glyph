@@ -130,9 +130,44 @@ pub(crate) struct GatherRange {
     end: GatherPosition,
 }
 
+/// Frozen old coordinates and their destination in one replacement envelope.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct GatherCorrespondence {
+    pub(crate) old: GatherRange,
+    pub(crate) next: GatherRange,
+    /// None identifies an authenticated clean gap; a dirty owner carries its paragraph ID.
+    pub(crate) owner: Option<u32>,
+}
+
+impl GatherPosition {
+    fn shifted_after(self, old: Self, next: Self) -> Result<Self, GatherError> {
+        Ok(Self {
+            source: shift_offset(self.source, old.source, next.source)?,
+            record: shift_offset(self.record, old.record, next.record)?,
+        })
+    }
+}
+
+fn shift_offset(value: usize, old: usize, next: usize) -> Result<usize, GatherError> {
+    value
+        .checked_sub(old)
+        .and_then(|offset| next.checked_add(offset))
+        .ok_or(GatherError::AllocationFailed)
+}
+
 impl GatherRange {
-    pub(crate) fn start_position(self) -> GatherPosition {
-        self.start
+    #[cfg(test)]
+    pub(crate) fn records_for_test(records: Range<usize>) -> Self {
+        Self {
+            start: GatherPosition {
+                source: records.start,
+                record: records.start,
+            },
+            end: GatherPosition {
+                source: records.end,
+                record: records.end,
+            },
+        }
     }
 
     pub(crate) fn record_end(self) -> usize {
@@ -148,21 +183,9 @@ impl GatherRange {
     }
 
     pub(crate) fn shifted_after(self, old: Self, next: Self) -> Result<Self, GatherError> {
-        let shift = |value: usize, end: usize, next_end: usize| {
-            value
-                .checked_sub(end)
-                .and_then(|delta| next_end.checked_add(delta))
-                .ok_or(GatherError::AllocationFailed)
-        };
         Ok(Self {
-            start: GatherPosition {
-                source: shift(self.start.source, old.end.source, next.end.source)?,
-                record: shift(self.start.record, old.end.record, next.end.record)?,
-            },
-            end: GatherPosition {
-                source: shift(self.end.source, old.end.source, next.end.source)?,
-                record: shift(self.end.record, old.end.record, next.end.record)?,
-            },
+            start: self.start.shifted_after(old.end, next.end)?,
+            end: self.end.shifted_after(old.end, next.end)?,
         })
     }
 
@@ -280,7 +303,6 @@ impl<'a> RetainedGatherOwner<'a> {
 }
 
 pub(crate) struct RetainedGatherStop {
-    pub(crate) transform_id: u32,
     pub(crate) source_index: usize,
 }
 
@@ -374,6 +396,7 @@ pub struct CodecGatherWorkspace {
     sources: RetainedRope<GatherSource>,
     semantic_change_masks: Vec<u16>,
     dirty_mask_ranges: Vec<Range<usize>>,
+    correspondence: Vec<GatherCorrespondence>,
     retained_output_intervals: bool,
     bounds_changed: bool,
     f32_fields: Vec<AlignedField<f32>>,
@@ -459,6 +482,7 @@ impl CodecGatherWorkspace {
         record_capacity: usize,
     ) -> Result<bool, GatherError> {
         self.reserve_codec(codec, record_capacity)?;
+        self.correspondence.clear();
         self.retained_cursor = 0;
         self.retained_source_cursor = 0;
         let retained_len = self.glyphs.len();
@@ -644,11 +668,6 @@ impl CodecGatherWorkspace {
             self.retained_source_cursor = state.source_cursor;
             if let Some(index) = state.rebuild {
                 return Ok(Some(RetainedGatherStop {
-                    transform_id: current
-                        .as_ref()
-                        .ok_or(GatherError::InvalidSemanticShape)?
-                        .input
-                        .transform_id,
                     source_index: index,
                 }));
             }
@@ -672,7 +691,6 @@ impl CodecGatherWorkspace {
                 self.retained_source_cursor = end.source;
                 if owner.range.source_count() != owner.input.glyphs.len() {
                     return Ok(Some(RetainedGatherStop {
-                        transform_id: owner.input.transform_id,
                         source_index: end.source - owner.range.start.source,
                     }));
                 }
@@ -734,10 +752,12 @@ impl CodecGatherWorkspace {
                     return Ok(RopeUpdate::Stop);
                 }
                 let previous = *previous;
-                let (_, [inline_start, block_start]) = plan_glyph_placement(input, glyph_index)?;
+                let (semantic_id, [inline_start, block_start]) =
+                    plan_glyph_placement(input, glyph_index)?;
                 self.replace_glyph(
                     state.record_cursor,
                     PlanGlyph {
+                        semantic_id,
                         inline_start,
                         block_start,
                         ..previous
@@ -937,7 +957,7 @@ impl CodecGatherWorkspace {
             }
             *value = semantic_f32(source.field, input, glyph_index)?;
         }
-        let (_, [inline_start, block_start]) = plan_glyph_placement(input, glyph_index)?;
+        let (semantic_id, [inline_start, block_start]) = plan_glyph_placement(input, glyph_index)?;
         for (field, value) in values
             .iter()
             .copied()
@@ -957,6 +977,7 @@ impl CodecGatherWorkspace {
             output_index,
             PlanGlyph {
                 content_revision: glyph.content_revision,
+                semantic_id,
                 inline_start,
                 block_start,
                 ..previous
@@ -1006,10 +1027,11 @@ impl CodecGatherWorkspace {
         true
     }
 
-    // Absolute ink bounds are gather metadata, not local Codec input dirt.
+    // Ink bounds and cluster ordinals are gather metadata, not local Codec input dirt.
     fn replace_glyph(&mut self, index: usize, next: PlanGlyph) {
         let previous = self.glyphs[index];
-        let changed = previous.inline_start.to_bits() != next.inline_start.to_bits()
+        let changed = previous.semantic_id != next.semantic_id
+            || previous.inline_start.to_bits() != next.inline_start.to_bits()
             || previous.block_start.to_bits() != next.block_start.to_bits()
             || previous.inline_extent.to_bits() != next.inline_extent.to_bits()
             || previous.block_extent.to_bits() != next.block_extent.to_bits();
@@ -1031,50 +1053,200 @@ impl CodecGatherWorkspace {
 
     /// The planner authenticates one changed owner and its otherwise unchanged suffix.
     /// Reuse the ordinary row writer, then splice its appended rows into the old owner.
-    pub(crate) fn replace_retained_owner<'binding>(
+    pub(crate) fn correspondence(&self) -> &[GatherCorrespondence] {
+        &self.correspondence
+    }
+
+    pub(crate) fn replace_retained_owners<'owner, 'binding>(
         &mut self,
         codec: &ValidatedCodec,
         capability_set: CapabilitySetId,
-        input: LayoutPlanInput<'_>,
-        old: GatherRange,
-        binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
+        owners: impl Iterator<Item = Result<RetainedGatherOwner<'owner>, GatherError>> + Clone,
+        mut binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
     ) -> Result<GatherRange, GatherError> {
-        if old.start != self.position()
-            || old.end.source > self.sources.len()
-            || old.end.record > self.glyphs.len()
+        let source_len = self.sources.len();
+        let record_len = self.glyphs.len();
+        let first = owners
+            .clone()
+            .next()
+            .ok_or(GatherError::InvalidSemanticShape)??;
+        let mut old = first.range;
+        let mut previous = old.start;
+        let mut appended_capacity = 0usize;
+        let mut owner_count = 0usize;
+        let mut dirty_index = 0usize;
+        for owner in owners.clone() {
+            let owner = owner?;
+            let range = owner.range;
+            if range.start.source < previous.source
+                || range.start.record < previous.record
+                || range.end.source < range.start.source
+                || range.end.record < range.start.record
+                || range.end.source > source_len
+                || range.end.record > record_len
+            {
+                return Err(GatherError::InvalidSemanticShape);
+            }
+            while self
+                .dirty_mask_ranges
+                .get(dirty_index)
+                .is_some_and(|mask| mask.end <= previous.record)
+            {
+                dirty_index += 1;
+            }
+            if range.start.record > previous.record
+                && self
+                    .dirty_mask_ranges
+                    .get(dirty_index)
+                    .is_some_and(|mask| mask.start < range.start.record)
+            {
+                return Err(GatherError::InvalidSemanticShape);
+            }
+            appended_capacity = appended_capacity
+                .checked_add(range.start.record - previous.record)
+                .and_then(|count| count.checked_add(owner.input.glyphs.len()))
+                .ok_or(GatherError::AllocationFailed)?;
+            previous = range.end;
+            owner_count += 1;
+        }
+        old.end = previous;
+        if self
+            .dirty_mask_ranges
+            .iter()
+            .any(|mask| mask.start < old.start.record || mask.end > old.end.record)
         {
             return Err(GatherError::InvalidSemanticShape);
         }
-        if old.end.source == self.sources.len() && old.end.record == self.glyphs.len() {
+        self.correspondence.clear();
+        reserve(
+            &mut self.correspondence,
+            owner_count
+                .checked_mul(2)
+                .ok_or(GatherError::AllocationFailed)?,
+        )?;
+        // Every prior write belongs to a frontier owner in this envelope. Clean gaps have no dirt.
+        self.dirty_mask_ranges.clear();
+        if owner_count == 1 && old.end.source == source_len && old.end.record == record_len {
+            self.reserve_codec(
+                codec,
+                old.start
+                    .record
+                    .checked_add(first.input.glyphs.len())
+                    .ok_or(GatherError::AllocationFailed)?,
+            )?;
+            self.retained_source_cursor = old.start.source;
+            self.retained_cursor = old.start.record;
             self.truncate_to_retained_prefix()?;
-            self.append_from(codec, capability_set, input, 0, binding_for_font)?;
-            return Ok(self.range_since(old.start));
+            #[cfg(test)]
+            super::work_attribution::record(|work| work.gather_paragraph_visits += 1);
+            self.append_from(
+                codec,
+                capability_set,
+                first.input(),
+                0,
+                &mut binding_for_font,
+            )?;
+            let next = self.range_since(old.start);
+            self.correspondence.push(GatherCorrespondence {
+                old,
+                next,
+                owner: Some(first.input.transform_id),
+            });
+            return Ok(next);
         }
-        let source_len = self.sources.len();
-        let record_len = self.glyphs.len();
-        let capacity = record_len
-            .checked_add(input.glyphs.len())
-            .ok_or(GatherError::AllocationFailed)?;
-        self.reserve_codec(codec, capacity)?;
+        self.reserve_codec(
+            codec,
+            record_len
+                .checked_add(appended_capacity)
+                .ok_or(GatherError::AllocationFailed)?,
+        )?;
         let old_sources = self.sources.clone();
-        self.append_from(codec, capability_set, input, 0, binding_for_font)?;
+        let destination = |position: GatherPosition| {
+            position.shifted_after(
+                GatherPosition {
+                    source: source_len,
+                    record: record_len,
+                },
+                old.start,
+            )
+        };
+        previous = old.start;
+        for owner in owners {
+            let owner = owner?;
+            let gap = GatherRange {
+                start: previous,
+                end: owner.range.start,
+            };
+            if gap.start != gap.end {
+                let start = GatherPosition {
+                    source: self.sources.len(),
+                    record: self.glyphs.len(),
+                };
+                self.sources
+                    .append_shared_range(&old_sources, gap.start.source..gap.end.source)
+                    .map_err(|()| GatherError::AllocationFailed)?;
+                let rows = gap.start.record..gap.end.record;
+                self.glyphs.extend_from_within(rows.clone());
+                self.placement_slots.extend_from_within(rows.clone())?;
+                self.semantic_change_masks.resize(self.glyphs.len(), 0);
+                for field in &mut self.f32_fields {
+                    field.extend_from_within(rows.clone())?;
+                }
+                for field in &mut self.u32_fields {
+                    field.extend_from_within(rows.clone())?;
+                }
+                let end = GatherPosition {
+                    source: self.sources.len(),
+                    record: self.glyphs.len(),
+                };
+                self.correspondence.push(GatherCorrespondence {
+                    old: gap,
+                    next: GatherRange {
+                        start: destination(start)?,
+                        end: destination(end)?,
+                    },
+                    owner: None,
+                });
+                #[cfg(test)]
+                super::work_attribution::record(|work| {
+                    work.gather_retained_gap_rows += gap.end.record - gap.start.record
+                });
+            }
+            let start = GatherPosition {
+                source: self.sources.len(),
+                record: self.glyphs.len(),
+            };
+            #[cfg(test)]
+            super::work_attribution::record(|work| work.gather_paragraph_visits += 1);
+            self.append_from(
+                codec,
+                capability_set,
+                owner.input(),
+                0,
+                &mut binding_for_font,
+            )?;
+            let end = GatherPosition {
+                source: self.sources.len(),
+                record: self.glyphs.len(),
+            };
+            self.correspondence.push(GatherCorrespondence {
+                old: owner.range,
+                next: GatherRange {
+                    start: destination(start)?,
+                    end: destination(end)?,
+                },
+                owner: Some(owner.input.transform_id),
+            });
+            previous = owner.range.end;
+        }
         let next = GatherRange {
             start: old.start,
-            end: GatherPosition {
-                source: old
-                    .start
-                    .source
-                    .checked_add(self.sources.len() - source_len)
-                    .ok_or(GatherError::AllocationFailed)?,
-                record: old
-                    .start
-                    .record
-                    .checked_add(self.glyphs.len() - record_len)
-                    .ok_or(GatherError::AllocationFailed)?,
-            },
+            end: destination(GatherPosition {
+                source: self.sources.len(),
+                record: self.glyphs.len(),
+            })?,
         };
-        // All fallible tree work precedes aligned lane mutation. A failed row/tree
-        // preparation remains cache-invalid and is rebuilt by the existing abort/retry.
+        // Complete the fallible rope work before the one net-delta splice of initialized lanes.
         let mut sources = RetainedRope::default();
         sources
             .append_shared_range(&old_sources, 0..old.start.source)
@@ -1085,36 +1257,33 @@ impl CodecGatherWorkspace {
         sources
             .append_shared_range(&old_sources, old.end.source..source_len)
             .map_err(|()| GatherError::AllocationFailed)?;
-        let old_records = old.start.record..old.end.record;
-        splice_appended(&mut self.glyphs, old_records.clone(), record_len);
-        splice_appended(
-            &mut self.semantic_change_masks,
-            old_records.clone(),
-            record_len,
-        );
+        let rows = old.start.record..old.end.record;
+        splice_appended(&mut self.glyphs, rows.clone(), record_len);
+        splice_appended(&mut self.semantic_change_masks, rows.clone(), record_len);
         self.placement_slots
-            .splice_appended(old_records.clone(), record_len);
+            .splice_appended(rows.clone(), record_len);
         for field in &mut self.f32_fields {
-            field.splice_appended(old_records.clone(), record_len);
+            field.splice_appended(rows.clone(), record_len);
         }
         for field in &mut self.u32_fields {
-            field.splice_appended(old_records.clone(), record_len);
+            field.splice_appended(rows.clone(), record_len);
         }
-        // Retained begin cleared old masks. This one-owner transaction has only
-        // the appended replacement's dirty runs, now rebased to its emitted position.
         for range in &mut self.dirty_mask_ranges {
-            range.start = range.start - record_len + old.start.record;
-            range.end = range.end - record_len + old.start.record;
+            range.start = shift_offset(range.start, record_len, old.start.record)?;
+            range.end = shift_offset(range.end, record_len, old.start.record)?;
         }
         self.sources = sources;
-        self.retained_source_cursor = next.end.source;
-        self.retained_cursor = next.end.record;
+        self.retained_source_cursor = self.sources.len();
+        self.retained_cursor = self.glyphs.len();
         self.retained_output_intervals = false;
         self.bounds_changed = true;
+        #[cfg(test)]
+        super::work_attribution::record(|work| work.gather_envelope_splices += 1);
         Ok(next)
     }
 
     pub fn truncate_to_retained_prefix(&mut self) -> Result<(), GatherError> {
+        self.correspondence.clear();
         self.sources
             .truncate(self.retained_source_cursor)
             .map_err(|_| GatherError::AllocationFailed)?;
@@ -1556,6 +1725,7 @@ impl CodecGatherWorkspace {
         self.sources.clear();
         self.semantic_change_masks.clear();
         self.dirty_mask_ranges.clear();
+        self.correspondence.clear();
         self.retained_output_intervals = false;
         self.bounds_changed = false;
         for field in &mut self.f32_fields {
@@ -1569,9 +1739,26 @@ impl CodecGatherWorkspace {
 
 fn move_appended<T: Copy>(values: &mut [T], old: Range<usize>, previous_len: usize) -> usize {
     let appended = values.len() - previous_len;
-    values[old.start..].rotate_right(appended);
-    // [prefix, new, old, suffix] -> [prefix, new, suffix]; old rows are discarded.
-    values.copy_within(old.end + appended.., old.start + appended);
+    if appended <= old.len() {
+        // The replacement fits the removed range, so moving the suffix cannot overwrite it.
+        values.copy_within(previous_len.., old.start);
+        if appended != old.len() {
+            #[cfg(test)]
+            super::work_attribution::record(|work| {
+                work.gather_suffix_copy_bytes +=
+                    (previous_len - old.end) * core::mem::size_of::<T>();
+            });
+            values.copy_within(old.end..previous_len, old.start + appended);
+        }
+    } else {
+        values[old.start..].rotate_right(appended);
+        // [prefix, new, old, suffix] -> [prefix, new, suffix]; old rows are discarded.
+        #[cfg(test)]
+        super::work_attribution::record(|work| {
+            work.gather_suffix_copy_bytes += (previous_len - old.end) * core::mem::size_of::<T>();
+        });
+        values.copy_within(old.end + appended.., old.start + appended);
+    }
     values.len() - old.len()
 }
 
@@ -1635,6 +1822,27 @@ impl<T: Copy + Default> AlignedField<T> {
     fn clear(&mut self) {
         self.blocks.clear();
         self.len = 0;
+    }
+
+    fn extend_from_within(&mut self, range: Range<usize>) -> Result<(), GatherError> {
+        if range.start > range.end || range.end > self.len {
+            return Err(GatherError::InvalidSemanticShape);
+        }
+        let previous_len = self.len;
+        let len = previous_len
+            .checked_add(range.len())
+            .ok_or(GatherError::AllocationFailed)?;
+        self.reserve(len)?;
+        self.blocks.resize_with(len.div_ceil(4), || AlignedBlock {
+            values: [T::default(); 4],
+        });
+        // SAFETY: only 32-bit scalars instantiate this field. Every block is initialized;
+        // exclusive access prevents aliases or relocation, and both ranges are within len.
+        let values =
+            unsafe { core::slice::from_raw_parts_mut(self.blocks.as_mut_ptr().cast::<T>(), len) };
+        values.copy_within(range, previous_len);
+        self.len = len;
+        Ok(())
     }
 
     fn splice_appended(&mut self, old: Range<usize>, previous_len: usize) {
@@ -1963,6 +2171,45 @@ mod tests {
         render_plan_wire::plan_layout,
     };
     use alloc::vec;
+
+    #[test]
+    fn appended_splice_matches_range_composition() {
+        for previous_len in 0..=8 {
+            for start in 0..=previous_len {
+                for end in start..=previous_len {
+                    for appended in 0..=8 {
+                        let previous: Vec<u32> = (0..previous_len as u32).collect();
+                        let replacement: Vec<u32> = (100..100 + appended as u32).collect();
+                        let expected: Vec<_> = previous[..start]
+                            .iter()
+                            .chain(&replacement)
+                            .chain(&previous[end..])
+                            .copied()
+                            .collect();
+                        let mut values = previous.clone();
+                        values.extend_from_slice(&replacement);
+                        let mut aligned = AlignedField::<u32>::default();
+                        aligned.reserve(values.len()).unwrap();
+                        for value in &values {
+                            aligned.push(*value).unwrap();
+                        }
+                        super::super::work_attribution::reset();
+                        splice_appended(&mut values, start..end, previous_len);
+                        aligned.splice_appended(start..end, previous_len);
+                        assert_eq!(values, expected);
+                        assert_eq!(aligned.as_slice(), expected);
+                        if appended == end - start {
+                            assert_eq!(
+                                super::super::work_attribution::snapshot().gather_suffix_copy_bytes,
+                                0,
+                                "equal-count replacement must leave the suffix in place"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     const CAPABILITY: CapabilitySetId = CapabilitySetId(1);
     const TEST_POSITIONED_SEMANTICS: [PositionedSemanticGlyph; 2] = [
@@ -2614,6 +2861,27 @@ mod tests {
             })
             .unwrap();
         assert!(!retained.bounds_changed());
+        let mut semantic_glyphs = input.semantic_glyphs.to_vec();
+        semantic_glyphs[0].cluster += 1;
+        let reindexed = LayoutPlanInput {
+            semantic_glyphs: &semantic_glyphs,
+            ..input
+        };
+        assert!(retained.begin_retained(&codec, 2).unwrap());
+        retained
+            .append_retained(&codec, CAPABILITY, reindexed, |_| {
+                panic!("derived cluster ordinals do not change raster selection")
+            })
+            .unwrap();
+        assert!(retained.bounds_changed());
+        assert_eq!(
+            retained.changed_output_intervals(),
+            Some(core::slice::from_ref(&(0..1)))
+        );
+        fresh
+            .gather(&codec, CAPABILITY, reindexed, |_| Some(&binding))
+            .unwrap();
+        assert_range_gather_equal(&retained, &fresh);
         retained.truncate_to_retained_prefix().unwrap();
         assert!(retained.bounds_changed());
         retained.clear();
@@ -3032,6 +3300,26 @@ mod tests {
             "recordless glyph deleted inside a paragraph",
             &[(1, &[layout_glyph(1, 0), space(2), layout_glyph(3, 1)], &[])],
             &[(1, &[layout_glyph(1, 0), layout_glyph(3, 1)], &[0, 0])],
+            false,
+        );
+        planner_matches_fresh(
+            "recordless glyph inserted at the front",
+            &[(1, &[layout_glyph(2, 0), layout_glyph(3, 1)], &[])],
+            &[(
+                1,
+                &[space(1), layout_glyph(2, 0), layout_glyph(3, 1)],
+                &[ALL_SEMANTIC_CHANGES, MOVED, MOVED],
+            )],
+            false,
+        );
+        planner_matches_fresh(
+            "recordless glyph inserted in the middle",
+            &[(1, &[layout_glyph(1, 0), layout_glyph(3, 1)], &[])],
+            &[(
+                1,
+                &[layout_glyph(1, 0), space(2), layout_glyph(3, 1)],
+                &[0, ALL_SEMANTIC_CHANGES, MOVED],
+            )],
             false,
         );
 
@@ -3648,7 +3936,7 @@ mod tests {
             .append_retained_stream(&codec, CAPABILITY, scopes, |_| Some(&binding))
             .unwrap()
             .unwrap();
-        assert_eq!((stop.transform_id, stop.source_index), (2, 4));
+        assert_eq!(stop.source_index, 4);
         workspace.truncate_to_retained_prefix().unwrap();
         for owner in 1..3 {
             workspace
@@ -3837,7 +4125,7 @@ mod tests {
                 .unwrap()
                 .unwrap();
             let retained = old_count.min(next_count);
-            assert_eq!((stop.transform_id, stop.source_index), (1, retained));
+            assert_eq!(stop.source_index, retained);
             assert_eq!(
                 (workspace.retained_source_cursor, workspace.retained_cursor),
                 (retained, retained)
@@ -4107,6 +4395,144 @@ mod tests {
     }
 
     #[test]
+    fn mixed_owner_envelope_reuses_clean_gaps_after_a_retained_stop() {
+        let codec = codec();
+        let binding = binding();
+        let semantics = [
+            TEST_POSITIONED_SEMANTICS[0],
+            PositionedSemanticGlyph {
+                cluster: 102,
+                ..TEST_POSITIONED_SEMANTICS[0]
+            },
+        ];
+        let before = vec![
+            vec![layout_glyph(1, 0)],
+            vec![layout_glyph(2, 0)],
+            vec![layout_glyph(3, 0), layout_glyph(4, 2)],
+            vec![layout_glyph(5, 0)],
+            vec![],
+            vec![layout_glyph(7, 0), layout_glyph(8, 1)],
+            vec![layout_glyph(9, 2)],
+            vec![layout_glyph(10, 0)],
+        ];
+        let mut after = before.clone();
+        after[1][0].semantic_glyph_index = 1;
+        after[3].push(layout_glyph(6, 1));
+        after[5].pop();
+        after[6][0] = layout_glyph(9, 0);
+        let dirty = [1, 3, 5, 6];
+        for (previous, desired) in [(&before, &after), (&after, &before)] {
+            let mut workspace = CodecGatherWorkspace::default();
+            workspace.begin(&codec, 32).unwrap();
+            let mut ranges = Vec::new();
+            for (index, glyphs) in previous.iter().enumerate() {
+                let start = workspace.position();
+                workspace
+                    .append(
+                        &codec,
+                        CAPABILITY,
+                        LayoutPlanInput {
+                            transform_id: index as u32 + 1,
+                            semantic_glyphs: &semantics,
+                            ..range_input(glyphs, &[0; 3])
+                        },
+                        |_| Some(&binding),
+                    )
+                    .unwrap();
+                ranges.push(workspace.range_since(start));
+            }
+            assert!(workspace.begin_retained(&codec, 32).unwrap());
+            let owners = dirty.iter().map(|&index| {
+                Ok(RetainedGatherOwner {
+                    range: ranges[index],
+                    input: LayoutPlanInput {
+                        transform_id: index as u32 + 1,
+                        semantic_glyphs: &semantics,
+                        ..range_input(
+                            &desired[index],
+                            if index == 1 {
+                                &[0; 3]
+                            } else {
+                                &[ALL_SEMANTIC_CHANGES; 3]
+                            },
+                        )
+                    },
+                    intervals: None,
+                    tables: None,
+                })
+            });
+            assert!(
+                workspace
+                    .append_retained_stream(&codec, CAPABILITY, owners.clone(), |_| Some(&binding))
+                    .unwrap()
+                    .is_some()
+            );
+            super::super::work_attribution::reset();
+            workspace
+                .replace_retained_owners(&codec, CAPABILITY, owners, |_| Some(&binding))
+                .unwrap();
+            assert!(workspace.finish_retained());
+            let work = super::super::work_attribution::snapshot();
+            assert_eq!(
+                work.gather_glyph_visits,
+                dirty
+                    .iter()
+                    .map(|&index| desired[index].len())
+                    .sum::<usize>()
+            );
+            assert_eq!(work.gather_envelope_splices, 1);
+            assert_eq!(work.gather_retained_gap_rows, 1);
+            assert_eq!(
+                workspace
+                    .correspondence()
+                    .iter()
+                    .filter_map(|entry| entry.owner)
+                    .collect::<Vec<_>>(),
+                vec![2, 4, 6, 7]
+            );
+            let mut cold = CodecGatherWorkspace::default();
+            cold.begin(&codec, 32).unwrap();
+            for (index, glyphs) in desired.iter().enumerate() {
+                let masks = if dirty.contains(&index) && index != 1 {
+                    &[ALL_SEMANTIC_CHANGES; 3]
+                } else {
+                    &[0; 3]
+                };
+                cold.append(
+                    &codec,
+                    CAPABILITY,
+                    LayoutPlanInput {
+                        transform_id: index as u32 + 1,
+                        semantic_glyphs: &semantics,
+                        ..range_input(glyphs, masks)
+                    },
+                    |_| Some(&binding),
+                )
+                .unwrap();
+            }
+            assert_range_gather_equal(&workspace, &cold);
+            assert_eq!(workspace.sources, cold.sources);
+            let all = GatherRange {
+                start: GatherPosition {
+                    source: 0,
+                    record: 0,
+                },
+                end: workspace.position(),
+            };
+            assert!(workspace.begin_retained(&codec, 32).unwrap());
+            assert!(workspace.correspondence().is_empty());
+            assert!(workspace.retain_unchanged(all));
+            assert!(workspace.finish_retained());
+            assert!(
+                workspace
+                    .semantic_change_masks
+                    .iter()
+                    .all(|mask| *mask == 0)
+            );
+        }
+    }
+
+    #[test]
     fn unchanged_ranges_skip_glyph_walks_and_clear_previous_deltas() {
         let codec = codec();
         let binding = binding();
@@ -4204,6 +4630,7 @@ mod tests {
             ),
         ];
         let suffix = [layout_glyph(4, 0), layout_glyph(5, 1)];
+        let mut saw_equal_record_count = false;
         for (before, after) in &cases {
             let mut retained = CodecGatherWorkspace::default();
             retained.begin(&codec, 16).unwrap();
@@ -4278,9 +4705,35 @@ mod tests {
             assert!(preserved.begin_retained(&codec, 16).unwrap());
             super::super::work_attribution::reset();
             let next = preserved
-                .replace_retained_owner(&codec, CAPABILITY, input, owner, |_| Some(&binding))
+                .replace_retained_owners(
+                    &codec,
+                    CAPABILITY,
+                    core::iter::once(Ok(RetainedGatherOwner {
+                        range: owner,
+                        input,
+                        intervals: None,
+                        tables: None,
+                    })),
+                    |_| Some(&binding),
+                )
                 .unwrap();
-            assert!(preserved.retain_unchanged(suffix_range.shifted_after(owner, next).unwrap()));
+            if owner.record_end() - owner.record_start() == next.record_end() - next.record_start()
+            {
+                assert_ne!(before.len(), after.len());
+                assert_eq!(
+                    super::super::work_attribution::snapshot().gather_suffix_copy_bytes,
+                    0,
+                    "source-count change with equal record count leaves packed suffix bytes in place"
+                );
+                saw_equal_record_count = true;
+            }
+            assert_eq!(
+                suffix_range
+                    .shifted_after(owner, next)
+                    .unwrap()
+                    .record_end(),
+                preserved.glyphs.len()
+            );
             assert!(preserved.finish_retained());
             assert!(preserved.changed_output_intervals().is_none());
             assert_eq!(
@@ -4301,6 +4754,7 @@ mod tests {
             assert_range_gather_equal(&preserved, &fresh);
             assert_eq!(preserved.sources, fresh.sources);
         }
+        assert!(saw_equal_record_count);
     }
 
     #[test]
@@ -4417,13 +4871,23 @@ mod tests {
                             replaced = true;
                             let old = ranges[index].unwrap();
                             let next = workspace
-                                .replace_retained_owner(&codec, CAPABILITY, input, old, |_| {
-                                    Some(&binding)
-                                })
+                                .replace_retained_owners(
+                                    &codec,
+                                    CAPABILITY,
+                                    core::iter::once(Ok(RetainedGatherOwner {
+                                        range: old,
+                                        input,
+                                        intervals: None,
+                                        tables: None,
+                                    })),
+                                    |_| Some(&binding),
+                                )
                                 .unwrap();
                             for range in &mut ranges[index + 1..] {
                                 *range = Some(range.unwrap().shifted_after(old, next).unwrap());
                             }
+                            ranges[index] = Some(next);
+                            break;
                         } else if retaining {
                             let scope = (index == edited)
                                 .then_some(edited_source)
@@ -4646,17 +5110,12 @@ mod tests {
         let incremental_input = incremental_view.plan_input();
         let fresh_input = fresh_view.plan_input();
         assert_eq!(
-            incremental_input
-                .glyphs
-                .iter()
-                .map(|glyph| (glyph.stable_id, glyph.transform_id))
-                .collect::<Vec<_>>(),
-            fresh_input
-                .glyphs
-                .iter()
-                .map(|glyph| (glyph.stable_id, glyph.transform_id))
-                .collect::<Vec<_>>(),
-            "{label}: records"
+            incremental_input.glyphs, fresh_input.glyphs,
+            "{label}: complete records"
+        );
+        assert_eq!(
+            incremental_input.placement_slots, fresh_input.placement_slots,
+            "{label}: slots"
         );
         assert_eq!(
             incremental_input.f32_fields, fresh_input.f32_fields,
@@ -4665,6 +5124,10 @@ mod tests {
         assert_eq!(
             incremental_input.u32_fields, fresh_input.u32_fields,
             "{label}: u32 registers"
+        );
+        assert_eq!(
+            incremental.sources, fresh.sources,
+            "{label}: source identities"
         );
     }
 

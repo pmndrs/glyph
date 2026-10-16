@@ -1,25 +1,12 @@
-//! One pipeline stage's committed value beside its optional pending replacement.
+//! One semantic stage's committed value and reusable pending scratch.
 //!
-//! A retained paragraph carries every stage twice: what the retained plan has committed, and
-//! what an in-flight update has prepared. Holding those as three independent fields —
-//! `value`, `pending_value`, and a `value_prepared` flag — spreads one indivisible fact
-//! across three places and leaves the selection to be written out by hand at every read
-//! site. That idiom appeared over sixty times in the engine, and each occurrence was an
-//! opportunity to read the committed value where the pending one was live, or to leave a
-//! flag set over a buffer that no longer described anything.
-//!
-//! [`Staged`] makes the trio one value with one way to read it. It also has to be a type
-//! rather than an accessor method on the paragraph: `self.active_clusters()` would borrow
-//! the whole paragraph and collide with the mutable borrow of the stage being written,
-//! which is precisely why the hand-written selectors were inlined in the first place.
-//! `self.clusters.active()` borrows one field, so the natural expression is also the one
-//! that compiles.
+//! Preparation writes pending storage, marks it complete, then commits by swapping.
+//! Semantic acceptance is separate from renderer publication. Field-local accessors
+//! allow one stage to derive its output while borrowing another stage's active input.
 
 /// A stage value that may have a prepared replacement waiting to commit.
 ///
-/// `T: Default` covers construction; every arena in the engine is default-constructible
-/// and reused rather than reallocated, which is why `abort` and `commit` return buffers to
-/// the pool instead of dropping them.
+/// Commit retains the previous value as scratch; each arena owns its capacity policy.
 #[derive(Default)]
 pub(crate) struct Staged<T> {
     committed: T,
@@ -48,9 +35,7 @@ impl<T> Staged<T> {
         }
     }
 
-    /// The last committed value, ignoring anything in flight. Used where a stage must
-    /// compare against what the retained plan already published — the equivalence proofs — and
-    /// nowhere else.
+    /// The last accepted semantic value, used by derivation and equivalence proofs.
     pub(crate) fn committed(&self) -> &T {
         &self.committed
     }
@@ -84,21 +69,17 @@ impl<T> Staged<T> {
         (&mut self.committed, &mut self.pending)
     }
 
-    /// The pending buffer for writing beside the committed one for reading. This is the
-    /// shape of every stage that rebuilds its pending value FROM what is already
-    /// published — incremental flow rebuilds, retained positioning — and it is the reason
-    /// the pair has to live behind one field: two separate fields would make the borrow
-    /// checker's job the author's job.
+    /// Pending scratch beside the accepted input for incremental derivation.
     pub(crate) fn derive_mut(&mut self) -> (&mut T, &T) {
         (&mut self.pending, &self.committed)
     }
 
     /// Drops anything in flight. The pending buffer keeps its capacity for reuse.
-    pub(crate) fn abort(&mut self) {
+    pub(crate) fn discard_candidate(&mut self) {
         self.prepared = false;
     }
 
-    /// Publishes a prepared value, retiring the previous committed buffer into the
+    /// Accepts a prepared value, retiring the previous committed buffer into the
     /// pending slot for reuse. A stage with nothing prepared commits unchanged, so this
     /// is total: every stage can be committed on every frame without asking whether it
     /// participated.
@@ -149,12 +130,12 @@ mod tests {
     }
 
     #[test]
-    fn abort_restores_the_committed_value_and_commit_is_total() {
+    fn discarding_a_candidate_keeps_the_committed_value_and_commit_is_total() {
         let mut stage: Staged<u32> = Staged::default();
         stage.reset(7);
         *stage.pending_mut() = 9;
         stage.mark_prepared();
-        stage.abort();
+        stage.discard_candidate();
         assert_eq!(*stage.active(), 7);
 
         // Committing a stage that prepared nothing is a no-op rather than an error, which

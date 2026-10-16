@@ -8,6 +8,7 @@ export interface NamedFunction {
 export interface NamedShaperProof {
   executableSha256: string;
   functions: NamedFunction[];
+  importedFunctionCount: number;
   nameSection: Uint8Array;
 }
 
@@ -18,6 +19,13 @@ export function wasmSections(bytes: Uint8Array): {
   payload: Uint8Array;
   bytes: Uint8Array;
 }[];
+export function cursor(bytes: Uint8Array): {
+  offset: number;
+  byte(): number;
+  u32(): number;
+  take(length: number): Uint8Array;
+  string(): string;
+};
 export function authenticateNamedShaper(release: Uint8Array, candidate: Uint8Array): NamedShaperProof;
 export function deriveNamedShaper(
   release: Uint8Array,

@@ -18,6 +18,7 @@ import type { msdf } from '../raster/msdf.js';
 import type { slug } from '../raster/slug.js';
 import type { Bindings } from './internal/bindings.js';
 import type { TypeGpuTransform } from './internal/renderer.js';
+import { PostCommitError } from '../glyph-error.js';
 
 export type TypeGpuFontSelection = FontFaceSelection<
   | typeof bitmap
@@ -158,14 +159,25 @@ export function createText<Selection extends TypeGpuFontSelection>(
       const previousMeasurement = anchorsPresent ? controller.measure() : undefined;
       const nextFont = next.font === state.font ? font : fonts.acquire(next.font);
       let nextMeasurement: ParagraphLayoutSummary | undefined;
+      let failure: unknown;
       try {
         controller.update(coreState(next, nextFont));
-        nextMeasurement = anchorsPresent ? controller.measure() : undefined;
       } catch (error) {
-        if (nextFont !== font) nextFont.dispose();
-        throw error;
+        if (error instanceof PostCommitError) failure = error;
+        else {
+          if (nextFont !== font) nextFont.dispose();
+          throw error;
+        }
       }
-      const nextOffset = nextMeasurement?.anchorOffset ?? { x: 0, y: 0 };
+      if (anchorsPresent) {
+        try {
+          nextMeasurement = controller.measure();
+        } catch (error) {
+          if (failure === undefined) failure = error;
+        }
+      }
+      const nextOffset =
+        nextMeasurement?.anchorOffset ?? (anchorsPresent ? { x: pendingAnchorX, y: pendingAnchorY } : { x: 0, y: 0 });
       // The controller owns cache invalidation. Reused lines prove that only placement changed,
       // including when a caller supplies new objects or mutates an earlier authored object.
       const placementOnly =
@@ -179,19 +191,36 @@ export function createText<Selection extends TypeGpuFontSelection>(
       pendingAnchorX = nextOffset.x;
       pendingAnchorY = nextOffset.y;
       pendingSemantic = !placementOnly;
-      if (placementOnly) {
-        anchorX = pendingAnchorX;
-        anchorY = pendingAnchorY;
-      }
-      if (nextPositionX !== positionX || nextPositionY !== positionY || placementOnly) {
-        writePosition(transform, positionValue, nextPositionX + anchorX, nextPositionY + anchorY);
-      }
-      positionX = nextPositionX;
-      positionY = nextPositionY;
-      if (nextFont !== font) font.dispose();
+      const appliedAnchorX = placementOnly ? pendingAnchorX : anchorX;
+      const appliedAnchorY = placementOnly ? pendingAnchorY : anchorY;
+      const previousFont = font;
       font = nextFont;
       state = next;
       hasAuthoredAnchor = next.constraints?.anchor !== undefined;
+      let positionFailure: unknown;
+      let positionFailed = false;
+      if (nextPositionX !== positionX || nextPositionY !== positionY || placementOnly) {
+        try {
+          writePosition(transform, positionValue, nextPositionX + appliedAnchorX, nextPositionY + appliedAnchorY);
+          positionX = nextPositionX;
+          positionY = nextPositionY;
+          anchorX = appliedAnchorX;
+          anchorY = appliedAnchorY;
+        } catch (error) {
+          positionFailure = error;
+          positionFailed = true;
+          if (placementOnly) pendingSemantic = true;
+        }
+      }
+      if (nextFont !== previousFont) {
+        try {
+          previousFont.dispose();
+        } catch (error) {
+          if (failure === undefined) failure = error;
+        }
+      }
+      if (positionFailed) throw positionFailure;
+      if (failure !== undefined) throw failure;
     },
     measure() {
       assertActive();
@@ -227,9 +256,9 @@ export function createText<Selection extends TypeGpuFontSelection>(
       prepared = undefined;
       if (disposed || accepted === undefined) return;
       if (anchorX !== accepted.x || anchorY !== accepted.y) {
+        writePosition(transform, positionValue, positionX + accepted.x, positionY + accepted.y);
         anchorX = accepted.x;
         anchorY = accepted.y;
-        writePosition(transform, positionValue, positionX + anchorX, positionY + anchorY);
       }
       if (semanticRevision === accepted.revision) pendingSemantic = false;
     },
@@ -244,9 +273,17 @@ function validatePosition(position: readonly [number, number] = [0, 0]): void {
 }
 
 function writePosition(transform: TypeGpuTransform, value: [number, number], x: number, y: number): void {
+  const previousX = value[0];
+  const previousY = value[1];
   value[0] = x;
   value[1] = y;
-  transform.position.write(value);
+  try {
+    transform.position.write(value);
+  } catch (error) {
+    value[0] = previousX;
+    value[1] = previousY;
+    throw error;
+  }
 }
 
 function hasSemanticUpdate<Selection extends TypeGpuFontSelection>(update: TypeGpuTextUpdate<Selection>): boolean {

@@ -13,17 +13,84 @@ use crate::{
         font_binding_wire::parse_font_binding,
         frame::RootRevision,
         frame_wire::parse_update_request,
-        layout_borrow::BorrowedLayoutDescriptor,
+        layout_borrow::{BORROWED_GLYPH_CAPACITY, BorrowedLayoutDescriptor},
         render_plan_compiler::RenderPlanCompilerError,
         render_plan_wire::{publication_layout, query_layout},
-        transport::{FrameTransport, UpdateBatchResult, UpdateBatchTransport},
+        transport::{FailureInfo, FrameTransport, UpdateBatchResult, UpdateBatchTransport},
     },
     outline::{GlyphOutline, OutlineError},
 };
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(feature = "diagnostic-live-memory")]
+#[path = "diagnostic_live_memory.rs"]
+mod diagnostic_live_memory;
+
+#[cfg(all(target_arch = "wasm32", not(feature = "diagnostic-live-memory")))]
 #[global_allocator]
 static ALLOCATOR: talc::wasm::WasmDynamicTalc = talc::wasm::new_wasm_dynamic_allocator();
+
+#[cfg(feature = "diagnostic-live-memory")]
+#[global_allocator]
+static ALLOCATOR: diagnostic_live_memory::DiagnosticAllocator =
+    diagnostic_live_memory::DiagnosticAllocator::new();
+
+// The record is written into an exact caller-owned request allocation. No temporary allocation
+// or generated ABI contract enters the shipping feature-off module.
+#[cfg(feature = "diagnostic-live-memory")]
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_glyph_shaper_diagnostic_memory_snapshot(pointer: u32, length: u32) -> u32 {
+    use diagnostic_live_memory::RECORD_BYTES;
+    if length != RECORD_BYTES as u32 {
+        return STATUS_INVALID_REQUEST;
+    }
+    with_state(|state| {
+        let Some(output) = state
+            .allocations
+            .iter_mut()
+            .find(|entry| entry.pointer == pointer && entry.requested_length == length)
+        else {
+            return STATUS_INVALID_REQUEST;
+        };
+        diagnostic_live_memory::snapshot(&mut output.bytes);
+        STATUS_OK
+    })
+}
+
+#[cfg(feature = "diagnostic-live-memory")]
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_glyph_shaper_diagnostic_memory_reset_window() {
+    diagnostic_live_memory::reset_window();
+}
+
+// A real Talc-backed alloc/realloc/dealloc exercise with no caller-supplied pointer.
+#[cfg(feature = "diagnostic-live-memory")]
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_glyph_shaper_diagnostic_memory_probe_sequence() -> u32 {
+    use core::alloc::{GlobalAlloc, Layout};
+    let small = match Layout::from_size_align(16, 8) {
+        Ok(layout) => layout,
+        Err(_) => return STATUS_INVALID_REQUEST,
+    };
+    let large = match Layout::from_size_align(32, 8) {
+        Ok(layout) => layout,
+        Err(_) => return STATUS_INVALID_REQUEST,
+    };
+    // SAFETY: each pointer is produced by this allocator with the matching layout. The old
+    // pointer remains owned on realloc failure; the replacement is released exactly once.
+    unsafe {
+        let pointer = ALLOCATOR.alloc(small);
+        if pointer.is_null() {
+            return STATUS_RESULT_TOO_LARGE;
+        }
+        let grown = ALLOCATOR.realloc(pointer, small, large.size());
+        if grown.is_null() {
+            ALLOCATOR.dealloc(pointer, small);
+            return STATUS_RESULT_TOO_LARGE;
+        }
+        ALLOCATOR.dealloc(grown, large);
+    }
+    STATUS_OK
+}
 
 const MAX_REQUEST_ALLOCATION_BYTES: u32 = 64 * 1024 * 1024;
 
@@ -317,6 +384,19 @@ pub extern "C" fn pmndrs_glyph_engine_reserve_root(
             return engine_status(error);
         }
         0
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_glyph_engine_reset_root(handle: u32) -> u32 {
+    with_state(|state| {
+        if !state.frames.contains_key(&handle) {
+            return STATUS_ROOT_MISSING;
+        }
+        match state.engine.reset_root(handle) {
+            Ok(()) => 0,
+            Err(error) => engine_status(error),
+        }
     })
 }
 
@@ -770,7 +850,7 @@ fn update(
         );
     }
     if !state.frames.contains_key(&root_id) {
-        let _ = state.engine.abort_update(prepared);
+        let _ = state.engine.invalidate_after_publication_failure(prepared);
         return 0;
     }
     let capacity = if grow_output {
@@ -1024,10 +1104,9 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_measure_paragraph(
                 Err(error) => publish_engine_failure(state, root_id, revision, error),
             },
             Err((status, fault, required_result_capacity)) => {
-                // A query the caller only observes as failed must not leave an
-                // adoptable transaction behind; the reported watermark lets the
-                // host reserve and retry exactly like an update.
-                let _ = state.engine.abort_measure(measured);
+                // The output was not delivered, so discard the derived root. The caller
+                // sees this failure and can make an explicit next request after reserving.
+                let _ = state.engine.invalidate_after_measure_failure(measured);
                 publish_attributed_failure(
                     state,
                     root_id,
@@ -1070,29 +1149,39 @@ pub extern "C" fn pmndrs_glyph_engine_borrow_paragraph_layout(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_glyph_engine_borrow_paragraph_glyph(
+pub extern "C" fn pmndrs_glyph_engine_borrow_paragraph_glyphs(
     root_id: u32,
     paragraph_id: u32,
     generation: u32,
-    glyph_index: u32,
+    start: u32,
+    count: u32,
 ) -> u32 {
     with_state(|state| {
+        let Some(end) = start.checked_add(count) else {
+            return 0;
+        };
         if !state
             .borrowed_layout
             .matches(root_id, paragraph_id, generation)
-            || glyph_index >= state.borrowed_layout.glyph_count
+            || count == 0
+            || count as usize > BORROWED_GLYPH_CAPACITY
+            || end > state.borrowed_layout.glyph_count
         {
             return 0;
         }
-        state.borrowed_glyph =
-            match state
-                .engine
-                .borrowed_paragraph_glyph(root_id, paragraph_id, glyph_index as usize)
-            {
-                Ok(glyph) => glyph,
-                Err(_) => return 0,
-            };
-        u32::try_from(core::ptr::addr_of!(state.borrowed_glyph) as usize).unwrap_or(0)
+        let (engine, borrowed_glyphs) = (&state.engine, &mut state.borrowed_glyphs);
+        if engine
+            .borrowed_paragraph_glyphs(
+                root_id,
+                paragraph_id,
+                start as usize,
+                &mut borrowed_glyphs[..count as usize],
+            )
+            .is_err()
+        {
+            return 0;
+        }
+        u32::try_from(borrowed_glyphs.as_ptr() as usize).unwrap_or(0)
     })
 }
 
@@ -1147,7 +1236,7 @@ struct WasmState {
     allocations: Vec<Allocation>,
     borrow_generation: u32,
     borrowed_layout: BorrowedLayoutDescriptor,
-    borrowed_glyph: crate::engine::SemanticGlyph,
+    borrowed_glyphs: [crate::engine::SemanticGlyph; BORROWED_GLYPH_CAPACITY],
     outline: GlyphOutline,
     outline_result: Vec<u32>,
 }
@@ -1261,7 +1350,7 @@ fn publish_prepared_failure(
     required_result_capacity: u32,
 ) -> u32 {
     let root_id = prepared.root_id();
-    let _ = state.engine.abort_update(prepared);
+    let _ = state.engine.invalidate_after_publication_failure(prepared);
     publish_attributed_failure(
         state,
         root_id,
@@ -1328,6 +1417,11 @@ fn publish_attributed_failure(
     required_request_capacity: u32,
     required_result_capacity: u32,
 ) -> u32 {
+    let flags = if state.engine.root_revision(root_id).is_err() {
+        crate::engine::frame::RESULT_FLAG_ROOT_INVALIDATED
+    } else {
+        0
+    };
     state
         .frames
         .get_mut(&root_id)
@@ -1335,10 +1429,13 @@ fn publish_attributed_failure(
             u32::try_from(transport.publish_failure(
                 root_id,
                 revision,
-                status,
-                fault,
-                required_request_capacity,
-                required_result_capacity,
+                FailureInfo {
+                    status,
+                    fault,
+                    required_request_capacity,
+                    required_result_capacity,
+                    flags,
+                },
             ))
             .ok()
         })

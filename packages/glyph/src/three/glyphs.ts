@@ -4,7 +4,7 @@ import * as THREE from 'three/webgpu';
 import type { GlyphCopy } from '../config/glyph.js';
 import type { GlyphOutlineContour } from '../glyph-outline.js';
 import type { GlyphLayoutInspection } from '../layout.js';
-import { createGlyphPlacements, type GlyphPlacement, type GlyphPlacements } from '../glyph-placement.js';
+import { createGlyphPlacements, type GlyphPlacement } from '../glyph-placement.js';
 import { ThreeCommandBufferRenderer, type ThreeRendererHost } from './command-buffer-renderer.js';
 import type { ThreeGlyphGeometrySource, ThreeGlyphMeasurement } from './glyph-measurement.js';
 import { measureGlyphPlacements } from './glyph-measurement.js';
@@ -42,7 +42,7 @@ interface GlyphsOptions {
   readonly text: string;
   readonly source: DetachedTextSource;
   readonly anchorOffset: LayoutPoint;
-  readonly placements: () => GlyphPlacements;
+  readonly layout: GlyphLayoutInspection;
   readonly copy: (renderer: ThreeCommandBufferRenderer, boundary: ThreePublicationBoundary) => GlyphCopy<void>;
   readonly resources: ThreeRendererResources;
   readonly renderOrderBase: number;
@@ -169,7 +169,7 @@ export class Glyphs extends THREE.Object3D {
         objectForTransform: (_recordIndex, _source) => this,
       });
       this.#copy = copy;
-      const layout = options.placements().layout;
+      const layout = options.layout;
       this.#layout = layout;
       if (this.#storages.size === 0) {
         throw new Error('detached glyph copy produced no drawable record storage');

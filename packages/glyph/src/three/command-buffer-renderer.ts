@@ -2,6 +2,8 @@ import * as THREE from 'three/webgpu';
 import type { LayoutPoint } from '../layout.js';
 
 import {
+  type BorrowedCommandSequence,
+  type DisplayListChild,
   type CommandBufferView,
   type TransformUpdate,
   type GlyphRenderer,
@@ -301,9 +303,10 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
   }
 
   #prepareBound(frame: CommandBufferView<ThreeBindings>): PreparedPublication {
-    const replacesDraws = frame.displayList.kind === 'replace' && frame.displayList.retainedTopology !== true;
-    const transforms = replacesDraws ? new Map<number, THREE.Object3D>() : this.#transforms;
-    if (frame.displayList.kind === 'replace' && replacesDraws) {
+    const replacesTransforms = frame.displayList.kind === 'replace';
+    const replacesDraws = replacesTransforms && frame.displayList.retainedTopology !== true;
+    const transforms = replacesTransforms ? new Map<number, THREE.Object3D>() : this.#transforms;
+    if (replacesTransforms) {
       for (let index = 0; index < frame.displayList.value.transforms.length; index += 1) {
         const transform = frame.displayList.value.transforms.at(index)!;
         transforms.set(transform.recordIndex, transform.value);
@@ -353,6 +356,12 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
               directDrawsByTransform: this.#directDrawsByTransform,
               batchDrawsByScope: this.#batchDrawsByScope,
             };
+      if (replacesTransforms && frame.displayList.kind === 'replace' && frame.displayList.retainedTopology === true) {
+        preparedDraws = {
+          ...preparedDraws,
+          directDrawsByTransform: indexRetainedDirectDraws(frame.displayList.value.children, transforms, this.#draws),
+        };
+      }
       this.#applyBoundRetirements(frame, context);
       const retainedMaterials = preparedDraws.changed
         ? new Set([...context.materials.values()].map(({ material }) => material))
@@ -398,8 +407,11 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       prepared.replacesDraws && prepared.context.transformAttribute !== this.#transformAttribute
         ? this.#transformAttribute
         : undefined;
-    const retainedBuffers = new Set(prepared.context.buffers.values());
-    const retiredBuffers = [...this.#buffers.values()].filter((buffer) => !retainedBuffers.has(buffer));
+    let retiredBuffers: RetainedBuffer[] = [];
+    if (prepared.context.buffers !== this.#buffers) {
+      const retainedBuffers = new Set(prepared.context.buffers.values());
+      retiredBuffers = [...this.#buffers.values()].filter((buffer) => !retainedBuffers.has(buffer));
+    }
     const attempt = (operation: () => void): void => {
       try {
         operation();
@@ -421,9 +433,15 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     this.#msdfAtlases = prepared.context.msdfAtlases;
     this.#slugPages = prepared.context.slugPages;
     this.#materials = prepared.context.materials;
-    if (prepared.replacesDraws) {
+    if (prepared.transforms !== undefined) {
       this.#transforms = prepared.context.transforms;
       this.#indexTransforms();
+      this.#directDrawsByTransform.clear();
+      for (const [id, meshes] of prepared.draws.directDrawsByTransform) {
+        this.#directDrawsByTransform.set(id, meshes);
+      }
+    }
+    if (prepared.replacesDraws) {
       this.#transformAttribute = prepared.context.transformAttribute;
       this.#transformGeneration = prepared.context.transformGeneration;
     }
@@ -433,10 +451,6 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       this.#originSegments = prepared.draws.originSegments;
       this.#activeTransformIndices.clear();
       for (const id of prepared.draws.activeTransformIndices) this.#activeTransformIndices.add(id);
-      this.#directDrawsByTransform.clear();
-      for (const [id, meshes] of prepared.draws.directDrawsByTransform) {
-        this.#directDrawsByTransform.set(id, meshes);
-      }
       this.#batchDrawsByScope = prepared.draws.batchDrawsByScope;
     }
     for (const material of prepared.context.newMaterials) this.#ownedMaterials.add(material);
@@ -702,13 +716,15 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
         // Candidate cleanup cannot replace the error that caused the rejection.
       }
     }
-    const retainedBuffers = new Set(this.#buffers.values());
-    for (const buffer of context.buffers.values()) {
-      if (retainedBuffers.has(buffer)) continue;
-      try {
-        buffer.attribute.dispose();
-      } catch {
-        // Candidate cleanup cannot replace the error that caused the rejection.
+    if (context.buffers !== this.#buffers) {
+      const retainedBuffers = new Set(this.#buffers.values());
+      for (const buffer of context.buffers.values()) {
+        if (retainedBuffers.has(buffer)) continue;
+        try {
+          buffer.attribute.dispose();
+        } catch {
+          // Candidate cleanup cannot replace the error that caused the rejection.
+        }
       }
     }
     if (context.transformAttribute !== this.#transformAttribute) {
@@ -739,6 +755,38 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     this.#draws = [];
     this.#drawKeys = [];
   }
+}
+
+/** Rebinds current transform identities to retained meshes using the certified display-list order. */
+function indexRetainedDirectDraws(
+  children: BorrowedCommandSequence<DisplayListChild<ThreeBindings>>,
+  transforms: ReadonlyMap<number, THREE.Object3D>,
+  draws: readonly THREE.Mesh[],
+): ReadonlyMap<number, THREE.Mesh[]> {
+  const transformIds = new WeakMap<THREE.Object3D, number[]>();
+  for (const [id, object] of transforms) {
+    const ids = transformIds.get(object);
+    if (ids === undefined) transformIds.set(object, [id]);
+    else ids.push(id);
+  }
+  const directDraws = new Map<number, THREE.Mesh[]>();
+  let drawIndex = 0;
+  for (let childIndex = 0; childIndex < children.length; childIndex += 1) {
+    const child = children.at(childIndex)!;
+    if (child.kind === 'batch') {
+      drawIndex += child.instances.length;
+      continue;
+    }
+    const mesh = draws[drawIndex++];
+    const object = child.transform;
+    if (mesh === undefined || object === undefined) continue;
+    for (const transformId of transformIds.get(object) ?? []) {
+      const meshes = directDraws.get(transformId);
+      if (meshes === undefined) directDraws.set(transformId, [mesh]);
+      else meshes.push(mesh);
+    }
+  }
+  return directDraws;
 }
 
 function applyReusedDrawUpdate(update: ReusedDrawUpdate): void {

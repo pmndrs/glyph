@@ -1,6 +1,9 @@
 import { createGlyphEngine, shapeGlyphEngine, type GlyphEngine, type GlyphEngineOptions } from './glyph-engine.js';
 import type { Codec, GlyphBindingSet, GlyphConfig, GlyphHandle, GlyphRoot } from './config/glyph.js';
 import { createConfiguredGlyphHandle } from './internal/configured-handle.js';
+
+/** @internal Canonical inspection access for the built-in integration, absent from published entry points. */
+export { configuredTextInspection } from './internal/configured-handle.js';
 import {
   createFontFace,
   FontFaceHandleStore,

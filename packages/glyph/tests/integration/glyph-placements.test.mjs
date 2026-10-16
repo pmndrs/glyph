@@ -382,6 +382,21 @@ function copySnapshot(copy) {
   };
 }
 
+function rendererBytes(scene) {
+  const draws = [];
+  scene.traverse((object) => {
+    if (!object.isMesh) return;
+    const attributes = Object.entries(object.geometry.attributes)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([name, attribute]) => [
+        name,
+        Buffer.from(attribute.array.buffer, attribute.array.byteOffset, attribute.array.byteLength).toString('hex'),
+      ]);
+    draws.push({ instanceCount: object.geometry.instanceCount, attributes });
+  });
+  return draws;
+}
+
 test('pending split matches publication and retains its independent copy across later edits', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont();
@@ -833,17 +848,109 @@ test('sibling preparation refreshes split identities before and after publicatio
         assert.equal(pending.count, a.text.length);
         assert.equal(pending.glyphAt(0).glyphId, a.glyphs().glyphIds[0]);
         const expected = copySnapshot(pending);
+        b.dispose();
         scene.updateMatrixWorld(true);
         const [published] = a.split();
         copies.push(published);
         assert.equal(published.count, a.text.length);
         assert.deepEqual(copySnapshot(published), expected);
+        assert.deepEqual(copySnapshot(pending), expected, 'sibling removal cannot mutate an earlier independent copy');
+        a.dispose();
+        assert.deepEqual(
+          copySnapshot(pending),
+          expected,
+          'source disposal cannot revoke copied glyph metadata or leases',
+        );
       } finally {
         for (const copy of copies) copy.dispose();
         a.dispose();
         b.dispose();
       }
     }
+  }
+});
+
+test('warm sibling placements recover after preparation commits but its result is rejected', async (t) => {
+  for (const publishBeforeSplit of [false, true]) {
+    await t.test(publishBeforeSplit ? 'after recovery publication' : 'before recovery publication', async (subtest) => {
+      const three = await createThreeTestHandle(subtest);
+      const font = await loadFont();
+      const scene = new THREE.Scene();
+      const a = three.createText({ font, style: { fontSize: 16 }, text: 'A ' });
+      const b = three.createText({ font, style: { fontSize: 16 }, text: 'B' });
+      const cold = await mount(subtest, font, 'A ', { style: { fontSize: 16 } });
+      scene.add(a, b);
+      let beforeRecovery;
+      let afterPublication;
+      let coldCopy;
+      try {
+        scene.updateMatrixWorld(true);
+        assert.equal(a.measureGlyphs().length, 2, 'warm the unchanged sibling placement query, including its blank');
+        assert.equal(a.glyphs().glyphCount, 2);
+        const acceptedRendererBytes = rendererBytes(scene);
+        const originalPrepare = PlanTransport.prototype.prepareParagraph;
+        const preparationFailure = new Error('injected failure after real paragraph preparation');
+        let failed = false;
+        PlanTransport.prototype.prepareParagraph = function (...args) {
+          const result = originalPrepare.apply(this, args);
+          if (!failed) {
+            failed = true;
+            throw preparationFailure;
+          }
+          return result;
+        };
+        try {
+          assert.throws(
+            () => b.set({ text: 'BB' }),
+            (error) => error === preparationFailure,
+          );
+        } finally {
+          PlanTransport.prototype.prepareParagraph = originalPrepare;
+        }
+        assert.equal(failed, true, 'the real preparation completed before its result was rejected');
+        assert.equal(b.text, 'B', 'the rejected edit does not replace the accepted authored text');
+        assert.deepEqual(
+          rendererBytes(scene),
+          acceptedRendererBytes,
+          'failed preparation cannot change renderer bytes',
+        );
+
+        if (publishBeforeSplit) scene.updateMatrixWorld(true);
+        beforeRecovery = a.split()[0];
+        assert.equal(beforeRecovery.count, 1);
+        assert.equal(a.glyphs().glyphCount, 2, 'recovery preserves non-drawable blank glyphs');
+        assert.deepEqual(rendererBytes(scene), acceptedRendererBytes, 'recovery reads do not publish renderer bytes');
+
+        scene.updateMatrixWorld(true);
+        assert.equal(a.commitState().status, 'committed');
+        afterPublication = a.split()[0];
+        coldCopy = cold.node.split()[0];
+        assert.deepEqual(copySnapshot(beforeRecovery), copySnapshot(afterPublication));
+        assert.deepEqual(copySnapshot(afterPublication), copySnapshot(coldCopy));
+
+        const publicInspection = a.glyphs();
+        const canonicalId = a.glyphs().glyphStableIds[0];
+        publicInspection.glyphStableIds[0] = 0;
+        publicInspection.x[0] = -1000;
+        assert.equal(
+          a.glyphs().glyphStableIds[0],
+          canonicalId,
+          'public inspection arrays cannot mutate canonical columns',
+        );
+        assert.notEqual(
+          a.measureGlyphs()[0].drawnOrigin.x,
+          -1000,
+          'placement queries remain isolated from public mutation',
+        );
+      } finally {
+        beforeRecovery?.dispose();
+        afterPublication?.dispose();
+        coldCopy?.dispose();
+        a.dispose();
+        b.dispose();
+        unmount(cold);
+      }
+    });
   }
 });
 

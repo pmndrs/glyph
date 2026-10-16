@@ -7,6 +7,7 @@ import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 /** Records the newest synchronous-measure request before the shaper instance is created. */
 let latestRequest;
 let preparationCalls = 0;
+let queryMaterializationCalls = 0;
 let publicationCalls = 0;
 const instantiate = WebAssembly.instantiate;
 WebAssembly.instantiate = async (source, imports) => {
@@ -16,7 +17,20 @@ WebAssembly.instantiate = async (source, imports) => {
   exports[textShaperAbi.functions.measureParagraph] = (...args) => {
     const [, pointer, length] = args;
     latestRequest = new Uint8Array(exports.memory.buffer, pointer, length).slice();
-    preparationCalls += 1;
+    const layout = textShaperAbi.layouts.engineUpdateRequest;
+    const header = new DataView(latestRequest.buffer, latestRequest.byteOffset, latestRequest.byteLength);
+    const semanticCounts = [
+      layout.paragraphMutationCount,
+      layout.paragraphOrderMutationCount,
+      layout.textMutationCount,
+      layout.styleMutationCount,
+      layout.constraintCount,
+      layout.regionCount,
+      layout.exclusionCount,
+      layout.inlineObjectCount,
+    ];
+    if (semanticCounts.some((offset) => header.getUint32(offset, true) > 0)) preparationCalls += 1;
+    else queryMaterializationCalls += 1;
     return measure(...args);
   };
   for (const name of [textShaperAbi.functions.textUpdate, textShaperAbi.functions.textUpdateBatch]) {
@@ -56,12 +70,18 @@ test('a one-character assignment sends the full candidate for Rust-owned sparse 
   const mounted = mount(font, [{ properties }]);
   try {
     const [node] = mounted.nodes;
-    const before = { preparationCalls, publicationCalls };
+    const before = { preparationCalls, queryMaterializationCalls, publicationCalls };
     node.set({ text: `${text.slice(0, 10)}x${text.slice(10)}` });
     assert.equal(preparationCalls, before.preparationCalls + 1, 'the setter synchronously prepares exactly once');
     assert.deepEqual(textMutations(latestRequest), [
       { start: 0, deleteCount: text.length, insertCount: text.length + 1 },
     ]);
+    node.measure();
+    assert.equal(
+      queryMaterializationCalls,
+      before.queryMaterializationCalls + 1,
+      'the first needed read materializes its summary once',
+    );
     for (let index = 0; index < 100; index += 1) node.measure();
     const glyphs = node.glyphs();
     assert.equal(
@@ -70,6 +90,11 @@ test('a one-character assignment sends the full candidate for Rust-owned sparse 
       'owned glyph demand combines prepared line spans with borrowed glyph records',
     );
     assert.equal(preparationCalls, before.preparationCalls + 1, 'unchanged metric and glyph reads reuse preparation');
+    assert.equal(
+      queryMaterializationCalls,
+      before.queryMaterializationCalls + 1,
+      'repeated measurement and glyph reads reuse the materialized summary',
+    );
     assert.equal(publicationCalls, before.publicationCalls, 'reads do not publish renderer state');
   } finally {
     unmount(mounted);

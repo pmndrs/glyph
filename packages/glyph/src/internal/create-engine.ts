@@ -37,6 +37,12 @@ interface RetainedResource<Resource extends object> {
 
 interface RetainedBuffer<Buffer extends object> {
   readonly generation: number;
+  readonly programId: number;
+  readonly bindingId: number | 'placement';
+  readonly scalarType: 'f32' | 'u32' | 'u16';
+  readonly vectorWidth: number;
+  readonly capacityRecords: number;
+  readonly byteLength: number;
   readonly value: Buffer;
 }
 
@@ -75,7 +81,6 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Boundary> implement
   readonly #mapper = new TypedCommandTreeMapper();
   readonly #programsById: ReadonlyMap<number, CodecProgram>;
   readonly #programs = new WeakMap<object, Bindings['program']>();
-  readonly #buffers = new WeakMap<object, Bindings['buffer']>();
   readonly #materials = new WeakMap<object, Bindings['material']>();
   readonly #transforms = new WeakMap<object, Bindings['transform']>();
   readonly #projected = new WeakMap<BorrowedTypedCommandTree, CommandBufferView<Bindings>>();
@@ -115,6 +120,7 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Boundary> implement
     const buffers = changesBindings ? new Map(previousBuffers) : previousBuffers;
     const fresh = new Set<RetainedResource<Bindings['resource']>>();
     const resourceValues = new WeakMap<object, Bindings['resource']>();
+    const bufferValues = new Map<number, Map<number, RetainedBuffer<Bindings['buffer']>>>();
 
     try {
       const boundResources = Array.from(source.updates.resources, (command) => {
@@ -155,23 +161,51 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Boundary> implement
         const record = this.#mapper.bufferIdentity(command.buffer);
         const program = command.program === undefined ? undefined : this.#program(command.program);
         let retained = buffers.get(record.id);
-        if (retained?.generation !== record.generation) {
+        const compatible =
+          retained !== undefined &&
+          retained.programId === record.programId &&
+          retained.bindingId === record.bindingId &&
+          retained.scalarType === command.scalarType &&
+          retained.vectorWidth === command.vectorWidth &&
+          retained.capacityRecords === command.capacityRecords &&
+          retained.byteLength === command.byteLength;
+        if (candidate.checkpoint || retained?.generation !== record.generation || !compatible) {
           // Rust adoption can precede renderer acceptance. Retire the accepted generation even
-          // when a retry checkpoint no longer names it in the engine's retirement commands.
+          // when a retry checkpoint no longer names it in the engine's retirement commands,
+          // but only when the accepted binding cannot satisfy the requested schema and capacity.
           const accepted = previousBuffers.get(record.id);
-          if (
-            accepted !== undefined &&
-            accepted.generation !== record.generation &&
-            !boundRetirements.some((retirement) => retirement.kind === 'buffer' && retirement.buffer === accepted.value)
-          ) {
-            boundRetirements.push(Object.freeze({ kind: 'buffer', buffer: accepted.value }));
+          if (compatible && retained !== undefined) {
+            retained = { ...retained, generation: record.generation };
+          } else {
+            const declaration = this.#bufferDeclaration(record.programId, record.bindingId);
+            const value = this.#config.schema.buffer(this.#boundary, { program, declaration });
+            retained = {
+              generation: record.generation,
+              programId: record.programId,
+              bindingId: record.bindingId,
+              scalarType: command.scalarType,
+              vectorWidth: command.vectorWidth,
+              capacityRecords: command.capacityRecords,
+              byteLength: command.byteLength,
+              value,
+            };
+            if (
+              accepted !== undefined &&
+              !boundRetirements.some(
+                (retirement) => retirement.kind === 'buffer' && retirement.buffer === accepted.value,
+              )
+            ) {
+              boundRetirements.push(Object.freeze({ kind: 'buffer', buffer: accepted.value }));
+            }
           }
-          const declaration = this.#bufferDeclaration(record.programId, record.bindingId);
-          const value = this.#config.schema.buffer(this.#boundary, { program, declaration });
-          retained = { generation: record.generation, value };
           buffers.set(record.id, retained);
-          this.#buffers.set(command.buffer, value);
         }
+        let generations = bufferValues.get(record.id);
+        if (generations === undefined) {
+          generations = new Map();
+          bufferValues.set(record.id, generations);
+        }
+        generations.set(record.generation, retained);
         return Object.freeze({
           kind: command.kind,
           buffer: retained.value,
@@ -184,7 +218,9 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Boundary> implement
       });
 
       const boundPatches = mapBorrowedSequence(source.updates.patches, (patch) =>
-        bindPatch(patch, (identity) => this.#buffer(identity, buffers)),
+        bindPatch(patch, (identity) =>
+          this.#buffer(identity, buffers, bufferValues, previousBuffers, `patch ${patch.kind}`),
+        ),
       );
 
       for (const retirement of source.updates.retirements) {
@@ -200,6 +236,7 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Boundary> implement
             const identity = this.#mapper.bufferIdentity(buffer);
             const retired = previousBuffers.get(identity.id);
             if (retired === undefined || retired.generation !== identity.generation) return undefined;
+            if (buffers.get(identity.id)?.value === retired.value) return undefined;
             if (buffers.get(identity.id)?.generation === identity.generation) buffers.delete(identity.id);
             return retired.value;
           },
@@ -226,7 +263,10 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Boundary> implement
             programVariant: details.programVariant,
             resource:
               details.resource === undefined ? undefined : this.#resource(details.resource, resources, resourceValues),
-            buffer: details.buffer === undefined ? undefined : this.#buffer(details.buffer, buffers),
+            buffer:
+              details.buffer === undefined
+                ? undefined
+                : this.#buffer(details.buffer, buffers, bufferValues, previousBuffers, 'instance span'),
             recordIndex: span.recordIndex,
             recordCount: span.recordCount,
             logicalOrder: span.logicalOrder,
@@ -273,7 +313,9 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Boundary> implement
                     program: this.#program(details.program),
                     programVariant: details.programVariant,
                     material: this.#material(details.material),
-                    buffers: mapBorrowedSequence(details.buffers, (buffer) => this.#buffer(buffer, buffers)),
+                    buffers: mapBorrowedSequence(details.buffers, (buffer) =>
+                      this.#buffer(buffer, buffers, bufferValues, previousBuffers, 'draw binding'),
+                    ),
                     resources: mapBorrowedSequence(details.resources, (resource) =>
                       this.#resource(resource, resources, resourceValues),
                     ),
@@ -389,14 +431,40 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Boundary> implement
   #buffer(
     identity: TypedBuffer,
     retained: ReadonlyMap<number, RetainedBuffer<Bindings['buffer']>>,
+    candidateValues: ReadonlyMap<number, ReadonlyMap<number, RetainedBuffer<Bindings['buffer']>>>,
+    accepted: ReadonlyMap<number, RetainedBuffer<Bindings['buffer']>>,
+    reference: string,
   ): Bindings['buffer'] {
-    const cached = this.#buffers.get(identity);
-    if (cached !== undefined) return cached;
     const record = this.#mapper.bufferIdentity(identity);
-    const value = retained.get(record.id)?.value;
-    if (value === undefined) throw new Error('command references an unknown buffer binding');
-    this.#buffers.set(identity, value);
-    return value;
+    const candidate = candidateValues.get(record.id)?.get(record.generation);
+    if (candidate !== undefined) return candidate.value;
+    const current = retained.get(record.id);
+    if (current?.generation === record.generation) return current.value;
+    const prior = accepted.get(record.id);
+    if (prior?.generation === record.generation) return prior.value;
+
+    // A checkpoint may rebind a retained backing buffer to the generation emitted by its
+    // full buffer command while unchanged draws still name an older generation. Resolve that
+    // package-owned alias by stable buffer ID and binding identity; never guess across bindings.
+    const candidates = candidateValues.get(record.id);
+    let candidateAlias: RetainedBuffer<Bindings['buffer']> | undefined;
+    if (candidates !== undefined) {
+      for (const value of candidates.values()) {
+        if (value.programId !== record.programId || value.bindingId !== record.bindingId) continue;
+        if (candidateAlias !== undefined && candidateAlias.value !== value.value) {
+          candidateAlias = undefined;
+          break;
+        }
+        candidateAlias = value;
+      }
+    }
+    if (candidates !== undefined) {
+      if (candidateAlias !== undefined) return candidateAlias.value;
+      throw new Error(`${reference} references an unknown buffer binding generation ${record.id}:${record.generation}`);
+    }
+    if (current?.programId === record.programId && current.bindingId === record.bindingId) return current.value;
+    if (prior?.programId === record.programId && prior.bindingId === record.bindingId) return prior.value;
+    throw new Error(`${reference} references an unknown buffer binding generation ${record.id}:${record.generation}`);
   }
 
   #resource(

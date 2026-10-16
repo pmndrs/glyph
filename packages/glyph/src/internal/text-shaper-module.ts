@@ -55,6 +55,7 @@ export interface ShaperExports {
     resultCapacity: number,
     textCapacity: number,
   ) => number;
+  readonly resetRoot: (handle: number) => number;
   readonly disposeRoot: (handle: number) => number;
   readonly requestPointer: (handle: number) => number;
   readonly requestCapacity: (handle: number) => number;
@@ -65,11 +66,12 @@ export interface ShaperExports {
   readonly textUpdateBatch: (entriesPointer: number, count: number) => number;
   readonly measureParagraph: (handle: number, pointer: number, length: number, paragraphId: number) => number;
   readonly borrowParagraphLayout: (handle: number, paragraphId: number) => number;
-  readonly borrowParagraphGlyph: (
+  readonly borrowParagraphGlyphs: (
     handle: number,
     paragraphId: number,
     generation: number,
-    glyphIndex: number,
+    start: number,
+    count: number,
   ) => number;
   readonly copyGlyphs: (
     handle: number,
@@ -148,6 +150,7 @@ export function readModule(instance: WebAssembly.Instance): ShaperModule {
       disposeCodec: exportedFunction(instance, functions.disposeCodec),
       createRoot: exportedFunction(instance, functions.createRoot),
       reserveRoot: exportedFunction(instance, functions.reserveRoot),
+      resetRoot: exportedFunction(instance, functions.resetRoot),
       disposeRoot: exportedFunction(instance, functions.disposeRoot),
       requestPointer: exportedFunction(instance, functions.requestPointer),
       requestCapacity: exportedFunction(instance, functions.requestCapacity),
@@ -158,7 +161,7 @@ export function readModule(instance: WebAssembly.Instance): ShaperModule {
       textUpdateBatch: exportedFunction(instance, functions.textUpdateBatch),
       measureParagraph: exportedFunction(instance, functions.measureParagraph),
       borrowParagraphLayout: exportedFunction(instance, functions.borrowParagraphLayout),
-      borrowParagraphGlyph: exportedFunction(instance, functions.borrowParagraphGlyph),
+      borrowParagraphGlyphs: exportedFunction(instance, functions.borrowParagraphGlyphs),
       copyGlyphs: exportedFunction(instance, functions.copyGlyphs),
       copyDecorations: exportedFunction(instance, functions.copyDecorations),
     },

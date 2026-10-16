@@ -14,13 +14,14 @@ use super::{
     codec::{
         BATCH_MATERIAL, BATCH_TRANSFORM, BufferSchema, CapabilitySetId, TechniqueId, ValidatedCodec,
     },
+    codec_gather::GatherCorrespondence,
     plan_draw::{GlyphDraw, independent_draw_sort_key, push_glyph_draw},
     plan_input::{DrawSpanSummary, draw_fields_compatible, draw_span_compatible},
     plan_packing::{
         MAX_PHYSICAL_BUFFERS, PendingAllocation, PhysicalBufferState, RangeJob, RecordRange,
-        align_record_range, align_up, apply_writes, buffer_record_alignment,
+        align_record_range, align_up, apply_writes_prevalidated, buffer_record_alignment,
         coalesce_buffer_ranges, collect_range_jobs, execute_run, grown_capacity,
-        push_pending_allocation, record_alignment, take_allocation,
+        push_pending_allocation, record_alignment,
     },
     render_plan::{
         BUFFER_ORDERED_DIRECT, BufferRecord, DrawRecord, PATCH_ALLOCATE_OR_RESIZE, PATCH_WRITE,
@@ -37,7 +38,23 @@ use super::render_plan::PRIMITIVE_DECORATION;
 
 pub use super::plan_input::{PlanGlyph as OrderedGlyph, PlanInput as OrderedPlanInput};
 
+const DRAW_BLOCK_SLOTS: usize = 32;
+
+#[derive(Clone, Copy)]
+struct DrawBlock {
+    batch: u32,
+    slot: u32,
+    summary: DrawSpanSummary,
+}
+
 const NONE: u32 = u32::MAX;
+
+// Both retained updates and batch patches consume sorted, unique physical slots.
+fn coalesced_slot_ranges(slots: &[u32]) -> impl Iterator<Item = Range<u32>> + '_ {
+    slots
+        .chunk_by(|left, right| *right == *left + 1)
+        .map(|run| run[0]..run[run.len() - 1] + 1)
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct BatchKey {
@@ -85,6 +102,9 @@ struct PendingBatch {
     retained_count: u32,
     state: BatchState,
     prior_index: Option<u32>,
+    allocation_start: Option<usize>,
+    patch_start: usize,
+    patch_end: usize,
     capacity: u32,
     buffer_ids: [u32; MAX_PHYSICAL_BUFFERS],
     buffer_generations: [u32; MAX_PHYSICAL_BUFFERS],
@@ -101,7 +121,15 @@ enum MappingState {
 #[derive(Clone, Copy)]
 pub(crate) enum RetainedOutputScope<'a> {
     ChangedIntervals(&'a [Range<usize>]),
-    ReplaceTail { unchanged_prefix: usize },
+    Replacement(&'a [GatherCorrespondence]),
+}
+
+fn sparse_output_intervals(ranges: &[Range<usize>], glyph_count: usize) -> Option<&[Range<usize>]> {
+    (ranges.len() != 1
+        || ranges[0].is_empty()
+        || ranges[0].start != 0
+        || ranges[0].end != glyph_count)
+        .then_some(ranges)
 }
 
 #[derive(Clone, Copy)]
@@ -111,6 +139,7 @@ struct PrepareContext<'a> {
     capability: &'a super::codec::CapabilitySet,
     input: OrderedPlanInput<'a>,
     checkpoint: bool,
+    changed_intervals: Option<&'a [Range<usize>]>,
 }
 
 #[derive(Default)]
@@ -123,9 +152,10 @@ pub struct OrderedPlanCompiler {
     pending_batches: Vec<PendingBatch>,
     pending_instances: RetainedRope<InstanceState>,
     dirty_instances: Vec<u32>,
-    pending_allocations: Vec<PendingAllocation>,
+    pending_allocations: Vec<Option<PendingAllocation>>,
     input_batches: Vec<u32>,
     input_slots: Vec<u32>,
+    retained_input_slots: Vec<u32>,
     mapping_state: MappingState,
     batch_cursors: Vec<u32>,
     changed_ranges: Vec<RecordRange>,
@@ -136,6 +166,8 @@ pub struct OrderedPlanCompiler {
     primitives: Vec<PrimitiveRecord>,
     draws: Vec<DrawRecord>,
     sort_pairs: Vec<(u64, u32)>,
+    blocks: Vec<DrawBlock>,
+    pending_blocks: Vec<DrawBlock>,
     live_primitives: Vec<PrimitiveRecord>,
     live_draws: Vec<DrawRecord>,
     patches: Vec<PatchRecord>,
@@ -152,6 +184,8 @@ pub struct OrderedPlanCompiler {
     retained_host_topology: bool,
     bindings_dirty: bool,
     reuse_live_bindings: bool,
+    committed_order_independent: Option<bool>,
+    pending_order_independent: Option<bool>,
     prepared: bool,
     #[cfg(test)]
     retained_topology_preparations: u32,
@@ -307,6 +341,9 @@ impl OrderedPlanCompiler {
             retained_count: 0,
             state: batch,
             prior_index: Some(0),
+            allocation_start: None,
+            patch_start: self.patches.len(),
+            patch_end: self.patches.len(),
             capacity: buffers.first().map_or(0, |buffer| buffer.capacity),
             buffer_ids: [0; MAX_PHYSICAL_BUFFERS],
             buffer_generations: [0; MAX_PHYSICAL_BUFFERS],
@@ -392,25 +429,32 @@ impl OrderedPlanCompiler {
                 .len()
                 .checked_mul(schema.stride())
                 .ok_or(OrderedPlanError::ArithmeticOverflow)?;
+            if live_bytes > buffer.bytes.len() {
+                return Err(OrderedPlanError::InvalidIdentity);
+            }
             let payload_start = self.payload.len();
+            let payload_end = payload_start
+                .checked_add(live_bytes)
+                .ok_or(OrderedPlanError::ArithmeticOverflow)?;
             reserve(&mut self.payload, live_bytes)?;
-            self.payload.resize(payload_start + live_bytes, 0);
+            self.payload.resize(payload_end, 0);
             for next_slot in 0..stable_ids.len() {
                 let old_slot = self.batch_cursors[next_slot] as usize;
                 let source = old_slot
                     .checked_mul(schema.stride())
                     .ok_or(OrderedPlanError::ArithmeticOverflow)?;
-                let destination = payload_start
-                    + next_slot
-                        .checked_mul(schema.stride())
-                        .ok_or(OrderedPlanError::ArithmeticOverflow)?;
+                let destination = payload_start + next_slot * schema.stride();
+                let source_end = source
+                    .checked_add(schema.stride())
+                    .ok_or(OrderedPlanError::ArithmeticOverflow)?;
+                let destination_end = destination + schema.stride();
                 let source = buffer
                     .bytes
-                    .get(source..source + schema.stride())
+                    .get(source..source_end)
                     .ok_or(OrderedPlanError::InvalidIdentity)?;
                 let destination = self
                     .payload
-                    .get_mut(destination..destination + schema.stride())
+                    .get_mut(destination..destination_end)
                     .ok_or(OrderedPlanError::InvalidIdentity)?;
                 destination.copy_from_slice(source);
             }
@@ -425,6 +469,7 @@ impl OrderedPlanCompiler {
                 ..PatchRecord::default()
             });
         }
+        self.pending_batches[0].patch_end = self.patches.len();
         self.mapping_state = MappingState::Invalid;
         self.input_batches.fill(0);
         for (input_index, slot) in self.input_slots.iter_mut().enumerate() {
@@ -434,6 +479,8 @@ impl OrderedPlanCompiler {
         self.pending_next_buffer_id = self.next_buffer_id;
         self.pending_codec_fingerprint = self.codec_fingerprint;
         self.pending_capability_set = self.capability_set;
+        // The reorder shortcut has no gathered draw key to certify a future span reuse.
+        self.pending_order_independent = None;
         self.prepared = true;
         Ok(true)
     }
@@ -462,12 +509,12 @@ impl OrderedPlanCompiler {
         self.reset_pending();
         let retained_topology = !checkpoint
             && match output_scope {
-                Some(RetainedOutputScope::ReplaceTail { unchanged_prefix }) => self
+                Some(RetainedOutputScope::Replacement(correspondence)) => self
                     .prepare_complete_topology(
                         codec,
                         capability_set,
                         input,
-                        Some(unchanged_prefix),
+                        Some(correspondence),
                     )?,
                 Some(RetainedOutputScope::ChangedIntervals(ranges)) => {
                     self.prepare_retained_topology(codec, capability_set, input, Some(ranges))?
@@ -492,12 +539,24 @@ impl OrderedPlanCompiler {
             capability,
             input,
             checkpoint,
+            // Exact output intervals cover gathered glyph metadata, including bounds.
+            changed_intervals: if retained_topology {
+                match output_scope {
+                    Some(RetainedOutputScope::ChangedIntervals(ranges)) => {
+                        sparse_output_intervals(ranges, input.glyphs.len())
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            },
         };
         for batch_index in 0..self.pending_batches.len() {
             self.prepare_batch(context, batch_index)?;
         }
         self.prepare_removed_batches()?;
         self.compile_bindings(context, retained_topology)?;
+        self.pending_order_independent = Some(input.order_independent);
         self.prepared = true;
         Ok(())
     }
@@ -551,31 +610,172 @@ impl OrderedPlanCompiler {
         })
     }
 
+    #[cfg(test)]
     pub fn commit(&mut self) -> Result<(), OrderedPlanError> {
+        self.preflight_commit()?;
+        self.commit_preflighted();
+        Ok(())
+    }
+
+    pub(crate) fn preflight_commit(&mut self) -> Result<(), OrderedPlanError> {
         if !self.prepared {
             return Err(OrderedPlanError::NotPrepared);
         }
-        mem::swap(&mut self.buffers, &mut self.spare_buffers);
-        self.buffers.clear();
-        for pending_index in 0..self.pending_batches.len() {
-            let pending = self.pending_batches[pending_index];
-            for buffer_index in 0..usize::from(pending.state.buffer_count) {
+        let mut output_buffer_count = 0usize;
+        for pending in &self.pending_batches {
+            let buffer_count = usize::from(pending.state.buffer_count);
+            if buffer_count > pending.buffer_ids.len() {
+                return Err(OrderedPlanError::InvalidIdentity);
+            }
+            u32::try_from(output_buffer_count).map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
+            output_buffer_count = output_buffer_count
+                .checked_add(buffer_count)
+                .ok_or(OrderedPlanError::ArithmeticOverflow)?;
+
+            if pending.patch_start > pending.patch_end || pending.patch_end > self.patches.len() {
+                return Err(OrderedPlanError::InvalidIdentity);
+            }
+            let prior = pending
+                .prior_index
+                .and_then(|index| self.batches.get(index as usize));
+            let allocation_end = pending
+                .allocation_start
+                .map(|start| {
+                    start
+                        .checked_add(buffer_count)
+                        .ok_or(OrderedPlanError::ArithmeticOverflow)
+                })
+                .transpose()?;
+            if allocation_end.is_some_and(|end| end > self.pending_allocations.len()) {
+                return Err(OrderedPlanError::InvalidIdentity);
+            }
+            if buffer_count != 0 && pending.allocation_start.is_none() && prior.is_none() {
+                return Err(OrderedPlanError::InvalidIdentity);
+            }
+            for buffer_index in 0..buffer_count {
                 let id = pending.buffer_ids[buffer_index];
                 let generation = pending.buffer_generations[buffer_index];
-                if let Some(allocation) =
-                    take_allocation(&mut self.pending_allocations, id, generation)
+                let target = self
+                    .pending_buffer_target(pending, buffer_index)
+                    .ok_or(OrderedPlanError::InvalidIdentity)?;
+                if target.id != id || target.generation != generation {
+                    return Err(OrderedPlanError::InvalidIdentity);
+                }
+                if pending.buffer_ids[..buffer_index]
+                    .iter()
+                    .zip(&pending.buffer_generations[..buffer_index])
+                    .any(|(&prior_id, &prior_generation)| {
+                        prior_id == id && prior_generation == generation
+                    })
                 {
+                    return Err(OrderedPlanError::InvalidIdentity);
+                }
+            }
+            for patch in &self.patches[pending.patch_start..pending.patch_end] {
+                if patch.opcode != PATCH_WRITE && patch.opcode != PATCH_ALLOCATE_OR_RESIZE {
+                    continue;
+                }
+                let Some(buffer_index) = (0..buffer_count).find(|&index| {
+                    pending.buffer_ids[index] == patch.buffer_id
+                        && pending.buffer_generations[index] == patch.buffer_generation
+                }) else {
+                    return Err(OrderedPlanError::InvalidIdentity);
+                };
+                let target = self
+                    .pending_buffer_target(pending, buffer_index)
+                    .ok_or(OrderedPlanError::InvalidIdentity)?;
+                if patch.opcode == PATCH_ALLOCATE_OR_RESIZE {
+                    if pending.allocation_start.is_none()
+                        || usize::try_from(patch.byte_length)
+                            .ok()
+                            .is_none_or(|length| length != target.bytes.len())
+                    {
+                        return Err(OrderedPlanError::InvalidIdentity);
+                    }
+                    continue;
+                }
+                let source_start = usize::try_from(patch.payload_start)
+                    .map_err(|_| OrderedPlanError::InvalidIdentity)?;
+                let destination_start = usize::try_from(patch.destination_offset)
+                    .map_err(|_| OrderedPlanError::InvalidIdentity)?;
+                let length = usize::try_from(patch.byte_length)
+                    .map_err(|_| OrderedPlanError::InvalidIdentity)?;
+                let source_end = source_start
+                    .checked_add(length)
+                    .ok_or(OrderedPlanError::InvalidIdentity)?;
+                let destination_end = destination_start
+                    .checked_add(length)
+                    .ok_or(OrderedPlanError::InvalidIdentity)?;
+                if source_end > self.payload.len() || destination_end > target.bytes.len() {
+                    return Err(OrderedPlanError::InvalidIdentity);
+                }
+            }
+        }
+        reserve(&mut self.spare_buffers, output_buffer_count)?;
+        reserve(&mut self.spare_batches, self.pending_batches.len())?;
+        Ok(())
+    }
+
+    fn pending_buffer_target(
+        &self,
+        pending: &PendingBatch,
+        buffer_index: usize,
+    ) -> Option<&PhysicalBufferState> {
+        if let Some(start) = pending.allocation_start {
+            return self
+                .pending_allocations
+                .get(start.checked_add(buffer_index)?)?
+                .as_ref()
+                .map(|allocation| &allocation.state);
+        }
+        let prior = self
+            .batches
+            .get(usize::try_from(pending.prior_index?).ok()?)?;
+        let source_index = usize::try_from(prior.buffer_start)
+            .ok()?
+            .checked_add(buffer_index)?;
+        self.buffers.get(source_index)
+    }
+
+    pub(crate) fn commit_preflighted(&mut self) {
+        mem::swap(&mut self.buffers, &mut self.spare_buffers);
+        self.buffers.clear();
+        let mut output_buffer_start = 0usize;
+        for pending_index in 0..self.pending_batches.len() {
+            let mut pending = self.pending_batches[pending_index];
+            pending.state.buffer_start = u32::try_from(output_buffer_start)
+                .expect("preflight checked every output buffer start");
+            output_buffer_start += usize::from(pending.state.buffer_count);
+            self.pending_batches[pending_index].state.buffer_start = pending.state.buffer_start;
+            for buffer_index in 0..usize::from(pending.state.buffer_count) {
+                if let Some(allocation_start) = pending.allocation_start {
+                    let allocation = self.pending_allocations[allocation_start + buffer_index]
+                        .take()
+                        .expect("preflight validated staged batch allocations");
                     self.buffers.push(allocation.state);
                     continue;
                 }
-                let position = self
-                    .spare_buffers
-                    .iter()
-                    .position(|buffer| buffer.id == id && buffer.generation == generation)
-                    .ok_or(OrderedPlanError::InvalidIdentity)?;
-                let mut buffer = self.spare_buffers.swap_remove(position);
-                apply_writes(&mut buffer, &self.patches, &self.payload)?;
-                self.buffers.push(buffer);
+                let prior = self.batches[pending
+                    .prior_index
+                    .expect("preflight validated prior batch provenance for retained buffers")
+                    as usize];
+                let source_index = prior.buffer_start as usize + buffer_index;
+                let source = &mut self.spare_buffers[source_index];
+                apply_writes_prevalidated(
+                    &mut source.bytes,
+                    source.id,
+                    source.generation,
+                    &self.patches[pending.patch_start..pending.patch_end],
+                    &self.payload,
+                );
+                self.buffers.push(PhysicalBufferState {
+                    id: source.id,
+                    generation: source.generation,
+                    program_id: source.program_id,
+                    schema: source.schema,
+                    capacity: source.capacity,
+                    bytes: mem::take(&mut source.bytes),
+                });
             }
         }
         self.spare_buffers.clear();
@@ -583,15 +783,14 @@ impl OrderedPlanCompiler {
         mem::swap(&mut self.batches, &mut self.spare_batches);
         self.batches.clear();
         for pending in &self.pending_batches {
-            let mut state = pending.state;
-            state.buffer_start = u32::try_from(self.batches_buffer_start(self.batches.len()))
-                .map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
-            self.batches.push(state);
+            self.batches.push(pending.state);
         }
         self.spare_batches.clear();
+        self.pending_allocations.clear();
         mem::swap(&mut self.instances, &mut self.pending_instances);
         self.pending_instances.clear();
-        if self.reuse_live_bindings {
+        let retained_bindings = self.reuse_live_bindings;
+        if retained_bindings {
             self.primitives.clear();
             self.draws.clear();
         } else {
@@ -603,12 +802,20 @@ impl OrderedPlanCompiler {
         self.next_buffer_id = self.pending_next_buffer_id;
         self.codec_fingerprint = self.pending_codec_fingerprint;
         self.capability_set = self.pending_capability_set;
+        self.committed_order_independent = self.pending_order_independent;
+        if !retained_bindings {
+            mem::swap(&mut self.blocks, &mut self.pending_blocks);
+            self.pending_blocks.clear();
+        }
+        if self.committed_order_independent.is_none() {
+            self.blocks.clear();
+        }
         if self.mapping_state == MappingState::RebuiltPending {
             self.mapping_state = MappingState::Current;
         }
         self.reuse_live_bindings = false;
+        self.pending_order_independent = None;
         self.prepared = false;
-        Ok(())
     }
 
     pub fn abort(&mut self) {
@@ -632,6 +839,16 @@ impl OrderedPlanCompiler {
     }
 
     #[cfg(test)]
+    pub(crate) fn block_stats(&self) -> (usize, usize, usize, usize) {
+        (
+            DRAW_BLOCK_SLOTS,
+            core::mem::size_of::<DrawBlock>(),
+            self.blocks.len(),
+            self.blocks.capacity() + self.pending_blocks.capacity(),
+        )
+    }
+
+    #[cfg(test)]
     pub(crate) fn retained_binding_compilation_skips(&self) -> u32 {
         self.retained_binding_compilation_skips
     }
@@ -641,11 +858,13 @@ impl OrderedPlanCompiler {
             self.mapping_state = MappingState::Invalid;
         }
         self.pending_batches.clear();
+        self.pending_blocks.clear();
         self.pending_instances.clear();
         self.pending_allocations.clear();
         self.batch_cursors.clear();
         self.changed_ranges.clear();
         self.dirty_instances.clear();
+        self.retained_input_slots.clear();
         self.resources.clear();
         self.plan_buffers.clear();
         self.primitives.clear();
@@ -657,6 +876,7 @@ impl OrderedPlanCompiler {
         self.retained_host_topology = false;
         self.bindings_dirty = false;
         self.reuse_live_bindings = false;
+        self.pending_order_independent = None;
     }
 
     fn prepare_complete_topology(
@@ -664,10 +884,15 @@ impl OrderedPlanCompiler {
         codec: &ValidatedCodec,
         capability_set: CapabilitySetId,
         input: OrderedPlanInput<'_>,
-        unchanged_prefix: Option<usize>,
+        replacement: Option<&[GatherCorrespondence]>,
     ) -> Result<bool, OrderedPlanError> {
-        let prefix = unchanged_prefix.unwrap_or(0);
-        if unchanged_prefix.is_some() {
+        let prefix = replacement
+            .and_then(|entries| entries.first())
+            .map_or(0, |entry| entry.old.record_start());
+        if let Some(correspondence) = replacement {
+            if correspondence.is_empty() {
+                return Ok(false);
+            }
             if self.mapping_state != MappingState::Current
                 || self.codec_fingerprint != codec.fingerprint()
                 || self.capability_set != capability_set.0
@@ -678,12 +903,43 @@ impl OrderedPlanCompiler {
             {
                 return Ok(false);
             }
+            reserve(&mut self.retained_input_slots, input.glyphs.len())?;
+            self.retained_input_slots.resize(input.glyphs.len(), NONE);
+            self.retain_input_slots(0..prefix, 0)?;
+            let mut old_end = prefix;
+            let mut next_end = prefix;
+            for entry in correspondence {
+                let old = entry.old.record_start()..entry.old.record_end();
+                let next = entry.next.record_start()..entry.next.record_end();
+                if old.start != old_end
+                    || next.start != next_end
+                    || old.end < old.start
+                    || next.end < next.start
+                    || old.end > self.instances.len()
+                    || next.end > input.glyphs.len()
+                    || (entry.owner.is_none() && old.len() != next.len())
+                {
+                    return Ok(false);
+                }
+                if entry.owner.is_none() {
+                    self.retain_input_slots(old.clone(), next.start)?;
+                }
+                old_end = old.end;
+                next_end = next.end;
+            }
+            if self.instances.len() - old_end != input.glyphs.len() - next_end {
+                return Ok(false);
+            }
+            self.retain_input_slots(old_end..self.instances.len(), next_end)?;
             reserve(&mut self.pending_batches, self.batches.len())?;
             for (index, batch) in self.batches.iter().copied().enumerate() {
                 self.pending_batches.push(PendingBatch {
                     retained_count: batch.instance_count,
                     state: batch,
                     prior_index: Some(index as u32),
+                    allocation_start: None,
+                    patch_start: self.patches.len(),
+                    patch_end: self.patches.len(),
                     capacity: 0,
                     buffer_ids: [0; MAX_PHYSICAL_BUFFERS],
                     buffer_generations: [0; MAX_PHYSICAL_BUFFERS],
@@ -699,15 +955,6 @@ impl OrderedPlanCompiler {
                 batch.retained_count = count;
                 batch.state.instance_count = count;
             }
-            // Every surviving batch must have a proven clean physical prefix. A batch
-            // introduced/removed exclusively by this tail uses the same complete executor.
-            if self
-                .pending_batches
-                .iter()
-                .any(|batch| batch.retained_count == 0)
-            {
-                return Ok(false);
-            }
         }
         // These mappings are speculative until commit. An aborted full fallback must
         // repair through complete admission before they can authorize retained work.
@@ -719,6 +966,26 @@ impl OrderedPlanCompiler {
         self.input_slots.resize(input.glyphs.len(), 0);
         let mut cached_kind_program = None;
         for (input_index, glyph) in input.glyphs.iter().copied().enumerate().skip(prefix) {
+            if let Some(&source) = self.retained_input_slots.get(input_index)
+                && source != NONE
+            {
+                let batch_index = self.batches.partition_point(|batch| {
+                    u64::from(batch.instance_start) + u64::from(batch.instance_count)
+                        <= u64::from(source)
+                });
+                let batch = self
+                    .pending_batches
+                    .get_mut(batch_index)
+                    .ok_or(OrderedPlanError::InvalidIdentity)?;
+                batch.state.instance_count = batch
+                    .state
+                    .instance_count
+                    .checked_add(1)
+                    .ok_or(OrderedPlanError::ArithmeticOverflow)?;
+                self.input_batches[input_index] =
+                    u32::try_from(batch_index).map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
+                continue;
+            }
             #[cfg(test)]
             super::work_attribution::record(|work| work.ordered_admission_visits += 1);
             let program = match cached_kind_program {
@@ -751,7 +1018,7 @@ impl OrderedPlanCompiler {
             {
                 Some(index) => index,
                 None => {
-                    if unchanged_prefix.is_some() {
+                    if replacement.is_some() {
                         return Ok(false);
                     }
                     reserve(&mut self.pending_batches, 1)?;
@@ -770,6 +1037,9 @@ impl OrderedPlanCompiler {
                             buffer_count: 0,
                         },
                         prior_index,
+                        allocation_start: None,
+                        patch_start: self.patches.len(),
+                        patch_end: self.patches.len(),
                         capacity: 0,
                         buffer_ids: [0; MAX_PHYSICAL_BUFFERS],
                         buffer_generations: [0; MAX_PHYSICAL_BUFFERS],
@@ -786,13 +1056,44 @@ impl OrderedPlanCompiler {
             self.input_batches[input_index] =
                 u32::try_from(batch_index).map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
         }
+        if replacement.is_some()
+            && self
+                .pending_batches
+                .iter()
+                .any(|batch| batch.state.instance_count == 0)
+        {
+            return Ok(false);
+        }
         self.layout_pending_instances(input, prefix)?;
         // A changed source tail can keep emitted/batch counts while changing draw
         // identity or extrema (for example, one glyph replaced by a ligature).
         // Retaining storage alone cannot authorize retention of renderer bindings.
-        self.bindings_dirty |= unchanged_prefix.is_some();
+        self.bindings_dirty |= replacement.is_some();
         self.mapping_state = MappingState::RebuiltPending;
         Ok(true)
+    }
+
+    fn retain_input_slots(
+        &mut self,
+        old: Range<usize>,
+        next_start: usize,
+    ) -> Result<(), OrderedPlanError> {
+        // Capture committed physical provenance before speculative input mappings are overwritten.
+        for (offset, input_index) in old.enumerate() {
+            let batch = self
+                .batches
+                .get(self.input_batches[input_index] as usize)
+                .ok_or(OrderedPlanError::InvalidIdentity)?;
+            let slot = self.input_slots[input_index];
+            if slot >= batch.instance_count {
+                return Err(OrderedPlanError::InvalidIdentity);
+            }
+            self.retained_input_slots[next_start + offset] = batch
+                .instance_start
+                .checked_add(slot)
+                .ok_or(OrderedPlanError::ArithmeticOverflow)?;
+        }
+        Ok(())
     }
 
     fn prepare_retained_topology(
@@ -813,12 +1114,8 @@ impl OrderedPlanCompiler {
         }
         // Exact complete dirt needs no sparse input-to-physical lookup. Both scopes
         // retain the same admission body and canonical physical instance order.
-        let output_intervals = output_intervals.filter(|ranges| {
-            ranges.len() != 1
-                || ranges[0].is_empty()
-                || ranges[0].start != 0
-                || ranges[0].end != input.glyphs.len()
-        });
+        let output_intervals =
+            output_intervals.and_then(|ranges| sparse_output_intervals(ranges, input.glyphs.len()));
         let retained_instances = self.instances.clone();
         let mut complete_instances = retained_instances.iter().enumerate();
         let mut sparse_inputs = output_intervals
@@ -882,12 +1179,12 @@ impl OrderedPlanCompiler {
                         .ok_or(OrderedPlanError::InvalidIdentity)?;
                 }
                 let retained = instance_cursor
-                    .take(1)
+                    .next_record()
                     .ok_or(OrderedPlanError::InvalidIdentity)?;
                 cursor_position = instance_index
                     .checked_add(1)
                     .ok_or(OrderedPlanError::ArithmeticOverflow)?;
-                retained.first().ok_or(OrderedPlanError::InvalidIdentity)?
+                retained
             };
             let input_position = input_index;
             let input_index =
@@ -926,6 +1223,9 @@ impl OrderedPlanCompiler {
                 prior_index: Some(
                     u32::try_from(batch_index).map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
                 ),
+                allocation_start: None,
+                patch_start: self.patches.len(),
+                patch_end: self.patches.len(),
                 capacity: buffers.first().map_or(0, |buffer| buffer.capacity),
                 buffer_ids: [0; MAX_PHYSICAL_BUFFERS],
                 buffer_generations: [0; MAX_PHYSICAL_BUFFERS],
@@ -937,25 +1237,19 @@ impl OrderedPlanCompiler {
             self.pending_batches.push(pending);
         }
         self.dirty_instances.sort_unstable();
-        let mut first = 0;
-        while first < self.dirty_instances.len() {
-            let start = self.dirty_instances[first];
-            let mut end = start + 1;
-            first += 1;
-            while first < self.dirty_instances.len() && self.dirty_instances[first] == end {
-                end += 1;
-                first += 1;
-            }
-            self.pending_instances
-                .update_ordered(start as usize..end as usize, |_, previous| {
+        self.pending_instances
+            .update_ordered_ranges(
+                coalesced_slot_ranges(&self.dirty_instances)
+                    .map(|range| Ok(range.start as usize..range.end as usize)),
+                |_, previous| {
                     instance_state(input, previous.input_index as usize)
                         .map(super::retained_rope::RopeUpdate::Replace)
-                })
-                .map_err(|error| match error {
-                    RopeEditError::Storage => OrderedPlanError::AllocationFailed,
-                    RopeEditError::Callback(error) => error,
-                })?;
-        }
+                },
+            )
+            .map_err(|error| match error {
+                RopeEditError::Storage => OrderedPlanError::AllocationFailed,
+                RopeEditError::Callback(error) => error,
+            })?;
         Ok(true)
     }
 
@@ -1028,13 +1322,23 @@ impl OrderedPlanCompiler {
             )? {
                 let input_index = self.sort_pairs[pair_index].1 as usize;
                 pair_index += 1;
+                let source = self
+                    .retained_input_slots
+                    .get(input_index)
+                    .copied()
+                    .unwrap_or(NONE);
+                let previous = previous.next();
                 let next = instance_state(input, input_index)?;
                 #[cfg(test)]
                 super::work_attribution::record(|work| {
                     work.ordered_instance_comparisons += 1;
                     work.ordered_instance_rewrites += 1;
                 });
-                if previous.next() != Some(&next) {
+                let moved = source != NONE
+                    && source as usize
+                        != ordinal - batch.state.instance_start as usize + retained_end
+                            - batch.retained_count as usize;
+                if moved || (source == NONE && previous != Some(&next)) {
                     reserve(&mut self.dirty_instances, 1)?;
                     self.dirty_instances.push(ordinal as u32);
                 }
@@ -1065,8 +1369,10 @@ impl OrderedPlanCompiler {
             capability,
             input,
             checkpoint,
+            ..
         } = context;
         let pending = self.pending_batches[batch_index];
+        let patch_start = self.patches.len();
         let key = pending.state.key;
         let program = codec
             .program(capability_set, key.technique, key.program_variant)
@@ -1098,6 +1404,10 @@ impl OrderedPlanCompiler {
         self.pending_batches[batch_index].capacity = capacity;
 
         let new_or_resized = prior.is_none() || capacity != prior_capacity;
+        let allocation_start =
+            (checkpoint || new_or_resized).then_some(self.pending_allocations.len());
+        self.pending_batches[batch_index].allocation_start = allocation_start;
+        self.pending_batches[batch_index].patch_start = patch_start;
         self.changed_ranges.clear();
         if required != 0 && (checkpoint || new_or_resized) {
             reserve(&mut self.changed_ranges, 1)?;
@@ -1111,22 +1421,13 @@ impl OrderedPlanCompiler {
                 .checked_add(required)
                 .ok_or(OrderedPlanError::ArithmeticOverflow)?;
             let first = self.dirty_instances.partition_point(|slot| *slot < start);
-            for &slot in self.dirty_instances[first..]
-                .iter()
-                .take_while(|slot| **slot < end)
-            {
-                let relative = slot - start;
-                if let Some(range) = self.changed_ranges.last_mut()
-                    && range.end == relative
-                {
-                    range.end += 1;
-                } else {
-                    reserve(&mut self.changed_ranges, 1)?;
-                    self.changed_ranges.push(RecordRange {
-                        start: relative,
-                        end: relative + 1,
-                    });
-                }
+            let last = self.dirty_instances.partition_point(|slot| *slot < end);
+            for run in coalesced_slot_ranges(&self.dirty_instances[first..last]) {
+                reserve(&mut self.changed_ranges, 1)?;
+                self.changed_ranges.push(RecordRange {
+                    start: run.start - start,
+                    end: run.end - start,
+                });
             }
         }
         for (schema_index, schema) in program.buffers.iter().copied().enumerate() {
@@ -1199,7 +1500,6 @@ impl OrderedPlanCompiler {
             program,
             prior,
             self.pending_batches[batch_index],
-            checkpoint || new_or_resized,
         )?;
         if let Some(prior) = prior
             && required < prior.instance_count
@@ -1220,6 +1520,7 @@ impl OrderedPlanCompiler {
                 });
             }
         }
+        self.pending_batches[batch_index].patch_end = self.patches.len();
         self.pending_batches[batch_index].state.buffer_count = u16::try_from(program.buffers.len())
             .map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
         Ok(())
@@ -1235,8 +1536,9 @@ impl OrderedPlanCompiler {
         program: &super::codec::ProgramDescriptor,
         prior: Option<BatchState>,
         pending: PendingBatch,
-        replace: bool,
     ) -> Result<(), OrderedPlanError> {
+        let allocation_start = pending.allocation_start;
+        let replace = allocation_start.is_some();
         let next_instances = self
             .pending_instances
             .range(range(
@@ -1267,6 +1569,8 @@ impl OrderedPlanCompiler {
                 input,
                 changed,
                 replace,
+                &self.retained_input_slots,
+                prior.map_or(0, |batch| batch.instance_start),
             )?;
             for (schema_index, schema) in program.buffers.iter().enumerate() {
                 if active_buffers & (1 << schema_index) == 0 {
@@ -1309,8 +1613,11 @@ impl OrderedPlanCompiler {
                     .and_then(|value| value.checked_mul(schema.stride()))
                     .ok_or(OrderedPlanError::ArithmeticOverflow)?;
                 let payload_start = self.payload.len();
+                let payload_end = payload_start
+                    .checked_add(byte_count)
+                    .ok_or(OrderedPlanError::ArithmeticOverflow)?;
                 reserve(&mut self.payload, byte_count)?;
-                self.payload.resize(payload_start + byte_count, 0);
+                self.payload.resize(payload_end, 0);
                 payload_starts[schema_index] = payload_start;
                 if !replace && let Some(prior) = prior {
                     let old_buffer = self
@@ -1318,9 +1625,11 @@ impl OrderedPlanCompiler {
                         .get(prior.buffer_start as usize + schema_index)
                         .ok_or(OrderedPlanError::InvalidIdentity)?;
                     let source_start = aligned.start as usize * schema.stride();
-                    let source_end = source_start + byte_count;
+                    let source_end = source_start
+                        .checked_add(byte_count)
+                        .ok_or(OrderedPlanError::ArithmeticOverflow)?;
                     if source_end <= old_buffer.bytes.len() {
-                        self.payload[payload_start..payload_start + byte_count]
+                        self.payload[payload_start..payload_end]
                             .copy_from_slice(&old_buffer.bytes[source_start..source_end]);
                     }
                 }
@@ -1341,6 +1650,63 @@ impl OrderedPlanCompiler {
                 .map(|(offset, next)| (aligned.start + offset as u32, next, previous.next()))
                 .peekable();
             while let Some((run_start, next, previous)) = records.next() {
+                if let Some(&source) = self.retained_input_slots.get(next.input_index as usize)
+                    && source != NONE
+                {
+                    let mut run_end = run_start + 1;
+                    while let Some((next_slot, next, _)) = records.peek()
+                        && let Some(&next_source) =
+                            self.retained_input_slots.get(next.input_index as usize)
+                        && next_source != NONE
+                        && source.checked_add(*next_slot - run_start) == Some(next_source)
+                    {
+                        records.next();
+                        run_end += 1;
+                    }
+                    let copied_records = run_end - run_start;
+                    let prior = prior.ok_or(OrderedPlanError::InvalidIdentity)?;
+                    let source_slot = source
+                        .checked_sub(prior.instance_start)
+                        .filter(|slot| {
+                            slot.checked_add(copied_records)
+                                .is_some_and(|end| end <= prior.instance_count)
+                        })
+                        .ok_or(OrderedPlanError::InvalidIdentity)?;
+                    #[cfg(test)]
+                    super::work_attribution::record(|work| work.clean_buffer_copy_runs += 1);
+                    for (schema_index, schema) in program.buffers.iter().enumerate() {
+                        if active_buffers & (1 << schema_index) == 0 {
+                            continue;
+                        }
+                        let old_buffer = self
+                            .buffers
+                            .get(prior.buffer_start as usize + schema_index)
+                            .ok_or(OrderedPlanError::InvalidIdentity)?;
+                        let source_start = (source_slot as usize)
+                            .checked_mul(schema.stride())
+                            .ok_or(OrderedPlanError::ArithmeticOverflow)?;
+                        let byte_count = (copied_records as usize)
+                            .checked_mul(schema.stride())
+                            .ok_or(OrderedPlanError::ArithmeticOverflow)?;
+                        let source_end = source_start
+                            .checked_add(byte_count)
+                            .ok_or(OrderedPlanError::ArithmeticOverflow)?;
+                        let destination_start = payload_starts[schema_index]
+                            .checked_add(
+                                ((run_start - aligned.start) as usize)
+                                    .checked_mul(schema.stride())
+                                    .ok_or(OrderedPlanError::ArithmeticOverflow)?,
+                            )
+                            .ok_or(OrderedPlanError::ArithmeticOverflow)?;
+                        let bytes = old_buffer
+                            .bytes
+                            .get(source_start..source_end)
+                            .ok_or(OrderedPlanError::InvalidIdentity)?;
+                        self.payload[destination_start..destination_start + byte_count]
+                            .copy_from_slice(bytes);
+                    }
+                    continue;
+                }
                 if instance_unchanged(previous, next, replace) {
                     continue;
                 }
@@ -1348,6 +1714,10 @@ impl OrderedPlanCompiler {
                 let mut slot = run_start + 1;
                 while let Some((next_slot, next, previous)) = records.peek()
                     && !instance_unchanged(*previous, next, replace)
+                    && self
+                        .retained_input_slots
+                        .get(next.input_index as usize)
+                        .is_none_or(|source| *source == NONE)
                     && next.input_index == input_start + (*next_slot - run_start)
                 {
                     records.next();
@@ -1381,6 +1751,28 @@ impl OrderedPlanCompiler {
                     .start
                     .checked_mul(u32::from(schema.stride))
                     .ok_or(OrderedPlanError::ArithmeticOverflow)?;
+                let source_start = payload_starts[schema_index];
+                let length = usize::try_from(byte_length)
+                    .map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
+                let source_end = source_start
+                    .checked_add(length)
+                    .ok_or(OrderedPlanError::ArithmeticOverflow)?;
+                let destination_start = usize::try_from(destination_offset)
+                    .map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
+                let destination_end = destination_start
+                    .checked_add(length)
+                    .ok_or(OrderedPlanError::ArithmeticOverflow)?;
+                let capacity_bytes = pending
+                    .capacity
+                    .checked_mul(u32::from(schema.stride))
+                    .ok_or(OrderedPlanError::ArithmeticOverflow)?;
+                if source_end > self.payload.len()
+                    || destination_end
+                        > usize::try_from(capacity_bytes)
+                            .map_err(|_| OrderedPlanError::ArithmeticOverflow)?
+                {
+                    return Err(OrderedPlanError::InvalidIdentity);
+                }
                 reserve(&mut self.patches, 1)?;
                 self.patches.push(PatchRecord {
                     opcode: PATCH_WRITE,
@@ -1392,22 +1784,17 @@ impl OrderedPlanCompiler {
                         .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
                     ..PatchRecord::default()
                 });
-                if let Some(allocation) = self.pending_allocations.iter_mut().find(|allocation| {
-                    allocation.state.id == buffer_id
-                        && allocation.state.generation == buffer_generation
-                }) {
-                    let destination = destination_offset as usize;
-                    let source = payload_starts[schema_index];
-                    let destination = allocation
-                        .state
-                        .bytes
-                        .get_mut(destination..destination + byte_length as usize)
+                if let Some(start) = allocation_start {
+                    let allocation_index = start
+                        .checked_add(schema_index)
+                        .ok_or(OrderedPlanError::ArithmeticOverflow)?;
+                    let allocation = self
+                        .pending_allocations
+                        .get_mut(allocation_index)
+                        .and_then(Option::as_mut)
                         .ok_or(OrderedPlanError::InvalidIdentity)?;
-                    let source = self
-                        .payload
-                        .get(source..source + byte_length as usize)
-                        .ok_or(OrderedPlanError::InvalidIdentity)?;
-                    destination.copy_from_slice(source);
+                    allocation.state.bytes[destination_start..destination_end]
+                        .copy_from_slice(&self.payload[source_start..source_end]);
                 }
             }
         }
@@ -1419,7 +1806,11 @@ impl OrderedPlanCompiler {
         context: PrepareContext<'_>,
         retained_topology: bool,
     ) -> Result<(), OrderedPlanError> {
-        if retained_topology && !self.bindings_dirty && self.retained_storage_bindings_match()? {
+        if retained_topology
+            && self.committed_order_independent == Some(context.input.order_independent)
+            && !self.bindings_dirty
+            && self.retained_storage_bindings_match()?
+        {
             self.reuse_live_bindings = true;
             self.retained_host_topology = !context.checkpoint;
             #[cfg(test)]
@@ -1509,12 +1900,21 @@ impl OrderedPlanCompiler {
         if context.capability.max_resources_per_draw < 1 {
             return Err(OrderedPlanError::CapacityExceeded);
         }
-        if context.input.order_independent {
-            self.compile_independent_draws(context)?;
+        let reuse_eligible = retained_topology
+            && !context.checkpoint
+            && context.changed_intervals.is_some()
+            && self.committed_order_independent == Some(context.input.order_independent);
+        let retained_storage = if reuse_eligible {
+            Some(self.retained_storage_bindings_match()?)
         } else {
-            self.compile_ordered_draws(context)?;
-        }
-        let retained_storage = self.retained_storage_bindings_match()?;
+            None
+        };
+        let reuse_clean_spans = retained_storage == Some(true);
+        self.compile_draw_spans(context, reuse_clean_spans)?;
+        let retained_storage = match retained_storage {
+            Some(matches) => matches,
+            None => self.retained_storage_bindings_match()?,
+        };
         let retained_draws = retained_storage
             && self.draws.len() == self.live_draws.len()
             && self.draws.iter().zip(&self.live_draws).all(|(next, live)| {
@@ -1554,6 +1954,8 @@ impl OrderedPlanCompiler {
             return Ok(false);
         }
         for (batch_index, pending) in self.pending_batches.iter().enumerate() {
+            #[cfg(test)]
+            super::work_attribution::record(|work| work.retained_storage_match_batch_visits += 1);
             let Some(committed) = self.batches.get(batch_index) else {
                 return Ok(false);
             };
@@ -1585,19 +1987,97 @@ impl OrderedPlanCompiler {
         Ok(true)
     }
 
-    fn compile_ordered_draws(
+    fn compile_draw_spans(
         &mut self,
         context: PrepareContext<'_>,
+        reuse_clean_spans: bool,
     ) -> Result<(), OrderedPlanError> {
-        let mut input_index = 0_usize;
-        while input_index < context.input.glyphs.len() {
-            if self.input_batches[input_index] == NONE {
-                input_index += 1;
-                continue;
+        let independent = context.input.order_independent;
+        let changed_intervals = context.changed_intervals.unwrap_or(&[]);
+        let reuse_blocks = independent && reuse_clean_spans;
+        // A changed row dirties the sole old span, leaving no old primitive to reuse.
+        let reuse_clean_spans = reuse_clean_spans
+            && (!independent || changed_intervals.is_empty() || self.live_primitives.len() > 1);
+        if reuse_blocks {
+            let dirty_count = changed_intervals
+                .iter()
+                .try_fold(0_usize, |total, interval| {
+                    total.checked_add(interval.end - interval.start)
+                })
+                .ok_or(OrderedPlanError::ArithmeticOverflow)?;
+            self.sort_pairs.clear();
+            reserve(&mut self.sort_pairs, dirty_count)?;
+            for interval in changed_intervals {
+                for input_index in interval.clone() {
+                    let batch = self.input_batches[input_index];
+                    self.sort_pairs
+                        .push((sort::pack2(batch, self.input_slots[input_index]), 0));
+                }
             }
-            let first = context.input.glyphs[input_index];
-            let batch_index = self.input_batches[input_index] as usize;
-            let first_slot = self.input_slots[input_index];
+            sort::sort_pairs(&mut self.sort_pairs);
+        }
+
+        let mut logical_index = 0_usize;
+        let mut physical_batch = 0_usize;
+        let mut physical_slot = 0_usize;
+        let mut physical_cursor = None;
+        let mut old_index = 0_usize;
+        let mut old_physical_batch = None;
+        let mut dirty_index = 0_usize;
+        let mut block_index = 0_usize;
+        loop {
+            let (first_input, batch_index, first_slot, start) = if independent {
+                while physical_batch < self.pending_batches.len() {
+                    let batch = self.pending_batches[physical_batch];
+                    if physical_slot < batch.state.instance_count as usize {
+                        break;
+                    }
+                    physical_batch += 1;
+                    physical_slot = 0;
+                    physical_cursor = None;
+                }
+                let Some(batch) = self.pending_batches.get(physical_batch).copied() else {
+                    break;
+                };
+                if physical_cursor.is_none() {
+                    physical_cursor = Some(
+                        self.pending_instances
+                            .cursor_from(batch.state.instance_start as usize)
+                            .ok_or(OrderedPlanError::InvalidIdentity)?,
+                    );
+                }
+                let input_index = physical_cursor
+                    .as_mut()
+                    .and_then(|cursor| cursor.peek_record())
+                    .map(|instance| instance.input_index as usize)
+                    .ok_or(OrderedPlanError::InvalidIdentity)?;
+                (
+                    input_index,
+                    physical_batch,
+                    u32::try_from(physical_slot)
+                        .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
+                    physical_slot,
+                )
+            } else {
+                while logical_index < context.input.glyphs.len()
+                    && self.input_batches[logical_index] == NONE
+                {
+                    logical_index += 1;
+                }
+                if logical_index == context.input.glyphs.len() {
+                    break;
+                }
+                (
+                    logical_index,
+                    self.input_batches[logical_index] as usize,
+                    self.input_slots[logical_index],
+                    logical_index,
+                )
+            };
+            let first = context.input.glyphs[first_input];
+            let batch = self.pending_batches[batch_index];
+            let batch_key_index =
+                u32::try_from(batch_index).map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
             let program = context
                 .codec
                 .program(
@@ -1608,31 +2088,321 @@ impl OrderedPlanCompiler {
                 .ok_or(OrderedPlanError::ProgramMissing)?;
             let split_material = program.draw_key_mask & BATCH_MATERIAL != 0;
             let split_transform = program.draw_key_mask & BATCH_TRANSFORM != 0;
-            let mut summary = DrawSpanSummary::new(first);
-            let mut end = input_index + 1;
-            while end < context.input.glyphs.len()
-                && end - input_index < usize::from(u16::MAX)
-                && self.same_draw_span(
-                    context.input.glyphs,
-                    input_index,
-                    end,
-                    batch_index,
-                    first_slot,
-                    split_material,
-                    split_transform,
-                )
-            {
-                summary.push(context.input.glyphs[end]);
-                end += 1;
+            let limit = if independent {
+                batch.state.instance_count as usize
+            } else {
+                context.input.glyphs.len()
+            };
+
+            if reuse_clean_spans {
+                if independent {
+                    if old_physical_batch != Some(batch_index) {
+                        if let Some(previous_batch) = old_physical_batch {
+                            let previous_buffer =
+                                self.pending_batches[previous_batch].buffer_ids[0];
+                            while self
+                                .live_primitives
+                                .get(old_index)
+                                .is_some_and(|old| old.buffer_id == previous_buffer)
+                            {
+                                old_index += 1;
+                            }
+                        }
+                        old_physical_batch = Some(batch_index);
+                    }
+                    while self.live_primitives.get(old_index).is_some_and(|old| {
+                        old.buffer_id == batch.buffer_ids[0] && old.record_index < first_slot
+                    }) {
+                        old_index += 1;
+                    }
+                    let key = sort::pack2(batch_key_index, first_slot);
+                    while self
+                        .sort_pairs
+                        .get(dirty_index)
+                        .is_some_and(|pair| pair.0 < key)
+                    {
+                        dirty_index += 1;
+                    }
+                } else {
+                    while self
+                        .live_primitives
+                        .get(old_index)
+                        .is_some_and(|old| (old.logical_order as usize) < first_input)
+                    {
+                        old_index += 1;
+                    }
+                    while changed_intervals
+                        .get(dirty_index)
+                        .is_some_and(|interval| interval.end <= first_input)
+                    {
+                        dirty_index += 1;
+                    }
+                }
             }
-            let count = u16::try_from(end - input_index)
-                .map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
-            let (inline_start, block_start, inline_extent, block_extent) = summary.bounds()?;
-            #[cfg(test)]
-            super::work_attribution::record(|work| {
-                work.draw_reduced_glyphs += usize::from(count);
-            });
-            let batch = self.pending_batches[batch_index];
+            if reuse_blocks {
+                while self
+                    .blocks
+                    .get(block_index)
+                    .is_some_and(|block| (block.batch, block.slot) < (batch_key_index, first_slot))
+                {
+                    block_index += 1;
+                }
+            }
+            let old_span = if reuse_clean_spans {
+                self.live_primitives.get(old_index).and_then(|old| {
+                    let count = usize::from(old.record_count);
+                    let end = start.checked_add(count)?;
+                    if count == 0
+                        || end > limit
+                        || old.record_index != first_slot
+                        || old.buffer_id != batch.buffer_ids[0]
+                        || old.logical_order as usize != first_input
+                    {
+                        return None;
+                    }
+                    let clean = if independent {
+                        let end_slot = u32::try_from(end).ok()?;
+                        let end_key = sort::pack2(batch_key_index, end_slot);
+                        self.sort_pairs
+                            .get(dirty_index)
+                            .is_none_or(|pair| pair.0 >= end_key)
+                    } else {
+                        changed_intervals
+                            .get(dirty_index)
+                            .is_none_or(|interval| interval.start >= end)
+                    };
+                    if !clean {
+                        return None;
+                    }
+                    let split_at_end = if end == limit || count == usize::from(u16::MAX) {
+                        true
+                    } else if independent {
+                        let next = physical_cursor
+                            .as_mut()
+                            .and_then(|cursor| cursor.peek(count + 1))
+                            .and_then(|range| range.last())?;
+                        let next_glyph = context.input.glyphs[next.input_index as usize];
+                        !draw_fields_compatible(first, next_glyph, split_material, split_transform)
+                    } else {
+                        !self.same_draw_span(
+                            context.input.glyphs,
+                            first_input,
+                            end,
+                            batch_index,
+                            first_slot,
+                            split_material,
+                            split_transform,
+                        )
+                    };
+                    split_at_end.then_some((old, end))
+                })
+            } else {
+                None
+            };
+            let (end, count, semantic_id, inline_start, block_start, inline_extent, block_extent) =
+                if let Some((old, end)) = old_span {
+                    if independent && reuse_blocks {
+                        while let Some(block) = self.blocks.get(block_index).copied() {
+                            if block.batch != batch_key_index
+                                || block.slot as usize + DRAW_BLOCK_SLOTS > end
+                            {
+                                break;
+                            }
+                            reserve(&mut self.pending_blocks, 1)?;
+                            self.pending_blocks.push(block);
+                            block_index += 1;
+                        }
+                    }
+                    if independent {
+                        physical_cursor
+                            .as_mut()
+                            .and_then(|cursor| cursor.advance(usize::from(old.record_count)))
+                            .ok_or(OrderedPlanError::InvalidIdentity)?;
+                    }
+                    (
+                        end,
+                        old.record_count,
+                        old.semantic_id,
+                        old.inline_start,
+                        old.block_start,
+                        old.inline_extent,
+                        old.block_extent,
+                    )
+                } else {
+                    let mut summary: Option<DrawSpanSummary> = None;
+                    let mut building: Option<(u32, DrawSpanSummary)> = None;
+                    let mut end = start;
+                    while end < limit && end - start < usize::from(u16::MAX) {
+                        let next_input = if independent {
+                            physical_cursor
+                                .as_mut()
+                                .and_then(|cursor| cursor.peek_record())
+                                .map(|instance| instance.input_index as usize)
+                                .ok_or(OrderedPlanError::InvalidIdentity)?
+                        } else {
+                            end
+                        };
+                        let next = context.input.glyphs[next_input];
+                        let compatible = end == start
+                            || if independent {
+                                draw_fields_compatible(first, next, split_material, split_transform)
+                            } else {
+                                self.same_draw_span(
+                                    context.input.glyphs,
+                                    first_input,
+                                    end,
+                                    batch_index,
+                                    first_slot,
+                                    split_material,
+                                    split_transform,
+                                )
+                            };
+                        if !compatible {
+                            break;
+                        }
+
+                        // Only a whole aligned physical block inside this draw can be represented.
+                        // The old table is read only under exact retained topology and scope.
+                        let full_block_fits = independent
+                            && building.is_none()
+                            && end % DRAW_BLOCK_SLOTS == 0
+                            && end.checked_add(DRAW_BLOCK_SLOTS).is_some_and(|next_end| {
+                                next_end <= limit && next_end - start <= usize::from(u16::MAX)
+                            });
+                        if full_block_fits && reuse_blocks {
+                            let block_slot = u32::try_from(end)
+                                .map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
+                            let key = sort::pack2(batch_key_index, block_slot);
+                            let block_end =
+                                sort::pack2(batch_key_index, block_slot + DRAW_BLOCK_SLOTS as u32);
+                            while self
+                                .sort_pairs
+                                .get(dirty_index)
+                                .is_some_and(|pair| pair.0 < key)
+                            {
+                                dirty_index += 1;
+                            }
+                            while self.blocks.get(block_index).is_some_and(|block| {
+                                (block.batch, block.slot) < (batch_key_index, block_slot)
+                            }) {
+                                block_index += 1;
+                            }
+                            let clean = self
+                                .sort_pairs
+                                .get(dirty_index)
+                                .is_none_or(|pair| pair.0 >= block_end);
+                            // The current first row passed compatibility above. A clean block
+                            // keeps its cached first key under the retained topology witness.
+                            if clean
+                                && let Some(block) = self.blocks.get(block_index).copied()
+                                && (block.batch, block.slot) == (batch_key_index, block_slot)
+                            {
+                                if let Some(total) = &mut summary {
+                                    total.combine(block.summary);
+                                } else {
+                                    summary = Some(block.summary);
+                                }
+                                reserve(&mut self.pending_blocks, 1)?;
+                                self.pending_blocks.push(block);
+                                physical_cursor
+                                    .as_mut()
+                                    .and_then(|cursor| cursor.advance(DRAW_BLOCK_SLOTS))
+                                    .ok_or(OrderedPlanError::InvalidIdentity)?;
+                                end += DRAW_BLOCK_SLOTS;
+                                #[cfg(test)]
+                                super::work_attribution::record(|work| {
+                                    work.draw_folded_blocks += 1;
+                                });
+                                continue;
+                            }
+                        }
+
+                        if full_block_fits {
+                            building = Some((
+                                u32::try_from(end)
+                                    .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
+                                DrawSpanSummary::new(next),
+                            ));
+                        } else if let Some((_, block_summary)) = &mut building {
+                            block_summary.push(next);
+                        } else if let Some(total) = &mut summary {
+                            total.push(next);
+                        } else {
+                            summary = Some(DrawSpanSummary::new(next));
+                        }
+                        if independent {
+                            physical_cursor
+                                .as_mut()
+                                .and_then(|cursor| cursor.next_record())
+                                .ok_or(OrderedPlanError::InvalidIdentity)?;
+                        }
+                        end += 1;
+                        #[cfg(test)]
+                        super::work_attribution::record(|work| {
+                            work.draw_reduced_glyphs += 1;
+                        });
+                        if let Some((block_slot, block_summary)) = building
+                            && end - block_slot as usize == DRAW_BLOCK_SLOTS
+                        {
+                            if let Some(total) = &mut summary {
+                                total.combine(block_summary);
+                            } else {
+                                summary = Some(block_summary);
+                            }
+                            reserve(&mut self.pending_blocks, 1)?;
+                            self.pending_blocks.push(DrawBlock {
+                                batch: batch_key_index,
+                                slot: block_slot,
+                                summary: block_summary,
+                            });
+                            building = None;
+                        }
+                    }
+                    if let Some((_, partial)) = building {
+                        if let Some(total) = &mut summary {
+                            total.combine(partial);
+                        } else {
+                            summary = Some(partial);
+                        }
+                    }
+                    let mut summary = summary.ok_or(OrderedPlanError::InvalidIdentity)?;
+                    if independent && summary.needs_sequential_replay() {
+                        // Preserve the old reduction order and error behavior for adverse floats.
+                        let mut replay_cursor = self
+                            .pending_instances
+                            .cursor_from(batch.state.instance_start as usize + start)
+                            .ok_or(OrderedPlanError::InvalidIdentity)?;
+                        for slot in start..end {
+                            let input_index = replay_cursor
+                                .next_record()
+                                .map(|instance| instance.input_index as usize)
+                                .ok_or(OrderedPlanError::InvalidIdentity)?;
+                            let glyph = context.input.glyphs[input_index];
+                            if slot == start {
+                                summary = DrawSpanSummary::new(glyph);
+                            } else {
+                                summary.push(glyph);
+                            }
+                            #[cfg(test)]
+                            super::work_attribution::record(|work| {
+                                work.draw_reduced_glyphs += 1;
+                            });
+                        }
+                    }
+                    let count = u16::try_from(end - start)
+                        .map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
+                    let (inline_start, block_start, inline_extent, block_extent) =
+                        summary.bounds()?;
+                    (
+                        end,
+                        count,
+                        summary.semantic_id,
+                        inline_start,
+                        block_start,
+                        inline_extent,
+                        block_extent,
+                    )
+                };
             let resource_start = if program.primitive_kind == PRIMITIVE_DECORATION {
                 0
             } else {
@@ -1653,8 +2423,8 @@ impl OrderedPlanCompiler {
                     record_count: count,
                     buffer_id: batch.buffer_ids[0],
                     record_index: first_slot,
-                    logical_order: input_index,
-                    semantic_id: summary.semantic_id,
+                    logical_order: first_input,
+                    semantic_id,
                     inline_start,
                     block_start,
                     inline_extent,
@@ -1671,108 +2441,22 @@ impl OrderedPlanCompiler {
                     program_id: batch.state.key.program_id,
                 },
             )?;
-            input_index = end;
-        }
-        Ok(())
-    }
-
-    fn compile_independent_draws(
-        &mut self,
-        context: PrepareContext<'_>,
-    ) -> Result<(), OrderedPlanError> {
-        for batch_index in 0..self.pending_batches.len() {
-            let batch = self.pending_batches[batch_index];
-            let program = context
-                .codec
-                .program(
-                    context.capability_set,
-                    batch.state.key.technique,
-                    batch.state.key.program_variant,
-                )
-                .ok_or(OrderedPlanError::ProgramMissing)?;
-            let split_material = program.draw_key_mask & BATCH_MATERIAL != 0;
-            let split_transform = program.draw_key_mask & BATCH_TRANSFORM != 0;
-            let instances = self
-                .pending_instances
-                .range(range(
-                    batch.state.instance_start,
-                    batch.state.instance_count,
-                )?)
-                .ok_or(OrderedPlanError::InvalidIdentity)?;
-            let mut ordered = instances.iter().enumerate().peekable();
-            while let Some((start, instance)) = ordered.next() {
-                let first_input = instance.input_index as usize;
-                let first = context.input.glyphs[first_input];
-                let mut summary = DrawSpanSummary::new(first);
-                let mut end = start + 1;
-                while let Some((_, instance)) = ordered.peek()
-                    && end - start < usize::from(u16::MAX)
-                {
-                    let glyph = context.input.glyphs[instance.input_index as usize];
-                    if draw_fields_compatible(first, glyph, split_material, split_transform) {
-                        summary.push(glyph);
-                        ordered.next();
-                        end += 1;
-                    } else {
-                        break;
-                    }
-                }
-                let count =
-                    u16::try_from(end - start).map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
-                let (inline_start, block_start, inline_extent, block_extent) = summary.bounds()?;
-                #[cfg(test)]
-                super::work_attribution::record(|work| {
-                    work.draw_reduced_glyphs += usize::from(count);
-                });
-                let resource_start = if program.primitive_kind == PRIMITIVE_DECORATION {
-                    0
-                } else {
-                    self.resources
-                        .iter()
-                        .position(|resource| {
-                            resource.id == first.resource_id
-                                && resource.generation == first.resource_generation
-                        })
-                        .ok_or(OrderedPlanError::InvalidResource)?
-                };
-                push_glyph_draw(
-                    &mut self.primitives,
-                    &mut self.draws,
-                    GlyphDraw {
-                        glyph: first,
-                        primitive_kind: program.primitive_kind,
-                        record_count: count,
-                        buffer_id: batch.buffer_ids[0],
-                        record_index: u32::try_from(start)
-                            .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
-                        logical_order: first_input,
-                        semantic_id: summary.semantic_id,
-                        inline_start,
-                        block_start,
-                        inline_extent,
-                        block_extent,
-                        material_id: if split_material { first.material_id } else { 0 },
-                        transform_id: if split_transform {
-                            first.transform_id
-                        } else {
-                            0
-                        },
-                        buffer_start: batch.state.buffer_start,
-                        buffer_count: u32::from(batch.state.buffer_count),
-                        resource_start,
-                        program_id: batch.state.key.program_id,
-                    },
-                )?;
+            if independent {
+                physical_slot = end;
+            } else {
+                logical_index = end;
             }
         }
-        self.sort_pairs.clear();
-        reserve(&mut self.sort_pairs, self.draws.len())?;
-        for (index, draw) in self.draws.iter().enumerate() {
-            self.sort_pairs
-                .push((independent_draw_sort_key(draw), index as u32));
+        if independent {
+            self.sort_pairs.clear();
+            reserve(&mut self.sort_pairs, self.draws.len())?;
+            for (index, draw) in self.draws.iter().enumerate() {
+                self.sort_pairs
+                    .push((independent_draw_sort_key(draw), index as u32));
+            }
+            sort::sort_pairs(&mut self.sort_pairs);
+            sort::apply_pair_order(&mut self.draws, &mut self.sort_pairs);
         }
-        sort::sort_pairs(&mut self.sort_pairs);
-        sort::apply_pair_order(&mut self.draws, &mut self.sort_pairs);
         Ok(())
     }
 
@@ -1845,13 +2529,6 @@ impl OrderedPlanCompiler {
         }
         Ok(())
     }
-
-    fn batches_buffer_start(&self, batch_count: usize) -> usize {
-        self.pending_batches[..batch_count]
-            .iter()
-            .map(|batch| usize::from(batch.state.buffer_count))
-            .sum()
-    }
 }
 
 fn instance_state(
@@ -1881,6 +2558,8 @@ fn active_buffers_for_range(
     input: OrderedPlanInput<'_>,
     changed: RecordRange,
     replace: bool,
+    retained_input_slots: &[u32],
+    prior_start: u32,
 ) -> Result<u32, OrderedPlanError> {
     let all = (1_u32 << program.buffers.len()) - 1;
     if replace {
@@ -1900,7 +2579,14 @@ fn active_buffers_for_range(
         )
         .ok_or(OrderedPlanError::InvalidIdentity)?;
     let mut previous = previous_range.iter();
-    for next in next_range.iter() {
+    for (offset, next) in next_range.iter().enumerate() {
+        if let Some(&source) = retained_input_slots.get(next.input_index as usize)
+            && source != NONE
+            && u64::from(source)
+                != u64::from(prior_start) + u64::from(changed.start) + offset as u64
+        {
+            return Ok(all);
+        }
         let Some(previous) = previous.next() else {
             return Ok(all);
         };
@@ -2227,6 +2913,633 @@ mod tests {
     }
 
     #[test]
+    fn first_owner_identity_change_reuses_clean_draws_and_matches_cold_host() {
+        let codec = paint_codec_with_limits(false, 65_536, true);
+        for order_independent in [false, true] {
+            for one_span in [false, true] {
+                for owner_count in [100_usize, 1_000] {
+                    let glyph_count = owner_count * 10;
+                    let expected_draws = if one_span { 1 } else { owner_count };
+                    let mut compiler = OrderedPlanCompiler::default();
+                    let mut host = TestHost::default();
+                    let mut glyphs: Vec<_> = (0..glyph_count)
+                        .map(|index| {
+                            let mut value = glyph(index as u32 + 1, 1);
+                            value.transform_id = if one_span { 1 } else { index as u32 / 10 + 1 };
+                            value
+                        })
+                        .collect();
+                    let mut x: Vec<_> = (0..glyph_count).map(|index| index as f32).collect();
+                    prepare_with_options(
+                        &mut compiler,
+                        &codec,
+                        &glyphs,
+                        &x,
+                        &[],
+                        true,
+                        order_independent,
+                    );
+                    host.accept(
+                        compiler
+                            .plan_view(7, CAPABILITY, codec.fingerprint())
+                            .unwrap(),
+                        compiler.publish_bindings,
+                    );
+                    compiler.commit().unwrap();
+                    let accepted = host.snapshot();
+                    assert_eq!(compiler.batches.len(), 1);
+                    assert_eq!(accepted.resources.len(), 1);
+                    assert_eq!(accepted.bindings.len(), 1);
+                    assert_eq!(accepted.draws.len(), expected_draws);
+
+                    for (glyph, x) in glyphs[..10].iter_mut().zip(&mut x[..10]) {
+                        glyph.stable_id += glyph_count as u32;
+                        glyph.content_revision += 1;
+                        glyph.inline_start += 0.25;
+                        *x += 0.25;
+                    }
+                    let slots = vec![0; glyph_count];
+                    let masks = vec![0; glyph_count];
+                    let fields = [x.as_slice()];
+                    let intervals = core::iter::once(0..10).collect::<Vec<_>>();
+                    super::super::work_attribution::reset();
+                    compiler
+                        .prepare_scoped(
+                            &codec,
+                            CAPABILITY,
+                            OrderedPlanInput {
+                                glyphs: &glyphs,
+                                placement_slots: &slots,
+                                semantic_change_masks: &masks,
+                                f32_fields: &fields,
+                                u32_fields: &[],
+                                order_independent,
+                            },
+                            false,
+                            2,
+                            Some(RetainedOutputScope::ChangedIntervals(&intervals)),
+                            false,
+                        )
+                        .unwrap();
+                    let work = super::super::work_attribution::snapshot();
+                    assert_eq!(work.ordered_admission_visits, 10);
+                    assert_eq!(work.ordered_instance_rewrites, 10);
+                    if one_span && order_independent {
+                        assert!(work.draw_reduced_glyphs <= 10 + 2 * DRAW_BLOCK_SLOTS);
+                        assert!(work.draw_folded_blocks >= glyph_count / DRAW_BLOCK_SLOTS - 2);
+                        assert_eq!(
+                            compiler.pending_blocks.len(),
+                            glyph_count / DRAW_BLOCK_SLOTS
+                        );
+                    } else {
+                        assert_eq!(
+                            work.draw_reduced_glyphs,
+                            if one_span { glyph_count } else { 10 }
+                        );
+                        assert_eq!(work.draw_folded_blocks, 0);
+                    }
+                    if !one_span {
+                        assert_eq!(compiler.block_stats().2, 0);
+                        assert_eq!(compiler.block_stats().3, 0);
+                    }
+                    assert_eq!(compiler.retained_binding_compilation_skips, 0);
+                    assert_eq!(compiler.pending_batches.len(), 1);
+                    assert_eq!(compiler.primitives.len(), expected_draws);
+                    assert_eq!(compiler.draws.len(), expected_draws);
+                    host.accept(
+                        compiler
+                            .plan_view(7, CAPABILITY, codec.fingerprint())
+                            .unwrap(),
+                        compiler.publish_bindings,
+                    );
+                    compiler.commit().unwrap();
+
+                    let mut cold = OrderedPlanCompiler::default();
+                    let mut oracle = TestHost::default();
+                    prepare_with_options(
+                        &mut cold,
+                        &codec,
+                        &glyphs,
+                        &x,
+                        &[],
+                        true,
+                        order_independent,
+                    );
+                    oracle.accept(
+                        cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap(),
+                        cold.publish_bindings,
+                    );
+                    let actual = host.snapshot();
+                    assert_ne!(accepted.primitives[0].id, actual.primitives[0].id);
+                    assert_ne!(accepted.draws[0].id, actual.draws[0].id);
+                    assert_ne!(
+                        accepted.primitives[0].inline_start,
+                        actual.primitives[0].inline_start
+                    );
+                    assert_eq!(actual, oracle.snapshot());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn scoped_ordered_spans_match_cold_host_across_changed_boundaries() {
+        let codec = paint_codec_with_limits(false, 65_536, true);
+        for order_independent in [false, true] {
+            for case in [
+                "head",
+                "interior",
+                "summary_inline_start",
+                "summary_block_start",
+                "summary_inline_extent",
+                "summary_block_extent",
+                "merge",
+                "split",
+                "resource",
+            ] {
+                let mut compiler = OrderedPlanCompiler::default();
+                let mut host = TestHost::default();
+                let mut glyphs: Vec<_> = (0..9)
+                    .map(|index| {
+                        let mut row = glyph(index + 1, 1);
+                        row.transform_id = index / 3 + 1;
+                        row
+                    })
+                    .collect();
+                let x: Vec<_> = glyphs.iter().map(|row| row.inline_start).collect();
+                prepare_with_options(
+                    &mut compiler,
+                    &codec,
+                    &glyphs,
+                    &x,
+                    &[],
+                    true,
+                    order_independent,
+                );
+                host.accept(
+                    compiler
+                        .plan_view(7, CAPABILITY, codec.fingerprint())
+                        .unwrap(),
+                    compiler.publish_bindings,
+                );
+                compiler.commit().unwrap();
+
+                let changed = match case {
+                    "head" => {
+                        glyphs[0].stable_id = 100;
+                        glyphs[0].inline_start = -2.0;
+                        glyphs[0].semantic_id = 2;
+                        0
+                    }
+                    "interior" => {
+                        glyphs[1].inline_extent = 30.0;
+                        glyphs[1].semantic_id = 0;
+                        1
+                    }
+                    "summary_inline_start" => {
+                        glyphs[1].inline_start = -30.0;
+                        glyphs[1].semantic_id = 0;
+                        1
+                    }
+                    "summary_block_start" => {
+                        glyphs[1].block_start = -30.0;
+                        glyphs[1].semantic_id = 0;
+                        1
+                    }
+                    "summary_inline_extent" => {
+                        glyphs[1].inline_extent = 30.0;
+                        glyphs[1].semantic_id = 0;
+                        1
+                    }
+                    "summary_block_extent" => {
+                        glyphs[1].block_extent = 30.0;
+                        glyphs[1].semantic_id = 0;
+                        1
+                    }
+                    "merge" => {
+                        glyphs[3].transform_id = 1;
+                        3
+                    }
+                    "split" => {
+                        glyphs[1].transform_id = 9;
+                        1
+                    }
+                    "resource" => {
+                        glyphs[0].resource_id = 12;
+                        0
+                    }
+                    _ => unreachable!(),
+                };
+                if !case.starts_with("summary_") {
+                    glyphs[changed].content_revision += 1;
+                }
+                let x = if case.starts_with("summary_") {
+                    x
+                } else {
+                    glyphs.iter().map(|row| row.inline_start).collect()
+                };
+                let slots = vec![0; glyphs.len()];
+                let masks = vec![0; glyphs.len()];
+                let intervals = core::iter::once(changed..changed + 1).collect::<Vec<_>>();
+                let prepare_changed = |compiler: &mut OrderedPlanCompiler| {
+                    compiler.prepare_scoped(
+                        &codec,
+                        CAPABILITY,
+                        OrderedPlanInput {
+                            glyphs: &glyphs,
+                            placement_slots: &slots,
+                            semantic_change_masks: &masks,
+                            f32_fields: &[&x],
+                            u32_fields: &[],
+                            order_independent,
+                        },
+                        false,
+                        2,
+                        Some(RetainedOutputScope::ChangedIntervals(&intervals)),
+                        case.starts_with("summary_"),
+                    )
+                };
+                super::super::work_attribution::reset();
+                prepare_changed(&mut compiler).unwrap();
+                if case == "head" {
+                    compiler.abort();
+                    assert_eq!(
+                        compiler.committed_order_independent,
+                        Some(order_independent)
+                    );
+                    super::super::work_attribution::reset();
+                    prepare_changed(&mut compiler).unwrap();
+                }
+                let work = super::super::work_attribution::snapshot();
+                let reduced = work.draw_reduced_glyphs;
+                if case.starts_with("summary_") {
+                    assert_eq!(work.ordered_instance_rewrites, 0);
+                    assert_eq!(compiler.primitives[0].semantic_id, 0);
+                    assert!(
+                        compiler.primitives[0].inline_extent > 3.0
+                            || compiler.primitives[0].block_extent > 3.0
+                    );
+                }
+                let expected_reduced = match case {
+                    "resource" => 9,
+                    "merge" => 6,
+                    _ => 3,
+                };
+                assert_eq!(reduced, expected_reduced, "{case}");
+                host.accept(
+                    compiler
+                        .plan_view(7, CAPABILITY, codec.fingerprint())
+                        .unwrap(),
+                    compiler.publish_bindings,
+                );
+                compiler.commit().unwrap();
+                let mut cold = OrderedPlanCompiler::default();
+                let mut oracle = TestHost::default();
+                prepare_with_options(&mut cold, &codec, &glyphs, &x, &[], true, order_independent);
+                oracle.accept(
+                    cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap(),
+                    cold.publish_bindings,
+                );
+                assert_eq!(host.snapshot(), oracle.snapshot(), "{case}");
+            }
+        }
+        // A single broad indexed span exercises cache eligibility at boundaries inside
+        // physical blocks; the ordered cases above keep their original small oracle.
+        for split_transform in [false, true] {
+            let codec = paint_codec_with_limits(false, 65_536, split_transform);
+            for key in ["clip", "depth", "material", "transform"] {
+                for changed_index in [0, 31, 32, 47] {
+                    let mut compiler = OrderedPlanCompiler::default();
+                    let mut host = TestHost::default();
+                    let mut glyphs: Vec<_> = (0..128).map(|index| glyph(index + 1, 1)).collect();
+                    let x: Vec<_> = glyphs.iter().map(|row| row.inline_start).collect();
+                    let slots = vec![0; glyphs.len()];
+                    let masks = vec![0; glyphs.len()];
+                    prepare_with_options(&mut compiler, &codec, &glyphs, &x, &masks, true, true);
+                    host.accept(
+                        compiler
+                            .plan_view(7, CAPABILITY, codec.fingerprint())
+                            .unwrap(),
+                        compiler.publish_bindings,
+                    );
+                    compiler.commit().unwrap();
+                    let (block_slots, block_bytes, block_count, block_capacity) =
+                        compiler.block_stats();
+                    assert_eq!((block_slots, block_bytes, block_count), (32, 36, 4));
+                    assert!(block_capacity >= block_count);
+                    let changed = &mut glyphs[changed_index];
+                    changed.content_revision += 1;
+                    match key {
+                        "clip" => changed.clip_id = 2,
+                        "depth" => changed.depth_key = 2,
+                        "material" => changed.material_id = 2,
+                        "transform" => changed.transform_id = 2,
+                        _ => unreachable!(),
+                    }
+                    let intervals =
+                        core::iter::once(changed_index..changed_index + 1).collect::<Vec<_>>();
+                    super::super::work_attribution::reset();
+                    compiler
+                        .prepare_scoped(
+                            &codec,
+                            CAPABILITY,
+                            OrderedPlanInput {
+                                glyphs: &glyphs,
+                                placement_slots: &slots,
+                                semantic_change_masks: &masks,
+                                f32_fields: &[&x],
+                                u32_fields: &[],
+                                order_independent: true,
+                            },
+                            false,
+                            2,
+                            Some(RetainedOutputScope::ChangedIntervals(&intervals)),
+                            false,
+                        )
+                        .unwrap();
+                    let expected_draws = if key == "depth" {
+                        2
+                    } else if key == "transform" && !split_transform {
+                        1
+                    } else if changed_index == 0 {
+                        2
+                    } else {
+                        3
+                    };
+                    assert_eq!(
+                        compiler.draws.len(),
+                        expected_draws,
+                        "{key} mask={split_transform} changed={changed_index}"
+                    );
+                    if key != "depth" {
+                        assert!(
+                            super::super::work_attribution::snapshot().draw_folded_blocks > 0,
+                            "{key} mask={split_transform} changed={changed_index} should fold clean blocks",
+                        );
+                    }
+                    host.accept(
+                        compiler
+                            .plan_view(7, CAPABILITY, codec.fingerprint())
+                            .unwrap(),
+                        compiler.publish_bindings,
+                    );
+                    compiler.commit().unwrap();
+                    let mut cold = OrderedPlanCompiler::default();
+                    let mut oracle = TestHost::default();
+                    prepare_with_options(&mut cold, &codec, &glyphs, &x, &masks, true, true);
+                    oracle.accept(
+                        cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap(),
+                        cold.publish_bindings,
+                    );
+                    assert_eq!(
+                        host.snapshot(),
+                        oracle.snapshot(),
+                        "{key} mask={split_transform} changed={changed_index}"
+                    );
+                    assert_eq!(compiler.live_primitives.len(), cold.primitives.len());
+                    for (warm, expected) in compiler.live_primitives.iter().zip(&cold.primitives) {
+                        assert_eq!(warm.inline_start.to_bits(), expected.inline_start.to_bits());
+                        assert_eq!(warm.block_start.to_bits(), expected.block_start.to_bits());
+                        assert_eq!(
+                            warm.inline_extent.to_bits(),
+                            expected.inline_extent.to_bits()
+                        );
+                        assert_eq!(warm.block_extent.to_bits(), expected.block_extent.to_bits());
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn rebuilt_bindings_check_retained_storage_once_after_buffer_construction() {
+        let codec = paint_codec_with_limits(false, 65_536, true);
+        let mut compiler = OrderedPlanCompiler::default();
+        let mut host = TestHost::default();
+        let mut glyphs: Vec<_> = (0..64)
+            .map(|index| {
+                let mut row = glyph(index + 1, 1);
+                row.resource_id = index + 1;
+                row
+            })
+            .collect();
+        let x: Vec<_> = glyphs.iter().map(|row| row.inline_start).collect();
+        let slots = vec![0; glyphs.len()];
+        let masks = vec![0; glyphs.len()];
+        prepare_with_options(&mut compiler, &codec, &glyphs, &x, &masks, true, true);
+        host.accept(
+            compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap(),
+            compiler.publish_bindings,
+        );
+        compiler.commit().unwrap();
+        assert_eq!(compiler.batches.len(), 64);
+
+        glyphs[0].stable_id = 1000;
+        glyphs[0].content_revision += 1;
+        glyphs[0].inline_extent += 1.0;
+        let intervals = core::iter::once(0..1).collect::<Vec<_>>();
+        super::super::work_attribution::reset();
+        compiler
+            .prepare_scoped(
+                &codec,
+                CAPABILITY,
+                OrderedPlanInput {
+                    glyphs: &glyphs,
+                    placement_slots: &slots,
+                    semantic_change_masks: &masks,
+                    f32_fields: &[&x],
+                    u32_fields: &[],
+                    order_independent: true,
+                },
+                false,
+                2,
+                Some(RetainedOutputScope::ChangedIntervals(&intervals)),
+                false,
+            )
+            .unwrap();
+        assert_eq!(compiler.retained_binding_compilation_skips, 0);
+        assert_eq!(
+            super::super::work_attribution::snapshot().retained_storage_match_batch_visits,
+            compiler.pending_batches.len(),
+        );
+        host.accept(
+            compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap(),
+            compiler.publish_bindings,
+        );
+        compiler.commit().unwrap();
+        let mut cold = OrderedPlanCompiler::default();
+        let mut oracle = TestHost::default();
+        prepare_with_options(&mut cold, &codec, &glyphs, &x, &masks, true, true);
+        oracle.accept(
+            cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap(),
+            cold.publish_bindings,
+        );
+        assert_eq!(host.snapshot(), oracle.snapshot());
+    }
+
+    #[test]
+    fn independent_dirty_logical_row_hits_its_nonadjacent_physical_span() {
+        let codec = paint_codec_with_limits(false, 65_536, true);
+        let mut compiler = OrderedPlanCompiler::default();
+        let mut host = TestHost::default();
+        let mut glyphs: Vec<_> = (0..256)
+            .map(|index| {
+                let mut row = glyph(index + 1, 1);
+                row.resource_id = if index % 2 == 0 { 1 } else { 2 };
+                row.transform_id = 1;
+                row
+            })
+            .collect();
+        let x: Vec<_> = glyphs.iter().map(|row| row.inline_start).collect();
+        prepare_with_options(&mut compiler, &codec, &glyphs, &x, &[], true, true);
+        host.accept(
+            compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap(),
+            compiler.publish_bindings,
+        );
+        compiler.commit().unwrap();
+        assert_eq!(compiler.live_primitives.len(), 2);
+        assert_eq!(compiler.live_primitives[0].record_count, 128);
+        assert_eq!(compiler.live_primitives[1].record_count, 128);
+
+        // Logical rows 2 and 130 are in separate blocks of the same physical batch.
+        for index in [2, 130] {
+            glyphs[index].semantic_id = 0;
+            glyphs[index].inline_extent = 30.0;
+        }
+        let slots = vec![0; glyphs.len()];
+        let masks = vec![0; glyphs.len()];
+        let intervals = [2..3, 130..131];
+        super::super::work_attribution::reset();
+        compiler
+            .prepare_scoped(
+                &codec,
+                CAPABILITY,
+                OrderedPlanInput {
+                    glyphs: &glyphs,
+                    placement_slots: &slots,
+                    semantic_change_masks: &masks,
+                    f32_fields: &[&x],
+                    u32_fields: &[],
+                    order_independent: true,
+                },
+                false,
+                2,
+                Some(RetainedOutputScope::ChangedIntervals(&intervals)),
+                true,
+            )
+            .unwrap();
+        assert_eq!(
+            super::super::work_attribution::snapshot().draw_reduced_glyphs,
+            64
+        );
+        assert_eq!(
+            super::super::work_attribution::snapshot().draw_folded_blocks,
+            2,
+        );
+        assert_eq!(compiler.pending_blocks.len(), 8);
+        host.accept(
+            compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap(),
+            compiler.publish_bindings,
+        );
+        compiler.commit().unwrap();
+
+        let mut cold = OrderedPlanCompiler::default();
+        let mut oracle = TestHost::default();
+        prepare_with_options(&mut cold, &codec, &glyphs, &x, &[], true, true);
+        oracle.accept(
+            cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap(),
+            cold.publish_bindings,
+        );
+        assert_eq!(host.snapshot(), oracle.snapshot());
+        for (warm, cold) in compiler.live_primitives.iter().zip(cold.primitives.iter()) {
+            assert_eq!(warm.inline_start.to_bits(), cold.inline_start.to_bits());
+            assert_eq!(warm.block_start.to_bits(), cold.block_start.to_bits());
+            assert_eq!(warm.inline_extent.to_bits(), cold.inline_extent.to_bits());
+            assert_eq!(warm.block_extent.to_bits(), cold.block_extent.to_bits());
+        }
+    }
+
+    #[test]
+    fn draw_mode_witness_changes_only_with_accepted_publications() {
+        let codec = paint_codec_with_limits(false, 65_536, true);
+        let glyphs: Vec<_> = (0..128)
+            .map(|index| {
+                let mut row = glyph(index + 1, 1);
+                row.resource_id += index % 2;
+                row
+            })
+            .collect();
+        let x: Vec<_> = glyphs.iter().map(|row| row.inline_start).collect();
+        let masks = vec![0; glyphs.len()];
+        let mut compiler = OrderedPlanCompiler::default();
+        let mut host = TestHost::default();
+        prepare_with_options(&mut compiler, &codec, &glyphs, &x, &masks, true, false);
+        host.accept(
+            compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap(),
+            compiler.publish_bindings,
+        );
+        compiler.commit().unwrap();
+        assert_eq!(compiler.committed_order_independent, Some(false));
+        assert_eq!(compiler.blocks.len(), 0);
+
+        prepare_with_options(&mut compiler, &codec, &glyphs, &x, &masks, false, true);
+        assert!(!compiler.reuse_live_bindings);
+        host.accept(
+            compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap(),
+            compiler.publish_bindings,
+        );
+        compiler.commit().unwrap();
+        assert_eq!(compiler.committed_order_independent, Some(true));
+        assert_eq!(compiler.blocks.len(), 4);
+        let mut cold = OrderedPlanCompiler::default();
+        let mut oracle = TestHost::default();
+        prepare_with_options(&mut cold, &codec, &glyphs, &x, &masks, true, true);
+        oracle.accept(
+            cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap(),
+            cold.publish_bindings,
+        );
+        assert_eq!(host.snapshot(), oracle.snapshot());
+
+        prepare_with_options(&mut compiler, &codec, &glyphs, &x, &masks, false, false);
+        assert_eq!(compiler.pending_order_independent, Some(false));
+        compiler.abort();
+        assert_eq!(compiler.committed_order_independent, Some(true));
+        prepare_with_options(&mut compiler, &codec, &glyphs, &x, &masks, false, true);
+        assert!(compiler.reuse_live_bindings);
+        compiler.commit().unwrap();
+        assert_eq!(compiler.blocks.len(), 4);
+        prepare_with_options(&mut compiler, &codec, &glyphs, &x, &masks, true, false);
+        host.accept(
+            compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap(),
+            compiler.publish_bindings,
+        );
+        compiler.commit().unwrap();
+        assert_eq!(compiler.blocks.len(), 0);
+        let mut cold = OrderedPlanCompiler::default();
+        let mut oracle = TestHost::default();
+        prepare_with_options(&mut cold, &codec, &glyphs, &x, &masks, true, false);
+        oracle.accept(
+            cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap(),
+            cold.publish_bindings,
+        );
+        assert_eq!(host.snapshot(), oracle.snapshot());
+    }
+
+    #[test]
     fn multileaf_scattered_warm_admission_uses_physical_order() {
         let codec = paint_codec_with_limits(false, 16_384, true);
         for order_independent in [false, true] {
@@ -2294,63 +3607,266 @@ mod tests {
                     cold.publish_bindings,
                 );
                 assert_eq!(host.snapshot(), oracle.snapshot());
-                for (glyph, x) in glyphs.iter_mut().zip(&mut x) {
-                    glyph.content_revision += 1;
-                    *x += 0.25;
+                for phase in 0..2 {
+                    // Input order alternates resources, while physical order groups them.
+                    // Sparse changes reach three slots in one leaf and two distant leaves.
+                    let dirty_slots: Vec<usize> = if phase == 0 {
+                        (0..glyphs.len()).collect()
+                    } else {
+                        vec![1, 3, 5, 34, glyphs.len() - 1]
+                    };
+                    let mut changed_inputs: Vec<_> = compiler
+                        .instances
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(slot, instance)| {
+                            (phase == 0 || dirty_slots.contains(&slot))
+                                .then_some(instance.input_index as usize)
+                        })
+                        .collect();
+                    assert_eq!(changed_inputs.len(), dirty_slots.len());
+                    changed_inputs.sort_unstable();
+                    let intervals: Vec<_> = if phase == 0 {
+                        core::iter::once(0..glyphs.len()).collect()
+                    } else {
+                        assert!(dirty_slots.windows(2).all(|pair| pair[0] + 1 < pair[1]));
+                        changed_inputs
+                            .iter()
+                            .map(|&index| index..index + 1)
+                            .collect()
+                    };
+                    for &index in &changed_inputs {
+                        glyphs[index].content_revision += 1;
+                        x[index] += 0.25;
+                    }
+                    let mut cold = OrderedPlanCompiler::default();
+                    let mut oracle = TestHost::default();
+                    prepare_with_options(
+                        &mut cold,
+                        &codec,
+                        &glyphs,
+                        &x,
+                        &[],
+                        true,
+                        order_independent,
+                    );
+                    oracle.accept(
+                        cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap(),
+                        cold.publish_bindings,
+                    );
+                    let slots = vec![0; glyphs.len()];
+                    let f32_fields = [x.as_slice()];
+                    let input = OrderedPlanInput {
+                        glyphs: &glyphs,
+                        placement_slots: &slots,
+                        semantic_change_masks: &masks,
+                        f32_fields: &f32_fields,
+                        u32_fields: &[],
+                        order_independent,
+                    };
+                    let committed = compiler.instances.clone();
+                    let accepted = host.snapshot();
+                    let touched_leaves = dirty_slots
+                        .iter()
+                        .map(|slot| slot / LEAF_CAPACITY)
+                        .collect::<alloc::collections::BTreeSet<_>>()
+                        .len();
+                    for rejected in [true, false] {
+                        super::super::work_attribution::reset();
+                        super::super::retained_rope::reset_work_counters();
+                        let admissions = compiler.retained_topology_preparations;
+                        compiler
+                            .prepare_scoped(
+                                &codec,
+                                CAPABILITY,
+                                input,
+                                false,
+                                2 + phase,
+                                Some(RetainedOutputScope::ChangedIntervals(&intervals)),
+                                false,
+                            )
+                            .unwrap();
+                        let work = super::super::work_attribution::snapshot();
+                        let (traversals, leaf_visits, record_visits) =
+                            super::super::retained_rope::ordered_work_counters();
+                        let (copied_records, _) = super::super::retained_rope::work_counters();
+                        assert_eq!(compiler.retained_topology_preparations, admissions + 1);
+                        assert_eq!(work.ordered_admission_visits, dirty_slots.len());
+                        assert_eq!(work.ordered_instance_rewrites, dirty_slots.len());
+                        assert_eq!(work.rope_point_queries, 0);
+                        assert!(work.rope_iterator_starts <= 32);
+                        assert_eq!(traversals, 1);
+                        assert_eq!(leaf_visits, touched_leaves);
+                        assert_eq!(record_visits, dirty_slots.len());
+                        assert!(copied_records <= LEAF_CAPACITY * touched_leaves);
+                        assert_eq!(
+                            compiler.dirty_instances,
+                            dirty_slots
+                                .iter()
+                                .map(|slot| *slot as u32)
+                                .collect::<Vec<_>>()
+                        );
+                        assert_eq!(compiler.instances, committed);
+                        assert_eq!(compiler.pending_instances, cold.pending_instances);
+                        assert_eq!(host.snapshot(), accepted);
+                        if rejected {
+                            compiler.abort();
+                            assert_eq!(compiler.instances, committed);
+                            assert_eq!(host.snapshot(), accepted);
+                        } else {
+                            host.accept(
+                                compiler
+                                    .plan_view(7, CAPABILITY, codec.fingerprint())
+                                    .unwrap(),
+                                compiler.publish_bindings,
+                            );
+                            compiler.commit().unwrap();
+                        }
+                    }
+                    assert_eq!(host.snapshot(), oracle.snapshot());
                 }
-                let slots = vec![0; glyphs.len()];
-                let f32_fields = [x.as_slice()];
+            }
+        }
+    }
+
+    #[test]
+    fn separated_replacements_copy_clean_batch_slots_and_match_cold_publication() {
+        use super::super::codec_gather::GatherRange;
+
+        let codec = paint_codec_with_limits(false, 16_384, true);
+        for order_independent in [false, true] {
+            let clean: Vec<_> = (1..=64)
+                .map(|id| {
+                    let mut value = glyph(id, 1);
+                    value.resource_id += id % 2;
+                    value
+                })
+                .collect();
+            let mut candidate = OrderedPlanCompiler::default();
+            let mut actual = TestHost::default();
+            let mut old_counts = [0, 0];
+            for step in 0..24 {
+                let counts = [[2, 4], [70, 1], [0, 3], [3, 0], [1, 1]][step % 5];
+                let mut glyphs = clean[..8].to_vec();
+                let mut masks = vec![0; 8];
+                for (owner, gap) in [8..32, 32..64].into_iter().enumerate() {
+                    for offset in 0..counts[owner] {
+                        let mut value = glyph(
+                            1000 + (step * 200 + owner * 100 + offset) as u32,
+                            step as u32 + 1,
+                        );
+                        value.resource_id += offset as u32 % 2;
+                        if step % 7 == 6 {
+                            value.resource_id += 10;
+                        }
+                        glyphs.push(value);
+                        masks.push(u16::MAX);
+                    }
+                    glyphs.extend_from_slice(&clean[gap.clone()]);
+                    masks.resize(masks.len() + gap.len(), 0);
+                }
+                let old_first_end = 8 + old_counts[0];
+                let next_first_end = 8 + counts[0];
+                let old_second_start = old_first_end + 24;
+                let next_second_start = next_first_end + 24;
+                let correspondence = [
+                    GatherCorrespondence {
+                        old: GatherRange::records_for_test(8..old_first_end),
+                        next: GatherRange::records_for_test(8..next_first_end),
+                        owner: Some(1),
+                    },
+                    GatherCorrespondence {
+                        old: GatherRange::records_for_test(old_first_end..old_second_start),
+                        next: GatherRange::records_for_test(next_first_end..next_second_start),
+                        owner: None,
+                    },
+                    GatherCorrespondence {
+                        old: GatherRange::records_for_test(
+                            old_second_start..old_second_start + old_counts[1],
+                        ),
+                        next: GatherRange::records_for_test(
+                            next_second_start..next_second_start + counts[1],
+                        ),
+                        owner: Some(2),
+                    },
+                ];
+                let x: Vec<_> = glyphs.iter().map(|value| value.stable_id as f32).collect();
+                let slots: Vec<_> = glyphs.iter().map(|value| value.stable_id).collect();
+                let fields = [x.as_slice()];
                 let input = OrderedPlanInput {
                     glyphs: &glyphs,
                     placement_slots: &slots,
                     semantic_change_masks: &masks,
-                    f32_fields: &f32_fields,
+                    f32_fields: &fields,
                     u32_fields: &[],
                     order_independent,
                 };
-                let intervals = core::iter::once(0..glyphs.len()).collect::<Vec<_>>();
-                let committed = compiler.instances.clone();
-                let accepted = host.snapshot();
-                for rejected in [true, false] {
-                    super::super::work_attribution::reset();
-                    compiler
+                let checkpoint = step == 0 || step % 11 == 10;
+                let scope = Some(RetainedOutputScope::Replacement(&correspondence));
+                super::super::work_attribution::reset();
+                candidate
+                    .prepare_scoped(
+                        &codec,
+                        CAPABILITY,
+                        input,
+                        checkpoint,
+                        step as u32 + 1,
+                        scope,
+                        true,
+                    )
+                    .unwrap();
+                let work = super::super::work_attribution::snapshot();
+                if !checkpoint && step % 7 != 6 && (step - 1) % 7 != 6 {
+                    assert_eq!(work.ordered_admission_visits, counts.iter().sum::<usize>());
+                    assert!(work.codec_executed_records <= counts.iter().sum::<usize>());
+                    // Each batch has at most the clean prefix, middle gap and suffix.
+                    assert!(work.clean_buffer_copy_runs <= candidate.pending_batches.len() * 3);
+                    assert_eq!(work.rope_point_queries, 0);
+                }
+                if step == 5 {
+                    let accepted = actual.snapshot();
+                    candidate.abort();
+                    assert_eq!(candidate.mapping_state, MappingState::Invalid);
+                    assert_eq!(actual.snapshot(), accepted);
+                    candidate
                         .prepare_scoped(
                             &codec,
                             CAPABILITY,
                             input,
-                            false,
-                            2,
-                            Some(RetainedOutputScope::ChangedIntervals(&intervals)),
-                            false,
+                            checkpoint,
+                            step as u32 + 1,
+                            scope,
+                            true,
                         )
                         .unwrap();
-                    let work = super::super::work_attribution::snapshot();
-                    assert_eq!(work.ordered_admission_visits, count as usize);
-                    assert_eq!(work.ordered_instance_rewrites, count as usize);
-                    assert_eq!(work.rope_point_queries, 0);
-                    assert!(work.rope_iterator_starts <= 32);
-                    if rejected {
-                        compiler.abort();
-                        assert_eq!(compiler.instances, committed);
-                        assert_eq!(host.snapshot(), accepted);
-                    } else {
-                        host.accept(
-                            compiler
-                                .plan_view(7, CAPABILITY, codec.fingerprint())
-                                .unwrap(),
-                            compiler.publish_bindings,
-                        );
-                        compiler.commit().unwrap();
-                    }
                 }
                 let mut cold = OrderedPlanCompiler::default();
-                let mut oracle = TestHost::default();
-                prepare_with_options(&mut cold, &codec, &glyphs, &x, &[], true, order_independent);
-                oracle.accept(
+                let mut expected = TestHost::default();
+                cold.prepare(&codec, CAPABILITY, input, true, step as u32 + 1)
+                    .unwrap();
+                actual.accept(
+                    candidate
+                        .plan_view(7, CAPABILITY, codec.fingerprint())
+                        .unwrap(),
+                    candidate.publish_bindings,
+                );
+                expected.accept(
                     cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap(),
                     cold.publish_bindings,
                 );
-                assert_eq!(host.snapshot(), oracle.snapshot());
+                assert_eq!(
+                    actual.snapshot(),
+                    expected.snapshot(),
+                    "step {step}, independent {order_independent}"
+                );
+                candidate.commit().unwrap();
+                for instance in candidate.instances.iter() {
+                    assert_eq!(
+                        instance.stable_id,
+                        glyphs[instance.input_index as usize].stable_id
+                    );
+                }
+                old_counts = counts;
             }
         }
     }
@@ -2372,6 +3888,7 @@ mod tests {
                 })
                 .collect();
             let mut random = 0x317a_8e91_u32;
+            let mut old_count = 0;
             for step in 0..32 {
                 random = random.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
                 let count = [1, 1, 0, 65, 2][step % 5];
@@ -2407,9 +3924,35 @@ mod tests {
                     u32_fields: &[],
                     order_independent,
                 };
-                let scope = (!checkpoint).then_some(RetainedOutputScope::ReplaceTail {
-                    unchanged_prefix: prefix,
-                });
+                let correspondence = [GatherCorrespondence {
+                    old: super::super::codec_gather::GatherRange::records_for_test(
+                        prefix..prefix + old_count,
+                    ),
+                    next: super::super::codec_gather::GatherRange::records_for_test(
+                        prefix..glyphs.len(),
+                    ),
+                    owner: Some(1),
+                }];
+                let malformed_correspondence = [GatherCorrespondence {
+                    old: super::super::codec_gather::GatherRange::records_for_test(
+                        prefix..prefix + old_count,
+                    ),
+                    // The first next range must begin at the unchanged-prefix boundary.
+                    next: super::super::codec_gather::GatherRange::records_for_test(
+                        prefix + 1..glyphs.len(),
+                    ),
+                    owner: Some(1),
+                }];
+                let invalid_scope_control = !checkpoint && matches!(step, 12 | 15);
+                let scope = if checkpoint {
+                    None
+                } else if step == 12 {
+                    Some(RetainedOutputScope::Replacement(&[]))
+                } else if step == 15 {
+                    Some(RetainedOutputScope::Replacement(&malformed_correspondence))
+                } else {
+                    Some(RetainedOutputScope::Replacement(&correspondence))
+                };
                 if step == 8 {
                     let mut rejected = glyphs.clone();
                     rejected[0].resource_id += 20;
@@ -2429,6 +3972,7 @@ mod tests {
                     assert_eq!(candidate.mapping_state, MappingState::Invalid);
                 }
                 super::super::work_attribution::reset();
+                let retained_preparations = candidate.retained_topology_preparations;
                 candidate
                     .prepare_scoped(
                         &codec,
@@ -2441,7 +3985,17 @@ mod tests {
                     )
                     .unwrap();
                 let work = super::super::work_attribution::snapshot();
-                if !checkpoint && step != 8 && step % 7 != 6 && (step == 0 || (step - 1) % 7 != 6) {
+                if invalid_scope_control {
+                    assert_eq!(work.ordered_admission_visits, glyphs.len());
+                    assert_eq!(
+                        candidate.retained_topology_preparations, retained_preparations,
+                        "invalid replacement scope must use full topology admission at step {step}"
+                    );
+                } else if !checkpoint
+                    && step != 8
+                    && step % 7 != 6
+                    && (step == 0 || (step - 1) % 7 != 6)
+                {
                     assert_eq!(work.ordered_admission_visits, count);
                     assert_eq!(work.ordered_instance_rewrites, count);
                     assert_eq!(work.ordered_instance_comparisons, count);
@@ -2482,6 +4036,7 @@ mod tests {
                 control.commit().unwrap();
                 assert_eq!(actual.snapshot(), expected.snapshot(), "step {step}");
                 assert_eq!(candidate.instances.len(), glyphs.len());
+                old_count = count;
                 for instance in candidate.instances.iter() {
                     assert_eq!(
                         instance.stable_id,
@@ -2885,62 +4440,146 @@ mod tests {
 
     #[test]
     fn draw_boundary_split_merge_falls_back_and_survives_abort_retry() {
-        let codec = paint_codec_with_options(false, false);
+        let codec = paint_codec_with_limits(false, 65_536, false);
         let mut compiler = OrderedPlanCompiler::default();
-        let mut glyphs = [glyph(1, 1), glyph(2, 1)];
-        glyphs[1].material_id = 2;
-        prepare(&mut compiler, &codec, &glyphs, &[1.0, 2.0], true);
-        compiler.commit().unwrap();
-        assert_eq!(compiler.live_draws.len(), 2);
-
-        glyphs[1].material_id = 1;
-        glyphs[1].content_revision = 2;
-        prepare_with_masks(
-            &mut compiler,
-            &codec,
-            &glyphs,
-            &[1.0, 20.0],
-            &[0, u16::MAX],
-            false,
+        let mut host = TestHost::default();
+        let mut glyphs: Vec<_> = (0..128).map(|index| glyph(index + 1, 1)).collect();
+        glyphs[47].material_id = 2;
+        let x: Vec<_> = glyphs.iter().map(|row| row.inline_start).collect();
+        let slots = vec![0; glyphs.len()];
+        let masks = vec![0; glyphs.len()];
+        prepare_with_options(&mut compiler, &codec, &glyphs, &x, &masks, true, true);
+        host.accept(
+            compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap(),
+            compiler.publish_bindings,
         );
-        assert_eq!(compiler.retained_binding_compilation_skips, 0);
+        compiler.commit().unwrap();
+        assert_eq!(compiler.live_draws.len(), 3);
+        assert_eq!(compiler.blocks.len(), 3);
+
+        // Merging the mid-block material boundary is speculative until accepted.
+        glyphs[47].material_id = 1;
+        glyphs[47].content_revision = 2;
+        let merge = core::iter::once(47..48).collect::<Vec<_>>();
+        compiler
+            .prepare_scoped(
+                &codec,
+                CAPABILITY,
+                OrderedPlanInput {
+                    glyphs: &glyphs,
+                    placement_slots: &slots,
+                    semantic_change_masks: &masks,
+                    f32_fields: &[&x],
+                    u32_fields: &[],
+                    order_independent: true,
+                },
+                false,
+                2,
+                Some(RetainedOutputScope::ChangedIntervals(&merge)),
+                false,
+            )
+            .unwrap();
         assert_eq!(compiler.draws.len(), 1);
+        assert!(compiler.pending_blocks.len() >= 3);
         compiler.abort();
-        assert_eq!(compiler.live_draws.len(), 2);
+        assert_eq!(compiler.live_draws.len(), 3);
+        assert_eq!(compiler.blocks.len(), 3);
 
-        prepare_with_masks(
-            &mut compiler,
-            &codec,
-            &glyphs,
-            &[1.0, 20.0],
-            &[0, u16::MAX],
-            false,
+        // A different edit after abort splits the long tail inside a cached block.
+        glyphs[47].material_id = 2;
+        glyphs[47].content_revision = 1;
+        glyphs[88].material_id = 3;
+        glyphs[88].content_revision = 2;
+        let split = core::iter::once(88..89).collect::<Vec<_>>();
+        compiler
+            .prepare_scoped(
+                &codec,
+                CAPABILITY,
+                OrderedPlanInput {
+                    glyphs: &glyphs,
+                    placement_slots: &slots,
+                    semantic_change_masks: &masks,
+                    f32_fields: &[&x],
+                    u32_fields: &[],
+                    order_independent: true,
+                },
+                false,
+                2,
+                Some(RetainedOutputScope::ChangedIntervals(&split)),
+                false,
+            )
+            .unwrap();
+        assert_eq!(compiler.draws.len(), 5);
+        host.accept(
+            compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap(),
+            compiler.publish_bindings,
         );
+        compiler.commit().unwrap();
+        assert_eq!(compiler.live_draws.len(), 5);
+
+        glyphs[47].material_id = 1;
+        glyphs[47].content_revision = 2;
+        glyphs[88].material_id = 1;
+        glyphs[88].content_revision = 3;
+        let merge_both = [47..48, 88..89];
+        compiler
+            .prepare_scoped(
+                &codec,
+                CAPABILITY,
+                OrderedPlanInput {
+                    glyphs: &glyphs,
+                    placement_slots: &slots,
+                    semantic_change_masks: &masks,
+                    f32_fields: &[&x],
+                    u32_fields: &[],
+                    order_independent: true,
+                },
+                false,
+                3,
+                Some(RetainedOutputScope::ChangedIntervals(&merge_both)),
+                false,
+            )
+            .unwrap();
         assert_eq!(compiler.draws.len(), 1);
-        compiler.commit().unwrap();
-        assert_eq!(compiler.live_draws.len(), 1);
-
-        glyphs[1].material_id = 2;
-        glyphs[1].content_revision = 3;
-        prepare_with_masks(
-            &mut compiler,
-            &codec,
-            &glyphs,
-            &[1.0, 21.0],
-            &[0, u16::MAX],
-            false,
+        host.accept(
+            compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap(),
+            compiler.publish_bindings,
         );
-        assert_eq!(compiler.draws.len(), 2);
         compiler.commit().unwrap();
-        assert_eq!(compiler.live_draws.len(), 2);
+        assert_eq!(compiler.blocks.len(), 4);
+        let mut cold = OrderedPlanCompiler::default();
+        let mut oracle = TestHost::default();
+        prepare_with_options(&mut cold, &codec, &glyphs, &x, &masks, true, true);
+        oracle.accept(
+            cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap(),
+            cold.publish_bindings,
+        );
+        assert_eq!(host.snapshot(), oracle.snapshot());
+        for (warm, expected) in compiler.live_primitives.iter().zip(cold.primitives.iter()) {
+            assert_eq!(warm.inline_start.to_bits(), expected.inline_start.to_bits());
+            assert_eq!(warm.block_start.to_bits(), expected.block_start.to_bits());
+            assert_eq!(
+                warm.inline_extent.to_bits(),
+                expected.inline_extent.to_bits()
+            );
+            assert_eq!(warm.block_extent.to_bits(), expected.block_extent.to_bits());
+        }
     }
 
     #[test]
     fn independent_order_reuses_bindings_for_instance_only_changes_and_retries() {
-        let codec = paint_codec_with_options(false, false);
+        let codec = paint_codec_with_limits(false, 65_536, false);
         let mut compiler = OrderedPlanCompiler::default();
-        let mut glyphs = [glyph(1, 1), glyph(2, 1)];
-        let placement_slots = [0; 2];
+        let mut glyphs: Vec<_> = (0..128).map(|index| glyph(index + 1, 1)).collect();
+        let placement_slots = vec![0; glyphs.len()];
+        let mut x: Vec<_> = glyphs.iter().map(|row| row.inline_start).collect();
+        let mut masks = vec![u16::MAX; glyphs.len()];
         compiler
             .prepare(
                 &codec,
@@ -2948,8 +4587,8 @@ mod tests {
                 OrderedPlanInput {
                     glyphs: &glyphs,
                     placement_slots: &placement_slots,
-                    semantic_change_masks: &[u16::MAX; 2],
-                    f32_fields: &[&[1.0, 2.0]],
+                    semantic_change_masks: &masks,
+                    f32_fields: &[&x],
                     u32_fields: &[],
                     order_independent: true,
                 },
@@ -2958,72 +4597,82 @@ mod tests {
             )
             .unwrap();
         compiler.commit().unwrap();
+        assert_eq!(compiler.blocks.len(), 4);
 
         glyphs[1].content_revision = 2;
-        compiler
-            .prepare(
-                &codec,
-                CAPABILITY,
-                OrderedPlanInput {
-                    glyphs: &glyphs,
-                    placement_slots: &placement_slots,
-                    semantic_change_masks: &[0, 1 << 8],
-                    f32_fields: &[&[1.0, 20.0]],
-                    u32_fields: &[],
-                    order_independent: true,
-                },
-                false,
-                2,
-            )
-            .unwrap();
-
-        assert_eq!(compiler.retained_binding_compilation_skips, 1);
-        assert!(compiler.reuse_live_bindings);
-        assert!(compiler.primitives.is_empty());
-        assert!(compiler.draws.is_empty());
-        compiler.abort();
-
-        compiler
-            .prepare(
-                &codec,
-                CAPABILITY,
-                OrderedPlanInput {
-                    glyphs: &glyphs,
-                    placement_slots: &placement_slots,
-                    semantic_change_masks: &[0, 1 << 8],
-                    f32_fields: &[&[1.0, 20.0]],
-                    u32_fields: &[],
-                    order_independent: true,
-                },
-                false,
-                2,
-            )
-            .unwrap();
+        x[1] = 20.0;
+        masks.fill(0);
+        masks[1] = 1 << 8;
+        for reject in [true, false] {
+            compiler
+                .prepare(
+                    &codec,
+                    CAPABILITY,
+                    OrderedPlanInput {
+                        glyphs: &glyphs,
+                        placement_slots: &placement_slots,
+                        semantic_change_masks: &masks,
+                        f32_fields: &[&x],
+                        u32_fields: &[],
+                        order_independent: true,
+                    },
+                    false,
+                    2,
+                )
+                .unwrap();
+            assert!(compiler.reuse_live_bindings);
+            assert!(compiler.primitives.is_empty());
+            assert!(compiler.draws.is_empty());
+            if reject {
+                compiler.abort();
+            } else {
+                compiler.commit().unwrap();
+            }
+            assert_eq!(compiler.blocks.len(), 4);
+        }
         assert_eq!(compiler.retained_binding_compilation_skips, 2);
-        compiler.commit().unwrap();
 
         glyphs[1].block_start = 3.0;
         glyphs[1].content_revision = 3;
+        masks[1] = 0; // Bounds metadata is dirty even with a zero semantic mask.
+        let intervals = core::iter::once(1..2).collect::<Vec<_>>();
+        super::super::work_attribution::reset();
         compiler
-            .prepare(
+            .prepare_scoped(
                 &codec,
                 CAPABILITY,
                 OrderedPlanInput {
                     glyphs: &glyphs,
                     placement_slots: &placement_slots,
-                    semantic_change_masks: &[0, 1 << 1],
-                    f32_fields: &[&[1.0, 20.0]],
+                    semantic_change_masks: &masks,
+                    f32_fields: &[&x],
                     u32_fields: &[],
                     order_independent: true,
                 },
                 false,
                 3,
+                Some(RetainedOutputScope::ChangedIntervals(&intervals)),
+                true,
             )
             .unwrap();
         assert_eq!(compiler.retained_binding_compilation_skips, 2);
         assert!(!compiler.reuse_live_bindings);
-        assert!(!compiler.primitives.is_empty());
-        assert!(!compiler.draws.is_empty());
+        assert_eq!(compiler.primitives.len(), 1);
+        assert_eq!(compiler.pending_blocks.len(), 4);
+        let work = super::super::work_attribution::snapshot();
+        assert_eq!(work.draw_reduced_glyphs, 32);
+        assert_eq!(work.draw_folded_blocks, 3);
+        let mut cold = OrderedPlanCompiler::default();
+        prepare_with_options(&mut cold, &codec, &glyphs, &x, &masks, true, true);
+        for (warm, expected) in compiler.primitives.iter().zip(cold.primitives.iter()) {
+            assert_eq!(warm.inline_start.to_bits(), expected.inline_start.to_bits());
+            assert_eq!(warm.block_start.to_bits(), expected.block_start.to_bits());
+            assert_eq!(
+                warm.inline_extent.to_bits(),
+                expected.inline_extent.to_bits()
+            );
+            assert_eq!(warm.block_extent.to_bits(), expected.block_extent.to_bits());
+        }
     }
 
     #[test]
@@ -3132,7 +4781,7 @@ mod tests {
                         input(&changed, order_independent),
                         false,
                         2,
-                        Some(RetainedOutputScope::ChangedIntervals(&[])),
+                        None,
                         true,
                     )
                     .unwrap();
@@ -3759,23 +5408,101 @@ mod tests {
 
     #[test]
     fn glyph_spans_split_at_the_wire_record_limit() {
-        let codec = codec_with_limits(false, 512 * 1024);
-        let mut compiler = OrderedPlanCompiler::default();
-        let glyphs: Vec<_> = (1..=u32::from(u16::MAX) + 1)
-            .map(|stable_id| glyph(stable_id, 1))
-            .collect();
-        let x = vec![0.0; glyphs.len()];
-        prepare(&mut compiler, &codec, &glyphs, &x, true);
-        let plan = compiler
-            .plan_view(7, CAPABILITY, codec.fingerprint())
-            .unwrap();
+        for order_independent in [false, true] {
+            let codec = codec_with_limits(false, 512 * 1024);
+            let mut compiler = OrderedPlanCompiler::default();
+            let mut glyphs: Vec<_> = (1..=u32::from(u16::MAX) + 1)
+                .map(|stable_id| glyph(stable_id, 1))
+                .collect();
+            let x = vec![0.0; glyphs.len()];
+            prepare_with_options(
+                &mut compiler,
+                &codec,
+                &glyphs,
+                &x,
+                &[],
+                true,
+                order_independent,
+            );
+            let plan = compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap();
 
-        assert_eq!(plan.primitives.len(), 2);
-        assert_eq!(plan.primitives[0].record_count, u16::MAX);
-        assert_eq!(plan.primitives[1].record_count, 1);
-        assert_eq!(plan.primitives[1].record_index, u32::from(u16::MAX));
-        assert_eq!(plan.draws.len(), 2);
-        assert!(plan_layout(plan).is_ok());
+            assert_eq!(plan.primitives.len(), 2);
+            assert_eq!(plan.primitives[0].record_count, u16::MAX);
+            assert_eq!(plan.primitives[1].record_count, 1);
+            assert_eq!(plan.primitives[1].record_index, u32::from(u16::MAX));
+            assert_eq!(plan.draws.len(), 2);
+            assert!(plan_layout(plan).is_ok());
+            let mut host = TestHost::default();
+            host.accept(
+                compiler
+                    .plan_view(7, CAPABILITY, codec.fingerprint())
+                    .unwrap(),
+                compiler.publish_bindings,
+            );
+            compiler.commit().unwrap();
+
+            let glyph_count = glyphs.len();
+            glyphs[0].stable_id += glyph_count as u32;
+            glyphs[0].content_revision += 1;
+            let slots = vec![0; glyphs.len()];
+            let masks = vec![0; glyphs.len()];
+            let intervals = core::iter::once(0..1).collect::<Vec<_>>();
+            super::super::work_attribution::reset();
+            compiler
+                .prepare_scoped(
+                    &codec,
+                    CAPABILITY,
+                    OrderedPlanInput {
+                        glyphs: &glyphs,
+                        placement_slots: &slots,
+                        semantic_change_masks: &masks,
+                        f32_fields: &[&x],
+                        u32_fields: &[],
+                        order_independent,
+                    },
+                    false,
+                    2,
+                    Some(RetainedOutputScope::ChangedIntervals(&intervals)),
+                    false,
+                )
+                .unwrap();
+            let work = super::super::work_attribution::snapshot();
+            if order_independent {
+                assert_eq!(work.draw_reduced_glyphs, 63);
+                assert_eq!(work.draw_folded_blocks, 2046);
+                assert_eq!(compiler.pending_blocks.len(), 2047);
+            } else {
+                assert_eq!(work.draw_reduced_glyphs, usize::from(u16::MAX));
+                assert_eq!(work.draw_folded_blocks, 0);
+                assert!(compiler.pending_blocks.is_empty());
+            }
+            host.accept(
+                compiler
+                    .plan_view(7, CAPABILITY, codec.fingerprint())
+                    .unwrap(),
+                compiler.publish_bindings,
+            );
+            compiler.commit().unwrap();
+            let mut cold = OrderedPlanCompiler::default();
+            let mut oracle = TestHost::default();
+            prepare_with_options(&mut cold, &codec, &glyphs, &x, &[], true, order_independent);
+            oracle.accept(
+                cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap(),
+                cold.publish_bindings,
+            );
+            assert_eq!(host.snapshot(), oracle.snapshot());
+            for (warm, expected) in compiler.live_primitives.iter().zip(cold.primitives.iter()) {
+                assert_eq!(warm.inline_start.to_bits(), expected.inline_start.to_bits());
+                assert_eq!(warm.block_start.to_bits(), expected.block_start.to_bits());
+                assert_eq!(
+                    warm.inline_extent.to_bits(),
+                    expected.inline_extent.to_bits()
+                );
+                assert_eq!(warm.block_extent.to_bits(), expected.block_extent.to_bits());
+            }
+        }
     }
 
     #[test]
@@ -3851,12 +5578,12 @@ mod tests {
     #[test]
     fn multileaf_rank_reorder_packs_chunks_and_matches_cold_publication() {
         let codec = codec();
-        for count in [33, 64, 65] {
+        for count in [33, 64, 65, 129] {
             let mut compiler = OrderedPlanCompiler::default();
             let mut host = TestHost::default();
             let mut glyphs: Vec<_> = (1..=count).map(|id| glyph(id, 1)).collect();
             let mut x: Vec<_> = (1..=count).map(|id| id as f32).collect();
-            prepare(&mut compiler, &codec, &glyphs, &x, true);
+            prepare_with_options(&mut compiler, &codec, &glyphs, &x, &[], true, true);
             host.accept(
                 compiler
                     .plan_view(7, CAPABILITY, codec.fingerprint())
@@ -3864,6 +5591,7 @@ mod tests {
                 compiler.publish_bindings,
             );
             compiler.commit().unwrap();
+            assert_eq!(compiler.blocks.len(), count as usize / DRAW_BLOCK_SLOTS);
             let accepted = host.snapshot();
             let accepted_bytes: Vec<_> = compiler
                 .buffers
@@ -3890,6 +5618,7 @@ mod tests {
                 if abort {
                     compiler.abort();
                     assert_eq!(host.snapshot(), accepted);
+                    assert_eq!(compiler.blocks.len(), count as usize / DRAW_BLOCK_SLOTS);
                     assert_eq!(
                         compiler
                             .buffers
@@ -3906,11 +5635,12 @@ mod tests {
                         compiler.publish_bindings,
                     );
                     compiler.commit().unwrap();
+                    assert!(compiler.blocks.is_empty());
                 }
             }
             let mut cold = OrderedPlanCompiler::default();
             let mut oracle = TestHost::default();
-            prepare(&mut cold, &codec, &glyphs, &x, true);
+            prepare_with_options(&mut cold, &codec, &glyphs, &x, &[], true, true);
             oracle.accept(
                 cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap(),
                 cold.publish_bindings,
@@ -3947,7 +5677,9 @@ mod tests {
                 .prepare_reorder(&codec, CAPABILITY, &[3, 4, 1, 2], 2)
                 .unwrap()
         );
+        assert_eq!(compiler.pending_order_independent, None);
         compiler.abort();
+        assert_eq!(compiler.committed_order_independent, Some(false));
         assert_eq!(read_f32(compiler.buffer_bytes(1).unwrap(), 0), 1.0);
         assert_eq!(read_f32(compiler.buffer_bytes(1).unwrap(), 4), 2.0);
         assert_eq!(read_f32(compiler.buffer_bytes(1).unwrap(), 8), 3.0);
@@ -3959,6 +5691,7 @@ mod tests {
                 .unwrap()
         );
         compiler.commit().unwrap();
+        assert_eq!(compiler.committed_order_independent, None);
         assert_eq!(compiler.live_primitives[0].record_index, 0);
         assert_eq!(compiler.live_primitives[0].record_count, 4);
         assert_eq!(compiler.live_primitives[0].id, 3);
@@ -4021,6 +5754,194 @@ mod tests {
         );
         compiler.commit().unwrap();
         assert_eq!(capacities(&compiler), settled);
+    }
+
+    #[test]
+    fn commit_preflight_rejects_invalid_range_and_reserves_commit_destinations() {
+        let codec = codec();
+        let mut compiler = OrderedPlanCompiler::default();
+        let initial = [glyph(1, 1)];
+        prepare(&mut compiler, &codec, &initial, &[1.0], true);
+        compiler.commit().unwrap();
+        let committed = compiler.buffer_bytes(1).unwrap().to_vec();
+
+        let changed = [glyph(1, 2)];
+        prepare(&mut compiler, &codec, &changed, &[2.0], false);
+        let patch_index = (compiler.pending_batches[0].patch_start
+            ..compiler.pending_batches[0].patch_end)
+            .find(|&index| compiler.patches[index].opcode == PATCH_WRITE)
+            .unwrap();
+        compiler.patches[patch_index].payload_start = u32::MAX;
+        assert_eq!(
+            compiler.commit(),
+            Err(OrderedPlanError::InvalidIdentity),
+            "bad pending write range must fail before the accepted buffers are swapped"
+        );
+        assert_eq!(compiler.buffer_bytes(1), Some(committed.as_slice()));
+        compiler.abort();
+
+        // A later valid preparation still commits to the same output as a cold compile.
+        let retried = [glyph(1, 2)];
+        prepare(&mut compiler, &codec, &retried, &[2.0], true);
+        compiler.preflight_commit().unwrap();
+        let output_buffer_count: usize = compiler
+            .pending_batches
+            .iter()
+            .map(|batch| usize::from(batch.state.buffer_count))
+            .sum();
+        assert!(compiler.spare_buffers.capacity() >= output_buffer_count);
+        assert!(compiler.spare_batches.capacity() >= compiler.pending_batches.len());
+        let buffer_capacity = compiler.spare_buffers.capacity();
+        let batch_capacity = compiler.spare_batches.capacity();
+        compiler.commit_preflighted();
+        assert_eq!(compiler.buffers.capacity(), buffer_capacity);
+        assert_eq!(compiler.batches.capacity(), batch_capacity);
+        let mut cold = OrderedPlanCompiler::default();
+        prepare(&mut cold, &codec, &retried, &[2.0], true);
+        cold.commit().unwrap();
+        assert_eq!(compiler.buffer_bytes(1), cold.buffer_bytes(1));
+    }
+
+    #[test]
+    fn cached_physical_blocks_match_original_sequential_float_bits_and_errors() {
+        fn original_bounds(rows: &[OrderedGlyph]) -> Result<[u32; 4], OrderedPlanError> {
+            let first = rows[0];
+            let mut inline_start = first.inline_start;
+            let mut block_start = first.block_start;
+            let mut inline_end = first.inline_start + first.inline_extent;
+            let mut block_end = first.block_start + first.block_extent;
+            for row in &rows[1..] {
+                inline_start = inline_start.min(row.inline_start);
+                block_start = block_start.min(row.block_start);
+                inline_end = inline_end.max(row.inline_start + row.inline_extent);
+                block_end = block_end.max(row.block_start + row.block_extent);
+            }
+            let inline_extent = inline_end - inline_start;
+            let block_extent = block_end - block_start;
+            if !inline_extent.is_finite() || !block_extent.is_finite() {
+                return Err(OrderedPlanError::InvalidInputShape);
+            }
+            Ok([
+                inline_start.to_bits(),
+                block_start.to_bits(),
+                inline_extent.to_bits(),
+                block_extent.to_bits(),
+            ])
+        }
+        fn published_bits(compiler: &OrderedPlanCompiler) -> [u32; 4] {
+            let primitive = compiler.primitives[0];
+            [
+                primitive.inline_start.to_bits(),
+                primitive.block_start.to_bits(),
+                primitive.inline_extent.to_bits(),
+                primitive.block_extent.to_bits(),
+            ]
+        }
+        let codec = paint_codec_with_limits(false, 65_536, true);
+        for (case, baseline, edited) in [
+            ("positive_zero", (0.0, 0.0), (0.0, 0.0)),
+            ("negative_zero", (-0.0, -0.0), (-0.0, -0.0)),
+            ("mixed_final_zero", (0.0, 0.0), (-0.0, -0.0)),
+            ("mixed_nonzero_extrema", (0.0, 0.0), (-0.0, 0.0)),
+            ("nan", (0.0, 0.0), (f32::NAN, 0.0)),
+            ("infinity", (0.0, 0.0), (f32::INFINITY, 0.0)),
+            ("overflow_endpoint", (0.0, 0.0), (f32::MAX, f32::MAX)),
+        ] {
+            let mut rows: Vec<_> = (0..128)
+                .map(|index| {
+                    let mut row = glyph(index + 1, 1);
+                    row.inline_start = baseline.0;
+                    row.block_start = baseline.0;
+                    row.inline_extent = baseline.1;
+                    row.block_extent = baseline.1;
+                    row
+                })
+                .collect();
+            if case == "mixed_nonzero_extrema" {
+                rows[0].inline_start = -5.0;
+                rows[0].block_start = -5.0;
+                rows[0].inline_extent = 10.0;
+                rows[0].block_extent = 10.0;
+            }
+            let x = vec![0.0; rows.len()];
+            let slots = vec![0; rows.len()];
+            let masks = vec![0; rows.len()];
+            let mut compiler = OrderedPlanCompiler::default();
+            prepare_with_options(&mut compiler, &codec, &rows, &x, &masks, true, true);
+            assert_eq!(
+                published_bits(&compiler),
+                original_bounds(&rows).unwrap(),
+                "{case} cold"
+            );
+            compiler.commit().unwrap();
+            assert_eq!(compiler.blocks.len(), 4, "{case} cache construction");
+            rows[40].inline_start = edited.0;
+            rows[40].block_start = edited.0;
+            rows[40].inline_extent = edited.1;
+            rows[40].block_extent = edited.1;
+            rows[40].content_revision += 1;
+            let intervals = core::iter::once(40..41).collect::<Vec<_>>();
+            super::super::work_attribution::reset();
+            let result = compiler.prepare_scoped(
+                &codec,
+                CAPABILITY,
+                OrderedPlanInput {
+                    glyphs: &rows,
+                    placement_slots: &slots,
+                    semantic_change_masks: &masks,
+                    f32_fields: &[&x],
+                    u32_fields: &[],
+                    order_independent: true,
+                },
+                false,
+                2,
+                Some(RetainedOutputScope::ChangedIntervals(&intervals)),
+                true,
+            );
+            let expected = original_bounds(&rows);
+            assert_eq!(
+                result.as_ref().err(),
+                expected.as_ref().err(),
+                "{case} warm error"
+            );
+            let work = super::super::work_attribution::snapshot();
+            assert_eq!(work.draw_folded_blocks, 3, "{case} cache fold");
+            if let Ok(bits) = expected {
+                assert_eq!(published_bits(&compiler), bits, "{case} warm bits");
+            }
+            if matches!(
+                case,
+                "mixed_final_zero" | "nan" | "infinity" | "overflow_endpoint"
+            ) {
+                assert_eq!(work.draw_reduced_glyphs, 32 + 128, "{case} replay");
+            } else {
+                assert_eq!(work.draw_reduced_glyphs, 32, "{case} row reductions");
+            }
+            compiler.abort();
+            let mut cold = OrderedPlanCompiler::default();
+            let cold_result = cold.prepare(
+                &codec,
+                CAPABILITY,
+                OrderedPlanInput {
+                    glyphs: &rows,
+                    placement_slots: &slots,
+                    semantic_change_masks: &masks,
+                    f32_fields: &[&x],
+                    u32_fields: &[],
+                    order_independent: true,
+                },
+                true,
+                1,
+            );
+            assert_eq!(
+                cold_result.as_ref().err(),
+                result.as_ref().err(),
+                "{case} cold error"
+            );
+            if let Ok(bits) = original_bounds(&rows) {
+                assert_eq!(published_bits(&cold), bits, "{case} cold bits");
+            }
+        }
     }
 
     fn prepare(
@@ -4182,8 +6103,13 @@ mod tests {
     fn decoration_rows_pack_and_draw_without_resources() {
         let codec = decoration_codec();
         let mut compiler = OrderedPlanCompiler::default();
-        let rows = [glyph(1, 1), decoration_row(0x8000_0000)];
-        prepare(&mut compiler, &codec, &rows, &[1.0, 4.0], true);
+        let mut rows = [
+            glyph(1, 1),
+            decoration_row(0x8000_0000),
+            decoration_row(0x8000_0001),
+        ];
+        let x = [1.0, 4.0, 4.0];
+        prepare(&mut compiler, &codec, &rows, &x, true);
         let view = compiler
             .plan_view(7, CAPABILITY, codec.fingerprint())
             .unwrap();
@@ -4206,6 +6132,55 @@ mod tests {
             })
             .expect("decoration draw");
         assert_eq!(decoration_draw.resource_count, 0);
+        let mut host = TestHost::default();
+        host.accept(
+            compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap(),
+            compiler.publish_bindings,
+        );
+        compiler.commit().unwrap();
+        rows[0].stable_id = 2;
+        rows[0].content_revision += 1;
+        let intervals = core::iter::once(0..1).collect::<Vec<_>>();
+        super::super::work_attribution::reset();
+        compiler
+            .prepare_scoped(
+                &codec,
+                CAPABILITY,
+                OrderedPlanInput {
+                    glyphs: &rows,
+                    placement_slots: &[0; 3],
+                    semantic_change_masks: &[0; 3],
+                    f32_fields: &[&x],
+                    u32_fields: &[],
+                    order_independent: false,
+                },
+                false,
+                2,
+                Some(RetainedOutputScope::ChangedIntervals(&intervals)),
+                false,
+            )
+            .unwrap();
+        assert_eq!(
+            super::super::work_attribution::snapshot().draw_reduced_glyphs,
+            1,
+        );
+        host.accept(
+            compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap(),
+            compiler.publish_bindings,
+        );
+        compiler.commit().unwrap();
+        let mut cold = OrderedPlanCompiler::default();
+        let mut oracle = TestHost::default();
+        prepare(&mut cold, &codec, &rows, &x, true);
+        oracle.accept(
+            cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap(),
+            cold.publish_bindings,
+        );
+        assert_eq!(host.snapshot(), oracle.snapshot());
     }
 
     #[test]

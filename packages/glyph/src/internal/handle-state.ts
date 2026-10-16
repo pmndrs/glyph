@@ -12,7 +12,13 @@ import { createRenderPlanner, type RenderPlanner, type RenderPlannerOptions } fr
 import { compileCodec, type CodecDescriptor, type CodecIdFactory } from '../config/codec.js';
 import { CodecIdScope } from './render-id.js';
 import { resolveRasterCodecInternal } from './raster-codec-registry.js';
-import { preparePlannerFrameUpdate, type PlannerFrameUpdate, writePreparedPlannerFrameUpdate } from './frame-wire.js';
+import {
+  clearPlannerFrameScratch,
+  createPlannerFrameScratch,
+  preparePlannerFrameUpdate,
+  type PlannerFrameUpdate,
+  writePreparedPlannerFrameUpdate,
+} from './frame-wire.js';
 import {
   assertGlyphId,
   createHandleIdFactory,
@@ -1235,8 +1241,12 @@ export class PlanTransport {
   /** The epoch each issued borrow was published under, keyed by publication identity. */
   readonly #issued = new WeakMap<PlanPublication, number>();
   readonly #issuedLayouts = new WeakMap<BorrowedLayoutPublication, number>();
-  #latestGeneration = 0;
   #stagedUpdate: { readonly requestLength: number; readonly initialMemoryBuffer: ArrayBuffer } | undefined;
+  #preparedMutationUnadopted = false;
+  #lastFailureInvalidatedRoot = false;
+  readonly #frameScratch = createPlannerFrameScratch();
+  #requestView: { readonly bytes: Uint8Array; readonly view: DataView } | undefined;
+  #resultHeader: DataView | undefined;
 
   /** @internal Plan transports are created by the render-planner implementation. */
   constructor(
@@ -1304,21 +1314,7 @@ export class PlanTransport {
   stageUpdate(frame: PlannerFrameUpdate): number {
     this.#assertActive();
     if (this.#stagedUpdate !== undefined) throw new Error('text update request is already staged');
-    const request = preparePlannerFrameUpdate(frame);
-    this.#invalidate();
-    const requestLength = uint32(request.byteLength, 'text update byte length');
-    const initialMemoryBuffer = this.#exports.memory.buffer;
-    if (requestLength > this.#requestCapacity || requestLength > this.#exports.requestCapacity(this.#handle)) {
-      this.reserve(requestLength, this.#resultCapacity);
-    }
-    const requestPointer = this.#exports.requestPointer(this.#handle);
-    if (requestPointer === 0) {
-      throw engineStatusError('resolve text request arena', textShaperAbi.status.rootMissing);
-    }
-    writePreparedPlannerFrameUpdate(
-      request,
-      new Uint8Array(this.#exports.memory.buffer, requestPointer, requestLength),
-    );
+    const { requestLength, initialMemoryBuffer } = this.#writeFrameRequest(frame, 'text update byte length');
     this.#stagedUpdate = { requestLength, initialMemoryBuffer };
     return requestLength;
   }
@@ -1329,6 +1325,7 @@ export class PlanTransport {
     const staged = this.#stagedUpdate;
     if (staged === undefined) throw new Error('no text update request is staged');
     this.#stagedUpdate = undefined;
+    this.#lastFailureInvalidatedRoot = true;
     if (memoryBuffer !== this.#exports.memory.buffer) {
       throw new Error('text update batch supplied stale Wasm memory');
     }
@@ -1339,8 +1336,10 @@ export class PlanTransport {
     if (resultPointer + layout.size > memoryBuffer.byteLength) {
       throw new RangeError('text engine returned an out-of-bounds result header');
     }
-    const header = new DataView(memoryBuffer, resultPointer, layout.size);
+    const header = this.#boundResultHeader(memoryBuffer, resultPointer, layout.size);
     const status = header.getUint32(layout.status, true);
+    this.#lastFailureInvalidatedRoot =
+      (header.getUint32(layout.flags, true) & textShaperAbi.engine.resultFlags.rootInvalidated) !== 0;
     if (status !== textShaperAbi.status.ok) {
       throw engineStatusError(
         'publish text update',
@@ -1350,7 +1349,15 @@ export class PlanTransport {
         headerFault(header),
       );
     }
+    // Rust has committed this candidate. Keep it marked unadopted until the planner has decoded
+    // and installed the publication into its accepted TypeScript state.
+    this.#preparedMutationUnadopted = true;
     return this.#decodeResult(header, resultPointer, memoryBuffer, staged.initialMemoryBuffer);
+  }
+
+  /** @internal Whether the last rejected engine result invalidated Rust's derived root. */
+  get failureInvalidatedRoot(): boolean {
+    return this.#lastFailureInvalidatedRoot;
   }
 
   /** @internal Abandon a staged request when the batch could not produce this planner's result. */
@@ -1360,63 +1367,62 @@ export class PlanTransport {
     this.#stagedUpdate = undefined;
   }
 
-  /** Transactionally prepares one paragraph and returns its fixed-size measurement sidecar without publishing renderer state. Result bytes stay readable only until the next Wasm call. */
-  prepareParagraph(
-    requestFrame: PlannerFrameUpdate,
-    paragraphId: ParagraphId,
-    maxOutputBytes: number,
-    onPreparationDiscarded?: () => void,
-  ): PlanPublication {
+  /** Prepares one paragraph with its requested semantic sidecar, without renderer publication. Result bytes expire at the next Wasm call. */
+  prepareParagraph(requestFrame: PlannerFrameUpdate, paragraphId: ParagraphId): PlanPublication {
     this.assertMutationAllowed();
-    const request = preparePlannerFrameUpdate(requestFrame);
-    maxOutputBytes = uint32(maxOutputBytes, 'paragraph measure max output bytes');
-    this.#invalidate();
-    const requestLength = uint32(request.byteLength, 'paragraph measure byte length');
-    const initialMemoryBuffer = this.#exports.memory.buffer;
-    if (requestLength > this.#requestCapacity || requestLength > this.#exports.requestCapacity(this.#handle)) {
-      this.reserve(requestLength, this.#resultCapacity);
+    const { requestLength, requestPointer, initialMemoryBuffer } = this.#writeFrameRequest(
+      requestFrame,
+      'paragraph measure byte length',
+    );
+    // From this call onward, an error may follow Rust preparation writes. The owner must
+    // invalidate the derived root instead of retrying the same mutation against old state.
+    this.#preparedMutationUnadopted = true;
+    this.#lastFailureInvalidatedRoot = true;
+    const resultPointer = this.#exports.measureParagraph(this.#handle, requestPointer, requestLength, paragraphId);
+    const memoryBuffer = this.#exports.memory.buffer;
+    if (resultPointer === 0) throw engineStatusError('measure paragraph', textShaperAbi.status.resultTooLarge);
+    const layout = textShaperAbi.layouts.engineResult;
+    if (resultPointer + layout.size > memoryBuffer.byteLength) {
+      throw new RangeError('text engine returned an out-of-bounds result header');
     }
-    let canRepairResultCapacity = true;
-    for (;;) {
-      const requestPointer = this.#exports.requestPointer(this.#handle);
-      if (requestPointer === 0) throw engineStatusError('resolve text request arena', textShaperAbi.status.rootMissing);
-      writePreparedPlannerFrameUpdate(
-        request,
-        new Uint8Array(this.#exports.memory.buffer, requestPointer, requestLength),
+    const header = this.#boundResultHeader(memoryBuffer, resultPointer, layout.size);
+    const status = header.getUint32(layout.status, true);
+    this.#lastFailureInvalidatedRoot =
+      (header.getUint32(layout.flags, true) & textShaperAbi.engine.resultFlags.rootInvalidated) !== 0;
+    const requiredResultCapacity = header.getUint32(layout.requiredResultCapacity, true);
+    if (status !== textShaperAbi.status.ok) {
+      this.#preparedMutationUnadopted = this.#lastFailureInvalidatedRoot;
+      throw engineStatusError(
+        'measure paragraph',
+        status,
+        header.getUint32(layout.requiredRequestCapacity, true),
+        requiredResultCapacity,
+        headerFault(header),
       );
-      const resultPointer = this.#exports.measureParagraph(this.#handle, requestPointer, requestLength, paragraphId);
-      const memoryBuffer = this.#exports.memory.buffer;
-      if (resultPointer === 0) throw engineStatusError('measure paragraph', textShaperAbi.status.resultTooLarge);
-      const layout = textShaperAbi.layouts.engineResult;
-      if (resultPointer + layout.size > memoryBuffer.byteLength) {
-        throw new RangeError('text engine returned an out-of-bounds result header');
-      }
-      const header = new DataView(memoryBuffer, resultPointer, layout.size);
-      const status = header.getUint32(layout.status, true);
-      const requiredResultCapacity = header.getUint32(layout.requiredResultCapacity, true);
-      const availableResultCapacity = header.getUint32(layout.resultCapacity, true);
-      if (
-        status === textShaperAbi.status.resultTooLarge &&
-        canRepairResultCapacity &&
-        requiredResultCapacity <= maxOutputBytes &&
-        requiredResultCapacity > availableResultCapacity
-      ) {
-        onPreparationDiscarded?.();
-        canRepairResultCapacity = false;
-        this.reserve(requestLength, requiredResultCapacity);
-        continue;
-      }
-      if (status !== textShaperAbi.status.ok) {
-        throw engineStatusError(
-          'measure paragraph',
-          status,
-          header.getUint32(layout.requiredRequestCapacity, true),
-          requiredResultCapacity,
-          headerFault(header),
-        );
-      }
-      return this.#decodeResult(header, resultPointer, memoryBuffer, initialMemoryBuffer);
     }
+    return this.#decodeResult(header, resultPointer, memoryBuffer, initialMemoryBuffer);
+  }
+
+  /** @internal Marks a successful Rust preparation whose authored state was adopted by TypeScript. */
+  acceptPreparedMutation(): void {
+    this.#preparedMutationUnadopted = false;
+  }
+
+  /** @internal Invalidates Rust-derived state after preparation committed but its TypeScript owner did not. */
+  invalidateUnadoptedMutation(): boolean {
+    if (!this.#preparedMutationUnadopted) return false;
+    this.#preparedMutationUnadopted = false;
+    this.#stagedUpdate = undefined;
+    this.#invalidate();
+    return true;
+  }
+
+  /** @internal Clears all derived root state while preserving its renderer publication fence. */
+  resetDerivedRoot(): void {
+    requireStatus(this.#exports.resetRoot(this.#handle), 'reset render planner state');
+    this.#preparedMutationUnadopted = false;
+    this.#stagedUpdate = undefined;
+    this.#invalidate();
   }
 
   /** @internal Borrows the current prepared positioning through a fixed-size demand descriptor. */
@@ -1443,9 +1449,39 @@ export class PlanTransport {
     return publication;
   }
 
-  /** @internal Returns one fixed scratch glyph record during an active layout borrow, over current Wasm memory. */
+  /** @internal Returns one record through the same bounded range borrow used by owned inspection. */
   borrowParagraphGlyph(layout: BorrowedLayoutPublication, index: number): DataView {
-    return this.#borrowParagraphRecord(layout, index);
+    return this.borrowParagraphGlyphs(layout, index, 1);
+  }
+
+  /** @internal Returns a bounded scratch range during an active layout borrow, over current Wasm memory. */
+  borrowParagraphGlyphs(layout: BorrowedLayoutPublication, start: number, count: number): DataView {
+    if (layout.rootId !== this.#handle || this.#disposed || this.#issuedLayouts.get(layout) !== this.#epoch) {
+      throw new Error('borrowed glyph layout has expired');
+    }
+    if (
+      !Number.isSafeInteger(start) ||
+      start < 0 ||
+      !Number.isSafeInteger(count) ||
+      count < 1 ||
+      count > textShaperAbi.engine.borrowedGlyphCapacity ||
+      !Number.isSafeInteger(start + count) ||
+      start + count > layout.glyphCount
+    ) {
+      throw new RangeError('borrowed layout glyph range is outside its bounds');
+    }
+    const pointer = this.#exports.borrowParagraphGlyphs(
+      this.#handle,
+      layout.paragraphId,
+      layout.generation,
+      start,
+      count,
+    );
+    const memoryBuffer = this.#exports.memory.buffer;
+    const record = textShaperAbi.layouts.borrowedGlyph;
+    const byteLength = checkedProduct(count, record.size, 'borrowed glyph range');
+    this.#assertBorrowedRange(pointer, byteLength, record.alignment, memoryBuffer, 'borrowed glyph records');
+    return new DataView(memoryBuffer, pointer, byteLength);
   }
 
   /** @internal Copies selected current glyph records into a complete query checkpoint. */
@@ -1534,20 +1570,6 @@ export class PlanTransport {
     return this.#decodeResult(header, resultPointer, memoryBuffer, initialMemoryBuffer);
   }
 
-  #borrowParagraphRecord(layout: BorrowedLayoutPublication, index: number): DataView {
-    if (layout.rootId !== this.#handle || this.#disposed || this.#issuedLayouts.get(layout) !== this.#epoch) {
-      throw new Error('borrowed glyph layout has expired');
-    }
-    if (!Number.isSafeInteger(index) || index < 0 || index >= layout.glyphCount) {
-      throw new RangeError('borrowed layout glyph index is outside its range');
-    }
-    const pointer = this.#exports.borrowParagraphGlyph(this.#handle, layout.paragraphId, layout.generation, index);
-    const memoryBuffer = this.#exports.memory.buffer;
-    const record = textShaperAbi.layouts.borrowedGlyph;
-    this.#assertBorrowedRange(pointer, record.size, record.alignment, memoryBuffer, 'borrowed glyph record');
-    return new DataView(memoryBuffer, pointer, record.size);
-  }
-
   #assertBorrowedRange(
     pointer: number,
     byteLength: number,
@@ -1595,7 +1617,6 @@ export class PlanTransport {
       drawCount: header.getUint32(layout.drawCount, true),
     };
     this.#issued.set(publication, this.#epoch);
-    this.#latestGeneration = Math.max(this.#latestGeneration, publication.publicationGeneration);
     return publication;
   }
 
@@ -1604,6 +1625,9 @@ export class PlanTransport {
     this.assertMutationAllowed();
     requireStatus(this.#exports.disposeRoot(this.#handle), 'dispose Glyph root');
     this.#stagedUpdate = undefined;
+    this.#requestView = undefined;
+    this.#resultHeader = undefined;
+    clearPlannerFrameScratch(this.#frameScratch);
     this.#invalidate();
     this.#disposed = true;
     this.#onDispose();
@@ -1612,6 +1636,55 @@ export class PlanTransport {
   #assertActive(): void {
     if (this.#disposed) throw new Error('plan transport is disposed');
     this.#assertEngineAvailable();
+  }
+
+  #writeFrameRequest(
+    frame: PlannerFrameUpdate,
+    lengthLabel: string,
+  ): { requestLength: number; requestPointer: number; initialMemoryBuffer: ArrayBuffer } {
+    // The planner's arrays belong to this transport and are borrowed only until this synchronous write ends.
+    // No staged request or issued publication retains the descriptor or its authored frame.
+    try {
+      const request = preparePlannerFrameUpdate(frame, this.#frameScratch);
+      this.#invalidate();
+      const requestLength = uint32(request.byteLength, lengthLabel);
+      const initialMemoryBuffer = this.#exports.memory.buffer;
+      if (requestLength > this.#requestCapacity || requestLength > this.#exports.requestCapacity(this.#handle)) {
+        this.reserve(requestLength, this.#resultCapacity);
+      }
+      const requestPointer = this.#exports.requestPointer(this.#handle);
+      if (requestPointer === 0) throw engineStatusError('resolve text request arena', textShaperAbi.status.rootMissing);
+      const memoryBuffer = this.#exports.memory.buffer;
+      let target = this.#requestView;
+      if (
+        target === undefined ||
+        target.bytes.buffer !== memoryBuffer ||
+        target.bytes.byteOffset !== requestPointer ||
+        target.bytes.byteLength !== requestLength
+      ) {
+        const bytes = new Uint8Array(memoryBuffer, requestPointer, requestLength);
+        target = { bytes, view: new DataView(memoryBuffer, requestPointer, requestLength) };
+        this.#requestView = target;
+      }
+      writePreparedPlannerFrameUpdate(request, target.bytes, target.view);
+      return { requestLength, requestPointer, initialMemoryBuffer };
+    } finally {
+      clearPlannerFrameScratch(this.#frameScratch);
+    }
+  }
+
+  #boundResultHeader(memoryBuffer: ArrayBuffer, pointer: number, length: number): DataView {
+    let header = this.#resultHeader;
+    if (
+      header === undefined ||
+      header.buffer !== memoryBuffer ||
+      header.byteOffset !== pointer ||
+      header.byteLength !== length
+    ) {
+      header = new DataView(memoryBuffer, pointer, length);
+      this.#resultHeader = header;
+    }
+    return header;
   }
 }
 

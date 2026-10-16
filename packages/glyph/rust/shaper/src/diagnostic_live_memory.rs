@@ -1,0 +1,260 @@
+//! Diagnostic requested-byte accounting around the unchanged Talc allocator.
+//! The feature-off Wasm build does not compile this module.
+
+#[cfg(target_arch = "wasm32")]
+use core::{
+    alloc::{GlobalAlloc, Layout},
+    sync::atomic::{AtomicUsize, Ordering},
+};
+
+#[cfg(target_arch = "wasm32")]
+pub const RECORD_BYTES: usize = 8 * 4;
+const VERSION: u32 = 1;
+const ARITHMETIC_OVERFLOW: u32 = 1;
+const ARITHMETIC_UNDERFLOW: u32 = 2;
+const SIZE_UNREPRESENTABLE: u32 = 4;
+
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
+struct Counters {
+    status: u32,
+    live: u32,
+    peak: u32,
+    allocations: u32,
+    reallocations: u32,
+    deallocations: u32,
+    cumulative_requested: u32,
+}
+
+impl Counters {
+    fn add(&mut self, size: usize) {
+        let size = self.size(size);
+        self.live = self.sum(self.live, size);
+        self.peak = self.peak.max(self.live);
+        self.cumulative_requested = self.sum(self.cumulative_requested, size);
+    }
+
+    fn remove(&mut self, size: usize) {
+        let size = self.size(size);
+        match self.live.checked_sub(size) {
+            Some(live) => self.live = live,
+            None => {
+                self.status |= ARITHMETIC_UNDERFLOW;
+                self.live = 0;
+            }
+        }
+    }
+
+    fn alloc_result(&mut self, succeeded: bool, size: usize) {
+        if !succeeded {
+            return;
+        }
+        self.add(size);
+        self.allocations = self.sum(self.allocations, 1);
+    }
+
+    fn realloc_result(&mut self, succeeded: bool, old_size: usize, new_size: usize) {
+        if !succeeded {
+            return;
+        }
+        self.remove(old_size);
+        self.add(new_size);
+        self.reallocations = self.sum(self.reallocations, 1);
+    }
+
+    fn deallocated(&mut self, size: usize) {
+        self.remove(size);
+        self.deallocations = self.sum(self.deallocations, 1);
+    }
+
+    fn reset_window(&mut self) {
+        self.peak = self.live;
+        self.allocations = 0;
+        self.reallocations = 0;
+        self.deallocations = 0;
+        self.cumulative_requested = 0;
+        // Sticky arithmetic faults remain visible. A saturated live total cannot be repaired
+        // reliably by resetting a window while allocations remain live.
+    }
+
+    fn size(&mut self, size: usize) -> u32 {
+        match u32::try_from(size) {
+            Ok(size) => size,
+            Err(_) => {
+                self.status |= SIZE_UNREPRESENTABLE;
+                u32::MAX
+            }
+        }
+    }
+
+    fn sum(&mut self, left: u32, right: u32) -> u32 {
+        match left.checked_add(right) {
+            Some(value) => value,
+            None => {
+                self.status |= ARITHMETIC_OVERFLOW;
+                u32::MAX
+            }
+        }
+    }
+
+    fn words(self) -> [u32; 8] {
+        [
+            VERSION,
+            self.status,
+            self.live,
+            self.peak,
+            self.allocations,
+            self.reallocations,
+            self.deallocations,
+            self.cumulative_requested,
+        ]
+    }
+}
+
+// The pinned shaper target has one Wasm thread and no shared memory. Each allocator callback
+// delegates to Talc, then reads and writes these relaxed cells without allocating; Talc does
+// not call the global allocator recursively. A shared-memory/thread build must re-audit this
+// multi-field snapshot and update protocol before enabling the diagnostic feature.
+#[cfg(target_arch = "wasm32")]
+static STATUS: AtomicUsize = AtomicUsize::new(0);
+#[cfg(target_arch = "wasm32")]
+static LIVE: AtomicUsize = AtomicUsize::new(0);
+#[cfg(target_arch = "wasm32")]
+static PEAK: AtomicUsize = AtomicUsize::new(0);
+#[cfg(target_arch = "wasm32")]
+static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
+#[cfg(target_arch = "wasm32")]
+static REALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
+#[cfg(target_arch = "wasm32")]
+static DEALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
+#[cfg(target_arch = "wasm32")]
+static CUMULATIVE_REQUESTED: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(target_arch = "wasm32")]
+fn read() -> Counters {
+    let load = |field: &AtomicUsize| field.load(Ordering::Relaxed) as u32;
+    Counters {
+        status: load(&STATUS),
+        live: load(&LIVE),
+        peak: load(&PEAK),
+        allocations: load(&ALLOCATIONS),
+        reallocations: load(&REALLOCATIONS),
+        deallocations: load(&DEALLOCATIONS),
+        cumulative_requested: load(&CUMULATIVE_REQUESTED),
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn write(counters: Counters) {
+    let store = |field: &AtomicUsize, value: u32| field.store(value as usize, Ordering::Relaxed);
+    store(&STATUS, counters.status);
+    store(&LIVE, counters.live);
+    store(&PEAK, counters.peak);
+    store(&ALLOCATIONS, counters.allocations);
+    store(&REALLOCATIONS, counters.reallocations);
+    store(&DEALLOCATIONS, counters.deallocations);
+    store(&CUMULATIVE_REQUESTED, counters.cumulative_requested);
+}
+
+#[cfg(target_arch = "wasm32")]
+pub struct DiagnosticAllocator {
+    inner: talc::wasm::WasmDynamicTalc,
+}
+
+#[cfg(target_arch = "wasm32")]
+impl DiagnosticAllocator {
+    pub const fn new() -> Self {
+        Self {
+            inner: talc::wasm::new_wasm_dynamic_allocator(),
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+unsafe impl GlobalAlloc for DiagnosticAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        // SAFETY: Talc receives the identical layout and owns the returned pointer. The
+        // observer runs only after delegation and never allocates or calls the allocator.
+        let pointer = unsafe { self.inner.alloc(layout) };
+        let mut counters = read();
+        counters.alloc_result(!pointer.is_null(), layout.size());
+        write(counters);
+        pointer
+    }
+
+    unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
+        // SAFETY: GlobalAlloc's caller supplies the original pointer/layout pair; this wrapper
+        // forwards it unchanged. The counter update has no allocation or reentrant path.
+        unsafe { self.inner.dealloc(pointer, layout) };
+        let mut counters = read();
+        counters.deallocated(layout.size());
+        write(counters);
+    }
+
+    unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        // SAFETY: Talc receives exactly the original pointer/layout and requested size. A null
+        // return leaves the original allocation live, so it must not change accounting.
+        let replacement = unsafe { self.inner.realloc(pointer, layout, new_size) };
+        let mut counters = read();
+        counters.realloc_result(!replacement.is_null(), layout.size(), new_size);
+        write(counters);
+        replacement
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn snapshot(output: &mut [u8]) {
+    debug_assert_eq!(output.len(), RECORD_BYTES);
+    for (chunk, word) in output.chunks_exact_mut(4).zip(read().words()) {
+        chunk.copy_from_slice(&word.to_le_bytes());
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn reset_window() {
+    let mut counters = read();
+    counters.reset_window();
+    write(counters);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn requested_live_arithmetic_and_window() {
+        let mut counters = Counters::default();
+        counters.alloc_result(true, 16);
+        counters.alloc_result(true, 8);
+        counters.realloc_result(true, 16, 32);
+        counters.deallocated(8);
+        assert_eq!(counters.words(), [1, 0, 32, 40, 2, 1, 1, 56]);
+        counters.reset_window();
+        assert_eq!(counters.words(), [1, 0, 32, 32, 0, 0, 0, 0]);
+        counters.deallocated(32);
+        assert_eq!(counters.live, 0);
+    }
+
+    #[test]
+    fn failed_operations_leave_snapshot_unchanged() {
+        let mut counters = Counters::default();
+        counters.alloc_result(true, 8);
+        let before = counters;
+        counters.alloc_result(false, 16);
+        counters.realloc_result(false, 8, 32);
+        assert_eq!(counters, before);
+    }
+
+    #[test]
+    fn overflow_and_underflow_are_visible() {
+        let mut counters = Counters::default();
+        counters.alloc_result(true, u32::MAX as usize);
+        counters.alloc_result(true, 1);
+        assert_eq!(counters.live, u32::MAX);
+        assert_eq!(counters.status, ARITHMETIC_OVERFLOW);
+        counters.deallocated(u32::MAX as usize);
+        counters.deallocated(2);
+        assert_eq!(counters.status, ARITHMETIC_OVERFLOW | ARITHMETIC_UNDERFLOW);
+        counters.reset_window();
+        assert_eq!(counters.status, ARITHMETIC_OVERFLOW | ARITHMETIC_UNDERFLOW);
+    }
+}

@@ -953,12 +953,7 @@ impl FlowLayoutArena {
                 .lines
                 .range(line_index..previous.lines.len())
                 .ok_or(EngineError::InvalidRequest)?;
-            let next_lines = candidate_lines
-                .iter()
-                .copied()
-                .skip(1)
-                .map(Some)
-                .chain(core::iter::once(None));
+            let mut candidate_lines = candidate_lines.iter().copied().enumerate().peekable();
             let previous_fragment_start = previous
                 .line_fragment_start(line_index)
                 .ok_or(EngineError::InvalidRequest)?;
@@ -966,9 +961,8 @@ impl FlowLayoutArena {
                 .fragments
                 .cursor_from(previous_fragment_start)
                 .ok_or(EngineError::InvalidRequest)?;
-            for (offset, (old_line, next_line)) in
-                candidate_lines.iter().copied().zip(next_lines).enumerate()
-            {
+            while let Some((offset, old_line)) = candidate_lines.next() {
+                let next_line = candidate_lines.peek().map(|(_, line)| *line);
                 let candidate = line_index
                     .checked_add(offset)
                     .ok_or(EngineError::ResultTooLarge)?;
