@@ -1,7 +1,7 @@
 /* @workflow {
   "name": "benchmark:cpu-profile-summary",
   "summary": "Summarize a saved Node or Chrome V8 CPU profile by self and inclusive sampled time.",
-  "requirements": "A saved V8 CPU profile JSON. Optional --manifest may contain artifact-only proof for --artifact <tgz> source maps, or a named-Wasm proof that is authenticated whenever present. --wasm-url <exact profile URL> requires a named-Wasm proof. Artifact source maps require matching manifest.artifact.sha256.",
+  "requirements": "A saved V8 CPU profile JSON. Optional --manifest may contain artifact-only proof for --artifact <tgz> source maps, or a named-Wasm proof that is authenticated whenever present. --wasm-url <exact profile URL> requires a named-Wasm proof. Artifact source maps require matching manifest.artifact.sha256. Optional --ancestry <json-file> contains disjoint {label,nodeId} phase anchors from this capture.",
   "writes": "The Markdown report at --output."
 } */
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -10,7 +10,13 @@ import { dirname, resolve } from 'node:path';
 import { renderCpuProfileSummary, summarizeCpuProfile } from './support/cpu-profile-summary.mts';
 
 const options = parseOptions(process.argv.slice(2));
-const summary = await summarizeCpuProfile(options.profile, options.manifest, options.wasmUrl, options.artifact);
+const summary = await summarizeCpuProfile(
+  options.profile,
+  options.manifest,
+  options.wasmUrl,
+  options.artifact,
+  options.ancestry,
+);
 const reportPath = resolve(process.cwd(), options.output);
 await mkdir(dirname(reportPath), { recursive: true });
 await writeFile(reportPath, renderCpuProfileSummary(summary));
@@ -22,6 +28,7 @@ function parseOptions(args: readonly string[]): {
   readonly manifest?: string;
   readonly wasmUrl?: string;
   readonly artifact?: string;
+  readonly ancestry?: string;
 } {
   const values = new Map<string, string>();
   for (let index = 0; index < args.length; index += 2) {
@@ -29,11 +36,11 @@ function parseOptions(args: readonly string[]): {
     const value = args[index + 1];
     if (
       name === undefined ||
-      !['--profile', '--output', '--manifest', '--wasm-url', '--artifact'].includes(name) ||
+      !['--profile', '--output', '--manifest', '--wasm-url', '--artifact', '--ancestry'].includes(name) ||
       value === undefined
     ) {
       throw new Error(
-        'Usage: --profile <file> --output <markdown> [--manifest <file> --wasm-url <exact profile URL>] [--artifact <tgz>]',
+        'Usage: --profile <file> --output <markdown> [--manifest <file> --wasm-url <exact profile URL>] [--artifact <tgz>] [--ancestry <json-file>]',
       );
     }
     if (values.has(name)) throw new Error(`Duplicate option: ${name}`);
@@ -50,5 +57,6 @@ function parseOptions(args: readonly string[]): {
     ...(values.has('--manifest') ? { manifest: values.get('--manifest')! } : {}),
     ...(values.has('--wasm-url') ? { wasmUrl: values.get('--wasm-url')! } : {}),
     ...(values.has('--artifact') ? { artifact: values.get('--artifact')! } : {}),
+    ...(values.has('--ancestry') ? { ancestry: values.get('--ancestry')! } : {}),
   };
 }

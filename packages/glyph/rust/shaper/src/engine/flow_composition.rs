@@ -1642,6 +1642,8 @@ impl FlowLayoutArena {
                     typography: measured.typography,
                 })
                 .map_err(|()| EngineError::ResultTooLarge)?;
+            #[cfg(test)]
+            super::work_attribution::record(|work| work.recomposed_flow_lines += 1);
             return Ok(Some(extents.height()));
         }
         Err(EngineError::InvalidRequest)

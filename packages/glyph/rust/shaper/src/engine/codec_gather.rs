@@ -828,6 +828,15 @@ impl CodecGatherWorkspace {
             state.rebuild = Some(glyph_index);
             return Ok(RopeUpdate::Stop);
         };
+        #[cfg(test)]
+        super::work_attribution::record(|work| {
+            work.gather_mask_bits += change_mask.count_ones() as usize;
+            for bit in 0..16 {
+                work.gather_mask_bit_counts[bit] += usize::from(change_mask & (1 << bit) != 0);
+            }
+            work.gather_all_masks += usize::from(change_mask == ALL_SEMANTIC_CHANGES);
+            work.gather_identity_mismatches += usize::from(previous.stable_id != next.stable_id);
+        });
         // The change mask is identity-relative: `assign_content_revision` derives it against
         // the slot this glyph occupied in the previous frame, wherever that was. The retained
         // columns are slot-relative. The two conventions agree while a slot keeps its

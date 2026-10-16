@@ -458,6 +458,11 @@ fn shape_segment(
         records: &font.extents,
         availability: &font.availability,
     };
+    #[cfg(test)]
+    engine::work_attribution::record(|work| {
+        work.harfrust_calls += 1;
+        work.harfrust_utf16_units += range.item_end.saturating_sub(range.item_start) as usize;
+    });
     Ok(shaper.shape(
         buffer,
         ShapeOptions::new()
