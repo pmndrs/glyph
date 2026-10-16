@@ -1,6 +1,8 @@
 //! Flat retained style storage and transactional mutation merge.
 
 use alloc::vec::Vec;
+#[cfg(test)]
+use core::cell::Cell;
 
 use crate::{
     FeatureRecord,
@@ -69,12 +71,32 @@ pub(crate) struct StyleArena {
     records: Vec<RetainedStyle>,
     languages: Vec<u8>,
     features: Vec<FeatureRecord>,
+    #[cfg(test)]
+    root_validation_steps: Cell<usize>,
 }
 
 #[derive(Clone, Copy)]
 pub(crate) struct MutationKey {
     style_id: u32,
     request_index: usize,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct StyleTopologyRecord {
+    style_id: u32,
+    text_start: u32,
+    text_end: u32,
+    cascade_order: u32,
+    root: bool,
+}
+
+pub(crate) struct MutationTopologyScratch<'a> {
+    pub topology: &'a mut Vec<StyleTopologyRecord>,
+    pub mutations: &'a mut Vec<MutationKey>,
+    pub sort_pairs: &'a mut Vec<(u64, u32)>,
+    pub order: &'a mut Vec<usize>,
+    pub nesting: &'a mut Vec<u32>,
+    pub sort_pairs_pass: &'a mut Vec<(u64, u32)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -129,6 +151,7 @@ pub(crate) struct StyleInvalidation {
     pub shaping: bool,
     pub metrics: bool,
     pub positioning: bool,
+    pub cluster_mapping: bool,
 }
 
 #[derive(Default)]
@@ -222,24 +245,28 @@ impl ResolvedStyleArena {
         next: &Self,
         next_storage: &StyleArena,
     ) -> StyleInvalidation {
-        if self.segments.len() != next.segments.len() {
+        if self.segments.first().map(|segment| segment.text_start)
+            != next.segments.first().map(|segment| segment.text_start)
+            || self.segments.last().map(|segment| segment.text_end)
+                != next.segments.last().map(|segment| segment.text_end)
+        {
             return StyleInvalidation {
                 bidi: true,
                 shaping: true,
                 metrics: true,
                 positioning: true,
+                cluster_mapping: true,
             };
         }
         let mut invalidation = StyleInvalidation::default();
-        for (previous, next) in self.segments.iter().zip(&next.segments) {
-            if previous.text_start != next.text_start || previous.text_end != next.text_end {
-                return StyleInvalidation {
-                    bidi: true,
-                    shaping: true,
-                    metrics: true,
-                    positioning: true,
-                };
-            }
+        let (mut old_index, mut new_index) = (0, 0);
+        // Resolved segments cover one continuous text range. Compare effective values
+        // over their shared refinement; paint boundaries are not shaping boundaries.
+        while let (Some(previous), Some(next)) =
+            (self.segments.get(old_index), next.segments.get(new_index))
+        {
+            invalidation.cluster_mapping |=
+                previous.text_start != next.text_start || previous.text_end != next.text_end;
             let old = previous.style;
             let new = next.style;
             invalidation.bidi |=
@@ -256,6 +283,7 @@ impl ResolvedStyleArena {
                 || old.word_spacing.to_bits() != new.word_spacing.to_bits()
                 || old.baseline_shift.to_bits() != new.baseline_shift.to_bits();
             invalidation.positioning |= invalidation.metrics
+                || invalidation.cluster_mapping
                 || old.material_id != new.material_id
                 || old.raster_pixel_ratio.to_bits() != new.raster_pixel_ratio.to_bits()
                 || old.foreground_rgba != new.foreground_rgba
@@ -270,6 +298,12 @@ impl ResolvedStyleArena {
                 || old.decoration_style != new.decoration_style
                 || old.decoration_thickness.to_bits() != new.decoration_thickness.to_bits()
                 || old.decoration_offset.to_bits() != new.decoration_offset.to_bits();
+            if previous.text_end <= next.text_end {
+                old_index += 1;
+            }
+            if next.text_end <= previous.text_end {
+                new_index += 1;
+            }
         }
         invalidation
     }
@@ -278,6 +312,204 @@ impl ResolvedStyleArena {
 impl StyleArena {
     pub(crate) fn len(&self) -> usize {
         self.records.len()
+    }
+
+    pub(crate) fn validate_root_mutations(
+        &self,
+        mutations: StyleMutationBatch<'_>,
+        scratch: &mut Vec<MutationKey>,
+        sort_pairs: &mut Vec<(u64, u32)>,
+    ) -> Result<(), EngineError> {
+        if mutations.len() == 0 {
+            scratch.clear();
+            sort_pairs.clear();
+            return Ok(());
+        }
+
+        // `records` and the collapsed mutation keys are both sorted by style ID. Merge them
+        // instead of searching the full mutation batch once for every retained style.
+        let result = (|| {
+            prepare_mutation_order(mutations, scratch, sort_pairs)?;
+
+            let mut root_count = 0usize;
+            let mut record_index = 0;
+            let mut mutation_index = 0;
+            #[cfg(test)]
+            let mut steps = 0;
+            while record_index < self.records.len() || mutation_index < scratch.len() {
+                #[cfg(test)]
+                {
+                    steps += 1;
+                }
+                match (self.records.get(record_index), scratch.get(mutation_index)) {
+                    (Some(style), Some(key)) if style.style_id < key.style_id => {
+                        root_count += usize::from(style.root);
+                        record_index += 1;
+                    }
+                    (Some(style), Some(key)) if key.style_id < style.style_id => {
+                        root_count += usize::from(mutation_root(mutations, *key)?);
+                        mutation_index += 1;
+                    }
+                    (Some(_), Some(key)) => {
+                        root_count += usize::from(mutation_root(mutations, *key)?);
+                        record_index += 1;
+                        mutation_index += 1;
+                    }
+                    (Some(style), None) => {
+                        root_count += usize::from(style.root);
+                        record_index += 1;
+                    }
+                    (None, Some(key)) => {
+                        root_count += usize::from(mutation_root(mutations, *key)?);
+                        mutation_index += 1;
+                    }
+                    (None, None) => break,
+                }
+            }
+            #[cfg(test)]
+            self.root_validation_steps.set(steps);
+
+            match root_count {
+                0 => Err(EngineError::InvalidRequest),
+                1 => Ok(()),
+                _ => Err(EngineError::StyleRootInvalid(FrameFault::default())),
+            }
+        })();
+        scratch.clear();
+        sort_pairs.clear();
+        result
+    }
+
+    pub(crate) fn validate_mutations_for_text(
+        &self,
+        mutations: StyleMutationBatch<'_>,
+        text_length: u32,
+        mut is_utf16_boundary: impl FnMut(u32) -> bool,
+        mut font_stack_exists: impl FnMut(u32) -> bool,
+        scratch: &mut Vec<MutationKey>,
+        sort_pairs: &mut Vec<(u64, u32)>,
+    ) -> Result<(), EngineError> {
+        self.validate_root_mutations(mutations, scratch, sort_pairs)?;
+        for index in 0..mutations.len() {
+            if let StyleMutation::Upsert(value) =
+                mutations.get(index).ok_or(EngineError::InvalidRequest)?
+            {
+                validate_style_value(
+                    value,
+                    text_length,
+                    &mut is_utf16_boundary,
+                    &mut font_stack_exists,
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn validate_mutation_topology(
+        committed: &Self,
+        mutations: StyleMutationBatch<'_>,
+        grapheme_boundaries: &[u32],
+        scratch: &mut MutationTopologyScratch<'_>,
+    ) -> Result<(), EngineError> {
+        let MutationTopologyScratch {
+            topology: topology_scratch,
+            mutations: mutation_scratch,
+            sort_pairs,
+            order: order_scratch,
+            nesting: nesting_scratch,
+            sort_pairs_pass,
+        } = scratch;
+        prepare_mutation_order(mutations, mutation_scratch, sort_pairs)?;
+        let capacity = committed
+            .records
+            .len()
+            .checked_add(mutation_scratch.len())
+            .ok_or(EngineError::ResultTooLarge)?;
+        topology_scratch.clear();
+        topology_scratch
+            .try_reserve(capacity)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+
+        let mut committed_index = 0;
+        let mut mutation_index = 0;
+        while committed_index < committed.records.len() || mutation_index < mutation_scratch.len() {
+            let committed_id = committed
+                .records
+                .get(committed_index)
+                .map_or(u32::MAX, |style| style.style_id);
+            let mutation = mutation_scratch.get(mutation_index).copied();
+            let mutation_id = mutation.map_or(u32::MAX, |key| key.style_id);
+            if committed_id < mutation_id {
+                topology_scratch.push(topology_record(
+                    committed.records[committed_index],
+                    grapheme_boundaries,
+                ));
+                committed_index += 1;
+                continue;
+            }
+            if let Some(key) = mutation
+                && mutation_id <= committed_id
+            {
+                if let StyleMutation::Upsert(value) = mutations
+                    .get(key.request_index)
+                    .ok_or(EngineError::InvalidRequest)?
+                {
+                    topology_scratch.push(topology_value(value, grapheme_boundaries));
+                }
+                mutation_index += 1;
+                if mutation_id == committed_id {
+                    committed_index += 1;
+                }
+                continue;
+            }
+            if let Some(style) = committed.records.get(committed_index).copied() {
+                topology_scratch.push(topology_record(style, grapheme_boundaries));
+                committed_index += 1;
+            }
+        }
+
+        validate_topology_records(
+            topology_scratch,
+            order_scratch,
+            nesting_scratch,
+            sort_pairs,
+            sort_pairs_pass,
+        )
+    }
+
+    /// Validates retained styles that survive this batch. Incoming upserts are validated by
+    /// `validate_mutations_for_text`; a mutation of an existing identity replaces or removes its
+    /// committed value in the resulting style set.
+    pub(crate) fn validate_retained_ranges_for_text(
+        &self,
+        mutations: StyleMutationBatch<'_>,
+        text_length: u32,
+        mut is_utf16_boundary: impl FnMut(u32) -> bool,
+        scratch: &mut Vec<MutationKey>,
+        sort_pairs: &mut Vec<(u64, u32)>,
+    ) -> Result<(), EngineError> {
+        prepare_mutation_order(mutations, scratch, sort_pairs)?;
+        let result = (|| {
+            for style in &self.records {
+                if scratch
+                    .binary_search_by_key(&style.style_id, |key| key.style_id)
+                    .is_ok()
+                {
+                    continue;
+                }
+                validate_retained_style(
+                    *style,
+                    self.features(*style),
+                    text_length,
+                    &mut is_utf16_boundary,
+                    &mut |_| true,
+                )?;
+            }
+            Ok(())
+        })();
+        scratch.clear();
+        sort_pairs.clear();
+        result
     }
 
     pub(crate) fn references_font_stack(&self, handle: u32) -> bool {
@@ -324,30 +556,7 @@ impl StyleArena {
         sort_pairs: &mut Vec<(u64, u32)>,
     ) -> Result<(), EngineError> {
         self.clear();
-        scratch.clear();
-        scratch
-            .try_reserve(mutations.len())
-            .map_err(|_| EngineError::ResultTooLarge)?;
-        for request_index in 0..mutations.len() {
-            let mutation = mutations
-                .get(request_index)
-                .ok_or(EngineError::InvalidRequest)?;
-            let style_id = match mutation {
-                StyleMutation::Remove { style_id, .. } => style_id,
-                StyleMutation::Upsert(value) => value.style_id,
-            };
-            scratch.push(MutationKey {
-                style_id,
-                request_index,
-            });
-        }
-        sort::prepare_pairs(sort_pairs, scratch.len())?;
-        for (index, key) in scratch.iter().enumerate() {
-            sort_pairs.push((sort::pack2(key.style_id, index as u32), index as u32));
-        }
-        sort::sort_pairs(sort_pairs);
-        sort::apply_pair_order(scratch, sort_pairs);
-        collapse_to_last_mutation(scratch);
+        prepare_mutation_order(mutations, scratch, sort_pairs)?;
 
         self.records
             .try_reserve(committed.records.len().saturating_add(scratch.len()))
@@ -414,39 +623,16 @@ impl StyleArena {
         let text_length = u32::try_from(text.len()).map_err(|_| EngineError::InvalidRequest)?;
         let mut root_count = 0;
         for style in &self.records {
-            let fault = FrameFault::style(style.style_id);
-            if style.authored_text_start > style.authored_text_end
-                || style.authored_text_end > text_length
-                || !valid_utf16_boundary(text, style.authored_text_start)
-                || !valid_utf16_boundary(text, style.authored_text_end)
-                || style.text_start > style.text_end
-                || style.text_end > text_length
-                || !valid_utf16_boundary(text, style.text_start)
-                || !valid_utf16_boundary(text, style.text_end)
-            {
-                return Err(EngineError::StyleRangeInvalid(fault));
-            }
-            if style.field_mask & STYLE_FIELD_FONT_STACK != 0
-                && !font_stack_exists(style.font_stack_handle)
-            {
-                return Err(EngineError::StyleFontStackMissing(fault));
-            }
             if style.root {
                 root_count += 1;
-                if style.text_start != 0
-                    || style.text_end != text_length
-                    || style.field_mask & ROOT_REQUIRED_FIELDS != ROOT_REQUIRED_FIELDS
-                {
-                    return Err(EngineError::StyleRootInvalid(fault));
-                }
             }
-            for feature in self.features(*style) {
-                if !valid_utf16_boundary(text, feature.start)
-                    || !valid_utf16_boundary(text, feature.end)
-                {
-                    return Err(EngineError::StyleRangeInvalid(fault));
-                }
-            }
+            validate_retained_style(
+                *style,
+                self.features(*style),
+                text_length,
+                &mut |offset| valid_utf16_boundary(text, offset),
+                &mut font_stack_exists,
+            )?;
         }
         if root_count != 1 {
             return Err(EngineError::StyleRootInvalid(FrameFault::default()));
@@ -468,71 +654,14 @@ impl StyleArena {
             return Ok(());
         }
 
-        order_scratch.clear();
-        order_scratch
-            .try_reserve(self.records.len())
-            .map_err(|_| EngineError::ResultTooLarge)?;
-        // Two stable passes over the shared kernel replace one wide-key sort: the
-        // second pass orders by (text_start, descending text_end) and preserves the
-        // first pass's (!root, cascade_order) order for equal keys, so the composite
-        // order matches the previous four-field key exactly.
-        sort::prepare_pairs(sort_pairs, self.records.len())?;
-        for (index, style) in self.records.iter().enumerate() {
-            if !style.root && style.text_start == style.text_end {
-                continue;
-            }
-            sort_pairs.push((
-                (u64::from(!style.root) << 32) | u64::from(style.cascade_order),
-                index as u32,
-            ));
-        }
-        sort::sort_pairs(sort_pairs);
-        sort::prepare_pairs(sort_pairs_pass, sort_pairs.len())?;
-        for (position, &(_, record_index)) in sort_pairs.iter().enumerate() {
-            let style = self.records[record_index as usize];
-            sort_pairs_pass.push((
-                sort::pack2(style.text_start, !style.text_end),
-                position as u32,
-            ));
-        }
-        sort::sort_pairs(sort_pairs_pass);
-        for &(_, position) in sort_pairs_pass.iter() {
-            order_scratch.push(sort_pairs[position as usize].1 as usize);
-        }
-        if let Some(pair) = order_scratch.windows(2).find(|pair| {
-            let left = self.records[pair[0]];
-            let right = self.records[pair[1]];
-            left.text_start == right.text_start
-                && left.text_end == right.text_end
-                && left.cascade_order == right.cascade_order
-        }) {
-            return Err(EngineError::StyleNestingInvalid(FrameFault::style(
-                self.records[pair[1]].style_id,
-            )));
-        }
-        nesting_scratch.clear();
-        nesting_scratch
-            .try_reserve(self.records.len())
-            .map_err(|_| EngineError::ResultTooLarge)?;
-        for index in order_scratch.iter().copied() {
-            let style = self.records[index];
-            while nesting_scratch
-                .last()
-                .is_some_and(|end| style.text_start >= *end)
-            {
-                nesting_scratch.pop();
-            }
-            if nesting_scratch
-                .last()
-                .is_some_and(|end| style.text_end > *end)
-            {
-                return Err(EngineError::StyleNestingInvalid(FrameFault::style(
-                    style.style_id,
-                )));
-            }
-            nesting_scratch.push(style.text_end);
-        }
-        Ok(())
+        validate_style_topology(
+            self.records.len(),
+            |index| self.records.get(index).copied().map(topology_current),
+            order_scratch,
+            nesting_scratch,
+            sort_pairs,
+            sort_pairs_pass,
+        )
     }
 
     pub(crate) fn resolve(
@@ -725,6 +854,106 @@ impl StyleArena {
     }
 }
 
+fn validate_style_value(
+    value: crate::engine::semantic_wire::StyleValue<'_>,
+    text_length: u32,
+    is_utf16_boundary: &mut impl FnMut(u32) -> bool,
+    font_stack_exists: &mut impl FnMut(u32) -> bool,
+) -> Result<(), EngineError> {
+    validate_style_ranges(
+        value.style_id,
+        value.text_start,
+        value.text_end,
+        value.text_start,
+        value.text_end,
+        value.root,
+        value.field_mask,
+        value.font_stack_handle,
+        text_length,
+        is_utf16_boundary,
+        font_stack_exists,
+    )?;
+    for index in 0..(value.features.len() / 16) {
+        let feature =
+            StyleMutationBatch::feature(value, index).ok_or(EngineError::InvalidRequest)?;
+        if !is_utf16_boundary(feature.start) || !is_utf16_boundary(feature.end) {
+            return Err(EngineError::StyleRangeInvalid(FrameFault::style(
+                value.style_id,
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn validate_retained_style(
+    style: RetainedStyle,
+    features: &[FeatureRecord],
+    text_length: u32,
+    is_utf16_boundary: &mut impl FnMut(u32) -> bool,
+    font_stack_exists: &mut impl FnMut(u32) -> bool,
+) -> Result<(), EngineError> {
+    validate_style_ranges(
+        style.style_id,
+        style.authored_text_start,
+        style.authored_text_end,
+        style.text_start,
+        style.text_end,
+        style.root,
+        style.field_mask,
+        style.font_stack_handle,
+        text_length,
+        is_utf16_boundary,
+        font_stack_exists,
+    )?;
+    for feature in features {
+        if !is_utf16_boundary(feature.start) || !is_utf16_boundary(feature.end) {
+            return Err(EngineError::StyleRangeInvalid(FrameFault::style(
+                style.style_id,
+            )));
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn validate_style_ranges(
+    style_id: u32,
+    authored_start: u32,
+    authored_end: u32,
+    text_start: u32,
+    text_end: u32,
+    root: bool,
+    field_mask: u32,
+    font_stack_handle: u32,
+    text_length: u32,
+    is_utf16_boundary: &mut impl FnMut(u32) -> bool,
+    font_stack_exists: &mut impl FnMut(u32) -> bool,
+) -> Result<(), EngineError> {
+    let fault = FrameFault::style(style_id);
+    if authored_start > authored_end
+        || authored_end > text_length
+        || !is_utf16_boundary(authored_start)
+        || !is_utf16_boundary(authored_end)
+        || text_start > text_end
+        || text_end > text_length
+        || !is_utf16_boundary(text_start)
+        || !is_utf16_boundary(text_end)
+    {
+        return Err(EngineError::StyleRangeInvalid(fault));
+    }
+    if field_mask & STYLE_FIELD_FONT_STACK != 0 && !font_stack_exists(font_stack_handle) {
+        return Err(EngineError::StyleFontStackMissing(fault));
+    }
+    if root
+        && (text_start != 0
+            || text_end != text_length
+            || field_mask & ROOT_REQUIRED_FIELDS != ROOT_REQUIRED_FIELDS)
+    {
+        return Err(EngineError::StyleRootInvalid(fault));
+    }
+    Ok(())
+}
+
 fn cluster_end_at_or_after(boundaries: &[u32], offset: u32) -> u32 {
     let Some(&last) = boundaries.last() else {
         return offset;
@@ -812,6 +1041,154 @@ fn apply_style(mut resolved: ResolvedStyle, style: RetainedStyle, source: usize)
     resolved
 }
 
+fn topology_record(style: RetainedStyle, grapheme_boundaries: &[u32]) -> StyleTopologyRecord {
+    let (text_start, text_end) = if style.root {
+        (style.text_start, style.text_end)
+    } else {
+        normalize_style_range(
+            style.authored_text_start,
+            style.authored_text_end,
+            grapheme_boundaries,
+        )
+    };
+    StyleTopologyRecord {
+        style_id: style.style_id,
+        text_start,
+        text_end,
+        cascade_order: style.cascade_order,
+        root: style.root,
+    }
+}
+
+fn topology_current(style: RetainedStyle) -> StyleTopologyRecord {
+    StyleTopologyRecord {
+        style_id: style.style_id,
+        text_start: style.text_start,
+        text_end: style.text_end,
+        cascade_order: style.cascade_order,
+        root: style.root,
+    }
+}
+
+fn topology_value(value: StyleValue<'_>, grapheme_boundaries: &[u32]) -> StyleTopologyRecord {
+    let (text_start, text_end) = if value.root {
+        (value.text_start, value.text_end)
+    } else {
+        normalize_style_range(value.text_start, value.text_end, grapheme_boundaries)
+    };
+    StyleTopologyRecord {
+        style_id: value.style_id,
+        text_start,
+        text_end,
+        cascade_order: value.cascade_order,
+        root: value.root,
+    }
+}
+
+fn validate_style_topology(
+    count: usize,
+    mut record_at: impl FnMut(usize) -> Option<StyleTopologyRecord>,
+    order_scratch: &mut Vec<usize>,
+    nesting_scratch: &mut Vec<u32>,
+    sort_pairs: &mut Vec<(u64, u32)>,
+    sort_pairs_pass: &mut Vec<(u64, u32)>,
+) -> Result<(), EngineError> {
+    order_scratch.clear();
+    order_scratch
+        .try_reserve(count)
+        .map_err(|_| EngineError::ResultTooLarge)?;
+    // Two stable passes preserve cascade order while sorting by range containment.
+    sort::prepare_pairs(sort_pairs, count)?;
+    for index in 0..count {
+        let style = record_at(index).ok_or(EngineError::InvalidRequest)?;
+        if !style.root && style.text_start == style.text_end {
+            continue;
+        }
+        sort_pairs.push((
+            (u64::from(!style.root) << 32) | u64::from(style.cascade_order),
+            u32::try_from(index).map_err(|_| EngineError::ResultTooLarge)?,
+        ));
+    }
+    sort::sort_pairs(sort_pairs);
+    sort::prepare_pairs(sort_pairs_pass, sort_pairs.len())?;
+    for (position, &(_, record_index)) in sort_pairs.iter().enumerate() {
+        let style =
+            record_at(usize::try_from(record_index).map_err(|_| EngineError::InvalidRequest)?)
+                .ok_or(EngineError::InvalidRequest)?;
+        sort_pairs_pass.push((
+            sort::pack2(style.text_start, !style.text_end),
+            u32::try_from(position).map_err(|_| EngineError::ResultTooLarge)?,
+        ));
+    }
+    sort::sort_pairs(sort_pairs_pass);
+    for &(_, position) in sort_pairs_pass.iter() {
+        let position = usize::try_from(position).map_err(|_| EngineError::InvalidRequest)?;
+        let record_index = sort_pairs
+            .get(position)
+            .ok_or(EngineError::InvalidRequest)?
+            .1;
+        order_scratch.push(usize::try_from(record_index).map_err(|_| EngineError::InvalidRequest)?);
+    }
+    if let Some(pair) = order_scratch.windows(2).find(|pair| {
+        let Some(left) = record_at(pair[0]) else {
+            return false;
+        };
+        let Some(right) = record_at(pair[1]) else {
+            return false;
+        };
+        left.text_start == right.text_start
+            && left.text_end == right.text_end
+            && left.cascade_order == right.cascade_order
+    }) {
+        let style_id = record_at(pair[1])
+            .ok_or(EngineError::InvalidRequest)?
+            .style_id;
+        return Err(EngineError::StyleNestingInvalid(FrameFault::style(
+            style_id,
+        )));
+    }
+    nesting_scratch.clear();
+    nesting_scratch
+        .try_reserve(order_scratch.len())
+        .map_err(|_| EngineError::ResultTooLarge)?;
+    for index in order_scratch.iter().copied() {
+        let style = record_at(index).ok_or(EngineError::InvalidRequest)?;
+        while nesting_scratch
+            .last()
+            .is_some_and(|end| style.text_start >= *end)
+        {
+            nesting_scratch.pop();
+        }
+        if nesting_scratch
+            .last()
+            .is_some_and(|end| style.text_end > *end)
+        {
+            return Err(EngineError::StyleNestingInvalid(FrameFault::style(
+                style.style_id,
+            )));
+        }
+        nesting_scratch.push(style.text_end);
+    }
+    Ok(())
+}
+
+fn validate_topology_records(
+    records: &[StyleTopologyRecord],
+    order_scratch: &mut Vec<usize>,
+    nesting_scratch: &mut Vec<u32>,
+    sort_pairs: &mut Vec<(u64, u32)>,
+    sort_pairs_pass: &mut Vec<(u64, u32)>,
+) -> Result<(), EngineError> {
+    validate_style_topology(
+        records.len(),
+        |index| records.get(index).copied(),
+        order_scratch,
+        nesting_scratch,
+        sort_pairs,
+        sort_pairs_pass,
+    )
+}
+
 fn collapse_to_last_mutation(scratch: &mut Vec<MutationKey>) {
     let mut read = 0;
     let mut write = 0;
@@ -825,6 +1202,48 @@ fn collapse_to_last_mutation(scratch: &mut Vec<MutationKey>) {
         read = next;
     }
     scratch.truncate(write);
+}
+
+fn mutation_root(mutations: StyleMutationBatch<'_>, key: MutationKey) -> Result<bool, EngineError> {
+    match mutations
+        .get(key.request_index)
+        .ok_or(EngineError::InvalidRequest)?
+    {
+        StyleMutation::Remove { .. } => Ok(false),
+        StyleMutation::Upsert(value) => Ok(value.root),
+    }
+}
+
+fn prepare_mutation_order(
+    mutations: StyleMutationBatch<'_>,
+    scratch: &mut Vec<MutationKey>,
+    sort_pairs: &mut Vec<(u64, u32)>,
+) -> Result<(), EngineError> {
+    scratch.clear();
+    scratch
+        .try_reserve(mutations.len())
+        .map_err(|_| EngineError::ResultTooLarge)?;
+    for request_index in 0..mutations.len() {
+        let mutation = mutations
+            .get(request_index)
+            .ok_or(EngineError::InvalidRequest)?;
+        let style_id = match mutation {
+            StyleMutation::Remove { style_id, .. } => style_id,
+            StyleMutation::Upsert(value) => value.style_id,
+        };
+        scratch.push(MutationKey {
+            style_id,
+            request_index,
+        });
+    }
+    sort::prepare_pairs(sort_pairs, scratch.len())?;
+    for (index, key) in scratch.iter().enumerate() {
+        sort_pairs.push((sort::pack2(key.style_id, index as u32), index as u32));
+    }
+    sort::sort_pairs(sort_pairs);
+    sort::apply_pair_order(scratch, sort_pairs);
+    collapse_to_last_mutation(scratch);
+    Ok(())
 }
 
 fn total_language_bytes(mutations: StyleMutationBatch<'_>) -> Result<usize, EngineError> {
@@ -914,9 +1333,11 @@ fn retained(value: StyleValue<'_>) -> RetainedStyle {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::abi_contract as abi;
     use crate::engine::frame::{
         STYLE_FIELD_FEATURES, STYLE_FIELD_FOREGROUND, STYLE_FIELD_LANGUAGE,
         STYLE_FIELD_LETTER_SPACING, STYLE_FIELD_MATERIAL, STYLE_FIELD_WORD_SPACING,
+        STYLE_FLAG_ROOT, STYLE_MUTATION_REMOVE, STYLE_MUTATION_UPSERT,
     };
     use alloc::vec;
 
@@ -943,6 +1364,162 @@ mod tests {
         };
         assert!(!arena.needs_range_realign(&[0, 1, 2]));
         assert!(arena.needs_range_realign(&[0, 2, 3]));
+    }
+
+    #[test]
+    fn root_mutation_merge_preserves_last_write_semantics() {
+        let arena = StyleArena {
+            records: vec![
+                style(10, 0, 0, 8, ROOT_REQUIRED_FIELDS, true),
+                style(20, 1, 0, 8, 0, false),
+            ],
+            ..StyleArena::default()
+        };
+        let mut scratch = Vec::new();
+        let mut sort_pairs = Vec::new();
+
+        let bytes = style_mutation_bytes(&[
+            (STYLE_MUTATION_UPSERT, 10, false),
+            (STYLE_MUTATION_UPSERT, 10, true),
+        ]);
+        assert_eq!(
+            arena.validate_root_mutations(
+                parse_style_mutations(&bytes),
+                &mut scratch,
+                &mut sort_pairs
+            ),
+            Ok(())
+        );
+
+        let bytes = style_mutation_bytes(&[
+            (STYLE_MUTATION_UPSERT, 10, true),
+            (STYLE_MUTATION_REMOVE, 10, false),
+        ]);
+        assert_eq!(
+            arena.validate_root_mutations(
+                parse_style_mutations(&bytes),
+                &mut scratch,
+                &mut sort_pairs
+            ),
+            Err(EngineError::InvalidRequest),
+        );
+
+        let bytes = style_mutation_bytes(&[
+            (STYLE_MUTATION_UPSERT, 30, true),
+            (STYLE_MUTATION_REMOVE, 30, false),
+        ]);
+        assert_eq!(
+            arena.validate_root_mutations(
+                parse_style_mutations(&bytes),
+                &mut scratch,
+                &mut sort_pairs
+            ),
+            Ok(())
+        );
+
+        let bytes = style_mutation_bytes(&[
+            (STYLE_MUTATION_UPSERT, 30, true),
+            (STYLE_MUTATION_UPSERT, 40, true),
+        ]);
+        assert_eq!(
+            arena.validate_root_mutations(
+                parse_style_mutations(&bytes),
+                &mut scratch,
+                &mut sort_pairs
+            ),
+            Err(EngineError::StyleRootInvalid(FrameFault::default())),
+        );
+    }
+
+    #[test]
+    fn root_mutation_merge_work_scales_with_records_and_unique_mutations() {
+        fn measure_merge_steps(size: usize) -> usize {
+            let mut records = vec![style(1, 0, 0, 8, ROOT_REQUIRED_FIELDS, true)];
+            records.extend((2..=size as u32).map(|id| style(id, id, 0, 8, 0, false)));
+            let arena = StyleArena {
+                records,
+                ..StyleArena::default()
+            };
+            let mut scratch = Vec::new();
+            let mut sort_pairs = Vec::new();
+            let entries = (2..=size as u32)
+                .map(|id| (STYLE_MUTATION_REMOVE, id, false))
+                .collect::<Vec<_>>();
+            let bytes = style_mutation_bytes(&entries);
+
+            assert_eq!(
+                arena.validate_root_mutations(
+                    parse_style_mutations(&bytes),
+                    &mut scratch,
+                    &mut sort_pairs
+                ),
+                Ok(())
+            );
+            let first_steps = arena.root_validation_steps.get();
+            let scratch_capacity = scratch.capacity();
+            let scratch_pointer = scratch.as_ptr();
+            let sort_capacity = sort_pairs.capacity();
+            let sort_pointer = sort_pairs.as_ptr();
+            assert_eq!(
+                arena.validate_root_mutations(
+                    parse_style_mutations(&bytes),
+                    &mut scratch,
+                    &mut sort_pairs
+                ),
+                Ok(())
+            );
+            assert_eq!(arena.root_validation_steps.get(), first_steps);
+            assert_eq!(scratch.capacity(), scratch_capacity);
+            assert_eq!(scratch.as_ptr(), scratch_pointer);
+            assert_eq!(sort_pairs.capacity(), sort_capacity);
+            assert_eq!(sort_pairs.as_ptr(), sort_pointer);
+            first_steps
+        }
+
+        let small = measure_merge_steps(128);
+        let large = measure_merge_steps(1024);
+        assert_eq!(small, 128);
+        assert_eq!(large, 1024);
+        assert_eq!(large, small * 8);
+    }
+
+    fn style_mutation_bytes(entries: &[(u8, u32, bool)]) -> Vec<u8> {
+        let records_offset = abi::ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let record_size = abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize;
+        let mut bytes = vec![0; records_offset + entries.len() * record_size];
+        for (index, &(opcode, style_id, root)) in entries.iter().enumerate() {
+            let start = records_offset + index * record_size;
+            bytes[start + abi::ENGINE_STYLE_MUTATION_OPCODE] = opcode;
+            if opcode == STYLE_MUTATION_UPSERT && root {
+                bytes[start + abi::ENGINE_STYLE_MUTATION_FLAGS] = STYLE_FLAG_ROOT;
+                crate::wire::write_u32(&mut bytes, start + abi::ENGINE_STYLE_MUTATION_TEXT_END, 8);
+            }
+            crate::wire::write_u32(
+                &mut bytes,
+                start + abi::ENGINE_STYLE_MUTATION_STYLE_ID,
+                style_id,
+            );
+            crate::wire::write_u32(
+                &mut bytes,
+                start + abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID,
+                1,
+            );
+        }
+        bytes
+    }
+
+    fn parse_style_mutations(bytes: &[u8]) -> StyleMutationBatch<'_> {
+        let count = u32::try_from(
+            (bytes.len() - abi::ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize)
+                / abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize,
+        )
+        .unwrap();
+        super::super::semantic_wire::parse_style_mutations(
+            bytes,
+            abi::ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+            count,
+        )
+        .unwrap()
     }
 
     #[test]
@@ -990,6 +1567,7 @@ mod tests {
                 start: 0,
                 end: 8,
             }],
+            ..StyleArena::default()
         };
         let mut order = Vec::new();
         let mut nesting = Vec::new();
@@ -1042,6 +1620,7 @@ mod tests {
                 start: 3,
                 end: 5,
             }],
+            ..StyleArena::default()
         };
         arena
             .validate(
@@ -1105,6 +1684,7 @@ mod tests {
                 shaping: false,
                 metrics: true,
                 positioning: true,
+                cluster_mapping: false,
             },
         );
 
@@ -1119,6 +1699,7 @@ mod tests {
                 shaping: false,
                 metrics: false,
                 positioning: true,
+                cluster_mapping: false,
             },
         );
 
@@ -1133,6 +1714,7 @@ mod tests {
                 shaping: true,
                 metrics: true,
                 positioning: true,
+                cluster_mapping: false,
             },
         );
     }
@@ -1148,6 +1730,7 @@ mod tests {
                 records,
                 languages: alloc::vec::Vec::new(),
                 features: alloc::vec::Vec::new(),
+                ..StyleArena::default()
             }
             .validate(
                 &[0x61; 8],

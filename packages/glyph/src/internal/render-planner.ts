@@ -42,10 +42,12 @@ import type {
   HandleResourceBinding,
   HandleTransformBinding,
   GlyphHandleState,
+  BorrowedLayoutPublication,
   PlanPublication,
   PlanTransport,
 } from './handle-state.js';
 import { RenderPlanView, type RenderPlanTable } from './plan-view.js';
+import { PostCommitError } from '../glyph-error.js';
 import {
   copyPreparedLayoutInspection,
   measurementFromLayoutInspection,
@@ -60,8 +62,9 @@ import {
 } from './borrowed-layout-view.js';
 import type { PortableResource } from '../config/resources.js';
 import { reuseOrCreateTextPropertySnapshot, reuseOrCreateTextStyleSnapshot } from '../config/text-property.js';
-import type { ParagraphId, ResourceHandle } from './glyph-id.js';
+import type { ParagraphId, ResourceHandle, StyleId } from './glyph-id.js';
 import { codecCapabilitySetSelectionId, selectCodecCapabilitySet } from './codec-capability-selection.js';
+import { ownTextInput } from '../config/text-span-owner.js';
 
 const MAX_U32 = 0xffff_ffff;
 const claimedTargets = new WeakSet<object>();
@@ -333,6 +336,7 @@ interface ResolvedSpan {
 
 interface ResolvedTextOptions {
   readonly source: RetainedTextOptions;
+  readonly ownership: ResolvedTextOwnership;
   readonly text: string;
   readonly spans: readonly ResolvedSpan[];
   readonly font: ReturnType<GlyphHandleState['_retainFontStackBinding']>;
@@ -352,8 +356,13 @@ const noRetainedStyleChanges: readonly RetainedStyleChange[] = Object.freeze([])
 
 interface OwnedTextInspection {
   readonly kind: 'owned';
-  readonly columns: GlyphLayoutColumns;
-  readOutline?: GlyphLayoutInspection['outlineAt'];
+  readonly columns: GlyphLayoutInspection;
+}
+
+/** @internal Canonical inspection columns for an integration's synchronous derived query. */
+export interface OwnedTextInspectionView {
+  readonly columns: GlyphLayoutInspection;
+  readonly readyToDraw: boolean;
 }
 
 type TextInspection = OwnedTextInspection | { readonly kind: 'borrowed'; recordReads: number };
@@ -361,6 +370,7 @@ type TextInspection = OwnedTextInspection | { readonly kind: 'borrowed'; recordR
 interface RetainedTextState {
   readonly paragraphId: ParagraphId;
   readonly ordinal: number;
+  readonly styleIds: StyleId[];
   desired: ResolvedTextOptions;
   metrics: RetainedTextMetrics;
   preparedText: string;
@@ -424,12 +434,6 @@ interface StagedBatchPublication {
   readonly semanticViewMask: number;
 }
 
-/** @internal Source-only regression counters; renderer publication and semantic preparation are intentionally distinct. */
-export interface RenderPlannerCounters {
-  readonly preparations: number;
-  readonly publications: number;
-}
-
 /** @internal One retained synchronous planner staged for the engine-wide shape batch. */
 export interface StagedRenderPlanner {
   readonly rootId: number;
@@ -445,6 +449,13 @@ const textStates = new WeakMap<object, Readonly<{ planner: RenderPlannerImpl; st
 /** @internal Constructed only after GlyphHandleState validates handle ownership. */
 export function createRenderPlanner(handleState: GlyphHandleState, options: RenderPlannerOptions): RenderPlanner {
   return new RenderPlannerImpl(handleState, options);
+}
+
+/** @internal Resolves the retained identity and reads its planner-owned inspection without exposing mutable columns. */
+export function ownedTextInspection(text: RetainedText): OwnedTextInspectionView {
+  const retained = textStates.get(text);
+  if (retained === undefined) throw new TypeError('text engine text is not retained by this planner');
+  return retained.planner._ownedInspection(retained.state);
 }
 
 /** @internal Construct a query planner without a renderer acceptance target. */
@@ -469,12 +480,6 @@ export function stageRenderPlanner(
 ): StagedRenderPlanner | undefined {
   if (!(planner instanceof RenderPlannerImpl)) throw new TypeError('render planner was not created by this package');
   return planner._stageBatch(normalizePublishOptions(options), force);
-}
-
-/** @internal Returns monotonic counters used by deterministic retained-preparation regressions. */
-export function renderPlannerCountersForTests(planner: RenderPlanner | MeasurementPlanner): RenderPlannerCounters {
-  if (!(planner instanceof RenderPlannerImpl)) throw new TypeError('render planner was not created by this package');
-  return planner._counters();
 }
 
 class RenderPlannerImpl {
@@ -509,15 +514,13 @@ class RenderPlannerImpl {
   #acknowledgedGeneration = 0;
   #checkpointGeneration = 0;
   #acceptedCheckpointGeneration = 0;
-  #structureRevision = 0;
   #disposed = false;
+  #engineNeedsRebuild = false;
   #stagedBatch: StagedBatchPublication | undefined;
   #stagedRequestLength = 0;
   #stagedPublication: PendingPublication | undefined;
   #stagedAcceptance: PendingPublication | undefined;
   #dirtyListener: (() => void) | undefined;
-  #preparationCount = 0;
-  #publicationCount = 0;
 
   constructor(
     handleState: GlyphHandleState,
@@ -594,26 +597,24 @@ class RenderPlannerImpl {
     return this.#disposed;
   }
 
-  /** @internal */
-  _counters(): RenderPlannerCounters {
-    this.#assertActive();
-    return Object.freeze({ preparations: this.#preparationCount, publications: this.#publicationCount });
-  }
-
   assertMutationAllowed(): void {
-    this.#assertPublicationMutationAllowed();
+    // This is a guard called from lifecycle/dirty callbacks, not an engine operation. In
+    // particular it must not replay accepted state reentrantly while a setter is still
+    // installing that state.
+    this.#assertMutable();
+    this.#transport.assertMutationAllowed();
   }
 
   createText(options: RetainedTextOptions): RetainedText {
     this.#assertPublicationMutationAllowed();
     const ordinal = this.#nextTextOrdinal;
     const nextOrdinal = checkedNextOrdinal(ordinal);
-    const nextStructureRevision = checkedNextStructureRevision(this.#structureRevision);
     const desired = resolveTextOptions(this.#handleState, options);
     const paragraphId = this.#handleState.id('paragraph', `${this.#handleState.integration}/text/${ordinal}`);
     const state: RetainedTextState = {
       paragraphId,
       ordinal,
+      styleIds: [],
       desired,
       metrics: retainedTextMetrics(desired, ordinal),
       preparedText: '',
@@ -639,14 +640,20 @@ class RenderPlannerImpl {
       measurement: undefined,
       inspection: undefined,
     };
+    let candidatePrepared = false;
     try {
       state.preparedOrder = this.#preparationOrderForCreation(state.metrics.order);
       this.#validateAggregateLimits(state);
+      this.#ensureEngineRebuilt();
       this.#prepareTextCandidate(state);
+      candidatePrepared = true;
     } catch (error) {
+      this.#invalidateUnadoptedPreparation();
+      if (candidatePrepared) this.#engineNeedsRebuild = true;
       releaseResolvedText(desired);
       throw error;
     }
+    const previousBaseOrderValidationPending = this.#baseOrderValidationPending;
     state.prepared = true;
     state.preparedText = desired.text;
     state.lifecycleDirty = state.preparedOrder !== state.metrics.order;
@@ -660,18 +667,36 @@ class RenderPlannerImpl {
     this.#transforms = undefined;
     this.#pendingTexts.add(state);
     this.#baseOrderValidationPending = true;
-    this.#structureRevision = nextStructureRevision;
     this.#nextTextOrdinal = nextOrdinal;
-    this.#dirtyListener?.();
+    this.#transport.acceptPreparedMutation();
+    try {
+      this.#dirtyListener?.();
+    } catch (error) {
+      this.#texts.delete(state);
+      this.#pendingTexts.delete(state);
+      this.#removeLiveState(state);
+      this.#releasePreparedOrder(state);
+      textStates.delete(text);
+      state.disposed = true;
+      state.desiredReleased = true;
+      releaseResolvedText(desired);
+      this.#nextTextOrdinal = ordinal;
+      this.#baseOrderValidationPending = previousBaseOrderValidationPending;
+      this.#engineNeedsRebuild = true;
+      throw new Error('text creation failed after preparing its candidate; the candidate was discarded', {
+        cause: error,
+      });
+    }
     return text;
   }
 
   /** @internal */
-  _updateText(state: RetainedTextState, update: RetainedTextUpdate): void {
+  _updateText(state: RetainedTextState, update: RetainedTextUpdate): { error: unknown } | undefined {
     this.#assertPublicationMutationAllowed();
     if (state.disposed) throw new Error('text engine text has been disposed');
     if (!isNonArrayObject(update)) throw new TypeError('text engine text update must be an object');
     const textOnly = textOnlyUpdate(update, state.desired);
+    if (textOnly !== undefined && textOnly === state.desired.text && !this.#engineNeedsRebuild) return;
     const desired =
       textOnly === undefined
         ? resolveTextOptions(
@@ -695,17 +720,20 @@ class RenderPlannerImpl {
     const previousOrder = state.metrics.order;
     const nextOrder = metrics.order;
     const lifecycleDirty = state.lifecycleDirty || previousOrder !== nextOrder;
-    const nextStructureRevision =
-      previousOrder === nextOrder ? this.#structureRevision : checkedNextStructureRevision(this.#structureRevision);
     const candidate: RetainedTextLimitState = {
       desired,
       metrics,
       dirty: true,
       styleChanges,
     };
+    const wasPending = this.#pendingTexts.has(state);
+    let preparation: RetainedTextState;
+    let preparedRevisionChanged: boolean;
+    let candidatePrepared = false;
     try {
       this.#validateAggregateLimits(candidate, state);
-      const preparation: RetainedTextState = {
+      this.#ensureEngineRebuilt();
+      preparation = {
         ...state,
         desired,
         metrics,
@@ -717,43 +745,67 @@ class RenderPlannerImpl {
         pendingFlowRegions: geometryDirty ? new Map() : state.pendingFlowRegions,
         pendingFlowExclusions: geometryDirty ? new Map() : state.pendingFlowExclusions,
       };
-      this.#prepareTextCandidate(preparation);
-      this.#replaceLiveState(state, metrics);
-      if (
-        desired.transform.handle !== state.desired.transform.handle ||
-        desired.flowTransforms.length !== state.desired.flowTransforms.length ||
-        desired.flowTransforms.some(
-          (transform, index) => transform.handle !== state.desired.flowTransforms[index]!.handle,
-        )
-      ) {
-        this.#transforms = undefined;
-      }
-      releaseResolvedText(state.desired);
-      state.desired = desired;
-      state.metrics = metrics;
-      state.preparedText = preparation.preparedText;
-      state.prepared = true;
-      state.dirty = true;
-      state.lifecycleDirty = lifecycleDirty;
-      state.styleChanges = noRetainedStyleChanges;
-      state.geometryDirty = false;
-      state.geometryRevision = preparation.geometryRevision;
-      state.committedFlowRegions = preparation.committedFlowRegions;
-      state.committedFlowExclusions = preparation.committedFlowExclusions;
-      state.pendingFlowRegions = preparation.pendingFlowRegions;
-      state.pendingFlowExclusions = preparation.pendingFlowExclusions;
-      state.measurement = preparation.measurement;
-      state.inspection = undefined;
-      this.#pendingTexts.add(state);
+      preparedRevisionChanged = this.#prepareTextCandidate(preparation);
+      candidatePrepared = true;
     } catch (error) {
+      this.#invalidateUnadoptedPreparation();
+      if (candidatePrepared) this.#engineNeedsRebuild = true;
+      if (!wasPending) this.#pendingTexts.delete(state);
       releaseResolvedText(desired);
       throw error;
     }
+
+    const previousDesired = state.desired;
+    const transformsChanged =
+      desired.transform.handle !== previousDesired.transform.handle ||
+      desired.flowTransforms.length !== previousDesired.flowTransforms.length ||
+      desired.flowTransforms.some(
+        (transform, index) => transform.handle !== previousDesired.flowTransforms[index]!.handle,
+      );
+    this.#replaceLiveState(state, metrics);
+    state.desired = desired;
+    state.metrics = metrics;
+    if (transformsChanged) this.#transforms = undefined;
+    state.preparedText = preparation.preparedText;
+    state.prepared = true;
+    state.dirty = true;
+    state.lifecycleDirty = lifecycleDirty;
+    state.styleChanges = noRetainedStyleChanges;
+    state.geometryDirty = false;
+    state.geometryRevision = preparation.geometryRevision;
+    state.committedFlowRegions = preparation.committedFlowRegions;
+    state.committedFlowExclusions = preparation.committedFlowExclusions;
+    state.pendingFlowRegions = preparation.pendingFlowRegions;
+    state.pendingFlowExclusions = preparation.pendingFlowExclusions;
+    state.measurement = preparation.measurement;
+    if (preparedRevisionChanged) state.inspection = undefined;
+    this.#pendingTexts.add(state);
     if (previousOrder !== nextOrder) {
       this.#baseOrderValidationPending = true;
-      this.#structureRevision = nextStructureRevision;
     }
-    this.#dirtyListener?.();
+    this.#transport.acceptPreparedMutation();
+    // Both operations are post-commit: attempt lease release and dirty notification before
+    // reporting the first failure as occurring after acceptance.
+    let postCommitError: unknown;
+    let postCommitFailed = false;
+    try {
+      releaseResolvedText(previousDesired);
+    } catch (error) {
+      postCommitError = error;
+      postCommitFailed = true;
+    }
+    try {
+      this.#dirtyListener?.();
+    } catch (error) {
+      if (!postCommitFailed) postCommitError = error;
+      postCommitFailed = true;
+    }
+    if (postCommitFailed) {
+      return {
+        error: new PostCommitError('text update was accepted, but a post-commit step failed', postCommitError),
+      };
+    }
+    return undefined;
   }
 
   /** @internal */
@@ -766,7 +818,6 @@ class RenderPlannerImpl {
     if (state.metrics.order === order && state.orderScope === orderScope && Object.is(state.orderRank, orderRank)) {
       return;
     }
-    const nextStructureRevision = checkedNextStructureRevision(this.#structureRevision);
     if (!state.dirty && this.#removed.size + this.#pendingTexts.size + 1 > this.#limits.maxParagraphs * 2) {
       throw new RangeError('pending paragraph mutations exceed limits.maxParagraphs');
     }
@@ -781,7 +832,6 @@ class RenderPlannerImpl {
     state.dirty = true;
     state.lifecycleDirty = state.lifecycleDirty || lifecycleOrderChanged;
     state.orderDirty = state.orderDirty || scopedOrderChanged;
-    this.#structureRevision = nextStructureRevision;
     this.#pendingTexts.add(state);
     this.#dirtyListener?.();
   }
@@ -793,38 +843,49 @@ class RenderPlannerImpl {
   }
 
   /** @internal */
-  _layoutTextInk(state: RetainedTextState): ParagraphLayoutSummary {
-    this.#assertTextQueryable(state);
-    return requirePreparedMeasurement(state);
-  }
-
-  /** @internal */
   _inspectText(state: RetainedTextState): GlyphLayoutInspection {
-    this.#assertTextQueryable(state);
-    const inspection =
-      state.inspection?.kind === 'owned'
-        ? state.inspection
-        : this._readGlyphs(state, (glyphs) => this.#ownInspection(state, glyphs));
-    const layout = inspection.columns;
-    if (inspection.readOutline === undefined) {
-      // Copies share the reader's font stores, so they read after the font or this handle is gone.
-      const stores = new Map<number, GlyphOutlineStore | undefined>();
-      for (const fontHandle of layout.fontHandles)
-        stores.set(fontHandle, this.#handleState._glyphOutlineStore(fontHandle));
-      inspection.readOutline = (index) =>
-        storedGlyphOutline(
-          requireGlyphOutlineStore(stores.get(fontHandleAt(layout, index))),
-          layout.glyphIds[index]!,
-        ).slice();
-    }
-    return copyGlyphLayoutInspection(layout, inspection.readOutline);
+    const inspection = this._ownedInspection(state);
+    return copyGlyphLayoutInspection(inspection.columns, inspection.columns.outlineAt);
   }
 
-  #ownInspection(state: RetainedTextState, glyphs: BorrowedGlyphLayout): OwnedTextInspection {
+  /** @internal Gives Three the canonical private columns plus the current renderer-readiness fact. */
+  _ownedInspection(state: RetainedTextState): OwnedTextInspectionView {
+    this.#assertTextQueryable(state);
+    let inspection = state.inspection?.kind === 'owned' ? state.inspection : undefined;
+    if (inspection === undefined) {
+      inspection = this.#ownInspection(state, this.#transport.borrowParagraphLayout(state.paragraphId));
+    }
+    return {
+      columns: inspection.columns,
+      readyToDraw:
+        state.published &&
+        state.committed === state.desired &&
+        this.#checkpointGeneration === this.#acceptedCheckpointGeneration,
+    };
+  }
+
+  #inspectionColumns(layout: GlyphLayoutColumns): GlyphLayoutInspection {
+    // Copies share font stores so their outlines outlive the source handle.
+    const stores = new Map<number, GlyphOutlineStore | undefined>();
+    for (const fontHandle of layout.fontHandles)
+      stores.set(fontHandle, this.#handleState._glyphOutlineStore(fontHandle));
+    const outlineAt: GlyphLayoutInspection['outlineAt'] = (index) =>
+      storedGlyphOutline(
+        requireGlyphOutlineStore(stores.get(fontHandleAt(layout, index))),
+        layout.glyphIds[index]!,
+      ).slice();
+    const inspection = { ...layout, outlineAt };
+    Object.defineProperty(inspection, 'outlineAt', { enumerable: false });
+    return Object.freeze(inspection);
+  }
+
+  #ownInspection(state: RetainedTextState, publication: BorrowedLayoutPublication): OwnedTextInspection {
     if (state.inspection?.kind === 'owned') return state.inspection;
     const inspection: OwnedTextInspection = {
       kind: 'owned',
-      columns: copyPreparedLayoutInspection(requirePreparedMeasurement(state), glyphs),
+      columns: this.#inspectionColumns(
+        copyPreparedLayoutInspection(requirePreparedMeasurement(state), this.#transport, publication),
+      ),
     };
     state.inspection = inspection;
     return inspection;
@@ -836,6 +897,7 @@ class RenderPlannerImpl {
     if (typeof read !== 'function') throw new TypeError('borrowed glyph inspection callback must be a function');
     let active = true;
     let glyphs: BorrowedGlyphLayout;
+    let publication: BorrowedLayoutPublication | undefined;
     const inspection = state.inspection;
     const assertActive = (): void => {
       if (!active) throw new Error('borrowed glyph layout has expired');
@@ -845,11 +907,12 @@ class RenderPlannerImpl {
     if (inspection?.kind === 'owned') {
       glyphs = createInspectionBorrowedGlyphLayout(inspection.columns, assertActive, decodeOutline);
     } else {
-      const publication = this.#transport.borrowParagraphLayout(state.paragraphId);
+      const descriptor = this.#transport.borrowParagraphLayout(state.paragraphId);
+      publication = descriptor;
       const demand = inspection ?? { kind: 'borrowed' as const, recordReads: 0 };
       state.inspection = demand;
-      glyphs = createBorrowedGlyphLayout(this.#transport, publication, assertActive, decodeOutline, () => {
-        if (demand.recordReads < publication.glyphCount) demand.recordReads += 1;
+      glyphs = createBorrowedGlyphLayout(this.#transport, descriptor, assertActive, decodeOutline, () => {
+        if (demand.recordReads < descriptor.glyphCount) demand.recordReads += 1;
       });
     }
     const leaveBorrow = this.#handleState._enterBorrowedPlan();
@@ -857,9 +920,10 @@ class RenderPlannerImpl {
       if (
         state.inspection?.kind === 'borrowed' &&
         state.inspection.recordReads > 0 &&
-        state.inspection.recordReads >= glyphs.glyphCount
+        state.inspection.recordReads >= glyphs.glyphCount &&
+        publication !== undefined
       ) {
-        const owned = this.#ownInspection(state, glyphs);
+        const owned = this.#ownInspection(state, publication);
         glyphs = createInspectionBorrowedGlyphLayout(owned.columns, assertActive, decodeOutline);
       }
       const result = read(glyphs);
@@ -900,13 +964,12 @@ class RenderPlannerImpl {
   _disposeText(state: RetainedTextState): void {
     if (state.disposed) return;
     this.#assertPublicationMutationAllowed();
-    const nextStructureRevision = checkedNextStructureRevision(this.#structureRevision);
     state.disposed = true;
+    state.styleIds.length = 0;
     this.#transforms = undefined;
     this.#removeLiveState(state);
     // Rust preparation still owns these bindings until the queued removal is consumed.
     // Publication adoption or root teardown releases them after removing that reference.
-    this.#structureRevision = nextStructureRevision;
     state.removed = true;
     state.dirty = true;
     this.#removed.add(state);
@@ -929,6 +992,7 @@ class RenderPlannerImpl {
   /** @internal */
   _stageBatch(options: NormalizedPublishOptions, force: boolean): StagedRenderPlanner | undefined {
     this.#assertMutable();
+    this.#ensureEngineRebuilt();
     if (this.#target === undefined) throw new Error('measurement-only planners cannot publish render plans');
     if (this.#target.delivery !== 'borrowed') {
       throw new TypeError('glyph.shape() requires a synchronous borrowed renderer target');
@@ -958,13 +1022,22 @@ class RenderPlannerImpl {
     if (this.#stagedPublication !== undefined) throw new Error('render planner already adopted a staged publication');
     this.#stagedBatch = undefined;
     this.#stagedRequestLength = 0;
-    const publication = this.#transport.consumeStagedUpdate(resultPointer, memoryBuffer);
-    this.#engineRevision = publication.engineRevision;
-    this.#cacheSemanticViews(publication, staged.semanticViewMask);
-    const transforms = this.#resolvedTransforms();
-    this.#commitDesiredState();
-    this.#publicationCount += 1;
-    this.#stagedPublication = { publication, transforms, checkpointGeneration: staged.checkpointGeneration };
+    try {
+      const publication = this.#transport.consumeStagedUpdate(resultPointer, memoryBuffer);
+      this.#engineRevision = publication.engineRevision;
+      this.#cacheSemanticViews(publication, staged.semanticViewMask);
+      const transforms = this.#resolvedTransforms();
+      this.#commitDesiredState();
+      this.#stagedPublication = { publication, transforms, checkpointGeneration: staged.checkpointGeneration };
+      this.#transport.acceptPreparedMutation();
+    } catch (error) {
+      // Rebuild if Rust rejected by invalidating its root, or if Rust committed a candidate that
+      // the TypeScript owner could not adopt. Renderer rejection happens later in consume() and
+      // leaves this now-adopted engine state intact.
+      this.#engineNeedsRebuild =
+        this.#transport.invalidateUnadoptedMutation() || this.#transport.failureInvalidatedRoot;
+      throw error;
+    }
   }
 
   consume(): PlanAcceptance {
@@ -979,10 +1052,17 @@ class RenderPlannerImpl {
       const answer = (this.#target as PlanTarget).accept(candidate, this.#targetController.signal);
       if (isPromiseLike(answer)) throw new TypeError('a borrowed plan target must answer synchronously');
       result = assertAcceptance(answer);
+    } catch (error) {
+      // A target rejection leaves the prepared Rust state valid. Request a full renderer
+      // checkpoint on the next explicit publish, without replaying accepted text or scheduling
+      // an implicit retry from a read.
+      this.#checkpointGeneration = checkedNextCheckpointGeneration(this.#checkpointGeneration);
+      throw error;
     } finally {
       lease.expire();
     }
     if (result.accepted) this.#stagedAcceptance = pending;
+    else this.#checkpointGeneration = checkedNextCheckpointGeneration(this.#checkpointGeneration);
     return result;
   }
 
@@ -999,6 +1079,7 @@ class RenderPlannerImpl {
     if (this.#stagedBatch === undefined) return;
     this.#stagedBatch = undefined;
     this.#stagedRequestLength = 0;
+    this.#engineNeedsRebuild = true;
     this.#transport.discardStagedUpdate();
   }
 
@@ -1027,6 +1108,7 @@ class RenderPlannerImpl {
     attempt(() => this.#transport.dispose());
     for (const state of this.#texts) {
       state.disposed = true;
+      state.styleIds.length = 0;
       if (!state.desiredReleased) attempt(() => releaseResolvedText(state.desired));
       state.desiredReleased = true;
       if (state.committed !== undefined) attempt(() => releaseResolvedText(state.committed!));
@@ -1055,7 +1137,7 @@ class RenderPlannerImpl {
         const layout = layouts.get(state.paragraphId);
         if (layout === undefined) continue;
         state.measurement = measurementFromLayoutInspection(layout);
-        state.inspection = { kind: 'owned', columns: layout };
+        state.inspection = { kind: 'owned', columns: this.#inspectionColumns(layout) };
       }
       return;
     }
@@ -1067,17 +1149,26 @@ class RenderPlannerImpl {
     }
   }
 
-  #prepareTextCandidate(state: RetainedTextState): void {
+  #prepareTextCandidate(state: RetainedTextState, includeMeasurement = state.measurement !== undefined): boolean {
     const styles = compileStyles(this.#handleState, state);
     const geometryChanged = state.geometryDirty || !state.prepared;
     const geometryRevision = state.geometryRevision + Number(geometryChanged);
     const geometry = geometryChanged ? compileGeometry(this.#handleState, state, 0, 0, geometryRevision) : undefined;
-    if (geometry !== undefined) prepareFlowEntityRevisions(state, geometry.regions, geometry.exclusions);
     const textMutation =
       state.preparedText === state.desired.text
         ? undefined
         : { start: 0, deleteCount: state.preparedText.length, insert: state.desired.text };
     const preparedRemovals = [...this.#preparationRemovals];
+    const preparationChanged =
+      !state.prepared ||
+      textMutation !== undefined ||
+      styles.length !== 0 ||
+      geometry !== undefined ||
+      preparedRemovals.length !== 0;
+    // Requested summaries stay current; unqueried text needs only durable layout preparation.
+    if (!preparationChanged && (!includeMeasurement || state.measurement !== undefined)) {
+      return false;
+    }
     const paragraphMutations: PlannerParagraphMutation[] = [
       ...preparedRemovals.map((removed) => ({ opcode: 'remove' as const, paragraphId: removed.paragraphId })),
       ...(!state.prepared || preparedRemovals.length !== 0
@@ -1097,8 +1188,9 @@ class RenderPlannerImpl {
       expectedEngineRevision: this.#engineRevision,
       consumedRevision: this.#revision,
       acknowledgedPublicationGeneration: this.#acknowledgedGeneration,
-      semanticViewMask:
-        textShaperAbi.engine.semanticViewMasks.measurement | textShaperAbi.engine.semanticViewMasks.borrowedLayout,
+      semanticViewMask: includeMeasurement
+        ? textShaperAbi.engine.semanticViewMasks.measurement | textShaperAbi.engine.semanticViewMasks.borrowedLayout
+        : 0,
       limits: this.#limits,
       paragraphMutations,
       paragraphOrderMutations: [],
@@ -1109,19 +1201,20 @@ class RenderPlannerImpl {
       exclusions: geometry?.exclusions ?? [],
       inlineObjects: geometryChanged ? compileInlineObjects(this.#handleState, state, geometryRevision) : [],
     };
-    const publication = this.#transport.prepareParagraph(request, state.paragraphId, this.#limits.maxOutputBytes);
-    const measurement = readPlannerMeasurements(publication).get(state.paragraphId);
-    if (measurement === undefined) throw new Error('text engine returned no measurement for prepared text');
+    const publication = this.#transport.prepareParagraph(request, state.paragraphId);
+    const measurement = includeMeasurement ? readPlannerMeasurements(publication).get(state.paragraphId) : undefined;
+    if (includeMeasurement && measurement === undefined)
+      throw new Error('text engine returned no measurement for prepared text');
     if (geometryChanged) commitFlowEntityRevisions(state);
     state.geometryRevision = geometryRevision;
     state.preparedText = state.desired.text;
     state.measurement = measurement;
-    state.inspection = undefined;
+    if (preparationChanged) state.inspection = undefined;
     for (const removed of preparedRemovals) {
       this.#preparationRemovals.delete(removed);
       this.#releasePreparedOrder(removed);
     }
-    this.#preparationCount += 1;
+    return preparationChanged;
   }
 
   #compileFrame(options: NormalizedPublishOptions, checkpointGeneration: number): PlannerFrameUpdate {
@@ -1461,7 +1554,70 @@ class RenderPlannerImpl {
 
   #assertTextQueryable(state: RetainedTextState): void {
     this.#assertMutable();
+    this.#ensureEngineRebuilt();
     if (state.disposed) throw new Error('text engine text has been disposed');
+    if (state.measurement === undefined) {
+      try {
+        this.#prepareTextCandidate(state, true);
+        this.#transport.acceptPreparedMutation();
+      } catch (error) {
+        this.#invalidateUnadoptedPreparation();
+        throw error;
+      }
+    }
+  }
+
+  #invalidateUnadoptedPreparation(): void {
+    if (this.#transport.invalidateUnadoptedMutation()) this.#engineNeedsRebuild = true;
+  }
+
+  #ensureEngineRebuilt(): void {
+    if (!this.#engineNeedsRebuild) return;
+    this.#transport.resetDerivedRoot();
+    this.#engineRevision = 0;
+    this.#revision = 0;
+    this.#checkpointGeneration = checkedNextCheckpointGeneration(this.#checkpointGeneration);
+    this.#preparationRemovals.clear();
+    try {
+      for (const state of this.#texts) {
+        if (state.removed || state.disposed) continue;
+        const replay: RetainedTextState = {
+          ...state,
+          prepared: false,
+          preparedText: '',
+          committedFlowRegions: new Map(),
+          committedFlowExclusions: new Map(),
+          pendingFlowRegions: new Map(),
+          pendingFlowExclusions: new Map(),
+          styleChanges: retainedStyleChanges(state.desired),
+          geometryDirty: true,
+        };
+        this.#prepareTextCandidate(replay);
+        state.prepared = true;
+        state.preparedText = replay.preparedText;
+        state.geometryRevision = replay.geometryRevision;
+        state.committedFlowRegions = replay.committedFlowRegions;
+        state.committedFlowExclusions = replay.committedFlowExclusions;
+        state.pendingFlowRegions = replay.pendingFlowRegions;
+        state.pendingFlowExclusions = replay.pendingFlowExclusions;
+        state.measurement = replay.measurement;
+        state.inspection = undefined;
+        state.dirty = true;
+        state.lifecycleDirty = true;
+        state.geometryDirty = false;
+        state.orderDirty = true;
+        state.styleChanges = noRetainedStyleChanges;
+        this.#pendingTexts.add(state);
+        this.#transport.acceptPreparedMutation();
+      }
+      this.#transforms = undefined;
+      this.#baseOrderValidationPending = true;
+      this.#dirtyListener?.();
+      this.#engineNeedsRebuild = false;
+    } catch (error) {
+      this.#engineNeedsRebuild = true;
+      throw error;
+    }
   }
 
   #isDirty(): boolean {
@@ -1491,7 +1647,8 @@ class RetainedTextImpl implements RetainedText {
   }
 
   update(update: RetainedTextUpdate): void {
-    this.#planner._updateText(this.#state, update);
+    const failure = this.#planner._updateText(this.#state, update);
+    if (failure !== undefined) throw failure.error;
   }
 
   updateOrder(order: number, orderScope: number, orderRank: number): void {
@@ -1503,7 +1660,7 @@ class RetainedTextImpl implements RetainedText {
   }
 
   measureInk(): ParagraphLayoutSummary {
-    return this.#planner._layoutTextInk(this.#state);
+    return this.#planner._layoutText(this.#state);
   }
 
   glyphs(): GlyphLayoutInspection {
@@ -1623,7 +1780,8 @@ function resolveTextOptions(
 ): ResolvedTextOptions {
   if (!isNonArrayObject(value)) throw new TypeError('text engine text options must be an object');
   validateTextScalarOptions(value);
-  const formattedText = normalizeTextInput(value.text, previous);
+  const previousInput = typeof previous?.source.text === 'object' ? previous.source.text : undefined;
+  const formattedText = ownTextInput(value.text, previousInput);
   validateInlineObjects(value.inlineObjects, formattedText.text.length);
   const style =
     value.style === undefined ? {} : reuseOrCreateTextStyleSnapshot(previous?.source.style, value.style, 'text style');
@@ -1635,13 +1793,21 @@ function resolveTextOptions(
   assertParagraphLayout(layout, 'text layout');
   assertConstraints(constraints, 'text constraints');
   normalizedColumns(layout, constraints);
+  const materialLeases = new Map<HandleMaterialBinding, HandleBindingLease<HandleMaterialBinding>>();
   const font = handleState._retainFontStackBinding(value.font);
   const leases: Array<{ dispose(): void }> = [font];
   try {
+    const retainMaterial = (binding: HandleMaterialBinding): HandleBindingLease<HandleMaterialBinding> => {
+      let retained = materialLeases.get(binding);
+      if (retained === undefined) {
+        retained = handleState._retainOpaqueBinding(binding, 'material');
+        materialLeases.set(binding, retained);
+        leases.push(retained);
+      }
+      return retained;
+    };
     assertTextEffectsSupported(style, font.formats, 'text engine text style');
-    const material =
-      value.material === undefined ? undefined : handleState._retainOpaqueBinding(value.material, 'material');
-    if (material !== undefined) leases.push(material);
+    const material = value.material === undefined ? undefined : retainMaterial(value.material);
     const createdTransform = value.transform === undefined;
     const transformBinding = value.transform ?? handleState.createTransformBinding();
     const transform = handleState._retainOpaqueBinding(transformBinding, 'transform');
@@ -1657,9 +1823,7 @@ function resolveTextOptions(
           `text engine span [${span.start}, ${span.end}) style`,
         );
       }
-      const spanMaterial =
-        span.material === undefined ? undefined : handleState._retainOpaqueBinding(span.material, 'material');
-      if (spanMaterial !== undefined) leases.push(spanMaterial);
+      const spanMaterial = span.material === undefined ? undefined : retainMaterial(span.material);
       return Object.freeze({
         start: span.start,
         end: span.end,
@@ -1677,14 +1841,13 @@ function resolveTextOptions(
     const inlineMaterials: HandleBindingLease<HandleMaterialBinding>[] = [];
     const inlineResources: HandleBindingLease<HandleResourceBinding>[] = [];
     for (const object of value.inlineObjects ?? []) {
-      const retainedMaterial = handleState._retainOpaqueBinding(object.material, 'material');
-      leases.push(retainedMaterial);
+      const retainedMaterial = retainMaterial(object.material);
       inlineMaterials.push(retainedMaterial);
       const retainedResource = handleState._retainOpaqueBinding(object.resource, 'resource');
       leases.push(retainedResource);
       inlineResources.push(retainedResource);
     }
-    return ownResolvedText({
+    return {
       source: snapshotTextOptions(
         value.style === undefined ? value : { ...value, style },
         formattedText,
@@ -1694,8 +1857,10 @@ function resolveTextOptions(
         flowTransforms,
         inlineMaterials,
         inlineResources,
+        style,
         previous,
       ),
+      ownership: { references: 1, leases },
       text: formattedText.text,
       spans: Object.freeze(spans),
       font,
@@ -1704,7 +1869,7 @@ function resolveTextOptions(
       flowTransforms: Object.freeze(flowTransforms),
       inlineMaterials: Object.freeze(inlineMaterials),
       inlineResources: Object.freeze(inlineResources),
-    });
+    };
   } catch (error) {
     for (const lease of leases.reverse()) lease.dispose();
     throw error;
@@ -1730,72 +1895,6 @@ function validateInlineObjects(
   }
 }
 
-function normalizeTextInput(value: unknown, previous?: ResolvedTextOptions): RetainedFormattedText {
-  if (typeof value === 'string') return Object.freeze({ text: value, spans: Object.freeze([]) });
-  if (!isNonArrayObject(value) || typeof value.text !== 'string' || !Array.isArray(value.spans)) {
-    throw new TypeError('text must be a string or formatted text value');
-  }
-  const text = value.text;
-  const previousInput = typeof previous?.source.text === 'object' ? previous.source.text : undefined;
-  const inputSpans = value.spans as readonly unknown[];
-  const checked = inputSpans.map((span, index) => {
-    if (!isNonArrayObject(span)) throw new TypeError(`text span ${index} must be an object`);
-    if (!Number.isSafeInteger(span.start) || !Number.isSafeInteger(span.end)) {
-      throw new TypeError(`text span ${index} bounds must be safe integers`);
-    }
-    if (
-      (span.start as number) < 0 ||
-      (span.end as number) < (span.start as number) ||
-      (span.end as number) > text.length
-    ) {
-      throw new RangeError(`text span ${index} is outside the text`);
-    }
-    const style =
-      span.style === undefined
-        ? undefined
-        : reuseOrCreateTextStyleSnapshot(
-            previousInput?.spans[index]?.style,
-            span.style as TextStyle,
-            `text span ${index} style`,
-          );
-    return Object.freeze({
-      start: span.start as number,
-      end: span.end as number,
-      ...(span.font === undefined ? {} : { font: span.font as HandleFontStackBinding }),
-      ...(span.material === undefined ? {} : { material: span.material as HandleMaterialBinding }),
-      ...(style === undefined ? {} : { style }),
-    });
-  });
-  const previousSpans = previous?.text === text ? previousInput?.spans : undefined;
-  const spans = reuseOrCreateRetainedTextSpans(previousSpans, checked);
-  if (spans === value.spans && Object.isFrozen(value)) return value as unknown as RetainedFormattedText;
-  return Object.freeze({ text, spans });
-}
-
-function reuseOrCreateRetainedTextSpans(
-  previous: readonly RetainedTextSpan[] | undefined,
-  spans: readonly RetainedTextSpan[],
-): readonly RetainedTextSpan[] {
-  let snapshot: RetainedTextSpan[] | undefined = previous?.length === spans.length ? undefined : [];
-  for (const [index, span] of spans.entries()) {
-    const prior = previous?.[index];
-    if (
-      prior !== undefined &&
-      prior.start === span.start &&
-      prior.end === span.end &&
-      prior.font === span.font &&
-      prior.material === span.material &&
-      prior.style === span.style
-    ) {
-      snapshot?.push(prior);
-      continue;
-    }
-    if (snapshot === undefined) snapshot = previous!.slice(0, index);
-    snapshot.push(span);
-  }
-  return snapshot === undefined ? previous! : snapshot;
-}
-
 function snapshotTextOptions(
   value: RetainedTextOptions,
   input: RetainedFormattedText,
@@ -1805,6 +1904,7 @@ function snapshotTextOptions(
   flowTransforms: readonly HandleBindingLease<HandleTransformBinding>[],
   inlineMaterials: readonly HandleBindingLease<HandleMaterialBinding>[],
   inlineResources: readonly HandleBindingLease<HandleResourceBinding>[],
+  style: TextStyle,
   previous?: ResolvedTextOptions,
 ): RetainedTextOptions {
   return Object.freeze({
@@ -1814,9 +1914,7 @@ function snapshotTextOptions(
     transform: transform.binding,
     ...(value.order === undefined ? {} : { order: value.order }),
     ...(value.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: value.rasterPixelRatio }),
-    ...(value.style === undefined
-      ? {}
-      : { style: reuseOrCreateTextPropertySnapshot(previous?.source.style, value.style, 'text style') }),
+    ...(value.style === undefined ? {} : { style }),
     ...(value.layout === undefined
       ? {}
       : { layout: reuseOrCreateTextPropertySnapshot(previous?.source.layout, value.layout, 'text layout') }),
@@ -1928,14 +2026,13 @@ function updateChangesStyle(
 }
 
 function forkResolvedTextWithText(previous: ResolvedTextOptions, text: string, order: number): ResolvedTextOptions {
-  return shareResolvedText(
-    {
-      ...previous,
-      source: Object.freeze({ ...previous.source, text, order }),
-      text,
-    },
-    previous,
-  );
+  const value = {
+    ...previous,
+    source: Object.freeze({ ...previous.source, text, order }),
+    text,
+  };
+  retainResolvedText(value);
+  return value;
 }
 
 function retainedStyleChanges(
@@ -1995,18 +2092,20 @@ function compileStyles(handleState: GlyphHandleState, state: RetainedTextState):
   const desired = state.desired;
   const source = desired.source;
   return state.styleChanges.map((change): PlannerStyleMutation => {
+    const styleIndex = change.kind === 'root' ? 1 : change.styleIndex;
+    const styleId = (state.styleIds[styleIndex] ??= engineStyleId(handleState.id, state.paragraphId, styleIndex));
     if (change.kind === 'remove') {
       return {
         opcode: 'remove',
         paragraphId: state.paragraphId,
-        styleId: engineStyleId(handleState.id, state.paragraphId, change.styleIndex),
+        styleId,
       };
     }
     if (change.kind === 'root') {
       return {
         opcode: 'upsert',
         paragraphId: state.paragraphId,
-        styleId: engineStyleId(handleState.id, state.paragraphId, 1),
+        styleId,
         cascadeOrder: 0,
         start: 0,
         end: desired.text.length,
@@ -2023,7 +2122,7 @@ function compileStyles(handleState: GlyphHandleState, state: RetainedTextState):
     return {
       opcode: 'upsert',
       paragraphId: state.paragraphId,
-      styleId: engineStyleId(handleState.id, state.paragraphId, change.styleIndex),
+      styleId,
       cascadeOrder: change.cascadeOrder,
       start: span.start,
       end: span.end,
@@ -2073,6 +2172,10 @@ function compileGeometry(
     regionStart,
   );
   const flow = state.desired.source.flow;
+  const pendingRegions = state.pendingFlowRegions;
+  const pendingExclusions = state.pendingFlowExclusions;
+  pendingRegions.clear();
+  pendingExclusions.clear();
   if (flow === undefined) return { ...ordinary, exclusions: [] };
   const regions: PlannerRegion[] = [];
   const exclusions: PlannerExclusion[] = [];
@@ -2096,19 +2199,26 @@ function compileGeometry(
       exclusionStart: firstExclusion,
       exclusionCount: input.exclusions?.length ?? 0,
     });
+    pendingRegions.set(regionKey, {
+      input: input.region,
+      transformHandle: transform.handle,
+      revision: regionRevision,
+    });
     for (const exclusion of input.exclusions ?? []) {
       const { key: exclusionKey, ...record } = exclusion;
       const entityKey = flowExclusionIdentity(regionKey, exclusionKey);
       const committedExclusion = state.committedFlowExclusions.get(entityKey);
+      const exclusionRevision =
+        committedExclusion !== undefined && sameFlowExclusion(committedExclusion.input, exclusion)
+          ? committedExclusion.revision
+          : revision;
       exclusions.push({
         ...record,
         id: handleState.id('exclusion', keyedFlowIdentity(state.paragraphId, 'exclusion', regionKey, exclusionKey)),
         regionId,
-        geometryRevision:
-          committedExclusion !== undefined && sameFlowExclusion(committedExclusion.input, exclusion)
-            ? committedExclusion.revision
-            : revision,
+        geometryRevision: exclusionRevision,
       });
+      pendingExclusions.set(entityKey, { input: exclusion, revision: exclusionRevision });
     }
   }
   return {
@@ -2116,44 +2226,6 @@ function compileGeometry(
     regions,
     exclusions,
   };
-}
-
-function prepareFlowEntityRevisions(
-  state: RetainedTextState,
-  compiledRegions: readonly PlannerRegion[],
-  compiledExclusions: readonly PlannerExclusion[],
-): void {
-  const regions = state.pendingFlowRegions;
-  const exclusions = state.pendingFlowExclusions;
-  regions.clear();
-  exclusions.clear();
-  if (state.desired.source.flow === undefined) return;
-  let exclusionIndex = 0;
-  for (const [regionIndex, input] of state.desired.source.flow.regions.entries()) {
-    const compiledRegion = compiledRegions[regionIndex];
-    if (compiledRegion === undefined) throw new Error('compiled flow region count does not match the retained source');
-    const transformHandle = state.desired.flowTransforms[regionIndex]!.handle;
-    regions.set(input.region.key, {
-      input: input.region,
-      transformHandle,
-      revision: compiledRegion.geometryRevision,
-    });
-    for (const exclusion of input.exclusions ?? []) {
-      const key = flowExclusionIdentity(input.region.key, exclusion.key);
-      const compiledExclusion = compiledExclusions[exclusionIndex];
-      if (compiledExclusion === undefined) {
-        throw new Error('compiled flow exclusion count does not match the retained source');
-      }
-      exclusions.set(key, {
-        input: exclusion,
-        revision: compiledExclusion.geometryRevision,
-      });
-      exclusionIndex += 1;
-    }
-  }
-  if (compiledRegions.length !== regions.size || compiledExclusions.length !== exclusionIndex) {
-    throw new Error('compiled flow geometry does not match the retained source');
-  }
 }
 
 function commitFlowEntityRevisions(state: RetainedTextState): void {
@@ -2242,45 +2314,16 @@ interface ResolvedTextOwnership {
   readonly leases: readonly { dispose(): void }[];
 }
 
-interface ResolvedTextReference {
-  references: number;
-  readonly ownership: ResolvedTextOwnership;
-}
-
-const resolvedTextReferences = new WeakMap<ResolvedTextOptions, ResolvedTextReference>();
-
-function ownResolvedText(value: ResolvedTextOptions): ResolvedTextOptions {
-  resolvedTextReferences.set(value, {
-    references: 1,
-    ownership: {
-      references: 1,
-      leases: resolvedTextLeases(value),
-    },
-  });
-  return value;
-}
-
-function shareResolvedText(value: ResolvedTextOptions, source: ResolvedTextOptions): ResolvedTextOptions {
-  const ownership = resolvedTextReferences.get(source)!.ownership;
-  ownership.references += 1;
-  resolvedTextReferences.set(value, { references: 1, ownership });
-  return value;
-}
-
 function retainResolvedText(value: ResolvedTextOptions): void {
-  const retained = resolvedTextReferences.get(value)!;
-  retained.references += 1;
-  retained.ownership.references += 1;
+  value.ownership.references += 1;
 }
 
 function releaseResolvedText(value: ResolvedTextOptions): void {
-  const retained = resolvedTextReferences.get(value)!;
-  retained.references -= 1;
-  retained.ownership.references -= 1;
-  if (retained.references === 0) resolvedTextReferences.delete(value);
-  if (retained.ownership.references !== 0) return;
+  const ownership = value.ownership;
+  ownership.references -= 1;
+  if (ownership.references !== 0) return;
   let failure: unknown;
-  for (const lease of [...retained.ownership.leases].reverse()) {
+  for (const lease of [...ownership.leases].reverse()) {
     try {
       lease.dispose();
     } catch (error) {
@@ -2288,21 +2331,6 @@ function releaseResolvedText(value: ResolvedTextOptions): void {
     }
   }
   if (failure !== undefined) throw failure;
-}
-
-function resolvedTextLeases(value: ResolvedTextOptions): readonly { dispose(): void }[] {
-  return [
-    value.font,
-    ...(value.material === undefined ? [] : [value.material]),
-    value.transform,
-    ...value.flowTransforms,
-    ...value.inlineMaterials,
-    ...value.inlineResources,
-    ...value.spans.flatMap((span) => [
-      ...(span.font === undefined ? [] : [span.font]),
-      ...(span.material === undefined ? [] : [span.material]),
-    ]),
-  ];
 }
 
 function assertRenderPlannerOptions(value: unknown): asserts value is RenderPlannerOptions {
@@ -2399,13 +2427,6 @@ function checkedNextCheckpointGeneration(value: number): number {
 
 function publicationIsCheckpoint(publication: PlanPublication): boolean {
   return (publication.flags & textShaperAbi.engine.resultFlags.checkpoint) !== 0;
-}
-
-function checkedNextStructureRevision(value: number): number {
-  if (!Number.isSafeInteger(value) || value < 0 || value >= Number.MAX_SAFE_INTEGER) {
-    throw new RangeError('retained text structure revision is exhausted');
-  }
-  return value + 1;
 }
 
 function positiveU32(value: unknown, label: string): asserts value is number {

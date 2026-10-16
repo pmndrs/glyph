@@ -304,15 +304,10 @@ pub(crate) fn append_measurement_with_glyph_spans(
         .fragments
         .cursor_from(0)
         .ok_or(EngineError::InvalidRequest)?;
-    let next_lines = flow
-        .lines
-        .iter()
-        .copied()
-        .skip(1)
-        .map(Some)
-        .chain(core::iter::once(None));
+    let mut lines = flow.lines.iter().copied().enumerate().peekable();
     let mut previous_flow_thread_id = None;
-    for (index, (line, next_line)) in flow.lines.iter().copied().zip(next_lines).enumerate() {
+    while let Some((index, line)) = lines.next() {
+        let next_line = lines.peek().map(|(_, line)| line);
         let fragments = next_line_fragments(line, &mut fragment_cursor)?;
         let first_thread_line = previous_flow_thread_id != Some(line.flow_thread_id);
         previous_flow_thread_id = Some(line.flow_thread_id);
@@ -497,15 +492,10 @@ pub(crate) fn flow_extents(
         .fragments
         .cursor_from(0)
         .ok_or(EngineError::InvalidRequest)?;
-    let next_lines = flow
-        .lines
-        .iter()
-        .copied()
-        .skip(1)
-        .map(Some)
-        .chain(core::iter::once(None));
+    let mut lines = flow.lines.iter().copied().peekable();
     let mut previous_flow_thread_id = None;
-    for (line, next_line) in flow.lines.iter().copied().zip(next_lines) {
+    while let Some(line) = lines.next() {
+        let next_line = lines.peek();
         let fragments = next_line_fragments(line, &mut fragment_cursor)?;
         let first_thread_line = previous_flow_thread_id != Some(line.flow_thread_id);
         previous_flow_thread_id = Some(line.flow_thread_id);
@@ -740,6 +730,22 @@ mod tests {
         assert_eq!(records[1].item_count, 2);
         assert_eq!(records[0].inline_extent, 11.0);
         assert_eq!(records[0].block_extent, 11.0);
+        super::super::work_attribution::reset();
+        let extents = flow_extents(
+            11,
+            &flow,
+            &ClusterArena::default(),
+            constraint_typography(&spaced),
+        )
+        .unwrap();
+        assert_eq!(extents.width, 11.0);
+        assert_eq!(extents.height, 5.0);
+        assert_eq!(extents.consumed_clusters, 2);
+        assert_eq!(
+            super::super::work_attribution::snapshot().rope_iterator_starts,
+            4,
+            "one line traversal, one fragment cursor, and two fragment extent scans",
+        );
     }
 
     #[test]

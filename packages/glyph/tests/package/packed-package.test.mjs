@@ -169,6 +169,7 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     '@pmndrs/glyph/extend',
     '@pmndrs/glyph/raster',
     '@pmndrs/glyph/config/font-library',
+    '@pmndrs/glyph/config/text-span-owner',
     '@pmndrs/glyph/tsl',
     '@pmndrs/glyph/tsl/bitmap',
     '@pmndrs/glyph/shaders',

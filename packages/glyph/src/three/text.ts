@@ -5,6 +5,7 @@ import type { Font } from '../font.js';
 import { isFontFaceSelection, resolveFontFace, type FontFaceSelection, type FontFaceRasterOf } from '../font-face.js';
 import { createGlyphPlacements, type GlyphCaret, type GlyphPlacements } from '../glyph-placement.js';
 import {
+  copyGlyphLayoutInspection,
   type BorrowedGlyphLayout,
   type LayoutBox,
   type GlyphLayoutInspection,
@@ -12,7 +13,7 @@ import {
 } from '../layout.js';
 import { immutableFontSelectionFonts, type FontSelection } from '../loaded-font.js';
 import { GlyphFontError } from '../loader.js';
-import { glyph } from '../glyph.js';
+import { glyph, configuredTextInspection } from '../glyph.js';
 import type { RasterFormatMetadata } from '../config/raster-format.js';
 import { mergePropertyList } from '../property-list.js';
 import type {
@@ -43,6 +44,7 @@ import { ThreeCommandBufferRenderer } from './command-buffer-renderer.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import type { ThreeBindings, ThreeMaterialBinding } from './schema.js';
 import { setThreeBatchScope } from './internal/batch-scope.js';
+import { mapTextSpanBindings, ownTextSpanRecords } from '../config/text-span-owner.js';
 import type { ThreePublicationBoundary } from './internal/publication-boundary.js';
 import type { ThreeRendererResources } from './internal/renderer-resources.js';
 import {
@@ -52,6 +54,7 @@ import {
 } from './glyph-measurement.js';
 import { createGlyphs, setGlyphDrawOrder, type Glyphs } from './glyphs.js';
 import { createDecorations, decorationDraws, type Decorations } from './decorations.js';
+import { PostCommitError } from '../glyph-error.js';
 
 /** Package-private construction capability used by the Three handle and R3F adapter. */
 export const threeTextConstructionToken: unique symbol = Symbol('pmndrs.glyph.three.construct');
@@ -144,6 +147,7 @@ interface TextReconciler {
   update<Format extends RasterFormatMetadata>(text: Text<Format>, update: TextUpdate<Format>): boolean;
   root(text: Text<RasterFormatMetadata>): ThreeRootHost;
   markCommitted(text: Text<RasterFormatMetadata>, revision: number): void;
+  boundsRequested(text: Text<RasterFormatMetadata>): boolean;
   publishMeasurement(text: Text<RasterFormatMetadata>, measurement: ParagraphLayoutSummary): void;
   bind(text: Text<RasterFormatMetadata>, binding: ThreeRootPublication, group: TextGroup | undefined): void;
   unbindFrom(text: Text<RasterFormatMetadata>, binding: ThreeRootPublication): void;
@@ -840,6 +844,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       update: (text, update) => text.#applyUpdate(update, false),
       root: (text) => text.#root,
       markCommitted: (text, revision) => text.#markCommitted(revision),
+      boundsRequested: (text) => text.#boundingBoxState !== 'unrequested',
       publishMeasurement: (text, measurement) => text.#setBoundingBox(measurement),
       bind: (text, binding, group) => text.#bind(binding, group),
       unbindFrom: (text, binding) => text.#unbindFrom(binding),
@@ -858,7 +863,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   #textGroup: TextGroup | undefined;
   #desiredRevision = 0;
   #committedRevision = -1;
-  #boundingBoxCurrent = false;
+  #boundingBoxState: 'unrequested' | 'dirty' | 'current' = 'unrequested';
   #disposed = false;
   #errorState: AttributedErrorState = noAttributedError;
   onError: ((error: unknown) => void) | undefined;
@@ -997,30 +1002,25 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       return false;
     }
     const nextRevision = checkedNextRevision(this.#desiredRevision);
-    this.#binding?.stageUpdate(this.#root.member(this), next, nextRevision);
+    const failure = this.#binding?.stageUpdate(this.#root.member(this), next, nextRevision);
     this.#desired = next;
     this.#desiredRevision = nextRevision;
     this.#boundingBox.makeEmpty();
-    this.#boundingBoxCurrent = false;
+    if (this.#boundingBoxState !== 'unrequested') this.#boundingBoxState = 'dirty';
+    if (failure !== undefined) throw failure.error;
     return true;
   }
 
   /** Measures the current synchronously prepared text without scene attachment or matrix traversal. */
   measure(): ParagraphLayoutSummary {
     this.#assertActive();
-    const text = this;
-    const measurement = this.#root.measurement(text);
-    this.#setBoundingBox(measurement);
-    return measurement;
+    return this.#root.measurement(this);
   }
 
   /** Returns caller-owned positioned glyph and line columns from current preparation; every call copies the columns. */
   glyphs(): GlyphLayoutInspection {
     this.#assertActive();
-    const text = this;
-    const inspection = this.#root.inspection(text);
-    this.#setBoundingBox(inspection);
-    return inspection;
+    return this.#root.inspection(this);
   }
 
   /** Synchronously reads selected positioned glyphs and returns the callback's result. The view expires when the callback exits; the full layout is not copied. */
@@ -1040,7 +1040,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   }
 
   computeBoundingBox(): THREE.Box3 {
-    if (!this.#boundingBoxCurrent) this.#setBoundingBox(this.#root.measurementWithInk(this));
+    if (this.#boundingBoxState !== 'current') this.#setBoundingBox(this.#root.measurementWithInk(this));
     return this.#boundingBox;
   }
 
@@ -1077,7 +1077,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     const glyphs = createGlyphs({
       text: this.text,
       source,
-      placements: () => binding.glyphPlacements(source, true)!,
+      layout: copyGlyphLayoutInspection(placements.layout, placements.layout.outlineAt),
       resources: this.#root.rendererResources,
       renderOrderBase: glyphRenderOrderBase,
       copy: (renderer, boundary) => binding.copyGlyphs(source, stableIds, renderer, boundary),
@@ -1162,12 +1162,12 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     const bounds = measurement.inkBounds;
     if (bounds === undefined || measurement.glyphCount === 0) {
       this.#boundingBox.makeEmpty();
-      this.#boundingBoxCurrent = true;
+      this.#boundingBoxState = 'current';
       return;
     }
     this.#boundingBox.min.set(bounds.x, -(bounds.y + bounds.height), 0);
     this.#boundingBox.max.set(bounds.x + bounds.width, -bounds.y, 0);
-    this.#boundingBoxCurrent = true;
+    this.#boundingBoxState = 'current';
   }
 
   #bind(binding: ThreeRootPublication, group: TextGroup | undefined): void {
@@ -1405,17 +1405,11 @@ interface TextPresentation {
   readonly renderOrder: number;
 }
 
-interface CanonicalInspection {
-  readonly revision: number;
-  readonly value: GlyphLayoutInspection;
-}
-
 class ThreeRootPublication {
   readonly #services: GlyphRootServices<ThreeBindings, void, ThreePublicationBoundary>;
   readonly #root: ThreeRootHost;
   readonly #target: ThreeCommandBufferRenderer;
   readonly #entries = new Map<Text<RasterFormatMetadata>, BoundTextEntry>();
-  readonly #inspections = new Map<Text<RasterFormatMetadata>, CanonicalInspection>();
   readonly #materialBindings = new ThreeMaterialBindingCache();
   #capacity: GlyphBufferCapacity;
   #textUnits = 0;
@@ -1538,13 +1532,13 @@ class ThreeRootPublication {
     text: Text<RasterFormatMetadata>,
     desired: DesiredTextState<RasterFormatMetadata>,
     revision: number,
-  ): void {
+  ): { error: unknown } | undefined {
     this.#assertActive();
     const entry = this.#entries.get(text);
-    if (entry === undefined) return;
+    if (entry === undefined) return undefined;
     const presentation = resolveTextPresentation(text);
     const orderScope = presentation.group;
-    this.#stage(
+    return this.#stage(
       text,
       desired,
       revision,
@@ -1552,6 +1546,7 @@ class ThreeRootPublication {
       orderScope,
       orderScope === undefined ? 0 : paragraphOrderRank(text),
       presentation,
+      true,
     );
   }
 
@@ -1561,7 +1556,6 @@ class ThreeRootPublication {
       if (this.#detachedQuery === text) this.#detachedQuery = undefined;
       this.#pendingMeasurements.delete(text);
       this.#detachedQueryCache = undefined;
-      this.#inspections.delete(text);
       reconciler.unbindFrom(text, this);
       return;
     }
@@ -1577,7 +1571,6 @@ class ThreeRootPublication {
     this.#pendingMeasurements.delete(text);
     this.#entries.delete(text);
     this.#textUnits -= entry.textUnits;
-    this.#inspections.delete(text);
     reconciler.unbindFrom(text, this);
   }
 
@@ -1673,7 +1666,6 @@ class ThreeRootPublication {
       entry.stagedOrder = detachedQueryOrder;
       this.#entries.delete(retired);
       this.#textUnits -= entry.textUnits;
-      this.#inspections.delete(retired);
       const pendingMeasurement = this.#pendingMeasurements.delete(retired);
       reconciler.unbindFrom(retired, this);
       this.#detachedQueryCache = { text: retired, entry, pendingMeasurement };
@@ -1686,18 +1678,17 @@ class ThreeRootPublication {
     if (cached === undefined) return;
     this.#detachedQueryCache = undefined;
     cached.entry.handle.dispose();
-    this.#inspections.delete(cached.text);
     this.#pendingMeasurements.delete(cached.text);
   }
 
-  glyphPlacements(text: Text<RasterFormatMetadata>, refresh = false): GlyphPlacements | undefined {
-    const layout = this.#canonicalInspection(text, refresh);
-    if (layout === undefined) return undefined;
-    const committed =
-      !this.#rendererUpdateRejected && this.#entries.get(text)?.committedRevision === reconciler.desiredRevision(text);
-    const drawn = committed
-      ? this.#target.snapshotGlyphOrigins(layout.glyphStableIds, layout.x, layout.y)
-      : { drawnX: layout.x, drawnY: layout.y, incomplete: [] };
+  glyphPlacements(text: Text<RasterFormatMetadata>): GlyphPlacements | undefined {
+    const entry = this.#queryEntry(text);
+    const inspection = configuredTextInspection(entry.handle);
+    const layout = inspection.columns;
+    const drawn =
+      inspection.readyToDraw && !this.#rendererUpdateRejected
+        ? this.#target.snapshotGlyphOrigins(layout.glyphStableIds, layout.x, layout.y)
+        : { drawnX: layout.x, drawnY: layout.y, incomplete: [] };
     const placements = createGlyphPlacements(layout, text.text, drawn.drawnX, drawn.drawnY, drawn.incomplete);
     return placements;
   }
@@ -1767,7 +1758,11 @@ class ThreeRootPublication {
       entry.committedRevision = acceptedRevision;
       entry.committedRenderOrder = entry.stagedPresentation.renderOrder;
       reconciler.markCommitted(text, acceptedRevision);
-      if (entry.stagedRevision === acceptedRevision && this.#pendingMeasurements.delete(text)) {
+      if (
+        entry.stagedRevision === acceptedRevision &&
+        this.#pendingMeasurements.delete(text) &&
+        reconciler.boundsRequested(text)
+      ) {
         reconciler.publishMeasurement(text, entry.handle.measure());
       }
     }
@@ -1827,7 +1822,8 @@ class ThreeRootPublication {
     orderScope: TextGroup | undefined,
     orderRank: number,
     presentation: TextPresentation,
-  ): void {
+    deferPostCommitFailure = false,
+  ): { error: unknown } | undefined {
     const previous = this.#entries.get(text);
     const state = coreTextState(
       desired,
@@ -1856,7 +1852,13 @@ class ThreeRootPublication {
     } else {
       const scopedOrderChanged =
         previous.stagedOrderScope !== orderScope || !Object.is(previous.stagedOrderRank, orderRank);
-      previous.handle.update(state);
+      let failure: { error: unknown } | undefined;
+      try {
+        previous.handle.update(state);
+      } catch (error) {
+        if (!(error instanceof PostCommitError)) throw error;
+        failure = { error };
+      }
       if (scopedOrderChanged) previous.handle.updateParagraphOrder(order, orderScope, orderRank);
       this.#textUnits += desired.text.length - previous.textUnits;
       previous.textUnits = desired.text.length;
@@ -1865,19 +1867,14 @@ class ThreeRootPublication {
       previous.stagedOrderScope = orderScope;
       previous.stagedOrderRank = orderRank;
       previous.stagedPresentation = presentation;
+      this.#pendingMeasurements.add(text);
+      if (failure !== undefined) {
+        if (deferPostCommitFailure) return failure;
+        throw failure.error;
+      }
     }
     this.#pendingMeasurements.add(text);
-    this.#inspections.delete(text);
-  }
-
-  #canonicalInspection(text: Text<RasterFormatMetadata>, refresh = false): GlyphLayoutInspection {
-    const entry = this.#queryEntry(text);
-    const revision = reconciler.desiredRevision(text);
-    const cached = this.#inspections.get(text);
-    if (!refresh && entry.committedRevision === revision && cached?.revision === revision) return cached.value;
-    const inspection = entry.handle.inspect();
-    if (entry.committedRevision === revision) this.#inspections.set(text, { revision, value: inspection });
-    return inspection;
+    return undefined;
   }
 
   #assertActive(): void {
@@ -1899,18 +1896,10 @@ function coreTextState(
 ) {
   const { batchGroup, pixelSnapping, renderOrder } = presentation;
   const material = materialBinding(desired.material ?? presentation.material, pixelSnapping, renderOrder, batchGroup);
-  const mappedSpans = desired.spans.map((span) => {
-    const spanMaterial: ThreeMaterialBinding | undefined =
-      span.material === undefined ? undefined : materialBinding(span.material, pixelSnapping, renderOrder, batchGroup);
-    return Object.freeze({
-      start: span.start,
-      end: span.end,
-      ...(span.font === undefined ? {} : { font: span.font }),
-      ...(spanMaterial === undefined ? {} : { material: spanMaterial }),
-      ...(span.style === undefined ? {} : { style: span.style }),
-    });
+  const spans = mapTextSpanBindings(desired.spans, {
+    font: (font) => font,
+    material: (spanMaterial) => materialBinding(spanMaterial, pixelSnapping, renderOrder, batchGroup),
   });
-  const spans = Object.freeze(mappedSpans);
   return {
     font: desired.font,
     text: spans.length === 0 ? desired.text : Object.freeze({ text: desired.text, spans }),
@@ -2040,7 +2029,7 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
     spans = stated;
   } else {
     const checked = assertSpanRanges(text, stated);
-    spans = reuseOrCreateTextSpans(previous?.spans, checked);
+    spans = ownTextSpanRecords(previous?.spans, checked, { kind: 'three' });
   }
   const rootTechniques = immutableFontSelectionFonts(properties.font).map((font) => font.raster);
   const inheritedTechniques = [
@@ -2107,34 +2096,6 @@ function sameDesiredTextState<Format extends RasterFormatMetadata>(
   );
 }
 
-function reuseOrCreateTextSpans<Format extends RasterFormatMetadata>(
-  previous: readonly TextSpan<Format>[] | undefined,
-  spans: readonly TextSpan<Format>[],
-): readonly TextSpan<Format>[] {
-  let snapshot: TextSpan<Format>[] | undefined = previous?.length === spans.length ? undefined : [];
-  for (const [index, span] of spans.entries()) {
-    const prior = previous?.[index];
-    const style =
-      span.style === undefined
-        ? undefined
-        : reuseOrCreateTextStyleSnapshot(prior?.style, span.style, `Text span ${index} style`);
-    if (
-      prior !== undefined &&
-      prior.start === span.start &&
-      prior.end === span.end &&
-      prior.font === span.font &&
-      prior.material === span.material &&
-      prior.style === style
-    ) {
-      snapshot?.push(prior);
-      continue;
-    }
-    if (snapshot === undefined) snapshot = previous!.slice(0, index);
-    snapshot.push(Object.freeze({ ...span, ...(style === undefined ? {} : { style }) }));
-  }
-  return snapshot === undefined ? previous! : snapshot;
-}
-
 function assertNoRawSpans(value: object, subject: string): void {
   if (Object.hasOwn(value, 'spans')) {
     throw new TypeError(`${subject} cannot declare raw spans; compose formatted text with txt and span`);
@@ -2177,28 +2138,68 @@ function assertRange(subject: string, start: number, end: number, length: number
 }
 
 function assertSpansNest<Format extends RasterFormatMetadata>(spans: readonly TextSpan<Format>[]): void {
-  const order = spans
-    .map((span, index) => ({ span, index }))
-    .filter((entry) => entry.span.start !== entry.span.end)
-    .sort((left, right) => left.span.start - right.span.start || right.span.end - left.span.end);
-  const open: { end: number; index: number }[] = [];
-  for (const { span, index } of order) {
-    while (open.length !== 0 && span.start >= open[open.length - 1]!.end) open.pop();
-    const enclosing = open[open.length - 1];
-    if (enclosing !== undefined && span.end > enclosing.end) {
+  if (spans.length < 2) return;
+
+  let canonical = true;
+  let previousIndex = -1;
+  for (let index = 0; index < spans.length; index++) {
+    const span = spans[index]!;
+    if (span.start === span.end) continue;
+    if (previousIndex !== -1) {
+      const previous = spans[previousIndex]!;
+      if (span.start < previous.start || (span.start === previous.start && span.end > previous.end)) {
+        canonical = false;
+        break;
+      }
+    }
+    previousIndex = index;
+  }
+
+  let order: number[] | undefined;
+  if (!canonical) {
+    order = spans.map((_, index) => index);
+    order.sort((left, right) => spans[left]!.start - spans[right]!.start || spans[right]!.end - spans[left]!.end);
+  }
+
+  const open: number[] = [];
+  let previousOrderedIndex = -1;
+  let duplicateFirstIndex = -1;
+  let duplicateSecondIndex = -1;
+  const count = order?.length ?? spans.length;
+  for (let position = 0; position < count; position++) {
+    const index = order?.[position] ?? position;
+    const span = spans[index]!;
+    if (span.start === span.end) continue;
+
+    while (open.length !== 0 && span.start >= spans[open[open.length - 1]!]!.end) open.pop();
+    const enclosingIndex = open[open.length - 1];
+    if (enclosingIndex !== undefined && span.end > spans[enclosingIndex]!.end) {
       throw new RangeError(
-        `span ${index} [${span.start}, ${span.end}) partially overlaps span ${enclosing.index}; spans must nest or be disjoint`,
+        `span ${index} [${span.start}, ${span.end}) partially overlaps span ${enclosingIndex}; spans must nest or be disjoint`,
       );
     }
-    open.push({ end: span.end, index });
+
+    if (previousOrderedIndex !== -1) {
+      const previous = spans[previousOrderedIndex]!;
+      // Defer duplicate rejection so crossing errors retain precedence.
+      if (
+        span.start === previous.start &&
+        span.end === previous.end &&
+        (duplicateSecondIndex === -1 || index < duplicateSecondIndex)
+      ) {
+        duplicateFirstIndex = previousOrderedIndex;
+        duplicateSecondIndex = index;
+      }
+    }
+    open.push(index);
+    previousOrderedIndex = index;
   }
-  const seen = new Map<string, number>();
-  for (const [index, span] of spans.entries()) {
-    if (span.start === span.end) continue;
-    const key = `${span.start}:${span.end}`;
-    const first = seen.get(key);
-    if (first !== undefined) throw new RangeError(`span ${index} duplicates span ${first} over [${key})`);
-    seen.set(key, index);
+
+  if (duplicateSecondIndex !== -1) {
+    const span = spans[duplicateSecondIndex]!;
+    throw new RangeError(
+      `span ${duplicateSecondIndex} duplicates span ${duplicateFirstIndex} over [${span.start}:${span.end})`,
+    );
   }
 }
 

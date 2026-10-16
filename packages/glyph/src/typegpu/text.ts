@@ -18,6 +18,7 @@ import type { msdf } from '../raster/msdf.js';
 import type { slug } from '../raster/slug.js';
 import type { Bindings } from './internal/bindings.js';
 import type { TypeGpuTransform } from './internal/renderer.js';
+import { PostCommitError } from '../glyph-error.js';
 
 export type TypeGpuFontSelection = FontFaceSelection<
   | typeof bitmap
@@ -124,20 +125,34 @@ export function createText<Selection extends TypeGpuFontSelection>(
       const next = { ...state, ...semanticUpdate };
       if (next.style?.decoration !== undefined) throw new TypeError('TypeGPU text decoration lines are not supported');
       const nextFont = next.font === state.font ? font : fonts.acquire(next.font);
+      let failure: PostCommitError | undefined;
       try {
         controller.update(coreState(next, nextFont));
       } catch (error) {
-        if (nextFont !== font) nextFont.dispose();
-        throw error;
+        if (error instanceof PostCommitError) failure = error;
+        else {
+          if (nextFont !== font) nextFont.dispose();
+          throw error;
+        }
       }
-      if (nextPositionX !== positionX || nextPositionY !== positionY) {
-        writePosition(transform, positionValue, nextPositionX, nextPositionY);
-        positionX = nextPositionX;
-        positionY = nextPositionY;
-      }
-      if (nextFont !== font) font.dispose();
+      const previousFont = font;
       font = nextFont;
       state = next;
+      let positionFailure: unknown;
+      let positionFailed = false;
+      if (nextPositionX !== positionX || nextPositionY !== positionY) {
+        try {
+          writePosition(transform, positionValue, nextPositionX, nextPositionY);
+          positionX = nextPositionX;
+          positionY = nextPositionY;
+        } catch (error) {
+          positionFailure = error;
+          positionFailed = true;
+        }
+      }
+      if (nextFont !== previousFont) previousFont.dispose();
+      if (positionFailed) throw positionFailure;
+      if (failure !== undefined) throw failure;
     },
     measure() {
       assertActive();
@@ -170,9 +185,17 @@ function validatePosition(position: readonly [number, number] = [0, 0]): void {
 }
 
 function writePosition(transform: TypeGpuTransform, value: [number, number], x: number, y: number): void {
+  const previousX = value[0];
+  const previousY = value[1];
   value[0] = x;
   value[1] = y;
-  transform.position.write(value);
+  try {
+    transform.position.write(value);
+  } catch (error) {
+    value[0] = previousX;
+    value[1] = previousY;
+    throw error;
+  }
 }
 
 function hasSemanticUpdate<Selection extends TypeGpuFontSelection>(update: TypeGpuTextUpdate<Selection>): boolean {

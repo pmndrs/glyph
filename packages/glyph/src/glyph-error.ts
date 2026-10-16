@@ -23,3 +23,11 @@ export class GlyphError<Code extends GlyphErrorCode = GlyphErrorCode> extends Er
     this.code = code;
   }
 }
+
+/** @internal Identifies failures after authored state has committed and must not be rolled back. */
+export class PostCommitError extends Error {
+  constructor(message: string, cause: unknown) {
+    super(message, { cause });
+    this.name = 'PostCommitError';
+  }
+}

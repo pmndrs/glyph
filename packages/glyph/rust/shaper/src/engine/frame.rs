@@ -1,5 +1,6 @@
 pub(crate) const RESULT_FLAG_CHECKPOINT: u32 = 1;
 pub(crate) const RESULT_FLAG_RETAINED_HOST_TOPOLOGY: u32 = 1 << 1;
+pub(crate) const RESULT_FLAG_ROOT_INVALIDATED: u32 = 1 << 2;
 pub(crate) const FRAME_FLAG_COMPOSITING_INDEPENDENT: u32 = 1;
 pub(crate) const FRAME_FLAGS: u32 = FRAME_FLAG_COMPOSITING_INDEPENDENT;
 pub(crate) const SEMANTIC_VIEW_MEASUREMENT: u32 = 1 << 0;
@@ -183,6 +184,10 @@ impl PreparedUpdate {
 pub(crate) struct MeasuredParagraph {
     pub(super) root_id: u32,
     pub(super) revision: RootRevision,
+    pub(super) preparation_revision: u32,
+    pub(super) measure_generation: u32,
+    pub(super) codec_handle: u32,
+    pub(super) codec_fingerprint: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

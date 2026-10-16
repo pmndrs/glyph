@@ -10,7 +10,12 @@ import { id } from '../../dist/config/codec.js';
 import { assertGlyphId, permanentGlyphId } from '../../dist/internal/glyph-id.js';
 import { threeCodecBytes } from '../../dist/three/codec.js';
 import { createRuntimeShaper } from '../../dist/shaper.js';
-import { engineUpdateBytes, fontBindingBytes, renderCodecBytes } from '../support/engine-abi.mjs';
+import {
+  engineFrameUpdateBytes,
+  engineUpdateBytes,
+  fontBindingBytes,
+  renderCodecBytes,
+} from '../support/engine-abi.mjs';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 
 const wasmUrl = new URL('../../dist/text-shaper.wasm', import.meta.url);
@@ -36,18 +41,139 @@ function emptyPlannerFrame(rootId = 1) {
   };
 }
 
-test('measurement growth uses the exact failing result capacity', () => {
+test('one transport writes changing frames through its retained arena after reserve growth', () => {
+  const abi = textShaperAbi;
+  const memory = { buffer: new ArrayBuffer(2_048) };
+  let requestPointer = 32;
+  let requestCapacity = abi.layouts.engineUpdateRequest.size;
+  let reserves = 0;
+  const exports = {
+    memory,
+    requestCapacity: () => requestCapacity,
+    requestPointer: () => requestPointer,
+    measureParagraph: (_handle, pointer, length) => {
+      assert.deepEqual(
+        new Uint8Array(memory.buffer, pointer, length),
+        engineUpdateBytes(abi, { rootId: 1, codecHandle: 1 }),
+      );
+      const resultPointer = 3_000;
+      const layout = abi.layouts.engineResult;
+      const header = new DataView(memory.buffer, resultPointer, layout.size);
+      header.setUint32(layout.status, abi.status.resultTooLarge, true);
+      header.setUint32(layout.flags, 0, true);
+      return resultPointer;
+    },
+    reserveRoot: (_handle, requested) => {
+      reserves++;
+      requestCapacity = requested;
+      requestPointer = 128;
+      memory.buffer = new ArrayBuffer(4_096);
+      return abi.status.ok;
+    },
+  };
+  const transport = new PlanTransport(
+    exports,
+    1,
+    requestCapacity,
+    abi.layouts.engineResult.size,
+    0,
+    () => undefined,
+    () => undefined,
+  );
+  const empty = {
+    ...emptyPlannerFrame(),
+    limits: { ...emptyPlannerFrame().limits, maxOutputBytes: abi.layouts.engineResult.size },
+  };
+  const firstLength = transport.stageUpdate(empty);
+  assert.deepEqual(
+    new Uint8Array(memory.buffer, requestPointer, firstLength),
+    engineUpdateBytes(abi, { rootId: 1, codecHandle: 1 }),
+  );
+  transport.discardStagedUpdate();
+
+  const text = 'A😀B';
+  const rich = {
+    ...empty,
+    paragraphMutations: [{ opcode: 'upsert', paragraphId: 1, order: 0 }],
+    textMutations: [{ paragraphId: 1, start: 0, deleteCount: 0, insert: text }],
+  };
+  const oldBuffer = memory.buffer;
+  const richLength = transport.stageUpdate(rich);
+  assert.equal(reserves, 1, 'the arena grows between planning and writing');
+  assert.notStrictEqual(memory.buffer, oldBuffer);
+  const expected = engineFrameUpdateBytes(abi, {
+    rootId: 1,
+    codecHandle: 1,
+    textMutation: {
+      start: 0,
+      deleteCount: 0,
+      insert: Array.from({ length: text.length }, (_, index) => text.charCodeAt(index)),
+    },
+    limits: { maxClusters: 1, maxLines: 1, maxOutputBytes: abi.layouts.engineResult.size },
+  });
+  assert.equal(richLength, expected.byteLength);
+  assert.deepEqual(new Uint8Array(memory.buffer, requestPointer, richLength), expected);
+  transport.discardStagedUpdate();
+  const repeatedLength = transport.stageUpdate(rich);
+  assert.equal(repeatedLength, richLength);
+  assert.equal(reserves, 1, 'the same frame reuses the grown arena');
+  assert.deepEqual(new Uint8Array(memory.buffer, requestPointer, repeatedLength), expected);
+  transport.discardStagedUpdate();
+
+  const styled = {
+    ...empty,
+    styleMutations: [
+      {
+        opcode: 'upsert',
+        paragraphId: 1,
+        styleId: 2,
+        cascadeOrder: 0,
+        start: 0,
+        end: 4,
+        value: { language: 'fr-CA', features: [{ tag: 'liga', value: 1, start: 0, end: 4 }] },
+      },
+    ],
+  };
+  const styledLength = transport.stageUpdate(styled);
+  const styledBytes = new Uint8Array(memory.buffer, requestPointer, styledLength);
+  const styledView = new DataView(memory.buffer, requestPointer, styledLength);
+  const requestLayout = abi.layouts.engineUpdateRequest;
+  const styleLayout = abi.layouts.engineStyleMutation;
+  const styleOffset = styledView.getUint32(requestLayout.styleMutationsOffset, true);
+  const languageOffset = styledView.getUint32(styleOffset + styleLayout.languageOffset, true);
+  assert.deepEqual(styledBytes.subarray(languageOffset, languageOffset + 5), new TextEncoder().encode('fr-CA'));
+  assert.equal(styledView.getUint16(styleOffset + styleLayout.featureCount, true), 1);
+  transport.discardStagedUpdate();
+
+  new Uint8Array(memory.buffer, requestPointer - 1, Math.max(richLength, styledLength) + 2).fill(0xa5);
+  const lastLength = transport.stageUpdate(empty);
+  assert.equal(lastLength, firstLength);
+  assert.deepEqual(
+    new Uint8Array(memory.buffer, requestPointer, lastLength),
+    engineUpdateBytes(abi, { rootId: 1, codecHandle: 1 }),
+  );
+  assert.equal(new Uint8Array(memory.buffer)[requestPointer - 1], 0xa5);
+  assert.equal(new Uint8Array(memory.buffer)[requestPointer + lastLength], 0xa5);
+  transport.discardStagedUpdate();
+  assert.throws(
+    () => transport.prepareParagraph(empty, 1),
+    (error) => error.statusCode === 'result-too-large',
+  );
+});
+
+test('measurement capacity failure is surfaced without retrying the mutation', () => {
   const memory = { buffer: new ArrayBuffer(2_048) };
   const resultPointer = 512;
   const requestPointer = 64;
   const layout = textShaperAbi.layouts.engineResult;
-  let grown = false;
+  let calls = 0;
   let reserves = 0;
-  const writeHeader = (status, requiredCapacity, resultCapacity) => {
+  const writeHeader = (status, requiredCapacity, resultCapacity, flags = 0, byteLength = layout.size) => {
     const header = new DataView(memory.buffer, resultPointer, layout.size);
     new Uint8Array(memory.buffer, resultPointer, layout.size).fill(0);
-    header.setUint32(layout.byteLength, layout.size, true);
+    header.setUint32(layout.byteLength, byteLength, true);
     header.setUint32(layout.status, status, true);
+    header.setUint32(layout.flags, flags, true);
     header.setUint32(layout.requestCapacity, 64, true);
     header.setUint32(layout.resultCapacity, resultCapacity, true);
     header.setUint32(layout.requiredResultCapacity, requiredCapacity, true);
@@ -56,14 +182,13 @@ test('measurement growth uses the exact failing result capacity', () => {
     memory,
     requestCapacity: () => 512,
     requestPointer: () => requestPointer,
-    reserveRoot: (_handle, _requestCapacity, resultCapacity) => {
+    reserveRoot: () => {
       reserves += 1;
-      grown = resultCapacity >= 100;
       return textShaperAbi.status.ok;
     },
     measureParagraph: () => {
-      if (!grown) writeHeader(textShaperAbi.status.resultTooLarge, 100, 8);
-      else writeHeader(textShaperAbi.status.ok, 0, 500);
+      calls += 1;
+      writeHeader(textShaperAbi.status.resultTooLarge, 100, 8, textShaperAbi.engine.resultFlags.rootInvalidated);
       return resultPointer;
     },
   };
@@ -78,35 +203,37 @@ test('measurement growth uses the exact failing result capacity', () => {
   );
   const paragraph = permanentGlyphId('paragraph', 'test.text-engine-handle-state/asymmetric-query');
 
-  const result = transport.prepareParagraph(emptyPlannerFrame(), paragraph, 1_000);
-  assert.equal(result.bytes.byteLength, layout.size);
-  assert.equal(reserves, 1, 'the failing arena must trigger one strict growth');
+  assert.throws(
+    () => transport.prepareParagraph(emptyPlannerFrame(), paragraph),
+    (error) => {
+      assert.equal(error.statusCode, 'result-too-large');
+      return true;
+    },
+  );
+  assert.equal(calls, 1, 'the synchronous mutation is attempted exactly once');
+  assert.equal(reserves, 0, 'result capacity is not repaired after the mutation begins');
+  assert.equal(transport.invalidateUnadoptedMutation(), true, 'a failed mutation invalidates derived state');
 });
 
-test('measurement growth permits at most one bounded capacity repair', () => {
+test('successful Rust preparation stays unadopted when TypeScript result decoding fails', () => {
   const memory = { buffer: new ArrayBuffer(2_048) };
   const resultPointer = 512;
+  const requestPointer = 64;
   const layout = textShaperAbi.layouts.engineResult;
   let calls = 0;
-  let reserves = 0;
   const exports = {
     memory,
     requestCapacity: () => 512,
-    requestPointer: () => 64,
-    reserveRoot: () => {
-      reserves += 1;
-      return textShaperAbi.status.ok;
-    },
+    requestPointer: () => requestPointer,
+    reserveRoot: () => textShaperAbi.status.ok,
     measureParagraph: () => {
       calls += 1;
-      const requiredCapacity = 100 + calls;
       const header = new DataView(memory.buffer, resultPointer, layout.size);
-      new Uint8Array(memory.buffer, resultPointer, layout.size).fill(0);
-      header.setUint32(layout.byteLength, layout.size, true);
-      header.setUint32(layout.status, textShaperAbi.status.resultTooLarge, true);
+      header.setUint32(layout.byteLength, memory.buffer.byteLength, true);
+      header.setUint32(layout.status, textShaperAbi.status.ok, true);
+      header.setUint32(layout.flags, 0, true);
       header.setUint32(layout.requestCapacity, 64, true);
-      header.setUint32(layout.resultCapacity, requiredCapacity - 1, true);
-      header.setUint32(layout.requiredResultCapacity, requiredCapacity, true);
+      header.setUint32(layout.resultCapacity, 64, true);
       return resultPointer;
     },
   };
@@ -114,47 +241,45 @@ test('measurement growth permits at most one bounded capacity repair', () => {
     exports,
     1,
     512,
-    8,
+    64,
     0,
     () => undefined,
     () => undefined,
   );
-  const paragraph = permanentGlyphId('paragraph', 'test.text-engine-handle-state/bounded-query-growth');
 
   assert.throws(
-    () => transport.prepareParagraph(emptyPlannerFrame(), paragraph, 1_000),
-    (error) => {
-      assert.equal(error.statusCode, 'result-too-large');
-      return true;
-    },
+    () =>
+      transport.prepareParagraph(
+        emptyPlannerFrame(),
+        permanentGlyphId('paragraph', 'test.text-engine-handle-state/decode-failure'),
+      ),
+    /out-of-bounds publication/u,
+    'a successful engine response can still fail during local result decoding',
   );
-  assert.equal(calls, 2, 'one repair permits exactly one retry');
-  assert.equal(reserves, 1, 'a second capacity watermark must not trigger another reserve');
+  assert.equal(calls, 1, 'Rust preparation ran exactly once');
+  assert.equal(
+    transport.invalidateUnadoptedMutation(),
+    true,
+    'the unadopted Rust candidate is discarded before the next explicit operation',
+  );
+  assert.equal(transport.invalidateUnadoptedMutation(), false, 'discarding the candidate is one-shot');
 });
 
-test('measurement growth rejects capacity beyond the authored output limit without reserving', () => {
+test('a rejected measurement without the invalidated-root flag does not invalidate the root', () => {
   const memory = { buffer: new ArrayBuffer(2_048) };
   const resultPointer = 512;
+  const requestPointer = 64;
   const layout = textShaperAbi.layouts.engineResult;
-  let calls = 0;
-  let reserves = 0;
   const exports = {
     memory,
     requestCapacity: () => 512,
-    requestPointer: () => 64,
-    reserveRoot: () => {
-      reserves += 1;
-      return textShaperAbi.status.ok;
-    },
+    requestPointer: () => requestPointer,
+    reserveRoot: () => textShaperAbi.status.ok,
     measureParagraph: () => {
-      calls += 1;
       const header = new DataView(memory.buffer, resultPointer, layout.size);
-      new Uint8Array(memory.buffer, resultPointer, layout.size).fill(0);
       header.setUint32(layout.byteLength, layout.size, true);
       header.setUint32(layout.status, textShaperAbi.status.resultTooLarge, true);
-      header.setUint32(layout.requestCapacity, 64, true);
-      header.setUint32(layout.resultCapacity, 8, true);
-      header.setUint32(layout.requiredResultCapacity, 101, true);
+      header.setUint32(layout.flags, 0, true);
       return resultPointer;
     },
   };
@@ -162,22 +287,28 @@ test('measurement growth rejects capacity beyond the authored output limit witho
     exports,
     1,
     512,
-    8,
+    64,
     0,
     () => undefined,
     () => undefined,
   );
-  const paragraph = permanentGlyphId('paragraph', 'test.text-engine-handle-state/over-limit-query-growth');
 
   assert.throws(
-    () => transport.prepareParagraph(emptyPlannerFrame(), paragraph, 100),
+    () =>
+      transport.prepareParagraph(
+        emptyPlannerFrame(),
+        permanentGlyphId('paragraph', 'test.text-engine-handle-state/rejected-root-preserved'),
+      ),
     (error) => {
       assert.equal(error.statusCode, 'result-too-large');
       return true;
     },
   );
-  assert.equal(calls, 1);
-  assert.equal(reserves, 0, 'an over-limit watermark must not grow the result arena');
+  assert.equal(
+    transport.invalidateUnadoptedMutation(),
+    false,
+    'Rust remains authoritative about whether a rejected response invalidated its derived root',
+  );
 });
 
 test('a glyph engine owns every configured-handle state it creates', async () => {

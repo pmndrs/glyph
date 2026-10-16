@@ -28,6 +28,7 @@ use super::{
         RunLocalWriter,
     },
     shaping_state::{BoundaryShape, BoundaryShapeArena, ShapingRun},
+    sort::{pack2, sort_keys},
     style_state::{ResolvedStyle, StyleSegment},
 };
 
@@ -180,41 +181,13 @@ pub(crate) struct PositionedGlyphArena {
     replacement_runs: Vec<LayoutRun>,
     replacement_run_local: RunLocalArena,
     replacement_run_indices: Vec<[Option<u32>; 2]>,
-    replacement_current_order: Vec<u32>,
-    replacement_previous_order: Vec<u32>,
+    replacement_current_order: Vec<u64>,
+    replacement_previous_order: Vec<u64>,
     placement: PlacementState,
     placement_fragment_index: u32,
     text_effects: bool,
     #[cfg(test)]
     retained_static_geometry: bool,
-}
-
-#[derive(Clone, Copy)]
-struct GlyphPlacementRollback {
-    index: usize,
-    placement_slot: u32,
-    content_revision: u32,
-    semantic_change_mask: u16,
-}
-
-/// Reusable metadata journal for renderer placement binding on a preparation that the
-/// setter has already committed. Geometry and semantic columns stay owned by the retained
-/// arena; only fields mutated while compiling a publication are copied here.
-#[derive(Default)]
-pub(crate) struct PlacementBindingRollback {
-    placement_handles: Vec<(usize, Option<PlacementHandle>)>,
-    glyphs: Vec<GlyphPlacementRollback>,
-    source_intervals_retained: bool,
-    active: bool,
-}
-
-impl PlacementBindingRollback {
-    fn clear(&mut self) {
-        self.placement_handles.clear();
-        self.glyphs.clear();
-        self.source_intervals_retained = false;
-        self.active = false;
-    }
 }
 
 /// Two resolved styles share one decoration line when every declared decoration field
@@ -369,8 +342,47 @@ fn boundary_shape_span<'a>(
     })
 }
 
-fn sort_replacement_order(order: &mut [u32], records: &[BoundaryShape]) {
-    order.sort_unstable_by_key(|index| (records[*index as usize].flow_thread_id, *index));
+fn merge_recomposed_glyphs(
+    current: &mut Vec<core::ops::Range<usize>>,
+    previous: &[core::ops::Range<usize>],
+) -> Result<(), EngineError> {
+    let current_len = current.len();
+    let merged_len = current_len
+        .checked_add(previous.len())
+        .ok_or(EngineError::ResultTooLarge)?;
+    current
+        .try_reserve(previous.len())
+        .map_err(|_| EngineError::ResultTooLarge)?;
+    current.resize(merged_len, 0..0);
+    let (mut left, mut right) = (current_len, previous.len());
+    // Both producers order by start. Filling backward never overwrites the unread
+    // current prefix: the destination is at or after its last unread element.
+    for write in (0..merged_len).rev() {
+        if right == 0 || (left != 0 && current[left - 1].start >= previous[right - 1].start) {
+            left -= 1;
+            current[write] = current[left].clone();
+        } else {
+            right -= 1;
+            current[write] = previous[right].clone();
+        }
+    }
+    let mut write = 0;
+    for read in 0..merged_len {
+        let range = current[read].clone();
+        if write != 0 && current[write - 1].end >= range.start {
+            current[write - 1].end = current[write - 1].end.max(range.end);
+        } else {
+            current[write] = range;
+            write += 1;
+        }
+    }
+    current.truncate(write);
+    Ok(())
+}
+
+fn replacement_index(key: u64) -> usize {
+    // pack2 stores the checked u32 source index in the low word.
+    (key as u32) as usize
 }
 
 fn same_boundary_run(
@@ -653,17 +665,10 @@ impl PositionedGlyphArena {
             .fragments
             .cursor_from(0)
             .ok_or(EngineError::InvalidRequest)?;
-        let next_lines = flow
-            .lines
-            .iter()
-            .copied()
-            .skip(1)
-            .map(Some)
-            .chain(core::iter::once(None));
+        let mut lines = flow.lines.iter().copied().enumerate().peekable();
         let mut previous_flow_thread_id = None;
-        for (line_index, (line, next_line)) in
-            flow.lines.iter().copied().zip(next_lines).enumerate()
-        {
+        while let Some((line_index, line)) = lines.next() {
+            let next_line = lines.peek().map(|(_, line)| line);
             let first_thread_line = previous_flow_thread_id != Some(line.flow_thread_id);
             previous_flow_thread_id = Some(line.flow_thread_id);
             let fragment_start_usize = fragment_cursor;
@@ -951,25 +956,7 @@ impl PositionedGlyphArena {
         // The candidate revision executor has consumed the current preparation windows. This
         // same storage now carries all unpublished windows in the preserved source coordinates.
         if self.recomposed_glyphs_retained && previous.recomposed_glyphs_retained {
-            self.recomposed_glyphs
-                .try_reserve(previous.recomposed_glyphs.len())
-                .map_err(|_| EngineError::ResultTooLarge)?;
-            self.recomposed_glyphs
-                .extend(previous.recomposed_glyphs.iter().cloned());
-            self.recomposed_glyphs
-                .sort_unstable_by_key(|range| range.start);
-            let mut write = 0;
-            for read in 0..self.recomposed_glyphs.len() {
-                let range = self.recomposed_glyphs[read].clone();
-                if write != 0 && self.recomposed_glyphs[write - 1].end >= range.start {
-                    self.recomposed_glyphs[write - 1].end =
-                        self.recomposed_glyphs[write - 1].end.max(range.end);
-                } else {
-                    self.recomposed_glyphs[write] = range;
-                    write += 1;
-                }
-            }
-            self.recomposed_glyphs.truncate(write);
+            merge_recomposed_glyphs(&mut self.recomposed_glyphs, &previous.recomposed_glyphs)?;
         } else {
             self.recomposed_glyphs_retained = false;
         }
@@ -1331,32 +1318,43 @@ impl PositionedGlyphArena {
         next_revision: &mut u32,
     ) -> Result<(), EngineError> {
         self.placement_binding_capacity(handles)?;
-        self.bind_placement_handles_inner(handles, previous, next_revision, None)
-    }
-
-    pub(crate) fn bind_placement_handles_transactional(
-        &mut self,
-        handles: &[PlacementHandle],
-        next_revision: &mut u32,
-        rollback: &mut PlacementBindingRollback,
-    ) -> Result<(), EngineError> {
-        if rollback.active {
-            return Err(EngineError::InvalidRequest);
+        let mut required_revisions = 0usize;
+        let mut instance_start = 0usize;
+        for (segment_index, handle) in handles.iter().copied().enumerate() {
+            let count = self.placement.segment_instance_counts()[segment_index] as usize;
+            let instance_end = instance_start + count;
+            if self.placement.placement_handle(segment_index) == Some(handle) {
+                instance_start = instance_end;
+                continue;
+            }
+            let slot = handle.slot().get();
+            for index in instance_start..instance_end {
+                let glyph = &self.glyphs[index];
+                let changed = glyph.placement_slot != slot
+                    || previous.is_some_and(|old| {
+                        old.glyphs.get(index).is_none_or(|prior| {
+                            prior.stable_id != glyph.stable_id || prior.placement_slot != slot
+                        })
+                    });
+                if changed && self.semantic_change_masks[index] == 0 {
+                    required_revisions = required_revisions
+                        .checked_add(1)
+                        .ok_or(EngineError::ResultTooLarge)?;
+                }
+            }
+            instance_start = instance_end;
         }
-        let (segments, instances) = self.placement_binding_capacity(handles)?;
-        reserve(&mut rollback.placement_handles, segments)?;
-        reserve(&mut rollback.glyphs, instances)?;
-        rollback.clear();
-        rollback.source_intervals_retained = self.recomposed_glyphs_retained;
-        rollback.active = segments != 0;
-        let previous_revision = *next_revision;
-        if let Err(error) =
-            self.bind_placement_handles_inner(handles, None, next_revision, Some(rollback))
-        {
-            self.restore_placement_binding(rollback);
-            *next_revision = previous_revision;
-            return Err(error);
-        }
+        let revision_count =
+            u32::try_from(required_revisions).map_err(|_| EngineError::ResultTooLarge)?;
+        let next = (*next_revision).max(1);
+        let final_revision = if revision_count == 0 {
+            *next_revision
+        } else {
+            next.checked_add(revision_count)
+                .ok_or(EngineError::ResultTooLarge)?
+        };
+        self.bind_placement_handles_inner(handles, previous, next_revision)?;
+        *next_revision = final_revision;
         Ok(())
     }
 
@@ -1365,9 +1363,7 @@ impl PositionedGlyphArena {
         handles: &[PlacementHandle],
         previous: Option<&Self>,
         next_revision: &mut u32,
-        mut rollback: Option<&mut PlacementBindingRollback>,
     ) -> Result<(), EngineError> {
-        let transactional = rollback.is_some();
         let mut instance_start = 0usize;
         for (segment_index, handle) in handles.iter().copied().enumerate() {
             let count = self.placement.segment_instance_counts()[segment_index] as usize;
@@ -1385,11 +1381,6 @@ impl PositionedGlyphArena {
             {
                 self.recomposed_glyphs_retained = false;
             }
-            if let Some(rollback) = &mut rollback {
-                rollback
-                    .placement_handles
-                    .push((segment_index, previous_handle));
-            }
             self.placement
                 .set_placement_handle(segment_index, Some(handle));
             let placement_slot = handle.slot().get();
@@ -1398,15 +1389,12 @@ impl PositionedGlyphArena {
                 super::work_attribution::record(|work| work.placement_binding_glyph_visits += 1);
                 let glyph = &mut self.glyphs[index];
                 let mask = &mut self.semantic_change_masks[index];
-                let changed = if transactional {
-                    glyph.placement_slot != placement_slot
-                } else {
-                    previous
-                        .and_then(|positioned| positioned.glyphs.get(index))
-                        .is_none_or(|old| {
+                let changed = glyph.placement_slot != placement_slot
+                    || previous.is_some_and(|positioned| {
+                        positioned.glyphs.get(index).is_none_or(|old| {
                             old.stable_id != glyph.stable_id || old.placement_slot != placement_slot
                         })
-                };
+                    });
                 let revision = if changed && *mask == 0 {
                     let revision = (*next_revision).max(1);
                     *next_revision = revision.checked_add(1).ok_or(EngineError::ResultTooLarge)?;
@@ -1414,20 +1402,6 @@ impl PositionedGlyphArena {
                 } else {
                     None
                 };
-                if let Some(rollback) = &mut rollback
-                    && changed
-                {
-                    rollback.glyphs.push(GlyphPlacementRollback {
-                        index,
-                        placement_slot: glyph.placement_slot,
-                        content_revision: glyph.content_revision,
-                        semantic_change_mask: *mask,
-                    });
-                    #[cfg(test)]
-                    super::work_attribution::record(|work| {
-                        work.placement_rollback_rows_copied += 1
-                    });
-                }
                 glyph.placement_slot = placement_slot;
                 if changed {
                     if let Some(revision) = revision {
@@ -1439,29 +1413,6 @@ impl PositionedGlyphArena {
             instance_start = instance_end;
         }
         Ok(())
-    }
-
-    pub(crate) fn restore_placement_binding(&mut self, rollback: &mut PlacementBindingRollback) {
-        if !rollback.active {
-            return;
-        }
-        for &(index, handle) in &rollback.placement_handles {
-            self.placement.set_placement_handle(index, handle);
-        }
-        for before in &rollback.glyphs {
-            let glyph = &mut self.glyphs[before.index];
-            glyph.placement_slot = before.placement_slot;
-            glyph.content_revision = before.content_revision;
-            self.semantic_change_masks[before.index] = before.semantic_change_mask;
-            #[cfg(test)]
-            super::work_attribution::record(|work| work.placement_rollback_rows_restored += 1);
-        }
-        self.recomposed_glyphs_retained = rollback.source_intervals_retained;
-        rollback.clear();
-    }
-
-    pub(crate) fn commit_placement_binding(rollback: &mut PlacementBindingRollback) {
-        rollback.clear();
     }
 
     fn rebuild_replacement_runs(
@@ -1491,44 +1442,47 @@ impl PositionedGlyphArena {
             .try_reserve(previous_shape.records.len())
             .map_err(|_| EngineError::ResultTooLarge)?;
         for index in 0..current_shape.records.len() {
-            self.replacement_current_order
-                .push(u32::try_from(index).map_err(|_| EngineError::ResultTooLarge)?);
+            let index = u32::try_from(index).map_err(|_| EngineError::ResultTooLarge)?;
+            self.replacement_current_order.push(pack2(
+                current_shape.records[index as usize].flow_thread_id,
+                index,
+            ));
         }
         for index in
             (0..previous_shape.records.len()).filter(|i| !previous_shape.records[*i].line_start)
         {
-            self.replacement_previous_order
-                .push(u32::try_from(index).map_err(|_| EngineError::ResultTooLarge)?);
+            let index = u32::try_from(index).map_err(|_| EngineError::ResultTooLarge)?;
+            self.replacement_previous_order.push(pack2(
+                previous_shape.records[index as usize].flow_thread_id,
+                index,
+            ));
         }
-        sort_replacement_order(&mut self.replacement_current_order, &current_shape.records);
-        sort_replacement_order(
-            &mut self.replacement_previous_order,
-            &previous_shape.records,
-        );
+        sort_keys(&mut self.replacement_current_order);
+        sort_keys(&mut self.replacement_previous_order);
         if self.replacement_current_order.windows(2).any(|pair| {
             let (left, right) = (
-                current_shape.records[pair[0] as usize],
-                current_shape.records[pair[1] as usize],
+                current_shape.records[replacement_index(pair[0])],
+                current_shape.records[replacement_index(pair[1])],
             );
             left.flow_thread_id == right.flow_thread_id && !(left.line_start || right.line_start)
-        }) || self.replacement_previous_order.windows(2).any(|pair| {
-            previous_shape.records[pair[0] as usize].flow_thread_id
-                == previous_shape.records[pair[1] as usize].flow_thread_id
-        }) {
+        }) || self
+            .replacement_previous_order
+            .windows(2)
+            .any(|pair| pair[0] >> 32 == pair[1] >> 32)
+        {
             return Err(EngineError::InvalidRequest);
         }
         self.replacement_run_indices
             .resize(current_shape.records.len(), [None; 2]);
         let mut revision_cursor = *next_revision;
         let mut previous_order_index = 0usize;
-        for current_boundary_index in self.replacement_current_order.iter().copied() {
-            let boundary = current_shape.records[current_boundary_index as usize];
+        for current_boundary_key in self.replacement_current_order.iter().copied() {
+            let current_boundary_index = replacement_index(current_boundary_key);
+            let boundary = current_shape.records[current_boundary_index];
             while self
                 .replacement_previous_order
                 .get(previous_order_index)
-                .is_some_and(|index| {
-                    previous_shape.records[*index as usize].flow_thread_id < boundary.flow_thread_id
-                })
+                .is_some_and(|key| (*key >> 32) < u64::from(boundary.flow_thread_id))
             {
                 previous_order_index += 1;
             }
@@ -1536,13 +1490,12 @@ impl PositionedGlyphArena {
                 .replacement_previous_order
                 .get(previous_order_index)
                 .copied()
-                .filter(|index| {
-                    !boundary.line_start
-                        && previous_shape.records[*index as usize].flow_thread_id
-                            == boundary.flow_thread_id
-                });
+                .filter(|key| {
+                    !boundary.line_start && (*key >> 32) == u64::from(boundary.flow_thread_id)
+                })
+                .map(replacement_index);
             let previous_boundary =
-                previous_boundary_index.map(|index| previous_shape.records[index as usize]);
+                previous_boundary_index.map(|index| previous_shape.records[index]);
             let mut run_indices = [None; 2];
             for role in [BoundaryRunRole::BoundarySource, BoundaryRunRole::Ellipsis] {
                 let Some(spec) = BoundaryRunSpec::from_boundary(boundary, role) else {
@@ -1550,7 +1503,7 @@ impl PositionedGlyphArena {
                 };
                 let role_index = boundary_role_index(role);
                 let previous_run = previous_boundary_index
-                    .and_then(|index| previous.replacement_run_indices.get(index as usize))
+                    .and_then(|index| previous.replacement_run_indices.get(index))
                     .and_then(|indices| indices[role_index])
                     .and_then(|index| previous.replacement_runs.get(index as usize))
                     .filter(|run| run.source_kind == spec.source_kind);
@@ -1590,7 +1543,7 @@ impl PositionedGlyphArena {
                 });
                 run_indices[role_index] = Some(run_index);
             }
-            self.replacement_run_indices[current_boundary_index as usize] = run_indices;
+            self.replacement_run_indices[current_boundary_index] = run_indices;
             if previous_boundary.is_some() {
                 previous_order_index += 1;
             }
@@ -4152,18 +4105,9 @@ pub(crate) fn flow_positioning_equivalent(
         .fragments
         .cursor_from(0)
         .ok_or(EngineError::InvalidRequest)?;
-    let next_lines = pending
-        .lines
-        .iter()
-        .skip(1)
-        .map(Some)
-        .chain(core::iter::once(None));
-    for ((line, previous), next_line) in pending
-        .lines
-        .iter()
-        .zip(committed.lines.iter())
-        .zip(next_lines)
-    {
+    let mut lines = pending.lines.iter().zip(committed.lines.iter()).peekable();
+    while let Some((line, previous)) = lines.next() {
+        let next_line = lines.peek().map(|(line, _)| *line);
         if line.flow_thread_id != previous.flow_thread_id
             || line.region_id != previous.region_id
             || line.transform_index != previous.transform_index
@@ -4553,6 +4497,52 @@ mod tests {
     };
     use super::*;
     use crate::unicode::UnicodeAnalysis;
+
+    fn one_range(range: core::ops::Range<usize>) -> Vec<core::ops::Range<usize>> {
+        core::iter::once(range).collect()
+    }
+
+    #[test]
+    fn recomposed_range_merge_matches_covered_indices() {
+        for (mut current, previous, expected) in [
+            (vec![], vec![], vec![]),
+            (one_range(1..3), vec![], one_range(1..3)),
+            (vec![], one_range(2..4), one_range(2..4)),
+            (vec![1..3, 7..9], one_range(3..7), one_range(1..9)),
+            (one_range(1..10), one_range(3..5), one_range(1..10)),
+            (vec![1..2, 8..9], one_range(4..5), vec![1..2, 4..5, 8..9]),
+            (one_range(2..2), one_range(2..4), one_range(2..4)),
+        ] {
+            merge_recomposed_glyphs(&mut current, &previous).unwrap();
+            assert_eq!(current, expected);
+        }
+
+        let mut seed = 0x5b7u32;
+        for _ in 0..512 {
+            let mut lists = [Vec::new(), Vec::new()];
+            let mut covered = [false; 64];
+            for list in &mut lists {
+                let count = (seed & 7) as usize;
+                for _ in 0..count {
+                    seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                    let start = (seed % 48) as usize;
+                    seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                    let end = start + 1 + (seed % 12) as usize;
+                    list.push(start..end);
+                    covered[start..end].fill(true);
+                }
+                list.sort_unstable_by_key(|range| range.start);
+            }
+            let [mut current, previous] = lists;
+            merge_recomposed_glyphs(&mut current, &previous).unwrap();
+            assert!(current.windows(2).all(|pair| pair[0].end < pair[1].start));
+            let mut actual = [false; 64];
+            for range in current {
+                actual[range].fill(true);
+            }
+            assert_eq!(actual, covered);
+        }
+    }
 
     fn boundary_record(flow_thread_id: u32, glyph_start: u32) -> BoundaryShape {
         BoundaryShape {
@@ -6656,8 +6646,11 @@ mod tests {
         assert_eq!(ellipsis_only.glyphs.len(), 1);
         assert_eq!(ellipsis_only.glyphs[0].stable_id, 777);
 
+        active.mark_published();
+        let mut second_line_lines = flow.lines.iter().copied().collect::<Vec<_>>();
+        second_line_lines[1].baseline += 1.0;
         let retained = FlowLayoutArena {
-            lines: flow.lines.clone(),
+            lines: second_line_lines.into(),
             fragments: flow.fragments.clone(),
             recomposed_lines: core::iter::once(1..2).collect(),
             recomposed_lines_retained: true,
@@ -6690,6 +6683,67 @@ mod tests {
         next.placement
             .validate_occurrences(next.glyphs.len())
             .unwrap();
+        assert_eq!(
+            next.placed_semantic_glyph(0).unwrap().block_origin,
+            active.placed_semantic_glyph(0).unwrap().block_origin,
+        );
+        assert_eq!(
+            next.placed_semantic_glyph(3).unwrap().block_origin,
+            active.placed_semantic_glyph(3).unwrap().block_origin + 1.0,
+        );
+        assert_eq!(
+            next.unpublished_source_intervals(),
+            Some(core::slice::from_ref(&(3..5)))
+        );
+
+        let mut first_line_lines = retained.lines.iter().copied().collect::<Vec<_>>();
+        first_line_lines[0].baseline += 2.0;
+        let first_line_edit = FlowLayoutArena {
+            lines: first_line_lines.into(),
+            fragments: flow.fragments.clone(),
+            recomposed_lines: core::iter::once(0..1).collect(),
+            recomposed_lines_retained: true,
+            ..FlowLayoutArena::default()
+        };
+        let mut newest = PositionedGlyphArena::default();
+        newest
+            .build(
+                &next,
+                &first_line_edit,
+                Some(&retained),
+                first_line_edit.recomposed_line_ranges(),
+                &text,
+                &clusters,
+                &clusters,
+                &runs,
+                &runs,
+                &boundary,
+                &boundary,
+                &styles,
+                &bidi,
+                &mut index,
+                &mut next_revision,
+                &mut next_run_revision,
+                |_| ThreadTypography::default(),
+                |_| ThreadTypography::default(),
+                metrics,
+                extents,
+            )
+            .unwrap();
+        assert_eq!(
+            newest.placed_semantic_glyph(0).unwrap().block_origin,
+            next.placed_semantic_glyph(0).unwrap().block_origin + 2.0,
+        );
+        assert_eq!(
+            newest.placed_semantic_glyph(3).unwrap().block_origin,
+            next.placed_semantic_glyph(3).unwrap().block_origin,
+        );
+        assert_eq!(
+            newest.unpublished_source_intervals(),
+            Some(core::slice::from_ref(&(0..5)))
+        );
+        newest.mark_published();
+        assert_eq!(newest.unpublished_source_intervals(), Some(&[][..]));
     }
 
     #[test]
@@ -7177,79 +7231,7 @@ mod tests {
     }
 
     #[test]
-    fn committed_preparation_placement_binding_can_abort_without_losing_state() {
-        let mut positioned = fixture_position_results(0, 3, |_, _, _| {});
-        positioned
-            .semantic_change_masks
-            .resize(positioned.glyphs.len(), 0);
-        let segment_count = positioned.placement_segments().len();
-        let keys = (1..=u32::try_from(segment_count).unwrap()).collect::<Vec<_>>();
-        let mut slots = PlacementSlotArena::default();
-        slots.prepare(&keys, 1).unwrap();
-        let handles = slots.assignments().unwrap();
-        let before_handles = (0..segment_count)
-            .map(|index| positioned.placement_handle(index))
-            .collect::<Vec<_>>();
-        let before_glyphs = positioned
-            .glyphs
-            .iter()
-            .enumerate()
-            .map(|(index, glyph)| {
-                (
-                    glyph.placement_slot,
-                    glyph.content_revision,
-                    positioned.semantic_change_masks[index],
-                )
-            })
-            .collect::<Vec<_>>();
-        let mut rollback = PlacementBindingRollback::default();
-        let mut next_revision = 41;
-
-        positioned
-            .bind_placement_handles_transactional(handles, &mut next_revision, &mut rollback)
-            .unwrap();
-        assert_eq!(
-            positioned
-                .glyphs
-                .iter()
-                .map(|glyph| glyph.placement_slot)
-                .collect::<Vec<_>>(),
-            handles
-                .iter()
-                .zip(positioned.placement.segment_instance_counts())
-                .flat_map(|(handle, count)| core::iter::repeat_n(
-                    handle.slot().get(),
-                    *count as usize
-                ))
-                .collect::<Vec<_>>()
-        );
-        positioned.restore_placement_binding(&mut rollback);
-
-        assert_eq!(
-            (0..segment_count)
-                .map(|index| positioned.placement_handle(index))
-                .collect::<Vec<_>>(),
-            before_handles
-        );
-        assert_eq!(
-            positioned
-                .glyphs
-                .iter()
-                .enumerate()
-                .map(|(index, glyph)| {
-                    (
-                        glyph.placement_slot,
-                        glyph.content_revision,
-                        positioned.semantic_change_masks[index],
-                    )
-                })
-                .collect::<Vec<_>>(),
-            before_glyphs
-        );
-    }
-
-    #[test]
-    fn placement_binding_skips_proven_spans_and_restores_indexed_overflow() {
+    fn placement_binding_skips_proven_spans_and_preflights_revision_overflow() {
         let mut positioned = fixture_position_results(0, 11, |_, _, _| {});
         let count = positioned.placement_segments().len();
         assert!(count >= 3);
@@ -7287,36 +7269,9 @@ mod tests {
             .map(|count| *count as usize)
             .sum::<usize>();
         assert!(changed >= 2 && changed < positioned.glyphs.len());
-        let mut cold = fixture_position_results(0, 11, |_, _, _| {});
-        cold.assign_content_revisions(&positioned, &mut IdentityIndex::default(), &mut 100, false)
-            .unwrap();
-        cold.bind_placement_handles(&desired, Some(&positioned), &mut 100)
-            .unwrap();
-        let mut rollback = PlacementBindingRollback::default();
-        crate::engine::work_attribution::reset();
-        positioned
-            .bind_placement_handles_transactional(&desired, &mut 100, &mut rollback)
-            .unwrap();
-        assert_eq!(snapshot(&positioned), snapshot(&cold));
-        assert!(positioned.unpublished_source_intervals().is_none());
-        assert_eq!(rollback.placement_handles.len(), 2);
-        assert_eq!(rollback.glyphs.len(), changed);
-        let work = crate::engine::work_attribution::snapshot();
-        assert_eq!(work.placement_binding_glyph_visits, changed);
-        assert_eq!(work.placement_rollback_rows_copied, changed);
-        positioned.restore_placement_binding(&mut rollback);
-        assert_eq!(snapshot(&positioned), before);
-        assert_eq!(
-            positioned.unpublished_source_intervals(),
-            Some(source_intervals.as_slice())
-        );
-        assert_eq!(
-            crate::engine::work_attribution::snapshot().placement_rollback_rows_restored,
-            changed
-        );
         let mut revision = u32::MAX - 1;
         assert_eq!(
-            positioned.bind_placement_handles_transactional(&desired, &mut revision, &mut rollback),
+            positioned.bind_placement_handles(&desired, None, &mut revision),
             Err(EngineError::ResultTooLarge)
         );
         assert_eq!(revision, u32::MAX - 1);
@@ -7325,22 +7280,27 @@ mod tests {
             positioned.unpublished_source_intervals(),
             Some(source_intervals.as_slice())
         );
-        for (index, handle) in accepted.iter().enumerate() {
-            assert_eq!(positioned.placement_handle(index), Some(*handle));
-        }
-        positioned
-            .bind_placement_handles_transactional(&desired, &mut 100, &mut rollback)
+        let mut cold = fixture_position_results(0, 11, |_, _, _| {});
+        cold.assign_content_revisions(&positioned, &mut IdentityIndex::default(), &mut 100, false)
             .unwrap();
-        assert_eq!(snapshot(&positioned), snapshot(&cold));
-        PositionedGlyphArena::commit_placement_binding(&mut rollback);
+        cold.bind_placement_handles(&desired, Some(&positioned), &mut 100)
+            .unwrap();
         crate::engine::work_attribution::reset();
         positioned
-            .bind_placement_handles_transactional(&desired, &mut 100, &mut rollback)
+            .bind_placement_handles(&desired, None, &mut 100)
             .unwrap();
-        assert!(!rollback.active);
-        assert_eq!(
-            crate::engine::work_attribution::snapshot().placement_binding_glyph_visits,
-            0
+        assert_eq!(snapshot(&positioned), snapshot(&cold));
+        assert!(positioned.unpublished_source_intervals().is_none());
+        let work = crate::engine::work_attribution::snapshot();
+        assert_eq!(work.placement_binding_glyph_visits, changed);
+        assert_ne!(snapshot(&positioned), before);
+        assert_eq!(snapshot(&positioned), snapshot(&cold));
+        assert_eq!(positioned.unpublished_source_intervals(), None);
+        assert!(
+            accepted
+                .iter()
+                .enumerate()
+                .any(|(index, handle)| { positioned.placement_handle(index) != Some(*handle) })
         );
     }
 
@@ -7364,10 +7324,9 @@ mod tests {
         let next = slots.assignments().unwrap()[0];
         assert_eq!(old.slot(), next.slot());
         assert_ne!(old, next);
-        let mut rollback = PlacementBindingRollback::default();
         crate::engine::work_attribution::reset();
         positioned
-            .bind_placement_handles_transactional(&[next], &mut 100, &mut rollback)
+            .bind_placement_handles(&[next], None, &mut 100)
             .unwrap();
         assert_eq!(positioned.placement_handle(0), Some(next));
         assert_eq!(positioned.glyphs[0].content_revision, revision);
@@ -7376,9 +7335,7 @@ mod tests {
             crate::engine::work_attribution::snapshot().placement_binding_glyph_visits,
             1
         );
-        assert!(rollback.glyphs.is_empty());
-        positioned.restore_placement_binding(&mut rollback);
-        assert_eq!(positioned.placement_handle(0), Some(old));
+        assert_eq!(positioned.placement_handle(0), Some(next));
     }
 
     #[test]

@@ -5,8 +5,8 @@ use alloc::vec::Vec;
 use super::{
     codec::{BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE, CapabilitySet, ScalarType},
     plan_packing::{
-        PackingError, RecordRange, align_record_range, coalesce_buffer_ranges, grown_capacity,
-        record_alignment_for_stride,
+        PackingError, RecordRange, align_record_range, apply_writes_prevalidated,
+        coalesce_buffer_ranges, grown_capacity, record_alignment_for_stride,
     },
     render_plan::{
         BUFFER_SESSION_SHARED, BufferRecord, CODEC_BUFFER_PLACEMENT, PATCH_ALLOCATE_OR_RESIZE,
@@ -45,7 +45,6 @@ pub(crate) enum SessionPlacementError {
 struct SessionBuffer {
     generation: u32,
     capacity: u32,
-    live_records: u32,
     bytes: Vec<u8>,
 }
 
@@ -128,7 +127,75 @@ impl SessionPlacementCompiler {
         }
     }
 
-    pub(crate) fn commit(&mut self) {
+    pub(crate) fn preflight_commit(&self) -> Result<(), SessionPlacementError> {
+        if !self.prepared {
+            return Err(SessionPlacementError::InvalidInput);
+        }
+        let target = if self.pending_placement.remove {
+            None
+        } else if self.pending_placement.replace {
+            self.placement_allocation.as_ref()
+        } else {
+            self.placement.as_ref()
+        };
+        if target.is_none()
+            && (self.pending_placement.replace
+                || (!self.pending_placement.remove && self.pending_placement.live_records != 0))
+        {
+            return Err(SessionPlacementError::InvalidInput);
+        }
+        let mut allocation_seen = false;
+        for patch in self
+            .patches
+            .iter()
+            .filter(|patch| patch.buffer_id == SESSION_PLACEMENT_BUFFER_ID)
+        {
+            let Some(target) = target else {
+                return Err(SessionPlacementError::InvalidInput);
+            };
+            if patch.buffer_generation != target.generation {
+                return Err(SessionPlacementError::InvalidInput);
+            }
+            match patch.opcode {
+                PATCH_WRITE => {
+                    let source = usize::try_from(patch.payload_start)
+                        .map_err(|_| SessionPlacementError::InvalidInput)?;
+                    let destination = usize::try_from(patch.destination_offset)
+                        .map_err(|_| SessionPlacementError::InvalidInput)?;
+                    let length = usize::try_from(patch.byte_length)
+                        .map_err(|_| SessionPlacementError::InvalidInput)?;
+                    let source_end = source
+                        .checked_add(length)
+                        .ok_or(SessionPlacementError::InvalidInput)?;
+                    let destination_end = destination
+                        .checked_add(length)
+                        .ok_or(SessionPlacementError::InvalidInput)?;
+                    if source_end > self.payload.len() || destination_end > target.bytes.len() {
+                        return Err(SessionPlacementError::InvalidInput);
+                    }
+                }
+                PATCH_ALLOCATE_OR_RESIZE => {
+                    let byte_length = usize::try_from(patch.byte_length)
+                        .map_err(|_| SessionPlacementError::InvalidInput)?;
+                    if allocation_seen || byte_length != target.bytes.len() {
+                        return Err(SessionPlacementError::InvalidInput);
+                    }
+                    allocation_seen = true;
+                }
+                _ => return Err(SessionPlacementError::InvalidInput),
+            }
+        }
+        if self.pending_placement.replace && !allocation_seen {
+            return Err(SessionPlacementError::InvalidInput);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn is_prepared(&self) -> bool {
+        self.prepared
+    }
+
+    pub(crate) fn commit_preflighted(&mut self) {
         if !self.prepared {
             return;
         }
@@ -142,8 +209,28 @@ impl SessionPlacementCompiler {
         self.finish();
     }
 
+    #[cfg(test)]
+    pub(crate) fn commit(&mut self) {
+        if self.preflight_commit().is_err() {
+            debug_assert!(false, "session placement commit was not preflighted");
+            return;
+        }
+        self.commit_preflighted();
+    }
+
     pub(crate) fn abort(&mut self) {
         self.finish();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn invalidate_first_write_generation_for_test(&mut self) {
+        if let Some(patch) = self
+            .patches
+            .iter_mut()
+            .find(|patch| patch.opcode == PATCH_WRITE)
+        {
+            patch.buffer_generation = patch.buffer_generation.wrapping_add(1);
+        }
     }
 
     pub(crate) fn buffer_bytes(&self, id: u32) -> Option<&[u8]> {
@@ -177,8 +264,13 @@ impl SessionPlacementCompiler {
             )
             .map_err(packing_error)?;
             let generation = next_generation(self.placement.as_ref())?;
-            let allocation = allocate_buffer(generation, capacity, live_records)?;
-            push_binding_and_allocation(&mut self.buffers, &mut self.patches, &allocation)?;
+            let allocation = allocate_buffer(generation, capacity)?;
+            push_binding_and_allocation(
+                &mut self.buffers,
+                &mut self.patches,
+                &allocation,
+                live_records,
+            )?;
             push_retirement(&self.placement, &mut self.retirements)?;
             self.placement_allocation = Some(allocation);
             generation
@@ -188,7 +280,12 @@ impl SessionPlacementCompiler {
                 .as_ref()
                 .ok_or(SessionPlacementError::InvalidInput)?;
             if checkpoint {
-                push_binding_and_allocation(&mut self.buffers, &mut self.patches, buffer)?;
+                push_binding_and_allocation(
+                    &mut self.buffers,
+                    &mut self.patches,
+                    buffer,
+                    live_records,
+                )?;
             }
             buffer.generation
         };
@@ -256,11 +353,7 @@ fn next_generation(buffer: Option<&SessionBuffer>) -> Result<u32, SessionPlaceme
     })
 }
 
-fn allocate_buffer(
-    generation: u32,
-    capacity: u32,
-    live_records: u32,
-) -> Result<SessionBuffer, SessionPlacementError> {
+fn allocate_buffer(generation: u32, capacity: u32) -> Result<SessionBuffer, SessionPlacementError> {
     let length = usize::try_from(capacity)
         .ok()
         .and_then(|capacity| capacity.checked_mul(PLACEMENT_STRIDE_BYTES))
@@ -273,7 +366,6 @@ fn allocate_buffer(
     Ok(SessionBuffer {
         generation,
         capacity,
-        live_records,
         bytes,
     })
 }
@@ -282,6 +374,7 @@ fn push_binding_and_allocation(
     buffers: &mut Vec<BufferRecord>,
     patches: &mut Vec<PatchRecord>,
     buffer: &SessionBuffer,
+    live_records: u32,
 ) -> Result<(), SessionPlacementError> {
     reserve(buffers, 1)?;
     reserve(patches, 1)?;
@@ -295,7 +388,7 @@ fn push_binding_and_allocation(
         vector_width: PLACEMENT_VECTOR_WIDTH,
         strategy: BUFFER_SESSION_SHARED,
         flags: (BUFFER_USAGE_STORAGE | BUFFER_USAGE_COPY_DST) as u16,
-        live_records: buffer.live_records,
+        live_records,
         capacity_records: buffer.capacity,
         byte_length: length,
     });
@@ -523,44 +616,25 @@ fn commit_buffer(
         *committed = None;
         return;
     }
-    let target = if pending.replace {
-        let Some(target) = allocation.as_mut() else {
-            debug_assert!(false, "prepared replacement is missing its allocation");
-            return;
-        };
-        target
-    } else if let Some(buffer) = committed.as_mut() {
-        buffer
-    } else {
+    if pending.live_records == 0 && !pending.replace && committed.is_none() {
         return;
-    };
-    for patch in patches.iter().filter(|patch| {
-        patch.opcode == PATCH_WRITE
-            && patch.buffer_id == SESSION_PLACEMENT_BUFFER_ID
-            && patch.buffer_generation == target.generation
-    }) {
-        let source_start = patch.payload_start as usize;
-        let length = patch.byte_length as usize;
-        let Some(source_end) = source_start.checked_add(length) else {
-            debug_assert!(false, "prepared source range overflowed");
-            return;
-        };
-        let Some(source) = payload.get(source_start..source_end) else {
-            debug_assert!(false, "prepared source range is invalid");
-            return;
-        };
-        let destination_start = patch.destination_offset as usize;
-        let Some(destination_end) = destination_start.checked_add(length) else {
-            debug_assert!(false, "prepared destination range overflowed");
-            return;
-        };
-        let Some(destination) = target.bytes.get_mut(destination_start..destination_end) else {
-            debug_assert!(false, "prepared destination range is invalid");
-            return;
-        };
-        destination.copy_from_slice(source);
     }
-    target.live_records = pending.live_records;
+    let target = if pending.replace {
+        allocation
+            .as_mut()
+            .expect("preflight validated the pending replacement allocation")
+    } else {
+        committed
+            .as_mut()
+            .expect("preflight validated the committed placement buffer")
+    };
+    apply_writes_prevalidated(
+        &mut target.bytes,
+        SESSION_PLACEMENT_BUFFER_ID,
+        target.generation,
+        patches,
+        payload,
+    );
     if pending.replace {
         *committed = allocation.take();
     }
@@ -732,27 +806,70 @@ mod tests {
         };
         compiler.prepare(input, &capability(), 1, false).unwrap();
         compiler.commit();
-
-        compiler.prepare(input, &capability(), 2, true).unwrap();
-        let view = compiler.view();
-        assert_eq!(view.buffers.len(), 1);
-        assert_eq!(view.buffers[0].generation, 1);
-        assert_eq!(view.patches[0].opcode, PATCH_ALLOCATE_OR_RESIZE);
+        let committed = compiler
+            .buffer_bytes(SESSION_PLACEMENT_BUFFER_ID)
+            .unwrap()
+            .to_vec();
+        compiler.prepare_reuse().unwrap();
+        assert!(compiler.view().buffers.is_empty());
+        assert!(compiler.view().patches.is_empty());
+        compiler.preflight_commit().unwrap();
+        compiler.commit();
         assert_eq!(
-            view.patches
-                .iter()
-                .filter(|patch| patch.opcode == PATCH_WRITE)
-                .count(),
-            1,
+            compiler.buffer_bytes(SESSION_PLACEMENT_BUFFER_ID),
+            Some(committed.as_slice())
         );
-        let write = view
-            .patches
-            .iter()
-            .find(|patch| patch.opcode == PATCH_WRITE)
-            .unwrap();
-        assert_eq!(write.destination_offset, 0);
-        assert_eq!(write.byte_length, 24);
-        assert!(view.retirements.is_empty());
+
+        for (publication_generation, input, write_bytes) in [
+            (2, input, 24),
+            (
+                3,
+                SessionPlacementInput {
+                    placement_capacity: 7,
+                    ..input
+                },
+                24,
+            ),
+            (
+                4,
+                SessionPlacementInput {
+                    placement_rows: &input.placement_rows[..1],
+                    placement_capacity: 2,
+                },
+                8,
+            ),
+        ] {
+            compiler
+                .prepare(input, &capability(), publication_generation, true)
+                .unwrap();
+            let view = compiler.view();
+            assert_eq!(view.buffers.len(), 1);
+            assert_eq!(view.buffers[0].generation, 1);
+            assert_eq!(view.buffers[0].capacity_records, MIN_CAPACITY);
+            assert_eq!(view.buffers[0].live_records, input.placement_capacity);
+            assert_eq!(view.patches[0].opcode, PATCH_ALLOCATE_OR_RESIZE);
+            assert_eq!(
+                view.patches
+                    .iter()
+                    .filter(|patch| patch.opcode == PATCH_WRITE)
+                    .count(),
+                1,
+            );
+            let write = view
+                .patches
+                .iter()
+                .find(|patch| patch.opcode == PATCH_WRITE)
+                .unwrap();
+            assert_eq!(write.destination_offset, 0);
+            assert_eq!(write.byte_length, write_bytes);
+            assert!(view.retirements.is_empty());
+            compiler.preflight_commit().unwrap();
+            compiler.commit();
+            assert_eq!(
+                compiler.buffer_bytes(SESSION_PLACEMENT_BUFFER_ID),
+                Some(committed.as_slice())
+            );
+        }
     }
 
     #[test]

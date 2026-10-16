@@ -36,6 +36,8 @@ pub struct UnicodeAnalysis {
     candidate_tags: Vec<u32>,
     candidate_scratch: Vec<u32>,
     script_items: Vec<ScriptItem>,
+    #[cfg(test)]
+    analysis_count: usize,
 }
 
 impl UnicodeAnalysis {
@@ -58,6 +60,10 @@ impl UnicodeAnalysis {
     }
 
     pub fn analyze(&mut self, text: &[u16]) -> Result<(), UnicodeError> {
+        #[cfg(test)]
+        {
+            self.analysis_count += 1;
+        }
         self.clear();
         self.reserve(text.len())?;
         encode_utf16(text, &mut self.utf8)?;
@@ -75,6 +81,11 @@ impl UnicodeAnalysis {
 
     pub fn script_items(&self) -> &[ScriptItem] {
         &self.script_items
+    }
+
+    #[cfg(test)]
+    pub(crate) fn analysis_count(&self) -> usize {
+        self.analysis_count
     }
 
     pub fn line_breaks(&self) -> &[LineBreak] {

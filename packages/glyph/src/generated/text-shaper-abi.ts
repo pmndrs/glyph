@@ -62,6 +62,7 @@ export const textShaperAbi = {
       "end": 3,
       "start": 1
     },
+    "borrowedGlyphCapacity": 32,
     "bufferStrategies": {
       "orderedDirect": 1,
       "sessionShared": 3
@@ -164,7 +165,8 @@ export const textShaperAbi = {
     },
     "resultFlags": {
       "checkpoint": 1,
-      "retainedHostTopology": 2
+      "retainedHostTopology": 2,
+      "rootInvalidated": 4
     },
     "retirementKinds": {
       "buffer": 2,
@@ -268,7 +270,7 @@ export const textShaperAbi = {
   },
   "functions": {
     "allocate": "pmndrs_glyph_shaper_alloc",
-    "borrowParagraphGlyph": "pmndrs_glyph_engine_borrow_paragraph_glyph",
+    "borrowParagraphGlyphs": "pmndrs_glyph_engine_borrow_paragraph_glyphs",
     "borrowParagraphLayout": "pmndrs_glyph_engine_borrow_paragraph_layout",
     "codecCount": "pmndrs_glyph_engine_codec_count",
     "copyDecorations": "pmndrs_glyph_engine_copy_decorations",
@@ -296,6 +298,7 @@ export const textShaperAbi = {
     "requestPointer": "pmndrs_glyph_engine_request_ptr",
     "reserveRoot": "pmndrs_glyph_engine_reserve_root",
     "reserveUpdateBatch": "pmndrs_glyph_engine_reserve_update_batch",
+    "resetRoot": "pmndrs_glyph_engine_reset_root",
     "retainedFontBytes": "pmndrs_glyph_shaper_retained_font_bytes",
     "rootCount": "pmndrs_glyph_engine_root_count",
     "shapePlanCount": "pmndrs_glyph_shaper_shape_plan_count",

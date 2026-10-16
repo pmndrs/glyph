@@ -5,6 +5,8 @@ import { compileCodec, createCodecProgram, id } from '../../dist/config/codec.js
 import { selectCodecCapabilitySet } from '../../dist/internal/codec-capability-selection.js';
 import { assertGlyphId, GlyphIdScope, permanentGlyphId } from '../../dist/internal/glyph-id.js';
 import { textShaperAbi } from '../../dist/generated/text-shaper-abi.js';
+import { renderWireId } from '../../dist/internal/render-id.js';
+import { seededRandom } from '../support/text-mutation-lanes.mjs';
 
 const opcodes = textShaperAbi.codec.opcodes;
 
@@ -48,6 +50,25 @@ test('semantic ID helpers are stable and namespace program variants', () => {
   assert.equal(id.program('pmndrs.msdf', 'three'), MSDF_PROGRAM_ID);
   assert.notEqual(MSDF_PROGRAM_ID, MSDF_SHADOW_PROGRAM_ID);
   assert.notEqual(MSDF_TECHNIQUE_ID, MSDF_PROGRAM_ID);
+});
+
+test('wire identities preserve UTF-8 hashes across scratch boundaries and malformed surrogates', () => {
+  assert.equal(renderWireId('hello'), 0x4f9f2cab);
+  const random = seededRandom(0x17d1d);
+  const identities = ['é', '😀', 'a'.repeat(254) + '😀', 'a'.repeat(255) + 'é', '\ud800', '\udfff', '😀'.repeat(257)];
+  for (let iteration = 0; iteration < 128; iteration++) {
+    identities.push(
+      Array.from({ length: 1 + Math.floor(random() * 1024) }, () =>
+        String.fromCharCode(Math.floor(random() * 0x10000)),
+      ).join(''),
+    );
+  }
+  for (const identity of identities) {
+    let expected = 0x811c9dc5;
+    for (const byte of Buffer.from(identity, 'utf8')) expected = Math.imul(expected ^ byte, 0x01000193) >>> 0;
+    if (expected === 0) assert.throws(() => renderWireId(identity), /reserved zero/);
+    else assert.equal(renderWireId(identity), expected);
+  }
 });
 
 test('package-owned host IDs are stable, nonzero, domain-separated, and collision-checked', () => {

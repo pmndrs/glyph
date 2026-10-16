@@ -328,18 +328,16 @@ test('localized TypeGPU edits retain GPU buffers and discard leaves accepted byt
     text.update({ text: 'e' });
     glyph.shape();
     const recoveredResize = host.projectedBuffers.at(-1);
-    for (const accepted of rejectedResize.retirements) {
-      assert.equal(
-        recoveredResize.retirements.filter((buffer) => buffer === accepted).length,
-        1,
-        'retry retires each previous accepted binding exactly once',
-      );
-    }
     assert.ok(
       rejectedResize.updates.every((buffer) => !recoveredResize.retirements.includes(buffer)),
       'rejected candidate bindings never enter accepted retirement ownership',
     );
     assert.deepEqual(renderedState(snapshot()), renderedState(after));
+    assert.equal(
+      host.allocations.size,
+      retainedAllocations,
+      'accepted checkpoint recovery replaces buffers without leaking the rejected generation',
+    );
     host.uploads.length = 0;
     glyph.shape();
     assert.equal(host.uploads.length, 0, 'idle shaping uploads nothing');

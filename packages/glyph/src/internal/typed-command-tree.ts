@@ -498,7 +498,8 @@ export class TypedCommandTreeMapper {
 
   retireBuffer(state: TypedSourceState, id: number, generation: number): TypedBuffer {
     const buffer = this.buffer(id, generation);
-    state.bufferOverlay.set(id, null);
+    const current = state.bufferOverlay.has(id) ? state.bufferOverlay.get(id) : this.#currentBuffers.get(id);
+    if (current === buffer) state.bufferOverlay.set(id, null);
     return buffer;
   }
 

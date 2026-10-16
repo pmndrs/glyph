@@ -1,3 +1,6 @@
+/// Maximum records returned by one borrowed inspection call; scratch is owned by the Wasm state.
+pub(crate) const BORROWED_GLYPH_CAPACITY: usize = 32;
+
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub(crate) struct BorrowedLayoutDescriptor {

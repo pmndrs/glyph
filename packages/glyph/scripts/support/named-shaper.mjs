@@ -37,12 +37,12 @@ export function authenticateNamedShaper(release, candidate) {
   const functions = functionNames(names[0].payload);
   if (functions.length === 0) throw new Error('Named shaper has no function names');
   const functionSection = releaseSections.find((section) => section.id === 3);
+  const importedFunctionCount = WebAssembly.Module.imports(module).filter((entry) => entry.kind === 'function').length;
   const functionCount =
-    WebAssembly.Module.imports(module).filter((entry) => entry.kind === 'function').length +
-    (functionSection === undefined ? 0 : cursor(functionSection.payload).u32());
+    importedFunctionCount + (functionSection === undefined ? 0 : cursor(functionSection.payload).u32());
   if (functions.some((entry) => entry.functionIndex >= functionCount))
     throw new Error('Function name index out of range');
-  return { executableSha256: sha256(original), functions, nameSection: names[0].bytes };
+  return { executableSha256: sha256(original), functions, importedFunctionCount, nameSection: names[0].bytes };
 }
 
 export function deriveNamedShaper(release, candidate) {
@@ -125,7 +125,7 @@ function functionNames(payload) {
   return functions;
 }
 
-function cursor(bytes) {
+export function cursor(bytes) {
   return {
     offset: 0,
     byte() {
