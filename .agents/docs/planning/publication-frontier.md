@@ -16,7 +16,7 @@ sources:
     title: Archived validation checkpoints and evidence
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-16T17:16:49Z'
+  at: '2026-10-16T19:33:18Z'
 ---
 
 # Publication frontier checklist
@@ -85,7 +85,7 @@ One exact-current 1,024 bulk-write scene-publication capture ran (10 warmups/80 
 
 Existing and extended native counts rule out duplicated publication layout/query serialization and dense clean-gap suffix copies in those outlined fixtures. The indexed oracle confirms required shape/position work and full-mask identity broadening, but its outlined binding cannot prove bitmap input/upload waste. Source plus exclusive CPU did not admit a material deletion; the reviewed transport cleanup’s two entire target functions provide only a 0.637 ms/frame upper bound before retaining required work, so it stays deferred under the larger-wave cadence.
 
-**Next reviewable discriminator, not executed:** a same-source/same-toolchain controlled ablation of only Binaryen’s one-caller inline policy, with package/named authentication, cold-output correctness and size accounting, then one frozen candidate’s consolidated main-and-0.1.0 acceptance only if a material wave is selected. This requires reopening the explicit compiler-policy exclusion above; do not silently run it or interpret the different-policy main capture as causality. All seven fixed families and final memory/API/ABI/peer/lifetime/browser/hero gates remain open. No release, tag, demo merge or stack merge.
+**Approved discriminator completed — rejected:** the user reopened only the same-input Binaryen one-caller policy ablation. Control re-optimization byte-reproduced the original release; treatment changed only the shaper Wasm among 1,217 members, with executable-authenticated names. One four-block unprofiled comparison: control/treatment p50 21.841/21.431 ms, p95 24.315/23.951 ms, p=0.343, displayed CI −8.1% to +4.0%. The 0.410 ms / 1.88% change fails the predeclared 1 ms and 5% admission minima; block clock-calibration drift also exceeds 5%. All 1,048 treatment Node tests pass. Same-method Wasm gzip grows 5,419 bytes despite 4,308 raw bytes removed. Production policy stays unchanged; no repeat or extra CPU capture. [Portable receipt](../../../benches/reports/held-ropes-local-2026-10-16/optimizer-ablation.json). Fresh scoped Sol High review of retained shape→flow→position and gather found no redundant pass across prepared consumers; the two cluster passes also exist in main. No source wave is admitted. Next potential admission needs actual bitmap identity/field/consumer proof before a deletion; outlined counters cannot establish upload waste. All seven families and final two-baseline, memory/API/ABI/peer/lifetime/browser/hero gates remain open. Keep the real stack held and unmerged.
 
 ### Predecessor checkpoint — reconciled held handoff, 16 October 2026 UTC
 
