@@ -1,7 +1,7 @@
 /* @workflow {
   "name": "benchmark:edit-sized-publication-profile",
   "summary": "Profile one installed-package edit-sized publication lane, optionally with a named shaper Wasm artifact.",
-  "requirements": "One packed @pmndrs/glyph .tgz artifact and the authenticated Labs font fixtures. Accepts --artifact, --output, --case, --boundary, --count, --position, --iterations, --warmups, and optional --wasm. One-label, prepared-read and bulk-write cases support setter+read preparation or setter+read+publication. Prepared-read accepts 100 or 1000 labels; interleaved-read requires publication.",
+  "requirements": "One packed @pmndrs/glyph .tgz artifact and the authenticated Labs font fixtures. Accepts --artifact, --output, --case, --boundary, --count, --position, --iterations, --warmups, and optional --wasm. The same-length, same-value, and overwrite-before-publication cases support setter-only, setter+read preparation, or setter+read+publication boundaries. Setter-only profiles exclude reads and publications from timing; parity reads run afterward. Same-value isolates no-op setters; overwrite-before-publication performs two edits. Prepared-read accepts 100 or 1000 labels; interleaved-read requires publication. Bulk-write alternates the short alpha/bravo labels across --count labels and supports preparation or publication boundaries; --reads none|measure selects setter-only versus setter+measure-read behavior (default measure), and --publication-path engine|scene selects publication routing (default engine). Post-timing correctness reads are counted separately. Fredoka-edit and inter-edit reproduce their long typing corpora at --count 1 and support all three boundaries. Font-size matches the 22k-glyph Labs publication callback at --count 1, with setter or publication boundaries only; warmup callbacks continue the same font-size progression before timed callbacks, not the Labs warmup schedule. Multi-owner-balanced and multi-owner-unbalanced share the Labs three-separated-owner publisher at 100 or 1000 labels and require the publication boundary.",
   "writes": "A CPU profile, summary, and artifact manifest under --output (default .cache/edit-sized-publication-profile)."
 } */
 import { createHash } from 'node:crypto';
@@ -70,6 +70,10 @@ try {
       GLYPH_EDIT_PROFILE_POSITION: options.position,
       GLYPH_EDIT_PROFILE_WARMUPS: String(options.warmups),
       GLYPH_LABS_PACKAGE_ROOT: packageRoot,
+      ...(options.reads === undefined ? {} : { GLYPH_EDIT_PROFILE_READS: options.reads }),
+      ...(options.publicationPath === undefined
+        ? {}
+        : { GLYPH_EDIT_PROFILE_PUBLICATION_PATH: options.publicationPath }),
     },
   );
   const artifactBytes = await readFile(artifact);
@@ -96,19 +100,28 @@ try {
 
 interface Options {
   readonly artifact: string;
-  readonly boundary: 'preparation' | 'publication';
+  readonly boundary: 'setter' | 'preparation' | 'publication';
   readonly count: number;
   readonly iterations: number;
   readonly output: string;
   readonly position: 'first' | 'last';
+  readonly reads?: 'none' | 'measure';
+  readonly publicationPath?: 'engine' | 'scene';
   readonly profileCase:
     | 'same-length'
+    | 'same-value'
+    | 'overwrite-before-publication'
     | 'length-changing'
     | 'color-only'
     | 'interleaved-read'
     | 'prepared-read'
     | 'bulk-write'
-    | 'width-reflow';
+    | 'fredoka-edit'
+    | 'inter-edit'
+    | 'width-reflow'
+    | 'font-size'
+    | 'multi-owner-balanced'
+    | 'multi-owner-unbalanced';
   readonly warmups: number;
   readonly wasm?: string;
 }
@@ -129,30 +142,77 @@ function parseOptions(arguments_: readonly string[]): Options {
   if (
     ![
       'same-length',
+      'same-value',
+      'overwrite-before-publication',
       'length-changing',
       'color-only',
       'interleaved-read',
       'prepared-read',
       'bulk-write',
+      'fredoka-edit',
+      'inter-edit',
       'width-reflow',
+      'font-size',
+      'multi-owner-balanced',
+      'multi-owner-unbalanced',
     ].includes(profileCase)
   ) {
     throw new Error(`Unknown --case: ${profileCase}`);
   }
   const position = values.get('position') ?? 'first';
   if (position !== 'first' && position !== 'last') throw new Error(`Unknown --position: ${position}`);
+  const reads = values.get('reads');
+  if (reads !== undefined && reads !== 'none' && reads !== 'measure') {
+    throw new Error('--reads must be none or measure');
+  }
+  if (reads !== undefined && profileCase !== 'bulk-write') {
+    throw new Error('--reads only applies to --case bulk-write');
+  }
+  const publicationPath = values.get('publication-path');
+  if (publicationPath !== undefined && publicationPath !== 'engine' && publicationPath !== 'scene') {
+    throw new Error('--publication-path must be engine or scene');
+  }
+  if (publicationPath !== undefined && profileCase !== 'bulk-write') {
+    throw new Error('--publication-path only applies to --case bulk-write');
+  }
   const boundary = values.get('boundary') ?? 'publication';
-  if (boundary !== 'preparation' && boundary !== 'publication') throw new Error(`Unknown --boundary: ${boundary}`);
+  if (boundary !== 'setter' && boundary !== 'preparation' && boundary !== 'publication') {
+    throw new Error(`Unknown --boundary: ${boundary}`);
+  }
+  if (
+    boundary === 'setter' &&
+    !['same-length', 'same-value', 'overwrite-before-publication', 'fredoka-edit', 'inter-edit', 'font-size'].includes(
+      profileCase,
+    )
+  ) {
+    throw new Error(
+      '--boundary setter supports same-length, same-value, overwrite-before-publication, fredoka-edit, inter-edit, or font-size',
+    );
+  }
   if (boundary === 'preparation' && profileCase === 'interleaved-read') {
     throw new Error('--case interleaved-read requires --boundary publication');
   }
-  const count = positiveInteger(values.get('count') ?? (profileCase === 'width-reflow' ? '1' : '1000'), 'count');
+  if (boundary === 'preparation' && profileCase === 'font-size') {
+    throw new Error('--case font-size has no preparation read; use --boundary setter or publication');
+  }
+  const count = positiveInteger(
+    values.get('count') ??
+      (['width-reflow', 'fredoka-edit', 'inter-edit', 'font-size'].includes(profileCase) ? '1' : '1000'),
+    'count',
+  );
   if (profileCase === 'width-reflow' && count !== 1) throw new RangeError('--case width-reflow requires --count 1');
+  if (profileCase === 'font-size' && count !== 1) throw new RangeError('--case font-size requires --count 1');
+  if (['fredoka-edit', 'inter-edit'].includes(profileCase) && count !== 1) {
+    throw new RangeError(`--case ${profileCase} requires --count 1`);
+  }
   if (profileCase === 'prepared-read' && count !== 100 && count !== 1000) {
     throw new RangeError('--case prepared-read requires --count 100 or 1000');
   }
   if (profileCase === 'interleaved-read' && count < 100) {
     throw new RangeError('--case interleaved-read requires at least 100 labels');
+  }
+  if (profileCase.startsWith('multi-owner-') && (boundary !== 'publication' || (count !== 100 && count !== 1000))) {
+    throw new RangeError('Multi-owner profiling requires publication and 100 or 1000 labels');
   }
   return {
     artifact: artifactOption,
@@ -163,6 +223,8 @@ function parseOptions(arguments_: readonly string[]): Options {
     position,
     profileCase: profileCase as Options['profileCase'],
     warmups: positiveInteger(values.get('warmups') ?? '10', 'warmups'),
+    ...(profileCase === 'bulk-write' ? { reads: reads ?? 'measure' } : {}),
+    ...(profileCase === 'bulk-write' ? { publicationPath: publicationPath ?? 'engine' } : {}),
     ...(values.has('wasm') ? { wasm: values.get('wasm')! } : {}),
   };
 }

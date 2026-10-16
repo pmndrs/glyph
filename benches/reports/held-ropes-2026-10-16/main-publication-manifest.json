@@ -1,0 +1,24 @@
+{
+  "generatedAt": "2026-10-15T04:15:51.915Z",
+  "labsVersion": "0.9.0",
+  "harnessDigest": "101fbfefd3a35b0c08d6417182128d107e696987baf484739b98b2fe79e769a1",
+  "blocks": 4,
+  "suite": "publication",
+  "baseline": {
+    "requested": "/Users/tjw/Documents/Codex/2026-07-22/referenced-chatgpt-conversation-this-is-untrusted/pmndrs-text-font-baker-core/.cache/publication-range-spike/.cache/main-d7ffcbbd-ci-package/pmndrs-glyph-0.1.0.tgz",
+    "version": "0.1.0",
+    "sha256": "3c6edf621d472ef08115cf69699ec2867be95898c4d56f7b15c19bc43dc35a42"
+  },
+  "candidate": {
+    "requested": "/Users/tjw/Documents/Codex/2026-07-22/referenced-chatgpt-conversation-this-is-untrusted/pmndrs-text-font-baker-core/.cache/publication-range-spike/.cache/retained-prepare-publish-wave2/order-ownership-wave/rope-tail-capacity-wave/owned-inspection-range-wave/checkpoint-publication/attempt1/package/pmndrs-glyph-0.1.0.tgz",
+    "version": "0.1.0",
+    "sha256": "d6b0f5a044832d6df1b9d5705706ecf2d2337d17ed89e3f6efe8c4ddea2e20f6"
+  },
+  "comparison": "comparison.txt",
+  "notComparable": {
+    "baselineCheckFailures": [],
+    "timingModeMismatches": [
+      "batching.bench.ts / 10 labels no-op scene traversal / 10 labels no-op scene traversal: baseline batched, candidate single-call"
+    ]
+  }
+}

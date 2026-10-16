@@ -259,12 +259,21 @@ sources:
   - id: labs-result-validator
     resource: ../../../benches/scripts/support/labs-result.mts
     title: Saved Labs result failure validator
+  - id: width-layout-inspection
+    resource: ../../../benches/labs/package/layout.bench.ts
+    title: Exact measurement and owned-inspection layout workloads
+  - id: cold-label-borrow
+    resource: ../../../benches/labs/package/cold.bench.ts
+    title: Cold mount and first borrowed-glyph Labs workloads
+  - id: cpu-profile-summary
+    resource: ../../../benches/scripts/summarize-cpu-profile.mts
+    title: Saved V8 CPU attribution workflow
   - id: raster-technique-compare-probe
     resource: ../../../benches/vitexec/raster-technique-compare.probe.ts
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-13T18:42:06Z'
+  at: '2026-10-16T15:11:09Z'
 ---
 
 # Package reference: `@pmndrs/glyph-benchmarks`
@@ -291,9 +300,71 @@ failed probes also capture the page and print recent browser errors without repl
 
 The optional `--wasm` profile override must contain function names and exactly match the installed artifact's ordered non-custom Wasm sections. Authentication happens before executing the profile, and its manifest records both Wasm hashes, the executable-section digest and function-index names. Produce a verified override with `glyph:shaper-profile-artifact --artifact <frozen.tgz>`; this workflow shares production optimization settings and writes only diagnostic artifacts. Once executable equivalence is established, the final function-index map can also annotate an existing numeric CPU profile without rerunning the workload.
 
-The draft integration preserves current-main width-reflow profiling and adds bulk-write attribution to the
-same installed-package profiling workflow. Preparation and publication are separate selectable boundaries;
-the candidate must pass cold-output controls before its elapsed results are compared with frozen main.
+The existing cold 100-label mount-and-borrow workload has the unique `@cold-borrow` tag. Select it with
+`benchmark:labs-package --profile-tag @cold-borrow --cpu-profile-output <directory>` plus the frozen candidate and
+output arguments. This profiles the actual cold callback, including mount, first reads and disposal; it is not a
+steady-state edit or comparative timing run. The tag changes discovery only.
+The `@width-inspection-publication` tag similarly selects the existing width-set, `glyphs()`, scene-publication
+callback. Keep this distinct from the `width-reflow` diagnostic callback, which reads `measure()` instead.
+
+`benchmark:shaper-live-memory` authenticates a `glyph:shaper-memory-artifact` manifest and either an installed package
+or a frozen archive in a temporary consumer. The diagnostic feature wraps the same Talc allocator; feature-off bytes
+must match the shipping shaper. Dense, sparse, count-changing and independent-copy phases report successful allocator
+calls, requested live/peak bytes and Wasm pages separately, with semantic checks and input hashes before and after.
+These are memory observations, not timings. They exclude physical fragmentation, transient internal realloc peaks,
+JavaScript, GPU storage and separate font-decoder instances; the diagnostic feature is absent from normal builds.
+
+The prepared-operation Labs matrix uses one changed first label among1/100/1000 retained labels. Setter-only,
+set+measure and set+measure+scene-publication are separate complete operations; same-value assignments and two writes
+before one publication expose eager preparation costs. Setter-only targets remain unqueried during timing. Cold-root
+measurement oracles and unchanged-sibling assertions run outside timing. The cold oracle uses the same initial
+published text and read-demand state, distinguishing cached rendered ink bounds from pending reads. Labs passes its
+first untimed result to the generator. `benchmark:prepared-operations-check --package-root <installed Glyph root>`
+drives that same generator for two and three invocations without timing; main, candidate andpublished0.1.0 each pass30
+cases. Plain `measure()` may omit ink bounds even after a no-op publication; every present box is checked against
+the published cold oracle, and all remaining paragraph/line fields are checked exactly.
+Independent split also covers1/100/1000.
+
+`benchmark:cpu-profile-summary --profile <capture> --output <report.md>` reports self and inclusive sampled time
+from saved Node/Chrome captures. Frames retain URL, name and raw V8 location; recursive occurrences count once per
+sampled stack. Different inclusive rows overlap and are not elapsed latency or FPS. Optional `--manifest` verifies
+named shaper bytes and their function map; numeric names resolve only for the explicitly associated `--wasm-url`.
+Optional `--artifact <tgz>` requires its SHA-256 to match the manifest, then reads that archive's source maps without
+executing package code. Only installed `/node_modules/@pmndrs/glyph/dist/` URLs receive mapped source file/line/column;
+raw function names and coordinates stay intact, and unrelated dist paths and unmapped/Wasm frames are preserved.
+The benchmark dev dependency is the already-pinned trace-mapping library; runtime dependencies are unchanged.
+Enclosing TypeScript member labels are omitted because the pinned compiler exposes no public standalone parser.
+Browser module association still needs separate capture provenance; a name map alone does not identify a module.
+
+Saved-profile summaries also recompute exclusive stage buckets from the raw samples. Browser HTTPS
+URLs ending in a `.wasm` pathname are Wasm; query strings and `.wasm.js` names do not establish that
+origin. Workspace `/packages/glyph/src/` and `/packages/glyph/dist/` paths identify Glyph JavaScript
+without a checkout-specific prefix. Eight focused tests and static checks pass; corrected summaries
+for eight saved Fjord profiles preserve all hotspot tables byte-for-byte. No profile was recaptured. Module origin takes precedence
+over function spelling: Binaryen and exported Wasm frames remain Wasm, authenticated numeric function names are
+classified after name resolution, Glyph JavaScript is separate from benchmark harness and external JavaScript, and
+Node/inspector frames are host runtime. `js-to-wasm` bridge samples remain a separate unattributed category; they do
+not claim work for a module whose executable sections were not authenticated. For the frozen `c42e70a6` bulk-write
+capture (1,000 labels, 20 iterations, 5 warmups), preparation sampled 411,667 µs: 153,377 other Wasm, 70,288 shaping,
+139,001 Glyph JavaScript, 4,542 allocation, and 44,459 host runtime. Publication sampled 505,375 µs: 164,582 other
+Wasm, 64,960 shaping, 27,208 gather, 8,999 render-plan, 9,084 allocation, 176,335 Glyph JavaScript, 3,000 external
+JavaScript, 1,541 benchmark harness, and 49,666 host runtime. Host runtime includes `node:inspector`'s `post` frame
+(35,333 µs preparation; 37,459 µs publication), so it is profiling overhead rather than package program cost. The
+publication profile's `wasm://wasm/00aa4bda` appears only as an inclusive JavaScript-to-Wasm transition and has no
+self samples; it remains unauthenticated and unattributed. Corrected saved summaries are under
+`.cache/retained-prepare-publish-wave1/planner-tail-prefix-profile-{preparation,publication}/cpu-summary-classified.md`.
+
+The installed-package profile also supports a bulk-write diagnostic with `--reads none|measure` and
+`--publication-path engine|scene`. The defaults preserve the existing measure-read and engine-publication
+workload; the no-read scene route isolates 1,024 setters from later scene publication, with correctness reads
+counted after profiling. Its 2026-10-13 candidate and pinned-main captures are diagnostic, not paired Labs
+evidence. Fixture setup publishes once before timing: the candidate leaves summaries unrequested, while the
+main artifact materializes measurements for newly pending labels during that initial publication. This means
+the timed setter loops begin from different measurement-cache states. A follow-up candidate capture uses a
+named shaper whose executable digest matches the packaged Wasm, separating shaping, gather, and render-plan
+samples; its profiler summary keeps the unrelated Wasm bridge unattributed. Exact source attribution, operation counts,
+sampled stage totals, and the 20-sample p99 limitation are recorded in
+`.cache/retained-prepare-publish-wave1/planner-demand-no-read-attribution.md`.
 
 ## Approved performance lanes
 
@@ -318,7 +389,16 @@ npm canary into isolated temporary consumers, then runs both through `@pmndrs/la
 Those consumers install the optional Three and TypeGPU peers exercised by the package workloads instead of relying on
 the benchmark workspace's dependency graph.
 The retained report includes native Labs JSON, comparison output, exact package manifests and lockfiles, and the candidate
-tarball SHA-256.
+tarball SHA-256. Saved candidate reuse checks artifact identity, environment and unchanged timing inputs. The two
+standalone inspector entry points are excluded from harness drift detection: Labs discovers `*.bench.ts`, and these
+inspectors are not benchmark dependencies. Changed benchmarks, shared fixtures, configuration and lockfiles still
+reject reuse; unknown profiling modules do too.
+
+New saved reports fingerprint actual benchmark inputs, including dirty tracked files, untracked helpers, hydrated
+fixtures and tracked deletions. The digest is checked again after timing and on saved-candidate reuse. Legacy reports
+retain the commit-based guard. Framework workloads support installed versions without the retired private span helper
+through the existing authored-span fallback; the obsolete candidate-only assertion is removed. `benchmark:static-check`
+runs the shared benchmark static gates without building or timing, with optional `--format`.
 
 The runner also renders the comparison as Markdown (`summary.md` under the output directory, appended to
 `$GITHUB_STEP_SUMMARY` when set): counts; a forest plot in a `diff` block, with each bench's Δ p50 inside its 95%
@@ -349,12 +429,19 @@ published for that same push would otherwise be installed as its own baseline. M
 choice and compares with the canary. Available focused suites are `layout`, `measure`, `glyphs`, `publication`, `spans`,
 `batch`, `style`, `reflow`, `stress`, `cold`, and `edit`; `spans` isolates the 1,000-label trailing-span mutation, while
 `edit` types one character into a long Inter or Fredoka paragraph and measures it or publishes a frame.
-The `assignment` suite isolates one 18,432-unit paragraph with 8,192 alternating paint spans. It compares unchanged,
+The `assignment` suite isolates one 18,432-unit paragraph with 8,192 alternating paint spans. The same declaration helper now runs both Inter and authenticated DotGothic16 fonts; the six original names remain unchanged and six monospaced rows are added. Font loading and scene input generation remain outside timed full assignments. The mono fixture declares both authenticated strikes16/32; partial16-only configuration does not match its baked raster key. It compares unchanged,
 scattered-character, and broad-character full assignments in paired setter-plus-immediate-measurement and
 setter-plus-scene-publication cases. Both include public `Text.set()` normalization, request encoding and synchronous
 Rust preparation. Authored inputs keep scene generation outside timing; untimed checks verify text and positive glyph
 count for preparation, and rendered glyph semantics plus draw glyph count for publication.
 These checks are benchmark sanity checks, while independent warm-versus-cold integration tests own correctness evidence.
+Two additional `@material-lease` scattered-assignment cases reuse that same executor with one explicit Three material
+shared by all8,192spans. They isolate repeated binding ownership in setter/measurement and setter/publication boundaries.
+Desired values are authored outside timing; both cases compare final observable output against independently mounted
+cold paragraphs. The original12case names and inputs remain unchanged. Four-block7f→df5 comparison reports2faster/
+12neutral/0skipped, with no correctness mismatches; candidate18.5%clock drift and9.3%between-run difference are visible
+in the retained report. New shared-material rows improve by7.88ms preparation and6.65ms publication; this does not
+establish release-wide parity or frame rate.
 `full` does not run browser observations, native/Worker profiles, or correctness and release gates.
 
 The `publication` suite includes 1,000 retained labels receiving equivalent style, layout, and constraint snapshots.
@@ -868,7 +955,14 @@ timed mutation. Paired immediate-measurement cases perform the same 100 assignme
 without explicit renderer publication, retaining cold measurement oracles and untouched-label checks. Each cold oracle
 performs the same publication boundary as its timed case, because publication can add positioned ink data. Full edited
 measurements are compared structurally rather than relying on JSON property order. These semantic
-reads are distinct from `measureGlyphs()`, which describes currently displayed glyphs.
+reads are distinct from the placement columns returned by `measureGlyphs()`.
+The focused `multi-owner` suite changes three separated labels before one publication in 100- and 1,000-label roots.
+Its eight cases pair balanced/unbalanced grow-shrink edits and a space transition with engine and scene publication.
+Cold measurement comparisons and unchanged-label glyph snapshots run outside timing. It uses the ordinary public
+assignment and publication APIs and is selectable locally, by `benchmark:multi-owner`, or manual CI dispatch.
+`measureGlyphs()` queries prepared desired layout independently of renderer publication on the retained pipeline;
+the suite inspects it after publication for parity with the older controls.
+
 `benchmark:edit-sized-publication-profile` installs one packed artifact
 and optionally substitutes a named shaper Wasm, then emits a CPU profile, timing summary, and manifest for shaping,
 gather, render-plan, serialization, allocation, host-JavaScript, and other-Wasm attribution.
@@ -876,11 +970,25 @@ Its `--case prepared-read --count 100|1000 --boundary preparation|publication` p
 assignments and immediate semantic measurements as the paired Labs cases. Both boundaries use identical edited strings;
 only the publication boundary calls `glyph.shape()` after each assignment. Cold measurement oracles and untouched-label
 checks run outside the sampled loop. Existing profile cases retain their explicit-publication behavior.
+The `multi-owner-balanced` and `multi-owner-unbalanced` profiles use the same three-separated-owner publisher as Labs, with `--count 100|1000 --boundary publication`. Each iteration performs three assignments and one engine publication, without measurement reads. Untimed cold measurements validate the final three labels. These profiles attribute the exact workload; they do not replace elapsed A/B or scene-boundary validation.
+The `inter-edit` and `fredoka-edit` profiles share the typing benchmark's matching corpus and font fixture, alternately
+inserting/removing one midpoint character at width 600. Both use one typing loop and a fresh final-text measurement
+oracle outside profiling. Use `--count 1 --boundary preparation` for assignment plus measurement; `setter` excludes
+reads and `publication` adds explicit rendering. Preparation excludes renderer publication.
 The `width-reflow` profile uses the existing 22k-glyph paragraph fixture and the Labs width sequence
 `420 + iteration / 64`, with one paragraph attached to a real Scene. Preparation reads `measure().glyphCount`;
 publication additionally traverses the Scene, including its private publication root. The publication lane asserts
 committed output before cold-control queries. A fresh paragraph receives the final width and equivalent read demands,
 including optional ink inspection, before complete measurements are compared outside the sampled loop.
+The `font-size` profile mirrors the 22k-glyph Labs font-size publication callback: one style assignment at
+`12 + iteration / 256`, then Scene traversal and the existing error check, with no timed measurement. It requires
+`--count 1 --boundary setter|publication`; preparation is rejected because it would introduce a read absent from that
+workload. Warmups continue the same progression; the report retains their count, final font size and ordered timed
+callback durations. It does not claim the Labs warmup schedule is identical. After capture, a cold paragraph at the
+final size is published and both owners demand glyph metadata before full measurement and placement comparison.
+Cross-mount stable IDs, font handles and the outline callback are excluded from placement equality; positioned columns
+remain checked. This profile attributes a saved tail concern; absence of that tail in a diagnostic capture does not
+clear the earlier full-suite result.
 A standalone TextGroup matrix traversal is not a semantic publication fence; legacy rows using only that traversal
 must not be interpreted as publication performance. Profiles are attribution evidence, not statistical release comparisons.
 The common-operation and 22k-paragraph publication cases now mount through the shared `createPublishedParagraph`
@@ -908,15 +1016,15 @@ semantic result afterward with package-owned counts, encoded bytes,
 borrowed glyph checksums, or draw topology. Compatibility probes and old-canary adapters run once during fixture setup;
 candidate-only helpers are required before timing begins.
 
-| Need                                  | Command                                                                                                                                          |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Common installed-package signal       | `pnpm scripts run benchmark:labs-package -- --candidate <package-or-tgz>`                                                                        |
-| Focused/full installed-package signal | add `--suite layout`, `measure`, `glyphs`, `publication`, `spans`, `batch`, `style`, `reflow`, `stress`, `cold`, `edit`, `edit-sized`, or `full` |
-| Edit-sized stage profile              | `pnpm scripts run benchmark:edit-sized-publication-profile -- --artifact <tgz> [--wasm <named-wasm>] --case <case>`                              |
-| Raw retained-engine signal            | `pnpm scripts run benchmark:labs-internal -- --suite <engine-case>`                                                                              |
-| Kernel signal                         | build with `glyph:kernel-lab-build`, then select `kernel`, `pack`, `break`, or `bidi`                                                            |
-| Generator signal                      | `pnpm scripts run benchmark:labs-internal -- --suite mtsdf-generator`                                                                            |
-| Browser/GPU/frame signal              | select the maintained `benchmark:*` or `glyph:kernel-lab-browser` workflow from the index                                                        |
+| Need                                  | Command                                                                                                                                                         |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Common installed-package signal       | `pnpm scripts run benchmark:labs-package -- --candidate <package-or-tgz>`                                                                                       |
+| Focused/full installed-package signal | add `--suite layout`, `measure`, `glyphs`, `publication`, `spans`, `batch`, `style`, `reflow`, `stress`, `cold`, `edit`, `edit-sized`, `multi-owner`, or `full` |
+| Edit-sized stage profile              | `pnpm scripts run benchmark:edit-sized-publication-profile -- --artifact <tgz> [--wasm <named-wasm>] --case <case>`                                             |
+| Raw retained-engine signal            | `pnpm scripts run benchmark:labs-internal -- --suite <engine-case>`                                                                                             |
+| Kernel signal                         | build with `glyph:kernel-lab-build`, then select `kernel`, `pack`, `break`, or `bidi`                                                                           |
+| Generator signal                      | `pnpm scripts run benchmark:labs-internal -- --suite mtsdf-generator`                                                                                           |
+| Browser/GPU/frame signal              | select the maintained `benchmark:*` or `glyph:kernel-lab-browser` workflow from the index                                                                       |
 
 Both Labs runners inspect the saved result and fail on an empty selection or any recorded benchmark-body error; Labs
 0.9.0 can otherwise print such an error and still exit zero. Generator fixture scripts may print elapsed progress while
@@ -940,6 +1048,10 @@ performance improved. Record this full comparison against the previous stable re
 and retain its exact source commit and artifact identities with the release notes.
 
 The summary excludes workloads whose saved Labs plans use different timing modes (batched versus single-call).
+Candidate block medians resolve truncated-name collisions when a sibling workload was skipped; ambiguous identities
+remain truncated and excluded from verdicts rather than receiving another workload's name. `benchmark:labs-summary -- <report-directory>` rebuilds
+Markdown from preserved results without rerunning timings or changing their manifest. Report paths are relative to
+`benches/`, matching the package Labs workflow.
 They remain listed as skipped with a timing-mode mismatch reason, rather than entering regression counts or plots.
 Raw comparison artifacts are preserved for inspection.
 
@@ -1060,3 +1172,5 @@ The installed-package browser consumer rejects requests whose URLs contain `fing
 The shared Bitmap/MTSDF/Slug detached raster proof creates its copy before the source first renders and asserts that
 the source remains pending. It then pixel-compares that independent copy with ordinary source publication and with
 an immediate original-matrix write, on WebGPU and WebGL2; decorations and parent transforms participate.
+
+The held-rope handoff preserves historical comparison summaries, manifests, absolute p50/p95 rows and source-gate hashes in [`benches/reports/held-ropes-2026-10-16`](../../../benches/reports/held-ropes-2026-10-16/). These portable reports retain artifact and timing qualifications; raw local caches are not needed to inspect the recorded results. They do not certify later source edits.

@@ -43,18 +43,26 @@ const statusOf = { '▲': 'faster', '▼': 'slower', '■': 'neutral' } as const
 
 /**
  * Reads the report `labs compare` prints. Labs truncates names to 36 columns, so `runNames` (the candidate result's full
- * run names, in report order) restores each one; a name with no match keeps its printed form.
+ * run names) restores each one. Candidate medians resolve a shared prefix when an earlier run was skipped. An
+ * ambiguous name with supplied timing evidence keeps its printed form rather than claiming the wrong workload.
  */
 export function parseLabsComparison(
   report: string,
   runNames: readonly string[],
   excludedTimingNames: readonly string[] = [],
+  candidateMedians?: ReadonlyMap<string, number>,
 ): LabsComparison {
   const unused = [...runNames];
-  const fullName = (printed: string): string => {
+  const fullName = (printed: string, candidateTime?: string): string => {
     if (!printed.endsWith('…')) return printed;
     const prefix = printed.slice(0, -1);
-    const index = unused.findIndex((name) => name.startsWith(prefix));
+    const matches = unused.flatMap((name, index) => (name.startsWith(prefix) ? [index] : []));
+    const timedMatches =
+      candidateMedians === undefined || candidateTime === undefined
+        ? matches
+        : matches.filter((index) => printedDurationMatches(candidateTime, candidateMedians.get(unused[index]!)));
+    const index =
+      candidateMedians === undefined ? (matches[0] ?? -1) : timedMatches.length === 1 ? timedMatches[0]! : -1;
     return index === -1 ? printed : unused.splice(index, 1)[0]!;
   };
   const rows: { -readonly [Key in keyof LabsRow]: LabsRow[Key] }[] = [];
@@ -82,9 +90,14 @@ export function parseLabsComparison(
     }
     const match = rowPattern.exec(line);
     if (match === null) continue;
+    const name = fullName(match[2]!.trim(), match[4]!);
+    if (candidateMedians !== undefined && name.endsWith('…')) {
+      skipped.push({ name, reason: 'unresolved workload identity' });
+      continue;
+    }
     rows.push({
       status: statusOf[match[1] as keyof typeof statusOf],
-      name: fullName(match[2]!.trim()),
+      name,
       baseline: match[3]!,
       candidate: match[4]!,
       delta: Number(match[5]),
@@ -101,6 +114,16 @@ export function parseLabsComparison(
     ],
     warnings,
   };
+}
+
+function printedDurationMatches(printed: string, nanoseconds: number | undefined): boolean {
+  if (nanoseconds === undefined) return false;
+  const duration = durationNs(printed);
+  if (duration === undefined) return false;
+  const decimals = /\.(\d+)/u.exec(printed)?.[1]?.length ?? 0;
+  const unit = printed.replace(/[\d.]/gu, '');
+  const rounding = durationNs(`1${unit}`)! / 10 ** decimals / 2;
+  return Math.abs(duration - nanoseconds) <= rounding;
 }
 
 export function renderLabsSummary({ suite, baseline, candidate, comparison }: LabsSummaryInput): string {

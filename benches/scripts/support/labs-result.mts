@@ -123,3 +123,22 @@ function displayError(value: unknown): string {
 export function labsRunNames(result: unknown): readonly string[] {
   return labeledRuns(result).map(({ run }) => displayName(run.name, '<unknown run>'));
 }
+
+/** Candidate block medians disambiguate truncated names when another matching run was excluded. */
+export function labsRunMedianTimes(result: unknown): ReadonlyMap<string, number> {
+  const medians = new Map<string, number>();
+  for (const { run } of labeledRuns(result)) {
+    if (!isRecord(run.stats) || !isRecord(run.stats.blocks) || !Array.isArray(run.stats.blocks.medians)) continue;
+    const values: unknown[] = run.stats.blocks.medians;
+    if (
+      values.length === 0 ||
+      !values.every((value): value is number => typeof value === 'number' && Number.isFinite(value))
+    )
+      continue;
+    const sorted = values.toSorted((left, right) => left - right);
+    const middle = Math.floor(sorted.length / 2);
+    const median = sorted.length % 2 === 0 ? (sorted[middle - 1]! + sorted[middle]!) / 2 : sorted[middle]!;
+    medians.set(displayName(run.name, '<unknown run>'), median);
+  }
+  return medians;
+}

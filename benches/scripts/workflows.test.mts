@@ -20,6 +20,7 @@ import { packedArchiveDependency } from './support/packed-archive.mts';
 
 const execute = promisify(execFile);
 const workflowScript = fileURLToPath(new URL('workflows.mts', import.meta.url));
+const editProfileScript = fileURLToPath(new URL('profile-edit-sized-publication.mts', import.meta.url));
 
 test('indexes current specialized workflows from source metadata', async () => {
   const { stdout } = await execute(process.execPath, [workflowScript, 'list']);
@@ -38,6 +39,50 @@ test('describes requirements, writes, and source for one workflow', async () => 
   assert.match(stdout, /Requires: GPU-enabled Chromium and authenticated benchmark fixtures\./);
   assert.match(stdout, /Writes: Ignored browser caches only\./);
   assert.match(stdout, /Source: benches\/scripts\/run-presentation-workload-matrix\.mts/);
+});
+
+test('limits bulk profile reads option to measure or none', async () => {
+  const runProfile = async (arguments_: readonly string[]) => {
+    try {
+      await execute(process.execPath, [editProfileScript, '--artifact', 'missing.tgz', ...arguments_]);
+      return '';
+    } catch (error) {
+      return String((error as { stderr?: string }).stderr ?? error);
+    }
+  };
+
+  assert.match(await runProfile(['--case', 'bulk-write', '--reads', 'invalid']), /--reads must be none or measure/u);
+  assert.match(
+    await runProfile(['--case', 'same-length', '--reads', 'none']),
+    /--reads only applies to --case bulk-write/u,
+  );
+  assert.match(
+    await runProfile(['--case', 'bulk-write', '--reads', 'none']),
+    /missing\.tgz/u,
+    'none is accepted and proceeds to the artifact check',
+  );
+  assert.match(
+    await runProfile(['--case', 'bulk-write', '--publication-path', 'invalid']),
+    /--publication-path must be engine or scene/u,
+  );
+  assert.match(
+    await runProfile(['--case', 'same-length', '--publication-path', 'scene']),
+    /--publication-path only applies to --case bulk-write/u,
+  );
+  assert.match(
+    await runProfile(['--case', 'bulk-write', '--publication-path', 'scene']),
+    /missing\.tgz/u,
+    'scene is accepted and proceeds to the artifact check',
+  );
+
+  const { stdout } = await execute(process.execPath, [
+    workflowScript,
+    'show',
+    'benchmark:edit-sized-publication-profile',
+  ]);
+  assert.match(stdout, /--reads none\|measure/u);
+  assert.match(stdout, /--publication-path engine\|scene/u);
+  assert.match(stdout, /Post-timing correctness reads are counted separately/u);
 });
 
 test('treats Vitexec browser and injected-module errors as workflow failures', () => {
@@ -118,6 +163,7 @@ test('routes package Labs by event and one explicit pull-request label', () => {
   assert.equal(selectPackageLabsSuite({ eventName: 'pull_request', labels: ['benchmark:assignment'] }), 'assignment');
   assert.equal(selectPackageLabsSuite({ eventName: 'pull_request', labels: ['benchmark:spans'] }), 'spans');
   assert.equal(selectPackageLabsSuite({ eventName: 'pull_request', labels: ['benchmark:edit-sized'] }), 'edit-sized');
+  assert.equal(selectPackageLabsSuite({ eventName: 'pull_request', labels: ['benchmark:multi-owner'] }), 'multi-owner');
   assert.equal(
     selectPackageLabsSuite({
       eventName: 'pull_request',

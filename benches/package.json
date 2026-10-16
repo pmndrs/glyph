@@ -35,6 +35,7 @@
   },
   "devDependencies": {
     "@babel/core": "8.0.1",
+    "@jridgewell/trace-mapping": "0.3.31",
     "@pmndrs/labs": "0.9.0",
     "@rolldown/plugin-babel": "0.2.3",
     "@tailwindcss/vite": "4.2.1",

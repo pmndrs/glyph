@@ -1,0 +1,4147 @@
+{
+  "method": {
+    "p50": "median of the four per-block medians",
+    "p95": "pooled raw samples sorted; element at index floor(0.95*(N-1))",
+    "rawUnits": "profile JSON stores nanoseconds; displayed ms divide by 1,000,000",
+    "p95Inference": "descriptive quantile only; no significance claim",
+    "comparisons": "Independent fresh baseline capture versus candidate captured once in main lane; published010 lane reuses the byte-identical saved candidate timing JSON."
+  },
+  "scope": "Historical d6b0f5 publication-suite comparison; not current ordered-range source; not full suite or FPS. Raw samples and archives remain local-only.",
+  "lanes": {
+    "main": {
+      "candidateSha256": "d6b0f5a044832d6df1b9d5705706ecf2d2337d17ed89e3f6efe8c4ddea2e20f6",
+      "candidateJsonSha256": "634fece21e4f17287e4d2ef04a411f1306a822eba562b45093ad7bd5657717b8",
+      "candidateJsonReusedByteIdentically": true,
+      "harnessDigest": "101fbfefd3a35b0c08d6417182128d107e696987baf484739b98b2fe79e769a1",
+      "blocks": 4,
+      "suite": "publication",
+      "rowCount": 87,
+      "classificationFromFinalComparisonText": {
+        "faster": 55,
+        "slower": 12,
+        "neutral": 18,
+        "clockConfoundedSkipped": 2,
+        "compared": 85,
+        "matched": 87,
+        "skippedRows": [
+          "clock-confounded",
+          "\u00b7 edit and measure one of 100 retaine\u2026  neutral\u2192faster \u00b7 2.94\u21922.84",
+          "\u00b7 10 labels first length-changing eng\u2026  slower\u2192neutral \u00b7 2.95\u21922.89"
+        ],
+        "baselineCheckFailures": [],
+        "timingModeMismatches": [
+          "batching.bench.ts / 10 labels no-op scene traversal / 10 labels no-op scene traversal: baseline batched, candidate single-call"
+        ]
+      },
+      "classificationFromFinalSummaryMd": {
+        "faster": 55,
+        "slower": 11,
+        "neutral": 18,
+        "skippedTotal": 3,
+        "matchedRawRows": 87,
+        "modeMismatchSkipped": 1,
+        "comparableAfterExclusions": 84,
+        "skippedRows": [
+          {
+            "reason": "clock-confounded: neutral\u2192faster \u00b7 2.94\u21922.84",
+            "name": "edit and measure one of 100 retained labels",
+            "detail": ""
+          },
+          {
+            "reason": "clock-confounded: slower\u2192neutral \u00b7 2.95\u21922.89",
+            "name": "10 labels first length-changing engine publication",
+            "detail": ""
+          },
+          {
+            "reason": "timing-mode mismatch",
+            "name": "10 labels no-op scene traversal",
+            "detail": ""
+          }
+        ],
+        "summarySha256": "8ecdee370ee6b068f74dcb46da04cf442c01e6caad3371b12366c4f16fc05565",
+        "clockWarnings": ["\u26a0 candidate CPU clock drifted 8.7% during its run"]
+      },
+      "classificationFromComparisonTxtBeforeModeExclusion": {
+        "faster": 55,
+        "slower": 12,
+        "neutral": 18,
+        "clockConfoundedSkipped": 2,
+        "compared": 85,
+        "matched": 87,
+        "comparisonSha256": "c71d37bc77f4b93936c4a464f1b5a38a0439b10e650bbaed5682ddde95fcc152",
+        "note": "This table counts the one mode-mismatched row among the categories; the final summary.md moves that row to skipped and is the authoritative post-exclusion classification."
+      },
+      "baselineJsonSha256": "d6f25a6e50d40a2e6cfc9f1f46236c40d353a27ccf6cbc065a197ac7af6f5c3c",
+      "summarySha256": "8ecdee370ee6b068f74dcb46da04cf442c01e6caad3371b12366c4f16fc05565",
+      "rows": [
+        {
+          "benchmarkFile": "adapter-publication.bench.ts",
+          "name": "mutate one trailing span across 1000 formatted labels",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 64817854.0,
+            "p95PooledNs": 67982833
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 56011812.5,
+            "p95PooledNs": 58357166
+          },
+          "deltaMs": {
+            "p50": -8.8060415,
+            "p95": -9.625667
+          }
+        },
+        {
+          "benchmarkFile": "adapter-publication.bench.ts",
+          "name": "normalize 1000 equivalent retained label updates",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 92,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3696562.5,
+            "p95PooledNs": 4586666
+          },
+          "candidate": {
+            "sampleCount": 84,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3610437.0,
+            "p95PooledNs": 4684917
+          },
+          "deltaMs": {
+            "p50": -0.0861255,
+            "p95": 0.098251
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels first color-only engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 176,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 586791.5,
+            "p95PooledNs": 918916
+          },
+          "candidate": {
+            "sampleCount": 204,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 552354.0,
+            "p95PooledNs": 822042
+          },
+          "deltaMs": {
+            "p50": -0.0344375,
+            "p95": -0.096874
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels first color-only scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 172,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 620708.5,
+            "p95PooledNs": 918000
+          },
+          "candidate": {
+            "sampleCount": 180,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 601208.0,
+            "p95PooledNs": 1154292
+          },
+          "deltaMs": {
+            "p50": -0.0195005,
+            "p95": 0.236292
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels first length-changing engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "skipped",
+          "baseline": {
+            "sampleCount": 168,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 971729.0,
+            "p95PooledNs": 1295666
+          },
+          "candidate": {
+            "sampleCount": 168,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1028667.0,
+            "p95PooledNs": 1387874.9999998808
+          },
+          "deltaMs": {
+            "p50": 0.056938,
+            "p95": 0.09220899999988079
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels first length-changing scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 172,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1027541.5,
+            "p95PooledNs": 1577750
+          },
+          "candidate": {
+            "sampleCount": 192,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1018542.0,
+            "p95PooledNs": 1432458.9999998808
+          },
+          "deltaMs": {
+            "p50": -0.0089995,
+            "p95": -0.1452910000001192
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels first same-length engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "slower",
+          "baseline": {
+            "sampleCount": 192,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 698187.0,
+            "p95PooledNs": 993666
+          },
+          "candidate": {
+            "sampleCount": 176,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 785853.9999999702,
+            "p95PooledNs": 1199708
+          },
+          "deltaMs": {
+            "p50": 0.0876669999999702,
+            "p95": 0.206042
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels first same-length scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "slower",
+          "baseline": {
+            "sampleCount": 168,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 748416.5,
+            "p95PooledNs": 1014000
+          },
+          "candidate": {
+            "sampleCount": 176,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 826354.5,
+            "p95PooledNs": 1169250
+          },
+          "deltaMs": {
+            "p50": 0.077938,
+            "p95": 0.15525
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels last color-only engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 188,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 569438.0,
+            "p95PooledNs": 928750
+          },
+          "candidate": {
+            "sampleCount": 204,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 523125.0,
+            "p95PooledNs": 774917
+          },
+          "deltaMs": {
+            "p50": -0.046313,
+            "p95": -0.153833
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels last color-only scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 188,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 592166.4999999702,
+            "p95PooledNs": 933750
+          },
+          "candidate": {
+            "sampleCount": 184,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 591750.0,
+            "p95PooledNs": 995583
+          },
+          "deltaMs": {
+            "p50": -0.00041649999997019765,
+            "p95": 0.061833
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels last length-changing engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 168,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 979646.0,
+            "p95PooledNs": 1273083
+          },
+          "candidate": {
+            "sampleCount": 164,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 984103.5,
+            "p95PooledNs": 1348042
+          },
+          "deltaMs": {
+            "p50": 0.0044575,
+            "p95": 0.074959
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels last length-changing scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "slower",
+          "baseline": {
+            "sampleCount": 192,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 975896.0,
+            "p95PooledNs": 1257000
+          },
+          "candidate": {
+            "sampleCount": 180,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1039104.0,
+            "p95PooledNs": 1391916
+          },
+          "deltaMs": {
+            "p50": 0.063208,
+            "p95": 0.134916
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels last same-length engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "slower",
+          "baseline": {
+            "sampleCount": 168,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 688917.0,
+            "p95PooledNs": 979208
+          },
+          "candidate": {
+            "sampleCount": 176,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 831812.5,
+            "p95PooledNs": 1168083
+          },
+          "deltaMs": {
+            "p50": 0.1428955,
+            "p95": 0.188875
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels last same-length scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "slower",
+          "baseline": {
+            "sampleCount": 172,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 726707.9999999702,
+            "p95PooledNs": 975750
+          },
+          "candidate": {
+            "sampleCount": 192,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 822458.5,
+            "p95PooledNs": 1146834
+          },
+          "deltaMs": {
+            "p50": 0.0957505000000298,
+            "p95": 0.171084
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels no-op scene traversal",
+          "args": {},
+          "timingModeMismatch": true,
+          "status": "skipped_timing_mode",
+          "baseline": {
+            "sampleCount": 208,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 9082.03125,
+            "p95PooledNs": 18393.25
+          },
+          "candidate": {
+            "sampleCount": 212,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 79979.0,
+            "p95PooledNs": 133584
+          },
+          "deltaMs": {
+            "p50": 0.07089696875,
+            "p95": 0.11519075
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels 100 edits immediate measurements with publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 18868312.5,
+            "p95PooledNs": 21150458
+          },
+          "candidate": {
+            "sampleCount": 76,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 11363270.5,
+            "p95PooledNs": 13947708
+          },
+          "deltaMs": {
+            "p50": -7.505042,
+            "p95": -7.20275
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels 100 edits immediate measurements without publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 108,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 5024291.5,
+            "p95PooledNs": 5918500
+          },
+          "candidate": {
+            "sampleCount": 136,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3678125.0,
+            "p95PooledNs": 4608125.00000006
+          },
+          "deltaMs": {
+            "p50": -1.3461665,
+            "p95": -1.3103749999999403
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels batched edit-read publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 80,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 9157271.0,
+            "p95PooledNs": 12055333
+          },
+          "candidate": {
+            "sampleCount": 92,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 7775041.5,
+            "p95PooledNs": 8367500
+          },
+          "deltaMs": {
+            "p50": -1.3822295,
+            "p95": -3.687833
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels first color-only engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 148,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 742687.5,
+            "p95PooledNs": 1141999.9999999404
+          },
+          "candidate": {
+            "sampleCount": 192,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 545083.5,
+            "p95PooledNs": 856417
+          },
+          "deltaMs": {
+            "p50": -0.197604,
+            "p95": -0.2855829999999404
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels first color-only scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 184,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 834063.0,
+            "p95PooledNs": 1309834
+          },
+          "candidate": {
+            "sampleCount": 176,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 647667.0,
+            "p95PooledNs": 1001333
+          },
+          "deltaMs": {
+            "p50": -0.186396,
+            "p95": -0.308501
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels first length-changing engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 172,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1438312.5,
+            "p95PooledNs": 1786208
+          },
+          "candidate": {
+            "sampleCount": 176,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1208062.5,
+            "p95PooledNs": 1548166
+          },
+          "deltaMs": {
+            "p50": -0.23025,
+            "p95": -0.238042
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels first length-changing scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 164,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1553291.0,
+            "p95PooledNs": 1910374.9999999404
+          },
+          "candidate": {
+            "sampleCount": 168,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1285000.0,
+            "p95PooledNs": 1594042
+          },
+          "deltaMs": {
+            "p50": -0.268291,
+            "p95": -0.3163329999999404
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels first same-length engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 176,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 963187.5,
+            "p95PooledNs": 1265500
+          },
+          "candidate": {
+            "sampleCount": 140,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 922813.0,
+            "p95PooledNs": 1283875
+          },
+          "deltaMs": {
+            "p50": -0.0403745,
+            "p95": 0.018375
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels first same-length scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 164,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1045000.0,
+            "p95PooledNs": 1447125
+          },
+          "candidate": {
+            "sampleCount": 156,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1023459.0,
+            "p95PooledNs": 1353959
+          },
+          "deltaMs": {
+            "p50": -0.021541,
+            "p95": -0.093166
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels interleaved edit-read publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 29492312.50000006,
+            "p95PooledNs": 33538167
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 19536291.50000006,
+            "p95PooledNs": 26548125
+          },
+          "deltaMs": {
+            "p50": -9.956021,
+            "p95": -6.990042
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels last color-only engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 184,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 694270.5,
+            "p95PooledNs": 1173917.0000001192
+          },
+          "candidate": {
+            "sampleCount": 176,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 546395.5,
+            "p95PooledNs": 876292
+          },
+          "deltaMs": {
+            "p50": -0.147875,
+            "p95": -0.2976250000001192
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels last color-only scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 164,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 830125.0,
+            "p95PooledNs": 1284000
+          },
+          "candidate": {
+            "sampleCount": 184,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 647917.0,
+            "p95PooledNs": 1029250
+          },
+          "deltaMs": {
+            "p50": -0.182208,
+            "p95": -0.25475
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels last length-changing engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 156,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1287583.0,
+            "p95PooledNs": 1722958
+          },
+          "candidate": {
+            "sampleCount": 180,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1126166.5,
+            "p95PooledNs": 1433792
+          },
+          "deltaMs": {
+            "p50": -0.1614165,
+            "p95": -0.289166
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels last length-changing scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 172,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1355854.5,
+            "p95PooledNs": 1789708
+          },
+          "candidate": {
+            "sampleCount": 160,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1205458.5,
+            "p95PooledNs": 1542708
+          },
+          "deltaMs": {
+            "p50": -0.150396,
+            "p95": -0.247
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels last same-length engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 176,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 940499.5,
+            "p95PooledNs": 1283834
+          },
+          "candidate": {
+            "sampleCount": 168,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 935625.0,
+            "p95PooledNs": 1250375
+          },
+          "deltaMs": {
+            "p50": -0.0048745,
+            "p95": -0.033459
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels last same-length scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 180,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1046791.5,
+            "p95PooledNs": 1424500
+          },
+          "candidate": {
+            "sampleCount": 176,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 996792.0,
+            "p95PooledNs": 1366458
+          },
+          "deltaMs": {
+            "p50": -0.0499995,
+            "p95": -0.058042
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels no-op scene traversal",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 196,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 129791.5,
+            "p95PooledNs": 219917
+          },
+          "candidate": {
+            "sampleCount": 184,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 127500.0,
+            "p95PooledNs": 234375
+          },
+          "deltaMs": {
+            "p50": -0.0022915,
+            "p95": 0.014458
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels separated balanced grow-shrink-space engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 152,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1504812.5,
+            "p95PooledNs": 1870542
+          },
+          "candidate": {
+            "sampleCount": 160,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1412396.0,
+            "p95PooledNs": 1766792
+          },
+          "deltaMs": {
+            "p50": -0.0924165,
+            "p95": -0.10375
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels separated balanced grow-shrink-space scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 160,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1612271.0,
+            "p95PooledNs": 2042292
+          },
+          "candidate": {
+            "sampleCount": 144,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1461333.5,
+            "p95PooledNs": 1807084
+          },
+          "deltaMs": {
+            "p50": -0.1509375,
+            "p95": -0.235208
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels separated unbalanced grow-shrink-space engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 160,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1475708.0,
+            "p95PooledNs": 1737917
+          },
+          "candidate": {
+            "sampleCount": 156,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1406729.5,
+            "p95PooledNs": 1772208
+          },
+          "deltaMs": {
+            "p50": -0.0689785,
+            "p95": 0.034291
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels separated unbalanced grow-shrink-space scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 148,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1539437.5,
+            "p95PooledNs": 1891792
+          },
+          "candidate": {
+            "sampleCount": 140,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1443708.4999999702,
+            "p95PooledNs": 3099375
+          },
+          "deltaMs": {
+            "p50": -0.0957290000000298,
+            "p95": 1.207583
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels 100 edits batched edit-read publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 14385333.0,
+            "p95PooledNs": 16526583
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 10847416.5,
+            "p95PooledNs": 12090875
+          },
+          "deltaMs": {
+            "p50": -3.5379165,
+            "p95": -4.435708
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels 100 edits immediate measurements with publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 152670583.00000024,
+            "p95PooledNs": 160691333
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 29951229.0,
+            "p95PooledNs": 33703750
+          },
+          "deltaMs": {
+            "p50": -122.71935400000024,
+            "p95": -126.987583
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels 100 edits immediate measurements without publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 76,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 6368166.5,
+            "p95PooledNs": 7066875
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3851937.5,
+            "p95PooledNs": 6890375
+          },
+          "deltaMs": {
+            "p50": -2.516229,
+            "p95": -0.1765
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels 100 edits interleaved edit-read publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 215823729.0,
+            "p95PooledNs": 238454459
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 70374521.0,
+            "p95PooledNs": 73807709
+          },
+          "deltaMs": {
+            "p50": -145.449208,
+            "p95": -164.64675
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels first color-only engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 96,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2936646.0,
+            "p95PooledNs": 3525833
+          },
+          "candidate": {
+            "sampleCount": 112,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 914875.0000000596,
+            "p95PooledNs": 1222500
+          },
+          "deltaMs": {
+            "p50": -2.0217709999999403,
+            "p95": -2.303333
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels first color-only scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 92,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3658166.5,
+            "p95PooledNs": 4229458
+          },
+          "candidate": {
+            "sampleCount": 100,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1393708.0,
+            "p95PooledNs": 1890167
+          },
+          "deltaMs": {
+            "p50": -2.2644585,
+            "p95": -2.339291
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels first length-changing engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 80,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 6654750.0,
+            "p95PooledNs": 7167166
+          },
+          "candidate": {
+            "sampleCount": 96,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3398875.0,
+            "p95PooledNs": 3876667
+          },
+          "deltaMs": {
+            "p50": -3.255875,
+            "p95": -3.290499
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels first length-changing scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 76,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 7188583.0,
+            "p95PooledNs": 7606167
+          },
+          "candidate": {
+            "sampleCount": 92,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3758375.5,
+            "p95PooledNs": 4290250
+          },
+          "deltaMs": {
+            "p50": -3.4302075,
+            "p95": -3.315917
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels first same-length engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 92,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4052937.5,
+            "p95PooledNs": 4436416
+          },
+          "candidate": {
+            "sampleCount": 96,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2413916.5,
+            "p95PooledNs": 2938917
+          },
+          "deltaMs": {
+            "p50": -1.639021,
+            "p95": -1.497499
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels first same-length scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 88,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4548041.0,
+            "p95PooledNs": 5057041
+          },
+          "candidate": {
+            "sampleCount": 88,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2817000.0,
+            "p95PooledNs": 3385333
+          },
+          "deltaMs": {
+            "p50": -1.731041,
+            "p95": -1.671708
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels last color-only engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 96,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2991021.5,
+            "p95PooledNs": 3647875
+          },
+          "candidate": {
+            "sampleCount": 112,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 916729.0,
+            "p95PooledNs": 1286375
+          },
+          "deltaMs": {
+            "p50": -2.0742925,
+            "p95": -2.3615
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels last color-only scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 92,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3649521.0,
+            "p95PooledNs": 4347334
+          },
+          "candidate": {
+            "sampleCount": 100,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1410583.5,
+            "p95PooledNs": 1969459
+          },
+          "deltaMs": {
+            "p50": -2.2389375,
+            "p95": -2.377875
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels last length-changing engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 88,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4817562.5,
+            "p95PooledNs": 5242542
+          },
+          "candidate": {
+            "sampleCount": 96,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2787854.500000119,
+            "p95PooledNs": 3237542
+          },
+          "deltaMs": {
+            "p50": -2.029707999999881,
+            "p95": -2.005
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels last length-changing scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 80,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 5261729.0,
+            "p95PooledNs": 5801708
+          },
+          "candidate": {
+            "sampleCount": 92,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3213145.5,
+            "p95PooledNs": 3540167
+          },
+          "deltaMs": {
+            "p50": -2.0485835,
+            "p95": -2.261541
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels last same-length engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 88,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4212145.5,
+            "p95PooledNs": 5224958
+          },
+          "candidate": {
+            "sampleCount": 100,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2428354.0,
+            "p95PooledNs": 2867417
+          },
+          "deltaMs": {
+            "p50": -1.7837915,
+            "p95": -2.357541
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels last same-length scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 84,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4629645.500000119,
+            "p95PooledNs": 5297083
+          },
+          "candidate": {
+            "sampleCount": 96,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2754500.0,
+            "p95PooledNs": 3178250
+          },
+          "deltaMs": {
+            "p50": -1.8751455000001191,
+            "p95": -2.118833
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels no-op scene traversal",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "slower",
+          "baseline": {
+            "sampleCount": 108,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 688104.0,
+            "p95PooledNs": 965208
+          },
+          "candidate": {
+            "sampleCount": 104,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 764812.5000000596,
+            "p95PooledNs": 1849500
+          },
+          "deltaMs": {
+            "p50": 0.0767085000000596,
+            "p95": 0.884292
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels separated balanced grow-shrink-space engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 6938583.5,
+            "p95PooledNs": 8191042
+          },
+          "candidate": {
+            "sampleCount": 76,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4472062.5,
+            "p95PooledNs": 5515792
+          },
+          "deltaMs": {
+            "p50": -2.466521,
+            "p95": -2.67525
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels separated balanced grow-shrink-space scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 7229063.0,
+            "p95PooledNs": 7919167
+          },
+          "candidate": {
+            "sampleCount": 72,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4991083.5,
+            "p95PooledNs": 5316417
+          },
+          "deltaMs": {
+            "p50": -2.2379795,
+            "p95": -2.60275
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels separated unbalanced grow-shrink-space engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 6987750.0,
+            "p95PooledNs": 7857458
+          },
+          "candidate": {
+            "sampleCount": 80,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4604125.0,
+            "p95PooledNs": 5138916
+          },
+          "deltaMs": {
+            "p50": -2.383625,
+            "p95": -2.718542
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels separated unbalanced grow-shrink-space scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 7631312.99999994,
+            "p95PooledNs": 8818708
+          },
+          "candidate": {
+            "sampleCount": 76,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 5023604.5,
+            "p95PooledNs": 6562708
+          },
+          "deltaMs": {
+            "p50": -2.6077084999999403,
+            "p95": -2.256
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "edit and measure one of 100 retained labels",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "skipped",
+          "baseline": {
+            "sampleCount": 176,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 352729.5,
+            "p95PooledNs": 467458
+          },
+          "candidate": {
+            "sampleCount": 200,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 318562.5,
+            "p95PooledNs": 702791
+          },
+          "deltaMs": {
+            "p50": -0.034167,
+            "p95": 0.235333
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "rewrite 128 labels in one group",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "slower",
+          "baseline": {
+            "sampleCount": 132,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3759521.0,
+            "p95PooledNs": 4516834
+          },
+          "candidate": {
+            "sampleCount": 128,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4113958.0,
+            "p95PooledNs": 5484208
+          },
+          "deltaMs": {
+            "p50": 0.354437,
+            "p95": 0.967374
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "rewrite 256 labels in one group",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "slower",
+          "baseline": {
+            "sampleCount": 88,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 6755479.5,
+            "p95PooledNs": 7512125
+          },
+          "candidate": {
+            "sampleCount": 96,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 7280583.5,
+            "p95PooledNs": 8689125
+          },
+          "deltaMs": {
+            "p50": 0.525104,
+            "p95": 1.177
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "rewrite 512 labels in one group",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "slower",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 12443104.5,
+            "p95PooledNs": 13765708
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 14703541.5,
+            "p95PooledNs": 16644542
+          },
+          "deltaMs": {
+            "p50": 2.260437,
+            "p95": 2.878834
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "rewrite 64 labels in one group",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "slower",
+          "baseline": {
+            "sampleCount": 144,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2281562.5,
+            "p95PooledNs": 3132542
+          },
+          "candidate": {
+            "sampleCount": 152,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2665166.5,
+            "p95PooledNs": 4108292
+          },
+          "deltaMs": {
+            "p50": 0.383604,
+            "p95": 0.97575
+          }
+        },
+        {
+          "benchmarkFile": "common.bench.ts",
+          "name": "publish after color change",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 156,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2281958.5,
+            "p95PooledNs": 2676166.9999999404
+          },
+          "candidate": {
+            "sampleCount": 160,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2129437.5,
+            "p95PooledNs": 2760875.0000000596
+          },
+          "deltaMs": {
+            "p50": -0.152521,
+            "p95": 0.08470800000011922
+          }
+        },
+        {
+          "benchmarkFile": "common.bench.ts",
+          "name": "publish after text change",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 160,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3284395.5,
+            "p95PooledNs": 3672292
+          },
+          "candidate": {
+            "sampleCount": 148,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2977562.0,
+            "p95PooledNs": 3622917
+          },
+          "deltaMs": {
+            "p50": -0.3068335,
+            "p95": -0.049375
+          }
+        },
+        {
+          "benchmarkFile": "common.bench.ts",
+          "name": "reflow after width change",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 164,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1237125.0,
+            "p95PooledNs": 1653541.9999998808
+          },
+          "candidate": {
+            "sampleCount": 184,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 694750.0,
+            "p95PooledNs": 1047708
+          },
+          "deltaMs": {
+            "p50": -0.542375,
+            "p95": -0.6058339999998807
+          }
+        },
+        {
+          "benchmarkFile": "common.bench.ts",
+          "name": "relayout after font-size change",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 156,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2989520.5,
+            "p95PooledNs": 3449292
+          },
+          "candidate": {
+            "sampleCount": 160,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3048520.5,
+            "p95PooledNs": 3696625
+          },
+          "deltaMs": {
+            "p50": 0.059,
+            "p95": 0.247333
+          }
+        },
+        {
+          "benchmarkFile": "framework-publication.bench.ts",
+          "name": "bind and normalize 1000 framework-shaped formatted flow updates",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 9386062.5,
+            "p95PooledNs": 10412708
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 7802041.5,
+            "p95PooledNs": 8411708
+          },
+          "deltaMs": {
+            "p50": -1.584021,
+            "p95": -2.001
+          }
+        },
+        {
+          "benchmarkFile": "framework-publication.bench.ts",
+          "name": "normalize 1000 equivalent formatted flow updates",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 8058812.5,
+            "p95PooledNs": 8797708
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 7505271.0,
+            "p95PooledNs": 8287125
+          },
+          "deltaMs": {
+            "p50": -0.5535415,
+            "p95": -0.510583
+          }
+        },
+        {
+          "benchmarkFile": "framework-publication.bench.ts",
+          "name": "reuse 1000 unchanged Vue property snapshots",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 184,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 304250.0,
+            "p95PooledNs": 339834
+          },
+          "candidate": {
+            "sampleCount": 228,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 299541.5,
+            "p95PooledNs": 404125
+          },
+          "deltaMs": {
+            "p50": -0.0047085,
+            "p95": 0.064291
+          }
+        },
+        {
+          "benchmarkFile": "layout.bench.ts",
+          "name": "inspection then publication after width change",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 10989166.5,
+            "p95PooledNs": 16825959
+          },
+          "candidate": {
+            "sampleCount": 92,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 7262416.5,
+            "p95PooledNs": 12108875
+          },
+          "deltaMs": {
+            "p50": -3.72675,
+            "p95": -4.717084
+          }
+        },
+        {
+          "benchmarkFile": "layout.bench.ts",
+          "name": "measurement then publication after width change",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 148,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3672542.0,
+            "p95PooledNs": 4996541
+          },
+          "candidate": {
+            "sampleCount": 144,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3047854.0,
+            "p95PooledNs": 4020000
+          },
+          "deltaMs": {
+            "p50": -0.624688,
+            "p95": -0.976541
+          }
+        },
+        {
+          "benchmarkFile": "layout.bench.ts",
+          "name": "publication after font-size change",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 88,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 9524458.5,
+            "p95PooledNs": 10535458
+          },
+          "candidate": {
+            "sampleCount": 88,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 10165146.0,
+            "p95PooledNs": 10867084
+          },
+          "deltaMs": {
+            "p50": 0.6406875,
+            "p95": 0.331626
+          }
+        },
+        {
+          "benchmarkFile": "layout.bench.ts",
+          "name": "publication after text change",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 84,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 10455396.0,
+            "p95PooledNs": 11588625
+          },
+          "candidate": {
+            "sampleCount": 96,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 9238333.5,
+            "p95PooledNs": 10287416
+          },
+          "deltaMs": {
+            "p50": -1.2170625,
+            "p95": -1.301209
+          }
+        },
+        {
+          "benchmarkFile": "layout.bench.ts",
+          "name": "publication after width change",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 144,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2502750.0,
+            "p95PooledNs": 3770583
+          },
+          "candidate": {
+            "sampleCount": 180,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1143250.0,
+            "p95PooledNs": 1556000
+          },
+          "deltaMs": {
+            "p50": -1.3595,
+            "p95": -2.214583
+          }
+        },
+        {
+          "benchmarkFile": "sparse-assignment.bench.ts",
+          "name": "broad end-to-end setter and publication with 8192 paint spans",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 31585166.50000006,
+            "p95PooledNs": 39610458
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 24070896.0,
+            "p95PooledNs": 25254792
+          },
+          "deltaMs": {
+            "p50": -7.51427050000006,
+            "p95": -14.355666
+          }
+        },
+        {
+          "benchmarkFile": "sparse-assignment.bench.ts",
+          "name": "monospaced broad end-to-end setter and publication with 8192 paint spans",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 201481499.5,
+            "p95PooledNs": 220045250
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 24438146.0,
+            "p95PooledNs": 26168750
+          },
+          "deltaMs": {
+            "p50": -177.0433535,
+            "p95": -193.8765
+          }
+        },
+        {
+          "benchmarkFile": "sparse-assignment.bench.ts",
+          "name": "monospaced scattered end-to-end setter and publication with 8192 paint spans",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 27430562.0,
+            "p95PooledNs": 32702875
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 18395041.5,
+            "p95PooledNs": 20900250
+          },
+          "deltaMs": {
+            "p50": -9.0355205,
+            "p95": -11.802625
+          }
+        },
+        {
+          "benchmarkFile": "sparse-assignment.bench.ts",
+          "name": "monospaced unchanged end-to-end setter and publication with 8192 paint spans",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 8298250.0,
+            "p95PooledNs": 15478000
+          },
+          "candidate": {
+            "sampleCount": 100,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4608562.5,
+            "p95PooledNs": 5373792
+          },
+          "deltaMs": {
+            "p50": -3.6896875,
+            "p95": -10.104208
+          }
+        },
+        {
+          "benchmarkFile": "sparse-assignment.bench.ts",
+          "name": "scattered end-to-end setter and publication with 8192 paint spans",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 31905291.50000006,
+            "p95PooledNs": 40132167
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 22392979.0,
+            "p95PooledNs": 23684916
+          },
+          "deltaMs": {
+            "p50": -9.512312500000059,
+            "p95": -16.447251
+          }
+        },
+        {
+          "benchmarkFile": "sparse-assignment.bench.ts",
+          "name": "shared-material scattered end-to-end setter and publication with 8192 paint spans",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 41441771.0,
+            "p95PooledNs": 46174042
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 22873354.0,
+            "p95PooledNs": 24239959
+          },
+          "deltaMs": {
+            "p50": -18.568417,
+            "p95": -21.934083
+          }
+        },
+        {
+          "benchmarkFile": "sparse-assignment.bench.ts",
+          "name": "split move and merge paint boundaries publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 72,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 13245853.99999994,
+            "p95PooledNs": 14253666
+          },
+          "candidate": {
+            "sampleCount": 96,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 8602208.5,
+            "p95PooledNs": 9294916
+          },
+          "deltaMs": {
+            "p50": -4.64364549999994,
+            "p95": -4.95875
+          }
+        },
+        {
+          "benchmarkFile": "sparse-assignment.bench.ts",
+          "name": "unchanged end-to-end setter and publication with 8192 paint spans",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 88,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 7025166.0,
+            "p95PooledNs": 9117458
+          },
+          "candidate": {
+            "sampleCount": 104,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4600000.0,
+            "p95PooledNs": 5510208
+          },
+          "deltaMs": {
+            "p50": -2.425166,
+            "p95": -3.60725
+          }
+        },
+        {
+          "benchmarkFile": "stress.bench.ts",
+          "name": "publish 1024 retained Text instances",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "slower",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 23583625.0,
+            "p95PooledNs": 30360500
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 29068979.0,
+            "p95PooledNs": 31627666
+          },
+          "deltaMs": {
+            "p50": 5.485354,
+            "p95": 1.267166
+          }
+        },
+        {
+          "benchmarkFile": "stress.bench.ts",
+          "name": "reorder 1000 unchanged retained labels",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 92,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4597229.0,
+            "p95PooledNs": 7953041
+          },
+          "candidate": {
+            "sampleCount": 92,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3778312.5,
+            "p95PooledNs": 4312375
+          },
+          "deltaMs": {
+            "p50": -0.8189165,
+            "p95": -3.640666
+          }
+        },
+        {
+          "benchmarkFile": "stress.bench.ts",
+          "name": "reorder then edit one of 1000 retained labels",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 68,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 9500813.0,
+            "p95PooledNs": 10832833
+          },
+          "candidate": {
+            "sampleCount": 68,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 8361667.0,
+            "p95PooledNs": 9265125
+          },
+          "deltaMs": {
+            "p50": -1.139146,
+            "p95": -1.567708
+          }
+        },
+        {
+          "benchmarkFile": "stress.bench.ts",
+          "name": "toggle one group containing 1000 retained labels",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 100,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 795249.5,
+            "p95PooledNs": 1343958
+          },
+          "candidate": {
+            "sampleCount": 100,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 756312.5,
+            "p95PooledNs": 1179375
+          },
+          "deltaMs": {
+            "p50": -0.038937,
+            "p95": -0.164583
+          }
+        },
+        {
+          "benchmarkFile": "typegpu-publication.bench.ts",
+          "name": "move 1000 retained TypeGPU labels",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 108,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 400020.5000000596,
+            "p95PooledNs": 452042.0000001192
+          },
+          "candidate": {
+            "sampleCount": 112,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 407021.0,
+            "p95PooledNs": 510750
+          },
+          "deltaMs": {
+            "p50": 0.0070004999999403955,
+            "p95": 0.05870799999988079
+          }
+        }
+      ]
+    },
+    "published010": {
+      "candidateSha256": "d6b0f5a044832d6df1b9d5705706ecf2d2337d17ed89e3f6efe8c4ddea2e20f6",
+      "candidateJsonSha256": "634fece21e4f17287e4d2ef04a411f1306a822eba562b45093ad7bd5657717b8",
+      "candidateJsonReusedByteIdentically": true,
+      "harnessDigest": "101fbfefd3a35b0c08d6417182128d107e696987baf484739b98b2fe79e769a1",
+      "blocks": 4,
+      "suite": "publication",
+      "rowCount": 87,
+      "classificationFromFinalComparisonText": {
+        "faster": 64,
+        "slower": 5,
+        "neutral": 17,
+        "clockConfoundedSkipped": 1,
+        "compared": 86,
+        "matched": 87,
+        "skippedRows": [
+          "clock-confounded",
+          "\u00b7 10 labels first length-changing eng\u2026  slower\u2192neutral \u00b7 2.96\u21922.89"
+        ],
+        "baselineCheckFailures": [],
+        "timingModeMismatches": [
+          "batching.bench.ts / 10 labels no-op scene traversal / 10 labels no-op scene traversal: baseline batched, candidate single-call"
+        ]
+      },
+      "classificationFromFinalSummaryMd": {
+        "faster": 64,
+        "slower": 4,
+        "neutral": 17,
+        "skippedTotal": 2,
+        "matchedRawRows": 87,
+        "modeMismatchSkipped": 1,
+        "comparableAfterExclusions": 85,
+        "skippedRows": [
+          {
+            "reason": "clock-confounded: slower\u2192neutral \u00b7 2.96\u21922.89",
+            "name": "10 labels first length-changing engine publication",
+            "detail": ""
+          },
+          {
+            "reason": "timing-mode mismatch",
+            "name": "10 labels no-op scene traversal",
+            "detail": ""
+          }
+        ],
+        "summarySha256": "56e0acabbcc884f98c001c5c05b41155fb726de7b6202659c33d7f6a463d060d",
+        "clockWarnings": [
+          "\u26a0 baseline CPU clock drifted 7.4% during its run",
+          "\u26a0 candidate CPU clock drifted 8.7% during its run"
+        ]
+      },
+      "classificationFromComparisonTxtBeforeModeExclusion": {
+        "faster": 64,
+        "slower": 5,
+        "neutral": 17,
+        "clockConfoundedSkipped": 1,
+        "compared": 86,
+        "matched": 87,
+        "comparisonSha256": "7906483b5ef618a24dd36f45600f0d45e5dc913030b67ba3113ecc1efc294e95",
+        "note": "This table counts the one mode-mismatched row among the categories; the final summary.md moves that row to skipped and is the authoritative post-exclusion classification."
+      },
+      "baselineJsonSha256": "113cde6e23a3fbd359dbde7bb73f73f18fba129762a2fc759c693b0d6eec0639",
+      "summarySha256": "56e0acabbcc884f98c001c5c05b41155fb726de7b6202659c33d7f6a463d060d",
+      "rows": [
+        {
+          "benchmarkFile": "adapter-publication.bench.ts",
+          "name": "mutate one trailing span across 1000 formatted labels",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 91146353.5,
+            "p95PooledNs": 99906709
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 56011812.5,
+            "p95PooledNs": 58357166
+          },
+          "deltaMs": {
+            "p50": -35.134541,
+            "p95": -41.549543
+          }
+        },
+        {
+          "benchmarkFile": "adapter-publication.bench.ts",
+          "name": "normalize 1000 equivalent retained label updates",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 46444458.0,
+            "p95PooledNs": 51196541
+          },
+          "candidate": {
+            "sampleCount": 84,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3610437.0,
+            "p95PooledNs": 4684917
+          },
+          "deltaMs": {
+            "p50": -42.834021,
+            "p95": -46.511624
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels first color-only engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 172,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 851666.5,
+            "p95PooledNs": 1326708
+          },
+          "candidate": {
+            "sampleCount": 204,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 552354.0,
+            "p95PooledNs": 822042
+          },
+          "deltaMs": {
+            "p50": -0.2993125,
+            "p95": -0.504666
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels first color-only scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 172,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 874271.0,
+            "p95PooledNs": 1288542
+          },
+          "candidate": {
+            "sampleCount": 180,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 601208.0,
+            "p95PooledNs": 1154292
+          },
+          "deltaMs": {
+            "p50": -0.273063,
+            "p95": -0.13425
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels first length-changing engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "skipped",
+          "baseline": {
+            "sampleCount": 188,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 939896.0,
+            "p95PooledNs": 1232042
+          },
+          "candidate": {
+            "sampleCount": 168,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1028667.0,
+            "p95PooledNs": 1387874.9999998808
+          },
+          "deltaMs": {
+            "p50": 0.088771,
+            "p95": 0.1558329999998808
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels first length-changing scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 168,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1002542.0,
+            "p95PooledNs": 1322250
+          },
+          "candidate": {
+            "sampleCount": 192,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1018542.0,
+            "p95PooledNs": 1432458.9999998808
+          },
+          "deltaMs": {
+            "p50": 0.016,
+            "p95": 0.11020899999988079
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels first same-length engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 184,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 840854.5,
+            "p95PooledNs": 1151208
+          },
+          "candidate": {
+            "sampleCount": 176,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 785853.9999999702,
+            "p95PooledNs": 1199708
+          },
+          "deltaMs": {
+            "p50": -0.0550005000000298,
+            "p95": 0.0485
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels first same-length scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 172,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 916187.5,
+            "p95PooledNs": 1282792
+          },
+          "candidate": {
+            "sampleCount": 176,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 826354.5,
+            "p95PooledNs": 1169250
+          },
+          "deltaMs": {
+            "p50": -0.089833,
+            "p95": -0.113542
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels last color-only engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 184,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 850562.5,
+            "p95PooledNs": 1283042
+          },
+          "candidate": {
+            "sampleCount": 204,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 523125.0,
+            "p95PooledNs": 774917
+          },
+          "deltaMs": {
+            "p50": -0.3274375,
+            "p95": -0.508125
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels last color-only scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 180,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 915083.0,
+            "p95PooledNs": 1354208
+          },
+          "candidate": {
+            "sampleCount": 184,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 591750.0,
+            "p95PooledNs": 995583
+          },
+          "deltaMs": {
+            "p50": -0.323333,
+            "p95": -0.358625
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels last length-changing engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 184,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 917812.5,
+            "p95PooledNs": 1240958
+          },
+          "candidate": {
+            "sampleCount": 164,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 984103.5,
+            "p95PooledNs": 1348042
+          },
+          "deltaMs": {
+            "p50": 0.066291,
+            "p95": 0.107084
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels last length-changing scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "slower",
+          "baseline": {
+            "sampleCount": 164,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 974063.0,
+            "p95PooledNs": 1266875
+          },
+          "candidate": {
+            "sampleCount": 180,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1039104.0,
+            "p95PooledNs": 1391916
+          },
+          "deltaMs": {
+            "p50": 0.065041,
+            "p95": 0.125041
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels last same-length engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 184,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 863416.5,
+            "p95PooledNs": 1137500
+          },
+          "candidate": {
+            "sampleCount": 176,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 831812.5,
+            "p95PooledNs": 1168083
+          },
+          "deltaMs": {
+            "p50": -0.031604,
+            "p95": 0.030583
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels last same-length scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 172,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 910875.0,
+            "p95PooledNs": 1284541
+          },
+          "candidate": {
+            "sampleCount": 192,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 822458.5,
+            "p95PooledNs": 1146834
+          },
+          "deltaMs": {
+            "p50": -0.0884165,
+            "p95": -0.137707
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "10 labels no-op scene traversal",
+          "args": {},
+          "timingModeMismatch": true,
+          "status": "skipped_timing_mode",
+          "baseline": {
+            "sampleCount": 232,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 7960.425,
+            "p95PooledNs": 15095.8
+          },
+          "candidate": {
+            "sampleCount": 212,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 79979.0,
+            "p95PooledNs": 133584
+          },
+          "deltaMs": {
+            "p50": 0.072018575,
+            "p95": 0.1184882
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels 100 edits immediate measurements with publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 34620542.0,
+            "p95PooledNs": 38114625
+          },
+          "candidate": {
+            "sampleCount": 76,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 11363270.5,
+            "p95PooledNs": 13947708
+          },
+          "deltaMs": {
+            "p50": -23.2572715,
+            "p95": -24.166917
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels 100 edits immediate measurements without publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 112,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4910459.0,
+            "p95PooledNs": 6078417
+          },
+          "candidate": {
+            "sampleCount": 136,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3678125.0,
+            "p95PooledNs": 4608125.00000006
+          },
+          "deltaMs": {
+            "p50": -1.232334,
+            "p95": -1.4702919999999404
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels batched edit-read publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 80,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 10029958.5,
+            "p95PooledNs": 10946292
+          },
+          "candidate": {
+            "sampleCount": 92,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 7775041.5,
+            "p95PooledNs": 8367500
+          },
+          "deltaMs": {
+            "p50": -2.254917,
+            "p95": -2.578792
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels first color-only engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 176,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1187854.5,
+            "p95PooledNs": 1619542
+          },
+          "candidate": {
+            "sampleCount": 192,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 545083.5,
+            "p95PooledNs": 856417
+          },
+          "deltaMs": {
+            "p50": -0.642771,
+            "p95": -0.763125
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels first color-only scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 156,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1288270.5,
+            "p95PooledNs": 1865916
+          },
+          "candidate": {
+            "sampleCount": 176,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 647667.0,
+            "p95PooledNs": 1001333
+          },
+          "deltaMs": {
+            "p50": -0.6406035,
+            "p95": -0.864583
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels first length-changing engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 156,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1450521.0,
+            "p95PooledNs": 1747542
+          },
+          "candidate": {
+            "sampleCount": 176,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1208062.5,
+            "p95PooledNs": 1548166
+          },
+          "deltaMs": {
+            "p50": -0.2424585,
+            "p95": -0.199376
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels first length-changing scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 164,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1514229.0,
+            "p95PooledNs": 1912166
+          },
+          "candidate": {
+            "sampleCount": 168,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1285000.0,
+            "p95PooledNs": 1594042
+          },
+          "deltaMs": {
+            "p50": -0.229229,
+            "p95": -0.318124
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels first same-length engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 176,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1188542.0,
+            "p95PooledNs": 1550667
+          },
+          "candidate": {
+            "sampleCount": 140,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 922813.0,
+            "p95PooledNs": 1283875
+          },
+          "deltaMs": {
+            "p50": -0.265729,
+            "p95": -0.266792
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels first same-length scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 160,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1300208.5,
+            "p95PooledNs": 1781708
+          },
+          "candidate": {
+            "sampleCount": 156,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1023459.0,
+            "p95PooledNs": 1353959
+          },
+          "deltaMs": {
+            "p50": -0.2767495,
+            "p95": -0.427749
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels interleaved edit-read publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 44280458.5,
+            "p95PooledNs": 47347500
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 19536291.50000006,
+            "p95PooledNs": 26548125
+          },
+          "deltaMs": {
+            "p50": -24.74416699999994,
+            "p95": -20.799375
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels last color-only engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 172,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1180416.5,
+            "p95PooledNs": 1652334
+          },
+          "candidate": {
+            "sampleCount": 176,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 546395.5,
+            "p95PooledNs": 876292
+          },
+          "deltaMs": {
+            "p50": -0.634021,
+            "p95": -0.776042
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels last color-only scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 76,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1372771.0,
+            "p95PooledNs": 1926708
+          },
+          "candidate": {
+            "sampleCount": 184,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 647917.0,
+            "p95PooledNs": 1029250
+          },
+          "deltaMs": {
+            "p50": -0.724854,
+            "p95": -0.897458
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels last length-changing engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 152,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1243333.0,
+            "p95PooledNs": 1663792
+          },
+          "candidate": {
+            "sampleCount": 180,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1126166.5,
+            "p95PooledNs": 1433792
+          },
+          "deltaMs": {
+            "p50": -0.1171665,
+            "p95": -0.23
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels last length-changing scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 176,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1351833.0,
+            "p95PooledNs": 1846416
+          },
+          "candidate": {
+            "sampleCount": 160,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1205458.5,
+            "p95PooledNs": 1542708
+          },
+          "deltaMs": {
+            "p50": -0.1463745,
+            "p95": -0.303708
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels last same-length engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 160,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1213416.5,
+            "p95PooledNs": 1616417
+          },
+          "candidate": {
+            "sampleCount": 168,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 935625.0,
+            "p95PooledNs": 1250375
+          },
+          "deltaMs": {
+            "p50": -0.2777915,
+            "p95": -0.366042
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels last same-length scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 172,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1297166.5,
+            "p95PooledNs": 1708416
+          },
+          "candidate": {
+            "sampleCount": 176,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 996792.0,
+            "p95PooledNs": 1366458
+          },
+          "deltaMs": {
+            "p50": -0.3003745,
+            "p95": -0.341958
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels no-op scene traversal",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 196,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 128229.0,
+            "p95PooledNs": 222250
+          },
+          "candidate": {
+            "sampleCount": 184,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 127500.0,
+            "p95PooledNs": 234375
+          },
+          "deltaMs": {
+            "p50": -0.000729,
+            "p95": 0.012125
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels separated balanced grow-shrink-space engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 148,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1483000.0,
+            "p95PooledNs": 1759541
+          },
+          "candidate": {
+            "sampleCount": 160,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1412396.0,
+            "p95PooledNs": 1766792
+          },
+          "deltaMs": {
+            "p50": -0.070604,
+            "p95": 0.007251
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels separated balanced grow-shrink-space scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 140,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1550895.5,
+            "p95PooledNs": 1938334
+          },
+          "candidate": {
+            "sampleCount": 144,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1461333.5,
+            "p95PooledNs": 1807084
+          },
+          "deltaMs": {
+            "p50": -0.089562,
+            "p95": -0.13125
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels separated unbalanced grow-shrink-space engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 156,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1462729.0,
+            "p95PooledNs": 1775834
+          },
+          "candidate": {
+            "sampleCount": 156,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1406729.5,
+            "p95PooledNs": 1772208
+          },
+          "deltaMs": {
+            "p50": -0.0559995,
+            "p95": -0.003626
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "100 labels separated unbalanced grow-shrink-space scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 148,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1540000.0,
+            "p95PooledNs": 1822458
+          },
+          "candidate": {
+            "sampleCount": 140,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1443708.4999999702,
+            "p95PooledNs": 3099375
+          },
+          "deltaMs": {
+            "p50": -0.0962915000000298,
+            "p95": 1.276917
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels 100 edits batched edit-read publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 15517062.50000006,
+            "p95PooledNs": 16353083
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 10847416.5,
+            "p95PooledNs": 12090875
+          },
+          "deltaMs": {
+            "p50": -4.66964600000006,
+            "p95": -4.262208
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels 100 edits immediate measurements with publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 278541562.5,
+            "p95PooledNs": 322983042
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 29951229.0,
+            "p95PooledNs": 33703750
+          },
+          "deltaMs": {
+            "p50": -248.5903335,
+            "p95": -289.279292
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels 100 edits immediate measurements without publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 72,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 6391062.5,
+            "p95PooledNs": 7210875
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3851937.5,
+            "p95PooledNs": 6890375
+          },
+          "deltaMs": {
+            "p50": -2.539125,
+            "p95": -0.3205
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels 100 edits interleaved edit-read publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 318162854.5,
+            "p95PooledNs": 332327833
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 70374521.0,
+            "p95PooledNs": 73807709
+          },
+          "deltaMs": {
+            "p50": -247.7883335,
+            "p95": -258.520124
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels first color-only engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 84,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4941812.0,
+            "p95PooledNs": 5560542
+          },
+          "candidate": {
+            "sampleCount": 112,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 914875.0000000596,
+            "p95PooledNs": 1222500
+          },
+          "deltaMs": {
+            "p50": -4.026936999999941,
+            "p95": -4.338042
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels first color-only scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 76,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 5512646.0,
+            "p95PooledNs": 6238458
+          },
+          "candidate": {
+            "sampleCount": 100,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1393708.0,
+            "p95PooledNs": 1890167
+          },
+          "deltaMs": {
+            "p50": -4.118938,
+            "p95": -4.348291
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels first length-changing engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 76,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 6841249.5,
+            "p95PooledNs": 7228958
+          },
+          "candidate": {
+            "sampleCount": 96,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3398875.0,
+            "p95PooledNs": 3876667
+          },
+          "deltaMs": {
+            "p50": -3.4423745,
+            "p95": -3.352291
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels first length-changing scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 76,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 7408521.0,
+            "p95PooledNs": 8072666
+          },
+          "candidate": {
+            "sampleCount": 92,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3758375.5,
+            "p95PooledNs": 4290250
+          },
+          "deltaMs": {
+            "p50": -3.6501455,
+            "p95": -3.782416
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels first same-length engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 72,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4991270.5,
+            "p95PooledNs": 6030250
+          },
+          "candidate": {
+            "sampleCount": 96,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2413916.5,
+            "p95PooledNs": 2938917
+          },
+          "deltaMs": {
+            "p50": -2.577354,
+            "p95": -3.091333
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels first same-length scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 80,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 5482187.5,
+            "p95PooledNs": 6067667
+          },
+          "candidate": {
+            "sampleCount": 88,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2817000.0,
+            "p95PooledNs": 3385333
+          },
+          "deltaMs": {
+            "p50": -2.6651875,
+            "p95": -2.682334
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels last color-only engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 84,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4984771.0,
+            "p95PooledNs": 5574583
+          },
+          "candidate": {
+            "sampleCount": 112,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 916729.0,
+            "p95PooledNs": 1286375
+          },
+          "deltaMs": {
+            "p50": -4.068042,
+            "p95": -4.288208
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels last color-only scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 84,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 5461458.0,
+            "p95PooledNs": 6083500
+          },
+          "candidate": {
+            "sampleCount": 100,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1410583.5,
+            "p95PooledNs": 1969459
+          },
+          "deltaMs": {
+            "p50": -4.0508745,
+            "p95": -4.114041
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels last length-changing engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 88,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4846708.5,
+            "p95PooledNs": 5461707.999999881
+          },
+          "candidate": {
+            "sampleCount": 96,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2787854.500000119,
+            "p95PooledNs": 3237542
+          },
+          "deltaMs": {
+            "p50": -2.0588539999998807,
+            "p95": -2.224165999999881
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels last length-changing scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 84,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 5485062.499999881,
+            "p95PooledNs": 6029667
+          },
+          "candidate": {
+            "sampleCount": 92,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3213145.5,
+            "p95PooledNs": 3540167
+          },
+          "deltaMs": {
+            "p50": -2.2719169999998807,
+            "p95": -2.4895
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels last same-length engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 88,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4813896.0,
+            "p95PooledNs": 5267750
+          },
+          "candidate": {
+            "sampleCount": 100,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2428354.0,
+            "p95PooledNs": 2867417
+          },
+          "deltaMs": {
+            "p50": -2.385542,
+            "p95": -2.400333
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels last same-length scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 84,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 5441000.0,
+            "p95PooledNs": 5943459
+          },
+          "candidate": {
+            "sampleCount": 96,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2754500.0,
+            "p95PooledNs": 3178250
+          },
+          "deltaMs": {
+            "p50": -2.6865,
+            "p95": -2.765209
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels no-op scene traversal",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 104,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 749146.0,
+            "p95PooledNs": 951000
+          },
+          "candidate": {
+            "sampleCount": 104,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 764812.5000000596,
+            "p95PooledNs": 1849500
+          },
+          "deltaMs": {
+            "p50": 0.015666500000059605,
+            "p95": 0.8985
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels separated balanced grow-shrink-space engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 72,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 6851207.99999994,
+            "p95PooledNs": 7216042
+          },
+          "candidate": {
+            "sampleCount": 76,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4472062.5,
+            "p95PooledNs": 5515792
+          },
+          "deltaMs": {
+            "p50": -2.3791454999999404,
+            "p95": -1.70025
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels separated balanced grow-shrink-space scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 7327834.0,
+            "p95PooledNs": 7848084
+          },
+          "candidate": {
+            "sampleCount": 72,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4991083.5,
+            "p95PooledNs": 5316417
+          },
+          "deltaMs": {
+            "p50": -2.3367505,
+            "p95": -2.531667
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels separated unbalanced grow-shrink-space engine publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 72,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 6908896.0,
+            "p95PooledNs": 7340459
+          },
+          "candidate": {
+            "sampleCount": 80,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4604125.0,
+            "p95PooledNs": 5138916
+          },
+          "deltaMs": {
+            "p50": -2.304771,
+            "p95": -2.201543
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "1000 labels separated unbalanced grow-shrink-space scene publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 7616417.0,
+            "p95PooledNs": 8255708
+          },
+          "candidate": {
+            "sampleCount": 76,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 5023604.5,
+            "p95PooledNs": 6562708
+          },
+          "deltaMs": {
+            "p50": -2.5928125,
+            "p95": -1.693
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "edit and measure one of 100 retained labels",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 176,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 345833.5,
+            "p95PooledNs": 490125
+          },
+          "candidate": {
+            "sampleCount": 200,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 318562.5,
+            "p95PooledNs": 702791
+          },
+          "deltaMs": {
+            "p50": -0.027271,
+            "p95": 0.212666
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "rewrite 128 labels in one group",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "slower",
+          "baseline": {
+            "sampleCount": 136,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3923500.0,
+            "p95PooledNs": 4777916
+          },
+          "candidate": {
+            "sampleCount": 128,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4113958.0,
+            "p95PooledNs": 5484208
+          },
+          "deltaMs": {
+            "p50": 0.190458,
+            "p95": 0.706292
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "rewrite 256 labels in one group",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 92,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 6978541.5,
+            "p95PooledNs": 8028250
+          },
+          "candidate": {
+            "sampleCount": 96,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 7280583.5,
+            "p95PooledNs": 8689125
+          },
+          "deltaMs": {
+            "p50": 0.302042,
+            "p95": 0.660875
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "rewrite 512 labels in one group",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "slower",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 12658145.5,
+            "p95PooledNs": 13633125
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 14703541.5,
+            "p95PooledNs": 16644542
+          },
+          "deltaMs": {
+            "p50": 2.045396,
+            "p95": 3.011417
+          }
+        },
+        {
+          "benchmarkFile": "batching.bench.ts",
+          "name": "rewrite 64 labels in one group",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 140,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2521708.0,
+            "p95PooledNs": 3261459
+          },
+          "candidate": {
+            "sampleCount": 152,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2665166.5,
+            "p95PooledNs": 4108292
+          },
+          "deltaMs": {
+            "p50": 0.1434585,
+            "p95": 0.846833
+          }
+        },
+        {
+          "benchmarkFile": "common.bench.ts",
+          "name": "publish after color change",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 164,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2588604.0,
+            "p95PooledNs": 3095917
+          },
+          "candidate": {
+            "sampleCount": 160,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2129437.5,
+            "p95PooledNs": 2760875.0000000596
+          },
+          "deltaMs": {
+            "p50": -0.4591665,
+            "p95": -0.3350419999999404
+          }
+        },
+        {
+          "benchmarkFile": "common.bench.ts",
+          "name": "publish after text change",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 148,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3458750.0,
+            "p95PooledNs": 3933417
+          },
+          "candidate": {
+            "sampleCount": 148,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2977562.0,
+            "p95PooledNs": 3622917
+          },
+          "deltaMs": {
+            "p50": -0.481188,
+            "p95": -0.3105
+          }
+        },
+        {
+          "benchmarkFile": "common.bench.ts",
+          "name": "reflow after width change",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 180,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1216875.0,
+            "p95PooledNs": 1587084
+          },
+          "candidate": {
+            "sampleCount": 184,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 694750.0,
+            "p95PooledNs": 1047708
+          },
+          "deltaMs": {
+            "p50": -0.522125,
+            "p95": -0.539376
+          }
+        },
+        {
+          "benchmarkFile": "common.bench.ts",
+          "name": "relayout after font-size change",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 144,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3218396.0,
+            "p95PooledNs": 3612208
+          },
+          "candidate": {
+            "sampleCount": 160,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3048520.5,
+            "p95PooledNs": 3696625
+          },
+          "deltaMs": {
+            "p50": -0.1698755,
+            "p95": 0.084417
+          }
+        },
+        {
+          "benchmarkFile": "framework-publication.bench.ts",
+          "name": "bind and normalize 1000 framework-shaped formatted flow updates",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 55561854.0,
+            "p95PooledNs": 67416042
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 7802041.5,
+            "p95PooledNs": 8411708
+          },
+          "deltaMs": {
+            "p50": -47.7598125,
+            "p95": -59.004334
+          }
+        },
+        {
+          "benchmarkFile": "framework-publication.bench.ts",
+          "name": "normalize 1000 equivalent formatted flow updates",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 53593040.99999988,
+            "p95PooledNs": 67294916
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 7505271.0,
+            "p95PooledNs": 8287125
+          },
+          "deltaMs": {
+            "p50": -46.08776999999988,
+            "p95": -59.007791
+          }
+        },
+        {
+          "benchmarkFile": "framework-publication.bench.ts",
+          "name": "reuse 1000 unchanged Vue property snapshots",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 192,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 692791.5,
+            "p95PooledNs": 1075625
+          },
+          "candidate": {
+            "sampleCount": 228,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 299541.5,
+            "p95PooledNs": 404125
+          },
+          "deltaMs": {
+            "p50": -0.39325,
+            "p95": -0.6715
+          }
+        },
+        {
+          "benchmarkFile": "layout.bench.ts",
+          "name": "inspection then publication after width change",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 13532083.5,
+            "p95PooledNs": 24089958
+          },
+          "candidate": {
+            "sampleCount": 92,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 7262416.5,
+            "p95PooledNs": 12108875
+          },
+          "deltaMs": {
+            "p50": -6.269667,
+            "p95": -11.981083
+          }
+        },
+        {
+          "benchmarkFile": "layout.bench.ts",
+          "name": "measurement then publication after width change",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 136,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3330062.5,
+            "p95PooledNs": 4556708
+          },
+          "candidate": {
+            "sampleCount": 144,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3047854.0,
+            "p95PooledNs": 4020000
+          },
+          "deltaMs": {
+            "p50": -0.2822085,
+            "p95": -0.536708
+          }
+        },
+        {
+          "benchmarkFile": "layout.bench.ts",
+          "name": "publication after font-size change",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 84,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 10131625.0,
+            "p95PooledNs": 11824125
+          },
+          "candidate": {
+            "sampleCount": 88,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 10165146.0,
+            "p95PooledNs": 10867084
+          },
+          "deltaMs": {
+            "p50": 0.033521,
+            "p95": -0.957041
+          }
+        },
+        {
+          "benchmarkFile": "layout.bench.ts",
+          "name": "publication after text change",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 80,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 10778146.0,
+            "p95PooledNs": 11979459
+          },
+          "candidate": {
+            "sampleCount": 96,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 9238333.5,
+            "p95PooledNs": 10287416
+          },
+          "deltaMs": {
+            "p50": -1.5398125,
+            "p95": -1.692043
+          }
+        },
+        {
+          "benchmarkFile": "layout.bench.ts",
+          "name": "publication after width change",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 136,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 2677416.5,
+            "p95PooledNs": 3801334
+          },
+          "candidate": {
+            "sampleCount": 180,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 1143250.0,
+            "p95PooledNs": 1556000
+          },
+          "deltaMs": {
+            "p50": -1.5341665,
+            "p95": -2.245334
+          }
+        },
+        {
+          "benchmarkFile": "sparse-assignment.bench.ts",
+          "name": "broad end-to-end setter and publication with 8192 paint spans",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 65010854.5,
+            "p95PooledNs": 69756583
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 24070896.0,
+            "p95PooledNs": 25254792
+          },
+          "deltaMs": {
+            "p50": -40.9399585,
+            "p95": -44.501791
+          }
+        },
+        {
+          "benchmarkFile": "sparse-assignment.bench.ts",
+          "name": "monospaced broad end-to-end setter and publication with 8192 paint spans",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 62782583.50000012,
+            "p95PooledNs": 69921042
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 24438146.0,
+            "p95PooledNs": 26168750
+          },
+          "deltaMs": {
+            "p50": -38.34443750000012,
+            "p95": -43.752292
+          }
+        },
+        {
+          "benchmarkFile": "sparse-assignment.bench.ts",
+          "name": "monospaced scattered end-to-end setter and publication with 8192 paint spans",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 62175708.50000006,
+            "p95PooledNs": 65897208
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 18395041.5,
+            "p95PooledNs": 20900250
+          },
+          "deltaMs": {
+            "p50": -43.78066700000006,
+            "p95": -44.996958
+          }
+        },
+        {
+          "benchmarkFile": "sparse-assignment.bench.ts",
+          "name": "monospaced unchanged end-to-end setter and publication with 8192 paint spans",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 54889708.5,
+            "p95PooledNs": 59758291
+          },
+          "candidate": {
+            "sampleCount": 100,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4608562.5,
+            "p95PooledNs": 5373792
+          },
+          "deltaMs": {
+            "p50": -50.281146,
+            "p95": -54.384499
+          }
+        },
+        {
+          "benchmarkFile": "sparse-assignment.bench.ts",
+          "name": "scattered end-to-end setter and publication with 8192 paint spans",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 66089604.0,
+            "p95PooledNs": 71642959
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 22392979.0,
+            "p95PooledNs": 23684916
+          },
+          "deltaMs": {
+            "p50": -43.696625,
+            "p95": -47.958043
+          }
+        },
+        {
+          "benchmarkFile": "sparse-assignment.bench.ts",
+          "name": "shared-material scattered end-to-end setter and publication with 8192 paint spans",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 74736583.0,
+            "p95PooledNs": 83335667
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 22873354.0,
+            "p95PooledNs": 24239959
+          },
+          "deltaMs": {
+            "p50": -51.863229,
+            "p95": -59.095708
+          }
+        },
+        {
+          "benchmarkFile": "sparse-assignment.bench.ts",
+          "name": "split move and merge paint boundaries publication",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 68,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 14257396.0,
+            "p95PooledNs": 14905083
+          },
+          "candidate": {
+            "sampleCount": 96,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 8602208.5,
+            "p95PooledNs": 9294916
+          },
+          "deltaMs": {
+            "p50": -5.6551875,
+            "p95": -5.610167
+          }
+        },
+        {
+          "benchmarkFile": "sparse-assignment.bench.ts",
+          "name": "unchanged end-to-end setter and publication with 8192 paint spans",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 55556271.00000012,
+            "p95PooledNs": 62152875
+          },
+          "candidate": {
+            "sampleCount": 104,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4600000.0,
+            "p95PooledNs": 5510208
+          },
+          "deltaMs": {
+            "p50": -50.95627100000012,
+            "p95": -56.642667
+          }
+        },
+        {
+          "benchmarkFile": "stress.bench.ts",
+          "name": "publish 1024 retained Text instances",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "slower",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 23904958.5,
+            "p95PooledNs": 26043375
+          },
+          "candidate": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 29068979.0,
+            "p95PooledNs": 31627666
+          },
+          "deltaMs": {
+            "p50": 5.1640205,
+            "p95": 5.584291
+          }
+        },
+        {
+          "benchmarkFile": "stress.bench.ts",
+          "name": "reorder 1000 unchanged retained labels",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 92,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 4416938.0,
+            "p95PooledNs": 5206833
+          },
+          "candidate": {
+            "sampleCount": 92,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 3778312.5,
+            "p95PooledNs": 4312375
+          },
+          "deltaMs": {
+            "p50": -0.6386255,
+            "p95": -0.894458
+          }
+        },
+        {
+          "benchmarkFile": "stress.bench.ts",
+          "name": "reorder then edit one of 1000 retained labels",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 64,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 10792500.0,
+            "p95PooledNs": 12568084
+          },
+          "candidate": {
+            "sampleCount": 68,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 8361667.0,
+            "p95PooledNs": 9265125
+          },
+          "deltaMs": {
+            "p50": -2.430833,
+            "p95": -3.302959
+          }
+        },
+        {
+          "benchmarkFile": "stress.bench.ts",
+          "name": "toggle one group containing 1000 retained labels",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "neutral",
+          "baseline": {
+            "sampleCount": 108,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 711896.0,
+            "p95PooledNs": 950541
+          },
+          "candidate": {
+            "sampleCount": 100,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 756312.5,
+            "p95PooledNs": 1179375
+          },
+          "deltaMs": {
+            "p50": 0.0444165,
+            "p95": 0.228834
+          }
+        },
+        {
+          "benchmarkFile": "typegpu-publication.bench.ts",
+          "name": "move 1000 retained TypeGPU labels",
+          "args": {},
+          "timingModeMismatch": false,
+          "status": "faster",
+          "baseline": {
+            "sampleCount": 76,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 5934937.5,
+            "p95PooledNs": 7245374.999999881
+          },
+          "candidate": {
+            "sampleCount": 112,
+            "blockCount": 4,
+            "p50MedianBlockMediansNs": 407021.0,
+            "p95PooledNs": 510750
+          },
+          "deltaMs": {
+            "p50": -5.5279165,
+            "p95": -6.73462499999988
+          }
+        }
+      ]
+    }
+  }
+}
