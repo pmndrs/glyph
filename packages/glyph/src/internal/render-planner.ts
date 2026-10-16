@@ -1201,8 +1201,16 @@ class RenderPlannerImpl {
       exclusions: geometry?.exclusions ?? [],
       inlineObjects: geometryChanged ? compileInlineObjects(this.#handleState, state, geometryRevision) : [],
     };
-    const publication = this.#transport.prepareParagraph(request, state.paragraphId);
-    const measurement = includeMeasurement ? readPlannerMeasurements(publication).get(state.paragraphId) : undefined;
+    let measurement: ParagraphLayoutSummary | undefined;
+    this.#transport.prepareParagraph(
+      request,
+      state.paragraphId,
+      includeMeasurement
+        ? (publication) => {
+            measurement = readPlannerMeasurements(publication).get(state.paragraphId);
+          }
+        : undefined,
+    );
     if (includeMeasurement && measurement === undefined)
       throw new Error('text engine returned no measurement for prepared text');
     if (geometryChanged) commitFlowEntityRevisions(state);

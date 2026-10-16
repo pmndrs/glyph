@@ -1367,8 +1367,12 @@ export class PlanTransport {
     this.#stagedUpdate = undefined;
   }
 
-  /** Prepares one paragraph with its requested semantic sidecar, without renderer publication. Result bytes expire at the next Wasm call. */
-  prepareParagraph(requestFrame: PlannerFrameUpdate, paragraphId: ParagraphId): PlanPublication {
+  /** Prepares one paragraph, synchronously exposing requested semantic bytes only to a consumer. */
+  prepareParagraph(
+    requestFrame: PlannerFrameUpdate,
+    paragraphId: ParagraphId,
+    consumePublication?: (publication: PlanPublication) => void,
+  ): void {
     this.assertMutationAllowed();
     const { requestLength, requestPointer, initialMemoryBuffer } = this.#writeFrameRequest(
       requestFrame,
@@ -1400,7 +1404,11 @@ export class PlanTransport {
         headerFault(header),
       );
     }
-    return this.#decodeResult(header, resultPointer, memoryBuffer, initialMemoryBuffer);
+    if (consumePublication === undefined) {
+      this.#recordResultExtent(header, resultPointer, memoryBuffer);
+    } else {
+      consumePublication(this.#decodeResult(header, resultPointer, memoryBuffer, initialMemoryBuffer));
+    }
   }
 
   /** @internal Marks a successful Rust preparation whose authored state was adopted by TypeScript. */
@@ -1594,12 +1602,7 @@ export class PlanTransport {
     initialMemoryBuffer: ArrayBuffer,
   ): PlanPublication {
     const layout = textShaperAbi.layouts.engineResult;
-    const byteLength = header.getUint32(layout.byteLength, true);
-    if (byteLength < layout.size || resultPointer + byteLength > memoryBuffer.byteLength) {
-      throw new RangeError('text engine returned an out-of-bounds publication');
-    }
-    this.#requestCapacity = header.getUint32(layout.requestCapacity, true);
-    this.#resultCapacity = header.getUint32(layout.resultCapacity, true);
+    const byteLength = this.#recordResultExtent(header, resultPointer, memoryBuffer);
     const publication: PlanPublication = {
       bytes: new Uint8Array(memoryBuffer, resultPointer, byteLength),
       memoryBuffer,
@@ -1618,6 +1621,17 @@ export class PlanTransport {
     };
     this.#issued.set(publication, this.#epoch);
     return publication;
+  }
+
+  #recordResultExtent(header: DataView, resultPointer: number, memoryBuffer: ArrayBuffer): number {
+    const layout = textShaperAbi.layouts.engineResult;
+    const byteLength = header.getUint32(layout.byteLength, true);
+    if (byteLength < layout.size || resultPointer + byteLength > memoryBuffer.byteLength) {
+      throw new RangeError('text engine returned an out-of-bounds publication');
+    }
+    this.#requestCapacity = header.getUint32(layout.requestCapacity, true);
+    this.#resultCapacity = header.getUint32(layout.resultCapacity, true);
+    return byteLength;
   }
 
   dispose(): void {
