@@ -13,6 +13,7 @@ export const PACKAGE_LABS_SUITES = [
   'edit',
   'assignment',
   'edit-sized',
+  'multi-owner',
   'full',
 ] as const;
 

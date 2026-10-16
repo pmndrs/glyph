@@ -4,6 +4,8 @@ import { assert, bench, group } from '@pmndrs/labs';
 
 import {
   createLabels,
+  createMultiOwnerPublication,
+  multiOwnerTexts,
   createGroupedLabels,
   disposeLabels,
   disposeGroupedLabels,
@@ -63,7 +65,7 @@ function editSizedColorPublication(
   engineOnly: boolean,
 ): void {
   const boundary = engineOnly ? 'engine' : 'scene';
-  bench(`${String(count)} labels ${position} color-only ${boundary} publication @color-only`, function* () {
+  bench(`${String(count)} labels ${position} color-only ${boundary} publication @color-only @style`, function* () {
     const created = createLabels(count);
     const target = created.labels[targetIndex]!;
     let alternate = false;
@@ -242,6 +244,49 @@ group('edit-sized root publication @publication @edit-sized @edit', () => {
         deepStrictEqual(untouched.map(committedGlyphSnapshot), untouchedSnapshots);
         disposeLabels(created);
       });
+    }
+  }
+});
+
+// Each operation changes separated owners before one submit; clean gaps remain part of the same batch.
+group('multiple-owner publication @multi-owner @edit-sized @edit @publication', () => {
+  for (const count of [100, 1_000]) {
+    for (const balanced of [true, false]) {
+      for (const engineOnly of [true, false]) {
+        const mode = balanced ? 'balanced' : 'unbalanced';
+        const boundary = engineOnly ? 'engine' : 'scene';
+        bench(`${String(count)} labels separated ${mode} grow-shrink-space ${boundary} publication`, function* () {
+          const texts = multiOwnerTexts(balanced);
+          const expected = texts.map((values) =>
+            values.map((text) => {
+              const cold = createLabels(1);
+              try {
+                cold.labels[0]!.text = text;
+                if (engineOnly) glyph.shape();
+                else cold.scene.updateMatrixWorld(true);
+                if (cold.textGroup.error !== undefined) throw cold.textGroup.error;
+                return cold.labels[0]!.measure();
+              } finally {
+                disposeLabels(cold);
+              }
+            }),
+          );
+          const workload = createMultiOwnerPublication(count, balanced, engineOnly);
+          const { created, indices, edited, publish } = workload;
+          const untouched = created.labels.filter((_, index) => !indices.includes(index));
+          const clean = untouched.map(committedGlyphSnapshot);
+          publish();
+          publish();
+          const textCount = yield publish;
+          assert.equal(textCount, count);
+          deepStrictEqual(
+            edited.map((label) => label.measure()),
+            expected[workload.selected],
+          );
+          deepStrictEqual(untouched.map(committedGlyphSnapshot), clean);
+          disposeLabels(created);
+        });
+      }
     }
   }
 });

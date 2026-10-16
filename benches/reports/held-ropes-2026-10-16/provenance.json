@@ -1,0 +1,41 @@
+{
+  "sourceReportSha256": "c13a166e0266ec1efe1f1f25d9ceb9c0170f7b5a92a248527b7cb78ba303bce8",
+  "copies": {
+    "main-publication.md": {
+      "source": ".cache/retained-prepare-publish-wave2/order-ownership-wave/rope-tail-capacity-wave/owned-inspection-range-wave/checkpoint-publication/attempt1/main/labs/summary.md",
+      "originalSourceSha256": "8ecdee370ee6b068f74dcb46da04cf442c01e6caad3371b12366c4f16fc05565",
+      "originalSourceBytes": 28837,
+      "committedReportSha256": "61d554f5f38934fc289cd0f445e62445c265f47ed075546329f5994542914daf",
+      "committedReportBytes": 33775
+    },
+    "main-publication-manifest.json": {
+      "source": ".cache/retained-prepare-publish-wave2/order-ownership-wave/rope-tail-capacity-wave/owned-inspection-range-wave/checkpoint-publication/attempt1/main/labs/manifest.json",
+      "originalSourceSha256": "7b63e67434a2df43e531d0231cabcccbd50ae846dadbda1f1f7ec9d6eebca978",
+      "originalSourceBytes": 1282,
+      "committedReportSha256": "7b63e67434a2df43e531d0231cabcccbd50ae846dadbda1f1f7ec9d6eebca978",
+      "committedReportBytes": 1282
+    },
+    "published010-publication.md": {
+      "source": ".cache/retained-prepare-publish-wave2/order-ownership-wave/rope-tail-capacity-wave/owned-inspection-range-wave/checkpoint-publication/attempt1/published010/labs/summary.md",
+      "originalSourceSha256": "56e0acabbcc884f98c001c5c05b41155fb726de7b6202659c33d7f6a463d060d",
+      "originalSourceBytes": 29072,
+      "committedReportSha256": "9838b78cb4aa915eea56e7286f06d1e28f6e46c17c0e77c44aa7eadea77491c9",
+      "committedReportBytes": 33903
+    },
+    "published010-publication-manifest.json": {
+      "source": ".cache/retained-prepare-publish-wave2/order-ownership-wave/rope-tail-capacity-wave/owned-inspection-range-wave/checkpoint-publication/attempt1/published010/labs/manifest.json",
+      "originalSourceSha256": "024c3272dc9724ab4c8bbb4b7b6729d461e6eed0586145777c36802751a4f73c",
+      "originalSourceBytes": 1341,
+      "committedReportSha256": "024c3272dc9724ab4c8bbb4b7b6729d461e6eed0586145777c36802751a4f73c",
+      "committedReportBytes": 1341
+    }
+  },
+  "limitations": [
+    "Candidate drift 8.7%; published baseline drift 7.4%.",
+    "Candidate measured once and reused for published comparison.",
+    "These reports predate the ordered-range/cursor edit.",
+    "Build recovery interrupted with SIGINT; not a completed current build gate.",
+    "Raw profiles, package archives, and full timing samples are local-only .cache artifacts."
+  ],
+  "presentation": "Copied historical reports were formatted by repository Oxfmt for the committed evidence bundle; original source hashes and final report hashes are distinct. No timing was rerun."
+}

@@ -29,7 +29,7 @@ group('per-glyph inspection @glyphs @api', () => {
     disposeLabels(created);
   });
 
-  for (const count of [1, 1000]) {
+  for (const count of [1, 100, 1000]) {
     bench(`edit and independently copy one label among ${count} labels @layout @glyphs @api`, function* () {
       const created = createLabels(count);
       const label = created.labels[count - 1]!;

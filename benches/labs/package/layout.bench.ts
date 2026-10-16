@@ -61,7 +61,7 @@ group('public paragraph layout at 22k glyphs @layout @exhaustive', () => {
     disposeParagraph(created);
   });
 
-  bench('inspection then publication after width change @glyphs @api @reflow @publication', function* () {
+  bench('inspection then publication after width change @glyphs @api @reflow @publication @width-inspection-publication', function* () {
     const created = createPublishedParagraph(text);
     let iteration = 0;
     const result = yield () => {

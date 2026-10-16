@@ -27,6 +27,7 @@ on:
           - cold
           - edit
           - edit-sized
+          - multi-owner
           - assignment
           - full
       baseline_version:

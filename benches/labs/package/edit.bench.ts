@@ -1,11 +1,16 @@
 import { assert, bench, group } from '@pmndrs/labs';
 
-import { attachToScene, createParagraph, disposeParagraph, fredokaFont, paragraphTextForGlyphs } from './fixture.ts';
+import {
+  attachToScene,
+  createParagraph,
+  disposeParagraph,
+  fredokaFont,
+  fredokaTextForGlyphs,
+  paragraphTextForGlyphs,
+} from './fixture.ts';
 
 const inter = paragraphTextForGlyphs(4_000);
-const fredokaSentence =
-  'Reveals one grapheme at a time over a duration. Layout stays put and a trigger fires at the end. ';
-const fredoka = fredokaSentence.repeat(Math.ceil(inter.length / fredokaSentence.length));
+const fredoka = fredokaTextForGlyphs(4_000);
 
 /** Alternately inserts and removes one character in the middle of `text`. */
 function typist(text: string) {

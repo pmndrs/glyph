@@ -46,7 +46,7 @@ group('first-time operations @cold', () => {
     assert(committed, 'cold label edit must complete publication before disposal');
   });
 
-  bench('mount 100 labels and borrow glyphs from each once', function* () {
+  bench('mount 100 labels and borrow glyphs from each once @cold-borrow', function* () {
     const glyphCount = yield () => {
       const created = createLabels();
       const result = created.labels.reduce(
