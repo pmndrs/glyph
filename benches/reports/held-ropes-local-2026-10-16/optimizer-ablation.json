@@ -1,0 +1,344 @@
+{
+  "status": "rejected; production optimizer policy unchanged",
+  "generatedAt": "2026-10-16T19:41:57.003634+00:00",
+  "admission": {
+    "recordedAt": "2026-10-16T19:39:23.818291+00:00",
+    "planSha256": "9def129f6f00b3d7971e804da84906c5c94b64cc0b8b35256086648f28019fc6",
+    "blocks": 4,
+    "suite": "bulk-1024-profile",
+    "minimumP50Fraction": 0.05,
+    "minimumP50Ms": 1,
+    "maximumP95RegressionFraction": 0.05,
+    "maximumClockDriftFraction": 0.05,
+    "alpha": 0.05,
+    "repeatPolicy": "one run; no favorable-clock retry",
+    "productionPolicyChanged": false
+  },
+  "artifact": {
+    "control": {
+      "file": "/private/tmp/glyph-held-20261016/.cache/held-local-20261016/baseline/pmndrs-glyph-0.1.0.tgz",
+      "sha256": "bec6c1735542bba49ab480d2337c787255950d09383c2f5720794a4d68fc5265"
+    },
+    "treatment": {
+      "file": "/private/tmp/glyph-held-20261016/packages/glyph/.cache/optimizer-ablation-20261016/pmndrs-glyph-0.1.0-optimizer-ablation.tgz",
+      "sha256": "e1cfc4b20d65c0065f09bdc61c012aa10feb32cf365c15becd3966e8ae9a19eb"
+    },
+    "diagnostic": {
+      "directory": "/private/tmp/glyph-held-20261016/.cache/held-local-20261016/baseline/named-wasm",
+      "manifestSha256": "5d10c3d72604ca65fdcd412f66554c51456a5fb959627ddb468e71692847976e",
+      "sourceRevision": "60d3c26f135b360ab1111131ce274218959d176f",
+      "sourceDirty": "",
+      "rawSha256": "d078a92a67b9a96283ec4f623ed33eee70dd0251e47a155cfecd0ced31e093b6",
+      "inputSha256": "d30b9056a6bf3e61305eb5f016e56f324b3df584a3f70a3421220d379e1236b2",
+      "originalCandidateSha256": "c4fcd84c34bd3accac9454ffd2ae635285323480dff1426ab9ab80f7ba97a67a"
+    },
+    "tools": {
+      "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+      "wasmOpt": "wasm-opt version 129 (version_129)"
+    },
+    "controlFlags": [
+      "--enable-bulk-memory",
+      "--enable-nontrapping-float-to-int",
+      "--enable-simd",
+      "--one-caller-inline-max-function-size=0",
+      "--merge-similar-functions",
+      "-Oz",
+      "--merge-similar-functions",
+      "-Oz"
+    ],
+    "treatmentFlags": [
+      "--enable-bulk-memory",
+      "--enable-nontrapping-float-to-int",
+      "--enable-simd",
+      "--merge-similar-functions",
+      "-Oz",
+      "--merge-similar-functions",
+      "-Oz"
+    ],
+    "packageMethod": "tar repack of authenticated original member tree with only text-shaper.wasm replaced",
+    "memberCount": 1217,
+    "memberDelta": [
+      {
+        "path": "package/dist/text-shaper.wasm",
+        "control": {
+          "sha256": "c4fcd84c34bd3accac9454ffd2ae635285323480dff1426ab9ab80f7ba97a67a",
+          "bytes": 1585989
+        },
+        "treatment": {
+          "sha256": "ed19321ea76df79caf5dc9f14f3eac9042590ec03c8adc3886cbe73aa83308a5",
+          "bytes": 1581681
+        }
+      }
+    ],
+    "sizes": {
+      "control": {
+        "wasm": {
+          "raw": 1585989,
+          "gzip": 591103
+        },
+        "package": {
+          "raw": 11018078,
+          "gzip": 3166898,
+          "members": 1217
+        },
+        "javascript": {
+          "files": 237,
+          "raw": 866455,
+          "gzip": 296453
+        }
+      },
+      "treatment": {
+        "wasm": {
+          "raw": 1581681,
+          "gzip": 595552
+        },
+        "package": {
+          "raw": 11013770,
+          "gzip": 3211102,
+          "members": 1217
+        },
+        "javascript": {
+          "files": 237,
+          "raw": 866455,
+          "gzip": 296453
+        }
+      }
+    },
+    "namedSha256": "bd9af170937b63b8d977fe284a555cd5da75af3416882341a5be42c1b7c7843e",
+    "namedExecutableSha256": "ed19321ea76df79caf5dc9f14f3eac9042590ec03c8adc3886cbe73aa83308a5",
+    "namedFunctionCount": 1019,
+    "namedManifest": "named-manifest.json",
+    "functionMapSha256": "0ee27b00393a301d0b19ac0f8fd9ddf1b0f9454d255e283b93bd3489f3267b44"
+  },
+  "delivery": {
+    "method": "Archive member bytes; gzip level 9 mtime 0; JS concatenated in sorted archive-member path order. Tarball byte sizes use distinct packers and are not a causal compression comparison.",
+    "control": {
+      "wasm": {
+        "raw": 1585989,
+        "gzip9": 584730,
+        "sha256": "c4fcd84c34bd3accac9454ffd2ae635285323480dff1426ab9ab80f7ba97a67a"
+      },
+      "javascript": {
+        "raw": 866455,
+        "gzip9": 231237,
+        "sha256": "f8745320728e00bda8b29abad256034f450008a3075f664d00e2d781307bd7fc"
+      },
+      "archiveBytes": 3166898,
+      "memberCount": 1217
+    },
+    "treatment": {
+      "wasm": {
+        "raw": 1581681,
+        "gzip9": 590149,
+        "sha256": "ed19321ea76df79caf5dc9f14f3eac9042590ec03c8adc3886cbe73aa83308a5"
+      },
+      "javascript": {
+        "raw": 866455,
+        "gzip9": 231237,
+        "sha256": "f8745320728e00bda8b29abad256034f450008a3075f664d00e2d781307bd7fc"
+      },
+      "archiveBytes": 3211102,
+      "memberCount": 1217
+    }
+  },
+  "labs": {
+    "generatedAt": "2026-10-16T19:40:38.776Z",
+    "labsVersion": "0.9.0",
+    "harnessDigest": "db9aad3b2b160bce3a7ddac83974f601ecf9fd2fd5b69e66294808160905d1f2",
+    "blocks": 4,
+    "suite": "bulk-1024-profile",
+    "baseline": {
+      "requested": "/private/tmp/glyph-held-20261016/.cache/held-local-20261016/baseline/pmndrs-glyph-0.1.0.tgz",
+      "version": "0.1.0",
+      "sha256": "bec6c1735542bba49ab480d2337c787255950d09383c2f5720794a4d68fc5265"
+    },
+    "candidate": {
+      "requested": "/private/tmp/glyph-held-20261016/packages/glyph/.cache/optimizer-ablation-20261016/pmndrs-glyph-0.1.0-optimizer-ablation.tgz",
+      "version": "0.1.0",
+      "sha256": "e1cfc4b20d65c0065f09bdc61c012aa10feb32cf365c15becd3966e8ae9a19eb"
+    },
+    "comparison": "comparison.txt",
+    "notComparable": {
+      "baselineCheckFailures": [],
+      "timingModeMismatches": []
+    }
+  },
+  "correctness": {
+    "sourceWorktree": "/private/tmp/glyph-held-ablation-checks-20261016",
+    "sourceRevision": "60d3c26f135b360ab1111131ce274218959d176f",
+    "trackedStatusAfterRun": "clean",
+    "command": "mise exec -- pnpm scripts run glyph:node-tests --",
+    "exit": 0,
+    "tests": {
+      "passed": 1048,
+      "failed": 0,
+      "skipped": 0,
+      "cancelled": 0
+    },
+    "testedDist": "/private/tmp/glyph-held-ablation-checks-20261016/packages/glyph/dist",
+    "testedTreatmentArchiveSha256": "e1cfc4b20d65c0065f09bdc61c012aa10feb32cf365c15becd3966e8ae9a19eb",
+    "testedTreatmentTextShaperWasmSha256": "ed19321ea76df79caf5dc9f14f3eac9042590ec03c8adc3886cbe73aa83308a5",
+    "log": "/private/tmp/glyph-held-20261016/.cache/held-local-20261016/optimizer-ablation/gates/glyph-node-tests-treatment.log",
+    "logSha256": "f5d334967a41310d1605c56f04b3d1ac028aebf84b57b56684b5f02c58dc9067",
+    "performanceOrMemoryWorkloadRun": false,
+    "oracleCoverage": "Package, integration, Three/React/Vue adapter, package-consumer, bake and shaping behavior; see full named workflow log."
+  },
+  "comparison": {
+    "p": 0.343,
+    "relative95PercentCI": [-8.1, 4.0],
+    "classification": "neutral; inconclusive at shown resolution"
+  },
+  "distributionMethod": "p50 is median of four block medians; p95 is pooled retained sample floor(.95*(N-1)); ms. Labs trims two low and two high samples in each 20-sample block, retaining64/80. No analyst trimming or retries.",
+  "arms": {
+    "baseline": {
+      "p50Ms": 21.841125,
+      "p95Ms": 24.314917,
+      "p99Ms": 24.938,
+      "retainedSamples": 64,
+      "blockMediansMs": [21.484584, 21.287458, 22.530833, 22.197666],
+      "timingPlan": {
+        "batch": false,
+        "batch_samples": 0,
+        "batch_unroll": 4,
+        "samples": 20
+      },
+      "environmentCalibrationGHz": [3.8828290172533513, 3.895784695480449],
+      "environmentDriftPercent": 0.3331102097508473,
+      "blockCalibrationGHz": [3.4817652490147615, 3.6639345396745147, 3.5171820496026363, 3.6677630131948518],
+      "blockDriftPercent": 5.203077947484226,
+      "gcNs": {
+        "min": 0,
+        "max": 11828416,
+        "p50": 257041.5
+      },
+      "heapBytes": {
+        "min": 6996096,
+        "max": 10890440,
+        "p50": 8043908
+      },
+      "hardware": {
+        "cpu": "Apple M4",
+        "arch": "arm64-darwin",
+        "runtime": "node",
+        "freq": 3.8828290172533513
+      }
+    },
+    "candidate": {
+      "p50Ms": 21.4314795,
+      "p95Ms": 23.951167,
+      "p99Ms": 24.147542,
+      "retainedSamples": 64,
+      "blockMediansMs": [22.074542, 22.148667, 20.788417, 20.70395900000012],
+      "timingPlan": {
+        "batch": false,
+        "batch_samples": 0,
+        "batch_unroll": 4,
+        "samples": 20
+      },
+      "environmentCalibrationGHz": [3.885278076589456, 3.869407912863226],
+      "environmentDriftPercent": 0.40930512848141926,
+      "blockCalibrationGHz": [3.7051914925354037, 3.5202408724686185, 3.710171940426322, 3.575698117650521],
+      "blockDriftPercent": 5.253671481079881,
+      "gcNs": {
+        "min": 0,
+        "max": 12062084,
+        "p50": 0
+      },
+      "heapBytes": {
+        "min": 6821168,
+        "max": 10742512,
+        "p50": 8106384
+      },
+      "hardware": {
+        "cpu": "Apple M4",
+        "arch": "arm64-darwin",
+        "runtime": "node",
+        "freq": 3.885278076589456
+      }
+    }
+  },
+  "limitations": [
+    "Serial baseline then candidate order",
+    "Clock estimates are calibration rates, not independently sampled hardware clocks",
+    "No memory or browser run: treatment rejected before production admission; all final mission gates remain open",
+    "Absolute package archive sizes use different packers; use same-method member compression for delivery delta",
+    "These archive-member JS sizes are not prior dist-directory inventory sizes; no cross-method size comparison"
+  ],
+  "evidence": {
+    ".cache/held-local-20261016/optimizer-ablation/build.log": {
+      "sha256": "d4674a0931c449b1f8937b71130275e4fdc8a00ea672d5df8c7dfc85102908f0",
+      "bytes": 481
+    },
+    ".cache/held-local-20261016/optimizer-ablation/labs.log": {
+      "sha256": "a9d34883e3ae8d72d8288b06a5fa63c33bc1fb99194c0c7ffec85977ba9bc8ef",
+      "bytes": 7738
+    },
+    ".cache/held-local-20261016/optimizer-ablation/labs/baseline.json": {
+      "sha256": "b34872bc5e76546eb378a684745f6938368f0a4315d228bf6f960d5c96b04a65",
+      "bytes": 5327
+    },
+    ".cache/held-local-20261016/optimizer-ablation/labs/candidate.json": {
+      "sha256": "21d13d46fdb50be8d7b242a28211ffcd4773387636dc4e6165cc66c2498d7197",
+      "bytes": 5321
+    },
+    ".cache/held-local-20261016/optimizer-ablation/labs/manifest.json": {
+      "sha256": "2f9fecf44017fc2ca31d3e51882c2afd823dadc17ead65d447ab215d7ca5295f",
+      "bytes": 842
+    },
+    ".cache/held-local-20261016/optimizer-ablation/labs/comparison.txt": {
+      "sha256": "efbc2892e666ffdc4c3295c59c5502bf2e4adf7a90b8d76eb87e8e2950fb37e9",
+      "bytes": 1164
+    },
+    ".cache/held-local-20261016/optimizer-ablation/gates/treatment-node-test-result.json": {
+      "sha256": "053bbf7199db3c585a62b4793b6c72af1a9e51c09ce38fd96435292d6bb766ad",
+      "bytes": 1023
+    },
+    ".cache/held-local-20261016/optimizer-ablation/gates/treatment-install-and-compare.json": {
+      "sha256": "b7e7d5cc45f89ace7d81a6cdb02bd7ba92cd35ad6f22e368bf7df18dc7ff67e7",
+      "bytes": 1404
+    },
+    "packages/glyph/scripts/build-shaper-optimizer-ablation.mjs": {
+      "sha256": "c28036c5b6e4289c17444ebfc3bb15a31e32873fe33e22b5c3aa5226409f95c8",
+      "bytes": 11010
+    },
+    "benches/scripts/support/package-labs-suite.mts": {
+      "sha256": "648c12bab924fe7b33452434bc1adaf47e1468e13f48d67a2db5ce45a1465756",
+      "bytes": 2966
+    },
+    "benches/scripts/run-package-labs.mts": {
+      "sha256": "19c42364610b15bf66693f513f127f97736ff27662d9261a5d722bf77fdac062",
+      "bytes": 18629
+    },
+    ".cache/held-local-20261016/optimizer-ablation/gates/wasm-interfaces.json": {
+      "sha256": "da4ffa2da86b6fd6b2e5f3b76bf0511203430b74d3657ae861aee3e945b4a711",
+      "bytes": 8737
+    },
+    ".cache/held-local-20261016/optimizer-ablation/gates/node-test-coverage-pointers.json": {
+      "sha256": "8408428e620fbc5400de50299f824b6c25c982db33592ccade5ebca11417b3e5",
+      "bytes": 23825
+    },
+    ".cache/held-local-20261016/optimizer-ablation/gates/glyph-static.log": {
+      "sha256": "0e1f9d686e30d873917248b73ba0d0a496627a8eca01579a873eee1e67185830",
+      "bytes": 970
+    },
+    ".cache/held-local-20261016/optimizer-ablation/gates/benchmark-static-final.log": {
+      "sha256": "91b47f0651ae1232d671d3b25ba744345b30418ad72f267a33b2557677c6b010",
+      "bytes": 182
+    }
+  },
+  "wasmInterface": {
+    "importsEqual": true,
+    "exportsEqual": true,
+    "countsEqual": true,
+    "importCount": 0,
+    "exportCount": 38
+  },
+  "gates": {
+    "artifactBuildExit": 0,
+    "treatmentNodeTestsExit": 0,
+    "glyphStaticExit": 0,
+    "benchmarkStaticInitialExit": 1,
+    "benchmarkStaticInitialReason": "Only report Markdown/JSON formatting; corrected through repository formatter",
+    "benchmarkStaticFinalExit": 0
+  }
+}
