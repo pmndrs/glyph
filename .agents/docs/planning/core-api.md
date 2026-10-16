@@ -28,11 +28,18 @@ sources:
     resource: ../guides/renderer-integration.md
     title: Renderer integration guide
 generated:
-  by: openai-codex/gpt-5.6
-  at: '2026-09-16T13:27:39Z'
+  by: openai-codex/gpt-6
+  at: '2026-10-12T11:22:21Z'
 ---
 
 # Glyph integration API
+
+## Held refactor contract
+
+The [accepted preparation/publication decision](decisions/retained-prepare-publish.md) governs the held ropes work.
+Bound setters prepare retained Rust layout synchronously. Reads and independent copies use that prepared revision;
+publication handles accumulated renderer updates and batching. Existing public signatures remain unchanged. This is
+a refactor target; passing implementation evidence is tracked in [publication-frontier](publication-frontier.md).
 
 Applications import the values and types they encounter from `@pmndrs/glyph`. Integration authors import the
 renderer-neutral construction helpers from `@pmndrs/glyph/core`. The engine-driving API formerly published at `/core`
