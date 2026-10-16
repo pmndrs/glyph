@@ -35,10 +35,17 @@ sources:
     title: Three.js Object3D
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-13T18:42:06Z'
+  at: '2026-10-14T08:13:00Z'
 ---
 
 # Three.js text API
+
+## Held refactor contract
+
+The [accepted preparation/publication decision](decisions/retained-prepare-publish.md) governs the held ropes work.
+Bound setters prepare retained Rust layout synchronously. Reads and independent copies use that prepared revision;
+publication handles accumulated renderer updates and batching. Existing public signatures remain unchanged. This is
+a refactor target; passing implementation evidence is tracked in [publication-frontier](publication-frontier.md).
 
 `@pmndrs/glyph/three` is the maintained renderer integration. `Text` and `TextGroup` are Three.js `Object3D` subclasses;
 scene traversal collects desired mutations, participates in root publication, consumes the resulting command buffer,
