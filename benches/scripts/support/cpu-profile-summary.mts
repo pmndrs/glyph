@@ -51,6 +51,40 @@ export interface CpuProfileStageTotal {
   readonly microseconds: number;
 }
 
+export interface CpuProfilePhase {
+  readonly label: string;
+  readonly nodeId?: number;
+  readonly microseconds: number;
+  readonly sampleCount: number;
+  readonly stageTotals: readonly CpuProfileStageTotal[];
+  readonly hotspots: readonly Pick<
+    Hotspot,
+    | 'functionName'
+    | 'url'
+    | 'lineNumber'
+    | 'columnNumber'
+    | 'selfMicroseconds'
+    | 'selfSamples'
+    | 'originalFile'
+    | 'originalLineNumber'
+    | 'originalColumnNumber'
+  >[];
+}
+
+interface AncestryAnchor {
+  readonly label: string;
+  readonly nodeId: number;
+}
+
+interface PhaseAccumulator {
+  readonly label: string;
+  readonly nodeId?: number;
+  microseconds: number;
+  sampleCount: number;
+  readonly stageTotals: Map<CpuProfileStage, number>;
+  readonly hotspots: Map<string, Hotspot>;
+}
+
 interface NamedFunction {
   readonly functionIndex: number;
   readonly name: string;
@@ -84,11 +118,13 @@ export async function summarizeCpuProfile(
   manifestPath?: string,
   wasmUrl?: string,
   artifactPath?: string,
+  ancestryPath?: string,
 ): Promise<{
   readonly totalMicroseconds: number;
   readonly sampleCount: number;
   readonly stageTotals: readonly CpuProfileStageTotal[];
   readonly hotspots: readonly Hotspot[];
+  readonly phases?: readonly CpuProfilePhase[];
   readonly sourceMapArtifactSha256?: string;
 }> {
   if (wasmUrl !== undefined && manifestPath === undefined) {
@@ -107,6 +143,27 @@ export async function summarizeCpuProfile(
   const totals = new Map<string, Hotspot>();
   const nodes = new Map(profile.nodes.map((node) => [node.id, node]));
   const parents = validateTree(profile.nodes, nodes);
+  const anchors =
+    ancestryPath === undefined
+      ? undefined
+      : validateAncestry(JSON.parse(await readFile(ancestryPath, 'utf8')), nodes, parents);
+  const phaseByNode = new Map(anchors?.map((anchor) => [anchor.nodeId, anchor.label]));
+  const phases =
+    anchors === undefined
+      ? undefined
+      : new Map<string, PhaseAccumulator>(
+          [...anchors, { label: 'unattributed' }].map(({ label, ...anchor }) => [
+            label,
+            {
+              label,
+              ...anchor,
+              microseconds: 0,
+              sampleCount: 0,
+              stageTotals: new Map<CpuProfileStage, number>(),
+              hotspots: new Map<string, Hotspot>(),
+            },
+          ]),
+        );
   let totalMicroseconds = 0;
   const stageTotals = new Map<CpuProfileStage, number>();
 
@@ -123,8 +180,10 @@ export async function summarizeCpuProfile(
     const original = sourceMaps?.locations.get(frameKey(sampledNode.callFrame));
     add(totals, sampledFrame, 'selfMicroseconds', delta, true, original);
     let ancestorId: number | undefined = sampleId;
+    let phaseLabel: string | undefined;
     const seenOnStack = new Set<string>();
     while (ancestorId !== undefined) {
+      phaseLabel ??= phaseByNode.get(ancestorId);
       const ancestor = nodes.get(ancestorId)!;
       const frame = resolveFrame(ancestor.callFrame, names, wasmUrl);
       const key = frameKey(frame);
@@ -141,14 +200,20 @@ export async function summarizeCpuProfile(
       }
       ancestorId = parents.get(ancestorId);
     }
+    if (phases !== undefined) {
+      const phase = phases.get(phaseLabel ?? 'unattributed')!;
+      phase.microseconds += delta;
+      if (!Number.isSafeInteger(phase.microseconds)) throw new Error('Phase sampled time exceeds safe integer range');
+      phase.sampleCount++;
+      phase.stageTotals.set(stage, (phase.stageTotals.get(stage) ?? 0) + delta);
+      add(phase.hotspots, sampledFrame, 'selfMicroseconds', delta, true, original);
+    }
   }
 
   return {
     totalMicroseconds,
     sampleCount: profile.samples.length,
-    stageTotals: [...stageTotals]
-      .map(([stage, microseconds]) => ({ stage, microseconds }))
-      .sort((left, right) => right.microseconds - left.microseconds || left.stage.localeCompare(right.stage)),
+    stageTotals: sortedStageTotals(stageTotals),
     hotspots: [...totals.values()].sort(
       (left, right) =>
         right.inclusiveMicroseconds - left.inclusiveMicroseconds ||
@@ -158,6 +223,29 @@ export async function summarizeCpuProfile(
         left.lineNumber - right.lineNumber ||
         left.columnNumber - right.columnNumber,
     ),
+    ...(phases === undefined
+      ? {}
+      : {
+          phases: [...phases.values()].map(
+            ({ label, nodeId, microseconds, sampleCount, stageTotals: phaseStages, hotspots }) => ({
+              label,
+              ...(nodeId === undefined ? {} : { nodeId }),
+              microseconds,
+              sampleCount,
+              stageTotals: sortedStageTotals(phaseStages),
+              hotspots: [...hotspots.values()]
+                .sort(
+                  (left, right) =>
+                    right.selfMicroseconds - left.selfMicroseconds ||
+                    left.url.localeCompare(right.url) ||
+                    left.functionName.localeCompare(right.functionName) ||
+                    left.lineNumber - right.lineNumber ||
+                    left.columnNumber - right.columnNumber,
+                )
+                .map(({ inclusiveMicroseconds: _inclusiveMicroseconds, ...hotspot }) => hotspot),
+            }),
+          ),
+        }),
     ...(sourceMaps === undefined ? {} : { sourceMapArtifactSha256: sourceMaps.artifactSha256 }),
   };
 }
@@ -167,6 +255,7 @@ export function renderCpuProfileSummary(summary: {
   readonly sampleCount: number;
   readonly stageTotals: readonly CpuProfileStageTotal[];
   readonly hotspots: readonly Hotspot[];
+  readonly phases?: readonly CpuProfilePhase[];
   readonly sourceMapArtifactSha256?: string;
 }): string {
   const lines = [
@@ -194,6 +283,33 @@ export function renderCpuProfileSummary(summary: {
     '| --- | ---: |',
     ...summary.stageTotals.map(({ stage, microseconds }) => `| ${stage} | ${microseconds} |`),
     '',
+    ...(summary.phases === undefined
+      ? []
+      : [
+          'Exclusive sampled CPU by ancestry node ID. Each sample belongs to one phase; detached runtime stacks remain unattributed.',
+          '| Phase | Anchor node | Samples | Self sampled CPU (µs) |',
+          '| --- | ---: | ---: | ---: |',
+          ...summary.phases.map(
+            ({ label, nodeId, sampleCount, microseconds }) =>
+              `| ${cell(label)} | ${nodeId ?? ''} | ${sampleCount} | ${microseconds} |`,
+          ),
+          '',
+          ...summary.phases.flatMap(({ label, stageTotals, hotspots }) => [
+            `### ${label}`,
+            '',
+            '| Origin stage | Self sampled CPU (µs) |',
+            '| --- | ---: |',
+            ...stageTotals.map(({ stage, microseconds }) => `| ${stage} | ${microseconds} |`),
+            '',
+            '| Function | URL | Line | Column | Original source | Original line | Original column | Self (µs) | Self samples |',
+            '| --- | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: |',
+            ...hotspots.map(
+              (hotspot) =>
+                `| ${cell(hotspot.functionName)} | ${cell(hotspot.url)} | ${hotspot.lineNumber} | ${hotspot.columnNumber} | ${cell(hotspot.originalFile ?? '')} | ${hotspot.originalLineNumber ?? ''} | ${hotspot.originalColumnNumber ?? ''} | ${hotspot.selfMicroseconds} | ${hotspot.selfSamples} |`,
+            ),
+            '',
+          ]),
+        ]),
     '| Function | URL | Line | Column | Original source | Original line | Original column | Self (µs) | Inclusive (µs) | Self samples |',
     '| --- | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: |',
   ];
@@ -285,6 +401,47 @@ function validateTree(
   visit(roots[0]!);
   if (visited.size !== nodes.length) throw new Error('Profile contains nodes detached from its root');
   return parents;
+}
+
+function validateAncestry(
+  value: unknown,
+  nodes: ReadonlyMap<number, ProfileNode>,
+  parents: ReadonlyMap<number, number | undefined>,
+): readonly AncestryAnchor[] {
+  if (!Array.isArray(value) || value.length === 0) throw new Error('Ancestry must be a nonempty array');
+  const labels = new Set<string>();
+  const ids = new Set<number>();
+  const anchors = value.map((entry: unknown, index): AncestryAnchor => {
+    if (
+      !isObject(entry) ||
+      typeof entry.label !== 'string' ||
+      entry.label.trim().length === 0 ||
+      entry.label === 'unattributed' ||
+      !isSafeIndex(entry.nodeId) ||
+      !nodes.has(entry.nodeId)
+    ) {
+      throw new Error(`Invalid ancestry anchor at index ${index}`);
+    }
+    if (labels.has(entry.label)) throw new Error(`Duplicate ancestry label: ${entry.label}`);
+    if (ids.has(entry.nodeId)) throw new Error(`Duplicate ancestry node ID: ${entry.nodeId}`);
+    labels.add(entry.label);
+    ids.add(entry.nodeId);
+    return { label: entry.label, nodeId: entry.nodeId };
+  });
+  for (const anchor of anchors) {
+    let ancestorId = parents.get(anchor.nodeId);
+    while (ancestorId !== undefined) {
+      if (ids.has(ancestorId)) throw new Error(`Ancestry anchors overlap at nodes ${ancestorId} and ${anchor.nodeId}`);
+      ancestorId = parents.get(ancestorId);
+    }
+  }
+  return anchors;
+}
+
+function sortedStageTotals(totals: ReadonlyMap<CpuProfileStage, number>): readonly CpuProfileStageTotal[] {
+  return [...totals]
+    .map(([stage, microseconds]) => ({ stage, microseconds }))
+    .sort((left, right) => right.microseconds - left.microseconds || left.stage.localeCompare(right.stage));
 }
 
 async function readNamedFunctions(

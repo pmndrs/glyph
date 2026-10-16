@@ -1,0 +1,829 @@
+{
+  "kind": "local diagnostic checkpoint; no performance fix or acceptance",
+  "generatedAt": "2026-10-16T17:15:35Z",
+  "runtimeCheckpoint": "60d3c26f135b360ab1111131ce274218959d176f",
+  "mainCheckpoint": "4e25a96a57462fef5ad0d19065a822695b480f60",
+  "baselineArtifacts": {
+    "held": {
+      "receiptSha256": "33587785bca58d9880058c61b29d0d352dfb9492f029a02f993e3080354df2ca",
+      "receipt": {
+        "baseline": {
+          "worktree": "WORK",
+          "branch": "feat/rust-text-input-wire",
+          "head": "60d3c26f135b360ab1111131ce274218959d176f",
+          "initialTrackedStatus": "clean",
+          "finalStatusObservation": "git lfs status later reported benches/scripts/support/cpu-profile-summary.mts changed from 4bc7f8c to 4c78f84; this agent did not edit tracked source; sourceDirty was empty in artifact provenance manifest",
+          "lfs": {
+            "installAndPullExit": 0,
+            "remote": "origin/feat/rust-text-input-wire",
+            "listedObjects": 861,
+            "remainingPointerFileCount": 0,
+            "log": "WORK/.cache/held-local-20261016/baseline/git-lfs-hydration.log"
+          }
+        },
+        "platform": {
+          "os": "macOS 26.5.2 (25F84)",
+          "kernel": "Darwin 25.5.0",
+          "machine": "Mac16,10 arm64",
+          "cpuCount": 10,
+          "memoryBytes": 17179869184
+        },
+        "toolchain": {
+          "node": "24.18.0",
+          "pnpm": "11.15.1",
+          "rustc": "1.97.1 (8bab26f4f 2026-07-14)",
+          "wasmOpt": "129"
+        },
+        "commands": [
+          {
+            "command": "mise exec -- pnpm --filter @pmndrs/glyph... build",
+            "attempt": 1,
+            "exit": 2,
+            "cause": "Git LFS pointer files had not been hydrated; Unicode check-data raised Z_DATA_ERROR incorrect header check",
+            "log": "WORK/.cache/held-local-20261016/baseline/build.log"
+          },
+          {
+            "command": "git lfs install --local && git lfs pull origin feat/rust-text-input-wire",
+            "exit": 0,
+            "log": "WORK/.cache/held-local-20261016/baseline/git-lfs-hydration.log"
+          },
+          {
+            "command": "mise exec -- pnpm --filter @pmndrs/glyph... build",
+            "attempt": 2,
+            "exit": 0,
+            "log": "WORK/.cache/held-local-20261016/baseline/build-attempt2.log"
+          },
+          {
+            "command": "mise exec -- pnpm --filter @pmndrs/glyph pack --pack-destination WORK/.cache/held-local-20261016/baseline",
+            "exit": 0,
+            "log": "WORK/.cache/held-local-20261016/baseline/pack.log"
+          },
+          {
+            "command": "mise exec -- pnpm scripts run glyph:shaper-profile-artifact -- --artifact WORK/.cache/held-local-20261016/baseline/pmndrs-glyph-0.1.0.tgz --output WORK/.cache/held-local-20261016/baseline/named-wasm",
+            "exit": 0,
+            "log": "WORK/.cache/held-local-20261016/baseline/named-artifact.log"
+          },
+          {
+            "command": "mise exec -- pnpm scripts run glyph:node-tests --",
+            "attempt": 1,
+            "exit": 1,
+            "cause": "run before successful build; dist was absent",
+            "log": "WORK/.cache/held-local-20261016/baseline/node-tests.log"
+          },
+          {
+            "command": "mise exec -- pnpm scripts run glyph:node-tests --",
+            "attempt": 2,
+            "exit": 0,
+            "result": "1048 passed, 0 failed",
+            "log": "WORK/.cache/held-local-20261016/baseline/node-tests-after-build.log"
+          },
+          {
+            "command": "mise exec -- pnpm scripts run glyph:shaper-tests -- sparse_edit_work_attribution_separates_preparation_from_root_publication -- --nocapture",
+            "exit": 0,
+            "result": "1 passed, 458 filtered out",
+            "log": "WORK/.cache/held-local-20261016/baseline/shaper-work-counters.log"
+          },
+          {
+            "command": "mise exec -- pnpm scripts run glyph:shaper-tests --",
+            "exit": 0,
+            "result": "472 passed across unit, diagnostic memory, outline, Unicode bidi, grapheme, and line-break suites",
+            "log": "WORK/.cache/held-local-20261016/baseline/shaper-tests-all.log"
+          }
+        ],
+        "artifacts": {
+          "packageTarball": {
+            "path": "WORK/.cache/held-local-20261016/baseline/pmndrs-glyph-0.1.0.tgz",
+            "sha256": "bec6c1735542bba49ab480d2337c787255950d09383c2f5720794a4d68fc5265",
+            "bytes": 3166898
+          },
+          "releaseShaperWasm": {
+            "path": "WORK/packages/glyph/dist/text-shaper.wasm",
+            "sha256": "c4fcd84c34bd3accac9454ffd2ae635285323480dff1426ab9ab80f7ba97a67a",
+            "rawBytes": 1585989,
+            "gzipBytes": 585969,
+            "gzipMethod": "gzip -n -c"
+          },
+          "namedProof": {
+            "directory": "WORK/.cache/held-local-20261016/baseline/named-wasm",
+            "candidateSha256": "c4fcd84c34bd3accac9454ffd2ae635285323480dff1426ab9ab80f7ba97a67a",
+            "namedWasmPath": "WORK/.cache/held-local-20261016/baseline/named-wasm/text-shaper.named.wasm",
+            "namedWasmSha256": "cc3699f7a786a64f269aaa06052732af1371d47663961b343ec5ac02e213ee6b",
+            "manifestPath": "WORK/.cache/held-local-20261016/baseline/named-wasm/manifest.json",
+            "manifestSha256": "5d10c3d72604ca65fdcd412f66554c51456a5fb959627ddb468e71692847976e",
+            "manifestSourceRevision": "60d3c26f135b360ab1111131ce274218959d176f",
+            "manifestSourceDirty": "",
+            "manifestArtifactSha256": "bec6c1735542bba49ab480d2337c787255950d09383c2f5720794a4d68fc5265",
+            "manifestExecutableSha256": "c4fcd84c34bd3accac9454ffd2ae635285323480dff1426ab9ab80f7ba97a67a"
+          },
+          "distJavaScript": {
+            "fileCount": 237,
+            "rawBytes": 867649,
+            "gzipBytes": 232575,
+            "gzipMethod": "lexically sorted dist/**/*.js concatenated, then gzip -n -c"
+          }
+        },
+        "scopeNote": "No CPU timing or performance capture was performed by this gate."
+      }
+    },
+    "main": {
+      "receiptSha256": "9750255bcda3232c9e37c92429328047d90b6dd6c77c5e53484c62ad75e3f92d",
+      "receipt": {
+        "source": {
+          "worktree": "MAIN_WORK",
+          "revision": "4e25a96a57462fef5ad0d19065a822695b480f60",
+          "detached": true,
+          "status": "clean",
+          "lfsPointerFilesRemaining": 0
+        },
+        "platform": {
+          "os": "macOS 26.5.2 (25F84)",
+          "machine": "Mac16,10 arm64",
+          "cpuCount": 10,
+          "memoryBytes": 17179869184
+        },
+        "toolchain": {
+          "node": "24.18.0",
+          "pnpm": "11.15.1",
+          "rustc": "1.97.1 (8bab26f4f 2026-07-14)",
+          "wasmOpt": "129"
+        },
+        "commands": [
+          {
+            "command": "mise exec -- pnpm install --frozen-lockfile",
+            "exit": 0,
+            "result": "619 packages installed; 618 reused"
+          },
+          {
+            "command": "git lfs pull origin main",
+            "exit": 0
+          },
+          {
+            "command": "mise exec -- pnpm scripts run repo:hooks:install --",
+            "exit": 0,
+            "result": "shared pre-commit hook already installed"
+          },
+          {
+            "command": "mise exec -- pnpm --filter @pmndrs/glyph... build",
+            "exit": 0,
+            "log": "WORK/.cache/held-local-20261016/main-baseline/build.log",
+            "logSha256": "229a10a742355ff0221a8ec2d901280053e48c8f26755de9452c9e5aaa57fbce"
+          },
+          {
+            "command": "mise exec -- pnpm --filter @pmndrs/glyph pack --pack-destination WORK/.cache/held-local-20261016/main-baseline",
+            "exit": 0,
+            "log": "WORK/.cache/held-local-20261016/main-baseline/pack.log",
+            "logSha256": "e60eee50d9eecfd4f0a0de2fafa8b3c67bc2d5d35f1471ea1d346cbe46436a5e"
+          },
+          {
+            "command": "mise exec -- pnpm scripts run glyph:shaper-profile-artifact -- --artifact WORK/.cache/held-local-20261016/main-baseline/pmndrs-glyph-0.1.0.tgz --source-root MAIN_WORK --output WORK/.cache/held-local-20261016/main-baseline/named-wasm --one-caller-inline-max-function-size default",
+            "exit": 0,
+            "result": "authenticated named Wasm; executable SHA256 equals packed main release Wasm",
+            "log": "WORK/.cache/held-local-20261016/main-baseline/named-artifact-historical-default.log",
+            "logSha256": "bab57e5d173563f5f4a4869772f57d6bba97f072cc7957eec8d50fcc0abfb4c2"
+          }
+        ],
+        "package": {
+          "tarball": "WORK/.cache/held-local-20261016/main-baseline/pmndrs-glyph-0.1.0.tgz",
+          "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+          "bytes": 3120073
+        },
+        "releaseShaperWasm": {
+          "path": "MAIN_WORK/packages/glyph/dist/text-shaper.wasm",
+          "sha256": "059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4",
+          "rawBytes": 1462005,
+          "gzipBytes": 537846,
+          "gzipMethod": "gzip -n -c"
+        },
+        "namedProof": {
+          "directory": "WORK/.cache/held-local-20261016/main-baseline/named-wasm",
+          "manifestSha256": "332d89b67bb7ce5c849df4e664a48a620366b2b5eafb8f99e092cf49788b1acf",
+          "namedWasmSha256": "f79677a13e8499b6229f6f3e05bf2d0583c4812ce4bda2fe4df32b875b7ed63c",
+          "candidateSha256": "059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4",
+          "manifestSourceRevision": "4e25a96a57462fef5ad0d19065a822695b480f60",
+          "manifestSourceDirty": "",
+          "manifestArtifactSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+          "manifestExecutableSha256": "059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4"
+        },
+        "distJavaScript": {
+          "fileCount": 238,
+          "rawBytes": 865501,
+          "gzipBytes": 232222,
+          "gzipMethod": "lexically sorted dist/**/*.js concatenated, then gzip -n -c"
+        },
+        "scope": "Build/package/provenance only; no Node tests or performance timing/capture run for this baseline."
+      }
+    }
+  },
+  "inputClosure": {
+    "benches/scripts/profile-edit-sized-publication.mts": "65f94088955d38fb28a6357ea41c2de2fdfb9cb354bd88b19e0be1cf02a6a8e7",
+    "benches/labs/package/edit-sized-publication.profile.mts": "7dd108a81e3bbba12c3cbed35295950badd0142814bf7e9021771e3210f08d85",
+    "benches/labs/package/fixture.ts": "34b97032e1f035d6b15ae385f4a6aa4e6cc0b78d9239dc14e8253a1a6644dfe3",
+    "benches/src/benchmark/cpu-profile-stage.mts": "1392af3692ed873abe18840d91fcfbfbc5ecfe68c5b42e2b242e2cbf2f2bb09d",
+    "benches/scripts/support/package-labs-dependencies.mts": "63ecee744c006d082bdb9f687775fcc9a426a44414629efdecced7ceeb29b08b",
+    "pnpm-lock.yaml": "d0d64f1bad9537f2cec0d6142ab94833bd09c5ed0021eb8ad66cc4f2da01cb3c",
+    "benches/fixtures/rendering/inter-bitmap-16.font.glb": "acdca408ed169c7aa1c2791dbbc2982afa1939c56fbc59ef43cc38f7ff366c14",
+    "benches/fixtures/rendering/dot-gothic-16-bitmap-16-32.font.glb": "f1895ea3bf8b69ee7430940a2ccf5d398c7a5f8c469635845c4b4b3b457b112b",
+    "benches/fixtures/rendering/fredoka-issue-216-bitmap-16.font.glb": "2be09acf3c5ebd2d08859eb8d5282cf9018d70f8e84b4bda9eb80c410ff532c0",
+    "benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf": "40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82"
+  },
+  "profiles": {
+    "held": {
+      "localDirectory": ".cache/held-local-20261016/dense1024",
+      "files": {
+        "cpu-profile.json": "9d2a59ca5a40b6d61846b5d3592305be82f3249bd493c0f6822bb4e73899a8e0",
+        "manifest.json": "836e63eba09431f88142e26c48ecaf2de9d8505f7113453e6bcfb4d0d8c3d9a7",
+        "summary.json": "1a0a3e69f5a46fd81ae695ac9c1259e8ec0975e0cc8b32730a75618238597bab",
+        "ancestry.json": "ea55252716e946b84109658525fea455586c6a9b9324dd0456db7f158b564809",
+        "ancestry-summary.md": "e74754deb483bcbe565c1afbfc5dce545fa57c67c681a1ca77ab50e24b476466"
+      },
+      "workload": {
+        "boundary": "publication",
+        "count": 1024,
+        "iterations": 80,
+        "position": "first",
+        "profileCase": "bulk-write",
+        "warmups": 10,
+        "reads": "none",
+        "publicationPath": "scene"
+      },
+      "operations": {
+        "perIteration": {
+          "sets": 1024,
+          "reads": 0,
+          "publications": 1
+        },
+        "timed": {
+          "sets": 81920,
+          "reads": 0,
+          "publications": 80
+        },
+        "warmup": {
+          "sets": 10240,
+          "reads": 0,
+          "publications": 10
+        },
+        "postTimedCorrectness": {
+          "measurementReads": 1024,
+          "commitStateReads": 1025,
+          "glyphReads": 1025
+        }
+      },
+      "drawTopology": {
+        "initial": {
+          "draws": 1,
+          "glyphs": 9216
+        },
+        "final": {
+          "draws": 1,
+          "glyphs": 9216
+        }
+      },
+      "profiledElapsedMs": {
+        "mean": 26.816586412500033,
+        "p50": 25.106667000000016,
+        "p95": 46.44195800000034
+      },
+      "sampledCpu": {
+        "microseconds": 2204250,
+        "samples": 1592,
+        "exclusivePhases": {
+          "preparation": {
+            "microseconds": 1371714,
+            "samples": 1025,
+            "nodeId": 7,
+            "recordedFrame": {
+              "functionName": "set text",
+              "scriptId": "244",
+              "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-VjGI0u/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+tmp+glyph-held-20261016+.cache+held-local-20261016_83eb03adec2759c2cc5eeb6aa56b5141/node_modules/@pmndrs/glyph/dist/three/text.js",
+              "lineNumber": 0,
+              "columnNumber": 10075
+            }
+          },
+          "publication": {
+            "microseconds": 658123,
+            "samples": 482,
+            "nodeId": 77,
+            "recordedFrame": {
+              "functionName": "updateMatrixWorld",
+              "scriptId": "155",
+              "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-VjGI0u/node_modules/.pnpm/three@0.185.1/node_modules/three/build/three.core.js",
+              "lineNumber": 12899,
+              "columnNumber": 18
+            }
+          },
+          "unattributed": {
+            "microseconds": 174413,
+            "samples": 85
+          }
+        }
+      },
+      "limitation": "Diagnostic inspector capture, not Labs acceptance, paired latency or clock-drift evidence. Main/HELD optimizer policies and source differ. Detached runtime/GC stacks remain unattributed.",
+      "manifestSummary": {
+        "artifact": {
+          "file": "pmndrs-glyph-0.1.0.tgz",
+          "sha256": "bec6c1735542bba49ab480d2337c787255950d09383c2f5720794a4d68fc5265"
+        },
+        "generatedAt": "2026-10-16T16:53:01.255Z",
+        "namedWasm": {
+          "file": "WORK/.cache/held-local-20261016/baseline/named-wasm/text-shaper.named.wasm",
+          "sha256": "cc3699f7a786a64f269aaa06052732af1371d47663961b343ec5ac02e213ee6b",
+          "releaseSha256": "c4fcd84c34bd3accac9454ffd2ae635285323480dff1426ab9ab80f7ba97a67a",
+          "executableSha256": "c4fcd84c34bd3accac9454ffd2ae635285323480dff1426ab9ab80f7ba97a67a",
+          "functionTable": {
+            "count": 1573,
+            "canonicalJsonSha256": "bc1f46cabf4f1474f51c2a4c2d0c3bea973f6b66cd77c2e17329f3b05a82e94a",
+            "location": "Original ignored manifest; authenticated by files.manifest.json hash"
+          }
+        },
+        "options": {
+          "artifact": "WORK/.cache/held-local-20261016/baseline/pmndrs-glyph-0.1.0.tgz",
+          "boundary": "publication",
+          "count": 1024,
+          "iterations": 80,
+          "output": "WORK/.cache/held-local-20261016/dense1024",
+          "position": "first",
+          "profileCase": "bulk-write",
+          "warmups": 10,
+          "reads": "none",
+          "publicationPath": "scene",
+          "wasm": "WORK/.cache/held-local-20261016/baseline/named-wasm/text-shaper.named.wasm"
+        }
+      }
+    },
+    "main": {
+      "localDirectory": ".cache/held-local-20261016/main-dense1024",
+      "files": {
+        "cpu-profile.json": "c64991547da89ad3febbe8bdfab11693ff081b3148a2f1ea5f4007912fb46ce4",
+        "manifest.json": "c263f96530698459ed79a8078bd79aa1ce91684384477f9c1f4384780c6f6aa6",
+        "summary.json": "4f9a4bf00c64f61cd853607122e80802824709322ddae0deac61f8777a8e5edc",
+        "ancestry.json": "3289547cc0273b7320209c99b7668752f82cddaa94a0edd3957588318ea6c4ad",
+        "ancestry-summary.md": "ba78f00c0cc2b07202821372c05960feaf9f01862a1752af4d33cc7467a50190"
+      },
+      "workload": {
+        "boundary": "publication",
+        "count": 1024,
+        "iterations": 80,
+        "position": "first",
+        "profileCase": "bulk-write",
+        "warmups": 10,
+        "reads": "none",
+        "publicationPath": "scene"
+      },
+      "operations": {
+        "perIteration": {
+          "sets": 1024,
+          "reads": 0,
+          "publications": 1
+        },
+        "timed": {
+          "sets": 81920,
+          "reads": 0,
+          "publications": 80
+        },
+        "warmup": {
+          "sets": 10240,
+          "reads": 0,
+          "publications": 10
+        },
+        "postTimedCorrectness": {
+          "measurementReads": 1024,
+          "commitStateReads": 1025,
+          "glyphReads": 1025
+        }
+      },
+      "drawTopology": {
+        "initial": {
+          "draws": 1,
+          "glyphs": 9216
+        },
+        "final": {
+          "draws": 1,
+          "glyphs": 9216
+        }
+      },
+      "profiledElapsedMs": {
+        "mean": 15.755746387500016,
+        "p50": 15.436999999999898,
+        "p95": 18.044208000000026
+      },
+      "sampledCpu": {
+        "microseconds": 1295500,
+        "samples": 869,
+        "exclusivePhases": {
+          "setter": {
+            "microseconds": 112003,
+            "samples": 76,
+            "nodeId": 7,
+            "recordedFrame": {
+              "functionName": "set text",
+              "scriptId": "249",
+              "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-WgCWOy/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+tmp+glyph-held-20261016+.cache+held-local-20261016_a4f5efa2ad366b7fdbe7f0a9e76673ce/node_modules/@pmndrs/glyph/dist/three/text.js",
+              "lineNumber": 0,
+              "columnNumber": 9845
+            }
+          },
+          "publication": {
+            "microseconds": 1079788,
+            "samples": 745,
+            "nodeId": 15,
+            "recordedFrame": {
+              "functionName": "updateMatrixWorld",
+              "scriptId": "155",
+              "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-WgCWOy/node_modules/.pnpm/three@0.185.1/node_modules/three/build/three.core.js",
+              "lineNumber": 12899,
+              "columnNumber": 18
+            }
+          },
+          "unattributed": {
+            "microseconds": 103709,
+            "samples": 48
+          }
+        }
+      },
+      "limitation": "Diagnostic inspector capture, not Labs acceptance, paired latency or clock-drift evidence. Main/HELD optimizer policies and source differ. Detached runtime/GC stacks remain unattributed.",
+      "manifestSummary": {
+        "artifact": {
+          "file": "pmndrs-glyph-0.1.0.tgz",
+          "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20"
+        },
+        "generatedAt": "2026-10-16T17:06:13.605Z",
+        "namedWasm": {
+          "file": "WORK/.cache/held-local-20261016/main-baseline/named-wasm/text-shaper.named.wasm",
+          "sha256": "f79677a13e8499b6229f6f3e05bf2d0583c4812ce4bda2fe4df32b875b7ed63c",
+          "releaseSha256": "059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4",
+          "executableSha256": "059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4",
+          "functionTable": {
+            "count": 887,
+            "canonicalJsonSha256": "542355d2f651f392501c2ac8e9cc5b74a5e05b72c2b5d0a6ca3eb52963627ba7",
+            "location": "Original ignored manifest; authenticated by files.manifest.json hash"
+          }
+        },
+        "options": {
+          "artifact": "WORK/.cache/held-local-20261016/main-baseline/pmndrs-glyph-0.1.0.tgz",
+          "boundary": "publication",
+          "count": 1024,
+          "iterations": 80,
+          "output": "WORK/.cache/held-local-20261016/main-dense1024",
+          "position": "first",
+          "profileCase": "bulk-write",
+          "warmups": 10,
+          "reads": "none",
+          "publicationPath": "scene",
+          "wasm": "WORK/.cache/held-local-20261016/main-baseline/named-wasm/text-shaper.named.wasm"
+        }
+      }
+    }
+  },
+  "nativeDiscriminator": {
+    "logSha256": "bd0f2ddad35b50d21336d4669e1729fe720af88b762d17e670e31d6c1046747d",
+    "fullLogSha256": "3fe86ae4c70c8afb376ec3c62dc14b375ac47dfd5ce1a994df178dd444ac829b",
+    "result": "473 native tests passed; one indexed Inter fixture passed",
+    "cycles": [
+      {
+        "cycle": 0,
+        "preparation": {
+          "harfrust_calls": 1024,
+          "harfrust_utf16_units": 10240,
+          "cluster_full_glyph_visits": 0,
+          "cluster_retained_glyph_loop_visits": 20480,
+          "run_local_glyph_visits": 10240,
+          "recomposed_flow_lines": 1024,
+          "gather_mask_bits": 0,
+          "gather_mask_bit_counts": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "gather_all_masks": 0,
+          "gather_identity_mismatches": 0,
+          "measurement_ink_glyph_visits": 0,
+          "measurement_intrinsic_cluster_visits": 0,
+          "intrinsic_flow_preparations": 0,
+          "intrinsic_positioning_preparations": 0,
+          "query_serialized_records": 0,
+          "query_serialized_bytes": 0,
+          "draw_reduced_glyphs": 0,
+          "draw_folded_blocks": 0,
+          "rope_record_pushes": 2048,
+          "rope_bulk_records": 0,
+          "rope_bulk_chunks": 0,
+          "rope_point_queries": 2048,
+          "rope_iterator_starts": 6144,
+          "copied_positioned_records": 0,
+          "copied_positioned_bytes": 0,
+          "newly_positioned_glyphs": 10240,
+          "positioned_revision_visits": 10240,
+          "gather_paragraph_visits": 0,
+          "gather_range_skips": 0,
+          "gather_glyph_visits": 0,
+          "gather_retained_gap_rows": 0,
+          "gather_envelope_splices": 0,
+          "gather_suffix_copy_bytes": 0,
+          "publication_commit_visits": 0,
+          "placement_key_owner_visits": 0,
+          "placement_binding_owner_visits": 0,
+          "placement_binding_glyph_visits": 0,
+          "placement_slot_checks": 0,
+          "placement_reconciled_key_groups": 0,
+          "placement_segment_validation_visits": 8192,
+          "placement_run_lookup_visits": 0,
+          "canonical_cluster_comparisons": 0,
+          "canonical_style_resolutions": 0,
+          "canonical_text_validations": 0,
+          "flow_shape_windows": 0,
+          "flow_shape_window_units": 0,
+          "flow_shape_window_first_start": 0,
+          "flow_shape_window_last_end": 0,
+          "flow_convergence_checks": 0,
+          "flow_dirty_end_blocks": 0,
+          "flow_cursor_mismatches": 0,
+          "flow_correction_mismatches": 0,
+          "flow_metric_mismatches": 0,
+          "flow_drop_cap_blocks": 0,
+          "placement_remap_attempts": 0,
+          "placement_remap_successes": 0,
+          "placement_remap_run_rejections": 0,
+          "placement_remap_direction_rejections": 0,
+          "placement_remap_anchor_rejections": 0,
+          "placement_remap_numeric_rejections": 0,
+          "placement_remap_numeric_prefix_only": 0,
+          "placement_remap_numeric_anchor_only": 0,
+          "placement_remap_numeric_prefix_and_anchor": 0,
+          "placement_remap_numeric_partition": 0,
+          "placement_remap_numeric_identity": 0,
+          "placement_remap_numeric_other": 0,
+          "placement_remap_glyph_rejections": 0,
+          "ordered_admission_visits": 0,
+          "codec_executed_records": 0,
+          "clean_buffer_copy_runs": 0,
+          "retained_storage_match_batch_visits": 0,
+          "ordered_instance_rewrites": 0,
+          "ordered_instance_comparisons": 0
+        },
+        "publication": {
+          "harfrust_calls": 0,
+          "harfrust_utf16_units": 0,
+          "cluster_full_glyph_visits": 0,
+          "cluster_retained_glyph_loop_visits": 0,
+          "run_local_glyph_visits": 0,
+          "recomposed_flow_lines": 0,
+          "gather_mask_bits": 81920,
+          "gather_mask_bit_counts": [
+            5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120
+          ],
+          "gather_all_masks": 5120,
+          "gather_identity_mismatches": 5120,
+          "measurement_ink_glyph_visits": 0,
+          "measurement_intrinsic_cluster_visits": 0,
+          "intrinsic_flow_preparations": 0,
+          "intrinsic_positioning_preparations": 0,
+          "query_serialized_records": 0,
+          "query_serialized_bytes": 0,
+          "draw_reduced_glyphs": 10240,
+          "draw_folded_blocks": 0,
+          "rope_record_pushes": 0,
+          "rope_bulk_records": 4096,
+          "rope_bulk_chunks": 128,
+          "rope_point_queries": 1,
+          "rope_iterator_starts": 7,
+          "copied_positioned_records": 0,
+          "copied_positioned_bytes": 0,
+          "newly_positioned_glyphs": 0,
+          "positioned_revision_visits": 0,
+          "gather_paragraph_visits": 1024,
+          "gather_range_skips": 0,
+          "gather_glyph_visits": 10240,
+          "gather_retained_gap_rows": 0,
+          "gather_envelope_splices": 0,
+          "gather_suffix_copy_bytes": 0,
+          "publication_commit_visits": 1024,
+          "placement_key_owner_visits": 1024,
+          "placement_binding_owner_visits": 1024,
+          "placement_binding_glyph_visits": 10240,
+          "placement_slot_checks": 1,
+          "placement_reconciled_key_groups": 3072,
+          "placement_segment_validation_visits": 0,
+          "placement_run_lookup_visits": 0,
+          "canonical_cluster_comparisons": 0,
+          "canonical_style_resolutions": 0,
+          "canonical_text_validations": 0,
+          "flow_shape_windows": 0,
+          "flow_shape_window_units": 0,
+          "flow_shape_window_first_start": 0,
+          "flow_shape_window_last_end": 0,
+          "flow_convergence_checks": 0,
+          "flow_dirty_end_blocks": 0,
+          "flow_cursor_mismatches": 0,
+          "flow_correction_mismatches": 0,
+          "flow_metric_mismatches": 0,
+          "flow_drop_cap_blocks": 0,
+          "placement_remap_attempts": 0,
+          "placement_remap_successes": 0,
+          "placement_remap_run_rejections": 0,
+          "placement_remap_direction_rejections": 0,
+          "placement_remap_anchor_rejections": 0,
+          "placement_remap_numeric_rejections": 0,
+          "placement_remap_numeric_prefix_only": 0,
+          "placement_remap_numeric_anchor_only": 0,
+          "placement_remap_numeric_prefix_and_anchor": 0,
+          "placement_remap_numeric_partition": 0,
+          "placement_remap_numeric_identity": 0,
+          "placement_remap_numeric_other": 0,
+          "placement_remap_glyph_rejections": 0,
+          "ordered_admission_visits": 10240,
+          "codec_executed_records": 10240,
+          "clean_buffer_copy_runs": 0,
+          "retained_storage_match_batch_visits": 1,
+          "ordered_instance_rewrites": 10240,
+          "ordered_instance_comparisons": 10240
+        },
+        "outputObservation": "{stable_id:5120,material_id:0,position:9216,extent:0,f32:[10240],u32:[]}; all_mask_rows=5120; all_mask_unchanged={f32:[0],u32:[]}"
+      },
+      {
+        "cycle": 1,
+        "preparation": {
+          "harfrust_calls": 1024,
+          "harfrust_utf16_units": 10240,
+          "cluster_full_glyph_visits": 0,
+          "cluster_retained_glyph_loop_visits": 20480,
+          "run_local_glyph_visits": 10240,
+          "recomposed_flow_lines": 1024,
+          "gather_mask_bits": 0,
+          "gather_mask_bit_counts": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "gather_all_masks": 0,
+          "gather_identity_mismatches": 0,
+          "measurement_ink_glyph_visits": 0,
+          "measurement_intrinsic_cluster_visits": 0,
+          "intrinsic_flow_preparations": 0,
+          "intrinsic_positioning_preparations": 0,
+          "query_serialized_records": 0,
+          "query_serialized_bytes": 0,
+          "draw_reduced_glyphs": 0,
+          "draw_folded_blocks": 0,
+          "rope_record_pushes": 2048,
+          "rope_bulk_records": 0,
+          "rope_bulk_chunks": 0,
+          "rope_point_queries": 2048,
+          "rope_iterator_starts": 6144,
+          "copied_positioned_records": 0,
+          "copied_positioned_bytes": 0,
+          "newly_positioned_glyphs": 10240,
+          "positioned_revision_visits": 10240,
+          "gather_paragraph_visits": 0,
+          "gather_range_skips": 0,
+          "gather_glyph_visits": 0,
+          "gather_retained_gap_rows": 0,
+          "gather_envelope_splices": 0,
+          "gather_suffix_copy_bytes": 0,
+          "publication_commit_visits": 0,
+          "placement_key_owner_visits": 0,
+          "placement_binding_owner_visits": 0,
+          "placement_binding_glyph_visits": 0,
+          "placement_slot_checks": 0,
+          "placement_reconciled_key_groups": 0,
+          "placement_segment_validation_visits": 8192,
+          "placement_run_lookup_visits": 0,
+          "canonical_cluster_comparisons": 0,
+          "canonical_style_resolutions": 0,
+          "canonical_text_validations": 0,
+          "flow_shape_windows": 0,
+          "flow_shape_window_units": 0,
+          "flow_shape_window_first_start": 0,
+          "flow_shape_window_last_end": 0,
+          "flow_convergence_checks": 0,
+          "flow_dirty_end_blocks": 0,
+          "flow_cursor_mismatches": 0,
+          "flow_correction_mismatches": 0,
+          "flow_metric_mismatches": 0,
+          "flow_drop_cap_blocks": 0,
+          "placement_remap_attempts": 0,
+          "placement_remap_successes": 0,
+          "placement_remap_run_rejections": 0,
+          "placement_remap_direction_rejections": 0,
+          "placement_remap_anchor_rejections": 0,
+          "placement_remap_numeric_rejections": 0,
+          "placement_remap_numeric_prefix_only": 0,
+          "placement_remap_numeric_anchor_only": 0,
+          "placement_remap_numeric_prefix_and_anchor": 0,
+          "placement_remap_numeric_partition": 0,
+          "placement_remap_numeric_identity": 0,
+          "placement_remap_numeric_other": 0,
+          "placement_remap_glyph_rejections": 0,
+          "ordered_admission_visits": 0,
+          "codec_executed_records": 0,
+          "clean_buffer_copy_runs": 0,
+          "retained_storage_match_batch_visits": 0,
+          "ordered_instance_rewrites": 0,
+          "ordered_instance_comparisons": 0
+        },
+        "publication": {
+          "harfrust_calls": 0,
+          "harfrust_utf16_units": 0,
+          "cluster_full_glyph_visits": 0,
+          "cluster_retained_glyph_loop_visits": 0,
+          "run_local_glyph_visits": 0,
+          "recomposed_flow_lines": 0,
+          "gather_mask_bits": 81920,
+          "gather_mask_bit_counts": [
+            5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120, 5120
+          ],
+          "gather_all_masks": 5120,
+          "gather_identity_mismatches": 5120,
+          "measurement_ink_glyph_visits": 0,
+          "measurement_intrinsic_cluster_visits": 0,
+          "intrinsic_flow_preparations": 0,
+          "intrinsic_positioning_preparations": 0,
+          "query_serialized_records": 0,
+          "query_serialized_bytes": 0,
+          "draw_reduced_glyphs": 10240,
+          "draw_folded_blocks": 0,
+          "rope_record_pushes": 0,
+          "rope_bulk_records": 4096,
+          "rope_bulk_chunks": 128,
+          "rope_point_queries": 1,
+          "rope_iterator_starts": 7,
+          "copied_positioned_records": 0,
+          "copied_positioned_bytes": 0,
+          "newly_positioned_glyphs": 0,
+          "positioned_revision_visits": 0,
+          "gather_paragraph_visits": 1024,
+          "gather_range_skips": 0,
+          "gather_glyph_visits": 10240,
+          "gather_retained_gap_rows": 0,
+          "gather_envelope_splices": 0,
+          "gather_suffix_copy_bytes": 0,
+          "publication_commit_visits": 1024,
+          "placement_key_owner_visits": 1024,
+          "placement_binding_owner_visits": 1024,
+          "placement_binding_glyph_visits": 10240,
+          "placement_slot_checks": 1,
+          "placement_reconciled_key_groups": 3072,
+          "placement_segment_validation_visits": 0,
+          "placement_run_lookup_visits": 0,
+          "canonical_cluster_comparisons": 0,
+          "canonical_style_resolutions": 0,
+          "canonical_text_validations": 0,
+          "flow_shape_windows": 0,
+          "flow_shape_window_units": 0,
+          "flow_shape_window_first_start": 0,
+          "flow_shape_window_last_end": 0,
+          "flow_convergence_checks": 0,
+          "flow_dirty_end_blocks": 0,
+          "flow_cursor_mismatches": 0,
+          "flow_correction_mismatches": 0,
+          "flow_metric_mismatches": 0,
+          "flow_drop_cap_blocks": 0,
+          "placement_remap_attempts": 0,
+          "placement_remap_successes": 0,
+          "placement_remap_run_rejections": 0,
+          "placement_remap_direction_rejections": 0,
+          "placement_remap_anchor_rejections": 0,
+          "placement_remap_numeric_rejections": 0,
+          "placement_remap_numeric_prefix_only": 0,
+          "placement_remap_numeric_anchor_only": 0,
+          "placement_remap_numeric_prefix_and_anchor": 0,
+          "placement_remap_numeric_partition": 0,
+          "placement_remap_numeric_identity": 0,
+          "placement_remap_numeric_other": 0,
+          "placement_remap_glyph_rejections": 0,
+          "ordered_admission_visits": 10240,
+          "codec_executed_records": 10240,
+          "clean_buffer_copy_runs": 0,
+          "retained_storage_match_batch_visits": 1,
+          "ordered_instance_rewrites": 10240,
+          "ordered_instance_comparisons": 10240
+        },
+        "outputObservation": "{stable_id:5120,material_id:0,position:9216,extent:0,f32:[10240],u32:[]}; all_mask_rows=5120; all_mask_unchanged={f32:[0],u32:[]}"
+      }
+    ],
+    "scope": "Raw Inter, font size16, width160, indexed alpha/bravo0000..1023. Outlined binding: not a bitmap codec/GPU upload measurement. Counter snapshots precede independent per-owner cold-output and whole-root full-gather oracles. Production behavior unchanged; increments are cfg(test)."
+  },
+  "remainingGates": [
+    "material dense512/1024 runtime correction",
+    "same frozen candidate Labs comparison against current main and published0.1.0",
+    "clock drift and exclusion accounting for acceptance",
+    "live/peak memory and GC acceptance",
+    "final declaration/API/ABI/peer/lifetime checks",
+    "WebGPU/WebGL browser and hero checks",
+    "reviewed main integration"
+  ],
+  "unavailableEvidence": "Previous-machine raw profiles, archives and samples were not retrieved or reconstructed. Full acceptance and live/peak memory were not measured. Capture runner removes its temporary install; its consumer lockfile was not retained.",
+  "checkpointGates": {
+    "glyph-static-final.log": {
+      "sha256": "48056573f593c7bc8e412078756dfcd53c3fcea6da10f53a000a86764853f3ba",
+      "exit": 0
+    },
+    "glyph-static-check.log": {
+      "sha256": "9936bc4d908bdf3b29fc68ba7fafe1e391454b02ea2cc941f96e3429f5c9f510",
+      "exit": 0
+    },
+    "docs-check.log": {
+      "sha256": "43bfd29a3558c7545ef6e95e75a115a7dc3fb87102a470c18a112a3677d569fa",
+      "exit": 0
+    },
+    "benchmark-static-check.log": {
+      "sha256": "54efa504e6ba17c552b860aa0cfed6fa85f43a9a536929c7b5c63f810c410e07",
+      "exit": 0
+    },
+    "cpu-profile-summary.test.log": {
+      "sha256": "83b3be1f12e8cc354105760dd037acd1f253b3d6410a2f38fba667ef2c0459f7",
+      "exit": 0
+    }
+  }
+}

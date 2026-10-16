@@ -4,6 +4,8 @@ title: Final retained-text performance architecture plan
 description: Current held-rope reconciliation, bounded algorithms, evidence gates and handoff sequence for one synchronous preparation and publication executor.
 status: draft
 sources:
+  - resource: ../../../benches/reports/held-ropes-local-2026-10-16/README.md
+    title: Authenticated local Mac diagnostic checkpoint
   - resource: ../planning/publication-frontier.md
     title: Held implementation frontier and frozen comparison
   - resource: ../planning/decisions/retained-prepare-publish.md
@@ -35,8 +37,8 @@ sources:
   - resource: ../../../packages/glyph/src/three/text.ts
     title: Current Three text entry and copy paths
 generated:
-  by: openai-codex/gpt-6-sol
-  at: '2026-10-16T12:10:54Z'
+  by: openai-codex/gpt-6
+  at: '2026-10-16T17:16:49Z'
 ---
 
 # Final retained-text performance architecture plan
@@ -86,6 +88,20 @@ Let `n` be old/new UTF-16 length, `s` authored fields/spans, `N` owners, `k` dir
 | Demand/copy/host          | First requested summary serializes requested columns; copy emits Ω(mF) for `m` selected glyphs. Sparse host patches may offer a small `P`.     | Current copy selection scans `G` with binary search over `m`: O(G log m+m log m). Three min/max and TypeGPU's 32-range cap may make `P` approach full buffer span; resize copies old host bytes.                                           |
 
 No O(log n) end-to-end edit claim follows from a rope. A one-line paragraph may still examine `B=Θ(n)`. A retained copy index or page map adds build/maintenance and live-memory cost before it earns a query saving. A fixed crossing cost `C` matters at 512/1,024 setters but should be attributed, not presumed. Count allocation, GC, ABI/delivery bytes, p95 and the renderer's actual GPU path alongside CPU. Preserve contiguous packed/SoA lanes and sequential dense output while they serve the broad case.
+
+## Local diagnostic admission result — 16 October 2026
+
+The [Mac16,10 diagnostic checkpoint](../../../benches/reports/held-ropes-local-2026-10-16/README.md) establishes an exit-0 build/package/named-Wasm baseline for runtime `60d3c26f`, 1,048 Node tests, and 473 native tests after adding cfg(test) attribution and an indexed Inter cold-output oracle. It does not clear the dense regression or any final acceptance gate. One current 1,024 no-read scene capture and one specifically selected main control were collected; the machine-readable receipt preserves exact source/artifact/input hashes, exclusive ancestry and diagnostic p50/p95. Previous-machine raw data was neither reconstructed nor compared as a paired result.
+
+No performance implementation wave was admitted. Broad shape, flow and positioned output are real; native publication does not duplicate them. Dense clean-gap/suffix-copy removal is unsupported by these fixtures. Full masks for changed identities may be conservative, but the outlined native binding does not prove avoidable bitmap output or host uploads. The private transport ownership cleanup is structurally sound but remains deferred: entire `#decodeResult` plus `writeHeader` self time is 50.960 ms over 80 iterations (0.637ms/frame upper bound, not a saving). Keep their required memory/status/capacity/borrow checks; no alternate executor or speculative cache was added.
+
+The two authenticated artifacts use different Binaryen one-caller inline policies. Main’s historical default is reproduced explicitly by the diagnostic builder; HELD production policy is unchanged. This confounds causal comparison of common functions. The frontier’s “Do not restart … another compiler-policy experiment” exclusion remains in force. The following is a concrete **unselected proposal**, requiring that exclusion to be reopened before execution:
+
+- Freeze one isolated source/toolchain/input closure and retain the existing production artifact as control. Vary only presence of `--one-caller-inline-max-function-size=0`; preserve Rust release profile, SIMD, both merge/-Oz passes and all application code. Record every flag and source hash; never label either package a published release.
+- Build/pack each controlled artifact and authenticate its own matching named executable. Retain ABI/declaration/export equality, independent cold semantic/command output and rejection/borrow/lifetime oracles. Raw/gzip Wasm/JS, package and live/peak memory remain part of admission; an attribution difference alone is insufficient.
+- Use one bounded discriminator to establish or reject material end-to-end benefit; no favorable-clock retries, helper loop or whole 1/100/512/1024 read/publication matrix. If rejected, retire the ablation and keep the current policy. If admitted as a coherent wave, freeze that candidate once and run the required complete current-main and published 0.1.0 comparisons with saved-candidate reuse, exclusions, drift, absolute p50/p95, memory and browser/hero proof before readiness.
+
+This proposal does not authorize execution or production policy changes. It changes no semantic executor, storage representation, API or ABI. The seven-family scope and all unclosed gates above remain authoritative.
 
 ## Bounded algorithm in the current executor: wave A
 

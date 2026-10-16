@@ -151,6 +151,112 @@ describe('V8 CPU profile summary', () => {
     expect(markdown).toContain('not timed latency or FPS');
   });
 
+  it('partitions a single capture by disjoint ancestry and leaves detached GC unattributed', async () => {
+    const profile = await writeProfile({
+      nodes: [
+        node(1, '(root)', '', [2, 7]),
+        node(2, 'updateBulk', 'file:///work/benches/labs/package/edit.mts', [3, 5]),
+        node(3, 'prepare', 'file:///work/benches/labs/package/edit.mts', [4]),
+        node(4, 'codec_gather', 'wasm://engine'),
+        node(5, 'publish', 'file:///work/benches/labs/package/edit.mts', [6]),
+        node(6, 'multiplyMatrices', 'file:///tmp/node_modules/three/build/three.core.js'),
+        node(7, '(garbage collector)', 'node:internal/gc'),
+      ],
+      samples: [3, 4, 5, 6, 7, 2],
+      timeDeltas: [2, 3, 5, 7, 11, 13],
+    });
+    const directory = await temporaryDirectory();
+    const ancestry = resolve(directory, 'ancestry.json');
+    await writeFile(
+      ancestry,
+      JSON.stringify([
+        { label: 'preparation', nodeId: 3 },
+        { label: 'publication', nodeId: 5 },
+      ]),
+    );
+    const summary = await summarizeCpuProfile(profile, undefined, undefined, undefined, ancestry);
+    expect(summary.totalMicroseconds).toBe(41);
+    expect(summary.sampleCount).toBe(6);
+    expect(
+      summary.phases?.map(({ label, nodeId, microseconds, sampleCount }) => ({
+        label,
+        nodeId,
+        microseconds,
+        sampleCount,
+      })),
+    ).toEqual([
+      { label: 'preparation', nodeId: 3, microseconds: 5, sampleCount: 2 },
+      { label: 'publication', nodeId: 5, microseconds: 12, sampleCount: 2 },
+      { label: 'unattributed', nodeId: undefined, microseconds: 24, sampleCount: 2 },
+    ]);
+    expect(summary.phases?.reduce((sum, phase) => sum + phase.microseconds, 0)).toBe(summary.totalMicroseconds);
+    expect(summary.phases?.reduce((sum, phase) => sum + phase.sampleCount, 0)).toBe(summary.sampleCount);
+    expect(summary.phases?.map((phase) => phase.stageTotals)).toEqual([
+      [
+        { stage: 'gather', microseconds: 3 },
+        { stage: 'benchmark-harness', microseconds: 2 },
+      ],
+      [
+        { stage: 'external-javascript', microseconds: 7 },
+        { stage: 'benchmark-harness', microseconds: 5 },
+      ],
+      [
+        { stage: 'benchmark-harness', microseconds: 13 },
+        { stage: 'host-runtime', microseconds: 11 },
+      ],
+    ]);
+    expect(
+      summary.phases?.[0]?.hotspots.map(({ functionName, selfMicroseconds }) => [functionName, selfMicroseconds]),
+    ).toEqual([
+      ['codec_gather', 3],
+      ['prepare', 2],
+    ]);
+    expect(
+      summary.phases?.[1]?.hotspots.map(({ functionName, selfMicroseconds }) => [functionName, selfMicroseconds]),
+    ).toEqual([
+      ['multiplyMatrices', 7],
+      ['publish', 5],
+    ]);
+    expect(summary.phases?.[2]?.hotspots.map(({ functionName }) => functionName)).toEqual([
+      'updateBulk',
+      '(garbage collector)',
+    ]);
+    expect(renderCpuProfileSummary(summary)).toContain('| preparation | 3 | 2 | 5 |');
+
+    await writeFile(
+      ancestry,
+      JSON.stringify([
+        { label: 'parent', nodeId: 2 },
+        { label: 'child', nodeId: 3 },
+      ]),
+    );
+    await expect(summarizeCpuProfile(profile, undefined, undefined, undefined, ancestry)).rejects.toThrow('overlap');
+    await writeFile(ancestry, JSON.stringify([{ label: 'missing', nodeId: 99 }]));
+    await expect(summarizeCpuProfile(profile, undefined, undefined, undefined, ancestry)).rejects.toThrow(
+      'Invalid ancestry anchor',
+    );
+    await writeFile(
+      ancestry,
+      JSON.stringify([
+        { label: 'same', nodeId: 3 },
+        { label: 'same', nodeId: 5 },
+      ]),
+    );
+    await expect(summarizeCpuProfile(profile, undefined, undefined, undefined, ancestry)).rejects.toThrow(
+      'Duplicate ancestry label',
+    );
+    await writeFile(
+      ancestry,
+      JSON.stringify([
+        { label: 'a', nodeId: 3 },
+        { label: 'b', nodeId: 3 },
+      ]),
+    );
+    await expect(summarizeCpuProfile(profile, undefined, undefined, undefined, ancestry)).rejects.toThrow(
+      'Duplicate ancestry node ID',
+    );
+  });
+
   it('keeps identical function names from different Wasm URLs separate', async () => {
     const profile = await writeProfile({
       nodes: [node(1, '(root)', '', [2, 3]), node(2, 'work', 'wasm://first'), node(3, 'work', 'wasm://second')],

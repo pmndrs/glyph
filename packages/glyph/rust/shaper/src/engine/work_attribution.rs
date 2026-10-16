@@ -4,6 +4,17 @@ use core::cell::Cell;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Work {
+    pub harfrust_calls: usize,
+    pub harfrust_utf16_units: usize,
+    pub cluster_full_glyph_visits: usize,
+    pub cluster_retained_glyph_loop_visits: usize,
+    pub run_local_glyph_visits: usize,
+    pub recomposed_flow_lines: usize,
+    /// Masks examined by the retained in-place gather decision, excluding rebuilt records.
+    pub gather_mask_bits: usize,
+    pub gather_mask_bit_counts: [usize; 16],
+    pub gather_all_masks: usize,
+    pub gather_identity_mismatches: usize,
     pub measurement_ink_glyph_visits: usize,
     pub measurement_intrinsic_cluster_visits: usize,
     pub intrinsic_flow_preparations: usize,
@@ -74,6 +85,16 @@ pub(crate) struct Work {
 
 std::thread_local! {
     static WORK: Cell<Work> = const { Cell::new(Work {
+        harfrust_calls: 0,
+        harfrust_utf16_units: 0,
+        cluster_full_glyph_visits: 0,
+        cluster_retained_glyph_loop_visits: 0,
+        run_local_glyph_visits: 0,
+        recomposed_flow_lines: 0,
+        gather_mask_bits: 0,
+        gather_mask_bit_counts: [0; 16],
+        gather_all_masks: 0,
+        gather_identity_mismatches: 0,
         measurement_ink_glyph_visits: 0,
         measurement_intrinsic_cluster_visits: 0,
         intrinsic_flow_preparations: 0,

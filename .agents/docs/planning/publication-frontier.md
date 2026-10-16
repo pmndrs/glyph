@@ -4,6 +4,8 @@ title: Publication frontier checklist
 description: Compact resume point and task tracker for the 0.2.0 publication frontier.
 status: draft
 sources:
+  - resource: ../../../benches/reports/held-ropes-local-2026-10-16/README.md
+    title: Authenticated local Mac diagnostic checkpoint
   - resource: ../reports/final-performance-architecture-plan.md
     title: Reviewed source-grounded algorithms and orchestration gates
   - resource: decisions/retained-prepare-publish.md
@@ -14,7 +16,7 @@ sources:
     title: Archived validation checkpoints and evidence
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-16T15:13:08Z'
+  at: '2026-10-16T17:16:49Z'
 ---
 
 # Publication frontier checklist
@@ -26,7 +28,7 @@ The user explicitly set a new goal after the classification and algorithm report
 ### Mandatory regrounding after every compaction
 
 1. Call `get_goal` and inspect live agents/jobs; never duplicate a running gate or revive a stale advisor.
-2. Set WORK to `/Users/tjw/Documents/Codex/2026-07-22/referenced-chatgpt-conversation-this-is-untrusted/pmndrs-text-font-baker-core/.cache/publication-range-spike`. Read WORK `AGENTS.md` and applicable parent guidance. Check branch/HEAD/status; preserve all staged, unstaged and untracked files. The outer checkout is not the implementation source.
+2. Resolve the isolated checkout on the current machine from task state; never reuse another machine’s absolute path or assume ignored artifacts/processes survived. Current local WORK is `/private/tmp/glyph-held-20261016`, with a separate detached main control at `/private/tmp/glyph-held-main-20261016`. Read WORK `AGENTS.md` and applicable parent guidance. Check branch/HEAD/status and preserve every staged, unstaged and untracked file.
 3. Read this tracker **through Historical implementation record**, then [the accepted preparation/publication contract](decisions/retained-prepare-publish.md), and the **entire** [final algorithm and architecture report](../reports/final-performance-architecture-plan.md). Do not skip its execution map, worked edits, algorithm admission rules, complexity derivations, evidence/deletion matrix or interplay review.
 4. Read [engineering rules](../engineering/code-style.md). Query the relevant decision and [retained assignment design](retained-text-assignment.md) section. Use the bounded append-log reader for raw traces; do not load all historical logs. Load applicable installed skills before relevant work.
 5. Authenticate current source/package/maps/Wasm/fixtures against the evidence receipt. Read actual functions before assigning changes. Source observations, old profiles and frozen package results are distinct evidence.
@@ -73,7 +75,19 @@ Preserve Rust SWAR/SIMD, contiguous packed/SoA fields, shared rope regions and s
 
 Use pinned mise and named pnpm workflows (`scripts list/show/run`). Portless only for listening servers, never as a package dependency. Use real noninteractive `gh stack` for dependent PR work. Resume from the current checkpoint and its next wave boundary; older provenance/profile steps are already complete. No repeated favorable-clock trials. Update this compact section after each wave with exact artifacts, receipts, active jobs, failures and the next bounded task.
 
-### Current checkpoint — reconciled held handoff, 16 October 2026 UTC
+### Local diagnostic checkpoint — 16 October 2026, Mac16,10
+
+**Still held and unresolved; no runtime performance fix admitted.** Fresh isolated checkout authenticated `60d3c26f` as fetched HEAD and restored real stack #293 (#292 → #301 → #302 → draft #310; #291 merged). Main remains two commits ahead of integrated base at `4e25a96a`; no stack rebase or merge ran. The previous machine’s ignored artifacts/processes were not reused.
+
+[Portable local receipts](../../../benches/reports/held-ropes-local-2026-10-16/README.md) record successful pinned package build/pack/named-Wasm executable parity, 1,048 Node and initially 472 native tests. New cfg(test) counters plus an indexed Inter cold-output/full-gather oracle pass 473 native tests. Glyph/benchmark static gates and 9 ancestry-summary tests pass. Production algorithms, ABI and production optimizer policy are unchanged. Diagnostic-only named optimizer option reproduces historical main flags explicitly and authenticates the packed main executable.
+
+One exact-current 1,024 bulk-write scene-publication capture ran (10 warmups/80 iterations, zero timed reads). Exclusive sampled CPU: preparation 1,371.714 ms, publication 658.123 ms, unattributed 174.413 ms. A specifically selected second **main** capture separates batched execution from per-setter preparation: setter 112.003 ms, publication 1,079.788 ms, unattributed 103.709 ms. Every sample is assigned once; detached GC remains unattributed. These are profiling diagnostics, not paired latency/clock-drift acceptance. Main/HELD optimizer policies differ. No third capture or full acceptance matrix ran.
+
+Existing and extended native counts rule out duplicated publication layout/query serialization and dense clean-gap suffix copies in those outlined fixtures. The indexed oracle confirms required shape/position work and full-mask identity broadening, but its outlined binding cannot prove bitmap input/upload waste. Source plus exclusive CPU did not admit a material deletion; the reviewed transport cleanup’s two entire target functions provide only a 0.637 ms/frame upper bound before retaining required work, so it stays deferred under the larger-wave cadence.
+
+**Next reviewable discriminator, not executed:** a same-source/same-toolchain controlled ablation of only Binaryen’s one-caller inline policy, with package/named authentication, cold-output correctness and size accounting, then one frozen candidate’s consolidated main-and-0.1.0 acceptance only if a material wave is selected. This requires reopening the explicit compiler-policy exclusion above; do not silently run it or interpret the different-policy main capture as causality. All seven fixed families and final memory/API/ABI/peer/lifetime/browser/hero gates remain open. No release, tag, demo merge or stack merge.
+
+### Predecessor checkpoint — reconciled held handoff, 16 October 2026 UTC
 
 **Held, unfinished, no merge or release.** User requested a fresh Sol High reconciliation, an updated plan, all work committed/upstream, and a prompt to switch implementors. Implementation is frozen for that handoff. Runtime checkpoint commit is `5544b0d4` on `feat/rust-text-input-wire`; the final handoff response carries the final commit/PR after documentation and benchmark checkpoints. The pre-checkpoint source HEAD was `d998bb814eac473b4d24dc1871ebee9f81c95b81`; its old staged patch was preserved in local handoff receipts before committing it. Do not reset to it.
 

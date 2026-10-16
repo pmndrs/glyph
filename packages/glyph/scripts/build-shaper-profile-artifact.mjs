@@ -1,7 +1,7 @@
 /* @workflow {
   "name": "glyph:shaper-profile-artifact",
   "summary": "Build named shaper diagnostics authenticated against an exact packed release artifact.",
-  "requirements": "Pinned Rust/Binaryen through mise. Requires --artifact <frozen.tgz>; optional --source-root <worktree>, --output <directory> and --simd 0|1 (default 1). Fails if optimized executable sections differ.",
+  "requirements": "Pinned Rust/Binaryen through mise. Requires --artifact <frozen.tgz>; optional --source-root <worktree>, --output <directory>, --simd 0|1 (default 1), and --one-caller-inline-max-function-size 0|default (default 0). The 'default' value reproduces historical optimizer defaults by omitting only that flag. Fails if optimized executable sections differ.",
   "writes": "Ignored packages/glyph/.cache/shaper-profile (or --output): isolated Cargo target, optimized candidate, named Wasm and provenance/function-map manifest. Never writes dist."
 } */
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -23,8 +23,14 @@ const arguments_ = process.argv.slice(2);
 for (let index = 0; index < arguments_.length; index += 2) {
   const key = arguments_[index];
   const value = arguments_[index + 1];
-  if (!['--artifact', '--source-root', '--output', '--simd'].includes(key) || value === undefined || options.has(key)) {
-    throw new Error('Expected --artifact <tgz> [--source-root <worktree>] [--output <directory>] [--simd 0|1]');
+  if (
+    !['--artifact', '--source-root', '--output', '--simd', '--one-caller-inline-max-function-size'].includes(key) ||
+    value === undefined ||
+    options.has(key)
+  ) {
+    throw new Error(
+      'Expected --artifact <tgz> [--source-root <worktree>] [--output <directory>] [--simd 0|1] [--one-caller-inline-max-function-size 0|default]',
+    );
   }
   options.set(key, value);
 }
@@ -32,6 +38,10 @@ if (!options.has('--artifact')) throw new Error('--artifact is required');
 const simdOption = options.get('--simd') ?? '1';
 if (simdOption !== '0' && simdOption !== '1') throw new Error('--simd must be 0 or 1');
 const simd = simdOption === '1';
+const oneCallerInlineMaxFunctionSize = options.get('--one-caller-inline-max-function-size') ?? '0';
+if (oneCallerInlineMaxFunctionSize !== '0' && oneCallerInlineMaxFunctionSize !== 'default') {
+  throw new Error('--one-caller-inline-max-function-size must be 0 or default');
+}
 const sourceRoot = resolve(options.get('--source-root') ?? workspaceRoot);
 const sourcePackageRoot = resolve(sourceRoot, 'packages/glyph');
 const artifact = resolve(options.get('--artifact'));
@@ -65,7 +75,9 @@ await writeFile(
   ]),
 );
 const wasmOpt = resolve(packageRoot, 'node_modules/.bin', process.platform === 'win32' ? 'wasm-opt.CMD' : 'wasm-opt');
-const optimization = shaperOptimizationArguments(simd);
+const optimization = shaperOptimizationArguments(simd).filter(
+  (argument) => oneCallerInlineMaxFunctionSize === '0' || argument !== '--one-caller-inline-max-function-size=0',
+);
 const symbolMap = await captureCommand(wasmOpt, [...optimization, '--print-function-map', input, '-o', candidatePath], {
   cwd: packageRoot,
 });
@@ -91,6 +103,7 @@ await writeFile(
         wasmOpt: String(await captureCommand(wasmOpt, ['--version'])).trim(),
       },
       simd,
+      oneCallerInlineMaxFunctionSize,
       optimization,
       functions: proof.functions,
     },

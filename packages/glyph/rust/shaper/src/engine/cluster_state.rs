@@ -612,6 +612,10 @@ impl ClusterArena {
                 )
                 .ok_or(EngineError::InvalidRequest)?;
             for glyph in glyph_start..glyph_end {
+                #[cfg(test)]
+                super::work_attribution::record(|work| {
+                    work.cluster_retained_glyph_loop_visits += 1
+                });
                 let cluster = self.cluster_at(shape.clusters[glyph])?;
                 if cluster < cluster_start || cluster >= cluster_end {
                     return Err(EngineError::InvalidRequest);
@@ -674,6 +678,10 @@ impl ClusterArena {
                 )
                 .ok_or(EngineError::InvalidRequest)?;
             for glyph in glyph_start..glyph_end {
+                #[cfg(test)]
+                super::work_attribution::record(|work| {
+                    work.cluster_retained_glyph_loop_visits += 1
+                });
                 let cluster = self.cluster_at(shape.clusters[glyph])?;
                 let ordinal = usize::try_from(self.glyph_counts[cluster])
                     .map_err(|_| EngineError::InvalidRequest)?;
@@ -1682,6 +1690,8 @@ impl ClusterArena {
                 )
                 .ok_or(EngineError::InvalidRequest)?;
             for glyph in start..end {
+                #[cfg(test)]
+                super::work_attribution::record(|work| work.cluster_full_glyph_visits += 1);
                 let cluster = *shape
                     .clusters
                     .get(glyph)
@@ -1973,6 +1983,8 @@ fn append_run_local_cluster(
         .ok_or(EngineError::InvalidRequest)?;
     writer.begin_cluster().map_err(run_local_error)?;
     for glyph in start..end {
+        #[cfg(test)]
+        super::work_attribution::record(|work| work.run_local_glyph_visits += 1);
         let glyph_id = u32::from(clusters.glyph_ids[glyph]);
         writer
             .push_glyph(RunLocalGlyphInput {

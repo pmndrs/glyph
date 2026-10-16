@@ -12647,6 +12647,313 @@ mod tests {
         }
     }
 
+    #[test]
+    fn dense_inter_setter_publication_attributes_actual_work() {
+        const INTER: &[u8] =
+            include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
+        const OWNERS: u32 = 1_024;
+        let alpha: Vec<Vec<u16>> = (0..OWNERS)
+            .map(|index| utf16(&alloc::format!("alpha {index:04}")))
+            .collect();
+        let bravo: Vec<Vec<u16>> = (0..OWNERS)
+            .map(|index| utf16(&alloc::format!("bravo {index:04}")))
+            .collect();
+        assert!(alpha.iter().chain(&bravo).all(|text| text.len() == 10));
+        let style = root_style_bytes_for_text(7, 10);
+        let mut template = root_geometry_bytes();
+        let constraint = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let region = constraint + abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
+        write_f32(
+            &mut template,
+            constraint + abi::ENGINE_CONSTRAINT_WIDTH,
+            160.0,
+        );
+        write_f32(&mut template, region + abi::ENGINE_REGION_INLINE_END, 160.0);
+        write_f32(
+            &mut template,
+            region + abi::ENGINE_REGION_CLIP_INLINE_END,
+            160.0,
+        );
+        let (mut engine, mut shaper) = shaped_engine_with_font_styles_geometry_and_extents(
+            "alpha 0000",
+            INTER,
+            2_937,
+            &style,
+            1,
+            Some((&template, 0)),
+            true,
+        );
+        let lifecycle_records: Vec<_> = (2..=OWNERS)
+            .map(|id| (PARAGRAPH_MUTATION_UPSERT, id, id - 1))
+            .collect();
+        let text_records: Vec<_> = (2..=OWNERS)
+            .map(|id| (id, 0, 0, alpha[(id - 1) as usize].as_slice()))
+            .collect();
+        let style_records: Vec<_> = (2..=OWNERS).map(|id| (id, 0)).collect();
+        let lifecycle = paragraph_mutation_bytes(&lifecycle_records);
+        let texts = paragraph_text_mutation_bytes(&text_records);
+        let mut styles = paragraph_root_style_bytes(&style_records);
+        let style_stride = abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize;
+        for index in 0..style_records.len() {
+            write_u32(
+                &mut styles,
+                ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize
+                    + index * style_stride
+                    + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+                10,
+            );
+        }
+        let header = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let constraint_stride = abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
+        let region_offset = header + OWNERS as usize * constraint_stride;
+        let mut geometry = vec![0; region_offset + abi::ENGINE_REGION_RECORD_SIZE as usize];
+        for id in 1..=OWNERS {
+            let offset = header + (id as usize - 1) * constraint_stride;
+            geometry[offset..offset + constraint_stride]
+                .copy_from_slice(&template[header..header + constraint_stride]);
+            write_u32(
+                &mut geometry,
+                offset + abi::ENGINE_CONSTRAINT_PARAGRAPH_ID,
+                id,
+            );
+        }
+        geometry[region_offset..].copy_from_slice(&template[header + constraint_stride..]);
+        let mut limits = update(1, 1, 1).limits;
+        limits.max_paragraphs = OWNERS;
+        limits.max_regions = OWNERS;
+        limits.max_clusters = OWNERS * 10;
+        limits.max_lines = OWNERS;
+        limits.max_output_bytes = 1 << 24;
+        let mut added = update(1, 1, 1);
+        added.limits = limits;
+        added.paragraph_mutations =
+            parse_paragraph_mutations(&lifecycle, ENGINE_UPDATE_REQUEST_HEADER_SIZE, OWNERS - 1)
+                .unwrap();
+        added.text_mutations =
+            parse_text_mutations(&texts, ENGINE_UPDATE_REQUEST_HEADER_SIZE, OWNERS - 1).unwrap();
+        added.style_mutations =
+            parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, OWNERS - 1).unwrap();
+        added.geometry = parse_geometry(
+            &geometry,
+            ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+            OWNERS,
+            region_offset as u32,
+            1,
+            0,
+            0,
+            0,
+            0,
+            limits,
+        )
+        .unwrap();
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, added, 2)
+            .unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        for (cycle, target) in [&bravo, &alpha].into_iter().enumerate() {
+            let revision = 2 + cycle as u32;
+            let before_view = engine.gather.view();
+            let before_output = before_view.plan_input();
+            let before = before_output.glyphs.to_vec();
+            let before_f32: Vec<Vec<u32>> = before_output
+                .f32_fields
+                .iter()
+                .map(|field| field.iter().map(|value| value.to_bits()).collect())
+                .collect();
+            let before_u32: Vec<Vec<u32>> = before_output
+                .u32_fields
+                .iter()
+                .map(|field| field.to_vec())
+                .collect();
+            super::super::work_attribution::reset();
+            for id in 1..=OWNERS {
+                let bytes = paragraph_text_mutation_bytes(&[(
+                    id,
+                    0,
+                    10,
+                    target[(id - 1) as usize].as_slice(),
+                )]);
+                let mut edit = update(revision, revision, revision);
+                edit.limits = limits;
+                edit.semantic_view_mask = 0;
+                edit.text_mutations =
+                    parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+                let measured = engine
+                    .measure_paragraph_with_shaper(&mut shaper, edit, id)
+                    .unwrap();
+                engine.commit_measure(measured).unwrap();
+            }
+            let preparation = super::super::work_attribution::snapshot();
+            assert_eq!(preparation.harfrust_calls, OWNERS as usize);
+            assert_eq!(preparation.harfrust_utf16_units, OWNERS as usize * 10);
+            assert_eq!(preparation.query_serialized_records, 0);
+            assert_eq!(preparation.query_serialized_bytes, 0);
+            super::super::work_attribution::reset();
+            let mut publication = update(revision, revision, revision);
+            publication.limits = limits;
+            assert_eq!(publication.text_mutations.len(), 0);
+            assert_eq!(publication.style_mutations.len(), 0);
+            assert_eq!(publication.semantic_view_mask, 0);
+            let prepared = engine
+                .prepare_update_with_shaper(&mut shaper, publication, revision + 1)
+                .unwrap();
+            engine.commit_update(prepared).unwrap();
+            let published = super::super::work_attribution::snapshot();
+            assert_eq!(published.harfrust_calls, 0);
+            assert_eq!(published.recomposed_flow_lines, 0);
+            assert_eq!(published.newly_positioned_glyphs, 0);
+            assert_eq!(published.query_serialized_records, 0);
+            assert_eq!(published.query_serialized_bytes, 0);
+            let after_view = engine.gather.view();
+            let after_output = after_view.plan_input();
+            let after = after_output.glyphs.to_vec();
+            let after_f32: Vec<Vec<u32>> = after_output
+                .f32_fields
+                .iter()
+                .map(|field| field.iter().map(|value| value.to_bits()).collect())
+                .collect();
+            let after_u32: Vec<Vec<u32>> = after_output
+                .u32_fields
+                .iter()
+                .map(|field| field.to_vec())
+                .collect();
+            let masks = after_output.semantic_change_masks;
+            assert_eq!(before.len(), OWNERS as usize * 10);
+            assert_eq!(after.len(), before.len());
+            for (old_owner, new_owner) in before.chunks_exact(10).zip(after.chunks_exact(10)) {
+                for (old_glyph, new_glyph) in old_owner[5..].iter().zip(&new_owner[5..]) {
+                    assert_eq!(old_glyph.stable_id, new_glyph.stable_id);
+                }
+            }
+            assert_eq!(masks.len(), after.len());
+            assert_eq!(
+                published.gather_mask_bit_counts.iter().sum::<usize>(),
+                published.gather_mask_bits
+            );
+            assert_eq!(
+                published.gather_all_masks,
+                published.gather_identity_mismatches
+            );
+            let changed_id = before
+                .iter()
+                .zip(&after)
+                .filter(|(a, b)| a.stable_id != b.stable_id)
+                .count();
+            let changed_material = before
+                .iter()
+                .zip(&after)
+                .filter(|(a, b)| a.material_id != b.material_id)
+                .count();
+            let changed_position = before
+                .iter()
+                .zip(&after)
+                .filter(|(a, b)| {
+                    a.inline_start.to_bits() != b.inline_start.to_bits()
+                        || a.block_start.to_bits() != b.block_start.to_bits()
+                })
+                .count();
+            let changed_extent = before
+                .iter()
+                .zip(&after)
+                .filter(|(a, b)| {
+                    a.inline_extent.to_bits() != b.inline_extent.to_bits()
+                        || a.block_extent.to_bits() != b.block_extent.to_bits()
+                })
+                .count();
+            let f32_changed: Vec<usize> = before_f32
+                .iter()
+                .zip(&after_f32)
+                .map(|(old, new)| old.iter().zip(new).filter(|(a, b)| a != b).count())
+                .collect();
+            let u32_changed: Vec<usize> = before_u32
+                .iter()
+                .zip(&after_u32)
+                .map(|(old, new)| old.iter().zip(new).filter(|(a, b)| a != b).count())
+                .collect();
+            let all_mask_rows = masks.iter().filter(|&&mask| mask == u16::MAX).count();
+            assert_eq!(all_mask_rows, published.gather_all_masks);
+            let all_mask_unchanged_f32: Vec<usize> = before_f32
+                .iter()
+                .zip(&after_f32)
+                .map(|(old, new)| {
+                    old.iter()
+                        .zip(new)
+                        .zip(masks)
+                        .filter(|((a, b), mask)| **mask == u16::MAX && a == b)
+                        .count()
+                })
+                .collect();
+            let all_mask_unchanged_u32: Vec<usize> = before_u32
+                .iter()
+                .zip(&after_u32)
+                .map(|(old, new)| {
+                    old.iter()
+                        .zip(new)
+                        .zip(masks)
+                        .filter(|((a, b), mask)| **mask == u16::MAX && a == b)
+                        .count()
+                })
+                .collect();
+            std::eprintln!(
+                "dense Inter {OWNERS}x10 cycle{cycle}: preparation={preparation:?}; publication={published:?}; output_changed={{stable_id:{changed_id},material_id:{changed_material},position:{changed_position},extent:{changed_extent},f32:{f32_changed:?},u32:{u32_changed:?}}}; all_mask_rows={all_mask_rows}; all_mask_unchanged={{f32:{all_mask_unchanged_f32:?},u32:{all_mask_unchanged_u32:?}}}"
+            );
+            for id in 1..=OWNERS {
+                let index = id - 1;
+                let cold_text =
+                    alloc::format!("{} {index:04}", if cycle == 0 { "bravo" } else { "alpha" });
+                assert_eq!(target[index as usize], utf16(&cold_text));
+                let (cold, _) = shaped_engine_with_font_styles_geometry_and_extents(
+                    &cold_text,
+                    INTER,
+                    2_937,
+                    &style,
+                    1,
+                    Some((&template, 0)),
+                    true,
+                );
+                let cold_view = cold.gather.view();
+                let cold_output = cold_view.plan_input();
+                let start = index as usize * 10;
+                let end = start + 10;
+                assert_eq!(cold_output.glyphs.len(), 10);
+                for (warm_glyph, cold_glyph) in after[start..end].iter().zip(cold_output.glyphs) {
+                    let mut expected = *cold_glyph;
+                    expected.stable_id = warm_glyph.stable_id;
+                    expected.content_revision = warm_glyph.content_revision;
+                    expected.semantic_id = warm_glyph.semantic_id;
+                    expected.transform_id = warm_glyph.transform_id;
+                    assert_eq!(*warm_glyph, expected);
+                }
+                assert_eq!(cold_output.f32_fields.len(), after_f32.len());
+                for (field, warm) in cold_output.f32_fields.iter().zip(&after_f32) {
+                    let expected: Vec<_> = field.iter().map(|value| value.to_bits()).collect();
+                    assert_eq!(&warm[start..end], expected.as_slice());
+                }
+                assert_eq!(cold_output.u32_fields.len(), after_u32.len());
+                for (field, warm) in cold_output.u32_fields.iter().zip(&after_u32) {
+                    assert_eq!(&warm[start..end], *field);
+                }
+                assert_visible_shape_equal(
+                    &engine
+                        .planners
+                        .get(&4)
+                        .unwrap()
+                        .paragraph(id)
+                        .unwrap()
+                        .state,
+                    cold.planners
+                        .get(&4)
+                        .unwrap()
+                        .first_paragraph_state()
+                        .unwrap(),
+                    "dense Inter setter cold parity",
+                );
+            }
+            assert_gather_matches_full(&mut engine);
+        }
+    }
+
     fn assert_gather_matches_full(engine: &mut TextEngine) {
         let warm = engine.gather.view();
         let warm = warm.plan_input();
