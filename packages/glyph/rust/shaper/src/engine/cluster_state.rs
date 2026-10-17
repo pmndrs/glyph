@@ -300,8 +300,6 @@ pub(crate) struct ClusterArena {
     /// The glyphs the islands behind `break_corrections` shape alone, kept for the line edges that draw them. Like
     /// the corrections it is a cache, but only a build or a derived copy empties it, so a relayout shapes nothing.
     pub(super) islands: RefCell<IslandShapes>,
-    /// No run is right-to-left or overridden: only then do line edges shape alone, so only then are breaks corrected.
-    pub(super) ltr: bool,
     pub(super) layout_runs: LayoutRunArena,
     pub(super) run_local: RunLocalArena,
 }
@@ -313,11 +311,6 @@ pub(crate) struct ClusterBuildInput<'a> {
     pub styles: &'a [StyleSegment],
     pub runs: &'a [ShapingRun],
     pub shape: &'a ShapeArena,
-}
-
-fn all_ltr(runs: &[ShapingRun]) -> bool {
-    runs.iter()
-        .all(|run| run.bidi_level & 1 == 0 && !run.style.bidi_override)
 }
 
 impl ClusterArena {
@@ -400,7 +393,6 @@ impl ClusterArena {
             shape,
         } = input;
         self.clear();
-        self.ltr = all_ltr(runs);
         if text.len() != text_unit_ids.len() || text_unit_ids.contains(&0) {
             return Err(EngineError::InvalidRequest);
         }
@@ -532,7 +524,6 @@ impl ClusterArena {
             return Ok(None);
         }
         self.copy_from(previous)?;
-        self.ltr = all_ltr(runs);
         for cluster in cluster_start..cluster_end {
             let start = self.starts[cluster];
             let end = self.ends[cluster];
@@ -985,7 +976,6 @@ impl ClusterArena {
         copy_lane!(shaped);
         copy_lane!(unsafe_before);
         copy_lane!(break_corrections);
-        self.ltr = source.ltr;
         self.layout_runs.reserve(source.layout_runs.runs.len())?;
         self.layout_runs
             .runs
@@ -1794,7 +1784,7 @@ impl ClusterArena {
     fn mark_optional_break(&mut self, preceding: usize) {
         if self.boundary_is_shaping_safe(preceding) {
             self.flags[preceding] |= CLUSTER_ALLOWED_BREAK;
-        } else if self.ltr && self.same_owner(preceding, preceding + 1) {
+        } else if self.same_owner(preceding, preceding + 1) {
             self.flags[preceding] |= CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION;
             // The correction lane exists only for paragraphs that have a correctable boundary.
             self.break_corrections
@@ -2252,6 +2242,27 @@ mod tests {
         style_arena: StyleArena,
         styles: Vec<StyleSegment>,
         shaping_runs: Vec<ShapingRun>,
+    }
+
+    #[test]
+    fn unsafe_breaks_are_correctable_inside_an_rtl_run_but_not_across_runs() {
+        let style = ResolvedStyle::test_typography(24.0, 0.0, 0.0);
+        let mut fixture =
+            canonical_fixture(&[0x05d0, 0x05d1, 0x0061], &[1, 2, 3], &[0, 0, 1], style);
+        fixture.shaping_runs[0].direction = 1;
+        fixture.shaping_runs[0].bidi_level = 1;
+        fixture.arena.flags[1] &= !CLUSTER_SAFE_BEFORE;
+        fixture.arena.flags[2] &= !CLUSTER_SAFE_BEFORE;
+
+        fixture.arena.mark_optional_break(0);
+        fixture.arena.mark_optional_break(1);
+
+        assert_eq!(
+            fixture.arena.flags[0] & (CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION),
+            CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION,
+        );
+        assert_eq!(fixture.arena.reshapable_island(1), Some((0, 2)));
+        assert_eq!(fixture.arena.flags[1] & CLUSTER_ALLOWED_BREAK, 0);
     }
 
     fn canonical_fixture(

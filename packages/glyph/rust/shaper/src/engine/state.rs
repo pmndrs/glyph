@@ -5884,6 +5884,7 @@ impl ShapedBreakCorrections<'_, '_> {
         let trail = edges.1;
         let c = self.clusters;
         let style = self.runs[c.source_runs[start] as usize].style;
+        let rtl = self.runs[c.source_runs[start] as usize].direction & 1 != 0;
         let scale = f64::from(style.font_size) / c.units_per_em[start];
         let paragraph = &c.glyph_ids[c.glyph_starts[start] as usize
             ..(c.glyph_starts[end - 1] + c.glyph_counts[end - 1]) as usize];
@@ -5899,7 +5900,19 @@ impl ShapedBreakCorrections<'_, '_> {
             let run = shaped.runs[run];
             let glyphs = run.glyph_start as usize..(run.glyph_start + run.glyph_count) as usize;
             let ids = &shaped.glyph_ids[glyphs.clone()];
-            same = same_glyphs(ids.iter().map(|id| u32::from(*id)), paragraph);
+            same = if !rtl {
+                same_glyphs(ids.iter().map(|id| u32::from(*id)), paragraph)
+            } else {
+                // HarfRust emits an RTL island in visual cluster order; the paragraph arena
+                // keeps the same glyphs in logical cluster order.
+                ids.iter()
+                    .map(|id| u32::from(*id))
+                    .eq((start..end).rev().flat_map(|cluster| {
+                        let first = c.glyph_starts[cluster] as usize;
+                        let last = first + c.glyph_counts[cluster] as usize;
+                        c.glyph_ids[first..last].iter().copied().map(u32::from)
+                    }))
+            };
             for (cluster, advance) in shaped.clusters[glyphs.clone()]
                 .iter()
                 .zip(&shaped.x_advances[glyphs])
