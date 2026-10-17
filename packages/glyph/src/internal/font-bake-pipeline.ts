@@ -13,6 +13,7 @@ export interface FontBakePipelineOptions {
   readonly fontFaceIndex: number;
   readonly outlines?: boolean;
   readonly unicodeRanges?: readonly { readonly start: number; readonly end: number }[];
+  readonly allowWholeFaceFallback?: boolean;
   readonly rasters: readonly ResolvedRasterBakePlan[];
   readonly signal?: AbortSignal;
   readonly onProgress?: BakeProgressListener;
@@ -48,6 +49,9 @@ export async function bakeFontPipeline(options: FontBakePipelineOptions): Promis
             formatVersion: 0,
             fontFaceIndex: options.fontFaceIndex,
             unicodeRanges: normalizeUnicodeRanges(options.unicodeRanges),
+            ...(options.allowWholeFaceFallback === undefined
+              ? {}
+              : { allowWholeFaceFallback: options.allowWholeFaceFallback }),
           },
         });
   const source = preparation?.bytes ?? options.source;

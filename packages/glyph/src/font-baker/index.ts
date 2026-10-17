@@ -26,6 +26,8 @@ export interface FontBakeSelection {
   readonly formatVersion: 0;
   readonly fontFaceIndex: number;
   readonly unicodeRanges: readonly UnicodeRange[];
+  /** Explicitly retain the complete source face when CFF/CFF2 cannot be subset. */
+  readonly allowWholeFaceFallback?: boolean;
 }
 
 export interface FontPrepareRequest {
@@ -37,7 +39,8 @@ export interface PreparedFontReport {
   readonly formatVersion: 0;
   readonly sourceBytes: number;
   readonly preparedBytes: number;
-  readonly fontFaceIndex: 0;
+  readonly fontFaceIndex: number;
+  readonly preparation: 'subset' | 'whole-face-fallback';
   readonly glyphCount: number;
   readonly fingerprint: Fingerprint;
 }
@@ -450,7 +453,8 @@ function isPreparedFontReport(value: unknown): value is PreparedFontReport {
     isNonnegativeSafeInteger(value.sourceBytes) &&
     isNonnegativeSafeInteger(value.preparedBytes) &&
     value.preparedBytes > 0 &&
-    value.fontFaceIndex === 0 &&
+    isNonnegativeSafeInteger(value.fontFaceIndex) &&
+    (value.preparation === 'subset' || value.preparation === 'whole-face-fallback') &&
     isNonnegativeSafeInteger(value.glyphCount) &&
     isFingerprint(value.fingerprint)
   );

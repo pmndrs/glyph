@@ -336,6 +336,13 @@ CLI nor the programmatic `@pmndrs/glyph/bake` path invokes a platform font tool.
 publishes only to temporary storage and compares the complete GLB byte-for-byte with the requested output. It calls the
 same `bakeFont` host as programmatic consumers rather than maintaining an example-only composition path.
 
+Skera cannot subset CFF or CFF2 outlines. A `--unicodes` request for such a face fails before publication with an
+explicit subsetting error. `--allow-whole-face-fallback` (Node `allowWholeFaceFallback`) opts into retaining the
+complete source container and selected face index; the preparation report says `whole-face-fallback` and gives the
+retained source bytes, while the CLI also prints output artifact bytes. Requested code points do not filter glyphs in
+this mode. Collections retain all source faces in the input bytes. The decision is recorded in
+[CFF whole-face fallback](../planning/decisions/cff-whole-face-fallback.md); compact CFF/CFF2 subsetting remains open.
+
 Project discovery uses Oxc Parser 0.150.0 for JS/JSX/TS/TSX syntax, Oxc Walker 1.1.1 for lexical scopes, and Oxc Resolver 11.24.2 for
 module resolution, including tsconfig paths and TypeScript source extension aliases. It scans `src` by default or the
 explicit entry files, then follows project-local ESM imports and re-exports. It resolves literal options and imported

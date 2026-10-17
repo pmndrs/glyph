@@ -60,6 +60,7 @@ export interface NodeBakeOptions<Rasters extends readonly object[] = readonly []
   readonly output: string | URL;
   readonly font: Omit<FontBakeDescriptor, 'formatVersion'>;
   readonly unicodeRanges?: readonly UnicodeRange[];
+  readonly allowWholeFaceFallback?: boolean;
   readonly rasters?: Rasters;
   readonly signal?: AbortSignal;
 }
@@ -189,6 +190,7 @@ async function bakeFontWithResolvedPlans<const Rasters extends readonly object[]
     fontFaceIndex: options.font.fontFaceIndex,
     ...(options.font.outlines === undefined ? {} : { outlines: options.font.outlines }),
     ...(options.unicodeRanges === undefined ? {} : { unicodeRanges: options.unicodeRanges }),
+    ...(options.allowWholeFaceFallback === undefined ? {} : { allowWholeFaceFallback: options.allowWholeFaceFallback }),
     rasters,
     validateArtifact: validateFontArtifact,
     ...(options.signal === undefined ? {} : { signal: options.signal }),
@@ -467,6 +469,7 @@ export async function fontIsUpToDate(request: {
   /** Whether the bake also keeps glyph outlines. Defaults to `false`. */
   readonly outlines?: boolean;
   readonly unicodeRanges?: readonly UnicodeRange[];
+  readonly allowWholeFaceFallback?: boolean;
   readonly rasters: readonly { readonly rasterKey: string; readonly kind: string; readonly version: number }[];
   /** A split bake writes companions beside the core, so the same rasters are a different result. */
   readonly split: boolean;
@@ -490,6 +493,9 @@ export async function fontIsUpToDate(request: {
         formatVersion: 0,
         fontFaceIndex: request.fontFaceIndex,
         unicodeRanges: request.unicodeRanges,
+        ...(request.allowWholeFaceFallback === undefined
+          ? {}
+          : { allowWholeFaceFallback: request.allowWholeFaceFallback }),
       },
     }).bytes;
   }

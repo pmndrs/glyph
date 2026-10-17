@@ -29,6 +29,8 @@ pub struct FontSelectionV0 {
     pub format_version: u8,
     pub font_face_index: u32,
     pub unicode_ranges: Vec<UnicodeRangeV0>,
+    #[serde(default)]
+    pub allow_whole_face_fallback: bool,
 }
 
 #[derive(Debug)]
@@ -44,8 +46,16 @@ pub struct PreparedFontReportV0 {
     pub source_bytes: usize,
     pub prepared_bytes: usize,
     pub font_face_index: u32,
+    pub preparation: FontPreparationV0,
     pub glyph_count: u32,
     pub fingerprint: String,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FontPreparationV0 {
+    Subset,
+    WholeFaceFallback,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -81,6 +91,36 @@ pub fn prepare_font(
 ) -> Result<PreparedFontV0, BakeError> {
     let unicode_ranges = validate_selection(&selection)?;
     let font = parse_font(source, selection.font_face_index)?;
+    let has_truetype_outlines = font.table_data(Tag::new(b"glyf")).is_some()
+        && font.table_data(Tag::new(b"loca")).is_some();
+    let cff = !has_truetype_outlines && font.table_data(Tag::new(b"CFF ")).is_some();
+    let cff2 = !has_truetype_outlines && font.table_data(Tag::new(b"CFF2")).is_some();
+    if cff || cff2 {
+        let format = if cff { "CFF" } else { "CFF2" };
+        if !selection.allow_whole_face_fallback {
+            return Err(BakeError::new(
+                BakeErrorCode::SubsettingFailed,
+                format!(
+                    "font face {} has {format} outlines; CFF/CFF2 Unicode subsetting is unsupported. Omit Unicode ranges to bake the whole face, or set allowWholeFaceFallback (CLI --allow-whole-face-fallback) to retain the whole source",
+                    selection.font_face_index
+                ),
+            ));
+        }
+        let bytes = source.to_vec();
+        let report = PreparedFontReportV0 {
+            format_version: 0,
+            source_bytes: source.len(),
+            prepared_bytes: bytes.len(),
+            font_face_index: selection.font_face_index,
+            preparation: FontPreparationV0::WholeFaceFallback,
+            glyph_count: font.glyph_names().num_glyphs(),
+            fingerprint: pmndrs_glyph_raster_artifact::fingerprint128(
+                &bytes,
+                pmndrs_glyph_raster_artifact::SOURCE_FINGERPRINT_V0,
+            ),
+        };
+        return Ok(PreparedFontV0 { bytes, report });
+    }
     let mut unicodes = IntSet::<u32>::empty();
     for range in unicode_ranges {
         insert_scalar_range(&mut unicodes, range);
@@ -122,6 +162,7 @@ pub fn prepare_font(
         source_bytes: source.len(),
         prepared_bytes: bytes.len(),
         font_face_index: 0,
+        preparation: FontPreparationV0::Subset,
         glyph_count,
         fingerprint: pmndrs_glyph_raster_artifact::fingerprint128(
             &bytes,
@@ -225,6 +266,9 @@ mod tests {
 
     const INTER: &[u8] =
         include_bytes!("../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
+    const DANCING: &[u8] = include_bytes!(
+        "../../../../../benches/fixtures/fonts/dancing-script-3.000/DancingScript-Regular.otf"
+    );
 
     #[test]
     fn prepares_a_shaping_complete_ascii_subset() {
@@ -233,6 +277,7 @@ mod tests {
             FontSelectionV0 {
                 format_version: 0,
                 font_face_index: 0,
+                allow_whole_face_fallback: false,
                 unicode_ranges: vec![UnicodeRangeV0 {
                     start: 0x20,
                     end: 0x7e,
@@ -242,10 +287,71 @@ mod tests {
         .expect("ASCII subset");
 
         assert!(result.bytes.len() < INTER.len());
+        assert!(matches!(
+            result.report.preparation,
+            FontPreparationV0::Subset
+        ));
         assert!(result.report.glyph_count < 200);
         let font = FontRef::new(&result.bytes).expect("subset font");
         assert!(font.charmap().map('A').is_some());
         assert!(font.charmap().map('é').is_none());
+    }
+
+    #[test]
+    fn cff_subset_requires_explicit_whole_face_fallback() {
+        let selection = FontSelectionV0 {
+            format_version: 0,
+            font_face_index: 0,
+            unicode_ranges: vec![UnicodeRangeV0 {
+                start: u32::from('A'),
+                end: u32::from('A'),
+            }],
+            allow_whole_face_fallback: false,
+        };
+        let error =
+            prepare_font(DANCING, selection.clone()).expect_err("CFF subset is unsupported");
+        assert_eq!(error.code, BakeErrorCode::SubsettingFailed);
+        assert!(
+            error
+                .message
+                .contains("CFF/CFF2 Unicode subsetting is unsupported")
+        );
+
+        let prepared = prepare_font(
+            DANCING,
+            FontSelectionV0 {
+                allow_whole_face_fallback: true,
+                ..selection
+            },
+        )
+        .expect("explicit whole-face fallback");
+        assert!(matches!(
+            prepared.report.preparation,
+            FontPreparationV0::WholeFaceFallback
+        ));
+        assert_eq!(prepared.bytes.as_slice(), DANCING);
+        assert_eq!(prepared.report.prepared_bytes, DANCING.len());
+        assert_eq!(prepared.report.font_face_index, 0);
+        let original = FontRef::new(DANCING).expect("source face");
+        let retained = FontRef::new(&prepared.bytes).expect("retained face");
+        assert_eq!(
+            retained
+                .table_data(Tag::new(b"CFF "))
+                .map(|table| table.as_bytes()),
+            original
+                .table_data(Tag::new(b"CFF "))
+                .map(|table| table.as_bytes())
+        );
+        for character in ['A', 'B', 'é'] {
+            assert_eq!(
+                retained.charmap().map(character),
+                original.charmap().map(character)
+            );
+        }
+        assert_eq!(
+            retained.glyph_names().num_glyphs(),
+            original.glyph_names().num_glyphs()
+        );
     }
 
     #[test]
@@ -269,6 +375,7 @@ mod tests {
             FontSelectionV0 {
                 format_version: 0,
                 font_face_index: 0,
+                allow_whole_face_fallback: false,
                 unicode_ranges: vec![
                     UnicodeRangeV0 {
                         start: 0x20,

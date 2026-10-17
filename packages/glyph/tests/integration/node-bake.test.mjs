@@ -17,6 +17,14 @@ import { fingerprint128, fingerprintDomain } from '../../dist/internal/content-d
 import { bitmapDescriptor, bitmapRasterKey } from '../../dist/internal/bitmap-contract.js';
 
 const fontUrl = new URL('../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
+const dancingUrl = new URL(
+  '../../../../benches/fixtures/fonts/dancing-script-3.000/DancingScript-Regular.otf',
+  import.meta.url,
+);
+const notoCjkUrl = new URL(
+  '../../../../benches/fixtures/fonts/noto-sans-cjk-2.004/NotoSansCJKjp-Regular.otf',
+  import.meta.url,
+);
 const iconFontUrl = new URL(
   '../../../../benches/fixtures/fonts/font-awesome-free-6.7.2/fa-solid-900.ttf',
   import.meta.url,
@@ -319,6 +327,52 @@ test('the CLI directly bakes and checks one known font from arguments', async (t
     (await validateFontArtifact(await readFile(subsetOutput))).glyphCount,
     subsetReport.preparation.glyphCount,
   );
+});
+
+test('CFF Unicode requests fail before publication unless whole-face retention is explicit', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-cff-cli-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const input = join(root, 'DancingScript-Regular.otf');
+  const output = join(root, 'DancingScript.font.glb');
+  await writeFile(input, await readFile(dancingUrl));
+  const args = ['bake', '--input', input, '--output', output, '--unicodes', 'U+0041', '--outlines', '--bitmap', '16'];
+
+  const rejected = captureIo();
+  assert.equal(await runCli(args, rejected.io), 1);
+  assert.match(rejected.stderr(), /CFF\/CFF2 Unicode subsetting is unsupported/u);
+  await assert.rejects(readFile(output), { code: 'ENOENT' });
+
+  const retained = captureIo();
+  assert.equal(await runCli([...args, '--allow-whole-face-fallback', '--json'], retained.io), 0, retained.stderr());
+  const report = JSON.parse(retained.stdout());
+  assert.equal(report.preparation.preparation, 'whole-face-fallback');
+  assert.equal(report.preparation.preparedBytes, (await readFile(input)).byteLength);
+  assert.equal(report.preparation.fontFaceIndex, 0);
+  const artifact = await validateFontArtifact(await readFile(output));
+  assert.equal(artifact.glyphCount, report.preparation.glyphCount);
+  assert.ok(artifact.glyphCount > 100, 'the selected U+0041 did not truncate the retained face');
+  assert.equal(report.shared.outlines.sourceFormat, 'cff');
+  assert.ok(artifact.document.extensions.PMNDRS_font.outlines);
+
+  const check = captureIo();
+  assert.equal(await runCli([...args, '--allow-whole-face-fallback', '--check'], check.io), 0, check.stderr());
+  assert.match(check.stdout(), /retained whole face 0 \(\d+ source bytes; \d+ output bytes\)/u);
+});
+
+test('a large CFF source never silently expands a requested tiny Unicode subset', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-cff-cjk-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const output = join(root, 'noto-cjk-one-glyph.font.glb');
+  const rejected = captureIo();
+  assert.equal(
+    await runCli(
+      ['bake', '--input', fileURLToPath(notoCjkUrl), '--output', output, '--unicodes', 'U+3042', '--slug'],
+      rejected.io,
+    ),
+    1,
+  );
+  assert.match(rejected.stderr(), /CFF\/CFF2 Unicode subsetting is unsupported/u);
+  await assert.rejects(readFile(output), { code: 'ENOENT' });
 });
 
 test('direct bake writes and checks a glyph-name lookup for its selected Unicode set', async (t) => {
