@@ -75,3 +75,20 @@ Portless 0.15.8 served fresh Chromium 149 verification without a package depende
 ## Inconclusive candidate preservation — 17 October 2026
 
 [Preservation index](experiment-retention.json) authenticates the named local compiler candidate and its source reproducer. The earlier standalone admission failure remains historical evidence; it does not establish zero benefit. The next bounded experiment combines that policy with the retained preparation cleanup. No combined timing result exists yet. Local binary archives are not available from GitHub.
+
+## Preparation and compiler combination — 17 October 2026
+
+The combination is **inconclusive and preserved**. Four frozen arms share identical Wasm bytes within each compiler-policy column; the two normalized cleanup archives are derived experiments. [Portable receipt](preparation-compiler-combination.json) includes exact identities, member invariants, raw-result hashes, block medians/frequencies, GC time, JS heap deltas, correctness and exclusions.
+
+| Arm                                  | p50 ms | p95 ms | File calibration drift |
+| ------------------------------------ | -----: | -----: | ---------------------: |
+| Unchanged HELD                       | 23.141 | 34.429 |                   2.4% |
+| Compiler only                        | 21.614 | 26.289 |                   0.9% |
+| Preparation cleanup only, normalized | 27.910 | 48.868 |                  16.3% |
+| Both                                 | 28.401 | 42.311 |                   7.4% |
+
+Each arm ran once: 16 blocks, 256 retained samples, no timed reads, scene publication. The combined result was reused byte-for-byte in all three comparisons. p50 is the median of block medians; p95 is the pooled retained sample at `floor(.95*(N-1))`. Serial order and software clock instability preclude causal acceptance of all three combined comparisons. Raw output classifies two slower and one neutral; p/CI and observed slower medians remain recorded. This proves neither a speedup, zero benefit nor a causal regression. No interaction significance is claimed, and no favorable-clock retry ran.
+
+The exact combined distribution passed 1,048 Node tests, 30 prepared generators, 27 diagnostic/workflow tests, both static gates and named/member/actual Wasm interface checks. Same Python zlib 1.2.12 gzip9 method: compiler Wasm −4,308 raw / +5,419 gzip bytes, cleanup JS +90 raw / +33 gzip. The report labels the separate Node zlib method explicitly. GC diagnostics are time in nanoseconds; JS heap deltas are not Rust or whole-process live/peak memory. No arm11 live/peak, new browser/hero or final main/published matrix is claimed.
+
+The preparation cleanup stays retained, production compiler policy stays unchanged, and both isolated options plus the combination remain available. Local preservation bundle/ref: `held-preparation-plus-compiler-inconclusive-2026-10-17`; the committed `glyph:shaper-combination-artifacts` workflow reconstructs the authenticated member composition from its required frozen inputs. Local binary archives and raw samples are not on GitHub. Dense regressions and the final seven-family readiness gates remain open.

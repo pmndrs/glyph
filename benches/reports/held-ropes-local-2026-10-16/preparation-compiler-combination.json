@@ -1,0 +1,1213 @@
+{
+  "date": "2026-10-17",
+  "status": "inconclusive-preserved-for-further-combinations",
+  "decision": {
+    "productionCompilerPolicyChanged": false,
+    "preparationCleanupStillRetained": true,
+    "reason": "The combined candidate passed correctness but its timing did not establish a gain. All three direct comparisons are clock-confounded. Preserve both isolated arms and the combination with their raw observations; neither zero benefit nor a causal regression is established. No old1ms/5% materiality floor was applied.",
+    "observed": "Combined p50 is higher than all three observed isolated/control arms; p95 is lower than the clock-unstable cleanup-only arm, higher than the other two. Those observations remain visible despite exclusion from causal acceptance.",
+    "futureUse": "Named isolated and combined packages remain available for compatible future work. Do not add old isolated timing deltas or claim an interaction from serial runs."
+  },
+  "source": {
+    "checkpointBeforeExperiment": "93a0cf3293a607fa341d43beefd781987e1cf62c",
+    "retainedRuntimeCommit": "4b7f55f08105ea48eefd6b0d63eb825e6c81560a",
+    "newWorkflow": "packages/glyph/scripts/build-shaper-combination-artifacts.mjs",
+    "workflowSha256": "888d56e84f60446845f6b274bfe3bf5980f5a196e23ef55802a223907bd84860",
+    "runtimeChangesThisWave": [],
+    "complexity": "Diagnostic assembly is linear in total archive bytes with bounded temporary copies. No runtime executor/cache/storage/API/ABI change, or replaced runtime path to retire.",
+    "review": "Native Sol6Medium implemented; fresh scoped SolHigh reviewed artifact authentication and normalization cleanly; primary independently compared extracted member bytes and actual Wasm interfaces."
+  },
+  "predeclaredProtocol": {
+    "createdAt": "2026-10-17T20:37:43.822606+00:00",
+    "sourceCheckpoint": "93a0cf32",
+    "purpose": "Bounded combined-candidate screening; small changes eligible, no interaction significance claim from serial runs.",
+    "arms": {
+      "00": "original HELD bec6c173, current production compiler policy",
+      "01": "archived compiler-only e1cfc4b2, default one-caller policy",
+      "10": "cleanup2a7f0317 package tree normalized to original c4fcd84c Wasm",
+      "11": "same cleanup tree normalized to archived ed19321e compiler-treatment Wasm"
+    },
+    "construction": "All four share exact Wasm bytes within each compiler-policy column; derived10/11 packages are experimental, not fresh production builds. Assert all member deltas.",
+    "correctnessBeforeTiming": [
+      "Authenticated archive/member/named-executable identity",
+      "Full existing Glyph Node tests against exact combined distribution",
+      "Prepared-operation generator deterministic checks and cold-output/lifetime/rejection coverage"
+    ],
+    "timing": {
+      "workflow": "benchmark:labs-package",
+      "suite": "bulk-1024-profile",
+      "blocksPerArm": 16,
+      "runs": [
+        ["00", "11"],
+        ["10", "saved11"],
+        ["01", "saved11"]
+      ],
+      "actualTimingOrder": ["00", "11", "10", "01"],
+      "eachArmTimedOnce": true,
+      "noTimedReads": true,
+      "publication": "scene.updateMatrixWorld(true)",
+      "profiler": false,
+      "sampling": "Existing unmodified Labs0.9.0 configuration, blockTime0.5,minSamples20; native low/high trim preserved.",
+      "retryPolicy": "No favorable-clock reruns. Operational failures retained separately; any restart must be documented before further timing."
+    },
+    "decision": {
+      "sizeFloor": "No old 1ms or5% minimum. Small benefits are eligible.",
+      "uncertainty": "Report raw absolute p50/p95, retained counts, block medians, calibration drift, exclusions and comparison uncertainty. Do not sum old isolated timing deltas or claim factorial interaction significance. Existing Labs minDelta classification is not an admission floor.",
+      "inconclusive": "Preserve all frozen arms and receipts with descriptive names. Compiler production policy stays unchanged unless evidence supports delivery cost; this does not reject future combinations.",
+      "correctnessFailure": "No adoption; preserve failing candidate and evidence.",
+      "retainedProductionCandidate": "Requires fresh release build/named authentication, appropriate downstream checks, same-frozen-candidate main and published0.1.0 comparisons, sizes and live/peak memory before acceptance."
+    }
+  },
+  "normalization": {
+    "classification": "DERIVED EXPERIMENTAL; normalized four-arm comparison, not fresh production builds",
+    "reason": "Original and retained-cleanup production Wasm differ in148 source-location data bytes; normalize both JavaScript states to exact c4 control or ed19 treatment Wasm so data is not a factor. Derived10/11 are experimental, not fresh production builds.",
+    "exactSameWasmWithinColumns": true,
+    "memberCheck": {
+      "method": "Independent Python tarfile extraction and full member-byte comparison against frozen archive hashes, separate from Node assembler.",
+      "arms": {
+        "00": {
+          "path": "/private/tmp/glyph-held-20261016/.cache/held-local-20261016/baseline/pmndrs-glyph-0.1.0.tgz",
+          "sha256": "bec6c1735542bba49ab480d2337c787255950d09383c2f5720794a4d68fc5265",
+          "members": 1217
+        },
+        "01": {
+          "path": "/private/tmp/glyph-held-20261016/packages/glyph/.cache/optimizer-ablation-20261016/pmndrs-glyph-0.1.0-optimizer-ablation.tgz",
+          "sha256": "e1cfc4b20d65c0065f09bdc61c012aa10feb32cf365c15becd3966e8ae9a19eb",
+          "members": 1217
+        },
+        "10": {
+          "path": "/private/tmp/glyph-held-20261016/packages/glyph/.cache/combination-artifacts-gzip9-20261017/preparation-only-normalized.tgz",
+          "sha256": "c69f6e636d3b987ff49b9aab3bce17bbbd25df092295385b9ed8345821138dd0",
+          "members": 1217
+        },
+        "11": {
+          "path": "/private/tmp/glyph-held-20261016/packages/glyph/.cache/combination-artifacts-gzip9-20261017/preparation-plus-compiler.tgz",
+          "sha256": "597f6416aed776c9be87ad0a379dd788bcfdaf0a69a639b082fa35f08bc8dfe0",
+          "members": 1217
+        }
+      },
+      "deltas": {
+        "00->01": ["package/dist/text-shaper.wasm"],
+        "00->10": [
+          "package/dist/internal/handle-state.js",
+          "package/dist/internal/handle-state.js.map",
+          "package/dist/internal/render-planner.js",
+          "package/dist/internal/render-planner.js.map",
+          "package/src/internal/handle-state.ts",
+          "package/src/internal/render-planner.ts"
+        ],
+        "01->11": [
+          "package/dist/internal/handle-state.js",
+          "package/dist/internal/handle-state.js.map",
+          "package/dist/internal/render-planner.js",
+          "package/dist/internal/render-planner.js.map",
+          "package/src/internal/handle-state.ts",
+          "package/src/internal/render-planner.ts"
+        ],
+        "10->11": ["package/dist/text-shaper.wasm"]
+      },
+      "exactSameWasmWithinCompilerColumns": true
+    },
+    "compilerProvenance": {
+      "manifestSha256": "2316dfdb164666f4b150b2212ddabea27ebac9f9a0057f2648f7399474bc6c49",
+      "namedManifestSha256": "61903abb2562bde0f9170089b0f8eedb36676ab5b5ce3a94bc00d7e15cf673f8",
+      "sourceRevisionOfCompilerInput": "60d3c26f135b360ab1111131ce274218959d176f",
+      "sameInputPolicyContrast": {
+        "controlFlags": [
+          "--enable-bulk-memory",
+          "--enable-nontrapping-float-to-int",
+          "--enable-simd",
+          "--one-caller-inline-max-function-size=0",
+          "--merge-similar-functions",
+          "-Oz",
+          "--merge-similar-functions",
+          "-Oz"
+        ],
+        "compilerFlags": [
+          "--enable-bulk-memory",
+          "--enable-nontrapping-float-to-int",
+          "--enable-simd",
+          "--merge-similar-functions",
+          "-Oz",
+          "--merge-similar-functions",
+          "-Oz"
+        ]
+      }
+    },
+    "named": {
+      "file": "text-shaper.named.wasm",
+      "sha256": "bd9af170937b63b8d977fe284a555cd5da75af3416882341a5be42c1b7c7843e",
+      "executableSha256": "ed19321ea76df79caf5dc9f14f3eac9042590ec03c8adc3886cbe73aa83308a5",
+      "functionMapFile": "functions.map",
+      "functionMapSha256": "0ee27b00393a301d0b19ac0f8fd9ddf1b0f9454d255e283b93bd3489f3267b44",
+      "functionCount": 1019,
+      "namedManifest": "named-manifest.json"
+    }
+  },
+  "samplingMethod": {
+    "p50": "Median of16 block medians, ns divided by1e6.",
+    "p95": "Pooled retained sample at floor(.95*(N-1)), ns divided by1e6; descriptive only.",
+    "retention": "Labs native trim removes two low and two high samples per20-sample block, above threshold12. No analyst trimming.",
+    "gcUnits": "Nanoseconds; Labs renders stats.gc via formatNs. GC timing diagnostics are not allocated bytes or Rust live/peak memory.",
+    "heapUnits": "JS heap delta bytes; not whole-process live or peak memory.",
+    "clockDrift": "abs(postFreq-runFreq)/mean(postFreq,runFreq)*100 for this one-file suite. Block frequency span separately reports(max-min)/mean(block frequencies)*100. Software calibration estimates, not hardware-frequency telemetry.",
+    "statisticalLimits": "Serial order00,11,10,01; no counterbalanced factorial interaction estimate. Existing Labs minDelta5% classification is not a user admission floor. Raw classifications/p/CI retained; all three comparisons withheld for clock confounds.",
+    "operatorReceiptQuantiles": "The operator receipt includes convenience pooled-sample quantiles; authoritative absolute p50/p95 here are recomputed directly from raw results using the stated block/floor definitions.",
+    "sameCandidateReused": true,
+    "candidateJsonSha256": "606c545a3e9681ce099eb7e4babe5ea4e23955910cdef12c30ca8a147724fe35",
+    "favorableClockRetries": 0
+  },
+  "arms": {
+    "00": {
+      "label": "unchanged HELD",
+      "file": "/private/tmp/glyph-held-20261016/.cache/held-local-20261016/baseline/pmndrs-glyph-0.1.0.tgz",
+      "sha256": "bec6c1735542bba49ab480d2337c787255950d09383c2f5720794a4d68fc5265",
+      "wasmSha256": "c4fcd84c34bd3accac9454ffd2ae635285323480dff1426ab9ab80f7ba97a67a",
+      "memberCount": 1217,
+      "sizes": {
+        "wasm": {
+          "raw": 1585989,
+          "gzip9": 590248
+        },
+        "package": {
+          "raw": 11018078,
+          "archiveBytes": 3166898
+        },
+        "javascript": {
+          "files": 237,
+          "raw": 866455,
+          "gzip9": 231448
+        }
+      },
+      "rawResult": ".cache/held-local-20261016/combination-20261017/labs-00-vs-11/baseline.json",
+      "rawResultSha256": "5ceaaf8e0ec2061f9f84d7386bf6ad82f5abf6630ffc8425faf56c3c1bb488ac",
+      "p50Ms": 23.1406255,
+      "p95Ms": 34.429,
+      "retainedSamples": 256,
+      "blocks": 16,
+      "plan": {
+        "batch": false,
+        "batch_samples": 0,
+        "batch_unroll": 4,
+        "samples": 20
+      },
+      "blockMediansNs": [
+        21823208, 21331500, 24275542.00000012, 21559500.00000012, 21287500, 23028917, 21871667, 20947458, 21407209,
+        23252334, 31608291, 30747292, 27800959, 30532291, 27919292, 29603250
+      ],
+      "blockFrequenciesGHz": [
+        3.6731303094102756, 3.516398075785676, 3.5887285363020127, 3.675038414273773, 3.6408045751366838,
+        3.523719855878456, 3.487594548860692, 3.6632587833638706, 3.7259949023127623, 3.69681510449369,
+        3.309739322166732, 3.4015430137270903, 3.3760046131770274, 3.1319479912491097, 2.7667900819428315,
+        3.134611239628447
+      ],
+      "blockSpreads": [
+        0.06976700767921219, 0.0840616753467911, 0.10010652158346924, 0.06976141564278632, 0.056722611850161954,
+        0.09936924343368332, 0.08048788524102055, 0.0888876009579402, 0.09972885807780019, 0.03698373322717411,
+        0.28948826079604584, 0.12151305156839043, 0.10539432311379822, 0.08534467919351177, 0.03567686117896529,
+        0.0913578627375945
+      ],
+      "calibration": {
+        "file": "stress.bench.ts",
+        "runFreq": 3.7578780985724762,
+        "postFreq": 3.6674276774455445
+      },
+      "fileCalibrationDriftPercent": 2.4362746492963328,
+      "blockFrequencySpanPercent": 27.746680657618295,
+      "gcTimeNs": {
+        "min": 0,
+        "max": 31675667,
+        "p50": 274833
+      },
+      "heapDeltaBytes": {
+        "min": 6948008,
+        "max": 11100640,
+        "p50": 7635476
+      },
+      "errors": 0,
+      "hardware": {
+        "cpu": "Apple M4",
+        "arch": "arm64-darwin",
+        "runtime": "node",
+        "freq": 3.7578780985724762
+      },
+      "runtimeVersion": "24.18.0"
+    },
+    "11": {
+      "label": "preparation cleanup plus compiler",
+      "file": "preparation-plus-compiler.tgz",
+      "sha256": "597f6416aed776c9be87ad0a379dd788bcfdaf0a69a639b082fa35f08bc8dfe0",
+      "wasmSha256": "ed19321ea76df79caf5dc9f14f3eac9042590ec03c8adc3886cbe73aa83308a5",
+      "memberCount": 1217,
+      "sizes": {
+        "wasm": {
+          "raw": 1581681,
+          "gzip9": 594834
+        },
+        "package": {
+          "raw": 11015162,
+          "archiveBytes": 3210977
+        },
+        "javascript": {
+          "files": 237,
+          "raw": 866545,
+          "gzip9": 231491
+        }
+      },
+      "rawResult": ".cache/held-local-20261016/combination-20261017/labs-00-vs-11/candidate.json",
+      "rawResultSha256": "606c545a3e9681ce099eb7e4babe5ea4e23955910cdef12c30ca8a147724fe35",
+      "p50Ms": 28.4010415,
+      "p95Ms": 42.311292,
+      "retainedSamples": 256,
+      "blocks": 16,
+      "plan": {
+        "batch": false,
+        "batch_samples": 0,
+        "batch_unroll": 4,
+        "samples": 20
+      },
+      "blockMediansNs": [
+        28227917, 32319709, 28574166, 29766458, 30368375, 42311292, 26573542, 28636708, 27923208, 27475417,
+        28775665.99999976, 26608333, 28921958, 27394208, 26595250, 27888209
+      ],
+      "blockFrequenciesGHz": [
+        3.01670211522729, 3.3409379769494314, 3.2569409709315256, 3.3729458776827452, 2.922462948170438,
+        3.246192278020489, 2.995183685443281, 3.399405312086815, 2.843355014010274, 3.225291100261705,
+        3.268581442997419, 3.3633583068790505, 3.1089399049867668, 3.341230480766898, 3.3716594748140585,
+        3.357717767274874
+      ],
+      "blockSpreads": [
+        0.13650438575273238, 0.14850820388422362, 0.07658923541541802, 0.048500333614308395, 0.15405895025271696,
+        0.23022283553947867, 0.06087376677624637, 0.14677457880269795, 0.07190032681780116, 0.10908632823217934,
+        0.2121257385854901, 0.07160152066235202, 0.1606304233705711, 0.13101646388931398, 0.12282834733073375,
+        0.21312343192329503
+      ],
+      "calibration": {
+        "file": "stress.bench.ts",
+        "runFreq": 3.366021140076805,
+        "postFreq": 3.6259685963113664
+      },
+      "fileCalibrationDriftPercent": 7.435578884840907,
+      "blockFrequencySpanPercent": 17.298557800304444,
+      "gcTimeNs": {
+        "min": 0,
+        "max": 26015208,
+        "p50": 265313
+      },
+      "heapDeltaBytes": {
+        "min": 6203960,
+        "max": 10831040,
+        "p50": 7448776
+      },
+      "errors": 0,
+      "hardware": {
+        "cpu": "Apple M4",
+        "arch": "arm64-darwin",
+        "runtime": "node",
+        "freq": 3.366021140076805
+      },
+      "runtimeVersion": "24.18.0"
+    },
+    "10": {
+      "label": "preparation cleanup only, normalized original Wasm",
+      "file": "preparation-only-normalized.tgz",
+      "sha256": "c69f6e636d3b987ff49b9aab3bce17bbbd25df092295385b9ed8345821138dd0",
+      "wasmSha256": "c4fcd84c34bd3accac9454ffd2ae635285323480dff1426ab9ab80f7ba97a67a",
+      "memberCount": 1217,
+      "sizes": {
+        "wasm": {
+          "raw": 1585989,
+          "gzip9": 590248
+        },
+        "package": {
+          "raw": 11019470,
+          "archiveBytes": 3204497
+        },
+        "javascript": {
+          "files": 237,
+          "raw": 866545,
+          "gzip9": 231491
+        }
+      },
+      "rawResult": ".cache/held-local-20261016/combination-20261017/labs-10-vs-11/baseline.json",
+      "rawResultSha256": "f08f413860af8fcd557e6a53f4addec956c99e853543b51c68127e0dda774eb9",
+      "p50Ms": 27.9097915,
+      "p95Ms": 48.868125,
+      "retainedSamples": 256,
+      "blocks": 16,
+      "plan": {
+        "batch": false,
+        "batch_samples": 0,
+        "batch_unroll": 4,
+        "samples": 20
+      },
+      "blockMediansNs": [
+        30156458, 27917958, 28794792, 44014125, 28529042, 33668750, 32427542, 27901625, 26301000, 28653583, 24754417,
+        24107666.99999988, 23665458, 22540125, 21147833, 21663292
+      ],
+      "blockFrequenciesGHz": [
+        2.8825179571540525, 2.5897692564638173, 2.9172484630924957, 3.288907705911226, 3.2837548249299435,
+        2.463230063455823, 3.278509561108947, 3.2884159473382777, 3.2622606182710063, 3.3822198438970466,
+        3.112341939254248, 3.441032682297994, 3.5917120628645716, 3.4845908479836605, 3.6579535890268127,
+        3.5205937154345825
+      ],
+      "blockSpreads": [
+        0.06507178608705709, 0.1147206697515349, 0.12320770133163927, 0.29917383700043754, 0.13269452980512503,
+        0.1899753364264591, 0.24960691610820387, 0.10172867841504214, 0.10886758237301677, 0.08226663934011737,
+        0.07076991183847961, 0.08291578145991872, 0.05131396088390629, 0.061124464426439935, 0.0576625364947298,
+        0.06611197204975132
+      ],
+      "calibration": {
+        "file": "stress.bench.ts",
+        "runFreq": 3.30439929479686,
+        "postFreq": 3.8923523514990266
+      },
+      "fileCalibrationDriftPercent": 16.339401040878816,
+      "blockFrequencySpanPercent": 37.15726398520243,
+      "gcTimeNs": {
+        "min": 0,
+        "max": 33356625,
+        "p50": 147542.5
+      },
+      "heapDeltaBytes": {
+        "min": 6628392,
+        "max": 11415464,
+        "p50": 7460456
+      },
+      "errors": 0,
+      "hardware": {
+        "cpu": "Apple M4",
+        "arch": "arm64-darwin",
+        "runtime": "node",
+        "freq": 3.30439929479686
+      },
+      "runtimeVersion": "24.18.0"
+    },
+    "01": {
+      "label": "compiler only",
+      "file": "/private/tmp/glyph-held-20261016/packages/glyph/.cache/optimizer-ablation-20261016/pmndrs-glyph-0.1.0-optimizer-ablation.tgz",
+      "sha256": "e1cfc4b20d65c0065f09bdc61c012aa10feb32cf365c15becd3966e8ae9a19eb",
+      "wasmSha256": "ed19321ea76df79caf5dc9f14f3eac9042590ec03c8adc3886cbe73aa83308a5",
+      "memberCount": 1217,
+      "sizes": {
+        "wasm": {
+          "raw": 1581681,
+          "gzip9": 594834
+        },
+        "package": {
+          "raw": 11013770,
+          "archiveBytes": 3211102
+        },
+        "javascript": {
+          "files": 237,
+          "raw": 866455,
+          "gzip9": 231448
+        }
+      },
+      "rawResult": ".cache/held-local-20261016/combination-20261017/labs-01-vs-11/baseline.json",
+      "rawResultSha256": "54e19df2d03d0b2fe6fe0fc3add4dc13d645d3c14422b3de22ed3e8fc46cd11c",
+      "p50Ms": 21.61425,
+      "p95Ms": 26.289167,
+      "retainedSamples": 256,
+      "blocks": 16,
+      "plan": {
+        "batch": false,
+        "batch_samples": 0,
+        "batch_unroll": 4,
+        "samples": 20
+      },
+      "blockMediansNs": [
+        21487125, 21188125, 22228625, 21741375, 21483167, 22767625, 21453917, 22695417, 22391333, 20744333, 25075833,
+        22082500, 21345167, 21388000, 22288417, 21173250
+      ],
+      "blockFrequenciesGHz": [
+        3.4851899139623317, 3.6151012420119493, 3.5012566483366503, 3.449933003295482, 3.527967908890954,
+        3.5233194963656316, 3.0332137457123314, 3.519025628020164, 3.4916526783039252, 3.4866968467203847,
+        3.492496579044893, 3.577536951372243, 3.499802029980939, 3.657209023961614, 3.5972440913972665,
+        3.614125985055317
+      ],
+      "blockSpreads": [
+        0.09619346748466666, 0.07007079832909745, 0.06124254187578956, 0.062164031812284644, 0.06464258281989449,
+        0.06614913725159857, 0.10439818186742082, 0.07737541739949615, 0.056320648663058394, 0.07928374029483631,
+        0.1525176540451496, 0.13256914771844674, 0.07940142135368641, 0.07459062795607439, 0.0741185197827613,
+        0.05750832908088384
+      ],
+      "calibration": {
+        "file": "stress.bench.ts",
+        "runFreq": 3.858926509777652,
+        "postFreq": 3.895086851244718
+      },
+      "fileCalibrationDriftPercent": 0.9326871075264223,
+      "blockFrequencySpanPercent": 17.805616153005456,
+      "gcTimeNs": {
+        "min": 0,
+        "max": 17326124,
+        "p50": 190583.5
+      },
+      "heapDeltaBytes": {
+        "min": 6771720,
+        "max": 11222440,
+        "p50": 7645692
+      },
+      "errors": 0,
+      "hardware": {
+        "cpu": "Apple M4",
+        "arch": "arm64-darwin",
+        "runtime": "node",
+        "freq": 3.858926509777652
+      },
+      "runtimeVersion": "24.18.0"
+    }
+  },
+  "comparisons": {
+    "00-vs-11": {
+      "rows": [
+        {
+          "status": "slower",
+          "name": "publish 1024 retained Text instances",
+          "baseline": "23.14ms",
+          "candidate": "28.40ms",
+          "delta": 22.7,
+          "p": ".017",
+          "ci": "+2.8..+30.9%",
+          "baselineSpark": "\u2586\u2588\u2585\u2583\u2581\u2581\u2581\u2581\u2581\u2581",
+          "candidateSpark": "\u2581\u2585\u2588\u2584\u2582\u2581\u2581\u2581\u2581\u2581"
+        }
+      ],
+      "skipped": [],
+      "warnings": [
+        "candidate CPU clock drifted 7.4% during its run",
+        "CPU clock speeds differ between runs (3.71 GHz vs 3.50 GHz \u2014 6.0% apart)"
+      ],
+      "acceptanceStatus": "withheld-clock-confounded",
+      "exclusions": [
+        "Combined arm11 file calibration drift7.4356% exceeds existing Labs5% stability criterion.",
+        "Labs reports6.0% cross-run calibration difference."
+      ]
+    },
+    "10-vs-11": {
+      "rows": [
+        {
+          "status": "neutral",
+          "name": "publish 1024 retained Text instances",
+          "baseline": "27.91ms",
+          "candidate": "28.40ms",
+          "delta": 1.8,
+          "p": ".305",
+          "ci": "-4.0..+18.5%",
+          "baselineSpark": "\u2584\u2588\u2586\u2584\u2582\u2581\u2581\u2582\u2581\u2581",
+          "candidateSpark": "\u2581\u2587\u2588\u2585\u2582\u2581\u2581\u2581\u2581\u2581"
+        }
+      ],
+      "skipped": [],
+      "warnings": [
+        "baseline CPU clock drifted 16.3% during its run",
+        "candidate CPU clock drifted 7.4% during its run"
+      ],
+      "acceptanceStatus": "withheld-clock-confounded",
+      "exclusions": [
+        "Combined arm11 file calibration drift7.4356% exceeds existing Labs5% stability criterion.",
+        "Cleanup-only arm10 file calibration drift16.3394%."
+      ]
+    },
+    "01-vs-11": {
+      "rows": [
+        {
+          "status": "slower",
+          "name": "publish 1024 retained Text instances",
+          "baseline": "21.61ms",
+          "candidate": "28.40ms",
+          "delta": 31.4,
+          "p": "<.001",
+          "ci": "+25.5..+34.4%",
+          "baselineSpark": "\u2586\u2588\u2582\u2581\u2581\u2581\u2581\u2581\u2581\u2581",
+          "candidateSpark": "\u2581\u2584\u2588\u2584\u2582\u2581\u2581\u2581\u2581\u2581"
+        }
+      ],
+      "skipped": [],
+      "warnings": [
+        "candidate CPU clock drifted 7.4% during its run",
+        "CPU clock speeds differ between runs (3.88 GHz vs 3.50 GHz \u2014 10.3% apart)"
+      ],
+      "acceptanceStatus": "withheld-clock-confounded",
+      "exclusions": [
+        "Combined arm11 file calibration drift7.4356% exceeds existing Labs5% stability criterion.",
+        "Labs reports10.3% cross-run calibration difference."
+      ]
+    }
+  },
+  "exclusions": {
+    "workloadIdentities": 0,
+    "failedChecks": 0,
+    "timingModeMismatches": 0,
+    "clockConfoundedComparisons": 3,
+    "acceptanceComparableComparisons": 0,
+    "absoluteObservationsRetained": 4
+  },
+  "sizes": {
+    "primarySameMethod": {
+      "method": {
+        "compression": "Python gzip.compress compresslevel=9,mtime=0",
+        "zlibRuntime": "1.2.12",
+        "javascript": "concatenate shipped .js members in sorted member-path order before gzip"
+      },
+      "arms": {
+        "10": {
+          "artifactSha256": "c69f6e636d3b987ff49b9aab3bce17bbbd25df092295385b9ed8345821138dd0",
+          "wasm": {
+            "raw": 1585989,
+            "gzip9": 584730
+          },
+          "javascript": {
+            "raw": 866545,
+            "gzip9": 231270
+          }
+        },
+        "11": {
+          "artifactSha256": "597f6416aed776c9be87ad0a379dd788bcfdaf0a69a639b082fa35f08bc8dfe0",
+          "wasm": {
+            "raw": 1581681,
+            "gzip9": 590149
+          },
+          "javascript": {
+            "raw": 866545,
+            "gzip9": 231270
+          }
+        },
+        "00": {
+          "artifactSha256": "bec6c1735542bba49ab480d2337c787255950d09383c2f5720794a4d68fc5265",
+          "wasm": {
+            "raw": 1585989,
+            "gzip9": 584730
+          },
+          "javascript": {
+            "raw": 866455,
+            "gzip9": 231237
+          }
+        },
+        "01": {
+          "artifactSha256": "e1cfc4b20d65c0065f09bdc61c012aa10feb32cf365c15becd3966e8ae9a19eb",
+          "wasm": {
+            "raw": 1581681,
+            "gzip9": 590149
+          },
+          "javascript": {
+            "raw": 866455,
+            "gzip9": 231237
+          }
+        }
+      }
+    },
+    "separateNodeMethod": {
+      "method": {
+        "compression": "Node zlib gzip level 9",
+        "zlibVersion": "1.3.1-e00f703",
+        "javascript": "concatenate shipped .js members in sorted member-path order, then gzip once",
+        "packageArchive": "exact .tgz byte length; tar metadata and packing prevent causal size attribution"
+      },
+      "arms": {
+        "10": {
+          "wasm": {
+            "raw": 1585989,
+            "gzip9": 590248
+          },
+          "package": {
+            "raw": 11019470,
+            "archiveBytes": 3204497
+          },
+          "javascript": {
+            "files": 237,
+            "raw": 866545,
+            "gzip9": 231491
+          }
+        },
+        "11": {
+          "wasm": {
+            "raw": 1581681,
+            "gzip9": 594834
+          },
+          "package": {
+            "raw": 11015162,
+            "archiveBytes": 3210977
+          },
+          "javascript": {
+            "files": 237,
+            "raw": 866545,
+            "gzip9": 231491
+          }
+        },
+        "00": {
+          "wasm": {
+            "raw": 1585989,
+            "gzip9": 590248
+          },
+          "package": {
+            "raw": 11018078,
+            "archiveBytes": 3166898
+          },
+          "javascript": {
+            "files": 237,
+            "raw": 866455,
+            "gzip9": 231448
+          }
+        },
+        "01": {
+          "wasm": {
+            "raw": 1581681,
+            "gzip9": 594834
+          },
+          "package": {
+            "raw": 11013770,
+            "archiveBytes": 3211102
+          },
+          "javascript": {
+            "files": 237,
+            "raw": 866455,
+            "gzip9": 231448
+          }
+        }
+      }
+    },
+    "tradeoff": "Same Pythonzlib1.2.12 gzip9 method: compiler Wasm-4308raw/+5419gzip bytes; cleanup JS+90raw/+33gzip bytes. Nodezlib1.3.1-e00f703 gzip9 measurements are separately labeled; do not mix compressors or infer size from tarpacker differences."
+  },
+  "correctness": {
+    "combinedNodeTests": {
+      "passed": 1048,
+      "failed": 0,
+      "exit": 0
+    },
+    "preparedGenerators": {
+      "passed": 30,
+      "exit": 0
+    },
+    "matchedDistMembers": 943,
+    "fullGateReceipt": {
+      "artifact": "/private/tmp/glyph-held-20261016/packages/glyph/.cache/combination-artifacts-gzip9-20261017/preparation-plus-compiler.tgz",
+      "sha256": "597f6416aed776c9be87ad0a379dd788bcfdaf0a69a639b082fa35f08bc8dfe0",
+      "startedAt": "2026-10-17T20:39:59.623022+00:00",
+      "commands": [
+        {
+          "name": "node",
+          "argv": ["mise", "exec", "--", "pnpm", "scripts", "run", "glyph:node-tests"],
+          "exit": 0,
+          "log": "gates/node.log"
+        },
+        {
+          "name": "prepared",
+          "argv": [
+            "mise",
+            "exec",
+            "--",
+            "pnpm",
+            "scripts",
+            "run",
+            "benchmark:prepared-operations-check",
+            "--",
+            "--package-root",
+            "/private/tmp/glyph-held-20261016/packages/glyph"
+          ],
+          "exit": 0,
+          "log": "gates/prepared.log"
+        }
+      ],
+      "matchedDistMembers": 943,
+      "postGateDistMatches": true,
+      "restoredProductionWasmSha256": "6f7afa1c596dc7c08d2138a67c4ae955d8aff5824602452cb6d12f30f2df3bbd",
+      "finishedAt": "2026-10-17T20:40:46.300422+00:00"
+    },
+    "existingIndependentOracles": "Full existing suite includes cold-output parity, prepared measurement/glyph/caret/selection/split, borrowed lifetime and rejection/recovery behavior. No implementation-mirroring test added for the reversible artifact assembler.",
+    "native": "473 preceding native tests apply to unchanged Rust semantic source; this experiment changes only optimizer policy and uses the exact archived optimized input/output. Node tests execute the combined optimized module.",
+    "focusedDiagnosticTests": {
+      "passed": 27,
+      "failed": 0,
+      "exit": 0
+    },
+    "static": {
+      "glyph": {
+        "command": "mise exec -- pnpm scripts run glyph:static-check",
+        "exit": 0,
+        "logSha256": "5a9bc21d68687c0e17d3b7d7b81a0c3876b5f9a0d235b4aa3fe37f4f863eb27c"
+      },
+      "benchmark": {
+        "command": "mise exec -- pnpm scripts run benchmark:static-check",
+        "exit": 0,
+        "logSha256": "ea534f8fdc46a93a9bb8eebd70e4625c7b45b209f2e9d9beadecbfc93ccd028c"
+      }
+    },
+    "namedAbi": {
+      "method": "Compare extracted authenticated frozen control and combined package Wasm, independent of mutable workspace dist.",
+      "controlSha256": "c4fcd84c34bd3accac9454ffd2ae635285323480dff1426ab9ab80f7ba97a67a",
+      "executableSha256": "ed19321ea76df79caf5dc9f14f3eac9042590ec03c8adc3886cbe73aa83308a5",
+      "functionCount": 1019,
+      "interface": {
+        "imports": [],
+        "exports": [
+          {
+            "name": "memory",
+            "kind": "memory"
+          },
+          {
+            "name": "pmndrs_glyph_engine_borrow_paragraph_glyphs",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_borrow_paragraph_layout",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_codec_count",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_copy_decorations",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_copy_glyphs",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_create_root",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_dispose_codec",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_dispose_font_binding",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_dispose_font_stack",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_dispose_root",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_font_binding_count",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_font_stack_count",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_measure_paragraph",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_register_codec",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_register_font_binding",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_register_font_stack",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_request_capacity",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_request_ptr",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_reserve_root",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_reserve_update_batch",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_reset_root",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_root_count",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_update",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_update_batch",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_update_batch_capacity",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_engine_update_batch_ptr",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_shaper_alloc",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_shaper_dealloc",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_shaper_dispose_font",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_shaper_font_count",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_shaper_glyph_outline",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_shaper_glyph_outline_len",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_shaper_glyph_outline_ptr",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_shaper_initialize",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_shaper_register_font",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_shaper_retained_font_bytes",
+            "kind": "function"
+          },
+          {
+            "name": "pmndrs_glyph_shaper_shape_plan_count",
+            "kind": "function"
+          }
+        ]
+      },
+      "controlInterfaceEqual": true,
+      "preliminaryProbe": "Excluded: read workspace dist while candidate correctness gate could have replaced it; final probe reads both authenticated archives."
+    }
+  },
+  "unperformedConditionalGates": {
+    "productionAdoption": false,
+    "mainAndPublished010": "No combined production policy adopted, so no additional full145-case main/published run was started. Prior cleanup comparisons remain evidence only for their exact2a7 candidate, not arm11.",
+    "memory": "No authenticated instrumented live/peak capture for arm11. Per-run JS heap and GC-time diagnostics above do not replace it. Prior2a7 allocator results cannot be reassigned to arm11.",
+    "browserHero": "No new combined browser/hero result. Prior retained-cleanup16browser/6layout correctness cells apply to2a7 only. Full hero and cumulative whole-stack gates remain open.",
+    "mainDrift": "Advanced-main integration/revalidation remains open; no rebase/merge ran."
+  },
+  "operationalFailure": {
+    "priorAttempt": {
+      "commandLog": "labs-00-vs-11-path-error.log",
+      "exit": 1,
+      "failure": "ENOENT: runner resolved the relative baseline archive under the benches working directory",
+      "failurePath": "/private/tmp/glyph-held-20261016/benches/.cache/held-local-20261016/baseline/pmndrs-glyph-0.1.0.tgz",
+      "samplingStarted": false,
+      "samplesCollected": 0
+    },
+    "restart": {
+      "reason": "Operational path correction to explicit absolute archive and output paths",
+      "protocolChanged": false,
+      "blocksChanged": false,
+      "suiteChanged": false,
+      "selectionChanged": false,
+      "favorableClockRetry": false,
+      "authorizedBy": "root"
+    }
+  },
+  "preservation": {
+    "name": "held-preparation-plus-compiler-inconclusive-2026-10-17",
+    "status": "inconclusive-preserved-for-further-combinations",
+    "localArchive": ".cache/held-experiments/held-preparation-plus-compiler-inconclusive-2026-10-17",
+    "reproducerGitRef": "experiments/held-preparation-plus-compiler-inconclusive-2026-10-17",
+    "files": {
+      "00-unchanged-held.tgz": {
+        "sha256": "bec6c1735542bba49ab480d2337c787255950d09383c2f5720794a4d68fc5265",
+        "bytes": 3166898
+      },
+      "01-compiler-only.tgz": {
+        "sha256": "e1cfc4b20d65c0065f09bdc61c012aa10feb32cf365c15becd3966e8ae9a19eb",
+        "bytes": 3211102
+      },
+      "admission-before-timing.json": {
+        "sha256": "56ccb2a983481dcf8e35220c4ebe09ef3c48c6e6f5e9840d1cceb1af8a2013f1",
+        "bytes": 2661
+      },
+      "functions.map": {
+        "sha256": "0ee27b00393a301d0b19ac0f8fd9ddf1b0f9454d255e283b93bd3489f3267b44",
+        "bytes": 9384
+      },
+      "gates/benchmark-static.log": {
+        "sha256": "ea534f8fdc46a93a9bb8eebd70e4625c7b45b209f2e9d9beadecbfc93ccd028c",
+        "bytes": 179
+      },
+      "gates/correctness-receipt.json": {
+        "sha256": "52fe92358570f028395cda5cdde28747e59749b9bfa08d1e0051ff44310c078b",
+        "bytes": 1093
+      },
+      "gates/focused-diagnostics.log": {
+        "sha256": "9fe131d3cf9871e7a751376eecefba14e07e102450bd9811ada4a614ce39393b",
+        "bytes": 2515
+      },
+      "gates/glyph-static.log": {
+        "sha256": "5a9bc21d68687c0e17d3b7d7b81a0c3876b5f9a0d235b4aa3fe37f4f863eb27c",
+        "bytes": 967
+      },
+      "gates/independent-member-check.json": {
+        "sha256": "b1a10b4bbdc6e7c840484afdf178564fb97caa80895f36f820f9e2527aaf31ef",
+        "bytes": 2014
+      },
+      "gates/maintained-comparisons.json": {
+        "sha256": "137fd7e16739b0623fe285550e001935e503d14f20db9b54431161acc23e0f88",
+        "bytes": 1719
+      },
+      "gates/named-abi-preliminary.json": {
+        "sha256": "f1f8df7e46f09c16e0117fd5656f90c359d4dc74124d10d88966e6aacad85f58",
+        "bytes": 3927
+      },
+      "gates/named-abi.json": {
+        "sha256": "aa009f388fbcd7e80ce701ae200ffc0b645c81ad71acd811e24b5442fb2a9648",
+        "bytes": 4300
+      },
+      "gates/node.log": {
+        "sha256": "44be3eb45f6f63aabb9c6854812d0141fb9b6c29319201dccb455badff9bf7c4",
+        "bytes": 103626
+      },
+      "gates/prepared.log": {
+        "sha256": "c4be549f6ec82cf68992b71864adae2f359de3287462b44fe1a4547e52a19cde",
+        "bytes": 191
+      },
+      "gates/python-gzip9-sizes.json": {
+        "sha256": "a69ebb7bac90c9ba721b166d97e53e13d04a8bee91b94ab244314e64e6eb0090",
+        "bytes": 1270
+      },
+      "labs-00-vs-11/baseline-package.json": {
+        "sha256": "839683b9b66a4119f9ba0b370c52898fdfb080bd1393ec74ce3961f685b89f24",
+        "bytes": 269
+      },
+      "labs-00-vs-11/baseline-pnpm-lock.yaml": {
+        "sha256": "a64b53282001726cafb1eb60bde4e5e2b3a19a861a5fa1a4895f14e8ed08b210",
+        "bytes": 22151
+      },
+      "labs-00-vs-11/baseline.json": {
+        "sha256": "5ceaaf8e0ec2061f9f84d7386bf6ad82f5abf6630ffc8425faf56c3c1bb488ac",
+        "bytes": 12109
+      },
+      "labs-00-vs-11/candidate-package.json": {
+        "sha256": "db9e4dc310b1b162e69e121c97f1a395ff5826708ed0b97d20faeb2b033ad248",
+        "bytes": 300
+      },
+      "labs-00-vs-11/candidate-pnpm-lock.yaml": {
+        "sha256": "6bbbf2ad4de33347b984aa35389adf79e9209f18b2c5455cafa318c7c59b32cb",
+        "bytes": 22301
+      },
+      "labs-00-vs-11/candidate.json": {
+        "sha256": "606c545a3e9681ce099eb7e4babe5ea4e23955910cdef12c30ca8a147724fe35",
+        "bytes": 12086
+      },
+      "labs-00-vs-11/comparison.txt": {
+        "sha256": "d60bd67fd1f3b318a9c3a2f2814b2a35d29392e5cce7d95e5e9ed7e8aa13dc8c",
+        "bytes": 1312
+      },
+      "labs-00-vs-11/manifest.json": {
+        "sha256": "55ac5a232e63c3919263d50066fcf3794e9bd4a61e35112d62b9cd32ec7538df",
+        "bytes": 840
+      },
+      "labs-00-vs-11/summary.md": {
+        "sha256": "ffa4f2e0a7af88bca890f36ff7104e2595b306f984c0a54f96198e5c10028e70",
+        "bytes": 1684
+      },
+      "labs-00-vs-11-path-error.log": {
+        "sha256": "1c420860a3a4759b77b7bcc92ad28a879e0aae1dad7001965338c763b6be25c0",
+        "bytes": 2131
+      },
+      "labs-01-vs-11/baseline-package.json": {
+        "sha256": "6e14a500fd20c112fa21c649ffda433497dfd7982421ccd3e316b704f0a1112d",
+        "bytes": 302
+      },
+      "labs-01-vs-11/baseline-pnpm-lock.yaml": {
+        "sha256": "0ee47cfb186bd77b4ba693f140a16c52024df231b6b4aaa194aee08f73981438",
+        "bytes": 22316
+      },
+      "labs-01-vs-11/baseline.json": {
+        "sha256": "54e19df2d03d0b2fe6fe0fc3add4dc13d645d3c14422b3de22ed3e8fc46cd11c",
+        "bytes": 12126
+      },
+      "labs-01-vs-11/candidate-package.json": {
+        "sha256": "db9e4dc310b1b162e69e121c97f1a395ff5826708ed0b97d20faeb2b033ad248",
+        "bytes": 300
+      },
+      "labs-01-vs-11/candidate-pnpm-lock.yaml": {
+        "sha256": "6bbbf2ad4de33347b984aa35389adf79e9209f18b2c5455cafa318c7c59b32cb",
+        "bytes": 22301
+      },
+      "labs-01-vs-11/candidate.json": {
+        "sha256": "606c545a3e9681ce099eb7e4babe5ea4e23955910cdef12c30ca8a147724fe35",
+        "bytes": 12086
+      },
+      "labs-01-vs-11/comparison.txt": {
+        "sha256": "4dbd41ece8de70087d7b171ce51fd0898a2711ff5eaa0c95d940443c87df9194",
+        "bytes": 1164
+      },
+      "labs-01-vs-11/manifest.json": {
+        "sha256": "a676ca147be7339270a793b54c80ca1c0e78f5c49e0d6ca34723b66fb4dd05a3",
+        "bytes": 991
+      },
+      "labs-01-vs-11/saved-candidate-manifest.json": {
+        "sha256": "55ac5a232e63c3919263d50066fcf3794e9bd4a61e35112d62b9cd32ec7538df",
+        "bytes": 840
+      },
+      "labs-01-vs-11/summary.md": {
+        "sha256": "15306e4369cf8b8092d4d9bff808f2df9f47dc14ca1768109315006009ce1562",
+        "bytes": 1874
+      },
+      "labs-10-vs-11/baseline-package.json": {
+        "sha256": "e958b2d5c16d470032c6bab6b03dc6523573e17828bf7360358aad59d82376e6",
+        "bytes": 301
+      },
+      "labs-10-vs-11/baseline-pnpm-lock.yaml": {
+        "sha256": "c5aeddfaabe70152141827cc636a5365a71c3a11a38ef76b7722d9d4730252db",
+        "bytes": 22311
+      },
+      "labs-10-vs-11/baseline.json": {
+        "sha256": "f08f413860af8fcd557e6a53f4addec956c99e853543b51c68127e0dda774eb9",
+        "bytes": 12103
+      },
+      "labs-10-vs-11/candidate-package.json": {
+        "sha256": "db9e4dc310b1b162e69e121c97f1a395ff5826708ed0b97d20faeb2b033ad248",
+        "bytes": 300
+      },
+      "labs-10-vs-11/candidate-pnpm-lock.yaml": {
+        "sha256": "6bbbf2ad4de33347b984aa35389adf79e9209f18b2c5455cafa318c7c59b32cb",
+        "bytes": 22301
+      },
+      "labs-10-vs-11/candidate.json": {
+        "sha256": "606c545a3e9681ce099eb7e4babe5ea4e23955910cdef12c30ca8a147724fe35",
+        "bytes": 12086
+      },
+      "labs-10-vs-11/comparison.txt": {
+        "sha256": "0ffbd1cac693b8bdd263ab179bc48c70a787d21b3255d70b80a44b5d70addd1e",
+        "bytes": 1287
+      },
+      "labs-10-vs-11/manifest.json": {
+        "sha256": "695cdc035bdc56b18e7308f963c7169cd4a0aa212a4a62dcb294df8892e51a37",
+        "bytes": 990
+      },
+      "labs-10-vs-11/saved-candidate-manifest.json": {
+        "sha256": "55ac5a232e63c3919263d50066fcf3794e9bd4a61e35112d62b9cd32ec7538df",
+        "bytes": 840
+      },
+      "labs-10-vs-11/summary.md": {
+        "sha256": "fa7a59df5243a8e8fd5802784da146883004e3459f618938997eab83bb98ac02",
+        "bytes": 1872
+      },
+      "manifest.json": {
+        "sha256": "14b70ec10a2542917d06217ef897346dd914c2aa2ce93fbdd3b763f139c2135c",
+        "bytes": 10052
+      },
+      "named-manifest.json": {
+        "sha256": "67dfafc67105ed3b41ad155396f0cfb52521a77366f313afda32c45393b26164",
+        "bytes": 165357
+      },
+      "operational-restart.json": {
+        "sha256": "e9d656287c84dcacd98d9386903672d7a077a4dcc135ba1f3813c978575a97fe",
+        "bytes": 667
+      },
+      "preparation-only-normalized.tgz": {
+        "sha256": "c69f6e636d3b987ff49b9aab3bce17bbbd25df092295385b9ed8345821138dd0",
+        "bytes": 3204497
+      },
+      "preparation-plus-compiler.tgz": {
+        "sha256": "597f6416aed776c9be87ad0a379dd788bcfdaf0a69a639b082fa35f08bc8dfe0",
+        "bytes": 3210977
+      },
+      "source/packages/glyph/scripts/build-shaper-combination-artifacts.mjs": {
+        "sha256": "888d56e84f60446845f6b274bfe3bf5980f5a196e23ef55802a223907bd84860",
+        "bytes": 14939
+      },
+      "source/packages/glyph/scripts/build-shaper-optimizer-ablation.mjs": {
+        "sha256": "c28036c5b6e4289c17444ebfc3bb15a31e32873fe33e22b5c3aa5226409f95c8",
+        "bytes": 11010
+      },
+      "source/packages/glyph/src/internal/handle-state.ts": {
+        "sha256": "deb43f9ad12046c0ebed409de888cc67340a3367b2cc74ef88de66e44000e83f",
+        "bytes": 69333
+      },
+      "source/packages/glyph/src/internal/render-planner.ts": {
+        "sha256": "e77a8f1e4e863d9c48bd18ede1e45290f0a3ed7386bca67784996bcaa1cf7365",
+        "bytes": 96522
+      },
+      "text-shaper.named.wasm": {
+        "sha256": "bd9af170937b63b8d977fe284a555cd5da75af3416882341a5be42c1b7c7843e",
+        "bytes": 1690252
+      },
+      "timing-receipt.json": {
+        "sha256": "15dc9826bc76aab513c4531dca807760f9355f4fe510b8953d78696432a04d3b",
+        "bytes": 18812
+      }
+    },
+    "availability": "Local ignored files only; hashes and reproducer are committed, binary archives/raw samples are not on GitHub."
+  },
+  "evidence": {
+    ".cache/held-local-20261016/combination-20261017/labs-00-vs-11/baseline.json": "5ceaaf8e0ec2061f9f84d7386bf6ad82f5abf6630ffc8425faf56c3c1bb488ac",
+    ".cache/held-local-20261016/combination-20261017/labs-00-vs-11/candidate.json": "606c545a3e9681ce099eb7e4babe5ea4e23955910cdef12c30ca8a147724fe35",
+    ".cache/held-local-20261016/combination-20261017/labs-00-vs-11/manifest.json": "55ac5a232e63c3919263d50066fcf3794e9bd4a61e35112d62b9cd32ec7538df",
+    ".cache/held-local-20261016/combination-20261017/labs-00-vs-11/comparison.txt": "d60bd67fd1f3b318a9c3a2f2814b2a35d29392e5cce7d95e5e9ed7e8aa13dc8c",
+    ".cache/held-local-20261016/combination-20261017/labs-00-vs-11/summary.md": "ffa4f2e0a7af88bca890f36ff7104e2595b306f984c0a54f96198e5c10028e70",
+    ".cache/held-local-20261016/combination-20261017/labs-00-vs-11/baseline-package.json": "839683b9b66a4119f9ba0b370c52898fdfb080bd1393ec74ce3961f685b89f24",
+    ".cache/held-local-20261016/combination-20261017/labs-00-vs-11/candidate-package.json": "db9e4dc310b1b162e69e121c97f1a395ff5826708ed0b97d20faeb2b033ad248",
+    ".cache/held-local-20261016/combination-20261017/labs-00-vs-11/baseline-pnpm-lock.yaml": "a64b53282001726cafb1eb60bde4e5e2b3a19a861a5fa1a4895f14e8ed08b210",
+    ".cache/held-local-20261016/combination-20261017/labs-00-vs-11/candidate-pnpm-lock.yaml": "6bbbf2ad4de33347b984aa35389adf79e9209f18b2c5455cafa318c7c59b32cb",
+    ".cache/held-local-20261016/combination-20261017/labs-00-vs-11.log": "5aa7800931050452161445ce7af025ffc76d6b8cfa2887c350642cc4ffd7664d",
+    ".cache/held-local-20261016/combination-20261017/labs-10-vs-11/baseline.json": "f08f413860af8fcd557e6a53f4addec956c99e853543b51c68127e0dda774eb9",
+    ".cache/held-local-20261016/combination-20261017/labs-10-vs-11/candidate.json": "606c545a3e9681ce099eb7e4babe5ea4e23955910cdef12c30ca8a147724fe35",
+    ".cache/held-local-20261016/combination-20261017/labs-10-vs-11/manifest.json": "695cdc035bdc56b18e7308f963c7169cd4a0aa212a4a62dcb294df8892e51a37",
+    ".cache/held-local-20261016/combination-20261017/labs-10-vs-11/comparison.txt": "0ffbd1cac693b8bdd263ab179bc48c70a787d21b3255d70b80a44b5d70addd1e",
+    ".cache/held-local-20261016/combination-20261017/labs-10-vs-11/summary.md": "fa7a59df5243a8e8fd5802784da146883004e3459f618938997eab83bb98ac02",
+    ".cache/held-local-20261016/combination-20261017/labs-10-vs-11/baseline-package.json": "e958b2d5c16d470032c6bab6b03dc6523573e17828bf7360358aad59d82376e6",
+    ".cache/held-local-20261016/combination-20261017/labs-10-vs-11/candidate-package.json": "db9e4dc310b1b162e69e121c97f1a395ff5826708ed0b97d20faeb2b033ad248",
+    ".cache/held-local-20261016/combination-20261017/labs-10-vs-11/baseline-pnpm-lock.yaml": "c5aeddfaabe70152141827cc636a5365a71c3a11a38ef76b7722d9d4730252db",
+    ".cache/held-local-20261016/combination-20261017/labs-10-vs-11/candidate-pnpm-lock.yaml": "6bbbf2ad4de33347b984aa35389adf79e9209f18b2c5455cafa318c7c59b32cb",
+    ".cache/held-local-20261016/combination-20261017/labs-10-vs-11.log": "f9a84e367de727ccbcd89965b4e9d81f8cad3bbf3af88a9767efda9f0a598ec6",
+    ".cache/held-local-20261016/combination-20261017/labs-01-vs-11/baseline.json": "54e19df2d03d0b2fe6fe0fc3add4dc13d645d3c14422b3de22ed3e8fc46cd11c",
+    ".cache/held-local-20261016/combination-20261017/labs-01-vs-11/candidate.json": "606c545a3e9681ce099eb7e4babe5ea4e23955910cdef12c30ca8a147724fe35",
+    ".cache/held-local-20261016/combination-20261017/labs-01-vs-11/manifest.json": "a676ca147be7339270a793b54c80ca1c0e78f5c49e0d6ca34723b66fb4dd05a3",
+    ".cache/held-local-20261016/combination-20261017/labs-01-vs-11/comparison.txt": "4dbd41ece8de70087d7b171ce51fd0898a2711ff5eaa0c95d940443c87df9194",
+    ".cache/held-local-20261016/combination-20261017/labs-01-vs-11/summary.md": "15306e4369cf8b8092d4d9bff808f2df9f47dc14ca1768109315006009ce1562",
+    ".cache/held-local-20261016/combination-20261017/labs-01-vs-11/baseline-package.json": "6e14a500fd20c112fa21c649ffda433497dfd7982421ccd3e316b704f0a1112d",
+    ".cache/held-local-20261016/combination-20261017/labs-01-vs-11/candidate-package.json": "db9e4dc310b1b162e69e121c97f1a395ff5826708ed0b97d20faeb2b033ad248",
+    ".cache/held-local-20261016/combination-20261017/labs-01-vs-11/baseline-pnpm-lock.yaml": "0ee47cfb186bd77b4ba693f140a16c52024df231b6b4aaa194aee08f73981438",
+    ".cache/held-local-20261016/combination-20261017/labs-01-vs-11/candidate-pnpm-lock.yaml": "6bbbf2ad4de33347b984aa35389adf79e9209f18b2c5455cafa318c7c59b32cb",
+    ".cache/held-local-20261016/combination-20261017/labs-01-vs-11.log": "fad5e2f58e4862ce4245c019dc4ce3398f72c1d0ab0e85a549ffe76076c0c101",
+    ".cache/held-local-20261016/combination-20261017/gates/benchmark-static.log": "ea534f8fdc46a93a9bb8eebd70e4625c7b45b209f2e9d9beadecbfc93ccd028c",
+    ".cache/held-local-20261016/combination-20261017/gates/correctness-receipt.json": "52fe92358570f028395cda5cdde28747e59749b9bfa08d1e0051ff44310c078b",
+    ".cache/held-local-20261016/combination-20261017/gates/focused-diagnostics.log": "9fe131d3cf9871e7a751376eecefba14e07e102450bd9811ada4a614ce39393b",
+    ".cache/held-local-20261016/combination-20261017/gates/glyph-static.log": "5a9bc21d68687c0e17d3b7d7b81a0c3876b5f9a0d235b4aa3fe37f4f863eb27c",
+    ".cache/held-local-20261016/combination-20261017/gates/independent-member-check.json": "b1a10b4bbdc6e7c840484afdf178564fb97caa80895f36f820f9e2527aaf31ef",
+    ".cache/held-local-20261016/combination-20261017/gates/maintained-comparisons.json": "137fd7e16739b0623fe285550e001935e503d14f20db9b54431161acc23e0f88",
+    ".cache/held-local-20261016/combination-20261017/gates/named-abi-preliminary.json": "f1f8df7e46f09c16e0117fd5656f90c359d4dc74124d10d88966e6aacad85f58",
+    ".cache/held-local-20261016/combination-20261017/gates/named-abi.json": "aa009f388fbcd7e80ce701ae200ffc0b645c81ad71acd811e24b5442fb2a9648",
+    ".cache/held-local-20261016/combination-20261017/gates/node.log": "44be3eb45f6f63aabb9c6854812d0141fb9b6c29319201dccb455badff9bf7c4",
+    ".cache/held-local-20261016/combination-20261017/gates/prepared.log": "c4be549f6ec82cf68992b71864adae2f359de3287462b44fe1a4547e52a19cde",
+    ".cache/held-local-20261016/combination-20261017/gates/python-gzip9-sizes.json": "a69ebb7bac90c9ba721b166d97e53e13d04a8bee91b94ab244314e64e6eb0090",
+    ".cache/held-local-20261016/combination-20261017/admission-before-timing.json": "56ccb2a983481dcf8e35220c4ebe09ef3c48c6e6f5e9840d1cceb1af8a2013f1",
+    ".cache/held-local-20261016/combination-20261017/timing-receipt.json": "15dc9826bc76aab513c4531dca807760f9355f4fe510b8953d78696432a04d3b",
+    ".cache/held-local-20261016/combination-20261017/operational-restart.json": "e9d656287c84dcacd98d9386903672d7a077a4dcc135ba1f3813c978575a97fe",
+    ".cache/held-local-20261016/combination-20261017/labs-00-vs-11-path-error.log": "1c420860a3a4759b77b7bcc92ad28a879e0aae1dad7001965338c763b6be25c0",
+    "packages/glyph/.cache/combination-artifacts-gzip9-20261017/manifest.json": "14b70ec10a2542917d06217ef897346dd914c2aa2ce93fbdd3b763f139c2135c",
+    "packages/glyph/.cache/combination-artifacts-gzip9-20261017/named-manifest.json": "67dfafc67105ed3b41ad155396f0cfb52521a77366f313afda32c45393b26164",
+    ".cache/held-local-20261016/combination-20261017/preservation.json": "b8b9fdba541027a7ac65c2cf3f6101a359456c54c7300471e08b2572614bc9c9"
+  },
+  "remainingMission": "Dense512/1024 regressions and final seven-family/API/ABI/peer/lifetime/browser/hero/main-integration readiness remain unresolved. Stack held/unmerged; no release/tag/demo merge."
+}

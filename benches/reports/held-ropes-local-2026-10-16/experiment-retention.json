@@ -37,7 +37,8 @@
     "retainedChange": "preparation-receipt-cleanup",
     "sourceRevision": "4b7f55f08105ea48eefd6b0d63eb825e6c81560a",
     "candidateArchiveSha256": "2a7f0317a49319203aac935a8d7387eafcc9f78443ff6de31c699c4605412627",
-    "status": "not-yet-tested"
+    "status": "evaluated-inconclusive-preserved",
+    "evidence": "preparation-compiler-combination.json"
   },
   "limitations": [
     "Previous isolated timing was inconclusive; it does not establish zero benefit.",
