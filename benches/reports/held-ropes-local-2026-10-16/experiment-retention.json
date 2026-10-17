@@ -1,0 +1,48 @@
+{
+  "name": "held-one-caller-default-inconclusive-2026-10-17",
+  "status": "inconclusive-preserved-for-combination",
+  "localGitRef": "experiments/held-one-caller-default-inconclusive-2026-10-17",
+  "reproducerRevision": "7347b549aeadf963744e77ce873e0ecc470bfc42",
+  "controlSourceRevision": "60d3c26f135b360ab1111131ce274218959d176f",
+  "localArchive": ".cache/held-experiments/held-one-caller-default-inconclusive-2026-10-17",
+  "artifacts": [
+    {
+      "file": "pmndrs-glyph-0.1.0-optimizer-ablation.tgz",
+      "sha256": "e1cfc4b20d65c0065f09bdc61c012aa10feb32cf365c15becd3966e8ae9a19eb",
+      "bytes": 3211102
+    },
+    {
+      "file": "manifest.json",
+      "sha256": "2316dfdb164666f4b150b2212ddabea27ebac9f9a0057f2648f7399474bc6c49",
+      "bytes": 3047
+    },
+    {
+      "file": "named-manifest.json",
+      "sha256": "61903abb2562bde0f9170089b0f8eedb36676ab5b5ce3a94bc00d7e15cf673f8",
+      "bytes": 165315
+    },
+    {
+      "file": "text-shaper.named.wasm",
+      "sha256": "bd9af170937b63b8d977fe284a555cd5da75af3416882341a5be42c1b7c7843e",
+      "bytes": 1690252
+    },
+    {
+      "file": "functions.map",
+      "sha256": "0ee27b00393a301d0b19ac0f8fd9ddf1b0f9454d255e283b93bd3489f3267b44",
+      "bytes": 9384
+    }
+  ],
+  "evidence": "optimizer-ablation.json",
+  "nextCombination": {
+    "retainedChange": "preparation-receipt-cleanup",
+    "sourceRevision": "4b7f55f08105ea48eefd6b0d63eb825e6c81560a",
+    "candidateArchiveSha256": "2a7f0317a49319203aac935a8d7387eafcc9f78443ff6de31c699c4605412627",
+    "status": "not-yet-tested"
+  },
+  "limitations": [
+    "Previous isolated timing was inconclusive; it does not establish zero benefit.",
+    "Original archived compiler package excludes the retained preparation cleanup; do not label it a combined package.",
+    "Local binary archive and branch are not on GitHub; the committed reproducer and hashes preserve identity, not remote availability.",
+    "The shape/flow review produced no implementation to combine."
+  ]
+}
