@@ -231,6 +231,8 @@ config helpers.
 
 Browser ESM delivery uses the private `content-digest` module filename to avoid URL filters matching `fingerprint`. Public fingerprint names, hash vectors, cache headers and artifact identities remain unchanged. The installed-package browser consumer rejects matching requests and proves both Worker baking and font loading, with an explicit blocking negative control. This models a filename filter; it does not claim coverage of every browser extension.
 
+Browser-targeted ESM imports of the root can evaluate without a Node `process` global. The private development-diagnostics gate uses Vite's build mode when supplied, Node's `process.env.NODE_ENV` in Node, and development as the default for direct browser modules without either environment value. Production Vite bundles remove the diagnostic branch.
+
 | Subpath                         | Purpose                                                                                                          |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `@pmndrs/glyph`                 | Root runtime, built-in format selection, font/raster types, fallback stacks, text authoring, and layout results. |

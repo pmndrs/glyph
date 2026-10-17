@@ -1,6 +1,6 @@
 /* @workflow {
   "name": "benchmark:packed-consumer",
-  "summary": "Pack Glyph and prove runtime font baking from an isolated installed browser consumer.",
+  "summary": "Pack Glyph and prove direct browser ESM import and runtime font baking from an isolated installed consumer.",
   "requirements": "Built Glyph package, pnpm offline cache, and Playwright Chromium.",
   "writes": "Ignored temporary files under benches/.cache, removed before exit."
 } */
@@ -135,6 +135,15 @@ try {
     throw new Error(`${result.error}${errors.length === 0 ? '' : `\nBrowser errors:\n${errors.join('\n')}`}`);
   }
   if (errors.length > 0) throw new Error(`packed consumer browser errors: ${errors.join(' | ')}`);
+
+  const devSource = await readFile(join(consumerDirectory, 'node_modules/@pmndrs/glyph/dist/internal/dev.js'), 'utf8');
+  const directImport = await page.evaluate(async (source) => {
+    const { DEV } = await import(`data:text/javascript,${encodeURIComponent(source)}`);
+    return { processGlobal: typeof process, dev: DEV };
+  }, devSource);
+  if (directImport.processGlobal !== 'undefined' || directImport.dev !== true) {
+    throw new Error(`packed direct browser module import returned ${JSON.stringify(directImport)}`);
+  }
 
   const blocked = await page.evaluate(async () => {
     try {
