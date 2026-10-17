@@ -21,6 +21,9 @@ type ThreeDecorationMaterialContext = ThreeMaterialRootContext &
   Readonly<{
     kind: 'decoration';
     shader: TslDecorationShaderOutput;
+    /** Paragraph-local Three position (+Y up), before glyph and owner transforms. Vertex-computed; fragment reads interpolate it. */
+    paragraphPosition: Node<'vec3'>;
+    /** Final renderer-local position. Vertex-computed; fragment reads interpolate it. Reuse this node for repeated reads. */
     position: Node<'vec3'>;
     createDefaultMaterial(): NodeMaterial;
   }>;
@@ -30,7 +33,9 @@ type ThreeBitmapMaterialContext = ThreeMaterialRootContext &
     kind: 'glyph';
     format: 'pmndrs.bitmap';
     shader: TslBitmapShaderOutput;
-    /** Final renderer-local position including Codec-selected transform indirection. */
+    /** Paragraph-local Three position (+Y up), before glyph and owner transforms. Vertex-computed; fragment reads interpolate it. */
+    paragraphPosition: Node<'vec3'>;
+    /** Final renderer-local position including Codec-selected transform indirection. Vertex-computed; fragment reads interpolate it. */
     position: Node<'vec3'>;
     createDefaultMaterial(): NodeMaterial;
   }>;
@@ -40,6 +45,9 @@ type ThreeMsdfMaterialContext = ThreeMaterialRootContext &
     kind: 'glyph';
     format: 'pmndrs.msdf';
     shader: TslMsdfShaderOutput;
+    /** Paragraph-local Three position (+Y up), before glyph and owner transforms. Vertex-computed; fragment reads interpolate it. */
+    paragraphPosition: Node<'vec3'>;
+    /** Final renderer-local position. Vertex-computed; fragment reads interpolate it. */
     position: Node<'vec3'>;
     createDefaultMaterial(): NodeMaterial;
   }>;
@@ -49,6 +57,9 @@ type ThreeSlugMaterialContext = ThreeMaterialRootContext &
     kind: 'glyph';
     format: 'pmndrs.slug';
     shader: TslSlugShaderOutput;
+    /** Dilated paragraph-local Three position (+Y up), before glyph and owner transforms. Vertex-computed; fragment reads interpolate it. */
+    paragraphPosition: Node<'vec3'>;
+    /** Final renderer-local position. Vertex-computed; fragment reads interpolate it. Slug also publishes its coverage varying. */
     position: Node<'vec3'>;
     createDefaultMaterial(): NodeMaterial;
   }>;

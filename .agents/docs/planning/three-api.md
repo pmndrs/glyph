@@ -403,7 +403,8 @@ or update text; the coordinator rejects such reentrancy before another Wasm call
 
 `ThreeTextMaterialContext` is a closed discriminated union on `kind`. A glyph branch also carries the concrete
 `pmndrs.bitmap`, `pmndrs.msdf`, or `pmndrs.slug` raster format. The decoration branch does not pretend that decoration is a
-raster format. Every branch provides its concrete shader, the final Codec-selected position node, and
+raster format. Every branch provides its concrete shader, a paragraph-local position node, the final Codec-selected
+position node, and
 `createDefaultMaterial()`, so decoration can keep the built-in material or override it explicitly:
 
 ```ts
@@ -415,6 +416,48 @@ const material = defineTextMaterial((context) => {
   return value;
 });
 ```
+
+`context.paragraphPosition` is in unanchored paragraph-local Three coordinates (+X right, +Y up), before per-glyph and
+Text/ancestor transforms. It pairs with `label.glyphs().inkBounds` after changing the bounds' Y-down axis to Y-up.
+`context.position` is the final renderer-local position after those transforms; it must not be normalized against raw
+paragraph bounds or the Text-local `computeBoundingBox()` result. Both position nodes are computed in the vertex stage.
+Reading either in a fragment expression receives its interpolated value, including for Slug, whose position graph also
+publishes the analytic coverage coordinate. Keep the same node when reading it more than once; the renderer realizes one
+vertex varying for that node. A displacement must still assign `material.positionNode` in the vertex stage:
+
+```ts
+const material = defineTextMaterial((context) => {
+  const value = context.createDefaultMaterial();
+  if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return value;
+  const position = context.position;
+  value.positionNode = position.add(vec3(position.y.sin().mul(0.12), 0, 0));
+  value.colorNode = context.shader.color.mul(position.x.sin().mul(0.2).add(0.8));
+  return value;
+});
+```
+
+Here `vec3` comes from `three/tsl`. The colour expression reads an interpolated coordinate; it does not rerun Slug's
+vertex dilation in the fragment shader. For a texture across a paragraph, query its desired bounds before material
+realization, give that Text its own material, and normalize the paragraph position in the same space:
+
+```ts
+const label = three.createText({ font, text: 'Custom' });
+const bounds = label.glyphs().inkBounds; // paragraph-local, +Y down
+if (bounds !== undefined && bounds.width > 0 && bounds.height > 0) {
+  const bottom = -(bounds.y + bounds.height);
+  label.material = defineTextMaterial((context) => {
+    const value = context.createDefaultMaterial();
+    const position = context.paragraphPosition;
+    const uv = vec2(position.x.sub(bounds.x).div(bounds.width), position.y.sub(bottom).div(bounds.height));
+    value.colorNode = texture(image, uv).rgb.mul(context.shader.color);
+    return value;
+  });
+}
+```
+
+Here `vec2` and `texture` come from `three/tsl`, and `image` is a caller-owned Three texture. Refresh the bounds and
+material when desired text/layout changes; a shared material cannot carry a different paragraph extent for each Text.
+The factory itself must not call `glyphs()` because material realization holds borrowed plan data.
 
 Decoration paint still comes from the engine-authored text style. Underline, overline, and line-through spans are planned
 as their own ordered batches and become separate Three draw objects with separate material instances. Reusing one factory

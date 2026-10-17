@@ -1,16 +1,52 @@
 import assert from 'node:assert/strict';
+import { gunzipSync } from 'node:zlib';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { loadFont } from '../../dist/loader.js';
-import { bitmap } from '@pmndrs/glyph';
+import { bitmap, slug } from '@pmndrs/glyph';
 import { defineTextMaterial } from '@pmndrs/glyph/three';
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
 import { createThreeTestHandle } from '../support/three-handle.mjs';
+import { compileNodeMaterialBackends } from '../support/node-material-shaders.mjs';
 
 const fontUrl = new URL('../../../../benches/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
+const slugFontUrl = new URL('../../../../benches/fixtures/rendering/inter-slug.font.glb.gz', import.meta.url);
+
+test('Slug material positions stay vertex-computed when a composed fragment reads both coordinate spaces', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: gunzipSync(await readFile(slugFontUrl)) } }, slug);
+  const contexts = [];
+  const material = defineTextMaterial((context) => {
+    contexts.push(context);
+    const composed = context.createDefaultMaterial();
+    composed.colorNode = TSL.vec3(context.position.x, context.paragraphPosition.y, 0);
+    return composed;
+  });
+  const scene = new THREE.Scene();
+  const label = three.createText({ font, material, text: 'A' });
+  scene.add(label);
+  scene.updateMatrixWorld();
+
+  assert.equal(label.error, undefined);
+  assert.equal(contexts.length, 1);
+  const draw = rootDraws(scene)[0];
+  assert.ok(draw, 'a real Slug draw must reach material realization');
+  for (const [backend, stages] of Object.entries(compileNodeMaterialBackends(draw, { scene }))) {
+    assert.match(stages.vertex, /pmndrsSlugRenderCoordinate/);
+    assert.match(stages.fragment, /pmndrsSlugRenderCoordinate/);
+    assert.doesNotMatch(
+      stages.fragment,
+      /pmndrsSlugRenderCoordinate\s*=/,
+      `${backend} must consume Slug's interpolated coordinate without assigning a fragment input`,
+    );
+  }
+
+  label.dispose();
+  font.dispose();
+});
 
 test('a custom Three material composes over the Bitmap shader in the Rust command-buffer draw path', async (t) => {
   const three = await createThreeTestHandle(t);

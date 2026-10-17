@@ -93,11 +93,13 @@ export class ThreeMaterialRealizer {
       rect: TSL.storage(rect.attribute, 'vec4', rect.attribute.count).setPBO(true).element(instance),
       packed: TSL.storage(packed.attribute, 'uvec2', packed.attribute.count).setPBO(true).element(instance),
     });
-    const position = this.#position(shader.position, instance, buffers, transform);
+    const paragraphPosition = TSL.vertexStage(shader.position);
+    const position = TSL.vertexStage(this.#position(paragraphPosition, instance, buffers, transform));
     const material = this.#createMaterial(selection, {
       root: this.#root(selection),
       kind: 'decoration',
       shader,
+      paragraphPosition,
       position,
       createDefaultMaterial: () => coverageMaterial(shader, position),
     });
@@ -152,12 +154,14 @@ export class ThreeMaterialRealizer {
       { page: texture },
       { pixelSnapping: this.#owner.pixelSnapping ?? selection?.pixelSnapping ?? false },
     );
-    const position = this.#position(shader.position, instance, buffers, transform);
+    const paragraphPosition = TSL.vertexStage(shader.position);
+    const position = TSL.vertexStage(this.#position(paragraphPosition, instance, buffers, transform));
     const material = this.#createMaterial(selection, {
       root: this.#root(selection),
       kind: 'glyph',
       format: bitmap.id,
       shader,
+      paragraphPosition,
       position,
       createDefaultMaterial: () => bitmapMaterial(shader, position),
     });
@@ -206,12 +210,14 @@ export class ThreeMaterialRealizer {
         pixelRange: f32BufferMember(atlas, 'pixelRange', 'MSDF'),
       },
     );
-    const position = this.#position(shader.position, instance, buffers, transform);
+    const paragraphPosition = TSL.vertexStage(shader.position);
+    const position = TSL.vertexStage(this.#position(paragraphPosition, instance, buffers, transform));
     const material = this.#createMaterial(selection, {
       root: this.#root(selection),
       kind: 'glyph',
       format: msdf.id,
       shader,
+      paragraphPosition,
       position,
       createDefaultMaterial: () => coverageMaterial(shader, position),
     });
@@ -277,13 +283,15 @@ export class ThreeMaterialRealizer {
       },
       { page: this.#slugPage(resource.binding, page), viewport, modelViewProjection },
     );
-    const glyphPosition = this.#glyphPosition(shader.position, instance, buffers);
-    const position = indexed?.position(glyphPosition) ?? glyphPosition;
+    const paragraphPosition = TSL.vertexStage(shader.position);
+    const glyphPosition = this.#glyphPosition(paragraphPosition, instance, buffers);
+    const position = TSL.vertexStage(indexed?.position(glyphPosition) ?? glyphPosition);
     const material = this.#createMaterial(selection, {
       root: this.#root(selection),
       kind: 'glyph',
       format: slug.id,
       shader,
+      paragraphPosition,
       position,
       createDefaultMaterial: () => coverageMaterial(shader, position),
     });

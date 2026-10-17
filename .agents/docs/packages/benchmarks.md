@@ -882,6 +882,10 @@ no-warm-memory-growth checks outside the timed region. Its `mtsdf-generator` sui
 host initialization, initialized-plus-corpus work, and retained-generator corpus work while preserving every oracle hash.
 Browser frame, GPU, and input-latency observations remain Vitexec or Playwright workflows, while package size and
 conformance remain deterministic gates rather than timing benchmarks.
+`benchmark:material-position` is a browser conformance probe for custom Three material coordinates. It draws a
+translated, centered Slug paragraph on asserted WebGPU and WebGL2 backends, reads its colour target, and compares
+paragraph-local texture coordinates against an independent `glyphs().inkBounds` pixel oracle. Page and console errors
+fail the run. The probe measures coordinate correctness, not performance.
 
 The installed-package publication suite includes warm retained-label normalization, framework-shaped formatted-flow
 updates, Vue snapshot reuse, TypeGPU position-only updates, and raw trailing-span changes. The batch suite also toggles

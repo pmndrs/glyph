@@ -1,4 +1,4 @@
-import { mul, vec3 } from 'three/tsl';
+import { mul, texture, vec2, vec3 } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 
@@ -30,6 +30,10 @@ const slugOutput = slugShader(slugInstance, slugResources);
 
 const customMaterial = defineTextMaterial((context) => {
   const material = context.createDefaultMaterial();
+  const paragraphPosition: Node<'vec3'> = context.paragraphPosition;
+  const rendererPosition: Node<'vec3'> = context.position;
+  void paragraphPosition;
+  void rendererPosition;
   material.depthTest = true;
   if (context.kind === 'glyph' && context.format === 'pmndrs.slug') material.opacityNode = context.shader.opacity;
   if (context.kind === 'decoration') material.colorNode = context.shader.color;
@@ -49,6 +53,35 @@ const warpedMaterial = defineTextMaterial((context) => {
   const material = context.createDefaultMaterial();
   if (context.kind === 'glyph' && context.format === 'pmndrs.slug')
     material.opacityNode = context.shader.coverageAt(context.shader.renderCoordinate.add(0.1));
+  return material;
+});
+
+declare const image: THREE.Texture;
+declare const paragraphInkBounds: {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+};
+const paragraphMappedMaterial = defineTextMaterial((context) => {
+  const material = context.createDefaultMaterial();
+  if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return material;
+  const position = context.paragraphPosition;
+  const bottom = -(paragraphInkBounds.y + paragraphInkBounds.height);
+  const uv = vec2(
+    position.x.sub(paragraphInkBounds.x).div(paragraphInkBounds.width),
+    position.y.sub(bottom).div(paragraphInkBounds.height),
+  );
+  material.colorNode = texture(image, uv).rgb.mul(context.shader.color);
+  return material;
+});
+
+const displacedMaterial = defineTextMaterial((context) => {
+  const material = context.createDefaultMaterial();
+  if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return material;
+  const position = context.position;
+  material.positionNode = position.add(vec3(position.y.sin().mul(0.12), 0, 0));
+  material.colorNode = context.shader.color.mul(position.x.sin().mul(0.2).add(0.8));
   return material;
 });
 
@@ -84,6 +117,8 @@ void mtsdfOutlineCoverage;
 void slugCoverage;
 void slugWarpedCoverage;
 void warpedMaterial;
+void paragraphMappedMaterial;
+void displacedMaterial;
 void material;
 void bitmapMaterial;
 void wrongColor;
