@@ -141,7 +141,7 @@ try {
     const { DEV } = await import(`data:text/javascript,${encodeURIComponent(source)}`);
     return { processGlobal: typeof process, dev: DEV };
   }, devSource);
-  if (directImport.processGlobal !== 'undefined' || directImport.dev !== true) {
+  if (directImport.processGlobal !== 'undefined' || directImport.dev !== false) {
     throw new Error(`packed direct browser module import returned ${JSON.stringify(directImport)}`);
   }
 

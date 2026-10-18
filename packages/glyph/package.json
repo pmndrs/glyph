@@ -240,6 +240,7 @@
     "@unicode/unicode-17.0.0": "1.6.17",
     "@webgpu/types": "0.1.71",
     "binaryen": "129.0.0",
+    "esbuild": "0.28.2",
     "eslint-plugin-react-you-might-not-need-an-effect": "1.0.1",
     "happy-dom": "20.14.0",
     "ktx-parse": "1.1.0",

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { build } from 'vite';
+import { build } from 'esbuild';
 
 const rootEntry = new URL('../../dist/index.js', import.meta.url).href;
 const devModule = new URL('../../dist/internal/dev.js', import.meta.url).href;
@@ -15,7 +15,7 @@ test('the shipped ESM root imports without a process global', () => {
     const glyph = await import(${JSON.stringify(rootEntry)});
     assert.equal(typeof glyph.glyph, 'object');
     const { DEV } = await import(${JSON.stringify(devModule)});
-    assert.equal(DEV, true);
+    assert.equal(DEV, false);
   `;
   const result = spawnSync(process.execPath, ['--input-type=module', '--eval', source], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
@@ -39,20 +39,23 @@ test('the shipped diagnostics gate retains Node development and production modes
   }
 });
 
-test('a production browser bundle disables diagnostics without a process global', async () => {
+test('a standard NODE_ENV production define removes diagnostics from the emitted browser module', async () => {
   const result = await build({
-    configFile: false,
-    logLevel: 'silent',
-    mode: 'production',
-    build: {
-      lib: { entry: fileURLToPath(new URL('../../src/internal/dev.ts', import.meta.url)), formats: ['es'] },
-      minify: 'oxc',
-      write: false,
+    stdin: {
+      contents: await readFile(new URL('../../dist/internal/dev.js', import.meta.url), 'utf8'),
+      sourcefile: 'dev.js',
+      loader: 'js',
     },
+    bundle: true,
+    define: { 'process.env.NODE_ENV': '"production"' },
+    format: 'esm',
+    minify: true,
+    platform: 'browser',
+    write: false,
   });
-  const output = (Array.isArray(result) ? result : [result]).flatMap((bundle) => bundle.output);
-  const javascript = output.find((file) => file.type === 'chunk')?.code;
+  const javascript = result.outputFiles?.[0]?.text;
   assert.ok(javascript);
+  assert.doesNotMatch(javascript, /\bprocess\b/);
   const source = `
     import assert from 'node:assert/strict';
     delete globalThis.process;

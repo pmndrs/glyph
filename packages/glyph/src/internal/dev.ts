@@ -1,8 +1,4 @@
-/** Dev-only diagnostics gate — Vite replaces `import.meta.env.MODE` in application builds;
- * direct ESM imports default to development when no build mode or Node process is present.
+/** Dev-only diagnostics gate — retain the literal `process.env.NODE_ENV` comparison for
+ * production bundlers, and avoid reading a missing Node global in direct browser modules.
  * Use for guidance only; real invariants still `throw`. */
-const buildMode = (import.meta as ImportMeta & { readonly env?: { readonly MODE?: string } }).env?.MODE;
-export const DEV: boolean =
-  buildMode === undefined
-    ? typeof process === 'undefined' || process.env.NODE_ENV !== 'production'
-    : buildMode !== 'production';
+export const DEV: boolean = typeof process === 'undefined' ? false : process.env.NODE_ENV !== 'production';
