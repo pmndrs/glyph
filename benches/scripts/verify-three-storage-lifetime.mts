@@ -1,4 +1,4 @@
-/* @workflow { "name": "benchmark:three-storage-lifetime", "summary": "Probe final-owner Three storage retirement and reactivation on one persistent renderer.", "requirements": "Built Glyph distribution, Playwright Chromium, baked Inter fixture, and npm access to the selected exact Three version. Pass --three-version=0.185.1 for the tested lower peer, --glyph-tgz=<packed package> --expect-leak for a negative control, or --three-source-archive=<exact upstream commit archive> for the unreleased upstream lifecycle probe.", "writes": "No repository files; temporary package extracts are removed." } */
+/* @workflow { "name": "benchmark:three-storage-lifetime", "summary": "Probe Three storage retirement and sibling survival on a persistent renderer.", "requirements": "Built Glyph distribution, Playwright Chromium, baked Inter fixture, and npm access to the selected exact Three version. Pass --three-version=0.185.1 for the tested lower peer, --glyph-tgz=<packed package> --expect-leak for a final-owner negative control, or --scenario=sibling --expect-sibling-failure for a pre-fix sibling negative control.", "writes": "No repository files; temporary package extracts are removed." } */
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink } from 'node:fs/promises';
@@ -32,6 +32,26 @@ interface StorageLifetimeResult {
   readonly secondaryDisposedBeforeOwner?: boolean;
 }
 
+interface SiblingPreparation {
+  readonly initial: {
+    readonly backend: 'webgpu' | 'webgl2';
+    readonly referencePixels: number;
+    readonly bothPixels: number;
+    readonly sharedAttributeName: string;
+    readonly storageBefore: number;
+  };
+  trigger(): Promise<{
+    readonly retiredDrawDisposed: boolean;
+    readonly retiredHeldSharedAtDispose: boolean;
+    readonly survivorRetainedDraw: boolean;
+    readonly survivorRetainedStorage: boolean;
+    readonly identicalSurvivorPixels: boolean;
+    readonly survivorPixels: number | undefined;
+    readonly storageAfter: number;
+    readonly renderError: string | undefined;
+  }>;
+}
+
 const exec = promisify(execFile);
 const root = fileURLToPath(new URL('..', import.meta.url));
 const workspaceGlyph = resolve(root, '../packages/glyph');
@@ -41,14 +61,25 @@ if (threeVersion !== '0.185.1' && threeVersion !== '0.186.1') {
 }
 const glyphTgz = option('--glyph-tgz=');
 const scenario = option('--scenario=') ?? 'single';
-if (scenario !== 'single' && scenario !== 'multi' && scenario !== 'renderer-disposed-first' && scenario !== 'compile') {
-  throw new Error('scenario must be single, multi, renderer-disposed-first, or compile');
+if (
+  scenario !== 'single' &&
+  scenario !== 'multi' &&
+  scenario !== 'renderer-disposed-first' &&
+  scenario !== 'compile' &&
+  scenario !== 'sibling'
+) {
+  throw new Error('scenario must be single, multi, renderer-disposed-first, compile, or sibling');
 }
 const threeSourceArchive = option('--three-source-archive=');
 const upstreamCommit = '9986ad524ae0c0ad0fd5193bd6ac235743d0b843';
 const upstreamArchiveSha256 = '1116f218148d0a141cc7c7236e0326eb068b70b22abe26dbacff82a4cd74142b';
 const expectLeak = process.argv.includes('--expect-leak');
 if (expectLeak && glyphTgz === undefined) throw new Error('--expect-leak requires --glyph-tgz');
+const expectSiblingFailure = process.argv.includes('--expect-sibling-failure');
+if (expectSiblingFailure && (scenario !== 'sibling' || glyphTgz === undefined)) {
+  throw new Error('--expect-sibling-failure requires --scenario=sibling and --glyph-tgz');
+}
+if (scenario === 'sibling' && expectLeak) throw new Error('--expect-leak applies only to final-owner scenarios');
 const temporary = await mkdtemp(join(tmpdir(), 'glyph-three-storage-'));
 const port = process.env.PORT === undefined ? 0 : Number(process.env.PORT);
 if (!Number.isSafeInteger(port) || port < 0 || port > 65_535) throw new Error('PORT must be a valid TCP port');
@@ -151,6 +182,65 @@ try {
     await page.goto(`${origin}/v1-storage-lifetime.html?backend=${backend}&scenario=${scenario}`, {
       waitUntil: 'domcontentloaded',
     });
+    if (scenario === 'sibling') {
+      await page.waitForFunction(
+        () =>
+          (window as typeof window & { targetV1SiblingStorageReady?: Promise<SiblingPreparation> })
+            .targetV1SiblingStorageReady !== undefined,
+      );
+      const initial = await page.evaluate(
+        async () =>
+          (
+            await (window as typeof window & { targetV1SiblingStorageReady: Promise<SiblingPreparation> })
+              .targetV1SiblingStorageReady
+          ).initial,
+      );
+      if (errors.length !== 0) throw new Error(`${backend} failed before sibling removal: ${errors.join(' | ')}`);
+      if (
+        initial.backend !== backend ||
+        initial.referencePixels < 16 ||
+        initial.bothPixels <= initial.referencePixels
+      ) {
+        throw new Error(`${backend} did not prepare a valid sibling reference: ${JSON.stringify(initial)}`);
+      }
+      if (backend === 'webgpu' && initial.storageBefore <= 0) {
+        throw new Error(
+          `${backend} did not allocate shared storage before sibling removal: ${JSON.stringify(initial)}`,
+        );
+      }
+      const result = await page.evaluate(async () =>
+        (
+          await (window as typeof window & { targetV1SiblingStorageReady: Promise<SiblingPreparation> })
+            .targetV1SiblingStorageReady
+        ).trigger(),
+      );
+      await page.close();
+      const observation = { ...initial, ...result, browserErrors: errors };
+      process.stdout.write(`${threeVersion} ${backend} sibling: ${JSON.stringify(observation)}\n`);
+      if (!result.retiredDrawDisposed || !result.survivorRetainedDraw || !result.survivorRetainedStorage) {
+        throw new Error(
+          `${backend} did not retire one draw while retaining its shared sibling: ${JSON.stringify(observation)}`,
+        );
+      }
+      if (result.retiredHeldSharedAtDispose !== expectSiblingFailure) {
+        throw new Error(`${backend} retired geometry had unexpected shared storage: ${JSON.stringify(observation)}`);
+      }
+      if (expectSiblingFailure && backend === 'webgpu') {
+        const destroyedStorageError = /destroyed.*(?:buffer|storage)|(?:buffer|storage).*destroyed/i;
+        const observedErrors = [...errors, ...(result.renderError === undefined ? [] : [result.renderError])];
+        if (observedErrors.some((message) => !destroyedStorageError.test(message))) {
+          throw new Error(`${backend} saw an unrelated error after removal: ${JSON.stringify(observation)}`);
+        }
+        const validationFailure = observedErrors.length > 0;
+        const wrongPixels = result.survivorPixels !== undefined && !result.identicalSurvivorPixels;
+        if (!validationFailure && !wrongPixels) {
+          throw new Error(`${backend} did not reproduce the sibling failure: ${JSON.stringify(observation)}`);
+        }
+      } else if (result.renderError !== undefined || errors.length !== 0 || !result.identicalSurvivorPixels) {
+        throw new Error(`${backend} sibling changed or failed after removal: ${JSON.stringify(observation)}`);
+      }
+      continue;
+    }
     await page.waitForFunction(
       () =>
         (window as typeof window & { targetV1StorageLifetimeReady?: Promise<StorageLifetimeResult> })
