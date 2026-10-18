@@ -23,7 +23,7 @@ type ThreeDecorationMaterialContext = ThreeMaterialRootContext &
     shader: TslDecorationShaderOutput;
     /** Paragraph-local Three position (+Y up), before glyph and owner transforms. Vertex-computed; fragment reads interpolate it. */
     paragraphPosition: Node<'vec3'>;
-    /** Final renderer-local position. Vertex-computed; fragment reads interpolate it. Reuse this node for repeated reads. */
+    /** Final draw-local position. Indexed owner transforms are included; direct owner transforms remain on the draw mesh. Vertex-computed; fragment reads interpolate it. */
     position: Node<'vec3'>;
     createDefaultMaterial(): NodeMaterial;
   }>;
@@ -35,7 +35,7 @@ type ThreeBitmapMaterialContext = ThreeMaterialRootContext &
     shader: TslBitmapShaderOutput;
     /** Paragraph-local Three position (+Y up), before glyph and owner transforms. Vertex-computed; fragment reads interpolate it. */
     paragraphPosition: Node<'vec3'>;
-    /** Final renderer-local position including Codec-selected transform indirection. Vertex-computed; fragment reads interpolate it. */
+    /** Final draw-local position. Indexed owner transforms are included; direct owner transforms remain on the draw mesh. Vertex-computed; fragment reads interpolate it. */
     position: Node<'vec3'>;
     createDefaultMaterial(): NodeMaterial;
   }>;
@@ -47,7 +47,7 @@ type ThreeMsdfMaterialContext = ThreeMaterialRootContext &
     shader: TslMsdfShaderOutput;
     /** Paragraph-local Three position (+Y up), before glyph and owner transforms. Vertex-computed; fragment reads interpolate it. */
     paragraphPosition: Node<'vec3'>;
-    /** Final renderer-local position. Vertex-computed; fragment reads interpolate it. */
+    /** Final draw-local position. Indexed owner transforms are included; direct owner transforms remain on the draw mesh. Vertex-computed; fragment reads interpolate it. */
     position: Node<'vec3'>;
     createDefaultMaterial(): NodeMaterial;
   }>;
@@ -59,7 +59,7 @@ type ThreeSlugMaterialContext = ThreeMaterialRootContext &
     shader: TslSlugShaderOutput;
     /** Dilated paragraph-local Three position (+Y up), before glyph and owner transforms. Vertex-computed; fragment reads interpolate it. */
     paragraphPosition: Node<'vec3'>;
-    /** Final renderer-local position. Vertex-computed; fragment reads interpolate it. Slug also publishes its coverage varying. */
+    /** Final draw-local position. Indexed owner transforms are included; direct owner transforms remain on the draw mesh. Vertex-computed; fragment reads interpolate it. */
     position: Node<'vec3'>;
     createDefaultMaterial(): NodeMaterial;
   }>;

@@ -6,6 +6,7 @@ import test from 'node:test';
 import { loadFont } from '../../dist/loader.js';
 import { bitmap, slug } from '@pmndrs/glyph';
 import { defineTextMaterial } from '@pmndrs/glyph/three';
+import { defineThreeConfig as defineTypeGpuThreeConfig } from '@pmndrs/glyph/three/typegpu';
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
@@ -46,6 +47,42 @@ test('Slug material positions stay vertex-computed when a composed fragment read
 
   label.dispose();
   font.dispose();
+});
+
+test('TypeGPU-backed default Bitmap and decoration positions compile for both Three backends', async (t) => {
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  try {
+    for (const transformMode of ['direct', 'indexed']) {
+      await t.test(transformMode, async (subtest) => {
+        const three = await createThreeTestHandle(subtest, defineTypeGpuThreeConfig({ transformMode }));
+        const scene = new THREE.Scene();
+        const label = three.createText({
+          font,
+          text: 'Default',
+          style: { decoration: { underline: true, color: '#ff0088' } },
+        });
+        scene.add(label);
+        scene.updateMatrixWorld();
+        assert.equal(label.error, undefined);
+        const draws = rootDraws(scene);
+        assert.equal(draws.length, 2);
+        const vertices = draws.map((draw) => {
+          const stages = compileNodeMaterialBackends(draw, { scene });
+          assert.ok(stages.webgpu.vertex.length > 0);
+          return stages.webgl2.vertex;
+        });
+        assert.ok(vertices.some((vertex) => vertex.includes('bitmapQuadPosition')));
+        assert.ok(vertices.some((vertex) => vertex.includes('decorationPosition')));
+        for (const vertex of vertices) {
+          assert.doesNotMatch(vertex, /null\./, 'a vertex builtin must not lower to null');
+          assert.doesNotMatch(vertex, /,\s*\)/, 'a vertex builtin must not lower to an empty argument');
+        }
+        label.dispose();
+      });
+    }
+  } finally {
+    font.dispose();
+  }
 });
 
 test('a custom Three material composes over the Bitmap shader in the Rust command-buffer draw path', async (t) => {

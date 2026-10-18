@@ -419,11 +419,16 @@ const material = defineTextMaterial((context) => {
 
 `context.paragraphPosition` is in unanchored paragraph-local Three coordinates (+X right, +Y up), before per-glyph and
 Text/ancestor transforms. It pairs with `label.glyphs().inkBounds` after changing the bounds' Y-down axis to Y-up.
-`context.position` is the final renderer-local position after those transforms; it must not be normalized against raw
-paragraph bounds or the Text-local `computeBoundingBox()` result. Both position nodes are computed in the vertex stage.
+`context.position` is the final draw-local position sent to `material.positionNode`; it must not be normalized against raw
+paragraph bounds or the Text-local `computeBoundingBox()` result. In indexed mode the Text/ancestor transform is applied
+inside this node, while in direct mode it remains on the draw mesh's matrix. Its numeric value can therefore differ
+between modes for the same world-space glyph. Use `paragraphPosition` for effects that must track a paragraph in both
+modes. Both position nodes are computed in the vertex stage.
 Reading either in a fragment expression receives its interpolated value, including for Slug, whose position graph also
 publishes the analytic coverage coordinate. Keep the same node when reading it more than once; the renderer realizes one
-vertex varying for that node. A displacement must still assign `material.positionNode` in the vertex stage:
+vertex varying for that node. The default material keeps the raw vertex position graph so TypeGPU-backed Bitmap and
+decoration shaders retain their vertex builtins on WebGL2. A displacement must still assign `material.positionNode` in
+the vertex stage:
 
 ```ts
 const material = defineTextMaterial((context) => {

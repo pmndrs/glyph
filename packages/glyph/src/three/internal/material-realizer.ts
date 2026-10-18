@@ -93,15 +93,16 @@ export class ThreeMaterialRealizer {
       rect: TSL.storage(rect.attribute, 'vec4', rect.attribute.count).setPBO(true).element(instance),
       packed: TSL.storage(packed.attribute, 'uvec2', packed.attribute.count).setPBO(true).element(instance),
     });
+    const vertexPosition = this.#position(shader.position, instance, buffers, transform);
     const paragraphPosition = TSL.vertexStage(shader.position);
-    const position = TSL.vertexStage(this.#position(paragraphPosition, instance, buffers, transform));
+    const position = TSL.vertexStage(vertexPosition);
     const material = this.#createMaterial(selection, {
       root: this.#root(selection),
       kind: 'decoration',
       shader,
       paragraphPosition,
       position,
-      createDefaultMaterial: () => coverageMaterial(shader, position),
+      createDefaultMaterial: () => coverageMaterial(shader, vertexPosition),
     });
     this.#retain(key, material, undefined, materialBuffers([rect, packed], transform), transform.kind);
     return material;
@@ -154,8 +155,9 @@ export class ThreeMaterialRealizer {
       { page: texture },
       { pixelSnapping: this.#owner.pixelSnapping ?? selection?.pixelSnapping ?? false },
     );
+    const vertexPosition = this.#position(shader.position, instance, buffers, transform);
     const paragraphPosition = TSL.vertexStage(shader.position);
-    const position = TSL.vertexStage(this.#position(paragraphPosition, instance, buffers, transform));
+    const position = TSL.vertexStage(vertexPosition);
     const material = this.#createMaterial(selection, {
       root: this.#root(selection),
       kind: 'glyph',
@@ -163,7 +165,7 @@ export class ThreeMaterialRealizer {
       shader,
       paragraphPosition,
       position,
-      createDefaultMaterial: () => bitmapMaterial(shader, position),
+      createDefaultMaterial: () => bitmapMaterial(shader, vertexPosition),
     });
     this.#retain(key, material, resource, materialBuffers(retained, transform), transform.kind);
     return material;
@@ -210,8 +212,9 @@ export class ThreeMaterialRealizer {
         pixelRange: f32BufferMember(atlas, 'pixelRange', 'MSDF'),
       },
     );
+    const vertexPosition = this.#position(shader.position, instance, buffers, transform);
     const paragraphPosition = TSL.vertexStage(shader.position);
-    const position = TSL.vertexStage(this.#position(paragraphPosition, instance, buffers, transform));
+    const position = TSL.vertexStage(vertexPosition);
     const material = this.#createMaterial(selection, {
       root: this.#root(selection),
       kind: 'glyph',
@@ -219,7 +222,7 @@ export class ThreeMaterialRealizer {
       shader,
       paragraphPosition,
       position,
-      createDefaultMaterial: () => coverageMaterial(shader, position),
+      createDefaultMaterial: () => coverageMaterial(shader, vertexPosition),
     });
     this.#retain(key, material, resource, materialBuffers(retained, transform), transform.kind);
     return material;
@@ -283,9 +286,10 @@ export class ThreeMaterialRealizer {
       },
       { page: this.#slugPage(resource.binding, page), viewport, modelViewProjection },
     );
+    const glyphPosition = this.#glyphPosition(shader.position, instance, buffers);
+    const vertexPosition = indexed?.position(glyphPosition) ?? glyphPosition;
     const paragraphPosition = TSL.vertexStage(shader.position);
-    const glyphPosition = this.#glyphPosition(paragraphPosition, instance, buffers);
-    const position = TSL.vertexStage(indexed?.position(glyphPosition) ?? glyphPosition);
+    const position = TSL.vertexStage(vertexPosition);
     const material = this.#createMaterial(selection, {
       root: this.#root(selection),
       kind: 'glyph',
@@ -293,7 +297,7 @@ export class ThreeMaterialRealizer {
       shader,
       paragraphPosition,
       position,
-      createDefaultMaterial: () => coverageMaterial(shader, position),
+      createDefaultMaterial: () => coverageMaterial(shader, vertexPosition),
     });
     this.#retain(key, material, resource, materialBuffers(retained, transform), transform.kind);
     return material;
