@@ -544,6 +544,47 @@ impl<'a, T: RopeRecord> RopeRange<'a, T> {
 pub(crate) type RopeRangeIter<'a, T> = RopeIter<'a, T>;
 
 pub(crate) struct RopeIter<'a, T: RopeRecord> {
+    state: RopeIterState<'a, T>,
+}
+
+#[expect(
+    clippy::large_enum_variant,
+    reason = "tree iteration keeps its stacks inline without an allocation"
+)]
+enum RopeIterState<'a, T: RopeRecord> {
+    Leaf(core::slice::Iter<'a, T>),
+    Tree(TreeRopeIter<'a, T>),
+}
+
+impl<'a, T: RopeRecord> RopeIter<'a, T> {
+    fn new(root: Option<&'a Node<T>>, range: Range<usize>) -> Self {
+        #[cfg(test)]
+        super::work_attribution::record(|work| work.rope_iterator_starts += 1);
+        let state = match root {
+            Some(Node::Leaf { items, .. }) if !range.is_empty() => {
+                RopeIterState::Leaf(items[range].iter())
+            }
+            Some(root @ Node::Branch { .. }) if !range.is_empty() => {
+                RopeIterState::Tree(TreeRopeIter::new(root, range))
+            }
+            _ => RopeIterState::Leaf([].iter()),
+        };
+        Self { state }
+    }
+
+    fn skip_front(&mut self, count: usize) {
+        match &mut self.state {
+            RopeIterState::Leaf(leaf) => {
+                if count > 0 {
+                    leaf.nth(count - 1);
+                }
+            }
+            RopeIterState::Tree(tree) => tree.skip_front(count),
+        }
+    }
+}
+
+struct TreeRopeIter<'a, T: RopeRecord> {
     front_stack: [Option<&'a Node<T>>; MAX_HEIGHT],
     front_depth: usize,
     front_leaf: Option<core::slice::Iter<'a, T>>,
@@ -554,10 +595,8 @@ pub(crate) struct RopeIter<'a, T: RopeRecord> {
     remaining: usize,
 }
 
-impl<'a, T: RopeRecord> RopeIter<'a, T> {
-    fn new(root: Option<&'a Node<T>>, range: Range<usize>) -> Self {
-        #[cfg(test)]
-        super::work_attribution::record(|work| work.rope_iterator_starts += 1);
+impl<'a, T: RopeRecord> TreeRopeIter<'a, T> {
+    fn new(root: &'a Node<T>, range: Range<usize>) -> Self {
         let mut this = Self {
             front_stack: [None; MAX_HEIGHT],
             front_depth: 0,
@@ -568,12 +607,8 @@ impl<'a, T: RopeRecord> RopeIter<'a, T> {
             back_leaf: None,
             remaining: range.len(),
         };
-        if let Some(root) = root
-            && !range.is_empty()
-        {
-            this.descend_front_at(root, range.start);
-            this.descend_back_at(root, range.end);
-        }
+        this.descend_front_at(root, range.start);
+        this.descend_back_at(root, range.end);
         this
     }
 
@@ -733,6 +768,38 @@ impl<'a, T: RopeRecord> Iterator for RopeIter<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
+        match &mut self.state {
+            RopeIterState::Leaf(leaf) => {
+                let item = leaf.next()?;
+                record_iteration_visit();
+                Some(item)
+            }
+            RopeIterState::Tree(tree) => tree.next(),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = match &self.state {
+            RopeIterState::Leaf(leaf) => leaf.len(),
+            RopeIterState::Tree(tree) => tree.remaining,
+        };
+        (remaining, Some(remaining))
+    }
+}
+
+impl<T: RopeRecord> DoubleEndedIterator for RopeIter<'_, T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        match &mut self.state {
+            RopeIterState::Leaf(leaf) => leaf.next_back(),
+            RopeIterState::Tree(tree) => tree.next_back(),
+        }
+    }
+}
+
+impl<'a, T: RopeRecord> Iterator for TreeRopeIter<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
         if self.remaining == 0 {
             return None;
         }
@@ -740,13 +807,9 @@ impl<'a, T: RopeRecord> Iterator for RopeIter<'a, T> {
         self.remaining -= 1;
         Some(item)
     }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.remaining, Some(self.remaining))
-    }
 }
 
-impl<T: RopeRecord> DoubleEndedIterator for RopeIter<'_, T> {
+impl<T: RopeRecord> DoubleEndedIterator for TreeRopeIter<'_, T> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.remaining == 0 {
             return None;
@@ -772,8 +835,13 @@ impl<'a, T: RopeRecord> RopeCursor<'a, T> {
         if self.iter.len() == 0 {
             return None;
         }
-        self.iter.ensure_front_leaf()?;
-        self.iter.front_leaf.as_ref()?.as_slice().first()
+        match &mut self.iter.state {
+            RopeIterState::Leaf(leaf) => leaf.as_slice().first(),
+            RopeIterState::Tree(tree) => {
+                tree.ensure_front_leaf()?;
+                tree.front_leaf.as_ref()?.as_slice().first()
+            }
+        }
     }
 
     pub(crate) fn peek(&mut self, count: usize) -> Option<RopeCursorRange<'a, T>> {
@@ -783,14 +851,19 @@ impl<'a, T: RopeRecord> RopeCursor<'a, T> {
         let range = if count == 0 {
             RopeRange::new(None, 0..0)
         } else {
-            self.iter.ensure_front_leaf()?;
-            let leaf = self.iter.front_leaf.as_ref()?.as_slice();
-            if count <= leaf.len() {
-                let node = self.iter.front_node?;
-                let start = node.summary().records - leaf.len();
-                RopeRange::new(Some(node), start..start + count)
-            } else {
-                RopeRange::new(self.root, self.index..self.index + count)
+            match &mut self.iter.state {
+                RopeIterState::Leaf(_) => RopeRange::new(self.root, self.index..self.index + count),
+                RopeIterState::Tree(tree) => {
+                    tree.ensure_front_leaf()?;
+                    let leaf = tree.front_leaf.as_ref()?.as_slice();
+                    if count <= leaf.len() {
+                        let node = tree.front_node?;
+                        let start = node.summary().records - leaf.len();
+                        RopeRange::new(Some(node), start..start + count)
+                    } else {
+                        RopeRange::new(self.root, self.index..self.index + count)
+                    }
+                }
             }
         };
         Some(range)
@@ -1917,6 +1990,98 @@ mod tests {
             assert!(cursor.is_empty());
             assert_eq!(cursor.peek_record(), None);
         }
+    }
+
+    #[test]
+    fn bounded_iteration_and_cursor_match_flat_slices_across_leaf_boundaries() {
+        for size in [0, 1, 31, 32, 33, 65] {
+            let values = records(size);
+            let rope = RetainedRope::from(values.clone());
+            for start in 0..=size {
+                for end in start..=size {
+                    let range = rope.range(start..end).unwrap();
+                    let expected = &values[start..end];
+                    assert_eq!(range.first(), expected.first());
+                    assert_eq!(range.last(), expected.last());
+                    let mut iter = range.iter();
+                    let (mut front, mut back) = (0, expected.len());
+                    let mut from_front = true;
+                    while front < back {
+                        assert_eq!(iter.len(), back - front);
+                        assert_eq!(iter.size_hint(), (back - front, Some(back - front)));
+                        if from_front {
+                            assert_eq!(iter.next(), expected.get(front));
+                            front += 1;
+                        } else {
+                            back -= 1;
+                            assert_eq!(iter.next_back(), expected.get(back));
+                        }
+                        from_front = !from_front;
+                    }
+                    assert_eq!(iter.next(), None);
+                    assert_eq!(iter.next_back(), None);
+                    assert_eq!(iter.next(), None);
+                    assert_eq!(iter.len(), 0);
+
+                    for skip in [0, expected.len() / 2, expected.len(), expected.len() + 1] {
+                        let mut iter = range.iter();
+                        assert_eq!(iter.nth(skip), expected.get(skip));
+                        assert_eq!(iter.len(), expected.len().saturating_sub(skip + 1));
+                    }
+                    if expected.len() > 1 {
+                        assert_eq!(
+                            range.range(1..expected.len()).unwrap().to_vec(),
+                            expected[1..]
+                        );
+                    }
+                }
+
+                let mut cursor = rope.cursor_from(start).unwrap();
+                assert_eq!(cursor.peek_record(), values.get(start));
+                for count in [0, 1.min(size - start), size - start] {
+                    assert_eq!(
+                        cursor.peek(count).unwrap().to_vec(),
+                        values[start..start + count]
+                    );
+                }
+                assert!(cursor.peek(size - start + 1).is_none());
+                reset_work_counters();
+                let count = (size - start).min(2);
+                assert_eq!(
+                    cursor.take(count).unwrap().to_vec(),
+                    values[start..start + count]
+                );
+                assert_eq!(ITERATION_RECORD_VISITS.with(core::cell::Cell::get), count);
+                let remaining = size - start - count;
+                assert_eq!(cursor.advance(remaining), Some(()));
+                assert_eq!(ITERATION_RECORD_VISITS.with(core::cell::Cell::get), count);
+                assert!(cursor.is_empty());
+                assert_eq!(cursor.peek_record(), None);
+            }
+        }
+    }
+
+    #[test]
+    fn single_leaf_cursor_keeps_bounded_slice_and_index_in_sync() {
+        let values = records(20);
+        let rope = RetainedRope::from(values.clone());
+        let mut cursor = rope.cursor_from(3).unwrap();
+
+        assert_eq!(cursor.peek(4).unwrap().to_vec(), values[3..7]);
+        assert_eq!(cursor.next_record(), values.get(3));
+        assert_eq!(cursor.advance(2), Some(()));
+        assert_eq!(cursor.peek_record(), values.get(6));
+        assert_eq!(cursor.take(3).unwrap().to_vec(), values[6..9]);
+        assert_eq!(cursor.next_record(), values.get(9));
+        assert_eq!(cursor.advance(1), Some(()));
+        assert_eq!(cursor.peek(2).unwrap().to_vec(), values[11..13]);
+        assert_eq!(cursor.take(2).unwrap().to_vec(), values[11..13]);
+        assert_eq!(cursor.peek_record(), values.get(13));
+        for expected in &values[13..] {
+            assert_eq!(cursor.next_record(), Some(expected));
+        }
+        assert!(cursor.is_empty());
+        assert_eq!(cursor.next_record(), None);
     }
 
     #[test]
