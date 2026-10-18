@@ -1508,8 +1508,13 @@ impl PositionedGlyphArena {
         let body_start = lead.map_or(cluster_start, |lead| lead.cluster_end as usize);
         let hanging_start = hanging_cluster_start(fragment, clusters, cluster_start, cluster_end)?;
         let visual_start = self.visual_clusters.len();
+        let visual_end = if fragment.tail_index != super::flow_composition::NO_BOUNDARY {
+            cluster_end
+        } else {
+            retained_cluster_end
+        };
         if !visually_ltr {
-            for cluster in cluster_start..retained_cluster_end {
+            for cluster in cluster_start..visual_end {
                 if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
                     continue;
                 }
@@ -1593,7 +1598,7 @@ impl PositionedGlyphArena {
             space_ordinal: 0,
             gap_ordinal: 0,
         };
-        if let Some(lead) = lead {
+        if visually_ltr && let Some(lead) = lead {
             state.cursor = self.position_boundary(
                 line,
                 fragment.lead_index,
@@ -1637,6 +1642,8 @@ impl PositionedGlyphArena {
             let mut layout_run_cache = None;
             let mut geometry_cache = None;
             let mut active_placement = None;
+            let mut lead_placed = false;
+            let mut tail_placed = false;
             for ordinal in 0..visual_count {
                 let cluster = if visually_ltr {
                     body_start + ordinal
@@ -1644,6 +1651,47 @@ impl PositionedGlyphArena {
                     usize::try_from(self.visual_clusters[visual_start + ordinal])
                         .map_err(|_| EngineError::InvalidRequest)?
                 };
+                if !visually_ltr {
+                    let in_lead = lead.is_some_and(|record| {
+                        record.cluster_start as usize <= cluster
+                            && cluster < record.cluster_end as usize
+                    });
+                    let in_tail = fragment.tail_index != super::flow_composition::NO_BOUNDARY
+                        && boundary.is_some_and(|record| {
+                            record.cluster_start as usize <= cluster
+                                && cluster < record.cluster_end as usize
+                        });
+                    let edge = if in_lead && !lead_placed {
+                        lead_placed = true;
+                        lead.map(|record| (fragment.lead_index, record))
+                    } else if in_tail && !tail_placed {
+                        tail_placed = true;
+                        boundary.map(|record| (fragment.tail_index, record))
+                    } else {
+                        None
+                    };
+                    if let Some((index, record)) = edge {
+                        state.cursor = self.position_boundary(
+                            line,
+                            index,
+                            record,
+                            state.cursor,
+                            baseline,
+                            text,
+                            clusters,
+                            runs,
+                            styles,
+                            boundary_shape,
+                            metrics_for,
+                            retained.as_deref_mut(),
+                            (justify, &mut state),
+                        )?;
+                        active_placement = None;
+                    }
+                    if in_lead || in_tail {
+                        continue;
+                    }
+                }
                 let (run_index, layout_run) =
                     layout_run_for_cluster(clusters, cluster, &mut layout_run_cache)?;
                 let direction = layout_run_direction(layout_run, runs)?;
@@ -1787,7 +1835,9 @@ impl PositionedGlyphArena {
                 }
             }
         }
-        if let Some(boundary) = boundary {
+        if let Some(boundary) = boundary
+            .filter(|_| visually_ltr || fragment.tail_index == super::flow_composition::NO_BOUNDARY)
+        {
             let _ = self.position_boundary(
                 line,
                 cut_index,
@@ -2361,7 +2411,12 @@ impl PositionedGlyphArena {
         };
         let mut pieces = 0;
         let mut glyph = boundary.source_glyph_start;
-        for cluster in source_cluster..last {
+        for ordinal in 0..last - source_cluster {
+            let cluster = if split && bidi_level & 1 != 0 {
+                last - 1 - ordinal
+            } else {
+                source_cluster + ordinal
+            };
             let (piece_start, piece_origin) = (glyph, cursor);
             if split {
                 let start = clusters.starts[cluster];

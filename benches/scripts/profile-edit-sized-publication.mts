@@ -1,13 +1,13 @@
 /* @workflow {
   "name": "benchmark:edit-sized-publication-profile",
   "summary": "Profile installed-package retained edits or width reflow, optionally with a named shaper Wasm artifact.",
-  "requirements": "One packed @pmndrs/glyph .tgz artifact and the authenticated Labs font fixtures. Accepts --artifact, --output, --case, --boundary, --count, --position, --iterations, --warmups, and optional --wasm. prepared-read accepts 100 or 1000 labels; width-reflow uses one 22k-glyph paragraph. Both accept preparation or publication boundaries.",
-  "writes": "A CPU profile, summary, and artifact manifest under --output (default .cache/edit-sized-publication-profile)."
+  "requirements": "One packed @pmndrs/glyph .tgz artifact and the authenticated Labs font fixtures. Accepts --artifact, --output, --case, --boundary, --count, --position, --iterations, --warmups, and optional --wasm. prepared-read accepts 100 or 1000 labels; width-reflow and width-inspection use one 22k-glyph paragraph. Both accept preparation or publication boundaries.",
+  "writes": "A CPU profile, summary, validation status, install lock and package manifests, harness source copies, and artifact manifest under --output (default .cache/edit-sized-publication-profile)."
 } */
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { cpus, tmpdir } from 'node:os';
 import { basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -42,11 +42,47 @@ try {
     await requireFile(wasm, '--wasm');
     await copyFile(wasm, resolve(packageRoot, 'dist/text-shaper.wasm'));
   }
-  await run(
-    process.execPath,
-    ['--expose-gc', resolve(benchesRoot, 'labs/package/edit-sized-publication.profile.mts')],
-    benchesRoot,
-    {
+  const workloadSource = resolve(benchesRoot, 'labs/package/edit-sized-publication.profile.mts');
+  const wrapperSource = fileURLToPath(import.meta.url);
+  await Promise.all([
+    copyFile(resolve(temporaryRoot, 'package.json'), resolve(output, 'install-package.json')),
+    copyFile(resolve(temporaryRoot, 'pnpm-lock.yaml'), resolve(output, 'install-pnpm-lock.yaml')),
+    copyFile(wrapperSource, resolve(output, 'profile-wrapper.mts')),
+    copyFile(workloadSource, resolve(output, 'profile-workload.mts')),
+  ]);
+  const digest = async (path: string) =>
+    createHash('sha256')
+      .update(await readFile(path))
+      .digest('hex');
+  const manifest = {
+    artifact: { file: basename(artifact), sha256: await digest(artifact) },
+    generatedAt: new Date().toISOString(),
+    harness: {
+      wrapperSha256: await digest(wrapperSource),
+      workloadSha256: await digest(workloadSource),
+    },
+    installed: {
+      packageSha256: await digest(resolve(output, 'install-package.json')),
+      lockSha256: await digest(resolve(output, 'install-pnpm-lock.yaml')),
+      textShaperWasmSha256: await digest(resolve(packageRoot, 'dist/text-shaper.wasm')),
+    },
+    runtime: {
+      cpu: cpus()[0]?.model.trim(),
+      arch: process.arch,
+      platform: process.platform,
+      node: process.versions.node,
+    },
+    namedWasm: options.wasm,
+    options,
+  };
+  const writeManifest = async (status: 'pending' | 'accepted' | 'not-accepted', sampleBindings?: unknown) =>
+    writeFile(
+      resolve(output, 'manifest.json'),
+      `${JSON.stringify({ ...manifest, ...(sampleBindings === undefined ? {} : { sampleBindings }), status }, null, 2)}\n`,
+    );
+  await writeManifest('pending');
+  try {
+    await run(process.execPath, ['--expose-gc', workloadSource], benchesRoot, {
       GLYPH_EDIT_PROFILE_CASE: options.profileCase,
       GLYPH_EDIT_PROFILE_BOUNDARY: options.boundary,
       GLYPH_EDIT_PROFILE_COUNT: String(options.count),
@@ -55,25 +91,28 @@ try {
       GLYPH_EDIT_PROFILE_POSITION: options.position,
       GLYPH_EDIT_PROFILE_WARMUPS: String(options.warmups),
       GLYPH_LABS_PACKAGE_ROOT: packageRoot,
-    },
-  );
-  const artifactBytes = await readFile(artifact);
-  await writeFile(
-    resolve(output, 'manifest.json'),
-    `${JSON.stringify(
-      {
-        artifact: {
-          file: basename(artifact),
-          sha256: createHash('sha256').update(artifactBytes).digest('hex'),
-        },
-        generatedAt: new Date().toISOString(),
-        namedWasm: options.wasm,
-        options,
-      },
-      null,
-      2,
-    )}\n`,
-  );
+    });
+    let sampleBindings: unknown;
+    if (options.profileCase === 'width-inspection') {
+      const validation = JSON.parse(await readFile(resolve(output, 'validation.json'), 'utf8')) as { status?: string };
+      if (validation.status !== 'passed') throw new Error('width-inspection cold oracle did not pass');
+      const summary = JSON.parse(await readFile(resolve(output, 'summary.json'), 'utf8')) as {
+        sampleBindings?: unknown;
+      };
+      if (summary.sampleBindings === undefined) throw new Error('installed inspection sample bindings are missing');
+      sampleBindings = summary.sampleBindings;
+    }
+    if (
+      (await digest(wrapperSource)) !== manifest.harness.wrapperSha256 ||
+      (await digest(workloadSource)) !== manifest.harness.workloadSha256
+    ) {
+      throw new Error('profile harness source changed during capture');
+    }
+    await writeManifest('accepted', sampleBindings);
+  } catch (error) {
+    await writeManifest('not-accepted');
+    throw error;
+  }
   process.stdout.write(`Edit-sized publication profile: ${output}\n`);
 } finally {
   await rm(temporaryRoot, { recursive: true, force: true });
@@ -92,7 +131,8 @@ interface Options {
     | 'color-only'
     | 'interleaved-read'
     | 'prepared-read'
-    | 'width-reflow';
+    | 'width-reflow'
+    | 'width-inspection';
   readonly warmups: number;
   readonly wasm?: string;
 }
@@ -111,9 +151,15 @@ function parseOptions(arguments_: readonly string[]): Options {
   if (artifactOption === undefined) throw new Error('--artifact is required');
   const profileCase = values.get('case') ?? 'same-length';
   if (
-    !['same-length', 'length-changing', 'color-only', 'interleaved-read', 'prepared-read', 'width-reflow'].includes(
-      profileCase,
-    )
+    ![
+      'same-length',
+      'length-changing',
+      'color-only',
+      'interleaved-read',
+      'prepared-read',
+      'width-reflow',
+      'width-inspection',
+    ].includes(profileCase)
   ) {
     throw new Error(`Unknown --case: ${profileCase}`);
   }
@@ -121,12 +167,18 @@ function parseOptions(arguments_: readonly string[]): Options {
   if (position !== 'first' && position !== 'last') throw new Error(`Unknown --position: ${position}`);
   const boundary = values.get('boundary') ?? 'publication';
   if (boundary !== 'preparation' && boundary !== 'publication') throw new Error(`Unknown --boundary: ${boundary}`);
-  if (boundary === 'preparation' && profileCase !== 'prepared-read' && profileCase !== 'width-reflow') {
-    throw new Error('--boundary preparation requires --case prepared-read or width-reflow');
+  if (
+    boundary === 'preparation' &&
+    profileCase !== 'prepared-read' &&
+    profileCase !== 'width-reflow' &&
+    profileCase !== 'width-inspection'
+  ) {
+    throw new Error('--boundary preparation requires --case prepared-read, width-reflow, or width-inspection');
   }
-  const count = positiveInteger(values.get('count') ?? (profileCase === 'width-reflow' ? '1' : '1000'), 'count');
-  if (profileCase === 'width-reflow' && count !== 1) {
-    throw new RangeError('--case width-reflow requires --count 1');
+  const widthCase = profileCase === 'width-reflow' || profileCase === 'width-inspection';
+  const count = positiveInteger(values.get('count') ?? (widthCase ? '1' : '1000'), 'count');
+  if (widthCase && count !== 1) {
+    throw new RangeError('--case width-reflow and width-inspection require --count 1');
   }
   if (profileCase === 'prepared-read' && count !== 100 && count !== 1000) {
     throw new RangeError('--case prepared-read requires --count 100 or 1000');
