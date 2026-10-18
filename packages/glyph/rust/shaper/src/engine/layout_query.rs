@@ -7,8 +7,8 @@ use alloc::vec::Vec;
 
 use super::{
     EngineError,
-    cluster_state::{CLUSTER_HARD_BREAK, ClusterArena},
-    flow_composition::{FlowDropCap, FlowFragment, FlowLayoutArena, FlowLine, NO_BOUNDARY},
+    cluster_state::ClusterArena,
+    flow_composition::{FlowDropCap, FlowFragment, FlowLayoutArena, FlowLine},
     flow_geometry::FlowGeometryArena,
     frame::{AXIS_AT_MOST, AXIS_EXACT, AXIS_UNCONSTRAINED},
     placement_state::SegmentTranslation,

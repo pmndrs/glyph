@@ -3463,6 +3463,8 @@ mod tests {
                                 units_per_em: 1_000,
                                 ascender: 800,
                                 cap_height: 700,
+                                x_height: 500,
+                                height_fallbacks: 0,
                                 descender: -200,
                                 line_gap: 0,
                                 underline_position: -100,
