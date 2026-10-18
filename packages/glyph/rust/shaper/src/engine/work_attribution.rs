@@ -6,6 +6,16 @@ use core::cell::Cell;
 pub(crate) struct Work {
     pub harfrust_calls: usize,
     pub harfrust_utf16_units: usize,
+    /// Completed whole scratch-to-pending ShapeArena ownership transfers.
+    pub shape_scratch_arena_moves: usize,
+    /// Glyph rows transferred with those arenas; no glyph payload is copied.
+    pub shape_scratch_moved_glyphs: usize,
+    /// Glyph rows copied by ShapeArena range appends, including retained rows.
+    pub shape_range_copied_glyphs: usize,
+    /// Completed direct ClusterArena full builds.
+    pub cluster_full_builds: usize,
+    /// Old cluster rows copied by ClusterArena::copy_from, across all callers.
+    pub cluster_copied_old_rows: usize,
     pub cluster_full_glyph_visits: usize,
     pub cluster_retained_glyph_loop_visits: usize,
     pub run_local_glyph_visits: usize,
@@ -87,6 +97,11 @@ std::thread_local! {
     static WORK: Cell<Work> = const { Cell::new(Work {
         harfrust_calls: 0,
         harfrust_utf16_units: 0,
+        shape_scratch_arena_moves: 0,
+        shape_scratch_moved_glyphs: 0,
+        shape_range_copied_glyphs: 0,
+        cluster_full_builds: 0,
+        cluster_copied_old_rows: 0,
         cluster_full_glyph_visits: 0,
         cluster_retained_glyph_loop_visits: 0,
         run_local_glyph_visits: 0,

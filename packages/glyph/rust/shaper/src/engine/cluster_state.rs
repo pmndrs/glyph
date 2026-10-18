@@ -489,6 +489,8 @@ impl ClusterArena {
         self.rebuild_layout_runs_for_shaping(runs)?;
         self.apply_break_flags(unicode)?;
         self.refresh_layout_units()?;
+        #[cfg(test)]
+        super::work_attribution::record(|work| work.cluster_full_builds += 1);
         Ok(())
     }
 
@@ -1065,6 +1067,8 @@ impl ClusterArena {
         self.layout_runs
             .runs
             .extend_from_slice(&source.layout_runs.runs);
+        #[cfg(test)]
+        super::work_attribution::record(|work| work.cluster_copied_old_rows += source.starts.len());
         Ok(())
     }
 

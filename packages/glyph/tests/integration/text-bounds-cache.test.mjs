@@ -57,7 +57,7 @@ test('prepared measurement leaves visible ink bounds queryable and cached, with 
   assert.equal(preparations(), 1, 'creation prepares the paragraph once');
   expected.translate(new THREE.Vector3(summary.anchorOffset.x, -summary.anchorOffset.y, 0));
   const actual = text.computeBoundingBox().clone();
-  assert.equal(actual.isEmpty(), false, 'visible ink must not become a cached empty box');
+  assert.equal(actual.isEmpty(), false, 'unknown ink must not become a cached empty box');
   sameBox(actual, expected, 'native owner-local ink');
   assert.equal(preparations(), 1, 'bounding-box demand reuses the prepared paragraph');
   for (let repeat = 0; repeat < 3; repeat++) {
@@ -74,18 +74,18 @@ test('empty and spaces-only bounds remain valid cached answers after prepared me
   const handle = await createThreeTestHandle(t);
   const preparations = countPreparations(t);
   for (const content of ['', '   ']) {
-    const before = preparations();
     const text = handle.createText({ font, text: content });
     t.after(() => text.dispose());
+    const before = preparations();
     text.measure();
     const box = text.computeBoundingBox();
     if (content.length === 0) {
       assert.equal(box.isEmpty(), true, 'zero glyphs have no ink box');
-      assert.equal(preparations() - before, 1, 'creation and first demand prepare the empty paragraph once');
+      assert.equal(preparations() - before, 1, 'first demand prepares the unbound empty paragraph once');
     } else {
       assert.equal(box.getSize(new THREE.Vector3()).y, 0, 'spaces have no ink area');
       assert.ok(box.min.toArray().every(Number.isFinite), 'positioned whitespace bounds are finite');
-      assert.equal(preparations() - before, 1, 'creation and first demand prepare the whitespace paragraph once');
+      assert.equal(preparations() - before, 1, 'first demand prepares the unbound whitespace paragraph once');
     }
     const knownPreparations = preparations();
     text.measure();

@@ -5087,6 +5087,42 @@ impl ParagraphState {
                     self.boundary_shape_scratch.clear();
                     return Ok(ShapeAttempt::RetryWholeRun);
                 }
+                // A complete sole run is already shaped in its final coordinates. Move its
+                // owned columns into pending; the old empty pending arena becomes reusable
+                // scratch, while committed shape remains available for reconciliation.
+                if source_run_index == 0
+                    && self.shaping_runs.committed().runs().len() == 1
+                    && self.shaping_runs.active().runs().len() == 1
+                    && run_count == 1
+                    && affected_shape_index == 0
+                    && self.shape_window_scratch.len() == 1
+                    && old_run.text_start == 0
+                    && new_run.text_start == 0
+                    && usize::try_from(old_run.text_end).ok()
+                        == Some(self.text.committed().units.len())
+                    && usize::try_from(new_run.text_end).ok()
+                        == Some(self.text.active().units.len())
+                    && affected_shape.text_start == old_run.text_start
+                    && affected_shape.text_end == old_run.text_end
+                    && run_glyph_start == 0
+                    && run_glyph_end == self.shape.committed().glyph_ids.len()
+                    && window.old_start == old_run.text_start
+                    && window.old_end == old_run.text_end
+                    && window.old_glyph_start == run_glyph_start
+                    && window.old_glyph_end == run_glyph_end
+                    && window.new_start == new_run.text_start
+                    && window.new_end == new_run.text_end
+                    && window.probe_end == window.new_end
+                {
+                    #[cfg(test)]
+                    super::work_attribution::record(|work| {
+                        work.shape_scratch_arena_moves += 1;
+                        work.shape_scratch_moved_glyphs +=
+                            self.boundary_shape_scratch.glyph_ids.len();
+                    });
+                    core::mem::swap(&mut self.boundary_shape_scratch, self.shape.pending_mut());
+                    return Ok(ShapeAttempt::Prepared);
+                }
                 {
                     let scratch = &self.boundary_shape_scratch;
                     self.shape.pending_mut().append_text_range_from(
@@ -5202,7 +5238,20 @@ impl ParagraphState {
             runs,
             shape,
         };
+        // The sole source run owns every cluster. Direct construction avoids copying old
+        // flat columns before replacing them, while equal grapheme/text cardinality keeps
+        // the existing full builder's reserve at the retained cluster granularity.
+        let full_source_run = self.incremental_shape_source_run == Some(0)
+            && runs.len() == 1
+            && self.shaping_runs.committed().runs().len() == 1
+            && runs[0].text_start == 0
+            && usize::try_from(runs[0].text_end).ok() == Some(text.len())
+            && self.shaping_runs.committed().runs()[0].text_start == 0
+            && usize::try_from(self.shaping_runs.committed().runs()[0].text_end).ok()
+                == Some(self.text.committed().units.len())
+            && unicode.grapheme_boundaries().len().saturating_sub(1) == text.len();
         if let Some(source_run) = self.incremental_shape_source_run
+            && !full_source_run
             && let Some((cluster_start, cluster_end)) = {
                 let (pending_clusters, committed_clusters) = self.clusters.derive_mut();
                 pending_clusters.rebuild_source_run_if_topology_is_stable(
@@ -13290,6 +13339,17 @@ mod tests {
             request.text_mutations =
                 parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
 
+            let old_pending_capacity = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap()
+                .shape
+                .pending()
+                .glyph_ids
+                .capacity();
+            super::super::work_attribution::reset();
             let before_calls = crate::SHAPINGS.with(core::cell::Cell::get);
             let before_units = crate::SHAPED_UNITS.with(core::cell::Cell::get);
             let measured = engine
@@ -13303,6 +13363,33 @@ mod tests {
                 .unwrap();
             let source_run = candidate.incremental_shape_source_run;
             let windows = candidate.shape_window_scratch.clone();
+            let work = super::super::work_attribution::snapshot();
+            assert_eq!(work.shape_scratch_arena_moves, 1);
+            assert_eq!(work.shape_range_copied_glyphs, 0);
+            assert_eq!(work.cluster_full_builds, 1);
+            assert_eq!(work.cluster_copied_old_rows, 0);
+            assert_eq!(
+                work.shape_scratch_moved_glyphs,
+                candidate.shape.pending().glyph_ids.len()
+            );
+            assert_eq!(
+                candidate.boundary_shape_scratch.glyph_ids.capacity(),
+                old_pending_capacity
+            );
+            let pending_shape = candidate.shape.pending();
+            let mut appended_shape = ShapeArena::default();
+            appended_shape
+                .append_text_range_from(pending_shape, 0, 0, 0, 10, 0)
+                .unwrap();
+            appended_shape.collapse_appended_runs(0, 0, 10).unwrap();
+            assert_eq!(pending_shape.runs, appended_shape.runs);
+            assert_eq!(pending_shape.glyph_ids, appended_shape.glyph_ids);
+            assert_eq!(pending_shape.clusters, appended_shape.clusters);
+            assert_eq!(pending_shape.x_advances, appended_shape.x_advances);
+            assert_eq!(pending_shape.y_advances, appended_shape.y_advances);
+            assert_eq!(pending_shape.x_offsets, appended_shape.x_offsets);
+            assert_eq!(pending_shape.y_offsets, appended_shape.y_offsets);
+            assert_eq!(pending_shape.glyph_flags, appended_shape.glyph_flags);
             engine.commit_measure(measured).unwrap();
 
             let calls = crate::SHAPINGS.with(core::cell::Cell::get) - before_calls;
@@ -13330,8 +13417,55 @@ mod tests {
                 .unwrap()
                 .first_paragraph_state()
                 .unwrap();
+            assert_eq!(warm.shape.committed().runs, cold.shape.committed().runs);
             assert_visible_shape_equal(warm, cold, "short Inter label assignment");
         }
+    }
+
+    #[test]
+    fn combining_cluster_keeps_retained_cluster_rebuild() {
+        let (mut engine, mut shaper) = shaped_inter_engine("a\u{301}bc");
+        let replacement = utf16("e");
+        let bytes = text_mutation_bytes(&[(0, 1, &replacement)]);
+        let mut request = update(1, 1, 1);
+        request.limits.max_clusters = 256;
+        request.limits.max_lines = 256;
+        request.limits.max_output_bytes = 1 << 20;
+        request.text_mutations =
+            parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        super::super::work_attribution::reset();
+        let measured = engine
+            .measure_paragraph_with_shaper(&mut shaper, request, 1)
+            .unwrap();
+        let candidate = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap();
+        assert_eq!(candidate.incremental_shape_source_run, Some(0));
+        assert!(
+            candidate.unicode.active().grapheme_boundaries().len() - 1
+                < candidate.text.active().units.len()
+        );
+        let work = super::super::work_attribution::snapshot();
+        assert_eq!(work.cluster_copied_old_rows, 3);
+        assert_eq!(work.cluster_full_builds, 0);
+        engine.commit_measure(measured).unwrap();
+        let (cold_engine, _) = shaped_inter_engine("e\u{301}bc");
+        let warm = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap();
+        let cold = cold_engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap();
+        assert_visible_shape_equal(warm, cold, "combining-cluster retained rebuild");
     }
 
     #[test]
