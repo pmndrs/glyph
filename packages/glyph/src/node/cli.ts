@@ -69,6 +69,8 @@ export async function runCli(
       if (parsed.json) io.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
       else {
         io.stdout.write(`${parsed.direct.input} -> ${parsed.direct.output}\n`);
+        if (report.preparation?.preparation === 'whole-face-fallback')
+          io.stdout.write(wholeFaceFallbackMessage(report.preparation, report.execution.outputs[0]!.bytes));
         io.stdout.write(`Baked 1 font in ${report.execution.timingsMs.total.toFixed(2)} ms.\n`);
       }
       return 0;
@@ -255,6 +257,7 @@ interface DirectBakeArguments {
   readonly slug: boolean;
   readonly slugOptions?: SlugOptions;
   readonly unicodeRanges?: readonly UnicodeRange[];
+  readonly allowWholeFaceFallback: boolean;
   readonly check: boolean;
   readonly split: boolean;
   readonly force: boolean;
@@ -295,6 +298,7 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
   let slug = false;
   let slugOptions: SlugOptions | undefined;
   let unicodeRanges: readonly UnicodeRange[] | undefined;
+  let allowWholeFaceFallback = false;
   let check = false;
   let json = false;
   let help = false;
@@ -349,6 +353,11 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
     } else if (argument === '--unicodes') {
       if (unicodeRanges !== undefined) throw new TypeError('--unicodes may be provided only once');
       unicodeRanges = parseUnicodeSet(valueAfter(argv, ++index, argument));
+    } else if (argument === '--allow-whole-face-fallback') {
+      if (allowWholeFaceFallback) {
+        throw new TypeError('--allow-whole-face-fallback may be provided only once');
+      }
+      allowWholeFaceFallback = true;
     } else if (argument === '--check') {
       check = true;
     } else if (argument === '--split') {
@@ -370,6 +379,7 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
     msdf ||
     slug ||
     unicodeRanges !== undefined ||
+    allowWholeFaceFallback ||
     check ||
     split ||
     force ||
@@ -381,6 +391,9 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
     throw new TypeError('direct font options cannot be mixed with project discovery');
   if (directSelected && input === undefined) {
     throw new TypeError('direct font baking requires --input');
+  }
+  if (allowWholeFaceFallback && unicodeRanges === undefined) {
+    throw new TypeError('--allow-whole-face-fallback requires --unicodes');
   }
   return {
     project: {
@@ -403,6 +416,7 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
             slug,
             ...(slugOptions === undefined ? {} : { slugOptions }),
             ...(unicodeRanges === undefined ? {} : { unicodeRanges }),
+            allowWholeFaceFallback,
             check,
             split,
             force,
@@ -451,7 +465,7 @@ function parseUnicodeSet(value: string): readonly UnicodeRange[] {
 async function bakeDirect(
   options: DirectBakeArguments,
   io: { readonly stdout: { write(text: string): unknown } },
-): Promise<NodeFontBakeReport | undefined> {
+): Promise<NodeFontBakeReport<number> | undefined> {
   const { plans, resolved } = await directRasterPlans(options);
   if (!options.check && !options.force) {
     const freshness = await fontIsUpToDate({
@@ -460,6 +474,7 @@ async function bakeDirect(
       fontFaceIndex: options.fontFaceIndex,
       outlines: options.outlines,
       ...(options.unicodeRanges === undefined ? {} : { unicodeRanges: options.unicodeRanges }),
+      allowWholeFaceFallback: options.allowWholeFaceFallback,
       rasters: resolved.map((plan) => ({
         rasterKey: plan.rasterKey,
         kind: plan.baker.kind,
@@ -468,6 +483,8 @@ async function bakeDirect(
       split: options.split,
     });
     if (freshness.fresh) {
+      if (freshness.preparation?.preparation === 'whole-face-fallback')
+        io.stdout.write(wholeFaceFallbackMessage(freshness.preparation, freshness.outputBytes));
       io.stdout.write(`${options.output} is up to date — ${freshness.reason}\n`);
       return undefined;
     }
@@ -486,6 +503,7 @@ async function bakeDirect(
       output,
       font: { fontFaceIndex: options.fontFaceIndex, outlines: options.outlines },
       ...(options.unicodeRanges === undefined ? {} : { unicodeRanges: options.unicodeRanges }),
+      allowWholeFaceFallback: options.allowWholeFaceFallback,
       rasters: plans,
     });
     if (options.check) {
@@ -522,6 +540,16 @@ async function bakeDirect(
   }
 }
 
+function wholeFaceFallbackMessage(
+  preparation: NonNullable<NodeFontBakeReport<number>['preparation']>,
+  outputBytes: number,
+): string {
+  return (
+    `CFF/CFF2 Unicode subsetting is unavailable; retained whole face ${preparation.fontFaceIndex} ` +
+    `(${preparation.preparedBytes} source bytes; ${outputBytes} output bytes).\n`
+  );
+}
+
 async function createGlyphMap(options: DirectBakeArguments): Promise<Uint8Array> {
   const inspection = await inspectFont({ input: options.input, fontFaceIndex: options.fontFaceIndex });
   const names = new Map<string, number>();
@@ -547,11 +575,11 @@ function selectedCodePoint(codePoint: number, ranges: readonly UnicodeRange[] | 
 }
 
 function reportWithPublishedOutput(
-  report: NodeFontBakeReport,
+  report: NodeFontBakeReport<number>,
   stagedOutput: string,
   publishedOutput: string,
   publishDuration: number,
-): NodeFontBakeReport {
+): NodeFontBakeReport<number> {
   return {
     ...report,
     execution: {
@@ -744,6 +772,8 @@ Direct font options:
   --unicodes <set>       Unicode set used to prepare a smaller source font
                         Example: U+0020-007E,U+00A0-00FF,U+4E00-9FFF
                         Selects code points, not raw glyph IDs
+  --allow-whole-face-fallback
+                        With --unicodes, explicitly retain a CFF/CFF2 face when subsetting is unavailable
   --outlines             Also keep every glyph's outline, read with outlineAt() on glyphs() or readGlyphs()
 
 Raster options:

@@ -20,7 +20,9 @@
     "dist/runtime-bake.d.ts",
     "dist/three.d.ts",
     "dist/three/*.d.ts",
-    "dist/shaders/tsl/**/*.d.ts"
+    "dist/shaders/tsl/**/*.d.ts",
+    "tests/types/font-freshness-emitted.test.ts",
+    "tests/types/font-preparation-emitted.test.ts"
   ],
   "exclude": [
     "dist/bakers/*-validator.d.ts",

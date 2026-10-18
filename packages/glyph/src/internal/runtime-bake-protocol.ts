@@ -26,6 +26,7 @@ export interface RuntimeBakeRequest {
   readonly font: FontBakeDescriptor;
   readonly cache?: { readonly expiresAt: number };
   readonly unicodeRanges?: readonly RuntimeBakeUnicodeRange[];
+  readonly allowWholeFaceFallback?: boolean;
   readonly rasters?: readonly RuntimeBakeRaster[];
 }
 
@@ -92,6 +93,7 @@ export function isRuntimeBakeRequest(value: unknown): value is RuntimeBakeReques
         Number.isSafeInteger(value.cache.expiresAt) &&
         (value.cache.expiresAt as number) > 0)) &&
     (value.unicodeRanges === undefined || isUnicodeRanges(value.unicodeRanges)) &&
+    (value.allowWholeFaceFallback === undefined || typeof value.allowWholeFaceFallback === 'boolean') &&
     (value.rasters === undefined || isRasters(value.rasters))
   );
 }

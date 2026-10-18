@@ -91,6 +91,7 @@ export type LoadFontInput =
       readonly source: string | URL | FontBytesInput;
       readonly runtimeBake: RuntimeFontBake;
       readonly unicodeRanges?: readonly RuntimeBakeUnicodeRange[];
+      readonly allowWholeFaceFallback?: boolean;
     };
 
 /** Nonempty raster-input tuple used by one multi-raster font load. */
@@ -152,6 +153,7 @@ export interface RuntimeFontBakeRequest {
   /** Persistent derived-artifact lifetime inherited from the source response. Omitted means memory-only. */
   readonly cache?: { readonly expiresAt: number };
   readonly unicodeRanges?: readonly RuntimeBakeUnicodeRange[];
+  readonly allowWholeFaceFallback?: boolean;
   readonly rasters?: readonly RuntimeBakeRaster[];
   readonly signal?: AbortSignal;
   readonly onProgress?: BakeProgressListener;
@@ -792,6 +794,7 @@ interface PreparedFontFaceSourceRequest {
   readonly input: FontInput;
   readonly runtimeBake?: RuntimeFontBake;
   readonly unicodeRanges?: readonly RuntimeBakeUnicodeRange[];
+  readonly allowWholeFaceFallback?: boolean;
   readonly initialRasters: readonly PreparedRasterRequest[];
   readonly key: string;
 }
@@ -1412,6 +1415,9 @@ async function loadFontFaceSourceFont(
     return bake({
       ...request,
       ...(prepared.unicodeRanges === undefined ? {} : { unicodeRanges: prepared.unicodeRanges }),
+      ...(prepared.allowWholeFaceFallback === undefined
+        ? {}
+        : { allowWholeFaceFallback: prepared.allowWholeFaceFallback }),
       rasters: workerRasters,
     });
   };
@@ -1569,10 +1575,13 @@ function prepareFontFaceSourceRequest(
     input: normalizedInput.input,
     ...(normalizedInput.runtimeBake === undefined ? {} : { runtimeBake: normalizedInput.runtimeBake }),
     ...(normalizedInput.unicodeRanges === undefined ? {} : { unicodeRanges: normalizedInput.unicodeRanges }),
+    ...(normalizedInput.allowWholeFaceFallback === undefined
+      ? {}
+      : { allowWholeFaceFallback: normalizedInput.allowWholeFaceFallback }),
     initialRasters: rasters,
     key: `${requestKey(resolved)}:runtime:${functionIdentity(normalizedInput.runtimeBake ?? config.runtimeBake)}:ranges:${canonicalJson(
       normalizedInput.unicodeRanges?.map(({ start, end }) => ({ start, end })) ?? null,
-    )}:font-face-source`,
+    )}${normalizedInput.allowWholeFaceFallback === true ? ':whole-face-fallback' : ''}:font-face-source`,
   };
 }
 
@@ -1600,6 +1609,7 @@ function prepareLoadInput(value: unknown): {
   readonly input: FontInput;
   readonly runtimeBake?: RuntimeFontBake;
   readonly unicodeRanges?: readonly RuntimeBakeUnicodeRange[];
+  readonly allowWholeFaceFallback?: boolean;
 } {
   if (isNonArrayObject(value) && Object.hasOwn(value, 'runtimeBake')) {
     const runtimeBake = value.runtimeBake;
@@ -1608,10 +1618,15 @@ function prepareLoadInput(value: unknown): {
     if (source === undefined) throw new TypeError('runtime-baked font request requires a source');
     const unicodeRanges =
       value.unicodeRanges === undefined ? undefined : normalizeUnicodeRangeInput(value.unicodeRanges);
+    if (value.allowWholeFaceFallback !== undefined && typeof value.allowWholeFaceFallback !== 'boolean')
+      throw new TypeError('font request allowWholeFaceFallback must be a boolean');
+    if (value.allowWholeFaceFallback === true && unicodeRanges === undefined)
+      throw new TypeError('font request allowWholeFaceFallback requires unicodeRanges');
     return {
       input: { source, baked: null },
       runtimeBake,
       ...(unicodeRanges === undefined ? {} : { unicodeRanges }),
+      ...(value.allowWholeFaceFallback === undefined ? {} : { allowWholeFaceFallback: value.allowWholeFaceFallback }),
     };
   }
   return { input: validatedFontInput(value) };

@@ -16,6 +16,10 @@ import { cloneImmutableFont, immutableFontResources, immutableFontVariantIdentit
 import { fingerprint128, fingerprintDomain } from '../../dist/internal/content-digest.js';
 
 const fixtureDirectory = new URL('../../../../benches/fixtures/fonts/inter-v4.1/', import.meta.url);
+const dancingUrl = new URL(
+  '../../../../benches/fixtures/fonts/dancing-script-3.000/DancingScript-Regular.otf',
+  import.meta.url,
+);
 const fixturePromise = Promise.all([
   readFile(new URL('Inter-Regular.ttf', fixtureDirectory)),
   readFile(new URL(fontBakerWasmUrl)),
@@ -32,6 +36,7 @@ test('the runtime host transfers source and accepts one authoritative font artif
   const { source, artifact } = await fixturePromise;
   const originalWorker = globalThis.Worker;
   const workers = [];
+  const messages = [];
   let terminations = 0;
   let malformedArtifacts = false;
   let activePosts = 0;
@@ -53,6 +58,7 @@ test('the runtime host transfers source and accepts one authoritative font artif
       maximumActivePosts = Math.max(maximumActivePosts, activePosts);
       assert.deepEqual(transfer, [value.source]);
       const received = structuredClone(value, { transfer });
+      messages.push(received);
       assert.equal(value.source.byteLength, 0);
       assert.deepEqual(Buffer.from(received.source), Buffer.from(source));
       queueMicrotask(() => {
@@ -101,9 +107,12 @@ test('the runtime host transfers source and accepts one authoritative font artif
   const result = await bakeFontInWorker({
     source: sourceCopy,
     sourceUrl: 'https://assets.test/Inter-Regular.ttf',
+    unicodeRanges: [{ start: 0x41, end: 0x41 }],
+    allowWholeFaceFallback: true,
   });
 
   assert.deepEqual(result, Uint8Array.from(artifact));
+  assert.equal(messages[0].allowWholeFaceFallback, true);
   assert.deepEqual(sourceCopy, Uint8Array.from(source));
   assert.equal(terminations, 1, 'a successful idle Worker terminates immediately');
 
@@ -371,6 +380,68 @@ test('the Worker prepares once and matches the Node canonical GLB for every buil
   assert.deepEqual(transfer, [value.artifacts[0].bytes]);
 });
 
+test('the Worker applies explicit CFF whole-face fallback to the same bytes as Node', async (t) => {
+  const source = await readFile(dancingUrl);
+  const root = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-runtime-cff-fallback-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const output = join(root, 'DancingScript.font.glb');
+  const rasterPlan = { baker: bitmapBaker, packaging: embeddedPackaging(), options: { strikes: [16] } };
+  const plan = await resolveRasterBakePlan(rasterPlan);
+  await bakeFont({
+    input: dancingUrl,
+    output,
+    font: { fontFaceIndex: 0 },
+    unicodeRanges: [{ start: 0x41, end: 0x41 }],
+    allowWholeFaceFallback: true,
+    rasters: [rasterPlan],
+  });
+  const expected = await readFile(output);
+
+  const originals = {
+    addEventListener: globalThis.addEventListener,
+    fetch: globalThis.fetch,
+    postMessage: globalThis.postMessage,
+  };
+  let receive;
+  const result = Promise.withResolvers();
+  globalThis.addEventListener = (type, listener) => {
+    if (type === 'message') receive = listener;
+  };
+  globalThis.fetch = async (input) => new Response(await readFile(new URL(String(input))));
+  globalThis.postMessage = (value) => {
+    if (value.type === 'bake-font-result-v0') result.resolve(value);
+  };
+  t.after(() => {
+    restoreGlobal('addEventListener', originals.addEventListener);
+    restoreGlobal('fetch', originals.fetch);
+    restoreGlobal('postMessage', originals.postMessage);
+  });
+
+  await import(`../../dist/runtime-bake-worker.js?test=cff-fallback-${Date.now()}`);
+  receive({
+    data: {
+      type: 'bake-font-v0',
+      id: 24,
+      source: source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength),
+      font: { formatVersion: 0, fontFaceIndex: 0 },
+      unicodeRanges: [{ start: 0x41, end: 0x41 }],
+      allowWholeFaceFallback: true,
+      rasters: [
+        {
+          kind: plan.baker.kind,
+          extension: plan.baker.extension,
+          version: plan.baker.version,
+          descriptor: plan.descriptor,
+          rasterKey: plan.rasterKey,
+        },
+      ],
+    },
+  });
+  const response = await result.promise;
+  assert.equal(response.ok, true);
+  assert.deepEqual(Buffer.from(response.artifacts[0].bytes), expected);
+});
+
 test('one portable source load sends its normalized ranges and complete raster tuple once', async (t) => {
   const { source } = await fixturePromise;
   const baked = await readFile(
@@ -389,6 +460,7 @@ test('one portable source load sends its normalized ranges and complete raster t
         { start: 0x41, end: 0x5a },
         { start: 0x20, end: 0x7e },
       ],
+      allowWholeFaceFallback: true,
     },
     [bitmap({ strikes: [32] }), msdf, slug],
   );
@@ -400,6 +472,7 @@ test('one portable source load sends its normalized ranges and complete raster t
 
   assert.equal(requests.length, 1);
   assert.deepEqual(requests[0].unicodeRanges, [{ start: 0x20, end: 0x7e }]);
+  assert.equal(requests[0].allowWholeFaceFallback, true);
   assert.deepEqual(
     requests[0].rasters.map(({ kind }) => kind),
     ['bitmap', 'msdf', 'slug'],

@@ -2,6 +2,10 @@ use pmndrs_glyph_font_baker::{BakeDescriptorV0, BakeErrorCode, abi_json, bake_fo
 
 const INTER: &[u8] =
     include_bytes!("../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
+#[cfg(feature = "subsetting")]
+const DANCING: &[u8] = include_bytes!(
+    "../../../../../benches/fixtures/fonts/dancing-script-3.000/DancingScript-Regular.otf"
+);
 
 #[test]
 fn generated_abi_is_valid_and_names_the_public_exports() {
@@ -114,6 +118,45 @@ fn public_api_selects_one_collection_face_and_rejects_an_unknown_index() {
             .code,
         BakeErrorCode::InvalidFont,
     );
+}
+
+#[cfg(feature = "subsetting")]
+#[test]
+fn cff_fallback_keeps_the_selected_collection_face_and_all_original_bytes() {
+    use pmndrs_glyph_font_baker::{
+        FontPreparationV0, FontSelectionV0, UnicodeRangeV0, prepare_font,
+    };
+
+    let collection = two_face_collection(DANCING);
+    let prepared = prepare_font(
+        &collection,
+        FontSelectionV0 {
+            format_version: 0,
+            font_face_index: 1,
+            unicode_ranges: vec![UnicodeRangeV0 {
+                start: u32::from('A'),
+                end: u32::from('A'),
+            }],
+            allow_whole_face_fallback: true,
+        },
+    )
+    .expect("explicit collection fallback");
+    assert!(matches!(
+        prepared.report.preparation,
+        FontPreparationV0::WholeFaceFallback
+    ));
+    assert_eq!(prepared.report.font_face_index, 1);
+    assert_eq!(prepared.bytes, collection);
+    let baked = bake_font(
+        &prepared.bytes,
+        BakeDescriptorV0 {
+            format_version: 0,
+            font_face_index: prepared.report.font_face_index,
+            outlines: true,
+        },
+    )
+    .expect("selected CFF face still bakes with outlines");
+    assert!(baked.report.shared.outlines.is_some());
 }
 
 #[test]

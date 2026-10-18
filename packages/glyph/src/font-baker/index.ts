@@ -26,6 +26,8 @@ export interface FontBakeSelection {
   readonly formatVersion: 0;
   readonly fontFaceIndex: number;
   readonly unicodeRanges: readonly UnicodeRange[];
+  /** Explicitly retain the complete source face when CFF/CFF2 cannot be subset. */
+  readonly allowWholeFaceFallback?: boolean;
 }
 
 export interface FontPrepareRequest {
@@ -33,19 +35,28 @@ export interface FontPrepareRequest {
   readonly selection: FontBakeSelection;
 }
 
-export interface PreparedFontReport {
+export interface PreparedFontReport<FaceIndex extends number = 0> {
   readonly formatVersion: 0;
   readonly sourceBytes: number;
   readonly preparedBytes: number;
-  readonly fontFaceIndex: 0;
+  readonly fontFaceIndex: FaceIndex;
+  readonly preparation: 'subset' | 'whole-face-fallback';
   readonly glyphCount: number;
   readonly fingerprint: Fingerprint;
 }
 
-export interface PreparedFont {
+export interface PreparedFont<FaceIndex extends number = 0> {
   readonly bytes: Uint8Array;
-  readonly report: PreparedFontReport;
+  readonly report: PreparedFontReport<FaceIndex>;
 }
+
+type SubsetPreparedFont = PreparedFont & {
+  readonly report: PreparedFontReport & { readonly fontFaceIndex: 0; readonly preparation: 'subset' };
+};
+
+type SubsetFontPrepareRequest = FontPrepareRequest & {
+  readonly selection: FontBakeSelection & { readonly allowWholeFaceFallback?: false };
+};
 
 export interface FontInspectRequest {
   readonly source: Uint8Array;
@@ -149,7 +160,8 @@ export class FontBakeError extends GlyphError<'bake-failed'> {
 
 export interface FontBakeCore {
   bake(request: FontBakeRequest): FontBakeResult;
-  prepare(request: FontPrepareRequest): PreparedFont;
+  prepare(request: SubsetFontPrepareRequest): SubsetPreparedFont;
+  prepare(request: FontPrepareRequest): PreparedFont<number>;
   inspect(request: FontInspectRequest): FontInspection;
 }
 
@@ -186,7 +198,14 @@ export function createFontBakerFromInstance(instance: WebAssembly.Instance): Fon
       return invoke(exports, exports.pmndrs_font_baker_bake, source, descriptor, decodeBakeResponse);
     },
     prepare({ source, selection }) {
-      return invoke(exports, exports.pmndrs_font_baker_prepare, source, selection, decodePreparedFont);
+      // The narrow overload applies only when fallback is absent or false; that path always emits face zero.
+      return invoke(
+        exports,
+        exports.pmndrs_font_baker_prepare,
+        source,
+        selection,
+        decodePreparedFont,
+      ) as SubsetPreparedFont;
     },
     inspect({ source, descriptor }) {
       return invoke(exports, exports.pmndrs_font_baker_inspect, source, descriptor, decodeFontInspection);
@@ -335,7 +354,7 @@ function decodeBakeResponse(bytes: Uint8Array, abi: FontBakerAbi): FontBakeResul
   };
 }
 
-function decodePreparedFont(bytes: Uint8Array, abi: FontBakerAbi): PreparedFont {
+function decodePreparedFont(bytes: Uint8Array, abi: FontBakerAbi): PreparedFont<number> {
   const { metadata, artifact } = decodeEnvelope(bytes, abi);
   if (!isPreparedFontReport(metadata) || artifact.byteLength !== metadata.preparedBytes) {
     throw new TypeError('font baker returned invalid prepared font metadata');
@@ -443,14 +462,15 @@ function isBakeWarning(value: unknown): value is BakeWarning {
   );
 }
 
-function isPreparedFontReport(value: unknown): value is PreparedFontReport {
+function isPreparedFontReport(value: unknown): value is PreparedFontReport<number> {
   return (
     isNonArrayObject(value) &&
     value.formatVersion === 0 &&
     isNonnegativeSafeInteger(value.sourceBytes) &&
     isNonnegativeSafeInteger(value.preparedBytes) &&
     value.preparedBytes > 0 &&
-    value.fontFaceIndex === 0 &&
+    isNonnegativeSafeInteger(value.fontFaceIndex) &&
+    (value.preparation === 'subset' || value.preparation === 'whole-face-fallback') &&
     isNonnegativeSafeInteger(value.glyphCount) &&
     isFingerprint(value.fingerprint)
   );

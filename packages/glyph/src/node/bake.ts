@@ -55,11 +55,15 @@ import { fingerprint128, fingerprintDomain } from '../internal/content-digest.js
 import { compatibilityFingerprint } from '../internal/raster-identity.js';
 import { parseGlb } from '../font-baker/validator.js';
 
-export interface NodeBakeOptions<Rasters extends readonly object[] = readonly []> {
+export interface NodeBakeOptions<
+  Rasters extends readonly object[] = readonly [],
+  AllowFallback extends boolean = false,
+> {
   readonly input: string | URL;
   readonly output: string | URL;
   readonly font: Omit<FontBakeDescriptor, 'formatVersion'>;
   readonly unicodeRanges?: readonly UnicodeRange[];
+  readonly allowWholeFaceFallback?: AllowFallback;
   readonly rasters?: Rasters;
   readonly signal?: AbortSignal;
 }
@@ -97,8 +101,8 @@ export interface NodeBakeExecutionReport {
   }[];
 }
 
-export interface NodeFontBakeReport extends FontPayloadReport {
-  readonly preparation?: PreparedFontReport;
+export interface NodeFontBakeReport<FaceIndex extends number = 0> extends FontPayloadReport {
+  readonly preparation?: PreparedFontReport<FaceIndex>;
   readonly execution: NodeBakeExecutionReport;
 }
 
@@ -136,7 +140,17 @@ const defaultFontBaker = cacheSuccessfulPromise(async () => createFontBaker(awai
 
 export async function bakeFont<const Rasters extends readonly object[]>(
   options: NodeBakeOptions<Rasters> & { readonly rasters?: Rasters & CheckedRasterPlans<Rasters> },
-): Promise<NodeFontBakeReport> {
+): Promise<
+  NodeFontBakeReport & {
+    readonly preparation?: PreparedFontReport & { readonly fontFaceIndex: 0; readonly preparation: 'subset' };
+  }
+>;
+export async function bakeFont<const Rasters extends readonly object[]>(
+  options: NodeBakeOptions<Rasters, boolean> & { readonly rasters?: Rasters & CheckedRasterPlans<Rasters> },
+): Promise<NodeFontBakeReport<number>>;
+export async function bakeFont<const Rasters extends readonly object[]>(
+  options: NodeBakeOptions<Rasters, boolean> & { readonly rasters?: Rasters & CheckedRasterPlans<Rasters> },
+): Promise<NodeFontBakeReport<number>> {
   return bakeFontWithResolvedPlans(options);
 }
 
@@ -152,7 +166,15 @@ export async function inspectFont(options: NodeFontInspectOptions): Promise<Font
 async function bakeFontWithResolvedPlans<const Rasters extends readonly object[]>(
   options: NodeBakeOptions<Rasters> & { readonly rasters?: Rasters & CheckedRasterPlans<Rasters> },
   preparedRasters?: readonly ResolvedRasterBakePlan[],
-): Promise<NodeFontBakeReport> {
+): Promise<NodeFontBakeReport>;
+async function bakeFontWithResolvedPlans<const Rasters extends readonly object[]>(
+  options: NodeBakeOptions<Rasters, boolean> & { readonly rasters?: Rasters & CheckedRasterPlans<Rasters> },
+  preparedRasters?: readonly ResolvedRasterBakePlan[],
+): Promise<NodeFontBakeReport<number>>;
+async function bakeFontWithResolvedPlans<const Rasters extends readonly object[]>(
+  options: NodeBakeOptions<Rasters, boolean> & { readonly rasters?: Rasters & CheckedRasterPlans<Rasters> },
+  preparedRasters?: readonly ResolvedRasterBakePlan[],
+): Promise<NodeFontBakeReport<number>> {
   const started = performance.now();
   const rssBeforeBytes = process.memoryUsage.rss();
   const timings = {
@@ -189,6 +211,7 @@ async function bakeFontWithResolvedPlans<const Rasters extends readonly object[]
     fontFaceIndex: options.font.fontFaceIndex,
     ...(options.font.outlines === undefined ? {} : { outlines: options.font.outlines }),
     ...(options.unicodeRanges === undefined ? {} : { unicodeRanges: options.unicodeRanges }),
+    ...(options.allowWholeFaceFallback === undefined ? {} : { allowWholeFaceFallback: options.allowWholeFaceFallback }),
     rasters,
     validateArtifact: validateFontArtifact,
     ...(options.signal === undefined ? {} : { signal: options.signal }),
@@ -459,6 +482,14 @@ export interface FontFreshness {
   readonly reason: string;
 }
 
+type FontFreshnessResult =
+  | (FontFreshness & { readonly fresh: false })
+  | (FontFreshness & {
+      readonly fresh: true;
+      readonly preparation?: PreparedFontReport<number>;
+      readonly outputBytes: number;
+    });
+
 /** Checks source and raster fingerprints before paying the rasterization cost again. */
 export async function fontIsUpToDate(request: {
   readonly output: string;
@@ -467,10 +498,11 @@ export async function fontIsUpToDate(request: {
   /** Whether the bake also keeps glyph outlines. Defaults to `false`. */
   readonly outlines?: boolean;
   readonly unicodeRanges?: readonly UnicodeRange[];
+  readonly allowWholeFaceFallback?: boolean;
   readonly rasters: readonly { readonly rasterKey: string; readonly kind: string; readonly version: number }[];
   /** A split bake writes companions beside the core, so the same rasters are a different result. */
   readonly split: boolean;
-}): Promise<FontFreshness> {
+}): Promise<FontFreshnessResult> {
   let existing: Uint8Array;
   try {
     existing = await readFile(request.output);
@@ -482,16 +514,24 @@ export async function fontIsUpToDate(request: {
   // Mirror the bake exactly: naming no ranges bakes the source as it is, and preparing with an
   // empty selection is not the same request — the baker rejects it outright.
   let baked: Uint8Array = source;
+  let fontFaceIndex = request.fontFaceIndex;
+  let preparation: PreparedFontReport<number> | undefined;
   if (request.unicodeRanges !== undefined) {
     const baker = await defaultFontBaker();
-    baked = baker.prepare({
+    const prepared = baker.prepare({
       source,
       selection: {
         formatVersion: 0,
         fontFaceIndex: request.fontFaceIndex,
         unicodeRanges: request.unicodeRanges,
+        ...(request.allowWholeFaceFallback === undefined
+          ? {}
+          : { allowWholeFaceFallback: request.allowWholeFaceFallback }),
       },
-    }).bytes;
+    });
+    baked = prepared.bytes;
+    fontFaceIndex = prepared.report.fontFaceIndex;
+    preparation = prepared.report;
   }
   const sourceFingerprint = fingerprint128(baked, fingerprintDomain.source);
 
@@ -506,6 +546,9 @@ export async function fontIsUpToDate(request: {
   if (font === undefined) return { fresh: false, reason: 'the existing font is not a glyph font' };
   if (font.provenance?.sourceFingerprint !== sourceFingerprint) {
     return { fresh: false, reason: 'the source font, face, or unicode ranges changed' };
+  }
+  if (font.provenance?.fontFaceIndex !== fontFaceIndex) {
+    return { fresh: false, reason: 'the selected font face changed' };
   }
   if (font.provenance?.bakerVersion !== FONT_BAKER_VERSION) {
     return { fresh: false, reason: 'a different core baker produced this font' };
@@ -554,5 +597,10 @@ export async function fontIsUpToDate(request: {
     });
     if (carried !== expected) return { fresh: false, reason: `${raster.kind} was baked by a different contract` };
   }
-  return { fresh: true, reason: 'every requested raster is already baked from this exact source' };
+  return {
+    fresh: true,
+    reason: 'every requested raster is already baked from this exact source',
+    ...(preparation === undefined ? {} : { preparation }),
+    outputBytes: existing.byteLength,
+  };
 }

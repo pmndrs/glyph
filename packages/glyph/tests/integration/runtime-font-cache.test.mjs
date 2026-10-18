@@ -13,7 +13,15 @@ test('runtime GLB cache keys include source, normalized ranges, and exact raster
   assert.equal(await cache.key(source, runtimeRequest()), key);
   assert.notEqual(await cache.key('2'.repeat(32), request), key);
   assert.notEqual(await cache.key(source, { ...request, unicodeRanges: [{ start: 0x20, end: 0x7f }] }), key);
+  assert.notEqual(await cache.key(source, { ...request, allowWholeFaceFallback: true }), key);
   assert.notEqual(await cache.key(source, { ...request, rasters: [] }), key);
+
+  const legacyDefault = { ...request, rasters: [] };
+  assert.equal(await cache.key(source, legacyDefault), '9d953178b01858b1795d10d4197639ca');
+  assert.equal(
+    await cache.key(source, { ...legacyDefault, allowWholeFaceFallback: false }),
+    '9d953178b01858b1795d10d4197639ca',
+  );
 });
 
 test('runtime GLB cache returns exact bytes and honors the source response expiration', async () => {

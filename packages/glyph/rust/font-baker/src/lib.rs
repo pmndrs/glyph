@@ -28,8 +28,8 @@ pub use report::{
 };
 #[cfg(feature = "subsetting")]
 pub use source_font::{
-    FontInspectionV0, FontSelectionV0, GlyphInspectionV0, PreparedFontReportV0, PreparedFontV0,
-    UnicodeRangeV0, inspect_font, prepare_font,
+    FontInspectionV0, FontPreparationV0, FontSelectionV0, GlyphInspectionV0, PreparedFontReportV0,
+    PreparedFontV0, UnicodeRangeV0, inspect_font, prepare_font,
 };
 
 /// Return the compile-time-generated C ABI description embedded in this build.
