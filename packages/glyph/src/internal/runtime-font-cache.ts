@@ -48,6 +48,7 @@ export function createCache(storage: CacheStorage, origin: string, now: () => nu
         rasters: request.rasters ?? [],
         sourceFingerprint,
         unicodeRanges: request.unicodeRanges ?? null,
+        ...(request.allowWholeFaceFallback === true ? { allowWholeFaceFallback: true } : {}),
       });
       return fingerprint128(textEncoder.encode(identity), fingerprintDomain.cache);
     },

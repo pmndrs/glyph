@@ -25,6 +25,10 @@ const notoCjkUrl = new URL(
   '../../../../benches/fixtures/fonts/noto-sans-cjk-2.004/NotoSansCJKjp-Regular.otf',
   import.meta.url,
 );
+const notoShowcaseUrl = new URL(
+  '../../../../benches/fixtures/fonts/noto-sans-cjk-showcase-v0/NotoSansCJKjp-Showcase.otf',
+  import.meta.url,
+);
 const iconFontUrl = new URL(
   '../../../../benches/fixtures/fonts/font-awesome-free-6.7.2/fa-solid-900.ttf',
   import.meta.url,
@@ -375,6 +379,72 @@ test('a large CFF source never silently expands a requested tiny Unicode subset'
   await assert.rejects(readFile(output), { code: 'ENOENT' });
 });
 
+test('CFF fallback freshness distinguishes collection faces and reports cached bytes', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-cff-collection-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const input = join(root, 'faces.otc');
+  const output = join(root, 'selected.font.glb');
+  const showcase = await readFile(notoShowcaseUrl);
+  await writeFile(input, collectionOf(await readFile(dancingUrl), showcase));
+  const bake = async (face) => {
+    const io = captureIo();
+    assert.equal(
+      await runCli(
+        [
+          'bake',
+          '--input',
+          input,
+          '--output',
+          output,
+          '--font-face-index',
+          String(face),
+          '--unicodes',
+          'U+0041',
+          '--allow-whole-face-fallback',
+          '--outlines',
+          '--bitmap',
+          '16',
+        ],
+        io.io,
+      ),
+      0,
+      io.stderr(),
+    );
+    return io.stdout();
+  };
+
+  const first = await bake(0);
+  assert.doesNotMatch(first, /is up to date/u);
+  const firstArtifact = await validateFontArtifact(await readFile(output));
+  assert.equal(firstArtifact.document.extensions.PMNDRS_font.provenance.fontFaceIndex, 0);
+
+  const second = await bake(1);
+  assert.doesNotMatch(second, /is up to date/u);
+  const secondArtifact = await validateFontArtifact(await readFile(output));
+  assert.equal(secondArtifact.document.extensions.PMNDRS_font.provenance.fontFaceIndex, 1);
+  assert.notEqual(secondArtifact.glyphCount, firstArtifact.glyphCount);
+  assert.equal(secondArtifact.document.extensions.PMNDRS_font.outlines !== undefined, true);
+
+  const standalone = join(root, 'showcase.font.glb');
+  await bakeFont({
+    input: notoShowcaseUrl,
+    output: standalone,
+    font: { fontFaceIndex: 0, outlines: true },
+  });
+  const standaloneArtifact = await validateFontArtifact(await readFile(standalone));
+  assert.equal(secondArtifact.glyphCount, standaloneArtifact.glyphCount);
+  assert.equal(
+    secondArtifact.document.extensions.PMNDRS_font.shaping.fingerprint,
+    standaloneArtifact.document.extensions.PMNDRS_font.shaping.fingerprint,
+  );
+
+  const cached = await bake(1);
+  assert.match(cached, /retained whole face 1 \(\d+ source bytes; \d+ output bytes\)/u);
+  assert.match(cached, /is up to date/u);
+  const changedBack = await bake(0);
+  assert.doesNotMatch(changedBack, /is up to date/u);
+});
+
 test('direct bake writes and checks a glyph-name lookup for its selected Unicode set', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-map-cli-'));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -660,6 +730,32 @@ async function projectFixture(secondStrike = 16, options = {}) {
 
 function hash(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
+}
+
+/** Assemble two authenticated standalone sfnts as a test collection with absolute table offsets. */
+function collectionOf(...faces) {
+  let size = 12 + faces.length * 4;
+  const offsets = faces.map((face) => {
+    size = (size + 3) & ~3;
+    const offset = size;
+    size += face.byteLength;
+    return offset;
+  });
+  const collection = Buffer.alloc(size);
+  collection.write('ttcf', 0);
+  collection.writeUInt32BE(0x00010000, 4);
+  collection.writeUInt32BE(faces.length, 8);
+  for (const [index, face] of faces.entries()) {
+    const offset = offsets[index];
+    collection.writeUInt32BE(offset, 12 + index * 4);
+    face.copy(collection, offset);
+    const count = face.readUInt16BE(4);
+    for (let table = 0; table < count; table += 1) {
+      const record = offset + 12 + table * 16;
+      collection.writeUInt32BE(offset + collection.readUInt32BE(record + 8), record + 8);
+    }
+  }
+  return collection;
 }
 
 function captureIo() {

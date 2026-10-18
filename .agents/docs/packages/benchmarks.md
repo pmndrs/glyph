@@ -364,6 +364,11 @@ sides as not comparable instead of printing its delta. A candidate must pass eve
 fail checks that guard behavior it predates, and those workloads are reported as not comparable rather than aborting
 the comparison. Both lists are recorded in the retained manifest.
 
+The full and `cold` Labs suites include one installed-package Fontations/Skera preparation case for authenticated
+Inter ASCII. It times `FontBakeCore.prepare()` alone; source SHA-256, byte counts, retained glyph count, and nominal
+Unicode mappings are checked outside the timed callback. It covers the unchanged TrueType path through the same
+preparation boundary that rejects or retains CFF sources, without treating the old broken CFF output as a baseline.
+
 Status: ✅ Milestone 10 renderer-neutral extensibility and retained Presentation are complete
 
 The application now also contains focused target-v1 browser proofs for Bitmap, MTSDF, Slug, and Worker preparation while

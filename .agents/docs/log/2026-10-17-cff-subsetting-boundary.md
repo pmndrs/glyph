@@ -12,3 +12,6 @@ container and selected face. The preparation report identifies this fallback and
 prints both the retained source and output sizes. The fallback preserves glyph IDs, layout tables, and collection face
 selection rather than passing unchanged charstrings through a renumbering subset. See the
 [package reference](../packages/glyph.md) and [decision](../planning/decisions/cff-whole-face-fallback.md).
+Follow-up review made direct-bake freshness compare the effective collection face, retained cached-size reporting,
+and carried the opt-in through portable runtime bake requests and their cache keys without changing default cache
+identity. An installed-package Labs case covers the unchanged TrueType Unicode preparation path.

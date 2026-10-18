@@ -337,10 +337,12 @@ publishes only to temporary storage and compares the complete GLB byte-for-byte 
 same `bakeFont` host as programmatic consumers rather than maintaining an example-only composition path.
 
 Skera cannot subset CFF or CFF2 outlines. A `--unicodes` request for such a face fails before publication with an
-explicit subsetting error. `--allow-whole-face-fallback` (Node `allowWholeFaceFallback`) opts into retaining the
+explicit subsetting error. `--allow-whole-face-fallback` (Node and portable runtime-load `allowWholeFaceFallback`) opts into retaining the
 complete source container and selected face index; the preparation report says `whole-face-fallback` and gives the
 retained source bytes, while the CLI also prints output artifact bytes. Requested code points do not filter glyphs in
-this mode. Collections retain all source faces in the input bytes. The decision is recorded in
+this mode. A cached direct CLI bake still reports those sizes without rerunning the raster bake. Collections retain all
+source faces in the input bytes, and freshness checks distinguish the selected face even when the retained bytes match.
+Runtime bake requests and cache keys carry the same opt-in; default requests retain their existing cache identity. The decision is recorded in
 [CFF whole-face fallback](../planning/decisions/cff-whole-face-fallback.md); compact CFF/CFF2 subsetting remains open.
 
 Project discovery uses Oxc Parser 0.150.0 for JS/JSX/TS/TSX syntax, Oxc Walker 1.1.1 for lexical scopes, and Oxc Resolver 11.24.2 for

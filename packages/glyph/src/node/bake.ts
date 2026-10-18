@@ -456,10 +456,14 @@ function filePath(value: string | URL, field: string): string {
   return value;
 }
 
-export interface FontFreshness {
-  readonly fresh: boolean;
-  readonly reason: string;
-}
+export type FontFreshness =
+  | { readonly fresh: false; readonly reason: string }
+  | {
+      readonly fresh: true;
+      readonly reason: string;
+      readonly preparation?: PreparedFontReport;
+      readonly outputBytes: number;
+    };
 
 /** Checks source and raster fingerprints before paying the rasterization cost again. */
 export async function fontIsUpToDate(request: {
@@ -485,9 +489,11 @@ export async function fontIsUpToDate(request: {
   // Mirror the bake exactly: naming no ranges bakes the source as it is, and preparing with an
   // empty selection is not the same request — the baker rejects it outright.
   let baked: Uint8Array = source;
+  let fontFaceIndex = request.fontFaceIndex;
+  let preparation: PreparedFontReport | undefined;
   if (request.unicodeRanges !== undefined) {
     const baker = await defaultFontBaker();
-    baked = baker.prepare({
+    const prepared = baker.prepare({
       source,
       selection: {
         formatVersion: 0,
@@ -497,7 +503,10 @@ export async function fontIsUpToDate(request: {
           ? {}
           : { allowWholeFaceFallback: request.allowWholeFaceFallback }),
       },
-    }).bytes;
+    });
+    baked = prepared.bytes;
+    fontFaceIndex = prepared.report.fontFaceIndex;
+    preparation = prepared.report;
   }
   const sourceFingerprint = fingerprint128(baked, fingerprintDomain.source);
 
@@ -512,6 +521,9 @@ export async function fontIsUpToDate(request: {
   if (font === undefined) return { fresh: false, reason: 'the existing font is not a glyph font' };
   if (font.provenance?.sourceFingerprint !== sourceFingerprint) {
     return { fresh: false, reason: 'the source font, face, or unicode ranges changed' };
+  }
+  if (font.provenance?.fontFaceIndex !== fontFaceIndex) {
+    return { fresh: false, reason: 'the selected font face changed' };
   }
   if (font.provenance?.bakerVersion !== FONT_BAKER_VERSION) {
     return { fresh: false, reason: 'a different core baker produced this font' };
@@ -560,5 +572,10 @@ export async function fontIsUpToDate(request: {
     });
     if (carried !== expected) return { fresh: false, reason: `${raster.kind} was baked by a different contract` };
   }
-  return { fresh: true, reason: 'every requested raster is already baked from this exact source' };
+  return {
+    fresh: true,
+    reason: 'every requested raster is already baked from this exact source',
+    ...(preparation === undefined ? {} : { preparation }),
+    outputBytes: existing.byteLength,
+  };
 }

@@ -15,7 +15,8 @@ generated:
 
 When a selected face has CFF or CFF2 outlines and the caller requests Unicode subsetting, the baker fails before
 publishing an artifact. The caller can opt in to a whole-face fallback through `allowWholeFaceFallback` or the direct
-CLI's `--allow-whole-face-fallback`. The fallback keeps the original source bytes and selected face index, reports
+CLI's `--allow-whole-face-fallback`; portable runtime loads carry the same option through their Worker and cache key.
+The fallback keeps the original source bytes and selected face index, reports
 `whole-face-fallback` and the retained byte count, and does not claim that the requested Unicode set removed glyphs.
 TrueType outlines continue through Skera subsetting.
 
@@ -31,6 +32,7 @@ subsetting out of the product pipeline, so the explicit fallback preserves that 
 
 The prepared-font report identifies whether preparation actually subset the face. For a collection, the fallback retains
 the whole original container so the selected face's offsets and glyph IDs remain intact; its byte count includes the
-other collection faces. The CLI prints the retained source and output sizes when baking, and JSON reports the same.
+other collection faces. Direct-bake freshness compares the effective selected face, and the CLI prints retained source
+and output sizes both when baking and when reusing a fresh artifact; JSON reports the same for a bake.
 This corrects the implicit assumption in D-239 that every supported outline format can be Unicode-subset with Skera.
 Compact CFF/CFF2 artifacts still require a future upstream subsetter or an explicitly prepared external input font.

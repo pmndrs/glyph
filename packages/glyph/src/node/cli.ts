@@ -69,12 +69,8 @@ export async function runCli(
       if (parsed.json) io.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
       else {
         io.stdout.write(`${parsed.direct.input} -> ${parsed.direct.output}\n`);
-        if (report.preparation?.preparation === 'whole-face-fallback') {
-          io.stdout.write(
-            `CFF/CFF2 Unicode subsetting is unavailable; retained whole face ${report.preparation.fontFaceIndex} ` +
-              `(${report.preparation.preparedBytes} source bytes; ${report.execution.outputs[0]?.bytes ?? 0} output bytes).\n`,
-          );
-        }
+        if (report.preparation?.preparation === 'whole-face-fallback')
+          io.stdout.write(wholeFaceFallbackMessage(report.preparation, report.execution.outputs[0]!.bytes));
         io.stdout.write(`Baked 1 font in ${report.execution.timingsMs.total.toFixed(2)} ms.\n`);
       }
       return 0;
@@ -471,7 +467,7 @@ async function bakeDirect(
   io: { readonly stdout: { write(text: string): unknown } },
 ): Promise<NodeFontBakeReport | undefined> {
   const { plans, resolved } = await directRasterPlans(options);
-  if (!options.check && !options.force && !options.allowWholeFaceFallback) {
+  if (!options.check && !options.force) {
     const freshness = await fontIsUpToDate({
       output: options.output,
       input: options.input,
@@ -487,6 +483,8 @@ async function bakeDirect(
       split: options.split,
     });
     if (freshness.fresh) {
+      if (freshness.preparation?.preparation === 'whole-face-fallback')
+        io.stdout.write(wholeFaceFallbackMessage(freshness.preparation, freshness.outputBytes));
       io.stdout.write(`${options.output} is up to date — ${freshness.reason}\n`);
       return undefined;
     }
@@ -540,6 +538,16 @@ async function bakeDirect(
   } finally {
     await rm(temporaryDirectory, { force: true, recursive: true });
   }
+}
+
+function wholeFaceFallbackMessage(
+  preparation: NonNullable<NodeFontBakeReport['preparation']>,
+  outputBytes: number,
+): string {
+  return (
+    `CFF/CFF2 Unicode subsetting is unavailable; retained whole face ${preparation.fontFaceIndex} ` +
+    `(${preparation.preparedBytes} source bytes; ${outputBytes} output bytes).\n`
+  );
 }
 
 async function createGlyphMap(options: DirectBakeArguments): Promise<Uint8Array> {

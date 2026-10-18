@@ -33,6 +33,9 @@ const host = new SerialWorkerHost<
         ...(request.unicodeRanges === undefined
           ? {}
           : { unicodeRanges: normalizeUnicodeRanges(request.unicodeRanges) }),
+        ...(request.allowWholeFaceFallback === undefined
+          ? {}
+          : { allowWholeFaceFallback: request.allowWholeFaceFallback }),
         ...(request.rasters === undefined ? {} : { rasters: request.rasters }),
       },
       transfer: [source],
