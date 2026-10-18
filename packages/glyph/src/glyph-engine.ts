@@ -237,7 +237,8 @@ class GlyphEngineImpl implements GlyphEngine {
     }
     this.#disposing = true;
     const report = (stage: string, error: unknown): void => {
-      if (DEV) console.warn(`glyph engine teardown continued after ${stage} failed: ${String(error)}`);
+      if (DEV && process.env.NODE_ENV !== 'production')
+        console.warn(`glyph engine teardown continued after ${stage} failed: ${String(error)}`);
     };
     for (const dispose of [...this.#disposeObservers]) {
       try {

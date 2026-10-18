@@ -372,5 +372,6 @@ function immutableFontImplementation<Format extends RasterFormatMetadata>(font: 
 }
 
 function reportDisposalFailure(stage: string, error: unknown): void {
-  if (DEV) console.warn(`font teardown continued after ${stage} failed: ${String(error)}`);
+  if (DEV && process.env.NODE_ENV !== 'production')
+    console.warn(`font teardown continued after ${stage} failed: ${String(error)}`);
 }

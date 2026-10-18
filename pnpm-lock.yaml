@@ -376,6 +376,9 @@ importers:
       binaryen:
         specifier: 129.0.0
         version: 129.0.0
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
       eslint-plugin-react-you-might-not-need-an-effect:
         specifier: 1.0.1
         version: 1.0.1(eslint@10.7.0(jiti@2.7.0))
