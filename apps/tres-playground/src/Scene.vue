@@ -92,7 +92,7 @@ const shimmer = defineTextMaterial((context) => {
   >
     {{ message }} <Text :font="activeIcon" :text-style="{ color: COLORS[format] }">{{ WORLD_ICON }}</Text>
   </Text>
-  <TextGroup v-if="labelFont !== undefined" name="format-labels" :position="[0, height / 2 - 48, 0]">
+  <TextGroup v-if="labelFont !== undefined" name="format-labels" batching="shared" :position="[0, height / 2 - 48, 0]">
     <Text
       v-for="(candidate, index) in RASTER_FORMATS"
       :key="candidate"

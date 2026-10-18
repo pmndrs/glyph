@@ -38,7 +38,8 @@ inside the canvas: it places a perspective camera at the distance where one worl
 Tres `sizes`, loads the Latin and icon fonts through `useBitmap`, `useMsdf`, and `useSlug`, renders one keyed greeting
 `<Text>` whose nested `<Text>` binds the globe glyph to the icon font, and batches three Slug labels in a `<TextGroup>`.
 The greeting and the labels share one `defineTextMaterial` that composes over each format's canonical shader and sweeps
-only a band of the active accent color across the glyphs in screen space; sharing it keeps the Slug greeting in the labels' batch. The scene publishes
+only a band of the active accent color across the glyphs in screen space. The labels' `TextGroup` opts into `shared`
+batching so its Slug glyphs can join the Slug greeting's draw. The scene publishes
 its Scene and greeting paragraph to a module the browser probe reads.
 
 `Backdrop.vue` sits behind the text at negative z. Its sky is one unlit `MeshBasicNodeMaterial` plane whose `colorNode`
@@ -61,6 +62,6 @@ mise exec -- pnpm --filter @pmndrs/glyph-tres-playground check
 
 The check runs `vue-tsgo` template type checking against the repository TypeScript 7 compiler, lint, formatting, a
 production build, and one Vitexec browser probe. The probe clicks each format button and requires the greeting to
-commit with ten Latin glyphs and one icon across two resource-partitioned draws, next to the label group's single
-batched draw, then requires the `backdrop` group to be mounted. Backdrop meshes carry no glyph run metadata, so they
-never count toward those draws.
+commit with ten Latin glyphs and one icon. The Slug greeting and labels share one draw, while the icon uses another;
+Bitmap and MSDF greetings each use a different technique from the labels and require three draws. The probe then
+requires the `backdrop` group to be mounted. Its meshes carry no glyph run metadata, so they never count toward those draws.
