@@ -25,6 +25,18 @@ export default defineConfig({
     // Tres tags are custom elements for the SFC compiler; otherwise Vue tries to resolve them as components.
     vue(templateCompilerOptions),
     {
+      name: 'portless-live-check',
+      // Vitexec requests port 0 inline; Vite runs app config hooks after that merge.
+      config(_config, { command }) {
+        if (command !== 'serve' || process.env.PORTLESS_URL === undefined) return;
+        const port = Number(process.env.PORT);
+        if (!Number.isInteger(port) || port < 1 || port > 65535) {
+          throw new Error('Portless requires a valid PORT for the Tres live server');
+        }
+        return { server: { port, strictPort: true } };
+      },
+    },
+    {
       name: 'font-notices',
       async generateBundle() {
         const notices = await Promise.all(

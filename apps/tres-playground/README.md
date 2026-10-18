@@ -26,6 +26,11 @@ under `on-demand`. The Vite `source` condition runs the adapter from `packages/g
 reloads the playground without a package build.
 
 The check runs `vue-tsc`, lint, formatting, a production build, and one Vitexec browser probe. The probe clicks every
-format button and requires the greeting paragraph to commit with ten Latin glyphs and one icon across two
-resource-partitioned draws, next to the label group's single batched draw, and then requires the backdrop group to be
-mounted. The backdrop meshes carry no glyph run metadata, so they never count toward those draws.
+format button and requires the greeting paragraph to commit with ten Latin glyphs and one icon. The label group's
+explicit `shared` batching joins its Slug glyphs with the Slug greeting, yielding two draws; Bitmap and MSDF greetings
+use a different technique and yield three draws. The probe also requires the backdrop group to be mounted. Its meshes
+carry no glyph run metadata, so they never count toward those draws.
+
+When Portless supplies `PORTLESS_URL` and `PORT`, the Vite config uses the assigned port for Vitexec's live server and
+the check verifies the playground title through the Portless route with a ten-second request deadline. Without Portless,
+Vitexec uses its usual ephemeral port.
