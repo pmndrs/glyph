@@ -59,8 +59,8 @@ if (portlessUrl !== undefined) {
 }
 
 async function checkPortlessRoute(url: string): Promise<void> {
-  const response = await fetch(url);
-  if (!response.ok || !(await response.text()).includes('<div id="app"></div>')) {
+  const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+  if (!response.ok || !(await response.text()).includes('<title>@pmndrs/glyph · TresJS playground</title>')) {
     throw new Error(`unexpected response from ${url} (${String(response.status)})`);
   }
 }

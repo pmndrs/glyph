@@ -66,5 +66,5 @@ commit with ten Latin glyphs and one icon. The Slug greeting and labels share on
 Bitmap and MSDF greetings each use a different technique from the labels and require three draws. The probe then
 requires the `backdrop` group to be mounted. Its meshes carry no glyph run metadata, so they never count toward those draws.
 When `PORTLESS_URL` and `PORT` are present, the Vite config overrides Vitexec's ephemeral server port with the assigned
-port, and the live-check wrapper requires the playground page to load through that route. Normal CI runs use Vitexec's
-ephemeral port.
+port, and the live-check wrapper requires the playground's title through that route within ten seconds. Normal CI runs
+use Vitexec's ephemeral port.

@@ -32,4 +32,5 @@ use a different technique and yield three draws. The probe also requires the bac
 carry no glyph run metadata, so they never count toward those draws.
 
 When Portless supplies `PORTLESS_URL` and `PORT`, the Vite config uses the assigned port for Vitexec's live server and
-the check requests the playground through the Portless route. Without Portless, Vitexec uses its usual ephemeral port.
+the check verifies the playground title through the Portless route with a ten-second request deadline. Without Portless,
+Vitexec uses its usual ephemeral port.
