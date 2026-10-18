@@ -945,6 +945,8 @@ separately prove that the root format move retains no additional modules or emit
 
 The size lane is also a package-graph gate. Its consumer builds inspect emitted module membership rather than relying only on source text or byte totals: the browser-core entry must retain runtime baking as a dynamic chunk while excluding React, bitmap rendering, Node hosts, the Worker, the validator implementation, and portable-baker hosts from its initial graph. The lightweight shared version contract remains intentionally present. These assertions run for both readable and minified builds before size evidence is accepted.
 
+The browser-import tooling test transforms the emitted diagnostics gate through Vite's development server with custom modes and through a development-mode Vite library build. It checks that serving replaces `NODE_ENV` and enables diagnostics, while the library output remains safe as native ESM without `process`.
+
 The V0 autoresearch baseline is a fail-closed control artifact, not an active optimizer. Its generated evidence list authenticates the current package sizes, admitted harness, shaping, paragraph, bidi, CJK, and advanced-shaping conformance records at the exact root toolchain pins. A discriminated campaign state remains `disabled`; tests reject malformed evidence and prove that an enabled manifest cannot cross the campaign guard without a later explicit maintainer decision.
 
 The packed-consumer lane packs the built Glyph package into an isolated Vite application and executes
