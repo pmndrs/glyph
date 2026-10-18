@@ -16,11 +16,14 @@ const threePackage = (await import(
   pathToFileURL(resolve(packageRoot, 'dist/three.js')).href
 )) as typeof import('@pmndrs/glyph/three');
 
-const { bitmap, glyph } = glyphPackage;
+const { bitmap, glyph, span, txt } = glyphPackage;
 const { defineThreeConfig } = threePackage;
 const safeFontBytes = await readFile(new URL('../fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url));
 const unsafeBoundaryFontBytes = await readFile(
   new URL('../fixtures/rendering/fredoka-issue-216-bitmap-16.font.glb', import.meta.url),
+);
+const crossSpaceFontBytes = await readFile(
+  new URL('../fixtures/rendering/cross-space-bitmap-16.font.glb', import.meta.url),
 );
 
 await glyph.init();
@@ -31,7 +34,10 @@ const unsafeBoundaryFont = glyph.fontFace(
   new Blob([new Uint8Array(unsafeBoundaryFontBytes)], { type: 'model/gltf-binary' }),
   { format: bitmap({ strikes: [16] }) },
 );
-await Promise.all([safeFont.load(), unsafeBoundaryFont.load()]);
+const crossSpaceFont = glyph.fontFace(new Blob([new Uint8Array(crossSpaceFontBytes)], { type: 'model/gltf-binary' }), {
+  format: bitmap({ strikes: [16] }),
+});
+await Promise.all([safeFont.load(), unsafeBoundaryFont.load(), crossSpaceFont.load()]);
 
 const safeText =
   'Typography is a moving system. Familiar words wrap while a responsive panel changes the space around them.';
@@ -39,6 +45,12 @@ const unsafeBoundaryText =
   'Reveals one grapheme at a time over a duration. Layout stays put and a trigger fires at the end.';
 const longUnsafeBoundaryText = Array.from({ length: 48 }, () => unsafeBoundaryText).join(' ');
 const editedLongUnsafeBoundaryText = longUnsafeBoundaryText.replaceAll('Reveals', 'reveals');
+const bidiBoundaryText =
+  'the apple ate a banana while the eagle and the ape made a cake at the lake; a bee came and ate a pear';
+const editedBidiBoundaryText = bidiBoundaryText.replace('eagle', 'Eagle');
+const rtlSpan = span({ direction: 'rtl' });
+const rtlText = (value: string) => txt`${rtlSpan`${value}`}`;
+type BenchmarkText = string | ReturnType<typeof rtlText>;
 const disableSpaceKerning = (text: string) =>
   Array.from(text.matchAll(/ /gu), (match) => ({
     end: match.index + 1,
@@ -49,7 +61,7 @@ const disableSpaceKerning = (text: string) =>
 let nextHandle = 1;
 
 function createParagraph(
-  text: string,
+  text: BenchmarkText,
   width: number,
   font: typeof safeFont,
   features: readonly {
@@ -85,7 +97,7 @@ function disposeParagraph(created: ReturnType<typeof createParagraph>): void {
 
 function benchmarkReflow(
   name: string,
-  text: string,
+  text: BenchmarkText,
   font: typeof safeFont,
   widths: readonly [number, number],
   features: readonly {
@@ -111,7 +123,12 @@ function benchmarkReflow(
   });
 }
 
-function benchmarkTextEdit(name: string, texts: readonly [string, string], font: typeof safeFont, width: number): void {
+function benchmarkTextEdit(
+  name: string,
+  texts: readonly [BenchmarkText, BenchmarkText],
+  font: typeof safeFont,
+  width: number,
+): void {
   bench(name, function* () {
     const created = createParagraph(texts[0], width, font);
     let alternate = false;
@@ -159,5 +176,19 @@ group('unsafe legal line boundaries @core', () => {
     [longUnsafeBoundaryText, editedLongUnsafeBoundaryText],
     unsafeBoundaryFont,
     420,
+  );
+  benchmarkReflow('issue 245 LTR edge width edit @layout', bidiBoundaryText, crossSpaceFont, [200, 240]);
+  benchmarkReflow('issue 245 RTL edge width edit @layout', rtlText(bidiBoundaryText), crossSpaceFont, [200, 240]);
+  benchmarkTextEdit(
+    'issue 245 LTR edge text edit @layout',
+    [bidiBoundaryText, editedBidiBoundaryText],
+    crossSpaceFont,
+    200,
+  );
+  benchmarkTextEdit(
+    'issue 245 RTL edge text edit @layout',
+    [rtlText(bidiBoundaryText), rtlText(editedBidiBoundaryText)],
+    crossSpaceFont,
+    200,
   );
 });
