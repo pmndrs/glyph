@@ -362,7 +362,7 @@ test('TypeGPU Bitmap omits equal retained color and page uploads but writes pain
   const baked = await readFile(
     new URL('../../../../benches/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url),
   );
-  const font = glyph.fontFace(new Blob([baked]), { format: bitmap });
+  const font = glyph.fontFace(new Blob([baked]), { format: bitmap({ strikes: [16] }) });
   const colorId = bitmapSchema.buffers.color.id;
   const pageId = bitmapSchema.buffers.page.id;
   const originId = bitmapSchema.buffers.origin.id;
