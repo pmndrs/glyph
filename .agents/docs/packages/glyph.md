@@ -220,6 +220,15 @@ than a second application or integrator API. A consumer loads a FontFace selecti
 independent immutable Font lease needed by its engine binding. Portable compiled resources remain immutable payload data,
 while each renderer owns physical textures, buffers, geometry, and their device-relative leases.
 
+The Three adapter owns Codec and transform storage attributes; detached `Glyphs` owns its borrowed instance-transform
+storage. Their owners call `BufferAttribute.dispose()` when the storage retires. Three r185/r186 does not connect that
+event to WebGPU storage cleanup, and geometry disposal only reaches attributes on initialized draw geometries. For
+those verified revisions, each committed draw records the actual renderer's canonical attribute manager on first
+render encounter. Attribute disposal then asks each still-live manager to delete its allocation, including material-only
+placement storage. This preserves sibling draws and releases storage after an unrendered replacement or final owner
+disposal without holding a renderer alive. The private compatibility path is limited to r185/r186; later revisions
+follow their own attribute-disposal lifecycle and require separate validation.
+
 The `/core` entry contains only renderer-neutral integration authoring operations, including construction of placement
 snapshots from package-produced inspection data and renderer-owned drawn origins. Package registries and identity maps, compiled
 Codec-body authentication, system-lane normalization, and Glyph's reserved built-in raster registration path stay under

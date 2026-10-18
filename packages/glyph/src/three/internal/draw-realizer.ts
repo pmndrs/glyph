@@ -13,6 +13,7 @@ import { attachSharedStorage, createGeometrySource, realizeGeometry, resolveDraw
 import { transformAttribute, type RetainedBuffer, type ThreeBufferBindingId } from './host-buffer.js';
 import { glyphOriginBuffer, glyphStorageKey, ThreeMaterialRealizer, transformProgramKey } from './material-realizer.js';
 import { threeBatchScope } from './batch-scope.js';
+import { trackStorageRenderer } from './attribute-disposal.js';
 import type {
   OriginSegment,
   PreparationContext,
@@ -167,17 +168,30 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
           mesh = reusable;
         } else {
           const geometry = realizeGeometry(drawGeometry, span.recordCount);
+          const storageAttributes = new Set<THREE.BufferAttribute>();
           for (const buffer of byCodecId.values()) {
             attachSharedStorage(geometry, buffer.threeAttributeName, buffer.attribute);
+            storageAttributes.add(buffer.attribute);
           }
+          if (!decoration && context.placementTable !== undefined)
+            storageAttributes.add(context.placementTable.attribute);
           const glyphStorage = stableIds === undefined ? undefined : owner.glyphStorage?.(glyphStorageKey(stableIds));
           if (glyphStorage !== undefined) {
             attachSharedStorage(geometry, '_pmndrsGlyphInstanceTransforms', glyphStorage.transforms);
+            storageAttributes.add(glyphStorage.transforms);
           }
           if (transform.kind === 'indexed') {
             attachSharedStorage(geometry, '_pmndrsGlyphTransforms', context.transformAttribute);
+            storageAttributes.add(context.transformAttribute);
           }
           mesh = new THREE.Mesh(geometry, material);
+          const trackedStorage = [...storageAttributes];
+          const observedRenderers = new WeakSet<object>();
+          mesh.onBeforeRender = (renderer) => {
+            if (observedRenderers.has(renderer)) return;
+            trackStorageRenderer(renderer, trackedStorage);
+            observedRenderers.add(renderer);
+          };
           mesh.userData.pmndrsGlyphRunStart = span.recordIndex;
           mesh.userData.pmndrsGlyphPrimitiveKind = decoration ? 'decoration' : 'glyph';
           mesh.userData.pmndrsGlyphDepthKey = draw.depthKey;
