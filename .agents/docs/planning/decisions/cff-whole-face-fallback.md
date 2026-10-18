@@ -1,6 +1,6 @@
 ---
 type: Decision
-title: "CFF subsetting requires explicit whole-face fallback"
+title: 'CFF subsetting requires explicit whole-face fallback'
 description: 'A CFF or CFF2 Unicode subset fails early unless the caller explicitly accepts retaining the complete source container.'
 decision_status: Proposed
 decided: '2026-10-17'

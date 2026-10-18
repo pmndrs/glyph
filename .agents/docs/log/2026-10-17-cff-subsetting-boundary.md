@@ -1,6 +1,6 @@
 ---
 type: Log Entry
-title: "Make CFF Unicode preparation explicit"
+title: 'Make CFF Unicode preparation explicit'
 generated:
   by: process:docs-new
   at: '2026-10-17T20:49:50Z'
