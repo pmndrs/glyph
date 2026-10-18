@@ -7836,6 +7836,7 @@ test('measurement bindings do not retain unrelated detached Texts', async (t) =>
 test('alternating detached measurements retain one bounded prepared lifecycle', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const amiri = await loadFont({ baked: { bytes: await readFile(amiriFontUrl) } }, bitmap({ strikes: [16] }));
   const first = three.createText({ font, text: 'first detached query' });
   const second = three.createText({ font, text: 'second detached query' });
   const scene = new THREE.Scene();
@@ -7888,11 +7889,29 @@ test('alternating detached measurements retain one bounded prepared lifecycle', 
   first.style = { ...first.style, fontSize: 20 };
   assert.equal(first.measure().glyphCount, 28, 'a style mutation invalidates the controller measurement');
   assert.equal(instrumentedGlyph.measureCrossings, 2, 'the changed style incurs exactly one new preparation');
+  const styledMeasurement = first.measure();
   first.font = font;
-  assert.equal(first.measure().glyphCount, 28, 'a font mutation invalidates the controller measurement');
-  assert.equal(instrumentedGlyph.measureCrossings, 3, 'the changed font selection incurs exactly one new preparation');
+  assert.equal(first.measure(), styledMeasurement, 'an equal font selection retains the prepared measurement');
+  assert.equal(instrumentedGlyph.measureCrossings, 2, 'an equal font selection reuses its prepared revision');
 
-  scene.add(first, second);
+  scene.add(first);
+  scene.updateMatrixWorld(true);
+  assert.equal(instrumentedGlyph.crossings, 1, 'an explicit equal font selection still publishes its accepted update');
+  assert.equal(instrumentedGlyph.measureCrossings, 2, 'publishing an equal font selection does not prepare layout');
+  assert.equal(first.commitState().status, 'committed');
+
+  first.font = amiri;
+  assert.ok(first.measure().glyphCount > 0, 'a distinct font selection keeps the paragraph measurable');
+  assert.equal(instrumentedGlyph.measureCrossings, 3, 'a changed font binding incurs exactly one new preparation');
+
+  const coldThree = await createThreeTestHandle(t);
+  const cold = coldThree.createText({ font: amiri, text: first.text, style: first.style });
+  assertPublicSemanticLayoutEqual(first, cold, 'changed detached font selection matches a cold paragraph');
+  cold.dispose();
+  coldThree.dispose();
+  instrumentedGlyph.reset();
+
+  scene.add(second);
   scene.updateMatrixWorld(true);
   assert.equal(instrumentedGlyph.crossings, 1, 'later attachment publishes both Texts in one frame');
   assert.equal(
@@ -7911,6 +7930,7 @@ test('alternating detached measurements retain one bounded prepared lifecycle', 
   first.dispose();
   second.dispose();
   font.dispose();
+  amiri.dispose();
 });
 
 test('synchronous Three scene events cannot replace a live member traversal with query members', async (t) => {

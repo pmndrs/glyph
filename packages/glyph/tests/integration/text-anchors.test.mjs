@@ -67,10 +67,10 @@ async function make(t, properties = {}, config) {
   return { handle, text };
 }
 
-test('measure exposes primary-face font dimensions and computed paragraph/line references without ink positioning', async (t) => {
+test('measure exposes primary-face font dimensions and computed paragraph/line references', async (t) => {
   const { text } = await make(t, { layout: { spaceBefore: 7, spaceAfter: 9 } });
   const metrics = text.measure();
-  assert.equal(metrics.inkBounds, undefined);
+  assert.ok(metrics.inkBounds && metrics.inkBounds.width > 0 && metrics.inkBounds.height > 0);
   assert.equal(metrics.lineCount, 2);
   assert.equal(text.measure(), metrics);
   const scale = 20 / 2048;
@@ -113,14 +113,14 @@ test('all anchor tokens resolve from measured box or named reference without res
   });
   const columns = text.glyphs();
   const initial = text.measure();
-  let queries = 0;
-  const measure = PlanTransport.prototype.measureParagraph;
-  PlanTransport.prototype.measureParagraph = function (...args) {
-    queries++;
-    return measure.apply(this, args);
+  let preparations = 0;
+  const prepare = PlanTransport.prototype.prepareParagraph;
+  PlanTransport.prototype.prepareParagraph = function (...args) {
+    preparations++;
+    return prepare.apply(this, args);
   };
   t.after(() => {
-    PlanTransport.prototype.measureParagraph = measure;
+    PlanTransport.prototype.prepareParagraph = prepare;
   });
   const yReferences = {
     top: 0,
@@ -156,7 +156,7 @@ test('all anchor tokens resolve from measured box or named reference without res
       assert.deepEqual(nextColumns.y, columns.y);
     }
   }
-  assert.equal(queries, 0, 'anchor-only updates must not cross the layout/shape engine');
+  assert.equal(preparations, 0, 'anchor-only updates must reuse the prepared layout and shape');
   text.constraints = { width: { mode: 'exact', size: 160 }, height: { mode: 'exact', size: 100 } };
   assert.deepEqual(text.measure().anchorOffset, { x: 0, y: 0 });
 });

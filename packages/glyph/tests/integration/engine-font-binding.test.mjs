@@ -137,6 +137,7 @@ test('shape registration queue membership ends at staging, including deferral an
 function captureNextMeasureRequest() {
   const originalInstantiate = WebAssembly.instantiate;
   let latestRequest;
+  let requestCount = 0;
   WebAssembly.instantiate = async (source, imports) => {
     const instance = await originalInstantiate(source, imports);
     const exports = { ...instance.exports };
@@ -145,6 +146,7 @@ function captureNextMeasureRequest() {
     exports[textShaperAbi.functions.measureParagraph] = (...arguments_) => {
       const [, pointer, length] = arguments_;
       latestRequest = new Uint8Array(exports.memory.buffer, pointer, length).slice();
+      requestCount += 1;
       return measure(...arguments_);
     };
     return { exports };
@@ -156,6 +158,9 @@ function captureNextMeasureRequest() {
     bytes() {
       assert.ok(latestRequest, 'a paragraph measurement request must have been captured');
       return latestRequest;
+    },
+    get count() {
+      return requestCount;
     },
   };
 }
@@ -746,6 +751,8 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
     assert.equal(sparseStyles[0].getUint32(style.foregroundRgba, true), 0xffcc_6633, 'caller mutation is isolated');
     shapeGlyphEngine(glyphEngine);
     assert.equal(acceptedPublications, 2);
+    const sparseMeasurement = text.measure();
+    const requestsBeforeEqualUpdate = capture.count;
 
     text.update({
       text: {
@@ -759,18 +766,8 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
         ],
       },
     });
-    assert.equal(text.measure().lineCount > 0, true);
-    const noOpStyleBytes = capture.bytes();
-    assert.equal(
-      readRecords(
-        noOpStyleBytes,
-        request.styleMutationsOffset,
-        request.styleMutationCount,
-        textShaperAbi.layouts.engineStyleMutation,
-      ).length,
-      0,
-      'an equal normalized batch retains the committed style identities',
-    );
+    assert.equal(text.measure(), sparseMeasurement, 'an equal normalized batch reuses its prepared measurement');
+    assert.equal(capture.count, requestsBeforeEqualUpdate, 'an equal normalized batch does not reprepare Rust state');
     shapeGlyphEngine(glyphEngine);
     assert.equal(acceptedPublications, 3);
 

@@ -1884,7 +1884,14 @@ class ThreeRootPublication {
       !this.#materialInvalidated &&
       !this.#rendererUpdateRejected &&
       previous.committedPresentation !== undefined &&
-      sameTextPresentation(previous.committedPresentation, presentation) &&
+      sameTextPresentation(
+        previous.committedPresentation,
+        presentation.group,
+        presentation.batchGroup,
+        presentation.material,
+        presentation.pixelSnapping,
+        presentation.renderOrder,
+      ) &&
       previous.committedOrder === order &&
       Object.is(previous.committedOrderRank, orderRank) &&
       sameDesiredExceptAnchor(previous.stagedDesired, desired);

@@ -744,7 +744,7 @@ class RenderPlannerImpl {
         pendingFlowRegions: geometryDirty ? new Map() : state.pendingFlowRegions,
         pendingFlowExclusions: geometryDirty ? new Map() : state.pendingFlowExclusions,
       };
-      this.#prepareTextCandidate(preparation);
+      const preparationChanged = this.#prepareTextCandidate(preparation);
       this.#replaceLiveState(state, metrics);
       if (
         desired.transform.handle !== state.desired.transform.handle ||
@@ -770,7 +770,13 @@ class RenderPlannerImpl {
       state.pendingFlowRegions = preparation.pendingFlowRegions;
       state.pendingFlowExclusions = preparation.pendingFlowExclusions;
       state.measurement = preparation.measurement;
-      state.inspection = undefined;
+      if (preparationChanged) state.inspection = undefined;
+      else if (state.inspection?.kind === 'owned') {
+        state.inspection = {
+          ...state.inspection,
+          columns: withTextAnchor(state.inspection.columns, desired.source.constraints?.anchor),
+        };
+      }
       this.#pendingTexts.add(state);
     } catch (error) {
       releaseResolvedText(desired);
@@ -1099,7 +1105,7 @@ class RenderPlannerImpl {
     }
   }
 
-  #prepareTextCandidate(state: RetainedTextState): void {
+  #prepareTextCandidate(state: RetainedTextState): boolean {
     const styles = compileStyles(this.#handleState, state);
     const geometryChanged = state.geometryDirty || !state.prepared;
     const geometryRevision = state.geometryRevision + Number(geometryChanged);
@@ -1110,6 +1116,16 @@ class RenderPlannerImpl {
         ? undefined
         : { start: 0, deleteCount: state.preparedText.length, insert: state.desired.text };
     const preparedRemovals = [...this.#preparationRemovals];
+    const preparationChanged =
+      !state.prepared ||
+      textMutation !== undefined ||
+      styles.length !== 0 ||
+      geometry !== undefined ||
+      preparedRemovals.length !== 0;
+    if (!preparationChanged && state.measurement !== undefined) {
+      state.measurement = withTextAnchor(state.measurement, state.desired.source.constraints?.anchor);
+      return false;
+    }
     const paragraphMutations: PlannerParagraphMutation[] = [
       ...preparedRemovals.map((removed) => ({ opcode: 'remove' as const, paragraphId: removed.paragraphId })),
       ...(!state.prepared || preparedRemovals.length !== 0
@@ -1154,6 +1170,7 @@ class RenderPlannerImpl {
       this.#releasePreparedOrder(removed);
     }
     this.#preparationCount += 1;
+    return preparationChanged;
   }
 
   #compileFrame(options: NormalizedPublishOptions, checkpointGeneration: number): PlannerFrameUpdate {
