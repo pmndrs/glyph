@@ -49,7 +49,7 @@ const output = resolve(options.get('--output') ?? resolve(packageRoot, '.cache/s
 assertDiagnosticOutputOutsideDist(resolve(packageRoot, 'dist'), output);
 assertDiagnosticOutputOutsideDist(resolve(sourcePackageRoot, 'dist'), output);
 const artifactBytes = await readFile(artifact);
-const release = await captureCommand('tar', ['-xOf', '-', 'package/dist/text-shaper.wasm'], { input: artifactBytes });
+const release = await captureCommand('tar', ['-xzOf', '-', 'package/dist/text-shaper.wasm'], { input: artifactBytes });
 await mkdir(output, { recursive: true });
 await Promise.all(
   ['text-shaper.named.wasm', 'manifest.json'].map((file) => rm(resolve(output, file), { force: true })),

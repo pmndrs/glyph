@@ -101,7 +101,7 @@ await writeFile(resolve(output, 'report.md'), markdown(report));
 process.stdout.write(`Shaper size accounting: ${output}\n`);
 
 async function extractShaper(bytes) {
-  return captureCommand('tar', ['-xOf', '-', 'package/dist/text-shaper.wasm'], { input: bytes });
+  return captureCommand('tar', ['-xzOf', '-', 'package/dist/text-shaper.wasm'], { input: bytes });
 }
 
 function markdown(accounting) {

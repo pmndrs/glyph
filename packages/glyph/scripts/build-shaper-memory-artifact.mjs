@@ -42,7 +42,7 @@ assertDiagnosticOutputOutsideDist(resolve(packageRoot, 'dist'), output);
 assertDiagnosticOutputOutsideDist(resolve(sourcePackageRoot, 'dist'), output);
 
 const archive = await readFile(artifact);
-const release = await captureCommand('tar', ['-xOf', '-', 'package/dist/text-shaper.wasm'], { input: archive });
+const release = await captureCommand('tar', ['-xzOf', '-', 'package/dist/text-shaper.wasm'], { input: archive });
 const wasmOpt = resolve(packageRoot, 'node_modules/.bin', process.platform === 'win32' ? 'wasm-opt.CMD' : 'wasm-opt');
 const optimization = shaperOptimizationArguments(simd);
 await mkdir(output, { recursive: true });
