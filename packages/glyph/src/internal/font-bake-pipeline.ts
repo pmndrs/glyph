@@ -30,7 +30,7 @@ export interface FontBakePipelineTimings {
 
 export interface FontBakePipelineResult {
   readonly composed: ComposedFontBakeResult;
-  readonly preparation?: PreparedFontReport;
+  readonly preparation?: PreparedFontReport<number>;
   readonly timings: FontBakePipelineTimings;
 }
 

@@ -36,3 +36,6 @@ other collection faces. Direct-bake freshness compares the effective selected fa
 and output sizes both when baking and when reusing a fresh artifact; JSON reports the same for a bake.
 This corrects the implicit assumption in D-239 that every supported outline format can be Unicode-subset with Skera.
 Compact CFF/CFF2 artifacts still require a future upstream subsetter or an explicitly prepared external input font.
+The supported direct-memory pairing is this package's TypeScript wrapper with its matching font-baker Wasm and generated
+ABI. `createFontBaker` accepts caller-supplied modules for that contract; it does not promise that an older V0 module
+whose preparation report lacks these fields will run with a newer wrapper.

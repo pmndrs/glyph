@@ -465,7 +465,7 @@ function parseUnicodeSet(value: string): readonly UnicodeRange[] {
 async function bakeDirect(
   options: DirectBakeArguments,
   io: { readonly stdout: { write(text: string): unknown } },
-): Promise<NodeFontBakeReport | undefined> {
+): Promise<NodeFontBakeReport<number> | undefined> {
   const { plans, resolved } = await directRasterPlans(options);
   if (!options.check && !options.force) {
     const freshness = await fontIsUpToDate({
@@ -541,7 +541,7 @@ async function bakeDirect(
 }
 
 function wholeFaceFallbackMessage(
-  preparation: NonNullable<NodeFontBakeReport['preparation']>,
+  preparation: NonNullable<NodeFontBakeReport<number>['preparation']>,
   outputBytes: number,
 ): string {
   return (
@@ -575,11 +575,11 @@ function selectedCodePoint(codePoint: number, ranges: readonly UnicodeRange[] | 
 }
 
 function reportWithPublishedOutput(
-  report: NodeFontBakeReport,
+  report: NodeFontBakeReport<number>,
   stagedOutput: string,
   publishedOutput: string,
   publishDuration: number,
-): NodeFontBakeReport {
+): NodeFontBakeReport<number> {
   return {
     ...report,
     execution: {
