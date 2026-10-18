@@ -1,0 +1,159 @@
+{
+  "bytes": 1586976,
+  "sha256": "52e6c93589926675c52bccf0d880b2005f9544d9322f4273af364ca47a7c2adb",
+  "imports": [],
+  "exports": [
+    {
+      "name": "memory",
+      "kind": "memory"
+    },
+    {
+      "name": "pmndrs_glyph_engine_borrow_paragraph_glyphs",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_borrow_paragraph_layout",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_codec_count",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_copy_decorations",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_copy_glyphs",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_create_root",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_dispose_codec",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_dispose_font_binding",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_dispose_font_stack",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_dispose_root",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_font_binding_count",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_font_stack_count",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_measure_paragraph",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_register_codec",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_register_font_binding",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_register_font_stack",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_request_capacity",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_request_ptr",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_reserve_root",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_reserve_update_batch",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_reset_root",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_root_count",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_update",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_update_batch",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_update_batch_capacity",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_engine_update_batch_ptr",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_shaper_alloc",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_shaper_dealloc",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_shaper_dispose_font",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_shaper_font_count",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_shaper_glyph_outline",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_shaper_glyph_outline_len",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_shaper_glyph_outline_ptr",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_shaper_initialize",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_shaper_register_font",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_shaper_retained_font_bytes",
+      "kind": "function"
+    },
+    {
+      "name": "pmndrs_glyph_shaper_shape_plan_count",
+      "kind": "function"
+    }
+  ]
+}

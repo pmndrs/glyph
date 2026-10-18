@@ -1,0 +1,221 @@
+{
+  "format": "glyph-physical-byte-elision-untimed-artifact-wave-v1",
+  "source": {
+    "head": "ad6327d9199cedf88217f1098db3aeb439ec3e66",
+    "trackedClean": true
+  },
+  "frozenPackage": {
+    "path": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/package/pmndrs-glyph-0.1.0.tgz",
+    "sha256": "880255c15c9822ded79cc934dba755070348faf729bc96af9cd6f450a57cb332",
+    "bytes": 3167719,
+    "packedWasmSha256": "52e6c93589926675c52bccf0d880b2005f9544d9322f4273af364ca47a7c2adb",
+    "distWasmMatchesPacked": true
+  },
+  "postWaveObserver": {
+    "command": "mise exec -- node /private/tmp/glyph-bug-review-20261017/bitmap-equal-patch-proof/post-wave/observe.mjs --archive <frozen archive> --archive-sha256 880255c15c9822ded79cc934dba755070348faf729bc96af9cd6f450a57cb332 --source-head ad6327d9199cedf88217f1098db3aeb439ec3e66 --rust-source-sha256 bf7c65322c9f3e24b1f345b892c54592a18df197946be345dcc23645b3657840 --output /private/tmp/glyph-bug-review-20261017/bitmap-equal-patch-proof/post-wave/raw.json",
+    "exitCode": 0,
+    "rawPath": "/private/tmp/glyph-bug-review-20261017/bitmap-equal-patch-proof/post-wave/raw.json",
+    "rawCandidatePackageSha256": "880255c15c9822ded79cc934dba755070348faf729bc96af9cd6f450a57cb332",
+    "rawSourceHead": "ad6327d9199cedf88217f1098db3aeb439ec3e66",
+    "candidateSummary": "not produced; summarize.py ignored CLI flags and consumed its fixed HERE/raw.json; its printed result was baseline-only and not candidate evidence. No observer retry.",
+    "parentOfflineSummaryAudit": {
+      "path": "/private/tmp/glyph-bug-review-20261017/bitmap-equal-patch-proof/post-wave/summary.json",
+      "sha256": "b446d7d1af9fb078e4082f74899fae990248031e6ad17d52ffd1206d72836d3b",
+      "exitCode": 0,
+      "script": "/private/tmp/glyph-bug-review-20261017/bitmap-equal-patch-proof/post-wave/summarize.py",
+      "baselineSummaryOverwrittenByWrongScriptButByteIdenticalToPriorParentSnapshot": true,
+      "baselineSummarySha256": "b31507f540384d2f6d67e573fa03d17d94b7516c7e28efd523929f6a99262d86",
+      "observerRerun": false,
+      "denseActualPatchBytes": 131840,
+      "beforeDensePatchBytes": 214240,
+      "removedDensePatchBytes": 82400,
+      "coldHostOraclesPassed": 3
+    }
+  },
+  "namedProfileArtifact": {
+    "exitCode": 0,
+    "manifestPath": "/private/tmp/glyph-held-20261016/packages/glyph/.cache/physical-byte-elision-named/manifest.json",
+    "stdoutLog": "not separately persisted; original tool transcript reported authenticated named shaper path and exit 0; do not rerun for log",
+    "artifactSha256": "880255c15c9822ded79cc934dba755070348faf729bc96af9cd6f450a57cb332",
+    "sourceRevision": "ad6327d9199cedf88217f1098db3aeb439ec3e66",
+    "sourceDirty": "",
+    "simd": true,
+    "oneCallerInlineMaxFunctionSize": "0",
+    "releaseSha256": "52e6c93589926675c52bccf0d880b2005f9544d9322f4273af364ca47a7c2adb",
+    "executableSha256": "52e6c93589926675c52bccf0d880b2005f9544d9322f4273af364ca47a7c2adb",
+    "namedSha256": "54e1a12a192263f0f01ac9b99dd1b087256d8b37ec37dd5b2d2a5188f6b02360",
+    "releaseExecutableParity": true,
+    "functionMapEntries": 1575,
+    "tools": {
+      "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+      "wasmOpt": "wasm-opt version 129 (version_129)"
+    },
+    "optimization": [
+      "--enable-bulk-memory",
+      "--enable-nontrapping-float-to-int",
+      "--enable-simd",
+      "--one-caller-inline-max-function-size=0",
+      "--merge-similar-functions",
+      "-Oz",
+      "--merge-similar-functions",
+      "-Oz"
+    ]
+  },
+  "memoryArtifact": {
+    "exitCode": 0,
+    "logPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/shaper-memory-artifact.log",
+    "manifestPath": "/private/tmp/glyph-held-20261016/packages/glyph/.cache/physical-byte-elision-memory/manifest.json",
+    "shippingSha256": "52e6c93589926675c52bccf0d880b2005f9544d9322f4273af364ca47a7c2adb",
+    "featureOffControlSha256": "52e6c93589926675c52bccf0d880b2005f9544d9322f4273af364ca47a7c2adb",
+    "controlFeatureArgs": ["simd128"],
+    "diagnosticSha256": "d0175ffea34f817e415ea466d14323f6acd1de084f171f585b2df0e0b9c4ada3",
+    "diagnosticFeatureArgs": ["simd128", "diagnostic-live-memory"],
+    "allocationProof": {
+      "before": [1, 0, 2400, 2400, 0, 0, 0, 0],
+      "after": [1, 0, 2400, 2432, 1, 1, 1, 48],
+      "expected": {
+        "requestedPeakIncrease": 32,
+        "requestedLiveDelta": 0,
+        "cumulativeRequested": 48
+      }
+    }
+  },
+  "liveMemory": {
+    "exitCode": 0,
+    "logPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/shaper-live-memory.log",
+    "resultPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/candidate-memory.json",
+    "scope": "captured engine Wasm instance only",
+    "cycles": 8,
+    "exclusions": ["JS tokens", "GPU", "font decoder instances"],
+    "requestedPeakDefinition": "completed allocator-call high water; excludes Talc fragmentation and transient internal realloc peak",
+    "maxObservedRequestedLiveAcrossPhaseEnds": 39737871,
+    "maxObservedRequestedPeakAcrossPhaseEnds": 39946379,
+    "maxWasmPages": 721,
+    "retainedBaseline": {
+      "requestedLive": 7641016,
+      "requestedPeak": 7641016,
+      "allocations": 0,
+      "reallocations": 0,
+      "deallocations": 0,
+      "cumulativeRequested": 0,
+      "wasmPages": 721
+    },
+    "finalAfterTeardown": {
+      "requestedLive": 7641016,
+      "requestedPeak": 7641016,
+      "allocations": 0,
+      "reallocations": 0,
+      "deallocations": 0,
+      "cumulativeRequested": 0,
+      "wasmPages": 721
+    },
+    "notPhysicalReallocPeak": true
+  },
+  "builds": {
+    "r3fHelloWorld": {
+      "exitCode": 0,
+      "logPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/r3f-hello-world-build.log"
+    },
+    "tresPlayground": {
+      "exitCode": 0,
+      "logPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/tres-playground-build.log"
+    }
+  },
+  "deliverySize": {
+    "exitCode": 0,
+    "logPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/package-size.log",
+    "reportPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/delivery-sizes.json",
+    "measurementHost": {
+      "platform": "darwin",
+      "architecture": "arm64"
+    },
+    "allEntries": 32,
+    "allMeasured": true,
+    "namedSevenRows": [
+      {
+        "id": "browser-core",
+        "label": "Core JS",
+        "status": "measured",
+        "format": "javascript",
+        "sha256": "a8f3209978e9e33deb39c618d321bed3ef517d6fc4938f63fdfa3c7fef377726",
+        "rawBytes": 361294,
+        "minifiedBytes": 357461,
+        "gzipBytes": 87922,
+        "brotliBytes": 73029
+      },
+      {
+        "id": "glyph-config-js",
+        "label": "GlyphConfig integration DSL",
+        "status": "measured",
+        "format": "javascript",
+        "sha256": "cd3e6bc6a2be7c9e4dc11ebf2c1b6b07ca8d1f935b472a9c9c850323658e89cc",
+        "rawBytes": 45607,
+        "minifiedBytes": 45337,
+        "gzipBytes": 11977,
+        "brotliBytes": 10575
+      },
+      {
+        "id": "three-runtime-js",
+        "label": "Three.js adapter JS",
+        "status": "measured",
+        "format": "javascript",
+        "sha256": "f4bacc8f373656729203c50dd2e146ba6a2d29ab6037090d97be0ab2ba043987",
+        "rawBytes": 565624,
+        "minifiedBytes": 557917,
+        "gzipBytes": 138635,
+        "brotliBytes": 113736
+      },
+      {
+        "id": "react-runtime-js",
+        "label": "React adapter JS",
+        "status": "measured",
+        "format": "javascript",
+        "sha256": "a19a9b30da2bfa59110023578464c2a956a8e8534164baa021101667f18257b1",
+        "rawBytes": 567273,
+        "minifiedBytes": 558700,
+        "gzipBytes": 138571,
+        "brotliBytes": 114074
+      },
+      {
+        "id": "vue-runtime-js",
+        "label": "Vue adapter JS",
+        "status": "measured",
+        "format": "javascript",
+        "sha256": "ae200ca75a4913185237022baa03b78a245cac9bf6e4e700a6ee924034c01574",
+        "rawBytes": 566257,
+        "minifiedBytes": 558377,
+        "gzipBytes": 138411,
+        "brotliBytes": 114073
+      },
+      {
+        "id": "three-typegpu-runtime-js",
+        "label": "Three.js + TypeGPU adapter JS",
+        "status": "measured",
+        "format": "javascript",
+        "sha256": "fb1bf89eadf9321b5d3f677c0f84a8e095f87a43d587f418144ad8aae3d642d9",
+        "rawBytes": 657134,
+        "minifiedBytes": 646102,
+        "gzipBytes": 148836,
+        "brotliBytes": 121997
+      },
+      {
+        "id": "text-shaper-wasm",
+        "label": "Shaper Wasm",
+        "status": "measured",
+        "format": "wasm",
+        "sha256": "52e6c93589926675c52bccf0d880b2005f9544d9322f4273af364ca47a7c2adb",
+        "rawBytes": 1586976,
+        "minifiedBytes": 1586976,
+        "gzipBytes": 590781,
+        "brotliBytes": 459484
+      }
+    ],
+    "comparisonScope": "absolute candidate delivery bundle measurements only; this run did not produce paired baseline deltas"
+  },
+  "finalInvariant": {
+    "archiveSha256": "880255c15c9822ded79cc934dba755070348faf729bc96af9cd6f450a57cb332",
+    "distWasmSha256": "52e6c93589926675c52bccf0d880b2005f9544d9322f4273af364ca47a7c2adb",
+    "head": "ad6327d9199cedf88217f1098db3aeb439ec3e66",
+    "trackedClean": true
+  }
+}

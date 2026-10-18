@@ -1,0 +1,150 @@
+{
+  "workflow": "benchmark:retained-uploads",
+  "command": "PORTLESS_STATE_DIR=/private/tmp/glyph-physical-byte-portless-20261018 PORTLESS_SYNC_HOSTS=0 PORTLESS_HTTPS=0 PORTLESS_PORT=38641 mise exec -- node /Users/mini/.npm/_npx/6a98873df99949c7/node_modules/portless/dist/cli.js run --name glyph-pbyte-ret-20261018 --app-port 38644 mise exec -- pnpm scripts run benchmark:retained-uploads",
+  "exitCode": 0,
+  "report": {
+    "browser": "149.0.7827.55",
+    "three": "0.185.1",
+    "glyph": "workspace-source",
+    "usage": "stream",
+    "workload": {
+      "model": "one retained Text inside one TextGroup",
+      "initialColorSpans": 240,
+      "initialGlyphs": 2880,
+      "idleFrames": 30
+    },
+    "results": [
+      {
+        "backend": "webgpu",
+        "expectedUsage": "stream",
+        "initial": {
+          "pixelHash": "edd436be",
+          "litPixels": 48898,
+          "draws": 1,
+          "instances": 2880,
+          "uploads": {
+            "attributeCreateBytes": 254080,
+            "attributeCreateCalls": 10,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          }
+        },
+        "changedContents": {
+          "pixelHash": "acb4311e",
+          "litPixels": 48917,
+          "draws": 1,
+          "instances": 2880,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 157728,
+            "attributeUpdateCalls": 8,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          }
+        },
+        "idle": {
+          "frames": 30,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        },
+        "storage": {
+          "attributes": 14,
+          "bytes": 528512
+        }
+      },
+      {
+        "backend": "webgl2",
+        "expectedUsage": "stream",
+        "initial": {
+          "pixelHash": "04fac2ee",
+          "litPixels": 48898,
+          "draws": 1,
+          "instances": 2880,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 254080,
+            "pboTextureCreateCalls": 10,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          }
+        },
+        "changedContents": {
+          "pixelHash": "de29bf5e",
+          "litPixels": 48917,
+          "draws": 1,
+          "instances": 2880,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 221312,
+            "pboTextureUpdateCalls": 8
+          }
+        },
+        "idle": {
+          "frames": 30,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        },
+        "storage": {
+          "attributes": 14,
+          "bytes": 528512
+        }
+      }
+    ]
+  },
+  "artifact": {
+    "archiveSha256": "880255c15c9822ded79cc934dba755070348faf729bc96af9cd6f450a57cb332",
+    "packedWasmSha256": "52e6c93589926675c52bccf0d880b2005f9544d9322f4273af364ca47a7c2adb",
+    "workspaceDistSha256": "52e6c93589926675c52bccf0d880b2005f9544d9322f4273af364ca47a7c2adb",
+    "routeReceipt": "Conformance gate observed the runtime module construct this exact /@fs Wasm URL; HTTP fetch through its named Portless route returned the matching 1,586,976-byte application/wasm. This retained-upload workflow rendered with workspace-source and does not emit its own response-body hash."
+  },
+  "route": {
+    "host": "glyph-pbyte-ret-20261018.localhost",
+    "url": "http://glyph-pbyte-ret-20261018.localhost:38641",
+    "proxyPort": 38641,
+    "appPort": 38644,
+    "workflowLoggedPortlessUrl": true,
+    "portlessPid": null,
+    "listenerPid": null,
+    "cleanup": {
+      "appPortFree": true,
+      "routeAbsentAfterWorkflow": true
+    }
+  },
+  "limitations": [
+    "Upload counts cover the documented Three Attribute and WebGL2 PBO texture paths; other traffic is excluded.",
+    "No CPU elapsed-time comparison or hardware-GPU timing claim is made."
+  ]
+}

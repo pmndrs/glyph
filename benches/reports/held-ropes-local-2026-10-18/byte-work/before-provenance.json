@@ -1,0 +1,33 @@
+{
+  "archiveSha256": "2a7f0317a49319203aac935a8d7387eafcc9f78443ff6de31c699c4605412627",
+  "archiveSrcCount": 226,
+  "archiveSrcMissing": [],
+  "archiveSrcMismatches": [],
+  "archiveDistCount": 943,
+  "archiveDistMissing": [],
+  "archiveDistMismatches": [],
+  "rustSourceSha256Manifest": "5af0747202c14fc24e95d1419ef91d2056730a3da9f5f0843735eda02b36722e",
+  "rustVerification": "Run rust-source-check.mjs; JavaScript localeCompare ordering is part of sourceIdentity",
+  "maps": [
+    {
+      "map": "package/dist/internal/handle-state.js.map",
+      "sourceChecks": [
+        {
+          "source": "../../src/internal/handle-state.ts",
+          "sha256": "deb43f9ad12046c0ebed409de888cc67340a3367b2cc74ef88de66e44000e83f",
+          "current": "deb43f9ad12046c0ebed409de888cc67340a3367b2cc74ef88de66e44000e83f"
+        }
+      ]
+    },
+    {
+      "map": "package/dist/internal/render-planner.js.map",
+      "sourceChecks": [
+        {
+          "source": "../../src/internal/render-planner.ts",
+          "sha256": "e77a8f1e4e863d9c48bd18ede1e45290f0a3ed7386bca67784996bcaa1cf7365",
+          "current": "e77a8f1e4e863d9c48bd18ede1e45290f0a3ed7386bca67784996bcaa1cf7365"
+        }
+      ]
+    }
+  ]
+}

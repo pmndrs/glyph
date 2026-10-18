@@ -1,0 +1,21 @@
+{
+  "phase": "browser-gate pre/post frozen identity",
+  "before": {
+    "head": "ad6327d9199cedf88217f1098db3aeb439ec3e66",
+    "worktreeClean": true,
+    "archiveSha256": "880255c15c9822ded79cc934dba755070348faf729bc96af9cd6f450a57cb332",
+    "distWasmSha256": "52e6c93589926675c52bccf0d880b2005f9544d9322f4273af364ca47a7c2adb",
+    "archiveMemberWasmSha256": "52e6c93589926675c52bccf0d880b2005f9544d9322f4273af364ca47a7c2adb"
+  },
+  "after": {
+    "head": "ad6327d9199cedf88217f1098db3aeb439ec3e66",
+    "worktreeClean": true,
+    "archiveSha256": "880255c15c9822ded79cc934dba755070348faf729bc96af9cd6f450a57cb332",
+    "distWasmSha256": "52e6c93589926675c52bccf0d880b2005f9544d9322f4273af364ca47a7c2adb",
+    "archiveMemberWasmSha256": "52e6c93589926675c52bccf0d880b2005f9544d9322f4273af364ca47a7c2adb"
+  },
+  "sourceOrDependencyEdits": false,
+  "serverRoutesOrProxyRemaining": false,
+  "allOwnedPorts": [38641, 38642, 38643, 38644],
+  "allOwnedPortsFree": true
+}

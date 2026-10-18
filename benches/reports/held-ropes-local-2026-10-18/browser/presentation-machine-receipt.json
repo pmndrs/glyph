@@ -1,0 +1,82 @@
+{
+  "workflow": "benchmark:presentation",
+  "command": "PRESENTATION_BASE_URL=http://glyph-pbyte-pres-20261018.localhost:38641 PRESENTATION_SHAPER_ARTIFACT=/private/tmp/glyph-physical-byte-portless-20261018/pinned-text-shaper.wasm mise exec -- pnpm scripts run benchmark:presentation -- --workload dynamic-layout",
+  "exitCode": 0,
+  "report": {
+    "cellCount": 6,
+    "cells": [
+      {
+        "backend": "webgpu",
+        "technique": "bitmap",
+        "workloads": 1,
+        "rendererCount": 1,
+        "shaders": "tsl"
+      },
+      {
+        "backend": "webgpu",
+        "technique": "mtsdf",
+        "workloads": 1,
+        "rendererCount": 1,
+        "shaders": "tsl"
+      },
+      {
+        "backend": "webgpu",
+        "technique": "slug",
+        "workloads": 1,
+        "rendererCount": 1,
+        "shaders": "tsl"
+      },
+      {
+        "backend": "webgl2",
+        "technique": "bitmap",
+        "workloads": 1,
+        "rendererCount": 1,
+        "shaders": "tsl"
+      },
+      {
+        "backend": "webgl2",
+        "technique": "mtsdf",
+        "workloads": 1,
+        "rendererCount": 1,
+        "shaders": "tsl"
+      },
+      {
+        "backend": "webgl2",
+        "technique": "slug",
+        "workloads": 1,
+        "rendererCount": 1,
+        "shaders": "tsl"
+      }
+    ],
+    "artifactFetchesWithHashes": 6,
+    "artifactHashes": ["52e6c93589926675c52bccf0d880b2005f9544d9322f4273af364ca47a7c2adb"],
+    "settled": [
+      "dynamic-layout draws=1 glyphs=387",
+      "dynamic-layout draws=1 glyphs=387",
+      "dynamic-layout draws=1 glyphs=387",
+      "dynamic-layout draws=1 glyphs=387",
+      "dynamic-layout draws=1 glyphs=387",
+      "dynamic-layout draws=1 glyphs=387"
+    ]
+  },
+  "artifact": {
+    "archiveSha256": "880255c15c9822ded79cc934dba755070348faf729bc96af9cd6f450a57cb332",
+    "expectedWasmSha256": "52e6c93589926675c52bccf0d880b2005f9544d9322f4273af364ca47a7c2adb",
+    "packedWasmPath": "/private/tmp/glyph-physical-byte-portless-20261018/pinned-text-shaper.wasm",
+    "workflowAssertedFetchCount": true
+  },
+  "route": {
+    "url": "http://glyph-pbyte-pres-20261018.localhost:38641",
+    "proxyPort": 38641,
+    "appPort": 38643,
+    "portlessRoutePidObserved": 82689,
+    "viteListenerPidObserved": 82732,
+    "httpStatus": 200,
+    "header": "X-Portless: 1",
+    "serverStillOwned": true
+  },
+  "limits": [
+    "No CPU elapsed-time comparison is claimed from presentation log fields.",
+    "The six cases are the selected Dynamic Layout raster/backend presentation cells."
+  ]
+}

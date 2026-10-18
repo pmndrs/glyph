@@ -1,0 +1,38 @@
+{
+  "workflow": "benchmark:conformance",
+  "command": "PORTLESS_STATE_DIR=/private/tmp/glyph-physical-byte-portless-20261018 PORTLESS_SYNC_HOSTS=0 PORTLESS_HTTPS=0 PORTLESS_PORT=38641 mise exec -- node /Users/mini/.npm/_npx/6a98873df99949c7/node_modules/portless/dist/cli.js run --name glyph-pbyte-conf-20261018 --app-port 38642 mise exec -- pnpm scripts run benchmark:conformance -- --suite conformance --output /private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/browser/conformance-16.json",
+  "numericExitCode": null,
+  "exitEvidence": "The asynchronous exec session ended after the complete 16-case JSON report was written; its write_stdin result object was not retained, so no numeric exit is claimed.",
+  "report": {
+    "cases": 16,
+    "passed": 16,
+    "nonPassed": [],
+    "browserVersions": ["149.0.7827.55"]
+  },
+  "route": {
+    "url": "http://glyph-pbyte-conf-20261018.localhost:38641",
+    "proxyPort": 38641,
+    "appPort": 38642,
+    "portlessRoutePidObserved": 82044,
+    "viteListenerPidObserved": 82089,
+    "portlessUrlSeenByWorkflow": "http://glyph-pbyte-conf-20261018.localhost:38641",
+    "httpStatus": 200,
+    "header": "X-Portless: 1"
+  },
+  "wasm": {
+    "archiveSha256": "880255c15c9822ded79cc934dba755070348faf729bc96af9cd6f450a57cb332",
+    "expectedSha256": "52e6c93589926675c52bccf0d880b2005f9544d9322f4273af364ca47a7c2adb",
+    "urlFromViteServedModule": "/@fs/private/tmp/glyph-held-20261016/packages/glyph/dist/text-shaper.wasm",
+    "httpStatus": 200,
+    "contentType": "application/wasm",
+    "contentLength": 1586976,
+    "servedSha256": "52e6c93589926675c52bccf0d880b2005f9544d9322f4273af364ca47a7c2adb",
+    "file": ".cache/held-local-20261018/physical-byte-elision/gates/browser/conformance-served-text-shaper-raw.wasm",
+    "scope": "The named browser workflow passed; exact bytes were fetched over the same Portless route at the URL the served module constructs. The workflow has no per-response body hash field."
+  },
+  "cleanup": {
+    "routesJsonEmpty": true,
+    "appPort38642ListenerAbsent": true,
+    "proxy38641StillOwned": true
+  }
+}

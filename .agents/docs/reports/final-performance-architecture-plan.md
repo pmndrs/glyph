@@ -53,6 +53,12 @@ This plan replaces the report's older `346`-era execution sequence. The cost mod
 
 The seven fixed families and their implemented/open/rejected status are audited in [Held rope plan reconciliation](held-rope-plan-reconciliation-2026-10-16.md). Those families remain the scope of this handoff; workload win counts are not completion counts.
 
+## Physical-byte publication checkpoint — 18 October 2026
+
+The [current wave report](../../../benches/reports/held-ropes-local-2026-10-18/README.md) supersedes earlier build/timing availability statements for its exact frozen runtime `ad6327d9` and package `880255c1…`. Canonically encoded, byte-identical already-live writes are now omitted and payload compacted in the existing ordered compiler. Independent cold-output/downstream oracles, package/native/minimum-peer and bounded browser gates pass. Actual dense-fixture write payload and scoped engine memory decrease; no elapsed gain is established. One eight-block candidate was reused against main, published0.1.0 and prior HELD. Dense remains neutral versus prior HELD and materially slower than main/release; five small prior-HELD rows classify slower. Keep the work preserved and held, without no-regression clearance.
+
+The [compact frontier](../planning/publication-frontier.md) records next conditional proofs and the unchanged seven-family priorities. Advanced main's #308 public anchor/font-metric additions remain absent from HELD, so final integration/API/ABI/lifetime and equivalent-output readiness remain open alongside full hero A/B and whole-application physical peak. Historical evidence below stays tied to its own source and artifacts.
+
 ## Evidence ledger and current gates
 
 | Evidence                              | Exact scope and result                                                                                                                                                                                                                                                                                                                                 | Limit                                                                                                                                                                                                                                                                                                                                                                                                                                                 |

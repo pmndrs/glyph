@@ -1,0 +1,319 @@
+{
+  "packageSha256": "2a7f0317a49319203aac935a8d7387eafcc9f78443ff6de31c699c4605412627",
+  "cases": {
+    "digit": {
+      "priorPublication": "digit-cold",
+      "publication": "digit-edit",
+      "liveRecordsBeforeAndAfter": 6,
+      "bufferCapacityRecords": {
+        "origin": 8,
+        "size": 8,
+        "uvOrigin": 8,
+        "uvSize": 8,
+        "color": 8,
+        "page": 8
+      },
+      "coldHostOracleEqual": true,
+      "fields": {
+        "origin": {
+          "patchCount": 1,
+          "patchBytes": 48,
+          "eligibleEqualCount": 0,
+          "eligibleEqualBytes": 0
+        },
+        "size": {
+          "patchCount": 1,
+          "patchBytes": 48,
+          "eligibleEqualCount": 0,
+          "eligibleEqualBytes": 0
+        },
+        "uvOrigin": {
+          "patchCount": 1,
+          "patchBytes": 48,
+          "eligibleEqualCount": 0,
+          "eligibleEqualBytes": 0
+        },
+        "uvSize": {
+          "patchCount": 1,
+          "patchBytes": 48,
+          "eligibleEqualCount": 0,
+          "eligibleEqualBytes": 0
+        },
+        "color": {
+          "patchCount": 1,
+          "patchBytes": 96,
+          "eligibleEqualCount": 1,
+          "eligibleEqualBytes": 96
+        },
+        "page": {
+          "patchCount": 1,
+          "patchBytes": 24,
+          "eligibleEqualCount": 1,
+          "eligibleEqualBytes": 24
+        }
+      },
+      "actualThreeHostDirtyRanges": {
+        "origin": [
+          {
+            "start": 0,
+            "count": 12
+          }
+        ],
+        "page": [
+          {
+            "start": 0,
+            "count": 6
+          }
+        ],
+        "uvOrigin": [
+          {
+            "start": 0,
+            "count": 12
+          }
+        ],
+        "color": [
+          {
+            "start": 0,
+            "count": 24
+          }
+        ],
+        "size": [
+          {
+            "start": 0,
+            "count": 12
+          }
+        ],
+        "uvSize": [
+          {
+            "start": 0,
+            "count": 12
+          }
+        ]
+      },
+      "hypotheticalHostDirtyRangesAfterEqualPatchOmission": {
+        "origin": [
+          {
+            "start": 0,
+            "count": 12
+          }
+        ],
+        "size": [
+          {
+            "start": 0,
+            "count": 12
+          }
+        ],
+        "uvOrigin": [
+          {
+            "start": 0,
+            "count": 12
+          }
+        ],
+        "uvSize": [
+          {
+            "start": 0,
+            "count": 12
+          }
+        ],
+        "color": [],
+        "page": []
+      }
+    },
+    "paint": {
+      "priorPublication": "digit-edit",
+      "publication": "paint-edit",
+      "liveRecordsBeforeAndAfter": 6,
+      "bufferCapacityRecords": {
+        "origin": 8,
+        "size": 8,
+        "uvOrigin": 8,
+        "uvSize": 8,
+        "color": 8,
+        "page": 8
+      },
+      "coldHostOracleEqual": true,
+      "fields": {
+        "origin": {
+          "patchCount": 0,
+          "patchBytes": 0,
+          "eligibleEqualCount": 0,
+          "eligibleEqualBytes": 0
+        },
+        "size": {
+          "patchCount": 0,
+          "patchBytes": 0,
+          "eligibleEqualCount": 0,
+          "eligibleEqualBytes": 0
+        },
+        "uvOrigin": {
+          "patchCount": 0,
+          "patchBytes": 0,
+          "eligibleEqualCount": 0,
+          "eligibleEqualBytes": 0
+        },
+        "uvSize": {
+          "patchCount": 0,
+          "patchBytes": 0,
+          "eligibleEqualCount": 0,
+          "eligibleEqualBytes": 0
+        },
+        "color": {
+          "patchCount": 1,
+          "patchBytes": 96,
+          "eligibleEqualCount": 0,
+          "eligibleEqualBytes": 0
+        },
+        "page": {
+          "patchCount": 0,
+          "patchBytes": 0,
+          "eligibleEqualCount": 0,
+          "eligibleEqualBytes": 0
+        }
+      },
+      "actualThreeHostDirtyRanges": {
+        "origin": [],
+        "page": [],
+        "uvOrigin": [],
+        "color": [
+          {
+            "start": 0,
+            "count": 24
+          }
+        ],
+        "size": [],
+        "uvSize": []
+      },
+      "hypotheticalHostDirtyRangesAfterEqualPatchOmission": {
+        "origin": [],
+        "size": [],
+        "uvOrigin": [],
+        "uvSize": [],
+        "color": [
+          {
+            "start": 0,
+            "count": 24
+          }
+        ],
+        "page": []
+      }
+    },
+    "dense": {
+      "priorPublication": "dense-cold",
+      "publication": "dense-bulk-edit",
+      "liveRecordsBeforeAndAfter": 4120,
+      "bufferCapacityRecords": {
+        "origin": 8192,
+        "size": 8192,
+        "uvOrigin": 8192,
+        "uvSize": 8192,
+        "color": 8192,
+        "page": 8192
+      },
+      "coldHostOracleEqual": true,
+      "fields": {
+        "origin": {
+          "patchCount": 1,
+          "patchBytes": 32960,
+          "eligibleEqualCount": 0,
+          "eligibleEqualBytes": 0
+        },
+        "size": {
+          "patchCount": 1,
+          "patchBytes": 32960,
+          "eligibleEqualCount": 0,
+          "eligibleEqualBytes": 0
+        },
+        "uvOrigin": {
+          "patchCount": 1,
+          "patchBytes": 32960,
+          "eligibleEqualCount": 0,
+          "eligibleEqualBytes": 0
+        },
+        "uvSize": {
+          "patchCount": 1,
+          "patchBytes": 32960,
+          "eligibleEqualCount": 0,
+          "eligibleEqualBytes": 0
+        },
+        "color": {
+          "patchCount": 1,
+          "patchBytes": 65920,
+          "eligibleEqualCount": 1,
+          "eligibleEqualBytes": 65920
+        },
+        "page": {
+          "patchCount": 1,
+          "patchBytes": 16480,
+          "eligibleEqualCount": 1,
+          "eligibleEqualBytes": 16480
+        }
+      },
+      "actualThreeHostDirtyRanges": {
+        "origin": [
+          {
+            "start": 0,
+            "count": 8240
+          }
+        ],
+        "page": [
+          {
+            "start": 0,
+            "count": 4120
+          }
+        ],
+        "uvOrigin": [
+          {
+            "start": 0,
+            "count": 8240
+          }
+        ],
+        "color": [
+          {
+            "start": 0,
+            "count": 16480
+          }
+        ],
+        "size": [
+          {
+            "start": 0,
+            "count": 8240
+          }
+        ],
+        "uvSize": [
+          {
+            "start": 0,
+            "count": 8240
+          }
+        ]
+      },
+      "hypotheticalHostDirtyRangesAfterEqualPatchOmission": {
+        "origin": [
+          {
+            "start": 0,
+            "count": 8240
+          }
+        ],
+        "size": [
+          {
+            "start": 0,
+            "count": 8240
+          }
+        ],
+        "uvOrigin": [
+          {
+            "start": 0,
+            "count": 8240
+          }
+        ],
+        "uvSize": [
+          {
+            "start": 0,
+            "count": 8240
+          }
+        ],
+        "color": [],
+        "page": []
+      }
+    }
+  }
+}
