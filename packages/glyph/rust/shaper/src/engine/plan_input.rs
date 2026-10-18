@@ -50,22 +50,11 @@ impl PlanInput<'_> {
 
 pub fn span_bounds(glyphs: &[PlanGlyph]) -> Result<(f32, f32, f32, f32), PlanInputError> {
     let first = glyphs.first().ok_or(PlanInputError::InvalidShape)?;
-    let mut inline_start = first.inline_start;
-    let mut block_start = first.block_start;
-    let mut inline_end = first.inline_start + first.inline_extent;
-    let mut block_end = first.block_start + first.block_extent;
+    let mut summary = DrawSpanSummary::new(*first);
     for glyph in &glyphs[1..] {
-        inline_start = inline_start.min(glyph.inline_start);
-        block_start = block_start.min(glyph.block_start);
-        inline_end = inline_end.max(glyph.inline_start + glyph.inline_extent);
-        block_end = block_end.max(glyph.block_start + glyph.block_extent);
+        summary.push(*glyph);
     }
-    let inline_extent = inline_end - inline_start;
-    let block_extent = block_end - block_start;
-    if !inline_extent.is_finite() || !block_extent.is_finite() {
-        return Err(PlanInputError::InvalidShape);
-    }
-    Ok((inline_start, block_start, inline_extent, block_extent))
+    summary.bounds()
 }
 
 pub fn indexed_span_bounds(
@@ -75,23 +64,58 @@ pub fn indexed_span_bounds(
     let first = glyphs
         .get(indices.next().ok_or(PlanInputError::InvalidShape)?)
         .ok_or(PlanInputError::InvalidShape)?;
-    let mut inline_start = first.inline_start;
-    let mut block_start = first.block_start;
-    let mut inline_end = first.inline_start + first.inline_extent;
-    let mut block_end = first.block_start + first.block_extent;
+    let mut summary = DrawSpanSummary::new(*first);
     for index in indices {
         let glyph = glyphs.get(index).ok_or(PlanInputError::InvalidShape)?;
-        inline_start = inline_start.min(glyph.inline_start);
-        block_start = block_start.min(glyph.block_start);
-        inline_end = inline_end.max(glyph.inline_start + glyph.inline_extent);
-        block_end = block_end.max(glyph.block_start + glyph.block_extent);
+        summary.push(*glyph);
     }
-    let inline_extent = inline_end - inline_start;
-    let block_extent = block_end - block_start;
-    if !inline_extent.is_finite() || !block_extent.is_finite() {
-        return Err(PlanInputError::InvalidShape);
+    summary.bounds()
+}
+
+pub(crate) struct DrawSpanSummary {
+    inline_start: f32,
+    block_start: f32,
+    inline_end: f32,
+    block_end: f32,
+    pub(crate) semantic_id: u32,
+}
+
+impl DrawSpanSummary {
+    pub(crate) fn new(first: PlanGlyph) -> Self {
+        Self {
+            inline_start: first.inline_start,
+            block_start: first.block_start,
+            inline_end: first.inline_start + first.inline_extent,
+            block_end: first.block_start + first.block_extent,
+            semantic_id: first.semantic_id,
+        }
     }
-    Ok((inline_start, block_start, inline_extent, block_extent))
+
+    pub(crate) fn push(&mut self, glyph: PlanGlyph) {
+        self.inline_start = self.inline_start.min(glyph.inline_start);
+        self.block_start = self.block_start.min(glyph.block_start);
+        self.inline_end = self
+            .inline_end
+            .max(glyph.inline_start + glyph.inline_extent);
+        self.block_end = self.block_end.max(glyph.block_start + glyph.block_extent);
+        if glyph.semantic_id != self.semantic_id {
+            self.semantic_id = 0;
+        }
+    }
+
+    pub(crate) fn bounds(&self) -> Result<(f32, f32, f32, f32), PlanInputError> {
+        let inline_extent = self.inline_end - self.inline_start;
+        let block_extent = self.block_end - self.block_start;
+        if !inline_extent.is_finite() || !block_extent.is_finite() {
+            return Err(PlanInputError::InvalidShape);
+        }
+        Ok((
+            self.inline_start,
+            self.block_start,
+            inline_extent,
+            block_extent,
+        ))
+    }
 }
 
 pub fn draw_fields_compatible(
