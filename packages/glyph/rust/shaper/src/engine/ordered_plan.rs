@@ -1603,6 +1603,7 @@ impl OrderedPlanCompiler {
                 active_buffers,
             } = self.range_jobs[job_index];
             let count = aligned.end - aligned.start;
+            let mut compact_cursor = self.payload.len();
             let mut payload_starts = [0_usize; MAX_PHYSICAL_BUFFERS];
             for (schema_index, schema) in program.buffers.iter().enumerate() {
                 if active_buffers & (1 << schema_index) == 0 {
@@ -1773,6 +1774,36 @@ impl OrderedPlanCompiler {
                 {
                     return Err(OrderedPlanError::InvalidIdentity);
                 }
+                // Prior-batch admission matches the batch key; prepare_batch copies its buffer
+                // identities and capacity when !replace. Matching codec/capability fingerprints
+                // then prove program and schema reuse. Only live-range and byte equality remain.
+                let same_physical_bytes = !replace
+                    && self.codec_fingerprint == codec.fingerprint()
+                    && self.capability_set == capability_set.0
+                    && aligned.end <= pending.state.instance_count
+                    && prior.is_some_and(|batch| {
+                        aligned.end <= batch.instance_count
+                            && self
+                                .buffers
+                                .get(batch.buffer_start as usize + schema_index)
+                                .is_some_and(|old| {
+                                    old.bytes.get(destination_start..destination_end)
+                                        == Some(&self.payload[source_start..source_end])
+                                })
+                    });
+                if same_physical_bytes {
+                    continue;
+                }
+                // Active segments were appended in schema order. The compact destination never
+                // passes this source, so it cannot overwrite a later segment or an earlier job.
+                if compact_cursor != source_start {
+                    self.payload
+                        .copy_within(source_start..source_end, compact_cursor);
+                }
+                let compact_start = compact_cursor;
+                compact_cursor = compact_cursor
+                    .checked_add(length)
+                    .ok_or(OrderedPlanError::ArithmeticOverflow)?;
                 reserve(&mut self.patches, 1)?;
                 self.patches.push(PatchRecord {
                     opcode: PATCH_WRITE,
@@ -1780,7 +1811,7 @@ impl OrderedPlanCompiler {
                     buffer_generation,
                     destination_offset,
                     byte_length,
-                    payload_start: u32::try_from(payload_starts[schema_index])
+                    payload_start: u32::try_from(compact_start)
                         .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
                     ..PatchRecord::default()
                 });
@@ -1794,9 +1825,10 @@ impl OrderedPlanCompiler {
                         .and_then(Option::as_mut)
                         .ok_or(OrderedPlanError::InvalidIdentity)?;
                     allocation.state.bytes[destination_start..destination_end]
-                        .copy_from_slice(&self.payload[source_start..source_end]);
+                        .copy_from_slice(&self.payload[compact_start..compact_cursor]);
                 }
             }
+            self.payload.truncate(compact_cursor);
         }
         Ok(())
     }
@@ -4946,6 +4978,403 @@ mod tests {
     }
 
     #[test]
+    fn equal_physical_patches_compact_payload_across_buffers_and_jobs() {
+        let codec = placement_codec();
+        let mut compiler = OrderedPlanCompiler::default();
+        let mut host = TestHost::default();
+        let initial = [glyph(1, 1), glyph(2, 1), glyph(3, 1)];
+        prepare_two_fields(
+            &mut compiler,
+            &codec,
+            &initial,
+            &[1.0, 2.0, 3.0],
+            &[10, 20, 30],
+            true,
+        );
+        let cold = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+        assert_eq!(
+            cold.patches
+                .iter()
+                .filter(|patch| patch.opcode == PATCH_WRITE)
+                .count(),
+            2
+        );
+        host.accept(cold, compiler.publish_bindings);
+        compiler.commit().unwrap();
+
+        let changed = [glyph(1, 2), glyph(2, 1), glyph(3, 2)];
+        prepare_two_fields(
+            &mut compiler,
+            &codec,
+            &changed,
+            &[1.0, 2.0, 3.0],
+            &[11, 20, 31],
+            false,
+        );
+        let delta = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+        assert_eq!(
+            delta.patches.len(),
+            2,
+            "equal f32 slices omit both whole writes"
+        );
+        assert!(
+            delta
+                .patches
+                .iter()
+                .all(|patch| patch.opcode == PATCH_WRITE)
+        );
+        assert_eq!(delta.patches[0].destination_offset, 0);
+        assert_eq!(delta.patches[1].destination_offset, 8);
+        assert_eq!(delta.patches[0].payload_start, 0);
+        assert_eq!(delta.patches[1].payload_start, 4);
+        assert_eq!(
+            delta.payload,
+            [11_u32.to_le_bytes(), 31_u32.to_le_bytes()].concat()
+        );
+        let layout = plan_layout(delta).unwrap();
+        let mut encoded = vec![0; layout.byte_length as usize];
+        super::super::render_plan_wire::encode_publication(delta, &[], layout, &mut encoded)
+            .unwrap();
+        let payload_offset = layout.payload_offset as usize;
+        assert_eq!(&encoded[payload_offset..payload_offset + 8], delta.payload);
+        host.accept(delta, compiler.publish_bindings);
+        compiler.commit().unwrap();
+
+        let mut oracle_compiler = OrderedPlanCompiler::default();
+        let mut oracle_host = TestHost::default();
+        prepare_two_fields(
+            &mut oracle_compiler,
+            &codec,
+            &changed,
+            &[1.0, 2.0, 3.0],
+            &[11, 20, 31],
+            true,
+        );
+        oracle_host.accept(
+            oracle_compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap(),
+            oracle_compiler.publish_bindings,
+        );
+        assert_eq!(host.snapshot(), oracle_host.snapshot());
+        assert_eq!(
+            host.bytes, oracle_host.bytes,
+            "capacity tails match cold output"
+        );
+    }
+
+    #[test]
+    fn equal_values_still_write_on_checkpoint_resize_and_regrown_live_tail() {
+        let codec = placement_codec();
+        let mut compiler = OrderedPlanCompiler::default();
+        let mut host = TestHost::default();
+        let initial = [glyph(1, 1), glyph(2, 1), glyph(3, 1)];
+        let x = [1.0, 2.0, 3.0];
+        let occurrence = [10, 20, 30];
+        prepare_two_fields(&mut compiler, &codec, &initial, &x, &occurrence, true);
+        let cold = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+        assert_eq!(
+            cold.patches
+                .iter()
+                .filter(|patch| patch.opcode == PATCH_WRITE)
+                .count(),
+            2
+        );
+        host.accept(cold, compiler.publish_bindings);
+        compiler.commit().unwrap();
+
+        let same_values = [glyph(1, 2), glyph(2, 2), glyph(3, 2)];
+        prepare_two_fields(&mut compiler, &codec, &same_values, &x, &occurrence, true);
+        let checkpoint = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+        assert_eq!(
+            checkpoint
+                .patches
+                .iter()
+                .filter(|patch| patch.opcode == PATCH_ALLOCATE_OR_RESIZE)
+                .count(),
+            2
+        );
+        assert_eq!(
+            checkpoint
+                .patches
+                .iter()
+                .filter(|patch| patch.opcode == PATCH_WRITE)
+                .count(),
+            2
+        );
+        assert_eq!(checkpoint.payload.len(), 24);
+        host.accept(checkpoint, compiler.publish_bindings);
+        compiler.commit().unwrap();
+
+        prepare_two_fields(
+            &mut compiler,
+            &codec,
+            &same_values[..2],
+            &x[..2],
+            &occurrence[..2],
+            false,
+        );
+        host.accept(
+            compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap(),
+            compiler.publish_bindings,
+        );
+        compiler.commit().unwrap();
+
+        prepare_two_fields(&mut compiler, &codec, &same_values, &x, &occurrence, false);
+        let regrow = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+        assert_eq!(
+            regrow.patches.len(),
+            2,
+            "newly live rows write even when tail bytes match"
+        );
+        assert_eq!(regrow.payload.len(), 8);
+        host.accept(regrow, compiler.publish_bindings);
+        compiler.commit().unwrap();
+
+        let larger = [
+            glyph(1, 2),
+            glyph(2, 2),
+            glyph(3, 2),
+            glyph(4, 1),
+            glyph(5, 1),
+        ];
+        prepare_two_fields(
+            &mut compiler,
+            &codec,
+            &larger,
+            &[1.0, 2.0, 3.0, 4.0, 5.0],
+            &[10, 20, 30, 40, 50],
+            false,
+        );
+        let resize = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+        assert_eq!(
+            resize
+                .patches
+                .iter()
+                .filter(|patch| patch.opcode == PATCH_ALLOCATE_OR_RESIZE)
+                .count(),
+            2
+        );
+        assert_eq!(
+            resize
+                .patches
+                .iter()
+                .filter(|patch| patch.opcode == PATCH_WRITE)
+                .count(),
+            2
+        );
+        host.accept(resize, compiler.publish_bindings);
+        compiler.commit().unwrap();
+
+        let mut oracle_compiler = OrderedPlanCompiler::default();
+        let mut oracle_host = TestHost::default();
+        prepare_two_fields(
+            &mut oracle_compiler,
+            &codec,
+            &larger,
+            &[1.0, 2.0, 3.0, 4.0, 5.0],
+            &[10, 20, 30, 40, 50],
+            true,
+        );
+        oracle_host.accept(
+            oracle_compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap(),
+            oracle_compiler.publish_bindings,
+        );
+        assert_eq!(host.snapshot(), oracle_host.snapshot());
+    }
+
+    #[test]
+    fn omitted_middle_buffer_moves_later_payload_without_touching_prior_job() {
+        let codec = three_field_codec();
+        let mut compiler = OrderedPlanCompiler::default();
+        let mut host = TestHost::default();
+        let initial = [glyph(1, 1)];
+        let changed = [glyph(1, 2)];
+        let prepare_fields = |compiler: &mut OrderedPlanCompiler,
+                              rows: &[OrderedGlyph],
+                              first: &[f32],
+                              middle: &[u32],
+                              last: &[f32],
+                              checkpoint| {
+            compiler
+                .prepare(
+                    &codec,
+                    CAPABILITY,
+                    OrderedPlanInput {
+                        glyphs: rows,
+                        placement_slots: &[0],
+                        semantic_change_masks: &[u16::MAX],
+                        f32_fields: &[first, last],
+                        u32_fields: &[middle],
+                        order_independent: false,
+                    },
+                    checkpoint,
+                    1,
+                )
+                .unwrap();
+        };
+        prepare_fields(&mut compiler, &initial, &[1.0], &[10], &[100.0], true);
+        host.accept(
+            compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap(),
+            compiler.publish_bindings,
+        );
+        compiler.commit().unwrap();
+
+        prepare_fields(&mut compiler, &changed, &[2.0], &[10], &[101.0], false);
+        let delta = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+        assert_eq!(delta.patches.len(), 2);
+        assert_eq!(delta.patches[0].buffer_id, 1);
+        assert_eq!(delta.patches[1].buffer_id, 3);
+        assert_eq!(delta.patches[0].payload_start, 0);
+        assert_eq!(delta.patches[1].payload_start, 4);
+        assert_eq!(
+            delta.payload,
+            [2.0_f32.to_le_bytes(), 101.0_f32.to_le_bytes()].concat()
+        );
+        plan_layout(delta).unwrap();
+        host.accept(delta, compiler.publish_bindings);
+        compiler.commit().unwrap();
+
+        let mut cold = OrderedPlanCompiler::default();
+        let mut oracle = TestHost::default();
+        prepare_fields(&mut cold, &changed, &[2.0], &[10], &[101.0], true);
+        oracle.accept(
+            cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap(),
+            cold.publish_bindings,
+        );
+        assert_eq!(host.bytes, oracle.bytes);
+        assert_eq!(host.snapshot(), oracle.snapshot());
+    }
+
+    #[test]
+    fn equal_aligned_patch_crossing_live_tail_is_retained() {
+        let codec = placement_codec_with_alignment(8);
+        let mut compiler = OrderedPlanCompiler::default();
+        let rows = [glyph(1, 1), glyph(2, 1), glyph(3, 1)];
+        prepare_two_fields(
+            &mut compiler,
+            &codec,
+            &rows,
+            &[1.0, 2.0, 3.0],
+            &[10, 20, 30],
+            true,
+        );
+        compiler.commit().unwrap();
+
+        let changed = [glyph(1, 1), glyph(2, 1), glyph(3, 2)];
+        prepare_two_fields(
+            &mut compiler,
+            &codec,
+            &changed,
+            &[1.0, 2.0, 3.0],
+            &[10, 20, 30],
+            false,
+        );
+        let delta = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+        assert_eq!(
+            delta.patches.len(),
+            2,
+            "aligned bytes beyond live count must be written"
+        );
+        assert!(
+            delta
+                .patches
+                .iter()
+                .all(|patch| patch.opcode == PATCH_WRITE)
+        );
+        assert_eq!(delta.payload.len(), 16);
+        assert!(
+            delta
+                .patches
+                .iter()
+                .all(|patch| patch.destination_offset == 8 && patch.byte_length == 8)
+        );
+    }
+
+    #[test]
+    fn rejected_host_publication_retries_with_checkpoint_writes() {
+        let codec = placement_codec();
+        let mut compiler = OrderedPlanCompiler::default();
+        let mut host = TestHost::default();
+        let initial = [glyph(1, 1)];
+        prepare_two_fields(&mut compiler, &codec, &initial, &[1.0], &[10], true);
+        host.accept(
+            compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap(),
+            compiler.publish_bindings,
+        );
+        compiler.commit().unwrap();
+
+        let changed = [glyph(1, 2)];
+        prepare_two_fields(&mut compiler, &codec, &changed, &[2.0], &[10], false);
+        let rejected = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+        assert_eq!(
+            rejected.patches.len(),
+            1,
+            "unchanged second field was omitted"
+        );
+        // Rust adopts preparation before the renderer accepts it; the host rejects this plan.
+        compiler.commit().unwrap();
+
+        prepare_two_fields(&mut compiler, &codec, &changed, &[2.0], &[10], true);
+        let retry = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+        assert_eq!(
+            retry
+                .patches
+                .iter()
+                .filter(|patch| patch.opcode == PATCH_ALLOCATE_OR_RESIZE)
+                .count(),
+            2
+        );
+        assert_eq!(
+            retry
+                .patches
+                .iter()
+                .filter(|patch| patch.opcode == PATCH_WRITE)
+                .count(),
+            2
+        );
+        host.accept(retry, compiler.publish_bindings);
+        compiler.commit().unwrap();
+
+        let mut cold = OrderedPlanCompiler::default();
+        let mut oracle = TestHost::default();
+        prepare_two_fields(&mut cold, &codec, &changed, &[2.0], &[10], true);
+        oracle.accept(
+            cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap(),
+            cold.publish_bindings,
+        );
+        assert_eq!(host.snapshot(), oracle.snapshot());
+    }
+
+    #[test]
     fn retained_host_topology_refreshes_metadata_but_rejects_structural_changes() {
         let codec = codec();
         let initial = [glyph(1, 1), glyph(2, 1), glyph(3, 1)];
@@ -5954,6 +6383,34 @@ mod tests {
         prepare_with_masks(compiler, codec, glyphs, x, &[], checkpoint);
     }
 
+    fn prepare_two_fields(
+        compiler: &mut OrderedPlanCompiler,
+        codec: &ValidatedCodec,
+        glyphs: &[OrderedGlyph],
+        x: &[f32],
+        occurrence: &[u32],
+        checkpoint: bool,
+    ) {
+        let placement_slots = vec![0; glyphs.len()];
+        let semantic_change_masks = vec![u16::MAX; glyphs.len()];
+        compiler
+            .prepare(
+                codec,
+                CAPABILITY,
+                OrderedPlanInput {
+                    glyphs,
+                    placement_slots: &placement_slots,
+                    semantic_change_masks: &semantic_change_masks,
+                    f32_fields: &[x],
+                    u32_fields: &[occurrence],
+                    order_independent: false,
+                },
+                checkpoint,
+                1,
+            )
+            .unwrap();
+    }
+
     fn prepare_with_masks(
         compiler: &mut OrderedPlanCompiler,
         codec: &ValidatedCodec,
@@ -6028,7 +6485,12 @@ mod tests {
     }
 
     fn placement_codec() -> ValidatedCodec {
+        placement_codec_with_alignment(4)
+    }
+
+    fn placement_codec_with_alignment(update_alignment: u32) -> ValidatedCodec {
         let mut descriptor = descriptor_with_options(false, 1024, true);
+        descriptor.capability_sets[0].update_alignment = update_alignment;
         let program = &mut descriptor.programs[0];
         program.capability_set = CAPABILITY;
         program.u32_input_count = 1;
@@ -6054,6 +6516,56 @@ mod tests {
             },
         ]);
         descriptor.capability_sets[0].max_buffers_per_draw = 2;
+        ValidatedCodec::new(descriptor).unwrap()
+    }
+
+    fn three_field_codec() -> ValidatedCodec {
+        let mut descriptor = descriptor_with_options(false, 1024, true);
+        let program = &mut descriptor.programs[0];
+        program.capability_set = CAPABILITY;
+        program.f32_input_count = 2;
+        program.u32_input_count = 1;
+        program
+            .inputs
+            .push(crate::engine::codec::InputSource::semantic(1));
+        program
+            .inputs
+            .push(crate::engine::codec::InputSource::semantic(8));
+        program.buffers.push(BufferSchema::packed(
+            BufferId(2),
+            ScalarType::U32,
+            1,
+            BUFFER_USAGE_STORAGE | BUFFER_USAGE_COPY_DST,
+            1,
+        ));
+        program.buffers.push(BufferSchema::packed(
+            BufferId(3),
+            ScalarType::F32,
+            1,
+            BUFFER_USAGE_STORAGE | BUFFER_USAGE_COPY_DST,
+            1,
+        ));
+        program.operations.extend([
+            Operation::LoadU32 {
+                target: 1,
+                field: 0,
+            },
+            Operation::StoreU32 {
+                source: 1,
+                buffer: BufferId(2),
+                lane: 0,
+            },
+            Operation::LoadF32 {
+                target: 2,
+                field: 1,
+            },
+            Operation::StoreF32 {
+                source: 2,
+                buffer: BufferId(3),
+                lane: 0,
+            },
+        ]);
+        descriptor.capability_sets[0].max_buffers_per_draw = 3;
         ValidatedCodec::new(descriptor).unwrap()
     }
 

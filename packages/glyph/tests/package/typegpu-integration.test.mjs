@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { glyph, msdf } from '@pmndrs/glyph';
+import { bitmap, glyph, msdf } from '@pmndrs/glyph';
 import { defineTypeGpuConfig } from '@pmndrs/glyph/typegpu';
-import { resourceLease, id, msdfSchema, slugSchema } from '@pmndrs/glyph/core';
+import { resourceLease, id, bitmapSchema, msdfSchema, slugSchema } from '@pmndrs/glyph/core';
 import { codecDescriptor, TYPEGPU_PLACEMENT_SLOT_BUFFER_ID } from '../../dist/typegpu/internal/codec.js';
 
 const fontBytes = await readFile(
@@ -32,11 +32,12 @@ test('TypeGPU Slug packs placement into its existing eighth-buffer program', () 
 });
 
 // A recording host at the public config seam. The real engine authors all commands and bytes.
-function recordingHost() {
+function recordingHost(rasterSchema = msdfSchema) {
   const allocations = new Set();
   const recorded = [];
   const uploads = [];
   const projectedBuffers = [];
+  const codecIdByGpu = new WeakMap();
   const stats = { allocations: 0, preparations: 0, publications: 0, uniformWrites: 0, reject: false };
   function buffer(size, usage = 0) {
     const value = {
@@ -70,7 +71,13 @@ function recordingHost() {
       },
       queue: {
         writeBuffer(target, offset, bytes) {
-          uploads.push({ offset, length: bytes.byteLength, capacity: target.bytes.byteLength, usage: target.usage });
+          uploads.push({
+            codecId: codecIdByGpu.get(target),
+            offset,
+            length: bytes.byteLength,
+            capacity: target.bytes.byteLength,
+            usage: target.usage,
+          });
           target.bytes.set(bytes, offset);
         },
       },
@@ -103,6 +110,7 @@ function recordingHost() {
         {
           prepare(buffers, placementTable, viewport, position, start, count) {
             stats.preparations++;
+            for (const [codecId, gpu] of buffers) codecIdByGpu.set(gpu, codecId);
             return {
               draw() {
                 const placementSlots = buffers
@@ -121,7 +129,7 @@ function recordingHost() {
                 );
                 recorded.push({
                   // Compare raster inputs, not lifecycle-specific stable glyph identities.
-                  buffers: Object.values(msdfSchema.buffers).map((declaration) => {
+                  buffers: Object.values(rasterSchema.buffers).map((declaration) => {
                     const stride = declaration.lanes.length * 4;
                     return buffers.get(declaration.id).bytes.slice(start * stride, (start + count) * stride);
                   }),
@@ -341,6 +349,88 @@ test('localized TypeGPU edits retain GPU buffers and discard leaves accepted byt
     host.uploads.length = 0;
     glyph.shape();
     assert.equal(host.uploads.length, 0, 'idle shaping uploads nothing');
+  } finally {
+    handle.dispose();
+    font.dispose();
+  }
+  assert.equal(host.allocations.size, 0);
+});
+
+test('TypeGPU Bitmap omits equal retained color and page uploads but writes paint and checkpoints', async () => {
+  const host = recordingHost(bitmapSchema);
+  const handle = glyph.handle('typegpu:bitmap-equal-writes', host.config);
+  const baked = await readFile(
+    new URL('../../../../benches/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url),
+  );
+  const font = glyph.fontFace(new Blob([baked]), { format: bitmap });
+  const colorId = bitmapSchema.buffers.color.id;
+  const pageId = bitmapSchema.buffers.page.id;
+  const originId = bitmapSchema.buffers.origin.id;
+  const snapshot = () => {
+    handle.draw({}, { width: 640, height: 240 });
+    return host.recorded.splice(0);
+  };
+  try {
+    await font.load();
+    const text = handle.createText({ font, text: '54,321' });
+    glyph.shape();
+    const before = snapshot();
+    const allocations = host.stats.allocations;
+    host.uploads.length = 0;
+    text.update({ text: '12,345' });
+    glyph.shape();
+    const edited = snapshot();
+    assert.equal(host.stats.allocations, allocations, 'retained digit replacement keeps GPU buffers');
+    assert.notDeepEqual(edited[0].buffers[0], before[0].buffers[0], 'origin bytes change');
+    assert.deepEqual(edited[0].buffers[4], before[0].buffers[4], 'color mirror remains equal');
+    assert.deepEqual(edited[0].buffers[5], before[0].buffers[5], 'page mirror remains equal');
+    assert.ok(
+      host.uploads.some((upload) => upload.codecId === originId),
+      'changed origin uploads',
+    );
+    assert.ok(host.uploads.every((upload) => upload.codecId !== colorId && upload.codecId !== pageId));
+
+    host.uploads.length = 0;
+    text.update({ style: { color: '#00ff00' } });
+    glyph.shape();
+    const painted = snapshot();
+    assert.notDeepEqual(painted[0].buffers[4], edited[0].buffers[4], 'paint changes color mirror');
+    assert.ok(
+      host.uploads.some((upload) => upload.codecId === colorId),
+      'changed paint uploads color',
+    );
+
+    host.uploads.length = 0;
+    text.update({ text: '98,765' });
+    host.stats.reject = true;
+    assert.throws(() => glyph.shape(), /Injected renderer rejection/);
+    assert.equal(host.uploads.length, 0, 'discard submits no writes');
+    assert.deepEqual(snapshot(), painted, 'rejected content leaves the accepted GPU mirror');
+    host.stats.reject = false;
+    text.update({ text: '12,345' });
+    glyph.shape();
+    const recovered = snapshot();
+    assert.ok(
+      host.uploads.some((upload) => upload.codecId === colorId),
+      'checkpoint retransmits equal color',
+    );
+    assert.ok(
+      host.uploads.some((upload) => upload.codecId === pageId),
+      'checkpoint retransmits equal page',
+    );
+    const cold = handle('bitmap-cold');
+    cold.createText({ font, text: '12,345', style: { color: '#00ff00' } });
+    glyph.shape();
+    cold.draw({}, { width: 640, height: 240 });
+    const oracle = host.recorded.splice(0);
+    assert.deepEqual(
+      recovered.map((draw) => draw.buffers),
+      oracle.map((draw) => draw.buffers),
+    );
+    assert.deepEqual(
+      recovered.map((draw) => draw.resolvedPlacement),
+      oracle.map((draw) => draw.resolvedPlacement),
+    );
   } finally {
     handle.dispose();
     font.dispose();

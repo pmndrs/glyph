@@ -339,6 +339,7 @@ mod tests {
     use alloc::vec;
 
     use super::*;
+    use crate::abi_contract::{PATCH_PAYLOAD_OFFSET, PATCH_RECORD_SIZE};
     use crate::engine::{
         codec::{
             BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BATCH_TECHNIQUE, BUFFER_USAGE_COPY_DST,
@@ -347,7 +348,9 @@ mod tests {
             ScalarType, TechniqueId,
         },
         plan_input::PlanGlyph,
-        render_plan::BUFFER_ORDERED_DIRECT,
+        render_plan::{BUFFER_ORDERED_DIRECT, PATCH_WRITE, SESSION_PLACEMENT_BUFFER_ID},
+        render_plan_wire::{encode_publication, plan_layout},
+        session_placement::SessionPlacementRow,
     };
 
     const CAPABILITY: CapabilitySetId = CapabilitySetId(1);
@@ -367,6 +370,129 @@ mod tests {
         assert_eq!(compiler.prepared_strategy, PreparedStrategy::Ordered);
         assert_eq!(plan.buffers[0].strategy, BUFFER_ORDERED_DIRECT);
         assert_eq!(plan.draws.len(), 1);
+    }
+
+    #[test]
+    fn compacted_primary_payload_rebases_real_session_write_in_wire() {
+        let codec = codec();
+        let first = glyph(1, ORDERED, 0);
+        let mut second = glyph(2, ORDERED, 0);
+        second.resource_id += 1;
+        second.resource_reference += 1;
+        let initial = [first, second];
+        let old_rows = [SessionPlacementRow {
+            slot: 0,
+            inline: 0.0,
+            block: 0.0,
+        }];
+        let next_rows = [SessionPlacementRow {
+            slot: 0,
+            inline: 3.0,
+            block: 0.0,
+        }];
+        let mut compiler = RenderPlanCompiler::default();
+        compiler
+            .prepare_session(
+                SessionPlacementInput {
+                    placement_rows: &old_rows,
+                    placement_capacity: 1,
+                },
+                &capability(),
+                1,
+                true,
+            )
+            .unwrap();
+        prepare(&mut compiler, &codec, &initial, &[1.0, 2.0], true, 1, 0);
+        compiler.commit().unwrap();
+
+        let mut changed = initial;
+        changed[0].content_revision += 1;
+        changed[1].content_revision += 1;
+        compiler
+            .prepare_session(
+                SessionPlacementInput {
+                    placement_rows: &next_rows,
+                    placement_capacity: 1,
+                },
+                &capability(),
+                2,
+                false,
+            )
+            .unwrap();
+        prepare(&mut compiler, &codec, &changed, &[1.0, 9.0], false, 2, 1);
+        let plan = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+        assert_eq!(
+            plan.patches.len(),
+            1,
+            "equal first physical batch is omitted"
+        );
+        assert_eq!(plan.patches[0].opcode, PATCH_WRITE);
+        assert_eq!(plan.payload, 9.0_f32.to_le_bytes());
+        assert!(!plan.session_payload.is_empty());
+        let session_write = plan
+            .session_patches
+            .iter()
+            .position(|patch| patch.opcode == PATCH_WRITE)
+            .unwrap();
+        let layout = plan_layout(plan).unwrap();
+        let mut encoded = vec![0; layout.byte_length as usize];
+        encode_publication(plan, &[], layout, &mut encoded).unwrap();
+        let primary_start = layout.payload_offset as usize;
+        assert_eq!(&encoded[primary_start..primary_start + 4], plan.payload);
+        assert_eq!(
+            &encoded[primary_start + 4..primary_start + 4 + plan.session_payload.len()],
+            plan.session_payload
+        );
+        let session_record = layout.patches.offset as usize
+            + (plan.patches.len() + session_write) * PATCH_RECORD_SIZE as usize;
+        let wire_offset = u32::from_le_bytes(
+            encoded
+                [session_record + PATCH_PAYLOAD_OFFSET..session_record + PATCH_PAYLOAD_OFFSET + 4]
+                .try_into()
+                .unwrap(),
+        );
+        assert_eq!(
+            wire_offset,
+            layout.payload_offset
+                + plan.payload.len() as u32
+                + plan.session_patches[session_write].payload_start
+        );
+        let expected_session_write = &plan.session_payload[plan.session_patches[session_write]
+            .payload_start as usize
+            ..(plan.session_patches[session_write].payload_start
+                + plan.session_patches[session_write].byte_length) as usize];
+        assert_eq!(
+            &encoded[wire_offset as usize..wire_offset as usize + expected_session_write.len()],
+            expected_session_write
+        );
+        let ids = plan
+            .buffers
+            .iter()
+            .map(|buffer| buffer.id)
+            .collect::<alloc::vec::Vec<_>>();
+        compiler.commit().unwrap();
+
+        let mut cold = RenderPlanCompiler::default();
+        cold.prepare_session(
+            SessionPlacementInput {
+                placement_rows: &next_rows,
+                placement_capacity: 1,
+            },
+            &capability(),
+            2,
+            true,
+        )
+        .unwrap();
+        prepare(&mut cold, &codec, &changed, &[1.0, 9.0], true, 2, 1);
+        cold.commit().unwrap();
+        for id in ids
+            .into_iter()
+            .chain(core::iter::once(SESSION_PLACEMENT_BUFFER_ID))
+        {
+            assert_eq!(compiler.buffer_bytes(id), cold.buffer_bytes(id));
+        }
     }
 
     #[test]

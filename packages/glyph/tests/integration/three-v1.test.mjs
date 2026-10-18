@@ -298,6 +298,12 @@ test('host topology authority refreshes metadata and rejects changed scope or st
     const initialDraw = rootDraws(scene)[0];
     const initialOrigin = initialDraw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.origin.id));
     const initialOriginValues = Array.from(initialOrigin.array);
+    const initialColor = initialDraw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.color.id));
+    const initialPage = initialDraw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.page.id));
+    const initialColorValues = Array.from(initialColor.array);
+    const initialPageValues = Array.from(initialPage.array);
+    initialColor.clearUpdateRanges();
+    initialPage.clearUpdateRanges();
     let originDisposals = 0;
     initialOrigin.addEventListener('dispose', () => {
       originDisposals += 1;
@@ -318,6 +324,10 @@ test('host topology authority refreshes metadata and rejects changed scope or st
       'retained patches update accepted host bytes',
     );
     assert.ok(initialOrigin.updateRanges.length > 0, 'retained patches offer updated host bytes for upload');
+    assert.deepEqual(Array.from(initialColor.array), initialColorValues, 'digit replacement preserves color bytes');
+    assert.deepEqual(Array.from(initialPage.array), initialPageValues, 'digit replacement preserves page bytes');
+    assert.equal(initialColor.updateRanges.length, 0, 'equal color bytes need no retained upload range');
+    assert.equal(initialPage.updateRanges.length, 0, 'equal page bytes need no retained upload range');
     assert.equal(originDisposals, 0, 'retained publication does not retire accepted storage');
     assert.ok(spanCalls > calls, 'complete fresh metadata still passes through custom schema callbacks');
     const acceptedDraw = rootDraws(scene)[0];

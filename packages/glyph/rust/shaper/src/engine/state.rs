@@ -18264,7 +18264,8 @@ mod tests {
     }
 
     fn validated_paint_codec(technique: TechniqueId) -> ValidatedCodec {
-        validated_codec_with_input(technique, 8)
+        // The paint fixture changes blue while preserving red and green.
+        validated_codec_with_input(technique, super::super::frame::SEMANTIC_F32_FOREGROUND_BLUE)
     }
 
     fn validated_codec_with_input(technique: TechniqueId, semantic_field: u8) -> ValidatedCodec {
