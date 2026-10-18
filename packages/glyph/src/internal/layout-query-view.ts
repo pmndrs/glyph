@@ -95,15 +95,13 @@ export function readPlannerMeasurements(publication: PlanPublication): ReadonlyM
               xHeightSource,
             });
       previousFontMetrics = fontMetrics;
-      // A measurement-only query leaves the line's glyph span zeroed; it is only meaningful
-      // alongside the per-glyph columns, which the measure reader validates before publishing.
       const lineGlyphStart = view.u32(line + recordLayout.itemStart);
       lines.push(
         Object.freeze({
           index: lineIndex,
           textStart: view.u32(line + recordLayout.textStart),
           textEnd: view.u32(line + recordLayout.textEnd),
-          glyphStart: lineGlyphStart === 0 ? 0 : lineGlyphStart - glyphStart,
+          glyphStart: lineGlyphStart - glyphStart,
           glyphCount: view.u32(line + recordLayout.itemCount),
           baseline,
           alphabeticBaseline: baseline,

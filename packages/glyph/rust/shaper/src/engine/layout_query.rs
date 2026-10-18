@@ -189,12 +189,12 @@ fn line_ink_bounds(
     Ok(bounds)
 }
 
-/// The visible glyph totals of a composed flow, derived at line level from the
-/// cluster arena's adjacency stream and the boundary records — the same set
-/// positioning emits, so a measurement-only query (which skips the positioning
-/// tail) reports identical counts to a positioned frame.
-pub(crate) fn visible_glyph_counts(
-    flow: &FlowLayoutArena,
+/// Count one line's semantic glyphs from the same cluster and boundary spans
+/// consumed by positioning. A measurement-only query uses this while writing
+/// line records, without positioning glyphs or retaining another line lane.
+fn line_visible_glyph_counts(
+    fragments: &[FlowFragment],
+    drop_cap: Option<&FlowDropCap>,
     clusters: &ClusterArena,
     boundary_shape: &BoundaryShapeArena,
 ) -> Result<(usize, usize), EngineError> {
@@ -208,7 +208,7 @@ pub(crate) fn visible_glyph_counts(
     }
     let mut total = 0_usize;
     let mut missing = 0_usize;
-    for cap in &flow.drop_caps {
+    if let Some(cap) = drop_cap {
         for cluster in usize::try_from(cap.fragment.line.cluster_start)
             .map_err(|_| EngineError::InvalidRequest)?
             ..usize::try_from(cap.fragment.line.cluster_end)
@@ -225,62 +225,59 @@ pub(crate) fn visible_glyph_counts(
             missing += zeros;
         }
     }
-    for line in flow.lines.iter().copied() {
-        for fragment in line_fragments(flow, line)?.iter().copied() {
-            let cluster_start = usize::try_from(fragment.line.cluster_start)
-                .map_err(|_| EngineError::InvalidRequest)?;
-            let cluster_end = usize::try_from(fragment.line.cluster_end)
-                .map_err(|_| EngineError::InvalidRequest)?;
-            let record = |index: u32| {
-                (index != NO_BOUNDARY)
-                    .then(|| {
-                        boundary_shape
-                            .record(index)
-                            .ok_or(EngineError::InvalidRequest)
-                    })
-                    .transpose()
-            };
-            let (boundary, lead, tail) = (
-                record(fragment.boundary_index)?,
-                record(fragment.lead_index)?,
-                record(fragment.tail_index)?,
-            );
-            let body_start = lead.map_or(cluster_start, |lead| lead.cluster_end as usize);
-            let retained_end = boundary.or(tail).map_or(cluster_end, |boundary| {
-                usize::try_from(boundary.cluster_start).unwrap_or(usize::MAX)
-            });
-            if retained_end > cluster_end {
-                return Err(EngineError::InvalidRequest);
+    for fragment in fragments.iter().copied() {
+        let cluster_start = usize::try_from(fragment.line.cluster_start)
+            .map_err(|_| EngineError::InvalidRequest)?;
+        let cluster_end =
+            usize::try_from(fragment.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
+        let record = |index: u32| {
+            (index != NO_BOUNDARY)
+                .then(|| {
+                    boundary_shape
+                        .record(index)
+                        .ok_or(EngineError::InvalidRequest)
+                })
+                .transpose()
+        };
+        let (boundary, lead, tail) = (
+            record(fragment.boundary_index)?,
+            record(fragment.lead_index)?,
+            record(fragment.tail_index)?,
+        );
+        let body_start = lead.map_or(cluster_start, |lead| lead.cluster_end as usize);
+        let retained_end = boundary.or(tail).map_or(cluster_end, |boundary| {
+            usize::try_from(boundary.cluster_start).unwrap_or(usize::MAX)
+        });
+        if retained_end > cluster_end {
+            return Err(EngineError::InvalidRequest);
+        }
+        // A boundary cutting at or before the fragment start leaves an
+        // empty retained range — positioning walks the same empty range
+        // without erroring, and the count mirrors that.
+        for cluster in body_start..retained_end {
+            // Positioning skips hard-break clusters before its glyph walk;
+            // the count mirrors that exactly.
+            if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
+                continue;
             }
-            // A boundary cutting at or before the fragment start leaves an
-            // empty retained range — positioning walks the same empty range
-            // without erroring, and the count mirrors that.
-            for cluster in body_start..retained_end {
-                // Positioning skips hard-break clusters before its glyph walk;
-                // the count mirrors that exactly.
-                if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
-                    continue;
-                }
-                let (count, zeros) = range_counts(
-                    &clusters.glyph_ids,
-                    clusters.glyph_starts[cluster],
-                    clusters.glyph_counts[cluster],
-                )?;
-                total = total
-                    .checked_add(count)
-                    .ok_or(EngineError::ResultTooLarge)?;
+            let (count, zeros) = range_counts(
+                &clusters.glyph_ids,
+                clusters.glyph_starts[cluster],
+                clusters.glyph_counts[cluster],
+            )?;
+            total = total
+                .checked_add(count)
+                .ok_or(EngineError::ResultTooLarge)?;
+            missing += zeros;
+        }
+        for boundary in lead.into_iter().chain(boundary).chain(tail) {
+            for (start, count) in [
+                (boundary.source_glyph_start, boundary.source_glyph_count),
+                (boundary.ellipsis_glyph_start, boundary.ellipsis_glyph_count),
+            ] {
+                let (span, zeros) = range_counts(&boundary_shape.shape.glyph_ids, start, count)?;
+                total = total.checked_add(span).ok_or(EngineError::ResultTooLarge)?;
                 missing += zeros;
-            }
-            for boundary in lead.into_iter().chain(boundary).chain(tail) {
-                for (start, count) in [
-                    (boundary.source_glyph_start, boundary.source_glyph_count),
-                    (boundary.ellipsis_glyph_start, boundary.ellipsis_glyph_count),
-                ] {
-                    let (span, zeros) =
-                        range_counts(&boundary_shape.shape.glyph_ids, start, count)?;
-                    total = total.checked_add(span).ok_or(EngineError::ResultTooLarge)?;
-                    missing += zeros;
-                }
             }
         }
     }
@@ -303,7 +300,7 @@ pub(crate) fn append_measurement(
     paragraph_id: u32,
     text_length: usize,
     cluster_count: usize,
-    visible_glyphs: (usize, usize),
+    visible_glyphs: Option<(usize, usize)>,
     geometry: &FlowGeometryArena,
     flow: &FlowLayoutArena,
     positioned_glyphs: &[PositionedSemanticGlyph],
@@ -312,6 +309,7 @@ pub(crate) fn append_measurement(
     semantic_line_glyph_counts: &[u32],
     semantic_line_inline_extents: Option<&[f64]>,
     clusters: &ClusterArena,
+    boundary_shape: &BoundaryShapeArena,
     intrinsic_extents: Option<LayoutExtents>,
     intrinsics: super::cluster_state::IntrinsicWidths,
     include_glyphs: bool,
@@ -323,7 +321,7 @@ pub(crate) fn append_measurement(
     if constraint.paragraph_id != paragraph_id {
         return Err(EngineError::InvalidRequest);
     }
-    if include_glyphs
+    if visible_glyphs.is_some()
         && (semantic_line_glyph_starts.len() != flow.lines.len()
             || semantic_line_glyph_counts.len() != flow.lines.len())
         || semantic_line_inline_extents.is_some_and(|extents| extents.len() != flow.lines.len())
@@ -364,13 +362,13 @@ pub(crate) fn append_measurement(
     let mut paragraph_ink = InkBounds::default();
     let mut first_ascent = 0.0_f64;
     let mut line_count_emitted = 0_usize;
+    let mut drop_cap_cursor = 0_usize;
+    let mut next_glyph_start = 0_usize;
+    let (mut visible_glyph_count, mut missing_glyph_count) = visible_glyphs.unwrap_or((0, 0));
     let mut consumed_clusters =
         usize::try_from(constraint.resume_cluster).map_err(|_| EngineError::InvalidRequest)?;
 
     for (index, line) in flow.lines.iter().copied().enumerate() {
-        if line.flow_thread_id != constraint.flow_thread_id {
-            continue;
-        }
         let fragments = line_fragments(flow, line)?;
         let Some(first) = fragments.first() else {
             continue;
@@ -378,6 +376,10 @@ pub(crate) fn append_measurement(
         let Some(last) = fragments.last() else {
             continue;
         };
+        let drop_cap = line_drop_cap(flow, index, line, &mut drop_cap_cursor);
+        if line.flow_thread_id != constraint.flow_thread_id {
+            continue;
+        }
         let advance = if let Some(extents) = semantic_line_inline_extents {
             extents[index]
         } else {
@@ -385,37 +387,48 @@ pub(crate) fn append_measurement(
                 flow,
                 line,
                 index,
+                fragments,
+                drop_cap,
                 clusters,
                 constraint_typography(constraint),
             )?
         };
         content_width = content_width.max(advance);
         content_height = content_height.max(line.block_start + line.height);
-        let drop_cap = (index == 0 || flow.lines[index - 1].flow_thread_id != line.flow_thread_id)
-            .then(|| {
-                flow.drop_caps
-                    .iter()
-                    .find(|cap| cap.line.flow_thread_id == line.flow_thread_id)
-            })
-            .flatten();
         if let Some(cap) = drop_cap {
             content_height = content_height.max(cap.line.block_start + cap.line.height);
         }
         consumed_clusters = consumed_clusters
             .max(usize::try_from(last.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?);
-        let item_start = if include_glyphs {
-            u32::try_from(glyph_record_start)
-                .map_err(|_| EngineError::ResultTooLarge)?
-                .checked_add(semantic_line_glyph_starts[index])
-                .ok_or(EngineError::ResultTooLarge)?
+        let (line_glyph_start, line_glyph_count) = if visible_glyphs.is_some() {
+            (
+                usize::try_from(semantic_line_glyph_starts[index])
+                    .map_err(|_| EngineError::ResultTooLarge)?,
+                usize::try_from(semantic_line_glyph_counts[index])
+                    .map_err(|_| EngineError::ResultTooLarge)?,
+            )
         } else {
-            0
+            let (count, missing) =
+                line_visible_glyph_counts(fragments, drop_cap, clusters, boundary_shape)?;
+            visible_glyph_count = visible_glyph_count
+                .checked_add(count)
+                .ok_or(EngineError::ResultTooLarge)?;
+            missing_glyph_count = missing_glyph_count
+                .checked_add(missing)
+                .ok_or(EngineError::ResultTooLarge)?;
+            (next_glyph_start, count)
         };
-        let item_count = if include_glyphs {
-            semantic_line_glyph_counts[index]
-        } else {
-            0
-        };
+        next_glyph_start = line_glyph_start
+            .checked_add(line_glyph_count)
+            .ok_or(EngineError::ResultTooLarge)?;
+        // Measurement-only records carry a virtual glyph-record base so their
+        // public line spans remain valid even when no glyph records are emitted.
+        let item_start = u32::try_from(glyph_record_start)
+            .map_err(|_| EngineError::ResultTooLarge)?
+            .checked_add(u32::try_from(line_glyph_start).map_err(|_| EngineError::ResultTooLarge)?)
+            .ok_or(EngineError::ResultTooLarge)?;
+        let item_count =
+            u32::try_from(line_glyph_count).map_err(|_| EngineError::ResultTooLarge)?;
         let line_ink = line_ink_bounds(
             positioned_glyphs,
             placement_translations,
@@ -501,10 +514,8 @@ pub(crate) fn append_measurement(
             constraint.height,
             full_content_height,
         )?;
-    // Glyph totals come from the flow-level derivation, not the positioned
-    // arena, so a measurement-only query (which skips the positioning tail)
-    // reports the same counts a positioned frame reports.
-    let (visible_glyph_count, missing_glyph_count) = visible_glyphs;
+    // Measurement-only totals were accumulated while serializing each line;
+    // positioned queries use the already-owned semantic glyph lane.
     // Ink is authoritative exactly when this query positioned the glyphs it measured. A paragraph
     // that positioned zero glyphs still reports authoritatively — its ink box is genuinely empty —
     // so the bit tracks whether positioning ran, not whether any ink was found.
@@ -546,10 +557,8 @@ pub(crate) fn flow_extents(
     typography: ThreadTypography,
 ) -> Result<LayoutExtents, EngineError> {
     let mut extents = LayoutExtents::default();
+    let mut drop_cap_cursor = 0_usize;
     for (index, line) in flow.lines.iter().copied().enumerate() {
-        if line.flow_thread_id != flow_thread_id {
-            continue;
-        }
         let fragments = line_fragments(flow, line)?;
         if fragments.is_empty() {
             continue;
@@ -557,16 +566,15 @@ pub(crate) fn flow_extents(
         let Some(last) = fragments.last() else {
             continue;
         };
-        extents.width = extents
-            .width
-            .max(line_inline_extent(flow, line, index, clusters, typography)?);
+        let drop_cap = line_drop_cap(flow, index, line, &mut drop_cap_cursor);
+        if line.flow_thread_id != flow_thread_id {
+            continue;
+        }
+        extents.width = extents.width.max(line_inline_extent(
+            flow, line, index, fragments, drop_cap, clusters, typography,
+        )?);
         extents.height = extents.height.max(line.block_start + line.height);
-        if (index == 0 || flow.lines[index - 1].flow_thread_id != line.flow_thread_id)
-            && let Some(cap) = flow
-                .drop_caps
-                .iter()
-                .find(|cap| cap.line.flow_thread_id == line.flow_thread_id)
-        {
+        if let Some(cap) = drop_cap {
             extents.height = extents.height.max(cap.line.block_start + cap.line.height);
         }
         extents.consumed_clusters = extents
@@ -580,10 +588,11 @@ fn line_inline_extent(
     flow: &FlowLayoutArena,
     line: FlowLine,
     index: usize,
+    fragments: &[FlowFragment],
+    drop_cap: Option<&FlowDropCap>,
     clusters: &ClusterArena,
     typography: ThreadTypography,
 ) -> Result<f64, EngineError> {
-    let fragments = line_fragments(flow, line)?;
     if fragments.is_empty() {
         return Ok(0.0);
     }
@@ -596,12 +605,7 @@ fn line_inline_extent(
         .map(|fragment| fragment.slot_start)
         .fold(f64::INFINITY, f64::min);
     let mut inline_end = f64::NEG_INFINITY;
-    if (index == 0 || flow.lines[index - 1].flow_thread_id != line.flow_thread_id)
-        && let Some(cap) = flow
-            .drop_caps
-            .iter()
-            .find(|cap| cap.line.flow_thread_id == line.flow_thread_id)
-    {
+    if let Some(cap) = drop_cap {
         inline_start = inline_start.min(cap.fragment.slot_start);
         inline_end = inline_end.max(cap.fragment.slot_start + cap.fragment.line.advance);
     }
@@ -624,6 +628,25 @@ fn line_inline_extent(
         );
     }
     Ok((inline_end - inline_start).max(0.0))
+}
+
+fn line_drop_cap<'a>(
+    flow: &'a FlowLayoutArena,
+    index: usize,
+    line: FlowLine,
+    cursor: &mut usize,
+) -> Option<&'a FlowDropCap> {
+    if index != 0 && flow.lines[index - 1].flow_thread_id == line.flow_thread_id {
+        return None;
+    }
+    let cap = flow
+        .drop_caps
+        .get(*cursor)
+        .filter(|cap| cap.line.flow_thread_id == line.flow_thread_id);
+    if cap.is_some() {
+        *cursor += 1;
+    }
+    cap
 }
 
 fn line_fragments(flow: &FlowLayoutArena, line: FlowLine) -> Result<&[FlowFragment], EngineError> {
@@ -740,7 +763,7 @@ mod tests {
             7,
             2,
             2,
-            (2, 1),
+            Some((2, 1)),
             &geometry,
             &flow,
             &[layout_glyph(3), layout_glyph(0)],
@@ -749,6 +772,7 @@ mod tests {
             &[2],
             None,
             &ClusterArena::default(),
+            &BoundaryShapeArena::default(),
             None,
             crate::engine::cluster_state::IntrinsicWidths::default(),
             false,
@@ -809,7 +833,7 @@ mod tests {
             7,
             2,
             2,
-            (2, 1),
+            Some((2, 1)),
             &geometry,
             &flow,
             &positioned,
@@ -818,6 +842,7 @@ mod tests {
             &[2],
             Some(&[7.0]),
             &ClusterArena::default(),
+            &BoundaryShapeArena::default(),
             None,
             crate::engine::cluster_state::IntrinsicWidths::default(),
             false,
@@ -849,7 +874,7 @@ mod tests {
             7,
             2,
             2,
-            (2, 1),
+            Some((2, 1)),
             &geometry,
             &flow,
             &positioned,
@@ -858,6 +883,7 @@ mod tests {
             &[2],
             Some(&[7.0]),
             &ClusterArena::default(),
+            &BoundaryShapeArena::default(),
             None,
             crate::engine::cluster_state::IntrinsicWidths::default(),
             true,
@@ -919,7 +945,7 @@ mod tests {
             7,
             2,
             2,
-            (0, 0),
+            Some((0, 0)),
             &geometry,
             &flow,
             &[],
@@ -928,6 +954,7 @@ mod tests {
             &[0],
             Some(&[7.0]),
             &ClusterArena::default(),
+            &BoundaryShapeArena::default(),
             Some(LayoutExtents {
                 width: 9.0,
                 height: 8.0,
@@ -992,7 +1019,7 @@ mod tests {
             7,
             1,
             1,
-            (0, 0),
+            Some((0, 0)),
             &geometry,
             &flow,
             &[],
@@ -1001,6 +1028,7 @@ mod tests {
             &[0],
             Some(&[140.64]),
             &ClusterArena::default(),
+            &BoundaryShapeArena::default(),
             None,
             crate::engine::cluster_state::IntrinsicWidths::default(),
             false,
@@ -1157,7 +1185,7 @@ mod tests {
             7,
             2,
             2,
-            (2, 0),
+            Some((2, 0)),
             &geometry,
             &flow,
             &positioned,
@@ -1166,6 +1194,7 @@ mod tests {
             &[2],
             Some(&[7.0]),
             &ClusterArena::default(),
+            &BoundaryShapeArena::default(),
             None,
             crate::engine::cluster_state::IntrinsicWidths::default(),
             true,
@@ -1244,13 +1273,20 @@ mod tests {
             }],
             ..FlowLayoutArena::default()
         };
+        let clusters = ClusterArena {
+            flags: vec![0, 0],
+            glyph_starts: vec![0, 1],
+            glyph_counts: vec![1, 1],
+            glyph_ids: vec![3, 4],
+            ..ClusterArena::default()
+        };
         let mut records = vec![];
         append_measurement(
             &mut records,
             7,
             2,
             2,
-            (2, 0),
+            None,
             &geometry,
             &flow,
             &[],
@@ -1258,7 +1294,8 @@ mod tests {
             &[],
             &[],
             Some(&[7.0]),
-            &ClusterArena::default(),
+            &clusters,
+            &BoundaryShapeArena::default(),
             None,
             crate::engine::cluster_state::IntrinsicWidths::default(),
             false,
@@ -1268,6 +1305,9 @@ mod tests {
         assert_eq!(records[0].flags & MEASUREMENT_FLAG_INK_BOUNDS, 0);
         assert_eq!(records[0].ink_inline_extent, 0.0);
         assert_eq!(records[0].ink_block_extent, 0.0);
+        assert_eq!(records[0].parent_id, 2);
+        assert_eq!(records[1].item_start, 2);
+        assert_eq!(records[1].item_count, 2);
         // The line box still decomposes; only ink needed positioning.
         assert_eq!(records[1].ascent, 4.0);
         assert_eq!(records[1].block_extent, 5.0);
