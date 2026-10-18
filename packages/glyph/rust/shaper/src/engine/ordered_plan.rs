@@ -1126,7 +1126,6 @@ impl OrderedPlanCompiler {
             .cursor_from(0)
             .ok_or(OrderedPlanError::InvalidIdentity)?;
         let mut cursor_position = 0;
-        self.pending_instances = retained_instances.clone();
         loop {
             let complete = if output_intervals.is_none() {
                 complete_instances.next()
@@ -1236,20 +1235,38 @@ impl OrderedPlanCompiler {
             }
             self.pending_batches.push(pending);
         }
-        self.dirty_instances.sort_unstable();
-        self.pending_instances
-            .update_ordered_ranges(
-                coalesced_slot_ranges(&self.dirty_instances)
-                    .map(|range| Ok(range.start as usize..range.end as usize)),
-                |_, previous| {
-                    instance_state(input, previous.input_index as usize)
-                        .map(super::retained_rope::RopeUpdate::Replace)
-                },
-            )
+        // The complete scan above admitted each physical slot once in order. Only that
+        // scan can use dirty cardinality as proof that every retained row changed.
+        if output_intervals.is_none()
+            && !retained_instances.is_empty()
+            && self.dirty_instances.len() == retained_instances.len()
+        {
+            let mut accepted = retained_instances.iter();
+            self.pending_instances = RetainedRope::try_from_exact(retained_instances.len(), |_| {
+                let previous = accepted.next().ok_or(OrderedPlanError::InvalidIdentity)?;
+                instance_state(input, previous.input_index as usize)
+            })
             .map_err(|error| match error {
                 RopeEditError::Storage => OrderedPlanError::AllocationFailed,
                 RopeEditError::Callback(error) => error,
             })?;
+        } else {
+            self.pending_instances = retained_instances.clone();
+            self.dirty_instances.sort_unstable();
+            self.pending_instances
+                .update_ordered_ranges(
+                    coalesced_slot_ranges(&self.dirty_instances)
+                        .map(|range| Ok(range.start as usize..range.end as usize)),
+                    |_, previous| {
+                        instance_state(input, previous.input_index as usize)
+                            .map(super::retained_rope::RopeUpdate::Replace)
+                    },
+                )
+                .map_err(|error| match error {
+                    RopeEditError::Storage => OrderedPlanError::AllocationFailed,
+                    RopeEditError::Callback(error) => error,
+                })?;
+        }
         Ok(true)
     }
 
@@ -3643,11 +3660,14 @@ mod tests {
                     cold.publish_bindings,
                 );
                 assert_eq!(host.snapshot(), oracle.snapshot());
-                for phase in 0..2 {
+                for phase in 0..3 {
                     // Input order alternates resources, while physical order groups them.
+                    // The last phase scans all physical rows but leaves one unchanged.
                     // Sparse changes reach three slots in one leaf and two distant leaves.
                     let dirty_slots: Vec<usize> = if phase == 0 {
                         (0..glyphs.len()).collect()
+                    } else if phase == 2 {
+                        (0..glyphs.len() - 1).collect()
                     } else {
                         vec![1, 3, 5, 34, glyphs.len() - 1]
                     };
@@ -3662,7 +3682,7 @@ mod tests {
                         .collect();
                     assert_eq!(changed_inputs.len(), dirty_slots.len());
                     changed_inputs.sort_unstable();
-                    let intervals: Vec<_> = if phase == 0 {
+                    let intervals: Vec<_> = if phase != 1 {
                         core::iter::once(0..glyphs.len()).collect()
                     } else {
                         assert!(dirty_slots.windows(2).all(|pair| pair[0] + 1 < pair[1]));
@@ -3727,14 +3747,26 @@ mod tests {
                             super::super::retained_rope::ordered_work_counters();
                         let (copied_records, _) = super::super::retained_rope::work_counters();
                         assert_eq!(compiler.retained_topology_preparations, admissions + 1);
-                        assert_eq!(work.ordered_admission_visits, dirty_slots.len());
+                        assert_eq!(
+                            work.ordered_admission_visits,
+                            if phase == 1 {
+                                dirty_slots.len()
+                            } else {
+                                glyphs.len()
+                            }
+                        );
                         assert_eq!(work.ordered_instance_rewrites, dirty_slots.len());
                         assert_eq!(work.rope_point_queries, 0);
                         assert!(work.rope_iterator_starts <= 32);
-                        assert_eq!(traversals, 1);
-                        assert_eq!(leaf_visits, touched_leaves);
-                        assert_eq!(record_visits, dirty_slots.len());
-                        assert!(copied_records <= LEAF_CAPACITY * touched_leaves);
+                        if phase == 0 {
+                            assert_eq!((traversals, leaf_visits, record_visits), (0, 0, 0));
+                            assert_eq!(copied_records, 0);
+                        } else {
+                            assert_eq!(traversals, 1);
+                            assert_eq!(leaf_visits, touched_leaves);
+                            assert_eq!(record_visits, dirty_slots.len());
+                            assert!(copied_records <= LEAF_CAPACITY * touched_leaves);
+                        }
                         assert_eq!(
                             compiler.dirty_instances,
                             dirty_slots

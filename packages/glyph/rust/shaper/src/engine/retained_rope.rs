@@ -110,6 +110,20 @@ impl<T: RopeRecord> Default for RetainedRope<T> {
 }
 
 impl<T: RopeRecord> RetainedRope<T> {
+    /// Constructs a packed, balanced root from exactly `count` records in storage order.
+    /// A failed producer or summary leaves no published root.
+    pub(crate) fn try_from_exact<E>(
+        count: usize,
+        mut produce: impl FnMut(usize) -> Result<T, E>,
+    ) -> Result<Self, RopeEditError<E>> {
+        if count == 0 {
+            return Ok(Self::default());
+        }
+        let leaf_count = count / LEAF_CAPACITY + usize::from(!count.is_multiple_of(LEAF_CAPACITY));
+        let root = build_exact_node(count, 0..leaf_count, &mut produce)?;
+        Ok(Self { root: Some(root) })
+    }
+
     pub(crate) fn len(&self) -> usize {
         self.summary().records
     }
@@ -427,6 +441,34 @@ impl<T: RopeRecord> RetainedRope<T> {
         }
         self.root.as_deref().map(capacity).unwrap_or(0)
     }
+}
+
+fn build_exact_node<T: RopeRecord, E>(
+    count: usize,
+    leaves: Range<usize>,
+    produce: &mut impl FnMut(usize) -> Result<T, E>,
+) -> Result<Arc<Node<T>>, RopeEditError<E>> {
+    if leaves.end - leaves.start == 1 {
+        let start = leaves
+            .start
+            .checked_mul(LEAF_CAPACITY)
+            .ok_or(RopeEditError::Storage)?;
+        let end = start
+            .checked_add(LEAF_CAPACITY)
+            .map_or(count, |end| end.min(count));
+        let mut items = Vec::new();
+        items
+            .try_reserve_exact(end - start)
+            .map_err(|_| RopeEditError::Storage)?;
+        for index in start..end {
+            items.push(produce(index).map_err(RopeEditError::Callback)?);
+        }
+        return leaf_from_items(items).map_err(|_| RopeEditError::Storage);
+    }
+    let middle = leaves.start + (leaves.end - leaves.start) / 2;
+    let left = build_exact_node(count, leaves.start..middle, produce)?;
+    let right = build_exact_node(count, middle..leaves.end, produce)?;
+    branch(left, right).map_err(|_| RopeEditError::Storage)
 }
 
 #[cfg(test)]
@@ -1744,6 +1786,98 @@ mod tests {
         );
         assert!(cursor.is_empty());
         assert!(cursor.take(1).is_none());
+    }
+
+    #[test]
+    fn exact_producer_builds_packed_balanced_roots_with_flat_navigation() {
+        fn leaf_lengths(node: &Node<Record>, lengths: &mut Vec<usize>) {
+            match node {
+                Node::Leaf { items, .. } => lengths.push(items.len()),
+                Node::Branch { left, right, .. } => {
+                    leaf_lengths(left, lengths);
+                    leaf_lengths(right, lengths);
+                }
+            }
+        }
+
+        for count in [0, 1, 31, 32, 33, 65, 257, 1025] {
+            let values = records(count);
+            let mut produced = 0;
+            let rope = RetainedRope::try_from_exact(count, |index| {
+                assert_eq!(index, produced);
+                produced += 1;
+                Ok::<_, u8>(values[index])
+            })
+            .unwrap();
+            assert_eq!(produced, count);
+            assert_matches_flat(&rope, &values);
+            for (index, expected) in values.iter().enumerate() {
+                assert_eq!(rope.get(index), Some(expected));
+                assert_eq!(
+                    rope.cursor_from(index).unwrap().next_record(),
+                    Some(expected)
+                );
+                assert_eq!(
+                    rope.prefix_summary(index),
+                    Some(flat_summary(&values[..index]))
+                );
+            }
+            assert_eq!(rope.prefix_summary(count), Some(flat_summary(&values)));
+            let mut lengths = Vec::new();
+            if let Some(root) = rope.root.as_deref() {
+                leaf_lengths(root, &mut lengths);
+            }
+            assert!(
+                lengths
+                    .iter()
+                    .take(lengths.len().saturating_sub(1))
+                    .all(|&len| len == LEAF_CAPACITY)
+            );
+            assert_eq!(lengths.iter().sum::<usize>(), count);
+            let snapshot = rope.clone();
+            let mut changed = rope;
+            if count != 0 {
+                changed.update(0, |record| record.fragments += 1).unwrap();
+                let mut changed_values = values.clone();
+                changed_values[0].fragments += 1;
+                assert_matches_flat(&changed, &changed_values);
+                assert_matches_flat(&snapshot, &values);
+            }
+        }
+    }
+
+    #[test]
+    fn exact_producer_failure_discards_partial_tree_and_preserves_snapshot() {
+        let values = records(65);
+        let snapshot = RetainedRope::from(values.clone());
+        let mut calls = 0;
+        assert!(matches!(
+            RetainedRope::try_from_exact(65, |index| {
+                calls += 1;
+                if index == 40 {
+                    Err(7u8)
+                } else {
+                    Ok(values[index])
+                }
+            }),
+            Err(RopeEditError::Callback(7))
+        ));
+        assert_eq!(calls, 41);
+        let overflow = [
+            Record {
+                fragments: usize::MAX,
+                ..values[0]
+            },
+            Record {
+                fragments: 1,
+                ..values[1]
+            },
+        ];
+        assert!(matches!(
+            RetainedRope::try_from_exact(2, |index| Ok::<_, u8>(overflow[index])),
+            Err(RopeEditError::Storage)
+        ));
+        assert_matches_flat(&snapshot, &values);
     }
 
     #[test]

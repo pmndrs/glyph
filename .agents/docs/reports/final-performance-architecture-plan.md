@@ -59,6 +59,28 @@ The [current wave report](../../../benches/reports/held-ropes-local-2026-10-18/R
 
 The [compact frontier](../planning/publication-frontier.md) records next conditional proofs and the unchanged seven-family priorities. Advanced main's #308 public anchor/font-metric additions remain absent from HELD, so final integration/API/ABI/lifetime and equivalent-output readiness remain open alongside full hero A/B and whole-application physical peak. Historical evidence below stays tied to its own source and artifacts.
 
+## Current-main and dense-root integration — 18 October 2026
+
+The later [request/iterator/binding evidence](../../../benches/reports/held-ropes-local-2026-10-18/combined-request-iterator-binding.md)
+belongs to clean `57243ee5` only. It completes that wave's build, package, named-codegen, scoped memory and local
+main/published comparisons. The candidate capture was reused, with clock/mode exclusions and the unlocalized install
+interference in the prior-only control retained. Dense and long-reflow gaps remain; no isolated speedup or
+no-regression clearance is established.
+
+The next source wave has now integrated main `4e25a96a` through the real gh-stack rebase, retaining one synchronous
+preparation executor and its prepared-query/split contract. Main's typography, anchors and ABI1 are present in source;
+their final generated-artifact/runtime gates remain distinct. A complete physical all-changed scan can directly build
+a balanced pending root in the same 32-record leaf/branch layout, avoiding old-leaf copy/overwrite work. Partial and
+sparse changes retain the existing ordered updater; accepted generations remain independently owned. This is Θ(G)
+construction with O(G) normal pending storage, no parallel layout or cache. Existing comparison and second final-record
+derivation remain. Independent flat/cold-output/failure oracles and fresh source reviews precede the new package gate.
+
+The [compact frontier](../planning/publication-frontier.md) owns the current checkout, exact gate outcomes and remaining
+work. Neither the earlier `57243ee5` timings nor historical records below accept the new integrated source. Preserve
+all seven families and final two-baseline, memory, size, API/ABI, peer/lifetime and Portless browser/hero requirements;
+keep the actual stack held, draft and unmerged. The earlier checkpoint-only instruction to defer main integration has
+been completed and is historical.
+
 ## Evidence ledger and current gates
 
 | Evidence                              | Exact scope and result                                                                                                                                                                                                                                                                                                                                 | Limit                                                                                                                                                                                                                                                                                                                                                                                                                                                 |

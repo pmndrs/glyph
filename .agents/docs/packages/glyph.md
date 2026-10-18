@@ -236,7 +236,7 @@ Paragraph preparation creates a borrowed `PlanPublication` only when its caller 
 
 Sparse retained gather now feeds the existing sorted dirty-owner frontier and owner-local unpublished source intervals into one ordered rope traversal. Ranges that intersect the same leaf are handled before that leaf is reconstructed, so owner boundaries no longer repeat leaf and ancestor copies. The one-owner entry point adapts to the same stream and glyph callback. Borrowed semantic column views carry no copied text/glyph data; authoritative gather ranges retain the distinction between source glyphs and emitted rows, including clean decorated owners. Topology stops identify the owner and local source offset before the existing suffix builder resumes. Source-tree errors preserve the previous root, and the existing cache-invalid publication failure path rebuilds the mutated column workspace.
 
-The ordered compiler also submits its coalesced dirty physical slots in one ordered rope traversal. Instance updates and per-batch patch ranges share one borrowed coalescer; the former per-range root walks are retired. Accepted instance snapshots, input-to-physical mapping and abort/commit ownership stay unchanged. The existing compiler oracle now covers full and separated same-leaf/distant-leaf dirt; validation of this latest edit is pending in the frontier tracker.
+The ordered compiler submits sparse coalesced dirty physical slots in one ordered rope traversal. Instance updates and per-batch patch ranges share one borrowed coalescer; the former per-range root walks are retired. When a complete physical scan proves every nonempty accepted slot changed, it constructs a balanced pending root directly from final records in the same 32-record leaves and branch layout. This avoids copying old leaf records before replacing all of them. Partial scans and partially changed roots retain the ordered copy-on-write updater. Accepted snapshots, input-to-physical mapping and abort/commit ownership remain; there is no parallel record store or executor. The frontier records the exact cold-output, failure and performance gates for each source checkpoint.
 
 The integrated stream passes 399 native unit tests and independent outline/Unicode controls, including cold output, sparse dirty islands, clean decorated gaps, recordless owners, growth/shrink Stop and failure recovery. Its first rebuilt package passes all 990 package/integration Node tests. Final formatter and Clippy cleanup passes the shared static gate and repeated native suite. These checks prove correctness at those boundaries; final artifact size, fuzz, browser and comparative performance remain separate gates for the draft frontier.
 
@@ -506,8 +506,10 @@ second renderer/runtime object to applications.
 `Text` publishes ink through Three's object-level `boundingBox` contract and carries one package-private shared empty
 `BufferGeometry` marker so `Box3.setFromObject()` visits those bounds in ordinary and precise modes. The marker has no
 vertex payload, child, draw, per-Text allocation, serialization, or raycast behavior. Before the first rendered frame,
-Box3 requests one positioned measurement containing only the paragraph summary and lines; later traversal reuses the
-revision-aware measurement cache. An aggregate layout query with unknown ink does not mark the Three bounds cache
+Box3 consumes ink from the prepared revision. A requested summary may already contain ink; if it is still unknown,
+the explicit bounds demand materializes owned prepared glyph columns and derives paragraph and line ink from those
+columns. It does not repeat authored shaping or require renderer publication. Later traversal reuses the
+revision-aware measurement cache. A summary with unknown ink does not mark the Three bounds cache
 current or clear known same-revision ink. Zero glyphs prove a valid empty box; positioned spaces retain a finite
 zero-height extent. Drei Center/Bounds can therefore consume transformed paragraph boxes without coupling
 authored objects to renderer-owned batch meshes or copying the per-glyph columns.
