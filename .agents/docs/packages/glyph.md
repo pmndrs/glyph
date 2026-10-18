@@ -231,7 +231,7 @@ config helpers.
 
 Browser ESM delivery uses the private `content-digest` module filename to avoid URL filters matching `fingerprint`. Public fingerprint names, hash vectors, cache headers and artifact identities remain unchanged. The installed-package browser consumer rejects matching requests and proves both Worker baking and font loading, with an explicit blocking negative control. This models a filename filter; it does not claim coverage of every browser extension.
 
-Browser-targeted ESM imports of the root can evaluate without a Node `process` global. The private development-diagnostics gate reads `process.env.NODE_ENV` when Node supplies it and remains off when `process` is absent. Bundlers can replace the literal environment comparison and eliminate the diagnostics from production browser bundles.
+Browser-targeted ESM imports of the root can evaluate without a Node `process` global. The private development-diagnostics gate reads `process.env.NODE_ENV` when Node supplies it and remains off when `process` is absent. A production build mode or a standard production `NODE_ENV` define lets bundlers eliminate diagnostics from browser bundles.
 
 | Subpath                         | Purpose                                                                                                          |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
