@@ -18,7 +18,9 @@ import type { msdf } from '../raster/msdf.js';
 import type { slug } from '../raster/slug.js';
 import type { Bindings } from './internal/bindings.js';
 import type { TypeGpuTransform } from './internal/renderer.js';
+import { reuseOrCreateTextPropertySnapshot, reuseOrCreateTextStyleSnapshot } from '../config/text-property.js';
 import { PostCommitError } from '../glyph-error.js';
+import { sameConstraintSizes } from '../text-anchor.js';
 
 export type TypeGpuFontSelection = FontFaceSelection<
   | typeof bitmap
@@ -44,8 +46,8 @@ export type TypeGpuTextUpdate<Selection extends TypeGpuFontSelection = TypeGpuFo
 >;
 type TypeGpuSemanticTextOptions<Selection extends TypeGpuFontSelection> = Omit<
   TypeGpuTextOptions<Selection>,
-  'position'
->;
+  'position' | 'style'
+> & { readonly style?: TextStyle };
 type TypeGpuSemanticTextKey = Exclude<keyof TypeGpuTextOptions, 'position'>;
 const semanticUpdateKeys = {
   font: 'font',
@@ -55,6 +57,30 @@ const semanticUpdateKeys = {
   constraints: 'constraints',
   rasterPixelRatio: 'rasterPixelRatio',
 } as const satisfies { readonly [Key in TypeGpuSemanticTextKey]: Key };
+
+function ownedSemanticState<Selection extends TypeGpuFontSelection>(
+  previous: TypeGpuSemanticTextOptions<Selection> | undefined,
+  next: TypeGpuSemanticTextOptions<Selection>,
+): TypeGpuSemanticTextOptions<Selection> {
+  return Object.freeze({
+    ...next,
+    ...(next.style === undefined
+      ? {}
+      : { style: reuseOrCreateTextStyleSnapshot(previous?.style, next.style, 'TypeGPU text style') }),
+    ...(next.layout === undefined
+      ? {}
+      : { layout: reuseOrCreateTextPropertySnapshot(previous?.layout, next.layout, 'TypeGPU text layout') }),
+    ...(next.constraints === undefined
+      ? {}
+      : {
+          constraints: reuseOrCreateTextPropertySnapshot(
+            previous?.constraints,
+            next.constraints,
+            'TypeGPU text constraints',
+          ),
+        }),
+  });
+}
 
 /** Retained text. Create with a configured TypeGPU handle's createText(). */
 export interface TypeGpuText<Selection extends TypeGpuFontSelection = TypeGpuFontSelection> {
@@ -85,8 +111,8 @@ export function createText<Selection extends TypeGpuFontSelection>(
 ): TypeGpuTextPublication<Selection> {
   if (options.style?.decoration !== undefined) throw new TypeError('TypeGPU text decoration lines are not supported');
   const { position: _initialPosition, ...initialSemanticState } = options;
-  let state: TypeGpuSemanticTextOptions<Selection> = initialSemanticState;
   validatePosition(options.position);
+  let state = ownedSemanticState<Selection>(undefined, initialSemanticState);
   let positionX = options.position?.[0] ?? 0;
   let positionY = options.position?.[1] ?? 0;
   const positionValue: [number, number] = [positionX, positionY];
@@ -95,10 +121,13 @@ export function createText<Selection extends TypeGpuFontSelection>(
   let anchorY = 0;
   let pendingAnchorX = 0;
   let pendingAnchorY = 0;
-  let hasAuthoredAnchor = options.constraints?.anchor !== undefined;
+  let pendingAnchorNeedsMeasure = false;
+  let hasAuthoredAnchor = state.constraints?.anchor !== undefined;
   let semanticRevision = 0;
   let pendingSemantic = true;
-  let prepared: { revision: number; x: number; y: number } | undefined;
+  let preparedRevision = -1;
+  let preparedAnchorX = 0;
+  let preparedAnchorY = 0;
   let controller: GlyphTextController<FontFaceRasterOf<Selection>, object, TypeGpuTransform>;
   let disposed = false;
   let acquiredController: typeof controller | undefined;
@@ -115,7 +144,7 @@ export function createText<Selection extends TypeGpuFontSelection>(
     writePosition(transform, positionValue, positionX, positionY);
     controller = services.createText(coreState(state, font));
     acquiredController = controller;
-    if (state.constraints?.anchor !== undefined) {
+    if (hasAuthoredAnchor) {
       const offset = controller.measure().anchorOffset;
       anchorX = offset.x;
       anchorY = offset.y;
@@ -153,13 +182,24 @@ export function createText<Selection extends TypeGpuFontSelection>(
         return;
       }
       const { position: _position, ...semanticUpdate } = update;
-      const next = { ...state, ...semanticUpdate };
-      if (next.style?.decoration !== undefined) throw new TypeError('TypeGPU text decoration lines are not supported');
+      const previousState = state;
+      const nextInput = { ...previousState, ...semanticUpdate };
+      if (nextInput.style?.decoration !== undefined)
+        throw new TypeError('TypeGPU text decoration lines are not supported');
+      const next = ownedSemanticState(previousState, nextInput);
       const anchorsPresent = next.constraints?.anchor !== undefined || hasAuthoredAnchor;
-      const previousMeasurement = anchorsPresent ? controller.measure() : undefined;
-      const nextFont = next.font === state.font ? font : fonts.acquire(next.font);
-      let nextMeasurement: ParagraphLayoutSummary | undefined;
-      let failure: unknown;
+      const wasPendingSemantic = pendingSemantic;
+      const anchorOnlyChange =
+        previousState.constraints?.anchor !== next.constraints?.anchor &&
+        previousState.font === next.font &&
+        previousState.text === next.text &&
+        previousState.style === next.style &&
+        previousState.layout === next.layout &&
+        Object.is(previousState.rasterPixelRatio, next.rasterPixelRatio) &&
+        sameConstraintSizes(previousState.constraints, next.constraints);
+      const previousMeasurement = anchorOnlyChange && !wasPendingSemantic ? controller.measure() : undefined;
+      const nextFont = next.font === previousState.font ? font : fonts.acquire(next.font);
+      let failure: PostCommitError | undefined;
       try {
         controller.update(coreState(next, nextFont));
       } catch (error) {
@@ -169,57 +209,42 @@ export function createText<Selection extends TypeGpuFontSelection>(
           throw error;
         }
       }
-      if (anchorsPresent) {
-        try {
-          nextMeasurement = controller.measure();
-        } catch (error) {
-          if (failure === undefined) failure = error;
-        }
-      }
-      const nextOffset =
-        nextMeasurement?.anchorOffset ?? (anchorsPresent ? { x: pendingAnchorX, y: pendingAnchorY } : { x: 0, y: 0 });
-      // The controller owns cache invalidation. Reused lines prove that only placement changed,
-      // including when a caller supplies new objects or mutates an earlier authored object.
-      const placementOnly =
-        !pendingSemantic &&
-        previousMeasurement !== undefined &&
-        nextMeasurement !== undefined &&
-        previousMeasurement.lines === nextMeasurement.lines &&
-        previousMeasurement.width === nextMeasurement.width &&
-        previousMeasurement.height === nextMeasurement.height;
-      semanticRevision += 1;
-      pendingAnchorX = nextOffset.x;
-      pendingAnchorY = nextOffset.y;
-      pendingSemantic = !placementOnly;
-      const appliedAnchorX = placementOnly ? pendingAnchorX : anchorX;
-      const appliedAnchorY = placementOnly ? pendingAnchorY : anchorY;
+      // The controller has adopted this update, including a PostCommitError from its dirt callback.
+      // Transfer the font lease and desired state before any requested query or host write can fail.
       const previousFont = font;
       font = nextFont;
       state = next;
       hasAuthoredAnchor = next.constraints?.anchor !== undefined;
-      let positionFailure: unknown;
-      let positionFailed = false;
-      if (nextPositionX !== positionX || nextPositionY !== positionY || placementOnly) {
-        try {
+      semanticRevision += 1;
+      pendingSemantic = true;
+      pendingAnchorNeedsMeasure = hasAuthoredAnchor;
+      try {
+        const nextMeasurement: ParagraphLayoutSummary | undefined = anchorsPresent ? controller.measure() : undefined;
+        pendingAnchorX = nextMeasurement?.anchorOffset.x ?? 0;
+        pendingAnchorY = nextMeasurement?.anchorOffset.y ?? 0;
+        pendingAnchorNeedsMeasure = false;
+        const placementOnly =
+          failure === undefined &&
+          previousMeasurement !== undefined &&
+          nextMeasurement !== undefined &&
+          previousMeasurement.lines === nextMeasurement.lines &&
+          previousMeasurement.width === nextMeasurement.width &&
+          previousMeasurement.height === nextMeasurement.height;
+        const appliedAnchorX = placementOnly ? pendingAnchorX : anchorX;
+        const appliedAnchorY = placementOnly ? pendingAnchorY : anchorY;
+        if (nextPositionX !== positionX || nextPositionY !== positionY || placementOnly) {
           writePosition(transform, positionValue, nextPositionX + appliedAnchorX, nextPositionY + appliedAnchorY);
           positionX = nextPositionX;
           positionY = nextPositionY;
-          anchorX = appliedAnchorX;
-          anchorY = appliedAnchorY;
-        } catch (error) {
-          positionFailure = error;
-          positionFailed = true;
-          if (placementOnly) pendingSemantic = true;
         }
-      }
-      if (nextFont !== previousFont) {
-        try {
-          previousFont.dispose();
-        } catch (error) {
-          if (failure === undefined) failure = error;
+        if (placementOnly) {
+          anchorX = pendingAnchorX;
+          anchorY = pendingAnchorY;
+          pendingSemantic = false;
         }
+      } finally {
+        if (nextFont !== previousFont) previousFont.dispose();
       }
-      if (positionFailed) throw positionFailure;
       if (failure !== undefined) throw failure;
     },
     measure() {
@@ -249,21 +274,40 @@ export function createText<Selection extends TypeGpuFontSelection>(
   return {
     text,
     prepare() {
-      prepared = pendingSemantic ? { revision: semanticRevision, x: pendingAnchorX, y: pendingAnchorY } : undefined;
+      if (pendingAnchorNeedsMeasure) {
+        const offset = controller.measure().anchorOffset;
+        pendingAnchorX = offset.x;
+        pendingAnchorY = offset.y;
+        pendingAnchorNeedsMeasure = false;
+      }
+      preparedRevision = pendingSemantic ? semanticRevision : -1;
+      if (preparedRevision >= 0) {
+        preparedAnchorX = pendingAnchorX;
+        preparedAnchorY = pendingAnchorY;
+      }
     },
     accepted() {
-      const accepted = prepared;
-      prepared = undefined;
-      if (disposed || accepted === undefined) return;
-      if (anchorX !== accepted.x || anchorY !== accepted.y) {
-        writePosition(transform, positionValue, positionX + accepted.x, positionY + accepted.y);
-        anchorX = accepted.x;
-        anchorY = accepted.y;
+      const acceptedRevision = preparedRevision;
+      if (disposed || acceptedRevision < 0) {
+        preparedRevision = -1;
+        return;
       }
-      if (semanticRevision === accepted.revision) pendingSemantic = false;
+      if (anchorX !== preparedAnchorX || anchorY !== preparedAnchorY) {
+        try {
+          writePosition(transform, positionValue, positionX + preparedAnchorX, positionY + preparedAnchorY);
+        } catch (error) {
+          // The renderer has accepted this revision; retry its host placement on the next explicit shape().
+          services.invalidate();
+          throw error;
+        }
+        anchorX = preparedAnchorX;
+        anchorY = preparedAnchorY;
+      }
+      if (semanticRevision === acceptedRevision) pendingSemantic = false;
+      preparedRevision = -1;
     },
     rejected() {
-      prepared = undefined;
+      preparedRevision = -1;
     },
   };
 }

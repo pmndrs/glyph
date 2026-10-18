@@ -252,8 +252,23 @@ export function copyPreparedLayoutInspection(
     lineBaselines[index] = line.baseline;
     lineAdvances[index] = line.advance;
   }
+  const lines = measurement.lines.map((line) =>
+    Object.freeze({
+      ...line,
+      inkBounds: glyphInkBounds(
+        glyphInkX,
+        glyphInkY,
+        glyphInkWidths,
+        glyphInkHeights,
+        line.glyphStart,
+        line.glyphCount,
+      ),
+    }),
+  );
   return Object.freeze({
     ...measurement,
+    inkBounds: glyphInkBounds(glyphInkX, glyphInkY, glyphInkWidths, glyphInkHeights, 0, glyphCount),
+    lines: Object.freeze(lines),
     fontHandles: Uint32Array.from(fontHandles),
     glyphStableIds,
     glyphFontSlots,
@@ -276,6 +291,29 @@ export function copyPreparedLayoutInspection(
     lineBaselines,
     lineAdvances,
   });
+}
+
+/** Copied borrowed glyph records carry positioned ink; aggregate it only for an owned inspection. */
+function glyphInkBounds(
+  x: Float32Array,
+  y: Float32Array,
+  widths: Float32Array,
+  heights: Float32Array,
+  start: number,
+  count: number,
+): LayoutBox | undefined {
+  if (count === 0) return undefined;
+  let minX = x[start]!;
+  let minY = y[start]!;
+  let maxX = minX + widths[start]!;
+  let maxY = minY + heights[start]!;
+  for (let index = start + 1; index < start + count; index += 1) {
+    minX = Math.min(minX, x[index]!);
+    minY = Math.min(minY, y[index]!);
+    maxX = Math.max(maxX, x[index]! + widths[index]!);
+    maxY = Math.max(maxY, y[index]! + heights[index]!);
+  }
+  return Object.freeze({ x: minX, y: minY, width: maxX - minX, height: maxY - minY });
 }
 
 /** Copies one explicitly requested retained layout out of borrowed Wasm publication memory. */

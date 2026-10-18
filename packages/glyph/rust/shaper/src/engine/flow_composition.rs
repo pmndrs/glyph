@@ -3534,6 +3534,86 @@ mod tests {
         assert_eq!(changed.fragments[0], retained_prefix);
         assert_eq!(changed.fragments[1].line.advance, 3.0);
         assert_eq!(changed.fragments[2], retained_suffix);
+
+        // Change only the primary face's cap/x references on the middle line. Its line box and
+        // baseline remain identical, so retained convergence must still publish fresh references.
+        let mut reference_clusters = make_clusters(vec![2.0, 2.0, 1.0, 2.0, 2.0, 2.0]);
+        reference_clusters.style_indexes[2] = 1;
+        reference_clusters.style_indexes[3] = 1;
+        reference_clusters.style_indexes[4] = 2;
+        reference_clusters.style_indexes[5] = 2;
+        let mut alternate_style = styles[0].style;
+        alternate_style.font_stack_handle = 2;
+        let reference_styles = [
+            StyleSegment {
+                text_start: 0,
+                text_end: 2,
+                style: styles[0].style,
+            },
+            StyleSegment {
+                text_start: 2,
+                text_end: 4,
+                style: alternate_style,
+            },
+            StyleSegment {
+                text_start: 4,
+                text_end: 6,
+                style: styles[0].style,
+            },
+        ];
+        let reference_metrics = |font_handle| {
+            metrics(font_handle).map(|mut value| {
+                if font_handle == 2 {
+                    value.cap_height = 600;
+                    value.x_height = 400;
+                    value.height_fallbacks = 3;
+                }
+                value
+            })
+        };
+        let first_font = |stack| Some(if stack == 2 { 2 } else { 1 });
+        let mut cold = FlowLayoutArena::default();
+        cold.build(
+            &geometry,
+            &reference_clusters,
+            &reference_styles,
+            &mut InlineSlotArena::default(),
+            8,
+            1,
+            reference_metrics,
+            first_font,
+        )
+        .unwrap();
+        let mut incremental = FlowLayoutArena::default();
+        assert!(
+            incremental
+                .rebuild_until_state_converges(
+                    &changed,
+                    &geometry,
+                    &changed_clusters,
+                    &reference_clusters,
+                    &[],
+                    &reference_styles,
+                    &mut InlineSlotArena::default(),
+                    core::iter::once(2..3),
+                    0,
+                    8,
+                    1,
+                    reference_metrics,
+                    first_font,
+                    &mut NoCorrections,
+                )
+                .unwrap()
+        );
+        let cold_lines: Vec<_> = cold.lines.iter().copied().collect();
+        let incremental_lines: Vec<_> = incremental.lines.iter().copied().collect();
+        assert_eq!(incremental_lines, cold_lines);
+        assert_eq!(incremental_lines[1].height, changed.lines[1].height);
+        assert_eq!(incremental_lines[1].baseline, changed.lines[1].baseline);
+        assert_eq!(incremental_lines[1].typography.cap_height, 6.0);
+        assert_eq!(incremental_lines[1].typography.x_height, 4.0);
+        assert_eq!(incremental_lines[1].typography.height_fallbacks, 3);
+        assert_eq!(incremental.fragments[2], retained_suffix);
     }
 
     #[test]

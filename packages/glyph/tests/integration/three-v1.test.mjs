@@ -3323,6 +3323,61 @@ test('Text.split imports a planner-assisted copy with exact world alignment and 
   }
 });
 
+test('a clean anchor edit retains accepted drawn origins and drawable split membership', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const label = three.createText({ font, text: 'Glyphs move', style: { fontSize: 16 } });
+  scene.add(label);
+  scene.updateMatrixWorld(true);
+
+  let beforeCopy;
+  let afterCopy;
+  try {
+    assert.equal(label.commitState().status, 'committed');
+    const before = label.measureGlyphs();
+    const caret = label.caretForOffset(1);
+    const selection = label.selectionRects(0, 2);
+    [beforeCopy] = label.split();
+    assert.ok(beforeCopy.count < label.glyphs().glyphCount, 'the published space has no drawable record');
+    assert.ok(beforeCopy.count > 0);
+
+    instrumentedGlyph.reset();
+    label.constraints = { anchor: { x: 'center', y: 'first-baseline' } };
+    const offset = label.measure().anchorOffset;
+    scene.updateMatrixWorld(true);
+    assert.equal(label.commitState().status, 'committed');
+    assert.equal(instrumentedGlyph.crossings, 0, 'the anchor edit reuses the accepted native publication');
+
+    const translation = new THREE.Vector3(offset.x, -offset.y, 0);
+    const anchoredGlyphs = label.measureGlyphs();
+    assert.equal(anchoredGlyphs.length, before.length);
+    for (let index = 0; index < anchoredGlyphs.length; index += 1) {
+      assert.ok(anchoredGlyphs[index].drawnOrigin.equals(before[index].drawnOrigin.clone().add(translation)));
+    }
+    const anchoredCaret = label.caretForOffset(1);
+    assert.equal(anchoredCaret.offset, caret.offset);
+    assert.ok(Math.abs(anchoredCaret.rect.x - caret.rect.x - offset.x) < 1e-5);
+    assert.ok(Math.abs(anchoredCaret.rect.y - caret.rect.y - offset.y) < 1e-5);
+    const anchoredSelection = label.selectionRects(0, 2);
+    assert.equal(anchoredSelection.length, selection.length);
+    for (let index = 0; index < selection.length; index += 1) {
+      assert.ok(Math.abs(anchoredSelection[index].x - selection[index].x - offset.x) < 1e-5);
+      assert.ok(Math.abs(anchoredSelection[index].y - selection[index].y - offset.y) < 1e-5);
+      assert.equal(anchoredSelection[index].width, selection[index].width);
+      assert.equal(anchoredSelection[index].height, selection[index].height);
+    }
+    [afterCopy] = label.split();
+    assert.equal(afterCopy.count, beforeCopy.count, 'semantic-only spaces stay excluded after the anchor edit');
+    assert.equal(instrumentedGlyph.crossings, 0, 'queries and split do not republish glyphs');
+  } finally {
+    afterCopy?.dispose();
+    beforeCopy?.dispose();
+    label.dispose();
+    font.dispose();
+  }
+});
+
 test('detached glyphs retain their engine domain after the source and font owners are disposed', async (t) => {
   for (const published of [false, true]) {
     const three = await createThreeTestHandle(t);

@@ -37,6 +37,7 @@ function recordingHost(rasterSchema = msdfSchema) {
   const recorded = [];
   const uploads = [];
   const projectedBuffers = [];
+  const uniforms = [];
   const codecIdByGpu = new WeakMap();
   const stats = { allocations: 0, preparations: 0, publications: 0, uniformWrites: 0, reject: false };
   function buffer(size, usage = 0) {
@@ -55,14 +56,23 @@ function recordingHost(rasterSchema = msdfSchema) {
   const root = {
     createUniform() {
       const allocation = buffer(8);
-      return {
+      const uniform = {
         buffer: allocation,
         value: [0, 0],
+        failNextWrite: false,
+        writes: 0,
         write(value) {
           stats.uniformWrites++;
+          this.writes++;
+          if (this.failNextWrite) {
+            this.failNextWrite = false;
+            throw new Error('Injected uniform write failure');
+          }
           this.value = [...value];
         },
       };
+      uniforms.push(uniform);
+      return uniform;
     },
     device: {
       createBuffer({ size, usage }) {
@@ -189,7 +199,7 @@ function recordingHost(rasterSchema = msdfSchema) {
       },
     },
   };
-  return { config, allocations, recorded, uploads, projectedBuffers, stats };
+  return { config, allocations, recorded, uploads, projectedBuffers, uniforms, stats };
 }
 
 function renderedState(draws) {
@@ -748,6 +758,146 @@ test('TypeGPU holds the accepted anchor across pending and rejected semantic upd
       'anchor edit explicitly retries failed semantic output',
     );
     text.dispose();
+  } finally {
+    handle.dispose();
+    font.dispose();
+  }
+  assert.equal(host.allocations.size, 0);
+});
+
+test('TypeGPU keeps accepted placement when a reused mutable paint and anchor change is rejected', async () => {
+  const host = recordingHost();
+  const handle = glyph.handle('typegpu:paint-anchor-rejection', host.config);
+  const font = glyph.fontFace(new Blob([fontBytes]), { format: msdf });
+  const snapshot = () => {
+    handle.draw({}, { width: 640, height: 240 });
+    return host.recorded.splice(0);
+  };
+  try {
+    await font.load();
+    const sharedStyle = { color: '#ff0000' };
+    const text = handle.createText({
+      font,
+      text: 'Same metrics',
+      style: sharedStyle,
+      position: [100, 80],
+      constraints: { anchor: { x: 'center', y: 'first-baseline' } },
+    });
+    glyph.shape();
+    const before = snapshot();
+    const measured = text.measure();
+    sharedStyle.color = '#00ff00';
+    text.update({ style: sharedStyle, constraints: { anchor: { x: 'right', y: 'bottom' } } });
+    const desired = text.measure();
+    assert.equal(desired.width, measured.width);
+    assert.equal(desired.height, measured.height);
+    assert.notDeepEqual([100 + desired.anchorOffset.x, 80 + desired.anchorOffset.y], before[0].position);
+    assert.deepEqual(snapshot(), before, 'paint update cannot move accepted glyphs before publication');
+    host.stats.reject = true;
+    assert.throws(() => glyph.shape(), /Injected renderer rejection/);
+    assert.deepEqual(snapshot(), before, 'rejected paint keeps the accepted host origin');
+    host.stats.reject = false;
+    text.update({ style: { color: '#0000ff' } }); // Explicitly retry the rejected publication.
+    glyph.shape();
+    assert.deepEqual(snapshot()[0].position, [100 + desired.anchorOffset.x, 80 + desired.anchorOffset.y]);
+  } finally {
+    handle.dispose();
+    font.dispose();
+  }
+  assert.equal(host.allocations.size, 0);
+});
+
+test('TypeGPU keeps accepted placement when reused mutable layout and constraints change', async () => {
+  const host = recordingHost();
+  const handle = glyph.handle('typegpu:layout-anchor-rejection', host.config);
+  const font = glyph.fontFace(new Blob([fontBytes]), { format: msdf });
+  const snapshot = () => {
+    handle.draw({}, { width: 640, height: 240 });
+    return host.recorded.splice(0);
+  };
+  try {
+    await font.load();
+    const sharedLayout = { align: 'start' };
+    const sharedConstraints = {
+      width: { mode: 'exact', size: 240 },
+      anchor: { x: 'center', y: 'first-baseline' },
+    };
+    const text = handle.createText({
+      font,
+      text: 'Layout',
+      layout: sharedLayout,
+      constraints: sharedConstraints,
+      position: [100, 80],
+    });
+    glyph.shape();
+    const before = snapshot();
+    const measured = text.measure();
+    sharedLayout.align = 'end';
+    sharedConstraints.anchor = { x: 'right', y: 'bottom' };
+    text.update({ layout: sharedLayout, constraints: sharedConstraints });
+    const desired = text.measure();
+    assert.equal(desired.width, measured.width);
+    assert.equal(desired.height, measured.height);
+    assert.deepEqual(snapshot(), before, 'layout change cannot move accepted glyphs before publication');
+    host.stats.reject = true;
+    assert.throws(() => glyph.shape(), /Injected renderer rejection/);
+    assert.deepEqual(snapshot(), before, 'rejected layout keeps the accepted host origin');
+  } finally {
+    handle.dispose();
+    font.dispose();
+  }
+  assert.equal(host.allocations.size, 0);
+});
+
+test('TypeGPU retries accepted host placement after one uniform write fails', async () => {
+  const host = recordingHost();
+  const handle = glyph.handle('typegpu:anchor-write-recovery', host.config);
+  const font = glyph.fontFace(new Blob([fontBytes]), { format: msdf });
+  const snapshot = () => {
+    handle.draw({}, { width: 640, height: 240 });
+    return host.recorded.splice(0);
+  };
+  try {
+    await font.load();
+    const first = handle.createText({
+      font,
+      text: 'First',
+      position: [100, 80],
+      constraints: { anchor: { x: 'center', y: 'first-baseline' } },
+    });
+    const firstUniform = host.uniforms.at(-1);
+    const second = handle.createText({
+      font,
+      text: 'Second',
+      position: [200, 80],
+      constraints: { anchor: { x: 'center', y: 'first-baseline' } },
+    });
+    const secondUniform = host.uniforms.at(-1);
+    const removed = handle.createText({ font, text: 'Removed' });
+    const retiredBuffer = host.uniforms.at(-1).buffer;
+    glyph.shape();
+    const before = snapshot();
+    assert.equal(before.length, 3);
+
+    first.update({ text: 'A much longer first paragraph', constraints: { anchor: { x: 'right', y: 'bottom' } } });
+    second.update({ text: 'A much longer second paragraph', constraints: { anchor: { x: 'right', y: 'bottom' } } });
+    const firstAnchor = first.measure().anchorOffset;
+    const secondAnchor = second.measure().anchorOffset;
+    removed.dispose();
+    firstUniform.failNextWrite = true;
+    assert.throws(() => glyph.shape(), /Injected uniform write failure/);
+    const partiallySettled = snapshot();
+    assert.equal(partiallySettled.length, 2, 'renderer accepted the new text and the removal');
+    assert.deepEqual(partiallySettled[0].position, before[0].position, 'failed placement keeps the old host origin');
+    assert.deepEqual(partiallySettled[1].position, [200 + secondAnchor.x, 80 + secondAnchor.y]);
+    assert.equal(retiredBuffer.destroyed, true, 'retired transform is released despite another text failing');
+    const secondWrites = secondUniform.writes;
+
+    glyph.shape();
+    const recovered = snapshot();
+    assert.deepEqual(recovered[0].position, [100 + firstAnchor.x, 80 + firstAnchor.y]);
+    assert.deepEqual(recovered[1].position, partiallySettled[1].position);
+    assert.equal(secondUniform.writes, secondWrites, 'settled text is not rewritten on the recovery shape');
   } finally {
     handle.dispose();
     font.dispose();

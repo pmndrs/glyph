@@ -713,6 +713,7 @@ class RenderPlannerImpl {
       !this.#isDirty() &&
       !this.#engineNeedsRebuild &&
       state.published &&
+      state.committed === state.desired &&
       this.#engineRevision === this.#revision &&
       sameTextExceptAnchor(state.desired, desired, state.ordinal)
     ) {
@@ -733,16 +734,23 @@ class RenderPlannerImpl {
         throw error;
       }
       const previousDesired = state.desired;
+      const previousCommitted = state.committed!;
+      // The accepted geometry and bindings are unchanged; own the new semantic identity for
+      // both the desired and committed references before any old lease can be released.
+      retainResolvedText(desired);
       state.desired = desired;
+      state.committed = desired;
       state.measurement = measurement;
       state.inspection = inspection;
       let postCommitError: unknown;
       let postCommitFailed = false;
-      try {
-        releaseResolvedText(previousDesired);
-      } catch (error) {
-        postCommitError = error;
-        postCommitFailed = true;
+      for (const previous of [previousDesired, previousCommitted]) {
+        try {
+          releaseResolvedText(previous);
+        } catch (error) {
+          if (!postCommitFailed) postCommitError = error;
+          postCommitFailed = true;
+        }
       }
       try {
         this.#dirtyListener?.();
@@ -831,6 +839,12 @@ class RenderPlannerImpl {
     state.pendingFlowExclusions = preparation.pendingFlowExclusions;
     state.measurement = preparation.measurement;
     if (preparedRevisionChanged) state.inspection = undefined;
+    else if (state.inspection?.kind === 'owned') {
+      state.inspection = {
+        kind: 'owned',
+        columns: this.#inspectionColumns(withTextAnchor(state.inspection.columns, desired.source.constraints?.anchor)),
+      };
+    }
     this.#pendingTexts.add(state);
     if (previousOrder !== nextOrder) {
       this.#baseOrderValidationPending = true;
@@ -892,6 +906,16 @@ class RenderPlannerImpl {
   _layoutText(state: RetainedTextState): ParagraphLayoutSummary {
     this.#assertTextQueryable(state);
     return requirePreparedMeasurement(state);
+  }
+
+  /** @internal Resolves positioned ink only when a host explicitly asks for it. */
+  _layoutTextWithInk(state: RetainedTextState): ParagraphLayoutSummary {
+    this.#assertTextQueryable(state);
+    const measurement = requirePreparedMeasurement(state);
+    if (measurement.inkBounds !== undefined || measurement.glyphCount === 0) return measurement;
+    const inspection = this._ownedInspection(state);
+    state.measurement = measurementFromLayoutInspection(inspection.columns);
+    return state.measurement;
   }
 
   /** @internal */
@@ -1233,6 +1257,8 @@ class RenderPlannerImpl {
       preparedRemovals.length !== 0;
     // Requested summaries stay current; unqueried text needs only durable layout preparation.
     if (!preparationChanged && (!includeMeasurement || state.measurement !== undefined)) {
+      if (state.measurement !== undefined)
+        state.measurement = withTextAnchor(state.measurement, state.desired.source.constraints?.anchor);
       return false;
     }
     const paragraphMutations: readonly PlannerParagraphMutation[] =
@@ -1736,7 +1762,7 @@ class RetainedTextImpl implements RetainedText {
   }
 
   measureInk(): ParagraphLayoutSummary {
-    return this.#planner._layoutText(this.#state);
+    return this.#planner._layoutTextWithInk(this.#state);
   }
 
   glyphs(): GlyphLayoutInspection {

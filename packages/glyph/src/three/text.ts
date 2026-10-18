@@ -1413,6 +1413,7 @@ interface BoundTextEntry {
   committedRenderOrder: number | undefined;
   committedPresentation: TextPresentation | undefined;
   committedOrder: number | undefined;
+  committedOrderScope: TextGroup | undefined;
   committedOrderRank: number | undefined;
   stagedDesired: DesiredTextState<RasterFormatMetadata>;
   stagedAnchorOffset: LayoutPoint | undefined;
@@ -1794,6 +1795,7 @@ class ThreeRootPublication {
       entry.committedRenderOrder = entry.stagedPresentation.renderOrder;
       entry.committedPresentation = entry.stagedPresentation;
       entry.committedOrder = entry.stagedOrder;
+      entry.committedOrderScope = entry.stagedOrderScope;
       entry.committedOrderRank = entry.stagedOrderRank;
       entry.committedAnchorOffset = entry.stagedAnchorOffset;
       reconciler.markCommitted(text, acceptedRevision);
@@ -1870,6 +1872,7 @@ class ThreeRootPublication {
       previous !== undefined &&
       previous.stagedDesired.constraints.anchor !== desired.constraints.anchor &&
       previous.stagedRevision === previous.committedRevision &&
+      !this.#pendingMeasurements.has(text) &&
       !this.#materialInvalidated &&
       !this.#rendererUpdateRejected &&
       previous.committedPresentation !== undefined &&
@@ -1882,6 +1885,7 @@ class ThreeRootPublication {
         presentation.renderOrder,
       ) &&
       previous.committedOrder === order &&
+      previous.committedOrderScope === orderScope &&
       Object.is(previous.committedOrderRank, orderRank) &&
       sameDesiredExceptAnchor(previous.stagedDesired, desired);
     const state = coreTextState(
@@ -1908,6 +1912,7 @@ class ThreeRootPublication {
         committedRenderOrder: undefined,
         committedPresentation: undefined,
         committedOrder: undefined,
+        committedOrderScope: undefined,
         committedOrderRank: undefined,
         stagedDesired: desired,
         stagedAnchorOffset: undefined,

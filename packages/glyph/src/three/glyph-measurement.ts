@@ -54,8 +54,9 @@ export function measureGlyphPlacements(
   geometryByIndex: ReadonlyMap<number, ThreeGlyphGeometrySource> = new Map(),
   offset: LayoutPoint = { x: 0, y: 0 },
 ): readonly ThreeGlyphMeasurement[] {
+  const translation = offset.x === 0 && offset.y === 0 ? undefined : new THREE.Vector3(offset.x, -offset.y, 0);
   const measurements = placements.glyphs.map((placement) =>
-    measureGlyph(placement, geometryByIndex.get(placement.index), offset),
+    measureGlyph(placement, geometryByIndex.get(placement.index), offset, translation),
   );
   return Object.freeze(measurements);
 }
@@ -109,10 +110,14 @@ function measureGlyph(
   placement: GlyphPlacement,
   suppliedGeometry: ThreeGlyphGeometrySource | undefined,
   offset: LayoutPoint,
+  translation: THREE.Vector3 | undefined,
 ): ThreeGlyphMeasurement {
-  const translation = new THREE.Vector3(offset.x, -offset.y, 0);
-  const localInkBounds = paragraphBox(placement.ink).translate(translation);
-  const localAdvanceBounds = paragraphBox(placement.bounds).translate(translation);
+  const localInkBounds = paragraphBox(placement.ink);
+  const localAdvanceBounds = paragraphBox(placement.bounds);
+  if (translation !== undefined) {
+    localInkBounds.translate(translation);
+    localAdvanceBounds.translate(translation);
+  }
   const localQuad = quadFromBox(localInkBounds);
   const shapedOrigin = new THREE.Vector3(placement.shapedX + offset.x, -(placement.shapedY + offset.y), 0);
   const drawnOrigin = new THREE.Vector3(placement.x + offset.x, -(placement.y + offset.y), 0);

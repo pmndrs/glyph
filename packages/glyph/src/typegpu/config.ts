@@ -140,12 +140,30 @@ export function defineTypeGpuConfig(options: TypeGpuConfigOptions): TypeGpuGlyph
                   for (const text of texts.values()) text.rejected();
                 },
                 accepted: () => {
-                  for (const text of texts.values()) text.accepted();
-                  for (const transform of retired) {
-                    transform.position.buffer.destroy();
-                    transforms.delete(transform);
+                  let errors: Set<unknown> | undefined;
+                  for (const text of texts.values()) {
+                    try {
+                      text.accepted();
+                    } catch (error) {
+                      (errors ??= new Set()).add(error);
+                    }
                   }
-                  retired.clear();
+                  for (const transform of retired) {
+                    try {
+                      transform.position.buffer.destroy();
+                      retired.delete(transform);
+                      transforms.delete(transform);
+                    } catch (error) {
+                      (errors ??= new Set()).add(error);
+                      try {
+                        context.services.invalidate();
+                      } catch (retryError) {
+                        (errors ??= new Set()).add(retryError);
+                      }
+                    }
+                  }
+                  if (errors?.size === 1) throw errors.values().next().value;
+                  if (errors !== undefined) throw new AggregateError(errors, 'TypeGPU text acceptance failed');
                 },
               },
             },
