@@ -560,16 +560,17 @@ impl<'a, T: RopeRecord> RopeIter<'a, T> {
     fn new(root: Option<&'a Node<T>>, range: Range<usize>) -> Self {
         #[cfg(test)]
         super::work_attribution::record(|work| work.rope_iterator_starts += 1);
-        let state = match root {
-            Some(Node::Leaf { items, .. }) if !range.is_empty() => {
-                RopeIterState::Leaf(items[range].iter())
-            }
-            Some(root @ Node::Branch { .. }) if !range.is_empty() => {
-                RopeIterState::Tree(TreeRopeIter::new(root, range))
-            }
-            _ => RopeIterState::Leaf([].iter()),
-        };
-        Self { state }
+        match root {
+            Some(Node::Leaf { items, .. }) if !range.is_empty() => Self {
+                state: RopeIterState::Leaf(items[range].iter()),
+            },
+            Some(root @ Node::Branch { .. }) if !range.is_empty() => Self {
+                state: RopeIterState::Tree(TreeRopeIter::new(root, range)),
+            },
+            _ => Self {
+                state: RopeIterState::Leaf([].iter()),
+            },
+        }
     }
 
     fn skip_front(&mut self, count: usize) {

@@ -1317,44 +1317,55 @@ impl PositionedGlyphArena {
         previous: Option<&Self>,
         next_revision: &mut u32,
     ) -> Result<(), EngineError> {
-        self.placement_binding_capacity(handles)?;
-        let mut required_revisions = 0usize;
-        let mut instance_start = 0usize;
-        for (segment_index, handle) in handles.iter().copied().enumerate() {
-            let count = self.placement.segment_instance_counts()[segment_index] as usize;
-            let instance_end = instance_start + count;
-            if self.placement.placement_handle(segment_index) == Some(handle) {
-                instance_start = instance_end;
-                continue;
-            }
-            let slot = handle.slot().get();
-            for index in instance_start..instance_end {
-                let glyph = &self.glyphs[index];
-                let changed = glyph.placement_slot != slot
-                    || previous.is_some_and(|old| {
-                        old.glyphs.get(index).is_none_or(|prior| {
-                            prior.stable_id != glyph.stable_id || prior.placement_slot != slot
-                        })
-                    });
-                if changed && self.semantic_change_masks[index] == 0 {
-                    required_revisions = required_revisions
-                        .checked_add(1)
-                        .ok_or(EngineError::ResultTooLarge)?;
+        let (_, changed_instances) = self.placement_binding_capacity(handles)?;
+        // At most one new revision can be written for each glyph in a changed segment.
+        // When that bound fits, the writer's checked increments cannot fail.
+        let has_revision_headroom = u32::try_from(changed_instances)
+            .ok()
+            .and_then(|count| (*next_revision).max(1).checked_add(count))
+            .is_some();
+        let mut final_revision = None;
+        if !has_revision_headroom {
+            let mut required_revisions = 0usize;
+            let mut instance_start = 0usize;
+            for (segment_index, handle) in handles.iter().copied().enumerate() {
+                let count = self.placement.segment_instance_counts()[segment_index] as usize;
+                let instance_end = instance_start + count;
+                if self.placement.placement_handle(segment_index) == Some(handle) {
+                    instance_start = instance_end;
+                    continue;
                 }
+                let slot = handle.slot().get();
+                for index in instance_start..instance_end {
+                    let glyph = &self.glyphs[index];
+                    let changed = glyph.placement_slot != slot
+                        || previous.is_some_and(|old| {
+                            old.glyphs.get(index).is_none_or(|prior| {
+                                prior.stable_id != glyph.stable_id || prior.placement_slot != slot
+                            })
+                        });
+                    if changed && self.semantic_change_masks[index] == 0 {
+                        required_revisions = required_revisions
+                            .checked_add(1)
+                            .ok_or(EngineError::ResultTooLarge)?;
+                    }
+                }
+                instance_start = instance_end;
             }
-            instance_start = instance_end;
+            let revision_count =
+                u32::try_from(required_revisions).map_err(|_| EngineError::ResultTooLarge)?;
+            let next = (*next_revision).max(1);
+            final_revision = Some(if revision_count == 0 {
+                *next_revision
+            } else {
+                next.checked_add(revision_count)
+                    .ok_or(EngineError::ResultTooLarge)?
+            });
         }
-        let revision_count =
-            u32::try_from(required_revisions).map_err(|_| EngineError::ResultTooLarge)?;
-        let next = (*next_revision).max(1);
-        let final_revision = if revision_count == 0 {
-            *next_revision
-        } else {
-            next.checked_add(revision_count)
-                .ok_or(EngineError::ResultTooLarge)?
-        };
         self.bind_placement_handles_inner(handles, previous, next_revision)?;
-        *next_revision = final_revision;
+        if let Some(final_revision) = final_revision {
+            *next_revision = final_revision;
+        }
         Ok(())
     }
 
@@ -7279,6 +7290,10 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         let before = snapshot(&positioned);
+        let accepted_handles = (0..count)
+            .map(|index| positioned.placement_handle(index))
+            .collect::<Vec<_>>();
+        let retained_before = positioned.recomposed_glyphs_retained;
         let source_intervals = positioned.unpublished_source_intervals().unwrap().to_vec();
         keys[count - 2] += 100;
         keys[count - 1] += 100;
@@ -7296,6 +7311,13 @@ mod tests {
         );
         assert_eq!(revision, u32::MAX - 1);
         assert_eq!(snapshot(&positioned), before);
+        assert_eq!(
+            (0..count)
+                .map(|index| positioned.placement_handle(index))
+                .collect::<Vec<_>>(),
+            accepted_handles
+        );
+        assert_eq!(positioned.recomposed_glyphs_retained, retained_before);
         assert_eq!(
             positioned.unpublished_source_intervals(),
             Some(source_intervals.as_slice())
@@ -7325,6 +7347,86 @@ mod tests {
     }
 
     #[test]
+    fn placement_binding_uses_exact_demand_when_segment_bound_exceeds_revision_headroom() {
+        let fixture = fixture_position_results(0, 11, |_, _, _| {});
+        let segment_count = fixture.placement_segments().len();
+        assert!(segment_count >= 3);
+        let mut keys = (1..=u32::try_from(segment_count).unwrap()).collect::<Vec<_>>();
+        let mut slots = PlacementSlotArena::default();
+        slots.prepare(&keys, 1).unwrap();
+        let accepted = slots.assignments().unwrap().to_vec();
+        slots.commit();
+        keys[segment_count - 2] += 100;
+        keys[segment_count - 1] += 100;
+        slots.prepare(&keys, 2).unwrap();
+        let desired = slots.assignments().unwrap().to_vec();
+        let first_changed = fixture.placement.segment_instance_counts()[..segment_count - 2]
+            .iter()
+            .map(|count| *count as usize)
+            .sum::<usize>();
+        let changed_count = fixture.placement.segment_instance_counts()[segment_count - 2..]
+            .iter()
+            .map(|count| *count as usize)
+            .sum::<usize>();
+        assert!(changed_count >= 2);
+
+        for (new_revision_needed, start_revision) in [
+            (false, u32::MAX),
+            (true, u32::MAX - 1),
+            (true, 100),
+            (false, 0),
+            (true, 0),
+        ] {
+            let mut positioned = fixture_position_results(0, 11, |_, _, _| {});
+            positioned
+                .bind_placement_handles(&accepted, None, &mut 1)
+                .unwrap();
+            assert!(
+                positioned.semantic_change_masks[first_changed..first_changed + changed_count]
+                    .iter()
+                    .all(|mask| *mask != 0)
+            );
+            if new_revision_needed {
+                positioned.semantic_change_masks[first_changed] = 0;
+            }
+            let before_revisions = positioned
+                .glyphs
+                .iter()
+                .map(|glyph| glyph.content_revision)
+                .collect::<Vec<_>>();
+            let mut next_revision = start_revision;
+            positioned
+                .bind_placement_handles(&desired, None, &mut next_revision)
+                .unwrap();
+            let minted_revision = start_revision.max(1);
+            assert_eq!(
+                next_revision,
+                if new_revision_needed {
+                    minted_revision + 1
+                } else {
+                    start_revision
+                }
+            );
+            for (index, glyph) in positioned.glyphs.iter().enumerate() {
+                assert_eq!(
+                    glyph.content_revision,
+                    if new_revision_needed && index == first_changed {
+                        minted_revision
+                    } else {
+                        before_revisions[index]
+                    }
+                );
+            }
+            assert_eq!(
+                (0..segment_count)
+                    .map(|index| positioned.placement_handle(index))
+                    .collect::<Vec<_>>(),
+                desired.iter().copied().map(Some).collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[test]
     fn placement_binding_checks_generation_when_numeric_slot_is_reused() {
         let mut positioned = fixture_position_results(0, 1, |_, _, _| {});
         assert_eq!(positioned.placement_segments().len(), 1);
@@ -7334,6 +7436,16 @@ mod tests {
         positioned
             .bind_placement_handles(&[old], None, &mut 1)
             .unwrap();
+        let mut unchanged_revision = u32::MAX;
+        positioned
+            .bind_placement_handles(&[old], None, &mut unchanged_revision)
+            .unwrap();
+        assert_eq!(unchanged_revision, u32::MAX);
+        let mut zero_revision = 0;
+        positioned
+            .bind_placement_handles(&[old], None, &mut zero_revision)
+            .unwrap();
+        assert_eq!(zero_revision, 0);
         positioned.mark_published();
         let revision = positioned.glyphs[0].content_revision;
         slots.commit();
