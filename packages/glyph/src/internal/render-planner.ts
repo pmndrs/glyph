@@ -34,6 +34,7 @@ import {
   type PlannerParagraphMutation,
   type PlannerRegion,
   type PlannerStyleMutation,
+  type PlannerTextMutation,
 } from './frame-wire.js';
 import type {
   HandleFontStackBinding,
@@ -69,6 +70,7 @@ import { ownTextInput } from '../config/text-span-owner.js';
 
 const MAX_U32 = 0xffff_ffff;
 const claimedTargets = new WeakSet<object>();
+const EMPTY_REQUEST_ITEMS: readonly never[] = Object.freeze([]);
 
 declare const planOriginBrand: unique symbol;
 /** Unforgeable identity of the plan that produced a plan candidate. */
@@ -1212,11 +1214,17 @@ class RenderPlannerImpl {
     const geometryChanged = state.geometryDirty || !state.prepared;
     const geometryRevision = state.geometryRevision + Number(geometryChanged);
     const geometry = geometryChanged ? compileGeometry(this.#handleState, state, 0, 0, geometryRevision) : undefined;
-    const textMutation =
+    const textMutation: PlannerTextMutation | undefined =
       state.preparedText === state.desired.text
         ? undefined
-        : { start: 0, deleteCount: state.preparedText.length, insert: state.desired.text };
-    const preparedRemovals = [...this.#preparationRemovals];
+        : {
+            paragraphId: state.paragraphId,
+            start: 0,
+            deleteCount: state.preparedText.length,
+            insert: state.desired.text,
+          };
+    const preparedRemovals =
+      this.#preparationRemovals.size === 0 ? EMPTY_REQUEST_ITEMS : [...this.#preparationRemovals];
     const preparationChanged =
       !state.prepared ||
       textMutation !== undefined ||
@@ -1227,18 +1235,17 @@ class RenderPlannerImpl {
     if (!preparationChanged && (!includeMeasurement || state.measurement !== undefined)) {
       return false;
     }
-    const paragraphMutations: PlannerParagraphMutation[] = [
-      ...preparedRemovals.map((removed) => ({ opcode: 'remove' as const, paragraphId: removed.paragraphId })),
-      ...(!state.prepared || preparedRemovals.length !== 0
-        ? [
+    const paragraphMutations: readonly PlannerParagraphMutation[] =
+      state.prepared && preparedRemovals.length === 0
+        ? EMPTY_REQUEST_ITEMS
+        : [
+            ...preparedRemovals.map((removed) => ({ opcode: 'remove' as const, paragraphId: removed.paragraphId })),
             {
               opcode: 'upsert' as const,
               paragraphId: state.paragraphId,
               order: state.preparedOrder,
             },
-          ]
-        : []),
-    ];
+          ];
     const request: PlannerFrameUpdate = {
       rootId: this.#transport.handle,
       codecHandle: this.#codec.handle,
@@ -1251,13 +1258,15 @@ class RenderPlannerImpl {
         : 0,
       limits: this.#limits,
       paragraphMutations,
-      paragraphOrderMutations: [],
-      textMutations: textMutation === undefined ? [] : [{ paragraphId: state.paragraphId, ...textMutation }],
+      paragraphOrderMutations: EMPTY_REQUEST_ITEMS,
+      textMutations: textMutation === undefined ? EMPTY_REQUEST_ITEMS : [textMutation],
       styleMutations: styles,
-      constraints: geometry === undefined ? [] : [geometry.constraint],
-      regions: geometry?.regions ?? [],
-      exclusions: geometry?.exclusions ?? [],
-      inlineObjects: geometryChanged ? compileInlineObjects(this.#handleState, state, geometryRevision) : [],
+      constraints: geometry === undefined ? EMPTY_REQUEST_ITEMS : [geometry.constraint],
+      regions: geometry === undefined ? EMPTY_REQUEST_ITEMS : geometry.regions,
+      exclusions: geometry === undefined ? EMPTY_REQUEST_ITEMS : geometry.exclusions,
+      inlineObjects: geometryChanged
+        ? compileInlineObjects(this.#handleState, state, geometryRevision)
+        : EMPTY_REQUEST_ITEMS,
     };
     let measurement: ParagraphLayoutSummary | undefined;
     this.#transport.prepareParagraph(
@@ -2180,6 +2189,7 @@ function sameSpanEngineStyle(left: ResolvedSpan, right: ResolvedSpan): boolean {
 }
 
 function compileStyles(handleState: GlyphHandleState, state: RetainedTextState): readonly PlannerStyleMutation[] {
+  if (state.styleChanges.length === 0) return EMPTY_REQUEST_ITEMS;
   const desired = state.desired;
   const source = desired.source;
   return state.styleChanges.map((change): PlannerStyleMutation => {

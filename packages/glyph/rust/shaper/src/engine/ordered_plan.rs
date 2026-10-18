@@ -1618,8 +1618,8 @@ impl OrderedPlanCompiler {
                     .checked_add(byte_count)
                     .ok_or(OrderedPlanError::ArithmeticOverflow)?;
                 reserve(&mut self.payload, byte_count)?;
-                self.payload.resize(payload_end, 0);
                 payload_starts[schema_index] = payload_start;
+                let mut copied_prior = false;
                 if !replace && let Some(prior) = prior {
                     let old_buffer = self
                         .buffers
@@ -1630,9 +1630,13 @@ impl OrderedPlanCompiler {
                         .checked_add(byte_count)
                         .ok_or(OrderedPlanError::ArithmeticOverflow)?;
                     if source_end <= old_buffer.bytes.len() {
-                        self.payload[payload_start..payload_end]
-                            .copy_from_slice(&old_buffer.bytes[source_start..source_end]);
+                        self.payload
+                            .extend_from_slice(&old_buffer.bytes[source_start..source_end]);
+                        copied_prior = true;
                     }
+                }
+                if !copied_prior {
+                    self.payload.resize(payload_end, 0);
                 }
             }
 
