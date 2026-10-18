@@ -220,6 +220,15 @@ than a second application or integrator API. A consumer loads a FontFace selecti
 independent immutable Font lease needed by its engine binding. Portable compiled resources remain immutable payload data,
 while each renderer owns physical textures, buffers, geometry, and their device-relative leases.
 
+The Three adapter owns Codec and transform storage attributes; detached `Glyphs` owns its borrowed instance-transform
+storage. Their owners call `BufferAttribute.dispose()` when the storage retires. Three r185/r186 does not connect that
+event to WebGPU storage cleanup, and geometry disposal only reaches attributes on initialized draw geometries. For
+those verified revisions, each committed draw records the actual renderer's canonical attribute manager on first
+render encounter. Attribute disposal then asks each still-live manager to delete its allocation, including material-only
+placement storage. This preserves sibling draws and releases storage after an unrendered replacement or final owner
+disposal without holding a renderer alive. The private compatibility path is limited to r185/r186; later revisions
+follow their own attribute-disposal lifecycle and require separate validation.
+
 The `/core` entry contains only renderer-neutral integration authoring operations, including construction of placement
 snapshots from package-produced inspection data and renderer-owned drawn origins. Package registries and identity maps, compiled
 Codec-body authentication, system-lane normalization, and Glyph's reserved built-in raster registration path stay under
@@ -727,6 +736,12 @@ still merge update ranges, advance the storage version, and invalidate Three's W
 replaces a three-component attribute view with four-component padded storage, publication repacks every affected record
 into that detached view before advancing the version. Transform-table growth disposes the superseded attribute only after
 the candidate publishes; rejection disposes only the candidate, and root teardown disposes the final table.
+Draw geometries expose retained Codec buffers, the transform table, and detached glyph storage by attribute name without
+owning them. Three r186+ destroys the GPU buffer of every attribute on a disposed geometry, while its
+`BufferAttribute.dispose()` releases nothing, so a retired draw detaches shared storage that outlives the publication
+before its geometry is disposed and keeps attached only storage retiring in the same publication, which that disposal
+then releases. Removing one TextGroup, or growing a buffer generation, therefore leaves sibling draws bound to live
+storage.
 
 Three preparation remains the rejection boundary: a material factory or other realization failure leaves the last
 accepted renderer branch and core revision live. Once commit starts retiring the old host branch, publication is
