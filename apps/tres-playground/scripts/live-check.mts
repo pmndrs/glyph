@@ -13,10 +13,19 @@ const child = spawn(
 );
 
 let output = '';
+const portlessUrl = process.env.PORTLESS_URL;
+let routeCheck: Promise<string | undefined> | undefined;
 child.stdout.setEncoding('utf8');
 child.stdout.on('data', (chunk: string) => {
   output += chunk;
   process.stdout.write(chunk);
+  if (portlessUrl !== undefined && routeCheck === undefined && output.includes('[log] msdf:')) {
+    // The first format has settled, so Vitexec's Vite server is listening while this request runs.
+    routeCheck = checkPortlessRoute(portlessUrl).then(
+      () => undefined,
+      (error: unknown) => String(error),
+    );
+  }
 });
 
 const code = await new Promise<number>((resolve, reject) => {
@@ -34,4 +43,24 @@ if (!output.includes(probe.marker)) {
     `live probe did not report ${probe.marker}; it threw or exited early, and vitexec reported success anyway\n`,
   );
   process.exit(1);
+}
+
+if (portlessUrl !== undefined) {
+  if (routeCheck === undefined) {
+    process.stderr.write('Portless route was not checked before the live probe finished\n');
+    process.exit(1);
+  }
+  const routeError = await routeCheck;
+  if (routeError !== undefined) {
+    process.stderr.write(`Portless route did not serve the Tres playground: ${routeError}\n`);
+    process.exit(1);
+  }
+  process.stdout.write(`portless-route-ok ${portlessUrl}\n`);
+}
+
+async function checkPortlessRoute(url: string): Promise<void> {
+  const response = await fetch(url);
+  if (!response.ok || !(await response.text()).includes('<div id="app"></div>')) {
+    throw new Error(`unexpected response from ${url} (${String(response.status)})`);
+  }
 }

@@ -30,3 +30,6 @@ format button and requires the greeting paragraph to commit with ten Latin glyph
 explicit `shared` batching joins its Slug glyphs with the Slug greeting, yielding two draws; Bitmap and MSDF greetings
 use a different technique and yield three draws. The probe also requires the backdrop group to be mounted. Its meshes
 carry no glyph run metadata, so they never count toward those draws.
+
+When Portless supplies `PORTLESS_URL` and `PORT`, the Vite config uses the assigned port for Vitexec's live server and
+the check requests the playground through the Portless route. Without Portless, Vitexec uses its usual ephemeral port.
