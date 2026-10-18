@@ -76,10 +76,14 @@ try {
 `,
     ),
   ]);
-  await execFile('pnpm', ['install', '--ignore-workspace', '--offline', '--config.node-linker=hoisted'], {
-    cwd: consumerDirectory,
-    env: { ...process.env, CI: 'true' },
-  });
+  await execFile(
+    'pnpm',
+    ['install', '--ignore-workspace', '--offline', '--config.node-linker=hoisted', '--config.auto-install-peers=false'],
+    {
+      cwd: consumerDirectory,
+      env: { ...process.env, CI: 'true' },
+    },
+  );
 
   server = await createServer({
     root: consumerDirectory,
