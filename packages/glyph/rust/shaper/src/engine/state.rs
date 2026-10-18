@@ -2118,8 +2118,7 @@ fn append_paragraph_measurement(
     // A measurement-only query deliberately skips the positioning tail, so the
     // positioned arena still describes the COMMITTED flow; its cached per-line
     // lanes must not be read against the speculative flow. The measurement
-    // falls back to append_measurement's own line-level derivation, which is
-    // the same line arithmetic positioning caches.
+    // derives each line's span while serializing that line.
     // The positioned arena describes the measured flow in every pairing except
     // one: a re-prepared flow whose positioning tail was deliberately skipped.
     // A pending positioning over a committed flow (a positioning-only restyle)
@@ -2136,11 +2135,7 @@ fn append_paragraph_measurement(
     } else {
         &state.boundary_shape
     };
-    // Glyph totals: the positioned arena's lanes when they describe this flow,
-    // the flow-level derivation otherwise — the integration suite asserts the
-    // two agree, so a measurement-only query reports positioned-identical
-    // counts without the positioning tail.
-    let visible_glyphs = if positioned_matches_flow {
+    let visible_glyphs = positioned_matches_flow.then(|| {
         (
             positioned.semantic_glyphs().len(),
             positioned
@@ -2149,9 +2144,7 @@ fn append_paragraph_measurement(
                 .filter(|glyph| glyph.glyph_id == 0)
                 .count(),
         )
-    } else {
-        super::layout_query::visible_glyph_counts(flow, clusters, boundary_shape)?
-    };
+    });
     super::layout_query::append_measurement(
         records,
         paragraph_id,
@@ -2174,6 +2167,7 @@ fn append_paragraph_measurement(
         line_glyph_counts,
         positioned_matches_flow.then(|| positioned.semantic_line_inline_extents()),
         clusters,
+        boundary_shape,
         intrinsic_extents,
         intrinsics,
         include_layout_inspection && positioned_matches_flow,
