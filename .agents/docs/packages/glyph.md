@@ -727,6 +727,12 @@ still merge update ranges, advance the storage version, and invalidate Three's W
 replaces a three-component attribute view with four-component padded storage, publication repacks every affected record
 into that detached view before advancing the version. Transform-table growth disposes the superseded attribute only after
 the candidate publishes; rejection disposes only the candidate, and root teardown disposes the final table.
+Draw geometries expose retained Codec buffers, the transform table, and detached glyph storage by attribute name without
+owning them. Three r186+ destroys the GPU buffer of every attribute on a disposed geometry, while its
+`BufferAttribute.dispose()` releases nothing, so a retired draw detaches shared storage that outlives the publication
+before its geometry is disposed and keeps attached only storage retiring in the same publication, which that disposal
+then releases. Removing one TextGroup, or growing a buffer generation, therefore leaves sibling draws bound to live
+storage.
 
 Three preparation remains the rejection boundary: a material factory or other realization failure leaves the last
 accepted renderer branch and core revision live. Once commit starts retiring the old host branch, publication is

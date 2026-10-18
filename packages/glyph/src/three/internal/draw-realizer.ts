@@ -9,7 +9,7 @@ import type {
   ThreeInstanceSpanBinding,
 } from '../schema.js';
 import { threeSystemBuffers } from '../codec.js';
-import { createGeometrySource, realizeGeometry, resolveDrawGeometry } from './geometry.js';
+import { attachSharedStorage, createGeometrySource, realizeGeometry, resolveDrawGeometry } from './geometry.js';
 import { transformAttribute, type RetainedBuffer, type ThreeBufferBindingId } from './host-buffer.js';
 import { glyphOriginBuffer, glyphStorageKey, ThreeMaterialRealizer, transformProgramKey } from './material-realizer.js';
 import { threeBatchScope } from './batch-scope.js';
@@ -167,12 +167,16 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
           mesh = reusable;
         } else {
           const geometry = realizeGeometry(drawGeometry, span.recordCount);
-          for (const buffer of byCodecId.values()) geometry.setAttribute(buffer.threeAttributeName, buffer.attribute);
+          for (const buffer of byCodecId.values()) {
+            attachSharedStorage(geometry, buffer.threeAttributeName, buffer.attribute);
+          }
           const glyphStorage = stableIds === undefined ? undefined : owner.glyphStorage?.(glyphStorageKey(stableIds));
           if (glyphStorage !== undefined) {
-            geometry.setAttribute('_pmndrsGlyphInstanceTransforms', glyphStorage.transforms);
+            attachSharedStorage(geometry, '_pmndrsGlyphInstanceTransforms', glyphStorage.transforms);
           }
-          if (transform.kind === 'indexed') geometry.setAttribute('_pmndrsGlyphTransforms', context.transformAttribute);
+          if (transform.kind === 'indexed') {
+            attachSharedStorage(geometry, '_pmndrsGlyphTransforms', context.transformAttribute);
+          }
           mesh = new THREE.Mesh(geometry, material);
           mesh.userData.pmndrsGlyphRunStart = span.recordIndex;
           mesh.userData.pmndrsGlyphPrimitiveKind = decoration ? 'decoration' : 'glyph';

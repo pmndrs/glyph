@@ -66,6 +66,34 @@ export function realizeGeometry(drawGeometry: DrawGeometry, recordCount: number)
   return geometry;
 }
 
+/** Storage a draw geometry exposes by name but does not own: Codec buffers, transform tables, host glyph storage. */
+const sharedStorage = new WeakMap<THREE.BufferGeometry, [name: string, attribute: THREE.BufferAttribute][]>();
+
+export function attachSharedStorage(
+  geometry: THREE.BufferGeometry,
+  name: string,
+  attribute: THREE.BufferAttribute,
+): void {
+  geometry.setAttribute(name, attribute);
+  const attached = sharedStorage.get(geometry);
+  if (attached === undefined) sharedStorage.set(geometry, [[name, attribute]]);
+  else attached.push([name, attribute]);
+}
+
+/**
+ * Three r186+ destroys the GPU buffer of every attribute on a disposed geometry, so a retired draw first detaches the
+ * shared storage that outlives it; storage retiring in the same publication stays attached and is released with it.
+ */
+export function disposeDrawGeometry(
+  geometry: THREE.BufferGeometry,
+  retiredStorage: ReadonlySet<THREE.BufferAttribute>,
+): void {
+  for (const [name, attribute] of sharedStorage.get(geometry) ?? []) {
+    if (!retiredStorage.has(attribute)) geometry.deleteAttribute(name);
+  }
+  geometry.dispose();
+}
+
 export function updateGeometryInstances(geometry: THREE.BufferGeometry, recordCount: number): void {
   if (!(geometry instanceof THREE.InstancedBufferGeometry)) {
     throw new TypeError('instanced text draw lost its instanced geometry');
