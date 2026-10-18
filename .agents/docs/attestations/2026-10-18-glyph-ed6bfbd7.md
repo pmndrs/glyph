@@ -1,9 +1,9 @@
 ---
 type: Attestation
-title: "@pmndrs/glyph at ed6bfbd7"
-description: "Contributor intent for @pmndrs/glyph, awaiting verification."
-package: "@pmndrs/glyph"
-concept: "packages/glyph.md"
+title: '@pmndrs/glyph at ed6bfbd7'
+description: 'Contributor intent for @pmndrs/glyph, awaiting verification.'
+package: '@pmndrs/glyph'
+concept: 'packages/glyph.md'
 source: 'sha256:ed6bfbd7a1f07356f88d6573ecde19d2ee21a1b06b7dfb505d94926eee0a68e6'
 generated:
   by: process:docs-attest
