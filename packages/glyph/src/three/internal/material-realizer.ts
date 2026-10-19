@@ -28,9 +28,10 @@ import {
 import type { PreparationContext, RetainedResource, ThreeHostResource, TransformRealization } from './render-state.js';
 
 type MaterialSelection = ThreeResolvedMaterialBinding | undefined;
+type BuiltinMaterialContextKey = 'decoration' | 'pmndrs.bitmap' | 'pmndrs.msdf' | 'pmndrs.slug';
 type RawMaterialContext = {
-  [Key in keyof ThreeTextMaterialContextMap]: Omit<ThreeTextMaterialContextMap[Key], 'paragraphPosition' | 'position'>;
-}[keyof ThreeTextMaterialContextMap];
+  [Key in BuiltinMaterialContextKey]: Omit<ThreeTextMaterialContextMap[Key], 'paragraphPosition' | 'position'>;
+}[BuiltinMaterialContextKey];
 
 interface ThreeMaterialOwner {
   readonly renderObject: THREE.Object3D;
