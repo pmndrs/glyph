@@ -9,7 +9,7 @@ import { msdf } from '../../raster/msdf.js';
 import { slugSchema } from '../../raster/slug.js';
 import { slug } from '../../raster/slug.js';
 import type { RetainedSlugPage, ThreeRendererResources } from './renderer-resources.js';
-import type { ThreeRootContext, ThreeTextMaterialContext } from '../material.js';
+import type { ThreeRootContext, ThreeTextMaterialContextMap } from '../material.js';
 import type { ThreeRasterProgramBuffer } from '../raster-program.js';
 import { decorationSchema, threeSystemBuffers } from '../codec.js';
 import type { ThreeResolvedMaterialBinding, ThreeResolvedResourceBinding } from '../schema.js';
@@ -28,6 +28,10 @@ import {
 import type { PreparationContext, RetainedResource, ThreeHostResource, TransformRealization } from './render-state.js';
 
 type MaterialSelection = ThreeResolvedMaterialBinding | undefined;
+type BuiltinMaterialContextKey = 'decoration' | 'pmndrs.bitmap' | 'pmndrs.msdf' | 'pmndrs.slug';
+type RawMaterialContext = {
+  [Key in BuiltinMaterialContextKey]: Omit<ThreeTextMaterialContextMap[Key], 'paragraphPosition' | 'position'>;
+}[BuiltinMaterialContextKey];
 
 interface ThreeMaterialOwner {
   readonly renderObject: THREE.Object3D;
@@ -93,14 +97,18 @@ export class ThreeMaterialRealizer {
       rect: TSL.storage(rect.attribute, 'vec4', rect.attribute.count).setPBO(true).element(instance),
       packed: TSL.storage(packed.attribute, 'uvec2', packed.attribute.count).setPBO(true).element(instance),
     });
-    const position = this.#position(shader.position, instance, buffers, transform);
-    const material = this.#createMaterial(selection, {
-      root: this.#root(selection),
-      kind: 'decoration',
-      shader,
-      position,
-      createDefaultMaterial: () => coverageMaterial(shader, position),
-    });
+    const vertexPosition = this.#position(shader.position, instance, buffers, transform);
+    const material = this.#createMaterial(
+      selection,
+      {
+        root: this.#root(selection),
+        kind: 'decoration',
+        shader,
+        createDefaultMaterial: () => coverageMaterial(shader, vertexPosition),
+      },
+      shader.position,
+      vertexPosition,
+    );
     this.#retain(key, material, undefined, materialBuffers([rect, packed], transform), transform.kind);
     return material;
   }
@@ -152,15 +160,19 @@ export class ThreeMaterialRealizer {
       { page: texture },
       { pixelSnapping: this.#owner.pixelSnapping ?? selection?.pixelSnapping ?? false },
     );
-    const position = this.#position(shader.position, instance, buffers, transform);
-    const material = this.#createMaterial(selection, {
-      root: this.#root(selection),
-      kind: 'glyph',
-      format: bitmap.id,
-      shader,
-      position,
-      createDefaultMaterial: () => bitmapMaterial(shader, position),
-    });
+    const vertexPosition = this.#position(shader.position, instance, buffers, transform);
+    const material = this.#createMaterial(
+      selection,
+      {
+        root: this.#root(selection),
+        kind: 'glyph',
+        format: bitmap.id,
+        shader,
+        createDefaultMaterial: () => bitmapMaterial(shader, vertexPosition),
+      },
+      shader.position,
+      vertexPosition,
+    );
     this.#retain(key, material, resource, materialBuffers(retained, transform), transform.kind);
     return material;
   }
@@ -206,15 +218,19 @@ export class ThreeMaterialRealizer {
         pixelRange: f32BufferMember(atlas, 'pixelRange', 'MSDF'),
       },
     );
-    const position = this.#position(shader.position, instance, buffers, transform);
-    const material = this.#createMaterial(selection, {
-      root: this.#root(selection),
-      kind: 'glyph',
-      format: msdf.id,
-      shader,
-      position,
-      createDefaultMaterial: () => coverageMaterial(shader, position),
-    });
+    const vertexPosition = this.#position(shader.position, instance, buffers, transform);
+    const material = this.#createMaterial(
+      selection,
+      {
+        root: this.#root(selection),
+        kind: 'glyph',
+        format: msdf.id,
+        shader,
+        createDefaultMaterial: () => coverageMaterial(shader, vertexPosition),
+      },
+      shader.position,
+      vertexPosition,
+    );
     this.#retain(key, material, resource, materialBuffers(retained, transform), transform.kind);
     return material;
   }
@@ -278,15 +294,19 @@ export class ThreeMaterialRealizer {
       { page: this.#slugPage(resource.binding, page), viewport, modelViewProjection },
     );
     const glyphPosition = this.#glyphPosition(shader.position, instance, buffers);
-    const position = indexed?.position(glyphPosition) ?? glyphPosition;
-    const material = this.#createMaterial(selection, {
-      root: this.#root(selection),
-      kind: 'glyph',
-      format: slug.id,
-      shader,
-      position,
-      createDefaultMaterial: () => coverageMaterial(shader, position),
-    });
+    const vertexPosition = indexed?.position(glyphPosition) ?? glyphPosition;
+    const material = this.#createMaterial(
+      selection,
+      {
+        root: this.#root(selection),
+        kind: 'glyph',
+        format: slug.id,
+        shader,
+        createDefaultMaterial: () => coverageMaterial(shader, vertexPosition),
+      },
+      shader.position,
+      vertexPosition,
+    );
     this.#retain(key, material, resource, materialBuffers(retained, transform), transform.kind);
     return material;
   }
@@ -484,8 +504,21 @@ export class ThreeMaterialRealizer {
     return lease.resource;
   }
 
-  #createMaterial(selection: MaterialSelection, context: ThreeTextMaterialContext): THREE.NodeMaterial {
-    return this.#own(selection?.material?.create(context) ?? context.createDefaultMaterial());
+  #createMaterial(
+    selection: MaterialSelection,
+    context: RawMaterialContext,
+    paragraphPosition: THREE.Node<'vec3'>,
+    vertexPosition: THREE.Node<'vec3'>,
+  ): THREE.NodeMaterial {
+    const factory = selection?.material;
+    if (factory === undefined) return this.#own(context.createDefaultMaterial());
+    return this.#own(
+      factory.create({
+        ...context,
+        paragraphPosition: TSL.vertexStage(paragraphPosition),
+        position: TSL.vertexStage(vertexPosition),
+      }) ?? context.createDefaultMaterial(),
+    );
   }
 
   #root(selection: MaterialSelection): ThreeRootContext {

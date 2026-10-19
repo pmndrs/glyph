@@ -870,6 +870,19 @@ root policy states draw order.
 
 `materialId` is explicit through the frame ABI and command buffer. Three maps it to a `defineTextMaterial()` factory. Material
 identity may split draws without forcing a second copy of the canonical glyph buffers.
+Built-in Three material contexts expose two stage-safe position nodes: `paragraphPosition` is the unanchored,
++Y-up paragraph coordinate before per-glyph/owner transforms, and `position` is the final draw-local coordinate.
+Indexed owner transforms enter the `position` node; direct owner transforms stay on the draw mesh's matrix, so
+`position` values differ across transform modes for the same world-space glyph. The default material uses the raw
+vertex position graph to preserve TypeGPU-backed shader builtins on WebGL2.
+The material realizer creates the two stage-safe wrappers only when a custom material factory is present;
+default material cache misses retain the raw graph without allocating unused wrappers.
+Its private raw-context union covers only the four built-in producers (decoration, Bitmap, MSDF, and Slug);
+external material-context augmentations retain their own contracts without inheriting built-in position nodes.
+Both compute in the vertex stage and interpolate when a fragment graph reads them; Slug's vertex position also publishes
+its analytic coverage coordinate. Raw `glyphs().inkBounds` uses the same paragraph origin with +Y down, so material
+mapping converts that axis before normalization. A material shared across Text objects has no single paragraph extent;
+the caller supplies a separate extent per Text/material when mapping across its entire ink.
 
 MSDF material shaders publish `fillDistance`, `trueDistance`, and `pixelRange` alongside their coverage outputs (D-365).
 Both Three configurations use the same `TslMsdfShaderOutput` type; raw TypeGPU `msdfFragment()` and
