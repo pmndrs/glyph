@@ -1,0 +1,23 @@
+{
+  "argv": [
+    "/usr/bin/env",
+    "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch",
+    "xcrun",
+    "clang",
+    "-std=c11",
+    "-O2",
+    "-Wall",
+    "-Wextra",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/support/darwin-family-footprint.c",
+    "-o",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/native-observer-gates/darwin-family-footprint"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-19T16:03:04.919832+00:00",
+  "finished": "2026-10-19T16:03:05.302381+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

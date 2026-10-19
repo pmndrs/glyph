@@ -1,0 +1,1267 @@
+{
+  "schemaVersion": 1,
+  "created": "2026-10-19",
+  "protocol": "Four untimed application-memory browser command-family observations using one retained ASCII-rich Text / TextGroup fixture, 240 spans, 2,880 initial glyphs, six phases on WebGPU and WebGL2, 30 idle frames. Main frozen oracle captured before comparison arms.",
+  "oracle": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/browser-main-oracle.json",
+    "sha256": "183476f79a859024e3e6f633395d9c8f874262f4f4009432c4ce6376b73837b1",
+    "pixelHashCaveat": "pixelHash is the existing noncryptographic 32-bit framebuffer digest plus lit-pixel count; full pixel arrays were not retained."
+  },
+  "limitations": [
+    "OS physical-footprint maximum is a non-atomic sum sampled over the complete observed command family; it is not an exact simultaneous peak and may miss short-lived peaks.",
+    "The observed browser command includes startup, installation, server/browser launch, all workload phases, and teardown; these are not isolated renderer-memory measurements.",
+    "Observer process-table scanning, browser delivery response hashing, and report generation contribute overhead.",
+    "Synchronous CPU timings are diagnostic only and excluded from acceptance because this observer perturbs runtime.",
+    "The delivery proof covers recorded requests and confirms the installed entry files and shaper Wasm; it does not claim to authenticate every possible transitive module."
+  ],
+  "arms": [
+    {
+      "arm": "main",
+      "archive": {
+        "basename": "main-4e25a96a.tgz",
+        "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20"
+      },
+      "mode": "stream",
+      "observer": {
+        "status": "completed",
+        "nativeExit": 0,
+        "maximumObservedNonAtomicSweepSumBytes": 1531603080,
+        "completeSweeps": 130,
+        "cleanupProven": true,
+        "remainingIdentities": [],
+        "uncertainIdentities": 0,
+        "temporaryConsumerRemoved": true
+      },
+      "harnessUnchanged": true,
+      "workload": {
+        "model": "one retained Text inside one TextGroup",
+        "initialColorSpans": 240,
+        "initialGlyphs": 2880,
+        "idleFrames": 30
+      },
+      "delivery": {
+        "status": "completed",
+        "installedShaper": {
+          "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-YDlHdc/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+main-4e25a96a.tgz_@oxc-project+types@0.150.0_7cbe60a4751913b6ad25cb79aec6334d/node_modules/@pmndrs/glyph/dist/text-shaper.wasm",
+          "bytes": 1462005,
+          "sha256": "059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4"
+        },
+        "backends": [
+          {
+            "backend": "webgpu",
+            "responseCount": 127,
+            "wasmResponseSha256": ["059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4"],
+            "installedEntriesSeen": {
+              "index": true,
+              "three": true
+            },
+            "failedRequests": [],
+            "errors": []
+          },
+          {
+            "backend": "webgl2",
+            "responseCount": 127,
+            "wasmResponseSha256": ["059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4"],
+            "installedEntriesSeen": {
+              "index": true,
+              "three": true
+            },
+            "failedRequests": [],
+            "errors": []
+          }
+        ]
+      },
+      "backends": [
+        {
+          "backend": "webgpu",
+          "phaseResults": {
+            "initial": {
+              "pixelHash": "edd436be",
+              "litPixels": 48898,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedContents": {
+              "pixelHash": "acb4311e",
+              "litPixels": 48917,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedCount": {
+              "pixelHash": "08501d70",
+              "litPixels": 24491,
+              "draws": 1,
+              "instances": 1440
+            },
+            "resized": {
+              "pixelHash": "4854a547",
+              "litPixels": 50569,
+              "draws": 1,
+              "instances": 5760
+            },
+            "drawReplacement": {
+              "pixelHash": "bc1fd119",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            },
+            "transform": {
+              "pixelHash": "a92799b9",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            }
+          },
+          "uploadsByPhase": {
+            "initial": {
+              "attributeCreateBytes": 254080,
+              "attributeCreateCalls": 10,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "changedContents": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 180768,
+              "attributeUpdateCalls": 10,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "changedCount": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 88816,
+              "attributeUpdateCalls": 10,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "resized": {
+              "attributeCreateBytes": 507904,
+              "attributeCreateCalls": 9,
+              "attributeUpdateBytes": 64,
+              "attributeUpdateCalls": 1,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "drawReplacement": {
+              "attributeCreateBytes": 3584,
+              "attributeCreateCalls": 3,
+              "attributeUpdateBytes": 64,
+              "attributeUpdateCalls": 1,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "transform": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 64,
+              "attributeUpdateCalls": 1,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            }
+          },
+          "storage": {
+            "attributes": 14,
+            "bytes": 528512,
+            "usage": [35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040],
+            "versions": [2, 2, 2, 2, 2, 2, 2, 2, 2, 6, 2, 2, 2, 2]
+          },
+          "idle": {
+            "frames": 30,
+            "medianCpuMs": 0.07000000029802322,
+            "p95CpuMs": 0.17999999970197678,
+            "totalCpuMs": 2.7349999994039536,
+            "uploads": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "versionsUnchanged": true
+          }
+        },
+        {
+          "backend": "webgl2",
+          "phaseResults": {
+            "initial": {
+              "pixelHash": "04fac2ee",
+              "litPixels": 48898,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedContents": {
+              "pixelHash": "de29bf5e",
+              "litPixels": 48917,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedCount": {
+              "pixelHash": "b27298a8",
+              "litPixels": 24491,
+              "draws": 1,
+              "instances": 1440
+            },
+            "resized": {
+              "pixelHash": "a166a52b",
+              "litPixels": 50569,
+              "draws": 1,
+              "instances": 5760
+            },
+            "drawReplacement": {
+              "pixelHash": "e9b75465",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            },
+            "transform": {
+              "pixelHash": "ad4d2245",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            }
+          },
+          "uploadsByPhase": {
+            "initial": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 254080,
+              "pboTextureCreateCalls": 10,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "changedContents": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 254080,
+              "pboTextureUpdateCalls": 10
+            },
+            "changedCount": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 254080,
+              "pboTextureUpdateCalls": 10
+            },
+            "resized": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 507904,
+              "pboTextureCreateCalls": 9,
+              "pboTextureUpdateBytes": 128,
+              "pboTextureUpdateCalls": 1
+            },
+            "drawReplacement": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 3584,
+              "pboTextureCreateCalls": 3,
+              "pboTextureUpdateBytes": 128,
+              "pboTextureUpdateCalls": 1
+            },
+            "transform": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 128,
+              "pboTextureUpdateCalls": 1
+            }
+          },
+          "storage": {
+            "attributes": 14,
+            "bytes": 528512,
+            "usage": [35044, 35044, 35044, 35044, 35044, 35044, 35040, 35044, 35044, 35044, 35044, 35044, 35040, 35044],
+            "versions": [2, 2, 2, 2, 2, 2, 2, 2, 2, 6, 2, 2, 2, 2]
+          },
+          "idle": {
+            "frames": 30,
+            "medianCpuMs": 0.05999999865889549,
+            "p95CpuMs": 0.18999999947845936,
+            "totalCpuMs": 2.6950000002980232,
+            "uploads": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "versionsUnchanged": true
+          }
+        }
+      ],
+      "frozenMainComparison": "matched all six pixelHash/litPixels/draws/instances signatures per backend"
+    },
+    {
+      "arm": "candidate",
+      "archive": {
+        "basename": "pmndrs-glyph-0.1.0.tgz",
+        "sha256": "2e4342243c55edb56d3a1a32cbd730185c8d172fa5634da9c1f8fc3b0edd9558"
+      },
+      "mode": "stream",
+      "observer": {
+        "status": "completed",
+        "nativeExit": 0,
+        "maximumObservedNonAtomicSweepSumBytes": 1578707752,
+        "completeSweeps": 104,
+        "cleanupProven": true,
+        "remainingIdentities": [],
+        "uncertainIdentities": 0,
+        "temporaryConsumerRemoved": true
+      },
+      "harnessUnchanged": true,
+      "workload": {
+        "model": "one retained Text inside one TextGroup",
+        "initialColorSpans": 240,
+        "initialGlyphs": 2880,
+        "idleFrames": 30
+      },
+      "delivery": {
+        "status": "completed",
+        "installedShaper": {
+          "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-EIbmRf/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+candidate+pmndrs-glyph-0.1.0.tgz_@oxc-project+types@0_f833e63321ddfb663f39c462194b7425/node_modules/@pmndrs/glyph/dist/text-shaper.wasm",
+          "bytes": 1601557,
+          "sha256": "244078b186e9de0414331ff9de2632c8a57c4ec20f19b6e0a41ce964f8e1b30a"
+        },
+        "backends": [
+          {
+            "backend": "webgpu",
+            "responseCount": 126,
+            "wasmResponseSha256": ["244078b186e9de0414331ff9de2632c8a57c4ec20f19b6e0a41ce964f8e1b30a"],
+            "installedEntriesSeen": {
+              "index": true,
+              "three": true
+            },
+            "failedRequests": [],
+            "errors": []
+          },
+          {
+            "backend": "webgl2",
+            "responseCount": 126,
+            "wasmResponseSha256": ["244078b186e9de0414331ff9de2632c8a57c4ec20f19b6e0a41ce964f8e1b30a"],
+            "installedEntriesSeen": {
+              "index": true,
+              "three": true
+            },
+            "failedRequests": [],
+            "errors": []
+          }
+        ]
+      },
+      "backends": [
+        {
+          "backend": "webgpu",
+          "phaseResults": {
+            "initial": {
+              "pixelHash": "edd436be",
+              "litPixels": 48898,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedContents": {
+              "pixelHash": "acb4311e",
+              "litPixels": 48917,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedCount": {
+              "pixelHash": "08501d70",
+              "litPixels": 24491,
+              "draws": 1,
+              "instances": 1440
+            },
+            "resized": {
+              "pixelHash": "4854a547",
+              "litPixels": 50569,
+              "draws": 1,
+              "instances": 5760
+            },
+            "drawReplacement": {
+              "pixelHash": "bc1fd119",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            },
+            "transform": {
+              "pixelHash": "a92799b9",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            }
+          },
+          "uploadsByPhase": {
+            "initial": {
+              "attributeCreateBytes": 254080,
+              "attributeCreateCalls": 10,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "changedContents": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 157728,
+              "attributeUpdateCalls": 8,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "changedCount": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 77296,
+              "attributeUpdateCalls": 8,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "resized": {
+              "attributeCreateBytes": 507904,
+              "attributeCreateCalls": 9,
+              "attributeUpdateBytes": 64,
+              "attributeUpdateCalls": 1,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "drawReplacement": {
+              "attributeCreateBytes": 3584,
+              "attributeCreateCalls": 3,
+              "attributeUpdateBytes": 64,
+              "attributeUpdateCalls": 1,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "transform": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 64,
+              "attributeUpdateCalls": 1,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            }
+          },
+          "storage": {
+            "attributes": 14,
+            "bytes": 528512,
+            "usage": [35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040],
+            "versions": [2, 2, 2, 2, 2, 2, 2, 2, 2, 6, 2, 2, 2, 2]
+          },
+          "idle": {
+            "frames": 30,
+            "medianCpuMs": 0.08499999903142452,
+            "p95CpuMs": 0.18999999947845936,
+            "totalCpuMs": 2.9750000052154064,
+            "uploads": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "versionsUnchanged": true
+          }
+        },
+        {
+          "backend": "webgl2",
+          "phaseResults": {
+            "initial": {
+              "pixelHash": "04fac2ee",
+              "litPixels": 48898,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedContents": {
+              "pixelHash": "de29bf5e",
+              "litPixels": 48917,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedCount": {
+              "pixelHash": "b27298a8",
+              "litPixels": 24491,
+              "draws": 1,
+              "instances": 1440
+            },
+            "resized": {
+              "pixelHash": "a166a52b",
+              "litPixels": 50569,
+              "draws": 1,
+              "instances": 5760
+            },
+            "drawReplacement": {
+              "pixelHash": "e9b75465",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            },
+            "transform": {
+              "pixelHash": "ad4d2245",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            }
+          },
+          "uploadsByPhase": {
+            "initial": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 254080,
+              "pboTextureCreateCalls": 10,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "changedContents": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 221312,
+              "pboTextureUpdateCalls": 8
+            },
+            "changedCount": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 221312,
+              "pboTextureUpdateCalls": 8
+            },
+            "resized": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 507904,
+              "pboTextureCreateCalls": 9,
+              "pboTextureUpdateBytes": 128,
+              "pboTextureUpdateCalls": 1
+            },
+            "drawReplacement": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 3584,
+              "pboTextureCreateCalls": 3,
+              "pboTextureUpdateBytes": 128,
+              "pboTextureUpdateCalls": 1
+            },
+            "transform": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 128,
+              "pboTextureUpdateCalls": 1
+            }
+          },
+          "storage": {
+            "attributes": 14,
+            "bytes": 528512,
+            "usage": [35044, 35044, 35044, 35044, 35044, 35044, 35040, 35044, 35044, 35044, 35044, 35044, 35040, 35044],
+            "versions": [2, 2, 2, 2, 2, 2, 2, 2, 2, 6, 2, 2, 2, 2]
+          },
+          "idle": {
+            "frames": 30,
+            "medianCpuMs": 0.054999999701976776,
+            "p95CpuMs": 0.17999999970197678,
+            "totalCpuMs": 2.480000000447035,
+            "uploads": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "versionsUnchanged": true
+          }
+        }
+      ],
+      "frozenMainComparison": "matched all six pixelHash/litPixels/draws/instances signatures per backend"
+    },
+    {
+      "arm": "published010",
+      "archive": {
+        "basename": "published-0.1.0.tgz",
+        "sha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b"
+      },
+      "mode": "dynamic",
+      "observer": {
+        "status": "completed",
+        "nativeExit": 0,
+        "maximumObservedNonAtomicSweepSumBytes": 1486776192,
+        "completeSweeps": 100,
+        "cleanupProven": true,
+        "remainingIdentities": [],
+        "uncertainIdentities": 0,
+        "temporaryConsumerRemoved": true
+      },
+      "harnessUnchanged": true,
+      "workload": {
+        "model": "one retained Text inside one TextGroup",
+        "initialColorSpans": 240,
+        "initialGlyphs": 2880,
+        "idleFrames": 30
+      },
+      "delivery": {
+        "status": "completed",
+        "installedShaper": {
+          "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/text-shaper.wasm",
+          "bytes": 1362353,
+          "sha256": "addb8144f474c9f5a005bdda084bcf15c05170004b34c7a65ab592db4962c893"
+        },
+        "backends": [
+          {
+            "backend": "webgpu",
+            "responseCount": 122,
+            "wasmResponseSha256": ["addb8144f474c9f5a005bdda084bcf15c05170004b34c7a65ab592db4962c893"],
+            "installedEntriesSeen": {
+              "index": true,
+              "three": true
+            },
+            "failedRequests": [],
+            "errors": []
+          },
+          {
+            "backend": "webgl2",
+            "responseCount": 122,
+            "wasmResponseSha256": ["addb8144f474c9f5a005bdda084bcf15c05170004b34c7a65ab592db4962c893"],
+            "installedEntriesSeen": {
+              "index": true,
+              "three": true
+            },
+            "failedRequests": [],
+            "errors": []
+          }
+        ]
+      },
+      "backends": [
+        {
+          "backend": "webgpu",
+          "phaseResults": {
+            "initial": {
+              "pixelHash": "edd436be",
+              "litPixels": 48898,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedContents": {
+              "pixelHash": "acb4311e",
+              "litPixels": 48917,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedCount": {
+              "pixelHash": "08501d70",
+              "litPixels": 24491,
+              "draws": 1,
+              "instances": 1440
+            },
+            "resized": {
+              "pixelHash": "4854a547",
+              "litPixels": 50569,
+              "draws": 1,
+              "instances": 5760
+            },
+            "drawReplacement": {
+              "pixelHash": "bc1fd119",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            },
+            "transform": {
+              "pixelHash": "a92799b9",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            }
+          },
+          "uploadsByPhase": {
+            "initial": {
+              "attributeCreateBytes": 254080,
+              "attributeCreateCalls": 10,
+              "attributeUpdateBytes": 685280,
+              "attributeUpdateCalls": 31,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "changedContents": {
+              "attributeCreateBytes": 16384,
+              "attributeCreateCalls": 1,
+              "attributeUpdateBytes": 947552,
+              "attributeUpdateCalls": 40,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "changedCount": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 350888,
+              "attributeUpdateCalls": 21,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "resized": {
+              "attributeCreateBytes": 491520,
+              "attributeCreateCalls": 8,
+              "attributeUpdateBytes": 1388744,
+              "attributeUpdateCalls": 33,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "drawReplacement": {
+              "attributeCreateBytes": 3584,
+              "attributeCreateCalls": 3,
+              "attributeUpdateBytes": 1027104,
+              "attributeUpdateCalls": 34,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "transform": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 1023424,
+              "attributeUpdateCalls": 28,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            }
+          },
+          "storage": {
+            "attributes": 14,
+            "bytes": 528512,
+            "usage": [35048, 35048, 35048, 35048, 35048, 35048, 35048, 35048, 35048, 35048, 35048, 35048, 35048, 35048],
+            "versions": [2, 2, 2, 2, 2, 2, 2, 2, 2, 11, 2, 2, 2, 2]
+          },
+          "idle": {
+            "frames": 30,
+            "medianCpuMs": 0.09999999962747097,
+            "p95CpuMs": 0.22499999962747097,
+            "totalCpuMs": 3.9100000001490116,
+            "uploads": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 15244800,
+              "attributeUpdateCalls": 600,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "versionsUnchanged": true
+          }
+        },
+        {
+          "backend": "webgl2",
+          "phaseResults": {
+            "initial": {
+              "pixelHash": "04fac2ee",
+              "litPixels": 48898,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedContents": {
+              "pixelHash": "de29bf5e",
+              "litPixels": 48917,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedCount": {
+              "pixelHash": "b27298a8",
+              "litPixels": 24491,
+              "draws": 1,
+              "instances": 1440
+            },
+            "resized": {
+              "pixelHash": "a166a52b",
+              "litPixels": 50569,
+              "draws": 1,
+              "instances": 5760
+            },
+            "drawReplacement": {
+              "pixelHash": "e9b75465",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            },
+            "transform": {
+              "pixelHash": "ad4d2245",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            }
+          },
+          "uploadsByPhase": {
+            "initial": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 254080,
+              "pboTextureCreateCalls": 10,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "changedContents": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 16384,
+              "pboTextureCreateCalls": 1,
+              "pboTextureUpdateBytes": 245888,
+              "pboTextureUpdateCalls": 9
+            },
+            "changedCount": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 262272,
+              "pboTextureUpdateCalls": 10
+            },
+            "resized": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 491520,
+              "pboTextureCreateCalls": 8,
+              "pboTextureUpdateBytes": 16512,
+              "pboTextureUpdateCalls": 2
+            },
+            "drawReplacement": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 3584,
+              "pboTextureCreateCalls": 3,
+              "pboTextureUpdateBytes": 128,
+              "pboTextureUpdateCalls": 1
+            },
+            "transform": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 128,
+              "pboTextureUpdateCalls": 1
+            }
+          },
+          "storage": {
+            "attributes": 14,
+            "bytes": 528512,
+            "usage": [35044, 35044, 35044, 35044, 35044, 35044, 35048, 35044, 35044, 35044, 35044, 35044, 35048, 35044],
+            "versions": [2, 2, 2, 2, 2, 2, 2, 2, 2, 11, 2, 2, 2, 2]
+          },
+          "idle": {
+            "frames": 30,
+            "medianCpuMs": 0.05000000074505806,
+            "p95CpuMs": 0.1699999999254942,
+            "totalCpuMs": 2.4649999998509884,
+            "uploads": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "versionsUnchanged": true
+          }
+        }
+      ],
+      "frozenMainComparison": "matched all six pixelHash/litPixels/draws/instances signatures per backend"
+    },
+    {
+      "arm": "prior328",
+      "archive": {
+        "basename": "prior328.tgz",
+        "sha256": "e453db3ed8e32bbdf8f8a46f2a7a1bfab6dba02c484933062b30ea842cd57dcd"
+      },
+      "mode": "stream",
+      "observer": {
+        "status": "completed",
+        "nativeExit": 0,
+        "maximumObservedNonAtomicSweepSumBytes": 1527622176,
+        "completeSweeps": 118,
+        "cleanupProven": true,
+        "remainingIdentities": [],
+        "uncertainIdentities": 0,
+        "temporaryConsumerRemoved": true
+      },
+      "harnessUnchanged": true,
+      "workload": {
+        "model": "one retained Text inside one TextGroup",
+        "initialColorSpans": 240,
+        "initialGlyphs": 2880,
+        "idleFrames": 30
+      },
+      "delivery": {
+        "status": "completed",
+        "installedShaper": {
+          "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-f3T8HQ/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+prior328.tgz_@oxc-project+types@0.150.0_reac_5d4893b03049eb73fb2316a42df9b904/node_modules/@pmndrs/glyph/dist/text-shaper.wasm",
+          "bytes": 1600609,
+          "sha256": "4ee7d0532a5f2b2a42f843b9f9d866bffb00fb4e6f70bb96adba952651944ffa"
+        },
+        "backends": [
+          {
+            "backend": "webgpu",
+            "responseCount": 126,
+            "wasmResponseSha256": ["4ee7d0532a5f2b2a42f843b9f9d866bffb00fb4e6f70bb96adba952651944ffa"],
+            "installedEntriesSeen": {
+              "index": true,
+              "three": true
+            },
+            "failedRequests": [],
+            "errors": []
+          },
+          {
+            "backend": "webgl2",
+            "responseCount": 126,
+            "wasmResponseSha256": ["4ee7d0532a5f2b2a42f843b9f9d866bffb00fb4e6f70bb96adba952651944ffa"],
+            "installedEntriesSeen": {
+              "index": true,
+              "three": true
+            },
+            "failedRequests": [],
+            "errors": []
+          }
+        ]
+      },
+      "backends": [
+        {
+          "backend": "webgpu",
+          "phaseResults": {
+            "initial": {
+              "pixelHash": "edd436be",
+              "litPixels": 48898,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedContents": {
+              "pixelHash": "acb4311e",
+              "litPixels": 48917,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedCount": {
+              "pixelHash": "08501d70",
+              "litPixels": 24491,
+              "draws": 1,
+              "instances": 1440
+            },
+            "resized": {
+              "pixelHash": "4854a547",
+              "litPixels": 50569,
+              "draws": 1,
+              "instances": 5760
+            },
+            "drawReplacement": {
+              "pixelHash": "bc1fd119",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            },
+            "transform": {
+              "pixelHash": "a92799b9",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            }
+          },
+          "uploadsByPhase": {
+            "initial": {
+              "attributeCreateBytes": 254080,
+              "attributeCreateCalls": 10,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "changedContents": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 157728,
+              "attributeUpdateCalls": 8,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "changedCount": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 77296,
+              "attributeUpdateCalls": 8,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "resized": {
+              "attributeCreateBytes": 507904,
+              "attributeCreateCalls": 9,
+              "attributeUpdateBytes": 64,
+              "attributeUpdateCalls": 1,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "drawReplacement": {
+              "attributeCreateBytes": 3584,
+              "attributeCreateCalls": 3,
+              "attributeUpdateBytes": 64,
+              "attributeUpdateCalls": 1,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "transform": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 64,
+              "attributeUpdateCalls": 1,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            }
+          },
+          "storage": {
+            "attributes": 14,
+            "bytes": 528512,
+            "usage": [35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040],
+            "versions": [2, 2, 2, 2, 2, 2, 2, 2, 2, 6, 2, 2, 2, 2]
+          },
+          "idle": {
+            "frames": 30,
+            "medianCpuMs": 0.08999999985098839,
+            "p95CpuMs": 0.4950000010430813,
+            "totalCpuMs": 3.955000001937151,
+            "uploads": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "versionsUnchanged": true
+          }
+        },
+        {
+          "backend": "webgl2",
+          "phaseResults": {
+            "initial": {
+              "pixelHash": "04fac2ee",
+              "litPixels": 48898,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedContents": {
+              "pixelHash": "de29bf5e",
+              "litPixels": 48917,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedCount": {
+              "pixelHash": "b27298a8",
+              "litPixels": 24491,
+              "draws": 1,
+              "instances": 1440
+            },
+            "resized": {
+              "pixelHash": "a166a52b",
+              "litPixels": 50569,
+              "draws": 1,
+              "instances": 5760
+            },
+            "drawReplacement": {
+              "pixelHash": "e9b75465",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            },
+            "transform": {
+              "pixelHash": "ad4d2245",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            }
+          },
+          "uploadsByPhase": {
+            "initial": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 254080,
+              "pboTextureCreateCalls": 10,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "changedContents": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 221312,
+              "pboTextureUpdateCalls": 8
+            },
+            "changedCount": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 221312,
+              "pboTextureUpdateCalls": 8
+            },
+            "resized": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 507904,
+              "pboTextureCreateCalls": 9,
+              "pboTextureUpdateBytes": 128,
+              "pboTextureUpdateCalls": 1
+            },
+            "drawReplacement": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 3584,
+              "pboTextureCreateCalls": 3,
+              "pboTextureUpdateBytes": 128,
+              "pboTextureUpdateCalls": 1
+            },
+            "transform": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 128,
+              "pboTextureUpdateCalls": 1
+            }
+          },
+          "storage": {
+            "attributes": 14,
+            "bytes": 528512,
+            "usage": [35044, 35044, 35044, 35044, 35044, 35044, 35040, 35044, 35044, 35044, 35044, 35044, 35040, 35044],
+            "versions": [2, 2, 2, 2, 2, 2, 2, 2, 2, 6, 2, 2, 2, 2]
+          },
+          "idle": {
+            "frames": 30,
+            "medianCpuMs": 0.054999999701976776,
+            "p95CpuMs": 0.17500000074505806,
+            "totalCpuMs": 2.6299999989569187,
+            "uploads": {
+              "attributeCreateBytes": 0,
+              "attributeCreateCalls": 0,
+              "attributeUpdateBytes": 0,
+              "attributeUpdateCalls": 0,
+              "pboTextureCreateBytes": 0,
+              "pboTextureCreateCalls": 0,
+              "pboTextureUpdateBytes": 0,
+              "pboTextureUpdateCalls": 0
+            },
+            "versionsUnchanged": true
+          }
+        }
+      ],
+      "frozenMainComparison": "matched all six pixelHash/litPixels/draws/instances signatures per backend"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+$ node benches/scripts/workflows.mts run benchmark:package-size -- --output=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/candidate/production-package-size.json
+[package-size] measuring Core JS
+[package-size] measured Core JS
+[package-size] measuring GlyphConfig integration DSL
+[package-size] measured GlyphConfig integration DSL
+[package-size] measuring TypeGPU direct renderer JS
+[package-size] measured TypeGPU direct renderer JS
+[package-size] measuring Three.js adapter JS
+[package-size] measured Three.js adapter JS
+[package-size] measuring Three.js + TypeGPU adapter JS
+[package-size] measured Three.js + TypeGPU adapter JS
+[package-size] measuring Font validator JS
+[package-size] measured Font validator JS
+[package-size] measuring Runtime bake host JS
+[package-size] measured Runtime bake host JS
+[package-size] measuring Runtime bake Worker JS
+[package-size] measured Runtime bake Worker JS
+[package-size] measuring Bitmap runtime JS graph
+[package-size] measured Bitmap runtime JS graph
+[package-size] measuring MSDF runtime JS graph
+[package-size] measured MSDF runtime JS graph
+[package-size] measuring Slug runtime JS graph
+[package-size] measured Slug runtime JS graph
+[package-size] measuring Bitmap baker JS
+[package-size] measured Bitmap baker JS
+[package-size] measuring MSDF generator host JS
+[package-size] measured MSDF generator host JS
+[package-size] measuring MTSDF baker JS
+[package-size] measured MTSDF baker JS
+[package-size] measuring Slug baker JS
+[package-size] measured Slug baker JS
+[package-size] measuring Font baker JS
+[package-size] measured Font baker JS

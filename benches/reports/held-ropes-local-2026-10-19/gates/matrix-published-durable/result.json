@@ -1,0 +1,34 @@
+{
+  "argv": [
+    "/usr/bin/env",
+    "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch",
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "benchmark:labs-package",
+    "--",
+    "--candidate",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "--baseline",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+    "--suite",
+    "full",
+    "--blocks",
+    "8",
+    "--output",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/matrix-published-durable-data",
+    "--saved-candidate",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/matrix-main-quiescent-data"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-19T15:14:14.428678+00:00",
+  "finished": "2026-10-19T15:35:49.719500+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "9d1f98b37aab2252326762c4bd9c4237f330c2dad79236cdec546a16df19c224",
+    "stderr.log": "a6685fad7f7b39fd85d8412f6e9cbc009bb88328edac6e00714aa8f6989fae03"
+  }
+}

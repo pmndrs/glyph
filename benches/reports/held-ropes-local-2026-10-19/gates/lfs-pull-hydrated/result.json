@@ -1,0 +1,11 @@
+{
+  "argv": ["/usr/bin/git", "lfs", "pull", "--include=benches/fixtures/**,packages/glyph/tests/fixtures/**,apps/**"],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-19T14:17:34.510681+00:00",
+  "finished": "2026-10-19T14:17:36.242297+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

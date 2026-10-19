@@ -1,0 +1,103 @@
+{
+  "format": "glyph-shaper-memory-artifact-v1",
+  "artifact": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "sha256": "2e4342243c55edb56d3a1a32cbd730185c8d172fa5634da9c1f8fc3b0edd9558",
+    "shaperSha256": "244078b186e9de0414331ff9de2632c8a57c4ec20f19b6e0a41ce964f8e1b30a"
+  },
+  "source": {
+    "root": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+    "revision": "6987418cc49495c60097801e0d675dec7ae84f77",
+    "dirty": "",
+    "rustSourceSha256": "fc4cd0a26a6ea2f45e197af8ec28c6e8549728166e72ec668e017e8d497b7127",
+    "sourceManifests": {
+      "Cargo.toml": "89e63906b1685010d3844fb540545215fd6f5514b390ea59818baa09a3423135",
+      "Cargo.lock": "920c5640afac103bdad7750d4bd4bf36caaa66012ce545755212c1af1a507586",
+      "build.rs": "0452d3847e4a47509012b4c528b056a35a16f583ebc740428de1912ba1efc9b3"
+    }
+  },
+  "control": {
+    "file": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/candidate/shaper-memory/text-shaper.control.wasm",
+    "sha256": "244078b186e9de0414331ff9de2632c8a57c4ec20f19b6e0a41ce964f8e1b30a",
+    "features": ["simd128"],
+    "cargo": [
+      "build",
+      "--manifest-path",
+      "rust/shaper/Cargo.toml",
+      "--target",
+      "wasm32-unknown-unknown",
+      "--release",
+      "--locked",
+      "--no-default-features",
+      "--features",
+      "simd128"
+    ]
+  },
+  "diagnostic": {
+    "file": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/candidate/shaper-memory/text-shaper.diagnostic.wasm",
+    "sha256": "52b4c08feb52d9e8cbad5a757af0dd2d785352e9a0602caa2bd8ac7e87bae203",
+    "features": ["simd128", "diagnostic-live-memory"],
+    "cargo": [
+      "build",
+      "--manifest-path",
+      "rust/shaper/Cargo.toml",
+      "--target",
+      "wasm32-unknown-unknown",
+      "--release",
+      "--locked",
+      "--no-default-features",
+      "--features",
+      "simd128",
+      "--features",
+      "diagnostic-live-memory"
+    ],
+    "exports": [
+      "pmndrs_glyph_shaper_diagnostic_memory_snapshot",
+      "pmndrs_glyph_shaper_diagnostic_memory_reset_window",
+      "pmndrs_glyph_shaper_diagnostic_memory_probe_sequence"
+    ],
+    "allocationProof": {
+      "before": [1, 0, 2400, 2400, 0, 0, 0, 0],
+      "after": [1, 0, 2400, 2432, 1, 1, 1, 48],
+      "expected": {
+        "requestedPeakIncrease": 32,
+        "requestedLiveDelta": 0,
+        "cumulativeRequested": 48
+      }
+    },
+    "record": {
+      "byteLength": 32,
+      "littleEndianU32": [
+        "version",
+        "status",
+        "requestedLive",
+        "requestedPeak",
+        "allocations",
+        "reallocations",
+        "deallocations",
+        "cumulativeRequested"
+      ],
+      "statusBits": {
+        "arithmeticOverflow": 1,
+        "arithmeticUnderflow": 2,
+        "sizeUnrepresentable": 4
+      },
+      "semantics": "Counts include successful operations only. Cumulative requested bytes add the full new size of each successful realloc, not its net growth.",
+      "limits": "Requested bytes at completed allocator calls; excludes Talc fragmentation and transient physical realloc peak."
+    }
+  },
+  "tools": {
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+    "wasmOpt": "wasm-opt version 129 (version_129)"
+  },
+  "optimization": [
+    "--enable-bulk-memory",
+    "--enable-nontrapping-float-to-int",
+    "--enable-simd",
+    "--one-caller-inline-max-function-size=0",
+    "--merge-similar-functions",
+    "-Oz",
+    "--merge-similar-functions",
+    "-Oz"
+  ]
+}

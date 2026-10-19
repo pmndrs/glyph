@@ -1,0 +1,29 @@
+
+portless
+
+-- Proxy is running
+-- held-final-check.localhost (auto-resolves to 127.0.0.1)
+-- Using port 4117
+
+  -> http://held-final-check.localhost:1356
+
+Running: PORT=4117 HOST=127.0.0.1 PORTLESS_URL=http://held-final-check.localhost:1356 /Users/mini/.local/bin/mise exec -- pnpm --dir /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo --filter @pmndrs/glyph-benchmarks check --runtime-packages-ready
+
+Checking formatting...
+
+All matched files use the correct format.
+Finished in 698ms on 439 files using 10 threads.
+
+ RUN  v4.1.11 /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches
+
+ ❯ src/tooling/harfbuzz-bundle.test.ts (5 tests | 1 failed) 79ms
+     × authenticates both checked bundles for the current supported platform 3ms
+
+ Test Files  1 failed | 38 passed (39)
+      Tests  1 failed | 165 passed (166)
+   Start at  12:21:17
+   Duration  2.87s (transform 3.43s, setup 0ms, import 6.20s, tests 1.64s, environment 2ms)
+
+/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches:
+[ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL] @pmndrs/glyph-benchmarks@0.0.0 check: `node ./scripts/check.mts --runtime-packages-ready`
+Exit status 2

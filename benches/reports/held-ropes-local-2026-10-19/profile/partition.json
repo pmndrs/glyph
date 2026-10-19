@@ -1,0 +1,27 @@
+{
+  "method": "Disjoint ancestry anchors in exactly one V8 capture; detached stacks remain unattributed. CPU attribution is not paired elapsed acceptance. Capture overlapped an external Defold check; no diagnostic retry.",
+  "rawProfileSha256": "8d6a3b7c36f4a093a3045d7f75905977423dbfe09996c2949e503b3c55e7a3ee",
+  "rawProfileBytes": 194802,
+  "totalSampledUs": 1627625,
+  "samples": 1270,
+  "phases": [
+    {
+      "name": "preparation",
+      "anchorNode": 7,
+      "samples": 790,
+      "exclusiveSampledUs": 988709
+    },
+    {
+      "name": "publication",
+      "anchorNode": 50,
+      "samples": 403,
+      "exclusiveSampledUs": 503421
+    },
+    {
+      "name": "unattributed",
+      "anchorNode": null,
+      "samples": 77,
+      "exclusiveSampledUs": 135495
+    }
+  ]
+}

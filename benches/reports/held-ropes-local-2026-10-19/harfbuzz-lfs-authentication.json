@@ -1,0 +1,76 @@
+{
+  "purpose": "Exact Darwin arm64 HarfBuzz LFS hydration to enable the previously failing full benchmark check; data recovery only, not source modification.",
+  "createdUtc": "2026-10-19T16:23:21.764859+00:00",
+  "head": "6987418cc49495c60097801e0d675dec7ae84f77",
+  "scopeNote": "The earlier 187-object LFS receipt covered required Glyph package fixtures only and did not include these vendor HarfBuzz binaries.",
+  "requestedInclude": "benches/vendor/harfbuzz/13.0.0/darwin-arm64/bin/hb-shape,benches/vendor/harfbuzz/14.2.0/darwin-arm64/bin/hb-shape",
+  "files": [
+    {
+      "path": "benches/vendor/harfbuzz/13.0.0/darwin-arm64/bin/hb-shape",
+      "headPointer": {
+        "version": "version https://git-lfs.github.com/spec/v1",
+        "oid": "sha256:3c8f65a39e8335f9cd7cc633b31012ad04920570133011fbf83b75034cb60873",
+        "size": 1196776,
+        "gitIndexMode": "100755",
+        "gitIndexBlob": "7b6011319fcc92215f20e6c5bf18438d10a03779"
+      },
+      "manifestExpected": {
+        "executable": true,
+        "path": "bin/hb-shape",
+        "sha256": "3c8f65a39e8335f9cd7cc633b31012ad04920570133011fbf83b75034cb60873",
+        "size": 1196776
+      },
+      "preHydration": {
+        "workingTreeSize": 132,
+        "workingTreeMode": "0o755",
+        "sha256": "1b981f13220b15e05021b23ae1a9222950e48b339cf083a35bf42b9a1e683328"
+      },
+      "manifestPath": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/vendor/harfbuzz/13.0.0/darwin-arm64/manifest.json"
+    },
+    {
+      "path": "benches/vendor/harfbuzz/14.2.0/darwin-arm64/bin/hb-shape",
+      "headPointer": {
+        "version": "version https://git-lfs.github.com/spec/v1",
+        "oid": "sha256:4de7971a5e6c8c5de18d3397d8fa46bbd1dfbf840ceedcd76d4f501d5e747b4f",
+        "size": 1223096,
+        "gitIndexMode": "100755",
+        "gitIndexBlob": "277050745b0f8507a19a2f37f24e35c37d6f20ba"
+      },
+      "manifestExpected": {
+        "executable": true,
+        "path": "bin/hb-shape",
+        "sha256": "4de7971a5e6c8c5de18d3397d8fa46bbd1dfbf840ceedcd76d4f501d5e747b4f",
+        "size": 1223096
+      },
+      "preHydration": {
+        "workingTreeSize": 132,
+        "workingTreeMode": "0o755",
+        "sha256": "b8c9761a1a8700e6f2b2e5b6eb0c694fd7dfb8a55be8806fa24833e12d389b5f"
+      },
+      "manifestPath": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/vendor/harfbuzz/14.2.0/darwin-arm64/manifest.json"
+    }
+  ],
+  "preHydrationGitStatus": "",
+  "hydration": {
+    "wrapperResult": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/harfbuzz-lfs-hydration/result.json",
+    "verifiedUtc": "2026-10-19T16:23:34.803685+00:00",
+    "files": [
+      {
+        "path": "benches/vendor/harfbuzz/13.0.0/darwin-arm64/bin/hb-shape",
+        "bytes": 1196776,
+        "sha256": "3c8f65a39e8335f9cd7cc633b31012ad04920570133011fbf83b75034cb60873",
+        "mode": "0o755",
+        "executable": true
+      },
+      {
+        "path": "benches/vendor/harfbuzz/14.2.0/darwin-arm64/bin/hb-shape",
+        "bytes": 1223096,
+        "sha256": "4de7971a5e6c8c5de18d3397d8fa46bbd1dfbf840ceedcd76d4f501d5e747b4f",
+        "mode": "0o755",
+        "executable": true
+      }
+    ],
+    "scopedGitStatusAfterHydration": "",
+    "verification": "each content SHA-256 and byte size equals HEAD LFS pointer and committed Darwin manifest; executable bit retained"
+  }
+}

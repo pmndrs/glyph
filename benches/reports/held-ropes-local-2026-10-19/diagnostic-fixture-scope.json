@@ -1,0 +1,18 @@
+{
+  "profile": "current1024-profile-data/manifest.json",
+  "profileTopology": {
+    "initialDraws": 1,
+    "initialDrawableInstances": 9216,
+    "finalDraws": 1,
+    "finalDrawableInstances": 9216
+  },
+  "native": "inter-1024-attribution/stderr.log",
+  "nativeScope": "Independent native real-Inter 1024 x ten-glyph source-record fixture with full f32/u32/cold-output checks. Its 10240 source/codec-record counts are not GPU uploaded instances or payload bytes in the Bitmap profile.",
+  "producerEvidence": [
+    "benches/labs/package/fixture.ts:createTextBatch constructs alpha NNNN labels and one group",
+    "benches/labs/package/edit-sized-publication.profile.mts:updateBulk alternates alpha/bravo, scene traversal, no timed reads",
+    "benches/labs/package/fixture.ts:inspectDraws counts InstancedBufferGeometry.instanceCount",
+    "packages/glyph/rust/shaper/src/engine/state.rs:dense_inter_setter_publication_attributes_actual_work emits native source and codec counts"
+  ],
+  "placementCounterCaution": "8192 placement_segment_validation_visits are monotone segment-discovery iterations in cluster_state.rs:placement_segment_monotone, not proof of repeated avoidable caller-validation. Do not admit their removal merely from the counter name."
+}

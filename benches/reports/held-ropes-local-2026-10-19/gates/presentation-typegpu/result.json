@@ -1,0 +1,27 @@
+{
+  "argv": [
+    "/usr/bin/env",
+    "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch",
+    "PRESENTATION_BASE_URL=http://held-presentation.localhost:1356",
+    "PRESENTATION_SHAPER_ARTIFACT=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/candidate/shaper-profile/candidate.wasm",
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "benchmark:presentation",
+    "--",
+    "--workload",
+    "dynamic-layout",
+    "--typegpu"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-19T16:35:08.752447+00:00",
+  "finished": "2026-10-19T16:36:03.796067+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "4e72cc4f7d951d36778fa157f553466ef2ddedd3edf12a13920e4698bf654d43",
+    "stderr.log": "a57045a73501079e8f95e22a8529172f518eb1b8b4fc094c0e3e12113df52901"
+  }
+}

@@ -1,0 +1,65 @@
+$ node ./scripts/check.mts --runtime-packages-ready
+[headless] waiting for Vite
+[headless] Vite ready at http://held-final-check.localhost:1356
+[headless] launching Chromium
+[chromium] 149.0.7827.55 via Playwright-managed executable
+[headless] synthetic/overview: opening isolated page
+[headless] synthetic/overview: running benchmark
+[headless] synthetic/overview: passed
+[headless] tsl-webgl2-baseline/tsl-shader-baseline: opening isolated page
+[headless] tsl-webgl2-baseline/tsl-shader-baseline: running benchmark
+[headless] tsl-webgl2-baseline/tsl-shader-baseline: passed
+[headless] bitmap-text-webgl2/bitmap-text-frame: opening isolated page
+[headless] bitmap-text-webgl2/bitmap-text-frame: running benchmark
+[headless] bitmap-text-webgl2/bitmap-text-frame: passed
+[headless] mtsdf-text-webgl2/mtsdf-text-scenes: opening isolated page
+[headless] mtsdf-text-webgl2/mtsdf-text-scenes: running benchmark
+[headless] mtsdf-text-webgl2/mtsdf-text-scenes: passed
+[headless] mtsdf-conformance-webgl2/mtsdf-sampling-conformance: opening isolated page
+[headless] mtsdf-conformance-webgl2/mtsdf-sampling-conformance: running benchmark
+[headless] mtsdf-conformance-webgl2/mtsdf-sampling-conformance: passed
+[headless] slug-text-webgl2/slug-text-scenes: opening isolated page
+[headless] slug-text-webgl2/slug-text-scenes: running benchmark
+[headless] slug-text-webgl2/slug-text-scenes: passed
+[headless] slug-conformance-webgl2/slug-sampling-conformance: opening isolated page
+[headless] slug-conformance-webgl2/slug-sampling-conformance: running benchmark
+[headless] slug-conformance-webgl2/slug-sampling-conformance: passed
+[headless] source-outline-bitmap-webgl2/source-outline-fidelity: opening isolated page
+[headless] source-outline-bitmap-webgl2/source-outline-fidelity: running benchmark
+[headless] source-outline-bitmap-webgl2/source-outline-fidelity: passed
+[headless] source-outline-mtsdf-webgl2/source-outline-fidelity: opening isolated page
+[headless] source-outline-mtsdf-webgl2/source-outline-fidelity: running benchmark
+[headless] source-outline-mtsdf-webgl2/source-outline-fidelity: passed
+[headless] source-outline-slug-webgl2/source-outline-fidelity: opening isolated page
+[headless] source-outline-slug-webgl2/source-outline-fidelity: running benchmark
+[headless] source-outline-slug-webgl2/source-outline-fidelity: passed
+[headless] react-text-reconciliation/react-text-reconciliation: opening isolated page
+[headless] react-text-reconciliation/react-text-reconciliation: running benchmark
+[headless] react-text-reconciliation/react-text-reconciliation: passed
+[headless] font-baker/cold-load-payload: opening isolated page
+[headless] font-baker/cold-load-payload: running benchmark
+[headless] font-baker/cold-load-payload: passed
+[headless] font-loader-worker/worker-fallback: opening isolated page
+[headless] font-loader-worker/worker-fallback: running benchmark
+[headless] font-loader-worker/worker-fallback: passed
+[headless] paragraph-contracts/paragraph-contracts: opening isolated page
+[headless] paragraph-contracts/paragraph-contracts: running benchmark
+[headless] paragraph-contracts/paragraph-contracts: passed
+[headless] advanced-shaping-conformance/advanced-shaping-conformance: opening isolated page
+[headless] advanced-shaping-conformance/advanced-shaping-conformance: running benchmark
+[headless] advanced-shaping-conformance/advanced-shaping-conformance: passed
+[headless] rich-text-spans-conformance/rich-text-spans-conformance: opening isolated page
+[headless] rich-text-spans-conformance/rich-text-spans-conformance: running benchmark
+[headless] rich-text-spans-conformance/rich-text-spans-conformance: passed
+[chromium] 149.0.7827.55 via Playwright-managed executable
+Failed to load resource: net::ERR_BLOCKED_BY_CLIENT.Inspector @ http://held-final-check.localhost:1356/fingerprint-negative-control.js:0
+[33m[PLUGIN_TIMINGS] [0mYour build spent significant time in plugins. Here is a breakdown:
+  - font-notices (89%)
+  - @rolldown/plugin-babel (5%)
+See https://rolldown.rs/reference/InputOptions.checks#plugintimings for more details.
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.

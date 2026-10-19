@@ -1,0 +1,11 @@
+{
+  "argv": ["/opt/homebrew/bin/git", "fetch", "--no-tags", "origin", "328aedb833e30ea1c9ae62bda7a026e93fdc7db1"],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-19T15:58:23.759943+00:00",
+  "finished": "2026-10-19T15:58:24.476155+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr.log": "d0fff74a6978e52e52902188854cfca0033cbef05e6b2919e622bfcb5e25b324"
+  }
+}

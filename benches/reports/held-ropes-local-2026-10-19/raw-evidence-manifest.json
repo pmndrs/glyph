@@ -1,0 +1,789 @@
+{
+  "schemaVersion": 1,
+  "createdUtc": "2026-10-19T16:39:51.489024+00:00",
+  "scope": "SHA-256 of explicitly enumerated durable gate stdout/stderr, matrix baseline/candidate sample JSON only, current1024-profile cpu-profile.json, selected named/shipping/input/diagnostic Wasm files, exact candidate and control tgz archives, and named standalone command logs. This does not recurse the evidence tree, include Cargo target/node_modules, or hash this manifest itself.",
+  "files": [
+    {
+      "path": "allocator-artifact/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 119,
+      "sha256": "a7cbb4bf3f5493f0ae5213df5d1b52c61521ff7bfc89f1ac0b64afff02b29fa4"
+    },
+    {
+      "path": "allocator-artifact/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 1662,
+      "sha256": "4e7152a6b734fd27242eafb97472d9ba9fc8a5d2c4fc6362e276752bdf5a4d8f"
+    },
+    {
+      "path": "allocator-capture/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 447,
+      "sha256": "ade1cade14d3542b103dfb4c9d393b1c13c96a8c12fc25725bbdcb9a2d3b9df9"
+    },
+    {
+      "path": "allocator-capture/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 410,
+      "sha256": "c095e0dccd4f811862d4788226621ae4939cdda21139fa06cad2235459a8bdad"
+    },
+    {
+      "path": "application-memory-node-candidate/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 463,
+      "sha256": "9833c983f13c4f0bae3fda56143020d191065c993f60b28b2e92116ff3615c3b"
+    },
+    {
+      "path": "application-memory-node-candidate/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 314,
+      "sha256": "06fc9d7cd07727e2966ccfa378becb6f004af339103a39441487a02137507340"
+    },
+    {
+      "path": "application-memory-node-main/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 459,
+      "sha256": "f2a7f2d31ab151d40f114cb785822e42eb064d84cfd75a08dc1dab1d1d8be069"
+    },
+    {
+      "path": "application-memory-node-main/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 303,
+      "sha256": "59b869afb85a432ed8ee69b6f5d4978ea3857f8cfc71c6a94caf9ee2d9fc533a"
+    },
+    {
+      "path": "application-memory-node-prior328/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 462,
+      "sha256": "cbb067938264e183762299de60979d5c79592ba42b34c503f9e7faa5b22b18c5"
+    },
+    {
+      "path": "application-memory-node-prior328/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 302,
+      "sha256": "048d53ebce1ea91598573edd4072df0a2d62494efbd09ac405a89be39ff25df8"
+    },
+    {
+      "path": "application-memory-node-published010/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 468,
+      "sha256": "c66870a0d5fc3827f522b39a94cab9510db040ec7e7cf36ec3e5f0af54ebd1b5"
+    },
+    {
+      "path": "application-memory-node-published010/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 313,
+      "sha256": "d3144276a74c2a78a61126ce6ac29d93bc353121a0215693bc2ca0345eabdddc"
+    },
+    {
+      "path": "benchmark-full-check/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 1176,
+      "sha256": "83f25bfb974aca1585bda4073fbea85b6aab118c15fc387f83aca9a8d17eba00"
+    },
+    {
+      "path": "benchmark-full-check/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 1152,
+      "sha256": "2a3c532bd7debc9af492bc3d82f8afdd7edbb3895fa4bbfaaa8f049ea9148437"
+    },
+    {
+      "path": "benchmark-full-check-complete-lfs/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 62838,
+      "sha256": "4c1fd550a0be952571a706b1a14623899ec1d0c35c5c0740219ce968d2005b14"
+    },
+    {
+      "path": "benchmark-full-check-complete-lfs/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 4434,
+      "sha256": "a515b7925bb924964aef1c4ef698765859a4361ddbf41b2cce51540df3609941"
+    },
+    {
+      "path": "benchmark-full-check-hydrated/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 1176,
+      "sha256": "8cbaab919ffe135f77a070a2b3785aa7724e7650cb87634df14cbdd391c6d7b4"
+    },
+    {
+      "path": "benchmark-full-check-hydrated/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 1153,
+      "sha256": "c72c1f3ef2ba36622795b3f64e288f07f802ba6e48e0a7a9127fa700c6f66ec2"
+    },
+    {
+      "path": "browser-memory-candidate/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 11441,
+      "sha256": "d603256d97f86e4c49b964e30f646db66fdfd26e51ae872f889dfe8fd43bef99"
+    },
+    {
+      "path": "browser-memory-candidate/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 753,
+      "sha256": "4a38b7f0e5c053d0998d9fd28bee12ddbd0030967325ada6c5740ac3e41ae683"
+    },
+    {
+      "path": "browser-memory-main/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 756,
+      "sha256": "78ce2e7271cf4938c085f6d8dd01ade82edc62cdedd92d348d6bed035749f40d"
+    },
+    {
+      "path": "browser-memory-main/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 1732,
+      "sha256": "5d0399df52d3ec73574b221be73a952454c7b337f29129e29fe9c0c7a3a38df5"
+    },
+    {
+      "path": "browser-memory-main-root-dir/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 11420,
+      "sha256": "f2ed42e02f24b044089e2a3141f743ef365fb01e2d10bd5105a690b659b8f8f9"
+    },
+    {
+      "path": "browser-memory-main-root-dir/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 746,
+      "sha256": "2c222a4b8847df5c0405731b253c732db812a86a0261c86eb471ac048a2b6217"
+    },
+    {
+      "path": "browser-memory-prior328/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 11415,
+      "sha256": "a201a7160f8eb551501a100bbed23655483474a07f74492cf9ce80ba9a1df7bf"
+    },
+    {
+      "path": "browser-memory-prior328/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 740,
+      "sha256": "0c77f685cecd0dc7be1b5388c402b562d9ef923bdfcd44dd9028003a3cedef2f"
+    },
+    {
+      "path": "browser-memory-published010/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 11484,
+      "sha256": "8206eb6f48dea86734291e8075c3897866ee9411942e42d3a6eb9976cfad2a20"
+    },
+    {
+      "path": "browser-memory-published010/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 243990,
+      "sha256": "62ae106aec3c5b2a912437b3ce8486f6aa1bb77f729e361e8fee14fb3065f753"
+    },
+    {
+      "path": "candidate-pack/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 42904,
+      "sha256": "ca4b6e15b9b7821f607087c7def215ae7640361dec71386ae2444dda2d0512fc"
+    },
+    {
+      "path": "candidate-pack/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "current1024-profile/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 10348,
+      "sha256": "a01e05ec42ecfb848d0b68eb8195455b221ab361e380cf2d1609ddf68b247e94"
+    },
+    {
+      "path": "current1024-profile/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 540,
+      "sha256": "954c1c477fd6c907785d74ef979ebe401e3398ba4bc40b14fa360cd2a461ad2e"
+    },
+    {
+      "path": "glyph-check/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 718,
+      "sha256": "7623faa36a3cfac93f87e5ec9b7a82df10bc6263c080c737510d0d8053b7d8c2"
+    },
+    {
+      "path": "glyph-check/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 759,
+      "sha256": "afbc739f01b98c337b5dcf8edbdee3234dae8cf78b5b0b5be447896baf3829f1"
+    },
+    {
+      "path": "glyph-check-hydrated/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 178857,
+      "sha256": "fc0ca2955429684623270ef4bc58eba47195f450cfcaf8607877011ee49be6af"
+    },
+    {
+      "path": "glyph-check-hydrated/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 21687,
+      "sha256": "83e14238c027899ed9987db1068ca6657c87e1ae841cb627d4c360bfc6ce436f"
+    },
+    {
+      "path": "harfbuzz-complete-lfs-hydration/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "harfbuzz-complete-lfs-hydration/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "harfbuzz-lfs-hydration/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "harfbuzz-lfs-hydration/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "historical-object-fetch/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "historical-object-fetch/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 193,
+      "sha256": "f12a5ab9c6f4fed16052182ff346499bc8239c0e13df5ac9a1a6052f14793804"
+    },
+    {
+      "path": "hooks-install/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 60,
+      "sha256": "c6963a917aa8f05062c79baa2f6e44b5f710244a481dda8d7f5e5972c397e4ca"
+    },
+    {
+      "path": "hooks-install/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 60,
+      "sha256": "eebc799c282ce0faf7f65b321f4ba2de21263b65cfcd70c5d228022b2a315ac3"
+    },
+    {
+      "path": "inter-1024-attribution/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 880,
+      "sha256": "aa9246858c0558ea4f2e04935a90f4e1c05b325a3856dd128fe3293b445a7bab"
+    },
+    {
+      "path": "inter-1024-attribution/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 11402,
+      "sha256": "0f8f40c818338c72e0f4c8c2aa3e963b3b55f3a5c7f1357696f1f6dfcd0c6eea"
+    },
+    {
+      "path": "inter-arena-attribution/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 900,
+      "sha256": "c25d2f896cf551fa6de0b39e0b236331e66341f8388b9ba08b0a7fde1e7f4c0a"
+    },
+    {
+      "path": "inter-arena-attribution/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 1052,
+      "sha256": "04fadfcfafc219490340ea58b7cddcf9321730e1e2c27b3cba8a996502b17104"
+    },
+    {
+      "path": "lfs-install/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 40,
+      "sha256": "4fea4bc2b3b77e0192bd58ef65c3a0c982ecc7409dbffab6873bb6e04be6a875"
+    },
+    {
+      "path": "lfs-install/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "lfs-pull/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 119,
+      "sha256": "9ec5050f19ac36ec226ef0d312f1b0419241dc61113d4def79dd46054af8d17b"
+    },
+    {
+      "path": "lfs-pull/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "lfs-pull-hydrated/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "lfs-pull-hydrated/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "matrix-main/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 2034,
+      "sha256": "ec1f3db4628c4d26ea198e553132205c9e8d9f1b5abcefc540eafb3f2eceedfb"
+    },
+    {
+      "path": "matrix-main/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 1052,
+      "sha256": "503ec94feaab7075010fc8e3c3119f7b0d1afbd3bda6aa699dc29465dd19d038"
+    },
+    {
+      "path": "matrix-main-quiescent/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 243370,
+      "sha256": "1c61d222e681b085038494752ca338073fd068cdd363957305a8e4bce03877a3"
+    },
+    {
+      "path": "matrix-main-quiescent/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 411,
+      "sha256": "b60010b7328662e53f7d49590112927859318a2cf6068a2f25d792766d20ca98"
+    },
+    {
+      "path": "matrix-prior328-durable/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 145052,
+      "sha256": "2dab830998e7f34b3f9b241933b42e3df30cd7d32f74707e0ce81947592a7670"
+    },
+    {
+      "path": "matrix-prior328-durable/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 520,
+      "sha256": "ec670b89f2fa69fc839c92c1120667f1aaaa9a49e0e3eb40393870973c63eff2"
+    },
+    {
+      "path": "matrix-published-durable/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 148994,
+      "sha256": "9d1f98b37aab2252326762c4bd9c4237f330c2dad79236cdec546a16df19c224"
+    },
+    {
+      "path": "matrix-published-durable/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 528,
+      "sha256": "a6685fad7f7b39fd85d8412f6e9cbc009bb88328edac6e00714aa8f6989fae03"
+    },
+    {
+      "path": "minimum-peers/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 23299,
+      "sha256": "7d7eaea13b13eb5970f2d956721d34de92bddc364d5ce5b11b4c30ae097eb605"
+    },
+    {
+      "path": "minimum-peers/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 436,
+      "sha256": "df77c297798bc35cecd522459d2167b68ef5922100064bded8e5169c7888ec45"
+    },
+    {
+      "path": "observer-compile/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "observer-compile/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "observer-descendant/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 259,
+      "sha256": "78ebd88d6e3bd79ec24e08f66e0ce2173ead35061fddd1cbf1ee827b7a29f121"
+    },
+    {
+      "path": "observer-descendant/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "observer-nonzero/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 65,
+      "sha256": "c65b98a15dd7b5c7b89795734595e7ef9ebc6ece1e159d940c38f9504632f151"
+    },
+    {
+      "path": "observer-nonzero/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "observer-oracle-failure/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 46,
+      "sha256": "70691ee46df8bffd84dd117eb9297af7108f7fc0b6be5f63d6cb30aef0d605b5"
+    },
+    {
+      "path": "observer-oracle-failure/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 2678,
+      "sha256": "b29f15f636bd7e9e26a2fc7a97915f7ecba2c5f783c491bce9c49fb6f8717a9c"
+    },
+    {
+      "path": "observer-oracle-failure-pnpm-repaired/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 364,
+      "sha256": "8358fb96a8efad37e6860f3fe2c25c765b0c66ea28724e8b17631e8f23132661"
+    },
+    {
+      "path": "observer-oracle-failure-pnpm-repaired/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 2134,
+      "sha256": "d0988100f8db7af4f63b7b38b8c825205cc24f99e5d0ff213e13987a62a194db"
+    },
+    {
+      "path": "observer-static/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 334,
+      "sha256": "c4b3e38859bf78c7301aefaee4df18a7d1e0d1c6254770f4b5c128cd7cc6fadd"
+    },
+    {
+      "path": "observer-static/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 743,
+      "sha256": "b8bb6b31140cf05ac7832e0658eafd03261bd497c343e706b78c50d97a39570c"
+    },
+    {
+      "path": "observer-static-pnpm-repair/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "observer-static-pnpm-repair/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 76,
+      "sha256": "522534a23f67666620e7f825abf4c836327467cb7364f78d14d2c64907e0486a"
+    },
+    {
+      "path": "observer-static-repair/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 633,
+      "sha256": "df05b1e71b14428661598fae9383741aacb9700821ed9539730b58ed4a333ffd"
+    },
+    {
+      "path": "observer-static-repair/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 743,
+      "sha256": "b8bb6b31140cf05ac7832e0658eafd03261bd497c343e706b78c50d97a39570c"
+    },
+    {
+      "path": "observer-static-repair-2/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "observer-static-repair-2/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 76,
+      "sha256": "522534a23f67666620e7f825abf4c836327467cb7364f78d14d2c64907e0486a"
+    },
+    {
+      "path": "portless-owned-proxy/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 240,
+      "sha256": "42bc636f34a09a729f266f1a09801a27d7d6569b1d722373a75ef068bcee5290"
+    },
+    {
+      "path": "portless-owned-proxy/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "presentation-owned-server/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 455,
+      "sha256": "82ca7a2f172e804caa21c8026dc0237bd3fc0fb46d99218b437ff33db4f53637"
+    },
+    {
+      "path": "presentation-owned-server/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 61,
+      "sha256": "4fa7797247bbbf10047dbedf7e80c3857b7e1e3020b0a4a815e4ec9ca096bf51"
+    },
+    {
+      "path": "presentation-tsl/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 2478,
+      "sha256": "8b52258a8ac859b5d9d999da7c6106057aef70fe08aaa3fcdd4ee062cb1db049"
+    },
+    {
+      "path": "presentation-tsl/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 447,
+      "sha256": "e3057b5c9dc783102ea98958fc5fc7a60bd45b032c8b32f0da915a01e2cbf9fe"
+    },
+    {
+      "path": "presentation-typegpu/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 2526,
+      "sha256": "4e72cc4f7d951d36778fa157f553466ef2ddedd3edf12a13920e4698bf654d43"
+    },
+    {
+      "path": "presentation-typegpu/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 457,
+      "sha256": "a57045a73501079e8f95e22a8529172f518eb1b8b4fc094c0e3e12113df52901"
+    },
+    {
+      "path": "prior-source-fetch/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "prior-source-fetch/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 115,
+      "sha256": "d0fff74a6978e52e52902188854cfca0033cbef05e6b2919e622bfcb5e25b324"
+    },
+    {
+      "path": "production-size/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 10929,
+      "sha256": "c624cc147caf4c584a08cf7bb16d4e964ccdbf62495e91ce68527d0ba8ce66e6"
+    },
+    {
+      "path": "production-size/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 1616,
+      "sha256": "b5bcaa5c22d344292a6f4c8dcb70237800ad610670b30102814caad349aaa150"
+    },
+    {
+      "path": "profile-summary/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 126,
+      "sha256": "1d0730b4cffc155cd31a1a06a61b7442a4de83260cde84e26584fb851b14bc43"
+    },
+    {
+      "path": "profile-summary/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 684,
+      "sha256": "89550f46fe94be455122c6abbf998db5b7462672131a3b43af48a917e1294272"
+    },
+    {
+      "path": "r3f-build/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 3386,
+      "sha256": "3dabd14738e322ce2857de4fdcbb7115c140f37539227688eb49e79ae5fda55b"
+    },
+    {
+      "path": "r3f-build/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 373,
+      "sha256": "71c384b4a1fc1546eb87bba07c964be608de350d69432bec5e901de1eb81699c"
+    },
+    {
+      "path": "shaper-profile-artifact/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 120,
+      "sha256": "7e6e4dda7b6c08467ea4183f028b81fa00d496635668b8f702a62629b50cd714"
+    },
+    {
+      "path": "shaper-profile-artifact/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 4352,
+      "sha256": "fc31d7d33a0e592bb78618236a3981d3d39fb5cdc4597a889b88cdc3e101319e"
+    },
+    {
+      "path": "size-accounting/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 113,
+      "sha256": "1cb4ac41d3d7f861e1fff36a542cd8745a8d9e73cd8e04bca99d8ae92357b1a4"
+    },
+    {
+      "path": "size-accounting/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 510,
+      "sha256": "4cdbc3b5f68ad4ca2916d08cd4f4d2c7a3289a9c23c2fd5a0d61599bc2ce1b93"
+    },
+    {
+      "path": "tres-build/stdout.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 2042,
+      "sha256": "aab694d9c13dd216f41da13cd02b9325f482a30288b5cea0598fbeda7ee44284"
+    },
+    {
+      "path": "tres-build/stderr.log",
+      "category": "durable gate stdout/stderr",
+      "bytes": 654,
+      "sha256": "2a5015c96a533e1cfde3c7773c886d478450294970d9961fe5dda5b5281cc797"
+    },
+    {
+      "path": "matrix-main-quiescent-data/baseline.json",
+      "category": "timing sample JSON",
+      "bytes": 1942037,
+      "sha256": "456b847698034e143c7b7b8173b57502e2e087a4dcfc95fdd917f21f5221ec78"
+    },
+    {
+      "path": "matrix-main-quiescent-data/candidate.json",
+      "category": "timing sample JSON",
+      "bytes": 2035581,
+      "sha256": "16bc62f972da183402dd5f891cca00e6f3ae39f122ba096f5e8a9898761eff4e"
+    },
+    {
+      "path": "matrix-prior328-durable-data/baseline.json",
+      "category": "timing sample JSON",
+      "bytes": 2078069,
+      "sha256": "332d9240192ca64ecc309d7d48d8f38ce14070757cb73737d32806b2b7a0969e"
+    },
+    {
+      "path": "matrix-prior328-durable-data/candidate.json",
+      "category": "timing sample JSON",
+      "bytes": 2035581,
+      "sha256": "16bc62f972da183402dd5f891cca00e6f3ae39f122ba096f5e8a9898761eff4e"
+    },
+    {
+      "path": "matrix-published-durable-data/baseline.json",
+      "category": "timing sample JSON",
+      "bytes": 1805862,
+      "sha256": "93c345c6a19acc6a1c9ad47d6b9346626a1589233901113f698a861ae99aa2ad"
+    },
+    {
+      "path": "matrix-published-durable-data/candidate.json",
+      "category": "timing sample JSON",
+      "bytes": 2035581,
+      "sha256": "16bc62f972da183402dd5f891cca00e6f3ae39f122ba096f5e8a9898761eff4e"
+    },
+    {
+      "path": "current1024-profile-data/cpu-profile.json",
+      "category": "current 1024-owner CPU profile",
+      "bytes": 194802,
+      "sha256": "8d6a3b7c36f4a093a3045d7f75905977423dbfe09996c2949e503b3c55e7a3ee"
+    },
+    {
+      "path": "candidate/shaper-profile/candidate.wasm",
+      "category": "named, shipping, input, or diagnostic Wasm artifact",
+      "bytes": 1601557,
+      "sha256": "244078b186e9de0414331ff9de2632c8a57c4ec20f19b6e0a41ce964f8e1b30a"
+    },
+    {
+      "path": "candidate/shaper-profile/text-shaper.named.wasm",
+      "category": "named, shipping, input, or diagnostic Wasm artifact",
+      "bytes": 1779067,
+      "sha256": "cfb3213f4b7acc111ef057621081b102e25f64fdd2df8e0c5e6c09b0e2ee36b3"
+    },
+    {
+      "path": "candidate/shaper-profile/input.wasm",
+      "category": "named, shipping, input, or diagnostic Wasm artifact",
+      "bytes": 1753000,
+      "sha256": "6a49fa1adabe5f10e4cba1d476e3b4c5559c957bd1175e7c0f5c34890ea5a613"
+    },
+    {
+      "path": "candidate/shaper-memory/text-shaper.control.wasm",
+      "category": "named, shipping, input, or diagnostic Wasm artifact",
+      "bytes": 1601557,
+      "sha256": "244078b186e9de0414331ff9de2632c8a57c4ec20f19b6e0a41ce964f8e1b30a"
+    },
+    {
+      "path": "candidate/shaper-memory/text-shaper.diagnostic.wasm",
+      "category": "named, shipping, input, or diagnostic Wasm artifact",
+      "bytes": 1700954,
+      "sha256": "52b4c08feb52d9e8cbad5a757af0dd2d785352e9a0602caa2bd8ac7e87bae203"
+    },
+    {
+      "path": "candidate/pmndrs-glyph-0.1.0.tgz",
+      "category": "candidate package or exact authenticated control archive",
+      "bytes": 3193950,
+      "sha256": "2e4342243c55edb56d3a1a32cbd730185c8d172fa5634da9c1f8fc3b0edd9558"
+    },
+    {
+      "path": "controls/main-4e25a96a.tgz",
+      "category": "candidate package or exact authenticated control archive",
+      "bytes": 3120073,
+      "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20"
+    },
+    {
+      "path": "controls/published-0.1.0.tgz",
+      "category": "candidate package or exact authenticated control archive",
+      "bytes": 2271693,
+      "sha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b"
+    },
+    {
+      "path": "controls/prior328.tgz",
+      "category": "candidate package or exact authenticated control archive",
+      "bytes": 3193397,
+      "sha256": "e453db3ed8e32bbdf8f8a46f2a7a1bfab6dba02c484933062b30ea842cd57dcd"
+    },
+    {
+      "path": "matrix-published-captured-stdout.log",
+      "category": "explicit retained command output",
+      "bytes": 794,
+      "sha256": "cf9773a441eff35748976f26d2265baf9b4c7026e6e874fb9ca1b6f238cabc4d"
+    },
+    {
+      "path": "clone.stdout",
+      "category": "explicit retained command output",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "clone.stderr",
+      "category": "explicit retained command output",
+      "bytes": 81,
+      "sha256": "fd2542a990fccf0eb60b993aea180dcfe5b9c22d01cdb2ccab5e9e0fd56cfada"
+    },
+    {
+      "path": "source.stdout",
+      "category": "explicit retained command output",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "source.stderr",
+      "category": "explicit retained command output",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "hardware.stdout",
+      "category": "explicit retained command output",
+      "bytes": 30,
+      "sha256": "42bd5e47cd0db789fd55700ecb1179176504f27a3805856bc7b12dafb3a52e51"
+    },
+    {
+      "path": "hardware.stderr",
+      "category": "explicit retained command output",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "stack.stdout",
+      "category": "explicit retained command output",
+      "bytes": 1997,
+      "sha256": "a09037686e6e94dc99c7e2fc2b850e7a51549372948b9eac66aafb4b64d98041"
+    },
+    {
+      "path": "stack.stderr",
+      "category": "explicit retained command output",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "missingPaths": [],
+  "selfExcluded": true,
+  "excludedTrees": [
+    "Cargo target directories",
+    "node_modules",
+    "recursive evidence tree",
+    "raw-evidence-manifest.json itself"
+  ]
+}

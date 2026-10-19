@@ -1,0 +1,22 @@
+{
+  "argv": [
+    "/usr/bin/env",
+    "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/native-observer-gates/darwin-family-footprint",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/native-observer-gates/nonzero.ndjson",
+    "25",
+    "1000",
+    "--",
+    "/usr/bin/python3",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/native-observer-gates/child-nonzero.py",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/native-observer-gates/nonzero.ndjson"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-19T16:03:37.677651+00:00",
+  "finished": "2026-10-19T16:03:37.752557+00:00",
+  "exit": 1,
+  "sha256": {
+    "stdout.log": "c65b98a15dd7b5c7b89795734595e7ef9ebc6ece1e159d940c38f9504632f151",
+    "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

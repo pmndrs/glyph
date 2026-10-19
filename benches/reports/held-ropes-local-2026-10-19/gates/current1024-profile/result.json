@@ -1,0 +1,42 @@
+{
+  "argv": [
+    "env",
+    "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch",
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "benchmark:edit-sized-publication-profile",
+    "--",
+    "--artifact",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "--wasm",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/candidate/shaper-profile/text-shaper.named.wasm",
+    "--output",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/current1024-profile-data",
+    "--case",
+    "bulk-write",
+    "--boundary",
+    "publication",
+    "--count",
+    "1024",
+    "--reads",
+    "none",
+    "--publication-path",
+    "scene",
+    "--warmups",
+    "10",
+    "--iterations",
+    "80"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-19T14:27:52.904235+00:00",
+  "finished": "2026-10-19T14:27:58.291023+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "a01e05ec42ecfb848d0b68eb8195455b221ab361e380cf2d1609ddf68b247e94",
+    "stderr.log": "954c1c477fd6c907785d74ef979ebe401e3398ba4bc40b14fa360cd2a461ad2e"
+  }
+}

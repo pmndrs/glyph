@@ -4,6 +4,8 @@ title: Publication frontier checklist
 description: Compact resume point and task tracker for the 0.2.0 publication frontier.
 status: draft
 sources:
+  - resource: ../../../benches/reports/held-ropes-local-2026-10-19/README.md
+    title: Current-machine complete rerun and bounded next-wave proposal
   - resource: ../../../benches/reports/held-ropes-local-2026-10-16/README.md
     title: Authenticated local Mac diagnostic checkpoint
   - resource: ../reports/final-performance-architecture-plan.md
@@ -16,7 +18,7 @@ sources:
     title: Archived validation checkpoints and evidence
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-16T20:55:54.205640Z'
+  at: '2026-10-19T16:37:00Z'
 ---
 
 # Publication frontier checklist
@@ -28,7 +30,7 @@ The user explicitly set a new goal after the classification and algorithm report
 ### Mandatory regrounding after every compaction
 
 1. Call `get_goal` and inspect live agents/jobs; never duplicate a running gate or revive a stale advisor.
-2. Resolve the isolated checkout on the current machine from task state; never reuse another machine’s absolute path or assume ignored artifacts/processes survived. Current local WORK is `/private/tmp/glyph-held-20261016`, with a separate detached main control at `/private/tmp/glyph-held-main-20261016`. Read WORK `AGENTS.md` and applicable parent guidance. Check branch/HEAD/status and preserve every staged, unstaged and untracked file.
+2. Resolve the isolated checkout on the current machine from task state; never reuse another machine’s absolute path or assume ignored artifacts/processes survived. Current local WORK is `/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo`; durable evidence is its sibling `evidence/`. Old absolute paths below are historical only. Main is an authenticated packed control, not an assumed live checkout. Read WORK `AGENTS.md` and applicable parent guidance. Check branch/HEAD/status and preserve every staged, unstaged and untracked file.
 3. Read this tracker **through Historical implementation record**, then [the accepted preparation/publication contract](decisions/retained-prepare-publish.md), and the **entire** [final algorithm and architecture report](../reports/final-performance-architecture-plan.md). Do not skip its execution map, worked edits, algorithm admission rules, complexity derivations, evidence/deletion matrix or interplay review.
 4. Read [engineering rules](../engineering/code-style.md). Query the relevant decision and [retained assignment design](retained-text-assignment.md) section. Use the bounded append-log reader for raw traces; do not load all historical logs. Load applicable installed skills before relevant work.
 5. Authenticate current source/package/maps/Wasm/fixtures against the evidence receipt. Read actual functions before assigning changes. Source observations, old profiles and frozen package results are distinct evidence.
@@ -74,6 +76,20 @@ Host-only accounting and correctness fixtures are permitted at the coherent redu
 Preserve Rust SWAR/SIMD, contiguous packed/SoA fields, shared rope regions and sequential dense work within one executor. Unicode preflight adoption, dirty-owner tracking and flow convergence already exist. Trace where dirt expands before proposing replacements. Record ropes are not a proof of incremental Unicode or sparse physical publication. Compact Unicode transitions and segmented storage are conditional designs requiring their report proofs and evidence gates; do not invent safety or unconditional logarithmic bounds. Queries and independent split read prepared state without whole-root publish; renderer rejection retains prepared state, unlike invalidating defects. Keep batching, logical paint order and GPU/borrowed lifetimes.
 
 Use pinned mise and named pnpm workflows (`scripts list/show/run`). Portless only for listening servers, never as a package dependency. Use real noninteractive `gh stack` for dependent PR work. Resume from the current checkpoint and its next wave boundary; older provenance/profile steps are already complete. No repeated favorable-clock trials. Update this compact section after each wave with exact artifacts, receipts, active jobs, failures and the next bounded task.
+
+### Completed current-machine rerun — 19 October 2026
+
+Runtime source `6987418c`, fresh archive `2e434224…`, shipping shaper `244078b1…` and executable-matching named shaper `cfb3213f…` are authenticated. Main remains `4e25a96a` after fetch. The original `60d3c26f` checkpoint is an ancestor of the preserved pre-rebase branch, not the rebased current head; [ancestry proof](../../../benches/reports/held-ropes-local-2026-10-19/ancestry.json) records both. All layers remain held/unmerged, #310 draft.
+
+One frozen candidate was measured once and reused byte-for-byte against main, published 0.1.0 and prior HELD `328aedb8`. Dense512 p50/p95 main/release/prior/current: **7.617/9.656, 8.032/9.132, 9.214/10.979, 9.242/10.628 ms**. Dense1024: **15.376/16.493, 15.376/16.404, 17.886/20.987, 17.738/20.033 ms**. Current is +21.3%/+15.4% versus main and +15.1%/+15.4% versus release; dense versus prior is neutral. Width inspection/publication retains −44.5% versus main and sparse borrowing −18.7%, but sparse borrowing is +8.6% versus prior. Main 83 faster/28 slower/30 neutral/4 excluded; release 102/22/8/11 excluded/2 unavailable; prior 5/13/88/39 excluded. Calibration drift main/current/release/prior **7.12/3.90/18.48/14.37%**; shared-host incidents and every exclusion remain visible. No favorable retry or cross-machine paired result. [Full absolute evidence, scopes and exclusions](../../../benches/reports/held-ropes-local-2026-10-19/README.md).
+
+The single count1024 bulk-write scene-publication profile uses 10 warmups/80 iterations/no timed reads. Exclusive preparation/publication/unattributed CPU: **988709/503421/135495 µs**. Actual Inter native counters prove whole-run transfers and direct cluster construction removed their targeted old-row copies; publication still executes 10240 changed records per cycle. Those native rows differ from the Bitmap profile's 9216 visible instances. Neither frame names nor enablement of SIMD establishes where the remaining 2.36 ms gap originates.
+
+Fresh checks pass 1140 Node/576 native tests (one existing ignored), full benchmark 166 tests/28 workflow tests/16 Chromium cells, minimum peers, R3F/Tres builds and 12 dynamic-layout raster/backend/shader cells. Four installed archives pass the same committed ASCII scene against frozen main on both browser backends, including actual installed entry/Wasm delivery and idle upload checks. Current-source API/lifetime review is bounded and clean; generated ABI outputs remain unchanged. PR317's separate r186 lifetime work is not included or cleared by the r185.1 browser lane. All owned verification listeners stopped; pre-existing port1355 was preserved.
+
+Memory is mixed: current post-update Wasm capacity is 42.56 MiB versus main151.31 MiB, but whole-command non-atomic OS sweep maximum is 613.10 MiB versus main585.39 MiB. These are different scopes, not summed or exact physical peaks. Current shaper is +139552 raw/+54914 same-method gzip bytes versus main; JS is +11692/+3229. Keep these costs and all 13 prior slower rows in admission.
+
+**Next:** deliver results and obtain the next-wave direction before runtime changes. Proposed coherent work fuses complete admission/derivation/binding dirt with the existing ordered updater and uses cached full-mask program counts, preserving sparse/all-Keep sharing and dense exact compaction. Lazy leaf fill enables that fusion; the existing all-dirty exact builder already avoids copying old dense rows. Check shape only after successful all-dirty traversal; fragmented cost is O(K) nodes, with conditional repack potentially retaining old/provisional/exact roots. Astra's source/codegen SIMD, locality, GC and house-style review informs the proposal; no new performance implementation or claimed speedup has occurred. Preserve all seven families, synchronous setters, prepared queries, independent split, one Rust executor, SWAR/SIMD and packed/SoA ownership. Preserve correct inconclusive candidates with named refs/artifacts for combination.
 
 ### Revised admission priority — 16 October 2026
 

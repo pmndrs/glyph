@@ -7,6 +7,14 @@ workspace_package: '@pmndrs/glyph-benchmarks'
 documentation_type: reference
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
+  - resource: ../../../benches/scripts/observe-application-memory.mts
+    title: Untimed installed-package application memory observer
+  - resource: ../../../benches/scripts/support/darwin-family-footprint.c
+    title: Darwin process-family physical footprint sweep
+  - resource: ../../../benches/labs/package/bulk-memory.observe.mts
+    title: Bulk-write checkpoints and independent cold controls
+  - resource: ../../../benches/reports/held-ropes-local-2026-10-19/README.md
+    title: Authenticated current-machine full HELD evidence
   - id: manifest
     resource: ../../../benches/package.json
     title: Package manifest
@@ -273,7 +281,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-16T15:11:09Z'
+  at: '2026-10-19T16:37:00Z'
 ---
 
 # Package reference: `@pmndrs/glyph-benchmarks`
@@ -923,6 +931,10 @@ A successful baked Presentation preload retains one application-lifetime `Font` 
 The Presentation workload probe checks Billboard labels at its authored density of 100. A stale density expectation of 50 caused its settling predicate to time out after switching from Icon Grid; correcting that expectation preserves the workload and rendering behavior.
 
 ## Package scripts
+
+`benchmark:application-memory-observe -- --artifact <archive.tgz> --output <directory>` observes an installed package without timing its workload. Node mode alternates eight 1024-label scene publications and checks final output against independent cold controls; browser mode forwards the existing command after `--`. Darwin physical-footprint evidence records complete non-atomic process-family sweeps. Checkpoint JS heap, RSS, Wasm capacity and process-family footprint are distinct views, never a sum or an exact simultaneous peak. Failure paths retain original command errors and observations, terminate known descendants, and remove temporary consumers only after cleanup is proved. Unknown surviving identities retain the consumer for inspection.
+
+The retained-upload probe can write an optional `GLYPH_RETAINED_UPLOAD_DELIVERY_PROOF` proof for actual installed entry requests and served Wasm bytes. Its framebuffer digest is a noncryptographic regression oracle, not retained full pixel arrays. Browser cleanup is bounded; partial initialization and shutdown failures retain their original causes. The four-archive [19 October evidence](../../../benches/reports/held-ropes-local-2026-10-19/README.md) records fixture, memory, delivery and measurement limits.
 
 `pnpm scripts run benchmark:presentation-screenshots` retains one MTSDF screenshot for every verified workload on WebGPU and forced WebGL under the ignored benchmark cache.
 

@@ -1,0 +1,271 @@
+ℹ tsdown v0.22.14 powered by rolldown v1.2.6
+ℹ config file: /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/tsdown.config.ts 
+ℹ entry: src/shaders/typegpu/bitmap-reference.ts, src/shaders/typegpu/bitmap-shader.ts, src/shaders/typegpu/decoration-shader.ts, src/shaders/typegpu/index.ts, src/shaders/typegpu/msdf-shader.ts, src/shaders/typegpu/msdf/distance.ts, src/shaders/typegpu/slug/index.ts, src/shaders/typegpu/slug/slug-band.ts, src/shaders/typegpu/slug/slug-render.ts, src/shaders/typegpu/slug/slug-texture.ts, src/shaders/typegpu/slug/core/band.ts, src/shaders/typegpu/slug/core/coverage.ts, src/shaders/typegpu/slug/core/dilate.ts, src/shaders/typegpu/slug/core/index.ts, src/shaders/typegpu/slug/core/root-code.ts, src/shaders/typegpu/slug/core/solve-quadratic.ts
+ℹ target: es2025
+ℹ tsconfig: tsconfig.build.json
+ℹ entry: src/bake.ts, src/bitmap-baker-abi.ts, src/core.ts, src/discovery-source.ts, src/discovery.ts, src/engine-encoding.ts, src/engine-error.ts, src/font-baker-abi.ts, src/font-face-transfer.ts, src/font-face.ts, src/font-feature.ts, src/font.ts, src/formatted-text.ts, src/glyph-engine.ts, src/glyph-error.ts, src/glyph-outline.ts, src/glyph-placement.ts, src/glyph.ts, src/identity.ts, src/index.ts, src/layout.ts, src/loaded-font.ts, src/loader.ts, src/mtsdf-baker-abi.ts, src/paint.ts, src/property-list.ts, src/raster-coverage.ts, src/raster.ts, src/react.ts, src/runtime-bake-worker.ts, src/runtime-bake.ts, src/shaper.ts, src/slug-baker-abi.ts, src/text-anchor.ts, src/text-properties.ts, src/text-shaper-abi.ts, src/three.ts, src/typegpu.ts, src/vue.ts, src/bakers/bitmap-validator.ts, src/bakers/bitmap.ts, src/bakers/msdf-validator.ts, src/bakers/msdf.ts, src/bakers/slug-validator.ts, src/bakers/slug.ts, src/config/codec-program.ts, src/config/codec.ts, src/config/glyph.ts, src/config/raster-format.ts, src/config/raster-host.ts, src/config/raster.ts, src/config/resources.ts, src/config/schema.ts, src/config/text-property.ts, src/config/text-span-owner.ts, src/generated/bitmap-baker-abi.ts, src/generated/font-artifact-schema.ts, src/generated/mtsdf-baker-abi.ts, src/generated/slug-baker-abi.ts, src/generated/text-shaper-abi.ts, src/font-baker/contract.ts, src/font-baker/index.ts, src/font-baker/validator.ts, src/font-baker/wasm-url.ts, src/internal/bake-progress-protocol.ts, src/internal/bind-command-buffer.ts, src/internal/bitmap-contract.ts, src/internal/bitmap-strike.ts, src/internal/borrowed-layout-view.ts, src/internal/codec-capability-selection.ts, src/internal/codec-program-contract.ts, src/internal/codec-program.ts, src/internal/compile-wasm-response.ts, src/internal/compose-bake.ts, src/internal/configured-handle.ts, src/internal/content-digest.ts, src/internal/core-bake-policy.ts, src/internal/create-engine.ts, src/internal/desired-text.ts, src/internal/dev.ts, src/internal/font-artifact-reader.ts, src/internal/font-bake-pipeline.ts, src/internal/font-binding.ts, src/internal/font-face-transfer-runtime.ts, src/internal/font-face-transfer.ts, src/internal/font-resource-key.ts, src/internal/font-selection.ts, src/internal/frame-wire.ts, src/internal/glb-reader.ts, src/internal/glyph-id.ts, src/internal/glyph-plan-target.ts, src/internal/handle-state.ts, src/internal/ktx2-constants.ts, src/internal/layout-query-view.ts, src/internal/msdf-contract.ts, src/internal/mtsdf-generator.ts, src/internal/node-bake-error.ts, src/internal/node-file-publication.ts, src/internal/owned-array-buffer.ts, src/internal/plan-view.ts, src/internal/raster-artifact-validation.ts, src/internal/raster-atlas.ts, src/internal/raster-bake-plan.ts, src/internal/raster-bake-worker-entry.ts, src/internal/raster-bake-worker-host.ts, src/internal/raster-bake-worker-protocol.ts, src/internal/raster-baker-profile.ts, src/internal/raster-baker-wasm.ts, src/internal/raster-codec-registry.ts, src/internal/raster-coverage-artifact.ts, src/internal/raster-format-compiler.ts, src/internal/raster-format-registry.ts, src/internal/raster-identity.ts, src/internal/raster-ktx.ts, src/internal/raster-records.ts, src/internal/registered-font.ts, src/internal/render-id.ts, src/internal/render-planner.ts, src/internal/resources.ts, src/internal/runtime-bake-protocol.ts, src/internal/runtime-font-cache.ts, src/internal/schema.ts, src/internal/serial-worker-host.ts, src/internal/shaper-wasm-url.ts, src/internal/slug-contract.ts, src/internal/span-cascade.ts, src/internal/successful-promise-cache.ts, src/internal/text-shaper-module.ts, src/internal/typed-command-identity.ts, src/internal/typed-command-tree.ts, src/raster/bitmap.ts, src/raster/msdf.ts, src/raster/slug.ts, src/node/bake.ts, src/node/cli.ts, src/react/bitmap.ts, src/react/index.ts, src/react/msdf.ts, src/react/slug.ts, src/runtime-bakers/bitmap-worker.ts, src/runtime-bakers/bitmap.ts, src/runtime-bakers/msdf-worker.ts, src/runtime-bakers/msdf.ts, src/runtime-bakers/slug-worker.ts, src/runtime-bakers/slug.ts, src/three/codec.ts, src/three/command-buffer-renderer.ts, src/three/decorations.ts, src/three/detached-object.ts, src/three/frame-error.ts, src/three/glyph-measurement.ts, src/three/glyphs.ts, src/three/material.ts, src/three/projected-flow.ts, src/three/raster-program.ts, src/three/schema.ts, src/three/span.ts, src/three/text.ts, src/three/transform-synchronizer.ts, src/three/typegpu.ts, src/typegpu/config.ts, src/typegpu/text.ts, src/vue/bitmap.ts, src/vue/msdf.ts, src/vue/slug.ts, src/font-baker/generated/font-baker-abi.ts, src/raster/internal/bitmap-decoder.ts, src/raster/internal/msdf-decoder.ts, src/raster/internal/slug-decoder.ts, src/shaders/tsl/bitmap-shader.ts, src/shaders/tsl/decoration-shader.ts, src/shaders/tsl/index.ts, src/shaders/tsl/msdf-shader.ts, src/shaders/tsl/packed-color.ts, src/three/internal/batch-scope.ts, src/three/internal/define-config.ts, src/three/internal/draw-realizer.ts, src/three/internal/geometry.ts, src/three/internal/handle-access.ts, src/three/internal/host-buffer.ts, src/three/internal/material-realizer.ts, src/three/internal/portable-resource.ts, src/three/internal/publication-boundary.ts, src/three/internal/raster-program-registry.ts, src/three/internal/render-state.ts, src/three/internal/renderer-resources.ts, src/three/internal/scene-tree.ts, src/three/internal/shader-set.ts, src/vue/internal/flatten-slots.ts, src/vue/internal/property-snapshot.ts, src/typegpu/internal/bindings.ts, src/typegpu/internal/codec.ts, src/typegpu/internal/renderer.ts, src/typegpu/internal/resources.ts, src/three/typegpu/internal/bitmap-shader.ts, src/three/typegpu/internal/decoration-shader.ts, src/three/typegpu/internal/msdf-shader.ts, src/three/typegpu/internal/slug-shader.ts, src/shaders/tsl/slug/calc-coverage.ts, src/shaders/tsl/slug/calc-root-code.ts, src/shaders/tsl/slug/index.ts, src/shaders/tsl/slug/primitives.ts, src/shaders/tsl/slug/shader.ts, src/shaders/tsl/slug/slug-band.ts, src/shaders/tsl/slug/slug-dilate.ts, src/shaders/tsl/slug/slug-render.ts, src/shaders/tsl/slug/slug-texture.ts, src/shaders/tsl/slug/solve-quadratic.ts, src/three/typegpu/internal/slug/slug-dilate.ts, src/shaders/tsl/slug/internal/reference.ts, src/shaders/tsl/slug/internal/three-compat.ts
+ℹ target: es2025
+ℹ tsconfig: tsconfig.build.json
+ℹ Build start
+✔ Build complete in 132ms
+ℹ Granting execute permission to .cache/build/staging-72503-sHDu93/node/cli.js
+✔ Build complete in 177ms
+Checking peer versions: {
+  '@react-three/fiber': '9.7.0',
+  '@tresjs/core': '5.8.3',
+  '@typegpu/gl': '0.12.4',
+  '@typegpu/three': '0.12.1',
+  react: '19.0.0',
+  three: '0.185.0',
+  typegpu: '0.12.5',
+  vue: '3.5'
+} 
+Consumer: /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM
+Scope: all 3 workspace projects
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Progress: resolved 286, reused 103, downloaded 35, added 0
+Progress: resolved 410, reused 189, downloaded 65, added 0
+[WARN] 2 deprecated subdependencies found: @yuku-codegen/binding-android-arm64@0.8.7, @yuku-parser/binding-android-arm64@0.8.7
+Packages: +255
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Progress: resolved 414, reused 190, downloaded 73, added 226
+Progress: resolved 414, reused 190, downloaded 73, added 255, done
+
+Done in 4s using pnpm v11.15.1
+THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+✔ Text and TextGroup retain their hosts after an application factory extension without a provider (119.754709ms)
+THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+✔ R3F TextGroup material props update the retained Three material property (15.488583ms)
+THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+✔ provider-free R3F roots isolate independent Canvas stores (28.913583ms)
+THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+✔ GlyphProvider resolves a scoped string through its lazy fontFaces table (24.45825ms)
+THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+✔ GlyphProvider reuses equal inline source tables and releases its declarations after StrictMode unmount (28.217166ms)
+THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+✔ Text suspends on an existing unloaded FontFace selection (25.846834ms)
+THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+✔ nested Text suspends on a provider FontFace alias before publishing the paragraph (29.034792ms)
+✔ nested font prefetch observes rejection while an earlier font suspends (4.701458ms)
+THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+✔ Text and TextGroup reject untyped object-level handle selection (6.021958ms)
+THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+✔ GlyphProvider rejects a handle change instead of rebinding mounted objects (9.800167ms)
+THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+✔ GlyphProvider string shorthand selects a named root on the built-in default handle (13.639834ms)
+THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+✔ an R3F portal selects a distinct terminal root for its target Scene (14.349875ms)
+THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+✔ StrictMode mount and replay balance every paragraph lease (9.607708ms)
+THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+✔ a FontFace may dispose before React releases its mounted Text lease (6.543083ms)
+THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+O [GlyphFontError]: font artifact could not be read
+    at K (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/packages/glyph/dist/loader.js:1:38590)
+    at k._registerAsset (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/packages/glyph/dist/loader.js:1:1862)
+    at #u (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/packages/glyph/dist/loader.js:1:7383)
+    ... 4 lines matching cause stack trace ...
+    at file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/packages/glyph/dist/loader.js:1:11593
+    at file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/packages/glyph/dist/loader.js:1:13567 {
+  code: 'resource-unavailable',
+  reason: 'INVALID_FONT_ASSET',
+  url: undefined,
+  [cause]: n [GlbReadError]: GLB_TOO_SHORT: GLB must contain a header plus JSON and BIN chunks
+      at o (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/packages/glyph/dist/internal/glb-reader.js:1:2639)
+      at r (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/packages/glyph/dist/internal/glb-reader.js:1:296)
+      at i (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/packages/glyph/dist/internal/font-artifact-reader.js:1:323)
+      at k._registerAsset (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/packages/glyph/dist/loader.js:1:1841)
+      at #u (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/packages/glyph/dist/loader.js:1:7383)
+      at #l (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/packages/glyph/dist/loader.js:1:7104)
+      at ae.load (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/packages/glyph/dist/loader.js:1:6613)
+      at xe (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/packages/glyph/dist/loader.js:1:18660)
+      at #a (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/packages/glyph/dist/loader.js:1:12396)
+      at file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/packages/glyph/dist/loader.js:1:11593 {
+    code: 'artifact-invalid',
+    issues: [ [Object] ]
+  }
+} {
+  componentStack: '\n' +
+    '    at RejectedHookFont (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/packages/glyph/tests/integration/react-lease-lifecycle.test.mjs:647:29)\n' +
+    '    at Suspense (<anonymous>)\n' +
+    '    at ge (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/packages/glyph/dist/react.js:1:4364)\n' +
+    '    at ue (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/packages/glyph/dist/react.js:1:1398)\n' +
+    '    at Provider (/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/node_modules/.pnpm/@react-three+fiber@9.7.0_@types+react@19.0.0_react-dom@19.0.0_react@19.0.0__react@19.0.0_three@0.185.0/node_modules/@react-three/fiber/dist/events-b1bdeb1a.cjs.dev.js:15970:3)',
+  errorBoundary: <ref *1> ge {
+    props: { fallback: [Function: errorFallback], children: [Object] },
+    context: {},
+    refs: {},
+    updater: {
+      enqueueSetState: [Function: enqueueSetState],
+      enqueueReplaceState: [Function: enqueueReplaceState],
+      enqueueForceUpdate: [Function: enqueueForceUpdate]
+    },
+    state: { error: [O] },
+    _reactInternals: Vm {
+      tag: 1,
+      key: null,
+      elementType: [class ge extends Component],
+      type: [class ge extends Component],
+      stateNode: [Circular *1],
+      return: [Vm],
+      child: null,
+      sibling: null,
+      index: 0,
+      ref: null,
+      refCleanup: null,
+      pendingProps: [Object],
+      memoizedProps: [Object],
+      updateQueue: [Object],
+      memoizedState: [Object],
+      dependencies: null,
+      mode: 3,
+      flags: 193,
+      subtreeFlags: 0,
+      deletions: null,
+      lanes: 0,
+      childLanes: 0,
+      alternate: null,
+      actualDuration: 0.03175100000009934,
+      actualStartTime: 622.942291,
+      selfBaseDuration: 0.0039999999999054126,
+      treeBaseDuration: 0.0039999999999054126,
+      _debugInfo: null,
+      _debugOwner: [Vm],
+      _debugStack: undefined,
+      _debugTask: undefined,
+      _debugNeedsRemount: false,
+      _debugHookTypes: null
+    },
+    _reactInternalInstance: {}
+  }
+}
+✔ preload, StrictMode consumers, clear, and remount share one font resource lifecycle (15.6615ms)
+THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+O [GlyphFontError]: retryable test failure
+    at TestContext.<anonymous> (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/packages/glyph/tests/integration/react-lease-lifecycle.test.mjs:589:19)
+    at async Test.run (node:internal/test_runner/test:1332:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+  code: 'resource-unavailable',
+  reason: 'test-retry',
+  url: undefined
+} {
+  componentStack: '\n' +
+    '    at RecoverableChild (<anonymous>)\n' +
+    '    at ge (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/packages/glyph/dist/react.js:1:4364)\n' +
+    '    at ue (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/packages/glyph/dist/react.js:1:1398)\n' +
+    '    at Provider (/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.cache/peer-versions/consumer-HB1UBM/node_modules/.pnpm/@react-three+fiber@9.7.0_@types+react@19.0.0_react-dom@19.0.0_react@19.0.0__react@19.0.0_three@0.185.0/node_modules/@react-three/fiber/dist/events-b1bdeb1a.cjs.dev.js:15970:3)',
+  errorBoundary: <ref *1> ge {
+    props: { fallback: [Function: errorFallback], children: [Object] },
+    context: {},
+    refs: {},
+    updater: {
+      enqueueSetState: [Function: enqueueSetState],
+      enqueueReplaceState: [Function: enqueueReplaceState],
+      enqueueForceUpdate: [Function: enqueueForceUpdate]
+    },
+    state: { error: [O] },
+    _reactInternals: Vm {
+      tag: 1,
+      key: null,
+      elementType: [class ge extends Component],
+      type: [class ge extends Component],
+      stateNode: [Circular *1],
+      return: [Vm],
+      child: null,
+      sibling: null,
+      index: 0,
+      ref: null,
+      refCleanup: null,
+      pendingProps: [Object],
+      memoizedProps: [Object],
+      updateQueue: [Object],
+      memoizedState: [Object],
+      dependencies: null,
+      mode: 3,
+      flags: 193,
+      subtreeFlags: 0,
+      deletions: null,
+      lanes: 0,
+      childLanes: 0,
+      alternate: null,
+      actualDuration: 0.015874000000053456,
+      actualStartTime: 625.357125,
+      selfBaseDuration: 0.003500000000030923,
+      treeBaseDuration: 0.003500000000030923,
+      _debugInfo: null,
+      _debugOwner: [Vm],
+      _debugStack: undefined,
+      _debugTask: undefined,
+      _debugNeedsRemount: false,
+      _debugHookTypes: null
+    },
+    _reactInternalInstance: {}
+  }
+}
+An update to ge inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+✔ a rejected hook resource stays stable for the error boundary and a later preload can retry (3.387542ms)
+✔ a GlyphProvider error fallback retries children only when its caller dismisses it (1.553792ms)
+THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+✔ Rust resolves authored template ranges after fragments join into graphemes (152.015625ms)
+✔ nested structural spans preserve authored ranges until Rust resolves them (7.1935ms)
+✔ a rejected authored mutation leaves the accepted planner usable for the next edit (5.408ms)
+✔ bound edits prepare once and reads plus renderer publication reuse that revision (53.082084ms)
+✔ a post-commit preparation failure invalidates Rust and rebuilds accepted authored text (17.459167ms)
+✔ a failed create preparation leaves no accepted text and rebuilds the existing root (4.790542ms)
+✔ a failed multi-text recovery replays the full accepted root on the next read (4.790667ms)
+✔ post-write recovery keeps flow revisions monotonic and restores keyed count changes (15.120042ms)
+✔ a failed staged publication rebuilds accepted text without changing renderer-owned bytes (13.193167ms)
+✔ equivalent authored ranges resolve to the same measurement in Rust (6.943542ms)
+✔ raw span updates do not run JavaScript grapheme segmentation (3.491583ms)
+✔ seeded retained formatted batches match a cold full publication after sparse edits (26.05025ms)
+THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+✔ nested React Text crossing a joining boundary mounts and publishes (27.034375ms)
+✔ nested React Text rejects box-only props before constructing a paragraph (3.509833ms)
+✔ a custom Three material composes over the Bitmap shader in the Rust command-buffer draw path (138.794584ms)
+✔ the same custom material factory may override a separate decoration realization (28.810792ms)
+✔ Bitmap pixel snapping is an explicit opt-in graph specialization (8.976542ms)
+✔ the Slug material compiles on both backends and calls the portable core once per algorithm step (95.742542ms)
+✔ the portable core emits no WGSL-only builtin into the WebGL2 shader (49.448042ms)
+THREE.AttributeNode: Vertex attribute "pageIndex" not found on geometry.
+THREE.AttributeNode: Vertex attribute "pageIndex" not found on geometry.
+✔ atlas addressing matches the TSL realization (0.447458ms)
+✔ quad placement matches the TSL realization, including the y flip (0.085875ms)
+✔ coverage is an exact clamped texel fetch on both sides (0.083667ms)
+✔ paint composition scales alpha by coverage identically (0.060792ms)
+✔ pixel snapping rounds projected axes onto whole physical pixels identically (0.075458ms)
+✔ shader functions agree with their CPU reference mirrors (1.086708ms)
+✔ the fragment input contract carries exactly the vertex varyings the fragment needs (0.049625ms)
+✔ the default vertex stage realizes the canonical atlas addressing and quad placement (3.508625ms)
+✔ the default clip placement matches an explicit column-major model-view-projection (0.628292ms)
+✔ the pixel-snapped variant rounds device-space landing without moving other channels (1.893667ms)
+✔ snapClipAxis keeps whole-pixel device coordinates fixed (0.200666ms)
+✔ paint composition scales unpremultiplied alpha by coverage and keeps rgb (0.368375ms)
+✔ every shipped Bitmap stage resolves to WGSL without consumer-side tooling (14.406166ms)
+✔ MTSDF placement converts downward paragraph y to upward Three y (0.720417ms)
+✔ the Bitmap Three adapter captures its texture instead of passing it to a GLSL function (42.320334ms)
+✔ the MTSDF Three adapter compiles the canonical TypeGPU functions on both backends (52.079291ms)
+✔ the decoration Three adapter compiles the canonical TypeGPU functions on both backends (2.978625ms)
+✔ stable and experimental handles retain independent shader selection in one scene (105.120583ms)
+✔ stable and experimental Three configs share the custom material override contract (25.946458ms)
+ℹ tests 55
+ℹ suites 0
+ℹ pass 55
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1162.188042

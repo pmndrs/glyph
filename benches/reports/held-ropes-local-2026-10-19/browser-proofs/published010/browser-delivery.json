@@ -1,0 +1,2264 @@
+{
+  "schemaVersion": 1,
+  "status": "completed",
+  "installedShaper": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/text-shaper.wasm",
+    "bytes": 1362353,
+    "sha256": "addb8144f474c9f5a005bdda084bcf15c05170004b34c7a65ab592db4962c893"
+  },
+  "installedEntries": {
+    "index": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/index.js",
+      "sha256": "d7f592e93dec399d374bc5cd5f2b73bc4fab03c913c4939c40a1deb5d4366b97"
+    },
+    "three": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three.js",
+      "sha256": "5b06f86a6bd2f048dd48d7f2221ed65fb21a197c3ea8394ded41db7b1fe053c1"
+    }
+  },
+  "backends": [
+    {
+      "backend": "webgpu",
+      "responses": [
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/vite@8.1.5_@types+node@24.13.3_esbuild@0.28.2_jiti@2.7.0_tsx@4.23.13/node_modules/vite/dist/client/env.mjs",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 3478,
+          "sha256": "87a1e6adc3833b1e0d8fd872e39e822401c8f0d593d5358f7e142f34d335946a"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/config/codec.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 20461,
+          "sha256": "1ebd2e34fe16c6b4b835710baa38cc5ffc9c1280626cc94c41b9d1dbe4b625c2"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/config/glyph.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 756,
+          "sha256": "a6aff986360203db7ba093419e93bb170cde1bcb4b2e7386ef49c2667ab1780d"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/config/raster-format.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2768,
+          "sha256": "db7f1faebd777c1bd6e4ac7acc103f1cefd0a695189d6569297fd068fdd6324c"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/config/raster-host.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 4467,
+          "sha256": "7de53a6b2c22397c87525d57e9d3a57c297a20b0075b11d861a314669be64e73"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/config/raster.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 11886,
+          "sha256": "b29ebb2029e2956366f88f2f502a30fe5d0631c73e092e7359bc09eb97190292"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/config/text-property.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 967,
+          "sha256": "4a76c136aabd77ede7df6fffb1160c8e857630051892eb574f4bb0e9b0a1d52f"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/engine-encoding.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 5970,
+          "sha256": "20b791bc466051b97c46db80a63e4f2d539db5b4159598203158f21be2d4f152"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/engine-error.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2136,
+          "sha256": "f6a1bb23a4fe4b99a64b92ef0ab8066b8c6e461bb4ea78f2123f09f4dac0c4d2"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/font-baker/contract.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 114,
+          "sha256": "d0cbaadb6bbe3ed34b36321397386e520f5704e7276df110a7f74009ee3e3e63"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/font-face.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 11998,
+          "sha256": "ad65430c78bf9b61a00a36b21e782cdd42ac451862ad2a95eeb882fa98a9f69c"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/formatted-text.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2695,
+          "sha256": "05b8fafe536db79f9ae9cdbf42dbcba7b85c8b927eddeca61173c1b634312a76"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/generated/text-shaper-abi.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 13125,
+          "sha256": "454b3662780119238817990811cd845890d8e07611e57049db1c34b6df8b746f"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/glyph-engine.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 10735,
+          "sha256": "c19aadd3001aca163ec1f5f906b650567786f7b3960a346728e0314fc855bfb1"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/glyph-error.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 162,
+          "sha256": "fcee63782b56793e9eee533721542ca3387970dc435ab8d1825304a4ebb406aa"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/glyph-placement.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 4414,
+          "sha256": "b6862e9e0ed38f0c735013c756a6a54937ada0424fd49b38f37f5011d88b7183"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/glyph.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 3782,
+          "sha256": "ddd6820161a4205aa60c5619a34c81a56844c99b99ea55400fb1b34f178fb236"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/identity.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 520,
+          "sha256": "f305e95525afda396baccd382f79dbadf5a18d0960fae7725dc0c754a92f3468"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/index.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 20920,
+          "sha256": "0279b26bdc791154d5f9a2535ada4ff4a140dc8dcf9b48779d3907411585e64f",
+          "installedSource": {
+            "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/index.js",
+            "sha256": "d7f592e93dec399d374bc5cd5f2b73bc4fab03c913c4939c40a1deb5d4366b97"
+          }
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/bind-command-buffer.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1092,
+          "sha256": "281a5a5438373c83d80643ffbc5ac8a209ead8d5b516c21848189b738c0cfef6"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/bitmap-contract.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2205,
+          "sha256": "502d47c0e963e8c6c4075e97df9599d417958328bff732375eaed2b1d18217a5"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/bitmap-strike.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 468,
+          "sha256": "8aea36bc0381148d037d2143ab31000bf5f774bce0b8079eb7d10cfd0b7b59ab"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/borrowed-layout-view.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2216,
+          "sha256": "cc02d202c85ca06653c4c94a575c8e198f76252dbe61d92932c1e644b24a396c"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/codec-capability-selection.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 581,
+          "sha256": "66ca84c7949042cf7fcf93be43061c943ec0d2a09a7405d4488c16844132528b"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/codec-program-contract.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 3445,
+          "sha256": "81d828a01f942c4ef50538cbb1b43a05c388e4d1553712868324701e3f7e6490"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/codec-program.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 9994,
+          "sha256": "7243e0b001afad22701f225ea956735d262b4cffcd182b1d34aa2a2591634065"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/configured-handle.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 14609,
+          "sha256": "05fdb18469cc1222cf8ef3db37cd152c9fe5c7c80c3780014a6253f3aeff16f0"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/create-engine.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 7150,
+          "sha256": "ea708630149e00267a1d1e960cc3885f21cc7f2d6577705665f7a306e2af1c7c"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/dev.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 470,
+          "sha256": "2872cf5da10a2154b7127228a158fed4017f74617925816a29df4988555b378b"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/fingerprint.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2072,
+          "sha256": "be8390cd63b906d9f75a45d55e3709bc77681cc48598349c7980d027e3b991c2"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/font-artifact-reader.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 3434,
+          "sha256": "5ae301d7fd0e7867301a7bebd18623c6b0dff0757d72f2ef933e5aeda1501ce4"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/font-binding.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 8272,
+          "sha256": "4698f3ece11aeba9e6deea6741bdcab5a4fbca049d152eaace5b658f1d314912"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/font-face-transfer.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 739,
+          "sha256": "cc490d722db3c00358362f1d1a4bbf3dc4441b1ca7395b363e7954fcfa10939b"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/font-selection.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 814,
+          "sha256": "586650ac56027e865cfd71a4f6ff604b211cbe2d08b8c3347c7ad4a547ea9081"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/frame-wire.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 15631,
+          "sha256": "3f96db80cb93ce92cafab8d9fae5dd522146e9916353dd3d8e50e4c5159a675e"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/glb-reader.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 3050,
+          "sha256": "00064d2c740415c67893b41d81eaf6c9e1ccc416858374a37b442ac683775e22"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/glyph-id.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2915,
+          "sha256": "11c8944ea074b9ac15f19afcc2ef03273e7423f56704c08a67dc54c296ba4cc7"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/glyph-plan-target.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2355,
+          "sha256": "72ff14cc4d23fc4f8c593b0fd54429671cf69d8ef9395733cd41d5745a2d46d4"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/graphemes.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1001,
+          "sha256": "c97cbfcdda5e3853ddf2e3a88ca08686e544c7dd8160a5456091c0d6d9c069b9"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/handle-state.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 26536,
+          "sha256": "8ea169cbaa79cf35f78ac88be61d6030f5dd7c80545791ed4a304c42f8a144cc"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/layout-query-view.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 7059,
+          "sha256": "5711438082ab26cd338ee9bc14a01205d726fa33ca417b719188060ebba18645"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/msdf-contract.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 3338,
+          "sha256": "9f3d96bc2bd6e40be0197939535137079560a0c77a1e847cba8d87912f0e101f"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/plan-view.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1890,
+          "sha256": "a8d29040a21f2eb6a5c90c000869fa6e7425bb36dc6262e42140b704808cc4f6"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/raster-atlas.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2883,
+          "sha256": "9720a235bb0a6b002484b3daa495937215b0c17a8ca2b3cd709b2b08b568138a"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/raster-codec-registry.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2934,
+          "sha256": "cbe20b1c5b6f719de3b14c063b78466f3b7150aa7f1cc16d59202cf244e37089"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/raster-coverage-artifact.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1857,
+          "sha256": "bb5129c1f876c1343a381d60476ddcf2cc566ae10b3145a3ccabd562678c7c84"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/raster-format-compiler.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 237,
+          "sha256": "882908e3c3dbcbc3a110414163052bc1c6ca0f850805b12d1cb9e080a7c4a4d5"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/raster-format-registry.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1301,
+          "sha256": "2fc1b2e8c777aa84964734040277f7da07595bbaebc977d36be27acce5e19c58"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/raster-identity.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2115,
+          "sha256": "bbb2ccfe4e867e3f08915265edb9beabcce822e0330cc21fa5d53da3acfc7673"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/raster-ktx.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 3344,
+          "sha256": "d9a4be8e6a78e5b4bf3541c9a7f7b81e8a34bbf68d4dc91264806f86aa947aed"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/raster-records.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1755,
+          "sha256": "31f60c7d6059c03f21f3d90ae590a1a3fe831519ec529aa1abce6f356238b9fa"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/registered-font.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 319,
+          "sha256": "61ecab62a6b9843a31dfec349e5556d29f2baa2592dd786559a07cff958726aa"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/render-id.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1433,
+          "sha256": "fa34dac6a50f009bb6de392e60da7c43734acc44ba8f2bcec31399de089649fb"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/render-planner.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 37874,
+          "sha256": "016692dacf17a3499fd0f85aecb2eef1d591193a678d049fe30ea90f6471fd85"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/resources.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 11988,
+          "sha256": "7ccc9431dbf95546d8152f77a7fe692bfe66d9759b559874c65bb3f072f94226"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/runtime-bake-protocol.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2331,
+          "sha256": "1d2b80bc174dbfb2e7f63b0215a66edf028e18d682d115c49e3ff35de9f7af2c"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/schema.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 9895,
+          "sha256": "1be89dc42f7a1d050733b560bb8d7ef4da7a39bf4b925c02298e63d1d5d6bb52"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/shaper-wasm-url.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 419,
+          "sha256": "2ee925620c8e40afba5148da373993133c7ae6dc51f26313a00f853acab16b54"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/slug-contract.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1324,
+          "sha256": "eff6c4f32f4ab53d8a1397310bb5d9056a829e55cdeef87a39eaf4ef9ca94b09"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/span-cascade.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 189,
+          "sha256": "22eb3bdad4248b3f444478cad6743be7cea45bb84d0a61efa10b62ef75b522b9"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/typed-command-identity.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 147,
+          "sha256": "af2180c5348a9eceec359471a13c8796f8d65c28b6fdd874d199868274950327"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/typed-command-tree.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 12096,
+          "sha256": "210ba6d70379bd7173a44048234c5d2340cc5720fdbd865a8895d07b266dceba"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/layout.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1233,
+          "sha256": "d04c258f0231ab2656dbd32974c7ea8dbe7773ab965fa0a6062a51864dfd4dad"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/loaded-font.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 4737,
+          "sha256": "ea9ae660131eddeac5235b640c178789ba4f7638c1a2335e15e252f16658e385"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/loader.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 44407,
+          "sha256": "937129b56ac108282ffb29b82bed45d3ac1ea9386eea73071c4942d2fe2170a6"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/property-list.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 289,
+          "sha256": "44f5cc8132e3cd6dfebba237098978172ebf0bc2801c34b134282b13520c2ca2"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/raster-coverage.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 3738,
+          "sha256": "02556086810f3ff0310f28e4dd68efcbfb57c409bc1e5f93d66eeec7df6e028b"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/raster/bitmap.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 7123,
+          "sha256": "d71ab57490bef6a90d3e789cb01a85d438536620756232afc0d60da4abe583bf"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/raster/internal/bitmap-decoder.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 4602,
+          "sha256": "ec03866826d5b64441c42e311f41b9af70514107897870511727c96be1ae9fbb"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/raster/msdf.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 6842,
+          "sha256": "cdc1da42fa2aff926606f5b5dcec7f8a6da0f0998cc55673ec1e863e35499d16"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/raster/slug.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 6798,
+          "sha256": "15f2bdd678dd68eef5457df8aee2d403025da5eddf5cdc832e3d19e48fa58964"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/bitmap-shader.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 790,
+          "sha256": "4659758f856b0c76941f313057cec1a582d8e5326a00d3c7b3ce48a53c4fe5bd"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/decoration-shader.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 675,
+          "sha256": "2a3d7333c63a88bdde040d406d991f8dcb0655d3ac8b6ac8824f9498558887ec"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/msdf-shader.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2100,
+          "sha256": "8150bd1fd0c34f90232e62bc4ef932018c9f1cd4681e798026e12d4465709529"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/packed-color.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 556,
+          "sha256": "7fc34782f9f7b266cf205d37d014ff3672cb55d349020a73195d71ca293e11f9"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/slug/calc-coverage.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 560,
+          "sha256": "53fafad33a5062f280c5e2959a0282c96889da520630358d16e24874966ba53c"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/slug/calc-root-code.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 712,
+          "sha256": "493b855be8e4df8d05ce8af37163468de4d862ec698a7b86c7c8855481c16aac"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/slug/internal/three-compat.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 958,
+          "sha256": "3711ee67ae2f7e5991bbc8e52c7fe5f72c00dfcb982f0e182b07b5ae2d52aaa4"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/slug/shader.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2124,
+          "sha256": "9d09db77b0cec1a6f8fcd81b49095edd4a302a3e303dce986d0765b6fe6f578d"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/slug/slug-band.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 3687,
+          "sha256": "f950a2add0a78e06acd2bd6dd16877764a8043eaf3303ad57610ae451f9d21d2"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/slug/slug-dilate.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1129,
+          "sha256": "792389dd30cdc490c32e94edf6321b06884a68f4a6cc57f6ee9063e9211a70ec"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/slug/slug-render.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2111,
+          "sha256": "905b126789d6e88b9a80f67f62a9eaa9cab41cd6b1adfa349567dbbd441b7998"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/slug/slug-texture.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1426,
+          "sha256": "a3f66a2aaf2ac171e768416f05582af8ea56ce391cc220934c509224e7f02d94"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/slug/solve-quadratic.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1319,
+          "sha256": "8f752bfe0691f56d2d6461963f62d572f15813d1e1cd01bb43a467823a2cfc35"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaper.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 5983,
+          "sha256": "35da497f7be31d168a2f6a8bc8b9c6796ea78b40c4b5d5e2c4caf26978d76b86"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/text-properties.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 10725,
+          "sha256": "f7b3e6274cd010fd0ef2022ac5c2d8cb6346cd29ad1d3e243b317a91d292def0"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/text-shaper.wasm",
+          "status": 200,
+          "contentType": "application/wasm",
+          "resourceType": "fetch",
+          "kind": "wasm",
+          "bytes": 1362353,
+          "sha256": "addb8144f474c9f5a005bdda084bcf15c05170004b34c7a65ab592db4962c893"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 5765,
+          "sha256": "a3460fa468c0b1376ff11ed235d28a9d2649f46e5f1b87435fcb3a707e7c620f",
+          "installedSource": {
+            "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three.js",
+            "sha256": "5b06f86a6bd2f048dd48d7f2221ed65fb21a197c3ea8394ded41db7b1fe053c1"
+          }
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/codec.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 5590,
+          "sha256": "7ecc82d1667488c3bc8bb6776a077e7fa2eb39aafd9300604d8b19b24b6de9fe"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/command-buffer-renderer.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 12981,
+          "sha256": "bc6a9dc112f9bae3c4948f0b6a8d15ea0bb657ade6675cddc9b80c211e7f6631"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/decorations.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2348,
+          "sha256": "8a726fe2e74177fb3e645a03443570c84e08fa22e0df18e6e68e383f1fd5ad27"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/detached-object.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 338,
+          "sha256": "f87da72e613ff8b00e1f9bf5f8f23de579484070bc747b146d03aa667b6ec6bb"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/frame-error.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2575,
+          "sha256": "4031a797aabb0f14412a398a6a8132df610053711578f40ec614a21faf470657"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/glyph-measurement.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 3172,
+          "sha256": "fb6ec6e964561b4e13572d6dd5ef691887b4761e4bfabe8f81df777a447c373c"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/glyphs.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 6119,
+          "sha256": "6bf52358c2ec88eb100095babcb7846269e9f93e58ae4058b46c154d210ac5e0"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/internal/define-config.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 3508,
+          "sha256": "aad2b2aa3a2f14de61536c14b13e974d0956084e4ed41eb018cd164539b3e5db"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/internal/draw-realizer.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 5530,
+          "sha256": "6e701dfa076fe9843fddb77a340131ee76cc67ead7121a7c68e818303af58a6d"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/internal/geometry.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 4160,
+          "sha256": "234d9a1215486ac505c54b89265616eff3c5683294fb1082c30f4b454b9d4c2b"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/internal/host-buffer.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2064,
+          "sha256": "832adc7fd719d2064751231996dacf7ab1066c04ea891233245bf524fc0f155f"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/internal/material-realizer.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 12141,
+          "sha256": "c3e6621f47d4731909097c0910f2c372f8fb3603cd89eed7b8f8e086a45d7a2d"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/internal/portable-resource.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2061,
+          "sha256": "8d5420dd295c9c3901ef319a960d228e50c5b2a60d9a31f085fe1ebd13c494e4"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/internal/raster-program-registry.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2672,
+          "sha256": "08a61df5298c38da3a5ef3f411a289e3c18741387c6545d2814fb936034a03b3"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/internal/renderer-resources.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1851,
+          "sha256": "6b1c4a5c8f39e61ee6d2ce2b130b25e167259f070aac45d6b4f58fe52bcf5b42"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/internal/scene-tree.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 163,
+          "sha256": "cc8fd56ad159f18b6132b6f9455f3a632fbf21190457b8b08dc14b2750bf8c9f"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/material.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 199,
+          "sha256": "f0dd3f39bc05a265eb47cd572f95b43b90052c8f3858ed2cfcf50b4647b5cdfe"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/projected-flow.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 7867,
+          "sha256": "6d4d02c688d7fb3ecdde70e1525f2554b7cb17d7f3e90723837c3f96dbb688f8"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/raster-program.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 6478,
+          "sha256": "f7312000fc5f381a9cdb32a3be1e6fa77a0ae3d47e9faa34796b1fe8b5de6147"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/schema.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1953,
+          "sha256": "3c367d84c1d8638084713ecaaebd76023225ef04f2a1389c2ba6b74664ecf790"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/span.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 873,
+          "sha256": "57956ff87846acc286d825134a17491ac64ee47fbb4beacb3848439a002a497f"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/text.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 30676,
+          "sha256": "fed8c3d8071b4f89f024654f71a53716d9cf32bf24eca52f5a8a25f4fd87d8d3"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/transform-synchronizer.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1863,
+          "sha256": "52b5a686bb3d811e7160aa600ea236c8748c8c75edb45063cec46ec4834f1263"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/ktx-parse@1.1.0/node_modules/ktx-parse/dist/ktx-parse.modern.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 166715,
+          "sha256": "0fc697ae299bde7dfa94db973c95d213502b6ec2004cd7ee637e605a6fbb9998"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@react-refresh",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 111894,
+          "sha256": "fe633113388e056842f0b8df96ea422fcd97761329b79d39fddd71d1fee2f8c7"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@vite/client",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 210569,
+          "sha256": "b5aca432f0aba92217696d2fa881b7403a15de31dc7d4ac7c3dd0a8e54480e87"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/fixtures/rendering/inter-bitmap-16.font.glb",
+          "status": 200,
+          "contentType": "model/gltf-binary",
+          "resourceType": "fetch",
+          "kind": "font",
+          "bytes": 926984,
+          "sha256": "acdca408ed169c7aa1c2791dbbc2982afa1939c56fbc59ef43cc38f7ff366c14"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/node_modules/.vite/deps/rolldown-runtime-B-1-B7_t.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 7626,
+          "sha256": "b10da6029f6edcecbd48f15e2d14b352c1151431076bd2be595dfc4dc30adef0"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/node_modules/.vite/deps/three_tsl.js?v=13548426",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 98302,
+          "sha256": "93a074358a081941b725d3b010efe78f52f6b8780a28a3c5bc59b34225e423a6"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/node_modules/.vite/deps/three_webgpu.js?v=323e4940",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 101650,
+          "sha256": "6f5568c71d00ec7da808cf61e78f31bb7dd21c59c15d14e1ae24bfcd6facc69a"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/node_modules/.vite/deps/three.webgpu-C4WvlVo3.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 10267471,
+          "sha256": "0decc48a6d59660d3d2193910f15967b7575d09e4e55a078eaa186d2a5ff6eda"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/node_modules/.vite/deps/unicode-segmenter_grapheme.js?v=07552a5b",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 51758,
+          "sha256": "bbcb0ff476aeaf068a50260f57c3776d844a92bc02f26b7cdcf54eb4e4157ac6"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/src/retained-upload-proof.ts",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 48028,
+          "sha256": "8fe4d9f076f9bcc59b368f019b896e2a63aaff82dd1867d7a68c63b9e6f60f35"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/src/three-root.ts",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 6366,
+          "sha256": "470dfb53bd4cfca3eeb2e020497ef7530f0bbfad172a5c070bea244dad56a6df"
+        }
+      ],
+      "failedRequests": [],
+      "errors": [],
+      "shaperMatchesInstalled": true,
+      "installedEntriesSeen": {
+        "index": true,
+        "three": true
+      }
+    },
+    {
+      "backend": "webgl2",
+      "responses": [
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/vite@8.1.5_@types+node@24.13.3_esbuild@0.28.2_jiti@2.7.0_tsx@4.23.13/node_modules/vite/dist/client/env.mjs",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 3478,
+          "sha256": "87a1e6adc3833b1e0d8fd872e39e822401c8f0d593d5358f7e142f34d335946a"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/config/codec.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 20461,
+          "sha256": "1ebd2e34fe16c6b4b835710baa38cc5ffc9c1280626cc94c41b9d1dbe4b625c2"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/config/glyph.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 756,
+          "sha256": "a6aff986360203db7ba093419e93bb170cde1bcb4b2e7386ef49c2667ab1780d"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/config/raster-format.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2768,
+          "sha256": "db7f1faebd777c1bd6e4ac7acc103f1cefd0a695189d6569297fd068fdd6324c"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/config/raster-host.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 4467,
+          "sha256": "7de53a6b2c22397c87525d57e9d3a57c297a20b0075b11d861a314669be64e73"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/config/raster.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 11886,
+          "sha256": "b29ebb2029e2956366f88f2f502a30fe5d0631c73e092e7359bc09eb97190292"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/config/text-property.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 967,
+          "sha256": "4a76c136aabd77ede7df6fffb1160c8e857630051892eb574f4bb0e9b0a1d52f"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/engine-encoding.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 5970,
+          "sha256": "20b791bc466051b97c46db80a63e4f2d539db5b4159598203158f21be2d4f152"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/engine-error.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2136,
+          "sha256": "f6a1bb23a4fe4b99a64b92ef0ab8066b8c6e461bb4ea78f2123f09f4dac0c4d2"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/font-baker/contract.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 114,
+          "sha256": "d0cbaadb6bbe3ed34b36321397386e520f5704e7276df110a7f74009ee3e3e63"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/font-face.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 11998,
+          "sha256": "ad65430c78bf9b61a00a36b21e782cdd42ac451862ad2a95eeb882fa98a9f69c"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/formatted-text.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2695,
+          "sha256": "05b8fafe536db79f9ae9cdbf42dbcba7b85c8b927eddeca61173c1b634312a76"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/generated/text-shaper-abi.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 13125,
+          "sha256": "454b3662780119238817990811cd845890d8e07611e57049db1c34b6df8b746f"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/glyph-engine.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 10735,
+          "sha256": "c19aadd3001aca163ec1f5f906b650567786f7b3960a346728e0314fc855bfb1"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/glyph-error.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 162,
+          "sha256": "fcee63782b56793e9eee533721542ca3387970dc435ab8d1825304a4ebb406aa"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/glyph-placement.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 4414,
+          "sha256": "b6862e9e0ed38f0c735013c756a6a54937ada0424fd49b38f37f5011d88b7183"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/glyph.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 3782,
+          "sha256": "ddd6820161a4205aa60c5619a34c81a56844c99b99ea55400fb1b34f178fb236"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/identity.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 520,
+          "sha256": "f305e95525afda396baccd382f79dbadf5a18d0960fae7725dc0c754a92f3468"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/index.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 20920,
+          "sha256": "0279b26bdc791154d5f9a2535ada4ff4a140dc8dcf9b48779d3907411585e64f",
+          "installedSource": {
+            "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/index.js",
+            "sha256": "d7f592e93dec399d374bc5cd5f2b73bc4fab03c913c4939c40a1deb5d4366b97"
+          }
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/bind-command-buffer.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1092,
+          "sha256": "281a5a5438373c83d80643ffbc5ac8a209ead8d5b516c21848189b738c0cfef6"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/bitmap-contract.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2205,
+          "sha256": "502d47c0e963e8c6c4075e97df9599d417958328bff732375eaed2b1d18217a5"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/bitmap-strike.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 468,
+          "sha256": "8aea36bc0381148d037d2143ab31000bf5f774bce0b8079eb7d10cfd0b7b59ab"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/borrowed-layout-view.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2216,
+          "sha256": "cc02d202c85ca06653c4c94a575c8e198f76252dbe61d92932c1e644b24a396c"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/codec-capability-selection.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 581,
+          "sha256": "66ca84c7949042cf7fcf93be43061c943ec0d2a09a7405d4488c16844132528b"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/codec-program-contract.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 3445,
+          "sha256": "81d828a01f942c4ef50538cbb1b43a05c388e4d1553712868324701e3f7e6490"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/codec-program.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 9994,
+          "sha256": "7243e0b001afad22701f225ea956735d262b4cffcd182b1d34aa2a2591634065"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/configured-handle.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 14609,
+          "sha256": "05fdb18469cc1222cf8ef3db37cd152c9fe5c7c80c3780014a6253f3aeff16f0"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/create-engine.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 7150,
+          "sha256": "ea708630149e00267a1d1e960cc3885f21cc7f2d6577705665f7a306e2af1c7c"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/dev.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 470,
+          "sha256": "2872cf5da10a2154b7127228a158fed4017f74617925816a29df4988555b378b"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/fingerprint.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2072,
+          "sha256": "be8390cd63b906d9f75a45d55e3709bc77681cc48598349c7980d027e3b991c2"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/font-artifact-reader.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 3434,
+          "sha256": "5ae301d7fd0e7867301a7bebd18623c6b0dff0757d72f2ef933e5aeda1501ce4"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/font-binding.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 8272,
+          "sha256": "4698f3ece11aeba9e6deea6741bdcab5a4fbca049d152eaace5b658f1d314912"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/font-face-transfer.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 739,
+          "sha256": "cc490d722db3c00358362f1d1a4bbf3dc4441b1ca7395b363e7954fcfa10939b"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/font-selection.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 814,
+          "sha256": "586650ac56027e865cfd71a4f6ff604b211cbe2d08b8c3347c7ad4a547ea9081"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/frame-wire.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 15631,
+          "sha256": "3f96db80cb93ce92cafab8d9fae5dd522146e9916353dd3d8e50e4c5159a675e"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/glb-reader.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 3050,
+          "sha256": "00064d2c740415c67893b41d81eaf6c9e1ccc416858374a37b442ac683775e22"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/glyph-id.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2915,
+          "sha256": "11c8944ea074b9ac15f19afcc2ef03273e7423f56704c08a67dc54c296ba4cc7"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/glyph-plan-target.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2355,
+          "sha256": "72ff14cc4d23fc4f8c593b0fd54429671cf69d8ef9395733cd41d5745a2d46d4"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/graphemes.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1001,
+          "sha256": "c97cbfcdda5e3853ddf2e3a88ca08686e544c7dd8160a5456091c0d6d9c069b9"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/handle-state.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 26536,
+          "sha256": "8ea169cbaa79cf35f78ac88be61d6030f5dd7c80545791ed4a304c42f8a144cc"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/layout-query-view.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 7059,
+          "sha256": "5711438082ab26cd338ee9bc14a01205d726fa33ca417b719188060ebba18645"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/msdf-contract.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 3338,
+          "sha256": "9f3d96bc2bd6e40be0197939535137079560a0c77a1e847cba8d87912f0e101f"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/plan-view.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1890,
+          "sha256": "a8d29040a21f2eb6a5c90c000869fa6e7425bb36dc6262e42140b704808cc4f6"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/raster-atlas.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2883,
+          "sha256": "9720a235bb0a6b002484b3daa495937215b0c17a8ca2b3cd709b2b08b568138a"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/raster-codec-registry.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2934,
+          "sha256": "cbe20b1c5b6f719de3b14c063b78466f3b7150aa7f1cc16d59202cf244e37089"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/raster-coverage-artifact.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1857,
+          "sha256": "bb5129c1f876c1343a381d60476ddcf2cc566ae10b3145a3ccabd562678c7c84"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/raster-format-compiler.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 237,
+          "sha256": "882908e3c3dbcbc3a110414163052bc1c6ca0f850805b12d1cb9e080a7c4a4d5"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/raster-format-registry.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1301,
+          "sha256": "2fc1b2e8c777aa84964734040277f7da07595bbaebc977d36be27acce5e19c58"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/raster-identity.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2115,
+          "sha256": "bbb2ccfe4e867e3f08915265edb9beabcce822e0330cc21fa5d53da3acfc7673"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/raster-ktx.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 3344,
+          "sha256": "d9a4be8e6a78e5b4bf3541c9a7f7b81e8a34bbf68d4dc91264806f86aa947aed"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/raster-records.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1755,
+          "sha256": "31f60c7d6059c03f21f3d90ae590a1a3fe831519ec529aa1abce6f356238b9fa"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/registered-font.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 319,
+          "sha256": "61ecab62a6b9843a31dfec349e5556d29f2baa2592dd786559a07cff958726aa"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/render-id.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1433,
+          "sha256": "fa34dac6a50f009bb6de392e60da7c43734acc44ba8f2bcec31399de089649fb"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/render-planner.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 37874,
+          "sha256": "016692dacf17a3499fd0f85aecb2eef1d591193a678d049fe30ea90f6471fd85"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/resources.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 11988,
+          "sha256": "7ccc9431dbf95546d8152f77a7fe692bfe66d9759b559874c65bb3f072f94226"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/runtime-bake-protocol.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2331,
+          "sha256": "1d2b80bc174dbfb2e7f63b0215a66edf028e18d682d115c49e3ff35de9f7af2c"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/schema.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 9895,
+          "sha256": "1be89dc42f7a1d050733b560bb8d7ef4da7a39bf4b925c02298e63d1d5d6bb52"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/shaper-wasm-url.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 419,
+          "sha256": "2ee925620c8e40afba5148da373993133c7ae6dc51f26313a00f853acab16b54"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/slug-contract.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1324,
+          "sha256": "eff6c4f32f4ab53d8a1397310bb5d9056a829e55cdeef87a39eaf4ef9ca94b09"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/span-cascade.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 189,
+          "sha256": "22eb3bdad4248b3f444478cad6743be7cea45bb84d0a61efa10b62ef75b522b9"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/typed-command-identity.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 147,
+          "sha256": "af2180c5348a9eceec359471a13c8796f8d65c28b6fdd874d199868274950327"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/internal/typed-command-tree.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 12096,
+          "sha256": "210ba6d70379bd7173a44048234c5d2340cc5720fdbd865a8895d07b266dceba"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/layout.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1233,
+          "sha256": "d04c258f0231ab2656dbd32974c7ea8dbe7773ab965fa0a6062a51864dfd4dad"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/loaded-font.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 4737,
+          "sha256": "ea9ae660131eddeac5235b640c178789ba4f7638c1a2335e15e252f16658e385"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/loader.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 44407,
+          "sha256": "937129b56ac108282ffb29b82bed45d3ac1ea9386eea73071c4942d2fe2170a6"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/property-list.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 289,
+          "sha256": "44f5cc8132e3cd6dfebba237098978172ebf0bc2801c34b134282b13520c2ca2"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/raster-coverage.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 3738,
+          "sha256": "02556086810f3ff0310f28e4dd68efcbfb57c409bc1e5f93d66eeec7df6e028b"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/raster/bitmap.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 7123,
+          "sha256": "d71ab57490bef6a90d3e789cb01a85d438536620756232afc0d60da4abe583bf"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/raster/internal/bitmap-decoder.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 4602,
+          "sha256": "ec03866826d5b64441c42e311f41b9af70514107897870511727c96be1ae9fbb"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/raster/msdf.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 6842,
+          "sha256": "cdc1da42fa2aff926606f5b5dcec7f8a6da0f0998cc55673ec1e863e35499d16"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/raster/slug.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 6798,
+          "sha256": "15f2bdd678dd68eef5457df8aee2d403025da5eddf5cdc832e3d19e48fa58964"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/bitmap-shader.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 790,
+          "sha256": "4659758f856b0c76941f313057cec1a582d8e5326a00d3c7b3ce48a53c4fe5bd"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/decoration-shader.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 675,
+          "sha256": "2a3d7333c63a88bdde040d406d991f8dcb0655d3ac8b6ac8824f9498558887ec"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/msdf-shader.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2100,
+          "sha256": "8150bd1fd0c34f90232e62bc4ef932018c9f1cd4681e798026e12d4465709529"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/packed-color.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 556,
+          "sha256": "7fc34782f9f7b266cf205d37d014ff3672cb55d349020a73195d71ca293e11f9"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/slug/calc-coverage.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 560,
+          "sha256": "53fafad33a5062f280c5e2959a0282c96889da520630358d16e24874966ba53c"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/slug/calc-root-code.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 712,
+          "sha256": "493b855be8e4df8d05ce8af37163468de4d862ec698a7b86c7c8855481c16aac"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/slug/internal/three-compat.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 958,
+          "sha256": "3711ee67ae2f7e5991bbc8e52c7fe5f72c00dfcb982f0e182b07b5ae2d52aaa4"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/slug/shader.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2124,
+          "sha256": "9d09db77b0cec1a6f8fcd81b49095edd4a302a3e303dce986d0765b6fe6f578d"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/slug/slug-band.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 3687,
+          "sha256": "f950a2add0a78e06acd2bd6dd16877764a8043eaf3303ad57610ae451f9d21d2"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/slug/slug-dilate.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1129,
+          "sha256": "792389dd30cdc490c32e94edf6321b06884a68f4a6cc57f6ee9063e9211a70ec"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/slug/slug-render.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2111,
+          "sha256": "905b126789d6e88b9a80f67f62a9eaa9cab41cd6b1adfa349567dbbd441b7998"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/slug/slug-texture.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1426,
+          "sha256": "a3f66a2aaf2ac171e768416f05582af8ea56ce391cc220934c509224e7f02d94"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaders/tsl/slug/solve-quadratic.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1319,
+          "sha256": "8f752bfe0691f56d2d6461963f62d572f15813d1e1cd01bb43a467823a2cfc35"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/shaper.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 5983,
+          "sha256": "35da497f7be31d168a2f6a8bc8b9c6796ea78b40c4b5d5e2c4caf26978d76b86"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/text-properties.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 10725,
+          "sha256": "f7b3e6274cd010fd0ef2022ac5c2d8cb6346cd29ad1d3e243b317a91d292def0"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/text-shaper.wasm",
+          "status": 200,
+          "contentType": "application/wasm",
+          "resourceType": "fetch",
+          "kind": "wasm",
+          "bytes": 1362353,
+          "sha256": "addb8144f474c9f5a005bdda084bcf15c05170004b34c7a65ab592db4962c893"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 5765,
+          "sha256": "a3460fa468c0b1376ff11ed235d28a9d2649f46e5f1b87435fcb3a707e7c620f",
+          "installedSource": {
+            "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three.js",
+            "sha256": "5b06f86a6bd2f048dd48d7f2221ed65fb21a197c3ea8394ded41db7b1fe053c1"
+          }
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/codec.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 5590,
+          "sha256": "7ecc82d1667488c3bc8bb6776a077e7fa2eb39aafd9300604d8b19b24b6de9fe"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/command-buffer-renderer.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 12981,
+          "sha256": "bc6a9dc112f9bae3c4948f0b6a8d15ea0bb657ade6675cddc9b80c211e7f6631"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/decorations.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2348,
+          "sha256": "8a726fe2e74177fb3e645a03443570c84e08fa22e0df18e6e68e383f1fd5ad27"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/detached-object.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 338,
+          "sha256": "f87da72e613ff8b00e1f9bf5f8f23de579484070bc747b146d03aa667b6ec6bb"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/frame-error.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2575,
+          "sha256": "4031a797aabb0f14412a398a6a8132df610053711578f40ec614a21faf470657"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/glyph-measurement.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 3172,
+          "sha256": "fb6ec6e964561b4e13572d6dd5ef691887b4761e4bfabe8f81df777a447c373c"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/glyphs.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 6119,
+          "sha256": "6bf52358c2ec88eb100095babcb7846269e9f93e58ae4058b46c154d210ac5e0"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/internal/define-config.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 3508,
+          "sha256": "aad2b2aa3a2f14de61536c14b13e974d0956084e4ed41eb018cd164539b3e5db"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/internal/draw-realizer.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 5530,
+          "sha256": "6e701dfa076fe9843fddb77a340131ee76cc67ead7121a7c68e818303af58a6d"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/internal/geometry.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 4160,
+          "sha256": "234d9a1215486ac505c54b89265616eff3c5683294fb1082c30f4b454b9d4c2b"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/internal/host-buffer.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2064,
+          "sha256": "832adc7fd719d2064751231996dacf7ab1066c04ea891233245bf524fc0f155f"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/internal/material-realizer.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 12141,
+          "sha256": "c3e6621f47d4731909097c0910f2c372f8fb3603cd89eed7b8f8e086a45d7a2d"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/internal/portable-resource.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2061,
+          "sha256": "8d5420dd295c9c3901ef319a960d228e50c5b2a60d9a31f085fe1ebd13c494e4"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/internal/raster-program-registry.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 2672,
+          "sha256": "08a61df5298c38da3a5ef3f411a289e3c18741387c6545d2814fb936034a03b3"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/internal/renderer-resources.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1851,
+          "sha256": "6b1c4a5c8f39e61ee6d2ce2b130b25e167259f070aac45d6b4f58fe52bcf5b42"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/internal/scene-tree.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 163,
+          "sha256": "cc8fd56ad159f18b6132b6f9455f3a632fbf21190457b8b08dc14b2750bf8c9f"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/material.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 199,
+          "sha256": "f0dd3f39bc05a265eb47cd572f95b43b90052c8f3858ed2cfcf50b4647b5cdfe"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/projected-flow.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 7867,
+          "sha256": "6d4d02c688d7fb3ecdde70e1525f2554b7cb17d7f3e90723837c3f96dbb688f8"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/raster-program.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 6478,
+          "sha256": "f7312000fc5f381a9cdb32a3be1e6fa77a0ae3d47e9faa34796b1fe8b5de6147"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/schema.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1953,
+          "sha256": "3c367d84c1d8638084713ecaaebd76023225ef04f2a1389c2ba6b74664ecf790"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/span.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 873,
+          "sha256": "57956ff87846acc286d825134a17491ac64ee47fbb4beacb3848439a002a497f"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/text.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 30676,
+          "sha256": "fed8c3d8071b4f89f024654f71a53716d9cf32bf24eca52f5a8a25f4fd87d8d3"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+published-0.1.0.tgz_@oxc-project+types@0.150_de734cf95962b79d6d535ecf62d26479/node_modules/@pmndrs/glyph/dist/three/transform-synchronizer.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 1863,
+          "sha256": "52b5a686bb3d811e7160aa600ea236c8748c8c75edb45063cec46ec4834f1263"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@fs/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-u4ufs9/node_modules/.pnpm/ktx-parse@1.1.0/node_modules/ktx-parse/dist/ktx-parse.modern.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 166715,
+          "sha256": "0fc697ae299bde7dfa94db973c95d213502b6ec2004cd7ee637e605a6fbb9998"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@react-refresh",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 111894,
+          "sha256": "fe633113388e056842f0b8df96ea422fcd97761329b79d39fddd71d1fee2f8c7"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/@vite/client",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 210569,
+          "sha256": "b5aca432f0aba92217696d2fa881b7403a15de31dc7d4ac7c3dd0a8e54480e87"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/fixtures/rendering/inter-bitmap-16.font.glb",
+          "status": 200,
+          "contentType": "model/gltf-binary",
+          "resourceType": "fetch",
+          "kind": "font",
+          "bytes": 926984,
+          "sha256": "acdca408ed169c7aa1c2791dbbc2982afa1939c56fbc59ef43cc38f7ff366c14"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/node_modules/.vite/deps/rolldown-runtime-B-1-B7_t.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 7626,
+          "sha256": "b10da6029f6edcecbd48f15e2d14b352c1151431076bd2be595dfc4dc30adef0"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/node_modules/.vite/deps/three_tsl.js?v=13548426",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 98302,
+          "sha256": "93a074358a081941b725d3b010efe78f52f6b8780a28a3c5bc59b34225e423a6"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/node_modules/.vite/deps/three_webgpu.js?v=323e4940",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 101650,
+          "sha256": "6f5568c71d00ec7da808cf61e78f31bb7dd21c59c15d14e1ae24bfcd6facc69a"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/node_modules/.vite/deps/three.webgpu-C4WvlVo3.js?v=abce14fa",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 10267471,
+          "sha256": "0decc48a6d59660d3d2193910f15967b7575d09e4e55a078eaa186d2a5ff6eda"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/node_modules/.vite/deps/unicode-segmenter_grapheme.js?v=07552a5b",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 51758,
+          "sha256": "bbcb0ff476aeaf068a50260f57c3776d844a92bc02f26b7cdcf54eb4e4157ac6"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/src/retained-upload-proof.ts",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 48028,
+          "sha256": "8fe4d9f076f9bcc59b368f019b896e2a63aaff82dd1867d7a68c63b9e6f60f35"
+        },
+        {
+          "url": "http://held-hero-published010.localhost:1356/src/three-root.ts",
+          "status": 200,
+          "contentType": "text/javascript",
+          "resourceType": "script",
+          "kind": "javascript",
+          "bytes": 6366,
+          "sha256": "470dfb53bd4cfca3eeb2e020497ef7530f0bbfad172a5c070bea244dad56a6df"
+        }
+      ],
+      "failedRequests": [],
+      "errors": [],
+      "shaperMatchesInstalled": true,
+      "installedEntriesSeen": {
+        "index": true,
+        "three": true
+      }
+    }
+  ],
+  "errors": [],
+  "limitations": [
+    "Response hashes identify bytes actually delivered to Chromium; Vite-transformed JS is not expected to equal installed archive JS byte-for-byte.",
+    "Each backend must serve JS from the installed index.js and three.js source paths; Vite-transformed body hashes are recorded beside installed source hashes, not compared for byte equality.",
+    "Response body hashing and temporary buffers contribute to the observed browser command-family physical footprint.",
+    "The proof does not cover every transitive browser module or runtime process identity."
+  ]
+}

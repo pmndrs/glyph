@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "git",
+    "fetch",
+    "origin",
+    "60d3c26f135b360ab1111131ce274218959d176f",
+    "57243ee5b5742da52214fc977517d2a01d2ab845"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-19T14:19:45.226297+00:00",
+  "finished": "2026-10-19T14:19:46.335419+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr.log": "f12a5ab9c6f4fed16052182ff346499bc8239c0e13df5ac9a1a6052f14793804"
+  }
+}

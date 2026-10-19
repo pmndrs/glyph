@@ -1,0 +1,53 @@
+{
+  "results": [
+    {
+      "argv": ["git", "merge-base", "--is-ancestor", "60d3c26f135b360ab1111131ce274218959d176f", "HEAD"],
+      "exit": 128,
+      "stdout": "",
+      "stderr": "fatal: Not a valid commit name 60d3c26f135b360ab1111131ce274218959d176f\n"
+    },
+    {
+      "argv": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "60d3c26f135b360ab1111131ce274218959d176f",
+        "57243ee5b5742da52214fc977517d2a01d2ab845"
+      ],
+      "exit": 128,
+      "stdout": "",
+      "stderr": "fatal: Not a valid commit name 60d3c26f135b360ab1111131ce274218959d176f\n"
+    },
+    {
+      "argv": ["git", "rev-list", "--left-right", "--count", "origin/feat/rust-text-input-wire...HEAD"],
+      "exit": 0,
+      "stdout": "0\t0\n",
+      "stderr": ""
+    },
+    {
+      "argv": ["git", "merge-base", "--is-ancestor", "origin/main", "HEAD"],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "note": "Prior authorized real-stack rebase onto advanced main rewrote the checkpoint ancestry. No reset or rebase during this rerun.",
+  "authenticatedAfterFetch": [
+    {
+      "argv": ["git", "merge-base", "--is-ancestor", "60d3c26f135b360ab1111131ce274218959d176f", "HEAD"],
+      "exit": 1,
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "60d3c26f135b360ab1111131ce274218959d176f",
+        "57243ee5b5742da52214fc977517d2a01d2ab845"
+      ],
+      "exit": 0,
+      "stderr": ""
+    }
+  ]
+}

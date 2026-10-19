@@ -1,0 +1,28 @@
+{
+  "argv": [
+    "/usr/bin/env",
+    "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch",
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "benchmark:shaper-live-memory",
+    "--",
+    "--artifact",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "--manifest",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/candidate/shaper-memory/manifest.json",
+    "--output",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/candidate/shaper-live-memory.json"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-19T15:59:06.596246+00:00",
+  "finished": "2026-10-19T15:59:08.352055+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "ade1cade14d3542b103dfb4c9d393b1c13c96a8c12fc25725bbdcb9a2d3b9df9",
+    "stderr.log": "c095e0dccd4f811862d4788226621ae4939cdda21139fa06cad2235459a8bdad"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "argv": [
+    "/usr/bin/env",
+    "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch",
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "benchmark:application-memory-observe",
+    "--",
+    "--artifact",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/prior328.tgz",
+    "--output",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/application-memory-node-prior328",
+    "--mode",
+    "node"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-19T16:10:44.269332+00:00",
+  "finished": "2026-10-19T16:10:47.131053+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "cbb067938264e183762299de60979d5c79592ba42b34c503f9e7faa5b22b18c5",
+    "stderr.log": "048d53ebce1ea91598573edd4072df0a2d62494efbd09ac405a89be39ff25df8"
+  }
+}
