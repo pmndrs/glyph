@@ -875,6 +875,8 @@ Built-in Three material contexts expose two stage-safe position nodes: `paragrap
 Indexed owner transforms enter the `position` node; direct owner transforms stay on the draw mesh's matrix, so
 `position` values differ across transform modes for the same world-space glyph. The default material uses the raw
 vertex position graph to preserve TypeGPU-backed shader builtins on WebGL2.
+The material realizer creates the two stage-safe wrappers only when a custom material factory is present;
+default material cache misses retain the raw graph without allocating unused wrappers.
 Both compute in the vertex stage and interpolate when a fragment graph reads them; Slug's vertex position also publishes
 its analytic coverage coordinate. Raw `glyphs().inkBounds` uses the same paragraph origin with +Y down, so material
 mapping converts that axis before normalization. A material shared across Text objects has no single paragraph extent;

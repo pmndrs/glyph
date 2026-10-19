@@ -159,6 +159,34 @@ test('the same custom material factory may override a separate decoration realiz
   font.dispose();
 });
 
+test('an undefined custom material result falls back to one retained default material', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  let attempts = 0;
+  const material = defineTextMaterial((context) => {
+    attempts++;
+    assert.equal(context.format, bitmap.id);
+    assert.ok(context.paragraphPosition?.isNode);
+    assert.ok(context.position?.isNode);
+    return undefined;
+  });
+  const scene = new THREE.Scene();
+  const label = three.createText({ font, material, text: 'Fallback' });
+  scene.add(label);
+  scene.updateMatrixWorld();
+
+  assert.equal(label.error, undefined);
+  const draw = rootDraws(scene)[0];
+  assert.ok(draw?.material?.isNodeMaterial);
+  assert.equal(attempts, 1);
+  scene.updateMatrixWorld();
+  assert.equal(rootDraws(scene)[0]?.material, draw.material);
+  assert.equal(attempts, 1);
+
+  label.dispose();
+  font.dispose();
+});
+
 test('Bitmap pixel snapping is an explicit opt-in graph specialization', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
