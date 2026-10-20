@@ -49,6 +49,11 @@ struct DrawBlock {
 
 const NONE: u32 = u32::MAX;
 
+enum RetainedAdmissionError {
+    Miss,
+    Plan(OrderedPlanError),
+}
+
 // Both retained updates and batch patches consume sorted, unique physical slots.
 fn coalesced_slot_ranges(slots: &[u32]) -> impl Iterator<Item = Range<u32>> + '_ {
     slots
@@ -1096,6 +1101,71 @@ impl OrderedPlanCompiler {
         Ok(())
     }
 
+    fn retained_physical_index(
+        &self,
+        input: OrderedPlanInput<'_>,
+        input_position: usize,
+    ) -> Result<Option<u32>, OrderedPlanError> {
+        #[cfg(test)]
+        super::work_attribution::record(|work| work.ordered_admission_visits += 1);
+        let glyph = input.glyphs[input_position];
+        let batch_index = self.input_batches[input_position];
+        if batch_index == NONE {
+            return Ok(None);
+        }
+        let batch_index =
+            usize::try_from(batch_index).map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
+        let Some(batch) = self.batches.get(batch_index).copied() else {
+            return Ok(None);
+        };
+        if !batch_key_matches(batch.key, glyph) {
+            return Ok(None);
+        }
+        let slot = self.input_slots[input_position];
+        if slot >= batch.instance_count {
+            return Ok(None);
+        }
+        batch
+            .instance_start
+            .checked_add(slot)
+            .map(Some)
+            .ok_or(OrderedPlanError::ArithmeticOverflow)
+    }
+
+    fn compare_retained_instance(
+        &mut self,
+        input: OrderedPlanInput<'_>,
+        input_position: usize,
+        physical_index: u32,
+        instance: &InstanceState,
+    ) -> Result<Option<super::retained_rope::RopeUpdate<InstanceState>>, OrderedPlanError> {
+        if instance.input_index
+            != u32::try_from(input_position).map_err(|_| OrderedPlanError::ArithmeticOverflow)?
+        {
+            return Ok(None);
+        }
+        let glyph = input.glyphs[input_position];
+        let semantic_changes = input
+            .semantic_change_masks
+            .get(input_position)
+            .copied()
+            .unwrap_or(super::positioning::ALL_SEMANTIC_CHANGES);
+        self.bindings_dirty |= instance.stable_id != glyph.stable_id
+            || (instance.content_revision != glyph.content_revision && semantic_changes == 0)
+            || !super::positioning::semantic_changes_preserve_plan_bindings(semantic_changes);
+        let next = instance_state(input, input_position)?;
+        #[cfg(test)]
+        super::work_attribution::record(|work| work.ordered_instance_comparisons += 1);
+        if *instance == next {
+            return Ok(Some(super::retained_rope::RopeUpdate::Keep));
+        }
+        reserve(&mut self.dirty_instances, 1)?;
+        self.dirty_instances.push(physical_index);
+        #[cfg(test)]
+        super::work_attribution::record(|work| work.ordered_instance_rewrites += 1);
+        Ok(Some(super::retained_rope::RopeUpdate::Replace(next)))
+    }
+
     fn prepare_retained_topology(
         &mut self,
         codec: &ValidatedCodec,
@@ -1117,96 +1187,94 @@ impl OrderedPlanCompiler {
         let output_intervals =
             output_intervals.and_then(|ranges| sparse_output_intervals(ranges, input.glyphs.len()));
         let retained_instances = self.instances.clone();
-        let mut complete_instances = retained_instances.iter().enumerate();
-        let mut sparse_inputs = output_intervals
-            .into_iter()
-            .flat_map(|intervals| intervals.iter())
-            .flat_map(|interval| interval.clone());
-        let mut instance_cursor = retained_instances
-            .cursor_from(0)
-            .ok_or(OrderedPlanError::InvalidIdentity)?;
-        let mut cursor_position = 0;
-        loop {
-            let complete = if output_intervals.is_none() {
-                complete_instances.next()
-            } else {
-                None
-            };
-            let input_index = if output_intervals.is_none() {
-                let Some((_, instance)) = complete else {
-                    break;
-                };
-                instance.input_index as usize
-            } else {
-                let Some(index) = sparse_inputs.next() else {
-                    break;
-                };
-                index
-            };
-            #[cfg(test)]
-            super::work_attribution::record(|work| work.ordered_admission_visits += 1);
-            let glyph = input.glyphs[input_index];
-            let batch_index = self.input_batches[input_index];
-            if batch_index == NONE {
-                return Ok(false);
-            }
-            let batch_index =
-                usize::try_from(batch_index).map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
-            let Some(batch) = self.batches.get(batch_index).copied() else {
-                return Ok(false);
-            };
-            if !batch_key_matches(batch.key, glyph) {
-                return Ok(false);
-            }
-            let slot = self.input_slots[input_index];
-            if slot >= batch.instance_count {
-                return Ok(false);
-            }
-            let instance_index = batch
-                .instance_start
-                .checked_add(slot)
-                .ok_or(OrderedPlanError::ArithmeticOverflow)?;
-            let instance = if let Some((physical_index, instance)) = complete {
-                if physical_index != instance_index as usize {
+        let mut pending_instances = retained_instances.clone();
+        if let Some(intervals) = output_intervals {
+            let mut instance_cursor = retained_instances
+                .cursor_from(0)
+                .ok_or(OrderedPlanError::InvalidIdentity)?;
+            let mut cursor_position = 0;
+            for input_position in intervals.iter().flat_map(|interval| interval.clone()) {
+                let Some(physical_index) = self.retained_physical_index(input, input_position)?
+                else {
                     return Ok(false);
-                }
-                instance
-            } else {
-                if cursor_position != instance_index {
+                };
+                if cursor_position != physical_index {
                     instance_cursor = retained_instances
-                        .cursor_from(instance_index as usize)
+                        .cursor_from(physical_index as usize)
                         .ok_or(OrderedPlanError::InvalidIdentity)?;
                 }
-                let retained = instance_cursor
+                let instance = instance_cursor
                     .next_record()
                     .ok_or(OrderedPlanError::InvalidIdentity)?;
-                cursor_position = instance_index
+                cursor_position = physical_index
                     .checked_add(1)
                     .ok_or(OrderedPlanError::ArithmeticOverflow)?;
-                retained
-            };
-            let input_position = input_index;
-            let input_index =
-                u32::try_from(input_position).map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
-            if instance.input_index != input_index {
-                return Ok(false);
+                if self
+                    .compare_retained_instance(input, input_position, physical_index, instance)?
+                    .is_none()
+                {
+                    return Ok(false);
+                }
             }
-            let semantic_changes = input
-                .semantic_change_masks
-                .get(input_position)
-                .copied()
-                .unwrap_or(super::positioning::ALL_SEMANTIC_CHANGES);
-            self.bindings_dirty |= instance.stable_id != glyph.stable_id
-                || (instance.content_revision != glyph.content_revision && semantic_changes == 0)
-                || !super::positioning::semantic_changes_preserve_plan_bindings(semantic_changes);
-            let next = instance_state(input, input_position)?;
-            #[cfg(test)]
-            super::work_attribution::record(|work| work.ordered_instance_comparisons += 1);
-            if *instance != next {
-                reserve(&mut self.dirty_instances, 1)?;
-                self.dirty_instances.push(instance_index);
+            self.dirty_instances.sort_unstable();
+            pending_instances
+                .update_ordered_ranges(
+                    coalesced_slot_ranges(&self.dirty_instances)
+                        .map(|range| Ok(range.start as usize..range.end as usize)),
+                    |_, previous| {
+                        instance_state(input, previous.input_index as usize)
+                            .map(super::retained_rope::RopeUpdate::Replace)
+                    },
+                )
+                .map_err(|error| match error {
+                    RopeEditError::Storage => OrderedPlanError::AllocationFailed,
+                    RopeEditError::Callback(error) => error,
+                })?;
+        } else {
+            let count = retained_instances.len();
+            let update = pending_instances.update_ordered(0..count, |physical_index, previous| {
+                let input_position = previous.input_index as usize;
+                let admitted =
+                    self.retained_physical_index(input, input_position)
+                        .and_then(|slot| match slot {
+                            Some(slot) if slot as usize == physical_index => self
+                                .compare_retained_instance(input, input_position, slot, previous),
+                            _ => Ok(None),
+                        });
+                match admitted {
+                    Ok(Some(update)) => Ok(update),
+                    Ok(None) => Err(RetainedAdmissionError::Miss),
+                    Err(error) => Err(RetainedAdmissionError::Plan(error)),
+                }
+            });
+            match update {
+                Ok(_) => {}
+                Err(RopeEditError::Storage) => return Err(OrderedPlanError::AllocationFailed),
+                Err(RopeEditError::Callback(RetainedAdmissionError::Miss)) => return Ok(false),
+                Err(RopeEditError::Callback(RetainedAdmissionError::Plan(error))) => {
+                    return Err(error);
+                }
+            }
+            if count != 0
+                && self.dirty_instances.len() == count
+                && !retained_instances.is_exact_shape()
+            {
                 #[cfg(test)]
-                super::work_attribution::record(|work| work.ordered_instance_rewrites += 1);
+                super::work_attribution::record(|work| work.ordered_repacks += 1);
+                let compact = {
+                    let mut computed = pending_instances.iter();
+                    RetainedRope::try_from_exact(count, |_| {
+                        computed
+                            .next()
+                            .copied()
+                            .ok_or(OrderedPlanError::InvalidIdentity)
+                    })
+                    .map_err(|error| match error {
+                        RopeEditError::Storage => OrderedPlanError::AllocationFailed,
+                        RopeEditError::Callback(error) => error,
+                    })?
+                };
+                pending_instances = compact;
             }
         }
 
@@ -1235,38 +1303,7 @@ impl OrderedPlanCompiler {
             }
             self.pending_batches.push(pending);
         }
-        // The complete scan above admitted each physical slot once in order. Only that
-        // scan can use dirty cardinality as proof that every retained row changed.
-        if output_intervals.is_none()
-            && !retained_instances.is_empty()
-            && self.dirty_instances.len() == retained_instances.len()
-        {
-            let mut accepted = retained_instances.iter();
-            self.pending_instances = RetainedRope::try_from_exact(retained_instances.len(), |_| {
-                let previous = accepted.next().ok_or(OrderedPlanError::InvalidIdentity)?;
-                instance_state(input, previous.input_index as usize)
-            })
-            .map_err(|error| match error {
-                RopeEditError::Storage => OrderedPlanError::AllocationFailed,
-                RopeEditError::Callback(error) => error,
-            })?;
-        } else {
-            self.pending_instances = retained_instances.clone();
-            self.dirty_instances.sort_unstable();
-            self.pending_instances
-                .update_ordered_ranges(
-                    coalesced_slot_ranges(&self.dirty_instances)
-                        .map(|range| Ok(range.start as usize..range.end as usize)),
-                    |_, previous| {
-                        instance_state(input, previous.input_index as usize)
-                            .map(super::retained_rope::RopeUpdate::Replace)
-                    },
-                )
-                .map_err(|error| match error {
-                    RopeEditError::Storage => OrderedPlanError::AllocationFailed,
-                    RopeEditError::Callback(error) => error,
-                })?;
-        }
+        self.pending_instances = pending_instances;
         Ok(true)
     }
 
@@ -2588,6 +2625,8 @@ fn instance_state(
     input: OrderedPlanInput<'_>,
     input_index: usize,
 ) -> Result<InstanceState, OrderedPlanError> {
+    #[cfg(test)]
+    super::work_attribution::record(|work| work.ordered_state_derivations += 1);
     let glyph = input
         .glyphs
         .get(input_index)
@@ -3756,15 +3795,42 @@ mod tests {
                             }
                         );
                         assert_eq!(work.ordered_instance_rewrites, dirty_slots.len());
+                        assert_eq!(
+                            work.ordered_state_derivations,
+                            if phase == 1 {
+                                dirty_slots.len() * 2
+                            } else {
+                                glyphs.len()
+                            }
+                        );
                         assert_eq!(work.rope_point_queries, 0);
                         assert!(work.rope_iterator_starts <= 32);
                         if phase == 0 {
-                            assert_eq!((traversals, leaf_visits, record_visits), (0, 0, 0));
+                            assert_eq!(
+                                (traversals, leaf_visits, record_visits),
+                                (1, glyphs.len().div_ceil(LEAF_CAPACITY), glyphs.len())
+                            );
                             assert_eq!(copied_records, 0);
+                            assert!(work.ordered_shape_nodes > 0);
                         } else {
                             assert_eq!(traversals, 1);
-                            assert_eq!(leaf_visits, touched_leaves);
-                            assert_eq!(record_visits, dirty_slots.len());
+                            assert_eq!(
+                                leaf_visits,
+                                if phase == 1 {
+                                    touched_leaves
+                                } else {
+                                    glyphs.len().div_ceil(LEAF_CAPACITY)
+                                }
+                            );
+                            assert_eq!(
+                                record_visits,
+                                if phase == 1 {
+                                    dirty_slots.len()
+                                } else {
+                                    glyphs.len()
+                                }
+                            );
+                            assert_eq!(work.ordered_shape_nodes, 0);
                             assert!(copied_records <= LEAF_CAPACITY * touched_leaves);
                         }
                         assert_eq!(
@@ -5869,6 +5935,110 @@ mod tests {
             .unwrap();
         assert_eq!(plan.buffers.len(), 2);
         assert_eq!(plan.draws.len(), 2);
+    }
+
+    #[test]
+    fn late_complete_admission_miss_discards_staged_rope_and_matches_cold_host() {
+        let codec = codec_with_material_storage(true);
+        let mut compiler = OrderedPlanCompiler::default();
+        let mut host = TestHost::default();
+        let mut glyphs: Vec<_> = (1..=65).map(|id| glyph(id, 1)).collect();
+        let mut x: Vec<_> = (1..=65).map(|id| id as f32).collect();
+        prepare(&mut compiler, &codec, &glyphs, &x, true);
+        host.accept(
+            compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap(),
+            compiler.publish_bindings,
+        );
+        compiler.commit().unwrap();
+        let accepted_root = compiler.instances.clone();
+        let retained_preparations = compiler.retained_topology_preparations;
+        for (glyph, value) in glyphs[..64].iter_mut().zip(&mut x[..64]) {
+            glyph.content_revision += 1;
+            *value += 0.25;
+        }
+        glyphs[64].material_id = 2;
+        x[64] += 0.5;
+        super::super::work_attribution::reset();
+        prepare(&mut compiler, &codec, &glyphs, &x, false);
+        let work = super::super::work_attribution::snapshot();
+        assert_eq!(work.ordered_admission_visits, 130);
+        assert_eq!(work.ordered_instance_rewrites, 129);
+        assert_eq!(compiler.dirty_instances.len(), 65);
+        assert_eq!(
+            compiler.retained_topology_preparations,
+            retained_preparations
+        );
+        assert_eq!(compiler.instances, accepted_root);
+        let mut cold = OrderedPlanCompiler::default();
+        let mut oracle = TestHost::default();
+        prepare(&mut cold, &codec, &glyphs, &x, true);
+        oracle.accept(
+            cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap(),
+            cold.publish_bindings,
+        );
+        host.accept(
+            compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap(),
+            compiler.publish_bindings,
+        );
+        assert_eq!(host.snapshot(), oracle.snapshot());
+        compiler.abort();
+        assert_eq!(compiler.instances, accepted_root);
+        prepare(&mut compiler, &codec, &glyphs, &x, false);
+        compiler.commit().unwrap();
+        assert_eq!(compiler.instances.len(), glyphs.len());
+    }
+
+    #[test]
+    fn all_dirty_fragmented_root_repacks_computed_states_without_rederivation() {
+        let codec = codec();
+        let mut compiler = OrderedPlanCompiler::default();
+        let mut host = TestHost::default();
+        let mut glyphs: Vec<_> = (1..=65).map(|id| glyph(id, 1)).collect();
+        let mut x: Vec<_> = (1..=65).map(|id| id as f32).collect();
+        prepare(&mut compiler, &codec, &glyphs, &x, true);
+        host.accept(
+            compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap(),
+            compiler.publish_bindings,
+        );
+        compiler.commit().unwrap();
+        let mut fragmented = RetainedRope::default();
+        for state in compiler.instances.iter() {
+            fragmented.push(*state).unwrap();
+        }
+        assert!(!fragmented.is_exact_shape());
+        compiler.instances = fragmented.clone();
+        for (glyph, value) in glyphs.iter_mut().zip(&mut x) {
+            glyph.content_revision += 1;
+            *value += 0.25;
+        }
+        super::super::work_attribution::reset();
+        prepare(&mut compiler, &codec, &glyphs, &x, false);
+        let work = super::super::work_attribution::snapshot();
+        assert_eq!(work.ordered_state_derivations, glyphs.len());
+        assert_eq!(work.ordered_repacks, 1);
+        assert!(work.ordered_shape_nodes > 0);
+        assert!(compiler.pending_instances.is_exact_shape());
+        assert_eq!(compiler.instances, fragmented);
+        let mut cold = OrderedPlanCompiler::default();
+        let mut oracle = TestHost::default();
+        prepare(&mut cold, &codec, &glyphs, &x, true);
+        oracle.accept(
+            cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap(),
+            cold.publish_bindings,
+        );
+        host.accept(
+            compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap(),
+            compiler.publish_bindings,
+        );
+        assert_eq!(host.snapshot(), oracle.snapshot());
     }
 
     #[test]

@@ -484,7 +484,7 @@ fn program_index(
         })
 }
 
-fn low_bits(count: u8) -> u32 {
+pub(crate) fn low_bits(count: u8) -> u32 {
     if count == 0 {
         0
     } else {
@@ -1824,6 +1824,14 @@ fn validate_store(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn all_input_masks_cover_the_validated_thirty_two_bit_boundary() {
+        assert_eq!(low_bits(0), 0);
+        assert_eq!(low_bits(1), 1);
+        assert_eq!(low_bits(31), 0x7fff_ffff);
+        assert_eq!(low_bits(32), u32::MAX);
+    }
     use alloc::vec;
 
     const BITMAP: TechniqueId = TechniqueId(1);

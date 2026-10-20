@@ -4,7 +4,9 @@ use alloc::vec::Vec;
 use core::ops::Range;
 
 use super::{
-    codec::{CapabilitySetId, InputScope, MAX_REGISTERS, ProgramDescriptor, ValidatedCodec},
+    codec::{
+        CapabilitySetId, InputScope, MAX_REGISTERS, ProgramDescriptor, ValidatedCodec, low_bits,
+    },
     font_binding::{FontRenderBinding, SelectedGlyphBinding},
     frame::{
         SEMANTIC_F32_BLOCK_ORIGIN, SEMANTIC_F32_FOREGROUND_ALPHA, SEMANTIC_F32_FOREGROUND_BLUE,
@@ -857,15 +859,16 @@ impl CodecGatherWorkspace {
             return Ok(RopeUpdate::Stop);
         }
         let selection_changed = !previous_source.same_selection(selected);
-        let (f32_inputs, u32_inputs) = codec
-            .input_masks_for_changes(
-                capability_set,
-                technique,
-                variant,
-                change_mask,
-                selection_changed,
+        let (f32_inputs, u32_inputs) = if selection_changed || change_mask == ALL_SEMANTIC_CHANGES {
+            (
+                low_bits(program.f32_input_count),
+                low_bits(program.u32_input_count),
             )
-            .ok_or(GatherError::ProgramMissing)?;
+        } else {
+            codec
+                .input_masks_for_changes(capability_set, technique, variant, change_mask, false)
+                .ok_or(GatherError::ProgramMissing)?
+        };
         self.update_fields(
             state.record_cursor,
             input,
@@ -3635,8 +3638,8 @@ mod tests {
             super::super::work_attribution::snapshot().gather_glyph_visits,
             0
         );
-        // Broad same-count substitutions visit each source once and copy each affected leaf
-        // once, including source identity changes that remain recordless.
+        // Broad same-count substitutions visit each source once and allocate changed leaves,
+        // including source identity changes that remain recordless, without copying old rows.
         for glyph in &mut glyphs {
             let previous = *glyph;
             *glyph = LayoutGlyph {
@@ -3665,7 +3668,7 @@ mod tests {
         let (copied, _) = super::super::retained_rope::work_counters();
         assert_eq!(traversals, 1);
         assert_eq!(records, glyphs.len());
-        assert!(copied > 0 && copied <= glyphs.len());
+        assert_eq!(copied, 0);
         cold.gather(
             &codec,
             CAPABILITY,

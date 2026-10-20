@@ -91,6 +91,9 @@ pub(crate) struct Work {
     pub retained_storage_match_batch_visits: usize,
     pub ordered_instance_rewrites: usize,
     pub ordered_instance_comparisons: usize,
+    pub ordered_state_derivations: usize,
+    pub ordered_shape_nodes: usize,
+    pub ordered_repacks: usize,
 }
 
 std::thread_local! {
@@ -175,6 +178,9 @@ std::thread_local! {
         retained_storage_match_batch_visits: 0,
         ordered_instance_rewrites: 0,
         ordered_instance_comparisons: 0,
+        ordered_state_derivations: 0,
+        ordered_shape_nodes: 0,
+        ordered_repacks: 0,
     }) };
 }
 

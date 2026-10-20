@@ -132,6 +132,18 @@ impl<T: RopeRecord> RetainedRope<T> {
         self.len() == 0
     }
 
+    /// Whether this root has the exact leaf partitions and midpoint tree of `try_from_exact`.
+    pub(crate) fn is_exact_shape(&self) -> bool {
+        let count = self.len();
+        if count == 0 {
+            return true;
+        }
+        let leaves = count / LEAF_CAPACITY + usize::from(!count.is_multiple_of(LEAF_CAPACITY));
+        self.root
+            .as_deref()
+            .is_some_and(|root| exact_shape(root, count, 0..leaves))
+    }
+
     pub(crate) fn summary(&self) -> RopeSummary {
         self.root.as_deref().map(Node::summary).unwrap_or_default()
     }
@@ -469,6 +481,24 @@ fn build_exact_node<T: RopeRecord, E>(
     let left = build_exact_node(count, leaves.start..middle, produce)?;
     let right = build_exact_node(count, middle..leaves.end, produce)?;
     branch(left, right).map_err(|_| RopeEditError::Storage)
+}
+
+fn exact_shape<T: RopeRecord>(node: &Node<T>, count: usize, leaves: Range<usize>) -> bool {
+    #[cfg(test)]
+    super::work_attribution::record(|work| work.ordered_shape_nodes += 1);
+    if leaves.end - leaves.start == 1 {
+        let start = leaves.start * LEAF_CAPACITY;
+        let expected = (count - start).min(LEAF_CAPACITY);
+        return matches!(node, Node::Leaf { items, .. } if items.len() == expected);
+    }
+    let middle = leaves.start + (leaves.end - leaves.start) / 2;
+    match node {
+        Node::Branch { left, right, .. } => {
+            exact_shape(left, count, leaves.start..middle)
+                && exact_shape(right, count, middle..leaves.end)
+        }
+        Node::Leaf { .. } => false,
+    }
 }
 
 #[cfg(test)]
@@ -1351,7 +1381,7 @@ fn update_ordered_node<T: RopeRecord, E>(
     match node.as_ref() {
         Node::Leaf { items, .. } => {
             record_ordered_leaf_visit();
-            let mut replacement = None;
+            let mut replacement: Option<Vec<T>> = None;
             let mut item_index = 0;
             while item_index < items.len() {
                 let global_index = record_start + item_index;
@@ -1372,7 +1402,15 @@ fn update_ordered_node<T: RopeRecord, E>(
                 let candidate = match update(global_index, &items[visited_index])
                     .map_err(RopeEditError::Callback)?
                 {
-                    RopeUpdate::Keep => continue,
+                    RopeUpdate::Keep => {
+                        if let Some(replacement) = replacement.as_mut() {
+                            let copied = visited_index + 1 - replacement.len();
+                            record_copies(copied);
+                            replacement
+                                .extend_from_slice(&items[replacement.len()..=visited_index]);
+                        }
+                        continue;
+                    }
                     RopeUpdate::Replace(candidate) => candidate,
                     RopeUpdate::Stop => {
                         *stopped = true;
@@ -1380,18 +1418,24 @@ fn update_ordered_node<T: RopeRecord, E>(
                     }
                 };
                 if replacement.is_none() {
-                    record_copies(items.len());
-                    replacement = Some(copy_items(items).map_err(|()| RopeEditError::Storage)?);
+                    let mut next = Vec::new();
+                    next.try_reserve_exact(items.len())
+                        .map_err(|_| RopeEditError::Storage)?;
+                    record_copies(visited_index);
+                    next.extend_from_slice(&items[..visited_index]);
+                    replacement = Some(next);
                 }
-                replacement
-                    .as_mut()
-                    .and_then(|items| items.get_mut(visited_index))
-                    .map(|item| *item = candidate)
-                    .ok_or(RopeEditError::Storage)?;
+                let next = replacement.as_mut().ok_or(RopeEditError::Storage)?;
+                let copied = visited_index - next.len();
+                record_copies(copied);
+                next.extend_from_slice(&items[next.len()..visited_index]);
+                next.push(candidate);
             }
-            let Some(replacement) = replacement else {
+            let Some(mut replacement) = replacement else {
                 return Ok(None);
             };
+            record_copies(items.len() - replacement.len());
+            replacement.extend_from_slice(&items[replacement.len()..]);
             leaf_from_items(replacement)
                 .map(Some)
                 .map_err(|()| RopeEditError::Storage)
@@ -2317,7 +2361,7 @@ mod tests {
             })
             .unwrap();
         assert_eq!(ordered_work_counters(), (1, 4, 32));
-        assert_eq!(work_counters().0, 128);
+        assert_eq!(work_counters().0, 96);
         let mut expected = original.clone();
         for (index, record) in expected.iter_mut().enumerate() {
             if index % 8 < 2 {
@@ -2326,6 +2370,64 @@ mod tests {
         }
         assert_matches_flat(&pending, &expected);
         assert_matches_flat(&snapshot, &original);
+    }
+
+    #[test]
+    fn exact_shape_checks_midpoint_partition_even_with_full_leaves() {
+        let original = records(96);
+        let exact = RetainedRope::try_from_exact(96, |index| Ok::<_, ()>(original[index])).unwrap();
+        assert!(exact.is_exact_shape());
+        let first = leaf_from_items(original[..32].to_vec()).unwrap();
+        let second = leaf_from_items(original[32..64].to_vec()).unwrap();
+        let third = leaf_from_items(original[64..].to_vec()).unwrap();
+        let skewed = RetainedRope {
+            root: Some(branch(branch(first, second).unwrap(), third).unwrap()),
+        };
+        assert_matches_flat(&skewed, &original);
+        assert!(!skewed.is_exact_shape());
+        let mut updated = skewed.clone();
+        updated
+            .update_ordered(0..96, |_, previous| {
+                Ok::<_, ()>(RopeUpdate::Replace(*previous))
+            })
+            .unwrap();
+        assert!(!updated.is_exact_shape());
+        let partial =
+            RetainedRope::try_from_exact(65, |index| Ok::<_, ()>(original[index])).unwrap();
+        assert!(partial.is_exact_shape());
+    }
+
+    #[test]
+    fn ordered_stop_preserves_prefix_and_copies_only_unchanged_old_rows() {
+        let original = records(70);
+        for stop_at in [0, 15, 32, 47, 69] {
+            let mut pending = RetainedRope::from(original.clone());
+            let accepted = pending.clone();
+            reset_work_counters();
+            pending
+                .update_ordered(0..original.len(), |index, previous| {
+                    Ok::<_, ()>(if index == stop_at {
+                        RopeUpdate::Stop
+                    } else if index % 3 == 0 {
+                        RopeUpdate::Replace(Record {
+                            fragments: previous.fragments + 1,
+                            ..*previous
+                        })
+                    } else {
+                        RopeUpdate::Keep
+                    })
+                })
+                .unwrap();
+            let mut expected = original.clone();
+            for (index, row) in expected.iter_mut().enumerate().take(stop_at) {
+                if index % 3 == 0 {
+                    row.fragments += 1;
+                }
+            }
+            assert_matches_flat(&pending, &expected);
+            assert_matches_flat(&accepted, &original);
+            assert!(work_counters().0 <= original.len());
+        }
     }
 
     #[test]
