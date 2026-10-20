@@ -1,0 +1,33 @@
+{
+  "recordedUtc": "2026-10-20T21:01:35.388487+00:00",
+  "copies": [
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-evidence-design.md",
+      "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-evidence-design.md",
+      "sourceSha256": "b2a70e8b7bfbeb7be9df56fecd597ab4bc22b47aa94a6a766512067da96782b6",
+      "sourceBytes": 8174,
+      "targetSha256": "37411ee3420abc4ae3f0dd939419944297ed9c97b7619d3adcd927f640ecb250",
+      "targetBytes": 8174,
+      "transformation": "Repository pinned Oxfmt formatting of copied design/review prose only; raw source in ignored evidence remains unchanged."
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-replay-auth/high-review.md",
+      "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-replay-high-review.md",
+      "sourceSha256": "21760b8e41e8db72d2e26b3f11a24dc224af57f5a64222d1bded80a221048894",
+      "sourceBytes": 7800,
+      "targetSha256": "d946f916a9c1992009797991adf1f258c4f30c0ac5b7d7e1cbacd9e7a3f74d08",
+      "targetBytes": 7800,
+      "transformation": "Repository pinned Oxfmt formatting of copied design/review prose only; raw source in ignored evidence remains unchanged."
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-replay-auth/implementation-brief.md",
+      "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-replay-implementation-brief.md",
+      "sourceSha256": "24090affc36897b7009015db970ca437c171df79398781b16ca7d7223224d813",
+      "sourceBytes": 5765,
+      "targetSha256": "3a9f013094b6ed99617cefdec7ae74980d5d605874d04822628dd83fc043edd0",
+      "targetBytes": 5765,
+      "transformation": "Repository pinned Oxfmt formatting of copied design/review prose only; raw source in ignored evidence remains unchanged."
+    }
+  ],
+  "scope": "Read-only design/review/brief copies formatted to repository style; original source hashes retained separately. No measured raw receipt modified. Runtime capture/native authentication remains in progress."
+}

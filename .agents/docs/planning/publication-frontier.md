@@ -143,6 +143,32 @@ unresolved, without an impossibility claim or weakening synchronous semantics. F
 API/ABI/peer/lifetime and a newly defined editorial hero comparison remain required. Parity false; boost waves0;
 stack held/unmerged. [Owned wave record](../log/2026-10-20-held-shared-layout-hybrid-wave.md).
 
+**Actual-Bitmap authentication boundary complete:** fresh no-history Sol6 High selected the
+[evidence discriminator](../../../benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-evidence-design.md),
+then scoped High review narrowed it to observing the unchanged archived28fd Wasm exports. Native Sol6 Medium added
+the named capture workflow/Labs child and cfg(test) native transport child. Independent review caught omitted
+initialize/preallocation and native batch reservation; both are corrected. Final full05 contains6157ordered status0
+events, initialize first/once,4096query and3single-entry publication results. All4099complete results/1977392B match
+native exactly; request1155504B and9227unique referenced blobs are authenticated,237installed JS files unchanged.
+Only actual Inter registers; imported-but-unused font metadata does not imply extra engine registrations.
+
+The full package check passes (587Rust,2ignored; named auth test executes separately). The initial build's only
+shipped delta was one panic/source-location Data byte after top insertion of a test declaration, with identical Code.
+Moving the declaration to EOF and rebuilding restores all947archived shipping members byte-for-byte, including
+Wasm01001ff6…. Final full05 retains exact-byte auth and current source hashes. Five extra local build files are
+unshipped. [Compact auth evidence](../../../benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-auth/README.md)
+and [owned log](../log/2026-10-20-bitmap-native-replay-authentication.md) preserve every stage and scope limit.
+
+This opens only the reproduced native field/physical-work counter gate. Native batch process/descriptor/allocator,
+actual Three private buffers, GC, elapsed time, other families and parity are not proved. A separate fresh Sol High
+has specified one cfg(test) ledger using this immutable trace, with per-event reset/snapshot and six aggregate
+preparation/publication totals to exclude interleaved registrations. Root will first preserve this authentication
+source checkpoint, then native Sol6 Medium may implement that one coherent ledger. No product optimization, new
+ABI/executor/parser/cache/layout, new timing/profile or E3 revival is selected. Full result-byte comparison remains
+a gate after instrumentation; any source-metadata artifact delta must be classified honestly. Exact940 CI Static,
+Docs,Size andCheck pass; its existing publication-suite performance job remains live under39494612090/watch95904.
+Parity false, boost waves0, stack held/unmerged.
+
 ### Completed current-machine rerun — 19 October 2026
 
 Runtime source `6987418c`, fresh archive `2e434224…`, shipping shaper `244078b1…` and executable-matching named shaper `cfb3213f…` are authenticated. Main remains `4e25a96a` after fetch. The original `60d3c26f` checkpoint is an ancestor of the preserved pre-rebase branch, not the rebased current head; [ancestry proof](../../../benches/reports/held-ropes-local-2026-10-19/ancestry.json) records both. All layers remain held/unmerged, #310 draft.

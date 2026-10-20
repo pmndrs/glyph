@@ -322,6 +322,19 @@ calls, requested live/peak bytes and Wasm pages separately, with semantic checks
 These are memory observations, not timings. They exclude physical fragmentation, transient internal realloc peaks,
 JavaScript, GPU storage and separate font-decoder instances; the diagnostic feature is absent from normal builds.
 
+`benchmark:bitmap-native-replay-capture` authenticates the frozen28fd installed package's actual1,024-label Bitmap
+fixture without timing. It temporarily observes existing Wasm exports, copying registration bytes, root lifecycle,
+requests and results into a fresh explicit output directory. It captures initial publication plus forward/reverse
+setters and scene publication, checks successful committed fixture state, hashes the unchanged installed JS/Wasm
+and observer/native sources, and invokes an explicit ignored native crate test. The replay uses the existing Rust
+font/Codec/frame parsers, initializes the same engine scratch, reserves the native batch arena and compares every
+encoded query/publication result exactly. F32 bits, identities, revisions and generations are not normalized.
+One-root/one-entry batches are enforced; direct ordered engine-entry replay excludes native batch descriptor
+processing and allocator attribution. This is neither a Three private host-buffer witness nor a timing/GC result.
+The [authentication record](../log/2026-10-20-bitmap-native-replay-authentication.md) owns attempts, reviews and exact
+source scope. Later work counters require the reviewed authentication boundary; a future product change requires
+its own output and same-machine performance gates, not reuse of this fixed-source result as acceptance.
+
 The prepared-operation Labs matrix uses one changed first label among1/100/1000 retained labels. Setter-only,
 set+measure and set+measure+scene-publication are separate complete operations; same-value assignments and two writes
 before one publication expose eager preparation costs. Setter-only targets remain unqueried during timing. Cold-root

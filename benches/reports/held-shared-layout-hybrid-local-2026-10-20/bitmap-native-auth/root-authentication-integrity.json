@@ -1,0 +1,55 @@
+{
+  "recordedUtc": "2026-10-20T21:17:18.530233+00:00",
+  "capture": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-replay-auth/full-04",
+  "source": "940e11e plus owned authentication-only workflow/test additions",
+  "eventCount": 6157,
+  "eventKinds": {
+    "initialize": 1,
+    "registerCodec": 1,
+    "createRoot": 1,
+    "registerFont": 1,
+    "registerFontBinding": 1,
+    "registerFontStack": 1024,
+    "measureParagraph": 4096,
+    "reserveUpdateBatch": 1,
+    "textUpdateBatch": 3,
+    "disposeRoot": 1,
+    "disposeFontStack": 1024,
+    "disposeFontBinding": 1,
+    "disposeFont": 1,
+    "disposeCodec": 1
+  },
+  "allStatusesZero": true,
+  "initializeFirstExactlyOnce": true,
+  "allThreeBatchesSingleEntry": true,
+  "blobCount": 9227,
+  "allBlobReferencesUniqueAndVerified": true,
+  "totals": {
+    "measureResults": 4096,
+    "measureResultBytes": 589824,
+    "requestBytes": 1155504,
+    "publicationResults": 3,
+    "publicationResultBytes": 1387568
+  },
+  "measureCounts": {
+    "initial": 2048,
+    "forward": 1024,
+    "reverse": 1024
+  },
+  "batchCounts": {
+    "initial": 1,
+    "forward": 1,
+    "reverse": 1
+  },
+  "archiveSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+  "allFourSourceHashesMatch": true,
+  "installedJsCount": 237,
+  "manifestSha256": "8c416e76e95b993766977b9f7f762692e9145312c0270af7de040d5c894d068f",
+  "eventsSha256": "51667f42fd2f4bde967dffab2b18048cf38a35174142952f09999815186d0fa6",
+  "replayResult": {
+    "result": "exact-byte-pass",
+    "eventCount": 6157,
+    "archiveSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb"
+  },
+  "scope": "Exact encoded request/result witness; not host private buffers, batch process work, allocator attribution, latency, parity or accepted counter gate. Corrective independent review pending."
+}

@@ -1046,3 +1046,6 @@ mod tests {
         write_u32(entry, ENGINE_UPDATE_BATCH_STATUS, status);
     }
 }
+
+#[cfg(test)]
+mod bitmap_replay_auth;

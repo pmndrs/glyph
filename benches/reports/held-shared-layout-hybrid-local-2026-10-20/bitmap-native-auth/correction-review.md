@@ -1,0 +1,23 @@
+# Independent review of Bitmap replay authentication correction
+
+20 October 2026. Read-only review of the stable four-file correction and stored `full-04` evidence at HELD HEAD `940e11e426d1fd0e05ae5ed4aaf4480c52475d7f`. This report preserves the original findings in `independent-code-review.md`. I did not run capture, replay, builds, formatters, timing, or gates, and did not edit source or Git.
+
+**Decision: the two prior findings are resolved for the stated one-root, one-entry native field/physical-work attribution scope.** A separate counter patch can now use the authenticated `ShaperRegistry`, `TextEngine`, and `FrameTransport` call paths exercised by this fixture. It must not claim batch descriptor processing or allocator work, Three host-buffer bytes, elapsed savings, or other-family parity from this proof.
+
+## Resolution of the prior findings
+
+1. **Initialization now matches the shipping setup.** The capture facade includes `initialize` (`benches/labs/package/bitmap-native-replay.capture.mts:89–110`) and records the export outcome in the same ordered event stream (`:123–185`). The native test requires it at sequence zero exactly once, calls `ShaperRegistry::initialize()` then `TextEngine::initialize()`, and rejects every later event before initialization (`packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs:71–101`). `full-04/events.jsonl` starts with one successful `initialize` event in phase `fixture-import`; no later initialization appears. This closes the preallocation-state gap identified in the original P1 finding.
+
+2. **Batch reservation now mutates the native batch arena.** The native test owns `UpdateBatchTransport` and calls its existing `reserve` method for the captured count (`bitmap_replay_auth.rs:73–74,183–185`). It requires capacity before each publication (`:223–231`). The capture rejects any batch count other than one before writing a batch request blob (`bitmap-native-replay.capture.mts:148–163`), and native replay also requires one entry. The stored trace has `reserveUpdateBatch(1)` before three successful one-entry publication batches. This closes the missing arena-reservation step identified in the original P2 finding.
+
+The native test still replays the one batch entry directly through the existing engine and frame transport methods rather than calling `UpdateBatchTransport::process`. That is a deliberate, visible limit: the tested entry's request, status, ordering, generation, and complete encoded result are authenticated, while batch descriptor reads/writes and its allocation behavior are outside the counter claim. No new batch parser or semantic executor is needed for this scope. Native pointer addresses are not part of result-byte equality.
+
+## Evidence checked
+
+The `full-04` workflow wrapper records exit 0 and its test log reports `authenticated 6157 exact shipping Wasm events`. The manifest and event stream agree on 6,157 contiguous events, all recorded statuses zero. There are 4,096 measure results and three publication results, totaling 1,977,392 result bytes, with 1,155,504 captured request bytes. Each phase has one one-entry publication batch; measure counts are 2,048 initial, 1,024 forward, and 1,024 reverse. All 9,227 event blob references are unique, present in the manifest, and match the stored length and SHA-256. The replay report says `exact-byte-pass` for the unchanged `28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb` archive; the installed Wasm hash remains `01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd`.
+
+Current workflow, observer, native harness, and transport SHA-256 values match the `full-04` manifest (`9687336b…`, `486e0e87…`, `10fdba88…`, `f483ff71…`). The source-preimages guard matches every listed source except `transport.rs`, whose sole Git diff remains the three-line test-only child-module declaration. Stored static-check and Rust Clippy result wrappers both report exit 0. These are inspections of existing evidence, not fresh gate executions.
+
+## Proof boundary
+
+This authenticates the actual package's captured request/lifecycle order and exact encoded query/publication result bytes for one initial `createTextBatch(1_024)` and its forward/reverse edit cycle. It provides a sound gate for later counters placed in the reproduced native engine and frame transport operations. It does not authenticate the batch arena's `process` work, private Three retained buffers, host GPU writes, timing, or a broader multi-root workload. Any counter covering those domains needs a separate matched witness. The earlier `full-03` pass remains evidence of exact result equivalence but lacks the corrected setup replay; use `full-04` as the gate.

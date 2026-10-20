@@ -1,0 +1,32 @@
+{
+  "recordedUtc": "2026-10-20T21:21:16.424604+00:00",
+  "copies": [
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-replay-auth/independent-code-review.md",
+      "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-auth/independent-code-review.md",
+      "sourceSha256": "e02a4a611b4009f7dc63faec1dc5da452e2441c4c87925fd72b11f755fd572ea",
+      "sourceBytes": 4816,
+      "targetSha256": "e02a4a611b4009f7dc63faec1dc5da452e2441c4c87925fd72b11f755fd572ea",
+      "targetBytes": 4816,
+      "transformation": "Pinned Oxfmt prose formatting"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-replay-auth/correction-review.md",
+      "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-auth/correction-review.md",
+      "sourceSha256": "4c7cbfbfc0138c32e29efada3db6bb9cd29e97c56e434aa6128df884e49f4d76",
+      "sourceBytes": 4737,
+      "targetSha256": "4c7cbfbfc0138c32e29efada3db6bb9cd29e97c56e434aa6128df884e49f4d76",
+      "targetBytes": 4737,
+      "transformation": "Pinned Oxfmt prose formatting"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-replay-auth/root-authentication-integrity.json",
+      "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-auth/root-authentication-integrity.json",
+      "sourceSha256": "bbddaabfb5d5d881e54c9e7e7aed5b2d5cf81578eba919e1656259f378bc8374",
+      "sourceBytes": 1865,
+      "targetSha256": "bbddaabfb5d5d881e54c9e7e7aed5b2d5cf81578eba919e1656259f378bc8374",
+      "targetBytes": 1865,
+      "transformation": "Byte-identical JSON copy"
+    }
+  ]
+}

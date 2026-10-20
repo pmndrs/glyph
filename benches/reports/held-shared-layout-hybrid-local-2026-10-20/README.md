@@ -62,3 +62,19 @@ bytes and borrowed host patches, finding no whole redundant pass source-proven r
 split; its opt-in patch remains unapplied. Keep28fd live and E3 fully recoverable. A new wave requires a named whole
 removable owner/path with cold physical and lifetime proof; current counts do not supply one. Parity remains
 unresolved, not proved impossible. No setter/query contract change, release, merge or boost-wave completion is implied.
+
+## Later exact-fixture evidence design
+
+A separate fresh no-history Sol High subsequently selected one
+[actual-Bitmap evidence discriminator](bitmap-evidence-design.md), extending evidence feasibility rather than
+admitting a product patch. Its [source review](bitmap-replay-high-review.md) narrowed the route to an external
+observer of the unchanged installed package's existing Wasm exports. The
+[authentication implementation brief](bitmap-replay-implementation-brief.md) requires a named workflow, complete
+captured lifecycle and exact native encoded result equality before counters. Implementation is in progress; these
+are designs, not runtime results. No counter, new profile/timing or optimization is selected. The
+[brief provenance](bitmap-replay-brief-copy-provenance.json) records raw source and repository-formatted target hashes for these design/review prose copies; original reviews and measured receipts remain unchanged.
+
+The [actual Bitmap authentication checkpoint](bitmap-native-auth/README.md) now records the completed full05
+boundary, including independent review corrections, exact query/publication bytes, source/blob hashes and all947
+shipping members restored byte-identical. It supports later native work counts under its stated scope; it is not a
+performance improvement or parity result.

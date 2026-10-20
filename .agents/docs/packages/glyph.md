@@ -2405,6 +2405,15 @@ source. E3 is preserved in full at734dae75 and `experiments/held-shared-layout-h
 source-choice state. Fresh independent Sol High owns the comparative reset and next ownership plan. No second
 executor, cache, Unicode parser or storage model is selected; parity remains open.
 
+A test-only transport child can replay the exact requests and registration bytes captured from the actual Bitmap
+package fixture through the same native engine and wire owners. It reproduces initialization, root/frame capacity,
+query receipt and publication-generation lifetimes before byte-comparing encoded results. The trace-requiring test
+is explicitly ignored in ordinary suites and executed by the named benchmark authentication workflow. It adds no
+shipping entry, Wasm export, parser, semantic executor or storage. One-root direct entry replay excludes native
+batch processing, host buffer contents, allocation and latency claims. The
+[authentication log](../log/2026-10-20-bitmap-native-replay-authentication.md) records the fixed-source evidence and
+review corrections; product performance parity remains unresolved.
+
 The frame request header uses direct checked writes rather than constructing 35 field/value tuples per setter;
 validation labels, field order and little-endian encoding are preserved. The saved bulk profile attributes 20.960 ms
 self samples to the former header writer across 20,000 sets. Compiled ABI 7/7, focused Rust, Unicode, static and

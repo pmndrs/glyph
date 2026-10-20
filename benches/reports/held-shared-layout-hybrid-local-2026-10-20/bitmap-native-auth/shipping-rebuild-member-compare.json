@@ -1,0 +1,16 @@
+{
+  "archiveSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+  "archivedDistMemberCount": 947,
+  "rebuiltDistMemberCount": 952,
+  "missingShippedMembers": [],
+  "mismatchedShippedMembers": [],
+  "extraUnshippedBuildOutputs": [
+    ".tsbuildinfo",
+    "internal/raster-baker-profile.d.ts",
+    "internal/raster-baker-profile.d.ts.map",
+    "internal/raster-baker-profile.js",
+    "internal/raster-baker-profile.js.map"
+  ],
+  "archivedWasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+  "rebuiltWasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd"
+}
