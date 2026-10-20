@@ -936,8 +936,8 @@ fn validate_style_ranges(
         || !is_utf16_boundary(authored_end)
         || text_start > text_end
         || text_end > text_length
-        || !is_utf16_boundary(text_start)
-        || !is_utf16_boundary(text_end)
+        || (text_start != authored_start && !is_utf16_boundary(text_start))
+        || (text_end != authored_end && !is_utf16_boundary(text_end))
     {
         return Err(EngineError::StyleRangeInvalid(fault));
     }
@@ -1364,6 +1364,60 @@ mod tests {
         };
         assert!(!arena.needs_range_realign(&[0, 1, 2]));
         assert!(arena.needs_range_realign(&[0, 2, 3]));
+    }
+
+    #[test]
+    fn style_range_checks_each_distinct_authored_and_effective_endpoint() {
+        let mut checked = Vec::new();
+        let mut font_stack_exists = |_| true;
+        {
+            let mut boundary = |offset| {
+                checked.push(offset);
+                offset != 1
+            };
+            assert_eq!(
+                validate_style_ranges(
+                    20,
+                    0,
+                    3,
+                    0,
+                    3,
+                    false,
+                    0,
+                    0,
+                    3,
+                    &mut boundary,
+                    &mut font_stack_exists,
+                ),
+                Ok(()),
+            );
+        }
+        assert_eq!(checked, [0, 3]);
+
+        checked.clear();
+        {
+            let mut boundary = |offset| {
+                checked.push(offset);
+                offset != 1
+            };
+            assert_eq!(
+                validate_style_ranges(
+                    20,
+                    0,
+                    3,
+                    1,
+                    3,
+                    false,
+                    0,
+                    0,
+                    3,
+                    &mut boundary,
+                    &mut font_stack_exists,
+                ),
+                Err(EngineError::StyleRangeInvalid(FrameFault::style(20))),
+            );
+        }
+        assert_eq!(checked, [0, 3, 1]);
     }
 
     #[test]

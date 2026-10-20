@@ -6192,8 +6192,9 @@ fn validate_planner_inputs(
                 .map_err(|error| error.in_paragraph(paragraph_id))?;
             let text_length =
                 u32::try_from(text_length).map_err(|_| EngineError::InvalidRequest)?;
-            let mut is_boundary =
-                |offset| utf16_boundary_after_mutations(committed_text, paragraph_text, offset);
+            let mut is_boundary = |offset| {
+                utf16_boundary_after_mutations(committed_text, paragraph_text, text_length, offset)
+            };
             paragraph
                 .state
                 .styles
@@ -6234,8 +6235,9 @@ fn validate_planner_inputs(
             if paragraph_styles.len() != 0 {
                 let text_length =
                     u32::try_from(text_length).map_err(|_| EngineError::InvalidRequest)?;
-                let mut is_boundary =
-                    |offset| utf16_boundary_after_mutations(&[], paragraph_text, offset);
+                let mut is_boundary = |offset| {
+                    utf16_boundary_after_mutations(&[], paragraph_text, text_length, offset)
+                };
                 let mut font_stack_exists = |handle| {
                     font_stacks
                         .binary_search_by_key(&handle, |stack| stack.handle)
@@ -6320,27 +6322,20 @@ fn text_unit_before_mutation(
 fn utf16_boundary_after_mutations(
     committed: &[u16],
     mutations: super::semantic_wire::TextMutationBatch<'_>,
+    length: u32,
     offset: u32,
 ) -> bool {
-    let mut length = committed.len();
-    for index in 0..mutations.len() {
-        let Some(mutation) = mutations.get(index) else {
-            return false;
-        };
-        let Ok(checked) = check_text_mutation(length, mutation) else {
-            return false;
-        };
-        length = checked.new_len;
-    }
-    let Ok(offset) = usize::try_from(offset) else {
-        return false;
-    };
     if offset > length {
         return false;
     }
     if offset == 0 || offset == length {
         return true;
     }
+    // Both callers pass the final length returned by validate_text_mutations
+    // for this same committed text and mutation batch.
+    let Ok(offset) = usize::try_from(offset) else {
+        return false;
+    };
     let Some(left) = text_unit_before_mutation(committed, mutations, mutations.len(), offset - 1)
     else {
         return false;
@@ -9361,6 +9356,27 @@ mod tests {
         );
         assert_eq!(engine.root_revision(4), Ok(revision));
         assert_eq!(engine.root_text(4).unwrap(), &[0xd83d, 0xde00]);
+    }
+
+    #[test]
+    fn validated_mutation_boundaries_match_materialized_utf16() {
+        let committed = [0x41, 0xd83d, 0xde00, 0x42, 0x43];
+        let bytes = text_mutation_bytes(&[
+            (3, 1, &[0x44, 0x45]),
+            (1, 2, &[0xd83c, 0xdf0d]),
+            (0, 0, &[0x5a]),
+        ]);
+        let mutations = parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 3).unwrap();
+        let length = validate_text_mutations(&committed, mutations).unwrap() as u32;
+        let materialized = [0x5a, 0x41, 0xd83c, 0xdf0d, 0x44, 0x45, 0x43];
+        assert_eq!(length as usize, materialized.len());
+        for offset in 0..=length + 1 {
+            assert_eq!(
+                utf16_boundary_after_mutations(&committed, mutations, length, offset),
+                valid_utf16_boundary(&materialized, offset),
+                "offset {offset}",
+            );
+        }
     }
 
     #[test]
