@@ -1,0 +1,471 @@
+{
+  "oracle": "Fresh main same-machine exact phase/backend pixelHash,litPixels,draws,instances; all4arms match.",
+  "arms": {
+    "main": {
+      "signatures": {
+        "webgpu": {
+          "initial": {
+            "pixelHash": "edd436be",
+            "litPixels": 48898,
+            "draws": 1,
+            "instances": 2880
+          },
+          "changedContents": {
+            "pixelHash": "acb4311e",
+            "litPixels": 48917,
+            "draws": 1,
+            "instances": 2880
+          },
+          "changedCount": {
+            "pixelHash": "08501d70",
+            "litPixels": 24491,
+            "draws": 1,
+            "instances": 1440
+          },
+          "resized": {
+            "pixelHash": "4854a547",
+            "litPixels": 50569,
+            "draws": 1,
+            "instances": 5760
+          },
+          "drawReplacement": {
+            "pixelHash": "bc1fd119",
+            "litPixels": 63301,
+            "draws": 2,
+            "instances": 5880
+          },
+          "transform": {
+            "pixelHash": "a92799b9",
+            "litPixels": 63301,
+            "draws": 2,
+            "instances": 5880
+          }
+        },
+        "webgl2": {
+          "initial": {
+            "pixelHash": "04fac2ee",
+            "litPixels": 48898,
+            "draws": 1,
+            "instances": 2880
+          },
+          "changedContents": {
+            "pixelHash": "de29bf5e",
+            "litPixels": 48917,
+            "draws": 1,
+            "instances": 2880
+          },
+          "changedCount": {
+            "pixelHash": "b27298a8",
+            "litPixels": 24491,
+            "draws": 1,
+            "instances": 1440
+          },
+          "resized": {
+            "pixelHash": "a166a52b",
+            "litPixels": 50569,
+            "draws": 1,
+            "instances": 5760
+          },
+          "drawReplacement": {
+            "pixelHash": "e9b75465",
+            "litPixels": 63301,
+            "draws": 2,
+            "instances": 5880
+          },
+          "transform": {
+            "pixelHash": "ad4d2245",
+            "litPixels": 63301,
+            "draws": 2,
+            "instances": 5880
+          }
+        }
+      },
+      "idle": {
+        "webgpu": {
+          "frames": 30,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        },
+        "webgl2": {
+          "frames": 30,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        }
+      },
+      "installedShaperSha256": "059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4",
+      "wholeCommandMaximumObservedNonAtomicSweepSumBytes": 1642522952,
+      "cleanupProven": true,
+      "rawCommandLogSha256": "a4909fa994ffccf7e388acffa5bc6d58d2d1127f762ee768e8d8716394ecbdb9",
+      "deliveryReportSha256": "ced5532822623842e68c12a9f783d6bee8920d2e363c47d1f0ba13baf35d2b6d"
+    },
+    "candidate": {
+      "signatures": {
+        "webgpu": {
+          "initial": {
+            "pixelHash": "edd436be",
+            "litPixels": 48898,
+            "draws": 1,
+            "instances": 2880
+          },
+          "changedContents": {
+            "pixelHash": "acb4311e",
+            "litPixels": 48917,
+            "draws": 1,
+            "instances": 2880
+          },
+          "changedCount": {
+            "pixelHash": "08501d70",
+            "litPixels": 24491,
+            "draws": 1,
+            "instances": 1440
+          },
+          "resized": {
+            "pixelHash": "4854a547",
+            "litPixels": 50569,
+            "draws": 1,
+            "instances": 5760
+          },
+          "drawReplacement": {
+            "pixelHash": "bc1fd119",
+            "litPixels": 63301,
+            "draws": 2,
+            "instances": 5880
+          },
+          "transform": {
+            "pixelHash": "a92799b9",
+            "litPixels": 63301,
+            "draws": 2,
+            "instances": 5880
+          }
+        },
+        "webgl2": {
+          "initial": {
+            "pixelHash": "04fac2ee",
+            "litPixels": 48898,
+            "draws": 1,
+            "instances": 2880
+          },
+          "changedContents": {
+            "pixelHash": "de29bf5e",
+            "litPixels": 48917,
+            "draws": 1,
+            "instances": 2880
+          },
+          "changedCount": {
+            "pixelHash": "b27298a8",
+            "litPixels": 24491,
+            "draws": 1,
+            "instances": 1440
+          },
+          "resized": {
+            "pixelHash": "a166a52b",
+            "litPixels": 50569,
+            "draws": 1,
+            "instances": 5760
+          },
+          "drawReplacement": {
+            "pixelHash": "e9b75465",
+            "litPixels": 63301,
+            "draws": 2,
+            "instances": 5880
+          },
+          "transform": {
+            "pixelHash": "ad4d2245",
+            "litPixels": 63301,
+            "draws": 2,
+            "instances": 5880
+          }
+        }
+      },
+      "idle": {
+        "webgpu": {
+          "frames": 30,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        },
+        "webgl2": {
+          "frames": 30,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        }
+      },
+      "installedShaperSha256": "81153a6202caef528f235ae69d34ff0c8b2515c8c711af84b92db57b1f700aa6",
+      "wholeCommandMaximumObservedNonAtomicSweepSumBytes": 1565731768,
+      "cleanupProven": true,
+      "rawCommandLogSha256": "f5e04161281a1851551d31d79159f5d0769d3cef3dcf15639eee7a20ff127597",
+      "deliveryReportSha256": "b90568a5ec04e34ffc6ca0402ddfb65f4a7eb8554b060210873f6c610e192b74"
+    },
+    "published010": {
+      "signatures": {
+        "webgpu": {
+          "initial": {
+            "pixelHash": "edd436be",
+            "litPixels": 48898,
+            "draws": 1,
+            "instances": 2880
+          },
+          "changedContents": {
+            "pixelHash": "acb4311e",
+            "litPixels": 48917,
+            "draws": 1,
+            "instances": 2880
+          },
+          "changedCount": {
+            "pixelHash": "08501d70",
+            "litPixels": 24491,
+            "draws": 1,
+            "instances": 1440
+          },
+          "resized": {
+            "pixelHash": "4854a547",
+            "litPixels": 50569,
+            "draws": 1,
+            "instances": 5760
+          },
+          "drawReplacement": {
+            "pixelHash": "bc1fd119",
+            "litPixels": 63301,
+            "draws": 2,
+            "instances": 5880
+          },
+          "transform": {
+            "pixelHash": "a92799b9",
+            "litPixels": 63301,
+            "draws": 2,
+            "instances": 5880
+          }
+        },
+        "webgl2": {
+          "initial": {
+            "pixelHash": "04fac2ee",
+            "litPixels": 48898,
+            "draws": 1,
+            "instances": 2880
+          },
+          "changedContents": {
+            "pixelHash": "de29bf5e",
+            "litPixels": 48917,
+            "draws": 1,
+            "instances": 2880
+          },
+          "changedCount": {
+            "pixelHash": "b27298a8",
+            "litPixels": 24491,
+            "draws": 1,
+            "instances": 1440
+          },
+          "resized": {
+            "pixelHash": "a166a52b",
+            "litPixels": 50569,
+            "draws": 1,
+            "instances": 5760
+          },
+          "drawReplacement": {
+            "pixelHash": "e9b75465",
+            "litPixels": 63301,
+            "draws": 2,
+            "instances": 5880
+          },
+          "transform": {
+            "pixelHash": "ad4d2245",
+            "litPixels": 63301,
+            "draws": 2,
+            "instances": 5880
+          }
+        }
+      },
+      "idle": {
+        "webgpu": {
+          "frames": 30,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 15244800,
+            "attributeUpdateCalls": 600,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        },
+        "webgl2": {
+          "frames": 30,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        }
+      },
+      "installedShaperSha256": "addb8144f474c9f5a005bdda084bcf15c05170004b34c7a65ab592db4962c893",
+      "wholeCommandMaximumObservedNonAtomicSweepSumBytes": 1690758336,
+      "cleanupProven": true,
+      "rawCommandLogSha256": "5222d9aaca99eae80004fcc8176074d2e263622a0fd0872afc074f97b2ce5816",
+      "deliveryReportSha256": "5dd2b696c94ac55c5af5fcdb1683f0d4311b0d9390cbe141f1664fe3c3afe172"
+    },
+    "prior28fd": {
+      "signatures": {
+        "webgpu": {
+          "initial": {
+            "pixelHash": "edd436be",
+            "litPixels": 48898,
+            "draws": 1,
+            "instances": 2880
+          },
+          "changedContents": {
+            "pixelHash": "acb4311e",
+            "litPixels": 48917,
+            "draws": 1,
+            "instances": 2880
+          },
+          "changedCount": {
+            "pixelHash": "08501d70",
+            "litPixels": 24491,
+            "draws": 1,
+            "instances": 1440
+          },
+          "resized": {
+            "pixelHash": "4854a547",
+            "litPixels": 50569,
+            "draws": 1,
+            "instances": 5760
+          },
+          "drawReplacement": {
+            "pixelHash": "bc1fd119",
+            "litPixels": 63301,
+            "draws": 2,
+            "instances": 5880
+          },
+          "transform": {
+            "pixelHash": "a92799b9",
+            "litPixels": 63301,
+            "draws": 2,
+            "instances": 5880
+          }
+        },
+        "webgl2": {
+          "initial": {
+            "pixelHash": "04fac2ee",
+            "litPixels": 48898,
+            "draws": 1,
+            "instances": 2880
+          },
+          "changedContents": {
+            "pixelHash": "de29bf5e",
+            "litPixels": 48917,
+            "draws": 1,
+            "instances": 2880
+          },
+          "changedCount": {
+            "pixelHash": "b27298a8",
+            "litPixels": 24491,
+            "draws": 1,
+            "instances": 1440
+          },
+          "resized": {
+            "pixelHash": "a166a52b",
+            "litPixels": 50569,
+            "draws": 1,
+            "instances": 5760
+          },
+          "drawReplacement": {
+            "pixelHash": "e9b75465",
+            "litPixels": 63301,
+            "draws": 2,
+            "instances": 5880
+          },
+          "transform": {
+            "pixelHash": "ad4d2245",
+            "litPixels": 63301,
+            "draws": 2,
+            "instances": 5880
+          }
+        }
+      },
+      "idle": {
+        "webgpu": {
+          "frames": 30,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        },
+        "webgl2": {
+          "frames": 30,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        }
+      },
+      "installedShaperSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+      "wholeCommandMaximumObservedNonAtomicSweepSumBytes": 1611359816,
+      "cleanupProven": true,
+      "rawCommandLogSha256": "f6b755abd8907d759e02ae0f34524b585d12c93a876621484026f37e2d9ed33f",
+      "deliveryReportSha256": "b9ef15efe6c9c49675a6dbd3bcb3b424b2ec0040cd82794318bf4609fddbf610"
+    }
+  },
+  "limits": [
+    "Pixel hashes are harness noncryptographic hashes; full readback pixels are not retained.",
+    "Installed JS entry source and delivered Wasm responses authenticated; Vite transformed JS body bytes differ by design.",
+    "Wholecommand physical footprint is25ms non-atomic process-family sweep, not edit-only/simultaneous peak.",
+    "Idle upload hooks exclude ordinarytextures/uniforms/swapchain; incidental browser CPU timings are not acceptance performance evidence."
+  ]
+}

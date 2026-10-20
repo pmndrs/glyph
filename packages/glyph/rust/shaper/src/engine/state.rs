@@ -30,7 +30,10 @@ use super::{
     line_composition::{BreakCorrections, Correction},
     placement_slot_arena::{PlacementSlotArena, PlacementSlotError},
     placement_state::{GlyphSource, LayoutRunOwner, PlacementIdentity, PlacementSegment},
-    positioning::{PositionedGlyphArena, SEMANTIC_F32_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT},
+    positioning::{
+        ALL_SEMANTIC_CHANGES, PositionedGlyphArena, SEMANTIC_F32_FIELD_COUNT,
+        SEMANTIC_U32_FIELD_COUNT,
+    },
     render_plan::RenderPlanView,
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
     retained_rope::RopeEditError,
@@ -1866,7 +1869,15 @@ impl TextEngine {
                     } else {
                         None
                     };
-                let record_count = if let Some(count) = replacement {
+                let dense_complete = if cached_gather == Some(current_gather_key)
+                    && !checkpoint
+                    && (sparse || replacement.is_some())
+                {
+                    planner.prepare_dense_complete_gather_count()?
+                } else {
+                    None
+                };
+                let record_count = if let Some(count) = dense_complete.or(replacement) {
                     count
                 } else if sparse {
                     planner
@@ -1897,6 +1908,7 @@ impl TextEngine {
                 let attempted_retained =
                     cached_gather == Some(current_gather_key) && ranges_reusable;
                 let retained = attempted_retained
+                    && dense_complete.is_none()
                     && gather
                         .begin_retained(codec, record_count)
                         .map_err(gather_error)?;
@@ -1924,13 +1936,20 @@ impl TextEngine {
                         false,
                         false,
                     )?;
+                    if dense_complete.is_some() {
+                        #[cfg(test)]
+                        super::work_attribution::record(|work| {
+                            work.gather_dense_complete_admissions += 1;
+                            work.gather_dense_complete_source_rows += record_count;
+                        });
+                    }
                 }
                 planner.gathered_source_count = if ranges_reusable {
                     Some(record_count)
                 } else {
                     None
                 };
-                let output_scope = if sparse {
+                let output_scope = if sparse && dense_complete.is_none() {
                     gather.changed_output_intervals().map(|ranges| {
                         super::render_plan_compiler::OwnedOutputScope {
                             previous_revision: planner.revision.root,
@@ -2796,6 +2815,47 @@ impl PlannerState {
                 .ok_or(EngineError::ResultTooLarge)?;
         }
         Ok(changed_count.then_some(count))
+    }
+
+    /// Select the reset writer only when the existing retained frontier is the whole root.
+    /// Sparse updates never inspect clean owners or make a second root-wide pass.
+    fn prepare_dense_complete_gather_count(&self) -> Result<Option<usize>, EngineError> {
+        let Some(old_source_count) = self.gathered_source_count else {
+            return Ok(None);
+        };
+        if old_source_count == 0
+            || self.active_order().is_empty()
+            || self.order_sort_scratch.len() != self.active_order().len()
+        {
+            return Ok(None);
+        }
+        let mut dirty_rows = 0usize;
+        let mut new_source_count = 0usize;
+        for &(_, id) in &self.order_sort_scratch {
+            let paragraph = self.paragraph(id).ok_or(EngineError::InvalidRequest)?;
+            let range = paragraph.gather_range.ok_or(EngineError::InvalidRequest)?;
+            let positioned = paragraph.state.positioned.active();
+            let next_count = positioned.glyphs().len();
+            new_source_count = new_source_count
+                .checked_add(next_count)
+                .ok_or(EngineError::ResultTooLarge)?;
+            let dirty = if range.source_count() != next_count {
+                range.source_count()
+            } else {
+                // A broad recomposition can change only cheap fields. PositionedGlyphArena
+                // produces one mask per glyph, so count full rewrites in its contiguous column.
+                positioned
+                    .semantic_change_masks()
+                    .iter()
+                    .filter(|&&mask| mask == ALL_SEMANTIC_CHANGES)
+                    .count()
+            };
+            dirty_rows = dirty_rows
+                .checked_add(dirty)
+                .ok_or(EngineError::ResultTooLarge)?;
+        }
+        let half = old_source_count / 2 + old_source_count % 2;
+        Ok((new_source_count > 0 && dirty_rows >= half).then_some(new_source_count))
     }
 
     /// Reuse renderer order and the preparation frontier without inspecting clean owners.
@@ -4898,13 +4958,45 @@ impl ParagraphState {
         if affected_shapes.next().is_some() {
             return Ok(false);
         }
-        let sparse_scope = build_sparse_shape_windows(
-            &self.text_edits,
-            self.shape.committed(),
-            affected_shape,
-            old_run,
-            &mut self.shape_window_scratch,
-        )?;
+        let old_run_units = old_run
+            .text_end
+            .checked_sub(old_run.text_start)
+            .ok_or(EngineError::InvalidRequest)?;
+        let new_run_units = new_run
+            .text_end
+            .checked_sub(new_run.text_start)
+            .ok_or(EngineError::InvalidRequest)?;
+        let changed_units = edit
+            .old_end
+            .checked_sub(edit.old_start)
+            .and_then(|old| {
+                edit.new_end
+                    .checked_sub(edit.new_start)
+                    .map(|new| old.max(new))
+            })
+            .ok_or(EngineError::InvalidRequest)?;
+        let run_units = usize::try_from(old_run_units.max(new_run_units))
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        // Sixteen units bounds the extra full-context shaping work; it is a performance
+        // admission for a substantially edited run, not a Unicode safety certificate.
+        let dense_short_run = old_run_units <= 16
+            && new_run_units <= 16
+            && changed_units >= run_units / 2 + run_units % 2;
+        let sparse_scope = if dense_short_run {
+            #[cfg(test)]
+            super::work_attribution::record(|work| work.shape_dense_run_admissions += 1);
+            false
+        } else {
+            #[cfg(test)]
+            super::work_attribution::record(|work| work.shape_sparse_window_builds += 1);
+            build_sparse_shape_windows(
+                &self.text_edits,
+                self.shape.committed(),
+                affected_shape,
+                old_run,
+                &mut self.shape_window_scratch,
+            )?
+        };
         if !sparse_scope {
             set_whole_shape_window(
                 &mut self.shape_window_scratch,
@@ -4927,6 +5019,8 @@ impl ParagraphState {
             )? {
                 ShapeAttempt::Prepared => break,
                 ShapeAttempt::RetryWholeRun if verify_boundaries => {
+                    #[cfg(test)]
+                    super::work_attribution::record(|work| work.shape_boundary_retries += 1);
                     set_whole_shape_window(
                         &mut self.shape_window_scratch,
                         affected_shape,
@@ -9153,9 +9247,12 @@ mod tests {
         changed.style_mutations =
             parse_style_mutations(&changed_style_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
                 .unwrap();
+        super::super::work_attribution::reset();
         let prepared = engine
             .prepare_update_with_shaper(&mut shaper, changed, 2)
             .unwrap();
+        let work = super::super::work_attribution::snapshot();
+        assert_eq!(work.gather_dense_complete_admissions, 0);
         let delta = engine.prepared_plan(prepared).unwrap();
         assert!(!delta.patches.is_empty());
         assert!(delta.resources.is_empty());
@@ -12324,6 +12421,7 @@ mod tests {
             assert_eq!(publication.copied_positioned_records, 0);
             assert_eq!(publication.copied_positioned_bytes, 0);
             assert_eq!(publication.gather_paragraph_visits, 1);
+            assert_eq!(publication.gather_dense_complete_admissions, 0);
             assert_eq!(publication.gather_range_skips, 1);
             assert_eq!(publication.placement_key_owner_visits, 1);
             assert_eq!(publication.placement_binding_owner_visits, 1);
@@ -12910,6 +13008,13 @@ mod tests {
             engine.commit_update(prepared).unwrap();
             let published = super::super::work_attribution::snapshot();
             assert_eq!(published.harfrust_calls, 0);
+            assert_eq!(published.gather_dense_complete_admissions, 1);
+            assert_eq!(
+                published.gather_dense_complete_source_rows,
+                OWNERS as usize * 10
+            );
+            assert_eq!(published.gather_retained_gap_rows, 0);
+            assert_eq!(published.gather_envelope_splices, 0);
             assert_eq!(published.recomposed_flow_lines, 0);
             assert_eq!(published.newly_positioned_glyphs, 0);
             assert_eq!(published.query_serialized_records, 0);
@@ -12986,10 +13091,9 @@ mod tests {
                 published.gather_mask_bit_counts.iter().sum::<usize>(),
                 published.gather_mask_bits
             );
-            assert_eq!(
-                published.gather_all_masks,
-                published.gather_identity_mismatches
-            );
+            assert_eq!(published.gather_mask_bits, 0);
+            assert_eq!(published.gather_all_masks, 0);
+            assert_eq!(published.gather_identity_mismatches, 0);
             let changed_id = before
                 .iter()
                 .zip(&after)
@@ -13027,7 +13131,7 @@ mod tests {
                 .map(|(old, new)| old.iter().zip(new).filter(|(a, b)| a != b).count())
                 .collect();
             let all_mask_rows = masks.iter().filter(|&&mask| mask == u16::MAX).count();
-            assert_eq!(all_mask_rows, published.gather_all_masks);
+            assert!(all_mask_rows >= OWNERS as usize * 5);
             let all_mask_unchanged_f32: Vec<usize> = before_f32
                 .iter()
                 .zip(&after_f32)
@@ -13470,6 +13574,9 @@ mod tests {
             let source_run = candidate.incremental_shape_source_run;
             let windows = candidate.shape_window_scratch.clone();
             let work = super::super::work_attribution::snapshot();
+            assert_eq!(work.shape_dense_run_admissions, 1);
+            assert_eq!(work.shape_sparse_window_builds, 0);
+            assert_eq!(work.shape_boundary_retries, 0);
             assert_eq!(work.shape_scratch_arena_moves, 1);
             assert_eq!(work.shape_range_copied_glyphs, 0);
             assert_eq!(work.cluster_full_builds, 1);
@@ -13525,6 +13632,72 @@ mod tests {
                 .unwrap();
             assert_eq!(warm.shape.committed().runs, cold.shape.committed().runs);
             assert_visible_shape_equal(warm, cold, "short Inter label assignment");
+        }
+    }
+
+    #[test]
+    fn short_inter_grow_and_shrink_use_whole_run_and_match_cold_output() {
+        let (mut engine, mut shaper) = shaped_inter_engine("alpha 0000");
+        for next in ["bravo 000", "alpha 0000"] {
+            let previous_len = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap()
+                .text
+                .committed()
+                .units
+                .len();
+            let replacement = utf16(next);
+            let bytes = text_mutation_bytes(&[(0, previous_len as u32, &replacement)]);
+            let styles = root_style_bytes_for_text(7, replacement.len() as u32);
+            let mut request = update(1, 1, 1);
+            request.limits.max_clusters = 256;
+            request.limits.max_lines = 256;
+            request.limits.max_output_bytes = 1 << 20;
+            request.text_mutations =
+                parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            request.style_mutations =
+                parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            super::super::work_attribution::reset();
+            let measured = engine
+                .measure_paragraph_with_shaper(&mut shaper, request, 1)
+                .unwrap();
+            let work = super::super::work_attribution::snapshot();
+            assert_eq!(work.shape_dense_run_admissions, 1);
+            assert_eq!(work.shape_sparse_window_builds, 0);
+            assert_eq!(work.shape_boundary_retries, 0);
+            assert_eq!(work.harfrust_calls, 1);
+            assert_eq!(work.harfrust_utf16_units, replacement.len());
+            let candidate = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert_eq!(candidate.incremental_shape_source_run, Some(0));
+            assert_eq!(candidate.shape_window_scratch.len(), 1);
+            assert_eq!(
+                candidate.shape_window_scratch[0].new_end as usize,
+                replacement.len()
+            );
+            engine.commit_measure(measured).unwrap();
+            let (cold, _) = shaped_inter_engine(next);
+            assert_visible_shape_equal(
+                engine
+                    .planners
+                    .get(&4)
+                    .unwrap()
+                    .first_paragraph_state()
+                    .unwrap(),
+                cold.planners
+                    .get(&4)
+                    .unwrap()
+                    .first_paragraph_state()
+                    .unwrap(),
+                "short Inter length change",
+            );
         }
     }
 
@@ -16554,10 +16727,16 @@ mod tests {
             .unwrap();
             let before_calls = crate::SHAPINGS.with(core::cell::Cell::get);
             let before_units = crate::SHAPED_UNITS.with(core::cell::Cell::get);
+            super::super::work_attribution::reset();
             let prepared = wrapped_engine
                 .prepare_update_with_shaper(&mut wrapped_shaper, request, step as u32 + 2)
                 .unwrap();
             wrapped_engine.commit_update(prepared).unwrap();
+            assert_eq!(
+                super::super::work_attribution::snapshot().gather_dense_complete_admissions,
+                0,
+                "paint-only all-owner changes keep retained gather"
+            );
             assert_eq!(
                 crate::SHAPINGS.with(core::cell::Cell::get) - before_calls,
                 0,
@@ -16623,10 +16802,16 @@ mod tests {
         width_edit.limits.max_lines = wrapped_text_end.max(256);
         width_edit.limits.max_output_bytes = 1 << 20;
         width_edit.geometry = parse_root_geometry(&narrower_geometry, width_edit.limits);
+        super::super::work_attribution::reset();
         let prepared = wrapped_engine
             .prepare_update_with_shaper(&mut wrapped_shaper, width_edit, 4)
             .unwrap();
         wrapped_engine.commit_update(prepared).unwrap();
+        assert_eq!(
+            super::super::work_attribution::snapshot().gather_dense_complete_admissions,
+            0,
+            "width-only all-owner changes keep retained gather"
+        );
         let (cold_width_engine, _) = shaped_engine_with_font_styles_geometry_and_extents(
             wrapped_text,
             FREDOKA,
@@ -17637,6 +17822,16 @@ mod tests {
                 vec![(2, 2, 3), (3, 3, 1)],
                 [2, 3, 1],
             ),
+            (
+                5,
+                vec![
+                    (1, 0, 2, vec![0x68, 0x68, 0x68]),
+                    (2, 0, 3, vec![0x69, 0x69]),
+                    (3, 0, 1, vec![0x6a, 0x6a]),
+                ],
+                vec![(1, 1, 3), (2, 2, 2), (3, 3, 2)],
+                [3, 2, 2],
+            ),
         ] {
             let records: Vec<_> = records
                 .iter()
@@ -17671,10 +17866,21 @@ mod tests {
                 u32::try_from(style_records.len()).unwrap(),
             )
             .unwrap();
+            super::super::work_attribution::reset();
             let prepared = engine
                 .prepare_update_with_shaper(&mut shaper, request, revision + 1)
                 .unwrap();
+            let warm_host = (revision == 5).then(|| {
+                let plan = engine.prepared_plan(prepared).unwrap();
+                (plan.primitives.to_vec(), plan.draws.to_vec())
+            });
             engine.commit_update(prepared).unwrap();
+            let work = super::super::work_attribution::snapshot();
+            assert_eq!(
+                work.gather_dense_complete_admissions,
+                usize::from(revision == 5),
+                "only the all-owner count-changing revision uses the reset writer"
+            );
 
             let planner = engine.planners.get(&4).unwrap();
             for (id, expected) in (1..=3).zip(expected_counts) {
@@ -17690,6 +17896,293 @@ mod tests {
                 engine.gather.view().plan_input().glyphs.len(),
                 expected_total
             );
+            if revision == 5 {
+                for (id, value) in [(1, "hhh"), (2, "ii"), (3, "jj")] {
+                    let mut cold_styles = paragraph_root_style_bytes(&[(1, id)]);
+                    write_u32(
+                        &mut cold_styles,
+                        ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize
+                            + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+                        u32::try_from(value.encode_utf16().count()).unwrap(),
+                    );
+                    let (cold, _) = shaped_outlined_engine_with_styles_geometry(
+                        value,
+                        &cold_styles,
+                        &root_geometry_bytes(),
+                    );
+                    assert_visible_shape_equal(
+                        &engine
+                            .planners
+                            .get(&4)
+                            .unwrap()
+                            .paragraph(id)
+                            .unwrap()
+                            .state,
+                        cold.planners
+                            .get(&4)
+                            .unwrap()
+                            .first_paragraph_state()
+                            .unwrap(),
+                        "all-owner count change",
+                    );
+                }
+
+                // Build a separate complete three-owner root from authored final inputs.
+                // It cannot borrow the warm planner's positioned glyphs or gather writer state.
+                let mut cold_root_style = paragraph_root_style_bytes(&[(1, 1)]);
+                write_u32(
+                    &mut cold_root_style,
+                    ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize
+                        + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+                    3,
+                );
+                let (mut cold, mut cold_shaper) = shaped_outlined_engine_with_styles_geometry(
+                    "hhh",
+                    &cold_root_style,
+                    &root_geometry_bytes(),
+                );
+                let cold_text = paragraph_text_mutation_bytes(&[
+                    (2, 0, 0, &[0x69, 0x69]),
+                    (3, 0, 0, &[0x6a, 0x6a]),
+                ]);
+                let mut cold_styles = paragraph_root_style_bytes(&[(2, 2), (3, 3)]);
+                for index in 0..2 {
+                    write_u32(
+                        &mut cold_styles,
+                        ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize
+                            + index * abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize
+                            + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+                        2,
+                    );
+                }
+                let mut cold_request = update(1, 1, 1);
+                cold_request.limits.max_paragraphs = 3;
+                cold_request.limits.max_regions = 3;
+                cold_request.paragraph_mutations =
+                    parse_paragraph_mutations(&lifecycle, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
+                        .unwrap();
+                cold_request.text_mutations =
+                    parse_text_mutations(&cold_text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+                cold_request.style_mutations =
+                    parse_style_mutations(&cold_styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
+                        .unwrap();
+                cold_request.geometry = parse_geometry(
+                    &geometry,
+                    ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+                    3,
+                    region_offset as u32,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    cold_request.limits,
+                )
+                .unwrap();
+                let cold_prepared = cold
+                    .prepare_update_with_shaper(&mut cold_shaper, cold_request, 2)
+                    .unwrap();
+                let cold_plan = cold.prepared_plan(cold_prepared).unwrap();
+                let cold_host = (cold_plan.primitives.to_vec(), cold_plan.draws.to_vec());
+                cold.commit_update(cold_prepared).unwrap();
+                for id in 1..=3 {
+                    assert_eq!(
+                        engine
+                            .planners
+                            .get(&4)
+                            .unwrap()
+                            .paragraph(id)
+                            .unwrap()
+                            .gather_range
+                            .unwrap()
+                            .source_count(),
+                        cold.planners
+                            .get(&4)
+                            .unwrap()
+                            .paragraph(id)
+                            .unwrap()
+                            .gather_range
+                            .unwrap()
+                            .source_count(),
+                    );
+                }
+
+                let warm_gather = engine.gather.view();
+                let warm_output = warm_gather.plan_input();
+                let cold_gather = cold.gather.view();
+                let cold_output = cold_gather.plan_input();
+                assert_eq!(warm_output.glyphs.len(), 7);
+                assert_eq!(warm_output.glyphs.len(), cold_output.glyphs.len());
+                for (warm_glyph, cold_glyph) in warm_output.glyphs.iter().zip(cold_output.glyphs) {
+                    let mut expected = *cold_glyph;
+                    expected.stable_id = warm_glyph.stable_id;
+                    expected.content_revision = warm_glyph.content_revision;
+                    expected.semantic_id = warm_glyph.semantic_id;
+                    assert_eq!(*warm_glyph, expected);
+                }
+                assert_eq!(warm_output.f32_fields.len(), cold_output.f32_fields.len());
+                for (warm_field, cold_field) in
+                    warm_output.f32_fields.iter().zip(cold_output.f32_fields)
+                {
+                    assert_eq!(
+                        warm_field
+                            .iter()
+                            .map(|value| value.to_bits())
+                            .collect::<Vec<_>>(),
+                        cold_field
+                            .iter()
+                            .map(|value| value.to_bits())
+                            .collect::<Vec<_>>()
+                    );
+                }
+                assert_eq!(warm_output.u32_fields, cold_output.u32_fields);
+                let warm_placements = engine
+                    .planners
+                    .get(&4)
+                    .unwrap()
+                    .plan
+                    .buffer_bytes(super::super::render_plan::SESSION_PLACEMENT_BUFFER_ID)
+                    .unwrap();
+                let cold_placements = cold
+                    .planners
+                    .get(&4)
+                    .unwrap()
+                    .plan
+                    .buffer_bytes(super::super::render_plan::SESSION_PLACEMENT_BUFFER_ID)
+                    .unwrap();
+                assert_eq!(
+                    warm_output.placement_slots.len(),
+                    cold_output.placement_slots.len()
+                );
+                for (&warm_slot, &cold_slot) in warm_output
+                    .placement_slots
+                    .iter()
+                    .zip(cold_output.placement_slots)
+                {
+                    let warm_start = usize::try_from(warm_slot).unwrap() * 8;
+                    let cold_start = usize::try_from(cold_slot).unwrap() * 8;
+                    assert_eq!(
+                        &warm_placements[warm_start..warm_start + 8],
+                        &cold_placements[cold_start..cold_start + 8]
+                    );
+                }
+
+                let (warm_primitives, warm_draws) = warm_host.unwrap();
+                let (cold_primitives, cold_draws) = cold_host;
+                assert!(!warm_primitives.is_empty());
+                assert_eq!(warm_primitives.len(), cold_primitives.len());
+                assert_eq!(warm_draws.len(), cold_draws.len());
+                for (warm_draw, cold_draw) in warm_draws.iter().zip(&cold_draws) {
+                    assert_eq!(
+                        (
+                            warm_draw.program_id,
+                            warm_draw.program_variant,
+                            warm_draw.flags,
+                            warm_draw.material_id,
+                            warm_draw.clip_id,
+                            warm_draw.depth_key,
+                            warm_draw.transform_id,
+                            warm_draw.primitive_start,
+                            warm_draw.primitive_count,
+                            warm_draw.buffer_count,
+                            warm_draw.resource_count,
+                            warm_draw.order_token,
+                        ),
+                        (
+                            cold_draw.program_id,
+                            cold_draw.program_variant,
+                            cold_draw.flags,
+                            cold_draw.material_id,
+                            cold_draw.clip_id,
+                            cold_draw.depth_key,
+                            cold_draw.transform_id,
+                            cold_draw.primitive_start,
+                            cold_draw.primitive_count,
+                            cold_draw.buffer_count,
+                            cold_draw.resource_count,
+                            cold_draw.order_token,
+                        )
+                    );
+                }
+                let schema = engine.codecs.get(&9).unwrap().programs()[0].buffers[0];
+                assert_eq!(schema.id.0, 1);
+                assert_eq!(schema.stride(), 4);
+                assert_eq!(
+                    warm_primitives
+                        .iter()
+                        .map(|primitive| usize::from(primitive.record_count))
+                        .sum::<usize>(),
+                    warm_output.glyphs.len(),
+                );
+                for (warm_primitive, cold_primitive) in warm_primitives.iter().zip(&cold_primitives)
+                {
+                    assert_eq!(
+                        warm_primitive.kind,
+                        super::super::render_plan::PRIMITIVE_GLYPH
+                    );
+                    assert_eq!(
+                        (
+                            warm_primitive.kind,
+                            warm_primitive.flags,
+                            warm_primitive.technique_id,
+                            warm_primitive.resource_id,
+                            warm_primitive.resource_generation,
+                            warm_primitive.program_id,
+                            warm_primitive.program_variant,
+                            warm_primitive.record_count,
+                        ),
+                        (
+                            cold_primitive.kind,
+                            cold_primitive.flags,
+                            cold_primitive.technique_id,
+                            cold_primitive.resource_id,
+                            cold_primitive.resource_generation,
+                            cold_primitive.program_id,
+                            cold_primitive.program_variant,
+                            cold_primitive.record_count,
+                        )
+                    );
+                    assert_eq!(
+                        (
+                            warm_primitive.logical_order,
+                            warm_primitive.clip_id,
+                            warm_primitive.inline_start.to_bits(),
+                            warm_primitive.block_start.to_bits(),
+                            warm_primitive.inline_extent.to_bits(),
+                            warm_primitive.block_extent.to_bits(),
+                        ),
+                        (
+                            cold_primitive.logical_order,
+                            cold_primitive.clip_id,
+                            cold_primitive.inline_start.to_bits(),
+                            cold_primitive.block_start.to_bits(),
+                            cold_primitive.inline_extent.to_bits(),
+                            cold_primitive.block_extent.to_bits(),
+                        )
+                    );
+                    let warm_start = warm_primitive.record_index as usize * schema.stride();
+                    let cold_start = cold_primitive.record_index as usize * schema.stride();
+                    let bytes = usize::from(warm_primitive.record_count) * schema.stride();
+                    let warm_bytes = engine
+                        .planners
+                        .get(&4)
+                        .unwrap()
+                        .plan
+                        .buffer_bytes(warm_primitive.buffer_id)
+                        .unwrap();
+                    let cold_bytes = cold
+                        .planners
+                        .get(&4)
+                        .unwrap()
+                        .plan
+                        .buffer_bytes(cold_primitive.buffer_id)
+                        .unwrap();
+                    assert_eq!(
+                        &warm_bytes[warm_start..warm_start + bytes],
+                        &cold_bytes[cold_start..cold_start + bytes]
+                    );
+                }
+            }
             assert_gather_matches_full(&mut engine);
         }
     }

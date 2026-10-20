@@ -1,0 +1,8 @@
+{
+  "recordedUtc": "2026-10-20T18:37:35.703823+00:00",
+  "sourceHelper": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/size-comparison.mjs",
+  "sourceHelperSha256": "7f200bcd69760a667029b2f43990ad91744ec98a2814cee953795d20feaa57a0",
+  "adaptedHelper": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/size-comparison.mjs",
+  "adaptedHelperSha256": "e5ec47e9af690b577fc82ee46588d176ceb4f98e17a3753a37d36833bcae667d",
+  "change": "Changed baseline label from prior340 to prior28fd only; compression/grouping calculation unchanged."
+}

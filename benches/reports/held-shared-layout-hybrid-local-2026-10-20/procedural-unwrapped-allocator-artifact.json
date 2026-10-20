@@ -1,0 +1,22 @@
+{
+  "schema": "e3-unwrapped-command-procedural-receipt-v1",
+  "command": "/usr/bin/env TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch /Users/mini/.local/bin/mise exec -- pnpm scripts run glyph:shaper-memory-artifact -- --artifact /Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz --output /Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/shaper-memory",
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "executionTool": "exec_command",
+  "toolSessionId": 99409,
+  "terminalExit": 0,
+  "outputSource": "Direct tool output chunks in the conversation; the command was not run via E3/run.py. There is no complete raw stdout/stderr file; this receipt does not reconstruct missing output.",
+  "observedOutputExcerpts": [
+    "Compiling proc-macro2 v1.0.107",
+    "Finished `release` profile [optimized] target(s) in 20.36s",
+    "Finished `release` profile [optimized] target(s) in 14.75s",
+    "Diagnostic memory artifact: /Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/shaper-memory"
+  ],
+  "stderrCapture": "No separate durable stderr capture exists.",
+  "resultArtifact": {
+    "manifestPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/shaper-memory/manifest.json",
+    "manifestSha256": "f34f2a699cfa3b27b14c16b43de8e41867553a67d8f238d0b541f42adeb96b22",
+    "artifactArchiveSha256": "37c1e0882acfb16bc6ebc9e2538340b4a12eeff6d8006e0055e86423db3572e6",
+    "shippingAndControlSha256Equal": true
+  }
+}

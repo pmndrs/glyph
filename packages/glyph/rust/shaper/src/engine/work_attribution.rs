@@ -12,6 +12,11 @@ pub(crate) struct CodecRunCountBin {
 pub(crate) struct Work {
     pub harfrust_calls: usize,
     pub harfrust_utf16_units: usize,
+    pub shape_dense_run_admissions: usize,
+    pub shape_sparse_window_builds: usize,
+    pub shape_boundary_retries: usize,
+    pub gather_dense_complete_admissions: usize,
+    pub gather_dense_complete_source_rows: usize,
     /// Completed whole scratch-to-pending ShapeArena ownership transfers.
     pub shape_scratch_arena_moves: usize,
     /// Glyph rows transferred with those arenas; no glyph payload is copied.
@@ -115,6 +120,11 @@ std::thread_local! {
     static WORK: Cell<Work> = const { Cell::new(Work {
         harfrust_calls: 0,
         harfrust_utf16_units: 0,
+        shape_dense_run_admissions: 0,
+        shape_sparse_window_builds: 0,
+        shape_boundary_retries: 0,
+        gather_dense_complete_admissions: 0,
+        gather_dense_complete_source_rows: 0,
         shape_scratch_arena_moves: 0,
         shape_scratch_moved_glyphs: 0,
         shape_range_copied_glyphs: 0,

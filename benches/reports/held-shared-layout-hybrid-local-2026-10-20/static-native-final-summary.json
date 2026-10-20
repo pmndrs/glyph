@@ -1,0 +1,94 @@
+{
+  "recordedUtc": "2026-10-20T18:27:25.452075+00:00",
+  "static": {
+    "receipt": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/static-check-final/result.json",
+    "exit": 0,
+    "stdoutSha256": "efa8ad5095b957da4053a9b93d5470f826ea7d539aef9d2ee3727423daf31fcd",
+    "stderrSha256": "023983cdb71041d10b2a3a23bd47948fd7566fb73bd8be6e4f7fa3f00f4ca372",
+    "observed": "Formatting check reports all matched files correct; 494 files checked."
+  },
+  "native": {
+    "receipt": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/native-final/result.json",
+    "exit": 0,
+    "stdoutSha256": "8e27633e9087bf99022d5462f0ac2c567615a25255d9f435677a32e0e21eb644",
+    "stderrSha256": "5a139439591fe2913325e4be4e760a05743ccd91d44378ff80eafa44577ae001",
+    "sections": [
+      {
+        "section": "shaper library tests",
+        "passed": 485,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "section": "first additional test binary",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "section": "diagnostic_live_memory",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "section": "outline decoding fixtures",
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "section": "Unicode bidi conformance",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "section": "Unicode grapheme conformance",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "section": "Unicode line-break conformance",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "section": "final additional test binary",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "aggregateObservedTestResults": {
+      "passed": 498,
+      "failed": 0,
+      "ignored": 0
+    },
+    "changedOracleTests": {
+      "engine::state::tests::retained_gather_tracks_multi_owner_empty_output_transitions": "passed",
+      "engine::state::tests::short_inter_grow_and_shrink_use_whole_run_and_match_cold_output": "passed",
+      "engine::state::tests::short_inter_label_assignments_use_incremental_shape_and_match_cold_output": "passed",
+      "engine::state::tests::dense_inter_setter_publication_attributes_actual_work": "passed"
+    },
+    "rawLog": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/native-final/stdout.log",
+    "stderrLog": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/native-final/stderr.log"
+  },
+  "integrity": {
+    "freeze": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate-source-freeze.json",
+    "preGateSnapshot": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/static-final-hashes-before.json",
+    "postStaticSnapshot": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/static-final-hashes-after.json",
+    "postNativeSnapshot": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/native-final-hashes-after.json",
+    "expectedAndObservedPathCount": 1059,
+    "matchesFreezeBefore": true,
+    "matchesFreezeAfter": true,
+    "matchesBetween": true,
+    "ownedSourceSha256": {
+      "packages/glyph/rust/shaper/src/engine/state.rs": "af32b2539c9475775ab5845bb07336ac994d03fc8b1827b1d13b5e3e0358cce2",
+      "packages/glyph/rust/shaper/src/engine/work_attribution.rs": "c65ec9b203042818e5eaa997cb9e211a494ddf606fe1d96aeb2c95e58e1c0ac1"
+    }
+  },
+  "scope": "This was one static gate and one full native correctness run following the frozen test-only repair. No build/pack/named-Wasm/timing/profile/listener work was run."
+}

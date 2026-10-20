@@ -1,0 +1,465 @@
+{
+  "schema": "held-hybrid-native-allocator-work-comparison-v1",
+  "scope": "Existing untimed instrumented engine-Wasm allocator captures of same authored1024label dense fixture; eight cycles; separate diagnostic images tied to each own shipping/control. Not shipping binary execution or JS/GPU/fontdecoder allocation/GC rate and not latency. Successful realloc cumulativeRequested counts full new size, not net growth. Warm2..7 counters stable within each capture.",
+  "arms": {
+    "prior28fd": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/shaper-live-memory.json",
+      "sha256": "77e726741367360e66e48db2953864fd585255738b4395d7f3598d2ed7323509",
+      "artifactInputs": {
+        "manifestSha256": "2f823142df75a5469bdc6da50ff5f022a1ebe25ac0b4e5a515f5368f4e5fdc88",
+        "diagnosticSha256": "8e1ff3aace7d217ac8b2e4092efa79a6f6cc9b3c2328a36280d6ef3fb703c6ee",
+        "controlSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+        "shippingSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd"
+      },
+      "denseCycles": [
+        {
+          "name": "dense-edit-publish-1024",
+          "cycle": 0,
+          "before": {
+            "requestedLive": 33435333,
+            "requestedPeak": 33435333,
+            "allocations": 0,
+            "reallocations": 0,
+            "deallocations": 0,
+            "cumulativeRequested": 0,
+            "wasmPages": 585
+          },
+          "after": {
+            "requestedLive": 39930963,
+            "requestedPeak": 40300887,
+            "allocations": 59917,
+            "reallocations": 9225,
+            "deallocations": 3626,
+            "cumulativeRequested": 8221722,
+            "wasmPages": 674
+          }
+        },
+        {
+          "name": "dense-edit-publish-1024",
+          "cycle": 1,
+          "before": {
+            "requestedLive": 39930963,
+            "requestedPeak": 39930963,
+            "allocations": 0,
+            "reallocations": 0,
+            "deallocations": 0,
+            "cumulativeRequested": 0,
+            "wasmPages": 674
+          },
+          "after": {
+            "requestedLive": 40471115,
+            "requestedPeak": 40671431,
+            "allocations": 10948,
+            "reallocations": 8,
+            "deallocations": 2762,
+            "cumulativeRequested": 879136,
+            "wasmPages": 681
+          }
+        },
+        {
+          "name": "dense-edit-publish-1024",
+          "cycle": 2,
+          "before": {
+            "requestedLive": 40471115,
+            "requestedPeak": 40471115,
+            "allocations": 0,
+            "reallocations": 0,
+            "deallocations": 0,
+            "cumulativeRequested": 0,
+            "wasmPages": 681
+          },
+          "after": {
+            "requestedLive": 40471115,
+            "requestedPeak": 40671431,
+            "allocations": 2762,
+            "reallocations": 0,
+            "deallocations": 2762,
+            "cumulativeRequested": 334904,
+            "wasmPages": 681
+          }
+        },
+        {
+          "name": "dense-edit-publish-1024",
+          "cycle": 3,
+          "before": {
+            "requestedLive": 40471115,
+            "requestedPeak": 40471115,
+            "allocations": 0,
+            "reallocations": 0,
+            "deallocations": 0,
+            "cumulativeRequested": 0,
+            "wasmPages": 681
+          },
+          "after": {
+            "requestedLive": 40471115,
+            "requestedPeak": 40671431,
+            "allocations": 2762,
+            "reallocations": 0,
+            "deallocations": 2762,
+            "cumulativeRequested": 334904,
+            "wasmPages": 681
+          }
+        },
+        {
+          "name": "dense-edit-publish-1024",
+          "cycle": 4,
+          "before": {
+            "requestedLive": 40471115,
+            "requestedPeak": 40471115,
+            "allocations": 0,
+            "reallocations": 0,
+            "deallocations": 0,
+            "cumulativeRequested": 0,
+            "wasmPages": 681
+          },
+          "after": {
+            "requestedLive": 40471115,
+            "requestedPeak": 40671431,
+            "allocations": 2762,
+            "reallocations": 0,
+            "deallocations": 2762,
+            "cumulativeRequested": 334904,
+            "wasmPages": 681
+          }
+        },
+        {
+          "name": "dense-edit-publish-1024",
+          "cycle": 5,
+          "before": {
+            "requestedLive": 40471115,
+            "requestedPeak": 40471115,
+            "allocations": 0,
+            "reallocations": 0,
+            "deallocations": 0,
+            "cumulativeRequested": 0,
+            "wasmPages": 681
+          },
+          "after": {
+            "requestedLive": 40471115,
+            "requestedPeak": 40671431,
+            "allocations": 2762,
+            "reallocations": 0,
+            "deallocations": 2762,
+            "cumulativeRequested": 334904,
+            "wasmPages": 681
+          }
+        },
+        {
+          "name": "dense-edit-publish-1024",
+          "cycle": 6,
+          "before": {
+            "requestedLive": 40471115,
+            "requestedPeak": 40471115,
+            "allocations": 0,
+            "reallocations": 0,
+            "deallocations": 0,
+            "cumulativeRequested": 0,
+            "wasmPages": 681
+          },
+          "after": {
+            "requestedLive": 40471115,
+            "requestedPeak": 40671431,
+            "allocations": 2762,
+            "reallocations": 0,
+            "deallocations": 2762,
+            "cumulativeRequested": 334904,
+            "wasmPages": 681
+          }
+        },
+        {
+          "name": "dense-edit-publish-1024",
+          "cycle": 7,
+          "before": {
+            "requestedLive": 40471115,
+            "requestedPeak": 40471115,
+            "allocations": 0,
+            "reallocations": 0,
+            "deallocations": 0,
+            "cumulativeRequested": 0,
+            "wasmPages": 681
+          },
+          "after": {
+            "requestedLive": 40471115,
+            "requestedPeak": 40671431,
+            "allocations": 2762,
+            "reallocations": 0,
+            "deallocations": 2762,
+            "cumulativeRequested": 334904,
+            "wasmPages": 681
+          }
+        }
+      ]
+    },
+    "candidate37c": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/shaper-live-memory.json",
+      "sha256": "57424cb6ccd8408bf6ac3d80ce9686fa48fe417a8ee8ec768e052ec8d3e6be4d",
+      "artifactInputs": {
+        "manifestSha256": "f34f2a699cfa3b27b14c16b43de8e41867553a67d8f238d0b541f42adeb96b22",
+        "diagnosticSha256": "37e2a7c4fda68eb3618c9ee823891c1c3347cadadb75df39469a80f3c22dd98a",
+        "controlSha256": "81153a6202caef528f235ae69d34ff0c8b2515c8c711af84b92db57b1f700aa6",
+        "shippingSha256": "81153a6202caef528f235ae69d34ff0c8b2515c8c711af84b92db57b1f700aa6"
+      },
+      "denseCycles": [
+        {
+          "name": "dense-edit-publish-1024",
+          "cycle": 0,
+          "before": {
+            "requestedLive": 33435333,
+            "requestedPeak": 33435333,
+            "allocations": 0,
+            "reallocations": 0,
+            "deallocations": 0,
+            "cumulativeRequested": 0,
+            "wasmPages": 585
+          },
+          "after": {
+            "requestedLive": 39984083,
+            "requestedPeak": 40354007,
+            "allocations": 64386,
+            "reallocations": 10183,
+            "deallocations": 8095,
+            "cumulativeRequested": 8653638,
+            "wasmPages": 675
+          }
+        },
+        {
+          "name": "dense-edit-publish-1024",
+          "cycle": 1,
+          "before": {
+            "requestedLive": 39984083,
+            "requestedPeak": 39984083,
+            "allocations": 0,
+            "reallocations": 0,
+            "deallocations": 0,
+            "cumulativeRequested": 0,
+            "wasmPages": 675
+          },
+          "after": {
+            "requestedLive": 40524235,
+            "requestedPeak": 40724551,
+            "allocations": 15417,
+            "reallocations": 968,
+            "deallocations": 7231,
+            "cumulativeRequested": 1311292,
+            "wasmPages": 682
+          }
+        },
+        {
+          "name": "dense-edit-publish-1024",
+          "cycle": 2,
+          "before": {
+            "requestedLive": 40524235,
+            "requestedPeak": 40524235,
+            "allocations": 0,
+            "reallocations": 0,
+            "deallocations": 0,
+            "cumulativeRequested": 0,
+            "wasmPages": 682
+          },
+          "after": {
+            "requestedLive": 40524235,
+            "requestedPeak": 40724551,
+            "allocations": 7231,
+            "reallocations": 960,
+            "deallocations": 7231,
+            "cumulativeRequested": 767060,
+            "wasmPages": 682
+          }
+        },
+        {
+          "name": "dense-edit-publish-1024",
+          "cycle": 3,
+          "before": {
+            "requestedLive": 40524235,
+            "requestedPeak": 40524235,
+            "allocations": 0,
+            "reallocations": 0,
+            "deallocations": 0,
+            "cumulativeRequested": 0,
+            "wasmPages": 682
+          },
+          "after": {
+            "requestedLive": 40524235,
+            "requestedPeak": 40724551,
+            "allocations": 7231,
+            "reallocations": 960,
+            "deallocations": 7231,
+            "cumulativeRequested": 767060,
+            "wasmPages": 682
+          }
+        },
+        {
+          "name": "dense-edit-publish-1024",
+          "cycle": 4,
+          "before": {
+            "requestedLive": 40524235,
+            "requestedPeak": 40524235,
+            "allocations": 0,
+            "reallocations": 0,
+            "deallocations": 0,
+            "cumulativeRequested": 0,
+            "wasmPages": 682
+          },
+          "after": {
+            "requestedLive": 40524235,
+            "requestedPeak": 40724551,
+            "allocations": 7231,
+            "reallocations": 960,
+            "deallocations": 7231,
+            "cumulativeRequested": 767060,
+            "wasmPages": 682
+          }
+        },
+        {
+          "name": "dense-edit-publish-1024",
+          "cycle": 5,
+          "before": {
+            "requestedLive": 40524235,
+            "requestedPeak": 40524235,
+            "allocations": 0,
+            "reallocations": 0,
+            "deallocations": 0,
+            "cumulativeRequested": 0,
+            "wasmPages": 682
+          },
+          "after": {
+            "requestedLive": 40524235,
+            "requestedPeak": 40724551,
+            "allocations": 7231,
+            "reallocations": 960,
+            "deallocations": 7231,
+            "cumulativeRequested": 767060,
+            "wasmPages": 682
+          }
+        },
+        {
+          "name": "dense-edit-publish-1024",
+          "cycle": 6,
+          "before": {
+            "requestedLive": 40524235,
+            "requestedPeak": 40524235,
+            "allocations": 0,
+            "reallocations": 0,
+            "deallocations": 0,
+            "cumulativeRequested": 0,
+            "wasmPages": 682
+          },
+          "after": {
+            "requestedLive": 40524235,
+            "requestedPeak": 40724551,
+            "allocations": 7231,
+            "reallocations": 960,
+            "deallocations": 7231,
+            "cumulativeRequested": 767060,
+            "wasmPages": 682
+          }
+        },
+        {
+          "name": "dense-edit-publish-1024",
+          "cycle": 7,
+          "before": {
+            "requestedLive": 40524235,
+            "requestedPeak": 40524235,
+            "allocations": 0,
+            "reallocations": 0,
+            "deallocations": 0,
+            "cumulativeRequested": 0,
+            "wasmPages": 682
+          },
+          "after": {
+            "requestedLive": 40524235,
+            "requestedPeak": 40724551,
+            "allocations": 7231,
+            "reallocations": 960,
+            "deallocations": 7231,
+            "cumulativeRequested": 767060,
+            "wasmPages": 682
+          }
+        }
+      ]
+    }
+  },
+  "candidateMinusPriorPerCycle": [
+    {
+      "cycle": 0,
+      "allocations": 4469,
+      "reallocations": 958,
+      "deallocations": 4469,
+      "cumulativeRequested": 431916,
+      "requestedLive": 53120,
+      "requestedPeak": 53120,
+      "wasmPages": 1
+    },
+    {
+      "cycle": 1,
+      "allocations": 4469,
+      "reallocations": 960,
+      "deallocations": 4469,
+      "cumulativeRequested": 432156,
+      "requestedLive": 53120,
+      "requestedPeak": 53120,
+      "wasmPages": 1
+    },
+    {
+      "cycle": 2,
+      "allocations": 4469,
+      "reallocations": 960,
+      "deallocations": 4469,
+      "cumulativeRequested": 432156,
+      "requestedLive": 53120,
+      "requestedPeak": 53120,
+      "wasmPages": 1
+    },
+    {
+      "cycle": 3,
+      "allocations": 4469,
+      "reallocations": 960,
+      "deallocations": 4469,
+      "cumulativeRequested": 432156,
+      "requestedLive": 53120,
+      "requestedPeak": 53120,
+      "wasmPages": 1
+    },
+    {
+      "cycle": 4,
+      "allocations": 4469,
+      "reallocations": 960,
+      "deallocations": 4469,
+      "cumulativeRequested": 432156,
+      "requestedLive": 53120,
+      "requestedPeak": 53120,
+      "wasmPages": 1
+    },
+    {
+      "cycle": 5,
+      "allocations": 4469,
+      "reallocations": 960,
+      "deallocations": 4469,
+      "cumulativeRequested": 432156,
+      "requestedLive": 53120,
+      "requestedPeak": 53120,
+      "wasmPages": 1
+    },
+    {
+      "cycle": 6,
+      "allocations": 4469,
+      "reallocations": 960,
+      "deallocations": 4469,
+      "cumulativeRequested": 432156,
+      "requestedLive": 53120,
+      "requestedPeak": 53120,
+      "wasmPages": 1
+    },
+    {
+      "cycle": 7,
+      "allocations": 4469,
+      "reallocations": 960,
+      "deallocations": 4469,
+      "cumulativeRequested": 432156,
+      "requestedLive": 53120,
+      "requestedPeak": 53120,
+      "wasmPages": 1
+    }
+  ],
+  "decision": "Retain as explicit hybrid cost; no final admission or causal attribution to shaping/gather from these aggregate counts. Full timing matrix remains active."
+}

@@ -1,0 +1,42 @@
+{
+  "recordedAt": "2026-10-20T18:19:56.686447+00:00",
+  "static": {
+    "receipt": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/static-check-attempt1/result.json",
+    "exit": 0,
+    "stdoutSha256": "4643980f648c8077a82206f80cd5eab07a704f730a79382f835d8341aae894c0",
+    "stderrSha256": "8dd5b79c6043b845e3b2526366e052965d5cfebacf61ac111590c04e154e4979",
+    "observed": "Formatting matched all 494 checked files; static workflow completed with no reported errors."
+  },
+  "native": {
+    "receipt": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/native-attempt1/result.json",
+    "exit": 1,
+    "stdoutSha256": "2b8cca3af1ec9a79d28414363f0e89900b2c11ac9a7daac3d39025da4f041189",
+    "stderrSha256": "ece7e22ecce2b534c36d24b58e5e34a2ce267c3585e9d12cb07cbf00feef1ea7",
+    "testResult": "484 passed; 1 failed; 0 ignored; 485 total; finished in 5.27s.",
+    "failure": {
+      "name": "engine::state::tests::retained_gather_tracks_multi_owner_empty_output_transitions",
+      "assertion": "all-owner count change: positioned glyph",
+      "field": "material_id",
+      "actualLeft": 1,
+      "expectedRight": 0,
+      "sourceLocation": "src/engine/state.rs:18393"
+    },
+    "newOracleTestsObserved": {
+      "short_inter_grow_and_shrink_use_whole_run_and_match_cold_output": "passed",
+      "short_inter_label_assignments_use_incremental_shape_and_match_cold_output": "passed",
+      "dense_inter_setter_publication_attributes_actual_work": "passed",
+      "retained_gather_tracks_multi_owner_empty_output_transitions": "failed"
+    },
+    "rawLog": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/native-attempt1/stdout.log",
+    "stderrLog": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/native-attempt1/stderr.log"
+  },
+  "sourceIntegrity": {
+    "preGate": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/static-attempt1/input-before.json",
+    "postStatic": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/static-attempt1/input-after-static.json",
+    "postNative": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/native-attempt1-input-after.json",
+    "expectedTrackedPathCount": 1059,
+    "allHashesMatchedFreezeAtPreStaticPostStaticPostNative": true
+  },
+  "proceduralNote": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/procedural-wrapper-collision.json",
+  "scope": "No source edits, retry, package build, profile, benchmark, or listening server was run in this gate."
+}

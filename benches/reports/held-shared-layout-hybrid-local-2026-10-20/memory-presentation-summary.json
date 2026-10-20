@@ -1,0 +1,562 @@
+{
+  "schema": "e3-memory-presentation-summary-v1",
+  "candidate": {
+    "archivePath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "archiveSha256": "37c1e0882acfb16bc6ebc9e2538340b4a12eeff6d8006e0055e86423db3572e6",
+    "shippingWasmSha256": "81153a6202caef528f235ae69d34ff0c8b2515c8c711af84b92db57b1f700aa6"
+  },
+  "allocatorDiagnostic": {
+    "artifactManifestPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/shaper-memory/manifest.json",
+    "artifactManifestSha256": "f34f2a699cfa3b27b14c16b43de8e41867553a67d8f238d0b541f42adeb96b22",
+    "manifestControlAndShippingWasmMatch": true,
+    "liveMemoryPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/shaper-live-memory.json",
+    "liveMemorySha256": "57424cb6ccd8408bf6ac3d80ce9686fa48fe417a8ee8ec768e052ec8d3e6be4d",
+    "cycles": 8,
+    "phaseCount": 71,
+    "maxRequestedLiveBytes": [40524235, "dense-root-teardown", 0],
+    "maxCompletedAllocationCallPeakBytes": [40724551, "dense-edit-publish-1024", 7],
+    "maxWasmPages": [731, "sparse-root-teardown", 0],
+    "retainedBaseline": {
+      "requestedLive": 7640828,
+      "requestedPeak": 7640828,
+      "allocations": 0,
+      "reallocations": 0,
+      "deallocations": 0,
+      "cumulativeRequested": 0,
+      "wasmPages": 731
+    },
+    "method": {
+      "cycles": 8,
+      "recordBytes": 32,
+      "scope": "captured engine Wasm instance only",
+      "exclusions": ["JS tokens", "GPU", "font decoder instances"],
+      "requestedPeak": "completed allocator-call high water; excludes Talc fragmentation and transient internal realloc peak",
+      "cumulativeRequested": "full new size of successful realloc, not net growth",
+      "wasmPages": "capacity, reported separately from requested live bytes"
+    },
+    "directCommandCaptureException": "The artifact-generation command was invoked directly through exec_command (tool session 99409), not through run.py. Only tool-result output chunks and terminal exit 0 are available; no complete durable stdout/stderr logs exist. See procedural-unwrapped-allocator-artifact.json."
+  },
+  "applicationMemory": {
+    "method": "Fresh main, published010, prior28fd, candidate in that order; Node and browser observations. Whole-command footprint is maximum complete non-atomic 25ms process-family sweep across fixture bootstrap, 1024 cold oracles, and teardown. It is not an atomic/edit-only peak.",
+    "node": {
+      "main": {
+        "gateResult": {
+          "type": "result",
+          "rootPid": 64047,
+          "rootStartSec": 1792521803,
+          "rootStartUsec": 858150,
+          "rootObserved": true,
+          "commandExitCode": 0,
+          "signal": 0,
+          "timedOut": false,
+          "sweeps": 51,
+          "completeSweeps": 51,
+          "terminalSweepComplete": true,
+          "maximumObservedNonAtomicSweepSumBytes": 620604832,
+          "survivingBeforeCleanup": 0,
+          "uncertainBeforeCleanup": 0,
+          "remainingIdentities": [],
+          "survivingProcesses": 0,
+          "uncertainIdentities": 0,
+          "terminalIdentityCheckComplete": true,
+          "cleanupProven": true,
+          "success": true
+        },
+        "maximumObservedNonAtomicSweepSumBytes": 620604832,
+        "tracePath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-node-main/physical-footprint.ndjson",
+        "traceSha256": "caf3d078ef06cdfd63d792f65f103e5e494f77fa94a0f1475aaff80cd9503263",
+        "traceLines": 52,
+        "reportPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-node-main/report.json",
+        "reportSha256": "f89d220d277c9700959df734a51001f4cb6d1c324513093b442ba7e5d2f158e8",
+        "installedPackageRoot": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch/glyph-application-memory-MWT82N/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+held-rerun-20261019+evidence+controls+main-4e25a96a.tgz__39b4de5fa5f942a1711baed50c6417d0/node_modules/@pmndrs/glyph",
+        "installedShaperSha256": null,
+        "browserDeliveryPath": null,
+        "browserDeliverySha256": null,
+        "installedPackageDistMemberCount": 242,
+        "installedPackageDistSha256MapHash": "c83c177bad68716ffcfba0740337fb7db635b04ac54bb694f7a9b5ec348bc004"
+      },
+      "published010": {
+        "gateResult": {
+          "type": "result",
+          "rootPid": 64157,
+          "rootStartSec": 1792521811,
+          "rootStartUsec": 60794,
+          "rootObserved": true,
+          "commandExitCode": 0,
+          "signal": 0,
+          "timedOut": false,
+          "sweeps": 48,
+          "completeSweeps": 48,
+          "terminalSweepComplete": true,
+          "maximumObservedNonAtomicSweepSumBytes": 581951568,
+          "survivingBeforeCleanup": 0,
+          "uncertainBeforeCleanup": 0,
+          "remainingIdentities": [],
+          "survivingProcesses": 0,
+          "uncertainIdentities": 0,
+          "terminalIdentityCheckComplete": true,
+          "cleanupProven": true,
+          "success": true
+        },
+        "maximumObservedNonAtomicSweepSumBytes": 581951568,
+        "tracePath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-node-published010/physical-footprint.ndjson",
+        "traceSha256": "f278b8a91a5cc3fb4adc5ca21bd6800cbd5bdb85c5ce3e4e261f683a1f0c4e3d",
+        "traceLines": 49,
+        "reportPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-node-published010/report.json",
+        "reportSha256": "568d77884c60fc2dc0faedd4e13a5f8ffaf3d344189d9f8a797c6705d929a13e",
+        "installedPackageRoot": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch/glyph-application-memory-Kl7zFA/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+held-rerun-20261019+evidence+controls+published-0.1.0.tg_a804daea9a9b8a6b74b817ac8fec8c60/node_modules/@pmndrs/glyph",
+        "installedShaperSha256": null,
+        "browserDeliveryPath": null,
+        "browserDeliverySha256": null,
+        "installedPackageDistMemberCount": 235,
+        "installedPackageDistSha256MapHash": "9c14acbd0fb72ad04cf4a94808ce3aec39adf3d006c874f54c44549b9139a00b"
+      },
+      "prior28fd": {
+        "gateResult": {
+          "type": "result",
+          "rootPid": 64265,
+          "rootStartSec": 1792521817,
+          "rootStartUsec": 827422,
+          "rootObserved": true,
+          "commandExitCode": 0,
+          "signal": 0,
+          "timedOut": false,
+          "sweeps": 51,
+          "completeSweeps": 51,
+          "terminalSweepComplete": true,
+          "maximumObservedNonAtomicSweepSumBytes": 654644888,
+          "survivingBeforeCleanup": 0,
+          "uncertainBeforeCleanup": 0,
+          "remainingIdentities": [],
+          "survivingProcesses": 0,
+          "uncertainIdentities": 0,
+          "terminalIdentityCheckComplete": true,
+          "cleanupProven": true,
+          "success": true
+        },
+        "maximumObservedNonAtomicSweepSumBytes": 654644888,
+        "tracePath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-node-prior28fd/physical-footprint.ndjson",
+        "traceSha256": "e2ba5e99b3456ac5512e6c2c821f1ce78bda263197778d5af093707d6d0acea6",
+        "traceLines": 52,
+        "reportPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-node-prior28fd/report.json",
+        "reportSha256": "adf67b9f5eeb589e97221dce1d363e90d6653b2fd4d32f5cfa9f330589202d91",
+        "installedPackageRoot": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch/glyph-application-memory-khkVwY/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+held-wave2-20261020+evidence+candidate+pmndrs-glyph-0.1._e8fac9687f4d83e8dadcf038a6b84c77/node_modules/@pmndrs/glyph",
+        "installedShaperSha256": null,
+        "browserDeliveryPath": null,
+        "browserDeliverySha256": null,
+        "installedPackageDistMemberCount": 242,
+        "installedPackageDistSha256MapHash": "7717d26881437e58810bd3346cad69bed784c00cc88e8fd544af759e627c24f3"
+      },
+      "candidate": {
+        "gateResult": {
+          "type": "result",
+          "rootPid": 64379,
+          "rootStartSec": 1792521824,
+          "rootStartUsec": 427490,
+          "rootObserved": true,
+          "commandExitCode": 0,
+          "signal": 0,
+          "timedOut": false,
+          "sweeps": 52,
+          "completeSweeps": 52,
+          "terminalSweepComplete": true,
+          "maximumObservedNonAtomicSweepSumBytes": 651957192,
+          "survivingBeforeCleanup": 0,
+          "uncertainBeforeCleanup": 0,
+          "remainingIdentities": [],
+          "survivingProcesses": 0,
+          "uncertainIdentities": 0,
+          "terminalIdentityCheckComplete": true,
+          "cleanupProven": true,
+          "success": true
+        },
+        "maximumObservedNonAtomicSweepSumBytes": 651957192,
+        "tracePath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-node-candidate/physical-footprint.ndjson",
+        "traceSha256": "2ed47a425dc6f3165e7fa41d5b0e93ba96f950cca15a19ffd8864a4f47ecb694",
+        "traceLines": 53,
+        "reportPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-node-candidate/report.json",
+        "reportSha256": "5c794506c5ebbb7de4d2c2eea29350cee185370f0f9a15d416010065354ec0f6",
+        "installedPackageRoot": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch/glyph-application-memory-4sv3uu/node_modules/.pnpm/@pmndrs+glyph@file+..+..+candidate+pmndrs-glyph-0.1.0.tgz_@oxc-project+types@0.150.0_re_b1c973abef666df3ee7078b52d0782e4/node_modules/@pmndrs/glyph",
+        "installedShaperSha256": null,
+        "browserDeliveryPath": null,
+        "browserDeliverySha256": null,
+        "installedPackageDistMemberCount": 242,
+        "installedPackageDistSha256MapHash": "ab30d7ac4d9070cc9e893597b3189f6b5a95165f47773746fc9672f4a736858d"
+      }
+    },
+    "browser": {
+      "main": {
+        "gateResult": {
+          "type": "result",
+          "rootPid": 64711,
+          "rootStartSec": 1792521868,
+          "rootStartUsec": 124455,
+          "rootObserved": true,
+          "commandExitCode": 0,
+          "signal": 0,
+          "timedOut": false,
+          "sweeps": 114,
+          "completeSweeps": 114,
+          "terminalSweepComplete": true,
+          "maximumObservedNonAtomicSweepSumBytes": 1642522952,
+          "survivingBeforeCleanup": 0,
+          "uncertainBeforeCleanup": 0,
+          "remainingIdentities": [],
+          "survivingProcesses": 0,
+          "uncertainIdentities": 0,
+          "terminalIdentityCheckComplete": true,
+          "cleanupProven": true,
+          "success": true
+        },
+        "maximumObservedNonAtomicSweepSumBytes": 1642522952,
+        "tracePath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-browser-main/physical-footprint.ndjson",
+        "traceSha256": "9207000902c20870c22fc36e577c8e7b871b060ed8cd2a9f1509d7579191f6b2",
+        "traceLines": 115,
+        "reportPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-browser-main/report.json",
+        "reportSha256": "4aaf23505e5529ab8c4428d421d6111b31ead4d77f4e29c8039a0fbab603a946",
+        "installedPackageRoot": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch/glyph-application-memory-8r7io5/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+held-rerun-20261019+evidence+controls+main-4e25a96a.tgz__39b4de5fa5f942a1711baed50c6417d0/node_modules/@pmndrs/glyph",
+        "installedShaperSha256": "059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4",
+        "browserDeliveryPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-browser-main/browser-delivery.json",
+        "browserDeliverySha256": "ced5532822623842e68c12a9f783d6bee8920d2e363c47d1f0ba13baf35d2b6d",
+        "installedPackageDistMemberCount": 242,
+        "installedPackageDistSha256MapHash": "c83c177bad68716ffcfba0740337fb7db635b04ac54bb694f7a9b5ec348bc004"
+      },
+      "published010": {
+        "gateResult": {
+          "type": "result",
+          "rootPid": 64864,
+          "rootStartSec": 1792521878,
+          "rootStartUsec": 161513,
+          "rootObserved": true,
+          "commandExitCode": 0,
+          "signal": 0,
+          "timedOut": false,
+          "sweeps": 94,
+          "completeSweeps": 94,
+          "terminalSweepComplete": true,
+          "maximumObservedNonAtomicSweepSumBytes": 1690758336,
+          "survivingBeforeCleanup": 0,
+          "uncertainBeforeCleanup": 0,
+          "remainingIdentities": [],
+          "survivingProcesses": 0,
+          "uncertainIdentities": 0,
+          "terminalIdentityCheckComplete": true,
+          "cleanupProven": true,
+          "success": true
+        },
+        "maximumObservedNonAtomicSweepSumBytes": 1690758336,
+        "tracePath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-browser-published010/physical-footprint.ndjson",
+        "traceSha256": "8561629f2d89a6f56f97f574129c0b8d67400c63804e975f0426639a387a6edf",
+        "traceLines": 95,
+        "reportPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-browser-published010/report.json",
+        "reportSha256": "82afda6eabff8e9a5a652ac662646179e4a2bce06526c8a5b66b7832e2692004",
+        "installedPackageRoot": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch/glyph-application-memory-2SdQcm/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+held-rerun-20261019+evidence+controls+published-0.1.0.tg_a804daea9a9b8a6b74b817ac8fec8c60/node_modules/@pmndrs/glyph",
+        "installedShaperSha256": "addb8144f474c9f5a005bdda084bcf15c05170004b34c7a65ab592db4962c893",
+        "browserDeliveryPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-browser-published010/browser-delivery.json",
+        "browserDeliverySha256": "5dd2b696c94ac55c5af5fcdb1683f0d4311b0d9390cbe141f1664fe3c3afe172",
+        "installedPackageDistMemberCount": 235,
+        "installedPackageDistSha256MapHash": "9c14acbd0fb72ad04cf4a94808ce3aec39adf3d006c874f54c44549b9139a00b"
+      },
+      "prior28fd": {
+        "gateResult": {
+          "type": "result",
+          "rootPid": 65020,
+          "rootStartSec": 1792521887,
+          "rootStartUsec": 171548,
+          "rootObserved": true,
+          "commandExitCode": 0,
+          "signal": 0,
+          "timedOut": false,
+          "sweeps": 94,
+          "completeSweeps": 94,
+          "terminalSweepComplete": true,
+          "maximumObservedNonAtomicSweepSumBytes": 1611359816,
+          "survivingBeforeCleanup": 0,
+          "uncertainBeforeCleanup": 0,
+          "remainingIdentities": [],
+          "survivingProcesses": 0,
+          "uncertainIdentities": 0,
+          "terminalIdentityCheckComplete": true,
+          "cleanupProven": true,
+          "success": true
+        },
+        "maximumObservedNonAtomicSweepSumBytes": 1611359816,
+        "tracePath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-browser-prior28fd/physical-footprint.ndjson",
+        "traceSha256": "845c7f254814300f37f2e46eb9085d457d5077c99ab748f07b4a918a9a6078ea",
+        "traceLines": 95,
+        "reportPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-browser-prior28fd/report.json",
+        "reportSha256": "a32393dc8365b78ea092c910270282f33633d1fdab60840ebbe65acaae9aa085",
+        "installedPackageRoot": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch/glyph-application-memory-SAY6bF/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+held-wave2-20261020+evidence+candidate+pmndrs-glyph-0.1._e8fac9687f4d83e8dadcf038a6b84c77/node_modules/@pmndrs/glyph",
+        "installedShaperSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+        "browserDeliveryPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-browser-prior28fd/browser-delivery.json",
+        "browserDeliverySha256": "b9ef15efe6c9c49675a6dbd3bcb3b424b2ec0040cd82794318bf4609fddbf610",
+        "installedPackageDistMemberCount": 242,
+        "installedPackageDistSha256MapHash": "7717d26881437e58810bd3346cad69bed784c00cc88e8fd544af759e627c24f3"
+      },
+      "candidate": {
+        "gateResult": {
+          "type": "result",
+          "rootPid": 65171,
+          "rootStartSec": 1792521895,
+          "rootStartUsec": 873950,
+          "rootObserved": true,
+          "commandExitCode": 0,
+          "signal": 0,
+          "timedOut": false,
+          "sweeps": 93,
+          "completeSweeps": 93,
+          "terminalSweepComplete": true,
+          "maximumObservedNonAtomicSweepSumBytes": 1565731768,
+          "survivingBeforeCleanup": 0,
+          "uncertainBeforeCleanup": 0,
+          "remainingIdentities": [],
+          "survivingProcesses": 0,
+          "uncertainIdentities": 0,
+          "terminalIdentityCheckComplete": true,
+          "cleanupProven": true,
+          "success": true
+        },
+        "maximumObservedNonAtomicSweepSumBytes": 1565731768,
+        "tracePath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-browser-candidate/physical-footprint.ndjson",
+        "traceSha256": "5ffecf86759de8d487f3e8d73f0dd341e9cd056dc63c11ebca5c9bae8e8f4283",
+        "traceLines": 94,
+        "reportPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-browser-candidate/report.json",
+        "reportSha256": "810120a4e1439835490e195d83da0bf6a5f5741399fb2710e9efe233a5fcd4a8",
+        "installedPackageRoot": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch/glyph-application-memory-zCVVxf/node_modules/.pnpm/@pmndrs+glyph@file+..+..+candidate+pmndrs-glyph-0.1.0.tgz_@oxc-project+types@0.150.0_re_b1c973abef666df3ee7078b52d0782e4/node_modules/@pmndrs/glyph",
+        "installedShaperSha256": "81153a6202caef528f235ae69d34ff0c8b2515c8c711af84b92db57b1f700aa6",
+        "browserDeliveryPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-browser-candidate/browser-delivery.json",
+        "browserDeliverySha256": "b90568a5ec04e34ffc6ca0402ddfb65f4a7eb8554b060210873f6c610e192b74",
+        "installedPackageDistMemberCount": 242,
+        "installedPackageDistSha256MapHash": "ab30d7ac4d9070cc9e893597b3189f6b5a95165f47773746fc9672f4a736858d"
+      }
+    },
+    "browserColdOutputOracle": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/browser-oracle-comparison.json",
+      "sha256": "a71c5ab755146acb0e3016837692452f3838461a99d3373d3f7ea640fe497fe4",
+      "allArmsMatchFreshMainAcrossSixPhasesAndBothBackends": true,
+      "comparedFields": ["pixelHash", "litPixels", "draws", "instances"],
+      "phases": ["initial", "changedContents", "changedCount", "resized", "drawReplacement", "transform"],
+      "backends": ["webgpu", "webgl2"],
+      "limits": [
+        "Pixel hashes are harness noncryptographic hashes; full readback pixels are not retained.",
+        "Installed JS entry source and delivered Wasm responses authenticated; Vite transformed JS body bytes differ by design.",
+        "Wholecommand physical footprint is25ms non-atomic process-family sweep, not edit-only/simultaneous peak.",
+        "Idle upload hooks exclude ordinarytextures/uniforms/swapchain; incidental browser CPU timings are not acceptance performance evidence."
+      ]
+    },
+    "idleUploadExceptions": {
+      "main": {
+        "webgpu": {
+          "frames": 30,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        },
+        "webgl2": {
+          "frames": 30,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        }
+      },
+      "candidate": {
+        "webgpu": {
+          "frames": 30,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        },
+        "webgl2": {
+          "frames": 30,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        }
+      },
+      "published010": {
+        "webgpu": {
+          "frames": 30,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 15244800,
+            "attributeUpdateCalls": 600,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        },
+        "webgl2": {
+          "frames": 30,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        }
+      },
+      "prior28fd": {
+        "webgpu": {
+          "frames": 30,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        },
+        "webgl2": {
+          "frames": 30,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        }
+      }
+    }
+  },
+  "peerCheck": {
+    "exit": 0,
+    "testCount55Passed": true,
+    "stdoutPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/peer-check/stdout.log",
+    "stdoutSha256": "43d6cf9b0bcdfb5c62ee0dccbac6d40e28602f45e7f5377db24c8015be036413",
+    "stderrSha256": "331ebd4feb660fa08d9d5e7f2a1fc16214539fb0eb39366c4005167009f536d2",
+    "peerFloors": [
+      "@react-three/fiber",
+      "@tresjs/core",
+      "@typegpu/gl",
+      "@typegpu/three",
+      "react",
+      "three",
+      "typegpu",
+      "vue"
+    ]
+  },
+  "packageSize": {
+    "exit": 0,
+    "entryCount": 32,
+    "statusCounts": {
+      "measured": 32
+    },
+    "outputPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/production-package-size.json",
+    "outputSha256": "20729369c54fe2a7611a476a2c7d67d84dda22804e3b6a9b12eb0755bc12b977",
+    "workflowResultPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/package-size/result.json"
+  },
+  "presentation": {
+    "presentation-tsl-dynamic-layout": {
+      "exit": 0,
+      "cells": [
+        "webgpu / bitmap",
+        "webgpu / mtsdf",
+        "webgpu / slug",
+        "webgl2 / bitmap",
+        "webgl2 / mtsdf",
+        "webgl2 / slug"
+      ],
+      "cellCount": 6,
+      "visibleReadinessCount": 6,
+      "allVisibleReadinessLines387GlyphsOneDraw": true,
+      "shaperArtifactSha256s": ["81153a6202caef528f235ae69d34ff0c8b2515c8c711af84b92db57b1f700aa6"],
+      "stdoutPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/presentation-tsl-dynamic-layout/stdout.log",
+      "stdoutSha256": "21ef80eac64080fb43658c3bf9e5e2d178986fa221f22b07c319e500420f2933",
+      "stderrSha256": "e3057b5c9dc783102ea98958fc5fc7a60bd45b032c8b32f0da915a01e2cbf9fe"
+    },
+    "presentation-typegpu-dynamic-layout": {
+      "exit": 0,
+      "cells": [
+        "webgpu / bitmap",
+        "webgpu / mtsdf",
+        "webgpu / slug",
+        "webgl2 / bitmap",
+        "webgl2 / mtsdf",
+        "webgl2 / slug"
+      ],
+      "cellCount": 6,
+      "visibleReadinessCount": 6,
+      "allVisibleReadinessLines387GlyphsOneDraw": true,
+      "shaperArtifactSha256s": ["81153a6202caef528f235ae69d34ff0c8b2515c8c711af84b92db57b1f700aa6"],
+      "stdoutPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/presentation-typegpu-dynamic-layout/stdout.log",
+      "stdoutSha256": "1336c99881115825e9e7ad8400770142ff2d1e67e5219ff73263534389b60843",
+      "stderrSha256": "a57045a73501079e8f95e22a8529172f518eb1b8b4fc094c0e3e12113df52901"
+    }
+  },
+  "screenshots": {
+    "exit": 0,
+    "workload": "dynamic-layout",
+    "technique": "MTSDF",
+    "backends": ["webgpu", "webgl2"],
+    "files": [
+      {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/visual-current/webgl2-mtsdf-dynamic-layout.png",
+        "sha256": "e1a54d97a67823375af6c4ae97558e98e4436ea2d3175fc9f5165c3146f5755b",
+        "bytes": 175286
+      },
+      {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/visual-current/webgpu-mtsdf-dynamic-layout.png",
+        "sha256": "7372da554f527322a1249c38d55b9cd889024f4fe3d4c2d54bfc47ec708b468e",
+        "bytes": 177959
+      }
+    ],
+    "outputPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/visual-current",
+    "workflowResultPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/presentation-screenshots-current/result.json"
+  },
+  "knownLimits": [
+    "OS footprint is a 25ms non-atomic process-family sampling estimate, not atomic peak or edit-only footprint; JS heap and Wasm capacity remain separate diagnostics.",
+    "Allocator requested live and completed-call high-water exclude Talc fragmentation, transient internal realloc peak, JS tokens, GPU, and font decoder instances; Wasm pages are capacity, reported separately.",
+    "Browser phase pixelHash is the harness hash, not retained full-pixel data.",
+    "Idle upload probes do not include ordinary textures/uniforms/swapchain. Published release WebGPU idle observed attributeUpdateBytes=15244800 over 600 calls; the other arms were zero.",
+    "Screenshots are current MTSDF dynamic-layout visual records; ASCII glyph density is not evidence for the separate raster hero A/B scene."
+  ]
+}

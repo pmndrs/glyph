@@ -2393,6 +2393,18 @@ The local publication frontier replaces gather's source Vec with the existing re
 The later per-owner sparse gather loop is retired: the preceding retained stream either completes or clears
 retaining before broad append. The stream, multi-owner replacement and broad writer remain the active paths;
 this reachability simplification has no measured speed claim.
+
+The E3 shared-layout experiment selected whole-run shaping for admitted short broad edits and complete gather
+reset for certified dense owner frontiers, preserving sparse owners and one executor. Its independent cold gathered
+and physical-byte oracle and scoped package/downstream gates pass. The complete same-machine matrix does not admit
+it as live: dense and sparse direct-prior p50 worsen, allocator work and shaper size rise, and clock/control movement
+limits causal attribution. Preserve its entire correct production variant before restoring the preceding a829/28fd
+source. At this preservation snapshot E3 is still present but not admitted; the
+[wave record](../log/2026-10-20-held-shared-layout-hybrid-wave.md) and
+[portable packet](../../../benches/reports/held-shared-layout-hybrid-local-2026-10-20/README.md) own exact scope and
+source-choice state. Fresh independent Sol High owns the comparative reset and next ownership plan. No second
+executor, cache, Unicode parser or storage model is selected; parity remains open.
+
 The frame request header uses direct checked writes rather than constructing 35 field/value tuples per setter;
 validation labels, field order and little-endian encoding are preserved. The saved bulk profile attributes 20.960 ms
 self samples to the former header writer across 20,000 sets. Compiled ABI 7/7, focused Rust, Unicode, static and

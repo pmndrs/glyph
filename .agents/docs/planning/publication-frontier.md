@@ -37,7 +37,7 @@ The user explicitly set a new goal after the classification and algorithm report
 
 ### Roles and bounded context
 
-Primary owns diagnosis, algorithm selection, Big-O reasoning, task boundaries, integration review and acceptance. **Every implementor is native GPT-6 Sol Medium: `model=gpt-6-sol`, `reasoning_effort=medium`. Never GPT-5 and never Luna for implementation.** Use `fork_turns=none` and a precise brief. Native Luna runs defined tests, gates, benchmarks and factual stats/retrieval only; it does not select algorithms or decide acceptance. Fresh Sol High may advise/review one bounded topic; retire it between topics rather than resume expired context. Do not route owned models through ai-cli.
+For the latest user-requested architectural reset, fresh no-history native Sol6 High owns comparative diagnosis, algorithm selection and the next plan; primary orchestrates evidence, preservation, integration review and acceptance. Earlier primary-selected hypotheses are historical, not instructions to the fresh reviewer. **Every implementor is native GPT-6 Sol Medium: `model=gpt-6-sol`, `reasoning_effort=medium`. Never GPT-5 and never Luna for implementation.** Use `fork_turns=none` and a precise brief. Native Luna runs defined tests, gates, benchmarks and factual stats/retrieval only; it does not select algorithms or decide acceptance. Fresh Sol High may advise/review one bounded topic; retire it between topics rather than resume expired context. Do not route owned models through ai-cli.
 
 Every implementation brief must carry: WORK/isolated checkout and exact source checkpoint; approved report subsection; owned files/functions and actual caller/consumer paths; the diagnosed mechanism and evidence receipt; concrete algorithm/pseudocode and admission/fallback conditions; time/space bounds and adversarial cases; identities/lifetimes/API/ABI invariants; explicit old paths to retire; scope exclusions; independent oracle/gates and artifact outputs; no merge/release. Do not tell an implementor merely to make something faster. Give read-only dependencies explicitly, partition mutating file ownership, and reconcile cross-file changes centrally. Mutation worktrees must derive from the frozen reviewed candidate, not accidentally from main without current uncommitted work.
 
@@ -91,47 +91,50 @@ Retain and preserve this correct combined work for compatible additions; no supe
 
 **Next-wave work evidence:** frozen optimized codec inspection proves repeated1536 B SIMD-group and384 B scalar-tail zero fills, plus scalarized finite checks; named/shipping standard sections match. The custom Inter producer proves repeated-group eligibility for scratch reuse. Actual Bitmap run/active-store utilization remains unproved, so the optional finite classifier is deferred. Static instructions do not prove frequency or latency; repeated lookup cost remains unmeasured. Fresh Sol High found no supported dense updater rewrite without that attribution; no new cache/executor/parser/layout/compiler policy or segmented design is selected. Preserve synchronous setters, prepared queries, split ownership, batching/order, Rust authority and packed SoA/SWAR/SIMD. Full seven-family parity remains open; post-parity boost waves completed0. New raw evidence lives under `.cache/held-wave1-20261020/evidence`. Commit/submit the completed packet through real gh stack; keep all layers held/unmerged.
 
-**Current frozen wave — invocation-local Codec scratch and publication requests:** native Sol6 Medium
-implemented one initialization per populated scalar/SIMD invocation in the existing executor and removed publication
-map/filter/spread intermediates plus fresh empty request lists. Pending snapshot, removal/upsert order, independent
-order dirt, synchronous readonly transport borrowing and nonempty output ownership remain. No shared mutable scratch,
-cache, parser, storage/ABI or finite-predicate change. Actual custom Inter1024 runs once with 2560 SIMD-eligible groups;
-these are not Bitmap runtime counts. Focused native literal-byte/mask/tail/padding/overflow and cold-output gates,
-Clippy and TS checks pass; final scoped source/test review is clean. The frozen candidate shipping build and full
-package check pass:1142 Node tests and587 Rust tests, one ignored. Both real-Wasm independent byte and reachable
-overflow/reset/recovery fixtures pass on this candidate. Packed archive28fd0413… and named executable authenticate; all four optimized scratch zero fills moved outside
-every executor loop while the1536-byte frame remains. JS and shaper each add2 Node-gzip bytes versus prior340.
-Full repository, peers, production, fresh four-arm memory/browser and12 presentation cells pass; allocator live
-and completed-call peaks match prior340. The main arm of the one full seven-family comparison is complete:
-dense512 main/candidate p50/p95ms7.910/8.936 versus10.143/11.443 (+28.2%p50); dense1024
-16.844/18.395 versus19.762/22.341 (+17.3%). All145 rows remain:89 faster,26 slower,24 neutral,
-two clock exclusions and four mode mismatches; cached inspection is mode-excluded. Sparse borrowing and
-width-change inspection remain faster. Main/candidate software calibration drift10.139/1.213%, not hardware GHz.
-Published completes with the same saved candidate JSON07379e47…: dense512 release/candidate
-p50/p95ms8.582/9.430 versus10.143/11.443 (+18.2%p50), dense1024 17.100/18.684 versus19.762/22.341
-(+15.6%). Release100 faster/26 slower/13 neutral/four exclusions(one clock,three mode),two unavailable
-outline rows; software calibration drift3.718%. Prior340 completes with identical saved candidate samples:
-1 faster/2 slower/142 neutral/no exclusions. Prior dense512 p50/p95ms10.217/11.319 and dense1024
-20.120/22.930 yield−0.7%/−1.8%current p50, both neutral. Balanced1000-label grow-shrink-space engine/scene
-publication flags+6.3%(p.028,CI+1.7..10.6%) and+5.9%(p.007,CI+2.6..13.6%) remain visible;
-no blanket no-regression clearance or parity. Prior software calibration drift1.302%. Preserve this exact
-correct provisional variant for combinations. The completed [portable packet](../../../benches/reports/held-codec-scratch-local-2026-10-20/README.md) preserves full results; source ref/commit/real-stack submission follow. Preceding pushed291 CI39445779433 passes all five jobs;
-it does not cover this uncommitted wave. [Owned wave record](../log/2026-10-20-held-codec-scratch-request-wave.md). New evidence lives under
-`.cache/held-wave2-20261020/evidence`; prior273 results do not accept this source. Parity remains false, boost waves0.
+**Completed Codec/request wave; preceding live-source choice:** commit `a829b86b`, preserved ref
+`experiments/held-codec-scratch-request-measured-20261020`, archive `28fd0413…`, shipping `01001ff6…`.
+The [portable evidence](../../../benches/reports/held-codec-scratch-local-2026-10-20/README.md) owns all three
+same-machine arms, correctness, codegen, size/memory and downstream limits. Dense remains slower than both controls;
+two balanced1000 grow/shrink prior flags remain. Exact a829 CI39472962401 passed all five jobs, independently of E3.
+The one exact current1024 profile uses10warmups/80iterations/no timed reads: exclusive sampled preparation835835µs,
+publication358876µs,unattributed99122µs; total1293833µs/842samples. The callback omits Labs returned textCount DFS;
+this is sampled diagnostic CPU, not acceptance or removable time. Custom outlined Inter counts are not Bitmap facts.
 
-All three arms and the one fresh exact28fd/named6fa1024-label scene bulk-write capture complete with exit0:
-10 warmups,80 iterations,no timed reads. Root independently selects fresh preparation/publication anchors7/53
-under updateBulk6 and runs the named summary plus structured sample/CPU conservation. Exclusive sampled CPU:
-preparation835835µs/560samples (JS242459µs),publication358876µs/240samples,unattributed99122µs/42samples.
-Whole total1293833µs/842samples. This is diagnostic attribution, not removable latency or a cross-day CPU comparison.
-Same createTextBatch/update/scene path; the profile omits Labs' returned textCount DFS, so its elapsed time is not
-benchmark acceptance. Full tables and exact identities are in local comparisons-all.json/md and
-wave2-result-summary.json. No second capture is selected. Fresh scoped Sol High ingress/shaping advice is complete. The user explicitly
-requests a hybrid: root is selecting coarse dense reconstruction versus sparse retention within the same executor
-and shared packed/SoA layouts, bypassing dense correspondence/splice work through existing producers. No extra
-executor, duplicated semantic model, speculative cache, shadow parser or segmented storage. Preparation remains
-the dominant sampled scope; publication alone is not promised to close parity. Root owns selection. ABI-free actual-Bitmap/native-counter bridge source advice is complete, but exact producer
-bytes/fixture equivalence and run masks remain unmeasured; custom Inter counts are not that proof.
+**Completed shared-layout hybrid E3 — preserve whole variant, then restore preceding source:** native Sol6 Medium
+implemented coarse short-run whole shaping and complete-frontier dense gather reset inside the existing owners,
+executor and layouts. Final cold gathered/physical oracle, scoped review,498 native tests, full root check, packed
+and named-Wasm authentication, peers, four-arm memory/browser and12dynamic-layout cells pass in their stated scopes.
+Initial fixture failure and repair remain recorded. Archive37c1e088…/shipping81153a62…/named8e325fa4… changes only
+shaper Wasm versus28fd (+1007raw/+403Node-gzipB); JS/declarations and exported binary signatures are unchanged.
+
+All three eight-block timing arms are terminal, with identical saved candidate samples and1059fixed inputs.
+Dense512 main/release/prior/E3 p50/p95ms:7.759/11.488,7.967/24.900,9.816/11.674,10.720/13.628.
+Dense1024:16.727/18.614,16.277/17.612,18.497/20.997,19.519/21.530. Direct-prior sparse borrow worsens
+0.186/0.270→0.214/0.324ms. Counts main60faster/37slower/31neutral/17excluded; release71/31/30/11excluded/
+2unavailable; prior1/75/44/25excluded. Software calibration drift12.9/116.3/27.8/89.6% and movement in an unchanged
+JS-owned-array control prohibit attributing all slower rows to code. No favorable retries or sample deletion.
+Untimed dense diagnostic allocator work rises4469allocations,960reallocations and432156requestedB/cycle; it does
+not identify allocation sites, latency or JS GC. All details are in the
+[portable E3 packet](../../../benches/reports/held-shared-layout-hybrid-local-2026-10-20/README.md).
+
+**Fresh independent Sol High reset:** a native `gpt-6-sol` High agent received no conversation history and owns the
+[comparison and next plan](../../../benches/reports/held-shared-layout-hybrid-local-2026-10-20/independent-architecture-reset.md).
+Old main/release stage changed setters and amortize one Rust frame across a batch. HELD prepares and adopts a
+queryable semantic revision synchronously per setter, then publishes; this buys prepared/sparse gains but introduces
+per-call work. Rope sharing and contiguous output also have different granularity. No semantic lower bound proves
+parity impossible. The source ingress audit admits no material deletion; do not restart header, validator or private
+Three/configured shortcuts from sampled labels. E3 fails live admission, not the general hybrid idea.
+
+Preservation/restoration is the next owned operation: commit the complete E3 production source/tests/docs/evidence,
+create a descriptive recoverable ref, submit through real held gh-stack, then restore only the two package source
+files to exact a829/28fd and update this state. Never retain tests alone or destroy the variant. After preservation,
+one matched actual-Bitmap eight-cycle setter/publication allocator split using the separately authenticated saved
+E3 and28fd diagnostic images may select a source ownership audit. The out-of-tree opt-in patch is reviewed but
+unapplied; static/workflow identity gates precede execution. No E3 CPU profile or product tweak is selected. Counts
+alone cannot admit a wave. A coherent deletion needs exact producer/consumer ownership proof and independent cold
+physical/semantic/lifetime output. Final seven-family parity, API/ABI/peer/lifetime and a newly defined editorial
+hero comparison remain required. No heavy runner is live. Parity false; boost waves0; stack held/unmerged.
+[Owned wave record](../log/2026-10-20-held-shared-layout-hybrid-wave.md).
 
 ### Completed current-machine rerun — 19 October 2026
 

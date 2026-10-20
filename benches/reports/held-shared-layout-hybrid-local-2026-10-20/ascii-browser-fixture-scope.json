@@ -1,0 +1,64 @@
+{
+  "schema": "ascii-browser-fixture-scope-v1",
+  "method": "Read-only source inspection of the committed repository snapshot and E2 wrapper receipts; no workload/server/browser was run.",
+  "workflow": {
+    "name": "benchmark:retained-uploads",
+    "source": "benches/scripts/verify-retained-uploads.mts",
+    "workflowSummary": "Prove retained Three storage uploads and profile an ASCII-rich Text on WebGPU and WebGL2.",
+    "sourceSha256": "5b8d24a26b5abb60e201d5c420e6334f7751264538d7b1a81b7d535140e7dd5e",
+    "dedicatedTestFile": "No separate retained-upload *.test.* file is registered; the named workflow script is the entry point."
+  },
+  "scene": {
+    "source": "benches/src/retained-upload-proof.ts",
+    "sourceSha256": "eaf0c8f0f729896218e30fd7ced1537b0d612d016f0156c5699719ac569b0ef8",
+    "sourceFreezeEvidence": "E2 application-memory-browser-candidate/report.json includes this path and hash; unchangedAfterObservation=true. The file SHA-256 read from the repository snapshot matches.",
+    "model": "one retained Text inside one TextGroup",
+    "text": "ASCII characters from .:+*#%@, arranged in 12-character runs with palette-colored spans and line breaks after every four runs.",
+    "fontSource": "/fixtures/rendering/inter-bitmap-16.font.glb; Bitmap strikes [16].",
+    "fontFixtureSha256": "acdca408ed169c7aa1c2791dbbc2982afa1939c56fbc59ef43cc38f7ff366c14",
+    "fontFixtureBytes": 926984,
+    "fontDeliveryEvidence": "E2 application-memory-browser-candidate/browser-delivery.json records HTTP 200, model/gltf-binary, 926984 bytes and the fixture SHA for both WebGPU and WebGL2.",
+    "initialRunCount": 240,
+    "initialAsciiCharacters": 2880,
+    "idleFrames": 30,
+    "usage": "stream for main, candidate, and prior-current archive; dynamic for published release, as recorded in E2 starts.",
+    "phases": [
+      {
+        "name": "initial",
+        "operation": "Create/publish 240 runs (2,880 glyph characters)."
+      },
+      {
+        "name": "idle",
+        "operation": "Render 30 frames and check upload counters and attribute versions."
+      },
+      {
+        "name": "changedContents",
+        "operation": "Replace equal-length text with a second ASCII palette phase."
+      },
+      {
+        "name": "changedCount",
+        "operation": "Replace with 120 runs."
+      },
+      {
+        "name": "resized",
+        "operation": "Grow to 480 runs and check replacement storage creation."
+      },
+      {
+        "name": "drawReplacement",
+        "operation": "Change style to underline and check draw topology replacement."
+      },
+      {
+        "name": "transform",
+        "operation": "Shift text position and check changed retained uploads."
+      }
+    ],
+    "scope": "Four-archive Node/browser memory and cold-output comparison through the same committed ASCII-rich retained-upload scene. It provides the six phase output signatures in both browser backends; it is separate from the 12-cell dynamic-layout TSL/TypeGPU presentation matrix.",
+    "visualEvidence": "Source and delivery evidence establish the ASCII fixture content and font identity. No raw ASCII scene screenshot is included in these records."
+  },
+  "presentationMatrixClarification": "benchmark:presentation is a separate workflow: 3 techniques \u00d7 2 backends \u00d7 2 shader implementations = 12 dynamic-layout cells. Do not label those cells as the ASCII scene or as a recovered hero workload.",
+  "receiptReferences": [
+    "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/application-memory-browser-candidate/start.json",
+    "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/application-memory-browser-candidate/browser-delivery.json",
+    "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/application-memory-browser-candidate/report.json"
+  ]
+}

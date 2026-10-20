@@ -1,0 +1,279 @@
+{
+  "schema": "glyph-held-hybrid-size-and-abi-summary-v1",
+  "recordedUtc": "2026-10-20",
+  "sizeMethod": {
+    "sourceHelper": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/size-comparison.mjs",
+    "sourceHelperSha256": "7f200bcd69760a667029b2f43990ad91744ec98a2814cee953795d20feaa57a0",
+    "adaptedHelper": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/size-comparison.mjs",
+    "adaptedHelperSha256": "e5ec47e9af690b577fc82ee46588d176ceb4f98e17a3753a37d36833bcae667d",
+    "inputSha256": "749bb912465bafc8e4e4d9d5b5c4959aaee9e9ae2a82a4a8af12a5b6e16a3bef",
+    "nodeVersion": "v24.18.0",
+    "compression": "gzipSync level 9, mtime 0; each dist member compressed separately then summed",
+    "scope": "dist .js/.wasm/.d.ts members; text-shaper.wasm also reported separately; not concatenated bundle or Brotli"
+  },
+  "archives": {
+    "candidate": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "sha256": "37c1e0882acfb16bc6ebc9e2538340b4a12eeff6d8006e0055e86423db3572e6",
+      "archiveBytes": 3196557,
+      "measuredMembers": 468,
+      "suffixCounts": {
+        ".js": 237,
+        ".wasm": 5,
+        ".d.ts": 226
+      }
+    },
+    "prior28fd": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "sha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+      "archiveBytes": 3196121,
+      "measuredMembers": 468,
+      "suffixCounts": {
+        ".js": 237,
+        ".wasm": 5,
+        ".d.ts": 226
+      }
+    },
+    "main": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+      "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "archiveBytes": 3120073,
+      "measuredMembers": 468,
+      "suffixCounts": {
+        ".js": 237,
+        ".wasm": 5,
+        ".d.ts": 226
+      }
+    },
+    "published010": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+      "sha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+      "archiveBytes": 2271693,
+      "measuredMembers": 454,
+      "suffixCounts": {
+        ".js": 230,
+        ".wasm": 5,
+        ".d.ts": 219
+      }
+    }
+  },
+  "sizes": {
+    "policy": "Node v24.18.0 gzipSync level9 mtime0, sum individual dist members per suffix group; shaper separately. No concatenated bundle or Brotli claim.",
+    "arms": {
+      "candidate": {
+        "js": {
+          "files": 237,
+          "rawBytes": 875885,
+          "gzipBytes": 298974
+        },
+        "declarations": {
+          "files": 226,
+          "rawBytes": 494232,
+          "gzipBytes": 160334
+        },
+        "wasm": {
+          "files": 5,
+          "rawBytes": 4308455,
+          "gzipBytes": 1619610
+        },
+        "shaper": {
+          "rawBytes": 1610254,
+          "gzipBytes": 599952
+        }
+      },
+      "prior28fd": {
+        "js": {
+          "files": 237,
+          "rawBytes": 875885,
+          "gzipBytes": 298974
+        },
+        "declarations": {
+          "files": 226,
+          "rawBytes": 494232,
+          "gzipBytes": 160334
+        },
+        "wasm": {
+          "files": 5,
+          "rawBytes": 4307448,
+          "gzipBytes": 1619207
+        },
+        "shaper": {
+          "rawBytes": 1609247,
+          "gzipBytes": 599549
+        }
+      },
+      "main": {
+        "js": {
+          "files": 237,
+          "rawBytes": 864183,
+          "gzipBytes": 295743
+        },
+        "declarations": {
+          "files": 226,
+          "rawBytes": 497005,
+          "gzipBytes": 161416
+        },
+        "wasm": {
+          "files": 5,
+          "rawBytes": 4160059,
+          "gzipBytes": 1560914
+        },
+        "shaper": {
+          "rawBytes": 1462005,
+          "gzipBytes": 541363
+        }
+      },
+      "published010": {
+        "js": {
+          "files": 230,
+          "rawBytes": 837472,
+          "gzipBytes": 289977
+        },
+        "declarations": {
+          "files": 219,
+          "rawBytes": 474185,
+          "gzipBytes": 153004
+        },
+        "wasm": {
+          "files": 5,
+          "rawBytes": 4052612,
+          "gzipBytes": 1517196
+        },
+        "shaper": {
+          "rawBytes": 1362353,
+          "gzipBytes": 500993
+        }
+      }
+    },
+    "deltas": {
+      "prior28fd": {
+        "js": {
+          "rawBytes": 0,
+          "gzipBytes": 0
+        },
+        "declarations": {
+          "rawBytes": 0,
+          "gzipBytes": 0
+        },
+        "wasm": {
+          "rawBytes": 1007,
+          "gzipBytes": 403
+        },
+        "shaper": {
+          "rawBytes": 1007,
+          "gzipBytes": 403
+        }
+      },
+      "main": {
+        "js": {
+          "rawBytes": 11702,
+          "gzipBytes": 3231
+        },
+        "declarations": {
+          "rawBytes": -2773,
+          "gzipBytes": -1082
+        },
+        "wasm": {
+          "rawBytes": 148396,
+          "gzipBytes": 58696
+        },
+        "shaper": {
+          "rawBytes": 148249,
+          "gzipBytes": 58589
+        }
+      },
+      "published010": {
+        "js": {
+          "rawBytes": 38413,
+          "gzipBytes": 8997
+        },
+        "declarations": {
+          "rawBytes": 20047,
+          "gzipBytes": 7330
+        },
+        "wasm": {
+          "rawBytes": 255843,
+          "gzipBytes": 102414
+        },
+        "shaper": {
+          "rawBytes": 247901,
+          "gzipBytes": 98959
+        }
+      }
+    }
+  },
+  "shaperWasmAbi": {
+    "decoder": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/inspect_wasm_abi_and_sections.py",
+    "decoderSha256": "50fdc263767c286065b7c5e52fb55a0563d7e802f449a9b11c80217194d41ef7",
+    "evidence": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/wasm-abi-and-section-evidence.json",
+    "candidateMemberSha256": "81153a6202caef528f235ae69d34ff0c8b2515c8c711af84b92db57b1f700aa6",
+    "prior28fdMemberSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+    "imports": {
+      "candidate": 0,
+      "prior28fd": 0,
+      "exact": true
+    },
+    "exports": {
+      "candidateCount": 39,
+      "prior28fdCount": 39,
+      "functionCountEach": 38,
+      "namesKindsAndFunctionParamResultTypesExact": true,
+      "nonFunctionExports": [
+        {
+          "name": "memory",
+          "kind": "memory",
+          "limits": {
+            "flags": 0,
+            "minimum": 21
+          }
+        }
+      ],
+      "actualStructuralBoundaryEqual": true
+    },
+    "limitations": "Structural ABI only; does not establish payload-layout semantics, ownership, or lifetime."
+  },
+  "otherFourWasmIdentityBridge": [
+    {
+      "member": "package/dist/bitmap-baker.wasm",
+      "sha256": "af4892531eeab1b5d7e40844e2ab261628f51456345fb4c515fae248ae8449bc",
+      "bytes": 614383,
+      "byteIdenticalCandidateToPrior28fd": true,
+      "priorBinaryInventoryAvailable": true
+    },
+    {
+      "member": "package/dist/font-baker.wasm",
+      "sha256": "10b15d3d9359fdc76629a52d8ff68158e0396f2fd0a4581be5b83b194eecd793",
+      "bytes": 1080865,
+      "byteIdenticalCandidateToPrior28fd": true,
+      "priorBinaryInventoryAvailable": true
+    },
+    {
+      "member": "package/dist/mtsdf-baker.wasm",
+      "sha256": "27a205b72a77fa81016c90e4be2cbfdda7a0ba587f0c9d18169a8399ff557728",
+      "bytes": 548605,
+      "byteIdenticalCandidateToPrior28fd": true,
+      "priorBinaryInventoryAvailable": true
+    },
+    {
+      "member": "package/dist/slug-baker.wasm",
+      "sha256": "418c895d6b5460e4a6ed1e3c35e37bc8e2fad31695e874cea5f33e144f71bee4",
+      "bytes": 454348,
+      "byteIdenticalCandidateToPrior28fd": true,
+      "priorBinaryInventoryAvailable": true
+    }
+  ],
+  "namedShipping": {
+    "sameStandardSectionOrder": true,
+    "allStandardSectionsByteIdentical": true,
+    "namedCustomSections": [
+      {
+        "name": "name",
+        "sha256": "de66b9127cb026c6a08df69d451cb6c2e64a8ce0f6259a62f3e46eb7ab08b879",
+        "bytes": 179621
+      }
+    ],
+    "shippingCustomSections": [],
+    "note": "Named artifact adds the name custom section; standard executable sections are byte-identical."
+  },
+  "note": "The underlying decoder evidence includes function indices. Its changedExports convenience list compares indices and is not an ABI-difference list; this receipt compares exported name/kind/signature/type fields and excludes internal indices."
+}

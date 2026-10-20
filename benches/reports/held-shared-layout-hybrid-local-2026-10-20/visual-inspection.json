@@ -1,0 +1,27 @@
+{
+  "recordedUtc": "2026-10-20T18:53:13.618646+00:00",
+  "method": "Root directly viewed both local PNGs with view_image, not just hashes.",
+  "artifact": "37c1e0882acfb16bc6ebc9e2538340b4a12eeff6d8006e0055e86423db3572e6",
+  "shippingWasm": "81153a6202caef528f235ae69d34ff0c8b2515c8c711af84b92db57b1f700aa6",
+  "images": [
+    {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/visual-current/webgpu-mtsdf-dynamic-layout.png",
+      "sha256": "7372da554f527322a1249c38d55b9cd889024f4fe3d4c2d54bfc47ec708b468e",
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/visual-current/webgl2-mtsdf-dynamic-layout.png",
+      "sha256": "e1a54d97a67823375af6c4ae97558e98e4436ea2d3175fc9f5165c3146f5755b",
+      "width": 1280,
+      "height": 720
+    }
+  ],
+  "observed": "Both show matching left/center/right paragraph layouts and visible readable text. No missing-character placeholders observed in visible portions.",
+  "limitations": [
+    "Toolbar/HUD overlays cover portions of the first and last paragraphs; these images alone do not prove every glyph is unoccluded.",
+    "These are current candidate MTSDF dynamic-layout images, distinct from the four-archive ASCII browser cold-output scene.",
+    "Animated HUD/FPS numbers are not performance acceptance measurements.",
+    "No claim that an unavailable historical hero source or image was recovered."
+  ]
+}

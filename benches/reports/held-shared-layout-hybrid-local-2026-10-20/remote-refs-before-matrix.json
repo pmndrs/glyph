@@ -1,0 +1,10 @@
+{
+  "recordedUtc": "2026-10-20T18:37:26.563623+00:00",
+  "provenance": "Root exec_command git ls-remote completed exit0; this receipt transcribes its two returned ref lines. No synthetic command start/finish time.",
+  "argv": ["git", "ls-remote", "origin", "refs/heads/main", "refs/heads/feat/rust-text-input-wire"],
+  "refs": {
+    "refs/heads/main": "4e25a96a57462fef5ad0d19065a822695b480f60",
+    "refs/heads/feat/rust-text-input-wire": "a829b86bfefcd0e39b6d947cb7a2571776cd06a0"
+  },
+  "mainControlSourceMatches": true
+}
