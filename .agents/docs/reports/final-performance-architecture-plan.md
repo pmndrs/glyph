@@ -104,10 +104,11 @@ published7.967/16.277 and prior28fd9.816/18.497; direct-prior sparse borrow also
 in a byte-identical JS control prevent assigning all slower flags to code. Untimed allocation work and shaper size
 rise. The [portable packet](../../../benches/reports/held-shared-layout-hybrid-local-2026-10-20/README.md) owns
 absolute p50/p95, all rows/exclusions, memory, size, identities and limits. Preserve the full correct E3 source/tests/
-archive/evidence under a descriptive ref and commit, then restore exact a829/28fd live source. A single optional
-matched Bitmap setter/publication allocator split can choose an ownership audit after preservation; no product tweak
-or E3 CPU profile is selected. A future wave needs a complete source-proven deletion and independent cold semantic,
-physical and lifetime proof. No new executor or layout. Final parity and integration/hero gates remain open;
+archive/evidence: preserved at734dae75/ref `experiments/held-shared-layout-hybrid-measured-20261020` and submitted through real gh-stack; live source is now restored to exact a829/28fd, with fresh exit0package check and all947shipped members matching the authenticated saved28fd archive. The [final independent addendum](../../../benches/reports/held-shared-layout-hybrid-local-2026-10-20/independent-next-decision-addendum.md)
+skips the allocator split and admits no new product wave: actual Bitmap prepared columns through physical/borrowed
+output show no whole source-proven redundant pass. A future wave requires a named removable owner/path and
+independent cold semantic, physical and lifetime proof. Parity remains unresolved without an impossibility claim.
+No new executor or layout. Final parity and integration/hero gates remain open;
 post-parity boost waves0, held stack unmerged.
 
 ## Evidence ledger and current gates

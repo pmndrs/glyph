@@ -1,0 +1,37 @@
+{
+  "recordedUtc": "2026-10-20T20:42:49.736629+00:00",
+  "preservationCommit": "734dae75e9d39cd90f0e60c2244aa488b5b64bf2",
+  "preservationRef": "experiments/held-shared-layout-hybrid-measured-20261020",
+  "stackSubmission": {
+    "argv": ["gh", "stack", "submit", "--auto", "--remote", "origin"],
+    "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+    "started": "2026-10-20T20:38:34.914094+00:00",
+    "finished": "2026-10-20T20:38:46.528917+00:00",
+    "exit": 0,
+    "sha256": {
+      "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr.log": "be0e1968a14a8791ac6c856aafd1a971dfc0dcdb20f26deebe247dba8ad8360e"
+    }
+  },
+  "priorSource": "a829b86bfefcd0e39b6d947cb7a2571776cd06a0",
+  "packageSourceDiffEmpty": true,
+  "restoredOnly": [
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/state.rs",
+      "liveSha256": "e59ab9f1ef5d2d294dc30fe7045e866d83e7e7d5647317262633bda132a57492",
+      "preservedExperimentSha256": "af32b2539c9475775ab5845bb07336ac994d03fc8b1827b1d13b5e3e0358cce2",
+      "liveEqualsPrior": true
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/work_attribution.rs",
+      "liveSha256": "803ef8d8eb71026fbebbb97e461a9deb4eddb2432ad5fdac45aac227fcd3cbd0",
+      "preservedExperimentSha256": "c65ec9b203042818e5eaa997cb9e211a494ddf606fe1d96aeb2c95e58e1c0ac1",
+      "liveEqualsPrior": true
+    }
+  ],
+  "attestation": "Existing staged-source digest dba4f566 remains covered; docs:attest refused duplicate, not a missing attestation.",
+  "pending": "Fresh shipping rebuild and package member authentication; fresh Sol High source-only downstream deletion audit.",
+  "allocatorSplitPatchApplied": false,
+  "parity": false,
+  "boostWaves": 0
+}

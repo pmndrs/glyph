@@ -125,16 +125,23 @@ per-call work. Rope sharing and contiguous output also have different granularit
 parity impossible. The source ingress audit admits no material deletion; do not restart header, validator or private
 Three/configured shortcuts from sampled labels. E3 fails live admission, not the general hybrid idea.
 
-Preservation/restoration is the next owned operation: commit the complete E3 production source/tests/docs/evidence,
-create a descriptive recoverable ref, submit through real held gh-stack, then restore only the two package source
-files to exact a829/28fd and update this state. Never retain tests alone or destroy the variant. After preservation,
-one matched actual-Bitmap eight-cycle setter/publication allocator split using the separately authenticated saved
-E3 and28fd diagnostic images may select a source ownership audit. The out-of-tree opt-in patch is reviewed but
-unapplied; static/workflow identity gates precede execution. No E3 CPU profile or product tweak is selected. Counts
-alone cannot admit a wave. A coherent deletion needs exact producer/consumer ownership proof and independent cold
-physical/semantic/lifetime output. Final seven-family parity, API/ABI/peer/lifetime and a newly defined editorial
-hero comparison remain required. No heavy runner is live. Parity false; boost waves0; stack held/unmerged.
-[Owned wave record](../log/2026-10-20-held-shared-layout-hybrid-wave.md).
+**Preservation and source restoration:** complete E3 source/tests/docs/evidence are committed at
+`734dae75e9d39cd90f0e60c2244aa488b5b64bf2`, recoverable ref
+`experiments/held-shared-layout-hybrid-measured-20261020`, submitted through real gh-stack to held draft#310.
+Only the two package source files were then restored to exact a829/28fd; all Glyph source matches a829.
+The fresh restored package check exits0; all947shipped dist members match saved28fd, shaper01001ff6…. The
+preservation packet retains its source-stage snapshot and does not assert the hybrid is admitted as live.
+Fresh Sol High selected **skip the allocator split**: E3 allocation phase totals cannot choose a removable live28fd
+path. The opt-in patch stays unapplied. Its completed
+[actual Bitmap source audit](../../../benches/reports/held-shared-layout-hybrid-local-2026-10-20/independent-next-decision-addendum.md)
+follows prepared glyph/flow/position columns through scene publication, Codec inputs, ordered instances, physical
+bytes and borrowed host patches. No whole redundant semantic/physical pass is source-proven; no product wave is
+selected. Keep28fd live, E3 fully preserved. A new wave needs a named complete removable owner/path with rollback,
+borrow and independent cold-output proof. Exact Bitmap changed-field/patch-byte counts remain unavailable; custom
+Inter is not a substitute, and a speculative diagnostic bridge is not selected. Report fixed-contract parity as
+unresolved, without an impossibility claim or weakening synchronous semantics. Final seven-family parity,
+API/ABI/peer/lifetime and a newly defined editorial hero comparison remain required. Parity false; boost waves0;
+stack held/unmerged. [Owned wave record](../log/2026-10-20-held-shared-layout-hybrid-wave.md).
 
 ### Completed current-machine rerun — 19 October 2026
 

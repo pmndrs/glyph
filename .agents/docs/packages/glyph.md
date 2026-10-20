@@ -2399,7 +2399,7 @@ reset for certified dense owner frontiers, preserving sparse owners and one exec
 and physical-byte oracle and scoped package/downstream gates pass. The complete same-machine matrix does not admit
 it as live: dense and sparse direct-prior p50 worsen, allocator work and shaper size rise, and clock/control movement
 limits causal attribution. Preserve its entire correct production variant before restoring the preceding a829/28fd
-source. At this preservation snapshot E3 is still present but not admitted; the
+source. E3 is preserved in full at734dae75 and `experiments/held-shared-layout-hybrid-measured-20261020`; live package source is restored to exact a829/28fd. Fresh package check exits0 and all947shipped dist members match saved28fd. The
 [wave record](../log/2026-10-20-held-shared-layout-hybrid-wave.md) and
 [portable packet](../../../benches/reports/held-shared-layout-hybrid-local-2026-10-20/README.md) own exact scope and
 source-choice state. Fresh independent Sol High owns the comparative reset and next ownership plan. No second

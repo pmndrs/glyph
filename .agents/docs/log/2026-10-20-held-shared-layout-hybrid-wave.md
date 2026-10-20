@@ -79,3 +79,24 @@ opt-in workflow patch is unapplied; no E3 CPU profile or product tweak is select
 Final API/ABI/peer/lifetime and a newly scoped editorial hero comparison remain distinct gates. Keep the fixed seven
 families and accepted synchronous preparation contract. Parity is false, boost waves0, held stack unmerged; no
 release, tag or demo merge. The [compact frontier](../planning/publication-frontier.md) owns current operation state.
+
+Whole-variant preservation completed at734dae75e9d39cd90f0e60c2244aa488b5b64bf2 and named ref
+`experiments/held-shared-layout-hybrid-measured-20261020`, submitted through real gh-stack to held draft#310 with
+remote/local0/0. After that checkpoint, only state.rs/work_attribution.rs were restored to a829. The entire Glyph
+source diff against a829 is empty. A fresh package rebuild/authentication is running before any restored-dist claim.
+The preceding pending-operation paragraphs describe the preserved source-stage snapshot, not the current status.
+
+The independent reviewer then chose to skip the allocator phase split: explaining rejected E3 allocation does not
+select a removable owner in live28fd. Its next source-only gate follows actual Bitmap prepared glyph/flow/position
+columns through publication to physical bytes. Require an entire redundant traversal/copy and lifetime/cold-output
+proof; no source-proven deletion means stop product waves and report parity unresolved without an impossibility claim.
+The diagnostic patch remains unapplied; no E3 profile or new benchmark run is selected.
+
+Restored package verification subsequently exits0: all947shipped dist members match authenticated archive28fd,
+shipping shaper01001ff6…. Source remains exact a829. The existing dba4f566 package attestation covers this restored
+source; the named attest workflow correctly refuses a duplicate. The independent actual-Bitmap downstream audit
+then completes with no source-proven whole redundant pass and no product wave selected. Its
+[separate addendum](../../../benches/reports/held-shared-layout-hybrid-local-2026-10-20/independent-next-decision-addendum.md)
+records producer/consumer ownership and the failed deletion gate. No allocator split or E3 profile was run. Keep
+parity unresolved without claiming impossibility or silently changing synchronous setters. All restoration receipts
+are in the portable packet; final integration/hero and full parity gates remain open.

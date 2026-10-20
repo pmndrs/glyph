@@ -1,6 +1,6 @@
 # Held shared-layout hybrid: portable evidence packet
 
-The frozen E3 hybrid (`37c1e088…`) passed scoped correctness and package checks but is **not admitted as the live path** after its completed three-control timing matrix. Dense 512 rewrite and 1,024-instance publication p50 are slower than main, published 0.1.0, and direct prior `28fd`; sparse borrow and width inspection improve against main/release while regressing or remaining inconclusive against direct prior. The whole correct E3 source variant remains in the held checkout with its exact archive and evidence; root will preserve it under a recoverable ref or snapshot before restoring `28fd` as the live source. The named preservation and restoration are pending at draft time. The [independent architectural review](independent-architecture-reset.md) gives the detailed decision basis. Parity is false; no boost wave has started.
+The frozen E3 hybrid (`37c1e088…`) passed scoped correctness and package checks but is **not admitted as the live path** after its completed three-control timing matrix. Dense 512 rewrite and 1,024-instance publication p50 are slower than main, published 0.1.0, and direct prior `28fd`; sparse borrow and width inspection improve against main/release while regressing or remaining inconclusive against direct prior. The whole correct E3 source variant is preserved at commit `734dae75e9d39cd90f0e60c2244aa488b5b64bf2` and ref `experiments/held-shared-layout-hybrid-measured-20261020`, submitted through the real held stack. Live package source has subsequently been restored to exact `a829b86b`/`28fd`; fresh rebuilt artifact authentication passed: all947shipped dist members match the saved28fd archive, including shipping shaper01001ff6…. The copied receipts below retain their frozen source-stage scope. The [independent architectural review](independent-architecture-reset.md) gives the detailed decision basis. Parity is false; no boost wave has started.
 
 ## Identity and measured results
 
@@ -45,4 +45,20 @@ The [Node memory summary](node-memory-summary.json) reports per-field maxima ove
 
 ## Review boundary and handoff
 
-The [independent reset](independent-architecture-reset.md) and [ingress audit](independent-ingress-audit.md) are final read-only reviews. They do not establish a production Bitmap allocation site or a latency cause. A saved opt-in transaction-ledger proposal exists in the capture but is **unapplied** and is not runtime evidence. The source-choice preservation/ref, live-path decision, canonical package concept/log/frontier update, formatting and attestation, source commit, and dependent-stack submission remain root-owned and pending. After a live candidate earns parity, the API/lifetime and new editorial visual comparison still require their own scoped gates. The exact capture-local paths in receipts locate the original evidence; they are not required for a reader to open this portable packet. [Copy provenance](draft-copy-provenance.json) records each included source and target SHA-256/size and the single intentional Markdown-link substitution in the independent review.
+The [independent reset](independent-architecture-reset.md) and [ingress audit](independent-ingress-audit.md) are final read-only reviews. They do not establish a production Bitmap allocation site or a latency cause. A saved opt-in transaction-ledger proposal exists in the capture but is **unapplied** and is not runtime evidence. The complete E3 preservation and source restoration are recorded above; current operation and rebuild status are owned by the canonical frontier. After a live candidate earns parity, the API/lifetime and new editorial visual comparison still require their own scoped gates. The exact capture-local paths in receipts locate the original evidence; they are not required for a reader to open this portable packet. [Copy provenance](draft-copy-provenance.json) records each included source and target SHA-256/size and the single intentional Markdown-link substitution in the independent review.
+
+## Restored live source and independent stop decision
+
+After preserving and submitting the complete E3 variant, root restored only its two package files to exact a829.
+The fresh [package authentication](restored-prior-package-authentication.json) records exit0, all947shipped dist
+members matching the saved28fd archive and exact source preimages. Existing source attestation dba4f566 remains
+valid; the workflow refuses duplicate attestations. The [source restoration receipt](live-source-restoration.json)
+records the earlier transition stage, and [copy provenance](restoration-copy-provenance.json) authenticates these
+additional receipts without changing the original evidence copies.
+
+Fresh no-history Sol High's [final source audit and next decision](independent-next-decision-addendum.md) selects no
+product wave. It traced actual Bitmap prepared columns through gathered Codec inputs, ordered instances, physical
+bytes and borrowed host patches, finding no whole redundant pass source-proven removable. It skips the E3 allocator
+split; its opt-in patch remains unapplied. Keep28fd live and E3 fully recoverable. A new wave requires a named whole
+removable owner/path with cold physical and lifetime proof; current counts do not supply one. Parity remains
+unresolved, not proved impossible. No setter/query contract change, release, merge or boost-wave completion is implied.
