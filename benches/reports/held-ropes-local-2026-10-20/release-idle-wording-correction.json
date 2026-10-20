@@ -1,0 +1,77 @@
+{
+  "oldRawLogSha256": "6cee1813db6a969b4b8532371847623f20f3e697b4f1415b2fe547224d6ecd76",
+  "currentRawLogSha256": "cb4c3f722d4c8bbaf54b644af5ebdc3fb04ceb47c523f4e1bba8e18f6ac979fd",
+  "oldIdle": {
+    "webgpu": {
+      "frames": 30,
+      "medianCpuMs": 0.09999999962747097,
+      "p95CpuMs": 0.22499999962747097,
+      "totalCpuMs": 3.9100000001490116,
+      "uploads": {
+        "attributeCreateBytes": 0,
+        "attributeCreateCalls": 0,
+        "attributeUpdateBytes": 15244800,
+        "attributeUpdateCalls": 600,
+        "pboTextureCreateBytes": 0,
+        "pboTextureCreateCalls": 0,
+        "pboTextureUpdateBytes": 0,
+        "pboTextureUpdateCalls": 0
+      },
+      "versionsUnchanged": true
+    },
+    "webgl2": {
+      "frames": 30,
+      "medianCpuMs": 0.05000000074505806,
+      "p95CpuMs": 0.1699999999254942,
+      "totalCpuMs": 2.4649999998509884,
+      "uploads": {
+        "attributeCreateBytes": 0,
+        "attributeCreateCalls": 0,
+        "attributeUpdateBytes": 0,
+        "attributeUpdateCalls": 0,
+        "pboTextureCreateBytes": 0,
+        "pboTextureCreateCalls": 0,
+        "pboTextureUpdateBytes": 0,
+        "pboTextureUpdateCalls": 0
+      },
+      "versionsUnchanged": true
+    }
+  },
+  "currentIdle": {
+    "webgpu": {
+      "frames": 30,
+      "medianCpuMs": 0.125,
+      "p95CpuMs": 0.25,
+      "totalCpuMs": 4.544999986886978,
+      "uploads": {
+        "attributeCreateBytes": 0,
+        "attributeCreateCalls": 0,
+        "attributeUpdateBytes": 15244800,
+        "attributeUpdateCalls": 600,
+        "pboTextureCreateBytes": 0,
+        "pboTextureCreateCalls": 0,
+        "pboTextureUpdateBytes": 0,
+        "pboTextureUpdateCalls": 0
+      },
+      "versionsUnchanged": true
+    },
+    "webgl2": {
+      "frames": 30,
+      "medianCpuMs": 0.07000000774860382,
+      "p95CpuMs": 0.17000000178813934,
+      "totalCpuMs": 2.7250000089406967,
+      "uploads": {
+        "attributeCreateBytes": 0,
+        "attributeCreateCalls": 0,
+        "attributeUpdateBytes": 0,
+        "attributeUpdateCalls": 0,
+        "pboTextureCreateBytes": 0,
+        "pboTextureCreateCalls": 0,
+        "pboTextureUpdateBytes": 0,
+        "pboTextureUpdateCalls": 0
+      },
+      "versionsUnchanged": true
+    }
+  },
+  "correction": "19OctREADME blanket zero-idle claim overstated releaseWebGPU; rawstructuredbrowser-memory.json already has15244800/600. Correct prose in final evidencecommit; observations unchanged."
+}

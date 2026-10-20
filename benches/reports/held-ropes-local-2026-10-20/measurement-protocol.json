@@ -1,0 +1,55 @@
+{
+  "recordedAt": "2026-10-20T12:26:11.197833+00:00",
+  "status": "Finalcombinedsource273 reviewed,shipping-validatedandpushed;predeclaredbeforetiming; repository/memory/browsergatespending",
+  "scope": "fixed seven-family full suite; dense512/1024 priority; protect inspection/sparse and all visible regressions",
+  "candidate": {
+    "archive": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-candidate/pmndrs-glyph-0.1.0.tgz",
+    "archiveSha256": "340cbe186620e51f7d0ec460e473d72332c1c112d6c07dfd7dab4e63f74f6804",
+    "shippingWasmSha256": "1f8d970cd74eafd2aedd5adb98abd64d002ac0ebd370fa40e936dc4dbd8a6fbf",
+    "namedWasmSha256": "01464bdb0b8acd6a6882fbdf8b4a8fc2c4f9731bc5201f07e90fd667571dc53c",
+    "wasmRaw": 1609232,
+    "wasmNodeGzip": 599547,
+    "sameMemberDelta": "onlytext-shaperwasm differs vs698 andpublication-only5fa;JS/maps/DTS/maps/other4Wasms/manifest/exports/peerssame",
+    "sourceBridge": "builtfrom5fa+exactreviewed2filedelta; sourcecontentcommitted273identical frozen7hashes"
+  },
+  "controls": {
+    "main": {
+      "source": "4e25a96a57462fef5ad0d19065a822695b480f60",
+      "archive": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+      "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20"
+    },
+    "published": {
+      "archive": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+      "sha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b"
+    },
+    "priorCurrent": {
+      "source": "6987418cc49495c60097801e0d675dec7ae84f77",
+      "archive": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "sha256": "2e4342243c55edb56d3a1a32cbd730185c8d172fa5634da9c1f8fc3b0edd9558"
+    }
+  },
+  "order": [
+    "fresh main baseline and candidate once",
+    "fresh published baseline with saved candidate",
+    "fresh prior698 baseline with saved candidate"
+  ],
+  "suite": "full",
+  "blocks": 8,
+  "commandTemplate": "mise exec -- pnpm scripts run benchmark:labs-package -- --candidate ABS --baseline ABS --suite full --blocks 8 --output ABS [--saved-candidate FIRST_OUTPUT]",
+  "p50": "median of eight block medians",
+  "p95": "pooled retained samples sorted; floor(.95*(N-1))",
+  "sourcePolicy": "One coherent implementation before freeze. No second current1024 CPU recording is selected. Native work-count fixture is untimed correctness proof. Compiler policy unchanged.",
+  "noisePolicy": "Preserve raw samples, absolute times, per-row sample counts/modes, statistical intervals and calibration drift/exclusions, host-load incidents. No favorable retries. Software calibration is not hardware GHz. Do not infer parity from neutral classification, aggregate wins or exclusions. No old-day absolute timing reused as a new paired result.",
+  "disposition": "Retain validated small work removals or preserve correct inconclusive variants under descriptive refs and archives for combination; keep actual correctness failures and demonstrated regressions distinct. Hold stack unmerged.",
+  "requiredGates": [
+    "fresh scoped review and integrating source review",
+    "native cold-output/adversarial/rollback and work counters",
+    "pinned shipping build and full Glyph/package/consumer checks",
+    "source/lock/package/named executable authentication",
+    "full seven-family timings and prior regression identities",
+    "same-method JS/Wasm/DTS/package sizes",
+    "scoped allocator and application live/peak memory, fragmented-root costs explicit",
+    "peer/API/ABI/lifetime and real installed browser delivery/output with idle uploads",
+    "docs/frontier/attestation and coherent realghstack submission"
+  ]
+}

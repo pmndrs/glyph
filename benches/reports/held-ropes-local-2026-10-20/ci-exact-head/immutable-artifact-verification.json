@@ -1,0 +1,69 @@
+{
+  "recorded": "2026-10-20T14:12:20.891460+00:00",
+  "run": 39426053824,
+  "head": "273d7ae053f223f74d3df0e192c002012cbe3fec",
+  "scope": "Immutable downloaded artifacts plus terminal run metadata; derived inspection report and manifests excluded from their own inventories. latest.json is the preceding in-progress snapshot, final.json is terminal.",
+  "files": [
+    {
+      "path": "artifacts/benchmark-conformance-results/ci-conformance.json",
+      "bytes": 42776,
+      "sha256": "6efa939829f95d18b8686161a17bf62fecc3e8a81bb5182613ce2b68edb4e1df"
+    },
+    {
+      "path": "artifacts/glyph-candidate-package/pmndrs-glyph-0.1.0.tgz",
+      "bytes": 3195862,
+      "sha256": "4afe2f369d9e4666b2ab8987dbd3f314acccae774421d9356d6efee0d0e6a0b1"
+    },
+    {
+      "path": "artifacts/glyph-package-performance/baseline-package.json",
+      "bytes": 226,
+      "sha256": "fec01ba72227a9281427db50733cde2de813a9b344797cd4e05e17efbfb4dded"
+    },
+    {
+      "path": "artifacts/glyph-package-performance/baseline-pnpm-lock.yaml",
+      "bytes": 21994,
+      "sha256": "d08ae0a8b5db51efbaecb9f1c885d817b86370a900ed0d33cb5fa557ba22c1b6"
+    },
+    {
+      "path": "artifacts/glyph-package-performance/baseline.json",
+      "bytes": 526149,
+      "sha256": "0aa2cee1e188b0552b72d5e9f7d1e371f502128c268b44bee25bdf38e8f47fce"
+    },
+    {
+      "path": "artifacts/glyph-package-performance/candidate-package.json",
+      "bytes": 284,
+      "sha256": "005e2c2de17f8406d415041980d2a5c7b6e8c54894581b00066517ace77484fd"
+    },
+    {
+      "path": "artifacts/glyph-package-performance/candidate-pnpm-lock.yaml",
+      "bytes": 22153,
+      "sha256": "e648996817d95902a977ea0ca1624a5328674a87b9c36b0fcc53dedd96b3ee96"
+    },
+    {
+      "path": "artifacts/glyph-package-performance/candidate.json",
+      "bytes": 524733,
+      "sha256": "e5011b5fa081e3a1b4751cf17510542d11fcee88f6788edc1c140789cc2495cc"
+    },
+    {
+      "path": "artifacts/glyph-package-performance/comparison.txt",
+      "bytes": 32907,
+      "sha256": "0fc07cf2ec60d4761c49d41b85f907a62bd59810b88634f81a4a5dd8392559b0"
+    },
+    {
+      "path": "artifacts/glyph-package-performance/manifest.json",
+      "bytes": 605,
+      "sha256": "c548927e7a02593cbf43819fc867dbe87241f6febf9ce1ef00903100842d7635"
+    },
+    {
+      "path": "artifacts/glyph-package-performance/summary.md",
+      "bytes": 28686,
+      "sha256": "8e3db918a5a079aa76cac71b4ebe86378e7cf8bf8bf2de6074bfb3b33f9806de"
+    },
+    {
+      "path": "final.json",
+      "bytes": 15177,
+      "sha256": "6dc0414c2e5380c44426a09849e3de140369f45a1fc39bb36e55139bf7db5fdc"
+    }
+  ],
+  "limit": "CIUbuntu artifact/timings are distinct from localfrozen340 package and same-machine acceptance. Archive4afe identity mustnotbe relabeled340."
+}

@@ -1,0 +1,137 @@
+{
+  "method": "Node 24.18.0 zlib.gzipSync(buf,{level:9,mtime:0}); archiveBytes is actual on-disk .tgz bytes",
+  "archives": {
+    "combined": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-candidate/pmndrs-glyph-0.1.0.tgz",
+      "archiveBytes": 3196033,
+      "archiveSha256": "340cbe186620e51f7d0ec460e473d72332c1c112d6c07dfd7dab4e63f74f6804",
+      "archiveGzipOfTgzBytes": 3193840,
+      "wasm": {
+        "package/dist/bitmap-baker.wasm": {
+          "bytes": 614383,
+          "sha256": "af4892531eeab1b5d7e40844e2ab261628f51456345fb4c515fae248ae8449bc",
+          "gzipBytes": 231061
+        },
+        "package/dist/font-baker.wasm": {
+          "bytes": 1080865,
+          "sha256": "10b15d3d9359fdc76629a52d8ff68158e0396f2fd0a4581be5b83b194eecd793",
+          "gzipBytes": 389418
+        },
+        "package/dist/mtsdf-baker.wasm": {
+          "bytes": 548605,
+          "sha256": "27a205b72a77fa81016c90e4be2cbfdda7a0ba587f0c9d18169a8399ff557728",
+          "gzipBytes": 215537
+        },
+        "package/dist/slug-baker.wasm": {
+          "bytes": 454348,
+          "sha256": "418c895d6b5460e4a6ed1e3c35e37bc8e2fad31695e874cea5f33e144f71bee4",
+          "gzipBytes": 183642
+        },
+        "package/dist/text-shaper.wasm": {
+          "bytes": 1609232,
+          "sha256": "1f8d970cd74eafd2aedd5adb98abd64d002ac0ebd370fa40e936dc4dbd8a6fbf",
+          "gzipBytes": 599547
+        }
+      }
+    },
+    "publicationOnly": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "archiveBytes": 3195643,
+      "archiveSha256": "d7c0a674695e65b567a875a7d6fc751ebe6d232f8b100d2fe0746c84fab59918",
+      "archiveGzipOfTgzBytes": 3193431,
+      "wasm": {
+        "package/dist/bitmap-baker.wasm": {
+          "bytes": 614383,
+          "sha256": "af4892531eeab1b5d7e40844e2ab261628f51456345fb4c515fae248ae8449bc",
+          "gzipBytes": 231061
+        },
+        "package/dist/font-baker.wasm": {
+          "bytes": 1080865,
+          "sha256": "10b15d3d9359fdc76629a52d8ff68158e0396f2fd0a4581be5b83b194eecd793",
+          "gzipBytes": 389418
+        },
+        "package/dist/mtsdf-baker.wasm": {
+          "bytes": 548605,
+          "sha256": "27a205b72a77fa81016c90e4be2cbfdda7a0ba587f0c9d18169a8399ff557728",
+          "gzipBytes": 215537
+        },
+        "package/dist/slug-baker.wasm": {
+          "bytes": 454348,
+          "sha256": "418c895d6b5460e4a6ed1e3c35e37bc8e2fad31695e874cea5f33e144f71bee4",
+          "gzipBytes": 183642
+        },
+        "package/dist/text-shaper.wasm": {
+          "bytes": 1607708,
+          "sha256": "43e73e38064f6f6ce20c7a08449bc5b63b072eb8d4f4789f601356e7ec163461",
+          "gzipBytes": 599048
+        }
+      }
+    },
+    "prior698": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "archiveBytes": 3193950,
+      "archiveSha256": "2e4342243c55edb56d3a1a32cbd730185c8d172fa5634da9c1f8fc3b0edd9558",
+      "archiveGzipOfTgzBytes": 3191835,
+      "wasm": {
+        "package/dist/bitmap-baker.wasm": {
+          "bytes": 614383,
+          "sha256": "af4892531eeab1b5d7e40844e2ab261628f51456345fb4c515fae248ae8449bc",
+          "gzipBytes": 231061
+        },
+        "package/dist/font-baker.wasm": {
+          "bytes": 1080865,
+          "sha256": "10b15d3d9359fdc76629a52d8ff68158e0396f2fd0a4581be5b83b194eecd793",
+          "gzipBytes": 389418
+        },
+        "package/dist/mtsdf-baker.wasm": {
+          "bytes": 548605,
+          "sha256": "27a205b72a77fa81016c90e4be2cbfdda7a0ba587f0c9d18169a8399ff557728",
+          "gzipBytes": 215537
+        },
+        "package/dist/slug-baker.wasm": {
+          "bytes": 454348,
+          "sha256": "418c895d6b5460e4a6ed1e3c35e37bc8e2fad31695e874cea5f33e144f71bee4",
+          "gzipBytes": 183642
+        },
+        "package/dist/text-shaper.wasm": {
+          "bytes": 1601557,
+          "sha256": "244078b186e9de0414331ff9de2632c8a57c4ec20f19b6e0a41ce964f8e1b30a",
+          "gzipBytes": 596277
+        }
+      }
+    },
+    "main": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+      "archiveBytes": 3120073,
+      "archiveSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "archiveGzipOfTgzBytes": 3117629,
+      "wasm": {
+        "package/dist/bitmap-baker.wasm": {
+          "bytes": 614383,
+          "sha256": "4b42611527f91a7fb5128a7cc1dbf2af320de33fb294c8c89b03db323535782c",
+          "gzipBytes": 231059
+        },
+        "package/dist/font-baker.wasm": {
+          "bytes": 1080718,
+          "sha256": "d8e4811f5859ba40b1368ff4e25b077700f7c2c858cd6a4bfdab1f063ce6c8a3",
+          "gzipBytes": 389313
+        },
+        "package/dist/mtsdf-baker.wasm": {
+          "bytes": 548605,
+          "sha256": "847ba5952cd4f7a006ea0a73e5a5503f8c7f819a1f10c3942c4016ac62b53bec",
+          "gzipBytes": 215536
+        },
+        "package/dist/slug-baker.wasm": {
+          "bytes": 454348,
+          "sha256": "205b12a76a2034ce3c89ec3f8e2f5bf891f846c7bdb5e38a094fc6fb3ddfa6d4",
+          "gzipBytes": 183643
+        },
+        "package/dist/text-shaper.wasm": {
+          "bytes": 1462005,
+          "sha256": "059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4",
+          "gzipBytes": 541363
+        }
+      }
+    }
+  }
+}

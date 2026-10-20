@@ -1,0 +1,239 @@
+{
+  "schema": "held-wave1-combined-source-freeze-v1",
+  "phase": "pre-build",
+  "capturedUtc": "2026-10-20T12:46:10.126648+00:00",
+  "repo": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "head": "5fa855ed06a6bfa32655378be5eedddcd7c13ff3",
+  "review": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/preparation-extension/review.md",
+    "sha256": "a514e7f304432017a2feca0d86d5714ab6bac64fe53408d7ed4e8d8d609db636",
+    "reviewedSources": {
+      "packages/glyph/rust/shaper/src/engine/state.rs": "c46627f9ae5fb9966e5d57b9ad2d696440752e8670b08baf3675e947332e8158",
+      "packages/glyph/rust/shaper/src/engine/style_state.rs": "1e848a48995c1d15d91af3654f97be066004d9594149ad6b50a29b484513a1c4"
+    }
+  },
+  "productionInputs": [
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/retained_rope.rs",
+      "sha256": "771de87d95bc6842e7b2e6999ebc10c6ff68a6202d30720441d3c9b20e80aebb",
+      "expectedSha256": "771de87d95bc6842e7b2e6999ebc10c6ff68a6202d30720441d3c9b20e80aebb",
+      "matchesReviewed": true
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/ordered_plan.rs",
+      "sha256": "1573808cec234f555b3cf88bb2eca2bd84b90b86c30abfde5748227b9828acce",
+      "expectedSha256": "1573808cec234f555b3cf88bb2eca2bd84b90b86c30abfde5748227b9828acce",
+      "matchesReviewed": true
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/codec_gather.rs",
+      "sha256": "61f836f7b3210387edbe7cb3f7227d2d5534adedbb57474f8e0471a6f2959809",
+      "expectedSha256": "61f836f7b3210387edbe7cb3f7227d2d5534adedbb57474f8e0471a6f2959809",
+      "matchesReviewed": true
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/codec.rs",
+      "sha256": "82df57f33ec343096a5e62f162c8de0c89c9eef58154c3510078da20ea8d21e2",
+      "expectedSha256": "82df57f33ec343096a5e62f162c8de0c89c9eef58154c3510078da20ea8d21e2",
+      "matchesReviewed": true
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/work_attribution.rs",
+      "sha256": "4b9f016cdeb3d08509b602227801067dfa6ec43cc5e80473b03e04deb712d0a4",
+      "expectedSha256": "4b9f016cdeb3d08509b602227801067dfa6ec43cc5e80473b03e04deb712d0a4",
+      "matchesReviewed": true
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/state.rs",
+      "sha256": "c46627f9ae5fb9966e5d57b9ad2d696440752e8670b08baf3675e947332e8158",
+      "expectedSha256": "c46627f9ae5fb9966e5d57b9ad2d696440752e8670b08baf3675e947332e8158",
+      "matchesReviewed": true
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/style_state.rs",
+      "sha256": "1e848a48995c1d15d91af3654f97be066004d9594149ad6b50a29b484513a1c4",
+      "expectedSha256": "1e848a48995c1d15d91af3654f97be066004d9594149ad6b50a29b484513a1c4",
+      "matchesReviewed": true
+    }
+  ],
+  "allSevenMatchExpected": true,
+  "productionDiffSha256": "e7877991246da702c5d2860b41f5307bae3f135ac7d3fcece4fcbaae05250b72",
+  "productionDiffBytes": 6287,
+  "productionStatus": [
+    " M packages/glyph/rust/shaper/src/engine/state.rs",
+    " M packages/glyph/rust/shaper/src/engine/style_state.rs"
+  ],
+  "toolVersions": {
+    "mise": {
+      "command": "/Users/mini/.local/bin/mise --version",
+      "stdout": "2026.7.6 macos-arm64 (2026-07-14)",
+      "stderr": "mise WARN  mise version 2026.10.15 available\nmise WARN  To update, run mise self-update"
+    },
+    "node": {
+      "command": "/Users/mini/.local/bin/mise exec -- node --version",
+      "stdout": "v24.18.0",
+      "stderr": ""
+    },
+    "pnpm": {
+      "command": "/Users/mini/.local/bin/mise exec -- pnpm --version",
+      "stdout": "11.15.1",
+      "stderr": ""
+    },
+    "rustc": {
+      "command": "/Users/mini/.local/bin/mise exec -- rustc --version",
+      "stdout": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+      "stderr": ""
+    },
+    "wasmOpt": {
+      "command": "/Users/mini/.local/bin/mise exec -- ./packages/glyph/node_modules/.bin/wasm-opt --version",
+      "stdout": "wasm-opt version 129 (version_129)",
+      "stderr": ""
+    }
+  },
+  "candidateDirectory": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-candidate",
+  "childTmpdir": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/scratch",
+  "finalAfterShippingGate": {
+    "capturedUtc": "2026-10-20T12:52:56.353254+00:00",
+    "productionHashes": [
+      {
+        "path": "packages/glyph/rust/shaper/src/engine/retained_rope.rs",
+        "sha256": "771de87d95bc6842e7b2e6999ebc10c6ff68a6202d30720441d3c9b20e80aebb",
+        "matchesPreBuild": true,
+        "matchesReview": true
+      },
+      {
+        "path": "packages/glyph/rust/shaper/src/engine/ordered_plan.rs",
+        "sha256": "1573808cec234f555b3cf88bb2eca2bd84b90b86c30abfde5748227b9828acce",
+        "matchesPreBuild": true,
+        "matchesReview": true
+      },
+      {
+        "path": "packages/glyph/rust/shaper/src/engine/codec_gather.rs",
+        "sha256": "61f836f7b3210387edbe7cb3f7227d2d5534adedbb57474f8e0471a6f2959809",
+        "matchesPreBuild": true,
+        "matchesReview": true
+      },
+      {
+        "path": "packages/glyph/rust/shaper/src/engine/codec.rs",
+        "sha256": "82df57f33ec343096a5e62f162c8de0c89c9eef58154c3510078da20ea8d21e2",
+        "matchesPreBuild": true,
+        "matchesReview": true
+      },
+      {
+        "path": "packages/glyph/rust/shaper/src/engine/work_attribution.rs",
+        "sha256": "4b9f016cdeb3d08509b602227801067dfa6ec43cc5e80473b03e04deb712d0a4",
+        "matchesPreBuild": true,
+        "matchesReview": true
+      },
+      {
+        "path": "packages/glyph/rust/shaper/src/engine/state.rs",
+        "sha256": "c46627f9ae5fb9966e5d57b9ad2d696440752e8670b08baf3675e947332e8158",
+        "matchesPreBuild": true,
+        "matchesReview": true
+      },
+      {
+        "path": "packages/glyph/rust/shaper/src/engine/style_state.rs",
+        "sha256": "1e848a48995c1d15d91af3654f97be066004d9594149ad6b50a29b484513a1c4",
+        "matchesPreBuild": true,
+        "matchesReview": true
+      }
+    ],
+    "allSevenMatchPreBuildAndReview": true,
+    "productionDiffSha256Unchanged": "e7877991246da702c5d2860b41f5307bae3f135ac7d3fcece4fcbaae05250b72",
+    "receipts": {
+      "combined-build-package": {
+        "exit": 0,
+        "started": "2026-10-20T12:46:15.148323+00:00",
+        "finished": "2026-10-20T12:47:29.815101+00:00",
+        "stdout": {
+          "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-build-package/stdout.log",
+          "bytes": 7407,
+          "sha256": "75f10c8057ffd8ad4101e7d5906dab9588b0f9a06869a10040015d1216af8bc0"
+        },
+        "stderr": {
+          "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-build-package/stderr.log",
+          "bytes": 511,
+          "sha256": "2830436109b577ccc5867da59baa2ff0263cf10bd191a71e5ce43e27bcce045d"
+        }
+      },
+      "combined-glyph-full-check": {
+        "exit": 0,
+        "started": "2026-10-20T12:47:33.767929+00:00",
+        "finished": "2026-10-20T12:50:06.287491+00:00",
+        "stdout": {
+          "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-glyph-full-check/stdout.log",
+          "bytes": 179515,
+          "sha256": "565a80e226949df45c64d0ca20f79afa78ae2b14c6cb3090da0b753fc27ebb04"
+        },
+        "stderr": {
+          "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-glyph-full-check/stderr.log",
+          "bytes": 4725,
+          "sha256": "a6e3eb7752dbae823b4cb2be7e1feb539ed8fd4bfb106547f074885f380108cc"
+        }
+      },
+      "combined-pack-package": {
+        "exit": 0,
+        "started": "2026-10-20T12:50:15.399377+00:00",
+        "finished": "2026-10-20T12:50:16.287181+00:00",
+        "stdout": {
+          "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-pack-package/stdout.log",
+          "bytes": 42913,
+          "sha256": "dcd67bf387bfad9cb66482514da077c91ab78f139b87400d41bff729cd87f793"
+        },
+        "stderr": {
+          "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-pack-package/stderr.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "combined-profile-artifact": {
+        "exit": 0,
+        "started": "2026-10-20T12:50:30.796079+00:00",
+        "finished": "2026-10-20T12:51:08.115014+00:00",
+        "stdout": {
+          "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-profile-artifact/stdout.log",
+          "bytes": 129,
+          "sha256": "b425747c5c21a2ab509fe05f60db847fabe884b8e7be4a3e81fda71b084a1482"
+        },
+        "stderr": {
+          "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-profile-artifact/stderr.log",
+          "bytes": 4370,
+          "sha256": "51ce6e6f59f4e54a3da950454135be25916290950cfa0a93fab9bdcfc1c7b174"
+        }
+      },
+      "combined-size-accounting": {
+        "exit": 0,
+        "started": "2026-10-20T12:51:32.238673+00:00",
+        "finished": "2026-10-20T12:51:33.006710+00:00",
+        "stdout": {
+          "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-size-accounting/stdout.log",
+          "bytes": 122,
+          "sha256": "ab0b305e67f69c640b4fd9fa3332f00439763d9cfb50969de46c794c8a42c9f3"
+        },
+        "stderr": {
+          "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-size-accounting/stderr.log",
+          "bytes": 537,
+          "sha256": "d5c2e0a530fdc6340a46351f50a0fe720bd9b29bdf8cce2074ba894a6339cf7b"
+        }
+      }
+    },
+    "checks": {
+      "node": {
+        "tests": 1140,
+        "pass": 1140,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "rust": {
+        "groups": 26,
+        "passed": 583,
+        "failed": 0,
+        "ignored": 1,
+        "measured": 0,
+        "filtered": 0
+      }
+    }
+  }
+}

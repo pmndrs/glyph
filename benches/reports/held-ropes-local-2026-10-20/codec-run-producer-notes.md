@@ -1,0 +1,7 @@
+# Codec run producer — source findings only
+
+Current ordered_plan.rs::write_changed_ranges coalesces consecutive changed physical records while their input indices remain consecutive and no retained-output copy applies. plan_packing.rs::execute_run slices contiguous PlanInput f32/u32 fields over the resulting count and calls ValidatedCodec::execute_buffers. The align(16) four-value blocks in AlignedField do not impose a four-record invocation limit: PlanInput exposes contiguous field slices. Actual run lengths, active F32-store counts and tails are not recorded by existing codec_executed_records.
+
+The current caller already holds a ProgramDescriptor for sizing/slicing, but execute_buffers checks the capability set and selects the program index again on every run. execute_program then checks field counts/lengths, output schema and capacity before running operations. These are source-visible repeated operations, not a measured bottleneck. Any removal must prove the exact producer's immutable validated program, output disjointness/capacity and checked range ownership; generic entry points must retain their validation/error contracts. A borrowed validated program/execution pair could avoid repeated selection without a cache or another executor, but it has not been selected, implemented or assessed for compiled size/stack cost.
+
+Do not infer a SIMD utilization percentage, allocator count or latency saving from these findings. Finish the frozen timing sequence first.

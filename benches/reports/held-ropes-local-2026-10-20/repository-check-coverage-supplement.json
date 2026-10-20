@@ -1,0 +1,127 @@
+{
+  "sourceLogSha256": "f119ca39d98882c6cdf35fbc40cadf13a8a2b1c336551d98345d1a8fa02e918f",
+  "workflowTests": {
+    "tests": 28,
+    "passed": 28,
+    "source": "literal completed Node TAP summary before conformance JSON"
+  },
+  "browserConformance": {
+    "targetCount": 16,
+    "allPassed": true,
+    "targets": [
+      {
+        "targetId": "synthetic",
+        "scenarioId": "overview",
+        "status": "passed",
+        "validation": "3/3 deterministic outputs",
+        "measurementCount": 3
+      },
+      {
+        "targetId": "tsl-webgl2-baseline",
+        "scenarioId": "tsl-shader-baseline",
+        "status": "passed",
+        "validation": "3/3 exact TSL shader readbacks",
+        "measurementCount": 3
+      },
+      {
+        "targetId": "bitmap-text-webgl2",
+        "scenarioId": "bitmap-text-frame",
+        "status": "passed",
+        "validation": "3/3 exact public Text frames with resize + clipping",
+        "measurementCount": 3
+      },
+      {
+        "targetId": "mtsdf-text-webgl2",
+        "scenarioId": "mtsdf-text-scenes",
+        "status": "passed",
+        "validation": "3/3 deterministic MTSDF resize + base-level + transform + effects frames",
+        "measurementCount": 3
+      },
+      {
+        "targetId": "mtsdf-conformance-webgl2",
+        "scenarioId": "mtsdf-sampling-conformance",
+        "status": "passed",
+        "validation": "3/3 deterministic GPU frames with CPU MTSDF comparison",
+        "measurementCount": 3
+      },
+      {
+        "targetId": "slug-text-webgl2",
+        "scenarioId": "slug-text-scenes",
+        "status": "passed",
+        "validation": "3/3 deterministic Slug resize + transform frames",
+        "measurementCount": 3
+      },
+      {
+        "targetId": "slug-conformance-webgl2",
+        "scenarioId": "slug-sampling-conformance",
+        "status": "passed",
+        "validation": "3/3 deterministic GPU frames with CPU Slug comparison",
+        "measurementCount": 3
+      },
+      {
+        "targetId": "source-outline-bitmap-webgl2",
+        "scenarioId": "source-outline-fidelity",
+        "status": "passed",
+        "validation": "3/3 deterministic source-outline comparisons within reviewed envelopes",
+        "measurementCount": 3
+      },
+      {
+        "targetId": "source-outline-mtsdf-webgl2",
+        "scenarioId": "source-outline-fidelity",
+        "status": "passed",
+        "validation": "3/3 deterministic source-outline comparisons within reviewed envelopes",
+        "measurementCount": 3
+      },
+      {
+        "targetId": "source-outline-slug-webgl2",
+        "scenarioId": "source-outline-fidelity",
+        "status": "passed",
+        "validation": "3/3 deterministic source-outline comparisons within reviewed envelopes",
+        "measurementCount": 3
+      },
+      {
+        "targetId": "react-text-reconciliation",
+        "scenarioId": "react-text-reconciliation",
+        "status": "passed",
+        "validation": "3/3 exact React Text reconciliations + R3F frames",
+        "measurementCount": 3
+      },
+      {
+        "targetId": "font-baker",
+        "scenarioId": "cold-load-payload",
+        "status": "passed",
+        "validation": "3/3 deterministic outputs",
+        "measurementCount": 3
+      },
+      {
+        "targetId": "font-loader-worker",
+        "scenarioId": "worker-fallback",
+        "status": "passed",
+        "validation": "3/3 deterministic outputs",
+        "measurementCount": 3
+      },
+      {
+        "targetId": "paragraph-contracts",
+        "scenarioId": "paragraph-contracts",
+        "status": "passed",
+        "validation": "3/3 exact bidi, policy, uikit, and CJK contract matrices",
+        "measurementCount": 3
+      },
+      {
+        "targetId": "advanced-shaping-conformance",
+        "scenarioId": "advanced-shaping-conformance",
+        "status": "passed",
+        "validation": "3/3 exact advanced-shaping timelines \u00b7 68 frames/sample",
+        "measurementCount": 3
+      },
+      {
+        "targetId": "rich-text-spans-conformance",
+        "scenarioId": "rich-text-spans-conformance",
+        "status": "passed",
+        "validation": "3/3 exact composed-span paragraphs \u00b7 7 controls \u00b7 nested paint inherits",
+        "measurementCount": 3
+      }
+    ]
+  },
+  "packedConsumer": "Glyph test suite includes packed package ESM subpaths and offline package consumer; 1140 tests allpass. Peer isolated consumer install/execution separately passes."
+}

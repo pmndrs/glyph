@@ -1,0 +1,9 @@
+{
+  "captured": "2026-10-20T13:26:34.562041+00:00",
+  "head": "2fcf408e786fd49d2fe12108823d285cf8c137c5",
+  "runtime273SourceBridge": "",
+  "uncommitted": "",
+  "remoteMain": "4e25a96a57462fef5ad0d19065a822695b480f60",
+  "packageSHA": "340cbe186620e51f7d0ec460e473d72332c1c112d6c07dfd7dab4e63f74f6804",
+  "note": "2fcf408e probe/docs-only commit; runtime/package/harness unchanged from273; freshmainfetch remains4e25. No latency samples yet; currentmemory/presentation lane owns heavywork."
+}

@@ -1,0 +1,263 @@
+{
+  "schema": "held-codec-scratch-codegen-v1",
+  "observedUtc": "2026-10-20T15:03:21Z",
+  "artifacts": {
+    "packageArchive": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-candidate/pmndrs-glyph-0.1.0.tgz",
+      "sha256": "340cbe186620e51f7d0ec460e473d72332c1c112d6c07dfd7dab4e63f74f6804"
+    },
+    "profileManifest": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-candidate/shaper-profile/manifest.json",
+      "artifactSha256": "340cbe186620e51f7d0ec460e473d72332c1c112d6c07dfd7dab4e63f74f6804",
+      "namedSha256Expected": "01464bdb0b8acd6a6882fbdf8b4a8fc2c4f9731bc5201f07e90fd667571dc53c",
+      "namedSha256Actual": "01464bdb0b8acd6a6882fbdf8b4a8fc2c4f9731bc5201f07e90fd667571dc53c",
+      "shippingSha256Expected": "1f8d970cd74eafd2aedd5adb98abd64d002ac0ebd370fa40e936dc4dbd8a6fbf",
+      "shippingSha256Actual": "1f8d970cd74eafd2aedd5adb98abd64d002ac0ebd370fa40e936dc4dbd8a6fbf",
+      "executableSha256": "1f8d970cd74eafd2aedd5adb98abd64d002ac0ebd370fa40e936dc4dbd8a6fbf"
+    },
+    "shippingPackageMember": {
+      "name": "package/dist/text-shaper.wasm",
+      "type": "file",
+      "size": 1609232,
+      "sha256": "1f8d970cd74eafd2aedd5adb98abd64d002ac0ebd370fa40e936dc4dbd8a6fbf"
+    },
+    "namedArtifactBytes": 1788734,
+    "shippingArtifactBytes": 1609232,
+    "namedWasmSectionInfo": [
+      {
+        "id": 1,
+        "customName": null,
+        "payloadBytes": 796,
+        "sectionSha256": "027df9553f9ee775b269efdcf864119daeed075981ca70abd3e7a6a9cfb97535",
+        "payloadSha256": "70a9e9bf7532db080c470c3368100170d4b1a482efd0d18e0734e11d29d49a86"
+      },
+      {
+        "id": 3,
+        "customName": null,
+        "payloadBytes": 1595,
+        "sectionSha256": "3f9d05678a5789cb37980090391e483eb8b42d350cf239868924516b7dbe8804",
+        "payloadSha256": "3c0c770ddb7cd4e18f6d7cc538bac2ec2b4434d69e09dbb9d8394bb284502df2"
+      },
+      {
+        "id": 4,
+        "customName": null,
+        "payloadBytes": 5,
+        "sectionSha256": "fa6d5b41c4bd0d977ff72eace9d886d52104eea044e40e7a631dcb63dd21980e",
+        "payloadSha256": "8449141115201ee6e893e12c6d0b0bd5377e6def7f79a023050ee53cedccbe0a"
+      },
+      {
+        "id": 5,
+        "customName": null,
+        "payloadBytes": 3,
+        "sectionSha256": "33e2aeac0e17d17abf54b183d1d4bf64ea2fee2be72bd174c5bd63e86bca9df9",
+        "payloadSha256": "5a4e4939c71f554223cd5d2bf346ba76c443330adc42a50cf8686cedbebfa95f"
+      },
+      {
+        "id": 6,
+        "customName": null,
+        "payloadBytes": 9,
+        "sectionSha256": "9f3cfe5176ae52746cd84164515877d028e9591e51c615e41f3a33b6c52e9608",
+        "payloadSha256": "da3c74f89a28b8e9a570d349d0f0a216ef8e69818c7226007164845feaceaf63"
+      },
+      {
+        "id": 7,
+        "customName": null,
+        "payloadBytes": 1469,
+        "sectionSha256": "5964e3f8fbfbc64ad2cef6b61961844694ff0344e7661b7ae56e3b021c581f99",
+        "payloadSha256": "c237740d4c0481e51094841a7f49e2093021f9aaa57d11a16e823b4dbb066760"
+      },
+      {
+        "id": 9,
+        "customName": null,
+        "payloadBytes": 258,
+        "sectionSha256": "c9a7ece5fd1beff4aab594678d03b293db5f86c1b9e3cd07945e4f4f877b44ac",
+        "payloadSha256": "be062d23fb3ca96ca6e6b9530f17a4caf5a46873881bd374f4c2ea159e82ac75"
+      },
+      {
+        "id": 12,
+        "customName": null,
+        "payloadBytes": 2,
+        "sectionSha256": "7a682b1c694cd58ec5682bca6c748572a293e162f1b4fdcf0e278dfe6ed3bfb4",
+        "payloadSha256": "5e93581fa4ade09e4a85519dceb896a60d58800923d45014072615aa36d0c17d"
+      },
+      {
+        "id": 10,
+        "customName": null,
+        "payloadBytes": 1311592,
+        "sectionSha256": "08ed8ec1552ef94f891772c265cb01911def4d7bac40719d0bdbc294d228a183",
+        "payloadSha256": "8bb677a8da817c1dfddc50b0b762ce5854de3ae20313aee148b64d8df1a60d10"
+      },
+      {
+        "id": 11,
+        "customName": null,
+        "payloadBytes": 293467,
+        "sectionSha256": "87797b9f748fe4aea42ac5488852ea5a6b501288a18ac21c44dd715fcb9cb7c9",
+        "payloadSha256": "8a791c622db896fa85706893780209298371e9bbf98ae4e8579172b5087763f5"
+      },
+      {
+        "id": 0,
+        "customName": "name",
+        "payloadBytes": 179498,
+        "sectionSha256": "623b7130c88b6608d02e940429bd35b8979d215e10e3062b934ff97ae963c9ec",
+        "payloadSha256": "cb0707f796f03c81bf4b01c84e2b89a7c2bb8e076a5eaa38c3f77f1992145bde"
+      }
+    ],
+    "shippingWasmSectionInfo": [
+      {
+        "id": 1,
+        "customName": null,
+        "payloadBytes": 796,
+        "sectionSha256": "027df9553f9ee775b269efdcf864119daeed075981ca70abd3e7a6a9cfb97535",
+        "payloadSha256": "70a9e9bf7532db080c470c3368100170d4b1a482efd0d18e0734e11d29d49a86"
+      },
+      {
+        "id": 3,
+        "customName": null,
+        "payloadBytes": 1595,
+        "sectionSha256": "3f9d05678a5789cb37980090391e483eb8b42d350cf239868924516b7dbe8804",
+        "payloadSha256": "3c0c770ddb7cd4e18f6d7cc538bac2ec2b4434d69e09dbb9d8394bb284502df2"
+      },
+      {
+        "id": 4,
+        "customName": null,
+        "payloadBytes": 5,
+        "sectionSha256": "fa6d5b41c4bd0d977ff72eace9d886d52104eea044e40e7a631dcb63dd21980e",
+        "payloadSha256": "8449141115201ee6e893e12c6d0b0bd5377e6def7f79a023050ee53cedccbe0a"
+      },
+      {
+        "id": 5,
+        "customName": null,
+        "payloadBytes": 3,
+        "sectionSha256": "33e2aeac0e17d17abf54b183d1d4bf64ea2fee2be72bd174c5bd63e86bca9df9",
+        "payloadSha256": "5a4e4939c71f554223cd5d2bf346ba76c443330adc42a50cf8686cedbebfa95f"
+      },
+      {
+        "id": 6,
+        "customName": null,
+        "payloadBytes": 9,
+        "sectionSha256": "9f3cfe5176ae52746cd84164515877d028e9591e51c615e41f3a33b6c52e9608",
+        "payloadSha256": "da3c74f89a28b8e9a570d349d0f0a216ef8e69818c7226007164845feaceaf63"
+      },
+      {
+        "id": 7,
+        "customName": null,
+        "payloadBytes": 1469,
+        "sectionSha256": "5964e3f8fbfbc64ad2cef6b61961844694ff0344e7661b7ae56e3b021c581f99",
+        "payloadSha256": "c237740d4c0481e51094841a7f49e2093021f9aaa57d11a16e823b4dbb066760"
+      },
+      {
+        "id": 9,
+        "customName": null,
+        "payloadBytes": 258,
+        "sectionSha256": "c9a7ece5fd1beff4aab594678d03b293db5f86c1b9e3cd07945e4f4f877b44ac",
+        "payloadSha256": "be062d23fb3ca96ca6e6b9530f17a4caf5a46873881bd374f4c2ea159e82ac75"
+      },
+      {
+        "id": 12,
+        "customName": null,
+        "payloadBytes": 2,
+        "sectionSha256": "7a682b1c694cd58ec5682bca6c748572a293e162f1b4fdcf0e278dfe6ed3bfb4",
+        "payloadSha256": "5e93581fa4ade09e4a85519dceb896a60d58800923d45014072615aa36d0c17d"
+      },
+      {
+        "id": 10,
+        "customName": null,
+        "payloadBytes": 1311592,
+        "sectionSha256": "08ed8ec1552ef94f891772c265cb01911def4d7bac40719d0bdbc294d228a183",
+        "payloadSha256": "8bb677a8da817c1dfddc50b0b762ce5854de3ae20313aee148b64d8df1a60d10"
+      },
+      {
+        "id": 11,
+        "customName": null,
+        "payloadBytes": 293467,
+        "sectionSha256": "87797b9f748fe4aea42ac5488852ea5a6b501288a18ac21c44dd715fcb9cb7c9",
+        "payloadSha256": "8a791c622db896fa85706893780209298371e9bbf98ae4e8579172b5087763f5"
+      }
+    ],
+    "standardSectionSequenceEqual": true,
+    "allStandardSectionBytesExactlyEqual": true,
+    "namedCustomSections": [
+      {
+        "id": 0,
+        "customName": "name",
+        "payloadBytes": 179498,
+        "sectionSha256": "623b7130c88b6608d02e940429bd35b8979d215e10e3062b934ff97ae963c9ec",
+        "payloadSha256": "cb0707f796f03c81bf4b01c84e2b89a7c2bb8e076a5eaa38c3f77f1992145bde"
+      }
+    ],
+    "shippingCustomSections": []
+  },
+  "disassembly": {
+    "input": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-candidate/shaper-profile/text-shaper.named.wasm",
+    "inputSha256": "01464bdb0b8acd6a6882fbdf8b4a8fc2c4f9731bc5201f07e90fd667571dc53c",
+    "output": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/codec-scratch-codegen/current.named.wat",
+    "outputSha256": "cd3045a350b9bfcaa6742cc3d06ca3b467a55f84be36b2faabab161367d40aff",
+    "tool": "repository node_modules/.pnpm/node_modules/.bin/wasm-dis (Binaryen 129; invoked under mise exec)",
+    "successfulWrapperReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/codec-scratch-codegen-decode-after-mkdir/result.json",
+    "successfulExit": 0,
+    "preservedInitialFailureReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/codec-scratch-codegen-decode/result.json",
+    "initialFailure": "wasm-dis could not open output because codec-scratch-codegen directory did not yet exist; directory created, then exact decode command rerun under a distinct receipt name."
+  },
+  "function": {
+    "name": "_RNvNtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine5codec15execute_program",
+    "functionIndex": 497,
+    "watLines": [318204, 322188],
+    "separateExecuteRecordFunctionNamed": false,
+    "staticOpcodeCounts": {
+      "loop": 12,
+      "memory.fill": 4,
+      "i32.store": 9,
+      "i32.store16": 1,
+      "i32.store8": 0,
+      "i64.store": 0,
+      "f32.store": 4,
+      "f64.store": 0,
+      "v128.store": 19,
+      "v128.store16_lane": 4,
+      "v128.store32_lane": 4,
+      "f32x4.extract_lane": 4,
+      "i32.reinterpret_f32": 4
+    },
+    "loops": {
+      "label7": {
+        "fillCount": 2,
+        "fillBytesPerIteration": 1536,
+        "explicitZeroValuedStoreCount": 0,
+        "storeOpcodes": {
+          "v128.store": 19,
+          "v128.store16_lane": 4,
+          "v128.store32_lane": 4
+        }
+      },
+      "label11": {
+        "fillCount": 2,
+        "fillBytesPerIteration": 384,
+        "explicitZeroValuedStoreCount": 0,
+        "storeOpcodes": {
+          "f32.store": 4,
+          "i32.store": 9,
+          "i32.store16": 1
+        }
+      }
+    }
+  },
+  "codegenFindings": {
+    "simdGroupLoop": "$label7 in execute_program; one backedge iteration handles a four-record group per the checked source/workflow notes. Two zero memory.fill instructions in loop body clear offsets [0,512) and [512,1536), a total 1536 bytes per group iteration. Stack frame allocation in function prologue is 1536 bytes.",
+    "scalarTailLoop": "$label11 in same execute_program function; two zero memory.fill instructions clear offsets [0,128) and [512,768), total 384 bytes per iteration. It is a loop in execute_program, not a separately named execute_record function in this artifact.",
+    "zeroStores": "No explicit zero-valued scalar/vector store value was found in either loop body by parsing store expression operands; loop body store opcode counts are listed above.",
+    "fourLaneFiniteCheck": "Four f32x4.extract_lane operations (lanes 0,1,2,3) and four reinterpret/mask/range comparisons are present in the SIMD loop before the failing branch. This is scalarized per-lane classification in the emitted code, not a single vector exponent comparison. Existing source helper uses the four-lane scalar predicates. This is a static code-shape observation only."
+  },
+  "excerpts": {
+    "stackFrame": "318253:   (global.set $global$0\n318254:    (local.tee $9\n318255:     (i32.sub\n318256:      (global.get $global$0)\n318257:      (i32.const 1536)\n318258:     )\n318259:    )\n318260:   )\n318261:   (local.set $7\n318262:    (i32.const 2)\n318263:   )",
+    "simdFillAndLoopEntry": "318714:         (loop $label7\n318715:          (memory.fill\n318716:           (local.get $9)\n318717:           (i32.const 0)\n318718:           (i32.const 512)\n318719:          )\n318720:          (memory.fill\n318721:           (i32.add\n318722:            (local.get $9)\n318723:            (i32.const 512)\n318724:           )\n318725:           (i32.const 0)\n318726:           (i32.const 1024)\n318727:          )\n318728:          (if\n318729:           (local.get $42)\n318730:           (then",
+    "simdLoopBackedge": "320788:           )\n320789:          )\n320790:          (br_if $label7\n320791:           (local.tee $38\n320792:            (i32.sub\n320793:             (local.get $38)\n320794:             (i32.const 1)\n320795:            )\n320796:           )\n320797:          )\n320798:         )",
+    "scalarFillAndLoopEntry": "320850:       (loop $label11\n320851:        (memory.fill\n320852:         (local.get $9)\n320853:         (i32.const 0)\n320854:         (i32.const 128)\n320855:        )\n320856:        (memory.fill\n320857:         (i32.add\n320858:          (local.get $9)\n320859:          (i32.const 512)\n320860:         )\n320861:         (i32.const 0)\n320862:         (i32.const 256)\n320863:        )\n320864:        (if\n320865:         (local.get $26)\n320866:         (then",
+    "scalarLoopBackedge": "322145:         )\n322146:        )\n322147:        (br_if $label11\n322148:         (i32.gt_u\n322149:          (local.get $24)\n322150:          (local.tee $10\n322151:           (i32.add\n322152:            (local.get $10)\n322153:            (i32.const 1)\n322154:           )\n322155:          )\n322156:         )\n322157:        )\n322158:       )",
+    "fourLaneFiniteClassification": "319441:                             (f32x4.extract_lane 0\n319442:                              (local.tee $45\n319443:                               (v128.load\n319444:                                (i32.add\n319445:                                 (local.get $9)\n319446:                                 (i32.shl\n319447:                                  (local.get $10)\n319448:                                  (i32.const 4)\n319449:                                 )\n319450:                                )\n319451:                               )\n319452:                              )\n319453:                             )\n319454:                            )\n319455:                            (i32.const 2147483647)\n319456:                           )\n319457:                           (i32.const 2139095039)\n319458:                          )\n319459:                          (i32.gt_u\n319460:                           (i32.and\n319461:                            (i32.reinterpret_f32\n319462:                             (f32x4.extract_lane 1\n319463:                              (local.get $45)\n319464:                             )\n319465:                            )\n319466:                            (i32.const 2147483647)\n319467:                           )\n319468:                           (i32.const 2139095039)\n319469:                          )\n319470:                         )\n319471:                         (i32.or\n319472:                          (i32.gt_u\n319473:                           (i32.and\n319474:                            (i32.reinterpret_f32\n319475:                             (f32x4.extract_lane 2\n319476:                              (local.get $45)\n319477:                             )\n319478:                            )\n319479:                            (i32.const 2147483647)\n319480:                           )\n319481:                           (i32.const 2139095039)\n319482:                          )\n319483:                          (i32.ge_u\n319484:                           (i32.and\n319485:                            (i32.reinterpret_f32\n319486:                             (f32x4.extract_lane 3\n319487:                              (local.get $45)\n319488:                             )\n319489:                            )\n319490:                            (i32.const 2147483647)\n319491:                           )\n319492:                           (i32.const 2139095040)\n319493:                          )\n319494:                         )\n319495:                        )\n319496:                       )\n319497:                       (if"
+  },
+  "limits": [
+    "Static code does not show runtime execution frequency, active lane or buffer distribution, or elapsed cost.",
+    "This inspection does not measure stack high-water or peak memory.",
+    "Exact standard-section equality authenticates executable sections between these two frozen Wasm artifacts; their name custom sections differ."
+  ]
+}

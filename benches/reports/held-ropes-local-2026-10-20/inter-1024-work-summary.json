@@ -1,0 +1,201 @@
+{
+  "schema": "held-wave1-inter-1024-actual-work-v1",
+  "run": {
+    "workflow": "glyph:shaper-tests",
+    "filter": "dense_inter_setter_publication_attributes_actual_work",
+    "command": "/opt/homebrew/bin/python3 /Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/run.py inter-1024-wave1 /Users/mini/.local/bin/mise exec -- pnpm scripts run glyph:shaper-tests -- dense_inter_setter_publication_attributes_actual_work -- --nocapture",
+    "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+    "startedUtc": "2026-10-20T12:25:22.974418+00:00",
+    "finishedUtc": "2026-10-20T12:25:27.011728+00:00",
+    "numericExit": 0,
+    "testResult": "1 passed; 0 failed; 477 filtered out",
+    "timedPerformanceClaim": false,
+    "rawLogs": {
+      "stdout": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/inter-1024-wave1/stdout.log",
+        "bytes": 880,
+        "sha256": "eed2d1933759650427642938dfa6a82d36a1e3f1df3ba2589929317d50863439"
+      },
+      "stderr": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/inter-1024-wave1/stderr.log",
+        "bytes": 11709,
+        "sha256": "e67ab4c8a8e00d15b331178eb049c1c8f52d298eed13d8a62d92704dd7c65bc8"
+      },
+      "wrapperResult": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/inter-1024-wave1/result.json",
+        "bytes": 616,
+        "sha256": "26f0eccb1df097ff062a07e4c7aae0e0278f82a9fb9c4acca6953109d793877b"
+      },
+      "start": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/inter-1024-wave1/start.json",
+        "bytes": 363,
+        "sha256": "6bb76a09f62d7b5a21702d05846aae59086515c7536d3cc9297c0470f151a6e3"
+      }
+    }
+  },
+  "source": {
+    "head": "54d114494dade0202392c65b55b1fcd6d22ecd4e",
+    "filesSha256": {
+      "packages/glyph/rust/shaper/src/engine/codec.rs": "82df57f33ec343096a5e62f162c8de0c89c9eef58154c3510078da20ea8d21e2",
+      "packages/glyph/rust/shaper/src/engine/codec_gather.rs": "61f836f7b3210387edbe7cb3f7227d2d5534adedbb57474f8e0471a6f2959809",
+      "packages/glyph/rust/shaper/src/engine/ordered_plan.rs": "1573808cec234f555b3cf88bb2eca2bd84b90b86c30abfde5748227b9828acce",
+      "packages/glyph/rust/shaper/src/engine/retained_rope.rs": "771de87d95bc6842e7b2e6999ebc10c6ff68a6202d30720441d3c9b20e80aebb",
+      "packages/glyph/rust/shaper/src/engine/work_attribution.rs": "4b9f016cdeb3d08509b602227801067dfa6ec43cc5e80473b03e04deb712d0a4"
+    },
+    "method": "SHA-256 of five source files after the single fixture; file contents were not edited by this gate"
+  },
+  "cycles": [
+    {
+      "cycle": 0,
+      "preparation": {
+        "ordered_admission_visits": 0,
+        "ordered_instance_comparisons": 0,
+        "ordered_instance_rewrites": 0,
+        "codec_executed_records": 0,
+        "ordered_state_derivations": 0,
+        "ordered_shape_nodes": 0,
+        "ordered_repacks": 0,
+        "gather_paragraph_visits": 0,
+        "gather_range_skips": 0,
+        "gather_glyph_visits": 0,
+        "gather_retained_gap_rows": 0,
+        "gather_envelope_splices": 0,
+        "gather_suffix_copy_bytes": 0,
+        "gather_mask_bits": 0,
+        "gather_all_masks": 0,
+        "gather_identity_mismatches": 0,
+        "copied_positioned_records": 0,
+        "copied_positioned_bytes": 0,
+        "clean_buffer_copy_runs": 0,
+        "shape_range_copied_glyphs": 0,
+        "cluster_copied_old_rows": 0,
+        "rope_bulk_records": 0,
+        "rope_bulk_chunks": 0,
+        "rope_iterator_starts": 6144
+      },
+      "publication": {
+        "ordered_admission_visits": 10240,
+        "ordered_instance_comparisons": 10240,
+        "ordered_instance_rewrites": 10240,
+        "codec_executed_records": 10240,
+        "ordered_state_derivations": 10240,
+        "ordered_shape_nodes": 13,
+        "ordered_repacks": 1,
+        "gather_paragraph_visits": 1024,
+        "gather_range_skips": 0,
+        "gather_glyph_visits": 10240,
+        "gather_retained_gap_rows": 0,
+        "gather_envelope_splices": 0,
+        "gather_suffix_copy_bytes": 0,
+        "gather_mask_bits": 81920,
+        "gather_all_masks": 5120,
+        "gather_identity_mismatches": 5120,
+        "copied_positioned_records": 0,
+        "copied_positioned_bytes": 0,
+        "clean_buffer_copy_runs": 0,
+        "shape_range_copied_glyphs": 0,
+        "cluster_copied_old_rows": 0,
+        "rope_bulk_records": 4096,
+        "rope_bulk_chunks": 128,
+        "rope_iterator_starts": 6
+      },
+      "output_changed": {}
+    },
+    {
+      "cycle": 1,
+      "preparation": {
+        "ordered_admission_visits": 0,
+        "ordered_instance_comparisons": 0,
+        "ordered_instance_rewrites": 0,
+        "codec_executed_records": 0,
+        "ordered_state_derivations": 0,
+        "ordered_shape_nodes": 0,
+        "ordered_repacks": 0,
+        "gather_paragraph_visits": 0,
+        "gather_range_skips": 0,
+        "gather_glyph_visits": 0,
+        "gather_retained_gap_rows": 0,
+        "gather_envelope_splices": 0,
+        "gather_suffix_copy_bytes": 0,
+        "gather_mask_bits": 0,
+        "gather_all_masks": 0,
+        "gather_identity_mismatches": 0,
+        "copied_positioned_records": 0,
+        "copied_positioned_bytes": 0,
+        "clean_buffer_copy_runs": 0,
+        "shape_range_copied_glyphs": 0,
+        "cluster_copied_old_rows": 0,
+        "rope_bulk_records": 0,
+        "rope_bulk_chunks": 0,
+        "rope_iterator_starts": 6144
+      },
+      "publication": {
+        "ordered_admission_visits": 10240,
+        "ordered_instance_comparisons": 10240,
+        "ordered_instance_rewrites": 10240,
+        "codec_executed_records": 10240,
+        "ordered_state_derivations": 10240,
+        "ordered_shape_nodes": 639,
+        "ordered_repacks": 0,
+        "gather_paragraph_visits": 1024,
+        "gather_range_skips": 0,
+        "gather_glyph_visits": 10240,
+        "gather_retained_gap_rows": 0,
+        "gather_envelope_splices": 0,
+        "gather_suffix_copy_bytes": 0,
+        "gather_mask_bits": 81920,
+        "gather_all_masks": 5120,
+        "gather_identity_mismatches": 5120,
+        "copied_positioned_records": 0,
+        "copied_positioned_bytes": 0,
+        "clean_buffer_copy_runs": 0,
+        "shape_range_copied_glyphs": 0,
+        "cluster_copied_old_rows": 0,
+        "rope_bulk_records": 4096,
+        "rope_bulk_chunks": 128,
+        "rope_iterator_starts": 5
+      },
+      "output_changed": {}
+    }
+  ],
+  "priorComparison": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/inter-1024-attribution",
+    "numericExit": 0,
+    "logs": {
+      "stdout": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/inter-1024-attribution/stdout.log",
+        "bytes": 880,
+        "sha256": "aa9246858c0558ea4f2e04935a90f4e1c05b325a3856dd128fe3293b445a7bab"
+      },
+      "stderr": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/inter-1024-attribution/stderr.log",
+        "bytes": 11402,
+        "sha256": "0f8f40c818338c72e0f4c8c2aa3e963b3b55f3a5c7f1357696f1f6dfcd0c6eea"
+      },
+      "wrapperResult": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/inter-1024-attribution/result.json",
+        "bytes": 616,
+        "sha256": "a89cb59b8e9d77ab7511580fe3aa30489230a0ce115ced1039095d5df6ad3de0"
+      }
+    },
+    "newCountersAbsentFromPrior": ["ordered_state_derivations", "ordered_shape_nodes", "ordered_repacks"],
+    "commonSelectedCounterDifferences": [
+      {
+        "cycle": 0,
+        "phase": "publication",
+        "field": "rope_iterator_starts",
+        "prior": 8,
+        "current": 6
+      },
+      {
+        "cycle": 1,
+        "phase": "publication",
+        "field": "rope_iterator_starts",
+        "prior": 8,
+        "current": 5
+      }
+    ],
+    "comparisonNote": "Prior Work output has no ordered_state_derivations, ordered_shape_nodes, or ordered_repacks fields; those values are recorded as null for prior and are not inferred as zero."
+  },
+  "measurementBoundary": "Untimed correctness and actual-work-counter gate only; no profile, elapsed-latency comparison, build/pack, or additional test run."
+}

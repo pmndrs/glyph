@@ -1,0 +1,722 @@
+{
+  "conclusion": "success",
+  "databaseId": 39426053824,
+  "event": "pull_request",
+  "headSha": "273d7ae053f223f74d3df0e192c002012cbe3fec",
+  "jobs": [
+    {
+      "completedAt": "2026-10-20T12:56:04Z",
+      "conclusion": "success",
+      "databaseId": 118638779957,
+      "name": "Static checks",
+      "startedAt": "2026-10-20T12:55:16Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-20T12:55:18Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-20T12:55:17Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:55:29Z",
+          "conclusion": "success",
+          "name": "Check out repository",
+          "number": 2,
+          "startedAt": "2026-10-20T12:55:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:55:45Z",
+          "conclusion": "success",
+          "name": "Install canonical toolchain",
+          "number": 3,
+          "startedAt": "2026-10-20T12:55:29Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:55:52Z",
+          "conclusion": "success",
+          "name": "Install locked dependencies",
+          "number": 4,
+          "startedAt": "2026-10-20T12:55:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:55:54Z",
+          "conclusion": "success",
+          "name": "Check repository formatting",
+          "number": 5,
+          "startedAt": "2026-10-20T12:55:52Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:55:58Z",
+          "conclusion": "success",
+          "name": "Check benchmark formatting",
+          "number": 6,
+          "startedAt": "2026-10-20T12:55:54Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:55:59Z",
+          "conclusion": "success",
+          "name": "Lint benchmarks",
+          "number": 7,
+          "startedAt": "2026-10-20T12:55:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:55:59Z",
+          "conclusion": "success",
+          "name": "Check skill linking",
+          "number": 8,
+          "startedAt": "2026-10-20T12:55:59Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:56:02Z",
+          "conclusion": "success",
+          "name": "Check OKF tooling",
+          "number": 9,
+          "startedAt": "2026-10-20T12:55:59Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:56:02Z",
+          "conclusion": "success",
+          "name": "Post Check out repository",
+          "number": 18,
+          "startedAt": "2026-10-20T12:56:02Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:56:02Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 19,
+          "startedAt": "2026-10-20T12:56:02Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/pmndrs/glyph/actions/runs/39426053824/job/118638779957"
+    },
+    {
+      "completedAt": "2026-10-20T13:09:13Z",
+      "conclusion": "success",
+      "databaseId": 118638780605,
+      "name": "Package size report",
+      "startedAt": "2026-10-20T12:55:16Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-20T12:55:18Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-20T12:55:17Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:55:26Z",
+          "conclusion": "success",
+          "name": "Check out repository",
+          "number": 2,
+          "startedAt": "2026-10-20T12:55:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:55:39Z",
+          "conclusion": "success",
+          "name": "Install canonical toolchain",
+          "number": 3,
+          "startedAt": "2026-10-20T12:55:26Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:55:49Z",
+          "conclusion": "success",
+          "name": "Restore Rust dependency cache",
+          "number": 4,
+          "startedAt": "2026-10-20T12:55:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:55:58Z",
+          "conclusion": "success",
+          "name": "Install locked dependencies",
+          "number": 5,
+          "startedAt": "2026-10-20T12:55:49Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:59:50Z",
+          "conclusion": "success",
+          "name": "Build measured delivery surfaces",
+          "number": 6,
+          "startedAt": "2026-10-20T12:55:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:01:36Z",
+          "conclusion": "success",
+          "name": "Measure package delivery sizes",
+          "number": 7,
+          "startedAt": "2026-10-20T12:59:50Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:01:36Z",
+          "conclusion": "skipped",
+          "name": "Bind the main baseline to its commit",
+          "number": 8,
+          "startedAt": "2026-10-20T13:01:36Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:01:36Z",
+          "conclusion": "skipped",
+          "name": "Retain exact main package-size baseline",
+          "number": 9,
+          "startedAt": "2026-10-20T13:01:36Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:01:38Z",
+          "conclusion": "success",
+          "name": "Find exact base package-size baseline",
+          "number": 10,
+          "startedAt": "2026-10-20T13:01:36Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:01:38Z",
+          "conclusion": "skipped",
+          "name": "Download exact base package-size baseline",
+          "number": 11,
+          "startedAt": "2026-10-20T13:01:38Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:01:38Z",
+          "conclusion": "skipped",
+          "name": "Validate exact base package-size baseline",
+          "number": 12,
+          "startedAt": "2026-10-20T13:01:38Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:01:45Z",
+          "conclusion": "success",
+          "name": "Check out base for first-run fallback",
+          "number": 13,
+          "startedAt": "2026-10-20T13:01:38Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:09:09Z",
+          "conclusion": "success",
+          "name": "Measure exact base fallback",
+          "number": 14,
+          "startedAt": "2026-10-20T13:01:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:09:10Z",
+          "conclusion": "success",
+          "name": "Publish compact package-size report",
+          "number": 15,
+          "startedAt": "2026-10-20T13:09:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:09:10Z",
+          "conclusion": "success",
+          "name": "Post Check out base for first-run fallback",
+          "number": 28,
+          "startedAt": "2026-10-20T13:09:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:09:11Z",
+          "conclusion": "success",
+          "name": "Post Restore Rust dependency cache",
+          "number": 29,
+          "startedAt": "2026-10-20T13:09:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:09:11Z",
+          "conclusion": "success",
+          "name": "Post Check out repository",
+          "number": 30,
+          "startedAt": "2026-10-20T13:09:11Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:09:11Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 31,
+          "startedAt": "2026-10-20T13:09:11Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/pmndrs/glyph/actions/runs/39426053824/job/118638780605"
+    },
+    {
+      "completedAt": "2026-10-20T12:55:53Z",
+      "conclusion": "success",
+      "databaseId": 118638780697,
+      "name": "Docs report",
+      "startedAt": "2026-10-20T12:55:16Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-20T12:55:19Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-20T12:55:18Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:55:22Z",
+          "conclusion": "success",
+          "name": "Check out repository",
+          "number": 2,
+          "startedAt": "2026-10-20T12:55:19Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:55:38Z",
+          "conclusion": "success",
+          "name": "Install canonical toolchain",
+          "number": 3,
+          "startedAt": "2026-10-20T12:55:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:55:46Z",
+          "conclusion": "success",
+          "name": "Install locked dependencies",
+          "number": 4,
+          "startedAt": "2026-10-20T12:55:38Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:55:48Z",
+          "conclusion": "success",
+          "name": "Report docs to review",
+          "number": 5,
+          "startedAt": "2026-10-20T12:55:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:55:50Z",
+          "conclusion": "success",
+          "name": "Publish docs report comment",
+          "number": 6,
+          "startedAt": "2026-10-20T12:55:48Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:55:50Z",
+          "conclusion": "success",
+          "name": "Post Check out repository",
+          "number": 12,
+          "startedAt": "2026-10-20T12:55:50Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:55:51Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 13,
+          "startedAt": "2026-10-20T12:55:50Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/pmndrs/glyph/actions/runs/39426053824/job/118638780697"
+    },
+    {
+      "completedAt": "2026-10-20T13:12:39Z",
+      "conclusion": "success",
+      "databaseId": 118639165917,
+      "name": "Check",
+      "startedAt": "2026-10-20T12:56:07Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-20T12:56:10Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-20T12:56:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:56:24Z",
+          "conclusion": "success",
+          "name": "Check out repository",
+          "number": 2,
+          "startedAt": "2026-10-20T12:56:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:56:39Z",
+          "conclusion": "success",
+          "name": "Install canonical toolchain",
+          "number": 3,
+          "startedAt": "2026-10-20T12:56:24Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:56:40Z",
+          "conclusion": "success",
+          "name": "Restore Rust dependency cache",
+          "number": 4,
+          "startedAt": "2026-10-20T12:56:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:56:49Z",
+          "conclusion": "success",
+          "name": "Install locked dependencies",
+          "number": 5,
+          "startedAt": "2026-10-20T12:56:40Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:56:51Z",
+          "conclusion": "success",
+          "name": "Provision authenticated vendored HarfBuzz utilities",
+          "number": 6,
+          "startedAt": "2026-10-20T12:56:49Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T12:56:53Z",
+          "conclusion": "success",
+          "name": "Select rolling runner Chromium",
+          "number": 7,
+          "startedAt": "2026-10-20T12:56:51Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:07:40Z",
+          "conclusion": "success",
+          "name": "Check core package",
+          "number": 8,
+          "startedAt": "2026-10-20T12:56:53Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:07:42Z",
+          "conclusion": "success",
+          "name": "Pack candidate package for performance reporting",
+          "number": 9,
+          "startedAt": "2026-10-20T13:07:40Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:07:44Z",
+          "conclusion": "success",
+          "name": "Retain candidate package",
+          "number": 10,
+          "startedAt": "2026-10-20T13:07:42Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:07:54Z",
+          "conclusion": "success",
+          "name": "Check glyph example package",
+          "number": 11,
+          "startedAt": "2026-10-20T13:07:44Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:08:00Z",
+          "conclusion": "success",
+          "name": "Check example renderer package",
+          "number": 12,
+          "startedAt": "2026-10-20T13:07:54Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:08:06Z",
+          "conclusion": "success",
+          "name": "Check benchmark application types",
+          "number": 13,
+          "startedAt": "2026-10-20T13:08:00Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:08:07Z",
+          "conclusion": "success",
+          "name": "Check benchmark script types",
+          "number": 14,
+          "startedAt": "2026-10-20T13:08:06Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:08:35Z",
+          "conclusion": "success",
+          "name": "Prove stable Three raster rendering",
+          "number": 15,
+          "startedAt": "2026-10-20T13:08:07Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:08:56Z",
+          "conclusion": "success",
+          "name": "Prove TypeGPU Three raster rendering",
+          "number": 16,
+          "startedAt": "2026-10-20T13:08:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:08:57Z",
+          "conclusion": "success",
+          "name": "Check paragraph fixture references",
+          "number": 17,
+          "startedAt": "2026-10-20T13:08:56Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:08:59Z",
+          "conclusion": "success",
+          "name": "Check bidi contract",
+          "number": 18,
+          "startedAt": "2026-10-20T13:08:57Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:09:01Z",
+          "conclusion": "success",
+          "name": "Check CJK contract",
+          "number": 19,
+          "startedAt": "2026-10-20T13:08:59Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:09:09Z",
+          "conclusion": "success",
+          "name": "Run benchmark unit tests",
+          "number": 20,
+          "startedAt": "2026-10-20T13:09:01Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:09:13Z",
+          "conclusion": "success",
+          "name": "Check workflow registry",
+          "number": 21,
+          "startedAt": "2026-10-20T13:09:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:09:48Z",
+          "conclusion": "success",
+          "name": "Run browser conformance suite",
+          "number": 22,
+          "startedAt": "2026-10-20T13:09:13Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:09:50Z",
+          "conclusion": "success",
+          "name": "Retain browser conformance results",
+          "number": 23,
+          "startedAt": "2026-10-20T13:09:48Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:09:55Z",
+          "conclusion": "success",
+          "name": "Verify packed consumer",
+          "number": 24,
+          "startedAt": "2026-10-20T13:09:50Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:12:01Z",
+          "conclusion": "success",
+          "name": "Build benchmark application",
+          "number": 25,
+          "startedAt": "2026-10-20T13:09:55Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:12:35Z",
+          "conclusion": "success",
+          "name": "Check Three and React Three Fiber examples",
+          "number": 26,
+          "startedAt": "2026-10-20T13:12:01Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:12:36Z",
+          "conclusion": "success",
+          "name": "Check Japanese showcase fixture",
+          "number": 27,
+          "startedAt": "2026-10-20T13:12:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:12:36Z",
+          "conclusion": "skipped",
+          "name": "Retain Wasm failure evidence",
+          "number": 28,
+          "startedAt": "2026-10-20T13:12:36Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:12:36Z",
+          "conclusion": "success",
+          "name": "Post Restore Rust dependency cache",
+          "number": 55,
+          "startedAt": "2026-10-20T13:12:36Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:12:37Z",
+          "conclusion": "success",
+          "name": "Post Check out repository",
+          "number": 56,
+          "startedAt": "2026-10-20T13:12:36Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:12:37Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 57,
+          "startedAt": "2026-10-20T13:12:37Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/pmndrs/glyph/actions/runs/39426053824/job/118639165917"
+    },
+    {
+      "completedAt": "2026-10-20T14:09:07Z",
+      "conclusion": "success",
+      "databaseId": 118646914946,
+      "name": "Package performance report",
+      "startedAt": "2026-10-20T13:12:43Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-10-20T13:12:46Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-10-20T13:12:44Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:13:01Z",
+          "conclusion": "success",
+          "name": "Check out repository",
+          "number": 2,
+          "startedAt": "2026-10-20T13:12:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:13:17Z",
+          "conclusion": "success",
+          "name": "Install canonical toolchain",
+          "number": 3,
+          "startedAt": "2026-10-20T13:13:01Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:13:24Z",
+          "conclusion": "success",
+          "name": "Install locked dependencies",
+          "number": 4,
+          "startedAt": "2026-10-20T13:13:17Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:13:26Z",
+          "conclusion": "success",
+          "name": "Download candidate package",
+          "number": 5,
+          "startedAt": "2026-10-20T13:13:24Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:13:26Z",
+          "conclusion": "skipped",
+          "name": "Download saved candidate package",
+          "number": 6,
+          "startedAt": "2026-10-20T13:13:26Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:13:26Z",
+          "conclusion": "skipped",
+          "name": "Download saved candidate timings",
+          "number": 7,
+          "startedAt": "2026-10-20T13:13:26Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T13:13:26Z",
+          "conclusion": "success",
+          "name": "Select package performance suite",
+          "number": 8,
+          "startedAt": "2026-10-20T13:13:26Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T14:09:01Z",
+          "conclusion": "success",
+          "name": "Measure installed-package performance",
+          "number": 9,
+          "startedAt": "2026-10-20T13:13:26Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T14:09:03Z",
+          "conclusion": "success",
+          "name": "Publish performance report comment",
+          "number": 10,
+          "startedAt": "2026-10-20T14:09:01Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T14:09:04Z",
+          "conclusion": "success",
+          "name": "Retain Labs performance report",
+          "number": 11,
+          "startedAt": "2026-10-20T14:09:03Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T14:09:05Z",
+          "conclusion": "success",
+          "name": "Post Check out repository",
+          "number": 22,
+          "startedAt": "2026-10-20T14:09:04Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-10-20T14:09:05Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 23,
+          "startedAt": "2026-10-20T14:09:05Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/pmndrs/glyph/actions/runs/39426053824/job/118646914946"
+    }
+  ],
+  "status": "completed",
+  "url": "https://github.com/pmndrs/glyph/actions/runs/39426053824",
+  "workflowName": "CI"
+}
