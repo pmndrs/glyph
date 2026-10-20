@@ -1,0 +1,9 @@
+# Preflight reuse cohort: source-only follow-up
+
+Observed while the frozen wave2 full matrix runs; no product source, package, workload, build, test, profile or timing changed.
+
+`benches/labs/package/stress.bench.ts` toggles `alpha NNNN` / `bravo NNNN` on the same owner. `state.rs::text_reconciliation` selects SameLength for this one equal-length replacement. `collect_text_edits` compares actual UTF-16 units and coalesces only adjacent differences; all five letter positions differ, while the space and four digits remain equal. Its edit is therefore [0,5), not the entire ten-unit authored replacement. `UnicodeAnalysis::reusable_for_ascii_letter_edit` checks only that changed slice. Both slices contain ASCII letters, so unchanged spaces/digits do not defeat this existing reuse witness. The same letters-only argument applies to the unpadded dense512 suffix, but no runtime cohort counts are asserted.
+
+`validate_planner_inputs` currently performs retained-style range validation before `validate_style_topology_for_inputs` constructs that witness. The later topology function obtains committed grapheme boundaries when CandidateUnicode::ReuseCommitted. Thus any future combined skip of both style traversals must justify this ordering and preserve caller mutation validation / errors / rollback; adding an early unproved guard in the first pass is insufficient. Source eligibility does not establish actual work count or elapsed savings. The earlier scoped advice remains conditional; nothing is selected here.
+
+Future discrimination remains actual full-replacement seed-copy units plus retained/topology visits in the eligible cohort, or current-source attribution for the Three/configured setter shortcut. Keep test-only counters, existing Unicode authority, one executor and no persistent cache or shadow parser.

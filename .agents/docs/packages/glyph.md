@@ -162,6 +162,13 @@ owner. Reads and explicit semantic publication reuse these results until semanti
 uses the same owned source layout that selected its glyph identities, then reconciles origins against its independently
 realized renderer records. Renderer-only publication keeps text/style/geometry mutation sections empty.
 
+Publication request construction keeps its pending-owner snapshot and emits removals before lifecycle upserts.
+One pending pass independently emits order mutations; an owner may require order work without a lifecycle change.
+Nonempty mutation arrays belong to that invocation. Empty mutation outputs and the six unused semantic sections
+reuse the existing frozen request list. The transport borrows these readonly lists only during its synchronous
+prepare/write call and retains neither the frame nor its descriptors. This removes intermediate map/filter/spread
+arrays and fresh empty lists without pooling mutable arrays or changing publication revisions and retry ownership.
+
 Text preflight and paragraph preparation now share one candidate text, changed-range discovery and Unicode result.
 Complete caller validation precedes adoption into the existing paragraph stages; queries and renderer publication
 reuse the prepared revision. Request-local metadata routes existing inactive buffers, a matching reserved implicit
@@ -1146,6 +1153,17 @@ compiler alone lowers them into the strike-major wire table. Three validates dec
 semantics when a variant registers, then validates every retained payload attribute when a font is bound, before device
 realization. Material contexts retain the discriminated `PortableResource` union rather than erasing typed payloads
 to `unknown`.
+
+The existing scalar and SIMD Codec loops own initialized register/output scratch for one invocation, reusing it
+across records or four-record groups. Validated def-before-use, complete store coverage and reverse dependency masks
+ensure every active read observes a definition from the current record/group; inactive scratch is not emitted.
+The scalar helper owns its loop and is called only for a nonempty tail; SIMD scratch is initialized only when a group
+exists. No scratch crosses calls or programs. The current finite predicate, preflight, output ordering, error prefix,
+padding and partial-buffer rules remain. This changes repeated initialization work, not the executor, wire format or
+semantic authority. Candidate shipping byte/error oracles and package/downstream/browser checks pass. Optimized scratch clears sit
+outside all executor loops, and the compiled frame remains1536 bytes. Memory observations and same-method size
+checks are recorded; elapsed acceptance remains open for the
+[current wave](../log/2026-10-20-held-codec-scratch-request-wave.md).
 
 CPU reference renderers and allocation diagnostics may pair `compileRasterFont()` with `readCompiledRasterFont()`.
 The authenticated read-only view resolves schema field names, strike rows, selected resources, and portable payloads

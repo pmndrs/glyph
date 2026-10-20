@@ -1,0 +1,45 @@
+{
+  "scope": "Fresh same-machine4arm observations,8 after-update-and-publish checkpoints each. Per-field maxima need not occur together. Wholecommand25ms process-family sweep includes bootstrap/all cold oracles/teardown and is non-atomic, not edit-only allocation peak or simultaneous sum. AfterGC points do not measure GC churn.",
+  "arms": {
+    "main": {
+      "afterUpdatePublishPoints": 8,
+      "maxHeapUsedBytes": 26533832,
+      "maxRssBytes": 389726208,
+      "maxEngineWasmCapacityBytes": 158662656,
+      "wholeCommandMaximumObservedNonAtomicSweepSumBytes": 609725520,
+      "cleanupProven": true,
+      "checkpointsSha256": "dcc6e6dc36d4918f370e630db2e01c8bb68dc92cc8b156199c150a3b0bc8481a",
+      "observerReportSha256": "9dcb57e089951d9c4a9beebe03542af3a0d4cec0dabb8c6c776d9965b9cf189a"
+    },
+    "candidate": {
+      "afterUpdatePublishPoints": 8,
+      "maxHeapUsedBytes": 30799072,
+      "maxRssBytes": 326909952,
+      "maxEngineWasmCapacityBytes": 44630016,
+      "wholeCommandMaximumObservedNonAtomicSweepSumBytes": 650498632,
+      "cleanupProven": true,
+      "checkpointsSha256": "2f60142078c75990fb89e81382daf2c000b2bf774dc6e7a0c7e0afe0b71037cb",
+      "observerReportSha256": "20a9f61fd7c0f894910c96c88d982ac81065eb998b6a5f64011c876a2ca0e7a1"
+    },
+    "published010": {
+      "afterUpdatePublishPoints": 8,
+      "maxHeapUsedBytes": 31015648,
+      "maxRssBytes": 387481600,
+      "maxEngineWasmCapacityBytes": 158072832,
+      "wholeCommandMaximumObservedNonAtomicSweepSumBytes": 581640176,
+      "cleanupProven": true,
+      "checkpointsSha256": "48fc7b97a633ecb791d01e7138b51c6834855f4c1c9b42548e4ac51f4d27c3c4",
+      "observerReportSha256": "ad80b5e64f390dda23b5880f3961d84e8109e80019686555562e7a05383a2d61"
+    },
+    "prior340": {
+      "afterUpdatePublishPoints": 8,
+      "maxHeapUsedBytes": 30773648,
+      "maxRssBytes": 323928064,
+      "maxEngineWasmCapacityBytes": 44630016,
+      "wholeCommandMaximumObservedNonAtomicSweepSumBytes": 651105200,
+      "cleanupProven": true,
+      "checkpointsSha256": "5306e425f5652db24e1824e8138666a3fc51be9ca0116aba9f964b8893d78433",
+      "observerReportSha256": "0bc105103e45fce441454ceebc2b1d48d03df6aedfc9c0a8319c160b9f15294e"
+    }
+  }
+}

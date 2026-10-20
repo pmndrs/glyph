@@ -89,7 +89,49 @@ One candidate was sampled once and byte-reused against fresh main, release and p
 
 Retain and preserve this correct combined work for compatible additions; no superseded materiality floor and no isolated dense speedup claim. Publication-only5fa and its archive remain separately named. Shaper1609232raw/599547Node-gzip B; +7675/+3270 versus698. Current scoped requested-live/completed-call peak40471115/40671431 B; whole-command physical sweep and fragmented-root limits remain explicit. Browser signatures match fresh main on both backends; release WebGPU's existing15244800 B/600idle-upload exception is recorded and the19October prose corrected. Separate Three186 PR317 is not integrated/cleared by this lane.
 
-**Next bounded admission:** frozen optimized codec inspection proves repeated1536 B SIMD-group and384 B scalar-tail zero fills, plus scalarized finite checks; named/shipping standard sections match. Establish actual production run/active-SIMD-store boundaries before selecting a coherent compatible work-removal wave. Static instructions do not prove frequency or latency; repeated lookup cost remains unmeasured. Fresh Sol High found no supported dense updater rewrite without that attribution; no new cache/executor/parser/layout/compiler policy or segmented design is selected. Preserve synchronous setters, prepared queries, split ownership, batching/order, Rust authority and packed SoA/SWAR/SIMD. Full seven-family parity remains open; post-parity boost waves completed0. New raw evidence lives under `.cache/held-wave1-20261020/evidence`. Commit/submit the completed packet through real gh stack; keep all layers held/unmerged.
+**Next-wave work evidence:** frozen optimized codec inspection proves repeated1536 B SIMD-group and384 B scalar-tail zero fills, plus scalarized finite checks; named/shipping standard sections match. The custom Inter producer proves repeated-group eligibility for scratch reuse. Actual Bitmap run/active-store utilization remains unproved, so the optional finite classifier is deferred. Static instructions do not prove frequency or latency; repeated lookup cost remains unmeasured. Fresh Sol High found no supported dense updater rewrite without that attribution; no new cache/executor/parser/layout/compiler policy or segmented design is selected. Preserve synchronous setters, prepared queries, split ownership, batching/order, Rust authority and packed SoA/SWAR/SIMD. Full seven-family parity remains open; post-parity boost waves completed0. New raw evidence lives under `.cache/held-wave1-20261020/evidence`. Commit/submit the completed packet through real gh stack; keep all layers held/unmerged.
+
+**Current frozen wave — invocation-local Codec scratch and publication requests:** native Sol6 Medium
+implemented one initialization per populated scalar/SIMD invocation in the existing executor and removed publication
+map/filter/spread intermediates plus fresh empty request lists. Pending snapshot, removal/upsert order, independent
+order dirt, synchronous readonly transport borrowing and nonempty output ownership remain. No shared mutable scratch,
+cache, parser, storage/ABI or finite-predicate change. Actual custom Inter1024 runs once with 2560 SIMD-eligible groups;
+these are not Bitmap runtime counts. Focused native literal-byte/mask/tail/padding/overflow and cold-output gates,
+Clippy and TS checks pass; final scoped source/test review is clean. The frozen candidate shipping build and full
+package check pass:1142 Node tests and587 Rust tests, one ignored. Both real-Wasm independent byte and reachable
+overflow/reset/recovery fixtures pass on this candidate. Packed archive28fd0413… and named executable authenticate; all four optimized scratch zero fills moved outside
+every executor loop while the1536-byte frame remains. JS and shaper each add2 Node-gzip bytes versus prior340.
+Full repository, peers, production, fresh four-arm memory/browser and12 presentation cells pass; allocator live
+and completed-call peaks match prior340. The main arm of the one full seven-family comparison is complete:
+dense512 main/candidate p50/p95ms7.910/8.936 versus10.143/11.443 (+28.2%p50); dense1024
+16.844/18.395 versus19.762/22.341 (+17.3%). All145 rows remain:89 faster,26 slower,24 neutral,
+two clock exclusions and four mode mismatches; cached inspection is mode-excluded. Sparse borrowing and
+width-change inspection remain faster. Main/candidate software calibration drift10.139/1.213%, not hardware GHz.
+Published completes with the same saved candidate JSON07379e47…: dense512 release/candidate
+p50/p95ms8.582/9.430 versus10.143/11.443 (+18.2%p50), dense1024 17.100/18.684 versus19.762/22.341
+(+15.6%). Release100 faster/26 slower/13 neutral/four exclusions(one clock,three mode),two unavailable
+outline rows; software calibration drift3.718%. Prior340 completes with identical saved candidate samples:
+1 faster/2 slower/142 neutral/no exclusions. Prior dense512 p50/p95ms10.217/11.319 and dense1024
+20.120/22.930 yield−0.7%/−1.8%current p50, both neutral. Balanced1000-label grow-shrink-space engine/scene
+publication flags+6.3%(p.028,CI+1.7..10.6%) and+5.9%(p.007,CI+2.6..13.6%) remain visible;
+no blanket no-regression clearance or parity. Prior software calibration drift1.302%. Preserve this exact
+correct provisional variant for combinations. The completed [portable packet](../../../benches/reports/held-codec-scratch-local-2026-10-20/README.md) preserves full results; source ref/commit/real-stack submission follow. Preceding pushed291 CI39445779433 passes all five jobs;
+it does not cover this uncommitted wave. [Owned wave record](../log/2026-10-20-held-codec-scratch-request-wave.md). New evidence lives under
+`.cache/held-wave2-20261020/evidence`; prior273 results do not accept this source. Parity remains false, boost waves0.
+
+All three arms and the one fresh exact28fd/named6fa1024-label scene bulk-write capture complete with exit0:
+10 warmups,80 iterations,no timed reads. Root independently selects fresh preparation/publication anchors7/53
+under updateBulk6 and runs the named summary plus structured sample/CPU conservation. Exclusive sampled CPU:
+preparation835835µs/560samples (JS242459µs),publication358876µs/240samples,unattributed99122µs/42samples.
+Whole total1293833µs/842samples. This is diagnostic attribution, not removable latency or a cross-day CPU comparison.
+Same createTextBatch/update/scene path; the profile omits Labs' returned textCount DFS, so its elapsed time is not
+benchmark acceptance. Full tables and exact identities are in local comparisons-all.json/md and
+wave2-result-summary.json. No second capture is selected. Fresh scoped Sol High ingress/shaping advice is complete. The user explicitly
+requests a hybrid: root is selecting coarse dense reconstruction versus sparse retention within the same executor
+and shared packed/SoA layouts, bypassing dense correspondence/splice work through existing producers. No extra
+executor, duplicated semantic model, speculative cache, shadow parser or segmented storage. Preparation remains
+the dominant sampled scope; publication alone is not promised to close parity. Root owns selection. ABI-free actual-Bitmap/native-counter bridge source advice is complete, but exact producer
+bytes/fixture equivalence and run masks remain unmeasured; custom Inter counts are not that proof.
 
 ### Completed current-machine rerun — 19 October 2026
 

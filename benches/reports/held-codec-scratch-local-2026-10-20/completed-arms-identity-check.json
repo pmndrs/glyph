@@ -1,0 +1,40 @@
+{
+  "recordedUtc": "2026-10-20T17:41:33.671354+00:00",
+  "scope": "Completed main/candidate/published rows only; prior340 pending. Identity check, no resampling.",
+  "arms": {
+    "main": {
+      "rows": 145,
+      "uniqueNames": 145,
+      "uniqueFullFileAliasNameKeys": 145,
+      "allRowsEightBlocksAndNonemptySamples": true,
+      "errors": [],
+      "rawSha256": "6e04b52792a47808bedc9e95b9e5c26e17c9c383259a56b4827ba94f3cbc6e63"
+    },
+    "candidate": {
+      "rows": 145,
+      "uniqueNames": 145,
+      "uniqueFullFileAliasNameKeys": 145,
+      "allRowsEightBlocksAndNonemptySamples": true,
+      "errors": [],
+      "rawSha256": "07379e474976e9b84a2a552989031f09bdd8645ae0a0d2940f8bed396bcfb8b7"
+    },
+    "published010": {
+      "rows": 143,
+      "uniqueNames": 143,
+      "uniqueFullFileAliasNameKeys": 143,
+      "allRowsEightBlocksAndNonemptySamples": true,
+      "errors": [],
+      "rawSha256": "7a8b876896f47fc8f55179ee3a44ff8bb6e0b25f0b9da8ef949b8296352e84ab"
+    }
+  },
+  "mainCandidateExactIdentitySetsEqual": true,
+  "publishedHasNoUnexpectedIdentities": true,
+  "publishedUnavailableFullKeys": [
+    [
+      "outlines.bench.ts",
+      "copy per-glyph metrics with outlines after text change",
+      "copy per-glyph metrics with outlines after text change"
+    ],
+    ["outlines.bench.ts", "read every outline from an unchanged copy", "read every outline from an unchanged copy"]
+  ]
+}

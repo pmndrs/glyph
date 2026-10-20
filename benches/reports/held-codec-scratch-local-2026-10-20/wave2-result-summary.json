@@ -1,0 +1,731 @@
+{
+  "recordedUtc": "2026-10-20T17:57:47.040874+00:00",
+  "status": "Completed wave2 remains held/provisional; dense deltas versusprior neutral and two named grow/shrink regressions prevent blanket no-regression clearance. Preserve exact variant for combination. Parityfalse.",
+  "priorCounts": {
+    "faster": 1,
+    "slower": 2,
+    "neutral": 142
+  },
+  "priorExclusions": [],
+  "priorSlowerRows": [
+    {
+      "status": "slower",
+      "name": "1000 labels separated balanced grow-shrink-space engine publication",
+      "baseline": "2.90ms",
+      "candidate": "3.08ms",
+      "delta": 6.3,
+      "p": ".028",
+      "ci": "+1.7..+10.6%",
+      "baselineSpark": "\u2583\u2588\u2584\u2582\u2582\u2582\u2582\u2582\u2581\u2581",
+      "candidateSpark": "\u2582\u2588\u2585\u2584\u2583\u2583\u2583\u2582\u2581\u2581"
+    },
+    {
+      "status": "slower",
+      "name": "1000 labels separated balanced grow-shrink-space scene publication",
+      "baseline": "3.33ms",
+      "candidate": "3.53ms",
+      "delta": 5.9,
+      "p": ".007",
+      "ci": "+2.6..+13.6%",
+      "baselineSpark": "\u2582\u2588\u2587\u2584\u2583\u2582\u2582\u2581\u2581\u2581",
+      "candidateSpark": "\u2582\u2588\u2588\u2587\u2585\u2584\u2584\u2582\u2582\u2582"
+    }
+  ],
+  "priorityRows": [
+    {
+      "name": "rewrite 512 labels in one group",
+      "main": {
+        "p50Ns": 7910395.5,
+        "p95Ns": 8935917,
+        "N": 208,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 30
+        },
+        "blockMediansNs": [7719250, 7784916, 8377833, 7991917, 8054834, 7976291, 7844500, 7692542],
+        "blockCalibrationRates": [
+          3.7993044118405255, 3.59028997994794, 3.598495815964483, 3.573644438484981, 3.6920073456765543,
+          3.6438511622422483, 3.6988781731170532, 3.6049951364569544
+        ],
+        "withinBlockSpreads": [
+          0.04238892960450142, 0.04641977062538632, 0.04205689076451328, 0.10689126280724343, 0.06414160282667006,
+          0.06086161520541711, 0.08443307657570741, 0.11209824147802448
+        ],
+        "gc": {
+          "min": 0,
+          "max": 8049209,
+          "p50": 0
+        },
+        "heap": {
+          "min": 2834880,
+          "max": 7555656,
+          "p50": 4296176
+        }
+      },
+      "published010": {
+        "p50Ns": 8582000.0,
+        "p95Ns": 9430375,
+        "N": 200,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 29
+        },
+        "blockMediansNs": [8330584, 8403291, 7898791, 8819958, 8760709, 8792000, 7970917, 8877458.00000006],
+        "blockCalibrationRates": [
+          3.6083235097297037, 3.5960175548901394, 3.572727468809038, 3.5845679739157115, 3.613604061370301,
+          3.594789258746997, 3.593309760787491, 3.593313965466174
+        ],
+        "withinBlockSpreads": [
+          0.04060704438008188, 0.08519405968447362, 0.07267090768701184, 0.03983859304091924, 0.04389494704138672,
+          0.07208957006369426, 0.06066744819949825, 0.060094892974983154
+        ],
+        "gc": {
+          "min": 0,
+          "max": 8150166.00000006,
+          "p50": 83646
+        },
+        "heap": {
+          "min": 3076320,
+          "max": 8872152,
+          "p50": 4577560
+        }
+      },
+      "prior340": {
+        "p50Ns": 10216916.5,
+        "p95Ns": 11318750,
+        "N": 176,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 26
+        },
+        "blockMediansNs": [10206041, 10338958, 10037708, 10227792, 10354000, 10545917, 10112542, 10012917],
+        "blockCalibrationRates": [
+          3.598505110709257, 3.7106478290344946, 3.6411857677395774, 3.584859690520666, 3.5860687650524072,
+          3.610399102852851, 3.6067987720421084, 3.621290009927248
+        ],
+        "withinBlockSpreads": [
+          0.09382732096130125, 0.06958686779486123, 0.07466940081629987, 0.057541459036710964, 0.042818236720104486,
+          0.06495671256293285, 0.0664531693047021, 0.10086269659636804
+        ],
+        "gc": {
+          "min": 0,
+          "max": 9060251,
+          "p50": 25375.5
+        },
+        "heap": {
+          "min": 1544456,
+          "max": 7833448,
+          "p50": 3941828
+        }
+      },
+      "candidate": {
+        "p50Ns": 10143000.0,
+        "p95Ns": 11442624.99999994,
+        "N": 184,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 27
+        },
+        "blockMediansNs": [10242458, 10343791, 10161917, 10110250, 10124083, 9975500, 10359459, 10035583],
+        "blockCalibrationRates": [
+          3.6516283800704166, 3.605763385276316, 3.651471529756369, 3.696746400310287, 3.589519094775224,
+          3.6074940707677565, 3.611329143106219, 3.7108855495424073
+        ],
+        "withinBlockSpreads": [
+          0.06531254321960607, 0.08410040695911199, 0.08369055021803465, 0.07426865120051432, 0.06414213342581249,
+          0.07849836040298731, 0.0753085639703772, 0.0610572635989359
+        ],
+        "gc": {
+          "min": 0,
+          "max": 9381209,
+          "p50": 0
+        },
+        "heap": {
+          "min": 0,
+          "max": 7543224,
+          "p50": 3969304
+        }
+      },
+      "versusPriorP50DeltaPercent": -0.7234717049904416,
+      "priorClassification": {
+        "status": "neutral",
+        "name": "rewrite 512 labels in one group",
+        "baseline": "10.22ms",
+        "candidate": "10.14ms",
+        "delta": -0.7,
+        "p": ".645",
+        "ci": "-2.2..+1.2%",
+        "baselineSpark": "\u2581\u2582\u2584\u2585\u2586\u2588\u2585\u2583\u2582\u2581",
+        "candidateSpark": "\u2582\u2582\u2584\u2586\u2586\u2588\u2585\u2584\u2582\u2582"
+      }
+    },
+    {
+      "name": "publish 1024 retained Text instances",
+      "main": {
+        "p50Ns": 16843541.5,
+        "p95Ns": 18395083,
+        "N": 128,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 20
+        },
+        "blockMediansNs": [16833291, 16798667, 16861000, 16826500, 17050458, 16980375, 16853792, 16787042],
+        "blockCalibrationRates": [
+          3.696771234046772, 3.7431939681811457, 3.732090259008152, 3.5961597265992555, 3.5583366443845312,
+          3.6410273855436337, 3.7353525526170035, 3.658444145797597
+        ],
+        "withinBlockSpreads": [
+          0.053159647562406764, 0.050764365149175754, 0.026959840567882466, 0.05451828654471114, 0.04541115275137101,
+          0.027672029592463572, 0.03890829350630313, 0.03786398640966615
+        ],
+        "gc": {
+          "min": 0,
+          "max": 6032958,
+          "p50": 143583.5
+        },
+        "heap": {
+          "min": 6499088,
+          "max": 13134184,
+          "p50": 8607400
+        }
+      },
+      "published010": {
+        "p50Ns": 17100416.5,
+        "p95Ns": 18684375,
+        "N": 128,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 20
+        },
+        "blockMediansNs": [16919500, 17102250, 17547458, 17173375, 17501125, 17098583, 16928042, 16764000],
+        "blockCalibrationRates": [
+          3.585871347957227, 3.575750996323275, 3.5299247703261782, 3.581025458708442, 3.2296530910635255,
+          3.60134448063215, 3.7177291298230646, 3.5953178328565274
+        ],
+        "withinBlockSpreads": [
+          0.05758037964028688, 0.0173462034990861, 0.07629711583037375, 0.05245782704948999, 0.08674725218095919,
+          0.058544784084934715, 0.05356559825433107, 0.028538729756822596
+        ],
+        "gc": {
+          "min": 0,
+          "max": 9456000,
+          "p50": 153354
+        },
+        "heap": {
+          "min": 8756192,
+          "max": 12054064,
+          "p50": 9131344
+        }
+      },
+      "prior340": {
+        "p50Ns": 20119729.0,
+        "p95Ns": 22929917,
+        "N": 128,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 20
+        },
+        "blockMediansNs": [19670166, 22141459, 19815334, 20075750, 19859500, 20163708, 20215542, 20418750],
+        "blockCalibrationRates": [
+          3.7116881345242785, 3.396058215411209, 3.7246715572599496, 3.5703079563900886, 3.563308377423436,
+          3.722882974756464, 3.7055177388182905, 3.7064022562954406
+        ],
+        "withinBlockSpreads": [
+          0.060840490913260555, 0.09266670457865478, 0.08321474122509774, 0.09126396295019334, 0.08210851639316802,
+          0.0843877563839715, 0.06669657394157329, 0.09503151424691503
+        ],
+        "gc": {
+          "min": 0,
+          "max": 10849208,
+          "p50": 0
+        },
+        "heap": {
+          "min": 5593472,
+          "max": 11806616,
+          "p50": 7475764
+        }
+      },
+      "candidate": {
+        "p50Ns": 19762228.99999994,
+        "p95Ns": 22340916,
+        "N": 128,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 20
+        },
+        "blockMediansNs": [19897208, 19527750, 20110709, 19747499.99999988, 20058458, 19776958, 19574083, 19306500],
+        "blockCalibrationRates": [
+          3.711804160141804, 3.7172912010819643, 3.608118091077326, 3.582059472090674, 3.71713648882664,
+          3.711713566187582, 3.6305260340812207, 3.721002048306188
+        ],
+        "withinBlockSpreads": [
+          0.09116747749133229, 0.08210977105570333, 0.086606535595297, 0.07232344887482457, 0.09925842098981778,
+          0.07616049140223492, 0.0720934142523299, 0.0649813044276773
+        ],
+        "gc": {
+          "min": 0,
+          "max": 11502375,
+          "p50": 0
+        },
+        "heap": {
+          "min": 6478936,
+          "max": 10567608,
+          "p50": 7543464
+        }
+      },
+      "versusPriorP50DeltaPercent": -1.7768628990979973,
+      "priorClassification": {
+        "status": "neutral",
+        "name": "publish 1024 retained Text instances",
+        "baseline": "20.12ms",
+        "candidate": "19.76ms",
+        "delta": -1.8,
+        "p": ".038",
+        "ci": "-3.8..-0.2%",
+        "baselineSpark": "\u2581\u2588\u2584\u2587\u2584\u2581\u2581\u2581\u2581\u2581",
+        "candidateSpark": "\u2583\u2588\u2584\u2585\u2585\u2581\u2581\u2581\u2581\u2581"
+      }
+    },
+    {
+      "name": "edit and sparsely borrow one of 1000 retained labels",
+      "main": {
+        "p50Ns": 268500.5,
+        "p95Ns": 495000,
+        "N": 360,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 49
+        },
+        "blockMediansNs": [267084, 261208, 277167, 279584.0000001192, 261458, 269917, 261125, 277459],
+        "blockCalibrationRates": [
+          3.6957373431492395, 3.5598463414370345, 3.659409534798069, 3.6347223552738375, 3.666286059943546,
+          3.7131029100440274, 3.5887525632317057, 3.61683858170046
+        ],
+        "withinBlockSpreads": [
+          0.13345309565529945, 0.12392271982481393, 0.20260333156544608, 0.14163458352466468, 0.10608388651332144,
+          0.163410789242619, 0.13437508549545235, 0.17834439538814742
+        ],
+        "gc": {
+          "min": 0,
+          "max": 2650291.0000000596,
+          "p50": 0
+        },
+        "heap": {
+          "min": 0,
+          "max": 267999,
+          "p50": 54871
+        }
+      },
+      "published010": {
+        "p50Ns": 267208.5,
+        "p95Ns": 500625,
+        "N": 368,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 50
+        },
+        "blockMediansNs": [265375, 256250, 268375, 300250, 300791, 262083, 266208, 268209],
+        "blockCalibrationRates": [
+          3.591046327410444, 3.5721120713619423, 3.5881731636909007, 3.5840803803590258, 3.639060960787545,
+          3.590869265881598, 3.58858491257389, 3.6416334551713185
+        ],
+        "withinBlockSpreads": [
+          0.15220246309859156, 0.10931594281898584, 0.17248781441580968, 0.13372585797464176, 0.193971437706805,
+          0.09597483275461421, 0.14639415933424357, 0.2075910918227501
+        ],
+        "gc": {
+          "min": 0,
+          "max": 3836457.9999999404,
+          "p50": 0
+        },
+        "heap": {
+          "min": 0,
+          "max": 309899,
+          "p50": 55251
+        }
+      },
+      "prior340": {
+        "p50Ns": 215563.0,
+        "p95Ns": 474875,
+        "N": 352,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 48
+        },
+        "blockMediansNs": [209458, 314458, 223500, 216042, 231208, 215084, 212917, 205958],
+        "blockCalibrationRates": [
+          3.7276250373020976, 3.496156373687779, 3.6443580960315187, 3.709875697553344, 3.7197317862173334,
+          3.7313377731710746, 3.7426356598558947, 3.5933803711063
+        ],
+        "withinBlockSpreads": [
+          0.13607284219631066, 0.37249970118773656, 0.23400483493252014, 0.13996523037187214, 0.21787320860227846,
+          0.18369094659276988, 0.20109380363693086, 0.1665211597973038
+        ],
+        "gc": {
+          "min": 0,
+          "max": 4456126,
+          "p50": 0
+        },
+        "heap": {
+          "min": 0,
+          "max": 1474992,
+          "p50": 25400
+        }
+      },
+      "candidate": {
+        "p50Ns": 211875.0,
+        "p95Ns": 416208,
+        "N": 360,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 49
+        },
+        "blockMediansNs": [205000, 225750, 210375, 222625, 209542, 208541, 213375, 216708],
+        "blockCalibrationRates": [
+          3.722095480594516, 3.6168443696570076, 3.7244405022716336, 3.72686733481602, 3.7172134013847495,
+          3.657513405730147, 3.6432988963810136, 3.6586804671072217
+        ],
+        "withinBlockSpreads": [
+          0.19798134146341462, 0.2076953488372093, 0.21083752442067735, 0.18674266861313865, 0.15182460222771568,
+          0.22365440560848943, 0.15402364007029876, 0.1924161775292098
+        ],
+        "gc": {
+          "min": 0,
+          "max": 8688208,
+          "p50": 0
+        },
+        "heap": {
+          "min": 0,
+          "max": 1227880,
+          "p50": 25384
+        }
+      },
+      "versusPriorP50DeltaPercent": -1.7108687483473495,
+      "priorClassification": {
+        "status": "neutral",
+        "name": "edit and sparsely borrow one of 1000 retained labels",
+        "baseline": "215.56\u00b5s",
+        "candidate": "211.88\u00b5s",
+        "delta": -1.7,
+        "p": ".442",
+        "ci": "-7.7..+2.1%",
+        "baselineSpark": "\u2584\u2588\u2584\u2582\u2582\u2582\u2581\u2581\u2581\u2581",
+        "candidateSpark": "\u2585\u2588\u2584\u2582\u2582\u2581\u2581\u2581\u2581\u2581"
+      }
+    },
+    {
+      "name": "inspection then publication after width change",
+      "main": {
+        "p50Ns": 5361896.0,
+        "p95Ns": 9781125,
+        "N": 256,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 36
+        },
+        "blockMediansNs": [5226250, 5403500, 6085291.99999994, 5320292, 5558875, 4954625, 5429959, 5013458],
+        "blockCalibrationRates": [
+          3.589960540125425, 3.501374775480162, 3.681856102224916, 3.741203436275381, 3.616995978760971,
+          3.5723459666017154, 3.790028366958527, 3.6273943435186715
+        ],
+        "withinBlockSpreads": [
+          0.417380681060736, 0.4495041190673105, 0.4850840767990208, 0.4694008450380845, 0.4582529885258154,
+          0.20173345581719332, 0.4534842601098385, 0.4316180643905122
+        ],
+        "gc": {
+          "min": 0,
+          "max": 3403709,
+          "p50": 211792
+        },
+        "heap": {
+          "min": 1131984,
+          "max": 12378944,
+          "p50": 7286124
+        }
+      },
+      "published010": {
+        "p50Ns": 10260396.0,
+        "p95Ns": 10952167,
+        "N": 192,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 28
+        },
+        "blockMediansNs": [10114292, 10524958, 10266167, 10533500, 10254625, 10222500, 10507292, 9806208],
+        "blockCalibrationRates": [
+          3.597125205521259, 3.696879367633549, 3.739266883682721, 3.6384566350544327, 3.6102883230925684,
+          3.566795010200986, 3.611705732365102, 3.59683265857553
+        ],
+        "withinBlockSpreads": [
+          0.058632976829026594, 0.063374519407872, 0.056452002838580345, 0.03593893045649308, 0.05942489252338356,
+          0.06741561515993107, 0.05105251107582629, 0.073004935902912
+        ],
+        "gc": {
+          "min": 0,
+          "max": 4823000,
+          "p50": 356771
+        },
+        "heap": {
+          "min": 2777856,
+          "max": 10257272,
+          "p50": 5220640
+        }
+      },
+      "prior340": {
+        "p50Ns": 5084896.5,
+        "p95Ns": 6311834,
+        "N": 312,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 43
+        },
+        "blockMediansNs": [5076084, 4937542, 5032750, 4925792, 5133958, 5093709, 5346958, 5132709],
+        "blockCalibrationRates": [
+          3.735984063117031, 3.6053221213362643, 3.727083555618011, 3.744314100199964, 3.553476780817276,
+          3.734967985645962, 3.750319197079477, 3.702295254330288
+        ],
+        "withinBlockSpreads": [
+          0.18826693092549293, 0.1780603217957437, 0.16146000810689978, 0.17412105505063957, 0.2787836387442203,
+          0.16941171680596592, 0.1136841765729224, 0.18119508364881
+        ],
+        "gc": {
+          "min": 0,
+          "max": 4221750,
+          "p50": 25875
+        },
+        "heap": {
+          "min": 1489216,
+          "max": 17135568,
+          "p50": 6576288
+        }
+      },
+      "candidate": {
+        "p50Ns": 5038770.5,
+        "p95Ns": 6357041,
+        "N": 280,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 39
+        },
+        "blockMediansNs": [5058541, 4954292, 5070583, 5121750, 4998625, 5019000, 5114000, 5000625],
+        "blockCalibrationRates": [
+          3.6181859182917853, 3.5847200026685035, 3.7079236507085467, 3.558582013994889, 3.702265890524311,
+          3.632530058394751, 3.6265745109212517, 3.707195071622108
+        ],
+        "withinBlockSpreads": [
+          0.17494919218802418, 0.19994019831693408, 0.27992947903623705, 0.18966395876409428, 0.15763157136212458,
+          0.2177200610878661, 0.17386137676965194, 0.17068760020997376
+        ],
+        "gc": {
+          "min": 0,
+          "max": 3982375,
+          "p50": 0
+        },
+        "heap": {
+          "min": 2368432,
+          "max": 16585320,
+          "p50": 6575648
+        }
+      },
+      "versusPriorP50DeltaPercent": -0.9071177751602266,
+      "priorClassification": {
+        "status": "neutral",
+        "name": "inspection then publication after width change",
+        "baseline": "5.08ms",
+        "candidate": "5.04ms",
+        "delta": -0.9,
+        "p": ".442",
+        "ci": "-2.6..+1.5%",
+        "baselineSpark": "\u2581\u2581\u2581\u2586\u2585\u2587\u2588\u2585\u2583\u2581",
+        "candidateSpark": "\u2581\u2581\u2581\u2586\u2586\u2588\u2587\u2586\u2583\u2581"
+      }
+    }
+  ],
+  "softwareCalibrationDriftPercent": {
+    "main": 10.139267317106906,
+    "candidate": 1.2134976908449144,
+    "published010": 3.7180008611472846,
+    "prior340": 1.3018365010768729
+  },
+  "candidateSamplesByteIdentical": true,
+  "freshProfile": {
+    "totalSampledMicroseconds": 1293833,
+    "samples": 842,
+    "phases": [
+      {
+        "label": "preparation",
+        "nodeId": 7,
+        "microseconds": 835835,
+        "sampleCount": 560,
+        "stageTotals": [
+          {
+            "stage": "other-wasm",
+            "microseconds": 401793
+          },
+          {
+            "stage": "javascript",
+            "microseconds": 242459
+          },
+          {
+            "stage": "shaping",
+            "microseconds": 185708
+          },
+          {
+            "stage": "host-runtime",
+            "microseconds": 4375
+          },
+          {
+            "stage": "allocation",
+            "microseconds": 1500
+          }
+        ]
+      },
+      {
+        "label": "publication",
+        "nodeId": 53,
+        "microseconds": 358876,
+        "sampleCount": 240,
+        "stageTotals": [
+          {
+            "stage": "javascript",
+            "microseconds": 122792
+          },
+          {
+            "stage": "other-wasm",
+            "microseconds": 106168
+          },
+          {
+            "stage": "gather",
+            "microseconds": 94000
+          },
+          {
+            "stage": "render-plan",
+            "microseconds": 15042
+          },
+          {
+            "stage": "external-javascript",
+            "microseconds": 10333
+          },
+          {
+            "stage": "allocation",
+            "microseconds": 8999
+          },
+          {
+            "stage": "serialization",
+            "microseconds": 1542
+          }
+        ]
+      },
+      {
+        "label": "unattributed",
+        "microseconds": 99122,
+        "sampleCount": 42,
+        "stageTotals": [
+          {
+            "stage": "host-runtime",
+            "microseconds": 52876
+          },
+          {
+            "stage": "other-wasm",
+            "microseconds": 19582
+          },
+          {
+            "stage": "benchmark-harness",
+            "microseconds": 10499
+          },
+          {
+            "stage": "shaping",
+            "microseconds": 8665
+          },
+          {
+            "stage": "gather",
+            "microseconds": 4500
+          },
+          {
+            "stage": "javascript",
+            "microseconds": 1500
+          },
+          {
+            "stage": "render-plan",
+            "microseconds": 1500
+          }
+        ]
+      }
+    ],
+    "limits": [
+      "Exclusive sampledCPU not latency/removabletime; no cross-day paired CPUclaim.",
+      "Profile uses same createTextBatch/update loop/scene publication asLabs, but omits Labs return textGroup.textCount DFS. Its elapsedtiming is not acceptedperformance comparison.",
+      "NativeBitmap run/mask proof stillmissing; customIntereligiblecountsnotactualSIMD.",
+      "Detached stacks remainunattributed; no GCchurn rate or maximumcache proof."
+    ]
+  },
+  "remaining": [
+    "Finalize portablepacket/docs/frontier and scopedcorrectness+regression disposition; coherentcommit/descriptivepreservedref/realghstacksubmitheld.",
+    "Fresh scopedJSingress/short-dense-native shape-scope sourceadvice to inform rootselectedlargerwave, noimplementationselected yet.",
+    "If finiteclassifierselected include realBitmapproducer/nativecounterbridge and realWasm bit/errorproof; no newABI."
+  ]
+}

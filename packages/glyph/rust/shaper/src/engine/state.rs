@@ -12713,6 +12713,50 @@ mod tests {
     }
 
     #[test]
+    fn codec_run_accounting_respects_active_mask() {
+        let codec = validated_codec(TechniqueId(1));
+        let program = &codec.programs()[0];
+        let field = [1.0_f32, 2.0, 3.0, 4.0, 5.0];
+        let fields: [&[f32]; 1] = [&field];
+        let input = super::super::plan_input::PlanInput {
+            glyphs: &[],
+            placement_slots: &[],
+            semantic_change_masks: &[],
+            f32_fields: &fields,
+            u32_fields: &[],
+            order_independent: false,
+        };
+        let starts = [0; super::super::plan_packing::MAX_PHYSICAL_BUFFERS];
+        let mut payload = [0_u8; 20];
+        super::super::work_attribution::reset();
+        for active_buffers in [0, 1] {
+            super::super::plan_packing::execute_run(
+                &codec,
+                CapabilitySetId(1),
+                program,
+                input,
+                0,
+                5,
+                0,
+                &mut payload,
+                &starts,
+                5,
+                active_buffers,
+            )
+            .unwrap();
+        }
+        let work = super::super::work_attribution::snapshot();
+        assert_eq!(work.codec_successful_runs, 2);
+        assert_eq!(work.codec_run_count_bins[0].records, 5);
+        assert_eq!(work.codec_run_count_bins[0].invocations, 2);
+        assert_eq!(work.codec_simd_eligible_groups, 2);
+        assert_eq!(work.codec_eligible_scalar_tails, 2);
+        assert_eq!(work.codec_repeated_group_steps, 0);
+        assert_eq!(work.codec_repeated_scalar_tail_steps, 0);
+        assert_eq!(work.codec_active_f32_store_group_operations, 1);
+    }
+
+    #[test]
     fn dense_inter_setter_publication_attributes_actual_work() {
         const INTER: &[u8] =
             include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
@@ -12870,6 +12914,52 @@ mod tests {
             assert_eq!(published.newly_positioned_glyphs, 0);
             assert_eq!(published.query_serialized_records, 0);
             assert_eq!(published.query_serialized_bytes, 0);
+            let run_bins: Vec<_> = published
+                .codec_run_count_bins
+                .iter()
+                .filter(|bin| bin.invocations != 0)
+                .map(|bin| (bin.records, bin.invocations))
+                .collect();
+            assert_eq!(published.codec_run_count_bin_overflow, 0);
+            assert_eq!(
+                run_bins.iter().map(|(_, count)| count).sum::<usize>(),
+                published.codec_successful_runs
+            );
+            assert_eq!(
+                run_bins
+                    .iter()
+                    .map(|(records, count)| *records as usize * count)
+                    .sum::<usize>(),
+                published.codec_executed_records
+            );
+            assert_eq!(
+                published.codec_simd_eligible_groups,
+                run_bins
+                    .iter()
+                    .map(|(records, count)| (*records as usize / 4) * count)
+                    .sum::<usize>()
+            );
+            assert_eq!(
+                published.codec_eligible_scalar_tails,
+                run_bins
+                    .iter()
+                    .map(|(records, count)| (*records as usize % 4) * count)
+                    .sum::<usize>()
+            );
+            // This fixture's validated program has exactly one active F32 store.
+            assert_eq!(
+                published.codec_active_f32_store_group_operations,
+                published.codec_simd_eligible_groups
+            );
+            std::eprintln!(
+                "dense Inter codec cycle{cycle}: successful_runs={}, record_count_histogram={run_bins:?}, simd_eligible_groups={}, eligible_scalar_tails={}, repeated_group_steps={}, repeated_scalar_tail_steps={}, active_f32_store_group_operations={}",
+                published.codec_successful_runs,
+                published.codec_simd_eligible_groups,
+                published.codec_eligible_scalar_tails,
+                published.codec_repeated_group_steps,
+                published.codec_repeated_scalar_tail_steps,
+                published.codec_active_f32_store_group_operations
+            );
             let after_view = engine.gather.view();
             let after_output = after_view.plan_input();
             let after = after_output.glyphs.to_vec();

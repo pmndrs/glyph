@@ -32,6 +32,7 @@ import {
   type PlannerFrameUpdate,
   type PlannerInlineObject,
   type PlannerParagraphMutation,
+  type PlannerParagraphOrderMutation,
   type PlannerRegion,
   type PlannerStyleMutation,
   type PlannerTextMutation,
@@ -1324,26 +1325,27 @@ class RenderPlannerImpl {
     const pendingTexts = [...this.#pendingTexts];
     // Semantic text, styles, and geometry were synchronously committed by the setter. Publication
     // carries only renderer lifecycle/order work and compiles that exact preparation revision.
-    const paragraphMutations = [
-      ...[...this.#preparationRemovals].map((state) => ({
-        opcode: 'remove' as const,
-        paragraphId: state.paragraphId,
-      })),
-      ...pendingTexts
-        .filter((state) => state.lifecycleDirty)
-        .map((state) => ({
-          opcode: 'upsert' as const,
+    let paragraphMutations: PlannerParagraphMutation[] | undefined;
+    for (const state of this.#preparationRemovals) {
+      (paragraphMutations ??= []).push({ opcode: 'remove', paragraphId: state.paragraphId });
+    }
+    let paragraphOrderMutations: PlannerParagraphOrderMutation[] | undefined;
+    for (const state of pendingTexts) {
+      if (state.lifecycleDirty) {
+        (paragraphMutations ??= []).push({
+          opcode: 'upsert',
           paragraphId: state.paragraphId,
           order: state.metrics.order,
-        })),
-    ];
-    const paragraphOrderMutations = pendingTexts
-      .filter((state) => state.orderDirty)
-      .map((state) => ({
-        paragraphId: state.paragraphId,
-        orderScope: state.orderScope,
-        orderRank: state.orderRank,
-      }));
+        });
+      }
+      if (state.orderDirty) {
+        (paragraphOrderMutations ??= []).push({
+          paragraphId: state.paragraphId,
+          orderScope: state.orderScope,
+          orderRank: state.orderRank,
+        });
+      }
+    }
     return {
       rootId: this.#transport.handle,
       codecHandle: this.#codec.handle,
@@ -1356,14 +1358,14 @@ class RenderPlannerImpl {
       // callers express ordering between paragraphs through the Three scene adapter.
       compositingIndependent: true,
       limits: this.#limits,
-      paragraphMutations,
-      paragraphOrderMutations,
-      textMutations: [],
-      styleMutations: [],
-      constraints: [],
-      regions: [],
-      exclusions: [],
-      inlineObjects: [],
+      paragraphMutations: paragraphMutations ?? EMPTY_REQUEST_ITEMS,
+      paragraphOrderMutations: paragraphOrderMutations ?? EMPTY_REQUEST_ITEMS,
+      textMutations: EMPTY_REQUEST_ITEMS,
+      styleMutations: EMPTY_REQUEST_ITEMS,
+      constraints: EMPTY_REQUEST_ITEMS,
+      regions: EMPTY_REQUEST_ITEMS,
+      exclusions: EMPTY_REQUEST_ITEMS,
+      inlineObjects: EMPTY_REQUEST_ITEMS,
     };
   }
 

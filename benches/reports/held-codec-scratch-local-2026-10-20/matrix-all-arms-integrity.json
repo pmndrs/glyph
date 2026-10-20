@@ -1,0 +1,195 @@
+{
+  "schema": "wave2-matrix-all-arms-integrity-v1",
+  "recordedUtc": "2026-10-20T17:48:38.213630+00:00",
+  "head": "291fb51ce5e61ca6903b67459872923ccab4ceee",
+  "trackedInputs": {
+    "frozenCount": 1039,
+    "additionalLabsCount": 20,
+    "mismatches": {},
+    "allMatch": true
+  },
+  "archives": {
+    "sha256": {
+      "candidate": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+      "main": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "published": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+      "prior340": "340cbe186620e51f7d0ec460e473d72332c1c112d6c07dfd7dab4e63f74f6804"
+    },
+    "expected": {
+      "candidate": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+      "main": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "published": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+      "prior340": "340cbe186620e51f7d0ec460e473d72332c1c112d6c07dfd7dab4e63f74f6804"
+    },
+    "allMatch": true
+  },
+  "arms": {
+    "main": {
+      "labsVersion": "0.9.0",
+      "suite": "full",
+      "blocks": 8,
+      "baselineSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "candidateSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+      "notComparable": {
+        "baselineCheckFailures": [],
+        "timingModeMismatches": [
+          "common.bench.ts / measure 100 unchanged labels / measure 100 unchanged labels: baseline single-call, candidate batched",
+          "layout.bench.ts / cached per-glyph inspection / cached per-glyph inspection: baseline batched, candidate single-call",
+          "prepared-operations.bench.ts / 100 labels first set+measure / 100 labels first set+measure: baseline single-call, candidate batched",
+          "prepared-operations.bench.ts / 1000 labels first set+measure / 1000 labels first set+measure: baseline single-call, candidate batched"
+        ]
+      },
+      "wrapperResult": {
+        "argv": [
+          "/usr/bin/env",
+          "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/scratch",
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "benchmark:labs-package",
+          "--",
+          "--candidate",
+          "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "--baseline",
+          "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+          "--suite",
+          "full",
+          "--blocks",
+          "8",
+          "--output",
+          "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/matrix-main-data"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-20T16:23:40.693674+00:00",
+        "finished": "2026-10-20T17:05:30.896732+00:00",
+        "exit": 0,
+        "sha256": {
+          "stdout.log": "7bd91f82c666723f59a9596ec4c145c22ee7ab378355936abbce9a2f6fc69fbb",
+          "stderr.log": "24994d218769e3df604ee24f2a87893b16e7d062760385ab5d3e36541560605d"
+        }
+      }
+    },
+    "published": {
+      "labsVersion": "0.9.0",
+      "suite": "full",
+      "blocks": 8,
+      "baselineSha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+      "candidateSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+      "notComparable": {
+        "baselineCheckFailures": [],
+        "timingModeMismatches": [
+          "layout.bench.ts / cached per-glyph inspection / cached per-glyph inspection: baseline batched, candidate single-call",
+          "prepared-operations.bench.ts / 100 labels first set+measure / 100 labels first set+measure: baseline single-call, candidate batched",
+          "prepared-operations.bench.ts / 1000 labels first set+measure / 1000 labels first set+measure: baseline single-call, candidate batched"
+        ]
+      },
+      "wrapperResult": {
+        "argv": [
+          "/usr/bin/env",
+          "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/scratch",
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "benchmark:labs-package",
+          "--",
+          "--candidate",
+          "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "--baseline",
+          "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+          "--suite",
+          "full",
+          "--blocks",
+          "8",
+          "--output",
+          "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/matrix-published-data",
+          "--saved-candidate",
+          "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/matrix-main-data"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-20T17:06:02.567008+00:00",
+        "finished": "2026-10-20T17:28:07.745490+00:00",
+        "exit": 0,
+        "sha256": {
+          "stdout.log": "30efb336e6d137079667dfdf6a57e1503f4cec025fc2a008dc47be1696cdd7dd",
+          "stderr.log": "acd3a933dfcf9e68ed54f0d095df4d24bc98d18674a7d31e0ec06b5f61978937"
+        }
+      }
+    },
+    "prior340": {
+      "labsVersion": "0.9.0",
+      "suite": "full",
+      "blocks": 8,
+      "baselineSha256": "340cbe186620e51f7d0ec460e473d72332c1c112d6c07dfd7dab4e63f74f6804",
+      "candidateSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+      "notComparable": {
+        "baselineCheckFailures": [],
+        "timingModeMismatches": []
+      },
+      "wrapperResult": {
+        "argv": [
+          "/usr/bin/env",
+          "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/scratch",
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "benchmark:labs-package",
+          "--",
+          "--candidate",
+          "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "--baseline",
+          "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-candidate/pmndrs-glyph-0.1.0.tgz",
+          "--suite",
+          "full",
+          "--blocks",
+          "8",
+          "--output",
+          "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/matrix-prior340-data",
+          "--saved-candidate",
+          "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/matrix-main-data"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-20T17:28:27.069133+00:00",
+        "finished": "2026-10-20T17:48:25.856216+00:00",
+        "exit": 0,
+        "sha256": {
+          "stdout.log": "4fb62cb3b110d74da4fa6791897fbd1de1ef7e1f00b29393d171a6556e0d11ee",
+          "stderr.log": "aa04efc94087421ee40f3d79d6f901a6ef86af988d195f967ce3db4a36696211"
+        }
+      }
+    }
+  },
+  "candidateJsonSha256": {
+    "main": "07379e474976e9b84a2a552989031f09bdd8645ae0a0d2940f8bed396bcfb8b7",
+    "published": "07379e474976e9b84a2a552989031f09bdd8645ae0a0d2940f8bed396bcfb8b7",
+    "prior340": "07379e474976e9b84a2a552989031f09bdd8645ae0a0d2940f8bed396bcfb8b7"
+  },
+  "candidateJsonSameBytesAllArms": true,
+  "harnessDigests": {
+    "main": "67d7e692d5b43266d3e3b5a2a8923cb004e5bcd2d24f565767b61cc435523a92",
+    "published": "67d7e692d5b43266d3e3b5a2a8923cb004e5bcd2d24f565767b61cc435523a92",
+    "prior340": "67d7e692d5b43266d3e3b5a2a8923cb004e5bcd2d24f565767b61cc435523a92"
+  },
+  "harnessDigestSameAllArms": true,
+  "wrapperExitCodes": {
+    "main": 0,
+    "published": 0,
+    "prior340": 0
+  },
+  "allWrapperExitsZero": true,
+  "runnerProcessesRemaining": [],
+  "runnerProcessGroupsChecked": {
+    "6915": [],
+    "19430": [],
+    "27348": []
+  },
+  "runnerDescendantsGone": true
+}

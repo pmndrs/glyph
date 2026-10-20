@@ -1,0 +1,24 @@
+{
+  "phases": 71,
+  "requestedLiveMax": 40471115,
+  "completedAllocatorCallHighWater": 40671431,
+  "wasmPagesMax": 728,
+  "retained": {
+    "requestedLive": 7641020,
+    "requestedPeak": 7641020,
+    "allocations": 0,
+    "reallocations": 0,
+    "deallocations": 0,
+    "cumulativeRequested": 0,
+    "wasmPages": 728
+  },
+  "scope": {
+    "cycles": 8,
+    "recordBytes": 32,
+    "scope": "captured engine Wasm instance only",
+    "exclusions": ["JS tokens", "GPU", "font decoder instances"],
+    "requestedPeak": "completed allocator-call high water; excludes Talc fragmentation and transient internal realloc peak",
+    "cumulativeRequested": "full new size of successful realloc, not net growth",
+    "wasmPages": "capacity, reported separately from requested live bytes"
+  }
+}

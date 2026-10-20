@@ -1,0 +1,312 @@
+{
+  "status": "Completed local wave evidence; correct variant held, parity not achieved. Raw packages, samples, CPU profile, WAT and build outputs remain local.",
+  "copiedUtc": "2026-10-20T18:08:29.979526+00:00",
+  "files": [
+    {
+      "path": "absolute-distributions.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/absolute-distributions.json",
+      "bytes": 974658,
+      "sha256": "52b97fceb62d73110ff8c88e5acaafd8300bff957e422dca9d94c360c10f83d4"
+    },
+    {
+      "path": "actual-labs-source-supplement.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/actual-labs-source-supplement.json",
+      "bytes": 3406,
+      "sha256": "c74b129a57701a22b5a75a4d260ede902321299c06450dd2e4da9cca4b349527"
+    },
+    {
+      "path": "allocator-summary.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/allocator-summary.json",
+      "bytes": 804,
+      "sha256": "099dc5311bef200b392761a13698b274c3d91b7f1704f5c2b80e8280062868cb"
+    },
+    {
+      "path": "artifact-api-member-inventory.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/artifact-api-member-inventory.json",
+      "bytes": 894809,
+      "sha256": "f67629878f0fafd7e35a9b9f0fb933f0279869aee01ac388d8ce991dd7f05ff8"
+    },
+    {
+      "path": "artifact-inventory-correction.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/artifact-inventory-correction.md",
+      "bytes": 453,
+      "sha256": "3d42aff002033d64916a3ac703df31e4fcf305d2615bd151d6c39b3c4efd9651"
+    },
+    {
+      "path": "bitmap-native-attribution-advice.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/bitmap-native-attribution-advice.md",
+      "bytes": 7763,
+      "sha256": "9c638fb070c44aad977665a10d18eb17a808a938623ff4632d64ddefff3823fb"
+    },
+    {
+      "path": "browser-oracle-comparison.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/browser-oracle-comparison.json",
+      "bytes": 14115,
+      "sha256": "da6d0f500baf2cf9febf0d0029231626a266c5f8de9ab82f45ee75ce3a295b83"
+    },
+    {
+      "path": "candidate-source-freeze.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate-source-freeze.json",
+      "bytes": 131701,
+      "sha256": "cbbdef97b97fc655bd777f4f81c97eae028578ac1bf417125872f28e55022370"
+    },
+    {
+      "path": "candidate/shaper-profile/manifest.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/shaper-profile/manifest.json",
+      "bytes": 269014,
+      "sha256": "febef0245f460489af816cbe27073654e388a62d9c9df296cc5cbc3758806593"
+    },
+    {
+      "path": "candidate/shaper-size/report.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/shaper-size/report.json",
+      "bytes": 771264,
+      "sha256": "ed4a02dcd70c5b7558750e186cf3a3b815e32546ee22bca722a2ff7fae0a59e7"
+    },
+    {
+      "path": "classification-policy-receipt.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/classification-policy-receipt.json",
+      "bytes": 1789,
+      "sha256": "e3784fcc831b77b8eb0c70e4255c9e54a04a5532ed11bc114edeb3298166f996"
+    },
+    {
+      "path": "codec-codegen/README.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/codec-codegen/README.md",
+      "bytes": 1313,
+      "sha256": "4f865b256148ecbc700375283c196cd623de26d30f008580e298f72eda97ee8e"
+    },
+    {
+      "path": "codec-codegen/guard-fill-excerpts.txt",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/codec-codegen/guard-fill-excerpts.txt",
+      "bytes": 2050,
+      "sha256": "0c267c8352569e3bea6a4b7748cb39022c63f1e92510f8ed630fcf04af5d7a50"
+    },
+    {
+      "path": "codec-codegen/receipt.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/codec-codegen/receipt.json",
+      "bytes": 7170,
+      "sha256": "b7f076ec37087e31d8415243da36424b410138b9a4a033db573a3b2faa794ce9"
+    },
+    {
+      "path": "combined-candidate/production-package-size.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/combined-candidate/production-package-size.json",
+      "bytes": 10928,
+      "sha256": "4bb0297b1ebeaf8022ba0363818bf8ecc59c6d4e1f6d738f1ede2717dc2182b9"
+    },
+    {
+      "path": "comparisons-all.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/comparisons-all.json",
+      "bytes": 800410,
+      "sha256": "e720f222ce281d6238320a42558f85cff5e532bf80652d3b15159eeb4b9a7cd7"
+    },
+    {
+      "path": "comparisons-all.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/comparisons-all.md",
+      "bytes": 244722,
+      "sha256": "80362bdbc54d167ac3725e56d2b05d513b5fdf4fb312c87663795e1a2a04ab58"
+    },
+    {
+      "path": "completed-arms-identity-check.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/completed-arms-identity-check.json",
+      "bytes": 1433,
+      "sha256": "ef41c7834e138a6a3710f40360ed6728ab34f4810c7885e04f78cf5750df4967"
+    },
+    {
+      "path": "current-source-diagnostic-plan.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/current-source-diagnostic-plan.json",
+      "bytes": 2759,
+      "sha256": "db90ed86c450cf7ca9590769d72b60e6fed9ec4a276f93c00a8b7d66fbe9eb32"
+    },
+    {
+      "path": "current1024-profile-authentication.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/current1024-profile-authentication.json",
+      "bytes": 20519,
+      "sha256": "ec9bf80be5913bc55b420325f6248f985e2ae7f70dfec1f93f5196639c637a31"
+    },
+    {
+      "path": "current1024-profile-data/ancestry.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/current1024-profile-data/ancestry.json",
+      "bytes": 110,
+      "sha256": "a5f066067c73677b2c1a91053bc20c3d69f96bc8be6b234614c159f47d3b464d"
+    },
+    {
+      "path": "current1024-profile-data/exclusive-summary.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/current1024-profile-data/exclusive-summary.json",
+      "bytes": 251174,
+      "sha256": "1aafee8bcaac734ae246b92a62fcc18d1158ed9cdc598e48822b59ccdd715b49"
+    },
+    {
+      "path": "current1024-profile-data/exclusive.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/current1024-profile-data/exclusive.md",
+      "bytes": 140042,
+      "sha256": "5bd84879d2d729cc66f38d26c0c4e28ffca579088b281831d71ae27cd089e344"
+    },
+    {
+      "path": "current1024-profile-data/root-anchor-selection.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/current1024-profile-data/root-anchor-selection.json",
+      "bytes": 458,
+      "sha256": "16369f7c8fbf5bbbeb52199c54046cf7a4eecd4a55751a14f78563223f2dc33a"
+    },
+    {
+      "path": "current1024-profile-data/summary.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/current1024-profile-data/summary.json",
+      "bytes": 9393,
+      "sha256": "b1e422608efe6d4dc5a68e74d904536e96755d03a67bc11de0ea0538f9c7995d"
+    },
+    {
+      "path": "dense-producer-source-bridge.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/dense-producer-source-bridge.md",
+      "bytes": 1300,
+      "sha256": "a3856d316017f9d840182f3af13ebe8b5006846130406a2748ee90e2eea86216"
+    },
+    {
+      "path": "downstream-final-verification.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/downstream-final-verification.json",
+      "bytes": 3917,
+      "sha256": "ef7e04ec42cd98babbfa403b5f1fad83582deada3aaffd75e5247e370b2becf4"
+    },
+    {
+      "path": "final-artifact-verification.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/final-artifact-verification.json",
+      "bytes": 7436,
+      "sha256": "60866bac8200125e426f8f6c20aa9f34be58d652e39c1a71d80b9b5096d58ae6"
+    },
+    {
+      "path": "implementation-proof/README.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/implementation-proof/README.md",
+      "bytes": 6341,
+      "sha256": "bf48ca1fae4975f0ea3132a8c3f88cff10b1136e7a8e4cfdad294147445b9d3a"
+    },
+    {
+      "path": "implementation-proof/receipt.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/implementation-proof/receipt.json",
+      "bytes": 13793,
+      "sha256": "d7fc523615a96af458d7eb3029987c616fbbe885371188d3febd079c1acc872a"
+    },
+    {
+      "path": "implementation-proof/scoped-review.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/implementation-proof/scoped-review.md",
+      "bytes": 6079,
+      "sha256": "a01edf4fd3343fed97edd0a83c97b0b2cdb07da7a92025bf6d1362afc451def7"
+    },
+    {
+      "path": "main-result-summary.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/main-result-summary.json",
+      "bytes": 17548,
+      "sha256": "f98a82290526c17182efde5d7094214d29d698f5cd15d98e11453db23d8dffcb"
+    },
+    {
+      "path": "main-result-summary.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/main-result-summary.md",
+      "bytes": 1514,
+      "sha256": "28bfa5a98b904f50a4e442b7ca5e5b68fb2e0ff464157af5e1036b446ca00e65"
+    },
+    {
+      "path": "matrix-all-arms-integrity.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/matrix-all-arms-integrity.json",
+      "bytes": 8167,
+      "sha256": "b64817e7d9bcb332d7139c5c8f177ea88cef00af648f4a67322244670cb6b020"
+    },
+    {
+      "path": "matrix-main-integrity.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/matrix-main-integrity.json",
+      "bytes": 3282,
+      "sha256": "3bd2e53215efb01dad555e2f8d5edbea82ae0fbc02efe2f521f28d2e5d1dd3aa"
+    },
+    {
+      "path": "measurement-protocol.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/measurement-protocol.json",
+      "bytes": 3935,
+      "sha256": "e34b7424e5b2647756a8d1dbd9ed19b8e8514eba99770b19f776d9e772be04e9"
+    },
+    {
+      "path": "memory-presentation-cleanup.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/memory-presentation-cleanup.json",
+      "bytes": 3334,
+      "sha256": "323339709a729f106c47ea9085fbf19e4479f66d1bff398c5fe3b2a92aa61a99"
+    },
+    {
+      "path": "memory-presentation-summary.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/memory-presentation-summary.json",
+      "bytes": 38718,
+      "sha256": "3051991b5be6e5232e3c32b383af275219f1f67a353756b631e5e405e0a313e1"
+    },
+    {
+      "path": "node-memory-summary.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/node-memory-summary.json",
+      "bytes": 2220,
+      "sha256": "0e9204eff46e4a55729db85286016b936eb297a6993f938dd014741ab5f8bdf9"
+    },
+    {
+      "path": "package-check-summary.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/package-check-summary.json",
+      "bytes": 1243,
+      "sha256": "8b82714ac495982a83cc82e4f4759a78dbc0a5391eaddd824cd2f87ff85fb88a"
+    },
+    {
+      "path": "parsed-comparisons.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/parsed-comparisons.json",
+      "bytes": 187025,
+      "sha256": "de52f55ddf3d72335d7d9cffad2723e76b6d32ae5ead558d18f62b269cac9e35"
+    },
+    {
+      "path": "planner-order-rejection-coverage.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/planner-order-rejection-coverage.md",
+      "bytes": 900,
+      "sha256": "3b3f4335a054f3be63e0a0ab21c68350ddde7df60c0d0ef000befd432a8121b8"
+    },
+    {
+      "path": "preflight-cohort-source-note.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/preflight-cohort-source-note.md",
+      "bytes": 1825,
+      "sha256": "2a58710f250af252953031bf9a4151df796c06d214544ed1b2c6d2c52be89aca"
+    },
+    {
+      "path": "prior291-ci-terminal/scope.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/prior291-ci-terminal/scope.json",
+      "bytes": 302,
+      "sha256": "937089d6269e5b06d3ec63f74628a8184a420262c0fc342840f7e51c9470c3d0"
+    },
+    {
+      "path": "prior291-ci-terminal/stdout.log",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/prior291-ci-terminal/stdout.log",
+      "bytes": 1147,
+      "sha256": "75be12f68db9c4ce9db6d490ec6a3a125bcfc71a5cf58357ee6671a6fe2e04ec"
+    },
+    {
+      "path": "procedural-unwrapped-presentation-help.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/procedural-unwrapped-presentation-help.json",
+      "bytes": 1899,
+      "sha256": "b4a4b01fd4186bef24940a6ca6b6477bbb0adf8e32be5f597ba33282f33eb187"
+    },
+    {
+      "path": "published-result-summary.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/published-result-summary.json",
+      "bytes": 17430,
+      "sha256": "63012aa732dd957b37467fd2feb3cc5821d9a11ed4aa3749a25b24b8234c1371"
+    },
+    {
+      "path": "setter-js-work-advice.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/setter-js-work-advice.md",
+      "bytes": 8754,
+      "sha256": "39f6d056bcb5664a7ababc8da014c4280860ff09313a55ce7e3dee0a9fef87f5"
+    },
+    {
+      "path": "simd-finite-proof-advice.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/simd-finite-proof-advice.md",
+      "bytes": 12342,
+      "sha256": "43aad70c7816da172a0b79d9150ead83f4d7b0b4b564d66c37ee1247bcdb4d4f"
+    },
+    {
+      "path": "size-comparison.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/size-comparison.json",
+      "bytes": 2905,
+      "sha256": "999bf612e85bb9e93168a072af3bf1e70383287947618d5b2b0321ab631d2bda"
+    },
+    {
+      "path": "wave2-result-summary.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/wave2-result-summary.json",
+      "bytes": 27034,
+      "sha256": "c0014320085156b111345b1b489ce5df62d49e4f70890cd72085407a67fa8001"
+    }
+  ]
+}

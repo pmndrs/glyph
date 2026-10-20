@@ -3,6 +3,12 @@
 use core::cell::Cell;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct CodecRunCountBin {
+    pub records: u32,
+    pub invocations: usize,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Work {
     pub harfrust_calls: usize,
     pub harfrust_utf16_units: usize,
@@ -87,6 +93,15 @@ pub(crate) struct Work {
 
     pub ordered_admission_visits: usize,
     pub codec_executed_records: usize,
+    /// Successful execute_run calls only. Four-record groups describe eligibility, not native SIMD execution.
+    pub codec_successful_runs: usize,
+    pub codec_run_count_bins: [CodecRunCountBin; 32],
+    pub codec_run_count_bin_overflow: usize,
+    pub codec_simd_eligible_groups: usize,
+    pub codec_eligible_scalar_tails: usize,
+    pub codec_repeated_group_steps: usize,
+    pub codec_repeated_scalar_tail_steps: usize,
+    pub codec_active_f32_store_group_operations: usize,
     pub clean_buffer_copy_runs: usize,
     pub retained_storage_match_batch_visits: usize,
     pub ordered_instance_rewrites: usize,
@@ -174,6 +189,14 @@ std::thread_local! {
 
         ordered_admission_visits: 0,
         codec_executed_records: 0,
+        codec_successful_runs: 0,
+        codec_run_count_bins: [CodecRunCountBin { records: 0, invocations: 0 }; 32],
+        codec_run_count_bin_overflow: 0,
+        codec_simd_eligible_groups: 0,
+        codec_eligible_scalar_tails: 0,
+        codec_repeated_group_steps: 0,
+        codec_repeated_scalar_tail_steps: 0,
+        codec_active_f32_store_group_operations: 0,
         clean_buffer_copy_runs: 0,
         retained_storage_match_batch_visits: 0,
         ordered_instance_rewrites: 0,
@@ -198,4 +221,63 @@ pub(crate) fn reset() {
 
 pub(crate) fn snapshot() -> Work {
     WORK.with(Cell::get)
+}
+
+pub(crate) fn record_successful_codec_run(record_count: u32, active_f32_stores: usize) {
+    let groups = record_count as usize / 4;
+    let tails = record_count as usize % 4;
+    record(|work| {
+        work.codec_successful_runs += 1;
+        if let Some(bin) = work
+            .codec_run_count_bins
+            .iter_mut()
+            .find(|bin| bin.invocations != 0 && bin.records == record_count)
+        {
+            bin.invocations += 1;
+        } else if let Some(bin) = work
+            .codec_run_count_bins
+            .iter_mut()
+            .find(|bin| bin.invocations == 0)
+        {
+            *bin = CodecRunCountBin {
+                records: record_count,
+                invocations: 1,
+            };
+        } else {
+            work.codec_run_count_bin_overflow += 1;
+        }
+        work.codec_simd_eligible_groups += groups;
+        work.codec_eligible_scalar_tails += tails;
+        work.codec_repeated_group_steps += groups.saturating_sub(1);
+        work.codec_repeated_scalar_tail_steps += tails.saturating_sub(1);
+        work.codec_active_f32_store_group_operations += groups * active_f32_stores;
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{record_successful_codec_run, reset, snapshot};
+
+    #[test]
+    fn codec_run_eligibility_boundaries() {
+        reset();
+        for records in [0, 1, 3, 4, 5, 8, 11] {
+            record_successful_codec_run(records, 2);
+        }
+        let work = snapshot();
+        assert_eq!(work.codec_successful_runs, 7);
+        assert_eq!(work.codec_simd_eligible_groups, 6);
+        assert_eq!(work.codec_eligible_scalar_tails, 8);
+        assert_eq!(work.codec_repeated_group_steps, 2);
+        assert_eq!(work.codec_repeated_scalar_tail_steps, 4);
+        assert_eq!(work.codec_active_f32_store_group_operations, 12);
+        assert_eq!(work.codec_run_count_bin_overflow, 0);
+        assert_eq!(
+            work.codec_run_count_bins[..7]
+                .iter()
+                .map(|bin| bin.records)
+                .collect::<alloc::vec::Vec<_>>(),
+            [0, 1, 3, 4, 5, 8, 11]
+        );
+    }
 }

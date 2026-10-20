@@ -2,6 +2,8 @@
 
 use core::{mem, slice};
 
+#[cfg(test)]
+use super::codec::Operation;
 use super::{
     codec::{
         CapabilitySetId, CodecExecutionError, PhysicalBufferMut, SemanticInputBatch, ValidatedCodec,
@@ -192,7 +194,32 @@ pub fn execute_run(
             outputs,
             active_buffers,
         )
-        .map_err(PackingError::Codec)
+        .map_err(PackingError::Codec)?;
+    #[cfg(test)]
+    {
+        let executed_program = codec
+            .program(capability_set, program.technique, program.variant)
+            .expect("successful execution selected a validated program");
+        let active_f32_stores = executed_program
+            .operations
+            .iter()
+            .filter_map(|operation| match operation {
+                Operation::StoreF32 { buffer, .. } => Some(buffer),
+                _ => None,
+            })
+            .filter(|buffer| {
+                executed_program
+                    .buffers
+                    .iter()
+                    .enumerate()
+                    .any(|(index, schema)| {
+                        schema.id == **buffer && active_buffers & (1_u32 << index) != 0
+                    })
+            })
+            .count();
+        super::work_attribution::record_successful_codec_run(record_count, active_f32_stores);
+    }
+    Ok(())
 }
 
 pub fn grown_capacity(mut capacity: u32, required: u32) -> Result<u32, PackingError> {

@@ -1,0 +1,289 @@
+{
+  "prior340": {
+    "wat": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/codec-scratch-codegen/current.named.wat",
+    "watSha256": "cd3045a350b9bfcaa6742cc3d06ca3b467a55f84be36b2faabab161367d40aff",
+    "functionTextSha256": "ec7bce52ef0b8b664f1127f2c7529655d83e047b199f2a2398e455be70457633",
+    "lines": [318204, 322188],
+    "fills": [
+      {
+        "line": 318715,
+        "enclosingLoops": ["$label7"],
+        "value": {
+          "head": "i32.const",
+          "args": ["0"],
+          "line": 318717
+        },
+        "length": {
+          "head": "i32.const",
+          "args": ["512"],
+          "line": 318718
+        }
+      },
+      {
+        "line": 318720,
+        "enclosingLoops": ["$label7"],
+        "value": {
+          "head": "i32.const",
+          "args": ["0"],
+          "line": 318725
+        },
+        "length": {
+          "head": "i32.const",
+          "args": ["1024"],
+          "line": 318726
+        }
+      },
+      {
+        "line": 320851,
+        "enclosingLoops": ["$label11"],
+        "value": {
+          "head": "i32.const",
+          "args": ["0"],
+          "line": 320853
+        },
+        "length": {
+          "head": "i32.const",
+          "args": ["128"],
+          "line": 320854
+        }
+      },
+      {
+        "line": 320856,
+        "enclosingLoops": ["$label11"],
+        "value": {
+          "head": "i32.const",
+          "args": ["0"],
+          "line": 320861
+        },
+        "length": {
+          "head": "i32.const",
+          "args": ["256"],
+          "line": 320862
+        }
+      }
+    ],
+    "loops": [
+      {
+        "label": "$label",
+        "line": 318315
+      },
+      {
+        "label": "$label1",
+        "line": 318365
+      },
+      {
+        "label": "$label2",
+        "line": 318461
+      },
+      {
+        "label": "$label7",
+        "line": 318714
+      },
+      {
+        "label": "$label3",
+        "line": 318740
+      },
+      {
+        "label": "$label6",
+        "line": 319869
+      },
+      {
+        "label": "$label4",
+        "line": 319990
+      },
+      {
+        "label": "$label5",
+        "line": 320257
+      },
+      {
+        "label": "$label11",
+        "line": 320850
+      },
+      {
+        "label": "$label8",
+        "line": 320876
+      },
+      {
+        "label": "$label10",
+        "line": 321918
+      },
+      {
+        "label": "$label9",
+        "line": 321971
+      }
+    ],
+    "frameSubtractions": [
+      {
+        "line": 318255,
+        "expression": {
+          "head": "i32.sub",
+          "args": [
+            {
+              "head": "global.get",
+              "args": ["$global$0"],
+              "line": 318256
+            },
+            {
+              "head": "i32.const",
+              "args": ["1536"],
+              "line": 318257
+            }
+          ],
+          "line": 318255
+        }
+      }
+    ],
+    "counts": {
+      "memory.fill": 4,
+      "loop": 12,
+      "f32x4.extract_lane": 4,
+      "v128.store": 19
+    }
+  },
+  "candidate": {
+    "wat": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/codec-codegen/candidate.named.wat",
+    "watSha256": "262ea5869fae293a50983b1086521fe4922525bdff2d529fa4be7fa54b9426dd",
+    "functionTextSha256": "dd015b58ba01031c269de9adf78b9c35b6605981e76f91db166a562183b1153e",
+    "lines": [318204, 322206],
+    "fills": [
+      {
+        "line": 318658,
+        "enclosingLoops": [],
+        "value": {
+          "head": "i32.const",
+          "args": ["0"],
+          "line": 318660
+        },
+        "length": {
+          "head": "i32.const",
+          "args": ["512"],
+          "line": 318661
+        }
+      },
+      {
+        "line": 318663,
+        "enclosingLoops": [],
+        "value": {
+          "head": "i32.const",
+          "args": ["0"],
+          "line": 318668
+        },
+        "length": {
+          "head": "i32.const",
+          "args": ["1024"],
+          "line": 318669
+        }
+      },
+      {
+        "line": 320829,
+        "enclosingLoops": [],
+        "value": {
+          "head": "i32.const",
+          "args": ["0"],
+          "line": 320831
+        },
+        "length": {
+          "head": "i32.const",
+          "args": ["128"],
+          "line": 320832
+        }
+      },
+      {
+        "line": 320834,
+        "enclosingLoops": [],
+        "value": {
+          "head": "i32.const",
+          "args": ["0"],
+          "line": 320839
+        },
+        "length": {
+          "head": "i32.const",
+          "args": ["256"],
+          "line": 320840
+        }
+      }
+    ],
+    "loops": [
+      {
+        "label": "$label",
+        "line": 318316
+      },
+      {
+        "label": "$label1",
+        "line": 318366
+      },
+      {
+        "label": "$label2",
+        "line": 318462
+      },
+      {
+        "label": "$label7",
+        "line": 318733
+      },
+      {
+        "label": "$label3",
+        "line": 318746
+      },
+      {
+        "label": "$label6",
+        "line": 319885
+      },
+      {
+        "label": "$label4",
+        "line": 320006
+      },
+      {
+        "label": "$label5",
+        "line": 320273
+      },
+      {
+        "label": "$label11",
+        "line": 320877
+      },
+      {
+        "label": "$label8",
+        "line": 320890
+      },
+      {
+        "label": "$label10",
+        "line": 321938
+      },
+      {
+        "label": "$label9",
+        "line": 321991
+      }
+    ],
+    "frameSubtractions": [
+      {
+        "line": 318256,
+        "expression": {
+          "head": "i32.sub",
+          "args": [
+            {
+              "head": "global.get",
+              "args": ["$global$0"],
+              "line": 318257
+            },
+            {
+              "head": "i32.const",
+              "args": ["1536"],
+              "line": 318258
+            }
+          ],
+          "line": 318256
+        }
+      }
+    ],
+    "counts": {
+      "memory.fill": 4,
+      "loop": 12,
+      "f32x4.extract_lane": 4,
+      "v128.store": 19
+    }
+  },
+  "claim": "All four optimized scratch zero-fill instructions moved outside every executor loop. SIMD clears are guarded by nonzero record_count&~3; scalar clears follow equality early exit for completed==record_count. Compiled execute_program frame remains1536 bytes. This proves static deletion of repeated fill instructions, not elapsed benefit or runtime SIMD utilization.",
+  "limits": [
+    "No dynamic execution-frequency or cache/GC claim.",
+    "No real-Wasm partial-mask sentinel fixture; native exact-mask tests and production dependency-mask producer bridge retained."
+  ]
+}

@@ -1,0 +1,997 @@
+{
+  "schema": "wave2-memory-browser-presentation-summary-v1",
+  "recordedUtc": "2026-10-20T16:21:25.710476+00:00",
+  "head": "291fb51ce5e61ca6903b67459872923ccab4ceee",
+  "candidateArchive": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "bytes": 3196121,
+    "sha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+    "expectedSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+    "matchesExpected": true,
+    "releaseWasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+    "memoryArtifactArchiveSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+    "memoryArtifactShaperSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+    "controlWasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+    "controlMatchesShipping": true
+  },
+  "sourceFreeze": {
+    "ownedSourceFiles": 6,
+    "trackedInputs": 1039,
+    "uniqueFrozenFiles": 1039,
+    "mismatches": [],
+    "allMatch": true
+  },
+  "packedDist": {
+    "memberCount": 947,
+    "missingWorkspaceMembers": [],
+    "byteMismatches": [],
+    "allMatch": true
+  },
+  "diagnosticMemory": {
+    "exit": 0,
+    "manifest": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/shaper-memory/manifest.json",
+    "archiveSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+    "shaperSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+    "controlSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+    "shippingSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd"
+  },
+  "allocatorLiveMemory": {
+    "exit": 0,
+    "file": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/shaper-live-memory.json",
+    "phaseCount": 71,
+    "cycles": 8,
+    "maxRequestedLiveBytes": 40471115,
+    "maxCompletedAllocationCallPeakBytes": 40671431,
+    "maxWasmPages": 728,
+    "retainedBaseline": {
+      "requestedLive": 7641020,
+      "requestedPeak": 7641020,
+      "allocations": 0,
+      "reallocations": 0,
+      "deallocations": 0,
+      "cumulativeRequested": 0,
+      "wasmPages": 728
+    },
+    "scope": "captured engine Wasm instance only",
+    "limitations": [
+      "JS tokens",
+      "GPU",
+      "font decoder instances",
+      "completed allocator-call high water; excludes Talc fragmentation and transient internal realloc peak",
+      "full new size of successful realloc, not net growth",
+      "capacity, reported separately from requested live bytes"
+    ]
+  },
+  "nodeMemory": {
+    "main": {
+      "archiveSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "status": "completed",
+      "commandExitCode": 0,
+      "oracleChecked": 1024,
+      "checkpointCount": 12,
+      "maxWasmCapacityAfterUpdateBytes": 158662656,
+      "wholeCommandPhysicalFootprint25msSweepMaxBytes": 609725520,
+      "sweeps": 51,
+      "completeSweeps": 51,
+      "cleanupProven": true,
+      "limitations": [
+        "The maximum complete 25 ms sweep sum is an estimate: processes were sampled non-atomically and short peaks or children may be missed.",
+        "The sum is neither an exact simultaneous peak nor a strict lower bound; incomplete sweeps are retained in NDJSON and excluded from the reported maximum.",
+        "The Node OS maximum covers the entire observed command lifetime, including fixture bootstrap, all 1,024 cold controls, and teardown. It is not a bulk-edit-only peak.",
+        "Only the launched command family is followed. Detached descendants discovered before reparenting remain tracked by PID and OS start time; undiscovered children and unrelated system processes are excluded.",
+        "PID identity check and signal delivery are separate syscalls; cleanup is bounded and best effort, not an atomic handle-based kill guarantee.",
+        "Darwin physical footprint includes process charges and may double-count shared memory across processes; JS heap and Wasm capacity are separate diagnostics.",
+        "The observer scans the process table and can perturb runtime; these observations are not latency evidence."
+      ]
+    },
+    "candidate": {
+      "archiveSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+      "status": "completed",
+      "commandExitCode": 0,
+      "oracleChecked": 1024,
+      "checkpointCount": 12,
+      "maxWasmCapacityAfterUpdateBytes": 44630016,
+      "wholeCommandPhysicalFootprint25msSweepMaxBytes": 650498632,
+      "sweeps": 53,
+      "completeSweeps": 53,
+      "cleanupProven": true,
+      "limitations": [
+        "The maximum complete 25 ms sweep sum is an estimate: processes were sampled non-atomically and short peaks or children may be missed.",
+        "The sum is neither an exact simultaneous peak nor a strict lower bound; incomplete sweeps are retained in NDJSON and excluded from the reported maximum.",
+        "The Node OS maximum covers the entire observed command lifetime, including fixture bootstrap, all 1,024 cold controls, and teardown. It is not a bulk-edit-only peak.",
+        "Only the launched command family is followed. Detached descendants discovered before reparenting remain tracked by PID and OS start time; undiscovered children and unrelated system processes are excluded.",
+        "PID identity check and signal delivery are separate syscalls; cleanup is bounded and best effort, not an atomic handle-based kill guarantee.",
+        "Darwin physical footprint includes process charges and may double-count shared memory across processes; JS heap and Wasm capacity are separate diagnostics.",
+        "The observer scans the process table and can perturb runtime; these observations are not latency evidence."
+      ]
+    },
+    "published010": {
+      "archiveSha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+      "status": "completed",
+      "commandExitCode": 0,
+      "oracleChecked": 1024,
+      "checkpointCount": 12,
+      "maxWasmCapacityAfterUpdateBytes": 158072832,
+      "wholeCommandPhysicalFootprint25msSweepMaxBytes": 581640176,
+      "sweeps": 49,
+      "completeSweeps": 49,
+      "cleanupProven": true,
+      "limitations": [
+        "The maximum complete 25 ms sweep sum is an estimate: processes were sampled non-atomically and short peaks or children may be missed.",
+        "The sum is neither an exact simultaneous peak nor a strict lower bound; incomplete sweeps are retained in NDJSON and excluded from the reported maximum.",
+        "The Node OS maximum covers the entire observed command lifetime, including fixture bootstrap, all 1,024 cold controls, and teardown. It is not a bulk-edit-only peak.",
+        "Only the launched command family is followed. Detached descendants discovered before reparenting remain tracked by PID and OS start time; undiscovered children and unrelated system processes are excluded.",
+        "PID identity check and signal delivery are separate syscalls; cleanup is bounded and best effort, not an atomic handle-based kill guarantee.",
+        "Darwin physical footprint includes process charges and may double-count shared memory across processes; JS heap and Wasm capacity are separate diagnostics.",
+        "The observer scans the process table and can perturb runtime; these observations are not latency evidence."
+      ]
+    },
+    "prior340": {
+      "archiveSha256": "340cbe186620e51f7d0ec460e473d72332c1c112d6c07dfd7dab4e63f74f6804",
+      "status": "completed",
+      "commandExitCode": 0,
+      "oracleChecked": 1024,
+      "checkpointCount": 12,
+      "maxWasmCapacityAfterUpdateBytes": 44630016,
+      "wholeCommandPhysicalFootprint25msSweepMaxBytes": 651105200,
+      "sweeps": 54,
+      "completeSweeps": 54,
+      "cleanupProven": true,
+      "limitations": [
+        "The maximum complete 25 ms sweep sum is an estimate: processes were sampled non-atomically and short peaks or children may be missed.",
+        "The sum is neither an exact simultaneous peak nor a strict lower bound; incomplete sweeps are retained in NDJSON and excluded from the reported maximum.",
+        "The Node OS maximum covers the entire observed command lifetime, including fixture bootstrap, all 1,024 cold controls, and teardown. It is not a bulk-edit-only peak.",
+        "Only the launched command family is followed. Detached descendants discovered before reparenting remain tracked by PID and OS start time; undiscovered children and unrelated system processes are excluded.",
+        "PID identity check and signal delivery are separate syscalls; cleanup is bounded and best effort, not an atomic handle-based kill guarantee.",
+        "Darwin physical footprint includes process charges and may double-count shared memory across processes; JS heap and Wasm capacity are separate diagnostics.",
+        "The observer scans the process table and can perturb runtime; these observations are not latency evidence."
+      ]
+    }
+  },
+  "browser": {
+    "main": {
+      "archiveSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "status": "completed",
+      "nativeExit": 0,
+      "usage": "stream",
+      "installedWasmSha256": "059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4",
+      "installedWasmBytes": 1462005,
+      "deliveryStatus": "completed",
+      "deliveryErrors": [],
+      "bothBackendsSixPhaseSignaturesMatchFreshMain": true,
+      "backends": {
+        "webgpu": {
+          "sixPhaseSignatureMatchesFreshMain": true,
+          "phases": {
+            "initial": {
+              "pixelHash": "edd436be",
+              "litPixels": 48898,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedContents": {
+              "pixelHash": "acb4311e",
+              "litPixels": 48917,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedCount": {
+              "pixelHash": "08501d70",
+              "litPixels": 24491,
+              "draws": 1,
+              "instances": 1440
+            },
+            "resized": {
+              "pixelHash": "4854a547",
+              "litPixels": 50569,
+              "draws": 1,
+              "instances": 5760
+            },
+            "drawReplacement": {
+              "pixelHash": "bc1fd119",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            },
+            "transform": {
+              "pixelHash": "a92799b9",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            }
+          },
+          "idleFrames": 30,
+          "idleUploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true,
+          "delivery": {
+            "responseCount": 127,
+            "failedRequestCount": 0,
+            "errors": [],
+            "shaperMatchesInstalled": true,
+            "installedEntriesSeen": {
+              "index": true,
+              "three": true
+            }
+          }
+        },
+        "webgl2": {
+          "sixPhaseSignatureMatchesFreshMain": true,
+          "phases": {
+            "initial": {
+              "pixelHash": "04fac2ee",
+              "litPixels": 48898,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedContents": {
+              "pixelHash": "de29bf5e",
+              "litPixels": 48917,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedCount": {
+              "pixelHash": "b27298a8",
+              "litPixels": 24491,
+              "draws": 1,
+              "instances": 1440
+            },
+            "resized": {
+              "pixelHash": "a166a52b",
+              "litPixels": 50569,
+              "draws": 1,
+              "instances": 5760
+            },
+            "drawReplacement": {
+              "pixelHash": "e9b75465",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            },
+            "transform": {
+              "pixelHash": "ad4d2245",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            }
+          },
+          "idleFrames": 30,
+          "idleUploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true,
+          "delivery": {
+            "responseCount": 127,
+            "failedRequestCount": 0,
+            "errors": [],
+            "shaperMatchesInstalled": true,
+            "installedEntriesSeen": {
+              "index": true,
+              "three": true
+            }
+          }
+        }
+      },
+      "rawCommandLogSha256": "3b5d87d28da282e2c2a925f8d1d8b29e1f37732b540392c0c75c9f885a2eaf1b",
+      "cleanupProven": true
+    },
+    "candidate": {
+      "archiveSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+      "status": "completed",
+      "nativeExit": 0,
+      "usage": "stream",
+      "installedWasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+      "installedWasmBytes": 1609247,
+      "deliveryStatus": "completed",
+      "deliveryErrors": [],
+      "bothBackendsSixPhaseSignaturesMatchFreshMain": true,
+      "backends": {
+        "webgpu": {
+          "sixPhaseSignatureMatchesFreshMain": true,
+          "phases": {
+            "initial": {
+              "pixelHash": "edd436be",
+              "litPixels": 48898,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedContents": {
+              "pixelHash": "acb4311e",
+              "litPixels": 48917,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedCount": {
+              "pixelHash": "08501d70",
+              "litPixels": 24491,
+              "draws": 1,
+              "instances": 1440
+            },
+            "resized": {
+              "pixelHash": "4854a547",
+              "litPixels": 50569,
+              "draws": 1,
+              "instances": 5760
+            },
+            "drawReplacement": {
+              "pixelHash": "bc1fd119",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            },
+            "transform": {
+              "pixelHash": "a92799b9",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            }
+          },
+          "idleFrames": 30,
+          "idleUploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true,
+          "delivery": {
+            "responseCount": 126,
+            "failedRequestCount": 0,
+            "errors": [],
+            "shaperMatchesInstalled": true,
+            "installedEntriesSeen": {
+              "index": true,
+              "three": true
+            }
+          }
+        },
+        "webgl2": {
+          "sixPhaseSignatureMatchesFreshMain": true,
+          "phases": {
+            "initial": {
+              "pixelHash": "04fac2ee",
+              "litPixels": 48898,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedContents": {
+              "pixelHash": "de29bf5e",
+              "litPixels": 48917,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedCount": {
+              "pixelHash": "b27298a8",
+              "litPixels": 24491,
+              "draws": 1,
+              "instances": 1440
+            },
+            "resized": {
+              "pixelHash": "a166a52b",
+              "litPixels": 50569,
+              "draws": 1,
+              "instances": 5760
+            },
+            "drawReplacement": {
+              "pixelHash": "e9b75465",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            },
+            "transform": {
+              "pixelHash": "ad4d2245",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            }
+          },
+          "idleFrames": 30,
+          "idleUploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true,
+          "delivery": {
+            "responseCount": 126,
+            "failedRequestCount": 0,
+            "errors": [],
+            "shaperMatchesInstalled": true,
+            "installedEntriesSeen": {
+              "index": true,
+              "three": true
+            }
+          }
+        }
+      },
+      "rawCommandLogSha256": "3a11e5fc95af9198648e795e2fa583b894c1b82217feb8dbfb16b0271a3600ba",
+      "cleanupProven": true
+    },
+    "published010": {
+      "archiveSha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+      "status": "completed",
+      "nativeExit": 0,
+      "usage": "dynamic",
+      "installedWasmSha256": "addb8144f474c9f5a005bdda084bcf15c05170004b34c7a65ab592db4962c893",
+      "installedWasmBytes": 1362353,
+      "deliveryStatus": "completed",
+      "deliveryErrors": [],
+      "bothBackendsSixPhaseSignaturesMatchFreshMain": true,
+      "backends": {
+        "webgpu": {
+          "sixPhaseSignatureMatchesFreshMain": true,
+          "phases": {
+            "initial": {
+              "pixelHash": "edd436be",
+              "litPixels": 48898,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedContents": {
+              "pixelHash": "acb4311e",
+              "litPixels": 48917,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedCount": {
+              "pixelHash": "08501d70",
+              "litPixels": 24491,
+              "draws": 1,
+              "instances": 1440
+            },
+            "resized": {
+              "pixelHash": "4854a547",
+              "litPixels": 50569,
+              "draws": 1,
+              "instances": 5760
+            },
+            "drawReplacement": {
+              "pixelHash": "bc1fd119",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            },
+            "transform": {
+              "pixelHash": "a92799b9",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            }
+          },
+          "idleFrames": 30,
+          "idleUploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 15244800,
+            "attributeUpdateCalls": 600,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true,
+          "delivery": {
+            "responseCount": 122,
+            "failedRequestCount": 0,
+            "errors": [],
+            "shaperMatchesInstalled": true,
+            "installedEntriesSeen": {
+              "index": true,
+              "three": true
+            }
+          }
+        },
+        "webgl2": {
+          "sixPhaseSignatureMatchesFreshMain": true,
+          "phases": {
+            "initial": {
+              "pixelHash": "04fac2ee",
+              "litPixels": 48898,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedContents": {
+              "pixelHash": "de29bf5e",
+              "litPixels": 48917,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedCount": {
+              "pixelHash": "b27298a8",
+              "litPixels": 24491,
+              "draws": 1,
+              "instances": 1440
+            },
+            "resized": {
+              "pixelHash": "a166a52b",
+              "litPixels": 50569,
+              "draws": 1,
+              "instances": 5760
+            },
+            "drawReplacement": {
+              "pixelHash": "e9b75465",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            },
+            "transform": {
+              "pixelHash": "ad4d2245",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            }
+          },
+          "idleFrames": 30,
+          "idleUploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true,
+          "delivery": {
+            "responseCount": 122,
+            "failedRequestCount": 0,
+            "errors": [],
+            "shaperMatchesInstalled": true,
+            "installedEntriesSeen": {
+              "index": true,
+              "three": true
+            }
+          }
+        }
+      },
+      "rawCommandLogSha256": "633562ad27e790da2ca3c8ffb5440337bb6496f664248d389812cf111e0c947a",
+      "cleanupProven": true
+    },
+    "prior340": {
+      "archiveSha256": "340cbe186620e51f7d0ec460e473d72332c1c112d6c07dfd7dab4e63f74f6804",
+      "status": "completed",
+      "nativeExit": 0,
+      "usage": "stream",
+      "installedWasmSha256": "1f8d970cd74eafd2aedd5adb98abd64d002ac0ebd370fa40e936dc4dbd8a6fbf",
+      "installedWasmBytes": 1609232,
+      "deliveryStatus": "completed",
+      "deliveryErrors": [],
+      "bothBackendsSixPhaseSignaturesMatchFreshMain": true,
+      "backends": {
+        "webgpu": {
+          "sixPhaseSignatureMatchesFreshMain": true,
+          "phases": {
+            "initial": {
+              "pixelHash": "edd436be",
+              "litPixels": 48898,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedContents": {
+              "pixelHash": "acb4311e",
+              "litPixels": 48917,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedCount": {
+              "pixelHash": "08501d70",
+              "litPixels": 24491,
+              "draws": 1,
+              "instances": 1440
+            },
+            "resized": {
+              "pixelHash": "4854a547",
+              "litPixels": 50569,
+              "draws": 1,
+              "instances": 5760
+            },
+            "drawReplacement": {
+              "pixelHash": "bc1fd119",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            },
+            "transform": {
+              "pixelHash": "a92799b9",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            }
+          },
+          "idleFrames": 30,
+          "idleUploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true,
+          "delivery": {
+            "responseCount": 126,
+            "failedRequestCount": 0,
+            "errors": [],
+            "shaperMatchesInstalled": true,
+            "installedEntriesSeen": {
+              "index": true,
+              "three": true
+            }
+          }
+        },
+        "webgl2": {
+          "sixPhaseSignatureMatchesFreshMain": true,
+          "phases": {
+            "initial": {
+              "pixelHash": "04fac2ee",
+              "litPixels": 48898,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedContents": {
+              "pixelHash": "de29bf5e",
+              "litPixels": 48917,
+              "draws": 1,
+              "instances": 2880
+            },
+            "changedCount": {
+              "pixelHash": "b27298a8",
+              "litPixels": 24491,
+              "draws": 1,
+              "instances": 1440
+            },
+            "resized": {
+              "pixelHash": "a166a52b",
+              "litPixels": 50569,
+              "draws": 1,
+              "instances": 5760
+            },
+            "drawReplacement": {
+              "pixelHash": "e9b75465",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            },
+            "transform": {
+              "pixelHash": "ad4d2245",
+              "litPixels": 63301,
+              "draws": 2,
+              "instances": 5880
+            }
+          },
+          "idleFrames": 30,
+          "idleUploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true,
+          "delivery": {
+            "responseCount": 126,
+            "failedRequestCount": 0,
+            "errors": [],
+            "shaperMatchesInstalled": true,
+            "installedEntriesSeen": {
+              "index": true,
+              "three": true
+            }
+          }
+        }
+      },
+      "rawCommandLogSha256": "9946afc01cf199bf8564f3c29f757648174986d09c6ab8d5e2090fb97311377b",
+      "cleanupProven": true
+    }
+  },
+  "presentation": {
+    "tsl": {
+      "command": "presentation-tsl-dynamic-layout",
+      "exit": 0,
+      "cellCount": 6,
+      "allUseShippingWasm": true,
+      "wasmSha256s": ["01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd"],
+      "cells": [
+        {
+          "cell": "sequential workloads / tsl: webgpu / bitmap",
+          "wasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+          "settled": "dynamic-layout draws=1 glyphs=387",
+          "visible": "dynamic-layout 28913 draws=1 glyphs=387",
+          "ready": {
+            "backend": "webgpu",
+            "workloads": 1,
+            "rendererCount": 1,
+            "shaders": "tsl",
+            "technique": "bitmap"
+          }
+        },
+        {
+          "cell": "sequential workloads / tsl: webgpu / mtsdf",
+          "wasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+          "settled": "dynamic-layout draws=1 glyphs=387",
+          "visible": "dynamic-layout 28840 draws=1 glyphs=387",
+          "ready": {
+            "backend": "webgpu",
+            "workloads": 1,
+            "rendererCount": 1,
+            "shaders": "tsl",
+            "technique": "mtsdf"
+          }
+        },
+        {
+          "cell": "sequential workloads / tsl: webgpu / slug",
+          "wasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+          "settled": "dynamic-layout draws=1 glyphs=387",
+          "visible": "dynamic-layout 28771 draws=1 glyphs=387",
+          "ready": {
+            "backend": "webgpu",
+            "workloads": 1,
+            "rendererCount": 1,
+            "shaders": "tsl",
+            "technique": "slug"
+          }
+        },
+        {
+          "cell": "sequential workloads / tsl: webgl2 / bitmap",
+          "wasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+          "settled": "dynamic-layout draws=1 glyphs=387",
+          "visible": "dynamic-layout 28913 draws=1 glyphs=387",
+          "ready": {
+            "backend": "webgl2",
+            "workloads": 1,
+            "rendererCount": 1,
+            "shaders": "tsl",
+            "technique": "bitmap"
+          }
+        },
+        {
+          "cell": "sequential workloads / tsl: webgl2 / mtsdf",
+          "wasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+          "settled": "dynamic-layout draws=1 glyphs=387",
+          "visible": "dynamic-layout 28840 draws=1 glyphs=387",
+          "ready": {
+            "backend": "webgl2",
+            "workloads": 1,
+            "rendererCount": 1,
+            "shaders": "tsl",
+            "technique": "mtsdf"
+          }
+        },
+        {
+          "cell": "sequential workloads / tsl: webgl2 / slug",
+          "wasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+          "settled": "dynamic-layout draws=1 glyphs=387",
+          "visible": "dynamic-layout 28771 draws=1 glyphs=387",
+          "ready": {
+            "backend": "webgl2",
+            "workloads": 1,
+            "rendererCount": 1,
+            "shaders": "tsl",
+            "technique": "slug"
+          }
+        }
+      ],
+      "stdoutSha256": "2e14d4171fa29b17e0a3011747c3fabb09a7dad70ee9df9867fb0794e3329b9f"
+    },
+    "typegpu": {
+      "command": "presentation-typegpu-dynamic-layout",
+      "exit": 0,
+      "cellCount": 6,
+      "allUseShippingWasm": true,
+      "wasmSha256s": ["01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd"],
+      "cells": [
+        {
+          "cell": "sequential workloads / typegpu: webgpu / bitmap",
+          "wasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+          "settled": "dynamic-layout draws=1 glyphs=387",
+          "visible": "dynamic-layout 29050 draws=1 glyphs=387",
+          "ready": {
+            "backend": "webgpu",
+            "workloads": 1,
+            "rendererCount": 1,
+            "shaders": "typegpu",
+            "technique": "bitmap"
+          }
+        },
+        {
+          "cell": "sequential workloads / typegpu: webgpu / mtsdf",
+          "wasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+          "settled": "dynamic-layout draws=1 glyphs=387",
+          "visible": "dynamic-layout 28840 draws=1 glyphs=387",
+          "ready": {
+            "backend": "webgpu",
+            "workloads": 1,
+            "rendererCount": 1,
+            "shaders": "typegpu",
+            "technique": "mtsdf"
+          }
+        },
+        {
+          "cell": "sequential workloads / typegpu: webgpu / slug",
+          "wasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+          "settled": "dynamic-layout draws=1 glyphs=387",
+          "visible": "dynamic-layout 28771 draws=1 glyphs=387",
+          "ready": {
+            "backend": "webgpu",
+            "workloads": 1,
+            "rendererCount": 1,
+            "shaders": "typegpu",
+            "technique": "slug"
+          }
+        },
+        {
+          "cell": "sequential workloads / typegpu: webgl2 / bitmap",
+          "wasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+          "settled": "dynamic-layout draws=1 glyphs=387",
+          "visible": "dynamic-layout 29050 draws=1 glyphs=387",
+          "ready": {
+            "backend": "webgl2",
+            "workloads": 1,
+            "rendererCount": 1,
+            "shaders": "typegpu",
+            "technique": "bitmap"
+          }
+        },
+        {
+          "cell": "sequential workloads / typegpu: webgl2 / mtsdf",
+          "wasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+          "settled": "dynamic-layout draws=1 glyphs=387",
+          "visible": "dynamic-layout 28840 draws=1 glyphs=387",
+          "ready": {
+            "backend": "webgl2",
+            "workloads": 1,
+            "rendererCount": 1,
+            "shaders": "typegpu",
+            "technique": "mtsdf"
+          }
+        },
+        {
+          "cell": "sequential workloads / typegpu: webgl2 / slug",
+          "wasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+          "settled": "dynamic-layout draws=1 glyphs=387",
+          "visible": "dynamic-layout 28771 draws=1 glyphs=387",
+          "ready": {
+            "backend": "webgl2",
+            "workloads": 1,
+            "rendererCount": 1,
+            "shaders": "typegpu",
+            "technique": "slug"
+          }
+        }
+      ],
+      "stdoutSha256": "ea9fc133395d7f5ebf0ca938b40f33432a22fbbb498db1074086d48869b491bf"
+    }
+  },
+  "receipts": {
+    "shaper-memory-artifact": {
+      "exit": 0,
+      "started": "2026-10-20T16:12:21.317908+00:00",
+      "finished": "2026-10-20T16:13:28.448026+00:00",
+      "stdoutSha256": "79e6f96fb4b175bde7901cabb86491a9a111736fd715fb9ac82d8c1c410f8b5e",
+      "stderrSha256": "704d81f56c44387fe5a68517aadd518a9b747fd6f72c5a260cb78ab9a2c08524"
+    },
+    "shaper-live-memory": {
+      "exit": 0,
+      "started": "2026-10-20T16:13:38.559379+00:00",
+      "finished": "2026-10-20T16:13:40.974766+00:00",
+      "stdoutSha256": "1b538d38fb6fd2c6ee243bef6d6e35fec9efbebf0af9b403323f208c331a8e84",
+      "stderrSha256": "88b8a4270f527930748b26dffdb2aa83dd598346f7cdb846e04b6add0a60489d"
+    },
+    "application-memory-node-main": {
+      "exit": 0,
+      "started": "2026-10-20T16:13:51.279647+00:00",
+      "finished": "2026-10-20T16:13:54.403057+00:00",
+      "stdoutSha256": "14a4276abbfbf698fdd81026802e8e984692e804e4686351119b9bdafe88350d",
+      "stderrSha256": "75bf7fd959c0f62caf494034213fe3ba884f829c5333efc7bd339a9e766b06a5"
+    },
+    "application-memory-node-candidate": {
+      "exit": 0,
+      "started": "2026-10-20T16:14:01.155763+00:00",
+      "finished": "2026-10-20T16:14:04.119590+00:00",
+      "stdoutSha256": "5067efe2e341acd9c39a38b2fed6884d45e0ff7d15cd1d8a3898320a83f0a08e",
+      "stderrSha256": "7285aff96a26306ef556217269756d0a3aa1affd066839e231dd0151c5503769"
+    },
+    "application-memory-node-published010": {
+      "exit": 0,
+      "started": "2026-10-20T16:14:12.686282+00:00",
+      "finished": "2026-10-20T16:14:15.506082+00:00",
+      "stdoutSha256": "295cd8cf7e38a8fb0fd236c59bd05c2e65fd47656e2e7c7948add854cd2d1ba0",
+      "stderrSha256": "a4dc296a0872afc82ff2a6c18871ce4111e02674c80c1c52e62c816528bb0faa"
+    },
+    "application-memory-node-prior340": {
+      "exit": 0,
+      "started": "2026-10-20T16:14:19.642078+00:00",
+      "finished": "2026-10-20T16:14:22.694153+00:00",
+      "stdoutSha256": "54e5e9ab76c2274d282405f6256d883c09d3eb58a976ac278f82067844c3aeab",
+      "stderrSha256": "40a220ab73425e8fde57d0e5edf848d24ff23fd77b09380f2c51ed9091fc24ba"
+    },
+    "application-memory-browser-main": {
+      "exit": 0,
+      "started": "2026-10-20T16:14:31.405042+00:00",
+      "finished": "2026-10-20T16:14:36.399806+00:00",
+      "stdoutSha256": "9223d7ccdf1f9d71efe465184efa434d4c6d05ea4440e507a66d71442ee2fce8",
+      "stderrSha256": "abfaa5bbc744d8b81d821c1da17bf339854ab2e7a2b3f428f248a0368feee856"
+    },
+    "application-memory-browser-candidate": {
+      "exit": 0,
+      "started": "2026-10-20T16:14:45.870965+00:00",
+      "finished": "2026-10-20T16:14:50.215586+00:00",
+      "stdoutSha256": "d176fd2032a9ee636db00b20e1a58a3e95875733a514243f9b0f368c7de16ccd",
+      "stderrSha256": "3fa1913f865613ab8334eb0ace5984d7929a56e92d5b2b579a17e2ba240fd20c"
+    },
+    "application-memory-browser-published010": {
+      "exit": 0,
+      "started": "2026-10-20T16:14:55.751344+00:00",
+      "finished": "2026-10-20T16:15:00.093448+00:00",
+      "stdoutSha256": "0dbceea2929d755097ee95261bcfcb91593f72bca5dcc5d17e75732d85151825",
+      "stderrSha256": "fb9e083a1553c0bad3485c036410b38d3a21c7df98d69c67a44fe37e50d73357"
+    },
+    "application-memory-browser-prior340": {
+      "exit": 0,
+      "started": "2026-10-20T16:15:06.783575+00:00",
+      "finished": "2026-10-20T16:15:11.108714+00:00",
+      "stdoutSha256": "760f6dbd1f93e78ce603bd4abb560d24606c7af7ce43a65885b61c22c863136d",
+      "stderrSha256": "705780afeb8e388698eb3d166272bfafdbf6dcfcf781fd399f485159bac28454"
+    },
+    "presentation-tsl-dynamic-layout": {
+      "exit": 0,
+      "started": "2026-10-20T16:18:10.452371+00:00",
+      "finished": "2026-10-20T16:19:05.935092+00:00",
+      "stdoutSha256": "2e14d4171fa29b17e0a3011747c3fabb09a7dad70ee9df9867fb0794e3329b9f",
+      "stderrSha256": "e3057b5c9dc783102ea98958fc5fc7a60bd45b032c8b32f0da915a01e2cbf9fe"
+    },
+    "presentation-typegpu-dynamic-layout": {
+      "exit": 0,
+      "started": "2026-10-20T16:19:11.844899+00:00",
+      "finished": "2026-10-20T16:20:05.735120+00:00",
+      "stdoutSha256": "ea9fc133395d7f5ebf0ca938b40f33432a22fbbb498db1074086d48869b491bf",
+      "stderrSha256": "a57045a73501079e8f95e22a8529172f518eb1b8b4fc094c0e3e12113df52901"
+    }
+  },
+  "scopesAndLimitations": [
+    "Node physical-footprint maximum is the maximum complete non-atomic 25 ms process-family sweep over the full command lifetime, including bootstrap, 1,024 cold oracles, and teardown; it is not an edit-only peak.",
+    "V8 heap/checkpoints, Wasm instance capacity, allocator-requested bytes, and process-family footprint are separate metrics and are not summed.",
+    "After-GC checkpoints do not measure allocation churn or prove reclaimability; allocator requested-call peaks exclude fragmentation and transient internal realloc peak.",
+    "Browser output validates installed package entrypoints, served Wasm identity, backend output signatures, and retained upload counts; it is not latency or hardware GPU performance evidence.",
+    "Presentation cell logs show workload settlement/visibility and the injected shipping Wasm SHA; no timing claim is made."
+  ],
+  "cleanupReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/memory-presentation-cleanup.json",
+  "finalVerification": {
+    "frozenInputsMatch": true,
+    "archiveMatches": true,
+    "all947DistMembersMatchWorkspace": true,
+    "all12PresentationCellsUseShippingWasm": true,
+    "ownedRouteAndProxyStopped": true,
+    "unrelated1355StillListening": true
+  }
+}

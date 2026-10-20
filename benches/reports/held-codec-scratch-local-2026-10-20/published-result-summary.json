@@ -1,0 +1,454 @@
+{
+  "recordedUtc": "2026-10-20T17:29:34.801899+00:00",
+  "status": "Published arm complete; dense gap remains. Fresh prior340 still active; no wave effect versus prior inferred.",
+  "candidateSamplesByteIdenticalToMain": true,
+  "candidateJsonSha256": "07379e474976e9b84a2a552989031f09bdd8645ae0a0d2940f8bed396bcfb8b7",
+  "arms": {
+    "published010": {
+      "rawSha256": "7a8b876896f47fc8f55179ee3a44ff8bb6e0b25f0b9da8ef949b8296352e84ab",
+      "softwareCalibrationDriftPercent": 3.7180008611472846
+    },
+    "candidate": {
+      "rawSha256": "07379e474976e9b84a2a552989031f09bdd8645ae0a0d2940f8bed396bcfb8b7",
+      "softwareCalibrationDriftPercent": 1.2134976908449144
+    }
+  },
+  "counts": {
+    "faster": 100,
+    "slower": 26,
+    "neutral": 13
+  },
+  "excluded": [
+    {
+      "name": "publish after text change",
+      "reason": "clock-confounded: faster\u2192neutral \u00b7 3.61\u21923.70"
+    },
+    {
+      "name": "cached per-glyph inspection",
+      "reason": "timing-mode mismatch"
+    },
+    {
+      "name": "100 labels first set+measure",
+      "reason": "timing-mode mismatch"
+    },
+    {
+      "name": "1000 labels first set+measure",
+      "reason": "timing-mode mismatch"
+    }
+  ],
+  "unavailableInBaseline": [
+    "copy per-glyph metrics with outlines after text change",
+    "read every outline from an unchanged copy"
+  ],
+  "unexpectedUnclassifiedNames": [],
+  "priorityRows": [
+    {
+      "name": "rewrite 512 labels in one group",
+      "published010": {
+        "p50Ns": 8582000.0,
+        "p95Ns": 9430375,
+        "N": 200,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 29
+        },
+        "blockMediansNs": [8330584, 8403291, 7898791, 8819958, 8760709, 8792000, 7970917, 8877458.00000006],
+        "blockCalibrationRates": [
+          3.6083235097297037, 3.5960175548901394, 3.572727468809038, 3.5845679739157115, 3.613604061370301,
+          3.594789258746997, 3.593309760787491, 3.593313965466174
+        ],
+        "withinBlockSpreads": [
+          0.04060704438008188, 0.08519405968447362, 0.07267090768701184, 0.03983859304091924, 0.04389494704138672,
+          0.07208957006369426, 0.06066744819949825, 0.060094892974983154
+        ],
+        "gc": {
+          "min": 0,
+          "max": 8150166.00000006,
+          "p50": 83646
+        },
+        "heap": {
+          "min": 3076320,
+          "max": 8872152,
+          "p50": 4577560
+        }
+      },
+      "candidate": {
+        "p50Ns": 10143000.0,
+        "p95Ns": 11442624.99999994,
+        "N": 184,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 27
+        },
+        "blockMediansNs": [10242458, 10343791, 10161917, 10110250, 10124083, 9975500, 10359459, 10035583],
+        "blockCalibrationRates": [
+          3.6516283800704166, 3.605763385276316, 3.651471529756369, 3.696746400310287, 3.589519094775224,
+          3.6074940707677565, 3.611329143106219, 3.7108855495424073
+        ],
+        "withinBlockSpreads": [
+          0.06531254321960607, 0.08410040695911199, 0.08369055021803465, 0.07426865120051432, 0.06414213342581249,
+          0.07849836040298731, 0.0753085639703772, 0.0610572635989359
+        ],
+        "gc": {
+          "min": 0,
+          "max": 9381209,
+          "p50": 0
+        },
+        "heap": {
+          "min": 0,
+          "max": 7543224,
+          "p50": 3969304
+        }
+      },
+      "p50DeltaPercent": 18.189233278955964,
+      "classification": {
+        "status": "slower",
+        "name": "rewrite 512 labels in one group",
+        "baseline": "8.58ms",
+        "candidate": "10.14ms",
+        "delta": 18.2,
+        "p": "<.001",
+        "ci": "+15.0..+26.3%",
+        "baselineSpark": "\u2582\u2586\u2588\u2588\u2586\u2582\u2581\u2581\u2581\u2581",
+        "candidateSpark": "\u2581\u2581\u2582\u2582\u2585\u2586\u2588\u2585\u2582\u2582"
+      }
+    },
+    {
+      "name": "publish 1024 retained Text instances",
+      "published010": {
+        "p50Ns": 17100416.5,
+        "p95Ns": 18684375,
+        "N": 128,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 20
+        },
+        "blockMediansNs": [16919500, 17102250, 17547458, 17173375, 17501125, 17098583, 16928042, 16764000],
+        "blockCalibrationRates": [
+          3.585871347957227, 3.575750996323275, 3.5299247703261782, 3.581025458708442, 3.2296530910635255,
+          3.60134448063215, 3.7177291298230646, 3.5953178328565274
+        ],
+        "withinBlockSpreads": [
+          0.05758037964028688, 0.0173462034990861, 0.07629711583037375, 0.05245782704948999, 0.08674725218095919,
+          0.058544784084934715, 0.05356559825433107, 0.028538729756822596
+        ],
+        "gc": {
+          "min": 0,
+          "max": 9456000,
+          "p50": 153354
+        },
+        "heap": {
+          "min": 8756192,
+          "max": 12054064,
+          "p50": 9131344
+        }
+      },
+      "candidate": {
+        "p50Ns": 19762228.99999994,
+        "p95Ns": 22340916,
+        "N": 128,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 20
+        },
+        "blockMediansNs": [19897208, 19527750, 20110709, 19747499.99999988, 20058458, 19776958, 19574083, 19306500],
+        "blockCalibrationRates": [
+          3.711804160141804, 3.7172912010819643, 3.608118091077326, 3.582059472090674, 3.71713648882664,
+          3.711713566187582, 3.6305260340812207, 3.721002048306188
+        ],
+        "withinBlockSpreads": [
+          0.09116747749133229, 0.08210977105570333, 0.086606535595297, 0.07232344887482457, 0.09925842098981778,
+          0.07616049140223492, 0.0720934142523299, 0.0649813044276773
+        ],
+        "gc": {
+          "min": 0,
+          "max": 11502375,
+          "p50": 0
+        },
+        "heap": {
+          "min": 6478936,
+          "max": 10567608,
+          "p50": 7543464
+        }
+      },
+      "p50DeltaPercent": 15.56577583943608,
+      "classification": {
+        "status": "slower",
+        "name": "publish 1024 retained Text instances",
+        "baseline": "17.10ms",
+        "candidate": "19.76ms",
+        "delta": 15.6,
+        "p": "<.001",
+        "ci": "+13.4..+17.3%",
+        "baselineSpark": "\u2583\u2588\u2588\u2585\u2583\u2581\u2581\u2581\u2581\u2581",
+        "candidateSpark": "\u2581\u2581\u2581\u2581\u2588\u2585\u2583\u2585\u2585\u2582"
+      }
+    },
+    {
+      "name": "edit and sparsely borrow one of 1000 retained labels",
+      "published010": {
+        "p50Ns": 267208.5,
+        "p95Ns": 500625,
+        "N": 368,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 50
+        },
+        "blockMediansNs": [265375, 256250, 268375, 300250, 300791, 262083, 266208, 268209],
+        "blockCalibrationRates": [
+          3.591046327410444, 3.5721120713619423, 3.5881731636909007, 3.5840803803590258, 3.639060960787545,
+          3.590869265881598, 3.58858491257389, 3.6416334551713185
+        ],
+        "withinBlockSpreads": [
+          0.15220246309859156, 0.10931594281898584, 0.17248781441580968, 0.13372585797464176, 0.193971437706805,
+          0.09597483275461421, 0.14639415933424357, 0.2075910918227501
+        ],
+        "gc": {
+          "min": 0,
+          "max": 3836457.9999999404,
+          "p50": 0
+        },
+        "heap": {
+          "min": 0,
+          "max": 309899,
+          "p50": 55251
+        }
+      },
+      "candidate": {
+        "p50Ns": 211875.0,
+        "p95Ns": 416208,
+        "N": 360,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 49
+        },
+        "blockMediansNs": [205000, 225750, 210375, 222625, 209542, 208541, 213375, 216708],
+        "blockCalibrationRates": [
+          3.722095480594516, 3.6168443696570076, 3.7244405022716336, 3.72686733481602, 3.7172134013847495,
+          3.657513405730147, 3.6432988963810136, 3.6586804671072217
+        ],
+        "withinBlockSpreads": [
+          0.19798134146341462, 0.2076953488372093, 0.21083752442067735, 0.18674266861313865, 0.15182460222771568,
+          0.22365440560848943, 0.15402364007029876, 0.1924161775292098
+        ],
+        "gc": {
+          "min": 0,
+          "max": 8688208,
+          "p50": 0
+        },
+        "heap": {
+          "min": 0,
+          "max": 1227880,
+          "p50": 25384
+        }
+      },
+      "p50DeltaPercent": -20.70798646001156,
+      "classification": {
+        "status": "faster",
+        "name": "edit and sparsely borrow one of 1000 retained labels",
+        "baseline": "267.21\u00b5s",
+        "candidate": "211.88\u00b5s",
+        "delta": -20.7,
+        "p": "<.001",
+        "ci": "-25.9..-17.0%",
+        "baselineSpark": "\u2581\u2586\u2588\u2584\u2582\u2582\u2582\u2581\u2581\u2581",
+        "candidateSpark": "\u2585\u2588\u2584\u2582\u2582\u2581\u2581\u2581\u2581\u2581"
+      }
+    },
+    {
+      "name": "per-glyph inspection after width change",
+      "published010": {
+        "p50Ns": 9307229.0,
+        "p95Ns": 11120916,
+        "N": 224,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 32
+        },
+        "blockMediansNs": [8119833, 9484958, 9683000, 9193500, 8045708, 10253292, 9057291, 9420958],
+        "blockCalibrationRates": [
+          3.1798451616008454, 3.7143344204680466, 3.6194147886221963, 3.6192945784477715, 3.698801400129403,
+          3.5861737660378155, 3.567137913740063, 3.5986697386281365
+        ],
+        "withinBlockSpreads": [
+          0.3754221908767807, 0.20838518563951436, 0.13313269043764636, 0.2405822229597722, 0.45319224432357785,
+          0.17169570919080404, 0.2793984894627847, 0.1775847209258154
+        ],
+        "gc": {
+          "min": 0,
+          "max": 2601542,
+          "p50": 192562
+        },
+        "heap": {
+          "min": 1863888,
+          "max": 9934408,
+          "p50": 5393472
+        }
+      },
+      "candidate": {
+        "p50Ns": 4755978.99999997,
+        "p95Ns": 6188292,
+        "N": 296,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 41
+        },
+        "blockMediansNs": [4718500, 4944834, 4851750, 4827458, 4614167, 4757165.99999994, 4754792, 4723874.999999881],
+        "blockCalibrationRates": [
+          3.7118810737882995, 3.719521031432285, 3.5646720489682595, 3.663668785479137, 3.744540919163707,
+          3.6273157709786004, 3.7102747753635605, 3.604381879887531
+        ],
+        "withinBlockSpreads": [
+          0.21731550810638975, 0.1528121695490688, 0.15508208378420157, 0.24977673947655266, 0.26745405885829443,
+          0.25732419137782947, 0.2829432800004711, 0.3098116535682803
+        ],
+        "gc": {
+          "min": 0,
+          "max": 2864459,
+          "p50": 0
+        },
+        "heap": {
+          "min": 2926800,
+          "max": 15512400,
+          "p50": 6482872
+        }
+      },
+      "p50DeltaPercent": -48.900161369189796,
+      "classification": {
+        "status": "faster",
+        "name": "per-glyph inspection after width change",
+        "baseline": "9.31ms",
+        "candidate": "4.76ms",
+        "delta": -48.9,
+        "p": "<.001",
+        "ci": "-50.9..-41.9%",
+        "baselineSpark": "\u2581\u2581\u2586\u2583\u2581\u2585\u2583\u2584\u2588\u2585",
+        "candidateSpark": "\u2587\u2587\u2588\u2586\u2581\u2581\u2581\u2581\u2581\u2581"
+      }
+    },
+    {
+      "name": "inspection then publication after width change",
+      "published010": {
+        "p50Ns": 10260396.0,
+        "p95Ns": 10952167,
+        "N": 192,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 28
+        },
+        "blockMediansNs": [10114292, 10524958, 10266167, 10533500, 10254625, 10222500, 10507292, 9806208],
+        "blockCalibrationRates": [
+          3.597125205521259, 3.696879367633549, 3.739266883682721, 3.6384566350544327, 3.6102883230925684,
+          3.566795010200986, 3.611705732365102, 3.59683265857553
+        ],
+        "withinBlockSpreads": [
+          0.058632976829026594, 0.063374519407872, 0.056452002838580345, 0.03593893045649308, 0.05942489252338356,
+          0.06741561515993107, 0.05105251107582629, 0.073004935902912
+        ],
+        "gc": {
+          "min": 0,
+          "max": 4823000,
+          "p50": 356771
+        },
+        "heap": {
+          "min": 2777856,
+          "max": 10257272,
+          "p50": 5220640
+        }
+      },
+      "candidate": {
+        "p50Ns": 5038770.5,
+        "p95Ns": 6357041,
+        "N": 280,
+        "blockN": 8,
+        "batch": false,
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 39
+        },
+        "blockMediansNs": [5058541, 4954292, 5070583, 5121750, 4998625, 5019000, 5114000, 5000625],
+        "blockCalibrationRates": [
+          3.6181859182917853, 3.5847200026685035, 3.7079236507085467, 3.558582013994889, 3.702265890524311,
+          3.632530058394751, 3.6265745109212517, 3.707195071622108
+        ],
+        "withinBlockSpreads": [
+          0.17494919218802418, 0.19994019831693408, 0.27992947903623705, 0.18966395876409428, 0.15763157136212458,
+          0.2177200610878661, 0.17386137676965194, 0.17068760020997376
+        ],
+        "gc": {
+          "min": 0,
+          "max": 3982375,
+          "p50": 0
+        },
+        "heap": {
+          "min": 2368432,
+          "max": 16585320,
+          "p50": 6575648
+        }
+      },
+      "p50DeltaPercent": -50.89107184557009,
+      "classification": {
+        "status": "faster",
+        "name": "inspection then publication after width change",
+        "baseline": "10.26ms",
+        "candidate": "5.04ms",
+        "delta": -50.9,
+        "p": "<.001",
+        "ci": "-51.9..-50.0%",
+        "baselineSpark": "\u2581\u2581\u2581\u2581\u2581\u2581\u2585\u2583\u2588\u2584",
+        "candidateSpark": "\u2584\u2586\u2588\u2584\u2581\u2581\u2581\u2581\u2581\u2581"
+      }
+    }
+  ],
+  "method": {
+    "p50": "median of fresh-process block medians",
+    "p95": "sorted retained samples[floor(.95*(N-1))]",
+    "units": "nanoseconds",
+    "samples": "all retained samples, no spike or slow-row deletion",
+    "clock": "software calibration rates, not measured hardware clock frequency"
+  },
+  "limits": [
+    "145candidate/143published identities;100faster26slower13neutral4excluded(1clock3mode),2unavailable retained.",
+    "No neutral/exclusion/aggregate result establishes parity. No favorable retry.",
+    "Software calibration3.718001%published/1.213498%candidate is not hardware frequency.",
+    "Prior-day results are context, not this wave effect; await fresh prior340 arm."
+  ]
+}

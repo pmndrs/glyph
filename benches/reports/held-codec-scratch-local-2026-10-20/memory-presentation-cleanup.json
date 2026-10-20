@@ -1,0 +1,90 @@
+{
+  "schema": "wave2-memory-presentation-cleanup-v1",
+  "recordedUtc": "2026-10-20T16:22:40.364509+00:00",
+  "head": "291fb51ce5e61ca6903b67459872923ccab4ceee",
+  "archive": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "sha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+    "expectedSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+    "matchesExpected": true
+  },
+  "frozenInputs": {
+    "count": 1039,
+    "mismatchCount": 0,
+    "mismatches": {},
+    "allMatch": true
+  },
+  "packedDistWorkspaceComparison": {
+    "archiveDistMemberCount": 947,
+    "mismatches": [],
+    "allMatch": true
+  },
+  "presentation": {
+    "tslExit": 0,
+    "tslCells": 6,
+    "typegpuExit": 0,
+    "typegpuCells": 6,
+    "shippingWasmSha256s": ["01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd"],
+    "expectedShippingWasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+    "allUseVerifiedShippingWasm": true
+  },
+  "ownedShutdowns": {
+    "presentationRoute": {
+      "route": "held-wave2-presentation",
+      "servicePort": 4312,
+      "pids": [4610, 4611, 4613, 4634, 4635],
+      "signal": "SIGTERM to owned Portless route PID 4611",
+      "signalCommandExit": 0,
+      "durableWrapperResult": {
+        "argv": [
+          "/usr/bin/env",
+          "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/scratch",
+          "PORTLESS_STATE_DIR=/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/portless-state",
+          "PORTLESS_PORT=1358",
+          "PORTLESS_HTTPS=0",
+          "PORTLESS_SYNC_HOSTS=0",
+          "/Users/mini/.local/share/mise/installs/node/24.18.0/bin/node",
+          "/Users/mini/.npm/_npx/6a98873df99949c7/node_modules/portless/dist/cli.js",
+          "held-wave2-presentation",
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "benchmark:dev-built"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-20T16:17:13.168475+00:00",
+        "finished": "2026-10-20T16:22:06.327387+00:00",
+        "exit": 143,
+        "sha256": {
+          "stdout.log": "63f4a637d27f6b7918ebdc412e924cf3c48c256c378b81a1c46ec3861f93e4d1",
+          "stderr.log": "4fa7797247bbbf10047dbedf7e80c3857b7e1e3020b0a4a815e4ec9ca096bf51"
+        }
+      },
+      "listenerGone": true,
+      "processesGone": true,
+      "remainingPidsOutput": "",
+      "allProcessesGone": true
+    },
+    "portlessProxy": {
+      "pid": 89392,
+      "port": 1358,
+      "signal": "SIGTERM",
+      "signalCommandExit": 0,
+      "processGone": true,
+      "listenerGone": true,
+      "ownedRouteStateFile": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/portless-state/routes.json",
+      "routes": []
+    },
+    "unrelatedProxy": {
+      "pid": 34322,
+      "port": 1355,
+      "stillListening": true,
+      "untouched": true
+    }
+  },
+  "proceduralAccidentalRunReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/procedural-unwrapped-presentation-help.json",
+  "noTimingClaim": true
+}

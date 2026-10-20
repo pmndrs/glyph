@@ -1021,6 +1021,8 @@ fn execute_program(
     active_buffers: u32,
 ) -> Result<(), CodecExecutionError> {
     validate_execution(program, inputs, output_start, outputs, active_buffers)?;
+    // Validation and reverse dependency masks define every active read and store within its
+    // current record/group, so scratch can be reused within this invocation.
     #[cfg(all(target_arch = "wasm32", feature = "simd128"))]
     let completed = unsafe {
         execute_simd_records(
@@ -1034,13 +1036,13 @@ fn execute_program(
     };
     #[cfg(not(all(target_arch = "wasm32", feature = "simd128")))]
     let completed = 0;
-    for record in completed..inputs.record_count {
-        execute_record(
+    if completed < inputs.record_count {
+        execute_scalar_records(
             program,
             execution,
             inputs,
-            output_start + record,
-            record,
+            output_start,
+            completed,
             outputs,
             active_buffers,
         )?;
@@ -1094,108 +1096,118 @@ fn validate_execution(
     Ok(())
 }
 
-fn execute_record(
+fn execute_scalar_records(
     program: &ProgramDescriptor,
     execution: &ExecutableProgram,
     inputs: SemanticInputBatch<'_>,
-    output_record: usize,
-    input_record: usize,
+    output_start: usize,
+    first_input_record: usize,
     outputs: &mut [PhysicalBufferMut<'_>],
     active_buffers: u32,
 ) -> Result<(), CodecExecutionError> {
     let mut registers = [0_u32; MAX_REGISTERS];
     let mut values = [0_u32; MAX_OUTPUT_LANES];
-    for (operation_index, operation) in program.operations.iter().enumerate() {
-        if execution.operation_buffer_masks[operation_index] & active_buffers == 0 {
-            continue;
-        }
-        match *operation {
-            Operation::LoadF32 { target, field } => {
-                registers[usize::from(target)] =
-                    inputs.f32_fields[usize::from(field)][input_record].to_bits();
+    for input_record in first_input_record..inputs.record_count {
+        let output_record = output_start + input_record;
+        for (operation_index, operation) in program.operations.iter().enumerate() {
+            if execution.operation_buffer_masks[operation_index] & active_buffers == 0 {
+                continue;
             }
-            Operation::LoadU32 { target, field } => {
-                registers[usize::from(target)] =
-                    inputs.u32_fields[usize::from(field)][input_record];
-            }
-            Operation::ConstantF32 { target, bits } => registers[usize::from(target)] = bits,
-            Operation::ConstantU32 { target, value } => registers[usize::from(target)] = value,
-            Operation::AddF32 {
-                target,
-                left,
-                right,
-            } => {
-                registers[usize::from(target)] =
-                    (register_f32(&registers, left) + register_f32(&registers, right)).to_bits();
-            }
-            Operation::SubtractF32 {
-                target,
-                left,
-                right,
-            } => {
-                registers[usize::from(target)] =
-                    (register_f32(&registers, left) - register_f32(&registers, right)).to_bits();
-            }
-            Operation::MultiplyF32 {
-                target,
-                left,
-                right,
-            } => {
-                registers[usize::from(target)] =
-                    (register_f32(&registers, left) * register_f32(&registers, right)).to_bits();
-            }
-            Operation::LessThanF32 {
-                target,
-                left,
-                right,
-            } => {
-                registers[usize::from(target)] =
-                    u32::from(register_f32(&registers, left) < register_f32(&registers, right));
-            }
-            Operation::SelectF32 {
-                target,
-                condition,
-                when_true,
-                when_false,
-            } => {
-                registers[usize::from(target)] = if registers[usize::from(condition)] != 0 {
-                    registers[usize::from(when_true)]
-                } else {
-                    registers[usize::from(when_false)]
-                };
-            }
-            Operation::ConvertU32ToF32 { target, source } => {
-                registers[usize::from(target)] = (registers[usize::from(source)] as f32).to_bits();
-            }
-            Operation::StoreF32 { source, lane, .. } => {
-                let bits = registers[usize::from(source)];
-                if !f32::from_bits(bits).is_finite() {
-                    return Err(CodecExecutionError::NonFiniteOutput);
+            match *operation {
+                Operation::LoadF32 { target, field } => {
+                    registers[usize::from(target)] =
+                        inputs.f32_fields[usize::from(field)][input_record].to_bits();
                 }
-                values[store_slot(execution, operation_index, lane)] = bits;
-            }
-            Operation::StoreU32 { source, lane, .. } | Operation::StoreU16 { source, lane, .. } => {
-                values[store_slot(execution, operation_index, lane)] =
-                    registers[usize::from(source)];
-            }
-        }
-    }
-    for (buffer_index, (schema, output)) in program.buffers.iter().zip(outputs).enumerate() {
-        if active_buffers & (1 << buffer_index) == 0 {
-            continue;
-        }
-        let record_offset = output_record * schema.stride();
-        for lane in 0..schema.vector_width {
-            let value = values[buffer_index * MAX_VECTOR_WIDTH as usize + usize::from(lane)];
-            let lane_offset = record_offset + usize::from(lane) * schema.scalar.byte_width();
-            match schema.scalar {
-                ScalarType::F32 | ScalarType::U32 => {
-                    output.bytes[lane_offset..lane_offset + 4]
-                        .copy_from_slice(&value.to_le_bytes());
+                Operation::LoadU32 { target, field } => {
+                    registers[usize::from(target)] =
+                        inputs.u32_fields[usize::from(field)][input_record];
                 }
-                ScalarType::U16 => {
-                    output.bytes[lane_offset..lane_offset + 2]
-                        .copy_from_slice(&(value as u16).to_le_bytes());
+                Operation::ConstantF32 { target, bits } => registers[usize::from(target)] = bits,
+                Operation::ConstantU32 { target, value } => registers[usize::from(target)] = value,
+                Operation::AddF32 {
+                    target,
+                    left,
+                    right,
+                } => {
+                    registers[usize::from(target)] = (register_f32(&registers, left)
+                        + register_f32(&registers, right))
+                    .to_bits();
+                }
+                Operation::SubtractF32 {
+                    target,
+                    left,
+                    right,
+                } => {
+                    registers[usize::from(target)] = (register_f32(&registers, left)
+                        - register_f32(&registers, right))
+                    .to_bits();
+                }
+                Operation::MultiplyF32 {
+                    target,
+                    left,
+                    right,
+                } => {
+                    registers[usize::from(target)] = (register_f32(&registers, left)
+                        * register_f32(&registers, right))
+                    .to_bits();
+                }
+                Operation::LessThanF32 {
+                    target,
+                    left,
+                    right,
+                } => {
+                    registers[usize::from(target)] =
+                        u32::from(register_f32(&registers, left) < register_f32(&registers, right));
+                }
+                Operation::SelectF32 {
+                    target,
+                    condition,
+                    when_true,
+                    when_false,
+                } => {
+                    registers[usize::from(target)] = if registers[usize::from(condition)] != 0 {
+                        registers[usize::from(when_true)]
+                    } else {
+                        registers[usize::from(when_false)]
+                    };
+                }
+                Operation::ConvertU32ToF32 { target, source } => {
+                    registers[usize::from(target)] =
+                        (registers[usize::from(source)] as f32).to_bits();
+                }
+                Operation::StoreF32 { source, lane, .. } => {
+                    let bits = registers[usize::from(source)];
+                    if !f32::from_bits(bits).is_finite() {
+                        return Err(CodecExecutionError::NonFiniteOutput);
+                    }
+                    values[store_slot(execution, operation_index, lane)] = bits;
+                }
+                Operation::StoreU32 { source, lane, .. }
+                | Operation::StoreU16 { source, lane, .. } => {
+                    values[store_slot(execution, operation_index, lane)] =
+                        registers[usize::from(source)];
+                }
+            }
+        }
+        for (buffer_index, (schema, output)) in
+            program.buffers.iter().zip(outputs.iter_mut()).enumerate()
+        {
+            if active_buffers & (1 << buffer_index) == 0 {
+                continue;
+            }
+            let record_offset = output_record * schema.stride();
+            for lane in 0..schema.vector_width {
+                let value = values[buffer_index * MAX_VECTOR_WIDTH as usize + usize::from(lane)];
+                let lane_offset = record_offset + usize::from(lane) * schema.scalar.byte_width();
+                match schema.scalar {
+                    ScalarType::F32 | ScalarType::U32 => {
+                        output.bytes[lane_offset..lane_offset + 4]
+                            .copy_from_slice(&value.to_le_bytes());
+                    }
+                    ScalarType::U16 => {
+                        output.bytes[lane_offset..lane_offset + 2]
+                            .copy_from_slice(&(value as u16).to_le_bytes());
+                    }
                 }
             }
         }
@@ -1218,9 +1230,12 @@ unsafe fn execute_simd_records(
     };
 
     let completed = inputs.record_count & !3;
+    if completed == 0 {
+        return Ok(0);
+    }
+    let mut registers = [u32x4_splat(0); MAX_REGISTERS];
+    let mut values = [u32x4_splat(0); MAX_OUTPUT_LANES];
     for input_record in (0..completed).step_by(4) {
-        let mut registers = [u32x4_splat(0); MAX_REGISTERS];
-        let mut values = [u32x4_splat(0); MAX_OUTPUT_LANES];
         for (operation_index, operation) in program.operations.iter().enumerate() {
             if execution.operation_buffer_masks[operation_index] & active_buffers == 0 {
                 continue;
@@ -2523,6 +2538,300 @@ mod tests {
         assert_eq!(read_u32(&objects, 4), 42);
         assert_eq!(read_u16(&pages, 0), 70_000_u32 as u16);
         assert_eq!(read_u16(&pages, 2), 42);
+    }
+
+    #[test]
+    fn reused_scratch_matches_literal_bytes_across_groups_tails_and_masks() {
+        let float_buffer = BufferId(10);
+        let word_buffer = BufferId(11);
+        let short_buffer = BufferId(12);
+        let mut program = valid_program();
+        program.u32_input_count = 1;
+        program.inputs.push(InputSource::semantic(2));
+        program.buffers = vec![
+            BufferSchema {
+                stride: 20,
+                alignment: 4,
+                ..BufferSchema::packed(
+                    float_buffer,
+                    ScalarType::F32,
+                    4,
+                    BUFFER_USAGE_STORAGE | BUFFER_USAGE_COPY_DST,
+                    1,
+                )
+            },
+            BufferSchema::packed(
+                word_buffer,
+                ScalarType::U32,
+                2,
+                BUFFER_USAGE_STORAGE | BUFFER_USAGE_COPY_DST,
+                1,
+            ),
+            BufferSchema {
+                stride: 8,
+                alignment: 2,
+                ..BufferSchema::packed(
+                    short_buffer,
+                    ScalarType::U16,
+                    3,
+                    BUFFER_USAGE_STORAGE | BUFFER_USAGE_COPY_DST,
+                    1,
+                )
+            },
+        ];
+        program.operations = vec![
+            Operation::LoadF32 {
+                target: 0,
+                field: 0,
+            },
+            Operation::LoadF32 {
+                target: 1,
+                field: 1,
+            },
+            Operation::AddF32 {
+                target: 0,
+                left: 0,
+                right: 1,
+            },
+            Operation::LessThanF32 {
+                target: 2,
+                left: 0,
+                right: 1,
+            },
+            Operation::SelectF32 {
+                target: 3,
+                condition: 2,
+                when_true: 0,
+                when_false: 1,
+            },
+            Operation::ConstantF32 {
+                target: 4,
+                bits: 2.0_f32.to_bits(),
+            },
+            Operation::MultiplyF32 {
+                target: 4,
+                left: 0,
+                right: 4,
+            },
+            Operation::LoadU32 {
+                target: 5,
+                field: 0,
+            },
+            Operation::StoreF32 {
+                source: 0,
+                buffer: float_buffer,
+                lane: 0,
+            },
+            Operation::StoreF32 {
+                source: 3,
+                buffer: float_buffer,
+                lane: 1,
+            },
+            Operation::StoreF32 {
+                source: 4,
+                buffer: float_buffer,
+                lane: 2,
+            },
+            Operation::StoreF32 {
+                source: 1,
+                buffer: float_buffer,
+                lane: 3,
+            },
+            Operation::StoreU32 {
+                source: 5,
+                buffer: word_buffer,
+                lane: 0,
+            },
+            Operation::StoreU32 {
+                source: 5,
+                buffer: word_buffer,
+                lane: 1,
+            },
+            Operation::StoreU16 {
+                source: 5,
+                buffer: short_buffer,
+                lane: 0,
+            },
+            Operation::StoreU16 {
+                source: 5,
+                buffer: short_buffer,
+                lane: 1,
+            },
+            Operation::StoreU16 {
+                source: 5,
+                buffer: short_buffer,
+                lane: 2,
+            },
+        ];
+        let codec = ValidatedCodec::new(descriptor(vec![program])).unwrap();
+        let schemas = &codec.program(CAPABILITY, BITMAP, 0).unwrap().buffers;
+        for count in 0..=11 {
+            let x: Vec<f32> = (0..count)
+                .map(|i| {
+                    if i % 2 == 0 {
+                        -(i as f32) - 0.5
+                    } else {
+                        i as f32 + 0.25
+                    }
+                })
+                .collect();
+            let y: Vec<f32> = (0..count).map(|i| 1.5 + (i % 3) as f32).collect();
+            let words: Vec<u32> = (0..count).map(|i| 0x1234_fff0 + i as u32).collect();
+            let f32_fields: [&[f32]; 2] = [&x, &y];
+            let u32_fields: [&[u32]; 1] = [&words];
+            for active in [0, 1, 2, 4, 7] {
+                let mut float_bytes = vec![0xa5; (count + 2) * 20];
+                let mut word_bytes = vec![0xa5; (count + 2) * 8];
+                let mut short_bytes = vec![0xa5; (count + 2) * 8];
+                let mut expected_float = float_bytes.clone();
+                let mut expected_word = word_bytes.clone();
+                let mut expected_short = short_bytes.clone();
+                for record in 0..count {
+                    let sum = x[record] + y[record];
+                    let selected = if sum < y[record] { sum } else { y[record] };
+                    if active & 1 != 0 {
+                        let offset = (record + 1) * 20;
+                        for (lane, value) in [sum, selected, sum * 2.0, y[record]]
+                            .into_iter()
+                            .enumerate()
+                        {
+                            expected_float[offset + lane * 4..offset + lane * 4 + 4]
+                                .copy_from_slice(&value.to_bits().to_le_bytes());
+                        }
+                    }
+                    if active & 2 != 0 {
+                        let offset = (record + 1) * 8;
+                        for lane in 0..2 {
+                            expected_word[offset + lane * 4..offset + lane * 4 + 4]
+                                .copy_from_slice(&words[record].to_le_bytes());
+                        }
+                    }
+                    if active & 4 != 0 {
+                        let offset = (record + 1) * 8;
+                        for lane in 0..3 {
+                            expected_short[offset + lane * 2..offset + lane * 2 + 2]
+                                .copy_from_slice(&(words[record] as u16).to_le_bytes());
+                        }
+                    }
+                }
+                let mut outputs = [
+                    PhysicalBufferMut {
+                        schema: schemas[0],
+                        bytes: &mut float_bytes,
+                    },
+                    PhysicalBufferMut {
+                        schema: schemas[1],
+                        bytes: &mut word_bytes,
+                    },
+                    PhysicalBufferMut {
+                        schema: schemas[2],
+                        bytes: &mut short_bytes,
+                    },
+                ];
+                codec
+                    .execute_buffers(
+                        CAPABILITY,
+                        BITMAP,
+                        0,
+                        SemanticInputBatch {
+                            f32_fields: &f32_fields,
+                            u32_fields: &u32_fields,
+                            record_count: count,
+                        },
+                        1,
+                        &mut outputs,
+                        active,
+                    )
+                    .unwrap();
+                assert_eq!(
+                    float_bytes, expected_float,
+                    "F32 count={count} mask={active}"
+                );
+                assert_eq!(word_bytes, expected_word, "U32 count={count} mask={active}");
+                assert_eq!(
+                    short_bytes, expected_short,
+                    "U16 count={count} mask={active}"
+                );
+            }
+        }
+        let other = ValidatedCodec::new(descriptor(vec![valid_program()])).unwrap();
+        let fields: [&[f32]; 2] = [&[9.25], &[-3.5]];
+        let mut bytes = [0xa5_u8; 8];
+        let mut outputs = [PhysicalBufferMut {
+            schema: other.program(CAPABILITY, BITMAP, 0).unwrap().buffers[0],
+            bytes: &mut bytes,
+        }];
+        other
+            .execute(
+                CAPABILITY,
+                BITMAP,
+                0,
+                SemanticInputBatch {
+                    f32_fields: &fields,
+                    u32_fields: &[],
+                    record_count: 1,
+                },
+                0,
+                &mut outputs,
+            )
+            .unwrap();
+        assert_eq!(&bytes[..4], &9.25_f32.to_bits().to_le_bytes());
+        assert_eq!(&bytes[4..], &(-3.5_f32).to_bits().to_le_bytes());
+    }
+
+    #[test]
+    fn later_overflow_preserves_only_the_completed_output_prefix() {
+        let mut program = valid_program();
+        program.operations.insert(
+            2,
+            Operation::MultiplyF32 {
+                target: 0,
+                left: 0,
+                right: 1,
+            },
+        );
+        let codec = ValidatedCodec::new(descriptor(vec![program])).unwrap();
+        let x = [1.0, 2.0, 3.0, 4.0, 5.0, f32::MAX, 7.0, 8.0, 9.0];
+        let y = [2.0; 9];
+        let fields: [&[f32]; 2] = [&x, &y];
+        let mut bytes = [0xa5_u8; 9 * 8];
+        let schema = codec.program(CAPABILITY, BITMAP, 0).unwrap().buffers[0];
+        let mut outputs = [PhysicalBufferMut {
+            schema,
+            bytes: &mut bytes,
+        }];
+        assert_eq!(
+            codec.execute(
+                CAPABILITY,
+                BITMAP,
+                0,
+                SemanticInputBatch {
+                    f32_fields: &fields,
+                    u32_fields: &[],
+                    record_count: 9
+                },
+                0,
+                &mut outputs
+            ),
+            Err(CodecExecutionError::NonFiniteOutput)
+        );
+        let completed = if cfg!(all(target_arch = "wasm32", feature = "simd128")) {
+            4
+        } else {
+            5
+        };
+        for (record, value) in x.iter().enumerate().take(completed) {
+            let offset = record * 8;
+            assert_eq!(
+                &bytes[offset..offset + 4],
+                &(*value * 2.0_f32).to_bits().to_le_bytes()
+            );
+            assert_eq!(
+                &bytes[offset + 4..offset + 8],
+                &2.0_f32.to_bits().to_le_bytes()
+            );
+        }
+        assert!(bytes[completed * 8..].iter().all(|byte| *byte == 0xa5));
     }
 
     #[test]

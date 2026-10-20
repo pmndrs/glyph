@@ -1,0 +1,362 @@
+{
+  "head": "291fb51ce5e61ca6903b67459872923ccab4ceee",
+  "work": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "status": [
+    " M packages/glyph/rust/shaper/src/engine/codec.rs",
+    " M packages/glyph/rust/shaper/src/engine/plan_packing.rs",
+    " M packages/glyph/rust/shaper/src/engine/state.rs",
+    " M packages/glyph/rust/shaper/src/engine/work_attribution.rs",
+    " M packages/glyph/src/internal/render-planner.ts",
+    " M packages/glyph/tests/integration/shaper-registration.test.mjs"
+  ],
+  "source_sha256": {
+    "packages/glyph/rust/shaper/src/engine/codec.rs": "fa7424b54666dae57e0d273d543b70b53c873d404c42565d83c265db13406d9d",
+    "packages/glyph/src/internal/render-planner.ts": "1226f19b69ba8cacb6c6527d3ce4946a851407b423762f790adddd0bb6d96230",
+    "packages/glyph/rust/shaper/src/engine/work_attribution.rs": "803ef8d8eb71026fbebbb97e461a9deb4eddb2432ad5fdac45aac227fcd3cbd0",
+    "packages/glyph/rust/shaper/src/engine/plan_packing.rs": "b11e4b9032b8948555c945054c7dfdf6421c0e9c1bdae49c672b50810fae3853",
+    "packages/glyph/rust/shaper/src/engine/state.rs": "e59ab9f1ef5d2d294dc30fe7045e866d83e7e7d5647317262633bda132a57492",
+    "packages/glyph/tests/integration/shaper-registration.test.mjs": "ea8e737838157ad81b3e68592ceeac0b2371b4b2cd0b74a7766cdde090d207e5"
+  },
+  "wave_scoped_diff_sha256": "35d45557e505c51bdd886345e2cd9f283c0b27f934a40089f64b85c918e76289",
+  "wave_scoped_diff_bytes": 43450,
+  "gates": [
+    {
+      "name": "native-codec-accepted",
+      "result": {
+        "argv": ["mise", "exec", "--", "pnpm", "scripts", "run", "glyph:shaper-tests", "--", "engine::codec::tests"],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-20T15:36:12.991365+00:00",
+        "finished": "2026-10-20T15:36:15.779258+00:00",
+        "exit": 0,
+        "sha256": {
+          "stdout.log": "68c84068b0d22c281e057c90d9da881e06cc4d325a4ff53b258ce0ad7cf12ca5",
+          "stderr.log": "d2a1553cbd67626b29d0659f54f21af1f16b851eb40bf0994855da747caecb54"
+        }
+      }
+    },
+    {
+      "name": "native-inter-final",
+      "result": {
+        "argv": [
+          "mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "glyph:shaper-tests",
+          "--",
+          "dense_inter_setter_publication_attributes_actual_work"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-20T15:33:54.832973+00:00",
+        "finished": "2026-10-20T15:33:58.835858+00:00",
+        "exit": 0,
+        "sha256": {
+          "stdout.log": "2329c2d0ad3a58e6e6c7b24a5afca0310f914f5b912fff5ad9017afc9c32c9c9",
+          "stderr.log": "aa6f99e8f75641cf059c17d063b71f23e025abd9e33015858c2514a0b3ff0ffc"
+        }
+      }
+    },
+    {
+      "name": "rust-clippy-final",
+      "result": {
+        "argv": [
+          "mise",
+          "exec",
+          "--",
+          "cargo",
+          "clippy",
+          "--manifest-path",
+          "packages/glyph/rust/shaper/Cargo.toml",
+          "--locked",
+          "--all-targets",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-20T15:35:57.956597+00:00",
+        "finished": "2026-10-20T15:36:02.335440+00:00",
+        "exit": 0,
+        "sha256": {
+          "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr.log": "24ff28ff9be913ba0fcb2691a58c58c222cba2f8c82a566f6c818e04953a692e"
+        }
+      }
+    },
+    {
+      "name": "ts-source-check",
+      "result": {
+        "argv": ["mise", "exec", "--", "pnpm", "exec", "tsc", "-p", "packages/glyph/tsconfig.json", "--noEmit"],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-20T15:34:04.176728+00:00",
+        "finished": "2026-10-20T15:34:04.648406+00:00",
+        "exit": 0,
+        "sha256": {
+          "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "name": "ts-format-check",
+      "result": {
+        "argv": [
+          "mise",
+          "exec",
+          "--",
+          "pnpm",
+          "exec",
+          "oxfmt",
+          "--check",
+          "packages/glyph/src/internal/render-planner.ts"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-20T15:34:10.928044+00:00",
+        "finished": "2026-10-20T15:34:11.359111+00:00",
+        "exit": 0,
+        "sha256": {
+          "stdout.log": "ce907143ab7e1639d9c91290113a728c4791fdcd5477fb2d462136a0fe00e5da",
+          "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "name": "ts-lint-check",
+      "result": {
+        "argv": [
+          "mise",
+          "exec",
+          "--",
+          "pnpm",
+          "exec",
+          "oxlint",
+          "--deny-warnings",
+          "packages/glyph/src/internal/render-planner.ts"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-20T15:34:17.093226+00:00",
+        "finished": "2026-10-20T15:34:17.505313+00:00",
+        "exit": 0,
+        "sha256": {
+          "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "name": "wasm-old340-testcontrol4",
+      "result": {
+        "argv": [
+          "mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "glyph:node-tests",
+          "--",
+          "tests/integration/shaper-registration.test.mjs"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-20T15:44:48.359774+00:00",
+        "finished": "2026-10-20T15:44:48.989587+00:00",
+        "exit": 0,
+        "sha256": {
+          "stdout.log": "fd8f64cca7edcad1168c5cb5f1db45e6c0bf7bdabde5b2541c26b96ea81065cc",
+          "stderr.log": "b3487fdffbc6e2311996b6863aa66c69c648714daa846926f33b2c43f051731b"
+        }
+      }
+    },
+    {
+      "name": "wasm-oracle-format",
+      "result": {
+        "argv": [
+          "mise",
+          "exec",
+          "--",
+          "pnpm",
+          "exec",
+          "oxfmt",
+          "--check",
+          "packages/glyph/tests/integration/shaper-registration.test.mjs"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-20T15:45:09.644852+00:00",
+        "finished": "2026-10-20T15:45:10.054286+00:00",
+        "exit": 0,
+        "sha256": {
+          "stdout.log": "95de222c25c4a59ebbfceb4d93c3186e5a26b135f7b7ddc565a905ee4b39dd76",
+          "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "name": "wasm-oracle-syntax",
+      "result": {
+        "argv": [
+          "mise",
+          "exec",
+          "--",
+          "node",
+          "--check",
+          "packages/glyph/tests/integration/shaper-registration.test.mjs"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-20T15:45:16.623262+00:00",
+        "finished": "2026-10-20T15:45:16.696905+00:00",
+        "exit": 0,
+        "sha256": {
+          "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "name": "wasm-old340-overflow-control1",
+      "result": {
+        "argv": [
+          "mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "glyph:node-tests",
+          "--",
+          "tests/integration/shaper-registration.test.mjs"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-20T15:50:45.766970+00:00",
+        "finished": "2026-10-20T15:50:46.480143+00:00",
+        "exit": 1,
+        "sha256": {
+          "stdout.log": "b8e700497c14eb47b8ffa9617ba37d8bc68f20e7e92842e992fde53a9ae4785b",
+          "stderr.log": "81050c1c03248b3b5c343cac21cc1443929f2a0348b7ee41923d0d2c0fc0b737"
+        }
+      }
+    },
+    {
+      "name": "wasm-old340-overflow-control2",
+      "result": {
+        "argv": [
+          "mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "glyph:node-tests",
+          "--",
+          "tests/integration/shaper-registration.test.mjs"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-20T15:51:43.813007+00:00",
+        "finished": "2026-10-20T15:51:44.976327+00:00",
+        "exit": 1,
+        "sha256": {
+          "stdout.log": "4d130bfadf5cca70eac8d3bdccbc5c0c22d903830af8f26cf822165c58f718dd",
+          "stderr.log": "81050c1c03248b3b5c343cac21cc1443929f2a0348b7ee41923d0d2c0fc0b737"
+        }
+      }
+    },
+    {
+      "name": "wasm-old340-overflow-control3",
+      "result": {
+        "argv": [
+          "mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "glyph:node-tests",
+          "--",
+          "tests/integration/shaper-registration.test.mjs"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-20T15:52:20.684540+00:00",
+        "finished": "2026-10-20T15:52:21.354209+00:00",
+        "exit": 0,
+        "sha256": {
+          "stdout.log": "a335ca343073981fc09375dcafa2d4df32d587430150a606ee42acf078e87809",
+          "stderr.log": "b3487fdffbc6e2311996b6863aa66c69c648714daa846926f33b2c43f051731b"
+        }
+      }
+    },
+    {
+      "name": "wasm-old340-final-control",
+      "result": {
+        "argv": [
+          "mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "glyph:node-tests",
+          "--",
+          "tests/integration/shaper-registration.test.mjs"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-20T15:54:21.880407+00:00",
+        "finished": "2026-10-20T15:54:22.564223+00:00",
+        "exit": 0,
+        "sha256": {
+          "stdout.log": "b2e2db7c7bf55846b0560891cd12d4018a10aab3ae2dcf5f35ad46319c468e39",
+          "stderr.log": "b3487fdffbc6e2311996b6863aa66c69c648714daa846926f33b2c43f051731b"
+        }
+      }
+    },
+    {
+      "name": "wasm-oracle-final-format",
+      "result": {
+        "argv": [
+          "mise",
+          "exec",
+          "--",
+          "pnpm",
+          "exec",
+          "oxfmt",
+          "--check",
+          "packages/glyph/tests/integration/shaper-registration.test.mjs"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-20T15:54:27.966695+00:00",
+        "finished": "2026-10-20T15:54:28.367576+00:00",
+        "exit": 0,
+        "sha256": {
+          "stdout.log": "e8814adce2fac45a06d10763189850e017f07584ca845b12cd1ecfbee69fa0fd",
+          "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "name": "wasm-oracle-final-syntax",
+      "result": {
+        "argv": [
+          "mise",
+          "exec",
+          "--",
+          "node",
+          "--check",
+          "packages/glyph/tests/integration/shaper-registration.test.mjs"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-20T15:54:33.309148+00:00",
+        "finished": "2026-10-20T15:54:33.380560+00:00",
+        "exit": 0,
+        "sha256": {
+          "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    }
+  ],
+  "scope": "Untimed source/test/static only; prior three-file cfg(test) counter proof preserved; no shipping build/package/benchmark/profile/commit.",
+  "old_wasm_control_sha256": "1f8d970cd74eafd2aedd5adb98abd64d002ac0ebd370fa40e936dc4dbd8a6fbf",
+  "candidate_wasm_gate": "pending root build; old installed artifact only exercised the new integration oracle",
+  "error_oracle": "Finite f32::MAX and 2 constants register; multiply overflows at execution, exported invalidRequest with zero physical buffers/patches; root reset required after invalidation; valid codec retry publishes revision 1 and exact five 2.5f32 records. Existing old Wasm positive control passes.",
+  "partial_buffer_bridge": "Source: positioning semantic change masks identify field 6 inline origin; codec buffer_dependency_masks and ordered_plan active_buffers_for_range select only matching buffers; plan_packing collect_range_jobs carries those masks. Existing native codec reused_scratch_matches_literal_bytes_across_groups_tails_and_masks exercises mask 4 on three buffers with literal bytes/sentinels; plan_packing identical_per_buffer_ranges_share_one_packing_job exercises partial mask 1. No additional public-Wasm partial-update fixture authored; generic shipping Wasm normal/error tests and source/native bridge remain distinct."
+}
