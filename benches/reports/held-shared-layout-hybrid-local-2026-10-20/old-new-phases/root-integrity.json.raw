@@ -1,0 +1,41 @@
+{
+  "scope": "Root verifies source/member equality and cardinalities; residual algebra is internal, not an independent timing oracle.",
+  "arms": [
+    {
+      "arm": "main",
+      "manifestSha256": "b7ea1716e4f8a64af3dd8031936a7ec23565ad07d0e5578eda57b11c7e815b3f",
+      "summarySha256": "ec0faa916d4f41f66f103fbac13a2f57c022e47baa2e6677d2602fe601b69abf",
+      "maxAbsoluteResidualMs": 0.020709000000010747,
+      "phases": [
+        "wholeMs",
+        "setterMs",
+        "publicationMs",
+        "residualMs"
+      ]
+    },
+    {
+      "arm": "published",
+      "manifestSha256": "183ede932843044336a32eaaf6ab1096bb5a237c38624511bd1d74c5ae5a1360",
+      "summarySha256": "b5b6a0403f251b138a0c6425d33bb21c4e797416b8ffca2b27ab165564645121",
+      "maxAbsoluteResidualMs": 0.021707999999989624,
+      "phases": [
+        "wholeMs",
+        "setterMs",
+        "publicationMs",
+        "residualMs"
+      ]
+    },
+    {
+      "arm": "held-e2",
+      "manifestSha256": "8157b9c7db0c357990cc0ee489da7121205ea7ad19728f9390a9385469af901a",
+      "summarySha256": "953e81bebb11f14334da7d43ff54eb0b57ce71aa8990d1ffa83e27c97749e365",
+      "maxAbsoluteResidualMs": 0.013000000000033651,
+      "phases": [
+        "wholeMs",
+        "setterMs",
+        "publicationMs",
+        "residualMs"
+      ]
+    }
+  ]
+}

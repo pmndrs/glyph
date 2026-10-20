@@ -189,12 +189,29 @@ and [owned log](../log/2026-10-20-bitmap-native-work-ledger.md) preserve exact s
 
 Final corrected-source package check02 passes (1,142Node/587Rust,2ignored; exact replay separate), with701source
 hashes unchanged. E2 archive28fd remains intact. Current build differs only in Wasm Data (203bytes; Code identical;
-same1,609,247B);946of947archived dist members match. Four local profile files are unshipped. This metadata boundary
-is not old-artifact performance acceptance. Exact940 CI still has four successful jobs and its existing publication
-performance job running; auth/counter source is not covered by that CI. Native Sol6 Medium has read the frozen High
-phase brief and waits for this counter commit before editing only the two benchmark observer owners. One fresh
-capture per main/release/E2 arm is selected (shipping Wasm,10warmups/80iterations/no timedreads); matched wall
-boundaries are diagnostic, not seven-family parity. Parity false, boost waves0, stack held/unmerged.
+same1,609,247B);946of947archived dist members match. Four local profile files are unshipped. Auth+ledger checkpoint
+8061d791 is committed and real-stack submitted; PR310 remains OPEN/draft, remote matches. Exact940 CI completed all
+five jobs successfully. Its publication report still has10slower/4clock-skipped rows; synthetic merge checkout578b6ae
+has the same tree as940, verified by API. That report is not806coverage or parity. Exact806 CI39504303510/watch80919
+is confirmed live; Docs/Static pass, remaining package gates running.
+
+**One matched phase comparison complete:** fresh High approved the fixed benchmark observer after adding all3GLB
+and2support input hashes. Native Luna ran exactly one main/published/E2 shipping-Wasm capture, in that order,
+10warmups/80iterations/count1024/no timedreads/one scene publication. All terminal0,source8hashes unchanged,3critical
+installed members match each archive before/after;1draw/9,216glyphs and all1,024finalstrings/committed checks pass.
+Profiled whole p50/p95ms main12.577/35.044, published11.400/13.401, E2 13.189/15.121; E2 setter9.391/10.617 and
+publication3.732/4.693. Sequential captures, main long tails, observer overhead and unmeasured formal drift prevent
+parity or a precise causal gap claim. The unprofiled seven-family matrix remains acceptance evidence.
+
+Fresh High and root independently reproduce disjoint CPU setter/publication roots per capture (main7/13,
+published44/7,E2 7/35). The [portable packet](../../../benches/reports/held-shared-layout-hybrid-local-2026-10-20/old-new-phases/README.md)
+and [owned log](../log/2026-10-20-held-old-new-phase-comparison.md) preserve raw summaries, receipts, identity,
+ancestry and independent reviews. Raw CPU profiles remain ignored local artifacts with recorded hashes, not Git.
+High closes borrowing existing positioned columns as-is and a nonexistent no-view sidecar deletion: selection,
+binding, recordless correspondence and field production cannot be skipped. This closes that proposed architecture
+line, not the parity goal or all algorithm replacements. A separate fresh Sol6 High source-only design evaluates
+measured discarded fast-path reads and coarse program invariants within existing gather ownership; no new capture
+or product wave is selected yet. Preserve E2 live and E3 whole experiment. Parity false, boost waves0, stack held/unmerged.
 
 ### Completed current-machine rerun — 19 October 2026
 

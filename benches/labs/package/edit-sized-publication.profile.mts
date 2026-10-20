@@ -29,6 +29,7 @@ const profileCase = requiredEnvironment('GLYPH_EDIT_PROFILE_CASE');
 const boundary = process.env.GLYPH_EDIT_PROFILE_BOUNDARY ?? 'publication';
 const rawBulkReads = process.env.GLYPH_EDIT_PROFILE_READS;
 const rawBulkPublicationPath = process.env.GLYPH_EDIT_PROFILE_PUBLICATION_PATH;
+const phaseObserver = process.env.GLYPH_EDIT_PROFILE_PHASE_OBSERVER;
 const bulkReads = rawBulkReads ?? 'measure';
 const bulkPublicationPath = rawBulkPublicationPath ?? 'engine';
 const count = positiveInteger(requiredEnvironment('GLYPH_EDIT_PROFILE_COUNT'), 'count');
@@ -67,6 +68,21 @@ if (profileCase === 'bulk-write' && bulkReads !== 'none' && bulkReads !== 'measu
 }
 if (profileCase === 'bulk-write' && bulkPublicationPath !== 'engine' && bulkPublicationPath !== 'scene') {
   throw new Error(`Unknown bulk-write publication path: ${bulkPublicationPath}`);
+}
+if (phaseObserver !== undefined) {
+  if (phaseObserver !== 'old-new-1024') throw new Error(`Unknown phase observer: ${phaseObserver}`);
+  if (
+    profileCase !== 'bulk-write' ||
+    boundary !== 'publication' ||
+    count !== 1024 ||
+    position !== 'first' ||
+    warmups !== 10 ||
+    iterations !== 80 ||
+    bulkReads !== 'none' ||
+    bulkPublicationPath !== 'scene'
+  ) {
+    throw new Error('The old-new-1024 phase observer requires bulk-write/publication/1024/first/10/80/none/scene');
+  }
 }
 if (
   boundary === 'setter' &&
@@ -195,18 +211,34 @@ const updatePrepared = () => {
   }
   return glyphCount;
 };
+interface PhaseBoundarySample {
+  readonly setterMs: number;
+  readonly publicationMs: number;
+}
+const warmupPhaseSamples: PhaseBoundarySample[] = [];
+const timedPhaseSamples: PhaseBoundarySample[] = [];
+let phaseSampleSink = warmupPhaseSamples;
 const updateBulk = () => {
   alternate = !alternate;
   const prefix = alternate ? 'bravo' : 'alpha';
   let glyphCount = 0;
+  const beforeSetters = phaseObserver === undefined ? undefined : performance.now();
   for (const [index, label] of created.labels.entries()) {
     label.text = `${prefix} ${String(index).padStart(4, '0')}`;
     if (bulkReads === 'measure') glyphCount += label.measure().glyphCount;
   }
+  const afterSetters = phaseObserver === undefined ? undefined : performance.now();
+  let afterPublication: number | undefined;
   if (boundary === 'publication') {
-    if (bulkPublicationPath === 'scene') created.scene.updateMatrixWorld(true);
-    else glyph.shape();
+    if (bulkPublicationPath === 'scene') {
+      created.scene.updateMatrixWorld(true);
+      if (phaseObserver !== undefined) afterPublication = performance.now();
+    } else glyph.shape();
     if (created.textGroup.error !== undefined) throw created.textGroup.error;
+  }
+  if (phaseObserver !== undefined) {
+    assert(beforeSetters !== undefined && afterSetters !== undefined && afterPublication !== undefined);
+    phaseSampleSink.push({ setterMs: afterSetters - beforeSetters, publicationMs: afterPublication - afterSetters });
   }
   return glyphCount;
 };
@@ -246,6 +278,10 @@ const update =
               : updateOne;
 
 for (let index = 0; index < warmups; index++) update();
+if (phaseObserver !== undefined) {
+  assert.equal(warmupPhaseSamples.length, warmups, 'one warmup phase pair per callback');
+  phaseSampleSink = timedPhaseSamples;
+}
 globalGc()?.();
 await setImmediate();
 
@@ -261,6 +297,22 @@ for (let index = 0; index < iterations; index++) {
 }
 const cpu = await session.post('Profiler.stop');
 session.disconnect();
+const timedPhaseIterations =
+  phaseObserver === undefined
+    ? undefined
+    : timedPhaseSamples.map((sample, index) => {
+        const wholeMs = elapsedMs[index]!;
+        const residualMs = wholeMs - sample.setterMs - sample.publicationMs;
+        assert(Number.isFinite(wholeMs) && Number.isFinite(sample.setterMs) && Number.isFinite(sample.publicationMs));
+        assert(
+          sample.setterMs >= 0 && sample.publicationMs >= 0 && residualMs >= -0.001,
+          'phase timers must nest within callback',
+        );
+        assert(Math.abs(sample.setterMs + sample.publicationMs + residualMs - wholeMs) <= 1e-9);
+        return { wholeMs, setterMs: sample.setterMs, publicationMs: sample.publicationMs, residualMs };
+      });
+if (phaseObserver !== undefined)
+  assert.equal(timedPhaseIterations?.length, iterations, 'one timed phase pair per callback');
 if (boundary === 'publication') assertCommitted();
 
 if (typingText !== undefined) {
@@ -367,6 +419,12 @@ if (multiOwner !== undefined) {
   }
 }
 const finalDrawTopology = 'scene' in created ? inspectDraws(created.scene) : undefined;
+if (phaseObserver !== undefined) {
+  assert.equal(created.labels.length, 1024);
+  deepStrictEqual(initialDrawTopology, { draws: 1, glyphs: 9216 });
+  deepStrictEqual(finalDrawTopology, { draws: 1, glyphs: 9216 });
+  assert.equal(created.textGroup.error, undefined);
+}
 created.dispose();
 const directory = resolve(output);
 await mkdir(directory, { recursive: true });
@@ -412,8 +470,31 @@ const summary = {
   drawTopology: { initial: initialDrawTopology, final: finalDrawTopology },
   elapsedMs: {
     ...distribution(elapsedMs),
-    ...(fontSizeText === undefined ? {} : { iterations: elapsedMs }),
+    ...(fontSizeText === undefined && phaseObserver === undefined ? {} : { iterations: elapsedMs }),
   },
+  ...(timedPhaseIterations === undefined
+    ? {}
+    : {
+        phaseObserver: {
+          mode: phaseObserver,
+          boundaryClocksPerCallback: 3,
+          warmupsExcluded: warmupPhaseSamples.length,
+          timedCallbacks: timedPhaseIterations.length,
+          warmup: {
+            setterMs: warmupPhaseSamples.map((sample) => sample.setterMs),
+            publicationMs: warmupPhaseSamples.map((sample) => sample.publicationMs),
+          },
+          timed: {
+            iterations: timedPhaseIterations,
+            wholeMs: distribution(timedPhaseIterations.map((sample) => sample.wholeMs)),
+            setterMs: distribution(timedPhaseIterations.map((sample) => sample.setterMs)),
+            publicationMs: distribution(timedPhaseIterations.map((sample) => sample.publicationMs)),
+            residualMs: distribution(timedPhaseIterations.map((sample) => sample.residualMs)),
+          },
+          timerScope:
+            'Nested wall boundaries around the setter loop and one scene publication; residual includes callback and observer overhead.',
+        },
+      }),
   sampledMs: {
     total: sampleTotal(cpu.profile) / 1_000,
     stages: stageTotals(cpu.profile),

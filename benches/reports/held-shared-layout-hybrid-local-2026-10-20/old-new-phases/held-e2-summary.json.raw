@@ -1,0 +1,829 @@
+{
+  "workload": {
+    "boundary": "publication",
+    "count": 1024,
+    "iterations": 80,
+    "position": "first",
+    "profileCase": "bulk-write",
+    "warmups": 10,
+    "reads": "none",
+    "publicationPath": "scene"
+  },
+  "operations": {
+    "perIteration": {
+      "sets": 1024,
+      "reads": 0,
+      "publications": 1
+    },
+    "timed": {
+      "sets": 81920,
+      "reads": 0,
+      "publications": 80
+    },
+    "warmup": {
+      "sets": 10240,
+      "reads": 0,
+      "publications": 10
+    },
+    "postTimedCorrectness": {
+      "measurementReads": 1024,
+      "commitStateReads": 1025,
+      "glyphReads": 1025
+    }
+  },
+  "drawTopology": {
+    "initial": {
+      "draws": 1,
+      "glyphs": 9216
+    },
+    "final": {
+      "draws": 1,
+      "glyphs": 9216
+    }
+  },
+  "elapsedMs": {
+    "mean": 13.368877637499995,
+    "p50": 13.188749999999914,
+    "p95": 15.12079099999994,
+    "iterations": [
+      16.565791999999988,
+      17.764332999999965,
+      14.21895900000004,
+      14.884374999999977,
+      15.158874999999966,
+      13.83887500000003,
+      13.640499999999975,
+      13.418541000000005,
+      13.59679200000005,
+      15.12079099999994,
+      13.781292000000008,
+      13.188749999999914,
+      13.358042000000069,
+      13.394583000000011,
+      13.929917000000046,
+      13.422500000000014,
+      12.960709000000065,
+      13.022375000000011,
+      13.751166000000012,
+      13.19779200000005,
+      13.215582999999924,
+      13.656749999999988,
+      12.999415999999997,
+      12.862957999999935,
+      13.70474999999999,
+      13.085208999999963,
+      13.651749999999993,
+      13.44616700000006,
+      13.47058299999992,
+      13.153167000000053,
+      13.464582999999948,
+      14.283500000000004,
+      13.193250000000035,
+      13.905749999999898,
+      13.153875000000198,
+      13.24716699999999,
+      13.240916999999854,
+      13.375583000000006,
+      12.789667000000009,
+      12.758957999999893,
+      13.15520800000013,
+      13.09329200000002,
+      13.153667000000041,
+      13.472833000000037,
+      13.00500000000011,
+      12.801959000000124,
+      12.998708999999963,
+      12.935208999999986,
+      13.316542000000027,
+      13.02274999999986,
+      12.965332999999873,
+      12.739208999999846,
+      13.010665999999901,
+      12.884791000000178,
+      13.335334000000103,
+      12.711292000000185,
+      12.814832999999908,
+      12.654957999999851,
+      12.930916000000025,
+      13.460332999999991,
+      14.45795800000019,
+      14.030374999999822,
+      13.907958000000008,
+      13.074583999999959,
+      12.90866700000015,
+      12.782625000000053,
+      13.396332999999913,
+      12.348457999999937,
+      12.668333999999959,
+      12.643041999999923,
+      12.828416999999945,
+      12.752291999999898,
+      13.009708000000046,
+      12.36283400000002,
+      12.836125000000038,
+      12.657875000000104,
+      12.843624999999975,
+      12.672166999999945,
+      13.239582999999811,
+      12.751874999999927
+    ]
+  },
+  "phaseObserver": {
+    "mode": "old-new-1024",
+    "boundaryClocksPerCallback": 3,
+    "warmupsExcluded": 10,
+    "timedCallbacks": 80,
+    "warmup": {
+      "setterMs": [
+        18.038792,
+        15.135417000000018,
+        12.756958999999995,
+        12.17108300000001,
+        11.20862500000004,
+        11.22750000000002,
+        11.950374999999951,
+        11.222958000000006,
+        11.572959000000026,
+        12.280000000000086
+      ],
+      "publicationMs": [
+        10.667166000000009,
+        6.050542000000007,
+        4.974375000000009,
+        4.755083999999954,
+        4.23479199999997,
+        4.000667000000021,
+        4.211667000000034,
+        4.019584000000009,
+        4.316208000000017,
+        4.722374999999943
+      ]
+    },
+    "timed": {
+      "iterations": [
+        {
+          "wholeMs": 16.565791999999988,
+          "setterMs": 11.860042000000021,
+          "publicationMs": 4.692749999999933,
+          "residualMs": 0.013000000000033651
+        },
+        {
+          "wholeMs": 17.764332999999965,
+          "setterMs": 11.240791999999942,
+          "publicationMs": 6.518041000000039,
+          "residualMs": 0.005499999999983629
+        },
+        {
+          "wholeMs": 14.21895900000004,
+          "setterMs": 9.989625000000046,
+          "publicationMs": 4.226583999999889,
+          "residualMs": 0.0027500000001055014
+        },
+        {
+          "wholeMs": 14.884374999999977,
+          "setterMs": 10.23516600000005,
+          "publicationMs": 4.646499999999946,
+          "residualMs": 0.0027089999999816428
+        },
+        {
+          "wholeMs": 15.158874999999966,
+          "setterMs": 10.616957999999954,
+          "publicationMs": 4.538542000000007,
+          "residualMs": 0.003375000000005457
+        },
+        {
+          "wholeMs": 13.83887500000003,
+          "setterMs": 9.854458000000022,
+          "publicationMs": 3.98174999999992,
+          "residualMs": 0.0026670000000876826
+        },
+        {
+          "wholeMs": 13.640499999999975,
+          "setterMs": 9.454624999999965,
+          "publicationMs": 4.183250000000044,
+          "residualMs": 0.0026249999999663487
+        },
+        {
+          "wholeMs": 13.418541000000005,
+          "setterMs": 9.345625000000041,
+          "publicationMs": 4.071125000000052,
+          "residualMs": 0.0017909999999119464
+        },
+        {
+          "wholeMs": 13.59679200000005,
+          "setterMs": 9.594791999999984,
+          "publicationMs": 4.000167000000033,
+          "residualMs": 0.0018330000000332802
+        },
+        {
+          "wholeMs": 15.12079099999994,
+          "setterMs": 11.025833999999918,
+          "publicationMs": 4.0934160000000475,
+          "residualMs": 0.0015409999999747015
+        },
+        {
+          "wholeMs": 13.781292000000008,
+          "setterMs": 9.843582999999967,
+          "publicationMs": 3.9360830000000533,
+          "residualMs": 0.0016259999999874708
+        },
+        {
+          "wholeMs": 13.188749999999914,
+          "setterMs": 9.234417000000008,
+          "publicationMs": 3.9529999999999745,
+          "residualMs": 0.0013329999999314168
+        },
+        {
+          "wholeMs": 13.358042000000069,
+          "setterMs": 9.416291999999999,
+          "publicationMs": 3.938541999999984,
+          "residualMs": 0.003208000000086031
+        },
+        {
+          "wholeMs": 13.394583000000011,
+          "setterMs": 9.262333000000012,
+          "publicationMs": 4.129125000000045,
+          "residualMs": 0.0031249999999545253
+        },
+        {
+          "wholeMs": 13.929917000000046,
+          "setterMs": 10.025457999999958,
+          "publicationMs": 3.9020420000000513,
+          "residualMs": 0.002417000000036751
+        },
+        {
+          "wholeMs": 13.422500000000014,
+          "setterMs": 9.566250000000082,
+          "publicationMs": 3.8538750000000164,
+          "residualMs": 0.002374999999915417
+        },
+        {
+          "wholeMs": 12.960709000000065,
+          "setterMs": 9.095500000000015,
+          "publicationMs": 3.862542000000076,
+          "residualMs": 0.0026669999999739957
+        },
+        {
+          "wholeMs": 13.022375000000011,
+          "setterMs": 9.146541999999954,
+          "publicationMs": 3.8735830000000533,
+          "residualMs": 0.002250000000003638
+        },
+        {
+          "wholeMs": 13.751166000000012,
+          "setterMs": 9.724249999999984,
+          "publicationMs": 4.024332999999956,
+          "residualMs": 0.0025830000000723885
+        },
+        {
+          "wholeMs": 13.19779200000005,
+          "setterMs": 9.274584000000004,
+          "publicationMs": 3.9209999999999354,
+          "residualMs": 0.002208000000109678
+        },
+        {
+          "wholeMs": 13.215582999999924,
+          "setterMs": 9.383707999999956,
+          "publicationMs": 3.82974999999999,
+          "residualMs": 0.002124999999978172
+        },
+        {
+          "wholeMs": 13.656749999999988,
+          "setterMs": 9.188916000000063,
+          "publicationMs": 4.464375000000018,
+          "residualMs": 0.003458999999907064
+        },
+        {
+          "wholeMs": 12.999415999999997,
+          "setterMs": 9.208584000000087,
+          "publicationMs": 3.788041000000021,
+          "residualMs": 0.0027909999998882995
+        },
+        {
+          "wholeMs": 12.862957999999935,
+          "setterMs": 9.11366600000008,
+          "publicationMs": 3.7471669999999904,
+          "residualMs": 0.0021249999998644853
+        },
+        {
+          "wholeMs": 13.70474999999999,
+          "setterMs": 9.405541999999969,
+          "publicationMs": 4.296707999999967,
+          "residualMs": 0.0025000000000545697
+        },
+        {
+          "wholeMs": 13.085208999999963,
+          "setterMs": 9.353165999999987,
+          "publicationMs": 3.7298339999999826,
+          "residualMs": 0.002208999999993466
+        },
+        {
+          "wholeMs": 13.651749999999993,
+          "setterMs": 9.62358299999994,
+          "publicationMs": 4.025082999999995,
+          "residualMs": 0.0030840000000580403
+        },
+        {
+          "wholeMs": 13.44616700000006,
+          "setterMs": 9.5306250000001,
+          "publicationMs": 3.9126249999999345,
+          "residualMs": 0.0029170000000249274
+        },
+        {
+          "wholeMs": 13.47058299999992,
+          "setterMs": 9.670834000000013,
+          "publicationMs": 3.7915409999999383,
+          "residualMs": 0.008207999999967797
+        },
+        {
+          "wholeMs": 13.153167000000053,
+          "setterMs": 9.47183300000006,
+          "publicationMs": 3.6783329999999523,
+          "residualMs": 0.0030010000000402215
+        },
+        {
+          "wholeMs": 13.464582999999948,
+          "setterMs": 9.690499999999929,
+          "publicationMs": 3.7716660000000957,
+          "residualMs": 0.002416999999923064
+        },
+        {
+          "wholeMs": 14.283500000000004,
+          "setterMs": 9.48745800000006,
+          "publicationMs": 4.792666999999938,
+          "residualMs": 0.003375000000005457
+        },
+        {
+          "wholeMs": 13.193250000000035,
+          "setterMs": 9.352041999999983,
+          "publicationMs": 3.8374999999999773,
+          "residualMs": 0.0037080000000742075
+        },
+        {
+          "wholeMs": 13.905749999999898,
+          "setterMs": 10.209833000000003,
+          "publicationMs": 3.6920840000000226,
+          "residualMs": 0.0038329999998722997
+        },
+        {
+          "wholeMs": 13.153875000000198,
+          "setterMs": 9.343417000000045,
+          "publicationMs": 3.8073750000000928,
+          "residualMs": 0.003083000000060565
+        },
+        {
+          "wholeMs": 13.24716699999999,
+          "setterMs": 9.541165999999976,
+          "publicationMs": 3.7035840000000917,
+          "residualMs": 0.002416999999923064
+        },
+        {
+          "wholeMs": 13.240916999999854,
+          "setterMs": 9.583082999999988,
+          "publicationMs": 3.655499999999847,
+          "residualMs": 0.002334000000018932
+        },
+        {
+          "wholeMs": 13.375583000000006,
+          "setterMs": 9.759207999999944,
+          "publicationMs": 3.6128329999999096,
+          "residualMs": 0.0035420000001522567
+        },
+        {
+          "wholeMs": 12.789667000000009,
+          "setterMs": 9.097541999999976,
+          "publicationMs": 3.6887500000000273,
+          "residualMs": 0.003375000000005457
+        },
+        {
+          "wholeMs": 12.758957999999893,
+          "setterMs": 9.223916000000145,
+          "publicationMs": 3.532375000000002,
+          "residualMs": 0.002666999999746622
+        },
+        {
+          "wholeMs": 13.15520800000013,
+          "setterMs": 9.471540999999888,
+          "publicationMs": 3.681291999999985,
+          "residualMs": 0.0023750000002564775
+        },
+        {
+          "wholeMs": 13.09329200000002,
+          "setterMs": 9.448624999999993,
+          "publicationMs": 3.6415000000001783,
+          "residualMs": 0.0031669999998484855
+        },
+        {
+          "wholeMs": 13.153667000000041,
+          "setterMs": 9.419541999999865,
+          "publicationMs": 3.7315419999999904,
+          "residualMs": 0.0025830000001860753
+        },
+        {
+          "wholeMs": 13.472833000000037,
+          "setterMs": 9.772917000000007,
+          "publicationMs": 3.6970410000001266,
+          "residualMs": 0.0028749999999035936
+        },
+        {
+          "wholeMs": 13.00500000000011,
+          "setterMs": 9.316625000000158,
+          "publicationMs": 3.6858749999998963,
+          "residualMs": 0.0025000000000545697
+        },
+        {
+          "wholeMs": 12.801959000000124,
+          "setterMs": 9.192958999999973,
+          "publicationMs": 3.60616600000003,
+          "residualMs": 0.0028340000001207954
+        },
+        {
+          "wholeMs": 12.998708999999963,
+          "setterMs": 9.39079199999992,
+          "publicationMs": 3.605207999999948,
+          "residualMs": 0.0027090000000953296
+        },
+        {
+          "wholeMs": 12.935208999999986,
+          "setterMs": 9.348874999999907,
+          "publicationMs": 3.583708000000115,
+          "residualMs": 0.002625999999963824
+        },
+        {
+          "wholeMs": 13.316542000000027,
+          "setterMs": 9.648040999999921,
+          "publicationMs": 3.665875000000142,
+          "residualMs": 0.002625999999963824
+        },
+        {
+          "wholeMs": 13.02274999999986,
+          "setterMs": 9.332916000000068,
+          "publicationMs": 3.685709000000088,
+          "residualMs": 0.004124999999703505
+        },
+        {
+          "wholeMs": 12.965332999999873,
+          "setterMs": 9.28862499999991,
+          "publicationMs": 3.673041000000012,
+          "residualMs": 0.003666999999950349
+        },
+        {
+          "wholeMs": 12.739208999999846,
+          "setterMs": 9.061791999999969,
+          "publicationMs": 3.6746250000001055,
+          "residualMs": 0.002791999999772088
+        },
+        {
+          "wholeMs": 13.010665999999901,
+          "setterMs": 9.250416000000087,
+          "publicationMs": 3.758250000000089,
+          "residualMs": 0.0019999999997253326
+        },
+        {
+          "wholeMs": 12.884791000000178,
+          "setterMs": 9.206209000000172,
+          "publicationMs": 3.676290999999992,
+          "residualMs": 0.0022910000000138098
+        },
+        {
+          "wholeMs": 13.335334000000103,
+          "setterMs": 9.40295900000001,
+          "publicationMs": 3.928625000000011,
+          "residualMs": 0.0037500000000818545
+        },
+        {
+          "wholeMs": 12.711292000000185,
+          "setterMs": 9.045875000000024,
+          "publicationMs": 3.662458999999899,
+          "residualMs": 0.002958000000262473
+        },
+        {
+          "wholeMs": 12.814832999999908,
+          "setterMs": 9.252124999999978,
+          "publicationMs": 3.5597089999998843,
+          "residualMs": 0.002999000000045271
+        },
+        {
+          "wholeMs": 12.654957999999851,
+          "setterMs": 9.124791000000187,
+          "publicationMs": 3.527541999999812,
+          "residualMs": 0.002624999999852662
+        },
+        {
+          "wholeMs": 12.930916000000025,
+          "setterMs": 9.358958999999913,
+          "publicationMs": 3.5690000000001874,
+          "residualMs": 0.002956999999923937
+        },
+        {
+          "wholeMs": 13.460332999999991,
+          "setterMs": 9.633208999999852,
+          "publicationMs": 3.8235830000000988,
+          "residualMs": 0.0035410000000410946
+        },
+        {
+          "wholeMs": 14.45795800000019,
+          "setterMs": 9.741500000000087,
+          "publicationMs": 4.711332999999968,
+          "residualMs": 0.005125000000134605
+        },
+        {
+          "wholeMs": 14.030374999999822,
+          "setterMs": 9.74895800000013,
+          "publicationMs": 4.276499999999942,
+          "residualMs": 0.00491699999975026
+        },
+        {
+          "wholeMs": 13.907958000000008,
+          "setterMs": 9.680374999999913,
+          "publicationMs": 4.224084000000175,
+          "residualMs": 0.0034989999999197607
+        },
+        {
+          "wholeMs": 13.074583999999959,
+          "setterMs": 9.423250000000053,
+          "publicationMs": 3.6495409999999993,
+          "residualMs": 0.0017929999999068968
+        },
+        {
+          "wholeMs": 12.90866700000015,
+          "setterMs": 9.340708000000177,
+          "publicationMs": 3.566708999999946,
+          "residualMs": 0.0012500000000272848
+        },
+        {
+          "wholeMs": 12.782625000000053,
+          "setterMs": 9.320124999999962,
+          "publicationMs": 3.4602919999999813,
+          "residualMs": 0.002208000000109678
+        },
+        {
+          "wholeMs": 13.396332999999913,
+          "setterMs": 9.437792000000172,
+          "publicationMs": 3.9549999999999272,
+          "residualMs": 0.003540999999813721
+        },
+        {
+          "wholeMs": 12.348457999999937,
+          "setterMs": 8.854583999999932,
+          "publicationMs": 3.4905409999998938,
+          "residualMs": 0.0033330000001114968
+        },
+        {
+          "wholeMs": 12.668333999999959,
+          "setterMs": 9.117917000000034,
+          "publicationMs": 3.5475830000000315,
+          "residualMs": 0.0028339999998934218
+        },
+        {
+          "wholeMs": 12.643041999999923,
+          "setterMs": 9.118584000000055,
+          "publicationMs": 3.5217079999999896,
+          "residualMs": 0.0027499999998781277
+        },
+        {
+          "wholeMs": 12.828416999999945,
+          "setterMs": 9.261042000000089,
+          "publicationMs": 3.5653749999999036,
+          "residualMs": 0.0019999999999527063
+        },
+        {
+          "wholeMs": 12.752291999999898,
+          "setterMs": 9.160624999999982,
+          "publicationMs": 3.589958000000024,
+          "residualMs": 0.0017089999998916028
+        },
+        {
+          "wholeMs": 13.009708000000046,
+          "setterMs": 9.485791999999947,
+          "publicationMs": 3.520958000000064,
+          "residualMs": 0.0029580000000350992
+        },
+        {
+          "wholeMs": 12.36283400000002,
+          "setterMs": 8.945708999999852,
+          "publicationMs": 3.415000000000191,
+          "residualMs": 0.002124999999978172
+        },
+        {
+          "wholeMs": 12.836125000000038,
+          "setterMs": 9.309167000000116,
+          "publicationMs": 3.5249169999999594,
+          "residualMs": 0.002040999999962878
+        },
+        {
+          "wholeMs": 12.657875000000104,
+          "setterMs": 9.166707999999971,
+          "publicationMs": 3.488833999999997,
+          "residualMs": 0.0023330000001351436
+        },
+        {
+          "wholeMs": 12.843624999999975,
+          "setterMs": 9.210417000000007,
+          "publicationMs": 3.6304999999999836,
+          "residualMs": 0.0027079999999841675
+        },
+        {
+          "wholeMs": 12.672166999999945,
+          "setterMs": 9.213374999999814,
+          "publicationMs": 3.456292000000076,
+          "residualMs": 0.0025000000000545697
+        },
+        {
+          "wholeMs": 13.239582999999811,
+          "setterMs": 9.664458000000195,
+          "publicationMs": 3.571666999999934,
+          "residualMs": 0.0034579999996822153
+        },
+        {
+          "wholeMs": 12.751874999999927,
+          "setterMs": 9.221625000000131,
+          "publicationMs": 3.527417000000014,
+          "residualMs": 0.0028329999997822597
+        }
+      ],
+      "wholeMs": {
+        "mean": 13.368877637499995,
+        "p50": 13.188749999999914,
+        "p95": 15.12079099999994
+      },
+      "setterMs": {
+        "mean": 9.505453150000008,
+        "p50": 9.39079199999992,
+        "p95": 10.616957999999954
+      },
+      "publicationMs": {
+        "mean": 3.8604411375000054,
+        "p50": 3.7315419999999904,
+        "p95": 4.692749999999933
+      },
+      "residualMs": {
+        "mean": 0.0029833499999810443,
+        "p50": 0.0027090000000953296,
+        "p95": 0.005125000000134605
+      }
+    },
+    "timerScope": "Nested wall boundaries around the setter loop and one scene publication; residual includes callback and observer overhead."
+  },
+  "sampledMs": {
+    "total": 1100,
+    "stages": {
+      "other-wasm": 790.7900000000008,
+      "javascript": 255.876,
+      "host-runtime": 39.876000000000005,
+      "external-javascript": 13.458
+    }
+  },
+  "cpuHotspots": [
+    {
+      "functionName": "wasm-function[951]",
+      "sampledMs": 68.91499999999999,
+      "url": "wasm://wasm/0062387e"
+    },
+    {
+      "functionName": "wasm-function[261]",
+      "sampledMs": 33.168000000000006,
+      "url": "wasm://wasm/0062387e"
+    },
+    {
+      "functionName": "wasm-function[1038]",
+      "sampledMs": 31.623000000000005,
+      "url": "wasm://wasm/0062387e"
+    },
+    {
+      "functionName": "post",
+      "sampledMs": 30.25,
+      "url": "node:inspector"
+    },
+    {
+      "functionName": "wasm-function[1037]",
+      "sampledMs": 26.791,
+      "url": "wasm://wasm/0062387e"
+    },
+    {
+      "functionName": "wasm-function[596]",
+      "sampledMs": 26.584,
+      "url": "wasm://wasm/0062387e"
+    },
+    {
+      "functionName": "c",
+      "sampledMs": 26.542,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-JBwOvs/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-wave2_28f31d826bbb03abfa0d6066daee2b06/node_modules/@pmndrs/glyph/dist/internal/frame-wire.js"
+    },
+    {
+      "functionName": "wasm-function[582]",
+      "sampledMs": 22.625,
+      "url": "wasm://wasm/0062387e"
+    },
+    {
+      "functionName": "wasm-function[668]",
+      "sampledMs": 21.207,
+      "url": "wasm://wasm/0062387e"
+    },
+    {
+      "functionName": "wasm-function[838]",
+      "sampledMs": 21.084000000000003,
+      "url": "wasm://wasm/0062387e"
+    },
+    {
+      "functionName": "wasm-function[42]",
+      "sampledMs": 21.083,
+      "url": "wasm://wasm/0062387e"
+    },
+    {
+      "functionName": "wasm-function[265]",
+      "sampledMs": 20.916000000000004,
+      "url": "wasm://wasm/0062387e"
+    },
+    {
+      "functionName": "wasm-function[219]",
+      "sampledMs": 19.541000000000004,
+      "url": "wasm://wasm/0062387e"
+    },
+    {
+      "functionName": "me",
+      "sampledMs": 18.083,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-JBwOvs/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-wave2_28f31d826bbb03abfa0d6066daee2b06/node_modules/@pmndrs/glyph/dist/three/text.js"
+    },
+    {
+      "functionName": "wasm-function[497]",
+      "sampledMs": 17.874000000000002,
+      "url": "wasm://wasm/0062387e"
+    },
+    {
+      "functionName": "wasm-function[733]",
+      "sampledMs": 16.625,
+      "url": "wasm://wasm/0062387e"
+    },
+    {
+      "functionName": "_updateText",
+      "sampledMs": 16.543,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-JBwOvs/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-wave2_28f31d826bbb03abfa0d6066daee2b06/node_modules/@pmndrs/glyph/dist/internal/render-planner.js"
+    },
+    {
+      "functionName": "wasm-function[367]",
+      "sampledMs": 16.459,
+      "url": "wasm://wasm/0062387e"
+    },
+    {
+      "functionName": "wasm-function[51]",
+      "sampledMs": 14.917,
+      "url": "wasm://wasm/0062387e"
+    },
+    {
+      "functionName": "#f",
+      "sampledMs": 14.916,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-JBwOvs/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-wave2_28f31d826bbb03abfa0d6066daee2b06/node_modules/@pmndrs/glyph/dist/three/text.js"
+    },
+    {
+      "functionName": "ge",
+      "sampledMs": 13.375,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-JBwOvs/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-wave2_28f31d826bbb03abfa0d6066daee2b06/node_modules/@pmndrs/glyph/dist/internal/render-planner.js"
+    },
+    {
+      "functionName": "wasm-function[451]",
+      "sampledMs": 12.083,
+      "url": "wasm://wasm/0062387e"
+    },
+    {
+      "functionName": "wasm-function[599]",
+      "sampledMs": 12,
+      "url": "wasm://wasm/0062387e"
+    },
+    {
+      "functionName": "wasm-function[222]",
+      "sampledMs": 11.959,
+      "url": "wasm://wasm/0062387e"
+    },
+    {
+      "functionName": "wasm-function[147]",
+      "sampledMs": 10.542,
+      "url": "wasm://wasm/0062387e"
+    },
+    {
+      "functionName": "wasm-function[56]",
+      "sampledMs": 10.501,
+      "url": "wasm://wasm/0062387e"
+    },
+    {
+      "functionName": "d",
+      "sampledMs": 10.417,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-JBwOvs/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-wave2_28f31d826bbb03abfa0d6066daee2b06/node_modules/@pmndrs/glyph/dist/internal/frame-wire.js"
+    },
+    {
+      "functionName": "#C",
+      "sampledMs": 9.043,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-JBwOvs/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-wave2_28f31d826bbb03abfa0d6066daee2b06/node_modules/@pmndrs/glyph/dist/internal/handle-state.js"
+    },
+    {
+      "functionName": "wasm-function[266]",
+      "sampledMs": 9.042,
+      "url": "wasm://wasm/0062387e"
+    },
+    {
+      "functionName": "wasm-function[255]",
+      "sampledMs": 9,
+      "url": "wasm://wasm/0062387e"
+    }
+  ]
+}
