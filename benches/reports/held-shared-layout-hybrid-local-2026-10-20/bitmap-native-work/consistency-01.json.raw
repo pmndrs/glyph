@@ -1,0 +1,83 @@
+{
+  "checkpoint": "b7ccb1f5d06a1a8e8dfecb6f92324f23e02807b1",
+  "sourceHashes": {
+    "packages/glyph/rust/shaper/src/engine/work_attribution.rs": {
+      "checkpointSha256": "803ef8d8eb71026fbebbb97e461a9deb4eddb2432ad5fdac45aac227fcd3cbd0",
+      "replaySha256": "a0dfc18b6ba0a07679a0cbf49d9990b39c62270db0ee4c6bc08acab00fa14424"
+    },
+    "packages/glyph/rust/shaper/src/engine/positioning.rs": {
+      "checkpointSha256": "78aba5a381a0f403cb6d456b13abd4b5042f0008552939125d1f6211c609c687",
+      "replaySha256": "e4e6aabce1998bf52339dbc89d330bf7bb1af06dcd2102ca824b4a0db04e2e15"
+    },
+    "packages/glyph/rust/shaper/src/engine/state.rs": {
+      "checkpointSha256": "e59ab9f1ef5d2d294dc30fe7045e866d83e7e7d5647317262633bda132a57492",
+      "replaySha256": "eb898e1262181c17f94295236b853b14837729616cf0efea67d3916b316a657d"
+    },
+    "packages/glyph/rust/shaper/src/engine/codec_gather.rs": {
+      "checkpointSha256": "61f836f7b3210387edbe7cb3f7227d2d5534adedbb57474f8e0471a6f2959809",
+      "replaySha256": "ea1233945c89e4702fd82a66d83c997ccc1293a8e88b288bbccee0fa337c220c"
+    },
+    "packages/glyph/rust/shaper/src/engine/plan_packing.rs": {
+      "checkpointSha256": "b11e4b9032b8948555c945054c7dfdf6421c0e9c1bdae49c672b50810fae3853",
+      "replaySha256": "b11e4b9032b8948555c945054c7dfdf6421c0e9c1bdae49c672b50810fae3853"
+    },
+    "packages/glyph/rust/shaper/src/engine/ordered_plan.rs": {
+      "checkpointSha256": "1573808cec234f555b3cf88bb2eca2bd84b90b86c30abfde5748227b9828acce",
+      "replaySha256": "6939f99cef36665afe20ddae49a836aef1847979b345dcb32aa15d2aa8a77c72"
+    },
+    "packages/glyph/rust/shaper/src/engine/transport.rs": {
+      "checkpointSha256": "11b6ddf6917ace16d9dbe8919d590565d09e436145adf5c24a6b9c1f016d57da",
+      "replaySha256": "11b6ddf6917ace16d9dbe8919d590565d09e436145adf5c24a6b9c1f016d57da"
+    },
+    "packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs": {
+      "checkpointSha256": "10fdba8800b41f7e9b22db64f864d9ba5cdf8d2d5dd15fe0ad4912a977086607",
+      "replaySha256": "c1c450c762f20a08292164cf4d68407495277bed50e9220c158a99f2a69caa7a"
+    },
+    "benches/scripts/replay-bitmap-native-work.mts": {
+      "checkpointSha256": null,
+      "replaySha256": "67c75ad00adcaf933831e0d2b7598ed823b0b15dcf97deca4acf946381c809f7"
+    }
+  },
+  "checks": [
+    {
+      "phase": "initial",
+      "kind": "queryPreparation",
+      "events": 2048
+    },
+    {
+      "phase": "initial",
+      "kind": "publication",
+      "events": 1,
+      "freshSelectedPlusRecordlessEqualsVisited": true,
+      "emittedEqualsPlanPatchBytes": true
+    },
+    {
+      "phase": "forward",
+      "kind": "queryPreparation",
+      "events": 1024
+    },
+    {
+      "phase": "forward",
+      "kind": "publication",
+      "events": 1,
+      "emittedEqualsPlanPatchBytes": true,
+      "comparedBytesPartitionToEqualSuppressedAndEmitted": true
+    },
+    {
+      "phase": "reverse",
+      "kind": "queryPreparation",
+      "events": 1024
+    },
+    {
+      "phase": "reverse",
+      "kind": "publication",
+      "events": 1,
+      "emittedEqualsPlanPatchBytes": true,
+      "comparedBytesPartitionToEqualSuppressedAndEmitted": true
+    }
+  ],
+  "ledgerSha256": "8459b6facd29a6e344e160dc8017c273e6a2fe65e94bc1792693d8ae1ebaa15f",
+  "identitySha256": "6bd0c2284b0c74a13a85286944db88e09993abdd89179e91e71e766fdae7b12c",
+  "replayWrapper": "bitmap-native-work-replay-01",
+  "replayExit": 0
+}

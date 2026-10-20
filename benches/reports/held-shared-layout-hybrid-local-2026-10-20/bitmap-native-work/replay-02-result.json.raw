@@ -1,0 +1,24 @@
+{
+  "argv": [
+    "mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "benchmark:bitmap-native-work-replay",
+    "--",
+    "--trace",
+    "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-replay-auth/full-05/events.jsonl",
+    "--output",
+    "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-work-ledger-02"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-20T21:48:52.158591+00:00",
+  "finished": "2026-10-20T21:48:58.618905+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "6dc3a9a7e2055f40981dbed1673f7278325a159c5c7c96ae80865eacc4944ca8",
+    "stderr.log": "65232ec8332e9b6d55db9aca055aa23a779eb5bd6719430fe88d8d65f81c1875"
+  }
+}

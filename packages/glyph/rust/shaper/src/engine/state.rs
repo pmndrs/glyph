@@ -1681,6 +1681,11 @@ impl TextEngine {
             planner.revision.root == 0 || request.consumed_revision != planner.revision.root;
         let preparation_changed =
             planner.preparation_revision != planner.published_preparation_revision;
+        #[cfg(test)]
+        super::work_attribution::record(|work| {
+            work.prepare_checkpoints += usize::from(checkpoint);
+            work.prepare_changed += usize::from(preparation_changed);
+        });
         let (mut next_glyph_id, mut next_content_revision) = (
             planner.next_glyph_id.max(1),
             planner.next_content_revision.max(1),
@@ -1855,6 +1860,8 @@ impl TextEngine {
                 && request.compositing_independent == planner.compositing_independent;
             if reuse_ordered_plan {
                 planner.plan.prepare_reuse().map_err(plan_error)?;
+                #[cfg(test)]
+                super::work_attribution::record(|work| work.prepare_reuse_modes += 1);
                 gather_output_matches_next = cached_gather == Some(current_gather_key);
             } else {
                 let sparse = cached_gather == Some(current_gather_key)
@@ -1925,6 +1932,19 @@ impl TextEngine {
                         false,
                     )?;
                 }
+                #[cfg(test)]
+                super::work_attribution::record(|work| {
+                    if retained && sparse {
+                        work.prepare_retained_sparse_modes += 1;
+                    } else if retained && replacement.is_some() {
+                        work.prepare_retained_replacement_modes += 1;
+                    } else {
+                        work.prepare_fresh_modes += 1;
+                    }
+                    work.gather_output_source_rows += gather.diagnostic_source_count();
+                    work.gather_output_selected_rows += gather.view().plan_input().glyphs.len();
+                    work.prepared_positioned_source_rows += record_count;
+                });
                 planner.gathered_source_count = if ranges_reusable {
                     Some(record_count)
                 } else {
@@ -2859,6 +2879,10 @@ impl PlannerState {
         }
         sort::sort_pairs(&mut self.order_sort_scratch);
         self.order_sort_scratch.dedup();
+        #[cfg(test)]
+        super::work_attribution::record(|work| {
+            work.retained_owner_admissions += self.order_sort_scratch.len();
+        });
         Ok(true)
     }
 

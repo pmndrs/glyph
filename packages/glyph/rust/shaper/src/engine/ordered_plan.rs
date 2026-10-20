@@ -1763,6 +1763,10 @@ impl OrderedPlanCompiler {
                             .ok_or(OrderedPlanError::InvalidIdentity)?;
                         self.payload[destination_start..destination_start + byte_count]
                             .copy_from_slice(bytes);
+                        #[cfg(test)]
+                        super::work_attribution::record(|work| {
+                            work.clean_buffer_copy_bytes += byte_count;
+                        });
                     }
                     continue;
                 }
@@ -1845,11 +1849,29 @@ impl OrderedPlanCompiler {
                                 .buffers
                                 .get(batch.buffer_start as usize + schema_index)
                                 .is_some_and(|old| {
-                                    old.bytes.get(destination_start..destination_end)
-                                        == Some(&self.payload[source_start..source_end])
+                                    #[cfg(not(test))]
+                                    {
+                                        old.bytes.get(destination_start..destination_end)
+                                            == Some(&self.payload[source_start..source_end])
+                                    }
+                                    #[cfg(test)]
+                                    {
+                                        let prior =
+                                            old.bytes.get(destination_start..destination_end);
+                                        if prior.is_some() {
+                                            super::work_attribution::record(|work| {
+                                                work.ordered_comparison_bytes += length;
+                                            });
+                                        }
+                                        prior == Some(&self.payload[source_start..source_end])
+                                    }
                                 })
                     });
                 if same_physical_bytes {
+                    #[cfg(test)]
+                    super::work_attribution::record(|work| {
+                        work.ordered_equal_suppressed_bytes += length;
+                    });
                     continue;
                 }
                 // Active segments were appended in schema order. The compact destination never
@@ -1872,6 +1894,10 @@ impl OrderedPlanCompiler {
                     payload_start: u32::try_from(compact_start)
                         .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
                     ..PatchRecord::default()
+                });
+                #[cfg(test)]
+                super::work_attribution::record(|work| {
+                    work.ordered_emitted_write_bytes += length;
                 });
                 if let Some(start) = allocation_start {
                     let allocation_index = start

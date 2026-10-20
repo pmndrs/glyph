@@ -3337,6 +3337,24 @@ impl PositionedGlyphArena {
             .semantic_change_masks
             .get_mut(slot)
             .ok_or(EngineError::InvalidRequest)? = change_mask | unpublished_mask;
+        #[cfg(test)]
+        let accumulated_mask = change_mask | unpublished_mask;
+        #[cfg(test)]
+        super::work_attribution::record(|work| {
+            work.positioned_rows += 1;
+            work.positioned_new_identities += usize::from(previous_slot.is_none());
+            work.positioned_prior_identities +=
+                usize::from(previous_slot.is_some_and(|old| {
+                    self.glyphs[slot].stable_id == previous.glyphs[old].stable_id
+                }));
+            work.positioned_zero_masks += usize::from(accumulated_mask == 0);
+            work.positioned_nonzero_masks += usize::from(accumulated_mask != 0);
+            work.positioned_full_masks += usize::from(accumulated_mask == ALL_SEMANTIC_CHANGES);
+            for bit in 0..16 {
+                work.positioned_mask_bit_counts[bit] +=
+                    usize::from(accumulated_mask & (1 << bit) != 0);
+            }
+        });
         Ok(())
     }
 

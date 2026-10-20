@@ -1,0 +1,92 @@
+{
+  "priorLedgerIdentity": "bitmap-native-work-ledger-01/identity.json",
+  "beforeAndAfterSourceSha256": {
+    "packages/glyph/rust/shaper/src/engine/work_attribution.rs": {
+      "before": "a0dfc18b6ba0a07679a0cbf49d9990b39c62270db0ee4c6bc08acab00fa14424",
+      "after": "2c530238afc3d4492744f46e4ec225404ee4d5e8ce112c07f9345c4d03819a55"
+    },
+    "packages/glyph/rust/shaper/src/engine/positioning.rs": {
+      "before": "e4e6aabce1998bf52339dbc89d330bf7bb1af06dcd2102ca824b4a0db04e2e15",
+      "after": "e4e6aabce1998bf52339dbc89d330bf7bb1af06dcd2102ca824b4a0db04e2e15"
+    },
+    "packages/glyph/rust/shaper/src/engine/state.rs": {
+      "before": "eb898e1262181c17f94295236b853b14837729616cf0efea67d3916b316a657d",
+      "after": "f6d8a77b0d483de1fb4fedb2b15a99c26eb3e2c5b11f5356f8efd2ec20fe9786"
+    },
+    "packages/glyph/rust/shaper/src/engine/codec_gather.rs": {
+      "before": "ea1233945c89e4702fd82a66d83c997ccc1293a8e88b288bbccee0fa337c220c",
+      "after": "74f850bf7eacc0cdf4876ad3d65b275133937af470d7b3071dcbb163200e53a1"
+    },
+    "packages/glyph/rust/shaper/src/engine/plan_packing.rs": {
+      "before": "b11e4b9032b8948555c945054c7dfdf6421c0e9c1bdae49c672b50810fae3853",
+      "after": "b11e4b9032b8948555c945054c7dfdf6421c0e9c1bdae49c672b50810fae3853"
+    },
+    "packages/glyph/rust/shaper/src/engine/ordered_plan.rs": {
+      "before": "6939f99cef36665afe20ddae49a836aef1847979b345dcb32aa15d2aa8a77c72",
+      "after": "6939f99cef36665afe20ddae49a836aef1847979b345dcb32aa15d2aa8a77c72"
+    },
+    "packages/glyph/rust/shaper/src/engine/transport.rs": {
+      "before": "11b6ddf6917ace16d9dbe8919d590565d09e436145adf5c24a6b9c1f016d57da",
+      "after": "11b6ddf6917ace16d9dbe8919d590565d09e436145adf5c24a6b9c1f016d57da"
+    },
+    "packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs": {
+      "before": "c1c450c762f20a08292164cf4d68407495277bed50e9220c158a99f2a69caa7a",
+      "after": "b8219980b281f1fe7ce1259ad1791cee050c6ef0236dd74772f803c26c7acab0"
+    },
+    "benches/scripts/replay-bitmap-native-work.mts": {
+      "before": "67c75ad00adcaf933831e0d2b7598ed823b0b15dcf97deca4acf946381c809f7",
+      "after": "67c75ad00adcaf933831e0d2b7598ed823b0b15dcf97deca4acf946381c809f7"
+    }
+  },
+  "checks": [
+    {
+      "phase": "initial",
+      "kind": "queryPreparation",
+      "events": 2048,
+      "gatherSourceCountAvailableEvents": 0
+    },
+    {
+      "phase": "initial",
+      "kind": "publication",
+      "events": 1,
+      "gatherSourceCountAvailableEvents": 1,
+      "positionedSourceMatchesGatherOutput": true,
+      "freshRowsPartition": true,
+      "orderedWriteBytesMatchPatches": true
+    },
+    {
+      "phase": "forward",
+      "kind": "queryPreparation",
+      "events": 1024,
+      "gatherSourceCountAvailableEvents": 0
+    },
+    {
+      "phase": "forward",
+      "kind": "publication",
+      "events": 1,
+      "gatherSourceCountAvailableEvents": 1,
+      "positionedSourceMatchesGatherOutput": true,
+      "orderedWriteBytesMatchPatches": true,
+      "comparedBytesPartition": true
+    },
+    {
+      "phase": "reverse",
+      "kind": "queryPreparation",
+      "events": 1024,
+      "gatherSourceCountAvailableEvents": 0
+    },
+    {
+      "phase": "reverse",
+      "kind": "publication",
+      "events": 1,
+      "gatherSourceCountAvailableEvents": 1,
+      "positionedSourceMatchesGatherOutput": true,
+      "orderedWriteBytesMatchPatches": true,
+      "comparedBytesPartition": true
+    }
+  ],
+  "reportSha256": "1bdfa7e60a850a14b20fc06685a709d0eb2f669150ac11bd69eff432a24fea1b",
+  "identitySha256": "b4b287e703593cf0e507457064915f391264c68215502580e5aecf75c69d610a",
+  "wrapper": "bitmap-native-work-replay-02",
+  "exit": 0
+}

@@ -162,12 +162,39 @@ and [owned log](../log/2026-10-20-bitmap-native-replay-authentication.md) preser
 This opens only the reproduced native field/physical-work counter gate. Native batch process/descriptor/allocator,
 actual Three private buffers, GC, elapsed time, other families and parity are not proved. A separate fresh Sol High
 has specified one cfg(test) ledger using this immutable trace, with per-event reset/snapshot and six aggregate
-preparation/publication totals to exclude interleaved registrations. Root will first preserve this authentication
-source checkpoint, then native Sol6 Medium may implement that one coherent ledger. No product optimization, new
+preparation/publication totals to exclude interleaved registrations. Authentication source is preserved at local commit `b7ccb1f5` and ref
+`experiments/held-bitmap-native-authenticated-20261020`; native Sol6 Medium is now implementing that one coherent
+ledger from immutable full05. Stack submission will include the completed ledger boundary; remote remains940 while
+its existing CI publication report runs. No product optimization, new
 ABI/executor/parser/cache/layout, new timing/profile or E3 revival is selected. Full result-byte comparison remains
 a gate after instrumentation; any source-metadata artifact delta must be classified honestly. Exact940 CI Static,
 Docs,Size andCheck pass; its existing publication-suite performance job remains live under39494612090/watch95904.
 Parity false, boost waves0, stack held/unmerged.
+
+**Fresh independent old/new review — 20 October:** a new no-history native Sol6 High reconstructed old main's
+deferred/batched preparation and HELD's immediate per-setter preparation from primary source. Its report is local
+`held-hybrid-20261020/evidence/fresh-old-new-hybrid-strategy.md`: proposed shared positioned-column consumption must
+replace gather storage/work, preserve one executor and broad SIMD grouping, and avoid adding renderer work or duplicate
+columns to every setter. No product wave is admitted. The reviewer is specifying one matched phase discriminator
+before selecting a preparation-side deletion or the shared-view wave; absence of a removable owner ends that line,
+not the parity goal.
+
+The corrected ledger02 passes all6,157events/4,099result slices. Independent High closes position-only lane coverage,
+accepted positioned source count and omitted existing owner counters. The first ledger remains preserved with its
+coverage limits. Corrected forward/reverse f32 reads109,568 include12,288 attempted fast-path reads; writes97,280.
+Each publication has10,240 accepted positioned sources and9,216 selected records; ordered compare589,824B,
+equal-suppressed221,184B and emitted368,640B remain distinct. These are native scalar work, not latency or actual
+Wasm SIMD frequency. [Portable ledger](../../../benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-work/README.md)
+and [owned log](../log/2026-10-20-bitmap-native-work-ledger.md) preserve exact source identities/reviews.
+
+Final corrected-source package check02 passes (1,142Node/587Rust,2ignored; exact replay separate), with701source
+hashes unchanged. E2 archive28fd remains intact. Current build differs only in Wasm Data (203bytes; Code identical;
+same1,609,247B);946of947archived dist members match. Four local profile files are unshipped. This metadata boundary
+is not old-artifact performance acceptance. Exact940 CI still has four successful jobs and its existing publication
+performance job running; auth/counter source is not covered by that CI. Native Sol6 Medium has read the frozen High
+phase brief and waits for this counter commit before editing only the two benchmark observer owners. One fresh
+capture per main/release/E2 arm is selected (shipping Wasm,10warmups/80iterations/no timedreads); matched wall
+boundaries are diagnostic, not seven-family parity. Parity false, boost waves0, stack held/unmerged.
 
 ### Completed current-machine rerun — 19 October 2026
 

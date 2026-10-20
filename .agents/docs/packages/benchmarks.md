@@ -335,6 +335,8 @@ The [authentication record](../log/2026-10-20-bitmap-native-replay-authenticatio
 source scope. Later work counters require the reviewed authentication boundary; a future product change requires
 its own output and same-machine performance gates, not reuse of this fixed-source result as acceptance.
 
+`benchmark:bitmap-native-work-replay` verifies the immutable full05 trace and all blob hashes without recapture or installation, then runs the same ignored native test with cfg(test) owner counters. Per-event reset/snapshot produces six preparation/publication totals while excluding interleaved setup; existing Codec histograms merge by record-count key. Source pre/post hashes, encoded byte equality and plan PATCH_WRITE totals gate the report. The [work ledger record](../log/2026-10-20-bitmap-native-work-ledger.md) describes independent review corrections and exclusions. Native scalar counts are not timings or actual Wasm SIMD frequency.
+
 The prepared-operation Labs matrix uses one changed first label among1/100/1000 retained labels. Setter-only,
 set+measure and set+measure+scene-publication are separate complete operations; same-value assignments and two writes
 before one publication expose eager preparation costs. Setter-only targets remain unqueried during timing. Cold-root

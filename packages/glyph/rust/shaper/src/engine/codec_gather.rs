@@ -720,6 +720,15 @@ impl CodecGatherWorkspace {
         super::work_attribution::record(|work| work.gather_glyph_visits += 1);
         let glyph = input.glyphs[glyph_index];
         let previous_source = *previous_source;
+        #[cfg(test)]
+        super::work_attribution::record(|work| {
+            work.retained_selected_rows += usize::from(previous_source.selected());
+            work.retained_recordless_rows += usize::from(!previous_source.selected());
+            work.retained_stable_id_matches +=
+                usize::from(previous_source.stable_id == glyph.stable_id);
+            work.retained_stable_id_mismatches +=
+                usize::from(previous_source.stable_id != glyph.stable_id);
+        });
         state.source_cursor += 1;
         let change_mask = input
             .semantic_change_masks
@@ -968,6 +977,8 @@ impl CodecGatherWorkspace {
                 return Ok(false);
             }
             *value = semantic_f32(source.field, input, glyph_index)?;
+            #[cfg(test)]
+            super::work_attribution::record(|work| work.gather_f32_reads += 1);
         }
         let (semantic_id, [inline_start, block_start]) = plan_glyph_placement(input, glyph_index)?;
         for (field, value) in values
@@ -977,12 +988,33 @@ impl CodecGatherWorkspace {
             .take(usize::from(program.f32_input_count))
         {
             if f32_inputs & (1 << field) != 0 {
+                #[cfg(test)]
+                let old = self.f32_fields[field]
+                    .blocks
+                    .get(output_index / 4)
+                    .map(|block| block.values[output_index % 4].to_bits());
                 self.f32_fields[field].set(output_index, value)?;
+                #[cfg(test)]
+                super::work_attribution::record(|work| {
+                    work.gather_f32_slots_written += 1;
+                    work.gather_f32_changed_slots += usize::from(old != Some(value.to_bits()));
+                });
             }
         }
         for field in 0..usize::from(program.u32_input_count) {
             if u32_inputs & (1 << field) != 0 {
+                #[cfg(test)]
+                let old = self.u32_fields[field]
+                    .blocks
+                    .get(output_index / 4)
+                    .map(|block| block.values[output_index % 4]);
                 self.u32_fields[field].set(output_index, glyph.placement_slot)?;
+                #[cfg(test)]
+                super::work_attribution::record(|work| {
+                    work.gather_u32_reads += 1;
+                    work.gather_u32_slots_written += 1;
+                    work.gather_u32_changed_slots += usize::from(old != Some(glyph.placement_slot));
+                });
             }
         }
         self.replace_glyph(
@@ -1387,6 +1419,8 @@ impl CodecGatherWorkspace {
             let Some(selected) =
                 binding.select(glyph.glyph_id, glyph.font_size, glyph.raster_pixel_ratio)
             else {
+                #[cfg(test)]
+                super::work_attribution::record(|work| work.fresh_recordless_rows += 1);
                 // A glyph that selects no raster still occupies a source row. The retained walk
                 // pairs source rows against emitted records, so omitting the row would shift every
                 // later pairing -- which is the defect this lane exists to prevent.
@@ -1397,6 +1431,8 @@ impl CodecGatherWorkspace {
                 )?;
                 continue;
             };
+            #[cfg(test)]
+            super::work_attribution::record(|work| work.fresh_selected_rows += 1);
             let technique = binding.technique();
             let variant = binding.program_variant();
             let program = match cached_program {
@@ -1548,6 +1584,11 @@ impl CodecGatherWorkspace {
         Ok(true)
     }
 
+    #[cfg(test)]
+    pub(crate) fn diagnostic_source_count(&self) -> usize {
+        self.sources.len()
+    }
+
     pub fn view(&self) -> GatheredPlanInput<'_> {
         let mut f32_fields = [&[][..]; MAX_REGISTERS];
         let mut u32_fields = [&[][..]; MAX_REGISTERS];
@@ -1599,6 +1640,14 @@ impl CodecGatherWorkspace {
                 0.0
             };
             self.f32_fields[field].push(value)?;
+            #[cfg(test)]
+            super::work_attribution::record(|work| {
+                work.gather_f32_reads +=
+                    usize::from(field < f32_count && required_f32 & (1 << field) != 0);
+                work.gather_f32_default_fills +=
+                    usize::from(field >= f32_count || required_f32 & (1 << field) == 0);
+                work.gather_f32_slots_written += 1;
+            });
         }
         for field in 0..self.u32_fields.len() {
             let value = if field < u32_count && required_u32 & (1 << field) != 0 {
@@ -1615,6 +1664,14 @@ impl CodecGatherWorkspace {
                 0
             };
             self.u32_fields[field].push(value)?;
+            #[cfg(test)]
+            super::work_attribution::record(|work| {
+                work.gather_u32_reads +=
+                    usize::from(field < u32_count && required_u32 & (1 << field) != 0);
+                work.gather_u32_default_fills +=
+                    usize::from(field >= u32_count || required_u32 & (1 << field) == 0);
+                work.gather_u32_slots_written += 1;
+            });
         }
         Ok(())
     }
@@ -1646,7 +1703,18 @@ impl CodecGatherWorkspace {
                 binding,
                 selected,
             )?;
+            #[cfg(test)]
+            let old = self.f32_fields[field]
+                .blocks
+                .get(output_index / 4)
+                .map(|block| block.values[output_index % 4].to_bits());
             self.f32_fields[field].set(output_index, value)?;
+            #[cfg(test)]
+            super::work_attribution::record(|work| {
+                work.gather_f32_reads += 1;
+                work.gather_f32_slots_written += 1;
+                work.gather_f32_changed_slots += usize::from(old != Some(value.to_bits()));
+            });
         }
         for field in 0..u32_count {
             if required_u32 & (1 << field) == 0 {
@@ -1661,7 +1729,18 @@ impl CodecGatherWorkspace {
                 binding,
                 selected,
             )?;
+            #[cfg(test)]
+            let old = self.u32_fields[field]
+                .blocks
+                .get(output_index / 4)
+                .map(|block| block.values[output_index % 4]);
             self.u32_fields[field].set(output_index, value)?;
+            #[cfg(test)]
+            super::work_attribution::record(|work| {
+                work.gather_u32_reads += 1;
+                work.gather_u32_slots_written += 1;
+                work.gather_u32_changed_slots += usize::from(old != Some(value));
+            });
         }
         Ok(())
     }

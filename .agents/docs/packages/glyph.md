@@ -2414,6 +2414,8 @@ batch processing, host buffer contents, allocation and latency claims. The
 [authentication log](../log/2026-10-20-bitmap-native-replay-authentication.md) records the fixed-source evidence and
 review corrections; product performance parity remains unresolved.
 
+The same test-only transport replay now supports a field/physical-work ledger at existing native owners. Counters include accumulated semantic masks, accepted positioned source counts, actual gather dependency reads/writes (including attempted position-only reads before fallback), prepared modes, Codec work and ordered comparison/suppression/emitted bytes. Reuse paths report count availability explicitly. No production executor or ABI is added. The [work ledger log](../log/2026-10-20-bitmap-native-work-ledger.md) owns the exact-source gates and independent corrections; native counts do not establish latency or seven-family parity.
+
 The frame request header uses direct checked writes rather than constructing 35 field/value tuples per setter;
 validation labels, field order and little-endian encoding are preserved. The saved bulk profile attributes 20.960 ms
 self samples to the former header writer across 20,000 sets. Compiled ABI 7/7, focused Rust, Unicode, static and

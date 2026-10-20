@@ -1,0 +1,100 @@
+[
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-work-ledger-01/native-work-ledger.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-work/native-work-ledger-01.json.raw",
+    "sourceSha256": "8459b6facd29a6e344e160dc8017c273e6a2fe65e94bc1792693d8ae1ebaa15f",
+    "copyMode": "verbatim",
+    "targetSha256": "8459b6facd29a6e344e160dc8017c273e6a2fe65e94bc1792693d8ae1ebaa15f"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-work-ledger-01/identity.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-work/identity-01.json.raw",
+    "sourceSha256": "6bd0c2284b0c74a13a85286944db88e09993abdd89179e91e71e766fdae7b12c",
+    "copyMode": "verbatim",
+    "targetSha256": "6bd0c2284b0c74a13a85286944db88e09993abdd89179e91e71e766fdae7b12c"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-work-ledger-01/prepost-and-consistency.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-work/consistency-01.json.raw",
+    "sourceSha256": "d5a7708458faec4166a9acd734da36622a41ee23e937b765e12ef26bc1e29a37",
+    "copyMode": "verbatim",
+    "targetSha256": "d5a7708458faec4166a9acd734da36622a41ee23e937b765e12ef26bc1e29a37"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-work-ledger-02/native-work-ledger.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-work/native-work-ledger-02.json.raw",
+    "sourceSha256": "1bdfa7e60a850a14b20fc06685a709d0eb2f669150ac11bd69eff432a24fea1b",
+    "copyMode": "verbatim",
+    "targetSha256": "1bdfa7e60a850a14b20fc06685a709d0eb2f669150ac11bd69eff432a24fea1b"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-work-ledger-02/identity.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-work/identity-02.json.raw",
+    "sourceSha256": "b4b287e703593cf0e507457064915f391264c68215502580e5aecf75c69d610a",
+    "copyMode": "verbatim",
+    "targetSha256": "b4b287e703593cf0e507457064915f391264c68215502580e5aecf75c69d610a"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-work-ledger-02/observer-correction-integrity.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-work/correction-integrity-02.json.raw",
+    "sourceSha256": "7b10585eeeb6f2eb496ddedaa7f69073bda23835c8badaa2d9d5c2d92fb5264e",
+    "copyMode": "verbatim",
+    "targetSha256": "7b10585eeeb6f2eb496ddedaa7f69073bda23835c8badaa2d9d5c2d92fb5264e"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-work-replay-01/result.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-work/replay-01-result.json.raw",
+    "sourceSha256": "f5679dd6cf31f27db541d72f115eac5f7221235b773163881079c4cb013feb2c",
+    "copyMode": "verbatim",
+    "targetSha256": "f5679dd6cf31f27db541d72f115eac5f7221235b773163881079c4cb013feb2c"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-work-replay-02/result.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-work/replay-02-result.json.raw",
+    "sourceSha256": "f128d12e59c556273fd7caa2f259f6edb46fea580690635e22f0371f6076575d",
+    "copyMode": "verbatim",
+    "targetSha256": "f128d12e59c556273fd7caa2f259f6edb46fea580690635e22f0371f6076575d"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/ledger-package-check-02/result.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-work/package-check-02-result.json.raw",
+    "sourceSha256": "1cae55422aa3aefc7a7185637c303bef3b774c7c3eb69d531741a742cf04e6cc",
+    "copyMode": "verbatim",
+    "targetSha256": "1cae55422aa3aefc7a7185637c303bef3b774c7c3eb69d531741a742cf04e6cc"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/ledger-package-gate-summary-02.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-work/package-check-02-summary.json.raw",
+    "sourceSha256": "053c9fac14682b06f0302a96a09e2c56b39019dd7869ff18ee2bdc26a10d849c",
+    "copyMode": "verbatim",
+    "targetSha256": "053c9fac14682b06f0302a96a09e2c56b39019dd7869ff18ee2bdc26a10d849c"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/fresh-old-new-hybrid-strategy.md",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/fresh-old-new-hybrid-strategy.md",
+    "sourceSha256": "6032edc303fddcf6b2da3e47a2e61a00794e7daf77751e1ac4beee5ad351145a",
+    "copyMode": "relative links repaired, repository formatting; no finding/decision changes",
+    "targetSha256": "d44b79706c7b866533b68ced9bc119fa585fa3e3e54b0e008df613f5fa81f75f"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/fresh-old-new-phase-discriminator-brief.md",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/fresh-old-new-phase-discriminator-brief.md",
+    "sourceSha256": "e7b4cf9f439ebfb30e1845fc11500d88e18e295331b0a6f9948df54d6321bb97",
+    "copyMode": "relative links repaired, repository formatting; no finding/decision changes",
+    "targetSha256": "1792fc726714d32087b920fffcbae96ad0fb548f9e12f80849298896c9b11482"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/fresh-work-ledger-review.md",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/fresh-work-ledger-review.md",
+    "sourceSha256": "f21993ba559d710b1e701be16f8b81fe9ae4da8d7e99e14d624ad04e35fedc99",
+    "copyMode": "relative links repaired, repository formatting; no finding/decision changes",
+    "targetSha256": "09019119a0e923398613d4aa8bb477527d033fa67715fe735a70fd7a3b4b8141"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/fresh-work-ledger-correction-review.md",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/fresh-work-ledger-correction-review.md",
+    "sourceSha256": "fdd35cb15d8b9f8fda102b795ea795da4c2e8c31e8986d6ac2365410c5aa2d57",
+    "copyMode": "relative links repaired, repository formatting; no finding/decision changes",
+    "targetSha256": "fdd35cb15d8b9f8fda102b795ea795da4c2e8c31e8986d6ac2365410c5aa2d57"
+  }
+]
