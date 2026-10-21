@@ -1000,7 +1000,11 @@
     "cycles": 8,
     "recordBytes": 32,
     "scope": "captured engine Wasm instance only",
-    "exclusions": ["JS tokens", "GPU", "font decoder instances"],
+    "exclusions": [
+      "JS tokens",
+      "GPU",
+      "font decoder instances"
+    ],
     "requestedPeak": "completed allocator-call high water; excludes Talc fragmentation and transient internal realloc peak",
     "cumulativeRequested": "full new size of successful realloc, not net growth",
     "wasmPages": "capacity, reported separately from requested live bytes"

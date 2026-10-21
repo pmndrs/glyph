@@ -1,5 +1,13 @@
 {
-  "argv": ["/Users/mini/.local/bin/mise", "exec", "--", "pnpm", "scripts", "run", "glyph:peer-check"],
+  "argv": [
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "glyph:peer-check"
+  ],
   "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
   "started": "2026-10-21T01:14:50.770452+00:00"
 }

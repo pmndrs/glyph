@@ -6,7 +6,15 @@
   "commands": [
     {
       "purpose": "full @pmndrs/glyph package check",
-      "argv": ["/Users/mini/.local/bin/mise", "exec", "--", "pnpm", "--filter", "@pmndrs/glyph", "check"],
+      "argv": [
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "pnpm",
+        "--filter",
+        "@pmndrs/glyph",
+        "check"
+      ],
       "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
       "durableReceipt": "unique E5/run.py wrapper after explicit release; proposed wrapper name package-check-final-01"
     },

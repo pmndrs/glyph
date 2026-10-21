@@ -12,24 +12,24 @@ All authorized full-matrix arms, the single current-candidate profile, and its m
 
 Each command used the maintained Labs workflow, full suite, eight blocks, and the same candidate archive. Main measured the candidate once. Published and prior E2 reused that exact saved candidate JSON (`700944329123880bcb040be199f39bd938af964247a34581c5e13811981b04bd`).
 
-| Arm       | Exit | Baseline SHA-256                                                   | Manifest SHA-256                                                   | Timing-mode exclusions | Calibration warning                                 |
-| --------- | ---: | ------------------------------------------------------------------ | ------------------------------------------------------------------ | ---------------------: | --------------------------------------------------- |
-| main      |    0 | `bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20` | `d5fd7f2e18af1653301bcd0724456a64a46ccb86c7dd368df8f451a6b348f23a` |                      3 | > ⚠ baseline CPU clock drifted 10.5% during its run |
-| published |    0 | `6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b` | `fecf23566641971a7859e3f7419f87fb0edfa45137542fa2e3267ccbd6447fa5` |                      5 | > ⚠ baseline CPU clock drifted 5.3% during its run  |
-| prior-e2  |    0 | `28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb` | `cb042fb47fb0aa3082a4cd0705db440d23204b23820945c4d7948d12c71c1e7d` |                      0 | none                                                |
+| Arm | Exit | Baseline SHA-256 | Manifest SHA-256 | Timing-mode exclusions | Calibration warning |
+| --- | ---: | --- | --- | ---: | --- |
+| main | 0 | `bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20` | `d5fd7f2e18af1653301bcd0724456a64a46ccb86c7dd368df8f451a6b348f23a` | 3 | > ⚠ baseline CPU clock drifted 10.5% during its run |
+| published | 0 | `6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b` | `fecf23566641971a7859e3f7419f87fb0edfa45137542fa2e3267ccbd6447fa5` | 5 | > ⚠ baseline CPU clock drifted 5.3% during its run |
+| prior-e2 | 0 | `28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb` | `cb042fb47fb0aa3082a4cd0705db440d23204b23820945c4d7948d12c71c1e7d` | 0 | none |
 
 Original Labs comparison reports retain the published block-statistics, p-values, confidence intervals, raw exclusions, and warnings. The published arm has 143 baseline identities against 145 candidate identities (two candidate-only identities); main and E2 each have 145 matched identities. Exact identities and exclusion flags are in the all-workload export below.
 
 Absolute p50/p95 values are descriptive nearest-rank quantiles over stored per-call nanosecond samples, converted to milliseconds. Labs median-of-block-medians is separate; no cross-arm candidate average or acceptance floor is used. The report warns of 10.5% main baseline and 5.3% published baseline software-calibration drift; these are calibration estimates, not hardware-frequency measurements. E2 has no warning line.
 
-| Dense workload                                  | Arm baseline pooled-sample p50 / p95 ms | Current candidate pooled-sample p50 / p95 ms | Original Labs report row (block-statistic estimator)                                                |
-| ----------------------------------------------- | --------------------------------------: | -------------------------------------------: | --------------------------------------------------------------------------------------------------- |
-| main: rewrite 512 labels in one group           |                     7.097750 / 7.876458 |                        10.019166 / 11.178209 | `▼ rewrite 512 labels in one group          7.07ms    10.00ms  +41.6%  +39.4% <.001  +39.3..+43.0%` |
-| main: publish 1024 retained Text instances      |                   15.397250 / 16.380625 |                        20.358833 / 22.668167 | `▼ publish 1024 retained Text instances    15.31ms    20.23ms  +32.1%  +37.0% <.001  +29.8..+33.9%` |
-| published: rewrite 512 labels in one group      |                     7.487042 / 8.096000 |                        10.019166 / 11.178209 | `▼ rewrite 512 labels in one group          7.46ms    10.00ms  +34.0%  +36.4% <.001  +32.3..+35.4%` |
-| published: publish 1024 retained Text instances |                   15.327208 / 17.231833 |                        20.358833 / 22.668167 | `▼ publish 1024 retained Text instances    15.23ms    20.23ms  +32.9%  +13.4% <.001  +30.4..+33.9%` |
-| prior-e2: rewrite 512 labels in one group       |                    9.384666 / 10.537833 |                        10.019166 / 11.178209 | `▼ rewrite 512 labels in one group          9.46ms    10.00ms   +5.8%   +5.4% <.001    +4.9..+7.5%` |
-| prior-e2: publish 1024 retained Text instances  |                   18.514042 / 21.048084 |                        20.358833 / 22.668167 | `▼ publish 1024 retained Text instances    18.37ms    20.23ms  +10.1%   +7.8% <.001   +8.5..+11.3%` |
+| Dense workload | Arm baseline pooled-sample p50 / p95 ms | Current candidate pooled-sample p50 / p95 ms | Original Labs report row (block-statistic estimator) |
+| --- | ---: | ---: | --- |
+| main: rewrite 512 labels in one group | 7.097750 / 7.876458 | 10.019166 / 11.178209 | `▼ rewrite 512 labels in one group          7.07ms    10.00ms  +41.6%  +39.4% <.001  +39.3..+43.0%` |
+| main: publish 1024 retained Text instances | 15.397250 / 16.380625 | 20.358833 / 22.668167 | `▼ publish 1024 retained Text instances    15.31ms    20.23ms  +32.1%  +37.0% <.001  +29.8..+33.9%` |
+| published: rewrite 512 labels in one group | 7.487042 / 8.096000 | 10.019166 / 11.178209 | `▼ rewrite 512 labels in one group          7.46ms    10.00ms  +34.0%  +36.4% <.001  +32.3..+35.4%` |
+| published: publish 1024 retained Text instances | 15.327208 / 17.231833 | 20.358833 / 22.668167 | `▼ publish 1024 retained Text instances    15.23ms    20.23ms  +32.9%  +13.4% <.001  +30.4..+33.9%` |
+| prior-e2: rewrite 512 labels in one group | 9.384666 / 10.537833 | 10.019166 / 11.178209 | `▼ rewrite 512 labels in one group          9.46ms    10.00ms   +5.8%   +5.4% <.001    +4.9..+7.5%` |
+| prior-e2: publish 1024 retained Text instances | 18.514042 / 21.048084 | 20.358833 / 22.668167 | `▼ publish 1024 retained Text instances    18.37ms    20.23ms  +10.1%   +7.8% <.001   +8.5..+11.3%` |
 
 ## All-workload files and original reports
 

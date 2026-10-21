@@ -53,8 +53,15 @@
           "comparison": [
             "function",
             {
-              "params": ["0x7f", "0x7f", "0x7f", "0x7f"],
-              "results": ["0x7f"]
+              "params": [
+                "0x7f",
+                "0x7f",
+                "0x7f",
+                "0x7f"
+              ],
+              "results": [
+                "0x7f"
+              ]
             },
             null
           ]
@@ -64,8 +71,16 @@
           "candidate": [
             "function",
             {
-              "params": ["0x7f", "0x7f", "0x7f", "0x7f", "0x7f"],
-              "results": ["0x7f"]
+              "params": [
+                "0x7f",
+                "0x7f",
+                "0x7f",
+                "0x7f",
+                "0x7f"
+              ],
+              "results": [
+                "0x7f"
+              ]
             },
             null
           ],
@@ -76,8 +91,12 @@
           "candidate": [
             "function",
             {
-              "params": ["0x7f"],
-              "results": ["0x7f"]
+              "params": [
+                "0x7f"
+              ],
+              "results": [
+                "0x7f"
+              ]
             },
             null
           ],
@@ -108,8 +127,30 @@
     }
   },
   "namedVsShippingStandardSections": {
-    "namedStandardSectionOrder": [1, 3, 4, 5, 6, 7, 9, 12, 10, 11],
-    "shippingStandardSectionOrder": [1, 3, 4, 5, 6, 7, 9, 12, 10, 11],
+    "namedStandardSectionOrder": [
+      1,
+      3,
+      4,
+      5,
+      6,
+      7,
+      9,
+      12,
+      10,
+      11
+    ],
+    "shippingStandardSectionOrder": [
+      1,
+      3,
+      4,
+      5,
+      6,
+      7,
+      9,
+      12,
+      10,
+      11
+    ],
     "sameStandardSectionOrder": true,
     "sectionsByteIdentical": {
       "1": true,

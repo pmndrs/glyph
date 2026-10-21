@@ -19,7 +19,9 @@
   "control": {
     "file": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/shaper-memory-final/text-shaper.control.wasm",
     "sha256": "8b594e2b123c35c0789a1e38ee15761e9a6a2245fdce6da1181efacbc0ab366a",
-    "features": ["simd128"],
+    "features": [
+      "simd128"
+    ],
     "cargo": [
       "build",
       "--manifest-path",
@@ -36,7 +38,10 @@
   "diagnostic": {
     "file": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/shaper-memory-final/text-shaper.diagnostic.wasm",
     "sha256": "ff6f72d51534fc4339814afa8249d191a846dbc65ef18289d2eba87fe483ce4d",
-    "features": ["simd128", "diagnostic-live-memory"],
+    "features": [
+      "simd128",
+      "diagnostic-live-memory"
+    ],
     "cargo": [
       "build",
       "--manifest-path",
@@ -57,8 +62,26 @@
       "pmndrs_glyph_shaper_diagnostic_memory_probe_sequence"
     ],
     "allocationProof": {
-      "before": [1, 0, 2528, 2528, 0, 0, 0, 0],
-      "after": [1, 0, 2528, 2560, 1, 1, 1, 48],
+      "before": [
+        1,
+        0,
+        2528,
+        2528,
+        0,
+        0,
+        0,
+        0
+      ],
+      "after": [
+        1,
+        0,
+        2528,
+        2560,
+        1,
+        1,
+        1,
+        48
+      ],
       "expected": {
         "requestedPeakIncrease": 32,
         "requestedLiveDelta": 0,

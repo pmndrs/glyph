@@ -2877,7 +2877,9 @@
     "priorE2": {
       "addedMembers": [],
       "removedMembers": [],
-      "changedMembers": ["package/dist/text-shaper.wasm"],
+      "changedMembers": [
+        "package/dist/text-shaper.wasm"
+      ],
       "exactPackageContractFields": [
         "name",
         "version",

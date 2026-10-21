@@ -9,7 +9,11 @@
     "watBytes": 27859535
   },
   "binaryenDisassemblyReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/wasm-dis-named-final-01/result.json",
-  "featureFlags": ["--enable-simd", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"],
+  "featureFlags": [
+    "--enable-simd",
+    "--enable-bulk-memory",
+    "--enable-nontrapping-float-to-int"
+  ],
   "executeProgram": {
     "symbol": "_RNvNtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine5codec15execute_program",
     "startLine": 326541,

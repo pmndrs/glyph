@@ -52,7 +52,9 @@
   "namedWasmSha256": "fb54c6442677f8cf6a8adbc220b86ed2031a68322669f79413a9ca1e6a2ea449",
   "namedWasmReleaseSha256": "8b594e2b123c35c0789a1e38ee15761e9a6a2245fdce6da1181efacbc0ab366a",
   "namedWasmExecutableSha256": "8b594e2b123c35c0789a1e38ee15761e9a6a2245fdce6da1181efacbc0ab366a",
-  "wasmUrls": ["wasm://wasm/006e44da"],
+  "wasmUrls": [
+    "wasm://wasm/006e44da"
+  ],
   "updateBulkId": 6,
   "updateBulkUrl": "file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/edit-sized-publication.profile.mts",
   "anchorRoots": {

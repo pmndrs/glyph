@@ -8,6 +8,7 @@
     "**/target/**",
     "benches/dist/**",
     "benches/fixtures/**",
+    "benches/reports/held-direct-operand-local-2026-10-21/**",
     "benches/vitexec/admission.probe.ts",
     ".agents/docs/planning/extensions/**/*.json",
     "packages/font-baker/src/schemas/**",

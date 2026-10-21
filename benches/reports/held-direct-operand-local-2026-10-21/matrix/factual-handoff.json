@@ -7364,7 +7364,9 @@
         }
       ]
     },
-    "wasmUrl": ["wasm://wasm/006e44da"],
+    "wasmUrl": [
+      "wasm://wasm/006e44da"
+    ],
     "anchors": {
       "preparation": {
         "nodeId": 7,

@@ -55,7 +55,9 @@
         "| skipped: timing-mode mismatch | 100 labels first set+measure |  |  |  |  |  |  |",
         "| skipped: timing-mode mismatch | 1000 labels first set+measure |  |  |  |  |  |  |"
       ],
-      "warningLines": ["> ⚠ baseline CPU clock drifted 10.5% during its run"],
+      "warningLines": [
+        "> ⚠ baseline CPU clock drifted 10.5% during its run"
+      ],
       "baselineEnvironment": {
         "freqs": [
           {
@@ -3878,9 +3880,9 @@
             "name": "cached measurement",
             "args": {},
             "storedSampleCount": 704,
-            "pooledStoredSampleNearestRankP50Ms": 3.654661016957571e-5,
-            "pooledStoredSampleNearestRankP95Ms": 6.720762711864406e-5,
-            "medianOfBlockMediansMs": 3.657556497175141e-5,
+            "pooledStoredSampleNearestRankP50Ms": 3.654661016957571e-05,
+            "pooledStoredSampleNearestRankP95Ms": 6.720762711864406e-05,
+            "medianOfBlockMediansMs": 3.657556497175141e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -3896,9 +3898,9 @@
             "name": "cached measurement",
             "args": {},
             "storedSampleCount": 840,
-            "pooledStoredSampleNearestRankP50Ms": 3.08921568627451e-5,
-            "pooledStoredSampleNearestRankP95Ms": 6.076348039215686e-5,
-            "medianOfBlockMediansMs": 3.107107843137255e-5,
+            "pooledStoredSampleNearestRankP50Ms": 3.08921568627451e-05,
+            "pooledStoredSampleNearestRankP95Ms": 6.076348039215686e-05,
+            "medianOfBlockMediansMs": 3.107107843137255e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -4494,9 +4496,9 @@
             "name": "1 labels first same-value-set",
             "args": {},
             "storedSampleCount": 688,
-            "pooledStoredSampleNearestRankP50Ms": 6.954225352112677e-5,
-            "pooledStoredSampleNearestRankP95Ms": 7.585110663983902e-5,
-            "medianOfBlockMediansMs": 6.956841046277665e-5,
+            "pooledStoredSampleNearestRankP50Ms": 6.954225352112677e-05,
+            "pooledStoredSampleNearestRankP95Ms": 7.585110663983902e-05,
+            "medianOfBlockMediansMs": 6.956841046277665e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -4512,9 +4514,9 @@
             "name": "1 labels first same-value-set",
             "args": {},
             "storedSampleCount": 672,
-            "pooledStoredSampleNearestRankP50Ms": 6.934375e-5,
-            "pooledStoredSampleNearestRankP95Ms": 7.5875e-5,
-            "medianOfBlockMediansMs": 6.956774999999999e-5,
+            "pooledStoredSampleNearestRankP50Ms": 6.934375e-05,
+            "pooledStoredSampleNearestRankP95Ms": 7.5875e-05,
+            "medianOfBlockMediansMs": 6.956774999999999e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -4714,9 +4716,9 @@
             "name": "100 labels first same-value-set",
             "args": {},
             "storedSampleCount": 648,
-            "pooledStoredSampleNearestRankP50Ms": 6.763490770901194e-5,
-            "pooledStoredSampleNearestRankP95Ms": 7.57328990228013e-5,
-            "medianOfBlockMediansMs": 6.737472855591747e-5,
+            "pooledStoredSampleNearestRankP50Ms": 6.763490770901194e-05,
+            "pooledStoredSampleNearestRankP95Ms": 7.57328990228013e-05,
+            "medianOfBlockMediansMs": 6.737472855591747e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -4732,9 +4734,9 @@
             "name": "100 labels first same-value-set",
             "args": {},
             "storedSampleCount": 640,
-            "pooledStoredSampleNearestRankP50Ms": 6.906962663975781e-5,
-            "pooledStoredSampleNearestRankP95Ms": 7.55340565085772e-5,
-            "medianOfBlockMediansMs": 6.917457114026238e-5,
+            "pooledStoredSampleNearestRankP50Ms": 6.906962663975781e-05,
+            "pooledStoredSampleNearestRankP95Ms": 7.55340565085772e-05,
+            "medianOfBlockMediansMs": 6.917457114026238e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -4934,9 +4936,9 @@
             "name": "1000 labels first same-value-set",
             "args": {},
             "storedSampleCount": 408,
-            "pooledStoredSampleNearestRankP50Ms": 6.894560878243513e-5,
-            "pooledStoredSampleNearestRankP95Ms": 7.91125249500998e-5,
-            "medianOfBlockMediansMs": 6.910142215568862e-5,
+            "pooledStoredSampleNearestRankP50Ms": 6.894560878243513e-05,
+            "pooledStoredSampleNearestRankP95Ms": 7.91125249500998e-05,
+            "medianOfBlockMediansMs": 6.910142215568862e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -4952,9 +4954,9 @@
             "name": "1000 labels first same-value-set",
             "args": {},
             "storedSampleCount": 384,
-            "pooledStoredSampleNearestRankP50Ms": 7.138888888888889e-5,
-            "pooledStoredSampleNearestRankP95Ms": 7.809244444444443e-5,
-            "medianOfBlockMediansMs": 7.122677777777778e-5,
+            "pooledStoredSampleNearestRankP50Ms": 7.138888888888889e-05,
+            "pooledStoredSampleNearestRankP95Ms": 7.809244444444443e-05,
+            "medianOfBlockMediansMs": 7.122677777777778e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -6740,8 +6742,18 @@
       "matchedIdentityCount": 143,
       "baselineOnlyIdentities": [],
       "candidateOnlyIdentities": [
-        ["outlines.bench.ts", "glyph outlines", "copy per-glyph metrics with outlines after text change", "{}"],
-        ["outlines.bench.ts", "glyph outlines", "read every outline from an unchanged copy", "{}"]
+        [
+          "outlines.bench.ts",
+          "glyph outlines",
+          "copy per-glyph metrics with outlines after text change",
+          "{}"
+        ],
+        [
+          "outlines.bench.ts",
+          "glyph outlines",
+          "read every outline from an unchanged copy",
+          "{}"
+        ]
       ],
       "reportExclusions": [
         "| skipped: timing-mode mismatch | measure 100 unchanged labels |  |  |  |  |  |  |",
@@ -6750,7 +6762,9 @@
         "| skipped: timing-mode mismatch | 1000 labels first set+measure |  |  |  |  |  |  |",
         "| skipped: timing-mode mismatch | write 1000 paragraph-order mutations |  |  |  |  |  |  |"
       ],
-      "warningLines": ["> ⚠ baseline CPU clock drifted 5.3% during its run"],
+      "warningLines": [
+        "> ⚠ baseline CPU clock drifted 5.3% during its run"
+      ],
       "baselineEnvironment": {
         "freqs": [
           {
@@ -10573,9 +10587,9 @@
             "name": "cached measurement",
             "args": {},
             "storedSampleCount": 808,
-            "pooledStoredSampleNearestRankP50Ms": 3.209404761904762e-5,
-            "pooledStoredSampleNearestRankP95Ms": 6.354166666666666e-5,
-            "medianOfBlockMediansMs": 3.2018452380952384e-5,
+            "pooledStoredSampleNearestRankP50Ms": 3.209404761904762e-05,
+            "pooledStoredSampleNearestRankP95Ms": 6.354166666666666e-05,
+            "medianOfBlockMediansMs": 3.2018452380952384e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -10591,9 +10605,9 @@
             "name": "cached measurement",
             "args": {},
             "storedSampleCount": 840,
-            "pooledStoredSampleNearestRankP50Ms": 3.08921568627451e-5,
-            "pooledStoredSampleNearestRankP95Ms": 6.076348039215686e-5,
-            "medianOfBlockMediansMs": 3.107107843137255e-5,
+            "pooledStoredSampleNearestRankP50Ms": 3.08921568627451e-05,
+            "pooledStoredSampleNearestRankP95Ms": 6.076348039215686e-05,
+            "medianOfBlockMediansMs": 3.107107843137255e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -11155,9 +11169,9 @@
             "name": "1 labels first same-value-set",
             "args": {},
             "storedSampleCount": 672,
-            "pooledStoredSampleNearestRankP50Ms": 6.821535580524345e-5,
-            "pooledStoredSampleNearestRankP95Ms": 7.583286516853932e-5,
-            "medianOfBlockMediansMs": 6.815215355805243e-5,
+            "pooledStoredSampleNearestRankP50Ms": 6.821535580524345e-05,
+            "pooledStoredSampleNearestRankP95Ms": 7.583286516853932e-05,
+            "medianOfBlockMediansMs": 6.815215355805243e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -11173,9 +11187,9 @@
             "name": "1 labels first same-value-set",
             "args": {},
             "storedSampleCount": 672,
-            "pooledStoredSampleNearestRankP50Ms": 6.934375e-5,
-            "pooledStoredSampleNearestRankP95Ms": 7.5875e-5,
-            "medianOfBlockMediansMs": 6.956774999999999e-5,
+            "pooledStoredSampleNearestRankP50Ms": 6.934375e-05,
+            "pooledStoredSampleNearestRankP95Ms": 7.5875e-05,
+            "medianOfBlockMediansMs": 6.956774999999999e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -11375,9 +11389,9 @@
             "name": "100 labels first same-value-set",
             "args": {},
             "storedSampleCount": 624,
-            "pooledStoredSampleNearestRankP50Ms": 6.85005035246727e-5,
-            "pooledStoredSampleNearestRankP95Ms": 7.54551863041289e-5,
-            "medianOfBlockMediansMs": 6.841641490433031e-5,
+            "pooledStoredSampleNearestRankP50Ms": 6.85005035246727e-05,
+            "pooledStoredSampleNearestRankP95Ms": 7.54551863041289e-05,
+            "medianOfBlockMediansMs": 6.841641490433031e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -11393,9 +11407,9 @@
             "name": "100 labels first same-value-set",
             "args": {},
             "storedSampleCount": 640,
-            "pooledStoredSampleNearestRankP50Ms": 6.906962663975781e-5,
-            "pooledStoredSampleNearestRankP95Ms": 7.55340565085772e-5,
-            "medianOfBlockMediansMs": 6.917457114026238e-5,
+            "pooledStoredSampleNearestRankP50Ms": 6.906962663975781e-05,
+            "pooledStoredSampleNearestRankP95Ms": 7.55340565085772e-05,
+            "medianOfBlockMediansMs": 6.917457114026238e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -11595,9 +11609,9 @@
             "name": "1000 labels first same-value-set",
             "args": {},
             "storedSampleCount": 472,
-            "pooledStoredSampleNearestRankP50Ms": 8.86470588235294e-5,
+            "pooledStoredSampleNearestRankP50Ms": 8.86470588235294e-05,
             "pooledStoredSampleNearestRankP95Ms": 0.0001556372549019608,
-            "medianOfBlockMediansMs": 8.87450980392157e-5,
+            "medianOfBlockMediansMs": 8.87450980392157e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -11613,9 +11627,9 @@
             "name": "1000 labels first same-value-set",
             "args": {},
             "storedSampleCount": 384,
-            "pooledStoredSampleNearestRankP50Ms": 7.138888888888889e-5,
-            "pooledStoredSampleNearestRankP95Ms": 7.809244444444443e-5,
-            "medianOfBlockMediansMs": 7.122677777777778e-5,
+            "pooledStoredSampleNearestRankP50Ms": 7.138888888888889e-05,
+            "pooledStoredSampleNearestRankP95Ms": 7.809244444444443e-05,
+            "medianOfBlockMediansMs": 7.122677777777778e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -17219,9 +17233,9 @@
             "name": "cached measurement",
             "args": {},
             "storedSampleCount": 696,
-            "pooledStoredSampleNearestRankP50Ms": 3.0010450160771705e-5,
-            "pooledStoredSampleNearestRankP95Ms": 5.92508038585209e-5,
-            "medianOfBlockMediansMs": 2.912299035369775e-5,
+            "pooledStoredSampleNearestRankP50Ms": 3.0010450160771705e-05,
+            "pooledStoredSampleNearestRankP95Ms": 5.92508038585209e-05,
+            "medianOfBlockMediansMs": 2.912299035369775e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -17237,9 +17251,9 @@
             "name": "cached measurement",
             "args": {},
             "storedSampleCount": 840,
-            "pooledStoredSampleNearestRankP50Ms": 3.08921568627451e-5,
-            "pooledStoredSampleNearestRankP95Ms": 6.076348039215686e-5,
-            "medianOfBlockMediansMs": 3.107107843137255e-5,
+            "pooledStoredSampleNearestRankP50Ms": 3.08921568627451e-05,
+            "pooledStoredSampleNearestRankP95Ms": 6.076348039215686e-05,
+            "medianOfBlockMediansMs": 3.107107843137255e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -17835,9 +17849,9 @@
             "name": "1 labels first same-value-set",
             "args": {},
             "storedSampleCount": 696,
-            "pooledStoredSampleNearestRankP50Ms": 6.965324927255092e-5,
+            "pooledStoredSampleNearestRankP50Ms": 6.965324927255092e-05,
             "pooledStoredSampleNearestRankP95Ms": 0.000154229388942774,
-            "medianOfBlockMediansMs": 6.967337536372454e-5,
+            "medianOfBlockMediansMs": 6.967337536372454e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -17853,9 +17867,9 @@
             "name": "1 labels first same-value-set",
             "args": {},
             "storedSampleCount": 672,
-            "pooledStoredSampleNearestRankP50Ms": 6.934375e-5,
-            "pooledStoredSampleNearestRankP95Ms": 7.5875e-5,
-            "medianOfBlockMediansMs": 6.956774999999999e-5,
+            "pooledStoredSampleNearestRankP50Ms": 6.934375e-05,
+            "pooledStoredSampleNearestRankP95Ms": 7.5875e-05,
+            "medianOfBlockMediansMs": 6.956774999999999e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -18055,9 +18069,9 @@
             "name": "100 labels first same-value-set",
             "args": {},
             "storedSampleCount": 600,
-            "pooledStoredSampleNearestRankP50Ms": 6.96030621572212e-5,
-            "pooledStoredSampleNearestRankP95Ms": 7.709666361974406e-5,
-            "medianOfBlockMediansMs": 6.95792961608775e-5,
+            "pooledStoredSampleNearestRankP50Ms": 6.96030621572212e-05,
+            "pooledStoredSampleNearestRankP95Ms": 7.709666361974406e-05,
+            "medianOfBlockMediansMs": 6.95792961608775e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -18073,9 +18087,9 @@
             "name": "100 labels first same-value-set",
             "args": {},
             "storedSampleCount": 640,
-            "pooledStoredSampleNearestRankP50Ms": 6.906962663975781e-5,
-            "pooledStoredSampleNearestRankP95Ms": 7.55340565085772e-5,
-            "medianOfBlockMediansMs": 6.917457114026238e-5,
+            "pooledStoredSampleNearestRankP50Ms": 6.906962663975781e-05,
+            "pooledStoredSampleNearestRankP95Ms": 7.55340565085772e-05,
+            "medianOfBlockMediansMs": 6.917457114026238e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -18275,9 +18289,9 @@
             "name": "1000 labels first same-value-set",
             "args": {},
             "storedSampleCount": 384,
-            "pooledStoredSampleNearestRankP50Ms": 7.087372802960222e-5,
-            "pooledStoredSampleNearestRankP95Ms": 7.846716003700277e-5,
-            "medianOfBlockMediansMs": 7.084007863089732e-5,
+            "pooledStoredSampleNearestRankP50Ms": 7.087372802960222e-05,
+            "pooledStoredSampleNearestRankP95Ms": 7.846716003700277e-05,
+            "medianOfBlockMediansMs": 7.084007863089732e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,
@@ -18293,9 +18307,9 @@
             "name": "1000 labels first same-value-set",
             "args": {},
             "storedSampleCount": 384,
-            "pooledStoredSampleNearestRankP50Ms": 7.138888888888889e-5,
-            "pooledStoredSampleNearestRankP95Ms": 7.809244444444443e-5,
-            "medianOfBlockMediansMs": 7.122677777777778e-5,
+            "pooledStoredSampleNearestRankP50Ms": 7.138888888888889e-05,
+            "pooledStoredSampleNearestRankP95Ms": 7.809244444444443e-05,
+            "medianOfBlockMediansMs": 7.122677777777778e-05,
             "blockCount": 8,
             "plan": {
               "batch": true,

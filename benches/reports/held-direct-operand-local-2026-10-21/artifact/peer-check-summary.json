@@ -2,7 +2,15 @@
   "schema": "glyph-peer-check-result-v1",
   "recordedUtc": "2026-10-21T01:16:36.391623+00:00",
   "workflow": "glyph:peer-check",
-  "argv": ["/Users/mini/.local/bin/mise", "exec", "--", "pnpm", "scripts", "run", "glyph:peer-check"],
+  "argv": [
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "glyph:peer-check"
+  ],
   "started": "2026-10-21T01:14:50.770452+00:00",
   "finished": "2026-10-21T01:15:58.918991+00:00",
   "exit": 0,
