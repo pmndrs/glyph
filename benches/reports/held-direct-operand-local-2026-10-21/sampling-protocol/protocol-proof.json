@@ -1,0 +1,10 @@
+{
+  "labsVersion": "0.9.0",
+  "adaptiveControlBatched": true,
+  "fixedControlBatched": false,
+  "workerSingleCallPlanValidated": true,
+  "workerBlocks": 8,
+  "invalidConfigRejected": true,
+  "invalidRunnerOptionRejected": true,
+  "scope": "Labs protocol correctness fixture; timings are not product performance evidence"
+}

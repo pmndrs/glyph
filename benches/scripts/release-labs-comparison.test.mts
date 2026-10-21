@@ -14,6 +14,8 @@ import {
   validateSavedPackageLabs,
 } from './support/saved-package-labs.mts';
 import {
+  acceptLabsResult,
+  assertFullLabsCoverage,
   labsRunMedianTimes,
   labsRunNames,
   timingModeDifferences,
@@ -39,7 +41,13 @@ test('pins manual release comparisons while preserving push and PR baselines', (
 });
 
 function savedFixture() {
-  const expected = { version: '0.1.0', sha256: 'exact-package-digest', suite: 'full', blocks: 8 };
+  const expected = {
+    version: '0.1.0',
+    sha256: 'exact-package-digest',
+    suite: 'full',
+    blocks: 8,
+    samplingPolicy: 'adaptive' as const,
+  };
   const manifest = {
     ...expected,
     labsVersion: '0.9.0',
@@ -67,7 +75,11 @@ test('retains the timing guard for benchmark inputs while allowing standalone in
     'benches/fixtures/fonts/inter.json',
     'benches/src/runtime.ts',
     'benches/package.json',
+    'benches/scripts/run-package-labs.mts',
+    'benches/scripts/support/labs-result.mts',
     'pnpm-lock.yaml',
+    'pnpm-workspace.yaml',
+    'patches/@pmndrs__labs@0.9.0.patch',
     'benches/labs/package/other.profile.mts',
   ]) {
     assert.throws(() => assertPackageLabsHarnessUnchanged(`${inspectors}${input}\n`), /harness changed/u);
@@ -77,6 +89,9 @@ test('retains the timing guard for benchmark inputs while allowing standalone in
 test('accepts saved timings only for the exact package and matching benchmark environment', () => {
   const { expected, manifest, result } = savedFixture();
   assert.doesNotThrow(() => validateSavedPackageLabs(manifest, result, expected));
+  assert.doesNotThrow(() =>
+    validateSavedPackageLabs({ ...manifest, baselineAvailability: 'published-no-outlines' }, result, expected),
+  );
   assert.throws(
     () => validateSavedPackageLabs(manifest, result, { ...expected, sha256: 'another-package' }),
     /does not match/u,
@@ -84,11 +99,131 @@ test('accepts saved timings only for the exact package and matching benchmark en
   assert.throws(() => validateSavedPackageLabs(manifest, result, { ...expected, suite: 'smoke' }), /does not match/u);
   assert.throws(() => validateSavedPackageLabs(manifest, result, { ...expected, blocks: 4 }), /does not match/u);
   assert.throws(
+    () => validateSavedPackageLabs(manifest, result, { ...expected, samplingPolicy: 'single-call' }),
+    /does not match/u,
+  );
+  assert.throws(
+    () => validateSavedPackageLabs({ ...manifest, samplingPolicy: undefined }, result, expected),
+    /does not match/u,
+  );
+  assert.throws(
     () => validateSavedPackageLabs({ ...manifest, profiling: { profileTag: '@target' } }, result, expected),
     /Diagnostic profiling results cannot be reused/u,
   );
   result.hardware.cpu = 'different CPU';
   assert.throws(() => validateSavedPackageLabs(manifest, result, expected), /do not compare/u);
+});
+
+test('fixed-policy saved reuse requires its digest even when an untracked dependency patch changes', () => {
+  const { expected, manifest, result } = savedFixture();
+  const fixedExpected = { ...expected, samplingPolicy: 'single-call' as const };
+  const fixedManifest = { ...manifest, samplingPolicy: 'single-call' as const };
+  const fixedResult = {
+    ...result,
+    files: [
+      {
+        file: 'fixture.bench.ts',
+        benchmarks: [
+          { runs: [{ name: 'fixture', stats: { plan: { batch: false }, blocks: { medians: Array(8).fill(100) } } }] },
+        ],
+      },
+    ],
+  };
+  assert.doesNotThrow(() => validateSavedPackageLabs(fixedManifest, fixedResult, fixedExpected));
+  const previousDirectory = process.cwd();
+  const directory = mkdtempSync(join(tmpdir(), 'glyph-labs-fixed-reuse-'));
+  try {
+    execFileSync('git', ['init', '--quiet', directory]);
+    process.chdir(directory);
+    mkdirSync('benches/labs/package', { recursive: true });
+    mkdirSync('patches', { recursive: true });
+    writeFileSync('benches/labs/package/fixture.bench.ts', 'same benchmark');
+    execFileSync('git', ['add', 'benches/labs/package/fixture.bench.ts']);
+    execFileSync('git', [
+      '-c',
+      'user.name=Protocol Test',
+      '-c',
+      'user.email=protocol@example.test',
+      'commit',
+      '--quiet',
+      '-m',
+      'fixture',
+    ]);
+    const oldCommit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    writeFileSync('patches/@pmndrs__labs@0.9.0.patch', 'original untracked patch');
+    const saved = { ...fixedManifest, harnessDigest: packageLabsHarnessDigest() };
+    const persistedResult = { ...fixedResult, git: { commit: oldCommit } };
+    assert.doesNotThrow(() => validateSavedPackageLabs(saved, persistedResult, fixedExpected));
+    writeFileSync('patches/@pmndrs__labs@0.9.0.patch', 'changed untracked patch');
+    assert.throws(() => validateSavedPackageLabs(saved, persistedResult, fixedExpected), /digest changed/u);
+    const withoutDigest: Record<string, unknown> = { ...saved };
+    delete withoutDigest.harnessDigest;
+    assert.throws(
+      () => validateSavedPackageLabs(withoutDigest, persistedResult, fixedExpected),
+      /requires a matching/u,
+    );
+  } finally {
+    process.chdir(previousDirectory);
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('full suite enforces exact declared baseline identities, including published outline absence', () => {
+  const ordinary: {
+    file: string;
+    groupName: string;
+    alias: string;
+    runs: { name: string; args: Record<string, unknown>; error?: string }[];
+  }[] = Array.from({ length: 143 }, (_, index) => ({
+    file: 'fixture.bench.ts',
+    groupName: 'fixture',
+    alias: `workload ${String(index)}`,
+    runs: [{ name: `workload ${String(index)}`, args: {} }],
+  }));
+  const outlines = [
+    'copy per-glyph metrics with outlines after text change',
+    'read every outline from an unchanged copy',
+  ].map((name) => ({
+    file: 'outlines.bench.ts',
+    groupName: 'glyph outlines',
+    alias: name,
+    runs: [{ name, args: {} }],
+  }));
+  const result = (items: typeof ordinary) => ({
+    files: items.map(({ file, groupName, alias, runs }) => ({ file, benchmarks: [{ groupName, alias, runs }] })),
+  });
+  const candidate = result([...ordinary, ...outlines]);
+  const full = result([...ordinary, ...outlines]);
+  const published = result(ordinary);
+  assert.doesNotThrow(() => assertFullLabsCoverage(candidate, full, 'complete'));
+  assert.doesNotThrow(() => assertFullLabsCoverage(candidate, published, 'published-no-outlines'));
+  const failedBaseline = result([
+    { ...ordinary[0]!, runs: [{ ...ordinary[0]!.runs[0]!, error: 'older API failed check' }] },
+    ...ordinary.slice(1),
+    ...outlines,
+  ]);
+  assert.doesNotThrow(() => assertFullLabsCoverage(candidate, failedBaseline, 'complete'));
+  assert.equal(acceptLabsResult(failedBaseline, 'baseline').length, 1);
+  assert.throws(() => assertFullLabsCoverage(candidate, published, 'complete'), /coverage mismatch/u);
+  assert.throws(
+    () => assertFullLabsCoverage(candidate, result(ordinary.slice(1)), 'published-no-outlines'),
+    /coverage mismatch/u,
+  );
+  assert.throws(
+    () => assertFullLabsCoverage(candidate, result([...ordinary.slice(1), ...outlines]), 'complete'),
+    /coverage mismatch/u,
+  );
+  assert.throws(
+    () => assertFullLabsCoverage(result([...ordinary.slice(1), ...outlines]), full, 'complete'),
+    /145 distinct/u,
+  );
+  const wrongOutlines = result([...ordinary, outlines[0]!]);
+  assert.throws(() => assertFullLabsCoverage(candidate, wrongOutlines, 'published-no-outlines'), /coverage mismatch/u);
+  const unexpected = { ...ordinary[0]!, alias: 'unexpected', runs: [{ name: 'unexpected', args: {} }] };
+  assert.throws(
+    () => assertFullLabsCoverage(candidate, result([...ordinary.slice(1), ...outlines, unexpected]), 'complete'),
+    /coverage mismatch/u,
+  );
 });
 
 test('saved timing digests track actual edited, added, removed and fixture bytes', () => {
@@ -100,13 +235,16 @@ test('saved timing digests track actual edited, added, removed and fixture bytes
     process.chdir(directory);
     mkdirSync('benches/labs/package', { recursive: true });
     mkdirSync('benches/fixtures', { recursive: true });
+    mkdirSync('patches', { recursive: true });
     const benchmark = 'benches/labs/package/example.bench.ts';
     const inspector = 'benches/labs/package/edit-sized-publication.profile.mts';
     const fixture = 'benches/fixtures/font with spaces.glb';
+    const patch = 'patches/@pmndrs__labs@0.9.0.patch';
     writeFileSync(benchmark, 'original benchmark');
     writeFileSync(inspector, 'standalone inspector');
     writeFileSync(fixture, Buffer.from([0, 1, 255]));
-    execFileSync('git', ['add', '-f', benchmark, inspector, fixture]);
+    writeFileSync(patch, 'original dependency patch');
+    execFileSync('git', ['add', '-f', benchmark, inspector, fixture, patch]);
     const harnessDigest = packageLabsHarnessDigest();
     process.chdir('benches');
     assert.equal(
@@ -122,6 +260,7 @@ test('saved timing digests track actual edited, added, removed and fixture bytes
     for (const [path, original, changed] of [
       [benchmark, 'original benchmark', 'edited benchmark'],
       [fixture, Buffer.from([0, 1, 255]), Buffer.from([0, 2, 255])],
+      [patch, 'original dependency patch', 'edited dependency patch'],
     ] as const) {
       writeFileSync(path, changed);
       assert.throws(() => validateSavedPackageLabs(saved, result, expected), /digest changed/u);

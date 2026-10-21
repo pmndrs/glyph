@@ -1,0 +1,23 @@
+{
+  "scope": "Exact later addendum corrects categorical no-E2-gain claim; original reports remain byte-identical. Root independently recomputed all145 stored comparisons and matched every numerical row. No new timing.",
+  "copies": [
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/e6-e5-small-gain-admission-correction-high.md",
+      "destination": "reviews/e5-small-gain-admission-correction-high.md",
+      "bytes": 10215,
+      "sha256": "4701a1d62446453b51805d4666f735847bd6a570ee187a552668c6bf0d7fe089"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/recompute-e5-small-gain-admission.mjs",
+      "destination": "matrix/recompute-small-gain-admission.mjs.raw",
+      "bytes": 6689,
+      "sha256": "c9c05f49555d225d01c71937aff8d6787f684649aafdd06398f562e80c35e317"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/e5-small-gain-admission-all145-recomputed.json",
+      "destination": "matrix/threshold-free-comparisons.json",
+      "bytes": 239461,
+      "sha256": "2a266a7871f3bdc38eda7fbd7faa8a6ea62263784fe6e1f3ed4ae22920968a3b"
+    }
+  ]
+}

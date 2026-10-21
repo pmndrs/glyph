@@ -425,6 +425,19 @@ retain the commit-based guard. Framework workloads support installed versions wi
 through the existing authored-span fallback; the obsolete candidate-only assertion is removed. `benchmark:static-check`
 runs the shared benchmark static gates without building or timing, with optional `--format`.
 
+`benchmark:labs-package -- --sampling single-call` applies one explicit sampling policy to every workload and arm
+through the pinned Labs 0.9.0 pnpm patch. The default remains adaptive. Fixed runs save one call per sample and replay
+that policy across fresh blocks; every successful row must record `stats.plan.batch=false` and the requested finite
+block medians. Manifests and saved-result reuse bind the policy and dependency-patch content as well as the existing
+artifact, environment and harness identity. Old adaptive data cannot be relabelled as fixed data. The named
+`benchmark:labs-sampling-protocol-check` proves config/CLI/worker forwarding with eight isolated blocks and deterministic
+controls; its clock values are protocol evidence, not product performance. Labs' legacy 5% display labels do not set
+an admission floor: retain the full confidence intervals, p-values and shifts, including changes labelled neutral.
+Fixed full-suite baselines default to complete identity coverage. The explicit
+`--baseline-availability published-no-outlines` declaration accepts only the two documented outline identities absent
+from published 0.1.0; it does not weaken main/E2 coverage or change candidate sampling. The declaration is recorded in
+the arm manifest. Fixed-policy saved reuse always requires a matching harness digest, including actual patch bytes.
+
 The runner also renders the comparison as Markdown (`summary.md` under the output directory, appended to
 `$GITHUB_STEP_SUMMARY` when set): counts; a forest plot in a `diff` block, with each bench's Δ p50 inside its 95%
 confidence interval against a zero line, plus p and Labs' baseline and candidate distribution sparklines (GitHub

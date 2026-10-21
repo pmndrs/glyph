@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { closeSync, openSync, readSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { assertLabsResultHasNoErrors } from './labs-result.mts';
+import { assertLabsResultHasNoErrors, assertLabsSamplingPolicy, type LabsSamplingPolicy } from './labs-result.mts';
 
 const harnessPaths = [
   ':(top)benches/labs',
@@ -12,7 +12,12 @@ const harnessPaths = [
   ':(top)benches/fixtures',
   ':(top)benches/src',
   ':(top)benches/package.json',
+  ':(top)benches/scripts/run-package-labs.mts',
+  ':(top)benches/scripts/support/labs-result.mts',
+  ':(top)benches/scripts/support/saved-package-labs.mts',
   ':(top)pnpm-lock.yaml',
+  ':(top)pnpm-workspace.yaml',
+  ':(top)patches/@pmndrs__labs@0.9.0.patch',
 ];
 const inspectorPaths = new Set([
   'benches/labs/package/edit-sized-publication.profile.mts',
@@ -59,7 +64,13 @@ export function packageLabsHarnessDigest(): string {
 export function validateSavedPackageLabs(
   manifest: unknown,
   result: unknown,
-  expected: { readonly version: string; readonly sha256?: string; readonly suite: string; readonly blocks: number },
+  expected: {
+    readonly version: string;
+    readonly sha256?: string;
+    readonly suite: string;
+    readonly blocks: number;
+    readonly samplingPolicy: LabsSamplingPolicy;
+  },
 ): void {
   if (!isRecord(manifest) || !isRecord(manifest.candidate) || !isRecord(result)) {
     throw new Error('Saved candidate must include its original manifest and result');
@@ -71,6 +82,7 @@ export function validateSavedPackageLabs(
     manifest.labsVersion !== '0.9.0' ||
     manifest.suite !== expected.suite ||
     manifest.blocks !== expected.blocks ||
+    manifest.samplingPolicy !== expected.samplingPolicy ||
     result.blocks !== expected.blocks ||
     manifest.candidate.version !== expected.version ||
     expected.sha256 === undefined ||
@@ -89,6 +101,10 @@ export function validateSavedPackageLabs(
     throw new Error('Saved candidate CPU, architecture or Node version differs; do not compare cross-machine timings');
   }
   assertLabsResultHasNoErrors(result);
+  assertLabsSamplingPolicy(result, expected.samplingPolicy, expected.blocks);
+  if (expected.samplingPolicy === 'single-call' && !Object.hasOwn(manifest, 'harnessDigest')) {
+    throw new Error('Fixed-policy saved candidate requires a matching benchmark harness digest');
+  }
   if (Object.hasOwn(manifest, 'harnessDigest')) {
     if (
       typeof manifest.harnessDigest !== 'string' ||

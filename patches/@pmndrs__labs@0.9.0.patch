@@ -1,0 +1,75 @@
+diff --git a/dist/cli/cli.mjs b/dist/cli/cli.mjs
+index ef292d6ca7dd2238611f982705b12cf8f2120b44..a0ffed2f2ef0ed19dbff4955f5ca66dcb9729127 100755
+--- a/dist/cli/cli.mjs
++++ b/dist/cli/cli.mjs
+@@ -1238,6 +1238,7 @@ function runBench(file, nodeFlags, label, tune, tagFilter, resultFile) {
+ 			LABS_BLOCKS: String(tune.blocks ?? 8),
+ 			...tune.blockTime !== void 0 ? { LABS_BLOCK_TIME: String(tune.blockTime * 1e9) } : {},
+ 			...tune.minSamples !== void 0 ? { LABS_MIN_SAMPLES: String(tune.minSamples) } : {},
++			LABS_SAMPLING_POLICY: tune.samplingPolicy,
+ 			...tagFilter ? { LABS_GREP_TAGS: tagFilter } : {},
+ 			...resultFile ? { LABS_RESULT_FILE: resultFile } : {}
+ 		}
+@@ -1392,6 +1393,7 @@ async function runCLI(args) {
+ 	const benchTune = {
+ 		blockTime: config.blockTime,
+ 		minSamples: config.minSamples,
++		samplingPolicy: config.samplingPolicy,
+ 		blocks
+ 	};
+ 	const git = captureGitInfo(dirname(configPath));
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index 3256fe9e73a908be929b0976787c9c6ea201e647..ee364657e55e481e91e75090fc4c6f959c05e1f2 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -130,6 +130,8 @@ interface LabsConfig {
+   blockTime?: number;
+   /** Minimum samples per block. @default 20 */
+   minSamples?: number;
++  /** Sampling mode for every benchmark call. @default "adaptive" */
++  samplingPolicy?: "adaptive" | "single-call";
+   /** Mann-Whitney U significance level. @default 0.05 */
+   alpha: number;
+   /** Minimum |Hodges-Lehmann delta| required to flag a verdict. Filters environmental noise on identical code. @default 0.05 */
+diff --git a/dist/src-DNyOXr2d.mjs b/dist/src-DNyOXr2d.mjs
+index ae2209d4ec8ef176de4d8b2a5c17733b69de00f0..bc0b7313409b0318ebc1f0692a67098e6aad77d5 100644
+--- a/dist/src-DNyOXr2d.mjs
++++ b/dist/src-DNyOXr2d.mjs
+@@ -1162,12 +1162,14 @@ const assert = Object.assign(assertCondition, { equal });
+ //#endregion
+ //#region src/config.ts
+ function defineConfig(config) {
++	if (config.samplingPolicy !== void 0 && config.samplingPolicy !== "adaptive" && config.samplingPolicy !== "single-call") throw new TypeError(`Invalid Labs samplingPolicy: ${String(config.samplingPolicy)}`);
+ 	return {
+ 		benchMatch: "**/*.bench.ts",
+ 		nodeFlags: ["--allow-natives-syntax", "--expose-gc"],
+ 		resultsDir: ".labs",
+ 		blockTime: .5,
+ 		minSamples: 20,
++		samplingPolicy: "adaptive",
+ 		alpha: .05,
+ 		minDelta: .05,
+ 		snapshotTolerance: 1e-9,
+diff --git a/dist/worker.mjs b/dist/worker.mjs
+index c31b0fe017c36e93aea53484b6475f91f6ba21fe..6e3a603c79252e813f51e71facb7468ac90f4d43 100644
+--- a/dist/worker.mjs
++++ b/dist/worker.mjs
+@@ -5,13 +5,16 @@ import { readFileSync, rmSync, writeFileSync } from "node:fs";
+ import { join } from "node:path";
+ import { tmpdir } from "node:os";
+ //#region src/bench/worker.ts
+-/** Per-block budget (LABS_BLOCK_TIME, ns) and sample floor (LABS_MIN_SAMPLES). */
++/** Per-block budget, sample floor, and explicit sampling policy forwarded by the CLI. */
+ function parseTuneEnv() {
+ 	const blockTime = Number(process.env.LABS_BLOCK_TIME);
+ 	const minSamples = Number(process.env.LABS_MIN_SAMPLES);
++	const samplingPolicy = process.env.LABS_SAMPLING_POLICY ?? "adaptive";
++	if (samplingPolicy !== "adaptive" && samplingPolicy !== "single-call") throw new TypeError(`Invalid Labs samplingPolicy: ${samplingPolicy}`);
+ 	return {
+ 		...Number.isFinite(blockTime) && blockTime > 0 ? { min_cpu_time: blockTime } : {},
+-		...Number.isFinite(minSamples) && minSamples > 0 ? { min_samples: minSamples } : {}
++		...Number.isFinite(minSamples) && minSamples > 0 ? { min_samples: minSamples } : {},
++		...samplingPolicy === "single-call" ? { batch: false } : {}
+ 	};
+ }
+ const file = process.env.LABS_BENCH_FILE;

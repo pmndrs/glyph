@@ -20,3 +20,9 @@ bounded call-scoped row-view repair. Native Sol Medium owns that implementation;
 The [compact frontier](../planning/publication-frontier.md) keeps all seven families, preservation, exact-artifact
 comparisons and final browser/hero, memory, downstream and lifetime gates open. Parity is false, boost waves zero;
 #292→#301→#302→draft #310 remains held/unmerged, with no release, tag or demo merge.
+
+A later [threshold-free correction](../../../benches/reports/held-direct-operand-local-2026-10-21/reviews/e5-small-gain-admission-correction-high.md)
+withdraws the categorical no-E2-gain interpretation. Exact stored block medians yield five nominally favourable and
+30 adverse intervals excluding zero; Labs' 5% label threshold had hidden five favourable and sixteen adverse rows
+among neutral labels. Root reproduced all145 numerical comparisons. These unadjusted related-workload signals remain
+preserved with their uncertainty; whole-variant dense and memory regressions still prevent overall admission.

@@ -34,6 +34,9 @@ catalogs:
 overrides:
   brace-expansion@>=4.0.0 <5.0.9: ^5.0.9
 
+patchedDependencies:
+  '@pmndrs/labs@0.9.0': 1475111a563f675ba8de804b57a4a7500acad4f500771713dad8ad33b5be3002
+
 importers:
 
   .:
@@ -263,7 +266,7 @@ importers:
         version: 0.3.31
       '@pmndrs/labs':
         specifier: 0.9.0
-        version: 0.9.0
+        version: 0.9.0(patch_hash=1475111a563f675ba8de804b57a4a7500acad4f500771713dad8ad33b5be3002)
       '@rolldown/plugin-babel':
         specifier: 0.2.3
         version: 0.2.3(@babel/core@8.0.1)(@babel/runtime@7.29.7)(rolldown@1.1.5)(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13))
@@ -5530,7 +5533,7 @@ snapshots:
   '@oxlint/binding-win32-x64-msvc@1.75.0':
     optional: true
 
-  '@pmndrs/labs@0.9.0':
+  '@pmndrs/labs@0.9.0(patch_hash=1475111a563f675ba8de804b57a4a7500acad4f500771713dad8ad33b5be3002)':
     dependencies:
       '@clack/prompts': 1.8.1
       tsx: 4.23.13

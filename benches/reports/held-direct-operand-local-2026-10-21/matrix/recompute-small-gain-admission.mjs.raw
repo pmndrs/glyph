@@ -1,0 +1,159 @@
+#!/usr/bin/env node
+
+// Recompute saved Labs comparisons only. This script does not run benchmarks.
+// Usage: node recompute-e5-small-gain-admission.mjs baseline.json candidate.json summary.md stats.mjs output.json
+
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+
+const [baselinePath, candidatePath, summaryPath, statsPath, outputPath] = process.argv.slice(2);
+if (![baselinePath, candidatePath, summaryPath, statsPath, outputPath].every(Boolean)) {
+  throw new Error('Usage: node recompute-e5-small-gain-admission.mjs baseline.json candidate.json summary.md stats.mjs output.json');
+}
+
+const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+const inputs = Object.fromEntries(
+  [
+    ['baseline', baselinePath],
+    ['candidate', candidatePath],
+    ['summary', summaryPath],
+    ['statsModule', statsPath],
+    ['script', process.argv[1]],
+  ].map(([name, path]) => [name, { path, sha256: sha256(readFileSync(path)) }]),
+);
+
+const baseline = JSON.parse(readFileSync(baselinePath, 'utf8'));
+const candidate = JSON.parse(readFileSync(candidatePath, 'utf8'));
+const summary = readFileSync(summaryPath, 'utf8');
+// The installed Labs 0.9.0 bundle exports classify and median under these names.
+// Its SHA above pins the precise implementation used by this receipt.
+const { n: classify, i: median } = await import(pathToFileURL(statsPath).href);
+if (typeof classify !== 'function' || typeof median !== 'function') {
+  throw new Error('Expected installed Labs classify/median exports');
+}
+
+const identity = (file, benchmark, run) => ({
+  file: file.file,
+  group: benchmark.groupName,
+  name: run.name,
+  args: run.args,
+});
+const identityKey = (value) => JSON.stringify([value.file, value.group, value.name, value.args]);
+const flatten = (data) =>
+  data.files.flatMap((file) =>
+    file.benchmarks.flatMap((benchmark) =>
+      benchmark.runs.map((run) => ({
+        identity: identity(file, benchmark, run),
+        kind: run.stats.kind,
+        batch: run.stats.plan.batch,
+        blockMediansNs: run.stats.blocks.medians,
+      })),
+    ),
+  );
+const baselineRows = flatten(baseline);
+const candidateRows = flatten(candidate);
+const candidateByIdentity = new Map(candidateRows.map((row) => [identityKey(row.identity), row]));
+if (candidateByIdentity.size !== candidateRows.length) throw new Error('Duplicate candidate identity');
+
+const printedRows = summary
+  .split('\n')
+  .filter((line) => /^\| (?:🔴 slower|🟢 faster|neutral) \|/.test(line))
+  .map((line) => {
+    const cells = line.split('|').slice(1, -1).map((cell) => cell.trim());
+    return { status: cells[0], name: cells[1], p: cells[6], ci: cells[7] };
+  });
+const printedByName = new Map(printedRows.map((row) => [row.name, row]));
+if (printedByName.size !== printedRows.length) throw new Error('Duplicate printed workload name');
+
+const formatP = (p) => (p < 0.001 ? '<.001' : p.toFixed(3).replace(/^0/, ''));
+const formatPercent = (fraction) => `${fraction > 0 ? '+' : ''}${(fraction * 100).toFixed(1)}`;
+const formatCI = (low, high) => `${formatPercent(low)}..${formatPercent(high)}%`;
+const printedStatus = (verdict) =>
+  verdict === 'slower' ? '🔴 slower' : verdict === 'faster' ? '🟢 faster' : 'neutral';
+
+const rows = baselineRows.map((base) => {
+  const key = identityKey(base.identity);
+  const next = candidateByIdentity.get(key);
+  const printed = printedByName.get(base.identity.name);
+  if (!next || !printed) throw new Error(`Missing candidate or printed row: ${key}`);
+  const comparison = classify(base.blockMediansNs, next.blockMediansNs);
+  const expected = {
+    status: printedStatus(comparison.verdict),
+    p: formatP(comparison.p),
+    ci: formatCI(comparison.ciLow, comparison.ciHigh),
+  };
+  const checks = {
+    identity: identityKey(next.identity) === key,
+    mode: base.kind === next.kind && base.batch === next.batch,
+    printedStatus: printed.status === expected.status,
+    printedP: printed.p === expected.p,
+    printedCI: printed.ci === expected.ci,
+  };
+  return {
+    identity: base.identity,
+    baseline: {
+      kind: base.kind,
+      batch: base.batch,
+      blockMediansNs: base.blockMediansNs,
+      medianOfBlockMediansNs: median(base.blockMediansNs),
+    },
+    candidate: {
+      kind: next.kind,
+      batch: next.batch,
+      blockMediansNs: next.blockMediansNs,
+      medianOfBlockMediansNs: median(next.blockMediansNs),
+    },
+    labs: {
+      verdictWithDefaultFivePercentGate: comparison.verdict,
+      mannWhitneyP: comparison.p,
+      hodgesLehmannRelativeShift: comparison.hl,
+      exactNominal95CI: [comparison.ciLow, comparison.ciHigh],
+      minDelta: comparison.minDelta,
+      cliffDelta: comparison.d,
+    },
+    printed,
+    expectedPrinted: expected,
+    checks,
+  };
+});
+
+const checks = {
+  baselineRows: baselineRows.length,
+  candidateRows: candidateRows.length,
+  printedRows: printedRows.length,
+  uniquePrintedNames: printedByName.size,
+  checkedRows: rows.length,
+  identityMatches: rows.filter((row) => row.checks.identity).length,
+  modeMatches: rows.filter((row) => row.checks.mode).length,
+  printedStatusMatches: rows.filter((row) => row.checks.printedStatus).length,
+  printedPMatches: rows.filter((row) => row.checks.printedP).length,
+  printedCIMatches: rows.filter((row) => row.checks.printedCI).length,
+};
+const counts = {
+  labsFaster: rows.filter((row) => row.labs.verdictWithDefaultFivePercentGate === 'faster').length,
+  labsSlower: rows.filter((row) => row.labs.verdictWithDefaultFivePercentGate === 'slower').length,
+  labsNeutral: rows.filter((row) => row.labs.verdictWithDefaultFivePercentGate === 'neutral').length,
+  nominalFavorableCI: rows.filter((row) => row.labs.exactNominal95CI[1] < 0).length,
+  nominalAdverseCI: rows.filter((row) => row.labs.exactNominal95CI[0] > 0).length,
+  nominalCISpansZero: rows.filter(
+    (row) => row.labs.exactNominal95CI[0] <= 0 && row.labs.exactNominal95CI[1] >= 0,
+  ).length,
+};
+
+const receipt = {
+  schema: 'glyph-e5-small-gain-admission-recomputation-v1',
+  method:
+    'Installed Labs classify on saved independent block medians; exact nominal Mann-Whitney p and Hodges-Lehmann ratio CI. No timing, new inference algorithm, multiple-comparison adjustment or five-percent minimum gain is added.',
+  inputs,
+  checks,
+  counts,
+  rows,
+};
+writeFileSync(outputPath, `${JSON.stringify(receipt, null, 2)}\n`);
+if (
+  Object.values(checks).some((value) => value !== rows.length) ||
+  counts.nominalFavorableCI + counts.nominalAdverseCI + counts.nominalCISpansZero !== rows.length
+) {
+  throw new Error('Saved comparison cross-check failed; inspect the written receipt');
+}

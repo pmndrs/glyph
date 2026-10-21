@@ -5,6 +5,14 @@ once and reused byte-for-byte against main, published 0.1.0 and E2 in complete e
 classifies 0 faster, 14 slower and 131 neutral workloads, with no exclusions. Dense 512 and 1,024 regress by 5.8% and
 10.1% in the block-median estimator. Parity remains unproved; post-parity boost waves completed: zero.
 
+**Admission correction:** those Labs labels apply a 5% magnitude threshold. The later independent
+[all-row correction](reviews/e5-small-gain-admission-correction-high.md), reproduced by root from the saved eight-block
+medians, finds five nominally favourable and 30 adverse intervals excluding zero, with 110 spanning zero. Five favourable
+and sixteen adverse rows had been labelled neutral. The former categorical “no validated E2 gain” claim is withdrawn.
+These unadjusted workload signals do not establish component causality or whole-variant acceptance; they remain
+preserved in the current combination. [Unrounded results](matrix/threshold-free-comparisons.json) and the
+[reproducer](matrix/recompute-small-gain-admission.mjs.raw) prevent rounded negative zero or label counts from hiding them.
+
 | Complete dense operation              | Main p50/p95 ms | Published p50/p95 ms | E2 p50/p95 ms   | E5 p50/p95 ms   |
 | ------------------------------------- | --------------- | -------------------- | --------------- | --------------- |
 | Rewrite 512 labels                    | 7.098 / 7.876   | 7.487 / 8.096        | 9.385 / 10.538  | 10.019 / 11.178 |
@@ -58,3 +66,9 @@ whole-operation matrix; a partial supported gain can be retained without an arbi
 The original [packet index](packet-index.md) and [copy provenance](copy-provenance.json) are exact staged copies;
 their pending architecture-report note is superseded by the completed reports above, authenticated in
 [supplemental provenance](supplemental-copy-provenance.json). The stack remains held and unmerged.
+
+The later [sampling protocol proof and reviews](sampling-protocol/fixed-sampling-high-correction-review.md) establish
+the explicit single-call policy for the next E6 series. They do not change or pool the E5 adaptive observations above.
+The initial review's missing-digest and baseline-coverage findings remain preserved beside their corrected review.
+The archived statistics reproducer uses a `.mjs.raw` suffix to preserve exact source bytes; copy it to a `.mjs` path
+before supplying the saved JSON inputs and the authenticated installed Labs statistics module.

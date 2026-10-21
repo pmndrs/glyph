@@ -1,0 +1,11 @@
+{
+  "patchSha256": "1475111a563f675ba8de804b57a4a7500acad4f500771713dad8ad33b5be3002",
+  "registeredPatchHash": "1475111a563f675ba8de804b57a4a7500acad4f500771713dad8ad33b5be3002",
+  "unchangedPackageResolutions": true,
+  "unchangedOtherImporters": true,
+  "unchangedOtherSnapshots": true,
+  "benchmarkSourceUnchanged": true,
+  "historicalFullCandidateIdentities": 145,
+  "historicalSource": "E5 saved full candidate; source files remain unchanged",
+  "scope": "Static protocol evidence, no E6 timings"
+}

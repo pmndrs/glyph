@@ -118,6 +118,26 @@ group replace per-operand slice-array construction, retaining the same Codec loo
 and fallback. E4/277 is immediate whole-source fallback; E2 remains the measured latency control. No later-source
 performance claim, extra profile or timing loop is authorized. Parity false; boost waves0; held/unmerged.
 
+**Correction and current E6 boundary:** Labs' 5% label threshold hid five favourable and sixteen adverse E5-versus-E2
+intervals among the 131 neutral labels. Root independently reproduced all145 exact statistics;
+[the correction and unrounded evidence](../../../benches/reports/held-direct-operand-local-2026-10-21/reviews/e5-small-gain-admission-correction-high.md)
+withdraw the categorical no-gain claim. Nominal counts without that floor:5favourable/30adverse/110intervals spanning0;
+multiple-workload uncertainty and whole-variant dense/memory regressions remain. Preserve partial signals, not just labels.
+E6 row-view repair is native/strict-static/replay green and independently reviewed; full package passes1142Node and593Rust
+result occurrences,2Rust ignored. Archive `d2f7a01f…`, shipping/named `a1cc22c7…`/`94d12b02…`; shaper1629518raw/609071gzipB.
+All947shipped dist members match after55/55minimum-peer checks; CPUrenderer-recovery and71phase allocator gates pass.
+Requested-live/peak/pages41848831/42049147/774 matchE5. No E6 elapsed run exists yet.
+
+Fresh High proves prior timing-mode exclusions come from Labs0.9.0 adaptive batching, not different callbacks.
+Medium's pinned pnpm patch adds explicit `--sampling single-call` across all145identities/allarms/eightblocks, using
+the same measurement loop and unchanged callbacks; eight-block protocol proof/static/11comparison tests pass and
+High re-review clears mandatory-digest and exact-coverage fixes. Old adaptive samples cannot be relabelled/reused as
+fixed-policy data. The two published
+outline rows are API-unsupported, separately unavailable. Root restored9formatted E4Markdown copies from authenticated
+originals and verified all47copies; runtime bytes unchanged. New timing freeze and root release follow protocol review,
+docs/attestation/real-stack submission and a fresh Glyph-source/dist bridge. Browser/hero, whole-app memory and final
+payload/performance acceptance remain open; parityfalse,boost0. No new profile selected.
+
 ### Completed current-machine rerun — 19 October 2026
 
 Runtime source `6987418c`, fresh archive `2e434224…`, shipping shaper `244078b1…` and executable-matching named shaper `cfb3213f…` are authenticated. Main remains `4e25a96a` after fetch. The original `60d3c26f` checkpoint is an ancestor of the preserved pre-rebase branch, not the rebased current head; [ancestry proof](../../../benches/reports/held-ropes-local-2026-10-19/ancestry.json) records both. All layers remain held/unmerged, #310 draft.

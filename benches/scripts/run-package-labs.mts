@@ -1,7 +1,7 @@
 /* @workflow {
   "name": "benchmark:labs-package",
   "summary": "Benchmark common installed-package workflows by default, select a focused/full pmndrs/labs suite, or capture a tagged diagnostic CPU profile.",
-  "requirements": "Network access for registry specs, or one or two packed @pmndrs/glyph .tgz artifacts. Never builds workspace source. --saved-candidate <report-directory> reuses an exact artifact's saved candidate instead of timing it again, with matching environment checks. Accepts --suite smoke|layout|measure|glyphs|publication|spans|batch|style|reflow|stress|cold|edit|assignment|edit-sized|multi-owner|bulk-1024-profile|full. Optional candidate-only diagnostic profiling requires both --profile-tag <@tag> and --cpu-profile-output <directory>; it selects that Labs tag and cannot be combined with --baseline or --saved-candidate. Profiled timings are diagnostic and are not a normal performance comparison.",
+  "requirements": "Network access for registry specs, or one or two packed @pmndrs/glyph .tgz artifacts. Never builds workspace source. --saved-candidate <report-directory> reuses an exact artifact's saved candidate instead of timing it again, with matching environment and sampling checks. Accepts --suite smoke|layout|measure|glyphs|publication|spans|batch|style|reflow|stress|cold|edit|assignment|edit-sized|multi-owner|bulk-1024-profile|full. --sampling adaptive|single-call defaults to adaptive; use single-call for every arm of a fixed-policy comparison. Full baselines require all 145 candidate identities unless --baseline-availability published-no-outlines explicitly permits the two documented outline omissions. Optional candidate-only diagnostic profiling requires both --profile-tag <@tag> and --cpu-profile-output <directory>; it selects that Labs tag and cannot be combined with --baseline or --saved-candidate. Profiled timings are diagnostic and are not a normal performance comparison.",
   "writes": "Ignored Labs results, an artifact manifest, and a Markdown summary.md (also appended to $GITHUB_STEP_SUMMARY when set) under --output (default .cache/labs-package); optional V8 CPU profiles are written under --cpu-profile-output."
 } */
 import { createHash } from 'node:crypto';
@@ -13,9 +13,13 @@ import { fileURLToPath } from 'node:url';
 
 import {
   acceptLabsResult,
+  assertFullLabsCoverage,
+  assertLabsSamplingPolicy,
   labsRunNames,
   labsRunMedianTimes,
   type LabsResultRole,
+  type LabsBaselineAvailability,
+  type LabsSamplingPolicy,
   readLabsResult,
   timingModeDifferences,
   timingModeMismatches,
@@ -34,6 +38,8 @@ interface Options {
   readonly cpuProfileOutput?: string;
   readonly suite: PackageLabsSuite;
   readonly savedCandidate?: string;
+  readonly samplingPolicy: LabsSamplingPolicy;
+  readonly baselineAvailability: LabsBaselineAvailability;
 }
 
 interface InstalledArtifact {
@@ -75,6 +81,7 @@ try {
       ...artifactIdentity(candidate),
       suite: options.suite,
       blocks: options.blocks,
+      samplingPolicy: options.samplingPolicy,
     });
     await mkdir(labsResults, { recursive: true });
     await copyFile(resolve(savedCandidate, 'candidate.json'), resolve(labsResults, `${candidateRunName}.json`));
@@ -105,6 +112,10 @@ try {
     throw new Error(
       `Diagnostic profile tag ${options.profileTag} selected ${selectedBenchmarks} benchmarks; expected one`,
     );
+  }
+  assertLabsSamplingPolicy(candidateRun.result, options.samplingPolicy, options.blocks);
+  if (options.suite === 'full') {
+    assertFullLabsCoverage(candidateRun.result, baselineRun?.result, options.baselineAvailability);
   }
 
   let comparison: string | undefined;
@@ -138,6 +149,8 @@ try {
         harnessDigest,
         blocks: options.blocks,
         suite: options.suite,
+        samplingPolicy: options.samplingPolicy,
+        baselineAvailability: options.baselineAvailability,
         baseline: baseline === undefined ? undefined : artifactIdentity(baseline),
         candidate: artifactIdentity(candidate),
         savedCandidate,
@@ -215,6 +228,20 @@ async function parseOptions(argv: readonly string[]): Promise<Options> {
     values.set(name.slice(2), value);
   }
   const suite = requirePackageLabsSuite(values.get('suite') ?? 'smoke');
+  const samplingPolicy = values.get('sampling') ?? 'adaptive';
+  if (samplingPolicy !== 'adaptive' && samplingPolicy !== 'single-call') {
+    throw new Error('--sampling must be adaptive or single-call');
+  }
+  const baselineAvailability = values.get('baseline-availability') ?? 'complete';
+  if (baselineAvailability !== 'complete' && baselineAvailability !== 'published-no-outlines') {
+    throw new Error('--baseline-availability must be complete or published-no-outlines');
+  }
+  if (baselineAvailability !== 'complete' && !values.has('baseline')) {
+    throw new Error('--baseline-availability requires --baseline');
+  }
+  if (baselineAvailability !== 'complete' && suite !== 'full') {
+    throw new Error('--baseline-availability published-no-outlines requires --suite full');
+  }
   const blocks = Number(values.get('blocks') ?? (suite === 'smoke' ? 4 : 8));
   if (!Number.isSafeInteger(blocks) || blocks < 2) throw new RangeError('--blocks must be an integer of at least 2');
   const profileTag = values.get('profile-tag');
@@ -239,6 +266,8 @@ async function parseOptions(argv: readonly string[]): Promise<Options> {
     blocks,
     output: values.get('output') ?? '.cache/labs-package',
     suite,
+    samplingPolicy,
+    baselineAvailability,
     ...(profileTag === undefined ? {} : { profileTag }),
     ...(cpuProfileOutput === undefined ? {} : { cpuProfileOutput }),
     ...(values.has('baseline') ? { baseline: values.get('baseline')! } : {}),
@@ -340,12 +369,14 @@ async function runLabs(
         GLYPH_LABS_PACKAGE_ROOT: packageRoot,
         GLYPH_LABS_ARTIFACT_ROLE: role,
         GLYPH_LABS_CPU_PROFILE_OUTPUT: cpuProfileOutput,
+        GLYPH_LABS_SAMPLING_POLICY: options.samplingPolicy,
       },
     );
   } catch (error) {
     if (role === 'candidate' || !(await exists(resultPath))) throw error;
   }
   const result = await readLabsResult(resultPath);
+  assertLabsSamplingPolicy(result, options.samplingPolicy, blocks);
   return { notComparable: acceptLabsResult(result, role), result };
 }
 
