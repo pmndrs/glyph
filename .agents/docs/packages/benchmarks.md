@@ -949,6 +949,13 @@ The Presentation workload probe checks Billboard labels at its authored density 
 
 ## Package scripts
 
+`benchmark:renderer-recovery -- --artifact <archive.tgz> --expected-sha256 <sha256> --output <new-directory>`
+checks the installed packed package through the default Three renderer without a GPU or timing run. A 1,024-label
+Bitmap fixture rejects a warm publication after decoding, proves accepted host bytes remain unchanged, and retries
+only at the explicit checkpoint. Prepared queries, borrowed-view expiry and exact cold host output are independent
+checks. The cold oracle is left untouched; installed JS/Wasm hashes are checked before and after. This is a CPU
+renderer-recovery gate, not browser/GPU lifetime or visual acceptance.
+
 `benchmark:application-memory-observe -- --artifact <archive.tgz> --output <directory>` observes an installed package without timing its workload. Node mode alternates eight 1024-label scene publications and checks final output against independent cold controls; browser mode forwards the existing command after `--`. Darwin physical-footprint evidence records complete non-atomic process-family sweeps. Checkpoint JS heap, RSS, Wasm capacity and process-family footprint are distinct views, never a sum or an exact simultaneous peak. Failure paths retain original command errors and observations, terminate known descendants, and remove temporary consumers only after cleanup is proved. Unknown surviving identities retain the consumer for inspection.
 
 The retained-upload probe can write an optional `GLYPH_RETAINED_UPLOAD_DELIVERY_PROOF` proof for actual installed entry requests and served Wasm bytes. Its framebuffer digest is a noncryptographic regression oracle, not retained full pixel arrays. Browser cleanup is bounded; partial initialization and shutdown failures retain their original causes. The four-archive [19 October evidence](../../../benches/reports/held-ropes-local-2026-10-19/README.md) records fixture, memory, delivery and measurement limits.
