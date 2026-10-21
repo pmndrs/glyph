@@ -1,0 +1,52 @@
+{
+  "observedAtUtc": "2026-10-21T00:29:50.720855+00:00",
+  "source": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/bitmap-native-ledger-direct-gate/native-work-ledger.json",
+  "sha256": "ceb89ce241102c79f055837a2be463f49c0c118c8c42dd3424abdfdc1dad3730",
+  "eventCount": 6157,
+  "result": "exact-byte-pass",
+  "nativeScalar": true,
+  "scope": "native direct one-entry engine/frame replay; excludes batch descriptor processing, allocation, host buffers, timing, GC, and seven-family parity",
+  "publications": [
+    {
+      "phase": "forward",
+      "direct": {
+        "admissionAttempts": 1,
+        "admissionRejections": 0,
+        "candidateAttempts": 1,
+        "candidateMisses": 0,
+        "completedPreparations": 1,
+        "elidedFullFieldWrites": 175104,
+        "f32OperandLoads": 138240,
+        "locatorBytes": 184320,
+        "selectedRows": 9216,
+        "u32OperandLoads": 36864,
+        "visitedSourceRows": 10240
+      },
+      "actualGatherF32Writes": 0,
+      "actualGatherU32Writes": 0,
+      "comparisonBytes": 589824,
+      "emittedWriteBytes": 368640
+    },
+    {
+      "phase": "reverse",
+      "direct": {
+        "admissionAttempts": 1,
+        "admissionRejections": 0,
+        "candidateAttempts": 1,
+        "candidateMisses": 0,
+        "completedPreparations": 1,
+        "elidedFullFieldWrites": 175104,
+        "f32OperandLoads": 138240,
+        "locatorBytes": 184320,
+        "selectedRows": 9216,
+        "u32OperandLoads": 36864,
+        "visitedSourceRows": 10240
+      },
+      "actualGatherF32Writes": 0,
+      "actualGatherU32Writes": 0,
+      "comparisonBytes": 589824,
+      "emittedWriteBytes": 368640
+    }
+  ],
+  "comparisonScope": "Compared with authenticated E4 warm actual writes97280f32+20480u32, nowzero. direct.elidedFullFieldWrites175104 is hypothetical full-declaredslots and NOT actual deleted baselinewrites. Direct loads138240f32+36864u32 move/repeat source reads. Metadata/locator/allocation/peak work remains. No nettraffic or latency claim."
+}

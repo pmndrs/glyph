@@ -1,0 +1,76 @@
+{
+  "schema": "glyph-peer-check-result-v1",
+  "recordedUtc": "2026-10-21T01:16:36.391623+00:00",
+  "workflow": "glyph:peer-check",
+  "argv": ["/Users/mini/.local/bin/mise", "exec", "--", "pnpm", "scripts", "run", "glyph:peer-check"],
+  "started": "2026-10-21T01:14:50.770452+00:00",
+  "finished": "2026-10-21T01:15:58.918991+00:00",
+  "exit": 0,
+  "peerFloorVersions": {
+    "@react-three/fiber": "9.7.0",
+    "@tresjs/core": "5.8.3",
+    "@typegpu/gl": "0.12.4",
+    "@typegpu/three": "0.12.1",
+    "react": "19.0.0",
+    "three": "0.185.0",
+    "typegpu": "0.12.5",
+    "vue": "3.5"
+  },
+  "browserOption": false,
+  "typecheckProjects": [
+    "tsconfig.slug-shaders.json",
+    "tsconfig.types.json",
+    "tsconfig.dist-peer-declarations.json",
+    "glyph-example-raster tsconfig.json"
+  ],
+  "nodeTestCount": 55,
+  "nodePass": 55,
+  "nodeFail": 0,
+  "nodeSkipped": 0,
+  "stderrNote": "7 lines contain ordinary optimized Rust build profile completion summaries; no build failure.",
+  "receipts": {
+    "result.json": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/peer-check-final-01/result.json",
+      "sha256": "80b0f17a67d7b8824d64cad1ab35655b788e57171a0f9718ee3fcc42df1ef569"
+    },
+    "start.json": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/peer-check-final-01/start.json",
+      "sha256": "5edb86b382174e85a81a8641e6165d54b8466ea61c28d29ccc51ff3ba437284e"
+    },
+    "stdout.log": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/peer-check-final-01/stdout.log",
+      "sha256": "1e696b6211ed3d26a6adfcbf347c8da87a8e841bf428ff0c79feedc5f65c4406"
+    },
+    "stderr.log": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/peer-check-final-01/stderr.log",
+      "sha256": "ba58a17d03cfe1facd60b4740913bf7fcc27bb57d9c53c8f2154f8dc1bbe43ea"
+    }
+  },
+  "beforeBridge": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/peer-check-artifact-bridge-before.json",
+    "sha256": "190179049335700d1c51d09ad9ff5f9992c1b2b813c9e4764146a78aea49cf8e"
+  },
+  "afterBridge": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/peer-check-artifact-bridge-after.json",
+    "sha256": "651f6592ae7ed0639596fddb24513acf2e34d48443eb59c53a3f3afde9daca37"
+  },
+  "artifactBridge": {
+    "candidateArchiveSha256": "83949860ae65b99fe6d7471b9782398234852668b54412870fafa81878c366a3",
+    "archiveUnchanged": true,
+    "shippedDistMemberCount": 947,
+    "localDistCount": 952,
+    "missing": [],
+    "mismatched": [],
+    "changedSinceBefore": [],
+    "allowedUnshippedExtras": [
+      ".tsbuildinfo",
+      "internal/raster-baker-profile.d.ts",
+      "internal/raster-baker-profile.d.ts.map",
+      "internal/raster-baker-profile.js",
+      "internal/raster-baker-profile.js.map"
+    ],
+    "validated672SourceInputsExact": true,
+    "reviewedRust10Exact": true
+  },
+  "scope": "Workflow rebuilt the package as expected, installed minimum declared peer versions in a temporary consumer, typechecked declarations and example, and ran the selected non-browser integration/unit tests. Exact candidate tarball was not repacked or modified."
+}

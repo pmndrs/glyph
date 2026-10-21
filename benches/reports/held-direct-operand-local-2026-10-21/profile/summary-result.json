@@ -1,0 +1,32 @@
+{
+  "argv": [
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "benchmark:cpu-profile-summary",
+    "--",
+    "--profile",
+    "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/current1024-profile-candidate/cpu-profile.json",
+    "--manifest",
+    "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/current1024-profile-candidate/manifest.json",
+    "--artifact",
+    "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "--wasm-url",
+    "wasm://wasm/006e44da",
+    "--ancestry",
+    "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/current1024-profile-candidate/ancestry.json",
+    "--output",
+    "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/current1024-profile-candidate/cpu-ancestry.md"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-21T02:48:57.259289+00:00",
+  "finished": "2026-10-21T02:48:57.982523+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "3c0dea16ccd5da5d8f17ff6f0d6b87e8d77807470f29eb8e8401c685646dda69",
+    "stderr.log": "888add06f51cb0bb393844499d84aca14ad74313368f05db4b97a31ba2cc2a75"
+  }
+}

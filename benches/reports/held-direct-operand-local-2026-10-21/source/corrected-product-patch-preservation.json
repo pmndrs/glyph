@@ -1,0 +1,22 @@
+{
+  "base": "277417596afbe2a8cd87454317d05607dc9ba51b",
+  "variantSnapshot": "be6c7960dd7eda8917bc43422edadca1970c1278",
+  "variantTree": "49dca6c0ad9c23835655ce9578ef3abe246f5e71",
+  "patch": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/corrected-product.patch",
+  "sha256": "d428cb137f5b6e4ce340d117bc3b527cd48b6312135960a7c5c7db1514ec902c",
+  "bytes": 122199,
+  "sourcePaths": [
+    "packages/glyph/rust/shaper/src/engine/codec.rs",
+    "packages/glyph/rust/shaper/src/engine/codec_gather.rs",
+    "packages/glyph/rust/shaper/src/engine/ordered_plan.rs",
+    "packages/glyph/rust/shaper/src/engine/plan_error.rs",
+    "packages/glyph/rust/shaper/src/engine/plan_packing.rs",
+    "packages/glyph/rust/shaper/src/engine/render_plan_compiler.rs",
+    "packages/glyph/rust/shaper/src/engine/session_placement.rs",
+    "packages/glyph/rust/shaper/src/engine/state.rs",
+    "packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs",
+    "packages/glyph/rust/shaper/src/engine/work_attribution.rs"
+  ],
+  "allSnapshotSourceBlobsMatchFrozenWorktree": true,
+  "scope": "Exact tracked ten-file source variant patch; untracked renderer recovery workflow is preserved separately. Ignored package/profile/raw artifacts are not reconstructed by this patch."
+}

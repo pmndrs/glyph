@@ -1,0 +1,35 @@
+{
+  "report": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/shaper-live-memory-final.json",
+  "sha256": "80182196ab912d2a227ae09388ac748f638529a6a88a824aab31fdd32847c3e7",
+  "phaseCount": 71,
+  "cycles": 8,
+  "maxRequestedLive": 41848831,
+  "maxCompletedCallRequestedPeak": 42049147,
+  "maxPages": 774,
+  "retainedBaseline": {
+    "requestedLive": 10741820,
+    "requestedPeak": 10741820,
+    "allocations": 0,
+    "reallocations": 0,
+    "deallocations": 0,
+    "cumulativeRequested": 0,
+    "wasmPages": 774
+  },
+  "method": {
+    "cycles": 8,
+    "recordBytes": 32,
+    "scope": "captured engine Wasm instance only",
+    "exclusions": ["JS tokens", "GPU", "font decoder instances"],
+    "requestedPeak": "completed allocator-call high water; excludes Talc fragmentation and transient internal realloc peak",
+    "cumulativeRequested": "full new size of successful realloc, not net growth",
+    "wasmPages": "capacity, reported separately from requested live bytes"
+  },
+  "archiveControlShippingIdentities": {
+    "manifestSha256": "3ba78d30afe029bbe31ef69b6a71687dd94669b7e1b78e788c727609c7592d6d",
+    "diagnosticSha256": "ff6f72d51534fc4339814afa8249d191a846dbc65ef18289d2eba87fe483ce4d",
+    "controlSha256": "8b594e2b123c35c0789a1e38ee15761e9a6a2245fdce6da1181efacbc0ab366a",
+    "shippingSha256": "8b594e2b123c35c0789a1e38ee15761e9a6a2245fdce6da1181efacbc0ab366a",
+    "archiveSha256": "83949860ae65b99fe6d7471b9782398234852668b54412870fafa81878c366a3",
+    "installedConsumerLockSha256": "72ab490967798bc4a2a47068d9423a63a49f60737a02d0dcf5d9a0d8270f5b89"
+  }
+}

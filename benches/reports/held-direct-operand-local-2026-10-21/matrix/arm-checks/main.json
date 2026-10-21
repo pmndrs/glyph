@@ -1,0 +1,56 @@
+{
+  "observedUtc": "2026-10-21T02:04:18.355508+00:00",
+  "head": "277417596afbe2a8cd87454317d05607dc9ba51b",
+  "expectedHead": "277417596afbe2a8cd87454317d05607dc9ba51b",
+  "headMatch": true,
+  "gitStatusShort": " M packages/glyph/rust/shaper/src/engine/codec.rs\n M packages/glyph/rust/shaper/src/engine/codec_gather.rs\n M packages/glyph/rust/shaper/src/engine/ordered_plan.rs\n M packages/glyph/rust/shaper/src/engine/plan_error.rs\n M packages/glyph/rust/shaper/src/engine/plan_packing.rs\n M packages/glyph/rust/shaper/src/engine/render_plan_compiler.rs\n M packages/glyph/rust/shaper/src/engine/session_placement.rs\n M packages/glyph/rust/shaper/src/engine/state.rs\n M packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs\n M packages/glyph/rust/shaper/src/engine/work_attribution.rs\n?? benches/scripts/check-renderer-recovery.mts\n",
+  "inputCount": 673,
+  "inputMismatches": {},
+  "archiveHashes": {
+    "main": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+      "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "expected": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "match": true
+    },
+    "published": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+      "sha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+      "expected": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+      "match": true
+    },
+    "priorE2": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "sha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+      "expected": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+      "match": true
+    },
+    "candidate": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "sha256": "83949860ae65b99fe6d7471b9782398234852668b54412870fafa81878c366a3",
+      "expected": "83949860ae65b99fe6d7471b9782398234852668b54412870fafa81878c366a3",
+      "match": true
+    }
+  },
+  "mainWrapperExit": 0,
+  "mainWrapperResultSha": "4bda560c86315bb407d80b8afde9ad4faeb15be031d95675af10ed6a4f45895b",
+  "mainStdoutSha": "5e9c29f5ea75d4da727357903edca6027f6bbda3c0ee28fb7023510162605654",
+  "mainStderrSha": "af659ac1698c68f53849000e404fc81807e9ee76cd8244ba5923fa5719be34e5",
+  "mainManifestSha": "d5fd7f2e18af1653301bcd0724456a64a46ccb86c7dd368df8f451a6b348f23a",
+  "mainCandidateJsonSha": "700944329123880bcb040be199f39bd938af964247a34581c5e13811981b04bd",
+  "mainManifestCandidate": {
+    "requested": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "version": "0.1.0",
+    "sha256": "83949860ae65b99fe6d7471b9782398234852668b54412870fafa81878c366a3"
+  },
+  "mainManifestBaseline": {
+    "requested": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+    "version": "0.1.0",
+    "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20"
+  },
+  "mainManifestBlocks": 8,
+  "mainManifestSuite": "full",
+  "nextOutputExists": false,
+  "nextWrapperExists": false,
+  "overallClear": true
+}

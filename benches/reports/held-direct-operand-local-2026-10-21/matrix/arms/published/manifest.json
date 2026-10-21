@@ -1,0 +1,29 @@
+{
+  "generatedAt": "2026-10-21T02:25:29.329Z",
+  "labsVersion": "0.9.0",
+  "harnessDigest": "024d0f4a23200fade2fda80676cab66eb0536656781ba44db88cf36b07236627",
+  "blocks": 8,
+  "suite": "full",
+  "baseline": {
+    "requested": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+    "version": "0.1.0",
+    "sha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b"
+  },
+  "candidate": {
+    "requested": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "version": "0.1.0",
+    "sha256": "83949860ae65b99fe6d7471b9782398234852668b54412870fafa81878c366a3"
+  },
+  "savedCandidate": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-main-data",
+  "comparison": "comparison.txt",
+  "notComparable": {
+    "baselineCheckFailures": [],
+    "timingModeMismatches": [
+      "common.bench.ts / measure 100 unchanged labels / measure 100 unchanged labels: baseline single-call, candidate batched",
+      "layout.bench.ts / cached per-glyph inspection / cached per-glyph inspection: baseline batched, candidate single-call",
+      "prepared-operations.bench.ts / 100 labels first set+measure / 100 labels first set+measure: baseline single-call, candidate batched",
+      "prepared-operations.bench.ts / 1000 labels first set+measure / 1000 labels first set+measure: baseline single-call, candidate batched",
+      "request-arena.bench.ts / write 1000 paragraph-order mutations / write 1000 paragraph-order mutations: baseline single-call, candidate batched"
+    ]
+  }
+}

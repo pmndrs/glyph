@@ -1,0 +1,103 @@
+{
+  "format": "glyph-shaper-memory-artifact-v1",
+  "artifact": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "sha256": "83949860ae65b99fe6d7471b9782398234852668b54412870fafa81878c366a3",
+    "shaperSha256": "8b594e2b123c35c0789a1e38ee15761e9a6a2245fdce6da1181efacbc0ab366a"
+  },
+  "source": {
+    "root": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+    "revision": "277417596afbe2a8cd87454317d05607dc9ba51b",
+    "dirty": "M packages/glyph/rust/shaper/src/engine/codec.rs\n M packages/glyph/rust/shaper/src/engine/codec_gather.rs\n M packages/glyph/rust/shaper/src/engine/ordered_plan.rs\n M packages/glyph/rust/shaper/src/engine/plan_error.rs\n M packages/glyph/rust/shaper/src/engine/plan_packing.rs\n M packages/glyph/rust/shaper/src/engine/render_plan_compiler.rs\n M packages/glyph/rust/shaper/src/engine/session_placement.rs\n M packages/glyph/rust/shaper/src/engine/state.rs\n M packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs\n M packages/glyph/rust/shaper/src/engine/work_attribution.rs\n?? benches/scripts/check-renderer-recovery.mts",
+    "rustSourceSha256": "89326aa1be15530fa81abae04e29cec6402eece57f28099c274f70d574fc9625",
+    "sourceManifests": {
+      "Cargo.toml": "89e63906b1685010d3844fb540545215fd6f5514b390ea59818baa09a3423135",
+      "Cargo.lock": "920c5640afac103bdad7750d4bd4bf36caaa66012ce545755212c1af1a507586",
+      "build.rs": "0452d3847e4a47509012b4c528b056a35a16f583ebc740428de1912ba1efc9b3"
+    }
+  },
+  "control": {
+    "file": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/shaper-memory-final/text-shaper.control.wasm",
+    "sha256": "8b594e2b123c35c0789a1e38ee15761e9a6a2245fdce6da1181efacbc0ab366a",
+    "features": ["simd128"],
+    "cargo": [
+      "build",
+      "--manifest-path",
+      "rust/shaper/Cargo.toml",
+      "--target",
+      "wasm32-unknown-unknown",
+      "--release",
+      "--locked",
+      "--no-default-features",
+      "--features",
+      "simd128"
+    ]
+  },
+  "diagnostic": {
+    "file": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/shaper-memory-final/text-shaper.diagnostic.wasm",
+    "sha256": "ff6f72d51534fc4339814afa8249d191a846dbc65ef18289d2eba87fe483ce4d",
+    "features": ["simd128", "diagnostic-live-memory"],
+    "cargo": [
+      "build",
+      "--manifest-path",
+      "rust/shaper/Cargo.toml",
+      "--target",
+      "wasm32-unknown-unknown",
+      "--release",
+      "--locked",
+      "--no-default-features",
+      "--features",
+      "simd128",
+      "--features",
+      "diagnostic-live-memory"
+    ],
+    "exports": [
+      "pmndrs_glyph_shaper_diagnostic_memory_snapshot",
+      "pmndrs_glyph_shaper_diagnostic_memory_reset_window",
+      "pmndrs_glyph_shaper_diagnostic_memory_probe_sequence"
+    ],
+    "allocationProof": {
+      "before": [1, 0, 2528, 2528, 0, 0, 0, 0],
+      "after": [1, 0, 2528, 2560, 1, 1, 1, 48],
+      "expected": {
+        "requestedPeakIncrease": 32,
+        "requestedLiveDelta": 0,
+        "cumulativeRequested": 48
+      }
+    },
+    "record": {
+      "byteLength": 32,
+      "littleEndianU32": [
+        "version",
+        "status",
+        "requestedLive",
+        "requestedPeak",
+        "allocations",
+        "reallocations",
+        "deallocations",
+        "cumulativeRequested"
+      ],
+      "statusBits": {
+        "arithmeticOverflow": 1,
+        "arithmeticUnderflow": 2,
+        "sizeUnrepresentable": 4
+      },
+      "semantics": "Counts include successful operations only. Cumulative requested bytes add the full new size of each successful realloc, not its net growth.",
+      "limits": "Requested bytes at completed allocator calls; excludes Talc fragmentation and transient physical realloc peak."
+    }
+  },
+  "tools": {
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+    "wasmOpt": "wasm-opt version 129 (version_129)"
+  },
+  "optimization": [
+    "--enable-bulk-memory",
+    "--enable-nontrapping-float-to-int",
+    "--enable-simd",
+    "--one-caller-inline-max-function-size=0",
+    "--merge-similar-functions",
+    "-Oz",
+    "--merge-similar-functions",
+    "-Oz"
+  ]
+}

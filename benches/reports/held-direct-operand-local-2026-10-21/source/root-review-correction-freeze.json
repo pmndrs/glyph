@@ -1,0 +1,42 @@
+{
+  "recordedUtc": "2026-10-21T00:52:35.976117+00:00",
+  "head": "277417596afbe2a8cd87454317d05607dc9ba51b",
+  "sourceFiles": {
+    "packages/glyph/rust/shaper/src/engine/codec.rs": "a0a5d2d4af79f0f6849319d037688253c26c4a9dfa7ecd0a173d854a344052b3",
+    "packages/glyph/rust/shaper/src/engine/codec_gather.rs": "ddb68be7736d28d02af4b3a27f92261c9bdc93c51cfbc67829f1a3fd348d1184",
+    "packages/glyph/rust/shaper/src/engine/ordered_plan.rs": "1979807211f5670492f30df284ab378e9eba4b2d82aff72e46782d512531678a",
+    "packages/glyph/rust/shaper/src/engine/plan_error.rs": "c492e82a95a790cca483b8dbfd9be8ae363792c0e03185ec3f36499d8d3ad624",
+    "packages/glyph/rust/shaper/src/engine/plan_packing.rs": "3bab853078bb695d92503c40370e48d0032fd3e6ccd485e016f935668713ef8a",
+    "packages/glyph/rust/shaper/src/engine/render_plan_compiler.rs": "fde405b21d956b94d3170b2f2bb832e2ac31000f67eee40daf9721794544d5f5",
+    "packages/glyph/rust/shaper/src/engine/session_placement.rs": "75aa1aa00cf6c10f4a7c82ceb96b1fe6ebe569feb09e8f1195bcfe34cccc545b",
+    "packages/glyph/rust/shaper/src/engine/state.rs": "bf863e76a4f2aa162cea7a5a00158471590544fc6189cf75dacb2d187e50451e",
+    "packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs": "1785b339aec6548a3c7e9fb5f1414dfc9bde8b647d57e39311aabe46c1bc0f11",
+    "packages/glyph/rust/shaper/src/engine/work_attribution.rs": "ad4d53e162bb481f3260ae4df1c3baf7403ff3758b354c7f85fa755173fc80b2"
+  },
+  "handoffSha256": "611976be42e183cb0ed8d1d120ae8422cdf03faf2fb98b42847696324f6378f8",
+  "receipts": {
+    "correction_format_gate": {
+      "sha256": "05c7177343f47cac40b55ee8d0c7a4ec195d8cd9139503b6f26e803b695c1d70",
+      "finished": "2026-10-21T00:50:17.484349+00:00"
+    },
+    "correction_clippy_gate": {
+      "sha256": "bbd79c072c0cbab0a542b934d887d179badf833409130cfb96789739628de9d0",
+      "finished": "2026-10-21T00:50:28.120361+00:00"
+    },
+    "correction_native_gate": {
+      "sha256": "c2408951b56c8c0441b430d7e8d32f7d320ee87f62ebca30809bc6585ede20e5",
+      "finished": "2026-10-21T00:50:56.178139+00:00"
+    },
+    "correction_bitmap_full05_gate": {
+      "sha256": "66eead5e069d73895c88dc400ef0fad76b93015d4d8b5cce3c4f2ee5824f747f",
+      "finished": "2026-10-21T00:51:04.031348+00:00"
+    }
+  },
+  "deltaFromReviewedSource": [
+    "packages/glyph/rust/shaper/src/engine/codec_gather.rs",
+    "packages/glyph/rust/shaper/src/engine/state.rs",
+    "packages/glyph/rust/shaper/src/engine/work_attribution.rs"
+  ],
+  "reviewedSnapshot": "c56e534370265a832c21d8adaf85e85aa02c79cf",
+  "scope": "Verifiedfrozenreviewcorrectionandnativegates; no packagebuild/SIMDruntime/memory/latency clearance."
+}

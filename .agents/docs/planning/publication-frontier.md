@@ -95,6 +95,29 @@ Main excludes one clock-confounded row and3timing-mode mismatches; published exc
 
 **User-requested fresh Sol High plan:** a native no-history reviewer owns the [old/new causal landscape and hybrid brief](../../../benches/reports/held-gather-input-plan-local-2026-10-20/fresh-causal-hybrid-20261020.md). Old no-read updates amortize one Rust frame; HELD synchronous setters buy prepared-query/sparse gains. Parity is not proved impossible. Next experiment consumes prepared SoA operands inside the same Codec scalar/SIMD loops and preserves retained exact output scopes, replacing intermediate full-field writes with bounded call-scoped locators. Source reads move and SIMD lane assembly may cost more; no speed promise. Medium's single-pass source traversal is feasible; scoped High requires non-mutating eligibility and exact error/fallback semantics, current strike selection for zero/position-only masks, and source/record adjacency before implementation. Complete metadata reset remains a separate compatible fallback because its allocation and widened ordered work are unresolved. One executor, synchronous semantics, cold-output/error oracles, packed fallback and transition memory/lifetime gates remain mandatory. Full matrix plus API/ABI/peer/lifetime/browser/new editorial hero gates remain open. Parity false; post-parity boost waves0; stack held/unmerged. [Owned wave log](../log/2026-10-21-held-gather-input-plan-wave.md).
 
+**Direct-operand wave completed and preserved — 21 October 2026:** corrected E5 source `be6c7960`, patch based on
+`27741759`, archive `83949860…`, shipping/named shaper `8b594e2b…` / `fb54c644…`.
+[Portable source, all 145 rows, original reports and reviews](../../../benches/reports/held-direct-operand-local-2026-10-21/README.md)
+preserve the entire correct experiment. One candidate result is byte-identically reused in three eight-block arms;
+all exits0 and673 inventoried inputs unchanged. E2 comparison:0faster/14slower/131neutral/no exclusions.
+Dense512 main/release/E2/E5 p50/p95ms: **7.098/7.876,7.487/8.096,9.385/10.538,10.019/11.178**;
+dense1024: **15.397/16.381,15.327/17.232,18.514/21.048,20.359/22.668**. Do not promote E5 as a faster baseline.
+Main excludes3modes with10.5%software-calibration drift; release excludes5modes/lacks2identities with5.3%drift.
+The single current1024/10warmup/80iteration/no-read scene profile assigns preparation/publication/unattributed sampled
+CPU790207/454502/112291µs; profile elapsed is not paired matrix timing. Native6157events/4099results match exactly;
+actual117760gathered slots disappear, but indirect reads/184320locator bytes remain and physical bytes are unchanged.
+Requested-live/peak41848831/42049147B, +1377716B and+46Wasm pages overE2/E4; shaper1625526raw/607475gzipB.
+Package/native/minimum-peer/CPUrenderer-recovery pass within scope; browser/hero, whole-app physical memory and final
+downstream/API/lifetime remain open. Previous277 CI passes all five jobs but does not cover E5 dirty source.
+
+The latest fresh no-history native Sol High [architecture report and concrete brief](../../../benches/reports/held-direct-operand-local-2026-10-21/reviews/architecture-speed-zoomout-implementation-brief.md)
+separate deferred-versus-synchronous semantics from packed-versus-indirect representation. A literal forward stream
+cannot replace indexed/reordered physical metadata or old/new transactional ownership without a new proof. Native
+Sol Medium now implements one bounded E5 combination: lazy call-scoped semantic views per loaded record/four-lane
+group replace per-operand slice-array construction, retaining the same Codec loop, packed SIMD, locators, candidate
+and fallback. E4/277 is immediate whole-source fallback; E2 remains the measured latency control. No later-source
+performance claim, extra profile or timing loop is authorized. Parity false; boost waves0; held/unmerged.
+
 ### Completed current-machine rerun — 19 October 2026
 
 Runtime source `6987418c`, fresh archive `2e434224…`, shipping shaper `244078b1…` and executable-matching named shaper `cfb3213f…` are authenticated. Main remains `4e25a96a` after fetch. The original `60d3c26f` checkpoint is an ancestor of the preserved pre-rebase branch, not the rebased current head; [ancestry proof](../../../benches/reports/held-ropes-local-2026-10-19/ancestry.json) records both. All layers remain held/unmerged, #310 draft.

@@ -1,0 +1,26 @@
+{
+  "argv": [
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "benchmark:cpu-profile-summary",
+    "--",
+    "--profile",
+    "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/current1024-profile-candidate/cpu-profile.json",
+    "--manifest",
+    "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/current1024-profile-candidate/manifest.json",
+    "--artifact",
+    "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "--wasm-url",
+    "wasm://wasm/006e44da",
+    "--ancestry",
+    "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/current1024-profile-candidate/ancestry.json",
+    "--output",
+    "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/current1024-profile-candidate/cpu-ancestry.md"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-21T02:48:57.259289+00:00"
+}

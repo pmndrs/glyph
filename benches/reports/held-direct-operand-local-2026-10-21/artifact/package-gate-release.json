@@ -1,0 +1,50 @@
+{
+  "authorizedUtc": "2026-10-21T00:54:21.059254+00:00",
+  "preflightSha256": "cf93241b6ed05f408d7579d37505aff6f084328fd55e0537c5487746bf2fa966",
+  "highCorrectionReviewSha256": "6c918100f9505656a533b23f1eec3b8b3bc9bb1f15edecc33861d815eb294ca3",
+  "all672InputsRootVerified": true,
+  "commands": [
+    {
+      "purpose": "full @pmndrs/glyph package check",
+      "argv": ["/Users/mini/.local/bin/mise", "exec", "--", "pnpm", "--filter", "@pmndrs/glyph", "check"],
+      "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+      "durableReceipt": "unique E5/run.py wrapper after explicit release; proposed wrapper name package-check-final-01"
+    },
+    {
+      "purpose": "pack built package from exact packages/glyph cwd",
+      "argv": [
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "pnpm",
+        "pack",
+        "--pack-destination",
+        "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate"
+      ],
+      "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph",
+      "durableReceipt": "unique E5/run.py wrapper after explicit release; proposed wrapper name pack-final-01"
+    },
+    {
+      "purpose": "authenticate frozen named shaper artifact",
+      "argv": [
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "pnpm",
+        "scripts",
+        "run",
+        "glyph:shaper-profile-artifact",
+        "--",
+        "--artifact",
+        "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+        "--source-root",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "--output",
+        "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/shaper-profile"
+      ],
+      "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+      "durableReceipt": "unique E5/run.py wrapper after explicit release; proposed wrapper name named-artifact-final-01"
+    }
+  ],
+  "scope": "Sequential fullpackagecheck ->pack ->matchingnamedWAsm authentication only; no timings/browser/memory untilrootartifactauthhandoff. Stoponfailure/sourcechange; noautorestart."
+}
