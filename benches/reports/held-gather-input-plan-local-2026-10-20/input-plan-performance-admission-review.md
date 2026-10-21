@@ -8,17 +8,17 @@
 
 The table gives **pooled stored normalized per-call nearest-rank p50/p95 in ms**. Main and release controls are independent sequential runs on the same Apple M4; the candidate samples are byte-identical reused data, not a new candidate sample against release.
 
-| Workload                                       |         Main p50/p95 | Published 0.1.0 p50/p95 | Frozen candidate p50/p95 | Finding                                                                    |
-| ---------------------------------------------- | -------------------: | ----------------------: | -----------------------: | -------------------------------------------------------------------------- |
-| Rewrite 512 labels in one group                |        6.999 / 7.741 |           7.411 / 7.957 |           9.228 / 10.652 | Material p50 and p95 regression to both                                    |
-| Publish 1024 retained Text instances           |      15.245 / 16.415 |         15.397 / 16.491 |          18.589 / 21.017 | Material p50 and p95 regression to both                                    |
-| Long Fredoka type and measure                  |        0.576 / 1.802 |           1.621 / 1.794 |            2.038 / 2.368 | Candidate slower than both controls; main p50 has mixed phase distribution |
-| Mount and publish 22k glyphs                   |      17.596 / 18.327 |         18.558 / 19.843 |          20.049 / 21.052 | Cold and tail guard worsens                                                |
-| Per-glyph inspection after width change        |        7.068 / 9.605 |          8.164 / 10.667 |            4.426 / 5.788 | Large retained gain                                                        |
-| Sparse borrow one of 1000 edited labels        |        0.227 / 0.318 |           0.216 / 0.304 |            0.180 / 0.270 | Retained sparse gain                                                       |
-| Independently copy one edited label among 1000 |        2.545 / 3.154 |           5.556 / 6.974 |            1.818 / 2.260 | Retained selected-copy gain                                                |
-| Scattered setter preparation, 8192 spans       |      32.902 / 36.434 |         37.011 / 39.292 |          12.816 / 14.485 | Large prepared-setter gain                                                 |
-| Cached per-glyph inspection                    | timing-mode mismatch |           0.057 / 0.078 |            0.067 / 0.096 | Published slower; main cannot be compared                                  |
+| Workload | Main p50/p95 | Published 0.1.0 p50/p95 | Frozen candidate p50/p95 | Finding |
+| --- | ---: | ---: | ---: | --- |
+| Rewrite 512 labels in one group | 6.999 / 7.741 | 7.411 / 7.957 | 9.228 / 10.652 | Material p50 and p95 regression to both |
+| Publish 1024 retained Text instances | 15.245 / 16.415 | 15.397 / 16.491 | 18.589 / 21.017 | Material p50 and p95 regression to both |
+| Long Fredoka type and measure | 0.576 / 1.802 | 1.621 / 1.794 | 2.038 / 2.368 | Candidate slower than both controls; main p50 has mixed phase distribution |
+| Mount and publish 22k glyphs | 17.596 / 18.327 | 18.558 / 19.843 | 20.049 / 21.052 | Cold and tail guard worsens |
+| Per-glyph inspection after width change | 7.068 / 9.605 | 8.164 / 10.667 | 4.426 / 5.788 | Large retained gain |
+| Sparse borrow one of 1000 edited labels | 0.227 / 0.318 | 0.216 / 0.304 | 0.180 / 0.270 | Retained sparse gain |
+| Independently copy one edited label among 1000 | 2.545 / 3.154 | 5.556 / 6.974 | 1.818 / 2.260 | Retained selected-copy gain |
+| Scattered setter preparation, 8192 spans | 32.902 / 36.434 | 37.011 / 39.292 | 12.816 / 14.485 | Large prepared-setter gain |
+| Cached per-glyph inspection | timing-mode mismatch | 0.057 / 0.078 | 0.067 / 0.096 | Published slower; main cannot be compared |
 
 The original Labs block-median report independently flags dense 512 at +31.9% versus main (95% relative CI +29.8..+34.2%) and +25.5% versus release (+23.5..+27.1%); dense 1024 at +18.7% versus main (+16.5..+21.4%) and +17.8% versus release (+16.3..+21.3%). These report deltas differ from ratios of the pooled-sample quantiles above because they use a different estimator. The p95 values are empirical tail summaries without their own significance interval. The main baseline's global 8.3% software-calibration drift weakens small-effect causal claims, but does not make the consistent multi-millisecond dense gaps into parity. Calibration estimates are not measured hardware clock frequency.
 
@@ -48,18 +48,18 @@ The direct-prior wrapper finished at 2026-10-20T23:58:26Z with exit 0. Its manif
 
 Direct-prior raw nearest-rank pooled p50/p95 values below are in ms, using the same estimator as the earlier table. Labs' separate block-median delta and CI are stated in the last column where decisive. P95 has no independent interval.
 
-| Workload                                       |          E2 p50/p95 |          E4 p50/p95 | Labs block-median evidence       |
-| ---------------------------------------------- | ------------------: | ------------------: | -------------------------------- |
-| Rewrite 512 labels                             |      9.297 / 10.661 |      9.228 / 10.652 | −0.6%, p=.328, CI −2.4..+0.9%    |
-| Publish 1024 Text instances                    |     18.490 / 20.991 |     18.589 / 21.017 | −0.2%, p=.959, CI −2.3..+2.2%    |
-| Per-glyph inspection after width               |       4.460 / 5.781 |       4.426 / 5.788 | −1.1%, p=.130, CI −1.8..+0.2%    |
-| Sparse borrow one edited label among 1000      |       0.176 / 0.257 |       0.180 / 0.270 | +3.2%, p=.083, CI −0.7..+8.7%    |
-| Independently copy one edited label among 1000 |       1.870 / 2.312 |       1.818 / 2.260 | −1.8%, p=.015, CI −4.3..−0.4%    |
-| Scattered setter preparation, 8192 spans       |     12.881 / 14.349 |     12.816 / 14.485 | +0.2%, p=.721, CI −2.1..+1.1%    |
-| Unchanged setter preparation, 8192 spans       |       2.707 / 3.036 |       2.710 / 3.318 | +0.2%, p=.959, CI −1.6..+1.4%    |
-| Cold mount/publish 22k glyphs                  |     19.887 / 20.931 |     20.049 / 21.052 | +0.5%, p=.195, CI −0.3..+1.6%    |
-| 10-label no-op scene traversal                 | 0.003079 / 0.006723 | 0.003802 / 0.006073 | +23.5%, p<.001, CI +20.4..+27.3% |
-| Toggle one group with 1000 labels              |       0.452 / 0.544 |       0.420 / 0.523 | −7.5%, p=.005, CI −10.8..−2.6%   |
+| Workload | E2 p50/p95 | E4 p50/p95 | Labs block-median evidence |
+| --- | ---: | ---: | --- |
+| Rewrite 512 labels | 9.297 / 10.661 | 9.228 / 10.652 | −0.6%, p=.328, CI −2.4..+0.9% |
+| Publish 1024 Text instances | 18.490 / 20.991 | 18.589 / 21.017 | −0.2%, p=.959, CI −2.3..+2.2% |
+| Per-glyph inspection after width | 4.460 / 5.781 | 4.426 / 5.788 | −1.1%, p=.130, CI −1.8..+0.2% |
+| Sparse borrow one edited label among 1000 | 0.176 / 0.257 | 0.180 / 0.270 | +3.2%, p=.083, CI −0.7..+8.7% |
+| Independently copy one edited label among 1000 | 1.870 / 2.312 | 1.818 / 2.260 | −1.8%, p=.015, CI −4.3..−0.4% |
+| Scattered setter preparation, 8192 spans | 12.881 / 14.349 | 12.816 / 14.485 | +0.2%, p=.721, CI −2.1..+1.1% |
+| Unchanged setter preparation, 8192 spans | 2.707 / 3.036 | 2.710 / 3.318 | +0.2%, p=.959, CI −1.6..+1.4% |
+| Cold mount/publish 22k glyphs | 19.887 / 20.931 | 20.049 / 21.052 | +0.5%, p=.195, CI −0.3..+1.6% |
+| 10-label no-op scene traversal | 0.003079 / 0.006723 | 0.003802 / 0.006073 | +23.5%, p<.001, CI +20.4..+27.3% |
+| Toggle one group with 1000 labels | 0.452 / 0.544 | 0.420 / 0.523 | −7.5%, p=.005, CI −10.8..−2.6% |
 
 **Direct-prior decision:** E4 is a correct, preserved **combination candidate**, but not an accepted dense optimization or a cleared nonregression successor to E2. The two priority dense medians and tails are essentially unchanged, with the 1024 raw p50/p95 fractionally worse. Inspection is effectively unchanged, sparse borrow has an adverse but inconclusive p50 and larger empirical p95, and unchanged setter preparation has a higher pooled p95. The independently copied-label row has a small favorable block CI and p50/p95 movement; it is eligible to preserve without a 5% floor. The toggle gain is also observed. Neither establishes that the targeted gather read deletion lowers the fixed dense end-to-end path. Keep E2 independently recoverable, and if a compatible hybrid incorporates E4, evaluate the combined whole variant against E2, main and release on the same required gates. This review does not select the hybrid algorithm.
 
