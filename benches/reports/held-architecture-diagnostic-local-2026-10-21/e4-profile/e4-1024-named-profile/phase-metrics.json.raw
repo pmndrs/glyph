@@ -1,0 +1,143 @@
+{
+  "schema": "held-e4-1024-profile-phase-metrics-v1",
+  "profileSha256": "2df04d4827cb1b80246c618989109654348f288a8eb2d7edb15f00a83624dadb",
+  "rawSampleCount": 699,
+  "rawSampledMicroseconds": 1079542,
+  "workload": {
+    "boundary": "publication",
+    "count": 1024,
+    "iterations": 80,
+    "position": "first",
+    "profileCase": "bulk-write",
+    "warmups": 10,
+    "reads": "none",
+    "publicationPath": "scene"
+  },
+  "operations": {
+    "perIteration": {
+      "sets": 1024,
+      "reads": 0,
+      "publications": 1
+    },
+    "timed": {
+      "sets": 81920,
+      "reads": 0,
+      "publications": 80
+    },
+    "warmup": {
+      "sets": 10240,
+      "reads": 0,
+      "publications": 10
+    },
+    "postTimedCorrectness": {
+      "measurementReads": 1024,
+      "commitStateReads": 1025,
+      "glyphReads": 1025
+    }
+  },
+  "elapsedMs": {
+    "mean": 13.093790124999995,
+    "p50": 12.9809580000001,
+    "p95": 14.663042000000019
+  },
+  "drawTopology": {
+    "initial": {
+      "draws": 1,
+      "glyphs": 9216
+    },
+    "final": {
+      "draws": 1,
+      "glyphs": 9216
+    }
+  },
+  "phases": {
+    "setter": {
+      "samples": 469,
+      "microseconds": 703581,
+      "gcSamples": 0,
+      "gcMicroseconds": 0,
+      "blankNameSamples": 0,
+      "blankNameMicroseconds": 0,
+      "binaryenSamples": 16,
+      "binaryenMicroseconds": 24165,
+      "wasmSamples": 347,
+      "wasmMicroseconds": 520915,
+      "stages": {
+        "javascript": 181166,
+        "shaping": 198040,
+        "other-wasm": 321458,
+        "allocation": 1417,
+        "host-runtime": 1500
+      },
+      "stageSharesPct": {
+        "javascript": 25.75,
+        "shaping": 28.15,
+        "other-wasm": 45.69,
+        "allocation": 0.2,
+        "host-runtime": 0.21
+      }
+    },
+    "publication": {
+      "samples": 189,
+      "microseconds": 282587,
+      "gcSamples": 0,
+      "gcMicroseconds": 0,
+      "blankNameSamples": 6,
+      "blankNameMicroseconds": 8334,
+      "binaryenSamples": 1,
+      "binaryenMicroseconds": 1417,
+      "wasmSamples": 128,
+      "wasmMicroseconds": 192587,
+      "stages": {
+        "gather": 64794,
+        "other-wasm": 99417,
+        "javascript": 82541,
+        "render-plan": 26876,
+        "external-javascript": 7459,
+        "allocation": 1500
+      },
+      "stageSharesPct": {
+        "gather": 22.93,
+        "other-wasm": 35.18,
+        "javascript": 29.21,
+        "render-plan": 9.51,
+        "external-javascript": 2.64,
+        "allocation": 0.53
+      }
+    },
+    "unattributed": {
+      "samples": 41,
+      "microseconds": 93374,
+      "gcSamples": 6,
+      "gcMicroseconds": 9126,
+      "blankNameSamples": 0,
+      "blankNameMicroseconds": 0,
+      "binaryenSamples": 4,
+      "binaryenMicroseconds": 6042,
+      "wasmSamples": 25,
+      "wasmMicroseconds": 37623,
+      "stages": {
+        "host-runtime": 52751,
+        "other-wasm": 24124,
+        "shaping": 7458,
+        "benchmark-harness": 3000,
+        "gather": 6041
+      },
+      "stageSharesPct": {
+        "host-runtime": 56.49,
+        "other-wasm": 25.84,
+        "shaping": 7.99,
+        "benchmark-harness": 3.21,
+        "gather": 6.47
+      }
+    }
+  },
+  "allPhaseSamplesSum": true,
+  "allPhaseMicrosecondsSum": true,
+  "interpretiveLimits": [
+    "Inclusive rows overlap; phase totals are exclusive self samples assigned to nearest selected anchor.",
+    "The named report classifies some Wasm Rust state/preflight work as other-wasm; do not map that stage wholesale to one operation.",
+    "GC and Binaryen generated frame counts are raw self-sampled frames, not event counts or wall costs.",
+    "Profile assertions are not an independent cold-label physical parity oracle."
+  ]
+}

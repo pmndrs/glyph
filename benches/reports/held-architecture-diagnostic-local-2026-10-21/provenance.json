@@ -1,0 +1,480 @@
+{
+  "schema": "held-architecture-diagnostic-portable-copies-v1",
+  "sourceRoots": {
+    "architecture": "/Volumes/Depot/Developer/glyph/.cache/held-architecture-zoomout-20261021/evidence",
+    "short-shape": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/evidence-final2",
+    "short-shape-receipts": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/receipts",
+    "e4-profile": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence"
+  },
+  "copies": [
+    {
+      "role": "architecture",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-architecture-zoomout-20261021/evidence/e4-bounded-attribution-and-hybrid-implementation-brief.md",
+      "copyPath": "architecture/e4-bounded-attribution-and-hybrid-implementation-brief.md.raw",
+      "sha256": "fa976f6bf17d8fc1237530873221d6f27819e8b80459b913b98c99e0c18b4c5a",
+      "bytes": 15912
+    },
+    {
+      "role": "architecture",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-architecture-zoomout-20261021/evidence/e4-capture-decision-dense-frontier-medium-brief.md",
+      "copyPath": "architecture/e4-capture-decision-dense-frontier-medium-brief.md.raw",
+      "sha256": "94748b322917965a87a4e8393b6d91bae23ffbabc35d5a126df0e388a8df74dd",
+      "bytes": 10152
+    },
+    {
+      "role": "architecture",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-architecture-zoomout-20261021/evidence/fresh-architecture-speed-zoomout.md",
+      "copyPath": "architecture/fresh-architecture-speed-zoomout.md.raw",
+      "sha256": "414b72b24d3b73bd4df4916ec83fb345bbd40cc7bfe2926129083080937fb1b8",
+      "bytes": 24331
+    },
+    {
+      "role": "architecture",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-architecture-zoomout-20261021/evidence/root-report-hashes.json",
+      "copyPath": "architecture/root-report-hashes.json.raw",
+      "sha256": "1802932593dcc3baaf5f438c7c94aeb303296f15f4db8d6241ab782c48ffd912",
+      "bytes": 243
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/artifact-auth-01/result.json",
+      "copyPath": "e4-profile/artifact-auth-01/result.json.raw",
+      "sha256": "56eef4f807a2100dac8ca9b5aefc466adee713fdcc7fa3022468819f2ff2ae5a",
+      "bytes": 567
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/artifact-auth-01/start.json",
+      "copyPath": "e4-profile/artifact-auth-01/start.json.raw",
+      "sha256": "7323603450680375d9aade93e11b9f5f2a127edbd0e49e09f31ad44c2167a80b",
+      "bytes": 314
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/artifact-auth-01/stderr.log",
+      "copyPath": "e4-profile/artifact-auth-01/stderr.log.raw",
+      "sha256": "e871a7b78825d073f8f9b789ad3fccff57e87e53e9cafa1952961ad6970dc7db",
+      "bytes": 2133
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/artifact-auth-01/stdout.log",
+      "copyPath": "e4-profile/artifact-auth-01/stdout.log.raw",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/artifact-auth-02/result.json",
+      "copyPath": "e4-profile/artifact-auth-02/result.json.raw",
+      "sha256": "e5cea1e1334bf3f2dfd7822b6f3536b2c959079829c016cd896b79f3589a1e70",
+      "bytes": 567
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/artifact-auth-02/start.json",
+      "copyPath": "e4-profile/artifact-auth-02/start.json.raw",
+      "sha256": "cd2c9b166aa027677827cf15d5983f194cf3d0cb7a57fe923635ffb79fa5abd8",
+      "bytes": 314
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/artifact-auth-02/stderr.log",
+      "copyPath": "e4-profile/artifact-auth-02/stderr.log.raw",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/artifact-auth-02/stdout.log",
+      "copyPath": "e4-profile/artifact-auth-02/stdout.log.raw",
+      "sha256": "3d04594f2e8456fbac15791b5d41492a804243b19fed4a3a46495c07dea749bf",
+      "bytes": 331
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/artifact-authentication.json",
+      "copyPath": "e4-profile/artifact-authentication.json.raw",
+      "sha256": "7377e2101d76aa3324b2eb8521e5b94b13de1340c53b603db1b46a76e2503247",
+      "bytes": 5630
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/authenticate-e4.mjs",
+      "copyPath": "e4-profile/authenticate-e4.mjs.raw",
+      "sha256": "b7429e4767780bf6f632d664b44f9e331700e5437a3ad61e927a3c71366e276e",
+      "bytes": 5001
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/cpu-profile-summary-01/result.json",
+      "copyPath": "e4-profile/cpu-profile-summary-01/result.json.raw",
+      "sha256": "af0ffcfbc86fac0a98b0c831407da9db8c769a6f8f0424d07ab0772a47400319",
+      "bytes": 1267
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/cpu-profile-summary-01/start.json",
+      "copyPath": "e4-profile/cpu-profile-summary-01/start.json.raw",
+      "sha256": "39aaf5be97fdb41a8d38f301581d330116630fa46386cfe44fcb9020c5e934a3",
+      "bytes": 1014
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/cpu-profile-summary-01/stderr.log",
+      "copyPath": "e4-profile/cpu-profile-summary-01/stderr.log.raw",
+      "sha256": "09cc01deee8311b0c6190f156adfabe3107c822f0738de354539d55a8cd9fa72",
+      "bytes": 720
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/cpu-profile-summary-01/stdout.log",
+      "copyPath": "e4-profile/cpu-profile-summary-01/stdout.log.raw",
+      "sha256": "27f1f4fc9fb310f95b813705f7f24ad37f917dd1d7cd1fc854e5d2640345f63b",
+      "bytes": 132
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/e4-1024-named-profile/ancestry-proof.json",
+      "copyPath": "e4-profile/e4-1024-named-profile/ancestry-proof.json.raw",
+      "sha256": "bfc2e4fcc68bd9403aaa3b6e93b6bd6e444b9995709b7b085544e394ac76e3df",
+      "bytes": 1621
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/e4-1024-named-profile/ancestry.json",
+      "copyPath": "e4-profile/e4-1024-named-profile/ancestry.json.raw",
+      "sha256": "ec39ca0d275e1d053c2f09fd666811c5a2e91fa1987fc030cd2c96647f49e046",
+      "bytes": 167
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/e4-1024-named-profile/cpu-profile.json",
+      "copyPath": "e4-profile/e4-1024-named-profile/cpu-profile.json.raw",
+      "sha256": "2df04d4827cb1b80246c618989109654348f288a8eb2d7edb15f00a83624dadb",
+      "bytes": 156210
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/e4-1024-named-profile/exclusive.md",
+      "copyPath": "e4-profile/e4-1024-named-profile/exclusive.md.raw",
+      "sha256": "18a97d39280f3343ee67ec181892124327b29a888631b590fee245f8bcc5b825",
+      "bytes": 120733
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/e4-1024-named-profile/manifest.json",
+      "copyPath": "e4-profile/e4-1024-named-profile/manifest.json.raw",
+      "sha256": "ac08ae9599c34bff938defd8a15aaa3dd6896c1c7aa82a777dc0b9ca0a6d75b1",
+      "bytes": 281298
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/e4-1024-named-profile/phase-metrics.json",
+      "copyPath": "e4-profile/e4-1024-named-profile/phase-metrics.json.raw",
+      "sha256": "ecfc215aad7893766fa4916e3330d175c954028bacd4effce46643907917f8c2",
+      "bytes": 3702
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/e4-1024-named-profile/root-ancestry-verification.json",
+      "copyPath": "e4-profile/e4-1024-named-profile/root-ancestry-verification.json.raw",
+      "sha256": "e753cbb57fda927228462b3501bda6c4ce02641cfa2a2bf6e7950d59c04f7279",
+      "bytes": 630
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/e4-1024-named-profile/summary.json",
+      "copyPath": "e4-profile/e4-1024-named-profile/summary.json.raw",
+      "sha256": "79093b98cf1da0c92b2c36b7a1fa23013902acd30d87466609bc4ca4e6fc584f",
+      "bytes": 8947
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/input-diff-scope-v1-preserved.json",
+      "copyPath": "e4-profile/input-diff-scope-v1-preserved.json.raw",
+      "sha256": "021b51621ca4fcc0fc69f8c4d642e4a435f93c28d4275c393a39c3f8ad1706ed",
+      "bytes": 4989
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/input-diff-scope.json",
+      "copyPath": "e4-profile/input-diff-scope.json.raw",
+      "sha256": "4e05d69551f3f551fd0224c7c200ee3b3d629bc93885abe01724377e96cac7df",
+      "bytes": 8821
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/profile-capture-01/result.json",
+      "copyPath": "e4-profile/profile-capture-01/result.json.raw",
+      "sha256": "86d3f498ab78cf86165e6546fcd417a85ea9b1f3c3ea5692bcd07a5833b0e0b5",
+      "bytes": 1204
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/profile-capture-01/start.json",
+      "copyPath": "e4-profile/profile-capture-01/start.json.raw",
+      "sha256": "4f6ac407b260a5eb494aa438279b2b272bbb9e0c4c173d6a2ed02f1a25d66aff",
+      "bytes": 951
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/profile-capture-01/stderr.log",
+      "copyPath": "e4-profile/profile-capture-01/stderr.log.raw",
+      "sha256": "19af0ddc34c15f9221caacab90c04e2a9d62f25b27c1e1aa3ad7339ea4c41b1f",
+      "bytes": 587
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/profile-capture-01/stdout.log",
+      "copyPath": "e4-profile/profile-capture-01/stdout.log.raw",
+      "sha256": "8148f9d0cca76756faeb080481317d3ebb96d4faf4e41c0541e10ce5b7f93f3c",
+      "bytes": 9395
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/profile-final-handoff.json",
+      "copyPath": "e4-profile/profile-final-handoff.json.raw",
+      "sha256": "79c46b28b62b7d1438daddd371a7aef088f2dd7ec93d9847b7afbaa028f9b4c5",
+      "bytes": 12861
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/profile-identity-comparison.json",
+      "copyPath": "e4-profile/profile-identity-comparison.json.raw",
+      "sha256": "d34a098200c7c38f4f57e36b25c2352dbec3e2584edc006bdad1bb831f3703ac",
+      "bytes": 906
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/profile-postflight.json",
+      "copyPath": "e4-profile/profile-postflight.json.raw",
+      "sha256": "7954cf381bb107f0a959ef4257c03ec7c59f46faa587f3754d2981727f626cda",
+      "bytes": 438947
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/profile-preflight.json",
+      "copyPath": "e4-profile/profile-preflight.json.raw",
+      "sha256": "210acab0b27fed046a3b852bcaaa62194cc0c2f6d21c8e687e03f9a6f54c8a74",
+      "bytes": 216378
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/root-preflight-verification.json",
+      "copyPath": "e4-profile/root-preflight-verification.json.raw",
+      "sha256": "c22ddd49fcd9a33aabaea29012b2784340caf96850d6e2b89bb30f10a2ea51e7",
+      "bytes": 2170
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/run.py",
+      "copyPath": "e4-profile/run.py.raw",
+      "sha256": "82f229cda8b48468c37dec1425c8ad1f6b2abc2a9eaa43574ac2e2be4cf6dc3a",
+      "bytes": 821
+    },
+    {
+      "role": "e4-profile",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/source-provenance.json",
+      "copyPath": "e4-profile/source-provenance.json.raw",
+      "sha256": "0484e4dd28a3bad4cd6fd78a3198a3811a00dd16c7bcfaf22938f0fdb4fcca37",
+      "bytes": 2584
+    },
+    {
+      "role": "short-shape",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/evidence-final2/handoff.json",
+      "copyPath": "short-shape/handoff.json.raw",
+      "sha256": "5f8407eb46fd05df95f1eaa118ffbe943ed56602d43ea3da650a588a197f5918",
+      "bytes": 6244
+    },
+    {
+      "role": "short-shape",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/evidence-final2/identity.json",
+      "copyPath": "short-shape/identity.json.raw",
+      "sha256": "569cebf47d599d0a3069ee525828628a35bcb58658c46b3b762965286a2c21fc",
+      "bytes": 2096
+    },
+    {
+      "role": "short-shape",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/evidence-final2/native-work-ledger.json",
+      "copyPath": "short-shape/native-work-ledger.json.raw",
+      "sha256": "2075c96fe728abc23c7fbe5e507d3b28a63b663a8deb9662ab11c26ffc16a5b0",
+      "bytes": 7598030
+    },
+    {
+      "role": "short-shape",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/evidence-final2/root-cleanup-receipt.json",
+      "copyPath": "short-shape/root-cleanup-receipt.json.raw",
+      "sha256": "e8483975e84f5ea968f42d75c0b538d28a971d85cf006d150f9fc462f0213685",
+      "bytes": 1021
+    },
+    {
+      "role": "short-shape",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/evidence-final2/root-factual-verification.json",
+      "copyPath": "short-shape/root-factual-verification.json.raw",
+      "sha256": "c0d079047a31880f8fbf070f311ac4a08408fc9da7d4ae24b08c0eaf9a861edd",
+      "bytes": 453
+    },
+    {
+      "role": "short-shape",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/evidence-final2/short-shape-histograms.json",
+      "copyPath": "short-shape/short-shape-histograms.json.raw",
+      "sha256": "b8d39a953f8b73bbd758c091f4b19fa68a832f669d549c2465a3affd7e7a0239",
+      "bytes": 327
+    },
+    {
+      "role": "short-shape",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/evidence-final2/short-shape-observation-review-sol-high.md",
+      "copyPath": "short-shape/short-shape-observation-review-sol-high.md.raw",
+      "sha256": "49b4ebefb5a02e0c70738d3d5e96a26bcbe24d116aeeea2b2c38127b8994387d",
+      "bytes": 4988
+    },
+    {
+      "role": "short-shape",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/evidence-final2/short-shape-rows.jsonl",
+      "copyPath": "short-shape/short-shape-rows.jsonl.raw",
+      "sha256": "f1a754554aff353bdcde4e9844db971a3fae415e243b872c1f1493bfead2837f",
+      "bytes": 3626480
+    },
+    {
+      "role": "short-shape",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/evidence-final2/short-shape-test-only.patch",
+      "copyPath": "short-shape/short-shape-test-only.patch.raw",
+      "sha256": "0b9d95ff7a88497cb25f30e09ce83300a7e719d19c14e39915fc74cdfa321314",
+      "bytes": 25427
+    },
+    {
+      "role": "short-shape-receipts",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/receipts/final-bitmap/result.json",
+      "copyPath": "short-shape-receipts/final-bitmap/result.json.raw",
+      "sha256": "a20cd0caea5274f1c618e587471a753c86c5198b6c106bca61aea9542242c1a8",
+      "bytes": 792
+    },
+    {
+      "role": "short-shape-receipts",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/receipts/final-bitmap/start.json",
+      "copyPath": "short-shape-receipts/final-bitmap/start.json.raw",
+      "sha256": "18578e7c3220535fc6744823cedaa36539a953cc5592ca4de34a303de3e66ce3",
+      "bytes": 539
+    },
+    {
+      "role": "short-shape-receipts",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/receipts/final-bitmap/stderr.log",
+      "copyPath": "short-shape-receipts/final-bitmap/stderr.log.raw",
+      "sha256": "9e6eb1f447f0da5b8c861430e4116887c703cadac017cf46fc3c3f804072f6a4",
+      "bytes": 465
+    },
+    {
+      "role": "short-shape-receipts",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/receipts/final-bitmap/stdout.log",
+      "copyPath": "short-shape-receipts/final-bitmap/stdout.log.raw",
+      "sha256": "86ccc0eee1a252afeca6a45bf5878ae31b36e1a440a2cc14d84f450f1a0654d9",
+      "bytes": 340
+    },
+    {
+      "role": "short-shape-receipts",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/receipts/focused-inter/result.json",
+      "copyPath": "short-shape-receipts/focused-inter/result.json.raw",
+      "sha256": "ef3e0366fe7bbb62f72ed0db057360093ba20b5976266a09e034e1741281bee7",
+      "bytes": 607
+    },
+    {
+      "role": "short-shape-receipts",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/receipts/focused-inter/start.json",
+      "copyPath": "short-shape-receipts/focused-inter/start.json.raw",
+      "sha256": "dbab7905998beca05237f5b3ceed10bf4c063a67eacf33d2a2f7fa20c48aa0be",
+      "bytes": 354
+    },
+    {
+      "role": "short-shape-receipts",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/receipts/focused-inter/stderr.log",
+      "copyPath": "short-shape-receipts/focused-inter/stderr.log.raw",
+      "sha256": "47ba2d35d90c878074fd4ba31055125296a5fe47a4288f468312d1d1b254f6ef",
+      "bytes": 1169
+    },
+    {
+      "role": "short-shape-receipts",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/receipts/focused-inter/stdout.log",
+      "copyPath": "short-shape-receipts/focused-inter/stdout.log.raw",
+      "sha256": "d67507307eb28c000955403fe5f8c183e860cc44936a229f6d9202b3644ed5b5",
+      "bytes": 900
+    },
+    {
+      "role": "short-shape-receipts",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/receipts/full-native/result.json",
+      "copyPath": "short-shape-receipts/full-native/result.json.raw",
+      "sha256": "97d5b24ebb7989481e955e699d9366a5061622cf71aeca90fb6ace44ab4b50c1",
+      "bytes": 516
+    },
+    {
+      "role": "short-shape-receipts",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/receipts/full-native/start.json",
+      "copyPath": "short-shape-receipts/full-native/start.json.raw",
+      "sha256": "d592f77aa3684082fecf60824fda945ed4162d65b1feab87e99b5ae092be5994",
+      "bytes": 263
+    },
+    {
+      "role": "short-shape-receipts",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/receipts/full-native/stderr.log",
+      "copyPath": "short-shape-receipts/full-native/stderr.log.raw",
+      "sha256": "f53be10c75fa8e7d9797a9a93b871bda486574b9450ab45757008a13d2e1a6a3",
+      "bytes": 993
+    },
+    {
+      "role": "short-shape-receipts",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/receipts/full-native/stdout.log",
+      "copyPath": "short-shape-receipts/full-native/stdout.log.raw",
+      "sha256": "7c7c1d317d81895448105ed6616b9f60a5e3ee5b037be6f2d013d48f5afd08dc",
+      "bytes": 50541
+    },
+    {
+      "role": "short-shape-receipts",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/receipts/run.py",
+      "copyPath": "short-shape-receipts/run.py.raw",
+      "sha256": "82f229cda8b48468c37dec1425c8ad1f6b2abc2a9eaa43574ac2e2be4cf6dc3a",
+      "bytes": 821
+    },
+    {
+      "role": "short-shape-receipts",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/receipts/static-check/result.json",
+      "copyPath": "short-shape-receipts/static-check/result.json.raw",
+      "sha256": "4e49f1e33d39cf1943f0e57672ccbf8f90ac1f7c6449a40f660f7c27133bbabf",
+      "bytes": 516
+    },
+    {
+      "role": "short-shape-receipts",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/receipts/static-check/start.json",
+      "copyPath": "short-shape-receipts/static-check/start.json.raw",
+      "sha256": "0398df1e9bc45bdd9273f994e2ef9d5f702c01e75d4b7e52637a6e798dce6f9a",
+      "bytes": 263
+    },
+    {
+      "role": "short-shape-receipts",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/receipts/static-check/stderr.log",
+      "copyPath": "short-shape-receipts/static-check/stderr.log.raw",
+      "sha256": "22263dc13fb9f91114a25de5548e8c2122c71a9fbf30de6e66874c5442cfa6df",
+      "bytes": 852
+    },
+    {
+      "role": "short-shape-receipts",
+      "sourcePath": "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/receipts/static-check/stdout.log",
+      "copyPath": "short-shape-receipts/static-check/stdout.log.raw",
+      "sha256": "bb2872a244eff566b937c548f0e2ac6f1b58a7ed329d4999e7d114bab4e9364d",
+      "bytes": 115
+    }
+  ],
+  "excluded": [
+    {
+      "description": "Archived Bitmap trace blobs and original 0.1.0 package/Wasm",
+      "reason": "large ignored source artifacts; exact SHA-256 identities retained in copied handoff and source evidence"
+    },
+    {
+      "description": "Full E6 matrix packet",
+      "reason": "already committed at benches/reports/held-row-view-local-2026-10-21/"
+    },
+    {
+      "description": "ephemeral process identifier files",
+      "reason": "not needed to reproduce workflow results; start/result/stdout/stderr and wrapper are copied"
+    }
+  ]
+}

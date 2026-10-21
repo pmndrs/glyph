@@ -1,0 +1,581 @@
+diff --git a/packages/glyph/rust/shaper/src/engine/state.rs b/packages/glyph/rust/shaper/src/engine/state.rs
+index 253db2c9..c98e2373 100644
+--- a/packages/glyph/rust/shaper/src/engine/state.rs
++++ b/packages/glyph/rust/shaper/src/engine/state.rs
+@@ -221,6 +221,44 @@ enum ShapeAttempt {
+     NeedsFallback,
+ }
+ 
++#[cfg(test)]
++fn short_probe_window(window: ShapeWindow) -> serde_json::Value {
++    serde_json::json!({
++        "oldStart": window.old_start, "oldEnd": window.old_end,
++        "newStart": window.new_start, "newEnd": window.new_end,
++        "probeEnd": window.probe_end,
++        "oldGlyphStart": window.old_glyph_start, "oldGlyphEnd": window.old_glyph_end,
++    })
++}
++
++#[cfg(test)]
++fn short_probe_boundary(
++    shape: &ShapeArena,
++    boundary: u32,
++    start: usize,
++    end: usize,
++) -> serde_json::Value {
++    let glyph = (start..end).find(|&index| shape.clusters[index] == boundary);
++    let Some(glyph) = glyph else {
++        return serde_json::json!({"offset": boundary, "state": "missing", "safe": false});
++    };
++    let cluster = shape.clusters[glyph];
++    let mut first = glyph;
++    let mut last = glyph + 1;
++    while first > start && shape.clusters[first - 1] == cluster {
++        first -= 1;
++    }
++    while last < end && shape.clusters[last] == cluster {
++        last += 1;
++    }
++    let unsafe_bits = shape.glyph_flags[first..last]
++        .iter()
++        .fold(0_u16, |bits, flags| {
++            bits | (flags & GLYPH_FLAG_UNSAFE_TO_CONCAT)
++        });
++    serde_json::json!({"offset": boundary, "state": if unsafe_bits == 0 { "present-safe" } else { "present-unsafe" }, "safe": unsafe_bits == 0, "glyph": glyph, "cluster": cluster, "glyphStart": first, "glyphEnd": last, "unsafeBits": unsafe_bits})
++}
++
+ impl TextEdit {
+     fn is_same_length(self) -> bool {
+         self.old_end.saturating_sub(self.old_start) == self.new_end.saturating_sub(self.new_start)
+@@ -4863,17 +4901,42 @@ impl ParagraphState {
+         shaper: &mut ShaperRegistry,
+     ) -> Result<bool, EngineError> {
+         let Some(edit) = bounding_text_edit(&self.text_edits) else {
++            #[cfg(test)]
++            super::work_attribution::short_shape_probe::record(
++                "guard",
++                serde_json::json!("no-reconciled-edit"),
++            );
+             return Ok(false);
+         };
++        #[cfg(test)]
++        super::work_attribution::short_shape_probe::record(
++            "edit",
++            serde_json::json!({"oldStart": edit.old_start, "oldEnd": edit.old_end, "newStart": edit.new_start, "newEnd": edit.new_end}),
++        );
+         let old_runs = self.shaping_runs.committed().runs();
+         let new_runs = self.shaping_runs.active().runs();
+         if old_runs.len() != new_runs.len() || old_runs.is_empty() {
++            #[cfg(test)]
++            super::work_attribution::short_shape_probe::record(
++                "guard",
++                serde_json::json!("run-count"),
++            );
+             return Ok(false);
+         }
+         let Some(old_run_index) = containing_run(old_runs, edit.old_start, edit.old_end) else {
++            #[cfg(test)]
++            super::work_attribution::short_shape_probe::record(
++                "guard",
++                serde_json::json!("old-containing-run"),
++            );
+             return Ok(false);
+         };
+         let Some(new_run_index) = containing_run(new_runs, edit.old_start, edit.new_end) else {
++            #[cfg(test)]
++            super::work_attribution::short_shape_probe::record(
++                "guard",
++                serde_json::json!("new-containing-run"),
++            );
+             return Ok(false);
+         };
+         if old_run_index != new_run_index
+@@ -4887,10 +4950,20 @@ impl ParagraphState {
+                     .then_some((&self.styles.committed().arena, &self.styles.active().arena)),
+             )?
+         {
++            #[cfg(test)]
++            super::work_attribution::short_shape_probe::record(
++                "guard",
++                serde_json::json!("run-topology"),
++            );
+             return Ok(false);
+         }
+         let old_run = old_runs[old_run_index];
+         let new_run = new_runs[new_run_index];
++        #[cfg(test)]
++        super::work_attribution::short_shape_probe::record(
++            "runs",
++            serde_json::json!({"old": [old_run.text_start, old_run.text_end, old_run.direction], "new": [new_run.text_start, new_run.text_end, new_run.direction]}),
++        );
+         let affected_source_run =
+             u32::try_from(old_run_index).map_err(|_| EngineError::ResultTooLarge)?;
+         let mut affected_fallbacks = self
+@@ -4899,6 +4972,11 @@ impl ParagraphState {
+             .copied()
+             .filter(|span| span.source_run == affected_source_run);
+         let Some(fallback) = affected_fallbacks.next() else {
++            #[cfg(test)]
++            super::work_attribution::short_shape_probe::record(
++                "guard",
++                serde_json::json!("no-fallback-span"),
++            );
+             return Ok(false);
+         };
+         if affected_fallbacks.next().is_some()
+@@ -4906,8 +4984,18 @@ impl ParagraphState {
+             || fallback.text_start != old_run.text_start
+             || fallback.text_end != old_run.text_end
+         {
++            #[cfg(test)]
++            super::work_attribution::short_shape_probe::record(
++                "guard",
++                serde_json::json!("fallback-not-primary-full-run"),
++            );
+             return Ok(false);
+         }
++        #[cfg(test)]
++        super::work_attribution::short_shape_probe::record(
++            "fallback",
++            serde_json::json!({"spanCount": 1, "primaryFullRun": true, "textStart": fallback.text_start, "textEnd": fallback.text_end, "fontIndex": fallback.font_index}),
++        );
+         let mut affected_shapes = self
+             .shape
+             .committed()
+@@ -4917,11 +5005,43 @@ impl ParagraphState {
+             .enumerate()
+             .filter(|(_, run)| run.source_run == affected_source_run);
+         let Some((affected_shape_index, affected_shape)) = affected_shapes.next() else {
++            #[cfg(test)]
++            super::work_attribution::short_shape_probe::record(
++                "guard",
++                serde_json::json!("no-shaped-run"),
++            );
+             return Ok(false);
+         };
+         if affected_shapes.next().is_some() {
++            #[cfg(test)]
++            super::work_attribution::short_shape_probe::record(
++                "guard",
++                serde_json::json!("multiple-shaped-runs"),
++            );
+             return Ok(false);
+         }
++        #[cfg(test)]
++        if super::work_attribution::short_shape_probe::enabled() {
++            let (glyph_start, glyph_end) =
++                shaped_run_glyph_range(self.shape.committed(), affected_shape)?;
++            let shape = self.shape.committed();
++            super::work_attribution::short_shape_probe::record(
++                "affectedShape",
++                serde_json::json!({"index": affected_shape_index, "glyphStart": glyph_start, "glyphEnd": glyph_end}),
++            );
++            super::work_attribution::short_shape_probe::record(
++                "oldBoundaries",
++                serde_json::Value::Array(
++                    (5..=9)
++                        .map(|offset| short_probe_boundary(shape, offset, glyph_start, glyph_end))
++                        .collect(),
++                ),
++            );
++            super::work_attribution::short_shape_probe::record(
++                "oldRunEnd",
++                serde_json::json!({"offset": old_run.text_end, "state": "run-end-admitted"}),
++            );
++        }
+         let sparse_scope = build_sparse_shape_windows(
+             &self.text_edits,
+             self.shape.committed(),
+@@ -4929,6 +5049,51 @@ impl ParagraphState {
+             old_run,
+             &mut self.shape_window_scratch,
+         )?;
++        #[cfg(test)]
++        {
++            super::work_attribution::short_shape_probe::record(
++                "sparseBuilder",
++                serde_json::json!(sparse_scope),
++            );
++            super::work_attribution::short_shape_probe::record(
++                "initialWindows",
++                serde_json::Value::Array(
++                    self.shape_window_scratch
++                        .iter()
++                        .copied()
++                        .map(short_probe_window)
++                        .collect(),
++                ),
++            );
++            let old_unsafe_chain = if super::work_attribution::short_shape_probe::enabled()
++                && old_run.text_end == 10
++                && edit.old_end == 5
++            {
++                let (start, end) = shaped_run_glyph_range(self.shape.committed(), affected_shape)?;
++                (5..=9).all(|offset| {
++                    short_probe_boundary(self.shape.committed(), offset, start, end)["state"]
++                        == "present-unsafe"
++                })
++            } else {
++                false
++            };
++            let whole = self.shape_window_scratch.len() == 1
++                && self.shape_window_scratch[0].old_start == old_run.text_start
++                && self.shape_window_scratch[0].old_end == old_run.text_end;
++            let reason = if !sparse_scope {
++                "builder-false-whole-run"
++            } else if whole && old_unsafe_chain {
++                "old-unsafe-chain"
++            } else if whole {
++                "old-builder-whole-run"
++            } else {
++                "old-boundary-builder-shorter"
++            };
++            super::work_attribution::short_shape_probe::record(
++                "initialScopeReason",
++                serde_json::json!(reason),
++            );
++        }
+         if !sparse_scope {
+             set_whole_shape_window(
+                 &mut self.shape_window_scratch,
+@@ -4939,6 +5104,17 @@ impl ParagraphState {
+         }
+         let mut verify_boundaries = sparse_scope;
+         loop {
++            #[cfg(test)]
++            super::work_attribution::short_shape_probe::record(
++                "attemptOrdinal",
++                serde_json::json!(if verify_boundaries {
++                    0
++                } else if sparse_scope {
++                    1
++                } else {
++                    0
++                }),
++            );
+             match self.prepare_incremental_shape_scope(
+                 shaper,
+                 old_run_index,
+@@ -4951,6 +5127,11 @@ impl ParagraphState {
+             )? {
+                 ShapeAttempt::Prepared => break,
+                 ShapeAttempt::RetryWholeRun if verify_boundaries => {
++                    #[cfg(test)]
++                    super::work_attribution::short_shape_probe::record(
++                        "retry",
++                        serde_json::json!("new-boundary-rejected"),
++                    );
+                     set_whole_shape_window(
+                         &mut self.shape_window_scratch,
+                         affected_shape,
+@@ -4959,7 +5140,14 @@ impl ParagraphState {
+                     )?;
+                     verify_boundaries = false;
+                 }
+-                ShapeAttempt::RetryWholeRun | ShapeAttempt::NeedsFallback => return Ok(false),
++                ShapeAttempt::RetryWholeRun | ShapeAttempt::NeedsFallback => {
++                    #[cfg(test)]
++                    super::work_attribution::short_shape_probe::record(
++                        "guard",
++                        serde_json::json!("scope-rejected-to-fallback"),
++                    );
++                    return Ok(false);
++                }
+             }
+         }
+         for span in self.fallback_spans.iter().copied() {
+@@ -4979,6 +5167,17 @@ impl ParagraphState {
+         }
+         self.boundary_shape_scratch.clear();
+         self.incremental_shape_source_run = Some(affected_source_run);
++        #[cfg(test)]
++        super::work_attribution::short_shape_probe::record(
++            "finalWindows",
++            serde_json::Value::Array(
++                self.shape_window_scratch
++                    .iter()
++                    .copied()
++                    .map(short_probe_window)
++                    .collect(),
++            ),
++        );
+         Ok(true)
+     }
+ 
+@@ -5094,6 +5293,61 @@ impl ParagraphState {
+                         },
+                     )
+                     .map_err(shaper_error)?;
++                #[cfg(test)]
++                if super::work_attribution::short_shape_probe::enabled() {
++                    let scratch = &self.boundary_shape_scratch;
++                    let start = if window.new_start == new_run.text_start {
++                        serde_json::json!({"offset": window.new_start, "state": "run-start-admitted"})
++                    } else {
++                        short_probe_boundary(scratch, window.new_start, 0, scratch.clusters.len())
++                    };
++                    let end = if window.new_end == new_run.text_end {
++                        serde_json::json!({"offset": window.new_end, "state": "run-end-admitted"})
++                    } else {
++                        short_probe_boundary(scratch, window.new_end, 0, scratch.clusters.len())
++                    };
++                    let state_safe = |value: &serde_json::Value| {
++                        matches!(
++                            value["state"].as_str(),
++                            Some("present-safe" | "run-start-admitted" | "run-end-admitted")
++                        )
++                    };
++                    let classified_safe = state_safe(&start) && state_safe(&end);
++                    assert_eq!(
++                        classified_safe,
++                        sparse_shape_boundaries_are_safe(
++                            scratch,
++                            window,
++                            new_run.text_start,
++                            new_run.text_end
++                        )
++                    );
++                    let glyph_zero = scratch.glyph_ids.contains(&0);
++                    let mut reasons = alloc::vec::Vec::new();
++                    for (name, boundary) in [("new-start", &start), ("new-end", &end)] {
++                        match boundary["state"].as_str() {
++                            Some("missing") => reasons.push(alloc::format!("{name}-missing")),
++                            Some("present-unsafe") => reasons.push(alloc::format!("{name}-unsafe")),
++                            _ => {}
++                        }
++                    }
++                    if glyph_zero {
++                        reasons.push(alloc::string::String::from("glyph-zero"));
++                    }
++                    let result = if glyph_zero {
++                        "NeedsFallback"
++                    } else if verify_boundaries && !classified_safe {
++                        "RetryWholeRun"
++                    } else {
++                        "Prepared"
++                    };
++                    super::work_attribution::short_shape_probe::attempt(serde_json::json!({
++                        "ordinal": super::work_attribution::short_shape_probe::attempt_ordinal(),
++                        "window": short_probe_window(window), "verifyBoundaries": verify_boundaries,
++                        "newStart": start, "newEnd": end, "glyphZero": glyph_zero,
++                        "boundarySafe": classified_safe, "result": result, "reasons": reasons,
++                    }));
++                }
+                 if self.boundary_shape_scratch.glyph_ids.contains(&0) {
+                     self.shape.pending_mut().clear();
+                     self.boundary_shape_scratch.clear();
+@@ -13460,6 +13714,11 @@ mod tests {
+         let (mut engine, mut shaper) = shaped_inter_engine("alpha 0000");
+ 
+         for next in ["bravo 0000", "alpha 0000"] {
++            let phase = if next == "bravo 0000" {
++                "forward"
++            } else {
++                "reverse"
++            };
+             let replacement = utf16(next);
+             let bytes = text_mutation_bytes(&[(0, replacement.len() as u32, &replacement)]);
+             let mut request = update(1, 1, 1);
+@@ -13480,11 +13739,23 @@ mod tests {
+                 .glyph_ids
+                 .capacity();
+             super::super::work_attribution::reset();
++            super::super::work_attribution::short_shape_probe::begin(
++                serde_json::json!({"phase": phase, "font": "actual-Inter", "root": 4, "paragraph": 1}),
++            );
+             let before_calls = crate::SHAPINGS.with(core::cell::Cell::get);
+             let before_units = crate::SHAPED_UNITS.with(core::cell::Cell::get);
+             let measured = engine
+                 .measure_paragraph_with_shaper(&mut shaper, request, 1)
+                 .unwrap();
++            let observation = super::super::work_attribution::short_shape_probe::take();
++            assert_eq!(observation["identity"]["phase"], phase);
++            assert_eq!(
++                observation["edit"],
++                serde_json::json!({"oldStart": 0, "oldEnd": 5, "newStart": 0, "newEnd": 5})
++            );
++            assert_eq!(observation["finalWindows"][0]["newStart"], 0);
++            assert_eq!(observation["finalWindows"][0]["newEnd"], 10);
++            assert!(!observation["attempts"].as_array().unwrap().is_empty());
+             let candidate = engine
+                 .planners
+                 .get(&4)
+diff --git a/packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs b/packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs
+index e55426cb..f31f8a4b 100644
+--- a/packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs
++++ b/packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs
+@@ -15,7 +15,7 @@ use crate::{
+         frame_wire::parse_update_request,
+         render_plan::PATCH_WRITE,
+         render_plan_wire::{publication_layout, query_layout},
+-        work_attribution::{self, Work},
++        work_attribution::{self, Work, short_shape_probe},
+     },
+     wire::read_u32,
+ };
+@@ -337,6 +337,7 @@ fn authenticate() {
+     let mut totals = [Work::default(); 6];
+     let mut event_counts = [0_usize; 6];
+     let mut wires = [WireTotals::default(); 6];
++    let mut shape_rows = Vec::<Value>::new();
+     for line in fs::read_to_string(&trace).unwrap().lines() {
+         let event: Value = serde_json::from_str(line).unwrap();
+         let sequence = field(&event, "sequence").as_u64().unwrap();
+@@ -462,6 +463,7 @@ fn authenticate() {
+             "measureParagraph" => {
+                 let root = argument(&event, 0);
+                 let paragraph = argument(&event, 3);
++                let warm_shape = matches!(phase, "forward" | "reverse");
+                 let request_bytes = blob(directory, &event, "request");
+                 let expected = blob(directory, &event, "result");
+                 let transport = frames.get_mut(&root).unwrap();
+@@ -476,9 +478,31 @@ fn authenticate() {
+                     root,
+                 )
+                 .unwrap();
++                if warm_shape {
++                    short_shape_probe::begin(
++                        serde_json::json!({"sequence": sequence, "phase": phase, "root": root, "paragraph": paragraph, "font": "actual-Bitmap"}),
++                    );
++                }
+                 let measured = engine
+                     .measure_paragraph_with_shaper(&mut registry, request, paragraph)
+                     .unwrap();
++                if warm_shape {
++                    let mut row = short_shape_probe::take();
++                    assert_eq!(row["identity"]["sequence"], sequence);
++                    assert_eq!(row["identity"]["root"], root);
++                    assert_eq!(row["identity"]["paragraph"], paragraph);
++                    assert!(
++                        row.get("edit").is_some(),
++                        "warm edit did not enter shape producer"
++                    );
++                    assert!(
++                        row.get("guard").is_some() || row.get("finalWindows").is_some(),
++                        "missing terminal shape observation"
++                    );
++                    let shape_work = work_attribution::snapshot();
++                    row["finalWork"] = serde_json::json!({"harfrustCalls": shape_work.harfrust_calls, "harfrustUtf16Units": shape_work.harfrust_utf16_units, "shapeScratchArenaMoves": shape_work.shape_scratch_arena_moves, "shapeRangeCopiedGlyphs": shape_work.shape_range_copied_glyphs});
++                    shape_rows.push(row);
++                }
+                 let views = engine.measured_semantic_views(measured).unwrap();
+                 let layout = query_layout(views).unwrap();
+                 assert!(layout.byte_length <= request.limits.max_output_bytes);
+@@ -595,6 +619,46 @@ fn authenticate() {
+     assert!(initialized);
+     assert!(frames.is_empty(), "every captured root must be disposed");
+     assert_eq!(event_counts, [2048, 1, 1024, 1, 1024, 1]);
++    assert_eq!(shape_rows.len(), 2048);
++    assert_eq!(
++        shape_rows
++            .iter()
++            .filter(|row| row["identity"]["phase"] == "forward")
++            .count(),
++        1024
++    );
++    assert_eq!(
++        shape_rows
++            .iter()
++            .filter(|row| row["identity"]["phase"] == "reverse")
++            .count(),
++        1024
++    );
++    let mut offset_histogram = BTreeMap::<String, usize>::new();
++    let mut reason_histogram = BTreeMap::<String, usize>::new();
++    for row in &shape_rows {
++        for boundary in row["oldBoundaries"]
++            .as_array()
++            .expect("missing old boundary array")
++        {
++            let key = format!(
++                "{}:{}",
++                boundary["offset"],
++                boundary["state"].as_str().unwrap()
++            );
++            *offset_histogram.entry(key).or_default() += 1;
++        }
++        for attempt in row["attempts"].as_array().unwrap() {
++            if attempt["reasons"].as_array().unwrap().is_empty() {
++                *reason_histogram.entry("none".into()).or_default() += 1;
++            }
++            for reason in attempt["reasons"].as_array().unwrap() {
++                *reason_histogram
++                    .entry(reason.as_str().unwrap().into())
++                    .or_default() += 1;
++            }
++        }
++    }
+     for index in [1, 3, 5] {
+         assert_eq!(
+             totals[index].ordered_emitted_write_bytes, wires[index].plan_write_bytes,
+@@ -606,6 +670,7 @@ fn authenticate() {
+         "eventCount": count,
+         "scope": "native direct one-entry engine/frame replay; excludes batch descriptor processing, allocation, host buffers, timing, GC, and seven-family parity",
+         "nativeScalar": true,
++        "shortShapeBoundaryObservation": {"rows": shape_rows, "offsetHistogram": offset_histogram, "reasonHistogram": reason_histogram},
+         "totals": [
+             work_json(totals[0], event_counts[0], wires[0], "initial", "queryPreparation"),
+             work_json(totals[1], event_counts[1], wires[1], "initial", "publication"),
+diff --git a/packages/glyph/rust/shaper/src/engine/work_attribution.rs b/packages/glyph/rust/shaper/src/engine/work_attribution.rs
+index 9e00ba9a..6a20a626 100644
+--- a/packages/glyph/rust/shaper/src/engine/work_attribution.rs
++++ b/packages/glyph/rust/shaper/src/engine/work_attribution.rs
+@@ -1,5 +1,58 @@
+ //! Test-only work counts. These observe existing owners; they are not timers or a second executor.
+ 
++/// Temporary, opt-in diagnostic for the authenticated short-label shape boundary replay.
++/// The owner enables it for one measure, takes it before the next event, and leaves it off
++/// during initialization and publication. Remove after the architecture decision.
++pub(crate) mod short_shape_probe {
++    use core::cell::RefCell;
++    use serde_json::{Value, json};
++
++    std::thread_local! {
++        static ROW: RefCell<Option<Value>> = const { RefCell::new(None) };
++    }
++
++    pub(crate) fn begin(identity: Value) {
++        ROW.with(|row| {
++            let mut row = row.borrow_mut();
++            assert!(row.is_none(), "stale shape observation");
++            *row = Some(json!({"identity": identity, "attempts": []}));
++        });
++    }
++
++    pub(crate) fn record(key: &str, value: Value) {
++        ROW.with(|row| {
++            if let Some(row) = row.borrow_mut().as_mut() {
++                row[key] = value;
++            }
++        });
++    }
++
++    pub(crate) fn attempt(value: Value) {
++        ROW.with(|row| {
++            if let Some(row) = row.borrow_mut().as_mut() {
++                row["attempts"].as_array_mut().unwrap().push(value);
++            }
++        });
++    }
++
++    pub(crate) fn enabled() -> bool {
++        ROW.with(|row| row.borrow().is_some())
++    }
++
++    pub(crate) fn attempt_ordinal() -> u64 {
++        ROW.with(|row| {
++            row.borrow()
++                .as_ref()
++                .and_then(|row| row["attemptOrdinal"].as_u64())
++                .unwrap_or(0)
++        })
++    }
++
++    pub(crate) fn take() -> Value {
++        ROW.with(|row| row.borrow_mut().take().expect("missing shape observation"))
++    }
++}
++
+ use core::cell::Cell;
+ 
+ #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

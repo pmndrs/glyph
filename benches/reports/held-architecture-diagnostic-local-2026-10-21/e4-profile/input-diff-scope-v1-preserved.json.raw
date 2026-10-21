@@ -1,0 +1,67 @@
+{
+  "schema": "held-e4-input-diff-scope-v1",
+  "checkedAt": "2026-10-21T06:17:14.916067+00:00",
+  "baseRevision": "b81756a5ce4541b4e9b23d7ad04c9105345e7cff",
+  "currentRevision": "16bd60e747a1323536e02f547841325ca96c43ff",
+  "inputHashes": {
+    "benches/scripts/support/labs-result.mts": {
+      "e4FreezeSha256": "0d6e3a8de0871bc9ee15c8f50a85085c9ab199fad3787b4b38b2f3f4403376e0",
+      "currentSha256": "7299ef7c78c3db4e38093ea463c95cd96ccf8bd0b65581f72d9fe4c5325efc02"
+    },
+    "benches/scripts/support/saved-package-labs.mts": {
+      "e4FreezeSha256": "b986ab507259c7e81a5ef7294b2ced848edd7f76bf61ac2a45fcd568fd6e03a9",
+      "currentSha256": "12742cf68755a09c9b30fe3dc9a3973b680f9e0ad0bd445e0c653891596a19cf"
+    },
+    "pnpm-lock.yaml": {
+      "e4FreezeSha256": "d0d64f1bad9537f2cec0d6142ab94833bd09c5ed0021eb8ad66cc4f2da01cb3c",
+      "currentSha256": "d8c2d8b5ee201fdf1a9e5270eda79d64cf7a79a2061937df49a54f5adf626e9a"
+    },
+    "pnpm-workspace.yaml": {
+      "e4FreezeSha256": "867c5bbbba8becd6e43141e4419e74182fdbc22317c943cac7e9c3e06c9e814f",
+      "currentSha256": "900bb0bc5ea9f2a1c19120ef404950a81dd36b271dc6ac110d1fa86fe8483469"
+    },
+    "patches/@pmndrs__labs@0.9.0.patch": {
+      "e4FreezeSha256": null,
+      "currentSha256": "1475111a563f675ba8de804b57a4a7500acad4f500771713dad8ad33b5be3002"
+    },
+    "packages/glyph/package.json": {
+      "e4FreezeSha256": "8e0f1ca27ba0908b97dc9664c2640d80f119858cec985d957fa0a3e8269103d6",
+      "currentSha256": "8e0f1ca27ba0908b97dc9664c2640d80f119858cec985d957fa0a3e8269103d6"
+    },
+    "packages/glyph/rust/Cargo.lock": {
+      "e4FreezeSha256": null,
+      "currentSha256": null
+    },
+    "packages/glyph/scripts/build-shaper-profile-artifact.mjs": {
+      "e4FreezeSha256": "50e36bcb872b248fd0131a29950620806f09e34cd81f52cf945d6c659b39de01",
+      "currentSha256": "50e36bcb872b248fd0131a29950620806f09e34cd81f52cf945d6c659b39de01"
+    },
+    "packages/glyph/scripts/support/named-shaper.mjs": {
+      "e4FreezeSha256": "3cc7fa6cc8cc44cec406cdbb90343a3ccbb912bd65fe848042264ea27b89a9ff",
+      "currentSha256": "3cc7fa6cc8cc44cec406cdbb90343a3ccbb912bd65fe848042264ea27b89a9ff"
+    }
+  },
+  "changes": {
+    "labsResult": "Adds full-coverage and single-call sampling policy validation; current helper input only.",
+    "savedPackageLabs": "Includes harness-related paths in digest and validates stored sampling policy / digest; current harness input only.",
+    "pnpmWorkspace": "Adds patchedDependencies mapping for @pmndrs/labs@0.9.0 to patches/@pmndrs__labs@0.9.0.patch.",
+    "pnpmLock": "Only resolution change is applying that @pmndrs/labs patch hash; no package glyph or Rust dependency resolution changes.",
+    "glyphPackageManifest": "Byte-identical to E4 frozen hash.",
+    "glyphRustCargoLock": "Byte-identical to E4 frozen hash.",
+    "glyphArtifactBuildAndAuthenticationScripts": "Both byte-identical to E4 frozen hashes."
+  },
+  "pnpmLockWorkspaceUnifiedDiff": "diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml\nindex 031ac201..8ef5403e 100644\n--- a/pnpm-lock.yaml\n+++ b/pnpm-lock.yaml\n@@ -36,0 +37,3 @@ overrides:\n+patchedDependencies:\n+  '@pmndrs/labs@0.9.0': 1475111a563f675ba8de804b57a4a7500acad4f500771713dad8ad33b5be3002\n+\n@@ -266 +269 @@ importers:\n-        version: 0.9.0\n+        version: 0.9.0(patch_hash=1475111a563f675ba8de804b57a4a7500acad4f500771713dad8ad33b5be3002)\n@@ -5533 +5536 @@ snapshots:\n-  '@pmndrs/labs@0.9.0':\n+  '@pmndrs/labs@0.9.0(patch_hash=1475111a563f675ba8de804b57a4a7500acad4f500771713dad8ad33b5be3002)':\ndiff --git a/pnpm-workspace.yaml b/pnpm-workspace.yaml\nindex c4ec141d..080e6c13 100644\n--- a/pnpm-workspace.yaml\n+++ b/pnpm-workspace.yaml\n@@ -38,0 +39,3 @@ overrides:\n+\n+patchedDependencies:\n+  '@pmndrs/labs@0.9.0': patches/@pmndrs__labs@0.9.0.patch\n",
+  "buildRuntimeAssessment": "Observed source diff changes the benchmark dependency/harness sampling protocol. It does not change Glyph package dependencies, Rust crate dependencies, product source, or the shaper artifact build/authentication scripts. No package build was run in this task.",
+  "currentHarnessRelevantHashes": {
+    "benches/scripts/support/labs-result.mts": "7299ef7c78c3db4e38093ea463c95cd96ccf8bd0b65581f72d9fe4c5325efc02",
+    "benches/scripts/support/saved-package-labs.mts": "12742cf68755a09c9b30fe3dc9a3973b680f9e0ad0bd445e0c653891596a19cf",
+    "pnpm-lock.yaml": "d8c2d8b5ee201fdf1a9e5270eda79d64cf7a79a2061937df49a54f5adf626e9a",
+    "pnpm-workspace.yaml": "900bb0bc5ea9f2a1c19120ef404950a81dd36b271dc6ac110d1fa86fe8483469",
+    "patches/@pmndrs__labs@0.9.0.patch": "1475111a563f675ba8de804b57a4a7500acad4f500771713dad8ad33b5be3002"
+  },
+  "notes": [
+    "The frozen full input manifest differs in exactly four files; product-source mismatch count is zero.",
+    "The current benchmark harness changes are expected protocol inputs and should be hashed in any fresh profiling provenance.",
+    "A harness change is not evidence of named Wasm section invalidity."
+  ]
+}

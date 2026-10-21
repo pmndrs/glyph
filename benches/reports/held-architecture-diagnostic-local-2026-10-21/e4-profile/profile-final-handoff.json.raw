@@ -1,0 +1,305 @@
+{
+  "schema": "held-e4-one-capture-factual-handoff-v1",
+  "checkedAt": "2026-10-21T06:22:28.696657+00:00",
+  "capture": {
+    "workflow": "benchmark:edit-sized-publication-profile",
+    "wrapperDirectory": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/profile-capture-01",
+    "wrapperResult": {
+      "argv": [
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "pnpm",
+        "scripts",
+        "run",
+        "benchmark:edit-sized-publication-profile",
+        "--",
+        "--artifact",
+        "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+        "--wasm",
+        "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/shaper-profile/text-shaper.named.wasm",
+        "--output",
+        "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/e4-1024-named-profile",
+        "--case",
+        "bulk-write",
+        "--boundary",
+        "publication",
+        "--count",
+        "1024",
+        "--position",
+        "first",
+        "--warmups",
+        "10",
+        "--iterations",
+        "80",
+        "--reads",
+        "none",
+        "--publication-path",
+        "scene"
+      ],
+      "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+      "started": "2026-10-21T06:20:09.623115+00:00",
+      "finished": "2026-10-21T06:20:12.691158+00:00",
+      "exit": 0,
+      "sha256": {
+        "stdout.log": "8148f9d0cca76756faeb080481317d3ebb96d4faf4e41c0541e10ce5b7f93f3c",
+        "stderr.log": "19af0ddc34c15f9221caacab90c04e2a9d62f25b27c1e1aa3ad7339ea4c41b1f"
+      }
+    },
+    "pid": "10630",
+    "settings": {
+      "boundary": "publication",
+      "count": 1024,
+      "iterations": 80,
+      "position": "first",
+      "profileCase": "bulk-write",
+      "warmups": 10,
+      "reads": "none",
+      "publicationPath": "scene"
+    },
+    "timedOperations": {
+      "sets": 81920,
+      "reads": 0,
+      "publications": 80
+    },
+    "wallLatencyMs": {
+      "mean": 13.093790124999995,
+      "p50": 12.9809580000001,
+      "p95": 14.663042000000019
+    },
+    "drawTopology": {
+      "initial": {
+        "draws": 1,
+        "glyphs": 9216
+      },
+      "final": {
+        "draws": 1,
+        "glyphs": 9216
+      }
+    },
+    "cpuProfile": {
+      "sampleCount": 699,
+      "sampledMicroseconds": 1079542,
+      "phases": {
+        "setter": {
+          "samples": 469,
+          "microseconds": 703581,
+          "gcSamples": 0,
+          "gcMicroseconds": 0,
+          "blankNameSamples": 0,
+          "blankNameMicroseconds": 0,
+          "binaryenSamples": 16,
+          "binaryenMicroseconds": 24165,
+          "wasmSamples": 347,
+          "wasmMicroseconds": 520915,
+          "stages": {
+            "javascript": 181166,
+            "shaping": 198040,
+            "other-wasm": 321458,
+            "allocation": 1417,
+            "host-runtime": 1500
+          },
+          "stageSharesPct": {
+            "javascript": 25.75,
+            "shaping": 28.15,
+            "other-wasm": 45.69,
+            "allocation": 0.2,
+            "host-runtime": 0.21
+          }
+        },
+        "publication": {
+          "samples": 189,
+          "microseconds": 282587,
+          "gcSamples": 0,
+          "gcMicroseconds": 0,
+          "blankNameSamples": 6,
+          "blankNameMicroseconds": 8334,
+          "binaryenSamples": 1,
+          "binaryenMicroseconds": 1417,
+          "wasmSamples": 128,
+          "wasmMicroseconds": 192587,
+          "stages": {
+            "gather": 64794,
+            "other-wasm": 99417,
+            "javascript": 82541,
+            "render-plan": 26876,
+            "external-javascript": 7459,
+            "allocation": 1500
+          },
+          "stageSharesPct": {
+            "gather": 22.93,
+            "other-wasm": 35.18,
+            "javascript": 29.21,
+            "render-plan": 9.51,
+            "external-javascript": 2.64,
+            "allocation": 0.53
+          }
+        },
+        "unattributed": {
+          "samples": 41,
+          "microseconds": 93374,
+          "gcSamples": 6,
+          "gcMicroseconds": 9126,
+          "blankNameSamples": 0,
+          "blankNameMicroseconds": 0,
+          "binaryenSamples": 4,
+          "binaryenMicroseconds": 6042,
+          "wasmSamples": 25,
+          "wasmMicroseconds": 37623,
+          "stages": {
+            "host-runtime": 52751,
+            "other-wasm": 24124,
+            "shaping": 7458,
+            "benchmark-harness": 3000,
+            "gather": 6041
+          },
+          "stageSharesPct": {
+            "host-runtime": 56.49,
+            "other-wasm": 25.84,
+            "shaping": 7.99,
+            "benchmark-harness": 3.21,
+            "gather": 6.47
+          }
+        }
+      }
+    },
+    "wrapperStdout": "Captured by profile-capture-01/stdout.log; reports exact installed direct deps.",
+    "resolvedInstalledDirectDependencies": [
+      "@pmndrs/glyph 0.1.0",
+      "react 19.2.8",
+      "three 0.185.1",
+      "typegpu 0.12.5"
+    ],
+    "profileUrlForWasm": "wasm://wasm/006d3d82",
+    "namedWasmSha256": "806066af37452bbf5781955c8bb6f2083997cc68fd0e5eae485612ea5b608826",
+    "archiveSha256": "9b1ad97a03f5af8eaa0613e5bdaab601edf7fccf69fdeacc6059759191b1fb18",
+    "ancestry": {
+      "schema": "held-e4-1024-profile-ancestry-v1",
+      "profile": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/e4-1024-named-profile/cpu-profile.json",
+      "profileSha256": "2df04d4827cb1b80246c618989109654348f288a8eb2d7edb15f00a83624dadb",
+      "updateBulk": {
+        "nodeId": 6,
+        "functionName": "updateBulk",
+        "url": "file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/edit-sized-publication.profile.mts"
+      },
+      "anchors": [
+        {
+          "label": "bulk label-set / preparation subtree",
+          "nodeId": 7,
+          "functionName": "set text",
+          "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-MpTGs7/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-gathe_961c106d0871e39cc62d2685f09c7686/node_modules/@pmndrs/glyph/dist/three/text.js",
+          "parentNodeId": 6
+        },
+        {
+          "label": "scene updateMatrixWorld publication subtree",
+          "nodeId": 38,
+          "functionName": "updateMatrixWorld",
+          "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-MpTGs7/node_modules/.pnpm/three@0.185.1/node_modules/three/build/three.core.js",
+          "parentNodeId": 6
+        }
+      ],
+      "disjointSiblingBranches": true,
+      "notes": [
+        "Both anchors are actual child branches of captured updateBulk node 6. Node 7 is the `set text` path containing _updateText/prepareParagraph. Node 38 is updateMatrixWorld in Three core and includes its scene-publication descendants. No E2 node IDs were reused."
+      ]
+    },
+    "summaryWorkflowResult": {
+      "argv": [
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "pnpm",
+        "scripts",
+        "run",
+        "benchmark:cpu-profile-summary",
+        "--",
+        "--profile",
+        "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/e4-1024-named-profile/cpu-profile.json",
+        "--output",
+        "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/e4-1024-named-profile/exclusive.md",
+        "--manifest",
+        "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/e4-1024-named-profile/manifest.json",
+        "--wasm-url",
+        "wasm://wasm/006d3d82",
+        "--artifact",
+        "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+        "--ancestry",
+        "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/e4-1024-named-profile/ancestry.json"
+      ],
+      "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+      "started": "2026-10-21T06:21:30.920373+00:00",
+      "finished": "2026-10-21T06:21:31.643314+00:00",
+      "exit": 0,
+      "sha256": {
+        "stdout.log": "27f1f4fc9fb310f95b813705f7f24ad37f917dd1d7cd1fc854e5d2640345f63b",
+        "stderr.log": "09cc01deee8311b0c6190f156adfabe3107c822f0738de354539d55a8cd9fa72"
+      }
+    }
+  },
+  "identityStability": {
+    "schema": "held-e4-1024-profile-identity-comparison-v1",
+    "preflight": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/profile-preflight.json",
+    "postflight": {
+      "head": "16bd60e747a1323536e02f547841325ca96c43ff",
+      "tree": "3686eb4bc9def610656d0377e161ce0c3143743b",
+      "clean": true,
+      "trackedFreezeMismatchCount": 4,
+      "harnessDigest": "badf82b0d84dbced158f4bb44ee50b7adac7169323f295d108909c2b93413627",
+      "archiveSha256": "9b1ad97a03f5af8eaa0613e5bdaab601edf7fccf69fdeacc6059759191b1fb18",
+      "namedWasmSha256": "806066af37452bbf5781955c8bb6f2083997cc68fd0e5eae485612ea5b608826"
+    },
+    "stable": {
+      "head": true,
+      "tree": true,
+      "cleanBeforeAndAfter": true,
+      "harnessDigest": true,
+      "workflowSourceHashes": true,
+      "fixtures": true,
+      "archiveSha256": true,
+      "namedWasmSha256": true,
+      "fullTrackedFreezeInputHashes": true
+    }
+  },
+  "preflight": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/profile-preflight.json",
+  "postflight": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/profile-postflight.json",
+  "artifactAuthentication": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/artifact-authentication.json",
+  "sourceProvenance": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/source-provenance.json",
+  "inputDiffScopeCorrected": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/input-diff-scope.json",
+  "priorInputDiffScopePreserved": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/input-diff-scope-v1-preserved.json",
+  "profileFiles": {
+    "cpu-profile.json": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/e4-1024-named-profile/cpu-profile.json",
+      "sha256": "2df04d4827cb1b80246c618989109654348f288a8eb2d7edb15f00a83624dadb"
+    },
+    "summary.json": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/e4-1024-named-profile/summary.json",
+      "sha256": "79093b98cf1da0c92b2c36b7a1fa23013902acd30d87466609bc4ca4e6fc584f"
+    },
+    "manifest.json": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/e4-1024-named-profile/manifest.json",
+      "sha256": "ac08ae9599c34bff938defd8a15aaa3dd6896c1c7aa82a777dc0b9ca0a6d75b1"
+    },
+    "ancestry.json": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/e4-1024-named-profile/ancestry.json",
+      "sha256": "ec39ca0d275e1d053c2f09fd666811c5a2e91fa1987fc030cd2c96647f49e046"
+    },
+    "ancestry-proof.json": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/e4-1024-named-profile/ancestry-proof.json",
+      "sha256": "bfc2e4fcc68bd9403aaa3b6e93b6bd6e444b9995709b7b085544e394ac76e3df"
+    },
+    "exclusive.md": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/e4-1024-named-profile/exclusive.md",
+      "sha256": "18a97d39280f3343ee67ec181892124327b29a888631b590fee245f8bcc5b825"
+    },
+    "phase-metrics.json": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/e4-1024-named-profile/phase-metrics.json",
+      "sha256": "ecfc215aad7893766fa4916e3330d175c954028bacd4effce46643907917f8c2"
+    }
+  },
+  "materialLimitations": [
+    "Normal named-profile workflow removes its temporary install tree and does not persist all 947 installed member hashes pre/post. The archive itself has a full 947-member before authentication and the archive SHA stayed identical after; workflow authenticated the installed named Wasm before use.",
+    "No separately untimed cold independent-label/packed-plan oracle was run; existing workload checks verify authored text, committed glyph availability and draw topology only.",
+    "The profile stage classifier puts portions of named Rust state/preflight into other-wasm. Report that bucket as classified frame share only, not as a single operation.",
+    "GC frames (6 samples / 9.126 ms) are unattributed; publication branch has six anonymous JS frame samples / 8.334 ms and one Binaryen-generated Wasm frame sample / 1.417 ms."
+  ]
+}

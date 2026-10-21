@@ -1,0 +1,136 @@
+{
+  "result": "exact-byte-pass",
+  "classification": "retire suffix-shape reuse for this authenticated actual-Bitmap short-label cohort under current HarfRust authority: every committed boundary at offsets 5\u20139 is present-unsafe; the builder selects [0,10) before any retry, so no shorter new-side boundary was observed or certified",
+  "limitations": [
+    "untimed native cfg(test) observation; no latency/SIMD/parity claim",
+    "new-side safety was observed only at admitted run endpoints 0 and 10; no shorter new-side attempt was manufactured",
+    "temporary hooks, collector, report field are deletion targets after root/fresh High decision"
+  ],
+  "identity": {
+    "manifestSha256": "09eb23a2fe41bad3578a4dfd8d42403ee66586da555f358f6317a477e3695412",
+    "eventsSha256": "51667f42fd2f4bde967dffab2b18048cf38a35174142952f09999815186d0fa6",
+    "archiveSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+    "wasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+    "archivedObserverSha256": "486e0e87816b42a7969b8fcc151add92d4f07af98f9d2607878d2d2ccbb92879",
+    "archivedCaptureWorkflowSha256": "9687336b92838f78c35c60b3cb795a00e1cb9fdad74468adf532c0c31826578f",
+    "archivedNativeHarnessSha256": "10fdba8800b41f7e9b22db64f864d9ba5cdf8d2d5dd15fe0ad4912a977086607",
+    "transportSha256": "11b6ddf6917ace16d9dbe8919d590565d09e436145adf5c24a6b9c1f016d57da",
+    "installedJsMembers": 237,
+    "blobs": 9227
+  },
+  "diagnosticSourceHashes": {
+    "packages/glyph/rust/shaper/src/engine/work_attribution.rs": "142c2452adfb89786a5177637c0543580b4fe2e22dc25b9788e673bd6d35233c",
+    "packages/glyph/rust/shaper/src/engine/positioning.rs": "e4e6aabce1998bf52339dbc89d330bf7bb1af06dcd2102ca824b4a0db04e2e15",
+    "packages/glyph/rust/shaper/src/engine/state.rs": "5eb93599b3625f12a8aa2a64ca87fe682f75881075228b4556120f8dd11f26c2",
+    "packages/glyph/rust/shaper/src/engine/codec_gather.rs": "e8c21cb9c7dddb99c9211bdadfd372bdc236d7a385c3f4868bac9ece36c33f7b",
+    "packages/glyph/rust/shaper/src/engine/plan_packing.rs": "b11e4b9032b8948555c945054c7dfdf6421c0e9c1bdae49c672b50810fae3853",
+    "packages/glyph/rust/shaper/src/engine/ordered_plan.rs": "6939f99cef36665afe20ddae49a836aef1847979b345dcb32aa15d2aa8a77c72",
+    "packages/glyph/rust/shaper/src/engine/transport.rs": "11b6ddf6917ace16d9dbe8919d590565d09e436145adf5c24a6b9c1f016d57da",
+    "packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs": "e2c9b275eb2ced4054de8929b44e8d1bce7a5e3ce2baa4024a65047201d279af",
+    "benches/scripts/replay-bitmap-native-work.mts": "67c75ad00adcaf933831e0d2b7598ed823b0b15dcf97deca4acf946381c809f7"
+  },
+  "counts": {
+    "events": 6157,
+    "exactResults": 4099,
+    "resultBytes": 1977392,
+    "warmRows": 2048,
+    "forwardRows": 1024,
+    "reverseRows": 1024,
+    "warmHarfrustCallUnits": {
+      "callsEach": 1,
+      "utf16UnitsEach": 10
+    }
+  },
+  "histograms": {
+    "initialScopeReason": {
+      "old-unsafe-chain": 2048
+    },
+    "oldOffsets": {
+      "5:present-unsafe": 2048,
+      "6:present-unsafe": 2048,
+      "7:present-unsafe": 2048,
+      "8:present-unsafe": 2048,
+      "9:present-unsafe": 2048
+    },
+    "attemptReasons": {
+      "none": 2048
+    },
+    "attemptResults": {
+      "Prepared": 2048
+    }
+  },
+  "reportFiles": {
+    "native-work-ledger.json": "2075c96fe728abc23c7fbe5e507d3b28a63b663a8deb9662ab11c26ffc16a5b0",
+    "identity.json": "569cebf47d599d0a3069ee525828628a35bcb58658c46b3b762965286a2c21fc",
+    "short-shape-rows.jsonl": "f1a754554aff353bdcde4e9844db971a3fae415e243b872c1f1493bfead2837f",
+    "short-shape-histograms.json": "b8d39a953f8b73bbd758c091f4b19fa68a832f669d549c2465a3affd7e7a0239",
+    "short-shape-test-only.patch": "0b9d95ff7a88497cb25f30e09ce83300a7e719d19c14e39915fc74cdfa321314"
+  },
+  "gateReceipts": {
+    "static-check": {
+      "exit": 0,
+      "argv": [
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "pnpm",
+        "scripts",
+        "run",
+        "glyph:static-check"
+      ],
+      "stdoutSha256": "bb2872a244eff566b937c548f0e2ac6f1b58a7ed329d4999e7d114bab4e9364d",
+      "stderrSha256": "22263dc13fb9f91114a25de5548e8c2122c71a9fbf30de6e66874c5442cfa6df"
+    },
+    "focused-inter": {
+      "exit": 0,
+      "argv": [
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "pnpm",
+        "scripts",
+        "run",
+        "glyph:shaper-tests",
+        "--",
+        "short_inter_label_assignments_use_incremental_shape_and_match_cold_output"
+      ],
+      "stdoutSha256": "d67507307eb28c000955403fe5f8c183e860cc44936a229f6d9202b3644ed5b5",
+      "stderrSha256": "47ba2d35d90c878074fd4ba31055125296a5fe47a4288f468312d1d1b254f6ef"
+    },
+    "full-native": {
+      "exit": 0,
+      "argv": [
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "pnpm",
+        "scripts",
+        "run",
+        "glyph:shaper-tests"
+      ],
+      "stdoutSha256": "7c7c1d317d81895448105ed6616b9f60a5e3ee5b037be6f2d013d48f5afd08dc",
+      "stderrSha256": "f53be10c75fa8e7d9797a9a93b871bda486574b9450ab45757008a13d2e1a6a3"
+    },
+    "final-bitmap": {
+      "exit": 0,
+      "argv": [
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "pnpm",
+        "scripts",
+        "run",
+        "benchmark:bitmap-native-work-replay",
+        "--",
+        "--trace",
+        "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-replay-auth/full-05/events.jsonl",
+        "--output",
+        "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/evidence-final2"
+      ],
+      "stdoutSha256": "86ccc0eee1a252afeca6a45bf5878ae31b36e1a440a2cc14d84f450f1a0654d9",
+      "stderrSha256": "9e6eb1f447f0da5b8c861430e4116887c703cadac017cf46fc3c3f804072f6a4"
+    }
+  },
+  "interControl": "Both actual Inter directions retain cold visible-shape equality and final [0,10), one call/10 units in existing focused test; see focused-inter stdout and full-native stdout. Control is a distinct font from Bitmap.",
+  "workTotals": "All six phase aggregate work entries are byte-equal as JSON to earlier observation runs evidence and evidence-final; no pre-hook same-source ledger was saved."
+}

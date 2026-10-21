@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "glyph:shaper-tests",
+    "--",
+    "short_inter_label_assignments_use_incremental_shape_and_match_cold_output"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-21T06:04:16.563377+00:00"
+}

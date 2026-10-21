@@ -1,0 +1,26 @@
+{
+  "at": "2026-10-21T06:22:38.992409+00:00",
+  "rawProfileSha256": "2df04d4827cb1b80246c618989109654348f288a8eb2d7edb15f00a83624dadb",
+  "samples": 699,
+  "microseconds": 1079542,
+  "disjointSiblingAnchors": {
+    "parent": 6,
+    "setter": 7,
+    "publication": 38
+  },
+  "recomputedExclusiveAncestry": {
+    "setter": {
+      "samples": 469,
+      "microseconds": 703581
+    },
+    "publication": {
+      "samples": 189,
+      "microseconds": 282587
+    },
+    "unattributed": {
+      "samples": 41,
+      "microseconds": 93374
+    }
+  },
+  "scope": "exclusive sampledCPU only; no percallwalltime/causal speedup/parityclaim"
+}

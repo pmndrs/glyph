@@ -1,0 +1,18 @@
+{
+  "initialScopeReason": {
+    "old-unsafe-chain": 2048
+  },
+  "oldOffsets": {
+    "5:present-unsafe": 2048,
+    "6:present-unsafe": 2048,
+    "7:present-unsafe": 2048,
+    "8:present-unsafe": 2048,
+    "9:present-unsafe": 2048
+  },
+  "attemptReasons": {
+    "none": 2048
+  },
+  "attemptResults": {
+    "Prepared": 2048
+  }
+}

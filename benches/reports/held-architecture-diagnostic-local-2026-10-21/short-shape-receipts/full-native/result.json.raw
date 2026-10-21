@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "glyph:shaper-tests"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-21T06:04:24.131589+00:00",
+  "finished": "2026-10-21T06:04:44.795207+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "7c7c1d317d81895448105ed6616b9f60a5e3ee5b037be6f2d013d48f5afd08dc",
+    "stderr.log": "f53be10c75fa8e7d9797a9a93b871bda486574b9450ab45757008a13d2e1a6a3"
+  }
+}

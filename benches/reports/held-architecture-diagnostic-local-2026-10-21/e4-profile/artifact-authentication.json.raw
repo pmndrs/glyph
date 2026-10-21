@@ -1,0 +1,165 @@
+{
+  "schema": "held-e4-artifact-attribution-v1",
+  "checkedAt": "2026-10-21T06:16:39.421Z",
+  "archive": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "sha256": "9b1ad97a03f5af8eaa0613e5bdaab601edf7fccf69fdeacc6059759191b1fb18",
+    "bytes": 3196682,
+    "expectedSha256": "9b1ad97a03f5af8eaa0613e5bdaab601edf7fccf69fdeacc6059759191b1fb18",
+    "exactExpectedArchiveHash": true,
+    "distMemberCount": 947,
+    "expectedDistMemberCount": 947,
+    "exactDistMemberNameSet": true,
+    "mismatchedDistMemberHashes": {},
+    "shippingWasmSha256": "d14d1fc68071da0127addec4dcb044998a7da4b16b32fa9c3a84eb7c70cc1018",
+    "shippingWasmBytes": 1610289,
+    "expectedShippingWasmSha256": "d14d1fc68071da0127addec4dcb044998a7da4b16b32fa9c3a84eb7c70cc1018"
+  },
+  "namedArtifact": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/shaper-profile/text-shaper.named.wasm",
+    "sha256": "806066af37452bbf5781955c8bb6f2083997cc68fd0e5eae485612ea5b608826",
+    "expectedSha256": "806066af37452bbf5781955c8bb6f2083997cc68fd0e5eae485612ea5b608826",
+    "exactManifestHash": true,
+    "manifestSourceRevision": "b81756a5ce4541b4e9b23d7ad04c9105345e7cff",
+    "manifestSourceDirty": "M packages/glyph/rust/shaper/src/engine/codec_gather.rs",
+    "manifestArtifactSha256": "9b1ad97a03f5af8eaa0613e5bdaab601edf7fccf69fdeacc6059759191b1fb18",
+    "exactArchiveBinding": true,
+    "executableSha256FromInstalledRepositoryHelper": "d14d1fc68071da0127addec4dcb044998a7da4b16b32fa9c3a84eb7c70cc1018",
+    "expectedExecutableSha256": "d14d1fc68071da0127addec4dcb044998a7da4b16b32fa9c3a84eb7c70cc1018",
+    "executableMatchesShipping": true,
+    "installedHelper": "packages/glyph/scripts/support/named-shaper.mjs deriveNamedShaper()",
+    "exactDerivedNamedEncoding": true,
+    "shippingSections": [
+      {
+        "id": 1,
+        "name": null,
+        "sha256": "6c552f867ecfd24790a01c1e629d25c33a268099673b5557fc4a69e6f8bbbeeb",
+        "bytes": 799
+      },
+      {
+        "id": 3,
+        "name": null,
+        "sha256": "f89e7ef339983681553c36b2e6cf8931b0873f4bea8d2230fa230ff3548959af",
+        "bytes": 1598
+      },
+      {
+        "id": 4,
+        "name": null,
+        "sha256": "fa6d5b41c4bd0d977ff72eace9d886d52104eea044e40e7a631dcb63dd21980e",
+        "bytes": 7
+      },
+      {
+        "id": 5,
+        "name": null,
+        "sha256": "33e2aeac0e17d17abf54b183d1d4bf64ea2fee2be72bd174c5bd63e86bca9df9",
+        "bytes": 5
+      },
+      {
+        "id": 6,
+        "name": null,
+        "sha256": "9f3cfe5176ae52746cd84164515877d028e9591e51c615e41f3a33b6c52e9608",
+        "bytes": 11
+      },
+      {
+        "id": 7,
+        "name": null,
+        "sha256": "5964e3f8fbfbc64ad2cef6b61961844694ff0344e7661b7ae56e3b021c581f99",
+        "bytes": 1472
+      },
+      {
+        "id": 9,
+        "name": null,
+        "sha256": "c9a7ece5fd1beff4aab594678d03b293db5f86c1b9e3cd07945e4f4f877b44ac",
+        "bytes": 261
+      },
+      {
+        "id": 12,
+        "name": null,
+        "sha256": "7a682b1c694cd58ec5682bca6c748572a293e162f1b4fdcf0e278dfe6ed3bfb4",
+        "bytes": 4
+      },
+      {
+        "id": 10,
+        "name": null,
+        "sha256": "c488392f9adff027c31ba4862ee2ab2f69e422f02b10df8a2e9dc57c451546e7",
+        "bytes": 1312621
+      },
+      {
+        "id": 11,
+        "name": null,
+        "sha256": "75ffe3ec5731a385ba10e0037b154ada1c0e0ce98b8df95ec01fd06cd443e802",
+        "bytes": 293503
+      }
+    ],
+    "namedSections": [
+      {
+        "id": 1,
+        "name": null,
+        "sha256": "6c552f867ecfd24790a01c1e629d25c33a268099673b5557fc4a69e6f8bbbeeb",
+        "bytes": 799
+      },
+      {
+        "id": 3,
+        "name": null,
+        "sha256": "f89e7ef339983681553c36b2e6cf8931b0873f4bea8d2230fa230ff3548959af",
+        "bytes": 1598
+      },
+      {
+        "id": 4,
+        "name": null,
+        "sha256": "fa6d5b41c4bd0d977ff72eace9d886d52104eea044e40e7a631dcb63dd21980e",
+        "bytes": 7
+      },
+      {
+        "id": 5,
+        "name": null,
+        "sha256": "33e2aeac0e17d17abf54b183d1d4bf64ea2fee2be72bd174c5bd63e86bca9df9",
+        "bytes": 5
+      },
+      {
+        "id": 6,
+        "name": null,
+        "sha256": "9f3cfe5176ae52746cd84164515877d028e9591e51c615e41f3a33b6c52e9608",
+        "bytes": 11
+      },
+      {
+        "id": 7,
+        "name": null,
+        "sha256": "5964e3f8fbfbc64ad2cef6b61961844694ff0344e7661b7ae56e3b021c581f99",
+        "bytes": 1472
+      },
+      {
+        "id": 9,
+        "name": null,
+        "sha256": "c9a7ece5fd1beff4aab594678d03b293db5f86c1b9e3cd07945e4f4f877b44ac",
+        "bytes": 261
+      },
+      {
+        "id": 12,
+        "name": null,
+        "sha256": "7a682b1c694cd58ec5682bca6c748572a293e162f1b4fdcf0e278dfe6ed3bfb4",
+        "bytes": 4
+      },
+      {
+        "id": 10,
+        "name": null,
+        "sha256": "c488392f9adff027c31ba4862ee2ab2f69e422f02b10df8a2e9dc57c451546e7",
+        "bytes": 1312621
+      },
+      {
+        "id": 11,
+        "name": null,
+        "sha256": "75ffe3ec5731a385ba10e0037b154ada1c0e0ce98b8df95ec01fd06cd443e802",
+        "bytes": 293503
+      },
+      {
+        "id": 0,
+        "name": "name",
+        "sha256": "9ba7f6fb8d6c1dfa1fcb28fe739f96527818c69d9d8c84c4991442caa8393290",
+        "bytes": 179503
+      }
+    ],
+    "functionNameCount": 1593
+  },
+  "conclusion": "Archive and named artifact are byte-authenticated; standard executable sections match via installed repository helper. Source provenance is separately evaluated in source-provenance.json."
+}

@@ -1,0 +1,30 @@
+{
+  "schema": "held-e4-1024-profile-ancestry-v1",
+  "profile": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/e4-1024-named-profile/cpu-profile.json",
+  "profileSha256": "2df04d4827cb1b80246c618989109654348f288a8eb2d7edb15f00a83624dadb",
+  "updateBulk": {
+    "nodeId": 6,
+    "functionName": "updateBulk",
+    "url": "file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/edit-sized-publication.profile.mts"
+  },
+  "anchors": [
+    {
+      "label": "bulk label-set / preparation subtree",
+      "nodeId": 7,
+      "functionName": "set text",
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-MpTGs7/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-gathe_961c106d0871e39cc62d2685f09c7686/node_modules/@pmndrs/glyph/dist/three/text.js",
+      "parentNodeId": 6
+    },
+    {
+      "label": "scene updateMatrixWorld publication subtree",
+      "nodeId": 38,
+      "functionName": "updateMatrixWorld",
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-MpTGs7/node_modules/.pnpm/three@0.185.1/node_modules/three/build/three.core.js",
+      "parentNodeId": 6
+    }
+  ],
+  "disjointSiblingBranches": true,
+  "notes": [
+    "Both anchors are actual child branches of captured updateBulk node 6. Node 7 is the `set text` path containing _updateText/prepareParagraph. Node 38 is updateMatrixWorld in Three core and includes its scene-publication descendants. No E2 node IDs were reused."
+  ]
+}

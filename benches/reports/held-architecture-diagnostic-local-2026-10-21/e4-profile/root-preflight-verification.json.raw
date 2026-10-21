@@ -1,0 +1,28 @@
+{
+  "verifiedAt": "2026-10-21T06:18:22.264410+00:00",
+  "head": "16bd60e747a1323536e02f547841325ca96c43ff",
+  "trackedInputs": 666,
+  "mismatches": [
+    "benches/scripts/support/labs-result.mts",
+    "benches/scripts/support/saved-package-labs.mts",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml"
+  ],
+  "rustCargoLocks": {
+    "packages/glyph/rust/bitmap-baker/Cargo.lock": "226d77c168ab68736293e3a516c13fd117880888242471bc04fbed4135a1e948",
+    "packages/glyph/rust/font-baker-fuzz/Cargo.lock": "c9695feb25d7a8c12b11e897163cdbe37597584c794ef474bc463420380aeac4",
+    "packages/glyph/rust/font-baker/Cargo.lock": "a27cb49bcc55c8076f28edb7cbedb988856315c3a21fd2e0d6751c78cb4bbd24",
+    "packages/glyph/rust/mtsdf-admission/Cargo.lock": "442936fd885bbdb411ed6930927ae9de7a55d02d6ab6f68bb9bb92ea77becb86",
+    "packages/glyph/rust/mtsdf-baker/Cargo.lock": "2b86cf352d1ec65e96b4fa5d83b1ff720b0fc0aa198829aea5718489d86eb030",
+    "packages/glyph/rust/mtsdf-core/Cargo.lock": "805f7134378b90058f170939fc4ecc81c7986aeaaea9a6251e518e12168ebc14",
+    "packages/glyph/rust/mtsdf-fontations/Cargo.lock": "2670bbb0a94f0dfa4e6f42fcdd7b027c8f5bb9ba7bb5bb1bdbbe29d1625c2301",
+    "packages/glyph/rust/raster-artifact/Cargo.lock": "d5c4d59907f3536f452c53bed7e801fd55c862f8a6ddfb7739172a18c1301ff7",
+    "packages/glyph/rust/shaper/Cargo.lock": "920c5640afac103bdad7750d4bd4bf36caaa66012ce545755212c1af1a507586",
+    "packages/glyph/rust/slug-baker/Cargo.lock": "3aec249a295a82f4ceddb58d38d5ac71cafa03b293f05205a6918dcde2c669d1",
+    "packages/glyph/rust/slug-core/Cargo.lock": "25a008f76482363c5078dc43ee211ddf823377b93931aef7efdd9bbae24bcf2d",
+    "packages/glyph/rust/slug-fontations/Cargo.lock": "edcc5943d7852a3a20d6461f6baf3fbf7fcbf92733f7527697ebac25bacfc145"
+  },
+  "rootArchiveAndNamedHashes": "verifiedsameasartifactauthentication",
+  "decision": "reuseauthenticatedarchivedE4product foronecurrentharnessprofile; historicalbuildenvironmentnotidentical; differenceslimitedtoLabspatchandharness",
+  "correctionRequired": "input-diff-scope.json names nonexistentpackages/glyph/rust/Cargo.lock andclaimsbyteequalnulls; replacewithactual12verifiedlockhashesbeforefinalhandoff"
+}

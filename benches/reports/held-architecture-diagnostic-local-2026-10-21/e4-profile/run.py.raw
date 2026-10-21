@@ -1,0 +1,11 @@
+import subprocess,sys,json,datetime,hashlib,os
+from pathlib import Path
+root=Path(__file__).parent
+name=sys.argv[1]; argv=sys.argv[2:]; out=root/name; out.mkdir(exist_ok=False)
+now=lambda:datetime.datetime.now(datetime.timezone.utc).isoformat()
+start={"argv":argv,"cwd":os.getcwd(),"started":now()}
+(out/"start.json").write_text(json.dumps(start,indent=2))
+with (out/"stdout.log").open("wb") as stdout,(out/"stderr.log").open("wb") as stderr:
+ p=subprocess.Popen(argv,stdout=stdout,stderr=stderr); (out/"pid").write_text(str(p.pid)); code=p.wait()
+result={**start,"finished":now(),"exit":code,"sha256":{f:hashlib.sha256((out/f).read_bytes()).hexdigest() for f in ["stdout.log","stderr.log"]}}
+(out/"result.json").write_text(json.dumps(result,indent=2)); print(json.dumps(result)); sys.exit(code if code>=0 else 128-code)

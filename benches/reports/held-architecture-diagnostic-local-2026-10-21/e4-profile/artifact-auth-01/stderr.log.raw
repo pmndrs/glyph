@@ -1,0 +1,54 @@
+node:internal/child_process:1143
+    result.error = new ErrnoException(result.error, 'spawnSync ' + options.file);
+                   ^
+
+<ref *1> Error: spawnSync tar ENOBUFS
+    at Object.spawnSync (node:internal/child_process:1143:20)
+    at spawnSync (node:child_process:911:24)
+    at execFileSync (node:child_process:954:15)
+    at file:///Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/authenticate-e4.mjs:20:61 {
+  errno: -55,
+  code: 'ENOBUFS',
+  syscall: 'spawnSync tar',
+  path: 'tar',
+  spawnargs: [
+    '-xzOf',
+    '/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz',
+    'package/dist/font-baker.wasm'
+  ],
+  error: [Circular *1],
+  status: null,
+  signal: 'SIGTERM',
+  output: [
+    null,
+    Buffer(1068544) [Uint8Array] [
+        0,  97, 115, 109,   1,   0,   0,   0,   1, 231,   3,  60,
+       96,   2, 127, 127,   0,  96,   3, 127, 127, 127,   0,  96,
+        1, 127,   1, 127,  96,   2, 127, 127,   1, 127,  96,   4,
+      127, 127, 127, 127,   0,  96,   1, 127,   0,  96,   5, 127,
+      127, 127, 127, 127,   0,  96,   3, 127, 127, 127,   1, 127,
+       96,   6, 127, 127, 127, 127, 127, 127,   0,  96,   7, 127,
+      127, 127, 127, 127, 127, 127,   0,  96,   4, 127, 127, 127,
+      127,   1, 127,  96,   3, 127, 127, 127,   1, 126,  96,   5,
+      127, 127, 127, 127,
+      ... 1068444 more items
+    ],
+    Buffer(0) [Uint8Array] []
+  ],
+  pid: 95351,
+  stdout: Buffer(1068544) [Uint8Array] [
+      0,  97, 115, 109,   1,   0,   0,   0,   1, 231,   3,  60,
+     96,   2, 127, 127,   0,  96,   3, 127, 127, 127,   0,  96,
+      1, 127,   1, 127,  96,   2, 127, 127,   1, 127,  96,   4,
+    127, 127, 127, 127,   0,  96,   1, 127,   0,  96,   5, 127,
+    127, 127, 127, 127,   0,  96,   3, 127, 127, 127,   1, 127,
+     96,   6, 127, 127, 127, 127, 127, 127,   0,  96,   7, 127,
+    127, 127, 127, 127, 127, 127,   0,  96,   4, 127, 127, 127,
+    127,   1, 127,  96,   3, 127, 127, 127,   1, 126,  96,   5,
+    127, 127, 127, 127,
+    ... 1068444 more items
+  ],
+  stderr: Buffer(0) [Uint8Array] []
+}
+
+Node.js v24.18.0

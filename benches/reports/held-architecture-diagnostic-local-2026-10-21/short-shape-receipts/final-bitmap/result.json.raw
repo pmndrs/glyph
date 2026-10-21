@@ -1,0 +1,24 @@
+{
+  "argv": [
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "benchmark:bitmap-native-work-replay",
+    "--",
+    "--trace",
+    "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-replay-auth/full-05/events.jsonl",
+    "--output",
+    "/Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/evidence-final2"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-21T06:04:51.531440+00:00",
+  "finished": "2026-10-21T06:04:54.187270+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "86ccc0eee1a252afeca6a45bf5878ae31b36e1a440a2cc14d84f450f1a0654d9",
+    "stderr.log": "9e6eb1f447f0da5b8c861430e4116887c703cadac017cf46fc3c3f804072f6a4"
+  }
+}

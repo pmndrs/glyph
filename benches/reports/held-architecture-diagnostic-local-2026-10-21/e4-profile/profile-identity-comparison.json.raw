@@ -1,0 +1,24 @@
+{
+  "schema": "held-e4-1024-profile-identity-comparison-v1",
+  "preflight": "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/profile-preflight.json",
+  "postflight": {
+    "head": "16bd60e747a1323536e02f547841325ca96c43ff",
+    "tree": "3686eb4bc9def610656d0377e161ce0c3143743b",
+    "clean": true,
+    "trackedFreezeMismatchCount": 4,
+    "harnessDigest": "badf82b0d84dbced158f4bb44ee50b7adac7169323f295d108909c2b93413627",
+    "archiveSha256": "9b1ad97a03f5af8eaa0613e5bdaab601edf7fccf69fdeacc6059759191b1fb18",
+    "namedWasmSha256": "806066af37452bbf5781955c8bb6f2083997cc68fd0e5eae485612ea5b608826"
+  },
+  "stable": {
+    "head": true,
+    "tree": true,
+    "cleanBeforeAndAfter": true,
+    "harnessDigest": true,
+    "workflowSourceHashes": true,
+    "fixtures": true,
+    "archiveSha256": true,
+    "namedWasmSha256": true,
+    "fullTrackedFreezeInputHashes": true
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "time": "2026-10-21T06:10:38.154632+00:00",
+  "head": "16bd60e747a1323536e02f547841325ca96c43ff",
+  "decision": "Retire shorter certified suffix reuse for actualBitmapcohort under currentauthority; preserveIntercomparison omission; no general impossibility/latencyclaim",
+  "archivedPatchSha256": "0b9d95ff7a88497cb25f30e09ce83300a7e719d19c14e39915fc74cdfa321314",
+  "restoredHeadHashes": {
+    "packages/glyph/rust/shaper/src/engine/state.rs": "f6d8a77b0d483de1fb4fedb2b15a99c26eb3e2c5b11f5356f8efd2ec20fe9786",
+    "packages/glyph/rust/shaper/src/engine/work_attribution.rs": "2c530238afc3d4492744f46e4ec225404ee4d5e8ce112c07f9345c4d03819a55",
+    "packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs": "b8219980b281f1fe7ce1259ad1791cee050c6ef0236dd74772f803c26c7acab0"
+  },
+  "status": "",
+  "reviewSha256": "49b4ebefb5a02e0c70738d3d5e96a26bcbe24d116aeeea2b2c38127b8994387d",
+  "interAttemptReasonComparison": "notarchived; explicitnonblockinggap; no newdiagnostic justified forBitmapdecision"
+}

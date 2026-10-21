@@ -1,0 +1,29 @@
+{
+  "result": "exact-byte-pass",
+  "frozen": {
+    "manifestSha256": "09eb23a2fe41bad3578a4dfd8d42403ee66586da555f358f6317a477e3695412",
+    "eventsSha256": "51667f42fd2f4bde967dffab2b18048cf38a35174142952f09999815186d0fa6",
+    "archiveSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+    "wasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+    "archivedObserverSha256": "486e0e87816b42a7969b8fcc151add92d4f07af98f9d2607878d2d2ccbb92879",
+    "archivedCaptureWorkflowSha256": "9687336b92838f78c35c60b3cb795a00e1cb9fdad74468adf532c0c31826578f",
+    "archivedNativeHarnessSha256": "10fdba8800b41f7e9b22db64f864d9ba5cdf8d2d5dd15fe0ad4912a977086607",
+    "transportSha256": "11b6ddf6917ace16d9dbe8919d590565d09e436145adf5c24a6b9c1f016d57da",
+    "installedJsMembers": 237,
+    "blobs": 9227
+  },
+  "currentDiagnosticSourceHashes": {
+    "packages/glyph/rust/shaper/src/engine/work_attribution.rs": "142c2452adfb89786a5177637c0543580b4fe2e22dc25b9788e673bd6d35233c",
+    "packages/glyph/rust/shaper/src/engine/positioning.rs": "e4e6aabce1998bf52339dbc89d330bf7bb1af06dcd2102ca824b4a0db04e2e15",
+    "packages/glyph/rust/shaper/src/engine/state.rs": "5eb93599b3625f12a8aa2a64ca87fe682f75881075228b4556120f8dd11f26c2",
+    "packages/glyph/rust/shaper/src/engine/codec_gather.rs": "e8c21cb9c7dddb99c9211bdadfd372bdc236d7a385c3f4868bac9ece36c33f7b",
+    "packages/glyph/rust/shaper/src/engine/plan_packing.rs": "b11e4b9032b8948555c945054c7dfdf6421c0e9c1bdae49c672b50810fae3853",
+    "packages/glyph/rust/shaper/src/engine/ordered_plan.rs": "6939f99cef36665afe20ddae49a836aef1847979b345dcb32aa15d2aa8a77c72",
+    "packages/glyph/rust/shaper/src/engine/transport.rs": "11b6ddf6917ace16d9dbe8919d590565d09e436145adf5c24a6b9c1f016d57da",
+    "packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs": "e2c9b275eb2ced4054de8929b44e8d1bce7a5e3ce2baa4024a65047201d279af",
+    "benches/scripts/replay-bitmap-native-work.mts": "67c75ad00adcaf933831e0d2b7598ed823b0b15dcf97deca4acf946381c809f7"
+  },
+  "tools": {
+    "node": "v24.18.0"
+  }
+}
