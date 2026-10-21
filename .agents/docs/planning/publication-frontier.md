@@ -83,135 +83,17 @@ The user directs continued execution to close the speed gap to parity, followed 
 
 After demonstrated parity, allow **up to three additional coherent implementation/evaluation waves** for a boost, preserving validated gains and correct inconclusive variants. If those waves do not establish an improvement beyond parity, stop for now. Do not convert this into repeated favorable-clock trials or discard compatible correct work for missing the former materiality floor. No merge, release, tag or demo merge.
 
-**Wave 1 complete; parity remains open:** runtime `273d7ae0`, archive `340cbe18…`, shipping shaper `1f8d970c…`, named `01464bdb…`. The combined lazy-leaf/fused-admission/full-mask and style-preflight wave passes fresh scoped reviews, independent cold/rollback work proofs, static/build/full package (1140 Node/583 Rust, one ignored), all downstream workflow/browser/peer gates and twelve presentation cells. Exact273 CI passes all five jobs, with nine performance slower flags retained. The stale Tres draw probe was independently reproduced on prior698 and corrected; runtime/package stayed frozen. [Completed portable evidence](../../../benches/reports/held-ropes-local-2026-10-20/README.md) owns scope, source hashes, full145 rows, exclusions and size/memory/delivery limits.
+**Completed prior waves and recoverable evidence:** the [first combined wave](../../../benches/reports/held-ropes-local-2026-10-20/README.md) and [Codec/request wave E2](../../../benches/reports/held-codec-scratch-local-2026-10-20/README.md) retain prepared/sparse gains but do not reach dense parity. E2 source `a829b86b` / archive `28fd0413…` remains independently recoverable. The complete [shared-layout E3 experiment](../../../benches/reports/held-shared-layout-hybrid-local-2026-10-20/README.md), commit `734dae75` / ref `experiments/held-shared-layout-hybrid-measured-20261020`, is preserved with its correct cold-output proofs, adverse performance and allocation observations; its two product files were restored to E2 before later work. Do not discard compatible whole variants or interpret their isolated results as a veto on combinations.
 
-One candidate was sampled once and byte-reused against fresh main, release and prior698; all command exits0. Dense512 main/release/prior/current p50/p95ms: **7.935/9.333, 8.344/9.487, 10.286/11.453, 10.164/11.539**. Dense1024: **16.986/18.421, 16.927/18.126, 19.940/22.630, 19.994/22.625**. Dense remains +28.1%/+17.7% versus main and +21.8%/+18.1% versus release; versus prior −1.2%/+0.3% is inconclusive. Main88faster/29slower/26neutral/2mode-excluded; release101/23/16/3excluded/2unavailable; prior7/1/134/3excluded. Calibration drift main/current/release/prior9.217/1.372/1.073/1.827%, not hardware GHz. Prior's one slower ten-label no-op row (+5.2%) remains a guard. Sparse borrowing improves8.6% versus prior; inspection gains remain. Neutral classifications, setter contract differences and aggregate wins do not establish parity.
+**Authenticated diagnostic boundary:** [actual Bitmap native authentication and corrected work ledger](../../../benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-work/README.md) reproduce 6157 events / 4099 complete results exactly. Forward/reverse publications select 9216 records from 10240 source rows, compare589824 physical bytes, suppress221184 and emit368640. [Matched old/new phase captures](../../../benches/reports/held-shared-layout-hybrid-local-2026-10-20/old-new-phases/README.md) expose deferred old setters versus synchronous HELD preparation. Native work counts exclude JS/GC/GPU and latency; profiled phase medians include observer overhead and cannot accept later source. Raw profiles/blobs remain ignored local artifacts. Exact submitted `b81756a5` CI39506579516 passed all five jobs; it does not cover the following product edit.
 
-Retain and preserve this correct combined work for compatible additions; no superseded materiality floor and no isolated dense speedup claim. Publication-only5fa and its archive remain separately named. Shaper1609232raw/599547Node-gzip B; +7675/+3270 versus698. Current scoped requested-live/completed-call peak40471115/40671431 B; whole-command physical sweep and fragmented-root limits remain explicit. Browser signatures match fresh main on both backends; release WebGPU's existing15244800 B/600idle-upload exception is recorded and the19October prose corrected. Separate Three186 PR317 is not integrated/cleared by this lane.
+**Gather input-plan wave complete; preserve as combination candidate:** checkpoint `b81756a5` plus `codec_gather.rs` SHA `e8c21cb9…`, archive `9b1ad97a…`, shipping shaper `d14d1fc6…`, matching named `806066af…`. [Portable evidence and final independent review](../../../benches/reports/held-gather-input-plan-local-2026-10-20/README.md) own exact identities, all seven families and scope. Cursor-local program/dependency invariants delete12288 f32 reads per warm forward/reverse publication; gathered writes and physical bytes remain unchanged. One full eight-block candidate run is byte-reused against main, published0.1.0 and E2, all exit0 with666gate inputs unchanged.
 
-**Next-wave work evidence:** frozen optimized codec inspection proves repeated1536 B SIMD-group and384 B scalar-tail zero fills, plus scalarized finite checks; named/shipping standard sections match. The custom Inter producer proves repeated-group eligibility for scratch reuse. Actual Bitmap run/active-store utilization remains unproved, so the optional finite classifier is deferred. Static instructions do not prove frequency or latency; repeated lookup cost remains unmeasured. Fresh Sol High found no supported dense updater rewrite without that attribution; no new cache/executor/parser/layout/compiler policy or segmented design is selected. Preserve synchronous setters, prepared queries, split ownership, batching/order, Rust authority and packed SoA/SWAR/SIMD. Full seven-family parity remains open; post-parity boost waves completed0. New raw evidence lives under `.cache/held-wave1-20261020/evidence`. Commit/submit the completed packet through real gh stack; keep all layers held/unmerged.
+Dense512 main/release/E2/current p50/p95ms: **6.999/7.741, 7.411/7.957, 9.297/10.661, 9.228/10.652**. Dense1024: **15.245/16.415, 15.397/16.491, 18.490/20.991, 18.589/21.017**. Dense improvement over E2 is unproved and parity against both controls fails. Sparse/query/copy gains against controls remain, but small adverse prior shifts and empirical tails prevent whole-variant nonregression clearance. The copied-label small favorable CI is preserved without a5%floor. Full correct source is recoverable at `cb77b3b7`, ref `experiments/held-gather-input-plan-frozen-20261020`, and its named stash. This is an experimental combination component, not an accepted faster successor.
 
-**Completed Codec/request wave; preceding live-source choice:** commit `a829b86b`, preserved ref
-`experiments/held-codec-scratch-request-measured-20261020`, archive `28fd0413…`, shipping `01001ff6…`.
-The [portable evidence](../../../benches/reports/held-codec-scratch-local-2026-10-20/README.md) owns all three
-same-machine arms, correctness, codegen, size/memory and downstream limits. Dense remains slower than both controls;
-two balanced1000 grow/shrink prior flags remain. Exact a829 CI39472962401 passed all five jobs, independently of E3.
-The one exact current1024 profile uses10warmups/80iterations/no timed reads: exclusive sampled preparation835835µs,
-publication358876µs,unattributed99122µs; total1293833µs/842samples. The callback omits Labs returned textCount DFS;
-this is sampled diagnostic CPU, not acceptance or removable time. Custom outlined Inter counts are not Bitmap facts.
+Main excludes one clock-confounded row and3timing-mode mismatches; published excludes2mode mismatches and lacks2outline rows; E2 has145matched/no exclusions. Main software-calibration drift8.3% is not hardware GHz. Published's direct-session launch and incomplete stdout are explicitly recorded; no wrapper receipt or unavailable raw profile is reconstructed. Package check passes588Rust/1142Node,2Rust ignored with exact replay separate. Shaper1610289raw/599723Node-gzipB (+1042/+174E2);237JS files875885/298974unchanged. All71allocator snapshots matchE2, requested-live/completed-call peak40471115/40671431B; JS/GPU/fragmentation/transient physical reallocpeak are excluded. Structural ABI/metadata proof does not close runtime peers/browser/hero/whole-app peak.
 
-**Completed shared-layout hybrid E3 — preserve whole variant, then restore preceding source:** native Sol6 Medium
-implemented coarse short-run whole shaping and complete-frontier dense gather reset inside the existing owners,
-executor and layouts. Final cold gathered/physical oracle, scoped review,498 native tests, full root check, packed
-and named-Wasm authentication, peers, four-arm memory/browser and12dynamic-layout cells pass in their stated scopes.
-Initial fixture failure and repair remain recorded. Archive37c1e088…/shipping81153a62…/named8e325fa4… changes only
-shaper Wasm versus28fd (+1007raw/+403Node-gzipB); JS/declarations and exported binary signatures are unchanged.
-
-All three eight-block timing arms are terminal, with identical saved candidate samples and1059fixed inputs.
-Dense512 main/release/prior/E3 p50/p95ms:7.759/11.488,7.967/24.900,9.816/11.674,10.720/13.628.
-Dense1024:16.727/18.614,16.277/17.612,18.497/20.997,19.519/21.530. Direct-prior sparse borrow worsens
-0.186/0.270→0.214/0.324ms. Counts main60faster/37slower/31neutral/17excluded; release71/31/30/11excluded/
-2unavailable; prior1/75/44/25excluded. Software calibration drift12.9/116.3/27.8/89.6% and movement in an unchanged
-JS-owned-array control prohibit attributing all slower rows to code. No favorable retries or sample deletion.
-Untimed dense diagnostic allocator work rises4469allocations,960reallocations and432156requestedB/cycle; it does
-not identify allocation sites, latency or JS GC. All details are in the
-[portable E3 packet](../../../benches/reports/held-shared-layout-hybrid-local-2026-10-20/README.md).
-
-**Fresh independent Sol High reset:** a native `gpt-6-sol` High agent received no conversation history and owns the
-[comparison and next plan](../../../benches/reports/held-shared-layout-hybrid-local-2026-10-20/independent-architecture-reset.md).
-Old main/release stage changed setters and amortize one Rust frame across a batch. HELD prepares and adopts a
-queryable semantic revision synchronously per setter, then publishes; this buys prepared/sparse gains but introduces
-per-call work. Rope sharing and contiguous output also have different granularity. No semantic lower bound proves
-parity impossible. The source ingress audit admits no material deletion; do not restart header, validator or private
-Three/configured shortcuts from sampled labels. E3 fails live admission, not the general hybrid idea.
-
-**Preservation and source restoration:** complete E3 source/tests/docs/evidence are committed at
-`734dae75e9d39cd90f0e60c2244aa488b5b64bf2`, recoverable ref
-`experiments/held-shared-layout-hybrid-measured-20261020`, submitted through real gh-stack to held draft#310.
-Only the two package source files were then restored to exact a829/28fd; all Glyph source matches a829.
-The fresh restored package check exits0; all947shipped dist members match saved28fd, shaper01001ff6…. The
-preservation packet retains its source-stage snapshot and does not assert the hybrid is admitted as live.
-Fresh Sol High selected **skip the allocator split**: E3 allocation phase totals cannot choose a removable live28fd
-path. The opt-in patch stays unapplied. Its completed
-[actual Bitmap source audit](../../../benches/reports/held-shared-layout-hybrid-local-2026-10-20/independent-next-decision-addendum.md)
-follows prepared glyph/flow/position columns through scene publication, Codec inputs, ordered instances, physical
-bytes and borrowed host patches. No whole redundant semantic/physical pass is source-proven; no product wave is
-selected. Keep28fd live, E3 fully preserved. A new wave needs a named complete removable owner/path with rollback,
-borrow and independent cold-output proof. Exact Bitmap changed-field/patch-byte counts remain unavailable; custom
-Inter is not a substitute, and a speculative diagnostic bridge is not selected. Report fixed-contract parity as
-unresolved, without an impossibility claim or weakening synchronous semantics. Final seven-family parity,
-API/ABI/peer/lifetime and a newly defined editorial hero comparison remain required. Parity false; boost waves0;
-stack held/unmerged. [Owned wave record](../log/2026-10-20-held-shared-layout-hybrid-wave.md).
-
-**Actual-Bitmap authentication boundary complete:** fresh no-history Sol6 High selected the
-[evidence discriminator](../../../benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-evidence-design.md),
-then scoped High review narrowed it to observing the unchanged archived28fd Wasm exports. Native Sol6 Medium added
-the named capture workflow/Labs child and cfg(test) native transport child. Independent review caught omitted
-initialize/preallocation and native batch reservation; both are corrected. Final full05 contains6157ordered status0
-events, initialize first/once,4096query and3single-entry publication results. All4099complete results/1977392B match
-native exactly; request1155504B and9227unique referenced blobs are authenticated,237installed JS files unchanged.
-Only actual Inter registers; imported-but-unused font metadata does not imply extra engine registrations.
-
-The full package check passes (587Rust,2ignored; named auth test executes separately). The initial build's only
-shipped delta was one panic/source-location Data byte after top insertion of a test declaration, with identical Code.
-Moving the declaration to EOF and rebuilding restores all947archived shipping members byte-for-byte, including
-Wasm01001ff6…. Final full05 retains exact-byte auth and current source hashes. Five extra local build files are
-unshipped. [Compact auth evidence](../../../benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-auth/README.md)
-and [owned log](../log/2026-10-20-bitmap-native-replay-authentication.md) preserve every stage and scope limit.
-
-This opens only the reproduced native field/physical-work counter gate. Native batch process/descriptor/allocator,
-actual Three private buffers, GC, elapsed time, other families and parity are not proved. A separate fresh Sol High
-has specified one cfg(test) ledger using this immutable trace, with per-event reset/snapshot and six aggregate
-preparation/publication totals to exclude interleaved registrations. Authentication source is preserved at local commit `b7ccb1f5` and ref
-`experiments/held-bitmap-native-authenticated-20261020`; native Sol6 Medium is now implementing that one coherent
-ledger from immutable full05. Stack submission will include the completed ledger boundary; remote remains940 while
-its existing CI publication report runs. No product optimization, new
-ABI/executor/parser/cache/layout, new timing/profile or E3 revival is selected. Full result-byte comparison remains
-a gate after instrumentation; any source-metadata artifact delta must be classified honestly. Exact940 CI Static,
-Docs,Size andCheck pass; its existing publication-suite performance job remains live under39494612090/watch95904.
-Parity false, boost waves0, stack held/unmerged.
-
-**Fresh independent old/new review — 20 October:** a new no-history native Sol6 High reconstructed old main's
-deferred/batched preparation and HELD's immediate per-setter preparation from primary source. Its report is local
-`held-hybrid-20261020/evidence/fresh-old-new-hybrid-strategy.md`: proposed shared positioned-column consumption must
-replace gather storage/work, preserve one executor and broad SIMD grouping, and avoid adding renderer work or duplicate
-columns to every setter. No product wave is admitted. The reviewer is specifying one matched phase discriminator
-before selecting a preparation-side deletion or the shared-view wave; absence of a removable owner ends that line,
-not the parity goal.
-
-The corrected ledger02 passes all6,157events/4,099result slices. Independent High closes position-only lane coverage,
-accepted positioned source count and omitted existing owner counters. The first ledger remains preserved with its
-coverage limits. Corrected forward/reverse f32 reads109,568 include12,288 attempted fast-path reads; writes97,280.
-Each publication has10,240 accepted positioned sources and9,216 selected records; ordered compare589,824B,
-equal-suppressed221,184B and emitted368,640B remain distinct. These are native scalar work, not latency or actual
-Wasm SIMD frequency. [Portable ledger](../../../benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-work/README.md)
-and [owned log](../log/2026-10-20-bitmap-native-work-ledger.md) preserve exact source identities/reviews.
-
-Final corrected-source package check02 passes (1,142Node/587Rust,2ignored; exact replay separate), with701source
-hashes unchanged. E2 archive28fd remains intact. Current build differs only in Wasm Data (203bytes; Code identical;
-same1,609,247B);946of947archived dist members match. Four local profile files are unshipped. Auth+ledger checkpoint
-8061d791 is committed and real-stack submitted; PR310 remains OPEN/draft, remote matches. Exact940 CI completed all
-five jobs successfully. Its publication report still has10slower/4clock-skipped rows; synthetic merge checkout578b6ae
-has the same tree as940, verified by API. That report is not806coverage or parity. Exact806 CI39504303510/watch80919
-is confirmed live; Docs/Static pass, remaining package gates running.
-
-**One matched phase comparison complete:** fresh High approved the fixed benchmark observer after adding all3GLB
-and2support input hashes. Native Luna ran exactly one main/published/E2 shipping-Wasm capture, in that order,
-10warmups/80iterations/count1024/no timedreads/one scene publication. All terminal0,source8hashes unchanged,3critical
-installed members match each archive before/after;1draw/9,216glyphs and all1,024finalstrings/committed checks pass.
-Profiled whole p50/p95ms main12.577/35.044, published11.400/13.401, E2 13.189/15.121; E2 setter9.391/10.617 and
-publication3.732/4.693. Sequential captures, main long tails, observer overhead and unmeasured formal drift prevent
-parity or a precise causal gap claim. The unprofiled seven-family matrix remains acceptance evidence.
-
-Fresh High and root independently reproduce disjoint CPU setter/publication roots per capture (main7/13,
-published44/7,E2 7/35). The [portable packet](../../../benches/reports/held-shared-layout-hybrid-local-2026-10-20/old-new-phases/README.md)
-and [owned log](../log/2026-10-20-held-old-new-phase-comparison.md) preserve raw summaries, receipts, identity,
-ancestry and independent reviews. Raw CPU profiles remain ignored local artifacts with recorded hashes, not Git.
-High closes borrowing existing positioned columns as-is and a nonexistent no-view sidecar deletion: selection,
-binding, recordless correspondence and field production cannot be skipped. This closes that proposed architecture
-line, not the parity goal or all algorithm replacements. A separate fresh Sol6 High source-only design evaluates
-measured discarded fast-path reads and coarse program invariants within existing gather ownership; no new capture
-or product wave is selected yet. Preserve E2 live and E3 whole experiment. Parity false, boost waves0, stack held/unmerged.
+**User-requested fresh Sol High plan:** a native no-history reviewer owns the [old/new causal landscape and hybrid brief](../../../benches/reports/held-gather-input-plan-local-2026-10-20/fresh-causal-hybrid-20261020.md). Old no-read updates amortize one Rust frame; HELD synchronous setters buy prepared-query/sparse gains. Parity is not proved impossible. Next experiment consumes prepared SoA operands inside the same Codec scalar/SIMD loops and preserves retained exact output scopes, replacing intermediate full-field writes with bounded call-scoped locators. Source reads move and SIMD lane assembly may cost more; no speed promise. Medium's single-pass source traversal is feasible; scoped High requires non-mutating eligibility and exact error/fallback semantics, current strike selection for zero/position-only masks, and source/record adjacency before implementation. Complete metadata reset remains a separate compatible fallback because its allocation and widened ordered work are unresolved. One executor, synchronous semantics, cold-output/error oracles, packed fallback and transition memory/lifetime gates remain mandatory. Full matrix plus API/ABI/peer/lifetime/browser/new editorial hero gates remain open. Parity false; post-parity boost waves0; stack held/unmerged. [Owned wave log](../log/2026-10-21-held-gather-input-plan-wave.md).
 
 ### Completed current-machine rerun — 19 October 2026
 

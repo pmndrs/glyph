@@ -315,6 +315,95 @@ struct RetainedGatherCursor<'codec, 'binding> {
     cached_font_handle: Option<u32>,
     cached_binding: Option<&'binding FontRenderBinding>,
     cached_program: Option<(super::codec::TechniqueId, u16, &'codec ProgramDescriptor)>,
+    input_plan: Option<ResolvedInputPlan<'codec>>,
+}
+
+#[derive(Clone, Copy)]
+struct ResolvedInputPlan<'codec> {
+    capability_set: CapabilitySetId,
+    technique: super::codec::TechniqueId,
+    variant: u16,
+    change_mask: u16,
+    program: &'codec ProgramDescriptor,
+    f32_inputs: u32,
+    u32_inputs: u32,
+    position_only_eligible: bool,
+    legacy_semantic_field: bool,
+}
+
+impl<'codec, 'binding> RetainedGatherCursor<'codec, 'binding> {
+    fn input_plan(
+        &mut self,
+        codec: &'codec ValidatedCodec,
+        capability_set: CapabilitySetId,
+        technique: super::codec::TechniqueId,
+        variant: u16,
+        change_mask: u16,
+    ) -> Result<ResolvedInputPlan<'codec>, GatherError> {
+        if let Some(plan) = self.input_plan
+            && plan.capability_set == capability_set
+            && plan.technique == technique
+            && plan.variant == variant
+            && plan.change_mask == change_mask
+        {
+            return Ok(plan);
+        }
+        let program = codec
+            .program(capability_set, technique, variant)
+            .ok_or(GatherError::ProgramMissing)?;
+        let (f32_inputs, u32_inputs) = codec
+            .input_masks_for_changes(capability_set, technique, variant, change_mask, false)
+            .ok_or(GatherError::ProgramMissing)?;
+        let mut position_only_eligible = true;
+        let mut legacy_semantic_field = false;
+        for field in 0..usize::from(program.f32_input_count) {
+            if f32_inputs & (1_u32 << field) == 0 {
+                continue;
+            }
+            let source = program.inputs[field];
+            position_only_eligible &= source.scope == InputScope::Semantic;
+            legacy_semantic_field |=
+                source.scope == InputScope::Semantic && !known_semantic_f32(source.field);
+        }
+        for field in 0..usize::from(program.u32_input_count) {
+            if u32_inputs & (1_u32 << field) == 0 {
+                continue;
+            }
+            let source = program.inputs[usize::from(program.f32_input_count) + field];
+            position_only_eligible &=
+                source.scope == InputScope::Semantic && source.field == SEMANTIC_U32_PLACEMENT_SLOT;
+        }
+        let plan = ResolvedInputPlan {
+            capability_set,
+            technique,
+            variant,
+            change_mask,
+            program,
+            f32_inputs,
+            u32_inputs,
+            position_only_eligible,
+            legacy_semantic_field,
+        };
+        self.input_plan = Some(plan);
+        Ok(plan)
+    }
+}
+
+fn known_semantic_f32(field: u8) -> bool {
+    usize::from(field) < super::positioning::SEMANTIC_F32_FIELD_COUNT
+        || matches!(
+            field,
+            SEMANTIC_F32_INLINE_ORIGIN
+                | SEMANTIC_F32_BLOCK_ORIGIN
+                | SEMANTIC_F32_INVERSE_FONT_SIZE
+                | SEMANTIC_F32_OUTLINE_WIDTH_EM
+                | SEMANTIC_F32_SHADOW_OFFSET_X_EM
+                | SEMANTIC_F32_SHADOW_OFFSET_Y_EM
+                | SEMANTIC_F32_FOREGROUND_RED
+                | SEMANTIC_F32_FOREGROUND_GREEN
+                | SEMANTIC_F32_FOREGROUND_BLUE
+                | SEMANTIC_F32_FOREGROUND_ALPHA
+        )
 }
 
 struct OwnerRanges<'a, I> {
@@ -587,6 +676,7 @@ impl CodecGatherWorkspace {
                 cached_font_handle: None,
                 cached_binding: None,
                 cached_program: None,
+                input_plan: None,
             };
             sources
                 .update_ordered_ranges(ranges, |source_index, previous_source| {
@@ -636,6 +726,7 @@ impl CodecGatherWorkspace {
                         state.cached_font_handle = None;
                         state.cached_binding = None;
                         state.cached_program = None;
+                        state.input_plan = None;
                         current = Some(owner);
                     }
                     let owner = current.as_ref().ok_or(GatherError::InvalidSemanticShape)?;
@@ -786,6 +877,7 @@ impl CodecGatherWorkspace {
             state.record_cursor,
             previous_source,
             change_mask,
+            state,
         )? {
             state.record_cursor += usize::from(previous_source.selected());
             return Ok(RopeUpdate::Keep);
@@ -874,9 +966,8 @@ impl CodecGatherWorkspace {
                 low_bits(program.u32_input_count),
             )
         } else {
-            codec
-                .input_masks_for_changes(capability_set, technique, variant, change_mask, false)
-                .ok_or(GatherError::ProgramMissing)?
+            let plan = state.input_plan(codec, capability_set, technique, variant, change_mask)?;
+            (plan.f32_inputs, plan.u32_inputs)
         };
         self.update_fields(
             state.record_cursor,
@@ -905,15 +996,16 @@ impl CodecGatherWorkspace {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn update_retained_position_only(
+    fn update_retained_position_only<'codec, 'binding>(
         &mut self,
-        codec: &ValidatedCodec,
+        codec: &'codec ValidatedCodec,
         capability_set: CapabilitySetId,
         input: LayoutPlanInput<'_>,
         glyph_index: usize,
         output_index: usize,
         previous_source: GatherSource,
         change_mask: u16,
+        state: &mut RetainedGatherCursor<'codec, 'binding>,
     ) -> Result<bool, GatherError> {
         if change_mask & !POSITION_ONLY_CHANGES != 0 {
             return Ok(false);
@@ -942,25 +1034,30 @@ impl CodecGatherWorkspace {
         {
             return Ok(false);
         }
-        let program = codec
-            .program(capability_set, previous.technique, previous.program_variant)
-            .ok_or(GatherError::ProgramMissing)?;
-        let (f32_inputs, u32_inputs) = codec
-            .input_masks_for_changes(
-                capability_set,
-                previous.technique,
-                previous.program_variant,
-                change_mask,
-                false,
-            )
-            .ok_or(GatherError::ProgramMissing)?;
-        for field in 0..usize::from(program.u32_input_count) {
-            if u32_inputs & (1 << field) == 0 {
-                continue;
-            }
-            let source = program.inputs[usize::from(program.f32_input_count) + field];
-            if source.scope != InputScope::Semantic || source.field != SEMANTIC_U32_PLACEMENT_SLOT {
-                return Ok(false);
+        let plan = state.input_plan(
+            codec,
+            capability_set,
+            previous.technique,
+            previous.program_variant,
+            change_mask,
+        )?;
+        let program = plan.program;
+        let (f32_inputs, u32_inputs) = (plan.f32_inputs, plan.u32_inputs);
+        if !plan.position_only_eligible && !plan.legacy_semantic_field {
+            return Ok(false);
+        }
+        // An out-of-domain custom semantic field retains the old read/error order.
+        if plan.legacy_semantic_field {
+            for field in 0..usize::from(program.u32_input_count) {
+                if u32_inputs & (1_u32 << field) == 0 {
+                    continue;
+                }
+                let source = program.inputs[usize::from(program.f32_input_count) + field];
+                if source.scope != InputScope::Semantic
+                    || source.field != SEMANTIC_U32_PLACEMENT_SLOT
+                {
+                    return Ok(false);
+                }
             }
         }
         let mut values = [0.0_f32; MAX_REGISTERS];
@@ -2858,6 +2955,93 @@ mod tests {
         assert_eq!(input.glyphs[0].block_start, 8.0);
         assert_eq!(input.glyphs[0].resource_id, 71);
         assert_eq!(input.glyphs[0].resource_generation, 3);
+    }
+
+    #[test]
+    fn late_binding_operand_falls_back_without_discarded_semantic_reads() {
+        let mut descriptor = base_descriptor();
+        let program = &mut descriptor.programs[0];
+        program.f32_input_count = 2;
+        program.u32_input_count = 0;
+        program.inputs = vec![
+            InputSource::semantic(0),
+            InputSource {
+                scope: InputScope::Glyph,
+                field: 0,
+            },
+        ];
+        program.operations = vec![
+            Operation::LoadF32 {
+                target: 0,
+                field: 0,
+            },
+            Operation::LoadF32 {
+                target: 1,
+                field: 1,
+            },
+            Operation::AddF32 {
+                target: 2,
+                left: 0,
+                right: 1,
+            },
+            Operation::StoreF32 {
+                source: 2,
+                buffer: BufferId(1),
+                lane: 0,
+            },
+        ];
+        let codec = ValidatedCodec::new(descriptor).unwrap();
+        let binding = binding();
+        let mut glyphs = [layout_glyph(1, 0), layout_glyph(2, 1)];
+        let before_x = [10.0, 20.0];
+        let after_x = [30.0, 40.0];
+        let before = LayoutPlanInput {
+            semantic_f32: &[&before_x],
+            ..range_input(&glyphs, &[])
+        };
+        let mut retained = CodecGatherWorkspace::default();
+        retained
+            .gather(&codec, CAPABILITY, before, |_| Some(&binding))
+            .unwrap();
+        for glyph in &mut glyphs {
+            glyph.content_revision += 1;
+        }
+        let after = LayoutPlanInput {
+            semantic_f32: &[&after_x],
+            ..range_input(&glyphs, &[1, 1])
+        };
+        assert!(retained.begin_retained(&codec, 2).unwrap());
+        super::super::work_attribution::reset();
+        assert_eq!(
+            retained
+                .append_retained(&codec, CAPABILITY, after, |_| Some(&binding))
+                .unwrap(),
+            RetainedGather::Complete
+        );
+        assert!(retained.finish_retained());
+        assert_eq!(
+            super::super::work_attribution::snapshot().gather_f32_reads,
+            4
+        );
+        let mut cold = CodecGatherWorkspace::default();
+        cold.gather(&codec, CAPABILITY, after, |_| Some(&binding))
+            .unwrap();
+        assert_range_gather_equal(&retained, &cold);
+        for gathered in [&retained, &cold] {
+            let mut compiler = RenderPlanCompiler::default();
+            compiler
+                .prepare(&codec, CAPABILITY, gathered.view().plan_input(), true, 1, 0)
+                .unwrap();
+            let plan = compiler
+                .plan_view(3, CAPABILITY, codec.fingerprint())
+                .unwrap();
+            let buffer_id = plan.buffers[0].id;
+            compiler.commit().unwrap();
+            assert_eq!(
+                &compiler.buffer_bytes(buffer_id).unwrap()[..8],
+                &[31.0_f32.to_le_bytes(), 42.0_f32.to_le_bytes()].concat(),
+            );
+        }
     }
 
     #[test]

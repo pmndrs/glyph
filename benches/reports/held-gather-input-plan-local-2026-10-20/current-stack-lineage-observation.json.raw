@@ -1,0 +1,101 @@
+{
+  "recordedUtc": "2026-10-20T22:55:21.432235+00:00",
+  "results": [
+    {
+      "argv": [
+        "git",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit": 0,
+      "stdout": "b81756a5ce4541b4e9b23d7ad04c9105345e7cff\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "rev-parse",
+        "--is-shallow-repository"
+      ],
+      "exit": 0,
+      "stdout": "false\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "60d3c26f135b360ab1111131ce274218959d176f",
+        "HEAD"
+      ],
+      "exit": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "60d3c26f135b360ab1111131ce274218959d176f",
+        "57243ee5b5742da52214fc977517d2a01d2ab845"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "4e25a96a57462fef5ad0d19065a822695b480f60",
+        "HEAD"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "rev-list",
+        "--left-right",
+        "--count",
+        "origin/feat/rust-text-input-wire...HEAD"
+      ],
+      "exit": 0,
+      "stdout": "0\t0\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "gh",
+        "api",
+        "repos/pmndrs/glyph/git/ref/heads/main",
+        "--jq",
+        ".object.sha"
+      ],
+      "exit": 0,
+      "stdout": "4e25a96a57462fef5ad0d19065a822695b480f60\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "gh",
+        "pr",
+        "view",
+        "310",
+        "--repo",
+        "pmndrs/glyph",
+        "--json",
+        "state,isDraft,baseRefName,headRefName,headRefOid,url"
+      ],
+      "exit": 0,
+      "stdout": "{\"baseRefName\":\"feat/shaper-helper-dedup\",\"headRefName\":\"feat/rust-text-input-wire\",\"headRefOid\":\"b81756a5ce4541b4e9b23d7ad04c9105345e7cff\",\"isDraft\":true,\"state\":\"OPEN\",\"url\":\"https://github.com/pmndrs/glyph/pull/310\"}\n",
+      "stderr": ""
+    }
+  ],
+  "interpretation": "Original checkpoint is ancestor of authenticated preserved pre-rebase57243ee5, not current rewritten branch. This matches committed Oct19 ancestry.json and frontier line218. Prior authorized real gh-stack rebase integrated main; no new rebase/fetch/checkout performed. Remote main still matches frozen comparator4e25; PR310 open draft, b817 submitted head, zero local/remote tracked-head difference."
+}

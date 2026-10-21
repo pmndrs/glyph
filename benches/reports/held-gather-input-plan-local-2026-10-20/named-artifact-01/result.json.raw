@@ -1,0 +1,26 @@
+{
+  "argv": [
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "glyph:shaper-profile-artifact",
+    "--",
+    "--artifact",
+    "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "--source-root",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+    "--output",
+    "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/shaper-profile"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-20T22:27:52.534971+00:00",
+  "finished": "2026-10-20T22:28:29.211689+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "c8b93d44c346e23603e091019819fed5e9536478b85844887fecf88e016f4af9",
+    "stderr.log": "c1f3b8d0394fea6cf4e9215a10dbc47f0ae1ae9d09eafc766500020ad1cb791b"
+  }
+}

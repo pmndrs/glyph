@@ -1,0 +1,1229 @@
+{
+  "schema": "held-hybrid-wasm-abi-and-sections-v1",
+  "recordedUtc": "2026-10-20T22:53:18.572974+00:00",
+  "decoderScriptSha256": "c09f712d443c54a5314aae2a7831529913a65fae7245c90d04dbb4e8311dc3b7",
+  "archiveIdentities": {
+    "candidate": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "sha256": "9b1ad97a03f5af8eaa0613e5bdaab601edf7fccf69fdeacc6059759191b1fb18",
+      "bytes": 3196682,
+      "memberSha256": "d14d1fc68071da0127addec4dcb044998a7da4b16b32fa9c3a84eb7c70cc1018",
+      "memberBytes": 1610289
+    },
+    "prior28fd": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "sha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+      "bytes": 3196121,
+      "memberSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+      "memberBytes": 1609247
+    }
+  },
+  "currentVsPrior28fdTextShaperAbi": {
+    "importsExact": true,
+    "exportNameKindTypeExact": true,
+    "candidateExports": [
+      {
+        "name": "memory",
+        "index": 0,
+        "kindId": 2,
+        "kind": "memory",
+        "type": {
+          "flags": 0,
+          "minimum": 21
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_borrow_paragraph_glyphs",
+        "index": 721,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_borrow_paragraph_layout",
+        "index": 722,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_codec_count",
+        "index": 723,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_copy_decorations",
+        "index": 724,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_copy_glyphs",
+        "index": 725,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_create_root",
+        "index": 726,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_dispose_codec",
+        "index": 727,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_dispose_font_binding",
+        "index": 728,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_dispose_font_stack",
+        "index": 729,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_dispose_root",
+        "index": 730,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_font_binding_count",
+        "index": 731,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_font_stack_count",
+        "index": 732,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_measure_paragraph",
+        "index": 733,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_register_codec",
+        "index": 734,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_register_font_binding",
+        "index": 735,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_register_font_stack",
+        "index": 736,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_request_capacity",
+        "index": 737,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_request_ptr",
+        "index": 738,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_reserve_root",
+        "index": 739,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_reserve_update_batch",
+        "index": 740,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_reset_root",
+        "index": 741,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_root_count",
+        "index": 742,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_update",
+        "index": 743,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_update_batch",
+        "index": 744,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_update_batch_capacity",
+        "index": 745,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_update_batch_ptr",
+        "index": 746,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_abi_version",
+        "index": 747,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_alloc",
+        "index": 748,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_dealloc",
+        "index": 749,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f"
+          ],
+          "results": []
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_dispose_font",
+        "index": 750,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_font_count",
+        "index": 751,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_glyph_outline",
+        "index": 752,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_glyph_outline_len",
+        "index": 753,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_glyph_outline_ptr",
+        "index": 754,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_initialize",
+        "index": 755,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_register_font",
+        "index": 756,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_retained_font_bytes",
+        "index": 757,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_shape_plan_count",
+        "index": 758,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      }
+    ],
+    "prior28fdExports": [
+      {
+        "name": "memory",
+        "index": 0,
+        "kindId": 2,
+        "kind": "memory",
+        "type": {
+          "flags": 0,
+          "minimum": 21
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_borrow_paragraph_glyphs",
+        "index": 721,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_borrow_paragraph_layout",
+        "index": 722,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_codec_count",
+        "index": 723,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_copy_decorations",
+        "index": 724,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_copy_glyphs",
+        "index": 725,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_create_root",
+        "index": 726,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_dispose_codec",
+        "index": 727,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_dispose_font_binding",
+        "index": 728,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_dispose_font_stack",
+        "index": 729,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_dispose_root",
+        "index": 730,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_font_binding_count",
+        "index": 731,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_font_stack_count",
+        "index": 732,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_measure_paragraph",
+        "index": 733,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_register_codec",
+        "index": 734,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_register_font_binding",
+        "index": 735,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_register_font_stack",
+        "index": 736,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_request_capacity",
+        "index": 737,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_request_ptr",
+        "index": 738,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_reserve_root",
+        "index": 739,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_reserve_update_batch",
+        "index": 740,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_reset_root",
+        "index": 741,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_root_count",
+        "index": 742,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_update",
+        "index": 743,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_update_batch",
+        "index": 744,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_update_batch_capacity",
+        "index": 745,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_engine_update_batch_ptr",
+        "index": 746,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_abi_version",
+        "index": 747,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_alloc",
+        "index": 748,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_dealloc",
+        "index": 749,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f"
+          ],
+          "results": []
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_dispose_font",
+        "index": 750,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_font_count",
+        "index": 751,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_glyph_outline",
+        "index": 752,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_glyph_outline_len",
+        "index": 753,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_glyph_outline_ptr",
+        "index": 754,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_initialize",
+        "index": 755,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_register_font",
+        "index": 756,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f",
+            "0x7f"
+          ],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_retained_font_bytes",
+        "index": 757,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      },
+      {
+        "name": "pmndrs_glyph_shaper_shape_plan_count",
+        "index": 758,
+        "kindId": 0,
+        "kind": "function",
+        "signature": {
+          "params": [],
+          "results": [
+            "0x7f"
+          ]
+        }
+      }
+    ],
+    "candidateImports": [],
+    "prior28fdImports": [],
+    "changedExports": []
+  },
+  "otherFourWasmIdentityBridge": [
+    {
+      "member": "package/dist/bitmap-baker.wasm",
+      "sha256": "af4892531eeab1b5d7e40844e2ab261628f51456345fb4c515fae248ae8449bc",
+      "bytes": 614383,
+      "byteIdenticalCandidateToPrior28fd": true,
+      "priorBinaryInventoryAvailable": true
+    },
+    {
+      "member": "package/dist/font-baker.wasm",
+      "sha256": "10b15d3d9359fdc76629a52d8ff68158e0396f2fd0a4581be5b83b194eecd793",
+      "bytes": 1080865,
+      "byteIdenticalCandidateToPrior28fd": true,
+      "priorBinaryInventoryAvailable": true
+    },
+    {
+      "member": "package/dist/mtsdf-baker.wasm",
+      "sha256": "27a205b72a77fa81016c90e4be2cbfdda7a0ba587f0c9d18169a8399ff557728",
+      "bytes": 548605,
+      "byteIdenticalCandidateToPrior28fd": true,
+      "priorBinaryInventoryAvailable": true
+    },
+    {
+      "member": "package/dist/slug-baker.wasm",
+      "sha256": "418c895d6b5460e4a6ed1e3c35e37bc8e2fad31695e874cea5f33e144f71bee4",
+      "bytes": 454348,
+      "byteIdenticalCandidateToPrior28fd": true,
+      "priorBinaryInventoryAvailable": true
+    }
+  ],
+  "namedVsShippingStandardSections": {
+    "namedStandardSectionOrder": [
+      1,
+      3,
+      4,
+      5,
+      6,
+      7,
+      9,
+      12,
+      10,
+      11
+    ],
+    "shippingStandardSectionOrder": [
+      1,
+      3,
+      4,
+      5,
+      6,
+      7,
+      9,
+      12,
+      10,
+      11
+    ],
+    "sameStandardSectionOrder": true,
+    "sectionsByteIdentical": {
+      "1": true,
+      "3": true,
+      "4": true,
+      "5": true,
+      "6": true,
+      "7": true,
+      "9": true,
+      "12": true,
+      "10": true,
+      "11": true
+    },
+    "allStandardSectionsByteIdentical": true,
+    "namedCustomSections": [
+      {
+        "name": "name",
+        "sha256": "9ba7f6fb8d6c1dfa1fcb28fe739f96527818c69d9d8c84c4991442caa8393290",
+        "bytes": 179503
+      }
+    ],
+    "shippingCustomSections": []
+  },
+  "scope": "Decoded binary import descriptors and exported function signatures plus exported memory/table/global types. Four other Wasms are carried from prior binary inventory only after current/prior byte-identity checks. Comparison is structural at actual Wasm boundaries; it does not establish payload-layout semantics, ownership, or lifetime."
+}

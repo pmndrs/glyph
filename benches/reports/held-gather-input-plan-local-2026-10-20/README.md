@@ -1,0 +1,37 @@
+# Gather input-plan combination candidate — local 20 October 2026
+
+This correct whole variant remains an experimental component, not a performance-accepted successor to E2. The cursor-local resolved input plan reuses validated program/dependency masks and static position-only classification in the existing gather owner. Legacy dynamic semantics retain their old read/error order. No second executor, persistent field cache, public API/ABI or setter scheduling change was added.
+
+The source checkpoint is `b81756a5ce4541b4e9b23d7ad04c9105345e7cff` plus the sole product change `codec_gather.rs` SHA-256 `e8c21cb9c7dddb99c9211bdadfd372bdc236d7a385c3f4868bac9ece36c33f7b`. Its whole source is preserved at `cb77b3b73b7e6e4078f31472417dbe561abc9d3d`, ref `experiments/held-gather-input-plan-frozen-20261020`, and named stash `held-gather-input-plan-frozen-20261020: reviewed exact-output candidate 9b1ad97a`. E2 and the complete E3 variant remain separately recoverable. No experiment was dropped for missing a 5% floor.
+
+## Complete measurements
+
+All three full eight-block arms exited zero. One candidate was sampled once and its raw timing JSON byte-reused against independently sampled same-machine main, published 0.1.0 and E2. Candidate archive SHA-256 is `9b1ad97a03f5af8eaa0613e5bdaab601edf7fccf69fdeacc6059759191b1fb18`; saved timing JSON is `e859be4b34068b7060601af793cae68b4363dd3ce168b75df4875167f7cfcfc5`. The [consolidated handoff](matrix-consolidated-factual-handoff.json.raw) records four archive identities, all terminal receipts, harness and unchanged 666 tracked gate inputs.
+
+Pooled stored normalized per-call nearest-rank p50/p95, milliseconds:
+
+| Workload                                       |            Main | Published 0.1.0 |              E2 |       Candidate |
+| ---------------------------------------------- | --------------: | --------------: | --------------: | --------------: |
+| Dense512 rewrite                               |   6.999 / 7.741 |   7.411 / 7.957 |  9.297 / 10.661 |  9.228 / 10.652 |
+| Dense1024 Text publication                     | 15.245 / 16.415 | 15.397 / 16.491 | 18.490 / 20.991 | 18.589 / 21.017 |
+| Width-change per-glyph inspection              |   7.068 / 9.605 |  8.164 / 10.667 |   4.460 / 5.781 |   4.426 / 5.788 |
+| Sparse borrow one edited label among 1000      |   0.227 / 0.318 |   0.216 / 0.304 |   0.176 / 0.257 |   0.180 / 0.270 |
+| Independently copy one edited label among 1000 |   2.545 / 3.154 |   5.556 / 6.974 |   1.870 / 2.312 |   1.818 / 2.260 |
+
+These quantiles and Labs' block-median deltas/CI are different estimators; p95 has no independent uncertainty interval. [Independent admission review](input-plan-performance-admission-review.md) covers all seven families, small favorable and adverse changes, unadjusted multiple comparisons and sequential sampling. Dense improvement over E2 is unproved. The copied-label favorable CI is eligible to preserve; no-op, first-set and sparse/tail shifts prevent blanket nonregression clearance. Main/release dense, long-edit, cold, cached-inspection and unchanged-copy gaps remain. Parity false; post-parity boost waves zero.
+
+Main has one clock-confounded normalization row and three timing-mode mismatches; published has two timing-mode mismatches and lacks two outline cases. E2 has 145 matched cases and no exclusions. Main's 8.3% global software-calibration drift is not hardware-frequency measurement. No timing was repeated for a favorable classification or corrected synthetically. Published was accidentally launched by direct tool session rather than `run.py`; its [direct-session record](matrix-published-01.direct-session.json.raw) preserves actual observations and terminal status. Its manual stdout is incomplete. Complete local raw JSON/manifests are authoritative; no wrapper receipt was fabricated.
+
+## Correctness, work, size and memory
+
+The [source review](input-plan-high-review.md), [integrity](root-implementation-integrity.json.raw) and package receipt establish focused correctness, 588 Rust passes with two ignored tests, and 1142 Node passes. The named immutable native replay runs separately: 6157 events and 4099 complete results / 1977392 bytes match. Its [ledger](native-work-ledger.json.raw) records forward/reverse f32 reads 109568→97280, deleting 12288 reads each; writes remain 97280 f32 and 20480 u32. Physical comparison 589824 bytes, equal suppression 221184 and emitted 368640 remain unchanged. Scalar native work excludes JS/GC, GPU, batch descriptor processing and elapsed time. Deleted reads did not establish a dense latency gain.
+
+Shipping shaper `d14d1fc68071da0127addec4dcb044998a7da4b16b32fa9c3a84eb7c70cc1018` is 1610289 raw / 599723 Node-gzip bytes, +1042/+174 versus E2. Matching named shaper `806066af37452bbf5781955c8bb6f2083997cc68fd0e5eae485612ea5b608826` has exact standard-section equality. Of 947 archived dist members, 946 match E2 byte-for-byte; only the shaper differs. The 237 JS files total 875885 raw / 298974 same-method gzip bytes, unchanged E2. Decoded vector instructions prove compiled SIMD presence, not frequency or runtime utilization.
+
+Across 71 allocator snapshots and eight cycles, maximum requested live is 40471115 bytes, completed-call requested peak 40671431, maximum 728 pages; every snapshot matches E2. This scope excludes JS/GPU, font decoder instances, allocator fragmentation and transient physical reallocation peak. Structural ABI exports/types and packed public/peer metadata match; final runtime peer, browser/hero and whole-application physical peak gates remain open. Prior-head CI does not cover this source.
+
+## Next hybrid and evidence boundary
+
+The user's requested [fresh no-history Sol High causal review](fresh-causal-hybrid-20261020.md) compares old deferred/batched setters with HELD synchronous preparation and retained sparse/query gains. It selects direct operands from prepared SoA into the same validated Codec operation loops, preserving exact ordered output scopes. Full gathered fields would be replaced on admitted dense work by call-scoped locators; scattered source reads and SIMD lane assembly may offset the deleted copies. There is no speed promise. The [Medium single-pass proof](direct-retained-single-pass-proof.md) has a [scoped High review](direct-retained-single-pass-high-review.md): eligibility must be certified without mutation; any post-mutation miss needs exact rollback or proved fallback equivalence. Zero-mask and position-only rows need current exact strike selection. The [complete metadata-reset combination](direct-operand-preserved-reset-combination.md) is preserved as a separate fallback design because it may widen ordered work and allocation. Cold-output/error, transitions, lifetime, size/memory and the complete three-control matrix remain mandatory for the combined candidate.
+
+[Copy provenance](portable-copy-provenance.json) authenticates exact source and portable target bytes. JSON receipts use `.json.raw` to avoid formatter mutation. Raw timing sample JSON, archives, profiles, native input blobs and build outputs remain local ignored artifacts; their recorded hashes do not make them recoverable from Git. Embedded absolute paths identify this machine's receipts, not portable prerequisites. Historical results are diagnostic context, never later-source acceptance. The real stack #292→#301→#302→draft #310 stays held and unmerged; no merge, release, tag or demo merge.

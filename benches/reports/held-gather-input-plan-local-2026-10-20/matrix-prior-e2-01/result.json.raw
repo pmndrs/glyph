@@ -1,0 +1,34 @@
+{
+  "argv": [
+    "/usr/bin/env",
+    "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/scratch",
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "benchmark:labs-package",
+    "--",
+    "--candidate",
+    "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "--baseline",
+    "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "--suite",
+    "full",
+    "--blocks",
+    "8",
+    "--output",
+    "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-prior-e2-data",
+    "--saved-candidate",
+    "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-main-data"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-20T23:39:01.482013+00:00",
+  "finished": "2026-10-20T23:58:26.618929+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "b7366831cb2a81ad4901888fca05d44f749c53932e6979ff6d41e2255c0556c3",
+    "stderr.log": "5d975085fa827017fd774b005a880ef2fe1c39743700b50a68864cddab0a0f98"
+  }
+}

@@ -207,6 +207,13 @@ placement walk. A changed placement topology still uses the existing complete re
 Retained gather also refreshes current cluster ordinals independently of stable Codec cluster identities. An ordinal
 change invalidates derived primitive metadata even when the Codec columns and ink bounds remain unchanged; zero-mask
 and position-only updates use the same gather and metadata-dirt mechanism.
+Within a retained gather cursor, resolved program input counts, dependency masks and static position-only classification
+are reused for matching capability, technique, variant and exact semantic mask. Selection and binding rejection precede
+speculative semantic reads; legacy dynamic fields preserve the prior fallible read order. The same packed field writer,
+four-lane Codec and ordered physical compiler retain ownership. Native deleted-read evidence does not establish a dense
+latency gain; the measured whole variant is preserved for combination and remains unaccepted for performance in the
+[frontier](../planning/publication-frontier.md).
+
 Count-changing dirty owners now share one appended gather envelope. Dirty rows use the existing Codec-directed writer;
 intervening clean rows extend the already-gathered columns and share source-rope ranges. One frozen old/current
 correspondence ledger separates source and emitted coordinates and identifies dirty owners versus clean gaps.

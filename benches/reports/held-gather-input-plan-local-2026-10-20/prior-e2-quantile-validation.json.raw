@@ -1,0 +1,10 @@
+{
+  "recordedUtc": "2026-10-21T00:01:21.365862+00:00",
+  "priorQuantileOutputSha256": "a059101eb36a458407f54df42a53ed15da8d603b38203f09fda75a2da4bab135",
+  "mainQuantileInputSha256": "540478458389b83cc024a5d6cdbaf7a7fee6ebe0e9a3bba353295b1ca78bc74e",
+  "candidateRowQuantilesMetadataCompared": 145,
+  "candidateRowMismatches": 0,
+  "matchedBaselineCandidateIdentities": 145,
+  "exclusions": [],
+  "warnings": []
+}

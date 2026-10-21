@@ -1,0 +1,931 @@
+{
+  "schema": "held-input-plan-packed-contract-comparison-v1",
+  "recordedUtc": "2026-10-20T22:53:40.070171+00:00",
+  "comparedKeys": [
+    "name",
+    "type",
+    "types",
+    "exports",
+    "peerDependencies",
+    "peerDependenciesMeta",
+    "engines",
+    "sideEffects"
+  ],
+  "arms": {
+    "candidate": {
+      "archive": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "archiveSha256": "9b1ad97a03f5af8eaa0613e5bdaab601edf7fccf69fdeacc6059759191b1fb18",
+      "packageJsonSha256": "29af8cb65e03353e78ad12372ba01d6cec8ea768a6f63f6d52c4be2df2c8fd4c",
+      "contract": {
+        "name": "@pmndrs/glyph",
+        "type": "module",
+        "types": null,
+        "exports": {
+          ".": {
+            "types": {
+              "source": "./src/index.ts",
+              "default": "./dist/index.d.ts"
+            },
+            "source": "./src/index.ts",
+            "import": "./dist/index.js"
+          },
+          "./shaders/tsl": {
+            "types": {
+              "source": "./src/shaders/tsl/index.ts",
+              "default": "./dist/shaders/tsl/index.d.ts"
+            },
+            "source": "./src/shaders/tsl/index.ts",
+            "import": "./dist/shaders/tsl/index.js"
+          },
+          "./shaders/tsl/internal/*": null,
+          "./shaders/tsl/slug/internal/*": null,
+          "./shaders/typegpu": {
+            "types": {
+              "source": "./src/shaders/typegpu/index.ts",
+              "default": "./dist/shaders/typegpu/index.d.ts"
+            },
+            "source": "./src/shaders/typegpu/index.ts",
+            "import": "./dist/shaders/typegpu/index.js"
+          },
+          "./shaders/typegpu/internal/*": null,
+          "./shaders/typegpu/slug/internal/*": null,
+          "./three": {
+            "types": {
+              "source": "./src/three.ts",
+              "default": "./dist/three.d.ts"
+            },
+            "source": "./src/three.ts",
+            "import": "./dist/three.js"
+          },
+          "./three/internal/*": null,
+          "./three/handle": null,
+          "./three/schema": null,
+          "./three/plan-program-registry": null,
+          "./three/codec": null,
+          "./three/command-buffer-renderer": null,
+          "./three/decorations": null,
+          "./three/detached-object": null,
+          "./three/engine-plan-target": null,
+          "./three/frame-error": null,
+          "./three/glyph-measurement": null,
+          "./three/glyphs": null,
+          "./three/font-loader": null,
+          "./three/loader": null,
+          "./three/renderer-resources": null,
+          "./three/text": null,
+          "./three/transform-synchronizer": null,
+          "./react": {
+            "types": {
+              "source": "./src/react/index.ts",
+              "default": "./dist/react/index.d.ts"
+            },
+            "source": "./src/react/index.ts",
+            "import": "./dist/react/index.js"
+          },
+          "./vue": {
+            "types": {
+              "source": "./src/vue.ts",
+              "default": "./dist/vue.d.ts"
+            },
+            "source": "./src/vue.ts",
+            "import": "./dist/vue.js"
+          },
+          "./vue/internal/*": null,
+          "./vue/*": {
+            "types": {
+              "source": "./src/vue/*.ts",
+              "default": "./dist/vue/*.d.ts"
+            },
+            "source": "./src/vue/*.ts",
+            "import": "./dist/vue/*.js"
+          },
+          "./raster/internal/*": null,
+          "./config/font-library": null,
+          "./config/raster-host": null,
+          "./config/text-property": null,
+          "./bakers/bitmap": {
+            "types": {
+              "source": "./src/bakers/bitmap.ts",
+              "default": "./dist/bakers/bitmap.d.ts"
+            },
+            "source": "./src/bakers/bitmap.ts",
+            "import": "./dist/bakers/bitmap.js"
+          },
+          "./bakers/msdf": {
+            "types": {
+              "source": "./src/bakers/msdf.ts",
+              "default": "./dist/bakers/msdf.d.ts"
+            },
+            "source": "./src/bakers/msdf.ts",
+            "import": "./dist/bakers/msdf.js"
+          },
+          "./bakers/slug": {
+            "types": {
+              "source": "./src/bakers/slug.ts",
+              "default": "./dist/bakers/slug.d.ts"
+            },
+            "source": "./src/bakers/slug.ts",
+            "import": "./dist/bakers/slug.js"
+          },
+          "./baker": {
+            "types": {
+              "source": "./src/bake.ts",
+              "default": "./dist/bake.d.ts"
+            },
+            "source": "./src/bake.ts",
+            "import": "./dist/bake.js"
+          },
+          "./bake": {
+            "types": {
+              "source": "./src/node/bake.ts",
+              "default": "./dist/node/bake.d.ts"
+            },
+            "source": "./src/node/bake.ts",
+            "import": "./dist/node/bake.js"
+          },
+          "./runtime-bake": {
+            "types": {
+              "source": "./src/runtime-bake.ts",
+              "default": "./dist/runtime-bake.d.ts"
+            },
+            "source": "./src/runtime-bake.ts",
+            "import": "./dist/runtime-bake.js"
+          },
+          "./loader": null,
+          "./internal/*": null,
+          "./generated/*": null,
+          "./font-baker/*": null,
+          "./text-shaper.wasm": "./dist/text-shaper.wasm",
+          "./bitmap-baker.wasm": "./dist/bitmap-baker.wasm",
+          "./mtsdf-baker.wasm": "./dist/mtsdf-baker.wasm",
+          "./slug-baker.wasm": "./dist/slug-baker.wasm",
+          "./font-baker.wasm": "./dist/font-baker.wasm",
+          "./package.json": "./package.json",
+          "./typegpu": {
+            "types": {
+              "source": "./src/typegpu.ts",
+              "default": "./dist/typegpu.d.ts"
+            },
+            "source": "./src/typegpu.ts",
+            "import": "./dist/typegpu.js"
+          },
+          "./three/typegpu": {
+            "types": {
+              "source": "./src/three/typegpu.ts",
+              "default": "./dist/three/typegpu.d.ts"
+            },
+            "source": "./src/three/typegpu.ts",
+            "import": "./dist/three/typegpu.js"
+          },
+          "./three/typegpu/internal/*": null,
+          "./core": {
+            "types": {
+              "source": "./src/core.ts",
+              "default": "./dist/core.d.ts"
+            },
+            "source": "./src/core.ts",
+            "import": "./dist/core.js"
+          }
+        },
+        "peerDependencies": {
+          "@react-three/fiber": ">=9.7.0 <10 || >=10.0.0-alpha.4 <11",
+          "@tresjs/core": ">=5.8.3 <6",
+          "@typegpu/gl": ">=0.12.4 <0.13",
+          "@typegpu/three": ">=0.12.1 <0.13",
+          "react": ">=19.0.0 <19.3",
+          "three": ">=0.185.0",
+          "typegpu": ">=0.12.5 <0.13",
+          "vue": ">=3.5 <4"
+        },
+        "peerDependenciesMeta": {
+          "@react-three/fiber": {
+            "optional": true
+          },
+          "@tresjs/core": {
+            "optional": true
+          },
+          "@typegpu/gl": {
+            "optional": true
+          },
+          "@typegpu/three": {
+            "optional": true
+          },
+          "react": {
+            "optional": true
+          },
+          "three": {
+            "optional": true
+          },
+          "typegpu": {
+            "optional": true
+          },
+          "vue": {
+            "optional": true
+          }
+        },
+        "engines": null,
+        "sideEffects": [
+          "./src/raster/bitmap.ts",
+          "./src/raster/msdf.ts",
+          "./src/raster/slug.ts",
+          "./dist/raster/bitmap.js",
+          "./dist/raster/msdf.js",
+          "./dist/raster/slug.js",
+          "./dist/internal/bitmap-*.js",
+          "./dist/internal/msdf-*.js",
+          "./dist/internal/slug-*.js"
+        ]
+      }
+    },
+    "priorE2": {
+      "archive": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "archiveSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+      "packageJsonSha256": "29af8cb65e03353e78ad12372ba01d6cec8ea768a6f63f6d52c4be2df2c8fd4c",
+      "contract": {
+        "name": "@pmndrs/glyph",
+        "type": "module",
+        "types": null,
+        "exports": {
+          ".": {
+            "types": {
+              "source": "./src/index.ts",
+              "default": "./dist/index.d.ts"
+            },
+            "source": "./src/index.ts",
+            "import": "./dist/index.js"
+          },
+          "./shaders/tsl": {
+            "types": {
+              "source": "./src/shaders/tsl/index.ts",
+              "default": "./dist/shaders/tsl/index.d.ts"
+            },
+            "source": "./src/shaders/tsl/index.ts",
+            "import": "./dist/shaders/tsl/index.js"
+          },
+          "./shaders/tsl/internal/*": null,
+          "./shaders/tsl/slug/internal/*": null,
+          "./shaders/typegpu": {
+            "types": {
+              "source": "./src/shaders/typegpu/index.ts",
+              "default": "./dist/shaders/typegpu/index.d.ts"
+            },
+            "source": "./src/shaders/typegpu/index.ts",
+            "import": "./dist/shaders/typegpu/index.js"
+          },
+          "./shaders/typegpu/internal/*": null,
+          "./shaders/typegpu/slug/internal/*": null,
+          "./three": {
+            "types": {
+              "source": "./src/three.ts",
+              "default": "./dist/three.d.ts"
+            },
+            "source": "./src/three.ts",
+            "import": "./dist/three.js"
+          },
+          "./three/internal/*": null,
+          "./three/handle": null,
+          "./three/schema": null,
+          "./three/plan-program-registry": null,
+          "./three/codec": null,
+          "./three/command-buffer-renderer": null,
+          "./three/decorations": null,
+          "./three/detached-object": null,
+          "./three/engine-plan-target": null,
+          "./three/frame-error": null,
+          "./three/glyph-measurement": null,
+          "./three/glyphs": null,
+          "./three/font-loader": null,
+          "./three/loader": null,
+          "./three/renderer-resources": null,
+          "./three/text": null,
+          "./three/transform-synchronizer": null,
+          "./react": {
+            "types": {
+              "source": "./src/react/index.ts",
+              "default": "./dist/react/index.d.ts"
+            },
+            "source": "./src/react/index.ts",
+            "import": "./dist/react/index.js"
+          },
+          "./vue": {
+            "types": {
+              "source": "./src/vue.ts",
+              "default": "./dist/vue.d.ts"
+            },
+            "source": "./src/vue.ts",
+            "import": "./dist/vue.js"
+          },
+          "./vue/internal/*": null,
+          "./vue/*": {
+            "types": {
+              "source": "./src/vue/*.ts",
+              "default": "./dist/vue/*.d.ts"
+            },
+            "source": "./src/vue/*.ts",
+            "import": "./dist/vue/*.js"
+          },
+          "./raster/internal/*": null,
+          "./config/font-library": null,
+          "./config/raster-host": null,
+          "./config/text-property": null,
+          "./bakers/bitmap": {
+            "types": {
+              "source": "./src/bakers/bitmap.ts",
+              "default": "./dist/bakers/bitmap.d.ts"
+            },
+            "source": "./src/bakers/bitmap.ts",
+            "import": "./dist/bakers/bitmap.js"
+          },
+          "./bakers/msdf": {
+            "types": {
+              "source": "./src/bakers/msdf.ts",
+              "default": "./dist/bakers/msdf.d.ts"
+            },
+            "source": "./src/bakers/msdf.ts",
+            "import": "./dist/bakers/msdf.js"
+          },
+          "./bakers/slug": {
+            "types": {
+              "source": "./src/bakers/slug.ts",
+              "default": "./dist/bakers/slug.d.ts"
+            },
+            "source": "./src/bakers/slug.ts",
+            "import": "./dist/bakers/slug.js"
+          },
+          "./baker": {
+            "types": {
+              "source": "./src/bake.ts",
+              "default": "./dist/bake.d.ts"
+            },
+            "source": "./src/bake.ts",
+            "import": "./dist/bake.js"
+          },
+          "./bake": {
+            "types": {
+              "source": "./src/node/bake.ts",
+              "default": "./dist/node/bake.d.ts"
+            },
+            "source": "./src/node/bake.ts",
+            "import": "./dist/node/bake.js"
+          },
+          "./runtime-bake": {
+            "types": {
+              "source": "./src/runtime-bake.ts",
+              "default": "./dist/runtime-bake.d.ts"
+            },
+            "source": "./src/runtime-bake.ts",
+            "import": "./dist/runtime-bake.js"
+          },
+          "./loader": null,
+          "./internal/*": null,
+          "./generated/*": null,
+          "./font-baker/*": null,
+          "./text-shaper.wasm": "./dist/text-shaper.wasm",
+          "./bitmap-baker.wasm": "./dist/bitmap-baker.wasm",
+          "./mtsdf-baker.wasm": "./dist/mtsdf-baker.wasm",
+          "./slug-baker.wasm": "./dist/slug-baker.wasm",
+          "./font-baker.wasm": "./dist/font-baker.wasm",
+          "./package.json": "./package.json",
+          "./typegpu": {
+            "types": {
+              "source": "./src/typegpu.ts",
+              "default": "./dist/typegpu.d.ts"
+            },
+            "source": "./src/typegpu.ts",
+            "import": "./dist/typegpu.js"
+          },
+          "./three/typegpu": {
+            "types": {
+              "source": "./src/three/typegpu.ts",
+              "default": "./dist/three/typegpu.d.ts"
+            },
+            "source": "./src/three/typegpu.ts",
+            "import": "./dist/three/typegpu.js"
+          },
+          "./three/typegpu/internal/*": null,
+          "./core": {
+            "types": {
+              "source": "./src/core.ts",
+              "default": "./dist/core.d.ts"
+            },
+            "source": "./src/core.ts",
+            "import": "./dist/core.js"
+          }
+        },
+        "peerDependencies": {
+          "@react-three/fiber": ">=9.7.0 <10 || >=10.0.0-alpha.4 <11",
+          "@tresjs/core": ">=5.8.3 <6",
+          "@typegpu/gl": ">=0.12.4 <0.13",
+          "@typegpu/three": ">=0.12.1 <0.13",
+          "react": ">=19.0.0 <19.3",
+          "three": ">=0.185.0",
+          "typegpu": ">=0.12.5 <0.13",
+          "vue": ">=3.5 <4"
+        },
+        "peerDependenciesMeta": {
+          "@react-three/fiber": {
+            "optional": true
+          },
+          "@tresjs/core": {
+            "optional": true
+          },
+          "@typegpu/gl": {
+            "optional": true
+          },
+          "@typegpu/three": {
+            "optional": true
+          },
+          "react": {
+            "optional": true
+          },
+          "three": {
+            "optional": true
+          },
+          "typegpu": {
+            "optional": true
+          },
+          "vue": {
+            "optional": true
+          }
+        },
+        "engines": null,
+        "sideEffects": [
+          "./src/raster/bitmap.ts",
+          "./src/raster/msdf.ts",
+          "./src/raster/slug.ts",
+          "./dist/raster/bitmap.js",
+          "./dist/raster/msdf.js",
+          "./dist/raster/slug.js",
+          "./dist/internal/bitmap-*.js",
+          "./dist/internal/msdf-*.js",
+          "./dist/internal/slug-*.js"
+        ]
+      }
+    },
+    "main": {
+      "archive": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+      "archiveSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "packageJsonSha256": "1926bd0e90be69e6d3a365d0e894cf5f33f69b45fc484ef5a2bfef995b4faadb",
+      "contract": {
+        "name": "@pmndrs/glyph",
+        "type": "module",
+        "types": null,
+        "exports": {
+          ".": {
+            "types": {
+              "source": "./src/index.ts",
+              "default": "./dist/index.d.ts"
+            },
+            "source": "./src/index.ts",
+            "import": "./dist/index.js"
+          },
+          "./shaders/tsl": {
+            "types": {
+              "source": "./src/shaders/tsl/index.ts",
+              "default": "./dist/shaders/tsl/index.d.ts"
+            },
+            "source": "./src/shaders/tsl/index.ts",
+            "import": "./dist/shaders/tsl/index.js"
+          },
+          "./shaders/tsl/internal/*": null,
+          "./shaders/tsl/slug/internal/*": null,
+          "./shaders/typegpu": {
+            "types": {
+              "source": "./src/shaders/typegpu/index.ts",
+              "default": "./dist/shaders/typegpu/index.d.ts"
+            },
+            "source": "./src/shaders/typegpu/index.ts",
+            "import": "./dist/shaders/typegpu/index.js"
+          },
+          "./shaders/typegpu/internal/*": null,
+          "./shaders/typegpu/slug/internal/*": null,
+          "./three": {
+            "types": {
+              "source": "./src/three.ts",
+              "default": "./dist/three.d.ts"
+            },
+            "source": "./src/three.ts",
+            "import": "./dist/three.js"
+          },
+          "./three/internal/*": null,
+          "./three/handle": null,
+          "./three/schema": null,
+          "./three/plan-program-registry": null,
+          "./three/codec": null,
+          "./three/command-buffer-renderer": null,
+          "./three/decorations": null,
+          "./three/detached-object": null,
+          "./three/engine-plan-target": null,
+          "./three/frame-error": null,
+          "./three/glyph-measurement": null,
+          "./three/glyphs": null,
+          "./three/font-loader": null,
+          "./three/loader": null,
+          "./three/renderer-resources": null,
+          "./three/text": null,
+          "./three/transform-synchronizer": null,
+          "./react": {
+            "types": {
+              "source": "./src/react/index.ts",
+              "default": "./dist/react/index.d.ts"
+            },
+            "source": "./src/react/index.ts",
+            "import": "./dist/react/index.js"
+          },
+          "./vue": {
+            "types": {
+              "source": "./src/vue.ts",
+              "default": "./dist/vue.d.ts"
+            },
+            "source": "./src/vue.ts",
+            "import": "./dist/vue.js"
+          },
+          "./vue/internal/*": null,
+          "./vue/*": {
+            "types": {
+              "source": "./src/vue/*.ts",
+              "default": "./dist/vue/*.d.ts"
+            },
+            "source": "./src/vue/*.ts",
+            "import": "./dist/vue/*.js"
+          },
+          "./raster/internal/*": null,
+          "./config/font-library": null,
+          "./config/raster-host": null,
+          "./config/text-property": null,
+          "./bakers/bitmap": {
+            "types": {
+              "source": "./src/bakers/bitmap.ts",
+              "default": "./dist/bakers/bitmap.d.ts"
+            },
+            "source": "./src/bakers/bitmap.ts",
+            "import": "./dist/bakers/bitmap.js"
+          },
+          "./bakers/msdf": {
+            "types": {
+              "source": "./src/bakers/msdf.ts",
+              "default": "./dist/bakers/msdf.d.ts"
+            },
+            "source": "./src/bakers/msdf.ts",
+            "import": "./dist/bakers/msdf.js"
+          },
+          "./bakers/slug": {
+            "types": {
+              "source": "./src/bakers/slug.ts",
+              "default": "./dist/bakers/slug.d.ts"
+            },
+            "source": "./src/bakers/slug.ts",
+            "import": "./dist/bakers/slug.js"
+          },
+          "./baker": {
+            "types": {
+              "source": "./src/bake.ts",
+              "default": "./dist/bake.d.ts"
+            },
+            "source": "./src/bake.ts",
+            "import": "./dist/bake.js"
+          },
+          "./bake": {
+            "types": {
+              "source": "./src/node/bake.ts",
+              "default": "./dist/node/bake.d.ts"
+            },
+            "source": "./src/node/bake.ts",
+            "import": "./dist/node/bake.js"
+          },
+          "./runtime-bake": {
+            "types": {
+              "source": "./src/runtime-bake.ts",
+              "default": "./dist/runtime-bake.d.ts"
+            },
+            "source": "./src/runtime-bake.ts",
+            "import": "./dist/runtime-bake.js"
+          },
+          "./loader": null,
+          "./internal/*": null,
+          "./generated/*": null,
+          "./font-baker/*": null,
+          "./text-shaper.wasm": "./dist/text-shaper.wasm",
+          "./bitmap-baker.wasm": "./dist/bitmap-baker.wasm",
+          "./mtsdf-baker.wasm": "./dist/mtsdf-baker.wasm",
+          "./slug-baker.wasm": "./dist/slug-baker.wasm",
+          "./font-baker.wasm": "./dist/font-baker.wasm",
+          "./package.json": "./package.json",
+          "./typegpu": {
+            "types": {
+              "source": "./src/typegpu.ts",
+              "default": "./dist/typegpu.d.ts"
+            },
+            "source": "./src/typegpu.ts",
+            "import": "./dist/typegpu.js"
+          },
+          "./three/typegpu": {
+            "types": {
+              "source": "./src/three/typegpu.ts",
+              "default": "./dist/three/typegpu.d.ts"
+            },
+            "source": "./src/three/typegpu.ts",
+            "import": "./dist/three/typegpu.js"
+          },
+          "./three/typegpu/internal/*": null,
+          "./core": {
+            "types": {
+              "source": "./src/core.ts",
+              "default": "./dist/core.d.ts"
+            },
+            "source": "./src/core.ts",
+            "import": "./dist/core.js"
+          }
+        },
+        "peerDependencies": {
+          "@react-three/fiber": ">=9.7.0 <10 || >=10.0.0-alpha.4 <11",
+          "@tresjs/core": ">=5.8.3 <6",
+          "@typegpu/gl": ">=0.12.4 <0.13",
+          "@typegpu/three": ">=0.12.1 <0.13",
+          "react": ">=19.0.0 <19.3",
+          "three": ">=0.185.0",
+          "typegpu": ">=0.12.5 <0.13",
+          "vue": ">=3.5 <4"
+        },
+        "peerDependenciesMeta": {
+          "@react-three/fiber": {
+            "optional": true
+          },
+          "@tresjs/core": {
+            "optional": true
+          },
+          "@typegpu/gl": {
+            "optional": true
+          },
+          "@typegpu/three": {
+            "optional": true
+          },
+          "react": {
+            "optional": true
+          },
+          "three": {
+            "optional": true
+          },
+          "typegpu": {
+            "optional": true
+          },
+          "vue": {
+            "optional": true
+          }
+        },
+        "engines": null,
+        "sideEffects": [
+          "./src/raster/bitmap.ts",
+          "./src/raster/msdf.ts",
+          "./src/raster/slug.ts",
+          "./dist/raster/bitmap.js",
+          "./dist/raster/msdf.js",
+          "./dist/raster/slug.js",
+          "./dist/internal/bitmap-*.js",
+          "./dist/internal/msdf-*.js",
+          "./dist/internal/slug-*.js"
+        ]
+      }
+    },
+    "published": {
+      "archive": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+      "archiveSha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+      "packageJsonSha256": "7ac2852e0736c2264ec3cec0b3bdbb36a1d043dc2eed42a130fda2df6ca608dc",
+      "contract": {
+        "name": "@pmndrs/glyph",
+        "type": "module",
+        "types": null,
+        "exports": {
+          ".": {
+            "types": {
+              "source": "./src/index.ts",
+              "default": "./dist/index.d.ts"
+            },
+            "source": "./src/index.ts",
+            "import": "./dist/index.js"
+          },
+          "./shaders/tsl": {
+            "types": {
+              "source": "./src/shaders/tsl/index.ts",
+              "default": "./dist/shaders/tsl/index.d.ts"
+            },
+            "source": "./src/shaders/tsl/index.ts",
+            "import": "./dist/shaders/tsl/index.js"
+          },
+          "./shaders/tsl/internal/*": null,
+          "./shaders/tsl/slug/internal/*": null,
+          "./shaders/typegpu": {
+            "types": {
+              "source": "./src/shaders/typegpu/index.ts",
+              "default": "./dist/shaders/typegpu/index.d.ts"
+            },
+            "source": "./src/shaders/typegpu/index.ts",
+            "import": "./dist/shaders/typegpu/index.js"
+          },
+          "./shaders/typegpu/internal/*": null,
+          "./shaders/typegpu/slug/internal/*": null,
+          "./three": {
+            "types": {
+              "source": "./src/three.ts",
+              "default": "./dist/three.d.ts"
+            },
+            "source": "./src/three.ts",
+            "import": "./dist/three.js"
+          },
+          "./three/internal/*": null,
+          "./three/handle": null,
+          "./three/schema": null,
+          "./three/plan-program-registry": null,
+          "./three/codec": null,
+          "./three/command-buffer-renderer": null,
+          "./three/decorations": null,
+          "./three/detached-object": null,
+          "./three/engine-plan-target": null,
+          "./three/frame-error": null,
+          "./three/glyph-measurement": null,
+          "./three/glyphs": null,
+          "./three/font-loader": null,
+          "./three/loader": null,
+          "./three/renderer-resources": null,
+          "./three/text": null,
+          "./three/transform-synchronizer": null,
+          "./react": {
+            "types": {
+              "source": "./src/react/index.ts",
+              "default": "./dist/react/index.d.ts"
+            },
+            "source": "./src/react/index.ts",
+            "import": "./dist/react/index.js"
+          },
+          "./vue": {
+            "types": {
+              "source": "./src/vue.ts",
+              "default": "./dist/vue.d.ts"
+            },
+            "source": "./src/vue.ts",
+            "import": "./dist/vue.js"
+          },
+          "./vue/internal/*": null,
+          "./vue/*": {
+            "types": {
+              "source": "./src/vue/*.ts",
+              "default": "./dist/vue/*.d.ts"
+            },
+            "source": "./src/vue/*.ts",
+            "import": "./dist/vue/*.js"
+          },
+          "./raster/internal/*": null,
+          "./config/font-library": null,
+          "./config/raster-host": null,
+          "./config/text-property": null,
+          "./bakers/bitmap": {
+            "types": {
+              "source": "./src/bakers/bitmap.ts",
+              "default": "./dist/bakers/bitmap.d.ts"
+            },
+            "source": "./src/bakers/bitmap.ts",
+            "import": "./dist/bakers/bitmap.js"
+          },
+          "./bakers/msdf": {
+            "types": {
+              "source": "./src/bakers/msdf.ts",
+              "default": "./dist/bakers/msdf.d.ts"
+            },
+            "source": "./src/bakers/msdf.ts",
+            "import": "./dist/bakers/msdf.js"
+          },
+          "./bakers/slug": {
+            "types": {
+              "source": "./src/bakers/slug.ts",
+              "default": "./dist/bakers/slug.d.ts"
+            },
+            "source": "./src/bakers/slug.ts",
+            "import": "./dist/bakers/slug.js"
+          },
+          "./baker": {
+            "types": {
+              "source": "./src/bake.ts",
+              "default": "./dist/bake.d.ts"
+            },
+            "source": "./src/bake.ts",
+            "import": "./dist/bake.js"
+          },
+          "./bake": {
+            "types": {
+              "source": "./src/node/bake.ts",
+              "default": "./dist/node/bake.d.ts"
+            },
+            "source": "./src/node/bake.ts",
+            "import": "./dist/node/bake.js"
+          },
+          "./runtime-bake": {
+            "types": {
+              "source": "./src/runtime-bake.ts",
+              "default": "./dist/runtime-bake.d.ts"
+            },
+            "source": "./src/runtime-bake.ts",
+            "import": "./dist/runtime-bake.js"
+          },
+          "./loader": null,
+          "./internal/*": null,
+          "./generated/*": null,
+          "./font-baker/*": null,
+          "./text-shaper.wasm": "./dist/text-shaper.wasm",
+          "./bitmap-baker.wasm": "./dist/bitmap-baker.wasm",
+          "./mtsdf-baker.wasm": "./dist/mtsdf-baker.wasm",
+          "./slug-baker.wasm": "./dist/slug-baker.wasm",
+          "./font-baker.wasm": "./dist/font-baker.wasm",
+          "./package.json": "./package.json",
+          "./typegpu": {
+            "types": {
+              "source": "./src/typegpu.ts",
+              "default": "./dist/typegpu.d.ts"
+            },
+            "source": "./src/typegpu.ts",
+            "import": "./dist/typegpu.js"
+          },
+          "./three/typegpu": {
+            "types": {
+              "source": "./src/three/typegpu.ts",
+              "default": "./dist/three/typegpu.d.ts"
+            },
+            "source": "./src/three/typegpu.ts",
+            "import": "./dist/three/typegpu.js"
+          },
+          "./three/typegpu/internal/*": null,
+          "./core": {
+            "types": {
+              "source": "./src/core.ts",
+              "default": "./dist/core.d.ts"
+            },
+            "source": "./src/core.ts",
+            "import": "./dist/core.js"
+          }
+        },
+        "peerDependencies": {
+          "@react-three/fiber": ">=9.7.0 <10 || >=10.0.0-alpha.4 <11",
+          "@tresjs/core": ">=5.8.3 <6",
+          "@typegpu/gl": ">=0.12.4 <0.13",
+          "@typegpu/three": ">=0.12.1 <0.13",
+          "react": ">=19.0.0 <19.3",
+          "three": ">=0.185.0",
+          "typegpu": ">=0.12.5 <0.13",
+          "vue": ">=3.5 <4"
+        },
+        "peerDependenciesMeta": {
+          "@react-three/fiber": {
+            "optional": true
+          },
+          "@tresjs/core": {
+            "optional": true
+          },
+          "@typegpu/gl": {
+            "optional": true
+          },
+          "@typegpu/three": {
+            "optional": true
+          },
+          "react": {
+            "optional": true
+          },
+          "three": {
+            "optional": true
+          },
+          "typegpu": {
+            "optional": true
+          },
+          "vue": {
+            "optional": true
+          }
+        },
+        "engines": null,
+        "sideEffects": [
+          "./src/raster/bitmap.ts",
+          "./src/raster/msdf.ts",
+          "./src/raster/slug.ts",
+          "./dist/raster/bitmap.js",
+          "./dist/raster/msdf.js",
+          "./dist/raster/slug.js",
+          "./dist/internal/bitmap-*.js",
+          "./dist/internal/msdf-*.js",
+          "./dist/internal/slug-*.js"
+        ]
+      }
+    }
+  },
+  "candidateComparisons": {
+    "priorE2": {
+      "allComparedKeysEqual": true,
+      "changedKeys": []
+    },
+    "main": {
+      "allComparedKeysEqual": true,
+      "changedKeys": []
+    },
+    "published": {
+      "allComparedKeysEqual": true,
+      "changedKeys": []
+    }
+  },
+  "scope": "Actual packed package metadata, exact archive hash authenticated. Declaration bytes and runtime behavior are separate gates; equal declared peers do not prove all peer versions work."
+}
