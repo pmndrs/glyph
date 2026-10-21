@@ -1,0 +1,36 @@
+{
+  "createdUtc": "2026-10-21T03:19:16.434810+00:00",
+  "head": "b331b12b26c17d861c5570caf76ddbe4feb75eb6",
+  "snapshot": "6bc123abb9fdf07183988dcea12ccc1d1876d1ba",
+  "tree": "c222f379929ceebe837a2f05c94d494036603bc7",
+  "ref": "refs/heads/experiments/held-row-view-native-gated-20261021",
+  "stashName": "held-row-view-native-gated-20261021",
+  "sourcePaths": [
+    "packages/glyph/rust/shaper/src/engine/codec.rs",
+    "packages/glyph/rust/shaper/src/engine/codec_gather.rs",
+    "packages/glyph/rust/shaper/src/engine/ordered_plan.rs",
+    "packages/glyph/rust/shaper/src/engine/plan_error.rs",
+    "packages/glyph/rust/shaper/src/engine/plan_packing.rs",
+    "packages/glyph/rust/shaper/src/engine/render_plan_compiler.rs",
+    "packages/glyph/rust/shaper/src/engine/session_placement.rs",
+    "packages/glyph/rust/shaper/src/engine/state.rs",
+    "packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs",
+    "packages/glyph/rust/shaper/src/engine/work_attribution.rs"
+  ],
+  "patches": [
+    {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/whole-product.patch",
+      "sha256": "3e0614f0647d4827f08e93a3b526105aa449bfe45126514aedf4003a607912b6",
+      "bytes": 123539,
+      "base": "b331b12b26c17d861c5570caf76ddbe4feb75eb6"
+    },
+    {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/row-view-only.patch",
+      "sha256": "e6400a37a0e6a8a385e288c281ed1245a51ff1b57ce71a2c5e4b591156cff530",
+      "bytes": 11059,
+      "base": "be6c7960dd7eda8917bc43422edadca1970c1278"
+    }
+  ],
+  "headIndexWorktreeUnchanged": true,
+  "shippingPerformance": "pending"
+}

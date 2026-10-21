@@ -1,0 +1,44 @@
+{
+  "phaseCount": 71,
+  "cycles": 8,
+  "phaseNames": [
+    "cold-copy-source",
+    "cold-count-change-owner",
+    "cold-create-publish-1024",
+    "cold-sparse-owner",
+    "copy-source-teardown",
+    "count-change-front-middle-tail",
+    "count-change-root-teardown",
+    "dense-edit-publish-1024",
+    "dense-root-teardown",
+    "fixture-font-teardown",
+    "immediate-prepared-read",
+    "independent-copy-teardown",
+    "independent-split-copy",
+    "sparse-equal-length-ascii-replace-publish",
+    "sparse-root-teardown"
+  ],
+  "maxRequestedLive": 41848831,
+  "maxCompletedCallPeak": 42049147,
+  "maxWasmPages": 774,
+  "retainedBaseline": {
+    "requestedLive": 10741820,
+    "requestedPeak": 10741820,
+    "allocations": 0,
+    "reallocations": 0,
+    "deallocations": 0,
+    "cumulativeRequested": 0,
+    "wasmPages": 774
+  },
+  "scope": "captured engine Wasm instance only",
+  "exclusions": [
+    "JS tokens",
+    "GPU",
+    "font decoder instances"
+  ],
+  "limitations": {
+    "requestedPeak": "completed allocator-call high water; excludes Talc fragmentation and transient internal realloc peak",
+    "cumulativeRequested": "full new size of successful realloc, not net growth",
+    "wasmPages": "capacity, reported separately from requested live bytes"
+  }
+}

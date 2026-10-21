@@ -1,0 +1,21 @@
+{
+  "argv": [
+    "/usr/bin/env",
+    "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/scratch",
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "pack",
+    "--pack-destination",
+    "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph",
+  "started": "2026-10-21T03:25:13.246825+00:00",
+  "finished": "2026-10-21T03:25:13.957248+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "a7fede2555782a255ee42a70ea064c24dfa95f9f6c1e317bc603561cd644cf74",
+    "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

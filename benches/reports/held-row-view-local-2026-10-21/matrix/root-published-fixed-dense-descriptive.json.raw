@@ -1,0 +1,106 @@
+{
+  "schema": "root-completed-published-dense-descriptive-v1",
+  "scope": "Completedpublishedcontrolonly; descriptivequantilesnotfulladmission. ExactcandidateJSONreuse,noretry.",
+  "quantile": "sorted raw samples index floor(q*(N-1))/1e6 ms",
+  "rows": [
+    {
+      "arm": "baseline",
+      "file": "batching.bench.ts",
+      "name": "rewrite 512 labels in one group",
+      "sampleCount": 216,
+      "p50Ms": 7.459083,
+      "p95Ms": 8.05954199999994,
+      "blockMediansMs": [
+        7.433083,
+        7.459083,
+        7.393666,
+        7.494459,
+        7.538875,
+        7.45825,
+        7.45825,
+        7.511333
+      ]
+    },
+    {
+      "arm": "baseline",
+      "file": "stress.bench.ts",
+      "name": "publish 1024 retained Text instances",
+      "sampleCount": 128,
+      "p50Ms": 15.366375,
+      "p95Ms": 16.277125,
+      "blockMediansMs": [
+        15.614,
+        15.235708,
+        15.437208,
+        15.250209,
+        15.243291,
+        15.29275,
+        15.407875,
+        15.407375
+      ]
+    },
+    {
+      "arm": "candidate",
+      "file": "batching.bench.ts",
+      "name": "rewrite 512 labels in one group",
+      "sampleCount": 200,
+      "p50Ms": 9.468042,
+      "p95Ms": 10.614125,
+      "blockMediansMs": [
+        9.591916,
+        9.452417,
+        9.297291,
+        9.600875,
+        9.646167,
+        9.364209,
+        9.57275,
+        9.344334
+      ]
+    },
+    {
+      "arm": "candidate",
+      "file": "stress.bench.ts",
+      "name": "publish 1024 retained Text instances",
+      "sampleCount": 128,
+      "p50Ms": 20.212541,
+      "p95Ms": 45.056167,
+      "blockMediansMs": [
+        32.416916,
+        18.613042,
+        19.006375,
+        18.840167,
+        19.049292,
+        20.00525,
+        19.079833,
+        19.342292
+      ]
+    }
+  ],
+  "inputs": {
+    "baseline": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-published-fixed-data/baseline.json",
+      "sha256": "9f585d52508dee7414978f2c3276272d42ff6c4b9d83a1557116b42def72372d"
+    },
+    "candidate": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-published-fixed-data/candidate.json",
+      "sha256": "69c6b80d2059ebe32909aa0a098e1e3a6c2a1e5e442d645c7f959b129c8db3d8"
+    }
+  },
+  "baselineIdentityCount": 143,
+  "candidateIdentityCount": 145,
+  "candidateOnlyIdentities": [
+    [
+      "outlines.bench.ts",
+      1,
+      "copy per-glyph metrics with outlines after text change",
+      "{}"
+    ],
+    [
+      "outlines.bench.ts",
+      1,
+      "read every outline from an unchanged copy",
+      "{}"
+    ]
+  ],
+  "mainCandidateJsonSha256": "69c6b80d2059ebe32909aa0a098e1e3a6c2a1e5e442d645c7f959b129c8db3d8"
+}

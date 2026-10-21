@@ -1,0 +1,30 @@
+{
+  "argv": [
+    "/usr/bin/env",
+    "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/scratch",
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "glyph:shaper-size-accounting",
+    "--",
+    "--artifact",
+    "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "--named",
+    "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/shaper-profile/text-shaper.named.wasm",
+    "--baseline",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+    "--output",
+    "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/shaper-size"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-21T03:26:37.654545+00:00",
+  "finished": "2026-10-21T03:26:38.266107+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "6ed371faebb6092a811b9ffb7a7cc6048f7c0c38c986b4b7fcd3a71665277a69",
+    "stderr.log": "52e98914d56905e94b02b4afc6c7fbe1b1c076968b6e8a8686cd3e96d0e95911"
+  }
+}

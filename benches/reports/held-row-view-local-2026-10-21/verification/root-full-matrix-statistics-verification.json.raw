@@ -1,0 +1,34 @@
+{
+  "schema": "independent-root-full-matrix-statistics-verification-v1",
+  "counts": {
+    "paired": 433,
+    "unsupported": 2,
+    "eligiblePrinted": 432,
+    "clockExcluded": 1
+  },
+  "byArm": {
+    "main": {
+      "paired": 145,
+      "unsupported": 0,
+      "eligible": 144,
+      "clockExcluded": 1
+    },
+    "published": {
+      "paired": 143,
+      "unsupported": 2,
+      "eligible": 143,
+      "clockExcluded": 0
+    },
+    "priorE2": {
+      "paired": 145,
+      "unsupported": 0,
+      "eligible": 145,
+      "clockExcluded": 0
+    }
+  },
+  "allIdentitiesSha256": "4ad803203b9fe1ba0b372393f1e545a72e9960c822d9b463a03b8fdc2b0c21f5",
+  "csvSha256": "329473eeea7d138d97cfa6237d427cbfccc2dfc0e23d1210cd80ed953341f4bf",
+  "collectorSha256": "10fd51e7a68dd64bfb9bb196e2b0041cbbe5151e6aa08f59668367489ef504ef",
+  "independentReproductionJsonAndCsvByteExact": true,
+  "scope": "All433rawpairedestimates independentlymatchedinstalledstockclassify/median andrawsamplequantiles;432eligibleprintedp/CI/verdictchecked;1clockexcludeddiagnosticand2unsupportedkeptseparate. No newtimings/admission."
+}

@@ -1,0 +1,234 @@
+diff --git a/packages/glyph/rust/shaper/src/engine/codec.rs b/packages/glyph/rust/shaper/src/engine/codec.rs
+index 06386cbe..2f329a37 100644
+--- a/packages/glyph/rust/shaper/src/engine/codec.rs
++++ b/packages/glyph/rust/shaper/src/engine/codec.rs
+@@ -1214,6 +1214,7 @@ fn execute_scalar_records(
+                 ..
+             } => Some(source.row(input_start + input_record)?),
+         };
++        let mut direct_view = None;
+         for (operation_index, operation) in program.operations.iter().enumerate() {
+             if execution.operation_buffer_masks[operation_index] & active_buffers == 0 {
+                 continue;
+@@ -1224,9 +1225,12 @@ fn execute_scalar_records(
+                         CodecInputs::Packed(batch) => {
+                             batch.f32_fields[usize::from(field)][input_record].to_bits()
+                         }
+-                        CodecInputs::Direct { .. } => direct_row
+-                            .ok_or(CodecExecutionError::InputLength)?
+-                            .f32(program.inputs[usize::from(field)])?,
++                        CodecInputs::Direct { .. } => {
++                            let row = direct_row.ok_or(CodecExecutionError::InputLength)?;
++                            direct_view
++                                .get_or_insert_with(|| row.view())
++                                .f32(program.inputs[usize::from(field)])?
++                        }
+                     };
+                 }
+                 Operation::LoadU32 { target, field } => {
+@@ -1235,7 +1239,8 @@ fn execute_scalar_records(
+                             batch.u32_fields[usize::from(field)][input_record]
+                         }
+                         CodecInputs::Direct { .. } => {
+-                            direct_row.ok_or(CodecExecutionError::InputLength)?.u32(
++                            let row = direct_row.ok_or(CodecExecutionError::InputLength)?;
++                            direct_view.get_or_insert_with(|| row.view()).u32(
+                                 program.inputs
+                                     [usize::from(program.f32_input_count) + usize::from(field)],
+                             )?
+@@ -1372,6 +1377,7 @@ unsafe fn execute_simd_records(
+                 ])
+             }
+         };
++        let mut direct_views = None;
+         for (operation_index, operation) in program.operations.iter().enumerate() {
+             if execution.operation_buffer_masks[operation_index] & active_buffers == 0 {
+                 continue;
+@@ -1391,7 +1397,10 @@ unsafe fn execute_simd_records(
+                             }
+                         }
+                         CodecInputs::Direct { .. } => {
+-                            let rows = direct_rows.ok_or(CodecExecutionError::InputLength)?;
++                            let source_rows =
++                                direct_rows.ok_or(CodecExecutionError::InputLength)?;
++                            let rows = direct_views
++                                .get_or_insert_with(|| source_rows.map(|row| row.view()));
+                             let source = program.inputs[usize::from(field)];
+                             let lanes = [
+                                 rows[0].f32(source)?,
+@@ -1418,7 +1427,10 @@ unsafe fn execute_simd_records(
+                             }
+                         }
+                         CodecInputs::Direct { .. } => {
+-                            let rows = direct_rows.ok_or(CodecExecutionError::InputLength)?;
++                            let source_rows =
++                                direct_rows.ok_or(CodecExecutionError::InputLength)?;
++                            let rows = direct_views
++                                .get_or_insert_with(|| source_rows.map(|row| row.view()));
+                             let source = program.inputs
+                                 [usize::from(program.f32_input_count) + usize::from(field)];
+                             let lanes = [
+diff --git a/packages/glyph/rust/shaper/src/engine/state.rs b/packages/glyph/rust/shaper/src/engine/state.rs
+index 9671bbab..8b6596a4 100644
+--- a/packages/glyph/rust/shaper/src/engine/state.rs
++++ b/packages/glyph/rust/shaper/src/engine/state.rs
+@@ -638,6 +638,13 @@ pub(crate) struct DirectRowContext<'a> {
+     selected: SelectedGlyphBinding,
+ }
+ 
++/// A codec-call-local view. The layout descriptor remains short-lived in each operand load.
++pub(crate) struct DirectRowView<'a> {
++    row: DirectRowContext<'a>,
++    semantic_f32: [&'a [f32]; SEMANTIC_F32_FIELD_COUNT],
++    semantic_u32: [&'a [u32]; SEMANTIC_U32_FIELD_COUNT],
++}
++
+ impl<'a> DirectOperandSource<'a> {
+     pub(crate) fn len(&self) -> usize {
+         self.locators.len()
+@@ -679,39 +686,49 @@ impl<'a> DirectOperandSource<'a> {
+ }
+ 
+ impl<'a> DirectRowContext<'a> {
+-    pub(crate) fn f32(self, source: InputSource) -> Result<u32, GatherError> {
++    pub(crate) fn view(self) -> DirectRowView<'a> {
++        #[cfg(test)]
++        super::work_attribution::record(|work| work.direct_semantic_view_constructions += 1);
++        DirectRowView {
++            semantic_f32: self.positioned.semantic_f32(),
++            semantic_u32: self.positioned.semantic_u32(),
++            row: self,
++        }
++    }
++}
++
++impl DirectRowView<'_> {
++    pub(crate) fn f32(&self, source: InputSource) -> Result<u32, GatherError> {
+         #[cfg(test)]
+         super::work_attribution::record(|work| work.direct_f32_operand_loads += 1);
+-        let semantic_f32 = self.positioned.semantic_f32();
+-        let semantic_u32 = self.positioned.semantic_u32();
+-        let input = self.input(&semantic_f32, &semantic_u32);
++        let input = self.row.input(&self.semantic_f32, &self.semantic_u32);
+         source_f32(
+             source.scope,
+             source.field,
+             input,
+-            self.glyph_index,
+-            self.binding,
+-            self.selected,
++            self.row.glyph_index,
++            self.row.binding,
++            self.row.selected,
+         )
+         .map(f32::to_bits)
+     }
+ 
+-    pub(crate) fn u32(self, source: InputSource) -> Result<u32, GatherError> {
++    pub(crate) fn u32(&self, source: InputSource) -> Result<u32, GatherError> {
+         #[cfg(test)]
+         super::work_attribution::record(|work| work.direct_u32_operand_loads += 1);
+-        let semantic_f32 = self.positioned.semantic_f32();
+-        let semantic_u32 = self.positioned.semantic_u32();
+-        let input = self.input(&semantic_f32, &semantic_u32);
++        let input = self.row.input(&self.semantic_f32, &self.semantic_u32);
+         source_u32(
+             source.scope,
+             source.field,
+             input,
+-            self.glyph_index,
+-            self.binding,
+-            self.selected,
++            self.row.glyph_index,
++            self.row.binding,
++            self.row.selected,
+         )
+     }
++}
+ 
++impl<'a> DirectRowContext<'a> {
+     fn input<'b>(
+         &'b self,
+         semantic_f32: &'b [&'a [f32]; SEMANTIC_F32_FIELD_COUNT],
+@@ -14274,6 +14291,7 @@ mod tests {
+             };
+             for (row_index, locator) in source.locators.iter().enumerate() {
+                 let row = source.row(row_index).unwrap();
++                let view = row.view();
+                 let binding = &engine.font_bindings[locator.binding_index as usize].binding;
+                 let program = codec
+                     .program(
+@@ -14287,7 +14305,7 @@ mod tests {
+                     .enumerate()
+                 {
+                     assert_eq!(
+-                        row.f32(*descriptor).unwrap(),
++                        view.f32(*descriptor).unwrap(),
+                         input.f32_fields[field][row_index].to_bits(),
+                         "direct f32 row {row_index} field {field}"
+                     );
+@@ -14297,7 +14315,7 @@ mod tests {
+                     .enumerate()
+                 {
+                     assert_eq!(
+-                        row.u32(*descriptor).unwrap(),
++                        view.u32(*descriptor).unwrap(),
+                         input.u32_fields[field][row_index],
+                         "direct u32 row {row_index} field {field}"
+                     );
+diff --git a/packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs b/packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs
+index 150e4816..706a02f8 100644
+--- a/packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs
++++ b/packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs
+@@ -150,6 +150,7 @@ fn add_work(total: &mut Work, next: Work) {
+         direct_selected_rows,
+         direct_locator_bytes,
+         direct_elided_full_field_writes,
++        direct_semantic_view_constructions,
+         direct_f32_operand_loads,
+         direct_u32_operand_loads,
+         retained_owner_admissions,
+@@ -303,6 +304,7 @@ fn work_json(work: Work, count: usize, wire: WireTotals, phase: &str, kind: &str
+             "selectedRows": work.direct_selected_rows,
+             "locatorBytes": work.direct_locator_bytes,
+             "elidedFullFieldWrites": work.direct_elided_full_field_writes,
++            "semanticViewConstructions": work.direct_semantic_view_constructions,
+             "f32OperandLoads": work.direct_f32_operand_loads,
+             "u32OperandLoads": work.direct_u32_operand_loads
+         },
+@@ -625,6 +627,15 @@ fn authenticate() {
+             "ordered write bytes must equal emitted plan write patch bytes"
+         );
+     }
++    for index in [3, 5] {
++        let work = totals[index];
++        assert_eq!(work.direct_selected_rows, 9_216);
++        assert_eq!(work.direct_semantic_view_constructions, 9_216);
++        assert_eq!(work.direct_f32_operand_loads, 138_240);
++        assert_eq!(work.direct_u32_operand_loads, 36_864);
++        assert_eq!(work.ordered_comparison_bytes, 589_824);
++        assert_eq!(work.ordered_emitted_write_bytes, 368_640);
++    }
+     let report = serde_json::json!({
+         "result": "exact-byte-pass",
+         "eventCount": count,
+diff --git a/packages/glyph/rust/shaper/src/engine/work_attribution.rs b/packages/glyph/rust/shaper/src/engine/work_attribution.rs
+index c0621aae..51ff65c2 100644
+--- a/packages/glyph/rust/shaper/src/engine/work_attribution.rs
++++ b/packages/glyph/rust/shaper/src/engine/work_attribution.rs
+@@ -81,6 +81,7 @@ pub(crate) struct Work {
+     pub direct_selected_rows: usize,
+     pub direct_locator_bytes: usize,
+     pub direct_elided_full_field_writes: usize,
++    pub direct_semantic_view_constructions: usize,
+     pub direct_f32_operand_loads: usize,
+     pub direct_u32_operand_loads: usize,
+     /// Direct output intervals whose push would grow the Vec without prior reservation.
+@@ -227,6 +228,7 @@ std::thread_local! {
+         direct_selected_rows: 0,
+         direct_locator_bytes: 0,
+         direct_elided_full_field_writes: 0,
++        direct_semantic_view_constructions: 0,
+         direct_f32_operand_loads: 0,
+         direct_u32_operand_loads: 0,
+         direct_unreserved_output_range_pushes: 0,

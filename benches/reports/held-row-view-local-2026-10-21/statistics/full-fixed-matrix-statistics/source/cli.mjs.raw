@@ -1,0 +1,1570 @@
+#!/usr/bin/env node
+import { a as BOLD, c as DARK_GRAY, d as GREEN, f as MAGENTA, g as YELLOW, h as WHITE, i as BLUE, l as DIM, m as RESET, n as isAssertionError, p as RED, s as CYAN, t as renderMitata, u as GRAY, v as snapshotsDiffer } from "../render-9ZEXq8F8.mjs";
+import { a as minDetectableEffect, i as median, n as classify, o as minMannWhitneyP, r as comparisonResolution, s as relativeSpread, t as calibrationExplainedFraction } from "../stats-DyCSLnVh.mjs";
+import { createRequire } from "node:module";
+import { execFileSync, execSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { isCancel, multiselect, select } from "@clack/prompts";
+//#region src/histogram.ts
+const SYMBOLS = [
+	"▁",
+	"▂",
+	"▃",
+	"▄",
+	"▅",
+	"▆",
+	"▇",
+	"█"
+];
+function clamp(lo, v, hi) {
+	return v < lo ? lo : v > hi ? hi : v;
+}
+/** Bin sorted samples into `size` buckets over `[min, max]`. Returns normalized heights [0..1]. */
+function binSamples(sorted, size, min, max, percentile) {
+	const bins = Array.from({ length: size }, () => 0);
+	if (sorted.length === 0) return bins;
+	const offset = percentile * (sorted.length - 1) | 0;
+	const step = (max - min) / (size - 1);
+	if (step === 0) {
+		bins[Math.floor(size / 2)] = 1;
+		return bins;
+	}
+	for (let i = 0; i <= offset; i++) {
+		const idx = clamp(0, Math.round((sorted[i] - min) / step), size - 1);
+		bins[idx]++;
+	}
+	const peak = Math.max(...bins);
+	if (peak === 0) return bins;
+	return bins.map((b) => b / peak);
+}
+function sparkline(heights, color) {
+	let s = color;
+	for (const h of heights) s += SYMBOLS[clamp(0, Math.round(h * (SYMBOLS.length - 1)), SYMBOLS.length - 1)];
+	s += RESET;
+	return s;
+}
+/** Render two sparklines on a shared axis, one per column. Visible width of each = `width`. */
+function renderDistributions(baselineSamples, candidateSamples, width) {
+	const bSorted = baselineSamples.slice().sort((a, b) => a - b);
+	const cSorted = candidateSamples.slice().sort((a, b) => a - b);
+	const percentile = .99;
+	const bCutoff = bSorted[percentile * (bSorted.length - 1) | 0] ?? 0;
+	const cCutoff = cSorted[percentile * (cSorted.length - 1) | 0] ?? 0;
+	const min = Math.min(bSorted[0] ?? 0, cSorted[0] ?? 0);
+	const max = Math.max(bCutoff, cCutoff) || 1;
+	const bBins = binSamples(bSorted, width, min, max, percentile);
+	const cBins = binSamples(cSorted, width, min, max, percentile);
+	return {
+		baseline: sparkline(bBins, CYAN),
+		candidate: sparkline(cBins, MAGENTA)
+	};
+}
+//#endregion
+//#region src/store.ts
+function freqReadings(freqs) {
+	return freqs.flatMap((s) => [s.runFreq, s.postFreq]);
+}
+/** Returns true if the CPU clock was stable during the run (drift ≤ threshold). */
+function isEnvironmentStable(result, threshold = .05) {
+	const freqs = result.environment?.freqs ?? [];
+	if (freqs.length === 0) return true;
+	const all = freqReadings(freqs);
+	const min = Math.min(...all);
+	const max = Math.max(...all);
+	return (max - min) / ((max + min) / 2) <= threshold;
+}
+/** Median CPU frequency across all freq samples, falling back to the hardware snapshot. */
+function resultMedianFreq(result) {
+	const freqs = result.environment?.freqs ?? [];
+	if (freqs.length > 0) {
+		const all = freqReadings(freqs).sort((a, b) => a - b);
+		return all[all.length >> 1];
+	}
+	return result.hardware.freq;
+}
+function getLabsDir(configDir, resultsDir) {
+	return join(configDir, resultsDir);
+}
+function getResultsDir(labsDir) {
+	return join(labsDir, "results");
+}
+function resultExists(labsDir, name) {
+	return existsSync(join(getResultsDir(labsDir), `${name}.json`));
+}
+/** First free name among `base`, `base-2`, `base-3`, ... */
+function uniqueResultName(labsDir, base) {
+	if (!resultExists(labsDir, base)) return base;
+	for (let i = 2;; i++) {
+		const name = `${base}-${i}`;
+		if (!resultExists(labsDir, name)) return name;
+	}
+}
+function saveResult(labsDir, result) {
+	const dir = getResultsDir(labsDir);
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(join(dir, `${result.name}.json`), JSON.stringify(result, null, 2));
+}
+function loadResult(labsDir, name) {
+	const file = join(getResultsDir(labsDir), `${name}.json`);
+	if (!existsSync(file)) throw new Error(`No saved result named "${name}"`);
+	return normalizeSavedResult(JSON.parse(readFileSync(file, "utf-8")));
+}
+function listResults(labsDir) {
+	const dir = getResultsDir(labsDir);
+	if (!existsSync(dir)) return [];
+	return readdirSync(dir).filter((f) => f.endsWith(".json")).map((f) => normalizeSavedResult(JSON.parse(readFileSync(join(dir, f), "utf-8")))).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+}
+function normalizeSavedResult(result) {
+	const legacyLayout = result.layout;
+	return {
+		...result,
+		files: result.files.map((file) => ({
+			...file,
+			layout: file.layout ?? legacyLayout,
+			context: file.context ?? {
+				cpu: {
+					freq: result.hardware.freq,
+					name: result.hardware.cpu
+				},
+				arch: result.hardware.arch,
+				runtime: result.hardware.runtime,
+				version: result.context?.version,
+				noop: result.context?.noop
+			},
+			benchmarks: file.benchmarks.map((bench) => normalizeTrial(bench))
+		}))
+	};
+}
+/** Older results summarized heap and gc with a mean under `avg`. */
+function normalizeRange(range) {
+	if (!range) return void 0;
+	return {
+		min: range.min,
+		max: range.max,
+		p50: range.p50 ?? range.avg
+	};
+}
+function normalizeRun(run) {
+	if (!run.stats) return run;
+	const heap = normalizeRange(run.stats.heap);
+	const gc = normalizeRange(run.stats.gc);
+	return {
+		...run,
+		stats: {
+			...run.stats,
+			...heap ? { heap } : {},
+			...gc ? { gc } : {}
+		}
+	};
+}
+function normalizeTrial(trial) {
+	if (Array.isArray(trial.runs)) return {
+		...trial,
+		group: trial.group ?? 0,
+		gcMode: trial.gcMode ?? "once",
+		kind: trial.kind ?? "static",
+		style: trial.style ?? {
+			compact: false,
+			highlight: false
+		},
+		runs: trial.runs.map(normalizeRun)
+	};
+	return {
+		alias: trial.alias,
+		group: trial.group ?? 0,
+		baseline: trial.baseline,
+		gcMode: trial.gcMode ?? "once",
+		groupName: trial.groupName,
+		kind: "static",
+		style: {
+			compact: false,
+			highlight: false
+		},
+		runs: [{
+			name: trial.alias,
+			args: {},
+			...trial.stats ? { stats: trimStats(trial.stats) } : {},
+			...trial.error !== void 0 ? { error: trial.error } : {}
+		}]
+	};
+}
+function trimStats(stats) {
+	return {
+		kind: stats.kind,
+		samples: stats.samples,
+		...stats.counters ? { counters: stats.counters } : {},
+		min: stats.min,
+		max: stats.max,
+		avg: stats.avg,
+		p25: stats.p25,
+		p75: stats.p75,
+		p99: stats.p99,
+		...stats.plan ? { plan: stats.plan } : {},
+		...stats.snapshot !== void 0 ? { snapshot: stats.snapshot } : {},
+		...stats.blocks ? { blocks: stats.blocks } : {},
+		...stats.gc ? { gc: {
+			min: stats.gc.min,
+			max: stats.gc.max,
+			p50: stats.gc.p50
+		} } : {},
+		...stats.heap ? { heap: {
+			min: stats.heap.min,
+			max: stats.heap.max,
+			p50: stats.heap.p50
+		} } : {}
+	};
+}
+function deleteResult(labsDir, name) {
+	const file = join(getResultsDir(labsDir), `${name}.json`);
+	if (!existsSync(file)) throw new Error(`No saved result named "${name}"`);
+	rmSync(file);
+	const baselineFile = join(labsDir, "baseline");
+	if (existsSync(baselineFile) && readFileSync(baselineFile, "utf-8").trim() === name) rmSync(baselineFile);
+	const lastCompareFile = join(labsDir, "last-compare.json");
+	if (existsSync(lastCompareFile)) try {
+		const last = JSON.parse(readFileSync(lastCompareFile, "utf-8"));
+		if (last.baselineName === name || last.candidateName === name) rmSync(lastCompareFile);
+	} catch {
+		rmSync(lastCompareFile);
+	}
+}
+function clearResults(labsDir) {
+	if (existsSync(labsDir)) rmSync(labsDir, {
+		recursive: true,
+		force: true
+	});
+}
+function setBaseline(labsDir, name) {
+	const file = join(getResultsDir(labsDir), `${name}.json`);
+	if (!existsSync(file)) throw new Error(`No saved result named "${name}"`);
+	mkdirSync(labsDir, { recursive: true });
+	writeFileSync(join(labsDir, "baseline"), name);
+}
+function getBaseline(labsDir) {
+	const file = join(labsDir, "baseline");
+	if (!existsSync(file)) return void 0;
+	return readFileSync(file, "utf-8").trim() || void 0;
+}
+function setLastComparison(labsDir, baselineName, candidateName) {
+	mkdirSync(labsDir, { recursive: true });
+	const file = join(labsDir, "last-compare.json");
+	writeFileSync(file, JSON.stringify({
+		baselineName,
+		candidateName
+	}, null, 2));
+}
+function getLastComparison(labsDir) {
+	const file = join(labsDir, "last-compare.json");
+	if (!existsSync(file)) return void 0;
+	try {
+		const parsed = JSON.parse(readFileSync(file, "utf-8"));
+		if (typeof parsed.baselineName !== "string") return void 0;
+		if (typeof parsed.candidateName !== "string") return void 0;
+		return {
+			baselineName: parsed.baselineName,
+			candidateName: parsed.candidateName
+		};
+	} catch {
+		return;
+	}
+}
+//#endregion
+//#region src/cli/utils.ts
+const DEFAULT_NAME_RE = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/;
+function dateHint(r) {
+	if (DEFAULT_NAME_RE.test(r.name)) return void 0;
+	const d = new Date(r.timestamp);
+	if (isNaN(d.getTime())) return void 0;
+	return `${d.toLocaleDateString("en-US", { month: "short" })} ${d.getDate()} ${d.getFullYear()}`;
+}
+/** Compact git label: `main@abc1234`, with `*` marking a dirty working tree. */
+function gitHint(git) {
+	const sha = git.commit.slice(0, 7);
+	const dirty = git.dirty ? "*" : "";
+	return git.branch ? `${git.branch}@${sha}${dirty}` : `${sha}${dirty}`;
+}
+function error(msg) {
+	console.error(`${RED}✖${RESET} ${msg}`);
+	process.exit(1);
+}
+//#endregion
+//#region src/utils/format.ts
+function formatTime(ns) {
+	if (ns >= 1e9) return `${(ns / 1e9).toFixed(2)}s`;
+	if (ns >= 1e6) return `${(ns / 1e6).toFixed(2)}ms`;
+	if (ns >= 1e3) return `${(ns / 1e3).toFixed(2)}µs`;
+	return `${ns.toFixed(2)}ns`;
+}
+function formatDelta(delta) {
+	const pct = delta * 100;
+	return `${pct > 0 ? "+" : ""}${pct.toFixed(1)}%`;
+}
+function formatP(p) {
+	if (p < .001) return "<.001";
+	return p.toFixed(3).replace(/^0/, "");
+}
+function visibleLength(s) {
+	return s.replace(new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g"), "").length;
+}
+//#endregion
+//#region src/compare.ts
+/** Max relative difference between the two runs' median clock speeds to consider them comparable. */
+const CLOCK_COMPARE_THRESHOLD = .05;
+function medianFreq(freqs) {
+	if (freqs.length === 0) return 0;
+	const all = freqs.flatMap((s) => [s.runFreq, s.postFreq]);
+	return median(all);
+}
+const checkHardwareMatch = (baseline, candidate) => {
+	const hw1 = baseline.hardware;
+	const hw2 = candidate.hardware;
+	const mismatches = [];
+	if (hw1.cpu !== hw2.cpu) mismatches.push(`CPU: "${hw1.cpu}" vs "${hw2.cpu}"`);
+	if (hw1.arch !== hw2.arch) mismatches.push(`arch: ${hw1.arch} vs ${hw2.arch}`);
+	if (hw1.runtime !== hw2.runtime) mismatches.push(`runtime: ${hw1.runtime} vs ${hw2.runtime}`);
+	if (mismatches.length > 0) return {
+		ok: false,
+		reason: mismatches.join(", ")
+	};
+	return { ok: true };
+};
+function freqDrift(freqs) {
+	if (freqs.length === 0) return 0;
+	const all = freqs.flatMap((s) => [s.runFreq, s.postFreq]);
+	const min = Math.min(...all);
+	const max = Math.max(...all);
+	return (max - min) / ((max + min) / 2);
+}
+const warnClockDrift = (baseline, candidate) => {
+	const warnings = [];
+	const bFreqs = baseline.environment?.freqs ?? [];
+	const cFreqs = candidate.environment?.freqs ?? [];
+	if (!isEnvironmentStable(baseline)) {
+		const drift = freqDrift(bFreqs);
+		warnings.push(`baseline CPU clock drifted ${(drift * 100).toFixed(1)}% during its run`);
+	}
+	if (!isEnvironmentStable(candidate)) {
+		const drift = freqDrift(cFreqs);
+		warnings.push(`candidate CPU clock drifted ${(drift * 100).toFixed(1)}% during its run`);
+	}
+	let bFreq = 0;
+	let cFreq = 0;
+	if (bFreqs.length > 0 && cFreqs.length > 0) {
+		bFreq = medianFreq(bFreqs);
+		cFreq = medianFreq(cFreqs);
+	} else {
+		bFreq = baseline.hardware.freq;
+		cFreq = candidate.hardware.freq;
+	}
+	if (bFreq > 0 && cFreq > 0) {
+		const diff = Math.abs(bFreq - cFreq) / ((bFreq + cFreq) / 2);
+		if (diff > CLOCK_COMPARE_THRESHOLD) warnings.push(`CPU clock speeds differ between runs (${bFreq.toFixed(2)} GHz vs ${cFreq.toFixed(2)} GHz — ${(diff * 100).toFixed(1)}% apart)`);
+	}
+	return warnings;
+};
+const warnFreshRunCountMismatch = (baseline, candidate) => {
+	const b = baseline.blocks ?? 1;
+	const c = candidate.blocks ?? 1;
+	if (b === c) return [];
+	return [`runs used different block counts (baseline: ${b}, candidate: ${c}) — eligibility uses the actual counts and configured significance level`];
+};
+const ENVIRONMENT_WARNINGS = [warnClockDrift, warnFreshRunCountMismatch];
+/** All environment checks in order. Any failure blocks the entire comparison. */
+const ENVIRONMENT_CHECKS = [checkHardwareMatch];
+/**
+* Samples within one process are correlated, so fresh-process blocks are the
+* independent experimental units and verdicts require block replication on
+* both sides. Eligibility also requires enough combined allocations for the
+* exact test to reach the configured alpha.
+*
+* There is deliberately no run-consistency gate: the exact test on block
+* medians is already spread-aware (high spread widens the CI and lifts p), so
+* benchmarks with limited resolution keep their verdicts and are annotated
+* instead of being hidden. Results saved before blocked sampling carry no
+* block medians and are skipped.
+*/
+const MIN_FRESH_RUNS = 2;
+const checkFreshRunReplication = (baseline, candidate, config) => {
+	const bN = baseline.runMedians?.length ?? 1;
+	const cN = candidate.runMedians?.length ?? 1;
+	if (bN < MIN_FRESH_RUNS || cN < MIN_FRESH_RUNS) return {
+		ok: false,
+		reason: `insufficient block replication (baseline: ${bN}, candidate: ${cN}; need ≥${MIN_FRESH_RUNS} per side) — re-save with the current version`
+	};
+	const alpha = config.alpha ?? .05;
+	const minP = minMannWhitneyP(bN, cN);
+	if (minP <= alpha) return { ok: true };
+	return {
+		ok: false,
+		reason: `block counts cannot reach α=${alpha} (baseline: ${bN}, candidate: ${cN}; smallest attainable p=${minP.toPrecision(2)}) — add blocks`
+	};
+};
+/** All per-bench checks in order. Any failure skips that bench with a reason. */
+const BENCH_CHECKS = [checkFreshRunReplication];
+function trialRuns(trial) {
+	const alias = trial.alias ?? "anonymous";
+	const runs = trial.runs;
+	const fromStats = (name, stats, error) => ({
+		name,
+		samples: Array.isArray(stats?.samples) ? stats.samples : [],
+		p99: typeof stats?.p99 === "number" ? stats.p99 : 0,
+		...Array.isArray(stats?.blocks?.medians) ? { runMedians: stats.blocks.medians } : {},
+		...Array.isArray(stats?.blocks?.freqs) ? { calibrationRates: stats.blocks.freqs } : {},
+		...stats?.snapshot !== void 0 ? { snapshot: stats.snapshot } : {},
+		...error !== void 0 ? { error } : {}
+	});
+	if (Array.isArray(runs) && runs.length > 0) return runs.map((run) => fromStats(run?.name ?? alias, run?.stats, run?.error));
+	return [fromStats(alias, trial.stats, trial.error)];
+}
+function errorMessage(error) {
+	if (typeof error === "object" && error !== null && "message" in error) return String(error.message);
+	return String(error);
+}
+/** Median block time, or pooled median for legacy results. */
+function typicalTime(entry) {
+	if (entry.runMedians?.length) return median(entry.runMedians);
+	return entry.samples.length ? median(entry.samples) : 0;
+}
+function buildIndex(result) {
+	const map = /* @__PURE__ */ new Map();
+	for (const f of result.files) for (const trial of f.benchmarks) for (const run of trialRuns(trial)) {
+		const key = `${f.file}\0${trial.groupName ?? ""}\0${run.name}`;
+		map.set(key, {
+			p99: run.p99,
+			samples: run.samples,
+			...run.runMedians ? { runMedians: run.runMedians } : {},
+			...run.calibrationRates ? { calibrationRates: run.calibrationRates } : {},
+			...run.snapshot !== void 0 ? { snapshot: run.snapshot } : {},
+			...run.error !== void 0 ? { error: run.error } : {}
+		});
+	}
+	return map;
+}
+function trialKey(file, trial, runName) {
+	return `${file}\0${trial.groupName ?? ""}\0${runName}`;
+}
+function benchKey(file, trial, runName) {
+	return {
+		file,
+		group: trial.groupName ?? trial.alias,
+		name: runName
+	};
+}
+/**
+* Median calibration rates must differ by more than this before normalization
+* can veto a verdict. The short probes carry a percent or two of variation;
+* below this threshold a disagreement says more about the probe than machine
+* state, and skipping would eat real verdicts.
+*/
+const CALIBRATION_GATE_MIN_DIFF = .02;
+const CLOCK_CONFOUNDED_PREFIX = "clock-confounded — ";
+/**
+* Re-judges a benchmark after calibration-rate normalization and returns a
+* skip reason when the verdicts disagree. Only applies when both sides carry
+* a valid probe for every run and their median rates differ beyond the jitter
+* guard. With similar rates, normalization would mostly add probe variation.
+*/
+function calibrationSensitive(base, candidate, timeVerdict, opts) {
+	const baselineRates = base.calibrationRates;
+	const candidateRates = candidate.calibrationRates;
+	const usable = (runMedians, calibrationRates) => runMedians && calibrationRates && calibrationRates.length === runMedians.length && calibrationRates.every((rate) => rate > 0);
+	if (!usable(base.runMedians, baselineRates) || !usable(candidate.runMedians, candidateRates)) return void 0;
+	const baselineRate = median(baselineRates);
+	const candidateRate = median(candidateRates);
+	if (Math.abs(baselineRate - candidateRate) / ((baselineRate + candidateRate) / 2) <= CALIBRATION_GATE_MIN_DIFF) return void 0;
+	const normalizedTimes = (runMedians, calibrationRates) => runMedians.map((runMedian, i) => runMedian * calibrationRates[i]);
+	const normalizedVerdict = classify(normalizedTimes(base.runMedians, baselineRates), normalizedTimes(candidate.runMedians, candidateRates), opts).verdict;
+	if (normalizedVerdict === timeVerdict) return void 0;
+	return `${CLOCK_CONFOUNDED_PREFIX}${timeVerdict}→${normalizedVerdict} · ${baselineRate.toFixed(2)}→${candidateRate.toFixed(2)}`;
+}
+function compare(baseline, candidate, config) {
+	const opts = {
+		alpha: config.alpha,
+		minDelta: config.minDelta
+	};
+	const environmentFailures = [];
+	for (const check of ENVIRONMENT_CHECKS) {
+		const result = check(baseline, candidate);
+		if (!result.ok) environmentFailures.push(result.reason);
+	}
+	const environmentWarnings = [];
+	for (const warn of ENVIRONMENT_WARNINGS) environmentWarnings.push(...warn(baseline, candidate));
+	const benches = [];
+	if (environmentFailures.length > 0) return {
+		baselineName: baseline.name,
+		candidateName: candidate.name,
+		...baseline.git ? { baselineGit: baseline.git } : {},
+		...candidate.git ? { candidateGit: candidate.git } : {},
+		hardware: baseline.hardware,
+		environmentFailures,
+		environmentWarnings,
+		benches
+	};
+	const baseIndex = buildIndex(baseline);
+	const candidateIndex = buildIndex(candidate);
+	for (const [key] of baseIndex) if (!candidateIndex.has(key)) {
+		const parts = key.split("\0");
+		benches.push({
+			kind: "missing",
+			key: {
+				file: parts[0],
+				group: parts[1] || parts[2],
+				name: parts[2]
+			},
+			presentIn: "baseline"
+		});
+	}
+	for (const f of candidate.files) for (const trial of f.benchmarks) for (const run of trialRuns(trial)) {
+		const key = trialKey(f.file, trial, run.name);
+		const key_ = benchKey(f.file, trial, run.name);
+		const base = baseIndex.get(key);
+		if (base === void 0) {
+			benches.push({
+				kind: "missing",
+				key: key_,
+				presentIn: "candidate"
+			});
+			continue;
+		}
+		if (run.error !== void 0) {
+			benches.push({
+				kind: "failed",
+				key: key_,
+				check: isAssertionError(run.error),
+				message: errorMessage(run.error)
+			});
+			continue;
+		}
+		if (base.error !== void 0) {
+			const how = isAssertionError(base.error) ? "failed its check" : "errored";
+			benches.push({
+				kind: "skipped",
+				key: key_,
+				reason: `baseline run ${how}: ${errorMessage(base.error)}`
+			});
+			continue;
+		}
+		if (base.snapshot !== void 0 && run.snapshot !== void 0 && snapshotsDiffer(base.snapshot, run.snapshot, config.snapshotTolerance)) {
+			benches.push({
+				kind: "changed",
+				key: key_,
+				baselineP50: typicalTime(base),
+				candidateP50: typicalTime(run)
+			});
+			continue;
+		}
+		const benchData = {
+			baseline: {
+				samples: base.samples,
+				runMedians: base.runMedians
+			},
+			candidate: {
+				samples: run.samples,
+				runMedians: run.runMedians
+			}
+		};
+		let skipReason;
+		for (const check of BENCH_CHECKS) {
+			const result = check(benchData.baseline, benchData.candidate, config);
+			if (!result.ok) {
+				skipReason = result.reason;
+				break;
+			}
+		}
+		if (skipReason !== void 0) {
+			benches.push({
+				kind: "skipped",
+				key: key_,
+				reason: skipReason
+			});
+			continue;
+		}
+		const baselineMedian = median(base.runMedians);
+		const candidateMedian = median(run.runMedians);
+		const deltaP50 = baselineMedian > 0 ? (candidateMedian - baselineMedian) / baselineMedian : 0;
+		const deltaP99 = base.p99 > 0 ? (run.p99 - base.p99) / base.p99 : 0;
+		const time = classify(base.runMedians, run.runMedians, opts);
+		const calibrationGate = calibrationSensitive(base, run, time.verdict, opts);
+		if (calibrationGate !== void 0) {
+			benches.push({
+				kind: "skipped",
+				key: key_,
+				reason: calibrationGate
+			});
+			continue;
+		}
+		benches.push({
+			kind: "eligible",
+			key: key_,
+			baselineP50: baselineMedian,
+			candidateP50: candidateMedian,
+			baselineSamples: base.samples,
+			candidateSamples: run.samples,
+			deltaP50,
+			deltaP99,
+			p: time.p,
+			d: time.d,
+			verdict: time.verdict,
+			hl: time.hl,
+			ciLow: time.ciLow,
+			ciHigh: time.ciHigh,
+			comparisonResolution: Math.max(comparisonResolution(base.runMedians), comparisonResolution(run.runMedians))
+		});
+	}
+	return {
+		baselineName: baseline.name,
+		candidateName: candidate.name,
+		...baseline.git ? { baselineGit: baseline.git } : {},
+		...candidate.git ? { candidateGit: candidate.git } : {},
+		hardware: baseline.hardware,
+		environmentFailures,
+		environmentWarnings,
+		benches
+	};
+}
+/** Whether correctness checks should fail the CLI command. */
+function compareFailed(result) {
+	return result.benches.some((b) => b.kind === "changed" || b.kind === "failed");
+}
+function deltaColor(delta, significant) {
+	if (!significant) return DIM;
+	return delta < 0 ? GREEN : delta > 0 ? RED : DIM;
+}
+function verdictStyle(verdict) {
+	if (verdict === "faster") return {
+		color: GREEN,
+		symbol: "▲"
+	};
+	if (verdict === "slower") return {
+		color: RED,
+		symbol: "▼"
+	};
+	return {
+		color: GRAY,
+		symbol: "■"
+	};
+}
+function printCompareReport(result, config) {
+	const side = (name, git) => git ? `${name} (${gitHint(git)})` : name;
+	console.log(`\n${BOLD}${CYAN}━━ compare${RESET} ${DIM}${side(result.baselineName, result.baselineGit)} -> ${side(result.candidateName, result.candidateGit)}${RESET}`);
+	console.log(`${DIM}${result.hardware.cpu ?? "unknown CPU"}${RESET}`);
+	console.log(`${DIM}Mann-Whitney U on block medians  α=${config.alpha}  minΔ=${(config.minDelta * 100).toFixed(0)}%${RESET}\n`);
+	if (result.environmentWarnings.length > 0) {
+		for (const reason of result.environmentWarnings) console.log(`${YELLOW}⚠ ${reason}${RESET}`);
+		console.log("");
+	}
+	if (result.environmentFailures.length > 0) {
+		console.log(`${RED}✖ cannot compare — environment check failed${RESET}`);
+		for (const reason of result.environmentFailures) console.log(`  ${DIM}· ${reason}${RESET}`);
+		console.log("");
+		return;
+	}
+	const eligible = result.benches.filter((b) => b.kind === "eligible");
+	const changed = result.benches.filter((b) => b.kind === "changed");
+	const failed = result.benches.filter((b) => b.kind === "failed");
+	const rows = result.benches.filter((b) => b.kind === "eligible" || b.kind === "changed");
+	const skipped = result.benches.filter((b) => b.kind === "skipped");
+	const baselineOnly = result.benches.filter((b) => b.kind === "missing" && b.presentIn === "baseline");
+	const candidateOnly = result.benches.filter((b) => b.kind === "missing" && b.presentIn === "candidate");
+	if (rows.length === 0 && failed.length === 0 && skipped.length === 0 && candidateOnly.length === 0) {
+		console.log(`${DIM}No benchmarks to compare${RESET}`);
+		return;
+	}
+	const nameCol = rows.length > 0 ? Math.min(36, Math.max(16, ...rows.map((b) => (b.key.name || b.key.group || "anonymous").length))) : 16;
+	const TIME_COL = 10;
+	const DELTA_COL = 7;
+	const P_COL = 5;
+	const CI_COL = 14;
+	const truncate = (s) => s.length > nameCol ? s.slice(0, nameCol - 1) + "…" : s.padEnd(nameCol);
+	const pct = (v) => `${v > 0 ? "+" : ""}${(v * 100).toFixed(1)}`;
+	const formatCI = (low, high) => `${pct(low)}..${pct(high)}%`;
+	if (rows.length > 0) {
+		const totalWidth = 4 + nameCol + 1 + TIME_COL + 1 + TIME_COL + 1 + DELTA_COL + 1 + DELTA_COL + 1 + P_COL + 1 + CI_COL;
+		const header = `${GRAY}${"  " + "bench".padEnd(nameCol + 2)} ${"baseline".padStart(TIME_COL)} ${"candidate".padStart(TIME_COL)} ${"Δp50".padStart(DELTA_COL)} ${"Δp99".padStart(DELTA_COL)} ${"p".padStart(P_COL)} ${`Δ ${(100 * (1 - config.alpha)).toFixed(0)}% CI`.padStart(CI_COL)}${RESET}`;
+		const divider = `${GRAY}${"-".repeat(totalWidth)}${RESET}`;
+		let lastFile = "";
+		let lastGroup = "";
+		let sawLimitedResolution = false;
+		for (const bench of rows) {
+			if (bench.key.file !== lastFile) {
+				if (lastFile) console.log("");
+				lastFile = bench.key.file;
+				lastGroup = "";
+				console.log(`${BOLD}${CYAN}${bench.key.file}${RESET}`);
+				console.log(header);
+				console.log(divider);
+			}
+			if (bench.key.group !== lastGroup) {
+				lastGroup = bench.key.group;
+				if (lastGroup && lastGroup !== bench.key.name) {
+					console.log(`  • ${lastGroup}`);
+					console.log(`  ${DARK_GRAY}${"-".repeat(totalWidth - 2)}${RESET}`);
+				}
+			}
+			const name = truncate(bench.key.name || bench.key.group || "anonymous");
+			if (bench.kind === "changed") {
+				console.log(`  ${RED}✗${RESET} ${WHITE}${name}${RESET} ${GRAY}${formatTime(bench.baselineP50).padStart(TIME_COL)}${RESET} ${GRAY}${formatTime(bench.candidateP50).padStart(TIME_COL)}${RESET}${RED}${"output changed".padStart(37)}${RESET}`);
+				console.log("");
+				continue;
+			}
+			const sig = bench.p <= config.alpha;
+			const { color, symbol } = verdictStyle(bench.verdict);
+			const neutral = bench.verdict === "neutral";
+			const dp50Color = neutral ? DIM : bench.verdict === "faster" ? GREEN : RED;
+			const dp99Color = neutral ? DIM : deltaColor(bench.deltaP99, sig);
+			const pColor = neutral ? DIM : WHITE;
+			const hasLimitedResolution = bench.comparisonResolution > config.minDelta;
+			if (hasLimitedResolution) sawLimitedResolution = true;
+			const resolutionLabel = `⚠ ~±${(bench.comparisonResolution * 100).toFixed(0)}%`;
+			console.log(`  ${color}${symbol}${RESET} ${WHITE}${name}${RESET} ${GRAY}${formatTime(bench.baselineP50).padStart(TIME_COL)}${RESET} ${GRAY}${formatTime(bench.candidateP50).padStart(TIME_COL)}${RESET} ${dp50Color}${formatDelta(bench.deltaP50).padStart(DELTA_COL)}${RESET} ${dp99Color}${formatDelta(bench.deltaP99).padStart(DELTA_COL)}${RESET} ${pColor}${formatP(bench.p).padStart(P_COL)}${RESET} ${neutral ? DIM : WHITE}${formatCI(bench.ciLow, bench.ciHigh).padStart(CI_COL)}${RESET}`);
+			const dist = renderDistributions(bench.baselineSamples, bench.candidateSamples, TIME_COL);
+			const resolutionMark = hasLimitedResolution ? `${" ".repeat(23)}${YELLOW}${resolutionLabel.padStart(CI_COL)}${RESET}` : "";
+			console.log(`${" ".repeat(4 + nameCol)} ${dist.baseline} ${dist.candidate}${resolutionMark}`);
+			console.log("");
+		}
+		if (sawLimitedResolution) {
+			console.log(`${YELLOW}⚠ Limited resolution:${RESET} ${DIM}Neutral results are inconclusive at the shown resolution.${RESET}`);
+			console.log("");
+		}
+	}
+	if (failed.length > 0) {
+		console.log(`\n${RED}failed (${failed.length})${RESET}`);
+		for (const b of failed) {
+			const label = truncate(b.key.name || b.key.group || "anonymous");
+			const how = b.check ? "check failed" : "error";
+			console.log(`  ${RED}✗${RESET} ${label}  ${RED}${how}:${RESET} ${DIM}${b.message}${RESET}`);
+		}
+	}
+	if (skipped.length > 0) {
+		console.log(`\n${YELLOW}skipped (${skipped.length})${RESET}`);
+		const calibrationSensitiveSkips = skipped.filter((b) => b.reason.startsWith(CLOCK_CONFOUNDED_PREFIX));
+		const otherSkipped = skipped.filter((b) => !b.reason.startsWith(CLOCK_CONFOUNDED_PREFIX));
+		if (calibrationSensitiveSkips.length > 0) {
+			console.log(`  ${YELLOW}clock-confounded${RESET}`);
+			for (const b of calibrationSensitiveSkips) {
+				const label = truncate(b.key.name || b.key.group || "anonymous");
+				const detail = b.reason.slice(19);
+				console.log(`  ${DIM}· ${label}${RESET}  ${YELLOW}${detail}${RESET}`);
+			}
+		}
+		for (const b of otherSkipped) {
+			const label = truncate(b.key.name || b.key.group || "anonymous");
+			console.log(`  ${DIM}· ${label}${RESET}  ${YELLOW}${b.reason}${RESET}`);
+		}
+	}
+	if (candidateOnly.length > 0) {
+		console.log(`\n${DIM}new in candidate (not in baseline)${RESET}`);
+		for (const b of candidateOnly) {
+			const label = b.key.group && b.key.group !== b.key.name ? `${b.key.group} > ${b.key.name || "anonymous"}` : b.key.name || "anonymous";
+			console.log(`  ${DIM}· ${label}${RESET}`);
+		}
+	}
+	if (baselineOnly.length > 0) {
+		console.log(`\n${DIM}removed from candidate (only in baseline)${RESET}`);
+		for (const b of baselineOnly) {
+			const label = b.key.group && b.key.group !== b.key.name ? `${b.key.group} > ${b.key.name || "anonymous"}` : b.key.name || "anonymous";
+			console.log(`  ${DIM}· ${label}${RESET}`);
+		}
+	}
+	const faster = eligible.filter((b) => b.verdict === "faster").length;
+	const slower = eligible.filter((b) => b.verdict === "slower").length;
+	const neutral = eligible.length - faster - slower;
+	const parts = [];
+	if (changed.length > 0) parts.push(`${RED}${changed.length} changed${RESET}`);
+	if (failed.length > 0) parts.push(`${RED}${failed.length} failed${RESET}`);
+	if (faster > 0) parts.push(`${GREEN}${faster} faster${RESET}`);
+	if (slower > 0) parts.push(`${RED}${slower} slower${RESET}`);
+	if (neutral > 0) parts.push(`${DIM}${neutral} neutral${RESET}`);
+	if (skipped.length > 0) parts.push(`${YELLOW}${skipped.length} skipped${RESET}`);
+	console.log(`\n${BOLD}summary${RESET}  ${parts.join("  ")}`);
+	console.log(`${DIM}compared: ${eligible.length}  matched: ${result.benches.length}${RESET}`);
+	console.log("");
+}
+//#endregion
+//#region src/report.ts
+function emptyDiagnostics() {
+	return {
+		failedChecks: [],
+		medianSpreads: [],
+		calibrationExplainedFractions: [],
+		inconsistent: [],
+		noisy: []
+	};
+}
+/**
+* Folds one file's trials into `into`. Between-block spread decides whether a
+* comparison could resolve minDelta. Within-block spread is a separate signal:
+* a bench whose own samples disagree is nondeterministic or being interfered
+* with, whichever way its blocks line up.
+*/
+function collectDiagnostics(trials, minDelta, into = emptyDiagnostics()) {
+	for (const trial of trials) for (const run of trial.runs) {
+		const name = run.name || trial.alias;
+		if (isAssertionError(run.error)) into.failedChecks.push(name);
+		const blocks = run.stats?.blocks;
+		if (!blocks) continue;
+		const spread = relativeSpread(blocks.medians);
+		into.medianSpreads.push(spread);
+		into.calibrationExplainedFractions.push(calibrationExplainedFraction(blocks.medians, blocks.freqs));
+		if (comparisonResolution(blocks.medians) > minDelta) into.inconsistent.push({
+			name,
+			spread
+		});
+		const within = median(blocks.spreads ?? []);
+		if (within > .1) into.noisy.push({
+			name,
+			spread: within
+		});
+	}
+	return into;
+}
+function printReportBox(input) {
+	const { envData, cpu, saveMsg, blocks, minDelta, diagnostics } = input;
+	const lines = [];
+	if (saveMsg) {
+		lines.push(saveMsg);
+		lines.push("");
+	}
+	if (diagnostics.failedChecks.length > 0) {
+		lines.push(`${RED}✖ Failed checks:${RESET} ${DIM}Assertions did not hold, so these benchmarks have no results.${RESET}`);
+		lines.push(`  ${DIM}Affected benchmarks (${diagnostics.failedChecks.length}):${RESET}`);
+		for (const name of diagnostics.failedChecks) lines.push(`    ${RED}✖${RESET} ${DIM}${name}${RESET}`);
+		lines.push("");
+	}
+	if (envData.length > 0) {
+		const allFreqs = envData.flatMap((e) => [e.runFreq, e.postFreq]);
+		const min = Math.min(...allFreqs);
+		const max = Math.max(...allFreqs);
+		const drift = (max - min) / ((max + min) / 2);
+		const rangeStr = `${min.toFixed(2)}–${max.toFixed(2)} GHz`;
+		if (drift > .05) {
+			lines.push(`${YELLOW}⚠ Unstable clock:${RESET} ${DIM}Readings ranged ${rangeStr} (${(drift * 100).toFixed(1)}% drift).${RESET}`);
+			if (cpu && /apple/i.test(cpu)) {
+				lines.push(`  ${DIM}Apple Silicon does not support CPU controls.${RESET}`);
+				lines.push(`  ${DIM}Drift is expected and may not affect results.${RESET}`);
+			} else lines.push(`  ${DIM}Disable turbo and fix the CPU governor for a stable benchmark environment.${RESET}`);
+		} else lines.push(`${GREEN}✔ Stable clock:${RESET} ${DIM}Readings ranged ${rangeStr}.${RESET}`);
+		lines.push("");
+	}
+	const affected = (benches) => {
+		lines.push(`  ${DIM}Affected benchmarks (${benches.length}):${RESET}`);
+		for (const bench of benches) lines.push(`    ${YELLOW}⚠${RESET} ${DIM}${bench.name}${RESET}  ${YELLOW}±${(bench.spread * 100).toFixed(1)}%${RESET}`);
+	};
+	if (diagnostics.medianSpreads.length > 0) {
+		const spread = median(diagnostics.medianSpreads);
+		const resolution = minDetectableEffect(spread, blocks);
+		lines.push(resolution > minDelta ? `${YELLOW}⚠ Inconsistent runs:${RESET} ${DIM}Median timings changed across fresh runs suggesting an unstable machine.${RESET}` : `${GREEN}✔ Consistent runs:${RESET} ${DIM}Median timings remained stable across fresh runs.${RESET}`);
+		lines.push(`  ${DIM}Median spread: ±${(spread * 100).toFixed(1)}% across ${blocks} fresh runs.${RESET}`);
+		lines.push(`  ${DIM}Comparison resolution: ~±${(resolution * 100).toFixed(1)}%.${RESET}`);
+		const explained = median(diagnostics.calibrationExplainedFractions);
+		lines.push(`  ${DIM}Clock estimate explains ~${(explained * 100).toFixed(0)}% of run-to-run spread.${RESET}`);
+		if (diagnostics.inconsistent.length > 0) affected(diagnostics.inconsistent);
+	}
+	if (diagnostics.noisy.length > 0) {
+		lines.push("");
+		lines.push(`${YELLOW}⚠ Noisy samples:${RESET} ${DIM}Timings varied widely within a process suggesting non-deterministic work or runtime interference.${RESET}`);
+		affected(diagnostics.noisy);
+	}
+	const PAD = 2;
+	const innerWidth = Math.max(40, ...lines.map((l) => visibleLength(l))) + 4;
+	const top = `┌ ${BOLD}report${RESET} ${"─".repeat(innerWidth - 8)}┐`;
+	const bot = `└${"─".repeat(innerWidth)}┘`;
+	const blank = `│${" ".repeat(innerWidth)}│`;
+	const pad = " ".repeat(PAD);
+	console.log(`\n${top}`);
+	console.log(blank);
+	for (const line of lines) if (line === "") console.log(blank);
+	else {
+		const fill = innerWidth - 4 - visibleLength(line);
+		console.log(`│${pad}${line}${" ".repeat(Math.max(0, fill))}${pad}│`);
+	}
+	console.log(blank);
+	console.log(bot);
+	console.log("");
+}
+function replayReport(result, config) {
+	for (const file of result.files) {
+		console.log(`\n${BLUE}▶ ${file.file}${RESET}`);
+		renderMitata(replayContext(file, result), {
+			print: console.log,
+			colors: true,
+			format: { name: "longest" },
+			countersAvailable: void 0
+		}, replayCollections(file));
+	}
+	const diagnostics = emptyDiagnostics();
+	for (const file of result.files) collectDiagnostics(file.benchmarks, config.minDelta, diagnostics);
+	printReportBox({
+		envData: result.environment?.freqs ?? [],
+		cpu: result.hardware.cpu,
+		blocks: result.blocks ?? 1,
+		minDelta: config.minDelta,
+		diagnostics
+	});
+}
+function replayCollections(file) {
+	const collections = (file.layout ?? [{
+		name: null,
+		types: []
+	}]).map((entry) => ({
+		name: entry.name,
+		types: entry.types,
+		trials: []
+	}));
+	for (const trial of file.benchmarks) {
+		const group = trial.group ?? 0;
+		(collections[group] ?? (collections[group] = {
+			name: trial.groupName ?? null,
+			types: [],
+			trials: []
+		})).trials.push({
+			highlight: trial.style.highlight,
+			compact: trial.style.compact,
+			gcMode: trial.gcMode,
+			bench: replayTrial(trial)
+		});
+	}
+	return collections.filter((collection) => collection && collection.trials.length > 0);
+}
+function replayTrial(trial) {
+	return {
+		alias: trial.alias,
+		group: trial.group,
+		gcMode: trial.gcMode,
+		baseline: trial.baseline,
+		args: {},
+		kind: trial.kind,
+		style: trial.style,
+		runs: trial.runs.map((run) => ({
+			name: run.name,
+			args: run.args,
+			stats: run.stats,
+			error: run.error
+		}))
+	};
+}
+function replayContext(file, result) {
+	const context = file.context ?? {
+		cpu: {
+			freq: result.hardware.freq,
+			name: result.hardware.cpu
+		},
+		arch: result.hardware.arch,
+		runtime: result.hardware.runtime,
+		version: result.context?.version,
+		noop: result.context?.noop
+	};
+	return {
+		now: 0,
+		arch: context.arch ?? "",
+		runtime: context.runtime ?? "",
+		version: context.version ?? null,
+		cpu: {
+			freq: context.cpu.freq,
+			name: context.cpu.name
+		},
+		noop: {
+			fn: noopStats(context.noop?.fn?.avg ?? 0),
+			iter: noopStats(context.noop?.iter?.avg ?? 0),
+			fn_gc: noopStats(context.noop?.fn_gc?.avg ?? 0)
+		}
+	};
+}
+function noopStats(avg) {
+	return { avg };
+}
+//#endregion
+//#region src/cli/commands/baseline.ts
+async function runBaselineCommand(ctx, name) {
+	if (name) {
+		try {
+			setBaseline(ctx.labsDir, name);
+			console.log(`${GREEN}✔${RESET} Baseline set to "${name}"`);
+		} catch (e) {
+			error(e.message);
+		}
+		return;
+	}
+	const results = listResults(ctx.labsDir);
+	if (results.length === 0) {
+		console.log(`${DIM}No saved results${RESET}`);
+		return;
+	}
+	const current = getBaseline(ctx.labsDir);
+	const chosen = await select({
+		message: "Select a baseline",
+		options: results.map((r) => {
+			const stable = isEnvironmentStable(r);
+			const hints = [];
+			const dh = dateHint(r);
+			if (dh) hints.push(dh);
+			if (r.git) hints.push(gitHint(r.git));
+			if (r.name === current) hints.push("current");
+			if (!stable) hints.push("unstable");
+			return {
+				value: r.name,
+				label: r.name,
+				hint: hints.length ? hints.join(", ") : void 0
+			};
+		}),
+		initialValue: current
+	});
+	if (isCancel(chosen)) {
+		console.log(`${DIM}Cancelled${RESET}`);
+		return;
+	}
+	try {
+		setBaseline(ctx.labsDir, chosen);
+		console.log(`${GREEN}✔${RESET} Baseline set to "${chosen}"`);
+	} catch (e) {
+		error(e.message);
+	}
+}
+//#endregion
+//#region src/cli/commands/compare.ts
+async function runCompareCommand(ctx, candidateArg) {
+	const baselineName = getBaseline(ctx.labsDir);
+	if (!baselineName) error("No baseline set. Run: bench baseline <name>");
+	let compareBaselineName = baselineName;
+	let candidateName;
+	if (candidateArg === "--last" || candidateArg === "-l") {
+		const last = getLastComparison(ctx.labsDir);
+		if (!last) error("No previous comparison found");
+		compareBaselineName = last.baselineName;
+		candidateName = last.candidateName;
+		console.log(`${CYAN}labs${RESET} ${DIM}(replaying last compare: ${compareBaselineName} -> ${candidateName})${RESET}`);
+	} else if (candidateArg) candidateName = candidateArg;
+	else {
+		const all = listResults(ctx.labsDir);
+		const candidates = all.filter((r) => r.name !== baselineName);
+		if (candidates.length === 0) error("No saved result to compare. Save a result first with -s.");
+		const latestCandidate = candidates[candidates.length - 1];
+		const baselineResult = all.find((r) => r.name === baselineName);
+		const baselineFreq = baselineResult ? resultMedianFreq(baselineResult) : 0;
+		const chosen = await select({
+			message: `Select result to compare against baseline "${baselineName}"`,
+			options: candidates.map((r) => {
+				const hints = [];
+				const dh = dateHint(r);
+				if (dh) hints.push(dh);
+				if (r.git) hints.push(gitHint(r.git));
+				if (r.name === latestCandidate.name) hints.push("latest");
+				const freq = resultMedianFreq(r);
+				if (baselineFreq > 0 && freq > 0) {
+					const diff = (freq - baselineFreq) / baselineFreq;
+					const sign = diff >= 0 ? "+" : "";
+					hints.push(`clk: ${sign}${(diff * 100).toFixed(1)}%`);
+				}
+				if (!isEnvironmentStable(r)) hints.push("unstable");
+				return {
+					value: r.name,
+					label: r.name,
+					hint: hints.length > 0 ? hints.join(", ") : void 0
+				};
+			}),
+			initialValue: latestCandidate.name
+		});
+		if (isCancel(chosen)) {
+			console.log(`${DIM}Cancelled${RESET}`);
+			return;
+		}
+		candidateName = chosen;
+	}
+	try {
+		const result = compare(loadResult(ctx.labsDir, compareBaselineName), loadResult(ctx.labsDir, candidateName), ctx.config);
+		printCompareReport(result, ctx.config);
+		setLastComparison(ctx.labsDir, compareBaselineName, candidateName);
+		if (compareFailed(result)) process.exitCode = 1;
+	} catch (e) {
+		error(e.message);
+	}
+}
+//#endregion
+//#region src/cli/commands/delete.ts
+async function runDeleteCommand(ctx, name) {
+	if (name) {
+		try {
+			deleteResult(ctx.labsDir, name);
+			console.log(`${GREEN}✔${RESET} Deleted "${name}"`);
+		} catch (e) {
+			error(e.message);
+		}
+		return;
+	}
+	const results = listResults(ctx.labsDir);
+	if (results.length === 0) {
+		console.log(`${DIM}No saved results${RESET}`);
+		return;
+	}
+	const baselineName = getBaseline(ctx.labsDir);
+	const chosen = await multiselect({
+		message: "Select results to delete",
+		options: results.map((r) => {
+			const hints = [];
+			const dh = dateHint(r);
+			if (dh) hints.push(dh);
+			if (r.git) hints.push(gitHint(r.git));
+			if (r.name === baselineName) hints.push("baseline");
+			return {
+				value: r.name,
+				label: r.name,
+				hint: hints.length > 0 ? hints.join(", ") : void 0
+			};
+		}),
+		required: false
+	});
+	if (isCancel(chosen)) {
+		console.log(`${DIM}Cancelled${RESET}`);
+		return;
+	}
+	const names = chosen;
+	if (names.length === 0) {
+		console.log(`${DIM}Nothing selected${RESET}`);
+		return;
+	}
+	for (const resultName of names) {
+		deleteResult(ctx.labsDir, resultName);
+		console.log(`${GREEN}✔${RESET} Deleted "${resultName}"`);
+	}
+}
+//#endregion
+//#region src/cli/commands/list.ts
+async function runListCommand(ctx) {
+	const results = listResults(ctx.labsDir);
+	const baselineName = getBaseline(ctx.labsDir);
+	if (results.length === 0) {
+		console.log(`${DIM}No saved results${RESET}`);
+		return;
+	}
+	const chosen = await select({
+		message: "Select a result to view its report",
+		options: results.map((r) => {
+			const stable = isEnvironmentStable(r);
+			const hints = [];
+			const dh = dateHint(r);
+			if (dh) hints.push(dh);
+			if (r.git) hints.push(gitHint(r.git));
+			if (r.name === baselineName) hints.push("baseline");
+			if (!stable) hints.push("unstable");
+			if (r.description) hints.push(r.description);
+			const freq = resultMedianFreq(r);
+			if (freq > 0) hints.push(`${freq.toFixed(2)} GHz`);
+			return {
+				value: r.name,
+				label: r.name,
+				hint: hints.length > 0 ? hints.join(", ") : void 0
+			};
+		})
+	});
+	if (isCancel(chosen)) {
+		console.log(`${DIM}Cancelled${RESET}`);
+		return;
+	}
+	replayReport(loadResult(ctx.labsDir, chosen), ctx.config);
+}
+//#endregion
+//#region src/cli/commands/prune.ts
+function runPruneCommand(ctx) {
+	const results = listResults(ctx.labsDir);
+	const baseline = getBaseline(ctx.labsDir);
+	const unstable = results.filter((r) => r.name !== baseline && !isEnvironmentStable(r));
+	if (unstable.length === 0) {
+		console.log(`${GREEN}✔${RESET} No unstable results to prune`);
+		return;
+	}
+	for (const r of unstable) deleteResult(ctx.labsDir, r.name);
+	console.log(`${GREEN}✔${RESET} Pruned ${unstable.length} unstable result${unstable.length !== 1 ? "s" : ""}`);
+	for (const r of unstable) console.log(`  ${DIM}· ${r.name}${RESET}`);
+}
+//#endregion
+//#region src/cli/runner.ts
+function freqSample(workerResult, file) {
+	const runFreq = workerResult.context.cpu.freq;
+	return {
+		file,
+		runFreq,
+		postFreq: workerResult.environment?.postFreq ?? runFreq
+	};
+}
+const WORKER_EXT = import.meta.url.endsWith(".ts") ? "ts" : "mjs";
+const WORKER = fileURLToPath(new URL(`../worker.${WORKER_EXT}`, import.meta.url));
+const TSX_LOADER = pathToFileURL(createRequire(import.meta.url).resolve("tsx")).href;
+function globBenchFiles(dir, pattern) {
+	const suffix = pattern.replace(/^\*\*\/\*/, "");
+	const results = [];
+	function walk(current) {
+		for (const entry of readdirSync(current, { withFileTypes: true })) {
+			const full = join(current, entry.name);
+			if (entry.isDirectory()) walk(full);
+			else if (entry.isFile() && entry.name.endsWith(suffix)) results.push(full);
+		}
+	}
+	walk(dir);
+	return results.sort();
+}
+async function loadConfig(configPath) {
+	const mod = await import(pathToFileURL(configPath).href);
+	return mod.default ?? mod;
+}
+const CACHE_FILE = join(process.cwd(), "node_modules", ".cache", "labs-last.json");
+function loadLastSelection() {
+	try {
+		return JSON.parse(readFileSync(CACHE_FILE, "utf-8"));
+	} catch {
+		return [];
+	}
+}
+function saveSelection(files) {
+	const dir = dirname(CACHE_FILE);
+	if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+	writeFileSync(CACHE_FILE, JSON.stringify(files));
+}
+function runBench(file, nodeFlags, label, tune, tagFilter, resultFile) {
+	console.log(`\n${BLUE}▶ ${label}${RESET}`);
+	const env = { ...process.env };
+	for (const key of Object.keys(env)) if (key.startsWith("LABS_")) delete env[key];
+	execFileSync(process.execPath, [
+		"--import",
+		TSX_LOADER,
+		...nodeFlags,
+		WORKER
+	], {
+		stdio: "inherit",
+		env: {
+			...env,
+			LABS_BENCH_FILE: pathToFileURL(file).href,
+			LABS_BLOCKS: String(tune.blocks ?? 8),
+			...tune.blockTime !== void 0 ? { LABS_BLOCK_TIME: String(tune.blockTime * 1e9) } : {},
+			...tune.minSamples !== void 0 ? { LABS_MIN_SAMPLES: String(tune.minSamples) } : {},
+			LABS_SAMPLING_POLICY: tune.samplingPolicy,
+			...tagFilter ? { LABS_GREP_TAGS: tagFilter } : {},
+			...resultFile ? { LABS_RESULT_FILE: resultFile } : {}
+		}
+	});
+}
+function fileHasAnyTag(file, tags) {
+	if (tags.length === 0) return true;
+	const content = readFileSync(file, "utf-8");
+	return tags.some((tag) => content.includes(tag));
+}
+/** Snapshot of the git state a run was produced from. Undefined outside a repo. */
+function captureGitInfo(dir) {
+	const git = (cmd) => execSync(`git ${cmd}`, {
+		cwd: dir,
+		stdio: [
+			"ignore",
+			"pipe",
+			"ignore"
+		]
+	}).toString().trim();
+	try {
+		const commit = git("rev-parse HEAD");
+		const ref = git("rev-parse --abbrev-ref HEAD");
+		const dirty = git("status --porcelain").length > 0;
+		return {
+			commit,
+			branch: ref === "HEAD" ? null : ref,
+			dirty
+		};
+	} catch {
+		return;
+	}
+}
+/** Parse a named flag value: --flag value -> value, or undefined if flag absent. */
+function flagValue(args, flag) {
+	const joined = args.find((a) => a.startsWith(`${flag}=`));
+	if (joined !== void 0) return joined.slice(flag.length + 1);
+	const i = args.indexOf(flag);
+	if (i === -1) return void 0;
+	const next = args[i + 1];
+	if (!next || next.startsWith("-")) return "";
+	return next;
+}
+async function runCLI(args) {
+	const cwd = process.cwd();
+	const configCandidates = ["labs.config.ts", "benches/labs.config.ts"].map((p) => resolve(cwd, p));
+	const configPath = configCandidates.find(existsSync);
+	if (!configPath) error(`labs.config.ts not found (checked: ${configCandidates.join(", ")})`);
+	let config;
+	try {
+		config = await loadConfig(configPath);
+	} catch (err) {
+		error(`Failed to load config: ${configPath}\n${String(err)}`);
+	}
+	const labsDir = getLabsDir(dirname(configPath), config.resultsDir);
+	const ctx = {
+		config,
+		configPath,
+		labsDir
+	};
+	const subcmd = args[0];
+	const subcmdArg = args[1];
+	if (subcmd === "list") {
+		await runListCommand(ctx);
+		return;
+	}
+	if (subcmd === "clear") {
+		clearResults(labsDir);
+		console.log(`${GREEN}✔${RESET} Cleared all saved results`);
+		return;
+	}
+	if (subcmd === "delete") {
+		await runDeleteCommand(ctx, subcmdArg);
+		return;
+	}
+	if (subcmd === "prune") {
+		runPruneCommand(ctx);
+		return;
+	}
+	if (subcmd === "baseline") {
+		await runBaselineCommand(ctx, subcmdArg);
+		return;
+	}
+	if (subcmd === "compare") {
+		await runCompareCommand(ctx, subcmdArg);
+		return;
+	}
+	const benchArgs = subcmd === "run" ? args.slice(1) : args;
+	const shouldSave = !benchArgs.includes("--no-save");
+	if (benchArgs.includes("--run") || benchArgs.includes("--runs")) error("`--run`/`--runs` are no longer supported; labs is single-run only");
+	const benchDir = resolve(dirname(configPath), config.benchDir);
+	if (!existsSync(benchDir)) error(`benchDir not found: ${benchDir}`);
+	const allFiles = globBenchFiles(benchDir, config.benchMatch);
+	if (allFiles.length === 0) error(`No bench files found matching "${config.benchMatch}" in ${benchDir}`);
+	const label = (f) => relative(benchDir, f).replace(/\\/g, "/");
+	const suiteName = (f) => basename(f);
+	let selected;
+	let tagEnv;
+	if (benchArgs.includes("--last")) {
+		selected = loadLastSelection().filter(existsSync);
+		if (selected.length === 0) error("No previous selection found");
+		console.log(`${CYAN}labs${RESET} ${DIM}(replaying last)${RESET}`);
+	} else {
+		const flagTakesValue = /* @__PURE__ */ new Set([
+			"-n",
+			"--name",
+			"-m",
+			"--message",
+			"--blocks"
+		]);
+		let filterArg;
+		for (let i = 0; i < benchArgs.length; i++) {
+			const a = benchArgs[i];
+			if (a.startsWith("-")) {
+				if (flagTakesValue.has(a)) i++;
+				continue;
+			}
+			filterArg = a;
+			break;
+		}
+		const tokens = filterArg ? filterArg.split(/\s+/).filter(Boolean) : [];
+		const tagFilters = tokens.filter((t) => t.startsWith("@"));
+		const nameFilters = tokens.filter((t) => !t.startsWith("@"));
+		tagEnv = tagFilters.length > 0 ? tagFilters.join(",") : void 0;
+		if (nameFilters.length > 0) {
+			const normalize = (s) => s.toLowerCase().replace(/[-\s_]+/g, "");
+			const seen = /* @__PURE__ */ new Set();
+			const missing = [];
+			selected = [];
+			for (const token of nameFilters) {
+				const norm = normalize(token);
+				const match = allFiles.find((f) => normalize(label(f)).includes(norm));
+				if (!match) {
+					missing.push(token);
+					continue;
+				}
+				if (!seen.has(match)) {
+					seen.add(match);
+					selected.push(match);
+				}
+			}
+			if (missing.length > 0) error(`No file matching: ${missing.join(", ")}. Available: ${allFiles.map(label).join(", ")}`);
+		} else selected = allFiles;
+		if (tagFilters.length > 0) selected = selected.filter((file) => fileHasAnyTag(file, tagFilters));
+		if (selected.length === 0) error(`No bench files matched the provided filters. Available: ${allFiles.map(label).join(", ")}`);
+		saveSelection(selected);
+		console.log(`${CYAN}labs${RESET}`);
+	}
+	const blocksFlag = flagValue(benchArgs, "--blocks");
+	if (blocksFlag !== void 0 && (!Number.isInteger(Number(blocksFlag)) || Number(blocksFlag) < 2)) error(`Invalid --blocks value "${blocksFlag}" — expected an integer ≥ 2`);
+	const blocks = blocksFlag !== void 0 ? Number(blocksFlag) : config.blocks ?? 8;
+	const benchTune = {
+		blockTime: config.blockTime,
+		minSamples: config.minSamples,
+		samplingPolicy: config.samplingPolicy,
+		blocks
+	};
+	const git = captureGitInfo(dirname(configPath));
+	const defaultName = () => {
+		if (git) return uniqueResultName(labsDir, `${git.commit.slice(0, 7)}${git.dirty ? "-dirty" : ""}`);
+		return (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-").replace("T", "_").slice(0, 19);
+	};
+	const suppliedName = flagValue(benchArgs, "-n") ?? flagValue(benchArgs, "--name");
+	const saveName = suppliedName ?? defaultName();
+	const forceOverwrite = benchArgs.includes("--force") || benchArgs.includes("-f");
+	if (shouldSave && !forceOverwrite && resultExists(labsDir, saveName)) {
+		const { confirm, isCancel } = await import("@clack/prompts");
+		const overwrite = await confirm({ message: `A result named "${saveName}" already exists. Overwrite?` });
+		if (isCancel(overwrite) || !overwrite) {
+			console.log(`${DIM}Cancelled${RESET}`);
+			return;
+		}
+	}
+	const description = flagValue(benchArgs, "-m") ?? flagValue(benchArgs, "--message");
+	const setAsBaseline = benchArgs.includes("--baseline") || benchArgs.includes("-b");
+	const shouldCompare = benchArgs.includes("--compare") || benchArgs.includes("-c");
+	const tmpDir = join(cwd, "node_modules", ".cache", "labs-tmp");
+	mkdirSync(tmpDir, { recursive: true });
+	const workerOutputs = [];
+	for (const f of selected) {
+		const resultFile = join(tmpDir, `${basename(f, ".ts")}-${Date.now()}.json`);
+		runBench(f, config.nodeFlags, suiteName(f), benchTune, tagEnv, resultFile);
+		workerOutputs.push({
+			file: f,
+			resultFile
+		});
+	}
+	let hardware = {
+		cpu: null,
+		arch: null,
+		runtime: null,
+		freq: 0
+	};
+	const files = [];
+	let hardwareSet = false;
+	const saveEnvData = [];
+	const saveDiagnostics = emptyDiagnostics();
+	let savedNoop;
+	for (const { file, resultFile } of workerOutputs) {
+		if (!existsSync(resultFile)) continue;
+		const workerResult = JSON.parse(readFileSync(resultFile, "utf-8"));
+		rmSync(resultFile);
+		if (!hardwareSet) {
+			hardware = {
+				cpu: workerResult.context.cpu.name,
+				arch: workerResult.context.arch,
+				runtime: workerResult.context.runtime,
+				freq: workerResult.context.cpu.freq
+			};
+			if (workerResult.context.noop) savedNoop = {
+				version: workerResult.context.version,
+				noop: {
+					fn: { avg: workerResult.context.noop.fn?.avg ?? 0 },
+					iter: { avg: workerResult.context.noop.iter?.avg ?? 0 },
+					fn_gc: { avg: workerResult.context.noop.fn_gc?.avg ?? 0 }
+				}
+			};
+			hardwareSet = true;
+		}
+		saveEnvData.push(freqSample(workerResult, suiteName(file)));
+		collectDiagnostics(workerResult.benchmarks, config.minDelta, saveDiagnostics);
+		files.push({
+			file: suiteName(file),
+			layout: workerResult.layout,
+			context: trimContext(workerResult.context),
+			benchmarks: workerResult.benchmarks.map((trial) => ({
+				alias: trial.alias,
+				group: trial.group,
+				baseline: trial.baseline,
+				gcMode: trial.gcMode ?? true,
+				groupName: trial.groupName,
+				kind: trial.kind ?? "static",
+				style: trial.style ?? {
+					compact: false,
+					highlight: false
+				},
+				runs: trial.runs.map((run) => ({
+					name: run.name,
+					args: run.args,
+					...run.stats ? { stats: trimStats(run.stats) } : {},
+					...run.error !== void 0 ? { error: run.error } : {}
+				}))
+			}))
+		});
+	}
+	if (!shouldSave) {
+		printReportBox({
+			envData: saveEnvData,
+			cpu: hardware.cpu,
+			blocks,
+			minDelta: config.minDelta,
+			diagnostics: saveDiagnostics
+		});
+		if (saveDiagnostics.failedChecks.length > 0) process.exitCode = 1;
+		return;
+	}
+	const result = {
+		name: saveName,
+		...description ? { description } : {},
+		timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+		...git ? { git } : {},
+		hardware,
+		blocks,
+		context: savedNoop,
+		files,
+		environment: { freqs: saveEnvData }
+	};
+	saveResult(labsDir, result);
+	const isFirstSave = !getBaseline(labsDir);
+	let markedBaseline = false;
+	const checksFailed = saveDiagnostics.failedChecks.length > 0;
+	if ((setAsBaseline || isFirstSave) && !checksFailed) {
+		setBaseline(labsDir, saveName);
+		markedBaseline = true;
+	}
+	if (checksFailed) process.exitCode = 1;
+	const gitNote = git && suppliedName ? ` ${DIM}${gitHint(git)}${RESET}` : "";
+	const details = [
+		markedBaseline ? `${CYAN}baseline${RESET}` : "",
+		`${files.length} file${files.length !== 1 ? "s" : ""}`,
+		checksFailed && (setAsBaseline || isFirstSave) ? `${RED}not set as baseline${RESET}` : ""
+	].filter(Boolean).join(", ");
+	const saveMsg = `${GREEN}✔${RESET} Saved "${saveName}"${gitNote} (${details})`;
+	printReportBox({
+		envData: saveEnvData,
+		cpu: hardware.cpu,
+		saveMsg,
+		blocks,
+		minDelta: config.minDelta,
+		diagnostics: saveDiagnostics
+	});
+	if (shouldCompare) {
+		const baselineName = getBaseline(labsDir);
+		if (!baselineName) console.log(`\n${DIM}No baseline set - skipping compare. Run: bench baseline <name>${RESET}`);
+		else if (baselineName === saveName) console.log(`\n${DIM}Saved result is the baseline - nothing to compare${RESET}`);
+		else try {
+			const comparison = compare(loadResult(labsDir, baselineName), result, config);
+			printCompareReport(comparison, config);
+			setLastComparison(labsDir, baselineName, saveName);
+			if (compareFailed(comparison)) process.exitCode = 1;
+		} catch (e) {
+			console.log(`\n${RED}✖${RESET} Compare failed: ${e.message}`);
+		}
+	}
+}
+function trimContext(context) {
+	return {
+		cpu: {
+			freq: context.cpu.freq,
+			name: context.cpu.name
+		},
+		arch: context.arch,
+		runtime: context.runtime,
+		version: context.version,
+		...context.noop ? { noop: {
+			...context.noop.fn ? { fn: { avg: context.noop.fn.avg } } : {},
+			...context.noop.iter ? { iter: { avg: context.noop.iter.avg } } : {},
+			...context.noop.fn_gc ? { fn_gc: { avg: context.noop.fn_gc.avg } } : {}
+		} } : {}
+	};
+}
+//#endregion
+//#region src/cli/cli.ts
+async function main() {
+	await runCLI(process.argv.slice(2));
+}
+main();
+//#endregion
+export {};

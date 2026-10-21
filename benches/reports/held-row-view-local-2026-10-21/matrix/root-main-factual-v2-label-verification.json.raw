@@ -1,0 +1,17 @@
+{
+  "schema": "root-main-factual-v2-label-verification-v1",
+  "correctedProvenanceSha256": "bd0654d99877a259ae737f862d4bbbfb4a94059bb1af3dad056959bd32a7a945",
+  "printedRowsVerifiedAgainstSummary": 144,
+  "printedFieldsPerRow": 6,
+  "skipIdentities": [
+    {
+      "file": "adapter-publication.bench.ts",
+      "group": 1,
+      "groupName": "allocation-light adapter publication",
+      "name": "normalize 1000 equivalent retained label updates",
+      "args": {}
+    }
+  ],
+  "all145RawQuantileFieldsUnchangedFromIndependentlyVerifiedV1": true,
+  "scope": "Correctedreportlabelsandidentityonly; no new inference, timing oradmission."
+}

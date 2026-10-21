@@ -1,0 +1,2976 @@
+diff --git a/packages/glyph/rust/shaper/src/engine/codec.rs b/packages/glyph/rust/shaper/src/engine/codec.rs
+index 3ef742a9..06386cbe 100644
+--- a/packages/glyph/rust/shaper/src/engine/codec.rs
++++ b/packages/glyph/rust/shaper/src/engine/codec.rs
+@@ -370,11 +370,12 @@ impl ValidatedCodec {
+         execute_program(
+             program,
+             execution,
+-            inputs,
++            CodecInputs::Packed(inputs),
+             output_start,
+             outputs,
+             active_buffers,
+         )
++        .map_err(InternalExecutionError::packed)
+     }
+ 
+     // Stage aggregation: each argument is one explicit input threaded through the
+@@ -399,7 +400,40 @@ impl ValidatedCodec {
+         execute_program(
+             &self.programs[program_index],
+             &self.execution[program_index],
+-            inputs,
++            CodecInputs::Packed(inputs),
++            output_start,
++            outputs,
++            active_buffers,
++        )
++        .map_err(InternalExecutionError::packed)
++    }
++
++    #[allow(clippy::too_many_arguments)]
++    pub(crate) fn execute_direct_buffers(
++        &self,
++        capability_set: CapabilitySetId,
++        technique: TechniqueId,
++        variant: u16,
++        source: &super::state::DirectOperandSource<'_>,
++        input_start: usize,
++        record_count: usize,
++        output_start: usize,
++        outputs: &mut [PhysicalBufferMut<'_>],
++        active_buffers: u32,
++    ) -> Result<(), InternalExecutionError> {
++        if self.capability_set(capability_set).is_none() {
++            return Err(CodecExecutionError::CapabilitySetMissing.into());
++        }
++        let program_index = program_index(&self.programs, capability_set, technique, variant)
++            .ok_or(CodecExecutionError::ProgramMissing)?;
++        execute_program(
++            &self.programs[program_index],
++            &self.execution[program_index],
++            CodecInputs::Direct {
++                source,
++                input_start,
++                record_count,
++            },
+             output_start,
+             outputs,
+             active_buffers,
+@@ -948,6 +982,53 @@ pub struct SemanticInputBatch<'a> {
+     pub record_count: usize,
+ }
+ 
++#[derive(Clone, Copy)]
++enum CodecInputs<'a> {
++    Packed(SemanticInputBatch<'a>),
++    Direct {
++        source: &'a super::state::DirectOperandSource<'a>,
++        input_start: usize,
++        record_count: usize,
++    },
++}
++
++impl CodecInputs<'_> {
++    fn record_count(self) -> usize {
++        match self {
++            Self::Packed(batch) => batch.record_count,
++            Self::Direct { record_count, .. } => record_count,
++        }
++    }
++}
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub(crate) enum InternalExecutionError {
++    Codec(CodecExecutionError),
++    Source(super::codec_gather::GatherError),
++}
++
++impl InternalExecutionError {
++    fn packed(self) -> CodecExecutionError {
++        match self {
++            Self::Codec(error) => error,
++            // Packed batches never construct a direct cursor.
++            Self::Source(_) => CodecExecutionError::InputLength,
++        }
++    }
++}
++
++impl From<CodecExecutionError> for InternalExecutionError {
++    fn from(error: CodecExecutionError) -> Self {
++        Self::Codec(error)
++    }
++}
++
++impl From<super::codec_gather::GatherError> for InternalExecutionError {
++    fn from(error: super::codec_gather::GatherError) -> Self {
++        Self::Source(error)
++    }
++}
++
+ pub struct PhysicalBufferMut<'a> {
+     pub schema: BufferSchema,
+     pub bytes: &'a mut [u8],
+@@ -1015,11 +1096,11 @@ pub enum CodecError {
+ fn execute_program(
+     program: &ProgramDescriptor,
+     execution: &ExecutableProgram,
+-    inputs: SemanticInputBatch<'_>,
++    inputs: CodecInputs<'_>,
+     output_start: usize,
+     outputs: &mut [PhysicalBufferMut<'_>],
+     active_buffers: u32,
+-) -> Result<(), CodecExecutionError> {
++) -> Result<(), InternalExecutionError> {
+     validate_execution(program, inputs, output_start, outputs, active_buffers)?;
+     // Validation and reverse dependency masks define every active read and store within its
+     // current record/group, so scratch can be reused within this invocation.
+@@ -1036,7 +1117,7 @@ fn execute_program(
+     };
+     #[cfg(not(all(target_arch = "wasm32", feature = "simd128")))]
+     let completed = 0;
+-    if completed < inputs.record_count {
++    if completed < inputs.record_count() {
+         execute_scalar_records(
+             program,
+             execution,
+@@ -1052,36 +1133,52 @@ fn execute_program(
+ 
+ fn validate_execution(
+     program: &ProgramDescriptor,
+-    inputs: SemanticInputBatch<'_>,
++    inputs: CodecInputs<'_>,
+     output_start: usize,
+     outputs: &[PhysicalBufferMut<'_>],
+     active_buffers: u32,
+-) -> Result<(), CodecExecutionError> {
+-    if inputs.f32_fields.len() != usize::from(program.f32_input_count)
+-        || inputs.u32_fields.len() != usize::from(program.u32_input_count)
+-    {
+-        return Err(CodecExecutionError::InputFieldCount);
+-    }
+-    if inputs
+-        .f32_fields
+-        .iter()
+-        .any(|field| field.len() != inputs.record_count)
+-        || inputs
+-            .u32_fields
+-            .iter()
+-            .any(|field| field.len() != inputs.record_count)
+-    {
+-        return Err(CodecExecutionError::InputLength);
++) -> Result<(), InternalExecutionError> {
++    match inputs {
++        CodecInputs::Packed(inputs) => {
++            if inputs.f32_fields.len() != usize::from(program.f32_input_count)
++                || inputs.u32_fields.len() != usize::from(program.u32_input_count)
++            {
++                return Err(CodecExecutionError::InputFieldCount.into());
++            }
++            if inputs
++                .f32_fields
++                .iter()
++                .any(|field| field.len() != inputs.record_count)
++                || inputs
++                    .u32_fields
++                    .iter()
++                    .any(|field| field.len() != inputs.record_count)
++            {
++                return Err(CodecExecutionError::InputLength.into());
++            }
++        }
++        CodecInputs::Direct {
++            source,
++            input_start,
++            record_count,
++        } => {
++            if input_start
++                .checked_add(record_count)
++                .is_none_or(|end| end > source.len())
++            {
++                return Err(CodecExecutionError::InputLength.into());
++            }
++        }
+     }
+     if outputs.len() != program.buffers.len() {
+-        return Err(CodecExecutionError::OutputBufferCount);
++        return Err(CodecExecutionError::OutputBufferCount.into());
+     }
+     let output_end = output_start
+-        .checked_add(inputs.record_count)
++        .checked_add(inputs.record_count())
+         .ok_or(CodecExecutionError::OutputCapacity)?;
+     for (index, (output, schema)) in outputs.iter().zip(&program.buffers).enumerate() {
+         if output.schema != *schema {
+-            return Err(CodecExecutionError::OutputSchema);
++            return Err(CodecExecutionError::OutputSchema.into());
+         }
+         if active_buffers & (1 << index) == 0 {
+             continue;
+@@ -1090,7 +1187,7 @@ fn validate_execution(
+             .checked_mul(schema.stride())
+             .ok_or(CodecExecutionError::OutputCapacity)?;
+         if output.bytes.len() < required {
+-            return Err(CodecExecutionError::OutputCapacity);
++            return Err(CodecExecutionError::OutputCapacity.into());
+         }
+     }
+     Ok(())
+@@ -1099,28 +1196,51 @@ fn validate_execution(
+ fn execute_scalar_records(
+     program: &ProgramDescriptor,
+     execution: &ExecutableProgram,
+-    inputs: SemanticInputBatch<'_>,
++    inputs: CodecInputs<'_>,
+     output_start: usize,
+     first_input_record: usize,
+     outputs: &mut [PhysicalBufferMut<'_>],
+     active_buffers: u32,
+-) -> Result<(), CodecExecutionError> {
++) -> Result<(), InternalExecutionError> {
+     let mut registers = [0_u32; MAX_REGISTERS];
+     let mut values = [0_u32; MAX_OUTPUT_LANES];
+-    for input_record in first_input_record..inputs.record_count {
++    for input_record in first_input_record..inputs.record_count() {
+         let output_record = output_start + input_record;
++        let direct_row = match inputs {
++            CodecInputs::Packed(_) => None,
++            CodecInputs::Direct {
++                source,
++                input_start,
++                ..
++            } => Some(source.row(input_start + input_record)?),
++        };
+         for (operation_index, operation) in program.operations.iter().enumerate() {
+             if execution.operation_buffer_masks[operation_index] & active_buffers == 0 {
+                 continue;
+             }
+             match *operation {
+                 Operation::LoadF32 { target, field } => {
+-                    registers[usize::from(target)] =
+-                        inputs.f32_fields[usize::from(field)][input_record].to_bits();
++                    registers[usize::from(target)] = match inputs {
++                        CodecInputs::Packed(batch) => {
++                            batch.f32_fields[usize::from(field)][input_record].to_bits()
++                        }
++                        CodecInputs::Direct { .. } => direct_row
++                            .ok_or(CodecExecutionError::InputLength)?
++                            .f32(program.inputs[usize::from(field)])?,
++                    };
+                 }
+                 Operation::LoadU32 { target, field } => {
+-                    registers[usize::from(target)] =
+-                        inputs.u32_fields[usize::from(field)][input_record];
++                    registers[usize::from(target)] = match inputs {
++                        CodecInputs::Packed(batch) => {
++                            batch.u32_fields[usize::from(field)][input_record]
++                        }
++                        CodecInputs::Direct { .. } => {
++                            direct_row.ok_or(CodecExecutionError::InputLength)?.u32(
++                                program.inputs
++                                    [usize::from(program.f32_input_count) + usize::from(field)],
++                            )?
++                        }
++                    };
+                 }
+                 Operation::ConstantF32 { target, bits } => registers[usize::from(target)] = bits,
+                 Operation::ConstantU32 { target, value } => registers[usize::from(target)] = value,
+@@ -1178,7 +1298,7 @@ fn execute_scalar_records(
+                 Operation::StoreF32 { source, lane, .. } => {
+                     let bits = registers[usize::from(source)];
+                     if !f32::from_bits(bits).is_finite() {
+-                        return Err(CodecExecutionError::NonFiniteOutput);
++                        return Err(CodecExecutionError::NonFiniteOutput.into());
+                     }
+                     values[store_slot(execution, operation_index, lane)] = bits;
+                 }
+@@ -1219,48 +1339,97 @@ fn execute_scalar_records(
+ unsafe fn execute_simd_records(
+     program: &ProgramDescriptor,
+     execution: &ExecutableProgram,
+-    inputs: SemanticInputBatch<'_>,
++    inputs: CodecInputs<'_>,
+     output_start: usize,
+     outputs: &mut [PhysicalBufferMut<'_>],
+     active_buffers: u32,
+-) -> Result<usize, CodecExecutionError> {
++) -> Result<usize, InternalExecutionError> {
+     use core::arch::wasm32::{
+         f32x4_add, f32x4_convert_u32x4, f32x4_lt, f32x4_mul, f32x4_sub, i32x4_ne, u32x4_splat,
+         v128, v128_and, v128_bitselect, v128_load,
+     };
+ 
+-    let completed = inputs.record_count & !3;
++    let completed = inputs.record_count() & !3;
+     if completed == 0 {
+         return Ok(0);
+     }
+     let mut registers = [u32x4_splat(0); MAX_REGISTERS];
+     let mut values = [u32x4_splat(0); MAX_OUTPUT_LANES];
+     for input_record in (0..completed).step_by(4) {
++        let direct_rows = match inputs {
++            CodecInputs::Packed(_) => None,
++            CodecInputs::Direct {
++                source,
++                input_start,
++                ..
++            } => {
++                let first = input_start + input_record;
++                Some([
++                    source.row(first)?,
++                    source.row(first + 1)?,
++                    source.row(first + 2)?,
++                    source.row(first + 3)?,
++                ])
++            }
++        };
+         for (operation_index, operation) in program.operations.iter().enumerate() {
+             if execution.operation_buffer_masks[operation_index] & active_buffers == 0 {
+                 continue;
+             }
+             match *operation {
+                 Operation::LoadF32 { target, field } => {
+-                    // SAFETY: validation proves this field contains four records from `input_record`.
+-                    registers[usize::from(target)] = unsafe {
+-                        v128_load(
+-                            inputs.f32_fields[usize::from(field)]
+-                                .as_ptr()
+-                                .add(input_record)
+-                                .cast::<v128>(),
+-                        )
++                    registers[usize::from(target)] = match inputs {
++                        CodecInputs::Packed(batch) => {
++                            // SAFETY: validation proves four packed records are present.
++                            unsafe {
++                                v128_load(
++                                    batch.f32_fields[usize::from(field)]
++                                        .as_ptr()
++                                        .add(input_record)
++                                        .cast::<v128>(),
++                                )
++                            }
++                        }
++                        CodecInputs::Direct { .. } => {
++                            let rows = direct_rows.ok_or(CodecExecutionError::InputLength)?;
++                            let source = program.inputs[usize::from(field)];
++                            let lanes = [
++                                rows[0].f32(source)?,
++                                rows[1].f32(source)?,
++                                rows[2].f32(source)?,
++                                rows[3].f32(source)?,
++                            ];
++                            // SAFETY: `lanes` is one initialized 16-byte stack value.
++                            unsafe { v128_load(lanes.as_ptr().cast::<v128>()) }
++                        }
+                     };
+                 }
+                 Operation::LoadU32 { target, field } => {
+-                    // SAFETY: validation proves this field contains four records from `input_record`.
+-                    registers[usize::from(target)] = unsafe {
+-                        v128_load(
+-                            inputs.u32_fields[usize::from(field)]
+-                                .as_ptr()
+-                                .add(input_record)
+-                                .cast::<v128>(),
+-                        )
++                    registers[usize::from(target)] = match inputs {
++                        CodecInputs::Packed(batch) => {
++                            // SAFETY: validation proves four packed records are present.
++                            unsafe {
++                                v128_load(
++                                    batch.u32_fields[usize::from(field)]
++                                        .as_ptr()
++                                        .add(input_record)
++                                        .cast::<v128>(),
++                                )
++                            }
++                        }
++                        CodecInputs::Direct { .. } => {
++                            let rows = direct_rows.ok_or(CodecExecutionError::InputLength)?;
++                            let source = program.inputs
++                                [usize::from(program.f32_input_count) + usize::from(field)];
++                            let lanes = [
++                                rows[0].u32(source)?,
++                                rows[1].u32(source)?,
++                                rows[2].u32(source)?,
++                                rows[3].u32(source)?,
++                            ];
++                            // SAFETY: `lanes` is one initialized 16-byte stack value.
++                            unsafe { v128_load(lanes.as_ptr().cast::<v128>()) }
++                        }
+                     };
+                 }
+                 Operation::ConstantF32 { target, bits } => {
+@@ -1323,7 +1492,7 @@ unsafe fn execute_simd_records(
+                 Operation::StoreF32 { source, lane, .. } => {
+                     let value = registers[usize::from(source)];
+                     if !simd_f32_is_finite(value) {
+-                        return Err(CodecExecutionError::NonFiniteOutput);
++                        return Err(CodecExecutionError::NonFiniteOutput.into());
+                     }
+                     values[store_slot(execution, operation_index, lane)] = value;
+                 }
+diff --git a/packages/glyph/rust/shaper/src/engine/codec_gather.rs b/packages/glyph/rust/shaper/src/engine/codec_gather.rs
+index 8cff5b6f..f567be4e 100644
+--- a/packages/glyph/rust/shaper/src/engine/codec_gather.rs
++++ b/packages/glyph/rust/shaper/src/engine/codec_gather.rs
+@@ -19,7 +19,7 @@ use super::{
+     placement_state::SegmentTranslation,
+     plan_input::{PlanGlyph, PlanInput},
+     positioning::{ALL_SEMANTIC_CHANGES, PositionedSemanticGlyph, SEMANTIC_PLACEMENT_SLOT_CHANGE},
+-    retained_rope::{LEAF_CAPACITY, RetainedRope, RopeRecord, RopeSummary, RopeUpdate},
++    retained_rope::{LEAF_CAPACITY, RetainedRope, RopeCursor, RopeRecord, RopeSummary, RopeUpdate},
+ };
+ 
+ const POSITION_ONLY_CHANGES: u16 =
+@@ -158,6 +158,13 @@ fn shift_offset(value: usize, old: usize, next: usize) -> Result<usize, GatherEr
+ }
+ 
+ impl GatherRange {
++    pub(crate) fn source_start(self) -> usize {
++        self.start.source
++    }
++
++    pub(crate) fn source_end(self) -> usize {
++        self.end.source
++    }
+     #[cfg(test)]
+     pub(crate) fn records_for_test(records: Range<usize>) -> Self {
+         Self {
+@@ -406,6 +413,101 @@ fn known_semantic_f32(field: u8) -> bool {
+         )
+ }
+ 
++/// Conservative eligibility only. A false result leaves the unchanged packed path responsible
++/// for both acceptance and the exact public error order.
++pub(crate) fn direct_semantic_sources_total(
++    input: LayoutPlanInput<'_>,
++    program: &ProgramDescriptor,
++) -> bool {
++    let rows = input.glyphs.len();
++    if !input.semantic_change_masks.is_empty() && input.semantic_change_masks.len() != rows {
++        return false;
++    }
++    for source in &program.inputs[..usize::from(program.f32_input_count)] {
++        if source.scope != InputScope::Semantic {
++            continue;
++        }
++        let field = source.field;
++        if !known_semantic_f32(field) {
++            return false;
++        }
++        if matches!(
++            field,
++            SEMANTIC_F32_INLINE_ORIGIN | SEMANTIC_F32_BLOCK_ORIGIN | SEMANTIC_F32_INVERSE_FONT_SIZE
++        ) {
++            continue;
++        }
++        if matches!(
++            field,
++            SEMANTIC_F32_FOREGROUND_RED
++                | SEMANTIC_F32_FOREGROUND_GREEN
++                | SEMANTIC_F32_FOREGROUND_BLUE
++                | SEMANTIC_F32_FOREGROUND_ALPHA
++        ) {
++            if input
++                .semantic_u32
++                .get(usize::from(SEMANTIC_U32_FOREGROUND_RGBA))
++                .is_none_or(|values| values.len() != rows)
++            {
++                return false;
++            }
++            continue;
++        }
++        let optional = matches!(
++            field,
++            SEMANTIC_F32_OUTLINE_WIDTH_EM
++                | SEMANTIC_F32_SHADOW_OFFSET_X_EM
++                | SEMANTIC_F32_SHADOW_OFFSET_Y_EM
++        );
++        if input
++            .semantic_f32
++            .get(usize::from(field))
++            .is_none_or(|values| values.len() != rows && !(optional && values.is_empty()))
++        {
++            return false;
++        }
++    }
++    for source in &program.inputs[usize::from(program.f32_input_count)..] {
++        if source.scope != InputScope::Semantic || source.field == SEMANTIC_U32_PLACEMENT_SLOT {
++            continue;
++        }
++        let optional = matches!(
++            source.field,
++            SEMANTIC_U32_OUTLINE_RGBA | SEMANTIC_U32_SHADOW_RGBA
++        );
++        if input
++            .semantic_u32
++            .get(usize::from(source.field))
++            .is_none_or(|values| values.len() != rows && !(optional && values.is_empty()))
++        {
++            return false;
++        }
++    }
++    true
++}
++
++pub(crate) fn direct_binding_sources_total(
++    binding: &FontRenderBinding,
++    program: &ProgramDescriptor,
++) -> bool {
++    for (index, source) in program.inputs.iter().enumerate() {
++        let float = index < usize::from(program.f32_input_count);
++        let count = match (source.scope, float) {
++            (InputScope::Semantic, _) => continue,
++            (InputScope::Glyph, true) => binding.glyph_f32().field_count(),
++            (InputScope::Glyph, false) => binding.glyph_u32().field_count(),
++            (InputScope::Strike, true) => binding.strike_f32().field_count(),
++            (InputScope::Strike, false) => binding.strike_u32().field_count(),
++            (InputScope::Resource, true) => binding.resource_f32().field_count(),
++            (InputScope::Resource, false) => binding.resource_u32().field_count(),
++        };
++        if source.field >= count {
++            return false;
++        }
++    }
++    true
++}
++
+ struct OwnerRanges<'a, I> {
+     owners: I,
+     current: Option<RetainedGatherOwner<'a>>,
+@@ -492,10 +594,39 @@ pub struct CodecGatherWorkspace {
+     bounds_changed: bool,
+     f32_fields: Vec<AlignedField<f32>>,
+     u32_fields: Vec<AlignedField<u32>>,
++    direct_locators: Vec<DirectRowLocator>,
++    metadata_only: bool,
+     retained_cursor: usize,
+     retained_source_cursor: usize,
+ }
+ 
++/// Call-scoped coordinates for one selected row. The indexed paragraph and binding are
++/// borrowed from the current preparation; neither index survives a new preparation.
++#[repr(C)]
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub(crate) struct DirectRowLocator {
++    pub(crate) paragraph_index: u32,
++    pub(crate) glyph_index: u32,
++    pub(crate) binding_index: u32,
++    pub(crate) selection: u32,
++    pub(crate) strike_row: u32,
++}
++
++const _: [(); 20] = [(); core::mem::size_of::<DirectRowLocator>()];
++
++// A cursor owns its fixed traversal stack. Boxing it would add one heap allocation per owner.
++#[allow(clippy::large_enum_variant)]
++enum AppendMode<'a> {
++    Packed,
++    Direct {
++        previous: &'a CodecGatherWorkspace,
++        old_sources: RopeCursor<'a, GatherSource>,
++        old_record: usize,
++        old_record_end: usize,
++        paragraph_index: u32,
++    },
++}
++
+ #[repr(C, align(16))]
+ struct AlignedBlock<T> {
+     values: [T; 4],
+@@ -567,6 +698,41 @@ impl CodecGatherWorkspace {
+         Ok(())
+     }
+ 
++    pub(crate) fn begin_direct(&mut self, record_capacity: usize) -> Result<(), GatherError> {
++        self.reserve_records(record_capacity)?;
++        reserve(&mut self.direct_locators, record_capacity)?;
++        self.clear();
++        // Translated bounds can change while every semantic input mask remains zero. Those
++        // selected rows still produce output intervals, so reserve their worst-case count
++        // before the candidate writes any row; the mask-run reservation cannot cover them.
++        self.dirty_mask_ranges
++            .try_reserve(record_capacity)
++            .map_err(|_| GatherError::AllocationFailed)?;
++        self.metadata_only = true;
++        self.retained_output_intervals = true;
++        Ok(())
++    }
++
++    pub(crate) fn direct_locators(&self) -> &[DirectRowLocator] {
++        &self.direct_locators
++    }
++
++    pub(crate) fn source_count(&self) -> usize {
++        self.sources.len()
++    }
++
++    #[cfg(test)]
++    pub(crate) fn is_metadata_only(&self) -> bool {
++        self.metadata_only
++    }
++
++    /// Invalid field capacity can be reused by the next cold packed build, but never supplies
++    /// retained values for a metadata-only cache key.
++    pub(crate) fn take_field_capacity_from(&mut self, spare: &mut Self) {
++        core::mem::swap(&mut self.f32_fields, &mut spare.f32_fields);
++        core::mem::swap(&mut self.u32_fields, &mut spare.u32_fields);
++    }
++
+     pub fn begin_retained(
+         &mut self,
+         codec: &ValidatedCodec,
+@@ -1470,6 +1636,60 @@ impl CodecGatherWorkspace {
+         source_start: usize,
+         mut binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
+     ) -> Result<(), GatherError> {
++        self.append_from_internal(
++            codec,
++            capability_set,
++            input,
++            source_start,
++            AppendMode::Packed,
++            |handle| binding_for_font(handle).map(|binding| (0, binding)),
++        )?;
++        Ok(())
++    }
++
++    #[allow(clippy::too_many_arguments)]
++    pub(crate) fn append_direct_from<'binding>(
++        &mut self,
++        previous: &CodecGatherWorkspace,
++        old_range: GatherRange,
++        paragraph_index: u32,
++        codec: &ValidatedCodec,
++        capability_set: CapabilitySetId,
++        input: LayoutPlanInput<'_>,
++        binding_for_font: impl FnMut(u32) -> Option<(u32, &'binding FontRenderBinding)>,
++    ) -> Result<bool, GatherError> {
++        let Some(old_sources) = previous.sources.cursor_from(old_range.start.source) else {
++            return Ok(false);
++        };
++        let complete = self.append_from_internal(
++            codec,
++            capability_set,
++            input,
++            0,
++            AppendMode::Direct {
++                previous,
++                old_sources,
++                old_record: old_range.start.record,
++                old_record_end: old_range.end.record,
++                paragraph_index,
++            },
++            binding_for_font,
++        )?;
++        Ok(complete
++            && self.sources.len() == old_range.end.source
++            && self.glyphs.len() == old_range.end.record)
++    }
++
++    #[allow(clippy::too_many_arguments)]
++    fn append_from_internal<'binding>(
++        &mut self,
++        codec: &ValidatedCodec,
++        capability_set: CapabilitySetId,
++        input: LayoutPlanInput<'_>,
++        source_start: usize,
++        mut mode: AppendMode<'_>,
++        mut binding_for_font: impl FnMut(u32) -> Option<(u32, &'binding FontRenderBinding)>,
++    ) -> Result<bool, GatherError> {
+         let remaining = input.glyphs.len().saturating_sub(source_start);
+         if source_start > input.glyphs.len() {
+             return Err(GatherError::InvalidSemanticShape);
+@@ -1478,20 +1698,36 @@ impl CodecGatherWorkspace {
+             input.semantic_change_masks,
+             source_start,
+             input.glyphs.len(),
+-            ALL_SEMANTIC_CHANGES,
++            if matches!(mode, AppendMode::Direct { .. }) {
++                0
++            } else {
++                ALL_SEMANTIC_CHANGES
++            },
+         )?;
+-        let required = self.glyphs.len().saturating_add(remaining);
++        let selected_capacity = match &mode {
++            AppendMode::Packed => remaining,
++            AppendMode::Direct {
++                old_record,
++                old_record_end,
++                ..
++            } => old_record_end.saturating_sub(*old_record),
++        };
++        let required = self.glyphs.len().saturating_add(selected_capacity);
+         if self.glyphs.capacity() < required
+             || self.placement_slots.capacity() < required
+             || self.semantic_change_masks.capacity() < required
+-            || self
+-                .f32_fields
+-                .iter()
+-                .any(|field| field.capacity() < required)
+-            || self
+-                .u32_fields
+-                .iter()
+-                .any(|field| field.capacity() < required)
++            || match mode {
++                AppendMode::Packed => {
++                    self.f32_fields
++                        .iter()
++                        .any(|field| field.capacity() < required)
++                        || self
++                            .u32_fields
++                            .iter()
++                            .any(|field| field.capacity() < required)
++                }
++                AppendMode::Direct { .. } => self.direct_locators.capacity() < required,
++            }
+         {
+             return Err(GatherError::AllocationFailed);
+         }
+@@ -1499,23 +1735,52 @@ impl CodecGatherWorkspace {
+         let mut source_chunk_len = 0;
+         let mut cached_font_handle = None;
+         let mut cached_binding = None;
++        let mut cached_binding_index = 0;
+         let mut cached_program = None;
+         for glyph_index in source_start..input.glyphs.len() {
+             #[cfg(test)]
+             super::work_attribution::record(|work| work.gather_glyph_visits += 1);
+             let glyph = input.glyphs[glyph_index];
++            let change_mask = input
++                .semantic_change_masks
++                .get(glyph_index)
++                .copied()
++                .unwrap_or(if matches!(mode, AppendMode::Direct { .. }) {
++                    0
++                } else {
++                    ALL_SEMANTIC_CHANGES
++                });
++            #[cfg(test)]
++            if matches!(mode, AppendMode::Direct { .. }) {
++                super::work_attribution::record(|work| work.direct_source_rows += 1);
++            }
++            let previous_source = match &mut mode {
++                AppendMode::Packed => None,
++                AppendMode::Direct { old_sources, .. } => Some(
++                    *old_sources
++                        .next_record()
++                        .ok_or(GatherError::InvalidSemanticShape)?,
++                ),
++            };
+             let binding = if cached_font_handle == Some(glyph.binding_handle) {
+                 cached_binding.ok_or(GatherError::FontBindingMissing)?
+             } else {
+-                let binding = binding_for_font(glyph.binding_handle)
++                let (binding_index, binding) = binding_for_font(glyph.binding_handle)
+                     .ok_or(GatherError::FontBindingMissing)?;
+                 cached_font_handle = Some(glyph.binding_handle);
+                 cached_binding = Some(binding);
++                cached_binding_index = binding_index;
+                 binding
+             };
+             let Some(selected) =
+                 binding.select(glyph.glyph_id, glyph.font_size, glyph.raster_pixel_ratio)
+             else {
++                if previous_source.is_some_and(|old| {
++                    old.selected()
++                        || (old.stable_id != glyph.stable_id && change_mask != ALL_SEMANTIC_CHANGES)
++                }) {
++                    return Ok(false);
++                }
+                 #[cfg(test)]
+                 super::work_attribution::record(|work| work.fresh_recordless_rows += 1);
+                 // A glyph that selects no raster still occupies a source row. The retained walk
+@@ -1530,6 +1795,13 @@ impl CodecGatherWorkspace {
+             };
+             #[cfg(test)]
+             super::work_attribution::record(|work| work.fresh_selected_rows += 1);
++            if previous_source.is_some_and(|old| {
++                !old.selected()
++                    || (old.stable_id != glyph.stable_id && change_mask != ALL_SEMANTIC_CHANGES)
++                    || (change_mask == 0 && !old.same_selection(selected))
++            }) {
++                return Ok(false);
++            }
+             let technique = binding.technique();
+             let variant = binding.program_variant();
+             let program = match cached_program {
+@@ -1549,16 +1821,72 @@ impl CodecGatherWorkspace {
+             // A pushed row has no prior value to preserve, so a change mask cannot narrow it: the
+             // registers it omits would be published as zeros rather than as retained values.
+             // `gather_fields` bounds these by the program's declared input counts.
+-            self.gather_fields(
+-                input,
+-                glyph_index,
+-                binding,
+-                selected,
+-                program,
+-                u32::MAX,
+-                u32::MAX,
+-            )?;
++            if matches!(mode, AppendMode::Packed) {
++                self.gather_fields(
++                    input,
++                    glyph_index,
++                    binding,
++                    selected,
++                    program,
++                    u32::MAX,
++                    u32::MAX,
++                )?;
++            } else {
++                #[cfg(test)]
++                super::work_attribution::record(|work| {
++                    work.direct_selected_rows += 1;
++                    work.direct_locator_bytes += core::mem::size_of::<DirectRowLocator>();
++                    work.direct_elided_full_field_writes +=
++                        usize::from(program.f32_input_count) + usize::from(program.u32_input_count);
++                });
++            }
+             let planned = plan_glyph(input, glyph_index, glyph, binding, selected)?;
++            if let AppendMode::Direct {
++                previous,
++                old_record,
++                paragraph_index,
++                ..
++            } = &mut mode
++            {
++                let old = match previous.glyphs.get(*old_record).copied() {
++                    Some(old) => old,
++                    None => return Ok(false),
++                };
++                if (old.stable_id != planned.stable_id && change_mask != ALL_SEMANTIC_CHANGES)
++                    || !same_storage_topology(old, planned)
++                {
++                    return Ok(false);
++                }
++                #[cfg(test)]
++                super::work_attribution::record(|work| {
++                    work.gather_mask_bits += change_mask.count_ones() as usize;
++                    for bit in 0..16 {
++                        work.gather_mask_bit_counts[bit] +=
++                            usize::from(change_mask & (1 << bit) != 0);
++                    }
++                    work.gather_all_masks += usize::from(change_mask == ALL_SEMANTIC_CHANGES);
++                    work.gather_identity_mismatches +=
++                        usize::from(old.stable_id != planned.stable_id);
++                });
++                let changed_bounds = old.semantic_id != planned.semantic_id
++                    || old.inline_start.to_bits() != planned.inline_start.to_bits()
++                    || old.block_start.to_bits() != planned.block_start.to_bits()
++                    || old.inline_extent.to_bits() != planned.inline_extent.to_bits()
++                    || old.block_extent.to_bits() != planned.block_extent.to_bits();
++                self.bounds_changed |= changed_bounds;
++                if changed_bounds {
++                    self.record_changed_output(self.glyphs.len());
++                }
++                self.direct_locators.push(DirectRowLocator {
++                    paragraph_index: *paragraph_index,
++                    glyph_index: u32::try_from(glyph_index)
++                        .map_err(|_| GatherError::AllocationFailed)?,
++                    binding_index: cached_binding_index,
++                    selection: selection_key(selected),
++                    strike_row: selected.strike_row,
++                });
++                *old_record += 1;
++            }
+             self.push_source_chunk(
+                 &mut source_chunk,
+                 &mut source_chunk_len,
+@@ -1566,21 +1894,23 @@ impl CodecGatherWorkspace {
+             )?;
+             self.glyphs.push(planned);
+             self.placement_slots.push(glyph.placement_slot)?;
+-            self.write_change_mask(
+-                self.semantic_change_masks.len(),
+-                input
+-                    .semantic_change_masks
+-                    .get(glyph_index)
+-                    .copied()
+-                    .unwrap_or(super::positioning::ALL_SEMANTIC_CHANGES),
+-            );
++            self.write_change_mask(self.semantic_change_masks.len(), change_mask);
++        }
++        if let AppendMode::Direct {
++            old_record,
++            old_record_end,
++            ..
++        } = &mode
++            && old_record != old_record_end
++        {
++            return Ok(false);
+         }
+         self.retained_cursor = self.glyphs.len();
+         self.sources
+             .append_records(&source_chunk[..source_chunk_len])
+             .map_err(|_| GatherError::AllocationFailed)?;
+         self.retained_source_cursor = self.sources.len();
+-        Ok(())
++        Ok(true)
+     }
+ 
+     /// Appends resource-free decorations around glyph gather in CSS paint order.
+@@ -1701,8 +2031,16 @@ impl CodecGatherWorkspace {
+             semantic_change_masks: &self.semantic_change_masks,
+             f32_fields,
+             u32_fields,
+-            f32_field_count: self.f32_fields.len(),
+-            u32_field_count: self.u32_fields.len(),
++            f32_field_count: if self.metadata_only {
++                0
++            } else {
++                self.f32_fields.len()
++            },
++            u32_field_count: if self.metadata_only {
++                0
++            } else {
++                self.u32_fields.len()
++            },
+         }
+     }
+ 
+@@ -1884,6 +2222,14 @@ impl CodecGatherWorkspace {
+         {
+             range.end = range.end.max(index + 1);
+         } else {
++            #[cfg(test)]
++            if self.metadata_only
++                && self.dirty_mask_ranges.len() == self.dirty_mask_ranges.capacity()
++            {
++                super::work_attribution::record(|work| {
++                    work.direct_unreserved_output_range_pushes += 1;
++                });
++            }
+             self.dirty_mask_ranges.push(index..index + 1);
+         }
+     }
+@@ -1916,6 +2262,8 @@ impl CodecGatherWorkspace {
+         self.correspondence.clear();
+         self.retained_output_intervals = false;
+         self.bounds_changed = false;
++        self.direct_locators.clear();
++        self.metadata_only = false;
+         for field in &mut self.f32_fields {
+             field.clear();
+         }
+@@ -2158,7 +2506,7 @@ fn same_storage_topology(previous: PlanGlyph, next: PlanGlyph) -> bool {
+         && previous.depth_key == next.depth_key
+ }
+ 
+-fn source_f32(
++pub(crate) fn source_f32(
+     scope: InputScope,
+     field: u8,
+     input: LayoutPlanInput<'_>,
+@@ -2271,7 +2619,7 @@ fn optional_semantic_f32(
+     }
+ }
+ 
+-fn source_u32(
++pub(crate) fn source_u32(
+     scope: InputScope,
+     field: u8,
+     input: LayoutPlanInput<'_>,
+@@ -2558,6 +2906,33 @@ mod tests {
+             .unwrap();
+     }
+ 
++    #[test]
++    fn direct_totality_rejects_unused_unknown_declared_source_before_cold_error() {
++        let mut descriptor = base_descriptor();
++        // The operation graph loads only field zero; legacy gather still reads every
++        // declared field in a cold row, including this unknown final F32 source.
++        descriptor.programs[0].inputs[3] = InputSource::semantic(250);
++        let codec = ValidatedCodec::new(descriptor).unwrap();
++        let program = codec.program(CAPABILITY, TechniqueId(7), 2).unwrap();
++        let binding = binding();
++        let glyphs = [layout_glyph(1, 0)];
++        let input = LayoutPlanInput {
++            transform_id: 1,
++            glyphs: &glyphs,
++            semantic_glyphs: &TEST_POSITIONED_SEMANTICS,
++            placement_translations: &TEST_PLACEMENT_TRANSLATIONS,
++            semantic_change_masks: &[],
++            semantic_f32: &[&[1.0]],
++            semantic_u32: &[&[1]],
++        };
++        assert!(direct_binding_sources_total(&binding, program));
++        assert!(!direct_semantic_sources_total(input, program));
++        assert_eq!(
++            CodecGatherWorkspace::default().gather(&codec, CAPABILITY, input, |_| Some(&binding)),
++            Err(GatherError::SourceFieldMissing),
++        );
++    }
++
+     #[test]
+     fn gathers_program_specific_sources_without_a_union_record() {
+         let binding = binding();
+diff --git a/packages/glyph/rust/shaper/src/engine/ordered_plan.rs b/packages/glyph/rust/shaper/src/engine/ordered_plan.rs
+index 19243b84..bcb168c7 100644
+--- a/packages/glyph/rust/shaper/src/engine/ordered_plan.rs
++++ b/packages/glyph/rust/shaper/src/engine/ordered_plan.rs
+@@ -20,8 +20,8 @@ use super::{
+     plan_packing::{
+         MAX_PHYSICAL_BUFFERS, PendingAllocation, PhysicalBufferState, RangeJob, RecordRange,
+         align_record_range, align_up, apply_writes_prevalidated, buffer_record_alignment,
+-        coalesce_buffer_ranges, collect_range_jobs, execute_run, grown_capacity,
+-        push_pending_allocation, record_alignment,
++        coalesce_buffer_ranges, collect_range_jobs, grown_capacity, push_pending_allocation,
++        record_alignment,
+     },
+     render_plan::{
+         BUFFER_ORDERED_DIRECT, BufferRecord, DrawRecord, PATCH_ALLOCATE_OR_RESIZE, PATCH_WRITE,
+@@ -143,6 +143,7 @@ struct PrepareContext<'a> {
+     capability_set: CapabilitySetId,
+     capability: &'a super::codec::CapabilitySet,
+     input: OrderedPlanInput<'a>,
++    direct_source: Option<&'a super::state::DirectOperandSource<'a>>,
+     checkpoint: bool,
+     changed_intervals: Option<&'a [Range<usize>]>,
+ }
+@@ -218,6 +219,7 @@ impl OrderedPlanCompiler {
+             codec,
+             capability_set,
+             input,
++            None,
+             checkpoint,
+             publication_generation,
+             None,
+@@ -226,6 +228,7 @@ impl OrderedPlanCompiler {
+     }
+ 
+     #[allow(clippy::too_many_arguments)]
++    #[cfg(test)]
+     pub(crate) fn prepare_scoped(
+         &mut self,
+         codec: &ValidatedCodec,
+@@ -240,6 +243,31 @@ impl OrderedPlanCompiler {
+             codec,
+             capability_set,
+             input,
++            None,
++            checkpoint,
++            publication_generation,
++            output_scope,
++            bounds_changed,
++        )
++    }
++
++    #[allow(clippy::too_many_arguments)]
++    pub(crate) fn prepare_scoped_with_source(
++        &mut self,
++        codec: &ValidatedCodec,
++        capability_set: CapabilitySetId,
++        input: OrderedPlanInput<'_>,
++        direct_source: Option<&super::state::DirectOperandSource<'_>>,
++        checkpoint: bool,
++        publication_generation: u32,
++        output_scope: Option<RetainedOutputScope<'_>>,
++        bounds_changed: bool,
++    ) -> Result<(), OrderedPlanError> {
++        self.prepare_internal(
++            codec,
++            capability_set,
++            input,
++            direct_source,
+             checkpoint,
+             publication_generation,
+             output_scope,
+@@ -496,6 +524,7 @@ impl OrderedPlanCompiler {
+         codec: &ValidatedCodec,
+         capability_set: CapabilitySetId,
+         input: OrderedPlanInput<'_>,
++        direct_source: Option<&super::state::DirectOperandSource<'_>>,
+         checkpoint: bool,
+         publication_generation: u32,
+         output_scope: Option<RetainedOutputScope<'_>>,
+@@ -543,6 +572,7 @@ impl OrderedPlanCompiler {
+             capability_set,
+             capability,
+             input,
++            direct_source,
+             checkpoint,
+             // Exact output intervals cover gathered glyph metadata, including bounds.
+             changed_intervals: if retained_topology {
+@@ -1551,6 +1581,7 @@ impl OrderedPlanCompiler {
+             capability_set,
+             capability,
+             input,
++            context.direct_source,
+             program,
+             prior,
+             self.pending_batches[batch_index],
+@@ -1587,6 +1618,7 @@ impl OrderedPlanCompiler {
+         capability_set: CapabilitySetId,
+         capability: &super::codec::CapabilitySet,
+         input: OrderedPlanInput<'_>,
++        direct_source: Option<&super::state::DirectOperandSource<'_>>,
+         program: &super::codec::ProgramDescriptor,
+         prior: Option<BatchState>,
+         pending: PendingBatch,
+@@ -1786,11 +1818,12 @@ impl OrderedPlanCompiler {
+                     records.next();
+                     slot += 1;
+                 }
+-                execute_run(
++                super::plan_packing::execute_run_with_source(
+                     codec,
+                     capability_set,
+                     program,
+                     input,
++                    direct_source,
+                     input_start as usize,
+                     slot - run_start,
+                     run_start - aligned.start,
+diff --git a/packages/glyph/rust/shaper/src/engine/plan_error.rs b/packages/glyph/rust/shaper/src/engine/plan_error.rs
+index 491f55a2..e1df9556 100644
+--- a/packages/glyph/rust/shaper/src/engine/plan_error.rs
++++ b/packages/glyph/rust/shaper/src/engine/plan_error.rs
+@@ -20,6 +20,7 @@ pub enum PlanError {
+     IdentifierExhausted,
+     ArithmeticOverflow,
+     CodecExecution(CodecExecutionError),
++    DirectSource(super::codec_gather::GatherError),
+ }
+ 
+ impl From<PlanInputError> for PlanError {
+@@ -38,6 +39,7 @@ impl From<PackingError> for PlanError {
+             PackingError::CapacityExceeded => Self::CapacityExceeded,
+             PackingError::InvalidIdentity => Self::InvalidIdentity,
+             PackingError::Codec(error) => Self::CodecExecution(error),
++            PackingError::DirectSource(error) => Self::DirectSource(error),
+         }
+     }
+ }
+diff --git a/packages/glyph/rust/shaper/src/engine/plan_packing.rs b/packages/glyph/rust/shaper/src/engine/plan_packing.rs
+index 33be7678..514f7807 100644
+--- a/packages/glyph/rust/shaper/src/engine/plan_packing.rs
++++ b/packages/glyph/rust/shaper/src/engine/plan_packing.rs
+@@ -6,7 +6,8 @@ use core::{mem, slice};
+ use super::codec::Operation;
+ use super::{
+     codec::{
+-        CapabilitySetId, CodecExecutionError, PhysicalBufferMut, SemanticInputBatch, ValidatedCodec,
++        CapabilitySetId, CodecExecutionError, InternalExecutionError, PhysicalBufferMut,
++        SemanticInputBatch, ValidatedCodec,
+     },
+     plan_input::PlanInput,
+     render_plan::{PATCH_WRITE, PatchRecord},
+@@ -21,6 +22,7 @@ pub enum PackingError {
+     CapacityExceeded,
+     InvalidIdentity,
+     Codec(CodecExecutionError),
++    DirectSource(super::codec_gather::GatherError),
+ }
+ 
+ #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+@@ -119,6 +121,7 @@ pub fn apply_writes_prevalidated(
+ }
+ 
+ #[allow(clippy::too_many_arguments)]
++#[cfg(test)]
+ pub fn execute_run(
+     codec: &ValidatedCodec,
+     capability_set: CapabilitySetId,
+@@ -131,6 +134,37 @@ pub fn execute_run(
+     payload_starts: &[usize; MAX_PHYSICAL_BUFFERS],
+     output_records: u32,
+     active_buffers: u32,
++) -> Result<(), PackingError> {
++    execute_run_with_source(
++        codec,
++        capability_set,
++        program,
++        input,
++        None,
++        input_index,
++        record_count,
++        output_record,
++        payload,
++        payload_starts,
++        output_records,
++        active_buffers,
++    )
++}
++
++#[allow(clippy::too_many_arguments)]
++pub(crate) fn execute_run_with_source(
++    codec: &ValidatedCodec,
++    capability_set: CapabilitySetId,
++    program: &super::codec::ProgramDescriptor,
++    input: PlanInput<'_>,
++    direct_source: Option<&super::state::DirectOperandSource<'_>>,
++    input_index: usize,
++    record_count: u32,
++    output_record: u32,
++    payload: &mut [u8],
++    payload_starts: &[usize; MAX_PHYSICAL_BUFFERS],
++    output_records: u32,
++    active_buffers: u32,
+ ) -> Result<(), PackingError> {
+     #[cfg(test)]
+     super::work_attribution::record(|work| work.codec_executed_records += record_count as usize);
+@@ -139,19 +173,21 @@ pub fn execute_run(
+         .ok_or(PackingError::ArithmeticOverflow)?;
+     let mut f32_fields: [&[f32]; super::codec::MAX_REGISTERS] = [&[]; super::codec::MAX_REGISTERS];
+     let mut u32_fields: [&[u32]; super::codec::MAX_REGISTERS] = [&[]; super::codec::MAX_REGISTERS];
+-    for (target, field) in f32_fields
+-        .iter_mut()
+-        .zip(input.f32_fields.iter())
+-        .take(usize::from(program.f32_input_count))
+-    {
+-        *target = &field[input_index..input_end];
+-    }
+-    for (target, field) in u32_fields
+-        .iter_mut()
+-        .zip(input.u32_fields.iter())
+-        .take(usize::from(program.u32_input_count))
+-    {
+-        *target = &field[input_index..input_end];
++    if direct_source.is_none() {
++        for (target, field) in f32_fields
++            .iter_mut()
++            .zip(input.f32_fields.iter())
++            .take(usize::from(program.f32_input_count))
++        {
++            *target = &field[input_index..input_end];
++        }
++        for (target, field) in u32_fields
++            .iter_mut()
++            .zip(input.u32_fields.iter())
++            .take(usize::from(program.u32_input_count))
++        {
++            *target = &field[input_index..input_end];
++        }
+     }
+ 
+     let mut outputs: [mem::MaybeUninit<PhysicalBufferMut<'_>>; MAX_PHYSICAL_BUFFERS] =
+@@ -180,21 +216,40 @@ pub fn execute_run(
+             program.buffers.len(),
+         )
+     };
+-    codec
+-        .execute_buffers(
+-            capability_set,
+-            program.technique,
+-            program.variant,
+-            SemanticInputBatch {
+-                f32_fields: &f32_fields[..usize::from(program.f32_input_count)],
+-                u32_fields: &u32_fields[..usize::from(program.u32_input_count)],
+-                record_count: record_count as usize,
+-            },
+-            output_record as usize,
+-            outputs,
+-            active_buffers,
+-        )
+-        .map_err(PackingError::Codec)?;
++    if let Some(source) = direct_source {
++        codec
++            .execute_direct_buffers(
++                capability_set,
++                program.technique,
++                program.variant,
++                source,
++                input_index,
++                record_count as usize,
++                output_record as usize,
++                outputs,
++                active_buffers,
++            )
++            .map_err(|error| match error {
++                InternalExecutionError::Codec(error) => PackingError::Codec(error),
++                InternalExecutionError::Source(error) => PackingError::DirectSource(error),
++            })?;
++    } else {
++        codec
++            .execute_buffers(
++                capability_set,
++                program.technique,
++                program.variant,
++                SemanticInputBatch {
++                    f32_fields: &f32_fields[..usize::from(program.f32_input_count)],
++                    u32_fields: &u32_fields[..usize::from(program.u32_input_count)],
++                    record_count: record_count as usize,
++                },
++                output_record as usize,
++                outputs,
++                active_buffers,
++            )
++            .map_err(PackingError::Codec)?;
++    }
+     #[cfg(test)]
+     {
+         let executed_program = codec
+diff --git a/packages/glyph/rust/shaper/src/engine/render_plan_compiler.rs b/packages/glyph/rust/shaper/src/engine/render_plan_compiler.rs
+index 4552d414..1b34d35f 100644
+--- a/packages/glyph/rust/shaper/src/engine/render_plan_compiler.rs
++++ b/packages/glyph/rust/shaper/src/engine/render_plan_compiler.rs
+@@ -97,6 +97,9 @@ fn plan_result_too_large(error: PlanError) -> bool {
+         | PlanError::DuplicateIdentity
+         | PlanError::InvalidResource => false,
+         PlanError::CodecExecution(error) => codec_result_too_large(error),
++        PlanError::DirectSource(error) => {
++            matches!(error, super::codec_gather::GatherError::AllocationFailed)
++        }
+     }
+ }
+ 
+@@ -218,6 +221,32 @@ impl RenderPlanCompiler {
+         acknowledged_publication_generation: u32,
+         output_scope: Option<OwnedOutputScope<'_>>,
+         bounds_changed: bool,
++    ) -> Result<(), RenderPlanCompilerError> {
++        self.prepare_owned_with_source(
++            codec,
++            capability_set,
++            input,
++            None,
++            checkpoint,
++            publication_generation,
++            acknowledged_publication_generation,
++            output_scope,
++            bounds_changed,
++        )
++    }
++
++    #[allow(clippy::too_many_arguments)]
++    pub(crate) fn prepare_owned_with_source(
++        &mut self,
++        codec: &ValidatedCodec,
++        capability_set: CapabilitySetId,
++        input: PlanInput<'_>,
++        direct_source: Option<&super::state::DirectOperandSource<'_>>,
++        checkpoint: bool,
++        publication_generation: u32,
++        acknowledged_publication_generation: u32,
++        output_scope: Option<OwnedOutputScope<'_>>,
++        bounds_changed: bool,
+     ) -> Result<(), RenderPlanCompilerError> {
+         if self.prepared_strategy != PreparedStrategy::None {
+             return Err(RenderPlanCompilerError::AlreadyPrepared);
+@@ -239,10 +268,11 @@ impl RenderPlanCompiler {
+             || !placement.patches.is_empty()
+             || !placement.buffers.is_empty()
+             || !placement.retirements.is_empty();
+-        self.ordered.prepare_scoped(
++        self.ordered.prepare_scoped_with_source(
+             codec,
+             capability_set,
+             input,
++            direct_source,
+             checkpoint,
+             publication_generation,
+             output_scope
+diff --git a/packages/glyph/rust/shaper/src/engine/session_placement.rs b/packages/glyph/rust/shaper/src/engine/session_placement.rs
+index 7bf4d03c..cdbdf8cc 100644
+--- a/packages/glyph/rust/shaper/src/engine/session_placement.rs
++++ b/packages/glyph/rust/shaper/src/engine/session_placement.rs
+@@ -548,7 +548,7 @@ fn packing_error(error: PackingError) -> SessionPlacementError {
+         PackingError::ArithmeticOverflow | PackingError::CapacityExceeded => {
+             SessionPlacementError::ArithmeticOverflow
+         }
+-        PackingError::InvalidIdentity | PackingError::Codec(_) => {
++        PackingError::InvalidIdentity | PackingError::Codec(_) | PackingError::DirectSource(_) => {
+             SessionPlacementError::InvalidInput
+         }
+     }
+diff --git a/packages/glyph/rust/shaper/src/engine/state.rs b/packages/glyph/rust/shaper/src/engine/state.rs
+index 253db2c9..9671bbab 100644
+--- a/packages/glyph/rust/shaper/src/engine/state.rs
++++ b/packages/glyph/rust/shaper/src/engine/state.rs
+@@ -14,14 +14,15 @@ use super::{
+         ClusterBuildInput, LayoutDirtyRanges, LayoutRunSourceKind, RunCanonicalInput,
+         SHAPING_CONTEXT,
+     },
+-    codec::{CapabilitySetId, ValidatedCodec},
++    codec::{CapabilitySetId, InputSource, ValidatedCodec},
+     codec_gather::{
+-        CodecGatherWorkspace, DEFAULT_GATHER_RECORD_CAPACITY, GatherError, LayoutPlanInput,
+-        RetainedGather, RetainedGatherOwner,
++        CodecGatherWorkspace, DEFAULT_GATHER_RECORD_CAPACITY, DirectRowLocator, GatherError,
++        LayoutPlanInput, RetainedGather, RetainedGatherOwner, direct_binding_sources_total,
++        direct_semantic_sources_total, source_f32, source_u32,
+     },
+     flow_composition::{EllipsisReplacement, FlowFragment, FlowLayoutArena, NO_BOUNDARY},
+     flow_geometry::{FlowGeometryArena, LocalizedGeometryChange},
+-    font_binding::FontRenderBinding,
++    font_binding::{FontRenderBinding, SelectedGlyphBinding},
+     frame::{
+         CommittedUpdate, MeasuredParagraph, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE,
+         PreparedUpdate, RootRevision, UpdateRequest, WRAP_WORD,
+@@ -156,8 +157,10 @@ pub struct TextEngine {
+     planners: BTreeMap<u32, PlannerState>,
+     invalidated_roots: BTreeMap<u32, RootHighWater>,
+     gather: CodecGatherWorkspace,
+-    gather_cache: Option<GatherCacheKey>,
+-    prepared_gather_cache: Option<GatherCacheKey>,
++    direct_candidate: CodecGatherWorkspace,
++    direct_candidate_ready: bool,
++    gather_cache: Option<GatherCache>,
++    prepared_gather_cache: Option<GatherCache>,
+ }
+ 
+ #[derive(Clone, Copy, Default)]
+@@ -607,10 +610,147 @@ struct GatherCacheKey {
+     capability_set: u32,
+ }
+ 
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++enum GatherColumns {
++    Packed,
++    MetadataOnly,
++}
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++struct GatherCache {
++    key: GatherCacheKey,
++    columns: GatherColumns,
++}
++
++/// Borrows only preparation-local state. It never enters a render-plan lease or committed cache.
++pub(crate) struct DirectOperandSource<'a> {
++    locators: &'a [DirectRowLocator],
++    paragraphs: &'a [RetainedParagraph],
++    bindings: &'a [RegisteredFontBinding],
++}
++
++#[derive(Clone, Copy)]
++pub(crate) struct DirectRowContext<'a> {
++    positioned: &'a PositionedGlyphArena,
++    transform_id: u32,
++    glyph_index: usize,
++    binding: &'a FontRenderBinding,
++    selected: SelectedGlyphBinding,
++}
++
++impl<'a> DirectOperandSource<'a> {
++    pub(crate) fn len(&self) -> usize {
++        self.locators.len()
++    }
++
++    pub(crate) fn row(&self, index: usize) -> Result<DirectRowContext<'a>, GatherError> {
++        let locator = self
++            .locators
++            .get(index)
++            .ok_or(GatherError::InvalidSemanticShape)?;
++        let paragraph = self
++            .paragraphs
++            .get(locator.paragraph_index as usize)
++            .ok_or(GatherError::InvalidSemanticShape)?;
++        let binding = self
++            .bindings
++            .get(locator.binding_index as usize)
++            .ok_or(GatherError::FontBindingMissing)?;
++        let positioned = paragraph.state.positioned.active();
++        if positioned
++            .glyphs()
++            .get(locator.glyph_index as usize)
++            .is_none()
++        {
++            return Err(GatherError::InvalidSemanticShape);
++        }
++        Ok(DirectRowContext {
++            positioned,
++            transform_id: paragraph.id,
++            glyph_index: locator.glyph_index as usize,
++            binding: &binding.binding,
++            selected: SelectedGlyphBinding {
++                strike: locator.selection >> 16,
++                resource: locator.selection & 0xffff,
++                strike_row: locator.strike_row,
++            },
++        })
++    }
++}
++
++impl<'a> DirectRowContext<'a> {
++    pub(crate) fn f32(self, source: InputSource) -> Result<u32, GatherError> {
++        #[cfg(test)]
++        super::work_attribution::record(|work| work.direct_f32_operand_loads += 1);
++        let semantic_f32 = self.positioned.semantic_f32();
++        let semantic_u32 = self.positioned.semantic_u32();
++        let input = self.input(&semantic_f32, &semantic_u32);
++        source_f32(
++            source.scope,
++            source.field,
++            input,
++            self.glyph_index,
++            self.binding,
++            self.selected,
++        )
++        .map(f32::to_bits)
++    }
++
++    pub(crate) fn u32(self, source: InputSource) -> Result<u32, GatherError> {
++        #[cfg(test)]
++        super::work_attribution::record(|work| work.direct_u32_operand_loads += 1);
++        let semantic_f32 = self.positioned.semantic_f32();
++        let semantic_u32 = self.positioned.semantic_u32();
++        let input = self.input(&semantic_f32, &semantic_u32);
++        source_u32(
++            source.scope,
++            source.field,
++            input,
++            self.glyph_index,
++            self.binding,
++            self.selected,
++        )
++    }
++
++    fn input<'b>(
++        &'b self,
++        semantic_f32: &'b [&'a [f32]; SEMANTIC_F32_FIELD_COUNT],
++        semantic_u32: &'b [&'a [u32]; SEMANTIC_U32_FIELD_COUNT],
++    ) -> LayoutPlanInput<'b>
++    where
++        'a: 'b,
++    {
++        LayoutPlanInput {
++            transform_id: self.transform_id,
++            glyphs: self.positioned.glyphs(),
++            semantic_glyphs: self.positioned.semantic_glyphs(),
++            placement_translations: self.positioned.placement_translations(),
++            semantic_change_masks: self.positioned.semantic_change_masks(),
++            semantic_f32,
++            semantic_u32,
++        }
++    }
++}
++
++impl core::ops::Deref for GatherCache {
++    type Target = GatherCacheKey;
++
++    fn deref(&self) -> &Self::Target {
++        &self.key
++    }
++}
++
++impl PartialEq<GatherCacheKey> for GatherCache {
++    fn eq(&self, key: &GatherCacheKey) -> bool {
++        self.key == *key
++    }
++}
++
+ impl TextEngine {
+     fn invalidate_gather_cache(&mut self) {
+         self.gather_cache = None;
+         self.prepared_gather_cache = None;
++        self.direct_candidate_ready = false;
+     }
+ 
+     pub fn initialize(&mut self) -> Result<(), EngineError> {
+@@ -1599,6 +1739,9 @@ impl TextEngine {
+         let font_bindings = &self.font_bindings;
+         let font_stacks = &self.font_stacks;
+         let gather = &mut self.gather;
++        let direct_candidate = &mut self.direct_candidate;
++        let direct_candidate_ready = &mut self.direct_candidate_ready;
++        *direct_candidate_ready = false;
+         let gather_cache = &mut self.gather_cache;
+         let prepared_gather_cache = &mut self.prepared_gather_cache;
+         let planner = self
+@@ -1691,6 +1834,8 @@ impl TextEngine {
+             planner.next_content_revision.max(1),
+         );
+         let mut gather_output_matches_next = false;
++        let mut next_gather_columns =
++            cached_gather.map_or(GatherColumns::Packed, |cache| cache.columns);
+         let preparation = (|| {
+             planner.semantic_records.clear();
+             planner.prepare_lifecycle(
+@@ -1862,17 +2007,21 @@ impl TextEngine {
+                 planner.plan.prepare_reuse().map_err(plan_error)?;
+                 #[cfg(test)]
+                 super::work_attribution::record(|work| work.prepare_reuse_modes += 1);
+-                gather_output_matches_next = cached_gather == Some(current_gather_key);
++                gather_output_matches_next =
++                    cached_gather.is_some_and(|cache| cache.key == current_gather_key);
+             } else {
+-                let sparse = cached_gather == Some(current_gather_key)
++                let sparse = cached_gather.is_some_and(|cache| cache.key == current_gather_key)
+                     && !checkpoint
+                     && planner.prepare_retained_order(RetainedOrderPurpose::Gather)?;
+-                let replacement =
+-                    if cached_gather == Some(current_gather_key) && !checkpoint && !sparse {
+-                        planner.prepare_replacement_gather_order()?
+-                    } else {
+-                        None
+-                    };
++                let replacement = if cached_gather.is_some_and(|cache| {
++                    cache.key == current_gather_key && cache.columns == GatherColumns::Packed
++                }) && !checkpoint
++                    && !sparse
++                {
++                    planner.prepare_replacement_gather_order()?
++                } else {
++                    None
++                };
+                 let record_count = if let Some(count) = replacement {
+                     count
+                 } else if sparse {
+@@ -1892,17 +2041,57 @@ impl TextEngine {
+                                 .ok_or(EngineError::ResultTooLarge)
+                         })?
+                 };
++                let capability_set = CapabilitySetId(request.capability_set);
++                let direct_eligible =
++                    sparse && request.compositing_independent == planner.compositing_independent;
++                #[cfg(test)]
++                if direct_eligible {
++                    super::work_attribution::record(|work| work.direct_admission_attempts += 1);
++                }
++                let direct_admitted = direct_eligible
++                    && direct_candidate_admissible(
++                        planner,
++                        gather,
++                        codec,
++                        capability_set,
++                        font_bindings,
++                    );
++                #[cfg(test)]
++                if direct_eligible && !direct_admitted {
++                    super::work_attribution::record(|work| work.direct_admission_rejections += 1);
++                }
++                #[cfg(test)]
++                if direct_admitted {
++                    super::work_attribution::record(|work| work.direct_candidate_attempts += 1);
++                }
++                let direct_complete = direct_admitted
++                    && build_direct_candidate(
++                        direct_candidate,
++                        gather,
++                        planner,
++                        codec,
++                        capability_set,
++                        font_bindings,
++                    );
++                #[cfg(test)]
++                if direct_admitted {
++                    super::work_attribution::record(|work| {
++                        work.direct_candidate_misses += usize::from(!direct_complete);
++                        work.direct_committed_preparations += usize::from(direct_complete);
++                    });
++                }
+                 *gather_cache = None;
+                 *prepared_gather_cache = None;
+-                let capability_set = CapabilitySetId(request.capability_set);
+                 // Decoration rows bypass the retained gather cursor arithmetic, so a retained plan with
+                 // any decorated paragraph must rebuild from a reset workspace; entering the
+                 // retained path and falling back mid-append would stack fresh rows onto the
+                 // previous update's buffers.
+                 let ranges_reusable =
+                     sparse || replacement.is_some() || !planner_has_decorations(planner);
+-                let attempted_retained =
+-                    cached_gather == Some(current_gather_key) && ranges_reusable;
++                let attempted_retained = cached_gather.is_some_and(|cache| {
++                    cache.key == current_gather_key && cache.columns == GatherColumns::Packed
++                }) && ranges_reusable
++                    && !direct_complete;
+                 let retained = attempted_retained
+                     && gather
+                         .begin_retained(codec, record_count)
+@@ -1919,7 +2108,23 @@ impl TextEngine {
+                         replacement.is_some(),
+                     )?;
+                 }
+-                if !retained {
++                if !retained && !direct_complete {
++                    if cached_gather
++                        .is_some_and(|cache| cache.columns == GatherColumns::MetadataOnly)
++                    {
++                        // This key previously certified every declared source domain. A newly
++                        // incomplete domain cannot be reconstructed from metadata; invalidate
++                        // rather than turning a narrow legacy success into a cold gather error.
++                        if !metadata_declared_sources_total(
++                            planner,
++                            codec,
++                            capability_set,
++                            font_bindings,
++                        ) {
++                            return Err(EngineError::InvalidRequest);
++                        }
++                        gather.take_field_capacity_from(direct_candidate);
++                    }
+                     gather.begin(codec, record_count).map_err(gather_error)?;
+                     append_planner_gather(
+                         gather,
+@@ -1934,7 +2139,9 @@ impl TextEngine {
+                 }
+                 #[cfg(test)]
+                 super::work_attribution::record(|work| {
+-                    if retained && sparse {
++                    if direct_complete {
++                        // Direct preparation has its own admission and operand counters.
++                    } else if retained && sparse {
+                         work.prepare_retained_sparse_modes += 1;
+                     } else if retained && replacement.is_some() {
+                         work.prepare_retained_replacement_modes += 1;
+@@ -1945,13 +2152,19 @@ impl TextEngine {
+                     work.gather_output_selected_rows += gather.view().plan_input().glyphs.len();
+                     work.prepared_positioned_source_rows += record_count;
+                 });
+-                planner.gathered_source_count = if ranges_reusable {
++                planner.gathered_source_count = if ranges_reusable || direct_complete {
+                     Some(record_count)
+                 } else {
+                     None
+                 };
+                 let output_scope = if sparse {
+-                    gather.changed_output_intervals().map(|ranges| {
++                    (if direct_complete {
++                        &*direct_candidate
++                    } else {
++                        &*gather
++                    })
++                    .changed_output_intervals()
++                    .map(|ranges| {
+                         super::render_plan_compiler::OwnedOutputScope {
+                             previous_revision: planner.revision.root,
+                             scope: super::ordered_plan::RetainedOutputScope::ChangedIntervals(
+@@ -1966,7 +2179,7 @@ impl TextEngine {
+                     gather
+                         .correspondence()
+                         .first()
+-                        .filter(|_| retained)
++                        .filter(|_| retained && !direct_complete)
+                         .map(|_| super::render_plan_compiler::OwnedOutputScope {
+                             previous_revision: planner.revision.root,
+                             scope: super::ordered_plan::RetainedOutputScope::Replacement(
+@@ -1974,9 +2187,18 @@ impl TextEngine {
+                             ),
+                         })
+                 });
+-                let gathered = gather.view();
++                let gathered = if direct_complete {
++                    direct_candidate.view()
++                } else {
++                    gather.view()
++                };
+                 let mut plan_input = gathered.plan_input();
+                 plan_input.order_independent = request.compositing_independent;
++                let direct_source = direct_complete.then_some(DirectOperandSource {
++                    locators: direct_candidate.direct_locators(),
++                    paragraphs: &planner.paragraphs,
++                    bindings: font_bindings,
++                });
+                 planner
+                     .plan
+                     .prepare_session(
+@@ -1993,18 +2215,29 @@ impl TextEngine {
+                     .map_err(plan_error)?;
+                 planner
+                     .plan
+-                    .prepare_owned(
++                    .prepare_owned_with_source(
+                         codec,
+                         CapabilitySetId(request.capability_set),
+                         plan_input,
++                        direct_source.as_ref(),
+                         checkpoint,
+                         publication_generation,
+                         request.acknowledged_publication_generation,
+                         output_scope,
+-                        gather.bounds_changed(),
++                        if direct_complete {
++                            direct_candidate.bounds_changed()
++                        } else {
++                            gather.bounds_changed()
++                        },
+                     )
+                     .map_err(plan_error)?;
+                 gather_output_matches_next = true;
++                next_gather_columns = if direct_complete {
++                    GatherColumns::MetadataOnly
++                } else {
++                    GatherColumns::Packed
++                };
++                *direct_candidate_ready = direct_complete;
+             }
+             let include_layout_inspection =
+                 request.semantic_view_mask & super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION != 0;
+@@ -2069,7 +2302,10 @@ impl TextEngine {
+         preflight_edit_scratch.clear();
+         planner.preflight_edit_scratch = preflight_edit_scratch;
+         if gather_output_matches_next {
+-            *prepared_gather_cache = Some(next_gather_key);
++            *prepared_gather_cache = Some(GatherCache {
++                key: next_gather_key,
++                columns: next_gather_columns,
++            });
+         }
+         Ok(PreparedUpdate {
+             root_id: request.root_id,
+@@ -2287,11 +2523,22 @@ impl TextEngine {
+         });
+         planner.revision = prepared.next;
+         planner.published_preparation_revision = prepared.preparation_revision;
+-        if self.prepared_gather_cache == Some(next_gather_key) {
+-            self.gather_cache = Some(next_gather_key);
++        if let Some(cache) = self
++            .prepared_gather_cache
++            .filter(|cache| cache.key == next_gather_key)
++        {
++            if self.direct_candidate_ready {
++                core::mem::swap(&mut self.gather, &mut self.direct_candidate);
++            }
++            self.direct_candidate_ready = false;
++            self.gather_cache = Some(cache);
+             self.prepared_gather_cache = None;
+-        } else if self.gather_cache == Some(previous_gather_key) {
+-            self.gather_cache = Some(next_gather_key);
++        } else if self
++            .gather_cache
++            .is_some_and(|cache| cache.key == previous_gather_key)
++            && let Some(cache) = self.gather_cache.as_mut()
++        {
++            cache.key = next_gather_key;
+         }
+         Ok(CommittedUpdate {
+             root_id: prepared.root_id,
+@@ -2708,6 +2955,211 @@ fn append_planner_gather(
+     Ok(())
+ }
+ 
++/// Source-totality and old/new ordinal geometry are proved without touching the gather cache.
++/// This deliberately overapproximates all registered binding domains for this exact codec key.
++fn direct_candidate_admissible(
++    planner: &PlannerState,
++    previous: &CodecGatherWorkspace,
++    codec: &ValidatedCodec,
++    capability_set: CapabilitySetId,
++    font_bindings: &[RegisteredFontBinding],
++) -> bool {
++    if planner.lifecycle_changed
++        || planner.order_sort_scratch.len() != planner.active_order().len()
++        || font_bindings.is_empty()
++    {
++        return false;
++    }
++    let mut source = 0usize;
++    let mut record = 0usize;
++    for (order_index, ordered) in planner.active_order().iter().enumerate() {
++        if planner
++            .order_sort_scratch
++            .get(order_index)
++            .is_none_or(|entry| {
++                usize::try_from(entry.0).ok() != Some(order_index) || entry.1 != ordered.id
++            })
++        {
++            return false;
++        }
++        let Some(paragraph) = planner.paragraph(ordered.id) else {
++            return false;
++        };
++        let positioned = paragraph.state.positioned.active();
++        let Some(range) = paragraph.gather_range else {
++            return false;
++        };
++        // The direct candidate visits every source. Admit only when the original packed
++        // retained route would visit every source too; narrow island work stays packed.
++        let owner_scanned = paragraph.positioned_changed
++            || paragraph.preparation_changed_since_publication
++            || planner
++                .pending_preparation_ids
++                .binary_search(&ordered.id)
++                .is_ok();
++        if !owner_scanned {
++            return false;
++        }
++        if (paragraph.positioned_changed || paragraph.preparation_changed_since_publication)
++            && let Some(intervals) = positioned.unpublished_source_intervals()
++            && (intervals.len() != 1 || intervals[0] != (0..positioned.glyphs().len()))
++        {
++            return false;
++        }
++        if paragraph.pending_remove
++            || !positioned.decorations().is_empty()
++            || range.source_start() != source
++            || range.record_start() != record
++            || range.source_count() != positioned.glyphs().len()
++            || positioned.semantic_change_masks().len() != positioned.glyphs().len()
++        {
++            return false;
++        }
++        source = range.source_end();
++        record = range.record_end();
++        let semantic_f32 = positioned.semantic_f32();
++        let semantic_u32 = positioned.semantic_u32();
++        let input = LayoutPlanInput {
++            transform_id: ordered.id,
++            glyphs: positioned.glyphs(),
++            semantic_glyphs: positioned.semantic_glyphs(),
++            placement_translations: positioned.placement_translations(),
++            semantic_change_masks: positioned.semantic_change_masks(),
++            semantic_f32: &semantic_f32,
++            semantic_u32: &semantic_u32,
++        };
++        if !direct_owner_sources_total(input, codec, capability_set, font_bindings) {
++            return false;
++        }
++    }
++    source == previous.source_count() && record == previous.view().plan_input().glyphs.len()
++}
++
++fn direct_owner_sources_total(
++    input: LayoutPlanInput<'_>,
++    codec: &ValidatedCodec,
++    capability_set: CapabilitySetId,
++    font_bindings: &[RegisteredFontBinding],
++) -> bool {
++    font_bindings.iter().all(|registered| {
++        let binding = &registered.binding;
++        codec
++            .program(
++                capability_set,
++                binding.technique(),
++                binding.program_variant(),
++            )
++            .is_some_and(|program| {
++                direct_binding_sources_total(binding, program)
++                    && direct_semantic_sources_total(input, program)
++            })
++    })
++}
++
++fn metadata_declared_sources_total(
++    planner: &PlannerState,
++    codec: &ValidatedCodec,
++    capability_set: CapabilitySetId,
++    font_bindings: &[RegisteredFontBinding],
++) -> bool {
++    planner.active_order().iter().all(|ordered| {
++        let Some(paragraph) = planner.paragraph(ordered.id) else {
++            return false;
++        };
++        let positioned = paragraph.state.positioned.active();
++        let semantic_f32 = positioned.semantic_f32();
++        let semantic_u32 = positioned.semantic_u32();
++        direct_owner_sources_total(
++            LayoutPlanInput {
++                transform_id: ordered.id,
++                glyphs: positioned.glyphs(),
++                semantic_glyphs: positioned.semantic_glyphs(),
++                placement_translations: positioned.placement_translations(),
++                semantic_change_masks: positioned.semantic_change_masks(),
++                semantic_f32: &semantic_f32,
++                semantic_u32: &semantic_u32,
++            },
++            codec,
++            capability_set,
++            font_bindings,
++        )
++    })
++}
++
++fn build_direct_candidate(
++    candidate: &mut CodecGatherWorkspace,
++    previous: &CodecGatherWorkspace,
++    planner: &PlannerState,
++    codec: &ValidatedCodec,
++    capability_set: CapabilitySetId,
++    font_bindings: &[RegisteredFontBinding],
++) -> bool {
++    let record_count = previous.view().plan_input().glyphs.len();
++    if candidate.begin_direct(record_count).is_err() {
++        return false;
++    }
++    for ordered in planner.active_order() {
++        #[cfg(test)]
++        super::work_attribution::record(|work| work.gather_paragraph_visits += 1);
++        let Ok(paragraph_index) = planner
++            .paragraphs
++            .binary_search_by_key(&ordered.id, |paragraph| paragraph.id)
++        else {
++            return false;
++        };
++        let paragraph = &planner.paragraphs[paragraph_index];
++        let Some(old_range) = paragraph.gather_range else {
++            return false;
++        };
++        let positioned = paragraph.state.positioned.active();
++        let semantic_f32 = positioned.semantic_f32();
++        let semantic_u32 = positioned.semantic_u32();
++        let masks =
++            if paragraph.positioned_changed || paragraph.preparation_changed_since_publication {
++                positioned.semantic_change_masks()
++            } else {
++                &[][..]
++            };
++        let input = LayoutPlanInput {
++            transform_id: ordered.id,
++            glyphs: positioned.glyphs(),
++            semantic_glyphs: positioned.semantic_glyphs(),
++            placement_translations: positioned.placement_translations(),
++            semantic_change_masks: masks,
++            semantic_f32: &semantic_f32,
++            semantic_u32: &semantic_u32,
++        };
++        let Ok(paragraph_index) = u32::try_from(paragraph_index) else {
++            return false;
++        };
++        match candidate.append_direct_from(
++            previous,
++            old_range,
++            paragraph_index,
++            codec,
++            capability_set,
++            input,
++            |handle| {
++                font_bindings
++                    .iter()
++                    .enumerate()
++                    .find(|(_, registered)| registered.handle == handle)
++                    .and_then(|(index, registered)| {
++                        u32::try_from(index)
++                            .ok()
++                            .map(|index| (index, &registered.binding))
++                    })
++            },
++        ) {
++            Ok(true) => {}
++            Ok(false) | Err(_) => return false,
++        }
++    }
++    candidate.source_count() == previous.source_count()
++        && candidate.direct_locators().len() == record_count
++        && candidate.view().plan_input().glyphs.len() == record_count
++}
++
+ fn planner_gather_owners(
+     planner: &PlannerState,
+ ) -> impl Iterator<Item = Result<RetainedGatherOwner<'_>, GatherError>> + Clone {
+@@ -12781,64 +13233,481 @@ mod tests {
+     }
+ 
+     #[test]
+-    fn dense_inter_setter_publication_attributes_actual_work() {
++    fn direct_codec_scalar_tails_match_independent_cold_bytes() {
+         const INTER: &[u8] =
+             include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
+-        const OWNERS: u32 = 1_024;
+-        let alpha: Vec<Vec<u16>> = (0..OWNERS)
+-            .map(|index| utf16(&alloc::format!("alpha {index:04}")))
+-            .collect();
+-        let bravo: Vec<Vec<u16>> = (0..OWNERS)
+-            .map(|index| utf16(&alloc::format!("bravo {index:04}")))
+-            .collect();
+-        assert!(alpha.iter().chain(&bravo).all(|text| text.len() == 10));
+-        let style = root_style_bytes_for_text(7, 10);
+-        let mut template = root_geometry_bytes();
+-        let constraint = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+-        let region = constraint + abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
+-        write_f32(
+-            &mut template,
+-            constraint + abi::ENGINE_CONSTRAINT_WIDTH,
+-            160.0,
+-        );
+-        write_f32(&mut template, region + abi::ENGINE_REGION_INLINE_END, 160.0);
+-        write_f32(
+-            &mut template,
+-            region + abi::ENGINE_REGION_CLIP_INLINE_END,
+-            160.0,
+-        );
+-        let (mut engine, mut shaper) = shaped_engine_with_font_styles_geometry_and_extents(
+-            "alpha 0000",
+-            INTER,
+-            2_937,
+-            &style,
+-            1,
+-            Some((&template, 0)),
+-            true,
+-        );
+-        let lifecycle_records: Vec<_> = (2..=OWNERS)
+-            .map(|id| (PARAGRAPH_MUTATION_UPSERT, id, id - 1))
+-            .collect();
+-        let text_records: Vec<_> = (2..=OWNERS)
+-            .map(|id| (id, 0, 0, alpha[(id - 1) as usize].as_slice()))
+-            .collect();
+-        let style_records: Vec<_> = (2..=OWNERS).map(|id| (id, 0)).collect();
+-        let lifecycle = paragraph_mutation_bytes(&lifecycle_records);
+-        let texts = paragraph_text_mutation_bytes(&text_records);
+-        let mut styles = paragraph_root_style_bytes(&style_records);
+-        let style_stride = abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize;
+-        for index in 0..style_records.len() {
+-            write_u32(
+-                &mut styles,
+-                ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize
+-                    + index * style_stride
+-                    + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+-                10,
+-            );
+-        }
+-        let header = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+-        let constraint_stride = abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
+-        let region_offset = header + OWNERS as usize * constraint_stride;
++        for (before, after) in [
++            ("abcde", "vwxyz"),
++            ("abcdef", "uvwxyz"),
++            ("abcdefg", "tuvwxyz"),
++        ] {
++            let style = root_style_bytes_for_text(7, before.len() as u32);
++            let geometry = root_geometry_bytes();
++            let (mut engine, mut shaper) = shaped_engine_with_font_styles_geometry_and_extents(
++                before,
++                INTER,
++                2_937,
++                &style,
++                1,
++                Some((&geometry, 0)),
++                true,
++            );
++            let units = utf16(after);
++            let bytes = text_mutation_bytes(&[(0, before.len() as u32, units.as_slice())]);
++            let mut edit = update(1, 1, 1);
++            edit.text_mutations =
++                parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
++            let measured = engine
++                .measure_paragraph_with_shaper(&mut shaper, edit, 1)
++                .unwrap();
++            engine.commit_measure(measured).unwrap();
++            let mut publication = update(1, 1, 1);
++            publication.limits.max_output_bytes = 1 << 20;
++            super::super::work_attribution::reset();
++            let prepared = engine
++                .prepare_update_with_shaper(&mut shaper, publication, 2)
++                .unwrap();
++            let work = super::super::work_attribution::snapshot();
++            assert_eq!(work.direct_committed_preparations, 1, "{after}");
++            assert_eq!(work.direct_selected_rows, after.len(), "{after}");
++            assert_eq!(work.codec_eligible_scalar_tails, after.len() % 4, "{after}");
++            assert_eq!(work.direct_f32_operand_loads, after.len(), "{after}");
++            assert_gather_matches_full(&mut engine);
++            engine.commit_update(prepared).unwrap();
++            assert_gather_matches_full(&mut engine);
++            let cold_style = root_style_bytes_for_text(7, after.len() as u32);
++            let (cold, _) = shaped_engine_with_font_styles_geometry_and_extents(
++                after,
++                INTER,
++                2_937,
++                &cold_style,
++                1,
++                Some((&geometry, 0)),
++                true,
++            );
++            let warm_bytes = engine
++                .planners
++                .get(&4)
++                .unwrap()
++                .plan
++                .buffer_bytes(1)
++                .unwrap();
++            let cold_bytes = cold.planners.get(&4).unwrap().plan.buffer_bytes(1).unwrap();
++            assert_eq!(
++                warm_bytes, cold_bytes,
++                "direct scalar tail physical bytes for {after}"
++            );
++            assert_visible_shape_equal(
++                engine
++                    .planners
++                    .get(&4)
++                    .unwrap()
++                    .first_paragraph_state()
++                    .unwrap(),
++                cold.planners
++                    .get(&4)
++                    .unwrap()
++                    .first_paragraph_state()
++                    .unwrap(),
++                "direct scalar tail shape",
++            );
++        }
++    }
++
++    #[test]
++    fn direct_zero_mask_translated_bounds_reserve_exact_output_intervals() {
++        const INTER: &[u8] =
++            include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
++        let text = "abcde";
++        let mut style = root_style_bytes_for_text(7, text.len() as u32);
++        let geometry = multiline_root_geometry_bytes();
++        let (mut engine, mut shaper) = shaped_engine_with_font_styles_geometry_and_extents(
++            text,
++            INTER,
++            2_937,
++            &style,
++            1,
++            Some((&geometry, 0)),
++            true,
++        );
++        write_f32(
++            &mut style,
++            ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize + abi::ENGINE_STYLE_MUTATION_LINE_HEIGHT,
++            2.0,
++        );
++        let mut reflow = update(1, 1, 1);
++        reflow.limits.max_output_bytes = 1 << 20;
++        reflow.style_mutations =
++            parse_style_mutations(&style, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
++        let measured = engine
++            .measure_paragraph_with_shaper(&mut shaper, reflow, 1)
++            .unwrap();
++        engine.commit_measure(measured).unwrap();
++        let positioned = engine
++            .planners
++            .get(&4)
++            .unwrap()
++            .first_paragraph_state()
++            .unwrap()
++            .positioned
++            .active();
++        // None is the producer's full-source scan certificate; admission below also
++        // proves the direct candidate visited every source in this owner.
++        assert_eq!(positioned.unpublished_source_intervals(), None);
++        assert!(
++            positioned
++                .semantic_change_masks()
++                .iter()
++                .all(|mask| *mask == 0)
++        );
++        let glyph_count = positioned.glyphs().len();
++
++        let mut publication = update(1, 1, 1);
++        publication.limits.max_output_bytes = 1 << 20;
++        super::super::work_attribution::reset();
++        let prepared = engine
++            .prepare_update_with_shaper(&mut shaper, publication, 2)
++            .unwrap();
++        let work = super::super::work_attribution::snapshot();
++        assert_eq!(work.direct_committed_preparations, 1, "{work:?}");
++        assert_eq!(work.direct_source_rows, glyph_count);
++        assert_eq!(work.direct_unreserved_output_range_pushes, 0, "{work:?}");
++        assert!(engine.direct_candidate_ready);
++        let output_intervals = engine.direct_candidate.changed_output_intervals().unwrap();
++        assert_eq!(output_intervals, core::slice::from_ref(&(0..glyph_count)));
++        assert!(
++            engine
++                .direct_candidate
++                .view()
++                .plan_input()
++                .semantic_change_masks
++                .iter()
++                .all(|mask| *mask == 0)
++        );
++        assert_gather_matches_full(&mut engine);
++        engine.commit_update(prepared).unwrap();
++        let (cold, _) = shaped_engine_with_font_styles_geometry_and_extents(
++            text,
++            INTER,
++            2_937,
++            &style,
++            1,
++            Some((&geometry, 0)),
++            true,
++        );
++        assert_eq!(
++            engine
++                .planners
++                .get(&4)
++                .unwrap()
++                .plan
++                .buffer_bytes(1)
++                .unwrap(),
++            cold.planners.get(&4).unwrap().plan.buffer_bytes(1).unwrap()
++        );
++        assert_eq!(
++            engine.gather_cache.unwrap().columns,
++            GatherColumns::MetadataOnly
++        );
++        engine
++            .register_codec(10, validated_codec(TechniqueId(1)))
++            .unwrap();
++        assert!(engine.gather_cache.is_none());
++        for (revision, line_height) in [(2, 3.0), (3, 4.0)] {
++            write_f32(
++                &mut style,
++                ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize + abi::ENGINE_STYLE_MUTATION_LINE_HEIGHT,
++                line_height,
++            );
++            let mut edit = update(revision, revision, revision);
++            edit.style_mutations =
++                parse_style_mutations(&style, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
++            let measured = engine
++                .measure_paragraph_with_shaper(&mut shaper, edit, 1)
++                .unwrap();
++            engine.commit_measure(measured).unwrap();
++            let prepared = engine
++                .prepare_update_with_shaper(
++                    &mut shaper,
++                    update(revision, revision, revision),
++                    revision + 1,
++                )
++                .unwrap();
++            engine.commit_update(prepared).unwrap();
++        }
++        assert_eq!(
++            engine.gather_cache.unwrap().columns,
++            GatherColumns::MetadataOnly
++        );
++        engine
++            .register_font_binding(43, 1, 2_937, render_binding(2_937, 1))
++            .unwrap();
++        assert!(engine.gather_cache.is_none());
++    }
++
++    #[test]
++    fn late_topology_miss_from_packed_and_metadata_matches_cold() {
++        const INTER: &[u8] =
++            include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
++        const BEFORE: &str = "abcde";
++        let geometry = multiline_root_geometry_bytes();
++        for metadata_predecessor in [false, true] {
++            let mut style = root_style_bytes_for_text(7, BEFORE.len() as u32);
++            let (mut engine, mut shaper) = shaped_engine_with_font_styles_geometry_and_extents(
++                BEFORE,
++                INTER,
++                2_937,
++                &style,
++                1,
++                Some((&geometry, 0)),
++                true,
++            );
++            if metadata_predecessor {
++                write_f32(
++                    &mut style,
++                    ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize
++                        + abi::ENGINE_STYLE_MUTATION_LINE_HEIGHT,
++                    2.0,
++                );
++                let mut edit = update(1, 1, 1);
++                edit.style_mutations =
++                    parse_style_mutations(&style, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
++                let measured = engine
++                    .measure_paragraph_with_shaper(&mut shaper, edit, 1)
++                    .unwrap();
++                engine.commit_measure(measured).unwrap();
++                let prepared = engine
++                    .prepare_update_with_shaper(&mut shaper, update(1, 1, 1), 2)
++                    .unwrap();
++                assert!(engine.direct_candidate_ready);
++                engine.commit_update(prepared).unwrap();
++                assert!(engine.gather.is_metadata_only());
++            }
++            let old_bytes = engine
++                .planners
++                .get(&4)
++                .unwrap()
++                .plan
++                .buffer_bytes(1)
++                .unwrap()
++                .to_vec();
++            let previous = u32::from(metadata_predecessor);
++            let header = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
++            let stride = abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize;
++            let mut overlay = vec![0; header + stride];
++            let record = &mut overlay[header..];
++            record[abi::ENGINE_STYLE_MUTATION_OPCODE] = STYLE_MUTATION_UPSERT;
++            write_u32(record, abi::ENGINE_STYLE_MUTATION_STYLE_ID, 2);
++            write_u32(record, abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID, 1);
++            write_u32(record, abi::ENGINE_STYLE_MUTATION_CASCADE_ORDER, 1);
++            write_u32(
++                record,
++                abi::ENGINE_STYLE_MUTATION_FIELD_MASK,
++                STYLE_FIELD_MATERIAL,
++            );
++            write_u32(record, abi::ENGINE_STYLE_MUTATION_TEXT_START, 4);
++            write_u32(record, abi::ENGINE_STYLE_MUTATION_TEXT_END, 5);
++            write_u32(record, abi::ENGINE_STYLE_MUTATION_MATERIAL_ID, 17);
++            let mut edit = update(previous + 1, previous + 1, previous + 1);
++            edit.style_mutations =
++                parse_style_mutations(&overlay, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
++            let measured = engine
++                .measure_paragraph_with_shaper(&mut shaper, edit, 1)
++                .unwrap();
++            engine.commit_measure(measured).unwrap();
++            let mut publication = update(previous + 1, previous + 1, previous + 1);
++            publication.limits.max_output_bytes = 1 << 20;
++            super::super::work_attribution::reset();
++            let prepared = engine
++                .prepare_update_with_shaper(&mut shaper, publication, previous + 3)
++                .unwrap();
++            let work = super::super::work_attribution::snapshot();
++            assert_eq!(
++                work.direct_committed_preparations, 0,
++                "{metadata_predecessor}: {work:?}"
++            );
++            assert_eq!(
++                work.direct_candidate_misses, 1,
++                "{metadata_predecessor}: {work:?}"
++            );
++            assert_eq!(
++                engine
++                    .planners
++                    .get(&4)
++                    .unwrap()
++                    .plan
++                    .buffer_bytes(1)
++                    .unwrap(),
++                old_bytes
++            );
++            assert_gather_matches_full(&mut engine);
++            engine.commit_update(prepared).unwrap();
++            assert!(!engine.gather.is_metadata_only());
++            let mut cold_styles = style.clone();
++            cold_styles.extend_from_slice(&overlay[header..]);
++            let (cold, _) = shaped_engine_with_font_styles_geometry_and_extents(
++                BEFORE,
++                INTER,
++                2_937,
++                &cold_styles,
++                2,
++                Some((&geometry, 0)),
++                true,
++            );
++            assert_eq!(
++                engine
++                    .planners
++                    .get(&4)
++                    .unwrap()
++                    .plan
++                    .buffer_bytes(1)
++                    .unwrap(),
++                cold.planners.get(&4).unwrap().plan.buffer_bytes(1).unwrap(),
++                "metadata predecessor: {metadata_predecessor}"
++            );
++        }
++    }
++
++    #[test]
++    fn rejected_direct_delivery_retries_as_cold_checkpoint() {
++        const INTER: &[u8] =
++            include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
++        let text = "abcde";
++        let mut style = root_style_bytes_for_text(7, text.len() as u32);
++        let geometry = multiline_root_geometry_bytes();
++        let (mut engine, mut shaper) = shaped_engine_with_font_styles_geometry_and_extents(
++            text,
++            INTER,
++            2_937,
++            &style,
++            1,
++            Some((&geometry, 0)),
++            true,
++        );
++        write_f32(
++            &mut style,
++            ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize + abi::ENGINE_STYLE_MUTATION_LINE_HEIGHT,
++            2.0,
++        );
++        let mut edit = update(1, 1, 1);
++        edit.style_mutations =
++            parse_style_mutations(&style, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
++        let measured = engine
++            .measure_paragraph_with_shaper(&mut shaper, edit, 1)
++            .unwrap();
++        engine.commit_measure(measured).unwrap();
++        let prepared = engine
++            .prepare_update_with_shaper(&mut shaper, update(1, 1, 1), 2)
++            .unwrap();
++        assert!(engine.direct_candidate_ready);
++        assert!(engine.prepared_plan(prepared).is_ok());
++        engine
++            .invalidate_after_publication_failure(prepared)
++            .unwrap();
++        assert_eq!(engine.root_revision(4), Err(EngineError::RootMissing));
++        assert!(!engine.direct_candidate_ready);
++        assert!(engine.gather_cache.is_none());
++        engine.reset_root(4).unwrap();
++        let units = utf16(text);
++        let text_bytes = text_mutation_bytes(&[(0, 0, &units)]);
++        let acknowledged = engine
++            .planners
++            .get(&4)
++            .unwrap()
++            .acknowledged_publication_generation;
++        let mut retry = update(0, 0, acknowledged);
++        retry.text_mutations =
++            parse_text_mutations(&text_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
++        retry.style_mutations =
++            parse_style_mutations(&style, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
++        retry.geometry = parse_root_geometry(&geometry, retry.limits);
++        let prepared = engine
++            .prepare_update_with_shaper(&mut shaper, retry, acknowledged + 1)
++            .unwrap();
++        assert!(prepared.checkpoint);
++        assert!(!engine.direct_candidate_ready);
++        engine.commit_update(prepared).unwrap();
++        assert_eq!(engine.gather_cache.unwrap().columns, GatherColumns::Packed);
++        let (cold, _) = shaped_engine_with_font_styles_geometry_and_extents(
++            text,
++            INTER,
++            2_937,
++            &style,
++            1,
++            Some((&geometry, 0)),
++            true,
++        );
++        assert_eq!(
++            engine
++                .planners
++                .get(&4)
++                .unwrap()
++                .plan
++                .buffer_bytes(1)
++                .unwrap(),
++            cold.planners.get(&4).unwrap().plan.buffer_bytes(1).unwrap()
++        );
++    }
++
++    #[test]
++    fn dense_inter_setter_publication_attributes_actual_work() {
++        const INTER: &[u8] =
++            include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
++        const OWNERS: u32 = 1_024;
++        let alpha: Vec<Vec<u16>> = (0..OWNERS)
++            .map(|index| utf16(&alloc::format!("alpha {index:04}")))
++            .collect();
++        let bravo: Vec<Vec<u16>> = (0..OWNERS)
++            .map(|index| utf16(&alloc::format!("bravo {index:04}")))
++            .collect();
++        assert!(alpha.iter().chain(&bravo).all(|text| text.len() == 10));
++        let style = root_style_bytes_for_text(7, 10);
++        let mut template = root_geometry_bytes();
++        let constraint = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
++        let region = constraint + abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
++        write_f32(
++            &mut template,
++            constraint + abi::ENGINE_CONSTRAINT_WIDTH,
++            160.0,
++        );
++        write_f32(&mut template, region + abi::ENGINE_REGION_INLINE_END, 160.0);
++        write_f32(
++            &mut template,
++            region + abi::ENGINE_REGION_CLIP_INLINE_END,
++            160.0,
++        );
++        let (mut engine, mut shaper) = shaped_engine_with_font_styles_geometry_and_extents(
++            "alpha 0000",
++            INTER,
++            2_937,
++            &style,
++            1,
++            Some((&template, 0)),
++            true,
++        );
++        let lifecycle_records: Vec<_> = (2..=OWNERS)
++            .map(|id| (PARAGRAPH_MUTATION_UPSERT, id, id - 1))
++            .collect();
++        let text_records: Vec<_> = (2..=OWNERS)
++            .map(|id| (id, 0, 0, alpha[(id - 1) as usize].as_slice()))
++            .collect();
++        let style_records: Vec<_> = (2..=OWNERS).map(|id| (id, 0)).collect();
++        let lifecycle = paragraph_mutation_bytes(&lifecycle_records);
++        let texts = paragraph_text_mutation_bytes(&text_records);
++        let mut styles = paragraph_root_style_bytes(&style_records);
++        let style_stride = abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize;
++        for index in 0..style_records.len() {
++            write_u32(
++                &mut styles,
++                ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize
++                    + index * style_stride
++                    + abi::ENGINE_STYLE_MUTATION_TEXT_END,
++                10,
++            );
++        }
++        let header = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
++        let constraint_stride = abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
++        let region_offset = header + OWNERS as usize * constraint_stride;
+         let mut geometry = vec![0; region_offset + abi::ENGINE_REGION_RECORD_SIZE as usize];
+         for id in 1..=OWNERS {
+             let offset = header + (id as usize - 1) * constraint_stride;
+@@ -12889,16 +13758,7 @@ mod tests {
+             let before_view = engine.gather.view();
+             let before_output = before_view.plan_input();
+             let before = before_output.glyphs.to_vec();
+-            let before_f32: Vec<Vec<u32>> = before_output
+-                .f32_fields
+-                .iter()
+-                .map(|field| field.iter().map(|value| value.to_bits()).collect())
+-                .collect();
+-            let before_u32: Vec<Vec<u32>> = before_output
+-                .u32_fields
+-                .iter()
+-                .map(|field| field.to_vec())
+-                .collect();
++            let (before_f32, before_u32) = gather_field_snapshot(&mut engine);
+             super::super::work_attribution::reset();
+             for id in 1..=OWNERS {
+                 let bytes = paragraph_text_mutation_bytes(&[(
+@@ -12934,6 +13794,13 @@ mod tests {
+             engine.commit_update(prepared).unwrap();
+             let published = super::super::work_attribution::snapshot();
+             assert_eq!(published.harfrust_calls, 0);
++            assert_eq!(published.direct_committed_preparations, 1);
++            assert_eq!(published.direct_source_rows, 10_240);
++            assert_eq!(published.direct_selected_rows, 10_240);
++            assert_eq!(published.direct_locator_bytes, 204_800);
++            assert_eq!(published.direct_elided_full_field_writes, 10_240);
++            assert_eq!(published.gather_f32_slots_written, 0);
++            assert_eq!(published.direct_f32_operand_loads, 10_240);
+             assert_eq!(published.recomposed_flow_lines, 0);
+             assert_eq!(published.newly_positioned_glyphs, 0);
+             assert_eq!(published.query_serialized_records, 0);
+@@ -12984,19 +13851,10 @@ mod tests {
+                 published.codec_repeated_scalar_tail_steps,
+                 published.codec_active_f32_store_group_operations
+             );
++            let (after_f32, after_u32) = gather_field_snapshot(&mut engine);
+             let after_view = engine.gather.view();
+             let after_output = after_view.plan_input();
+             let after = after_output.glyphs.to_vec();
+-            let after_f32: Vec<Vec<u32>> = after_output
+-                .f32_fields
+-                .iter()
+-                .map(|field| field.iter().map(|value| value.to_bits()).collect())
+-                .collect();
+-            let after_u32: Vec<Vec<u32>> = after_output
+-                .u32_fields
+-                .iter()
+-                .map(|field| field.to_vec())
+-                .collect();
+             let masks = after_output.semantic_change_masks;
+             assert_eq!(before.len(), OWNERS as usize * 10);
+             assert_eq!(after.len(), before.len());
+@@ -13131,11 +13989,163 @@ mod tests {
+             }
+             assert_gather_matches_full(&mut engine);
+         }
++
++        // A full-owner paint edit keeps every glyph/strike selection stable. This is the
++        // 1024-owner admission witness, unlike the text swaps above whose selection changes.
++        let paint_records: Vec<_> = (1..=OWNERS).map(|id| (id, 0)).collect();
++        let mut paint = paragraph_root_style_bytes(&paint_records);
++        for index in 0..OWNERS as usize {
++            let record = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize + index * style_stride;
++            write_u32(
++                &mut paint,
++                record + abi::ENGINE_STYLE_MUTATION_FIELD_MASK,
++                STYLE_FIELD_FONT_STACK
++                    | STYLE_FIELD_MATERIAL
++                    | STYLE_FIELD_FONT_SIZE
++                    | STYLE_FIELD_LINE_HEIGHT
++                    | STYLE_FIELD_RASTER_PIXEL_RATIO
++                    | STYLE_FIELD_FOREGROUND,
++            );
++            write_u32(&mut paint, record + abi::ENGINE_STYLE_MUTATION_TEXT_END, 10);
++            write_u32(
++                &mut paint,
++                record + abi::ENGINE_STYLE_MUTATION_FOREGROUND_RGBA,
++                0xff22_66ff,
++            );
++        }
++        let mut publication = update(4, 4, 4);
++        publication.limits = limits;
++        publication.style_mutations =
++            parse_style_mutations(&paint, ENGINE_UPDATE_REQUEST_HEADER_SIZE, OWNERS).unwrap();
++        super::super::work_attribution::reset();
++        let prepared = engine
++            .prepare_update_with_shaper(&mut shaper, publication, 5)
++            .unwrap();
++        let direct_work = super::super::work_attribution::snapshot();
++        assert_eq!(direct_work.direct_admission_attempts, 1);
++        assert_eq!(direct_work.direct_admission_rejections, 0);
++        assert_eq!(direct_work.direct_candidate_misses, 0);
++        assert_eq!(direct_work.direct_committed_preparations, 1);
++        assert_eq!(direct_work.direct_source_rows, 10_240);
++        assert_eq!(direct_work.direct_selected_rows, 10_240);
++        assert_eq!(direct_work.direct_locator_bytes, 204_800);
++        assert_eq!(direct_work.direct_elided_full_field_writes, 10_240);
++        assert_eq!(direct_work.direct_f32_operand_loads, 0);
++        assert_eq!(direct_work.gather_f32_slots_written, 0);
++        engine.commit_update(prepared).unwrap();
++        assert!(engine.gather.is_metadata_only());
++        assert_gather_matches_full(&mut engine);
++
++        // A later one-owner edit cannot use complete-owner direct mode. It must rebuild
++        // packed columns from current positioned sources, never reuse the invalid spare.
++        let changed = utf16("bravo 0000");
++        let text = paragraph_text_mutation_bytes(&[(1, 0, 10, changed.as_slice())]);
++        let mut narrow = update(5, 5, 5);
++        narrow.limits = limits;
++        narrow.text_mutations =
++            parse_text_mutations(&text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
++        super::super::work_attribution::reset();
++        let prepared = engine
++            .prepare_update_with_shaper(&mut shaper, narrow, 6)
++            .unwrap();
++        let narrow_work = super::super::work_attribution::snapshot();
++        assert_eq!(narrow_work.direct_committed_preparations, 0);
++        assert!(narrow_work.gather_f32_slots_written > 0);
++        engine.commit_update(prepared).unwrap();
++        assert!(!engine.gather.is_metadata_only());
++        assert_gather_matches_full(&mut engine);
++
++        for index in 0..OWNERS as usize {
++            let record = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize + index * style_stride;
++            write_u32(
++                &mut paint,
++                record + abi::ENGINE_STYLE_MUTATION_FOREGROUND_RGBA,
++                0xff44_aaff,
++            );
++        }
++        let mut full_again = update(6, 6, 6);
++        full_again.limits = limits;
++        full_again.style_mutations =
++            parse_style_mutations(&paint, ENGINE_UPDATE_REQUEST_HEADER_SIZE, OWNERS).unwrap();
++        super::super::work_attribution::reset();
++        let prepared = engine
++            .prepare_update_with_shaper(&mut shaper, full_again, 7)
++            .unwrap();
++        assert_eq!(
++            super::super::work_attribution::snapshot().direct_committed_preparations,
++            1
++        );
++        engine.commit_update(prepared).unwrap();
++        assert!(engine.gather.is_metadata_only());
++        assert_gather_matches_full(&mut engine);
++    }
++
++    fn gather_field_snapshot(engine: &mut TextEngine) -> (Vec<Vec<u32>>, Vec<Vec<u32>>) {
++        if !engine.gather.is_metadata_only() {
++            let input = engine.gather.view();
++            let input = input.plan_input();
++            return (
++                input
++                    .f32_fields
++                    .iter()
++                    .map(|field| field.iter().map(|value| value.to_bits()).collect())
++                    .collect(),
++                input
++                    .u32_fields
++                    .iter()
++                    .map(|field| field.to_vec())
++                    .collect(),
++            );
++        }
++        let mut full = CodecGatherWorkspace::default();
++        let codec = engine.codecs.get(&9).unwrap();
++        let planner = engine.planners.get_mut(&4).unwrap();
++        let ranges: Vec<_> = planner
++            .paragraphs
++            .iter()
++            .map(|paragraph| paragraph.gather_range)
++            .collect();
++        full.begin(codec, engine.gather.view().plan_input().glyphs.len())
++            .unwrap();
++        append_planner_gather(
++            &mut full,
++            planner,
++            codec,
++            CapabilitySetId(1),
++            &engine.font_bindings,
++            false,
++            false,
++            false,
++        )
++        .unwrap();
++        for (paragraph, range) in planner.paragraphs.iter_mut().zip(ranges) {
++            paragraph.gather_range = range;
++        }
++        let view = full.view();
++        let input = view.plan_input();
++        (
++            input
++                .f32_fields
++                .iter()
++                .map(|field| field.iter().map(|value| value.to_bits()).collect())
++                .collect(),
++            input
++                .u32_fields
++                .iter()
++                .map(|field| field.to_vec())
++                .collect(),
++        )
+     }
+ 
+     fn assert_gather_matches_full(engine: &mut TextEngine) {
+-        let warm = engine.gather.view();
++        let workspace = if engine.direct_candidate_ready {
++            &engine.direct_candidate
++        } else {
++            &engine.gather
++        };
++        let warm = workspace.view();
+         let warm = warm.plan_input();
++        let metadata_only = workspace.is_metadata_only();
+         let glyphs = warm.glyphs.to_vec();
+         let placements = warm.placement_slots.to_vec();
+         let f32_fields: Vec<_> = warm.f32_fields.iter().map(|field| field.to_vec()).collect();
+@@ -13255,13 +14265,53 @@ mod tests {
+         {
+             assert_eq!(*actual, expected, "placement slot at record {index}");
+         }
+-        assert_eq!(input.f32_fields.len(), f32_fields.len());
+-        assert_eq!(input.u32_fields.len(), u32_fields.len());
+-        for (field, expected) in input.f32_fields.iter().zip(f32_fields) {
+-            assert_eq!(*field, expected);
+-        }
+-        for (field, expected) in input.u32_fields.iter().zip(u32_fields) {
+-            assert_eq!(*field, expected);
++        if metadata_only {
++            assert!(f32_fields.is_empty() && u32_fields.is_empty());
++            let source = DirectOperandSource {
++                locators: workspace.direct_locators(),
++                paragraphs: &planner.paragraphs,
++                bindings: &engine.font_bindings,
++            };
++            for (row_index, locator) in source.locators.iter().enumerate() {
++                let row = source.row(row_index).unwrap();
++                let binding = &engine.font_bindings[locator.binding_index as usize].binding;
++                let program = codec
++                    .program(
++                        CapabilitySetId(1),
++                        binding.technique(),
++                        binding.program_variant(),
++                    )
++                    .unwrap();
++                for (field, descriptor) in program.inputs[..usize::from(program.f32_input_count)]
++                    .iter()
++                    .enumerate()
++                {
++                    assert_eq!(
++                        row.f32(*descriptor).unwrap(),
++                        input.f32_fields[field][row_index].to_bits(),
++                        "direct f32 row {row_index} field {field}"
++                    );
++                }
++                for (field, descriptor) in program.inputs[usize::from(program.f32_input_count)..]
++                    .iter()
++                    .enumerate()
++                {
++                    assert_eq!(
++                        row.u32(*descriptor).unwrap(),
++                        input.u32_fields[field][row_index],
++                        "direct u32 row {row_index} field {field}"
++                    );
++                }
++            }
++        } else {
++            assert_eq!(input.f32_fields.len(), f32_fields.len());
++            assert_eq!(input.u32_fields.len(), u32_fields.len());
++            for (field, expected) in input.f32_fields.iter().zip(f32_fields) {
++                assert_eq!(*field, expected);
++            }
++            for (field, expected) in input.u32_fields.iter().zip(u32_fields) {
++                assert_eq!(*field, expected);
++            }
+         }
+     }
+ 
+@@ -14649,8 +15699,12 @@ mod tests {
+             .prepare_update_with_shaper(&mut shaper, publication, 2)
+             .unwrap();
+         let work = super::super::work_attribution::snapshot();
+-        let dirty_records = engine
+-            .gather
++        let workspace = if engine.direct_candidate_ready {
++            &engine.direct_candidate
++        } else {
++            &engine.gather
++        };
++        let dirty_records = workspace
+             .view()
+             .plan_input()
+             .semantic_change_masks
+@@ -14658,9 +15712,12 @@ mod tests {
+             .filter(|mask| **mask != 0)
+             .count();
+         assert!(dirty_records > 0 && dirty_records < desired.len() / 2);
++        assert_eq!(
++            work.direct_committed_preparations, 0,
++            "narrow source scope must stay packed"
++        );
+         assert_eq!(work.gather_glyph_visits, source_visits, "{work:?}");
+-        let output_visits = engine
+-            .gather
++        let output_visits = workspace
+             .changed_output_intervals()
+             .unwrap()
+             .iter()
+diff --git a/packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs b/packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs
+index e55426cb..150e4816 100644
+--- a/packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs
++++ b/packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs
+@@ -141,6 +141,17 @@ fn add_work(total: &mut Work, next: Work) {
+         gather_u32_slots_written,
+         gather_f32_changed_slots,
+         gather_u32_changed_slots,
++        direct_admission_attempts,
++        direct_admission_rejections,
++        direct_candidate_attempts,
++        direct_candidate_misses,
++        direct_committed_preparations,
++        direct_source_rows,
++        direct_selected_rows,
++        direct_locator_bytes,
++        direct_elided_full_field_writes,
++        direct_f32_operand_loads,
++        direct_u32_operand_loads,
+         retained_owner_admissions,
+         gather_output_source_rows,
+         gather_output_selected_rows,
+@@ -282,6 +293,19 @@ fn work_json(work: Work, count: usize, wire: WireTotals, phase: &str, kind: &str
+             "generalRetainedMaskBitCounts": work.gather_mask_bit_counts,
+             "generalRetainedFullMasks": work.gather_all_masks,
+             "generalRetainedIdentityMismatches": work.gather_identity_mismatches},
++        "direct": {
++            "admissionAttempts": work.direct_admission_attempts,
++            "admissionRejections": work.direct_admission_rejections,
++            "candidateAttempts": work.direct_candidate_attempts,
++            "candidateMisses": work.direct_candidate_misses,
++            "completedPreparations": work.direct_committed_preparations,
++            "visitedSourceRows": work.direct_source_rows,
++            "selectedRows": work.direct_selected_rows,
++            "locatorBytes": work.direct_locator_bytes,
++            "elidedFullFieldWrites": work.direct_elided_full_field_writes,
++            "f32OperandLoads": work.direct_f32_operand_loads,
++            "u32OperandLoads": work.direct_u32_operand_loads
++        },
+         "codec": {"executedRecords": work.codec_executed_records,
+             "successfulRuns": work.codec_successful_runs,
+             "runHistogram": work.codec_run_count_bins.iter().filter(|bin| bin.invocations != 0)
+diff --git a/packages/glyph/rust/shaper/src/engine/work_attribution.rs b/packages/glyph/rust/shaper/src/engine/work_attribution.rs
+index 9e00ba9a..c0621aae 100644
+--- a/packages/glyph/rust/shaper/src/engine/work_attribution.rs
++++ b/packages/glyph/rust/shaper/src/engine/work_attribution.rs
+@@ -72,6 +72,19 @@ pub(crate) struct Work {
+     pub gather_u32_slots_written: usize,
+     pub gather_f32_changed_slots: usize,
+     pub gather_u32_changed_slots: usize,
++    pub direct_admission_attempts: usize,
++    pub direct_admission_rejections: usize,
++    pub direct_candidate_attempts: usize,
++    pub direct_candidate_misses: usize,
++    pub direct_committed_preparations: usize,
++    pub direct_source_rows: usize,
++    pub direct_selected_rows: usize,
++    pub direct_locator_bytes: usize,
++    pub direct_elided_full_field_writes: usize,
++    pub direct_f32_operand_loads: usize,
++    pub direct_u32_operand_loads: usize,
++    /// Direct output intervals whose push would grow the Vec without prior reservation.
++    pub direct_unreserved_output_range_pushes: usize,
+     pub gather_retained_gap_rows: usize,
+     pub gather_envelope_splices: usize,
+     pub gather_suffix_copy_bytes: usize,
+@@ -205,6 +218,18 @@ std::thread_local! {
+         gather_u32_slots_written: 0,
+         gather_f32_changed_slots: 0,
+         gather_u32_changed_slots: 0,
++        direct_admission_attempts: 0,
++        direct_admission_rejections: 0,
++        direct_candidate_attempts: 0,
++        direct_candidate_misses: 0,
++        direct_committed_preparations: 0,
++        direct_source_rows: 0,
++        direct_selected_rows: 0,
++        direct_locator_bytes: 0,
++        direct_elided_full_field_writes: 0,
++        direct_f32_operand_loads: 0,
++        direct_u32_operand_loads: 0,
++        direct_unreserved_output_range_pushes: 0,
+         gather_retained_gap_rows: 0,
+         gather_envelope_splices: 0,
+         gather_suffix_copy_bytes: 0,

@@ -8,6 +8,7 @@
     "**/target/**",
     "benches/dist/**",
     "benches/fixtures/**",
+    "benches/reports/held-row-view-local-2026-10-21/**",
     "benches/reports/held-direct-operand-local-2026-10-21/**",
     "benches/reports/held-gather-input-plan-local-2026-10-20/**",
     "benches/vitexec/admission.probe.ts",

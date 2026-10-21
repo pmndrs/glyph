@@ -1,0 +1,4 @@
+$ node benches/scripts/workflows.mts run benchmark:bitmap-native-work-replay -- --trace /Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-replay-auth/full-05/events.jsonl --output /Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/bitmap-native-replay
+   Compiling pmndrs-glyph-shaper v0.0.0 (/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/rust/shaper)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.61s
+     Running unittests src/lib.rs (target/debug/deps/pmndrs_glyph_shaper-411c98d278b4d570)

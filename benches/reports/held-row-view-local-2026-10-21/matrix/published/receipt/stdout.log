@@ -1,0 +1,1498 @@
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +23
++++++++++++++++++++++++
+Progress: resolved 65, reused 29, downloaded 0, added 23, done
+
+dependencies:
++ @pmndrs/glyph 0.1.0
++ react 19.2.8 (19.3.1 is available)
++ three 0.185.1 (0.186.1 is available)
++ typegpu 0.12.5
+
+Done in 370ms using pnpm v11.15.1
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +21
++++++++++++++++++++++
+Progress: resolved 63, reused 27, downloaded 0, added 21, done
+
+dependencies:
++ @pmndrs/glyph 0.1.0
++ react 19.2.8 (19.3.1 is available)
++ three 0.185.1 (0.186.1 is available)
++ typegpu 0.12.5
+
+Done in 323ms using pnpm v11.15.1
+Reusing saved candidate timings from /Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data; candidate will not be benchmarked again
+[36mlabs[0m
+
+[34m▶ adapter-publication.bench.ts[0m
+clk: ~4.00 GHz
+cpu: Apple M4
+runtime: node 24.18.0 (arm64-darwin)
+
+benchmark                                            avg (min … max) p75 / p99    (min … top 1%)
+-------------------------------------------------------------------- -------------------------------
+• allocation-light adapter publication
+-------------------------------------------------------------------- -------------------------------
+normalize 1000 equivalent retained label updates       29.90 ms/iter  31.68 ms   ▅▂       █▄▅▄      
+                                               (25.30 ms … 34.72 ms)  34.16 ms ▂███▄▃▃▁▁▇▆██████▄█▃▂
+                                           gc(555.33 µs …   5.16 ms)   1.04 ms
+                                         heap( 50.61 mb …  62.90 mb)  54.39 mb/iter
+
+mutate one trailing span across 1000 formatted labels  57.85 ms/iter  59.24 ms       ▇█  ▂ ▂        
+                                               (53.98 ms … 65.95 ms)  64.55 ms ▃▇███▇██▆████▁▅▂▁▂▁▁▂
+                                           gc(  0.00 ps …   4.41 ms) 610.48 µs
+                                         heap( 10.21 mb …  36.12 mb)  29.22 mb/iter
+
+[34m▶ batching.bench.ts[0m
+clk: ~4.00 GHz
+cpu: Apple M4
+runtime: node 24.18.0 (arm64-darwin)
+
+benchmark                                                            avg (min … max) p75 / p99    (min … top 1%)
+------------------------------------------------------------------------------------ -------------------------------
+• batched text operations
+------------------------------------------------------------------------------------ -------------------------------
+edit and measure one of 100 retained labels                           154.58 µs/iter 164.42 µs   ▃██▇▂              
+                                                             (110.67 µs … 296.67 µs) 248.04 µs ▂▇██████▅▅▃▃▃▃▃▃▃▂▃▂▂
+                                                           gc(  0.00 ps …   1.83 ms)   0.00 ps
+                                                         heap(  0.00  b … 414.83 kb)  46.92 kb/iter
+
+rewrite 64 labels in one group                                          1.37 ms/iter   1.37 ms   ▇█▃                
+                                                                 (1.15 ms … 2.14 ms)   2.02 ms ▂▅███▇▅▂▂▁▂▂▁▁▁▂▂▂▂▂▁
+                                                           gc(  0.00 ps …   5.84 ms)   0.00 ps
+                                                         heap(  0.00  b …   9.17 mb) 682.75 kb/iter
+
+rewrite 128 labels in one group                                         2.19 ms/iter   2.23 ms  ▄█▅                 
+                                                                 (1.98 ms … 3.20 ms)   2.93 ms ▂███▇▆▄▃▃▃▂▂▂▂▂▁▁▁▁▁▁
+                                                           gc(  0.00 ps …   2.89 ms)   0.00 ps
+                                                         heap(502.62 kb …  10.00 mb)   1.20 mb/iter
+
+rewrite 256 labels in one group                                         3.95 ms/iter   4.05 ms    █▇▆▃              
+                                                                 (3.58 ms … 4.92 ms)   4.70 ms ▃▆▆█████▇▅▆▅▃▂▂▃▃▁▂▃▂
+                                                           gc(  0.00 ps …   5.67 ms)   0.00 ps
+                                                         heap(244.61 kb …   7.23 mb)   2.26 mb/iter
+
+rewrite 512 labels in one group                                         7.47 ms/iter   7.67 ms    ▅▂▃ ▄██▇▂ ▂       
+                                                                 (6.90 ms … 8.69 ms)   8.23 ms ▄▆▇███▇████████▁▅▆▃▂▂
+                                                           gc(  0.00 ps …   7.38 ms)   0.00 ps
+                                                         heap(  2.82 mb …   7.61 mb)   4.36 mb/iter
+
+• edit-sized root publication
+------------------------------------------------------------------------------------ -------------------------------
+10 labels no-op scene traversal                                        32.74 µs/iter  40.17 µs  ▃█▅                 
+                                                               (17.54 µs … 85.96 µs)  70.29 µs ▃███▇██▄▄▆▅▄▃▃▃▃▂▁▁▁▂
+                                                           gc(  0.00 ps …   1.75 ms)   0.00 ps
+                                                         heap(  8.66 kb … 494.05 kb)   8.98 kb/iter
+
+10 labels first same-length scene publication                         449.53 µs/iter 469.92 µs   █▅                 
+                                                               (343.17 µs … 1.68 ms) 807.13 µs ▂█████▆▅▂▂▂▁▁▁▁▂▁▂▁▁▁
+                                                           gc(  0.00 ps …   5.08 ms)   0.00 ps
+                                                         heap(  0.00  b …   4.72 mb) 203.97 kb/iter
+
+10 labels first length-changing scene publication                     483.28 µs/iter 510.38 µs  ▃█▄                 
+                                                             (387.75 µs … 829.50 µs) 793.13 µs ▃████▆▇▅▅▃▂▂▁▁▂▁▂▂▁▂▁
+                                                           gc(  0.00 ps …   5.00 ms)   0.00 ps
+                                                         heap(  0.00  b …   5.30 mb) 197.85 kb/iter
+
+10 labels first color-only scene publication                          459.30 µs/iter 473.83 µs  ▆█▅                 
+                                                             (354.13 µs … 872.04 µs) 852.79 µs ▃████▇▅▃▂▁▂▁▁▁▁▁▂▂▂▁▂
+                                                           gc(  0.00 ps …   5.67 ms)   0.00 ps
+                                                         heap(  0.00  b …   2.37 mb) 184.76 kb/iter
+
+10 labels first same-length engine publication                        431.66 µs/iter 461.08 µs   ▅█▄▂ ▂             
+                                                             (322.92 µs … 727.42 µs) 686.54 µs ▂▆██████▆▆▃▃▃▂▂▃▁▂▂▂▁
+                                                           gc(  0.00 ps …   2.67 ms)   0.00 ps
+                                                         heap(  0.00  b …   1.58 mb) 197.71 kb/iter
+
+10 labels first length-changing engine publication                    468.35 µs/iter 493.08 µs   ▆█▇▃               
+                                                             (357.83 µs … 841.25 µs) 755.38 µs ▁▅█████▇▆▃▃▄▃▂▂▂▂▂▁▂▁
+                                                           gc(  0.00 ps …   2.63 ms)   0.00 ps
+                                                         heap(  0.00  b …   1.83 mb) 188.25 kb/iter
+
+10 labels first color-only engine publication                         447.28 µs/iter 471.29 µs  ▄█▃▂                
+                                                             (341.75 µs … 922.42 µs) 795.92 µs ▃████▇▅▅▂▂▂▂▂▁▂▂▂▂▁▁▂
+                                                           gc(  0.00 ps …   5.77 ms)   0.00 ps
+                                                         heap(  0.00  b …   2.19 mb) 190.97 kb/iter
+
+10 labels last same-length scene publication                          444.78 µs/iter 475.96 µs  ▂█▄▂                
+                                                             (343.38 µs … 783.46 µs) 740.79 µs ▃██████▇▅▃▂▂▂▁▁▁▂▂▂▂▁
+                                                           gc(  0.00 ps …   5.33 ms)   0.00 ps
+                                                         heap(  0.00  b …   2.72 mb) 203.47 kb/iter
+
+10 labels last length-changing scene publication                      473.99 µs/iter 503.58 µs   ▄█▃                
+                                                             (361.33 µs … 840.33 µs) 756.50 µs ▁▅████▇▇▅▅▃▃▂▁▂▂▁▂▁▂▂
+                                                           gc(  0.00 ps …   5.33 ms)   0.00 ps
+                                                         heap(  0.00  b …   2.46 mb) 197.82 kb/iter
+
+10 labels last color-only scene publication                           454.19 µs/iter 470.13 µs  ▄█▃                 
+                                                             (348.83 µs … 884.33 µs) 836.00 µs ▁█████▅▃▂▂▂▁▁▁▁▁▁▂▂▂▁
+                                                           gc(  0.00 ps …   5.90 ms)   0.00 ps
+                                                         heap(  0.00  b …   2.56 mb) 184.53 kb/iter
+
+10 labels last same-length engine publication                         419.94 µs/iter 442.71 µs   ▅█▇▃▂▂             
+                                                             (311.67 µs … 749.92 µs) 680.79 µs ▁▃██████▇▄▃▃▂▂▂▂▂▂▂▂▁
+                                                           gc(  0.00 ps …   2.75 ms)   0.00 ps
+                                                         heap(  0.00  b …   1.99 mb) 196.23 kb/iter
+
+10 labels last length-changing engine publication                     453.32 µs/iter 475.96 µs   ▄▆█▆▄              
+                                                             (345.79 µs … 856.54 µs) 713.46 µs ▁▆██████▆▆▄▂▂▂▂▂▂▂▂▂▁
+                                                           gc(  0.00 ps …   2.72 ms)   0.00 ps
+                                                         heap(  0.00  b …   2.58 mb) 206.51 kb/iter
+
+10 labels last color-only engine publication                          433.98 µs/iter 446.25 µs  ▅██▂                
+                                                             (333.79 µs … 908.17 µs) 782.63 µs ▂█████▅▄▂▂▂▂▂▁▂▁▂▂▁▂▂
+                                                           gc(  0.00 ps …   5.77 ms)   0.00 ps
+                                                         heap(  0.00  b …   3.30 mb) 174.89 kb/iter
+
+100 labels no-op scene traversal                                       64.46 µs/iter  67.21 µs  ▇█ ▂                
+                                                              (50.00 µs … 142.38 µs) 118.00 µs ▃████▆▅▄▂▂▁▂▂▁▁▂▂▂▁▁▁
+                                                           gc(  0.00 ps …   2.16 ms)   0.00 ps
+                                                         heap(  0.00  b … 455.28 kb)  55.84 kb/iter
+
+100 labels first same-length scene publication                        673.98 µs/iter 697.00 µs   ▄▄█                
+                                                               (557.33 µs … 1.07 ms) 990.83 µs ▃█████▇▅▄▃▂▂▁▂▂▂▂▂▂▂▁
+                                                           gc(  0.00 ps …   3.38 ms)   0.00 ps
+                                                         heap(  0.00  b …   2.15 mb) 518.56 kb/iter
+
+100 labels first length-changing scene publication                    885.82 µs/iter 919.92 µs   ▅█▆▂               
+                                                               (743.25 µs … 1.38 ms)   1.27 ms ▁▄████▅▅▄▄▃▃▂▂▃▂▁▂▁▁▁
+                                                           gc(  0.00 ps …   2.59 ms)   0.00 ps
+                                                         heap(  0.00  b …   2.27 mb) 535.92 kb/iter
+
+100 labels first color-only scene publication                         686.49 µs/iter 701.46 µs  ▂█▃                 
+                                                               (553.92 µs … 1.23 ms)   1.14 ms ▂████▅▃▃▂▂▂▂▁▁▂▂▂▁▁▂▁
+                                                           gc(  0.00 ps …   3.86 ms)   0.00 ps
+                                                         heap(  0.00  b …   3.75 mb) 525.85 kb/iter
+
+100 labels first same-length engine publication                       606.06 µs/iter 630.25 µs   ▇█                 
+                                                               (502.42 µs … 1.08 ms) 910.50 µs ▂█████▇▆▄▃▂▂▁▂▂▃▂▁▂▂▁
+                                                           gc(  0.00 ps …   3.41 ms)   0.00 ps
+                                                         heap(  0.00  b …   3.10 mb) 464.62 kb/iter
+
+100 labels first length-changing engine publication                   818.14 µs/iter 843.17 µs    ▇█▃               
+                                                               (673.46 µs … 1.30 ms)   1.15 ms ▁▃▆████▅▃▃▃▃▂▄▂▂▂▂▁▂▁
+                                                           gc(  0.00 ps …   2.82 ms)   0.00 ps
+                                                         heap(  0.00  b …   1.82 mb) 480.31 kb/iter
+
+100 labels first color-only engine publication                        620.37 µs/iter 626.54 µs   █▆▃                
+                                                               (499.13 µs … 1.11 ms)   1.03 ms ▂████▇▃▃▃▂▁▁▁▁▂▂▂▂▂▂▁
+                                                           gc(  0.00 ps …   4.12 ms)   0.00 ps
+                                                         heap(  0.00  b …   3.68 mb) 472.67 kb/iter
+
+100 labels last same-length scene publication                         674.30 µs/iter 706.25 µs   ▅█▆▃               
+                                                               (547.17 µs … 1.12 ms) 980.42 µs ▃███████▄▄▃▃▂▃▃▂▂▃▂▁▂
+                                                           gc(  0.00 ps …   3.73 ms)   0.00 ps
+                                                         heap(  0.00  b …   2.44 mb) 517.55 kb/iter
+
+100 labels last length-changing scene publication                     697.39 µs/iter 729.88 µs   ▅▄█▄               
+                                                               (573.92 µs … 1.10 ms)   1.03 ms ▂███████▄▅▂▂▂▂▂▂▂▂▂▁▁
+                                                           gc(  0.00 ps …   2.80 ms)   0.00 ps
+                                                         heap(  0.00  b …   3.42 mb) 531.31 kb/iter
+
+100 labels last color-only scene publication                          701.93 µs/iter 745.96 µs  ▂█▃                 
+                                                               (553.79 µs … 1.21 ms)   1.15 ms ▂███▇▄▃▂▂▄▃▃▂▂▂▂▂▂▂▁▂
+                                                           gc(  0.00 ps …   4.24 ms)   0.00 ps
+                                                         heap(  0.00  b …   4.08 mb) 526.07 kb/iter
+
+100 labels last same-length engine publication                        667.96 µs/iter 641.08 µs  █                   
+                                                               (503.42 µs … 3.68 ms)   2.54 ms ▆█▃▃▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+                                                           gc(  0.00 ps …  21.20 ms)   0.00 ps
+                                                         heap(  0.00  b …   2.45 mb) 464.37 kb/iter
+
+100 labels last length-changing engine publication                    644.83 µs/iter 663.92 µs   ▂█▇▅               
+                                                             (536.79 µs … 984.13 µs) 929.88 µs ▂▅█████▇▄▃▂▁▂▂▃▂▂▂▁▁▂
+                                                           gc(  0.00 ps …   2.29 ms)   0.00 ps
+                                                         heap(  0.00  b …   1.42 mb) 477.86 kb/iter
+
+100 labels last color-only engine publication                         621.84 µs/iter 637.42 µs  █▆▃                 
+                                                               (510.88 µs … 1.12 ms)   1.06 ms ▃███▆▅▃▃▂▁▂▂▂▂▂▂▁▁▁▁▁
+                                                           gc(  0.00 ps …   4.69 ms)   0.00 ps
+                                                         heap(  0.00  b …   3.70 mb) 472.78 kb/iter
+
+1000 labels no-op scene traversal                                     377.00 µs/iter 425.83 µs   ▄█▇       ▄        
+                                                             (294.00 µs … 640.92 µs) 517.08 µs ▃▇█████▃▃▃▅▇██▇▄▃▂▂▁▁
+                                                           gc(  0.00 ps …   7.86 ms)   0.00 ps
+                                                         heap(  0.00  b …   2.03 mb) 258.74 kb/iter
+
+1000 labels first same-length scene publication                         3.17 ms/iter   3.28 ms  ▅▄▂█ ▃  ▃  ▂        
+                                                                 (2.93 ms … 3.66 ms)   3.53 ms ▃███████▇█▆██▆▆▅█▄▂▄▃
+                                                           gc(  0.00 ps …   7.50 ms)   0.00 ps
+                                                         heap(  1.23 mb …   5.77 mb)   3.30 mb/iter
+
+1000 labels first length-changing scene publication                     4.77 ms/iter   4.88 ms  ▂▅▆█▄ ▂▂            
+                                                                 (4.50 ms … 5.50 ms)   5.25 ms ▄███████████▇▄▃▅▅▃▂▁▂
+                                                           gc(  0.00 ps …   2.44 ms)   0.00 ps
+                                                         heap(  1.17 mb …   4.43 mb)   3.33 mb/iter
+
+1000 labels first color-only scene publication                          3.13 ms/iter   3.25 ms    █▇▇▅▃             
+                                                                 (2.86 ms … 3.75 ms)   3.58 ms ▂████████▆▅▅▇▅▅▃▅▃▄▃▂
+                                                           gc(  0.00 ps …   3.98 ms)   0.00 ps
+                                                         heap(  1.07 mb …   5.75 mb)   3.31 mb/iter
+
+1000 labels first same-length engine publication                        2.91 ms/iter   3.03 ms   ▂█ ▄               
+                                                                 (2.65 ms … 3.40 ms)   3.31 ms ▂▄████▇▆█▅▇▇▆▇▄▅▃▅▃▁▂
+                                                           gc(  0.00 ps …   1.88 ms)   0.00 ps
+                                                         heap(565.31 kb …   4.49 mb)   3.01 mb/iter
+
+1000 labels first length-changing engine publication                    4.52 ms/iter   4.59 ms  ▃▃▄█▂▃              
+                                                                 (4.24 ms … 5.40 ms)   5.18 ms ▃███████▇▃▅▃▃▂▃▂▂▂▃▁▁
+                                                           gc(  0.00 ps …   1.87 ms)   0.00 ps
+                                                         heap(937.14 kb …   4.58 mb)   3.10 mb/iter
+
+1000 labels first color-only engine publication                         2.85 ms/iter   2.96 ms   ▃█▇▂▃              
+                                                                 (2.61 ms … 3.38 ms)   3.26 ms ▂▆█████▆▇▇▇▆▆▄▆▄▄▅▄▂▁
+                                                           gc(  0.00 ps …   3.69 ms)   0.00 ps
+                                                         heap(676.59 kb …   4.69 mb)   2.99 mb/iter
+
+1000 labels last same-length scene publication                          3.21 ms/iter   3.33 ms   ▅█▆ ▂▂             
+                                                                 (2.91 ms … 4.12 ms)   3.80 ms ▂▇███▆██▅▇▆▆▅▄▄▂▂▄▁▂▂
+                                                           gc(  0.00 ps …   7.27 ms)   0.00 ps
+                                                         heap(  0.99 mb …   5.78 mb)   3.30 mb/iter
+
+1000 labels last length-changing scene publication                      3.23 ms/iter   3.35 ms   ▂█▇▃               
+                                                                 (2.98 ms … 3.81 ms)   3.66 ms ▂▆███████▇▆▇▆█▄▄▃▃▃▁▂
+                                                           gc(  0.00 ps …   7.16 ms)   0.00 ps
+                                                         heap(  1.23 mb …   6.03 mb)   3.32 mb/iter
+
+1000 labels last color-only scene publication                           3.19 ms/iter   3.31 ms    ▂▃█▇█▄            
+                                                                 (2.84 ms … 4.21 ms)   3.70 ms ▂▃███████▆▅▆▅█▇▃▂▄▂▃▂
+                                                           gc(  0.00 ps …   7.53 ms)   0.00 ps
+                                                         heap(  1.23 mb …   5.79 mb)   3.31 mb/iter
+
+1000 labels last same-length engine publication                         2.87 ms/iter   2.99 ms   ▆██      ▄ ▃       
+                                                                 (2.65 ms … 3.27 ms)   3.20 ms ▂▅██████▆▆▇█▅█▆▆▅▄▃▁▂
+                                                           gc(  0.00 ps … 996.63 µs)   0.00 ps
+                                                         heap(593.64 kb …   4.46 mb)   3.01 mb/iter
+
+1000 labels last length-changing engine publication                     2.97 ms/iter   3.07 ms   ▇█▆▄▅▄▂▅▄          
+                                                                 (2.70 ms … 3.51 ms)   3.41 ms ▃██████████▆▇█▆▃▆▅▂▂▂
+                                                           gc(  0.00 ps …   1.36 ms)   0.00 ps
+                                                         heap(709.29 kb …   4.02 mb)   3.02 mb/iter
+
+1000 labels last color-only engine publication                          2.87 ms/iter   3.01 ms   ▅█▇█▄ █▃   ▂ ▃     
+                                                                 (2.60 ms … 3.35 ms)   3.29 ms ▂▅████████▆▅▇█▆█▄▂▄▂▃
+                                                           gc(  0.00 ps …   3.16 ms)   0.00 ps
+                                                         heap(743.72 kb …   4.81 mb)   2.99 mb/iter
+
+100 labels 100 edits immediate measurements without publication         2.89 ms/iter   2.98 ms       ▅█▄▅           
+                                                                 (2.40 ms … 4.30 ms)   3.65 ms ▁▁▄▆▅██████▇▄▃▂▂▁▁▁▁▁
+                                                           gc(  0.00 ps …   1.68 ms)   0.00 ps
+                                                         heap(481.29 kb …   9.93 mb)   2.88 mb/iter
+
+100 labels 100 edits immediate measurements with publication           21.19 ms/iter  21.47 ms   ▅█▄▆               
+                                                               (20.12 ms … 24.40 ms)  24.12 ms ▃▇█████▅▇▅▂▅▂▃▂▂▁▁▁▁▂
+                                                           gc(  0.00 ps …   2.30 ms)   0.00 ps
+                                                         heap(677.16 kb …  33.79 mb)  30.98 mb/iter
+
+100 labels batched edit-read publication                                6.20 ms/iter   6.39 ms     ▂▅█▃▅▃           
+                                                                 (5.56 ms … 7.60 ms)   7.18 ms ▃▄▃▆██████▆▇█▃▄▄▂▂▂▁▂
+                                                           gc(  0.00 ps …   2.83 ms)   0.00 ps
+                                                         heap(  6.17 mb …  15.22 mb)  11.65 mb/iter
+
+100 labels interleaved edit-read publication                           27.99 ms/iter  28.95 ms    ▃▄      ▃█▆       
+                                                               (25.34 ms … 32.23 ms)  30.95 ms ▃▅████▃▄▂▃▇███▆▅▄▃▅▃▃
+                                                           gc(  0.00 ps …   1.77 ms)   0.00 ps
+                                                         heap( 34.31 mb …  60.99 mb)  56.40 mb/iter
+
+1000 labels 100 edits immediate measurements without publication        3.94 ms/iter   4.01 ms      ▄█▆▂            
+                                                                 (3.55 ms … 4.76 ms)   4.57 ms ▂▂▃▃█████▅▆▄▄▂▃▂▂▃▁▁▂
+                                                           gc(  0.00 ps …   2.21 ms)   0.00 ps
+                                                         heap(  1.35 mb …   6.46 mb)   3.61 mb/iter
+
+1000 labels 100 edits immediate measurements with publication         153.12 ms/iter 156.37 ms    ▅▃█▃▄             
+                                                             (139.60 ms … 209.12 ms) 194.26 ms ▂▅▇█████▂▂▁▂▁▁▁▁▁▁▁▁▂
+                                                           gc(  0.00 ps …   8.02 ms)   0.00 ps
+                                                         heap( 29.90 mb …  58.37 mb)  53.14 mb/iter
+
+1000 labels 100 edits batched edit-read publication                     9.88 ms/iter  10.01 ms     ▃█ █▅█▃▅         
+                                                                (9.36 ms … 10.65 ms)  10.56 ms ▅▅▄██████████▆▂▅▇█▅▁▂
+                                                           gc(  0.00 ps …   7.89 ms)   0.00 ps
+                                                         heap( 14.96 mb …  18.34 mb)  15.96 mb/iter
+
+1000 labels 100 edits interleaved edit-read publication               178.60 ms/iter 182.64 ms   ▂▇   ▅▄█▅          
+                                                             (166.93 ms … 204.32 ms) 194.63 ms ▄▅███▅█████▇█▄▃▅▄▃▄▃▃
+                                                           gc(  0.00 ps …   2.89 ms) 412.38 µs
+                                                         heap(174.17 mb … 179.90 mb) 176.31 mb/iter
+
+• multiple-owner publication
+------------------------------------------------------------------------------------ -------------------------------
+100 labels separated balanced grow-shrink-space engine publication    783.57 µs/iter 806.50 µs    ▃▆██▃▄            
+                                                               (679.54 µs … 1.02 ms) 972.54 µs ▂▃▆██████▇▆▄▅▄▂▃▃▂▂▂▁
+                                                           gc(  0.00 ps …   4.88 ms)   0.00 ps
+                                                         heap(  0.00  b …   2.14 mb) 487.87 kb/iter
+
+100 labels separated balanced grow-shrink-space scene publication     843.27 µs/iter 867.21 µs    ▆▇█▄              
+                                                               (727.83 µs … 1.16 ms)   1.10 ms ▁▂▅██████▄▄▃▃▂▂▁▂▂▁▂▁
+                                                           gc(  0.00 ps …   1.48 ms)   0.00 ps
+                                                         heap(  0.00  b …   3.33 mb) 544.33 kb/iter
+
+100 labels separated unbalanced grow-shrink-space engine publication  810.86 µs/iter 847.63 µs    ▃█▆▄              
+                                                               (694.25 µs … 1.17 ms)   1.06 ms ▁███████▅▆▅▄▄▄▂▃▂▂▁▂▁
+                                                           gc(  0.00 ps …   4.32 ms)   0.00 ps
+                                                         heap(  0.00  b …   4.56 mb) 478.65 kb/iter
+
+100 labels separated unbalanced grow-shrink-space scene publication   847.82 µs/iter 875.75 µs     █▇▇▆             
+                                                               (725.67 µs … 1.15 ms)   1.07 ms ▁▄▆███████▄▅▃▄▃▂▂▃▁▂▂
+                                                           gc(  0.00 ps …   2.06 ms)   0.00 ps
+                                                         heap(  0.00  b …   2.41 mb) 533.62 kb/iter
+
+1000 labels separated balanced grow-shrink-space engine publication     4.48 ms/iter   4.54 ms   ▃▄▅▅▆█▆▃           
+                                                                 (4.23 ms … 4.97 ms)   4.94 ms ▃▆████████▇█▃▂▃▃▂▃▂▁▂
+                                                           gc(  0.00 ps …   1.84 ms)   0.00 ps
+                                                         heap(839.69 kb …   4.02 mb)   3.24 mb/iter
+
+1000 labels separated balanced grow-shrink-space scene publication      4.79 ms/iter   4.88 ms     ▂▅▂   █ ▃        
+                                                                 (4.51 ms … 5.18 ms)   5.08 ms ▂▃▇▇███▄▆████▇█▆▆█▃▃▃
+                                                           gc(  0.00 ps …   8.48 ms)   0.00 ps
+                                                         heap(  1.12 mb …   4.68 mb)   3.65 mb/iter
+
+1000 labels separated unbalanced grow-shrink-space engine publication   4.58 ms/iter   4.65 ms     ▄▅██▃            
+                                                                 (4.32 ms … 5.11 ms)   5.00 ms ▁▃▆▆███████▆▇▅▄▂▂▂▂▁▁
+                                                           gc(  0.00 ps …   1.63 ms)   0.00 ps
+                                                         heap(836.98 kb …   3.85 mb)   3.24 mb/iter
+
+1000 labels separated unbalanced grow-shrink-space scene publication    4.91 ms/iter   4.99 ms   ▆ ▇▂▅▆▆█▄█▄ ▂      
+                                                                 (4.66 ms … 5.29 ms)   5.23 ms ▃██████████████▃▇▃█▃▄
+                                                           gc(  0.00 ps …   8.73 ms)   0.00 ps
+                                                         heap(  1.18 mb …   4.82 mb)   3.63 mb/iter
+
+[34m▶ cold.bench.ts[0m
+clk: ~4.00 GHz
+cpu: Apple M4
+runtime: node 24.18.0 (arm64-darwin)
+
+benchmark                                        avg (min … max) p75 / p99    (min … top 1%)
+---------------------------------------------------------------- -------------------------------
+• first-time operations
+---------------------------------------------------------------- -------------------------------
+mount and publish a 22k-glyph paragraph            18.81 ms/iter  19.16 ms   ▇█   ▃ ▅           
+                                           (18.10 ms … 20.48 ms)  19.84 ms ▄▇██▇▅██▇█▆█▇▇██▂▅▁▂▄
+                                       gc(  0.00 ps …   1.69 ms)   0.00 ps
+                                     heap(  3.74 mb …   9.77 mb)   3.78 mb/iter
+
+mount a label and publish its first edit            2.72 ms/iter   2.78 ms   ▆█▄                
+                                             (2.40 ms … 4.17 ms)   3.66 ms ▂████▇▆▄▃▃▃▂▂▂▁▂▂▃▁▂▁
+                                       gc(  0.00 ps …   2.30 ms)   0.00 ps
+                                     heap(  0.00  b …   7.58 mb)   1.43 mb/iter
+
+mount 100 labels and borrow glyphs from each once  12.08 ms/iter  12.35 ms   █▅▅▄▄              
+                                           (11.24 ms … 14.82 ms)  13.86 ms ▂▅██████▅▅▅▃▃▃▄▃▃▁▂▁▂
+                                       gc(  0.00 ps …   3.49 ms)   0.00 ps
+                                     heap(  7.05 mb …  31.53 mb)  11.62 mb/iter
+
+[34m▶ common.bench.ts[0m
+clk: ~3.93 GHz
+cpu: Apple M4
+runtime: node 24.18.0 (arm64-darwin)
+
+benchmark                      avg (min … max) p75 / p99    (min … top 1%)
+---------------------------------------------- -------------------------------
+• common text operations
+---------------------------------------------- -------------------------------
+measure after text change         2.62 ms/iter   2.71 ms   ▄██▃               
+                           (2.41 ms … 3.12 ms)   3.08 ms ▂▄████▃▃▅▅▄▅▃▂▃▂▄▃▂▂▁
+                     gc(  0.00 ps …   1.69 ms)   0.00 ps
+                   heap(  0.00  b …   3.90 mb) 119.98 kb/iter
+
+publish after text change         2.11 ms/iter   2.13 ms   ▆█▆▂               
+                           (1.96 ms … 2.54 ms)   2.49 ms ▁▅█████▄▄▃▂▂▂▂▂▂▃▂▁▁▂
+                     gc(  0.00 ps …   2.34 ms)   0.00 ps
+                   heap(  0.00  b …   3.42 mb) 237.96 kb/iter
+
+reflow after width change       528.44 µs/iter 538.00 µs     ▂█▅              
+                       (383.00 µs … 865.96 µs) 832.79 µs ▁▃▄▆████▄▃▂▁▂▁▁▁▂▂▃▂▁
+                     gc(  0.00 ps …   2.51 ms)   0.00 ps
+                   heap(  0.00  b …   1.41 mb) 212.34 kb/iter
+
+publish after color change        1.56 ms/iter   1.56 ms   ▇█▅                
+                           (1.44 ms … 1.94 ms)   1.89 ms ▁▅███▇▃▃▂▂▁▂▁▁▁▁▂▂▂▂▂
+                     gc(  0.00 ps …   1.78 ms)   0.00 ps
+                   heap(  0.00  b …   3.42 mb) 240.39 kb/iter
+
+relayout after font-size change   1.99 ms/iter   1.99 ms  ▅▇█▇                
+                           (1.87 ms … 2.45 ms)   2.40 ms ▃████▅▄▃▂▂▁▁▂▂▂▂▃▁▁▁▁
+                     gc(  0.00 ps …   2.18 ms)   0.00 ps
+                   heap(  0.00  b …   4.11 mb) 235.07 kb/iter
+
+measure 100 unchanged labels     19.98 µs/iter  20.58 µs    ▆██▆              
+                         (13.63 µs … 60.33 µs)  35.79 µs ▂▃█████▇▄▃▂▂▂▁▂▁▂▂▂▂▁
+                     gc(  0.00 ps …   1.07 ms)   0.00 ps
+                   heap(128.00  b … 482.38 kb) 192.00  b/iter
+
+[34m▶ edit.bench.ts[0m
+clk: ~3.99 GHz
+cpu: Apple M4
+runtime: node 24.18.0 (arm64-darwin)
+
+benchmark                                                   avg (min … max) p75 / p99    (min … top 1%)
+--------------------------------------------------------------------------- -------------------------------
+• typing into a long paragraph
+--------------------------------------------------------------------------- -------------------------------
+type one character into a long paragraph and measure           1.24 ms/iter   2.16 ms █▅               █▃  
+                                                      (219.83 µs … 2.51 ms)   2.44 ms ██▄▁▁▁▁▁▁▁▁▁▁▁▁▁▁██▅▂
+                                                  gc(  0.00 ps …   1.97 ms)   0.00 ps
+                                                heap(  0.00  b …   3.37 mb) 108.04 kb/iter
+
+type one character into a long Fredoka paragraph and measure   1.01 ms/iter   1.69 ms  █               ▆   
+                                                      (217.13 µs … 1.99 ms)   1.91 ms ▅█▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁█▇▂▁
+                                                  gc(  0.00 ps …   1.91 ms)   0.00 ps
+                                                heap(  0.00  b …   2.32 mb) 109.25 kb/iter
+
+type one character into a long paragraph and publish a frame   3.39 ms/iter   3.44 ms  ▂▄█▆                
+                                                        (3.19 ms … 4.08 ms)   3.93 ms ▂█████▄▄▃▃▂▃▃▂▃▂▃▂▁▁▁
+                                                  gc(  0.00 ps …   2.33 ms)   0.00 ps
+                                                heap(  0.00  b …   3.81 mb) 232.66 kb/iter
+
+[34m▶ framework-publication.bench.ts[0m
+clk: ~3.93 GHz
+cpu: Apple M4
+runtime: node 24.18.0 (arm64-darwin)
+
+benchmark                                                      avg (min … max) p75 / p99    (min … top 1%)
+------------------------------------------------------------------------------ -------------------------------
+• framework normalization publication
+------------------------------------------------------------------------------ -------------------------------
+reuse 1000 unchanged Vue property snapshots                     456.66 µs/iter 460.04 µs      █▄              
+                                                       (415.25 µs … 591.00 µs) 555.71 µs ▁▆█▆███▆▂▁▂▁▁▁▂▂▂▂▂▁▁
+                                                     gc(  0.00 ps …   2.38 ms)   0.00 ps
+                                                   heap(764.98 kb …   1.77 mb)   1.26 mb/iter
+
+normalize 1000 equivalent formatted flow updates                 33.73 ms/iter  35.07 ms   ▃▇▂       █ ▂      
+                                                         (31.24 ms … 38.10 ms)  37.63 ms ▂████████▅▂██▇█▃▃▂▁▁▂
+                                                     gc(632.25 µs …   5.73 ms)   1.42 ms
+                                                   heap( 45.52 mb …  56.41 mb)  48.72 mb/iter
+
+bind and normalize 1000 framework-shaped formatted flow updates  34.05 ms/iter  35.12 ms   ▅▆ ▃▂ ▃ ▅ ▂▃█      
+                                                         (31.67 ms … 39.74 ms)  37.11 ms ▂▅██▇██▄█▄█████▇▃▁▂▂▂
+                                                     gc(433.21 µs …   9.80 ms)   1.33 ms
+                                                   heap( 47.56 mb …  56.70 mb)  49.42 mb/iter
+
+[34m▶ inspection.bench.ts[0m
+clk: ~3.99 GHz
+cpu: Apple M4
+runtime: node 24.18.0 (arm64-darwin)
+
+benchmark                                              avg (min … max) p75 / p99    (min … top 1%)
+---------------------------------------------------------------------- -------------------------------
+• per-glyph inspection
+---------------------------------------------------------------------- -------------------------------
+copy per-glyph metrics after text change                  5.28 ms/iter   5.38 ms   ▄▄▄▆█              
+                                                   (4.67 ms … 7.13 ms)   6.97 ms ▂██████▆▄▃▃▁▂▁▁▁▂▂▂▂▂
+                                             gc(  0.00 ps …   2.26 ms)   0.00 ps
+                                           heap(  0.00  b …   5.59 mb)   1.71 mb/iter
+
+copy per-glyph metrics from 100 unchanged labels         98.19 µs/iter 101.63 µs  ▂█▇▄▄               
+                                                (85.33 µs … 185.29 µs) 143.46 µs ▃██████▇▄▃▂▂▁▁▁▁▁▁▁▁▁
+                                             gc(  0.00 ps …   2.47 ms)   0.00 ps
+                                           heap(  0.00  b …   0.98 mb) 545.62 kb/iter
+
+edit and independently copy one label among 1 labels      1.12 ms/iter   1.17 ms   ██▄                
+                                                 (925.00 µs … 1.71 ms)   1.69 ms ▁▇████▇▆▄▄▂▂▃▂▂▂▁▂▁▁▁
+                                             gc(  0.00 ps …   2.27 ms)   0.00 ps
+                                           heap(  0.00  b …   4.28 mb) 583.17 kb/iter
+
+edit and independently copy one label among 100 labels    1.58 ms/iter   1.64 ms  ▂█▃                 
+                                                   (1.33 ms … 2.55 ms)   2.37 ms ▃████▇▅▃▃▃▃▃▂▁▂▁▁▁▂▁▁
+                                             gc(  0.00 ps …   3.36 ms)   0.00 ps
+                                           heap(  0.00  b …  12.83 mb)   1.34 mb/iter
+
+edit and independently copy one label among 1000 labels   5.57 ms/iter   5.82 ms  ▂█▅▂                
+                                                   (5.04 ms … 8.38 ms)   6.82 ms ▂████▄▃▄▃▄▃▃▄▃▃▃▃▂▁▁▁
+                                             gc(  0.00 ps …   9.96 ms)   0.00 ps
+                                           heap(  6.25 mb …  11.10 mb)   7.42 mb/iter
+
+borrow per-glyph metrics from 100 promoted labels       223.91 µs/iter 237.50 µs            ▄█▂       
+                                               (101.92 µs … 366.50 µs) 312.71 µs ▁▂▃▁▁▁▁▂▃▂▄███▅▃▂▁▁▁▂
+                                             gc(  0.00 ps …   2.13 ms)   0.00 ps
+                                           heap(  0.00  b …   1.16 mb) 489.81 kb/iter
+
+[34m▶ layout.bench.ts[0m
+clk: ~3.99 GHz
+cpu: Apple M4
+runtime: node 24.18.0 (arm64-darwin)
+
+benchmark                                      avg (min … max) p75 / p99    (min … top 1%)
+-------------------------------------------------------------- -------------------------------
+• public paragraph layout at 22k glyphs
+-------------------------------------------------------------- -------------------------------
+cached measurement                                5.44 µs/iter   5.29 µs  █                   
+                                          (2.67 µs … 25.42 µs)  19.79 µs ▄██▅▃▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
+                                     gc(  0.00 ps …   2.07 ms)   0.00 ps
+                                   heap(328.00  b … 193.80 kb) 376.00  b/iter
+
+measurement after width change                  894.74 µs/iter 973.50 µs             █▆       
+                                         (497.38 µs … 1.31 ms)   1.21 ms ▂▂▂▂▄▄▃▄▃▂▂▅██▇▄▃▃▂▂▂
+                                     gc(  0.00 ps …   2.65 ms)   0.00 ps
+                                   heap(  0.00  b …   3.40 mb) 314.18 kb/iter
+
+measurement then publication after width change   1.62 ms/iter   1.67 ms          █           
+                                           (1.12 ms … 2.42 ms)   2.29 ms ▂▃▃▂▂▁▁▁██▅▂▂▂▁▁▂▂▁▁▁
+                                     gc(  0.00 ps …   4.53 ms)   0.00 ps
+                                   heap(  0.00  b …   4.44 mb) 747.51 kb/iter
+
+cached per-glyph inspection                      59.87 µs/iter  60.92 µs  █▇▂                 
+                                        (52.42 µs … 112.79 µs)  93.00 µs ▄███▇▅▃▂▂▂▁▁▂▁▂▁▁▁▁▂▁
+                                     gc(  0.00 ps …   1.47 ms)   0.00 ps
+                                   heap(  1.17 mb …   1.66 mb)   1.18 mb/iter
+
+per-glyph inspection after width change           8.39 ms/iter  10.29 ms █                  ▂ 
+                                          (5.21 ms … 11.63 ms)  10.91 ms █▃▁▁▁▁▁▁▆█▃▂▁▂▄▃▃███▂
+                                     gc(  0.00 ps …   2.33 ms)   0.00 ps
+                                   heap(  1.65 mb …   9.21 mb)   5.17 mb/iter
+
+inspection then publication after width change    9.46 ms/iter  10.02 ms                ▇▇█   
+                                          (8.03 ms … 10.48 ms)  10.42 ms ▅▅▆▇▅▄▃▁▁▁▁▁▁▄▇███▆▅▂
+                                     gc(  0.00 ps …   5.25 ms) 208.02 µs
+                                   heap(  2.64 mb …  10.21 mb)   4.98 mb/iter
+
+publication after font-size change                6.59 ms/iter   6.67 ms     ▂█▆▃▄            
+                                           (6.33 ms … 7.01 ms)   6.95 ms ▂▃▃███████▆▄▄▃▅▆▆▅▂▂▁
+                                     gc(  0.00 ps …   2.19 ms)   0.00 ps
+                                   heap(  0.00  b …   1.29 mb) 327.45 kb/iter
+
+publication after width change                    1.22 ms/iter   1.27 ms           █▆         
+                                         (837.58 µs … 1.69 ms)   1.59 ms ▁▂▃▃▂▃▂▂▂▄██▅▃▃▂▂▁▂▂▁
+                                     gc(  0.00 ps …   2.49 ms)   0.00 ps
+                                   heap(  0.00  b …   2.78 mb) 493.98 kb/iter
+
+publication after text change                     7.07 ms/iter   6.97 ms ▃█                   
+                                          (6.51 ms … 20.20 ms)  14.98 ms ██▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+                                     gc(  0.00 ps …  48.17 ms)   0.00 ps
+                                   heap(  0.00  b …   1.88 mb) 446.06 kb/iter
+
+[34m▶ outlines.bench.ts[0m
+clk: ~4.00 GHz
+cpu: Apple M4
+runtime: node 24.18.0 (arm64-darwin)
+
+benchmark                   avg (min … max) p75 / p99    (min … top 1%)
+------------------------------------------- -------------------------------
+
+[34m▶ prepared-operations.bench.ts[0m
+clk: ~3.97 GHz
+cpu: Apple M4
+runtime: node 24.18.0 (arm64-darwin)
+
+benchmark                                           avg (min … max) p75 / p99    (min … top 1%)
+------------------------------------------------------------------- -------------------------------
+• prepared label operations
+------------------------------------------------------------------- -------------------------------
+1 labels first set                                    22.89 µs/iter  24.38 µs  ▇█▄                 
+                                              (15.96 µs … 65.96 µs)  51.04 µs ▃████▆▄▄▃▂▂▂▁▁▁▁▂▁▁▁▁
+                                          gc(  0.00 ps …   1.96 ms)   0.00 ps
+                                        heap(  5.98 kb … 212.95 kb)   6.00 kb/iter
+
+1 labels first set+measure                           175.29 µs/iter 192.29 µs   █▇▃▆▅▆▆▅           
+                                            (119.96 µs … 334.38 µs) 276.21 µs ▂▆████████▇▇▆▅▂▃▄▂▂▂▁
+                                          gc(  0.00 ps …   2.52 ms)   0.00 ps
+                                        heap(  0.00  b …   1.13 mb)  64.56 kb/iter
+
+1 labels first set+measure+scene-publication         580.24 µs/iter 617.13 µs    ▄██▃▄             
+                                              (457.21 µs … 1.50 ms) 813.42 µs ▂▃██████▇▇▇▆▄▃▃▂▂▁▂▁▁
+                                          gc(  0.00 ps …  16.07 ms)   0.00 ps
+                                        heap(  0.00  b …   3.64 mb) 230.01 kb/iter
+
+1 labels first same-value-set                          4.00 µs/iter   3.42 µs  █                   
+                                               (1.71 µs … 22.67 µs)  18.92 µs ▇█▇▃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+                                          gc(  0.00 ps …   7.73 ms)   0.00 ps
+                                        heap(576.00  b …  80.61 kb) 624.00  b/iter
+
+1 labels first overwrite-before-scene-publication    280.48 µs/iter 296.46 µs    ▆█▅▃              
+                                            (221.67 µs … 443.13 µs) 399.96 µs ▁▂▇█████▆▆▄▄▄▃▃▃▁▂▂▂▁
+                                          gc(  0.00 ps …   1.76 ms)   0.00 ps
+                                        heap(  0.00  b …   2.80 mb) 150.35 kb/iter
+
+100 labels first set                                  25.62 µs/iter  27.96 µs  ▅█▂                 
+                                              (16.42 µs … 70.08 µs)  55.38 µs ▃███▆▅▄▄▃▂▂▂▂▂▂▁▃▂▂▁▁
+                                          gc(  0.00 ps …   1.98 ms)   0.00 ps
+                                        heap(  2.10 kb … 401.66 kb)   5.91 kb/iter
+
+100 labels first set+measure                         140.03 µs/iter 156.25 µs  ▃█▅  ▄█             
+                                             (93.33 µs … 271.17 µs) 245.42 µs ▄███▇█████▆▄▄▃▃▂▁▂▁▂▁
+                                          gc(  0.00 ps …   2.08 ms)   0.00 ps
+                                        heap(  0.00  b … 607.16 kb)  45.90 kb/iter
+
+100 labels first set+measure+scene-publication       788.29 µs/iter 826.08 µs  ▂█▆▃                
+                                              (659.42 µs … 1.30 ms)   1.18 ms ▃████▇▆▅▄▃▃▃▂▂▂▁▁▁▁▂▁
+                                          gc(  0.00 ps …   2.91 ms)   0.00 ps
+                                        heap(  0.00  b …   5.10 mb) 547.12 kb/iter
+
+100 labels first same-value-set                        4.07 µs/iter   3.67 µs  █                   
+                                               (1.67 µs … 19.88 µs)  17.67 µs ▄██▄▂▁▁▁▁▁▁▁▁▂▁▁▂▁▂▁▁
+                                          gc(  0.00 ps …   1.68 ms)   0.00 ps
+                                        heap(576.00  b … 250.88 kb) 624.00  b/iter
+
+100 labels first overwrite-before-scene-publication  397.14 µs/iter 411.88 µs   █▆                 
+                                            (317.21 µs … 705.63 µs) 669.04 µs ▂███▇▆▃▃▃▂▃▂▁▁▂▁▂▁▁▁▁
+                                          gc(  0.00 ps …   2.42 ms)   0.00 ps
+                                        heap(  0.00  b …   1.90 mb) 391.26 kb/iter
+
+1000 labels first set                                 35.16 µs/iter  38.58 µs  ▇█▃                 
+                                              (25.29 µs … 70.83 µs)  64.54 µs ▄████▇▄▄▄▃▂▃▃▂▂▂▂▂▂▂▁
+                                          gc(  0.00 ps …   2.52 ms)   0.00 ps
+                                        heap(  5.79 kb … 176.23 kb)   5.85 kb/iter
+
+1000 labels first set+measure                        192.20 µs/iter 210.25 µs   █▃    ▄▅           
+                                            (144.63 µs … 299.58 µs) 274.04 µs ▂███▆▆█▆████▆▆▂▃▃▂▂▂▂
+                                          gc(  0.00 ps …   1.88 ms)   0.00 ps
+                                        heap(  0.00  b … 544.09 kb)  85.73 kb/iter
+
+1000 labels first set+measure+scene-publication        3.28 ms/iter   3.36 ms     ███▅▂            
+                                                (2.98 ms … 4.03 ms)   3.73 ms ▁▂▆██████▇▆▅▆▅▃▅▅▂▃▂▂
+                                          gc(  0.00 ps …   3.07 ms)   0.00 ps
+                                        heap(  1.12 mb …   6.94 mb)   3.49 mb/iter
+
+1000 labels first same-value-set                       6.53 µs/iter   5.96 µs  █                   
+                                               (3.17 µs … 24.08 µs)  20.83 µs ▇█▇▄▂▂▂▁▁▁▁▁▂▂▂▂▂▁▂▁▁
+                                          gc(  0.00 ps …   1.58 ms)   0.00 ps
+                                        heap(512.00  b …  80.61 kb) 560.00  b/iter
+
+1000 labels first overwrite-before-scene-publication   1.82 ms/iter   1.92 ms    ▆█▃▂   ▃          
+                                                (1.55 ms … 2.37 ms)   2.25 ms ▂▅█████████▅▅▅▇▃▅▁▂▂▁
+                                          gc(  0.00 ps …   7.58 ms)   0.00 ps
+                                        heap(  0.00  b …   5.05 mb)   2.59 mb/iter
+
+[34m▶ request-arena.bench.ts[0m
+clk: ~4.00 GHz
+cpu: Apple M4
+runtime: node 24.18.0 (arm64-darwin)
+
+benchmark                                    avg (min … max) p75 / p99    (min … top 1%)
+------------------------------------------------------------ -------------------------------
+• direct request-arena encoding
+------------------------------------------------------------ -------------------------------
+write one paragraph and text mutation          12.87 µs/iter  13.17 µs  ▃▄█                 
+                                        (7.04 µs … 50.79 µs)  41.75 µs ▆███▆▃▂▂▂▂▁▁▁▁▁▁▁▁▁▁▁
+                                   gc(  0.00 ps …   2.39 ms)   0.00 ps
+                                 heap( 11.18 kb … 644.25 kb)  11.74 kb/iter
+
+write 1000 paragraph-order mutations           18.15 µs/iter  17.38 µs  ▆█                  
+                                      (12.08 µs … 147.88 µs)  56.83 µs ▄██▅▂▂▂▁▁▁▁▂▁▁▁▁▁▁▁▁▁
+                                   gc(  0.00 ps …   2.22 ms)   0.00 ps
+                                 heap(  9.84 kb … 460.08 kb)  89.27 kb/iter
+
+write 1000 paragraph and text mutations       109.92 µs/iter 100.29 µs  █                   
+                                      (85.79 µs … 639.46 µs) 297.21 µs ▃█▃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+                                   gc(  0.00 ps …   8.71 ms)   0.00 ps
+                                 heap(  0.00  b … 963.30 kb) 225.87 kb/iter
+
+write 22k UTF16 text into Wasm request arena   57.70 µs/iter  52.21 µs  █                   
+                                      (45.96 µs … 171.50 µs) 150.17 µs ██▃▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁▁▁▁
+                                   gc(  0.00 ps …   1.67 ms)   0.00 ps
+                                 heap(  0.00  b … 414.07 kb)  54.41 kb/iter
+
+write 22k UTF16 text into owned array control  56.94 µs/iter  52.29 µs ▄█                   
+                                      (46.33 µs … 160.21 µs) 148.46 µs ██▃▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁▁▁
+                                   gc(  0.00 ps …   2.27 ms)   0.00 ps
+                                 heap(  0.00  b … 606.68 kb)  54.41 kb/iter
+
+[34m▶ sparse-assignment.bench.ts[0m
+clk: ~3.98 GHz
+cpu: Apple M4
+runtime: node 24.18.0 (arm64-darwin)
+
+benchmark                                                                                avg (min … max) p75 / p99    (min … top 1%)
+-------------------------------------------------------------------------------------------------------- -------------------------------
+• large retained assignments
+-------------------------------------------------------------------------------------------------------- -------------------------------
+unchanged setter preparation in one large paragraph with 8192 paint spans                  27.84 ms/iter  29.11 ms    █▄▆               
+                                                                                   (25.53 ms … 32.09 ms)  31.78 ms ▃▄████▇█▅▇▂▃▅█▂▃▅▃▃▂▂
+                                                                               gc(  0.00 ps …   3.44 ms) 368.63 µs
+                                                                             heap( 10.02 mb …  68.50 mb)  60.97 mb/iter
+
+unchanged end-to-end setter and publication with 8192 paint spans                          31.53 ms/iter  32.69 ms             ▂█▆▃▄▃   
+                                                                                   (28.17 ms … 34.27 ms)  34.04 ms ▅▃▅█▄▅▅▃▅▇▆▄██████▅▄▃
+                                                                               gc(  0.00 ps …   3.33 ms) 390.04 µs
+                                                                             heap( 57.64 mb …  65.05 mb)  60.56 mb/iter
+
+scattered setter preparation in one large paragraph with 8192 paint spans                  36.81 ms/iter  37.90 ms             ▃ █      
+                                                                                   (32.43 ms … 39.74 ms)  39.34 ms ▄▂▂▃▂▄▃▄▄████▇███▆█▆▄
+                                                                               gc(  0.00 ps …   2.62 ms) 157.08 µs
+                                                                             heap( 10.13 mb …  68.51 mb)  60.70 mb/iter
+
+scattered end-to-end setter and publication with 8192 paint spans                          40.53 ms/iter  41.03 ms           █▅ ▆▄      
+                                                                                   (38.52 ms … 42.11 ms)  41.98 ms ▂▃▂▂▄▄▄█████▄████▆▅▆▂
+                                                                               gc(  0.00 ps …   2.17 ms) 400.94 µs
+                                                                             heap( 59.00 mb …  64.54 mb)  60.18 mb/iter
+
+broad setter preparation in one large paragraph with 8192 paint spans                      36.95 ms/iter  37.78 ms         █▄▆          
+                                                                                   (31.62 ms … 52.31 ms)  43.90 ms ▂▂▄▃▄▃▅▆████▃▂▂▂▁▁▂▁▂
+                                                                               gc(  0.00 ps …  12.33 ms) 146.29 µs
+                                                                             heap( 10.04 mb …  68.55 mb)  60.73 mb/iter
+
+broad end-to-end setter and publication with 8192 paint spans                              39.96 ms/iter  40.76 ms     ▃      ▃▄▃███▄   
+                                                                                   (37.81 ms … 41.92 ms)  41.62 ms ▂▂▆████▆██████████▅▆▅
+                                                                               gc(  0.00 ps …   2.68 ms) 423.81 µs
+                                                                             heap( 58.99 mb …  64.67 mb)  60.17 mb/iter
+
+• monospaced retained assignments
+-------------------------------------------------------------------------------------------------------- -------------------------------
+monospaced unchanged setter preparation in one large paragraph with 8192 paint spans       27.95 ms/iter  29.17 ms     ▂▃█ ▃            
+                                                                                   (25.53 ms … 31.45 ms)  31.04 ms ▂▃▇▇█████▄█▄▂▄▅▆▅▇▂▃▄
+                                                                               gc(  0.00 ps …   3.65 ms) 170.02 µs
+                                                                             heap( 10.13 mb …  68.86 mb)  61.18 mb/iter
+
+monospaced unchanged end-to-end setter and publication with 8192 paint spans               31.82 ms/iter  32.61 ms                █     
+                                                                                   (27.23 ms … 35.78 ms)  34.18 ms ▂▁▃▂▂▃▂▃▁▂▄▅█████▇▄▂▂
+                                                                               gc(  0.00 ps …   5.77 ms) 515.37 µs
+                                                                             heap( 57.81 mb …  64.95 mb)  60.38 mb/iter
+
+monospaced scattered setter preparation in one large paragraph with 8192 paint spans       35.23 ms/iter  36.22 ms           ▂█▃▆ ▃ ▃   
+                                                                                   (31.69 ms … 37.70 ms)  37.63 ms ▃▃▄▃▄▂▆▂▃█████▇█▇█▇▄▃
+                                                                               gc(  0.00 ps …   4.95 ms)  88.75 µs
+                                                                             heap(  6.47 mb …  68.79 mb)  60.71 mb/iter
+
+monospaced scattered end-to-end setter and publication with 8192 paint spans               39.19 ms/iter  39.80 ms     ▂▄▄█▇█▂█ ▂█▅▇    
+                                                                                   (37.58 ms … 40.85 ms)  40.62 ms ▃▃▆█████████▆█████▇▆▆
+                                                                               gc(  0.00 ps …   2.71 ms) 439.67 µs
+                                                                             heap( 59.02 mb …  64.76 mb)  60.46 mb/iter
+
+monospaced broad setter preparation in one large paragraph with 8192 paint spans           35.58 ms/iter  36.31 ms         ▃ ▆█▆▆▂▃     
+                                                                                   (32.02 ms … 38.63 ms)  38.15 ms ▃▂▂▂▄▂▅▆████████▃▅▇▆▂
+                                                                               gc(  0.00 ps …   3.23 ms) 248.67 µs
+                                                                             heap( 10.09 mb …  68.95 mb)  60.78 mb/iter
+
+monospaced broad end-to-end setter and publication with 8192 paint spans                   38.81 ms/iter  39.35 ms       ▃▆▇▆  ▇█▄▆     
+                                                                                   (37.24 ms … 40.68 ms)  40.34 ms ▅▄▇▇▆▅████▆██████▂▄▂▅
+                                                                               gc(  0.00 ps …   3.09 ms) 323.02 µs
+                                                                             heap( 59.15 mb …  64.62 mb)  60.34 mb/iter
+
+• shared material large retained assignments
+-------------------------------------------------------------------------------------------------------- -------------------------------
+shared-material scattered setter preparation in one large paragraph with 8192 paint spans  43.77 ms/iter  44.23 ms  ▃▇▆█▅▆▂             
+                                                                                   (42.40 ms … 49.15 ms)  46.80 ms ▅███████▇█▆▅▄▂▃▂▃▃▂▁▂
+                                                                               gc(  1.46 ms …   5.62 ms)   2.57 ms
+                                                                             heap( 11.34 mb …  72.90 mb)  68.96 mb/iter
+
+shared-material scattered end-to-end setter and publication with 8192 paint spans          47.04 ms/iter  47.57 ms    ▆█▄▇▆▃ ▂          
+                                                                                   (45.27 ms … 50.92 ms)  50.39 ms ▂▄▇████████▅▄▅▃▃▁▁▁▁▂
+                                                                               gc(421.92 µs …   4.71 ms)   2.67 ms
+                                                                             heap(  6.56 mb …  72.41 mb)  68.91 mb/iter
+
+• paint-only style partition assignments
+-------------------------------------------------------------------------------------------------------- -------------------------------
+split move and merge paint boundaries preparation only                                      4.93 ms/iter   6.94 ms                    █ 
+                                                                                   (545.42 µs … 7.27 ms)   7.19 ms █▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▃
+                                                                               gc(  0.00 ps …   2.10 ms)   0.00 ps
+                                                                             heap(  0.00  b …   5.80 mb)   4.20 mb/iter
+
+split move and merge paint boundaries publication                                           9.53 ms/iter   9.86 ms           ▂  ▄▄ █▄   
+                                                                                    (8.67 ms … 10.36 ms)  10.18 ms ▂▆▄▇▇▇█▅▅▇██▇██████▅▃
+                                                                               gc(  0.00 ps …   2.98 ms)   0.00 ps
+                                                                             heap(363.65 kb …   5.05 mb)   4.45 mb/iter
+
+[34m▶ stress.bench.ts[0m
+clk: ~3.94 GHz
+cpu: Apple M4
+runtime: node 24.18.0 (arm64-darwin)
+
+benchmark                                                avg (min … max) p75 / p99    (min … top 1%)
+------------------------------------------------------------------------ -------------------------------
+• 1,000-label stress
+------------------------------------------------------------------------ -------------------------------
+toggle one group containing 1000 retained labels          402.50 µs/iter 437.96 µs   ▂▇█▆  ▂ ▂▂         
+                                                 (319.33 µs … 617.50 µs) 536.54 µs ▂█████▅██████▇▄▄▄▃▂▂▃
+                                               gc(  0.00 ps …   8.12 ms)   0.00 ps
+                                             heap( 76.33 kb …   2.57 mb) 377.41 kb/iter
+
+reorder 1000 unchanged retained labels                      2.63 ms/iter   2.74 ms  ▆▇█▆▅▂▃▄▇▄          
+                                                     (2.34 ms … 3.54 ms)   3.14 ms ▄██████████▆▇▇▇▇▃▃▂▁▂
+                                               gc(  0.00 ps …   3.06 ms)   0.00 ps
+                                             heap(265.67 kb …   5.84 mb)   2.98 mb/iter
+
+reorder then edit one of 1000 retained labels               6.49 ms/iter   6.74 ms  ██▃▄                
+                                                     (6.02 ms … 7.90 ms)   7.63 ms ▅████▇▆▅▅█▆▄▃▃▂▃▂▁▂▂▂
+                                               gc(  0.00 ps …   2.40 ms)   0.00 ps
+                                             heap(  4.99 mb …   8.76 mb)   5.28 mb/iter
+
+measure 1000 unchanged retained labels                    211.69 µs/iter 225.00 µs    ▄▆▅▃█▆            
+                                                 (169.96 µs … 289.38 µs) 279.50 µs ▂▄▇█████████▇▆▃▄▄▂▁▁▂
+                                               gc(  0.00 ps …   6.97 ms)   0.00 ps
+                                             heap(  0.00  b … 468.23 kb) 208.00  b/iter
+
+borrow glyphs from 1000 steadily promoted retained labels   1.46 ms/iter   2.21 ms  █                ▄▃ 
+                                                   (601.33 µs … 2.47 ms)   2.34 ms ▅█▃▁▂▂▁▁▁▁▁▁▁▁▁▁▁▂██▃
+                                               gc(  0.00 ps …  11.38 ms)   0.00 ps
+                                             heap(  1.97 mb …   6.87 mb)   3.91 mb/iter
+
+edit and measure one of 1000 retained labels              212.69 µs/iter 221.17 µs   █▇▃                
+                                                 (168.17 µs … 444.88 µs) 352.17 µs ▂████▇▅▄▃▃▃▃▂▂▁▁▂▂▁▁▁
+                                               gc(  0.00 ps …   2.77 ms)   0.00 ps
+                                             heap(  0.00  b … 486.46 kb)  47.19 kb/iter
+
+edit and sparsely borrow one of 1000 retained labels      232.15 µs/iter 242.21 µs  ▂███                
+                                                 (192.58 µs … 367.17 µs) 338.04 µs ▂█████▇▅▄▄▂▃▃▅▃▂▂▁▁▁▁
+                                               gc(  0.00 ps …   2.71 ms)   0.00 ps
+                                             heap(  0.00  b … 479.60 kb)  53.97 kb/iter
+
+publish 1024 retained Text instances                       15.40 ms/iter  15.83 ms     █▇▄  ▄▃▂ ▄▄      
+                                                   (14.30 ms … 16.81 ms)  16.67 ms ▂▁▃▆████▇███▆██▅▇▄▃▁▂
+                                               gc(  0.00 ps …   8.42 ms)   0.00 ps
+                                             heap(  8.26 mb …  11.28 mb)   8.64 mb/iter
+
+[34m▶ typegpu-publication.bench.ts[0m
+clk: ~4.00 GHz
+cpu: Apple M4
+runtime: node 24.18.0 (arm64-darwin)
+
+benchmark                        avg (min … max) p75 / p99    (min … top 1%)
+------------------------------------------------ -------------------------------
+• TypeGPU adapter CPU publication
+------------------------------------------------ -------------------------------
+move 1000 retained TypeGPU labels   3.26 ms/iter   3.53 ms   ▂▄  ▄█▂▅           
+                             (2.56 ms … 4.35 ms)   4.21 ms ▃▇█████████▇██▅▄▃▅▅▄▃
+                       gc(  0.00 ps …   8.81 ms)   0.00 ps
+                     heap(  4.37 mb …   8.71 mb)   6.06 mb/iter
+
+[34m▶ unsafe-line-breaks.bench.ts[0m
+clk: ~4.00 GHz
+cpu: Apple M4
+runtime: node 24.18.0 (arm64-darwin)
+
+benchmark                                 avg (min … max) p75 / p99    (min … top 1%)
+--------------------------------------------------------- -------------------------------
+• unsafe legal line boundaries
+--------------------------------------------------------- -------------------------------
+common-safe word-wrap reflow               215.39 µs/iter 219.46 µs  ▃█▇                 
+                                  (163.92 µs … 541.96 µs) 387.79 µs ▄████▇▄▃▂▁▁▂▁▂▂▂▂▂▂▁▁
+                                gc(  0.00 ps …   2.95 ms)   0.00 ps
+                              heap(  0.00  b …   1.16 mb)  85.05 kb/iter
+
+issue 216 reporter workaround              224.18 µs/iter 232.38 µs  █▇▄                 
+                                  (171.00 µs … 578.42 µs) 410.79 µs ▆███▇▇▄▃▂▂▁▂▂▂▂▂▂▂▂▁▁
+                                gc(  0.00 ps …   2.70 ms)   0.00 ps
+                              heap(  0.00  b …   1.12 mb) 104.01 kb/iter
+
+issue 216 unsafe-boundary word-wrap reflow 210.18 µs/iter 213.13 µs   █▄                 
+                                  (158.33 µs … 415.33 µs) 380.83 µs ▁████▇▄▃▂▂▁▁▁▁▂▂▂▂▂▁▁
+                                gc(  0.00 ps …   2.45 ms)   0.00 ps
+                              heap(  0.00  b … 634.44 kb)  83.97 kb/iter
+
+long reporter workaround paragraph reflow  608.16 µs/iter 624.71 µs    ▆█                
+                                  (489.83 µs … 930.46 µs) 881.50 µs ▂▄▆███▅▄▃▂▂▂▂▂▃▃▂▂▂▁▁
+                                gc(  0.00 ps …   3.99 ms)   0.00 ps
+                              heap(  0.00  b …   4.73 mb) 793.63 kb/iter
+
+long unsafe-boundary paragraph reflow      506.87 µs/iter 513.42 µs     █▅               
+                                  (396.92 µs … 918.25 µs) 759.42 µs ▁▃▆▇███▄▃▂▂▂▂▂▂▃▂▂▁▁▁
+                                gc(  0.00 ps …   1.89 ms)   0.00 ps
+                              heap(  0.00  b …   1.07 mb) 139.09 kb/iter
+
+long unsafe-boundary paragraph text edit     1.70 ms/iter   1.71 ms   ▃█                 
+                                      (1.57 ms … 2.84 ms)   2.06 ms ▁▅███▆▄▃▂▂▂▂▃▂▂▁▁▂▁▁▁
+                                gc(  0.00 ps …   9.36 ms)   0.00 ps
+                              heap(  0.00  b …   2.90 mb) 124.38 kb/iter
+
+┌ [1mreport[0m ──────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                                      │
+│  [32m✔[0m Saved "baseline-0.1.0-6e2bf7bd" [2mfeat/rust-text-input-wire@5993367*[0m (15 files)                                     │
+│                                                                                                                      │
+│  [32m✔ Stable clock:[0m [2mReadings ranged 3.93–4.01 GHz.[0m                                                                      │
+│                                                                                                                      │
+│  [32m✔ Consistent runs:[0m [2mMedian timings remained stable across fresh runs.[0m                                                │
+│    [2mMedian spread: ±1.4% across 8 fresh runs.[0m                                                                         │
+│    [2mComparison resolution: ~±1.9%.[0m                                                                                    │
+│    [2mClock estimate explains ~0% of run-to-run spread.[0m                                                                 │
+│    [2mAffected benchmarks (18):[0m                                                                                         │
+│      [33m⚠[0m [2m10 labels no-op scene traversal[0m  [33m±7.4%[0m                                                                        │
+│      [33m⚠[0m [2m10 labels first length-changing engine publication[0m  [33m±4.6%[0m                                                     │
+│      [33m⚠[0m [2m100 labels no-op scene traversal[0m  [33m±5.3%[0m                                                                       │
+│      [33m⚠[0m [2mmeasure 100 unchanged labels[0m  [33m±4.3%[0m                                                                           │
+│      [33m⚠[0m [2mtype one character into a long paragraph and measure[0m  [33m±3.8%[0m                                                   │
+│      [33m⚠[0m [2mcopy per-glyph metrics from 100 unchanged labels[0m  [33m±5.7%[0m                                                       │
+│      [33m⚠[0m [2mcached measurement[0m  [33m±4.6%[0m                                                                                     │
+│      [33m⚠[0m [2mper-glyph inspection after width change[0m  [33m±9.8%[0m                                                                │
+│      [33m⚠[0m [2m1 labels first set[0m  [33m±4.1%[0m                                                                                     │
+│      [33m⚠[0m [2m1 labels first set+measure+scene-publication[0m  [33m±5.1%[0m                                                           │
+│      [33m⚠[0m [2m1 labels first same-value-set[0m  [33m±8.4%[0m                                                                          │
+│      [33m⚠[0m [2m100 labels first set[0m  [33m±4.7%[0m                                                                                   │
+│      [33m⚠[0m [2m1000 labels first set[0m  [33m±4.7%[0m                                                                                  │
+│      [33m⚠[0m [2m1000 labels first same-value-set[0m  [33m±6.3%[0m                                                                       │
+│      [33m⚠[0m [2mwrite one paragraph and text mutation[0m  [33m±4.5%[0m                                                                  │
+│      [33m⚠[0m [2mcommon-safe word-wrap reflow[0m  [33m±5.4%[0m                                                                           │
+│      [33m⚠[0m [2missue 216 reporter workaround[0m  [33m±3.8%[0m                                                                          │
+│      [33m⚠[0m [2missue 216 unsafe-boundary word-wrap reflow[0m  [33m±3.7%[0m                                                             │
+│                                                                                                                      │
+│  [33m⚠ Noisy samples:[0m [2mTimings varied widely within a process suggesting non-deterministic work or runtime interference.[0m  │
+│    [2mAffected benchmarks (38):[0m                                                                                         │
+│      [33m⚠[0m [2medit and measure one of 100 retained labels[0m  [33m±13.0%[0m                                                           │
+│      [33m⚠[0m [2m10 labels no-op scene traversal[0m  [33m±31.3%[0m                                                                       │
+│      [33m⚠[0m [2m10 labels first same-length scene publication[0m  [33m±13.1%[0m                                                         │
+│      [33m⚠[0m [2m10 labels first length-changing scene publication[0m  [33m±11.6%[0m                                                     │
+│      [33m⚠[0m [2m10 labels first color-only scene publication[0m  [33m±12.1%[0m                                                          │
+│      [33m⚠[0m [2m10 labels first same-length engine publication[0m  [33m±12.9%[0m                                                        │
+│      [33m⚠[0m [2m10 labels first length-changing engine publication[0m  [33m±11.1%[0m                                                    │
+│      [33m⚠[0m [2m10 labels first color-only engine publication[0m  [33m±11.9%[0m                                                         │
+│      [33m⚠[0m [2m10 labels last same-length scene publication[0m  [33m±13.5%[0m                                                          │
+│      [33m⚠[0m [2m10 labels last length-changing scene publication[0m  [33m±12.5%[0m                                                      │
+│      [33m⚠[0m [2m10 labels last color-only scene publication[0m  [33m±13.2%[0m                                                           │
+│      [33m⚠[0m [2m10 labels last same-length engine publication[0m  [33m±13.5%[0m                                                         │
+│      [33m⚠[0m [2m10 labels last length-changing engine publication[0m  [33m±11.8%[0m                                                     │
+│      [33m⚠[0m [2m10 labels last color-only engine publication[0m  [33m±11.8%[0m                                                          │
+│      [33m⚠[0m [2m100 labels no-op scene traversal[0m  [33m±12.4%[0m                                                                      │
+│      [33m⚠[0m [2m1000 labels no-op scene traversal[0m  [33m±15.6%[0m                                                                     │
+│      [33m⚠[0m [2mmeasure 100 unchanged labels[0m  [33m±10.9%[0m                                                                          │
+│      [33m⚠[0m [2mtype one character into a long paragraph and measure[0m  [33m±113.2%[0m                                                 │
+│      [33m⚠[0m [2mtype one character into a long Fredoka paragraph and measure[0m  [33m±29.5%[0m                                          │
+│      [33m⚠[0m [2mcached measurement[0m  [33m±27.3%[0m                                                                                    │
+│      [33m⚠[0m [2mper-glyph inspection after width change[0m  [33m±30.0%[0m                                                               │
+│      [33m⚠[0m [2m1 labels first set[0m  [33m±16.7%[0m                                                                                    │
+│      [33m⚠[0m [2m1 labels first set+measure[0m  [33m±19.2%[0m                                                                            │
+│      [33m⚠[0m [2m1 labels first same-value-set[0m  [33m±23.3%[0m                                                                         │
+│      [33m⚠[0m [2m100 labels first set[0m  [33m±16.4%[0m                                                                                  │
+│      [33m⚠[0m [2m100 labels first set+measure[0m  [33m±22.9%[0m                                                                          │
+│      [33m⚠[0m [2m100 labels first same-value-set[0m  [33m±28.2%[0m                                                                       │
+│      [33m⚠[0m [2m1000 labels first set[0m  [33m±13.9%[0m                                                                                 │
+│      [33m⚠[0m [2m1000 labels first set+measure[0m  [33m±18.3%[0m                                                                         │
+│      [33m⚠[0m [2m1000 labels first same-value-set[0m  [33m±24.4%[0m                                                                      │
+│      [33m⚠[0m [2mwrite one paragraph and text mutation[0m  [33m±20.4%[0m                                                                 │
+│      [33m⚠[0m [2mwrite 1000 paragraph-order mutations[0m  [33m±17.4%[0m                                                                  │
+│      [33m⚠[0m [2mtoggle one group containing 1000 retained labels[0m  [33m±14.0%[0m                                                      │
+│      [33m⚠[0m [2mmeasure 1000 unchanged retained labels[0m  [33m±10.8%[0m                                                                │
+│      [33m⚠[0m [2mborrow glyphs from 1000 steadily promoted retained labels[0m  [33m±67.2%[0m                                             │
+│      [33m⚠[0m [2medit and measure one of 1000 retained labels[0m  [33m±10.0%[0m                                                          │
+│      [33m⚠[0m [2mmove 1000 retained TypeGPU labels[0m  [33m±13.6%[0m                                                                     │
+│      [33m⚠[0m [2missue 216 reporter workaround[0m  [33m±11.2%[0m                                                                         │
+│                                                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+[32m✔[0m Baseline set to "baseline-0.1.0-6e2bf7bd"
+
+[1m[36m━━ compare[0m [2mbaseline-0.1.0-6e2bf7bd (feat/rust-text-input-wire@5993367*) -> candidate-0.1.0-d2f7a01f (feat/rust-text-input-wire@5993367*)[0m
+[2mApple M4[0m
+[2mMann-Whitney U on block medians  α=0.05  minΔ=5%[0m
+
+[1m[36madapter-publication.bench.ts[0m
+[38;5;248m  bench                                    baseline  candidate    Δp50    Δp99     p       Δ 95% CI[0m
+[38;5;248m---------------------------------------------------------------------------------------------------[0m
+  • allocation-light adapter publication
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [32m▲[0m [37mnormalize 1000 equivalent retained …[0m [38;5;248m   30.24ms[0m [38;5;248m    2.23ms[0m [32m -92.6%[0m [32m -92.3%[0m [37m<.001[0m [37m -92.7..-92.5%[0m
+                                         [36m▁▁▁▁▁▁▁▅█▂[0m [35m█▁▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37mmutate one trailing span across 100…[0m [38;5;248m   57.43ms[0m [38;5;248m   37.34ms[0m [32m -35.0%[0m [32m -36.9%[0m [37m<.001[0m [37m -35.8..-34.2%[0m
+                                         [36m▁▁▁▁▁▁▄█▃▁[0m [35m▃█▁▁▁▁▁▁▁▁[0m
+
+
+[1m[36mbatching.bench.ts[0m
+[38;5;248m  bench                                    baseline  candidate    Δp50    Δp99     p       Δ 95% CI[0m
+[38;5;248m---------------------------------------------------------------------------------------------------[0m
+  • batched text operations
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [32m▲[0m [37medit and measure one of 100 retaine…[0m [38;5;248m  142.44µs[0m [38;5;248m  109.56µs[0m [32m -23.1%[0m [32m -10.1%[0m [37m<.001[0m [37m -28.1..-19.2%[0m
+                                         [36m▁▁▅█▄▃▂▂▂▁[0m [35m▃█▄▃▂▁▁▁▁▁[0m                       [33m        ⚠ ~±7%[0m
+
+  [31m▼[0m [37mrewrite 64 labels in one group      [0m [38;5;248m    1.30ms[0m [38;5;248m    1.38ms[0m [31m  +6.1%[0m [31m +13.2%[0m [37m<.001[0m [37m   +5.3..+7.0%[0m
+                                         [36m▂█▃▁▁▁▂▁▁▁[0m [35m▁█▆▃▂▂▁▁▂▁[0m
+
+  [31m▼[0m [37mrewrite 128 labels in one group     [0m [38;5;248m    2.12ms[0m [38;5;248m    2.41ms[0m [31m +13.9%[0m [31m +19.4%[0m [37m<.001[0m [37m +11.8..+15.3%[0m
+                                         [36m▅█▃▂▂▁▁▁▁▁[0m [35m▁▂█▅▃▂▂▁▁▁[0m
+
+  [31m▼[0m [37mrewrite 256 labels in one group     [0m [38;5;248m    3.87ms[0m [38;5;248m    4.51ms[0m [31m +16.4%[0m [31m +20.9%[0m [37m<.001[0m [37m +15.2..+17.8%[0m
+                                         [36m▂█▄▂▂▁▁▁▁▁[0m [35m▁▁▁▆█▄▂▂▁▁[0m
+
+  [31m▼[0m [37mrewrite 512 labels in one group     [0m [38;5;248m    7.46ms[0m [38;5;248m    9.51ms[0m [31m +27.5%[0m [31m +33.1%[0m [37m<.001[0m [37m +25.3..+28.7%[0m
+                                         [36m▃█▅▂▁▁▁▁▁▁[0m [35m▁▁▁▃▄▅█▄▂▂[0m
+
+  • edit-sized root publication
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [38;5;248m■[0m [37m10 labels no-op scene traversal     [0m [38;5;248m   27.27µs[0m [38;5;248m   29.52µs[0m [2m  +8.3%[0m [2m  +2.3%[0m [2m .137[0m [2m  -4.8..+13.3%[0m
+                                         [36m▃█▅▃▃▂▂▂▁▁[0m [35m▂█▅▄▂▂▂▂▁▁[0m                       [33m       ⚠ ~±10%[0m
+
+  [32m▲[0m [37m10 labels first same-length scene p…[0m [38;5;248m  418.50µs[0m [38;5;248m  367.92µs[0m [32m -12.1%[0m [32m -16.5%[0m [37m<.001[0m [37m  -15.1..-7.3%[0m
+                                         [36m▁▅█▅▂▁▁▁▁▁[0m [35m▂█▃▂▂▁▁▁▁▁[0m                       [33m        ⚠ ~±6%[0m
+
+  [38;5;248m■[0m [37m10 labels first length-changing sce…[0m [38;5;248m  454.48µs[0m [38;5;248m  473.94µs[0m [2m  +4.3%[0m [2m  +0.8%[0m [2m<.001[0m [2m   +2.4..+5.9%[0m
+                                         [36m▃█▅▄▂▁▁▁▁▁[0m [35m▁▆█▄▂▂▁▂▁▁[0m
+
+  [32m▲[0m [37m10 labels first color-only scene pu…[0m [38;5;248m  423.38µs[0m [38;5;248m  253.42µs[0m [32m -40.1%[0m [32m -29.2%[0m [37m<.001[0m [37m -42.3..-39.1%[0m
+                                         [36m▁▁▄█▄▂▁▁▁▁[0m [35m▇█▂▁▂▁▁▁▁▁[0m
+
+  [32m▲[0m [37m10 labels first same-length engine …[0m [38;5;248m  396.00µs[0m [38;5;248m  346.92µs[0m [32m -12.4%[0m [32m -15.2%[0m [37m .005[0m [37m -21.8..-10.3%[0m
+                                         [36m▁▃█▆▄▂▂▁▂▁[0m [35m▂█▄▂▂▁▁▁▁▁[0m
+
+  [38;5;248m■[0m [37m10 labels first length-changing eng…[0m [38;5;248m  440.88µs[0m [38;5;248m  458.50µs[0m [2m  +4.0%[0m [2m  -2.6%[0m [2m .041[0m [2m   +0.3..+9.1%[0m
+                                         [36m▁██▅▃▂▂▂▁▁[0m [35m▁▃█▅▃▂▁▁▁▁[0m                       [33m        ⚠ ~±6%[0m
+
+  [32m▲[0m [37m10 labels first color-only engine p…[0m [38;5;248m  410.17µs[0m [38;5;248m  232.69µs[0m [32m -43.3%[0m [32m -37.0%[0m [37m<.001[0m [37m -46.3..-38.5%[0m
+                                         [36m▁▁▂█▅▂▁▁▁▁[0m [35m▇█▃▂▂▁▁▁▁▁[0m                       [33m        ⚠ ~±6%[0m
+
+  [32m▲[0m [37m10 labels last same-length scene pu…[0m [38;5;248m  416.58µs[0m [38;5;248m  359.31µs[0m [32m -13.7%[0m [32m -17.6%[0m [37m<.001[0m [37m -15.5..-12.6%[0m
+                                         [36m▁▄█▅▄▂▁▁▂▁[0m [35m▂█▄▂▁▁▁▁▁▁[0m
+
+  [31m▼[0m [37m10 labels last length-changing scen…[0m [38;5;248m  441.67µs[0m [38;5;248m  463.98µs[0m [31m  +5.1%[0m [32m  -1.1%[0m [37m<.001[0m [37m   +3.2..+7.6%[0m
+                                         [36m▁█▆▄▃▂▁▁▁▁[0m [35m▁▃█▆▃▂▁▁▁▁[0m
+
+  [32m▲[0m [37m10 labels last color-only scene pub…[0m [38;5;248m  420.88µs[0m [38;5;248m  246.65µs[0m [32m -41.4%[0m [32m -41.6%[0m [37m<.001[0m [37m -42.9..-38.8%[0m
+                                         [36m▁▁▂█▄▁▁▁▁▁[0m [35m▅█▂▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m10 labels last same-length engine p…[0m [38;5;248m  397.44µs[0m [38;5;248m  348.06µs[0m [32m -12.4%[0m [32m -10.8%[0m [37m<.001[0m [37m  -14.7..-8.7%[0m
+                                         [36m▁▄█▆▃▂▁▁▁▁[0m [35m▂█▅▂▁▁▁▁▁▁[0m                       [33m        ⚠ ~±5%[0m
+
+  [31m▼[0m [37m10 labels last length-changing engi…[0m [38;5;248m  433.48µs[0m [38;5;248m  469.71µs[0m [31m  +8.4%[0m [31m+139.9%[0m [37m .001[0m [37m  +5.4..+16.3%[0m
+                                         [36m▇█▂▁▁▁▁▁▁▁[0m [35m▁█▂▁▁▁▁▁▁▁[0m                       [33m        ⚠ ~±7%[0m
+
+  [32m▲[0m [37m10 labels last color-only engine pu…[0m [38;5;248m  402.88µs[0m [38;5;248m  223.83µs[0m [32m -44.4%[0m [32m -42.0%[0m [37m<.001[0m [37m -45.3..-41.2%[0m
+                                         [36m▁▁▂█▄▂▁▁▁▁[0m [35m█▇▂▂▁▁▁▁▁▁[0m
+
+  [38;5;248m■[0m [37m100 labels no-op scene traversal    [0m [38;5;248m   59.13µs[0m [38;5;248m   60.25µs[0m [2m  +1.9%[0m [2m  -0.8%[0m [2m .553[0m [2m   -3.9..+7.3%[0m
+                                         [36m▄█▅▃▁▁▁▁▁▁[0m [35m▂█▄▃▂▁▁▁▁▁[0m                       [33m        ⚠ ~±7%[0m
+
+  [32m▲[0m [37m100 labels first same-length scene …[0m [38;5;248m  643.33µs[0m [38;5;248m  470.40µs[0m [32m -26.9%[0m [32m -26.4%[0m [37m<.001[0m [37m -29.0..-25.1%[0m
+                                         [36m▁▁▁▇█▃▂▂▂▁[0m [35m▂█▃▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m100 labels first length-changing sc…[0m [38;5;248m  848.71µs[0m [38;5;248m  658.88µs[0m [32m -22.4%[0m [32m -18.3%[0m [37m<.001[0m [37m -24.1..-17.6%[0m
+                                         [36m▁▁▁█▆▃▂▂▁▁[0m [35m▃█▅▃▂▂▁▁▁▁[0m
+
+  [32m▲[0m [37m100 labels first color-only scene p…[0m [38;5;248m  639.42µs[0m [38;5;248m  288.60µs[0m [32m -54.9%[0m [32m -53.0%[0m [37m<.001[0m [37m -56.1..-53.5%[0m
+                                         [36m▁▁▁▃█▃▂▂▁▁[0m [35m█▅▂▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m100 labels first same-length engine…[0m [38;5;248m  575.33µs[0m [38;5;248m  428.04µs[0m [32m -25.6%[0m [32m -24.7%[0m [37m<.001[0m [37m -27.7..-23.2%[0m
+                                         [36m▁▁▁█▅▃▁▂▁▁[0m [35m▂█▃▂▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m100 labels first length-changing en…[0m [38;5;248m  774.27µs[0m [38;5;248m  609.67µs[0m [32m -21.3%[0m [32m -20.8%[0m [37m<.001[0m [37m -26.6..-19.7%[0m
+                                         [36m▁▁▁█▇▂▂▂▁▁[0m [35m▃█▄▂▂▁▁▁▁▁[0m
+
+  [32m▲[0m [37m100 labels first color-only engine …[0m [38;5;248m  576.52µs[0m [38;5;248m  246.90µs[0m [32m -57.2%[0m [32m -55.5%[0m [37m<.001[0m [37m -58.6..-56.6%[0m
+                                         [36m▁▁▁▁█▃▁▁▁▁[0m [35m█▆▂▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m100 labels last same-length scene p…[0m [38;5;248m  644.42µs[0m [38;5;248m  466.08µs[0m [32m -27.7%[0m [32m -22.4%[0m [37m<.001[0m [37m -28.7..-24.0%[0m
+                                         [36m▁▁▁█▇▃▂▂▂▁[0m [35m▂█▃▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m100 labels last length-changing sce…[0m [38;5;248m  669.52µs[0m [38;5;248m  596.77µs[0m [32m -10.9%[0m [32m -13.4%[0m [37m<.001[0m [37m  -12.7..-6.7%[0m
+                                         [36m▁▃█▇▄▂▂▂▁▁[0m [35m▂█▅▃▂▂▂▁▁▁[0m
+
+  [32m▲[0m [37m100 labels last color-only scene pu…[0m [38;5;248m  631.10µs[0m [38;5;248m  295.06µs[0m [32m -53.2%[0m [32m -52.0%[0m [37m<.001[0m [37m -54.0..-52.5%[0m
+                                         [36m▁▁▁▄█▂▃▂▂▁[0m [35m█▅▂▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m100 labels last same-length engine …[0m [38;5;248m  592.27µs[0m [38;5;248m  421.38µs[0m [32m -28.9%[0m [32m -74.6%[0m [37m<.001[0m [37m -30.5..-25.7%[0m
+                                         [36m▁█▂▁▁▁▁▁▁▁[0m [35m█▂▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m100 labels last length-changing eng…[0m [38;5;248m  618.17µs[0m [38;5;248m  556.85µs[0m [32m  -9.9%[0m [32m -11.0%[0m [37m<.001[0m [37m  -12.2..-7.9%[0m
+                                         [36m▁▁▆█▄▂▂▂▁▁[0m [35m▂█▇▃▂▂▂▁▁▁[0m
+
+  [32m▲[0m [37m100 labels last color-only engine p…[0m [38;5;248m  574.92µs[0m [38;5;248m  246.10µs[0m [32m -57.2%[0m [32m -46.3%[0m [37m<.001[0m [37m -58.9..-54.5%[0m
+                                         [36m▁▁▁▂█▃▁▂▁▁[0m [35m██▂▂▁▁▁▁▁▁[0m                       [33m        ⚠ ~±7%[0m
+
+  [31m▼[0m [37m1000 labels no-op scene traversal   [0m [38;5;248m  351.81µs[0m [38;5;248m  389.29µs[0m [31m +10.7%[0m [31m +39.4%[0m [37m<.001[0m [37m  +7.6..+13.8%[0m
+                                         [36m▃█▃▅▂▁▁▁▁▁[0m [35m▁▄█▃▂▁▁▁▁▁[0m
+
+  [32m▲[0m [37m1000 labels first same-length scene…[0m [38;5;248m    3.13ms[0m [38;5;248m    1.63ms[0m [32m -48.0%[0m [32m -44.1%[0m [37m<.001[0m [37m -48.7..-47.4%[0m
+                                         [36m▁▁▁▁▁▁▂█▆▂[0m [35m▆█▂▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m1000 labels first length-changing s…[0m [38;5;248m    4.73ms[0m [38;5;248m    2.37ms[0m [32m -50.0%[0m [32m -46.2%[0m [37m<.001[0m [37m -51.0..-49.5%[0m
+                                         [36m▁▁▁▁▁▁▁█▇▂[0m [35m█▇▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m1000 labels first color-only scene …[0m [38;5;248m    3.08ms[0m [38;5;248m  774.48µs[0m [32m -74.9%[0m [32m -65.2%[0m [37m<.001[0m [37m -75.0..-74.1%[0m
+                                         [36m▁▁▁▁▁▁▁█▆▂[0m [35m█▅▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m1000 labels first same-length engin…[0m [38;5;248m    2.84ms[0m [38;5;248m    1.39ms[0m [32m -50.9%[0m [32m -47.2%[0m [37m<.001[0m [37m -51.8..-50.2%[0m
+                                         [36m▁▁▁▁▁▁▃█▅▂[0m [35m▇█▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m1000 labels first length-changing e…[0m [38;5;248m    4.44ms[0m [38;5;248m    2.12ms[0m [32m -52.2%[0m [32m -52.2%[0m [37m<.001[0m [37m -52.7..-51.8%[0m
+                                         [36m▁▁▁▁▁▁▂█▂▁[0m [35m█▅▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m1000 labels first color-only engine…[0m [38;5;248m    2.80ms[0m [38;5;248m  486.42µs[0m [32m -82.6%[0m [32m -75.9%[0m [37m<.001[0m [37m -83.4..-82.2%[0m
+                                         [36m▁▁▁▁▁▁▁▇█▂[0m [35m█▃▁▁▁▁▁▁▁▁[0m                       [33m        ⚠ ~±6%[0m
+
+  [32m▲[0m [37m1000 labels last same-length scene …[0m [38;5;248m    3.14ms[0m [38;5;248m    1.62ms[0m [32m -48.3%[0m [32m -46.5%[0m [37m<.001[0m [37m -49.0..-47.2%[0m
+                                         [36m▁▁▁▁▁▁█▆▃▁[0m [35m█▇▂▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m1000 labels last length-changing sc…[0m [38;5;248m    3.17ms[0m [38;5;248m    1.89ms[0m [32m -40.3%[0m [32m -35.5%[0m [37m<.001[0m [37m -41.2..-39.1%[0m
+                                         [36m▁▁▁▁▁▁▇█▅▂[0m [35m▄█▃▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m1000 labels last color-only scene p…[0m [38;5;248m    3.12ms[0m [38;5;248m  755.19µs[0m [32m -75.8%[0m [32m -68.6%[0m [37m<.001[0m [37m -76.3..-74.9%[0m
+                                         [36m▁▁▁▁▁▁▁█▄▂[0m [35m█▃▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m1000 labels last same-length engine…[0m [38;5;248m    2.84ms[0m [38;5;248m    1.41ms[0m [32m -50.1%[0m [32m -45.8%[0m [37m<.001[0m [37m -50.9..-48.3%[0m
+                                         [36m▁▁▁▁▁▁▁█▆▂[0m [35m▂█▂▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m1000 labels last length-changing en…[0m [38;5;248m    2.92ms[0m [38;5;248m    1.67ms[0m [32m -42.6%[0m [32m -33.2%[0m [37m<.001[0m [37m -44.2..-38.7%[0m
+                                         [36m▁▁▁▁▁▁▇█▄▁[0m [35m▅█▃▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m1000 labels last color-only engine …[0m [38;5;248m    2.83ms[0m [38;5;248m  471.06µs[0m [32m -83.4%[0m [32m -74.0%[0m [37m<.001[0m [37m -83.7..-82.5%[0m
+                                         [36m▁▁▁▁▁▁▁██▂[0m [35m█▃▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m100 labels 100 edits immediate meas…[0m [38;5;248m    2.88ms[0m [38;5;248m    1.90ms[0m [32m -33.9%[0m [32m -28.3%[0m [37m<.001[0m [37m -35.2..-32.8%[0m
+                                         [36m▁▁▁▁▃█▇▃▁▁[0m [35m▂█▃▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m100 labels 100 edits immediate meas…[0m [38;5;248m   20.88ms[0m [38;5;248m    6.18ms[0m [32m -70.4%[0m [32m -67.1%[0m [37m<.001[0m [37m -70.7..-69.9%[0m
+                                         [36m▁▁▁▁▁▁▁█▆▁[0m [35m█▂▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m100 labels batched edit-read public…[0m [38;5;248m    6.13ms[0m [38;5;248m    4.48ms[0m [32m -26.9%[0m [32m -23.5%[0m [37m<.001[0m [37m -28.1..-25.8%[0m
+                                         [36m▁▁▁▁▂▅█▄▂▁[0m [35m▃█▃▂▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m100 labels interleaved edit-read pu…[0m [38;5;248m   28.47ms[0m [38;5;248m   10.55ms[0m [32m -62.9%[0m [32m -61.0%[0m [37m<.001[0m [37m -63.3..-62.3%[0m
+                                         [36m▁▁▁▁▁▁▁▆█▂[0m [35m█▂▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m1000 labels 100 edits immediate mea…[0m [38;5;248m    3.90ms[0m [38;5;248m    2.08ms[0m [32m -46.7%[0m [32m -43.2%[0m [37m<.001[0m [37m -47.2..-46.2%[0m
+                                         [36m▁▁▁▁▁▁▄█▂▁[0m [35m▆█▂▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m1000 labels 100 edits immediate mea…[0m [38;5;248m  153.62ms[0m [38;5;248m   18.22ms[0m [32m -88.1%[0m [32m -90.1%[0m [37m<.001[0m [37m -88.2..-87.7%[0m
+                                         [36m▁▁▁▁▁▁▂█▁▁[0m [35m█▁▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m1000 labels 100 edits batched edit-…[0m [38;5;248m    9.81ms[0m [38;5;248m    6.68ms[0m [32m -31.9%[0m [32m -30.5%[0m [37m<.001[0m [37m -32.7..-31.2%[0m
+                                         [36m▁▁▁▁▁▁▁█▇▂[0m [35m▅█▃▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m1000 labels 100 edits interleaved e…[0m [38;5;248m  177.13ms[0m [38;5;248m   45.61ms[0m [32m -74.2%[0m [32m -74.6%[0m [37m<.001[0m [37m -74.6..-74.0%[0m
+                                         [36m▁▁▁▁▁▁▁▂█▂[0m [35m█▁▁▁▁▁▁▁▁▁[0m
+
+  • multiple-owner publication
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [32m▲[0m [37m100 labels separated balanced grow-…[0m [38;5;248m  769.52µs[0m [38;5;248m  728.02µs[0m [32m  -5.4%[0m [32m  -3.5%[0m [37m<.001[0m [37m   -6.5..-4.3%[0m
+                                         [36m▁▁▂██▅▃▂▂▁[0m [35m▁▄█▆▅▃▃▂▁▁[0m
+
+  [32m▲[0m [37m100 labels separated balanced grow-…[0m [38;5;248m  818.90µs[0m [38;5;248m  777.85µs[0m [32m  -5.0%[0m [32m  -7.2%[0m [37m<.001[0m [37m   -7.9..-3.9%[0m
+                                         [36m▁▁▅█▅▂▂▁▁▁[0m [35m▂▆█▅▃▂▂▁▁▁[0m
+
+  [32m▲[0m [37m100 labels separated unbalanced gro…[0m [38;5;248m  782.77µs[0m [38;5;248m  711.65µs[0m [32m  -9.1%[0m [32m  -6.6%[0m [37m .005[0m [37m  -10.7..-5.8%[0m
+                                         [36m▁▁▃█▆▃▃▂▁▁[0m [35m▁▇█▅▃▃▂▂▁▁[0m
+
+  [32m▲[0m [37m100 labels separated unbalanced gro…[0m [38;5;248m  825.71µs[0m [38;5;248m  771.46µs[0m [32m  -6.6%[0m [32m  -6.2%[0m [37m<.001[0m [37m   -9.5..-4.0%[0m
+                                         [36m▁▁▃█▇▄▃▂▂▁[0m [35m▁▇█▆▄▃▂▂▁▁[0m
+
+  [32m▲[0m [37m1000 labels separated balanced grow…[0m [38;5;248m    4.46ms[0m [38;5;248m    2.73ms[0m [32m -38.8%[0m [32m -33.8%[0m [37m<.001[0m [37m -39.3..-37.5%[0m
+                                         [36m▁▁▁▁▁▁▁█▃▁[0m [35m▂█▂▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m1000 labels separated balanced grow…[0m [38;5;248m    4.78ms[0m [38;5;248m    2.98ms[0m [32m -37.6%[0m [32m -27.6%[0m [37m<.001[0m [37m -38.2..-36.8%[0m
+                                         [36m▁▁▁▁▁▁▁▆█▃[0m [35m▄█▃▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m1000 labels separated unbalanced gr…[0m [38;5;248m    4.56ms[0m [38;5;248m    2.80ms[0m [32m -38.5%[0m [32m -35.6%[0m [37m<.001[0m [37m -40.0..-38.2%[0m
+                                         [36m▁▁▁▁▁▁▁█▅▁[0m [35m▃█▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37m1000 labels separated unbalanced gr…[0m [38;5;248m    4.89ms[0m [38;5;248m    3.03ms[0m [32m -37.9%[0m [32m -34.2%[0m [37m<.001[0m [37m -38.6..-37.4%[0m
+                                         [36m▁▁▁▁▁▁▁▅█▂[0m [35m▄█▂▁▁▁▁▁▁▁[0m
+
+
+[1m[36mcold.bench.ts[0m
+[38;5;248m  bench                                    baseline  candidate    Δp50    Δp99     p       Δ 95% CI[0m
+[38;5;248m---------------------------------------------------------------------------------------------------[0m
+  • first-time operations
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [31m▼[0m [37mmount and publish a 22k-glyph parag…[0m [38;5;248m   18.63ms[0m [38;5;248m   19.97ms[0m [31m  +7.2%[0m [31m  +7.0%[0m [37m<.001[0m [37m   +5.4..+8.5%[0m
+                                         [36m▃█▇▅▄▂▁▁▁▁[0m [35m▁▁▁▁▄█▇▃▃▂[0m
+
+  [32m▲[0m [37mmount a label and publish its first…[0m [38;5;248m    2.63ms[0m [38;5;248m    2.27ms[0m [32m -13.6%[0m [32m  -9.4%[0m [37m<.001[0m [37m -14.3..-12.1%[0m
+                                         [36m▁▁▄█▃▂▁▁▁▁[0m [35m▃█▄▂▂▂▁▁▁▁[0m
+
+  [32m▲[0m [37mmount 100 labels and borrow glyphs …[0m [38;5;248m   11.89ms[0m [38;5;248m   11.17ms[0m [32m  -6.1%[0m [32m  -4.1%[0m [37m<.001[0m [37m   -8.1..-5.1%[0m
+                                         [36m▁▁▂█▆▄▂▂▁▁[0m [35m▂█▅▃▂▂▂▁▁▁[0m
+
+
+[1m[36mcommon.bench.ts[0m
+[38;5;248m  bench                                    baseline  candidate    Δp50    Δp99     p       Δ 95% CI[0m
+[38;5;248m---------------------------------------------------------------------------------------------------[0m
+  • common text operations
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [32m▲[0m [37mmeasure after text change           [0m [38;5;248m    2.55ms[0m [38;5;248m    1.61ms[0m [32m -37.0%[0m [32m -34.0%[0m [37m<.001[0m [37m -37.4..-36.3%[0m
+                                         [36m▁▁▁▁▁▂█▃▂▁[0m [35m█▅▂▁▁▁▁▁▁▁[0m
+
+  [38;5;248m■[0m [37mpublish after text change           [0m [38;5;248m    2.07ms[0m [38;5;248m    2.07ms[0m [2m  -0.1%[0m [2m  +6.3%[0m [2m .959[0m [2m   -0.6..+0.8%[0m
+                                         [36m▁█▇▃▁▂▂▁▁▁[0m [35m▂█▇▃▂▁▁▂▁▁[0m
+
+  [32m▲[0m [37mreflow after width change           [0m [38;5;248m  502.75µs[0m [38;5;248m  346.77µs[0m [32m -31.0%[0m [32m -13.4%[0m [37m<.001[0m [37m -32.5..-29.9%[0m
+                                         [36m▁▁▃█▇▂▁▁▂▁[0m [35m▄█▃▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37mpublish after color change          [0m [38;5;248m    1.52ms[0m [38;5;248m    1.38ms[0m [32m  -9.5%[0m [32m  -6.4%[0m [37m<.001[0m [37m  -10.1..-9.0%[0m
+                                         [36m▁▁▂█▃▂▁▁▁▁[0m [35m▅█▃▂▁▁▂▁▁▁[0m
+
+  [31m▼[0m [37mrelayout after font-size change     [0m [38;5;248m    1.95ms[0m [38;5;248m    2.11ms[0m [31m  +8.1%[0m [31m +11.3%[0m [37m<.001[0m [37m   +7.1..+9.1%[0m
+                                         [36m▄█▂▁▂▂▁▁▁▁[0m [35m▁▁▆█▂▂▂▂▁▁[0m
+
+  [38;5;248m■[0m [37mmeasure 100 unchanged labels        [0m [38;5;248m   18.67µs[0m [38;5;248m   18.56µs[0m [2m  -0.6%[0m [2m +77.1%[0m [2m .398[0m [2m   -7.3..+2.9%[0m
+                                         [36m▂█▂▁▁▁▁▁▁▁[0m [35m▃█▃▁▁▁▁▁▁▁[0m                       [33m        ⚠ ~±6%[0m
+
+
+[1m[36medit.bench.ts[0m
+[38;5;248m  bench                                    baseline  candidate    Δp50    Δp99     p       Δ 95% CI[0m
+[38;5;248m---------------------------------------------------------------------------------------------------[0m
+  • typing into a long paragraph
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [31m▼[0m [37mtype one character into a long para…[0m [38;5;248m  457.33µs[0m [38;5;248m    1.71ms[0m [31m+274.0%[0m [32m -15.1%[0m [37m<.001[0m [37m+261.4..+285.7%[0m
+                                         [36m█▂▁▁▁▁▁▁█▂[0m [35m▁▁▁▁▁▁█▂▁▁[0m                       [33m        ⚠ ~±5%[0m
+
+  [31m▼[0m [37mtype one character into a long Fred…[0m [38;5;248m    1.62ms[0m [38;5;248m    2.02ms[0m [31m +24.4%[0m [31m +31.3%[0m [37m<.001[0m [37m +23.0..+25.4%[0m
+                                         [36m▇▂▁▁▁▁█▁▁▁[0m [35m▁▁▁▁▁▁▁█▂▁[0m
+
+  [32m▲[0m [37mtype one character into a long para…[0m [38;5;248m    3.32ms[0m [38;5;248m    2.83ms[0m [32m -14.8%[0m [32m -10.7%[0m [37m<.001[0m [37m -15.8..-14.3%[0m
+                                         [36m▁▁▁▁█▇▃▂▂▁[0m [35m▃█▃▂▂▂▁▁▁▁[0m
+
+
+[1m[36mframework-publication.bench.ts[0m
+[38;5;248m  bench                                    baseline  candidate    Δp50    Δp99     p       Δ 95% CI[0m
+[38;5;248m---------------------------------------------------------------------------------------------------[0m
+  • framework normalization publication
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [32m▲[0m [37mreuse 1000 unchanged Vue property s…[0m [38;5;248m  449.75µs[0m [38;5;248m  189.23µs[0m [32m -57.9%[0m [32m -61.8%[0m [37m<.001[0m [37m -58.4..-57.4%[0m
+                                         [36m▁▁▁▁▁▁█▆▂▁[0m [35m█▁▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37mnormalize 1000 equivalent formatted…[0m [38;5;248m   32.84ms[0m [38;5;248m    4.78ms[0m [32m -85.4%[0m [32m -85.2%[0m [37m<.001[0m [37m -85.7..-85.2%[0m
+                                         [36m▁▁▁▁▁▁▁▃█▂[0m [35m█▁▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37mbind and normalize 1000 framework-s…[0m [38;5;248m   33.59ms[0m [38;5;248m    4.94ms[0m [32m -85.3%[0m [32m -85.3%[0m [37m<.001[0m [37m -85.7..-84.9%[0m
+                                         [36m▁▁▁▁▁▁▁▁█▃[0m [35m█▁▁▁▁▁▁▁▁▁[0m
+
+
+[1m[36minspection.bench.ts[0m
+[38;5;248m  bench                                    baseline  candidate    Δp50    Δp99     p       Δ 95% CI[0m
+[38;5;248m---------------------------------------------------------------------------------------------------[0m
+  • per-glyph inspection
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [32m▲[0m [37mcopy per-glyph metrics after text c…[0m [38;5;248m    5.19ms[0m [38;5;248m    3.09ms[0m [32m -40.3%[0m [32m -47.6%[0m [37m<.001[0m [37m -40.8..-39.0%[0m
+                                         [36m▁▁▁▁▁▆█▂▁▁[0m [35m▅▂█▁▁▁▁▁▁▁[0m
+
+  [31m▼[0m [37mcopy per-glyph metrics from 100 unc…[0m [38;5;248m   96.38µs[0m [38;5;248m  176.73µs[0m [31m +83.4%[0m [31m +72.4%[0m [37m<.001[0m [37m +75.0..+92.9%[0m
+                                         [36m▆█▁▁▁▁▁▁▁▁[0m [35m▁▁▁▁▂█▃▁▁▁[0m                       [33m        ⚠ ~±8%[0m
+
+  [32m▲[0m [37medit and independently copy one lab…[0m [38;5;248m    1.07ms[0m [38;5;248m  839.33µs[0m [32m -21.3%[0m [32m -18.4%[0m [37m<.001[0m [37m -22.5..-20.4%[0m
+                                         [36m▁▁▃█▄▂▂▁▁▁[0m [35m▃█▃▂▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37medit and independently copy one lab…[0m [38;5;248m    1.48ms[0m [38;5;248m  939.46µs[0m [32m -36.6%[0m [32m -35.9%[0m [37m<.001[0m [37m -40.8..-35.8%[0m
+                                         [36m▁▁▁▄█▃▂▁▁▁[0m [35m▅█▂▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37medit and independently copy one lab…[0m [38;5;248m    5.35ms[0m [38;5;248m    1.82ms[0m [32m -66.1%[0m [32m -65.6%[0m [37m<.001[0m [37m -66.5..-65.7%[0m
+                                         [36m▁▁▁▁▁▁█▄▃▁[0m [35m█▄▁▁▁▁▁▁▁▁[0m
+
+  [38;5;248m■[0m [37mborrow per-glyph metrics from 100 p…[0m [38;5;248m  225.73µs[0m [38;5;248m  223.79µs[0m [2m  -0.9%[0m [2m  -5.8%[0m [2m .279[0m [2m   -3.3..+0.9%[0m
+                                         [36m▁▂▁▁▂█▆▂▁▁[0m [35m▁▂▁▂▂█▄▁▁▁[0m
+
+
+[1m[36mlayout.bench.ts[0m
+[38;5;248m  bench                                    baseline  candidate    Δp50    Δp99     p       Δ 95% CI[0m
+[38;5;248m---------------------------------------------------------------------------------------------------[0m
+  • public paragraph layout at 22k glyphs
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [31m▼[0m [37mcached measurement                  [0m [38;5;248m    4.02µs[0m [38;5;248m    4.69µs[0m [31m +16.6%[0m [31m  +2.1%[0m [37m<.001[0m [37m  +9.5..+22.2%[0m
+                                         [36m▆█▃▂▁▁▁▁▁▁[0m [35m▃█▃▂▁▁▁▁▁▁[0m                       [33m        ⚠ ~±6%[0m
+
+  [31m▼[0m [37mmeasurement after width change      [0m [38;5;248m  933.58µs[0m [38;5;248m    1.18ms[0m [31m +26.4%[0m [31m +21.7%[0m [37m<.001[0m [37m +25.0..+28.8%[0m
+                                         [36m▁▂▃▂█▃▂▁▁▁[0m [35m▁▁▁▁▁▂█▅▂▁[0m
+
+  [32m▲[0m [37mmeasurement then publication after …[0m [38;5;248m    1.63ms[0m [38;5;248m    1.39ms[0m [32m -14.7%[0m [32m -25.0%[0m [37m<.001[0m [37m -15.7..-14.1%[0m
+                                         [36m▁▂▁▁█▂▁▁▁▁[0m [35m▁▁█▃▂▁▁▁▁▁[0m
+
+  [31m▼[0m [37mcached per-glyph inspection         [0m [38;5;248m   56.77µs[0m [38;5;248m   67.29µs[0m [31m +18.5%[0m [31m +17.9%[0m [37m<.001[0m [37m +15.9..+20.1%[0m
+                                         [36m▅█▃▂▁▁▁▁▁▁[0m [35m▁▁█▄▂▁▁▁▁▁[0m
+
+  [32m▲[0m [37mper-glyph inspection after width ch…[0m [38;5;248m    8.46ms[0m [38;5;248m    4.37ms[0m [32m -48.4%[0m [32m -46.3%[0m [37m<.001[0m [37m -53.1..-44.9%[0m
+                                         [36m▁▁▁█▁▁▇▃█▆[0m [35m▁▃█▄▅▁▁▁▁▁[0m                       [33m       ⚠ ~±14%[0m
+
+  [32m▲[0m [37minspection then publication after w…[0m [38;5;248m    9.83ms[0m [38;5;248m    4.70ms[0m [32m -52.1%[0m [32m -29.8%[0m [37m<.001[0m [37m -52.8..-51.5%[0m
+                                         [36m▁▁▁▁▁▁▅▂█▄[0m [35m█▆▆▄▃▁▁▁▁▁[0m
+
+  [31m▼[0m [37mpublication after font-size change  [0m [38;5;248m    6.56ms[0m [38;5;248m    7.90ms[0m [31m +20.4%[0m [31m +22.5%[0m [37m<.001[0m [37m +19.9..+22.0%[0m
+                                         [36m▃█▃▁▁▁▁▁▁▁[0m [35m▁▁▁▁▁▇▅█▄▁[0m
+
+  [32m▲[0m [37mpublication after width change      [0m [38;5;248m    1.23ms[0m [38;5;248m  690.90µs[0m [32m -43.8%[0m [32m -30.4%[0m [37m<.001[0m [37m -44.2..-41.3%[0m
+                                         [36m▁▁▁▂▂▅█▂▁▁[0m [35m█▆▂▂▁▁▁▁▁▁[0m
+
+  [31m▼[0m [37mpublication after text change       [0m [38;5;248m    6.76ms[0m [38;5;248m    7.28ms[0m [31m  +7.7%[0m [32m -46.6%[0m [37m<.001[0m [37m   +5.9..+8.6%[0m
+                                         [36m█▃▁▁▁▁▁▁▁▁[0m [35m▂█▁▁▁▁▁▁▁▁[0m
+
+
+[1m[36mprepared-operations.bench.ts[0m
+[38;5;248m  bench                                    baseline  candidate    Δp50    Δp99     p       Δ 95% CI[0m
+[38;5;248m---------------------------------------------------------------------------------------------------[0m
+  • prepared label operations
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [31m▼[0m [37m1 labels first set                  [0m [38;5;248m   20.40µs[0m [38;5;248m   90.35µs[0m [31m+343.0%[0m [31m+226.3%[0m [37m<.001[0m [37m+316.3..+367.8%[0m
+                                         [36m█▃▁▁▁▁▁▁▁▁[0m [35m▁▁▁▁█▆▃▂▁▁[0m                       [33m        ⚠ ~±6%[0m
+
+  [32m▲[0m [37m1 labels first set+measure          [0m [38;5;248m  172.42µs[0m [38;5;248m  113.83µs[0m [32m -34.0%[0m [32m -19.0%[0m [37m<.001[0m [37m -38.2..-26.6%[0m
+                                         [36m▁▁▆██▆▄▂▂▁[0m [35m▃█▄▂▂▁▁▁▁▁[0m                       [33m       ⚠ ~±18%[0m
+
+  [32m▲[0m [37m1 labels first set+measure+scene-pu…[0m [38;5;248m  553.46µs[0m [38;5;248m  357.83µs[0m [32m -35.3%[0m [31m +73.4%[0m [37m .003[0m [37m -38.4..-25.8%[0m
+                                         [36m▁▁█▃▁▁▁▁▁▁[0m [35m▇█▂▁▁▁▁▁▁▁[0m                       [33m        ⚠ ~±7%[0m
+
+  [32m▲[0m [37m1 labels first same-value-set       [0m [38;5;248m    2.56µs[0m [38;5;248m    2.31µs[0m [32m  -9.7%[0m [31m  +2.6%[0m [37m .019[0m [37m  -16.9..-3.3%[0m
+                                         [36m█▆▁▁▁▁▁▁▁▁[0m [35m█▄▁▁▁▁▁▁▁▁[0m                       [33m       ⚠ ~±12%[0m
+
+  [31m▼[0m [37m1 labels first overwrite-before-sce…[0m [38;5;248m  270.02µs[0m [38;5;248m  363.25µs[0m [31m +34.5%[0m [31m+632.9%[0m [37m<.001[0m [37m +30.5..+46.4%[0m
+                                         [36m█▁▁▁▁▁▁▁▁▁[0m [35m█▆▁▁▁▁▁▁▁▁[0m
+
+  [31m▼[0m [37m100 labels first set                [0m [38;5;248m   21.08µs[0m [38;5;248m  100.79µs[0m [31m+378.1%[0m [31m+398.0%[0m [37m<.001[0m [37m+291.6..+417.2%[0m
+                                         [36m█▃▁▁▁▁▁▁▁▁[0m [35m▁▁▆█▄▃▂▁▁▁[0m                       [33m       ⚠ ~±17%[0m
+
+  [38;5;248m■[0m [37m100 labels first set+measure        [0m [38;5;248m  136.31µs[0m [38;5;248m  127.38µs[0m [2m  -6.6%[0m [2m -10.9%[0m [2m .234[0m [2m  -17.7..+5.3%[0m
+                                         [36m▁█▆█▆▃▂▂▁▁[0m [35m▂█▇▅▅▃▂▁▁▁[0m                       [33m       ⚠ ~±20%[0m
+
+  [32m▲[0m [37m100 labels first set+measure+scene-…[0m [38;5;248m  747.67µs[0m [38;5;248m  495.77µs[0m [32m -33.7%[0m [32m -32.3%[0m [37m<.001[0m [37m -34.9..-24.5%[0m
+                                         [36m▁▁▁██▄▂▂▁▁[0m [35m▄█▄▂▁▁▁▁▁▁[0m
+
+  [38;5;248m■[0m [37m100 labels first same-value-set     [0m [38;5;248m    2.81µs[0m [38;5;248m    2.81µs[0m [2m  +0.0%[0m [2m +29.5%[0m [2m .896[0m [2m -11.6..+37.7%[0m
+                                         [36m█▆▁▁▁▁▁▁▁▁[0m [35m██▂▁▁▁▁▁▁▁[0m                       [33m       ⚠ ~±23%[0m
+
+  [31m▼[0m [37m100 labels first overwrite-before-s…[0m [38;5;248m  368.19µs[0m [38;5;248m  499.79µs[0m [31m +35.7%[0m [31m +14.3%[0m [37m<.001[0m [37m +30.0..+43.5%[0m
+                                         [36m▃█▃▂▂▁▁▁▁▁[0m [35m▁▁▁█▇▄▃▂▁▁[0m                       [33m        ⚠ ~±5%[0m
+
+  [31m▼[0m [37m1000 labels first set               [0m [38;5;248m   30.40µs[0m [38;5;248m  127.00µs[0m [31m+317.8%[0m [31m+183.9%[0m [37m<.001[0m [37m+281.3..+334.8%[0m
+                                         [36m█▄▂▁▁▁▁▁▁▁[0m [35m▁▁▁▁▁▆█▃▂▁[0m                       [33m        ⚠ ~±9%[0m
+
+  [32m▲[0m [37m1000 labels first set+measure       [0m [38;5;248m  192.96µs[0m [38;5;248m  149.67µs[0m [32m -22.4%[0m [32m -21.0%[0m [37m<.001[0m [37m -25.7..-15.9%[0m
+                                         [36m▁▂█▄▆▇▄▂▂▁[0m [35m▂█▆▃▂▂▁▁▁▁[0m                       [33m        ⚠ ~±7%[0m
+
+  [32m▲[0m [37m1000 labels first set+measure+scene…[0m [38;5;248m    3.23ms[0m [38;5;248m    1.70ms[0m [32m -47.3%[0m [32m -44.2%[0m [37m<.001[0m [37m -49.5..-46.5%[0m
+                                         [36m▁▁▁▁▁▁▃█▃▁[0m [35m▅█▃▁▁▁▁▁▁▁[0m
+
+  [31m▼[0m [37m1000 labels first same-value-set    [0m [38;5;248m    4.40µs[0m [38;5;248m    4.77µs[0m [31m  +8.5%[0m [31m  +8.6%[0m [37m .007[0m [37m  +3.6..+21.3%[0m
+                                         [36m█▆▂▁▁▂▂▂▁▁[0m [35m▄█▂▁▁▁▂▂▂▁[0m                       [33m        ⚠ ~±9%[0m
+
+  [32m▲[0m [37m1000 labels first overwrite-before-…[0m [38;5;248m    1.78ms[0m [38;5;248m    1.67ms[0m [32m  -6.6%[0m [32m  -9.9%[0m [37m .001[0m [37m   -9.4..-4.0%[0m
+                                         [36m▁▂█▇▆▅▄▃▂▁[0m [35m▂█▇▆▄▃▂▁▁▁[0m
+
+
+[1m[36mrequest-arena.bench.ts[0m
+[38;5;248m  bench                                    baseline  candidate    Δp50    Δp99     p       Δ 95% CI[0m
+[38;5;248m---------------------------------------------------------------------------------------------------[0m
+  • direct request-arena encoding
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [32m▲[0m [37mwrite one paragraph and text mutati…[0m [38;5;248m   11.60µs[0m [38;5;248m    8.12µs[0m [32m -30.0%[0m [31m +26.7%[0m [37m .007[0m [37m -34.9..-10.7%[0m
+                                         [36m▃█▂▂▁▁▁▁▁▁[0m [35m█▅▃▁▁▁▁▁▁▁[0m                       [33m       ⚠ ~±11%[0m
+
+  [32m▲[0m [37mwrite 1000 paragraph-order mutations[0m [38;5;248m   16.08µs[0m [38;5;248m   12.52µs[0m [32m -22.2%[0m [31m +20.2%[0m [37m<.001[0m [37m -24.2..-18.9%[0m
+                                         [36m▂█▂▁▁▁▁▁▁▁[0m [35m█▄▁▁▁▁▁▁▁▁[0m                       [33m        ⚠ ~±6%[0m
+
+  [32m▲[0m [37mwrite 1000 paragraph and text mutat…[0m [38;5;248m   95.85µs[0m [38;5;248m   72.85µs[0m [32m -24.0%[0m [32m -58.7%[0m [37m<.001[0m [37m -24.9..-21.7%[0m
+                                         [36m▁█▂▁▁▁▁▁▁▁[0m [35m█▃▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37mwrite 22k UTF16 text into Wasm requ…[0m [38;5;248m   50.44µs[0m [38;5;248m   37.19µs[0m [32m -26.3%[0m [32m -19.5%[0m [37m<.001[0m [37m -27.6..-22.4%[0m
+                                         [36m▁█▂▁▁▁▁▁▁▁[0m [35m█▂▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37mwrite 22k UTF16 text into owned arr…[0m [38;5;248m   50.40µs[0m [38;5;248m   39.40µs[0m [32m -21.8%[0m [32m -10.7%[0m [37m<.001[0m [37m -26.6..-16.5%[0m
+                                         [36m▁█▂▁▁▁▁▁▁▁[0m [35m█▄▂▁▁▁▁▁▁▁[0m                       [33m       ⚠ ~±12%[0m
+
+
+[1m[36msparse-assignment.bench.ts[0m
+[38;5;248m  bench                                    baseline  candidate    Δp50    Δp99     p       Δ 95% CI[0m
+[38;5;248m---------------------------------------------------------------------------------------------------[0m
+  • large retained assignments
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [32m▲[0m [37munchanged setter preparation in one…[0m [38;5;248m   27.05ms[0m [38;5;248m    2.68ms[0m [32m -90.1%[0m [32m -89.1%[0m [37m<.001[0m [37m -90.1..-89.8%[0m
+                                         [36m▁▁▁▁▁▁▁▆█▂[0m [35m█▁▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37munchanged end-to-end setter and pub…[0m [38;5;248m   31.99ms[0m [38;5;248m    2.72ms[0m [32m -91.5%[0m [32m -90.0%[0m [37m<.001[0m [37m -91.5..-91.0%[0m
+                                         [36m▁▁▁▁▁▁▁▂█▆[0m [35m█▁▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37mscattered setter preparation in one…[0m [38;5;248m   36.82ms[0m [38;5;248m   12.82ms[0m [32m -65.2%[0m [32m -62.4%[0m [37m<.001[0m [37m -65.5..-65.0%[0m
+                                         [36m▁▁▁▁▁▁▁▂█▄[0m [35m█▂▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37mscattered end-to-end setter and pub…[0m [38;5;248m   40.45ms[0m [38;5;248m   14.60ms[0m [32m -63.9%[0m [32m -61.6%[0m [37m<.001[0m [37m -64.0..-63.6%[0m
+                                         [36m▁▁▁▁▁▁▁▁██[0m [35m█▁▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37mbroad setter preparation in one lar…[0m [38;5;248m   36.68ms[0m [38;5;248m   12.25ms[0m [32m -66.6%[0m [32m -68.2%[0m [37m<.001[0m [37m -67.0..-66.1%[0m
+                                         [36m▁▁▁▁▁▁▂█▂▁[0m [35m█▂▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37mbroad end-to-end setter and publica…[0m [38;5;248m   39.98ms[0m [38;5;248m   16.24ms[0m [32m -59.4%[0m [32m -58.9%[0m [37m<.001[0m [37m -59.8..-58.8%[0m
+                                         [36m▁▁▁▁▁▁▁▁█▇[0m [35m█▄▁▁▁▁▁▁▁▁[0m
+
+  • monospaced retained assignments
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [32m▲[0m [37mmonospaced unchanged setter prepara…[0m [38;5;248m   27.32ms[0m [38;5;248m    2.67ms[0m [32m -90.2%[0m [32m -89.5%[0m [37m<.001[0m [37m -90.4..-90.1%[0m
+                                         [36m▁▁▁▁▁▁▁▂█▃[0m [35m█▁▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37mmonospaced unchanged end-to-end set…[0m [38;5;248m   32.17ms[0m [38;5;248m    2.74ms[0m [32m -91.5%[0m [32m -90.0%[0m [37m<.001[0m [37m -91.6..-91.3%[0m
+                                         [36m▁▁▁▁▁▁▁▂█▅[0m [35m█▁▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37mmonospaced scattered setter prepara…[0m [38;5;248m   35.18ms[0m [38;5;248m   10.09ms[0m [32m -71.3%[0m [32m -68.3%[0m [37m<.001[0m [37m -71.6..-70.9%[0m
+                                         [36m▁▁▁▁▁▁▁▂█▄[0m [35m█▂▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37mmonospaced scattered end-to-end set…[0m [38;5;248m   39.12ms[0m [38;5;248m   11.48ms[0m [32m -70.7%[0m [32m -69.0%[0m [37m<.001[0m [37m -70.9..-70.4%[0m
+                                         [36m▁▁▁▁▁▁▁▁▆█[0m [35m█▁▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37mmonospaced broad setter preparation…[0m [38;5;248m   35.46ms[0m [38;5;248m   12.91ms[0m [32m -63.6%[0m [32m -62.3%[0m [37m<.001[0m [37m -64.0..-63.2%[0m
+                                         [36m▁▁▁▁▁▁▁▂█▃[0m [35m█▂▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37mmonospaced broad end-to-end setter …[0m [38;5;248m   38.72ms[0m [38;5;248m   16.87ms[0m [32m -56.4%[0m [32m -55.9%[0m [37m<.001[0m [37m -56.6..-56.1%[0m
+                                         [36m▁▁▁▁▁▁▁▁█▆[0m [35m█▁▁▁▁▁▁▁▁▁[0m
+
+  • shared material large retained assignments
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [32m▲[0m [37mshared-material scattered setter pr…[0m [38;5;248m   43.44ms[0m [38;5;248m   13.91ms[0m [32m -68.0%[0m [32m -68.2%[0m [37m<.001[0m [37m -68.2..-67.5%[0m
+                                         [36m▁▁▁▁▁▁▁▁█▂[0m [35m█▁▁▁▁▁▁▁▁▁[0m
+
+  [32m▲[0m [37mshared-material scattered end-to-en…[0m [38;5;248m   46.85ms[0m [38;5;248m   15.21ms[0m [32m -67.5%[0m [32m -68.0%[0m [37m<.001[0m [37m -67.8..-67.3%[0m
+                                         [36m▁▁▁▁▁▁▁▁█▂[0m [35m█▁▁▁▁▁▁▁▁▁[0m
+
+  • paint-only style partition assignments
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [32m▲[0m [37msplit move and merge paint boundari…[0m [38;5;248m    6.87ms[0m [38;5;248m    4.59ms[0m [32m -33.3%[0m [32m -23.2%[0m [37m<.001[0m [37m -33.7..-32.4%[0m
+                                         [36m▅▁▁▁▁▁▁▁▂█[0m [35m▁▁▁▁▁██▁▁▁[0m
+
+  [32m▲[0m [37msplit move and merge paint boundari…[0m [38;5;248m    9.60ms[0m [38;5;248m    6.04ms[0m [32m -37.0%[0m [32m -36.2%[0m [37m<.001[0m [37m -37.5..-36.6%[0m
+                                         [36m▁▁▁▁▁▁▃▅█▃[0m [35m▇█▁▁▁▁▁▁▁▁[0m
+
+
+[1m[36mstress.bench.ts[0m
+[38;5;248m  bench                                    baseline  candidate    Δp50    Δp99     p       Δ 95% CI[0m
+[38;5;248m---------------------------------------------------------------------------------------------------[0m
+  • 1,000-label stress
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [31m▼[0m [37mtoggle one group containing 1000 re…[0m [38;5;248m  396.33µs[0m [38;5;248m  427.52µs[0m [31m  +7.9%[0m [31m +12.9%[0m [37m .005[0m [37m  +4.0..+12.0%[0m
+                                         [36m▃█▆▆▅▃▂▁▁▁[0m [35m▁▂▅█▅▅▂▂▁▁[0m                       [33m        ⚠ ~±5%[0m
+
+  [32m▲[0m [37mreorder 1000 unchanged retained lab…[0m [38;5;248m    2.56ms[0m [38;5;248m    2.20ms[0m [32m -14.4%[0m [32m  -4.6%[0m [37m<.001[0m [37m -16.1..-12.4%[0m
+                                         [36m▁▁▁▆█▇▅▄▂▁[0m [35m▃█▆▃▃▂▁▁▁▁[0m
+
+  [32m▲[0m [37mreorder then edit one of 1000 retai…[0m [38;5;248m    6.32ms[0m [38;5;248m    5.47ms[0m [32m -13.5%[0m [32m -13.8%[0m [37m<.001[0m [37m  -14.3..-9.8%[0m
+                                         [36m▁▁▁▆█▃▄▂▂▁[0m [35m▅█▄▂▂▂▁▁▁▁[0m
+
+  [31m▼[0m [37mmeasure 1000 unchanged retained lab…[0m [38;5;248m  208.69µs[0m [38;5;248m  221.94µs[0m [31m  +6.3%[0m [31m +39.2%[0m [37m .005[0m [37m   +2.5..+9.7%[0m
+                                         [36m▂█▇▄▂▁▁▁▁▁[0m [35m▁▅█▄▃▂▂▁▁▁[0m
+
+  [31m▼[0m [37mborrow glyphs from 1000 steadily pr…[0m [38;5;248m  993.75µs[0m [38;5;248m    1.11ms[0m [31m +11.2%[0m [31m  +2.5%[0m [37m .010[0m [37m  +6.4..+18.2%[0m
+                                         [36m▆▃▂▁▁▁▁▁█▁[0m [35m▁▅█▄▁▁▂▂█▂[0m                       [33m        ⚠ ~±6%[0m
+
+  [32m▲[0m [37medit and measure one of 1000 retain…[0m [38;5;248m  195.40µs[0m [38;5;248m  146.13µs[0m [32m -25.2%[0m [32m -21.7%[0m [37m<.001[0m [37m -28.9..-24.1%[0m
+                                         [36m▁▁▄█▃▂▂▁▁▁[0m [35m▃█▃▂▂▁▁▁▁▁[0m
+
+  [32m▲[0m [37medit and sparsely borrow one of 100…[0m [38;5;248m  219.79µs[0m [38;5;248m  172.92µs[0m [32m -21.3%[0m [32m -13.6%[0m [37m<.001[0m [37m -23.8..-19.1%[0m
+                                         [36m▁▁▃█▅▂▂▂▁▁[0m [35m▄█▃▂▂▂▁▁▁▁[0m
+
+  [31m▼[0m [37mpublish 1024 retained Text instances[0m [38;5;248m   15.35ms[0m [38;5;248m   19.06ms[0m [31m +24.2%[0m [31m+307.9%[0m [37m<.001[0m [37m +22.3..+29.8%[0m
+                                         [36m█▁▁▁▁▁▁▁▁▁[0m [35m▁█▁▁▁▁▁▁▁▁[0m
+
+
+[1m[36mtypegpu-publication.bench.ts[0m
+[38;5;248m  bench                                    baseline  candidate    Δp50    Δp99     p       Δ 95% CI[0m
+[38;5;248m---------------------------------------------------------------------------------------------------[0m
+  • TypeGPU adapter CPU publication
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [32m▲[0m [37mmove 1000 retained TypeGPU labels   [0m [38;5;248m    3.18ms[0m [38;5;248m  255.98µs[0m [32m -92.0%[0m [32m -93.0%[0m [37m<.001[0m [37m -92.4..-91.7%[0m
+                                         [36m▁▁▁▁▁▂▇█▄▂[0m [35m█▁▁▁▁▁▁▁▁▁[0m                       [33m        ⚠ ~±7%[0m
+
+
+[1m[36munsafe-line-breaks.bench.ts[0m
+[38;5;248m  bench                                    baseline  candidate    Δp50    Δp99     p       Δ 95% CI[0m
+[38;5;248m---------------------------------------------------------------------------------------------------[0m
+  • unsafe legal line boundaries
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [32m▲[0m [37mcommon-safe word-wrap reflow        [0m [38;5;248m  194.94µs[0m [38;5;248m  156.88µs[0m [32m -19.5%[0m [32m  -9.1%[0m [37m<.001[0m [37m -26.5..-15.8%[0m
+                                         [36m▁▃█▄▂▁▁▂▁▁[0m [35m▄█▂▁▁▁▁▁▁▁[0m                       [33m        ⚠ ~±8%[0m
+
+  [32m▲[0m [37missue 216 reporter workaround       [0m [38;5;248m  199.71µs[0m [38;5;248m  175.35µs[0m [32m -12.2%[0m [32m  -9.9%[0m [37m<.001[0m [37m  -18.9..-9.6%[0m
+                                         [36m▁▇█▄▂▁▂▂▂▁[0m [35m▄█▃▂▁▁▂▁▁▁[0m                       [33m        ⚠ ~±5%[0m
+
+  [32m▲[0m [37missue 216 unsafe-boundary word-wrap…[0m [38;5;248m  188.46µs[0m [38;5;248m  179.25µs[0m [32m  -4.9%[0m [32m  -2.2%[0m [37m .007[0m [37m  -10.3..-2.4%[0m
+                                         [36m▁█▆▃▁▁▁▂▂▁[0m [35m▃█▄▂▁▁▁▁▁▁[0m                       [33m        ⚠ ~±5%[0m
+
+  [38;5;248m■[0m [37mlong reporter workaround paragraph …[0m [38;5;248m  567.48µs[0m [38;5;248m  587.98µs[0m [2m  +3.6%[0m [2m  +0.0%[0m [2m .010[0m [2m   +1.7..+4.5%[0m
+                                         [36m▂▆█▃▂▁▂▂▂▁[0m [35m▁▂█▄▁▁▁▂▁▁[0m
+
+  [31m▼[0m [37mlong unsafe-boundary paragraph refl…[0m [38;5;248m  481.27µs[0m [38;5;248m  641.40µs[0m [31m +33.3%[0m [31m +38.5%[0m [37m<.001[0m [37m +31.9..+35.3%[0m
+                                         [36m▂█▃▂▂▁▁▁▁▁[0m [35m▁▁▁█▅▂▁▂▁▁[0m
+
+  [38;5;248m■[0m [37mlong unsafe-boundary paragraph text…[0m [38;5;248m    1.66ms[0m [38;5;248m    1.74ms[0m [2m  +5.0%[0m [2m +10.3%[0m [2m<.001[0m [2m   +3.7..+5.9%[0m
+                                         [36m▂█▃▂▂▁▁▁▁▁[0m [35m▁▂█▄▂▁▁▁▁▁[0m
+
+[33m⚠ Limited resolution:[0m [2mNeutral results are inconclusive at the shown resolution.[0m
+
+
+[2mnew in candidate (not in baseline)[0m
+  [2m· glyph outlines > copy per-glyph metrics with outlines after text change[0m
+  [2m· glyph outlines > read every outline from an unchanged copy[0m
+
+[1msummary[0m  [32m104 faster[0m  [31m28 slower[0m  [2m11 neutral[0m
+[2mcompared: 143  matched: 145[0m
+
+Labs artifacts: /Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-published-fixed-data

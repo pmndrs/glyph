@@ -110,33 +110,24 @@ Requested-live/peak41848831/42049147B, +1377716B and+46Wasm pages overE2/E4; sha
 Package/native/minimum-peer/CPUrenderer-recovery pass within scope; browser/hero, whole-app physical memory and final
 downstream/API/lifetime remain open. Previous277 CI passes all five jobs but does not cover E5 dirty source.
 
-The latest fresh no-history native Sol High [architecture report and concrete brief](../../../benches/reports/held-direct-operand-local-2026-10-21/reviews/architecture-speed-zoomout-implementation-brief.md)
-separate deferred-versus-synchronous semantics from packed-versus-indirect representation. A literal forward stream
-cannot replace indexed/reordered physical metadata or old/new transactional ownership without a new proof. Native
-Sol Medium now implements one bounded E5 combination: lazy call-scoped semantic views per loaded record/four-lane
-group replace per-operand slice-array construction, retaining the same Codec loop, packed SIMD, locators, candidate
-and fallback. E4/277 is immediate whole-source fallback; E2 remains the measured latency control. No later-source
-performance claim, extra profile or timing loop is authorized. Parity false; boost waves0; held/unmerged.
+The fresh Sol High [architecture review](../../../benches/reports/held-direct-operand-local-2026-10-21/reviews/architecture-speed-zoomout-implementation-brief.md) separated deferred versus synchronous semantics from packed versus indirect representation. Sol Medium completed the bounded E6 row-view combination: lazy call-scoped semantic views per loaded record or four-lane group replaced per-operand slice-array construction within the same Codec scalar/SIMD loops. The fixed matrix and source choice below supersede that implementation handoff. Indexed physical metadata and old/new ownership still require their existing authoritative paths.
 
-**Correction and current E6 boundary:** Labs' 5% label threshold hid five favourable and sixteen adverse E5-versus-E2
-intervals among the 131 neutral labels. Root independently reproduced all145 exact statistics;
-[the correction and unrounded evidence](../../../benches/reports/held-direct-operand-local-2026-10-21/reviews/e5-small-gain-admission-correction-high.md)
-withdraw the categorical no-gain claim. Nominal counts without that floor:5favourable/30adverse/110intervals spanning0;
-multiple-workload uncertainty and whole-variant dense/memory regressions remain. Preserve partial signals, not just labels.
-E6 row-view repair is native/strict-static/replay green and independently reviewed; full package passes1142Node and593Rust
-result occurrences,2Rust ignored. Archive `d2f7a01f…`, shipping/named `a1cc22c7…`/`94d12b02…`; shaper1629518raw/609071gzipB.
-All947shipped dist members match after55/55minimum-peer checks; CPUrenderer-recovery and71phase allocator gates pass.
-Requested-live/peak/pages41848831/42049147/774 matchE5. No E6 elapsed run exists yet.
+**E5 correction:** The earlier E5 comparison displayed 0 faster / 14 slower / 131 neutral versus E2. That 5% UI label floor hid five favorable and sixteen adverse intervals among the neutral labels. Root's [unrounded E5 correction](../../../benches/reports/held-direct-operand-local-2026-10-21/reviews/e5-small-gain-admission-correction-high.md) withdrew the categorical no-gain claim: nominal directions were **5 favorable / 30 adverse / 110 spanning zero**. Preserve those partial signals without admitting E5 as a faster whole variant. E6's later fixed-policy 15 / 16 / 114 nominal comparison is a separate result.
 
-Fresh High proves prior timing-mode exclusions come from Labs0.9.0 adaptive batching, not different callbacks.
-Medium's pinned pnpm patch adds explicit `--sampling single-call` across all145identities/allarms/eightblocks, using
-the same measurement loop and unchanged callbacks; eight-block protocol proof/static/11comparison tests pass and
-High re-review clears mandatory-digest and exact-coverage fixes. Old adaptive samples cannot be relabelled/reused as
-fixed-policy data. The two published
-outline rows are API-unsupported, separately unavailable. Root restored9formatted E4Markdown copies from authenticated
-originals and verified all47copies; runtime bytes unchanged. New timing freeze and root release follow protocol review,
-docs/attestation/real-stack submission and a fresh Glyph-source/dist bridge. Browser/hero, whole-app memory and final
-payload/performance acceptance remain open; parityfalse,boost0. No new profile selected.
+**E6 fixed-matrix closure and active source — 21 October 2026:** The [portable 127-copy packet](../../../benches/reports/held-row-view-local-2026-10-21/README.md) preserves the exact E6 source, native and shipping gates, fixed matrix, stock statistics, reviews and ISC license for the copied Labs source. E6 is snapshot `6bc123abb9fdf07183988dcea12ccc1d1876d1ba`, tree `c222f379929ceebe837a2f05c94d494036603bc7`, and ref `experiments/held-row-view-native-gated-20261021`. Corrected `be6c7960` is its E5 predecessor. The frozen shipping-only index mislabels `be6` as E6 and says timing is pending; it remains historical, superseded by the completed matrix. The E6 archive SHA-256 starts `d2f7a01f`; candidate JSON `69c6b80d` was timed once and byte-reused across main, published 0.1.0 and E2 arms.
+
+Each full-suite arm exited zero with eight fresh blocks and actual nonbatch `--sampling single-call` plans. There were no retries, timing-mode mismatches or check failures. Main has 145 pairs, with 144 eligible and one clock-confounded diagnostic; published has 143 pairs and two unsupported outline rows; E2 has 145 pairs. The independently verified, unadjusted nominal CI directions (favorable / adverse / spanning zero) are **main 94 / 32 / 18 eligible; published 104 / 32 / 7; E2 15 / 16 / 114**. E2's 5 / 4 / 136 UI labels have a 5% display floor. These related-workload intervals are not causal proof. Baseline/candidate software-calibration drift was main 10.984502/4.022791%, published 1.983945/4.022791%, and E2 7.877973/4.022791%; it is not physical CPU GHz.
+
+| Complete operation, pooled p50/p95 ms |                  Main |       Published 0.1.0 |                    E2 |                    E6 |
+| ------------------------------------- | --------------------: | --------------------: | --------------------: | --------------------: |
+| Rewrite 512 labels                    |   6.968375 / 7.768000 |   7.459083 / 8.059542 |  9.252167 / 10.577458 |  9.468042 / 10.614125 |
+| Publish 1,024 retained Text instances | 15.544292 / 16.756375 | 15.366375 / 16.277125 | 18.456334 / 20.953583 | 20.212541 / 45.056167 |
+
+The E6 1,024 first-block median was 32.416916 ms; the next seven were 18.613–20.005 ms. Retain the observed pooled p95 without a causal diagnosis; pooled raw-sample quantiles differ from block-median Hodges–Lehmann estimates. The [fresh admission review](../../../benches/reports/held-row-view-local-2026-10-21/reviews/e6-full-fixed-matrix-admission-sol-high.md) rejects E6 as the active whole parity variant while preserving its favorable partial rows and complete source. Root restored all ten Rust files byte-exact to E4 HEAD `59933674684f7b3aaebfa2fc2ce96d8ec3a8629a`; packed gather and retained sparse are active. E2 is the measured fixed-policy control. Historical E4 adaptive timings do not establish E4 fixed-policy parity. No E6 CPU profile exists.
+
+E6 shipping/native/package gates, 55 peers and CPU renderer recovery pass. The package ledger has 593 Rust pass occurrences, two ignored, and 1,142 Node passes; these are not unique native-test counts. The E6 shaper is 1,629,518 raw / 609,071 Node-gzip bytes. Engine-only requested-live/completed-call high-water/pages are 41,848,831 / 42,049,147 bytes / 774 pages, including 1,377,716 more requested-live bytes and 46 more pages than E2. This excludes whole-app physical memory, JS/GPU and transient internal reallocation peaks. Archived-package browser pixels/editorial hero, downstream consumers, whole-app physical memory and exact E4 seven-family parity remain open. The five-success CI run at committed `59933674` covers E4/protocol, not dirty E6. Remote main remains `4e25a96a…`; the held `#292 → #301 → #302 → draft #310` stack remains unmerged, untagged and unreleased. Parity is false; post-parity boost waves remain zero.
+
+After this closure and real stack submission, the next bounded discriminator is the [test-only actual Bitmap old/new `UNSAFE_TO_CONCAT` boundary observation](../../../benches/reports/held-row-view-local-2026-10-21/reviews/short-shape-boundary-observation-brief-sol-high.md) over 2,048 warm edits. No suffix optimization, ingress, new storage or flat shape path is selected.
 
 ### Completed current-machine rerun — 19 October 2026
 

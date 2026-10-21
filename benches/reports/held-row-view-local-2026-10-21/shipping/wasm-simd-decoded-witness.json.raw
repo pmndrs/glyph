@@ -1,0 +1,33 @@
+{
+  "schema": "held-e6-named-wasm-simd-static-witness-v1",
+  "namedWasm": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/shaper-profile/text-shaper.named.wasm",
+  "namedWasmSha256": "94d12b02cf7a5cc331196fe8e24844ff89db23d72eaa0654c28af8fc4fa14f47",
+  "watPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/shaper-profile/text-shaper.named.wat",
+  "watSha256": "f57dc749047aecf060220465e64c935a306b7ef7ad8679b8403083cf82f761eb",
+  "watBytes": 27925278,
+  "executeProgram": {
+    "symbol": "_RNvNtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine5codec15execute_program",
+    "lineStart": 326541,
+    "lineEnd": 335343,
+    "bodyBytesUtf8": 283003,
+    "explicitVectorOperatorCounts": {
+      "v128.load": 25,
+      "i8x16.shuffle": 10,
+      "i32x4.ne": 1,
+      "f32x4.add": 1,
+      "v128.store": 19
+    },
+    "directHelperCalls": {
+      "directRowViewF32": 5,
+      "directRowViewU32": 0,
+      "directRowContextView": 0
+    }
+  },
+  "featureFlags": [
+    "--enable-simd",
+    "--enable-bulk-memory",
+    "--enable-nontrapping-float-to-int"
+  ],
+  "provenanceReceipt": "wasm-dis-final-01/result.json",
+  "interpretationLimit": "Static emitted-code evidence only; it does not prove workload execution or runtime SIMD utilization."
+}

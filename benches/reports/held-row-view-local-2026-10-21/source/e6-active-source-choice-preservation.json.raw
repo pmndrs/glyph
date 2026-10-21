@@ -1,0 +1,57 @@
+{
+  "schema": "e6-active-source-choice-preservation-v1",
+  "recordedUtc": "2026-10-21T05:40:57.987098+00:00",
+  "decision": "AcceptfreshHighrecommendation: preserveE6whole+nominalpartialsignals; returnactiveknownowned10RustfilestoHEAD599E4packedgather/retainedsparse. E4paritynotclaimed.",
+  "reviewPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/e6-full-fixed-matrix-admission-sol-high.md",
+  "reviewSha256": "f2d460e1c57837bd09e0124926d189c184d65b1628fec5233dd6dde8c1c4deb9",
+  "statsVerification": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/root-full-matrix-statistics-verification.json",
+  "namedRef": "experiments/held-row-view-native-gated-20261021",
+  "snapshot": "6bc123abb9fdf07183988dcea12ccc1d1876d1ba",
+  "snapshotSourceExact": [
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/codec.rs",
+      "sha256": "66f3302c781b7af7d3e4c5c831977da77805e8c714e3330c2957d460af5e72d2"
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/codec_gather.rs",
+      "sha256": "ddb68be7736d28d02af4b3a27f92261c9bdc93c51cfbc67829f1a3fd348d1184"
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/ordered_plan.rs",
+      "sha256": "1979807211f5670492f30df284ab378e9eba4b2d82aff72e46782d512531678a"
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/plan_error.rs",
+      "sha256": "c492e82a95a790cca483b8dbfd9be8ae363792c0e03185ec3f36499d8d3ad624"
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/plan_packing.rs",
+      "sha256": "3bab853078bb695d92503c40370e48d0032fd3e6ccd485e016f935668713ef8a"
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/render_plan_compiler.rs",
+      "sha256": "fde405b21d956b94d3170b2f2bb832e2ac31000f67eee40daf9721794544d5f5"
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/session_placement.rs",
+      "sha256": "75aa1aa00cf6c10f4a7c82ceb96b1fe6ebe569feb09e8f1195bcfe34cccc545b"
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/state.rs",
+      "sha256": "c11754546b96c5e8de949a163a5717c6fb45bc9b742cbb0f0abce09c2f1ab959"
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs",
+      "sha256": "f13a1e468c69c3ffc727deb5f00f7f7b393b5fa3a265d964adc51d2a854f8de9"
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/work_attribution.rs",
+      "sha256": "9e47aa897405061c99d868dd00cf619a459cd062d5acffe57fcbf985baf22591"
+    }
+  ],
+  "frozenArchiveSha256": "d2f7a01ffb47aeaf87499979310286f1c980b88389e20bd1fc0f39794a0fc18c",
+  "newExactPatch": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/e6-final-frozen-product-from-59933674.patch",
+  "newExactPatchSha256": "3e0614f0647d4827f08e93a3b526105aa449bfe45126514aedf4003a607912b6",
+  "status": "Preservationverified;restorenotyetexecuted",
+  "next": "CommitportableE6closure/frontierthroughrealghstackbeforetemporaryshape-boundaryprobe. No performanceimplementationuntilboundaryproof."
+}
