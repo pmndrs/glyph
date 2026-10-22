@@ -1,0 +1,47 @@
+## Package performance: `frontier` suite
+
+0 faster · 0 slower · 4 neutral · 0 skipped
+
+Baseline `0.1.0 (06fe22b7)` → candidate `0.1.0 (383fcbdd)`
+
+Latency distribution across 4 comparable workload p50s. Each workload counts once; these are not frame times.
+
+| statistic | baseline | candidate |
+| --- | ---: | ---: |
+| Median workload p50 | 4.975ms | 5.010ms |
+| Workloads ≤1 ms | 1 | 1 |
+| Workloads ≤2 ms | 2 | 2 |
+| Workloads ≤3 ms | 2 | 2 |
+| Workloads >3 ms | 2 | 2 |
+
+Largest candidate workloads (including neutral results):
+
+| workload | baseline | candidate | Δ time |
+| --- | ---: | ---: | ---: |
+| publish 1024 retained Text instances | 17.12ms | 17.13ms | +0.010ms |
+| rewrite 512 labels in one group | 8.27ms | 8.34ms | +0.070ms |
+| 1000 labels first same-length scene publication | 1.68ms | 1.68ms | 0.000ms |
+| 1 labels first set | 120.85µs | 126.56µs | +0.006ms |
+
+```diff
+                                                   faster ◀       ┊       ▶ slower    Δ p50      p  baseline   candidate
+  1 labels first set                                            ├─┼──────●──────┤     +4.7%   .195  ▂▆█▄▂▂▁▁▁▁ ▂▅█▇▃▂▁▁▁▁
+  rewrite 512 labels in one group                                ├┼●─┤                +0.8%   .442  ▁▂▄█▇▅▄▂▂▁ ▁▄▆▇█▇▄▃▁▂
+  1000 labels first same-length scene publication              ├──●────┤               0.0%   .878  █▁▁▁▁▁▁▁▁▁ █▂▁▁▁▁▁▁▁▁
+  publish 1024 retained Text instances                          ├─●─┤                  0.0%   .878  ▂▃▃▅█▆▆▅▃▂ ▁▄▅▆██▆▅▄▂
+                                                   └──────────────┴──────────────┘
+                                                   -10%           0           +10%
+```
+
+All 4 compared benches are neutral.
+
+<details><summary>4 neutral, 0 skipped</summary>
+
+| status | bench | baseline | candidate | Δ time | Δ p50 | p | 95% CI |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| neutral | rewrite 512 labels in one group | 8.27ms | 8.34ms | +0.070ms | +0.8% | .442 | -0.8..+2.2% |
+| neutral | 1000 labels first same-length scene publication | 1.68ms | 1.68ms | 0.000ms | 0.0% | .878 | -1.8..+3.0% |
+| neutral | 1 labels first set | 120.85µs | 126.56µs | +0.006ms | +4.7% | .195 | -1.5..+9.5% |
+| neutral | publish 1024 retained Text instances | 17.12ms | 17.13ms | +0.010ms | 0.0% | .878 | -1.1..+1.2% |
+
+</details>

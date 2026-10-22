@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "mise",
+    "exec",
+    "--",
+    "sh",
+    "-c",
+    "git rev-parse HEAD; git status --porcelain=v1; shasum -a 256 /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/pmndrs-glyph-0.1.0.tgz /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/v3-combined/candidate/pmndrs-glyph-0.1.0.tgz /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/v3-combined/candidate/shaper-profile-authenticated/text-shaper.named.wasm /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/v3-combined/frontier-comparison/baseline.json /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/v3-combined/frontier-comparison/candidate.json; ./benches/node_modules/.bin/tsx -e \"import { packageLabsHarnessDigest } from \\\"./benches/scripts/support/saved-package-labs.mts\\\"; console.log(packageLabsHarnessDigest());\""
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-22T20:54:02.065416+00:00",
+  "finished": "2026-10-22T20:54:02.445946+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "a0a79a50c2d24fb57bd027c756e3f51b06e374ebf769b6b35a50efd1c1da6cc1",
+    "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

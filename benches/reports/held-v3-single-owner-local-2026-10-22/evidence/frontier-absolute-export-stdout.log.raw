@@ -1,0 +1,106 @@
+{
+  "output": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/v3-combined/frontier-absolute-results.json",
+  "sha256": "5bce45b696228b1d2efc56406677de78116ecfdde228330511bfae746f99a87a",
+  "rows": [
+    "rewrite 512 labels in one group"
+  ],
+  "raw": {
+    "baseline": "f76c842adc420e144f7b531f26b62030a60fd97729b988dccf5e36461ea8e314",
+    "candidate": "77c36a6e9c76ecb8316b319be9b91cb72d6ad14cfa6cd7aa3e1e7207c52d8f08"
+  }
+}
+{
+  "output": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/v3-combined/frontier-absolute-results.json",
+  "sha256": "5540b5b208a250eb3cbaf9f3b7d32c1de1f4148fa97645e72f7104d35e7310b6",
+  "rows": [
+    "rewrite 512 labels in one group",
+    "1000 labels first same-length scene publication"
+  ],
+  "raw": {
+    "baseline": "f76c842adc420e144f7b531f26b62030a60fd97729b988dccf5e36461ea8e314",
+    "candidate": "77c36a6e9c76ecb8316b319be9b91cb72d6ad14cfa6cd7aa3e1e7207c52d8f08"
+  }
+}
+{
+  "output": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/v3-combined/frontier-absolute-results.json",
+  "sha256": "4a19ef44b6482d72d259d91398ee2a6a157d56f1a69f458cbc94812599581c4f",
+  "rows": [
+    "rewrite 512 labels in one group",
+    "1000 labels first same-length scene publication",
+    "1 labels first set"
+  ],
+  "raw": {
+    "baseline": "f76c842adc420e144f7b531f26b62030a60fd97729b988dccf5e36461ea8e314",
+    "candidate": "77c36a6e9c76ecb8316b319be9b91cb72d6ad14cfa6cd7aa3e1e7207c52d8f08"
+  }
+}
+{
+  "output": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/v3-combined/frontier-absolute-results.json",
+  "sha256": "cb60a5395ddef202b162ad073aeae50e8cfa5156f9dccd003a50a24e72f51ef3",
+  "rows": [
+    "rewrite 512 labels in one group",
+    "1000 labels first same-length scene publication",
+    "1 labels first set",
+    "publish 1024 retained Text instances"
+  ],
+  "raw": {
+    "baseline": "f76c842adc420e144f7b531f26b62030a60fd97729b988dccf5e36461ea8e314",
+    "candidate": "77c36a6e9c76ecb8316b319be9b91cb72d6ad14cfa6cd7aa3e1e7207c52d8f08"
+  }
+}
+{
+  "output": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/v3-combined/frontier-absolute-results.json",
+  "sha256": "986689aea944e8a23e3f859231b6fabdafedd1748ab04dcd35a7438179bbef4d",
+  "rows": [
+    "rewrite 512 labels in one group",
+    "1000 labels first same-length scene publication",
+    "1 labels first set",
+    "publish 1024 retained Text instances"
+  ],
+  "raw": {
+    "baseline": "f76c842adc420e144f7b531f26b62030a60fd97729b988dccf5e36461ea8e314",
+    "candidate": "77c36a6e9c76ecb8316b319be9b91cb72d6ad14cfa6cd7aa3e1e7207c52d8f08"
+  }
+}
+{
+  "output": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/v3-combined/frontier-absolute-results.json",
+  "sha256": "de24aeb3e7010340dc235940ce4e7c955f1b671d71b7c48eef1de488fd9b1a78",
+  "rows": [
+    "rewrite 512 labels in one group",
+    "1000 labels first same-length scene publication",
+    "1 labels first set",
+    "publish 1024 retained Text instances"
+  ],
+  "raw": {
+    "baseline": "f76c842adc420e144f7b531f26b62030a60fd97729b988dccf5e36461ea8e314",
+    "candidate": "77c36a6e9c76ecb8316b319be9b91cb72d6ad14cfa6cd7aa3e1e7207c52d8f08"
+  }
+}
+{
+  "output": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/v3-combined/frontier-absolute-results.json",
+  "sha256": "b384e41474d379b81303774eb035cd5d106bb920aa73eac6da3472ffdce05dd0",
+  "rows": [
+    "rewrite 512 labels in one group",
+    "1000 labels first same-length scene publication",
+    "1 labels first set",
+    "publish 1024 retained Text instances"
+  ],
+  "raw": {
+    "baseline": "f76c842adc420e144f7b531f26b62030a60fd97729b988dccf5e36461ea8e314",
+    "candidate": "77c36a6e9c76ecb8316b319be9b91cb72d6ad14cfa6cd7aa3e1e7207c52d8f08"
+  }
+}
+{
+  "output": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/v3-combined/frontier-absolute-results.json",
+  "sha256": "d490af6d825d6c1904b22215694ee97003d42f2f19561ce9bbe57ac1b1954353",
+  "rows": [
+    "rewrite 512 labels in one group",
+    "1000 labels first same-length scene publication",
+    "1 labels first set",
+    "publish 1024 retained Text instances"
+  ],
+  "raw": {
+    "baseline": "f76c842adc420e144f7b531f26b62030a60fd97729b988dccf5e36461ea8e314",
+    "candidate": "77c36a6e9c76ecb8316b319be9b91cb72d6ad14cfa6cd7aa3e1e7207c52d8f08"
+  }
+}

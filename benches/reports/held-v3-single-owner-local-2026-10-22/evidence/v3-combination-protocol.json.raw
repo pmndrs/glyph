@@ -1,0 +1,32 @@
+{
+  "status": "declared before new candidate gates or timing",
+  "baseCheckpoint": "83ccb82314f84449aa14c269f09b0da43cf65e2e",
+  "productBase": "dec7509b3a18b2d71e27de023419f45c32fb10e7",
+  "branch": "experiments/held-v3-single-owner-20261022",
+  "referenceArchive": "candidate/pmndrs-glyph-0.1.0.tgz",
+  "referenceArchiveSha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+  "variant": "Complete archived V3 plus frozen single-owner preparation and acknowledgement; no other product optimization.",
+  "suite": "frontier",
+  "blocks": 8,
+  "sampling": "single-call",
+  "warmup": "fixed-20",
+  "identities": [
+    "rewrite 512 labels in one group",
+    "publish 1024 retained Text instances",
+    "1000 labels first same-length scene publication",
+    "1 labels first set"
+  ],
+  "callbackChanges": "labels only; bodies and fixtures unchanged",
+  "execution": "Luna sole gate/build/timing executor; fresh scoped Sol High source review before gates; no overlapping owned heavy jobs; competing-load observations preserved; no stopping unrelated processes.",
+  "preTiming": [
+    "native independent cold output and V3 admission/fallback",
+    "combined pending/unpublished query/split lifetime and rejection/retry",
+    "downstream package correctness",
+    "frozen archive plus matching executable named Wasm",
+    "exact four callback resolution and cross-policy authentication"
+  ],
+  "selection": "Both dense complete operations must show credible block-supported gain after added admission costs; sparse publication and one-label setter guards must not show credible regression. No 5% floor, no tail-only veto, no favorable rerun. Preserve inconclusive correct whole variants under refs and reject as next product wave.",
+  "statistics": "Absolute p50/p90/p95, n, all blocks/raw samples, exclusions and software calibration diagnostics; no process/RSS memory used.",
+  "limits": "Native counters establish native fixture mechanism only. Timed Wasm exact admission and source row counts unobserved. This focused selection does not establish seven-family or two-control parity.",
+  "afterSelection": "Only a selected variant proceeds to full main/published evaluation and candidate-specific API/ABI/size/owned-memory/browser/hero proof. Stop optimization at verified parity."
+}

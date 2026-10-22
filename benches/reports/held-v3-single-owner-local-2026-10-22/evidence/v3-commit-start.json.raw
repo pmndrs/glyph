@@ -1,0 +1,10 @@
+{
+  "argv": [
+    "git",
+    "commit",
+    "-m",
+    "perf(engine): combine full-frontier retained gather"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-22T20:48:41.117878+00:00"
+}

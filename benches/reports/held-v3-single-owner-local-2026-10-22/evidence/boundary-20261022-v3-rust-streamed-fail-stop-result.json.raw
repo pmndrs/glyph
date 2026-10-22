@@ -1,0 +1,21 @@
+{
+  "argv": [
+    "mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "glyph:shaper-tests",
+    "--",
+    "streamed"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-22T20:36:12.593570+00:00",
+  "finished": "2026-10-22T20:36:13.101915+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "a4025ae332c90668c17050a726ed5b92c3ba5870417207da4e05749bc734dbec",
+    "stderr.log": "70b30d1871088cc37fc06644550ab968a0742505caf86187dde5abebdfedab5b"
+  }
+}

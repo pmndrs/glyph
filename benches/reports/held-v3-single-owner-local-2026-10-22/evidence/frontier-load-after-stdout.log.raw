@@ -1,0 +1,40 @@
+Thu Oct 22 20:53:31 UTC 2026
+Processes: 735 total, 2 running, 733 sleeping, 5954 threads 
+2026/10/22 16:53:31
+Load Avg: 3.17, 4.11, 3.98 
+CPU usage: 6.7% user, 23.29% sys, 70.63% idle 
+SharedLibs: 478M resident, 152M data, 100M linkedit.
+MemRegions: 601606 total, 4498M resident, 123M private, 1483M shared.
+PhysMem: 15G used (3458M wired, 4553M compressor), 453M unused.
+VM: 340T vsize, 6144M framework vsize, 2342087(0) swapins, 3606251(0) swapouts.
+Networks: packets: 68239968/81G in, 52335906/69G out.
+Disks: 669603771/7006G read, 27381791/2092G written.
+
+
+Processes: 735 total, 2 running, 733 sleeping, 5957 threads 
+2026/10/22 16:53:32
+Load Avg: 3.17, 4.11, 3.98 
+CPU usage: 8.8% user, 16.16% sys, 75.75% idle 
+SharedLibs: 478M resident, 152M data, 100M linkedit.
+MemRegions: 0 total, 0B resident, 123M private, 1483M shared.
+PhysMem: 15G used (3458M wired, 4553M compressor), 455M unused.
+VM: 340T vsize, 6144M framework vsize, 2342087(0) swapins, 3606251(0) swapouts.
+Networks: packets: 68240181/81G in, 52336090/69G out.
+Disks: 669603817/7006G read, 27381805/2092G written.
+
+
+  PID  PPID  %CPU COMMAND
+42659 42601 156.6 node /Volumes/Depot/Developer/text/apps/pixi3d-hello-world/node_modules/.bin/../../../../node_modules/.pnpm/vite@8.1.5_@types+node@24.13.3_esbuild@0.28.2_jiti@2.7.0_tsx@4.23.13/node_modules/vite/bin/vite.js --port 5173 --host 127.0.0.1 --strictPort --force
+  618     1  12.4 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+ 1995     1   4.7 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -m sidepulse status-bar --foreground
+ 1445  1302   2.3 /Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex -c features.code_mode_host=true app-server --analytics-default-enabled -c plugins.codex-app-tools@openai-bundled.mcp_servers.codex_app.enabled=true -c plugins.code-review@openai-bundled.mcp_servers.code-review.enabled=true
+  738     1   1.9 /System/Library/DriverExtensions/com.apple.DriverKit-AppleBCMWLAN.dext/com.apple.DriverKit-AppleBCMWLAN com.apple.bcmwlan 0x100000f43 com.apple.DriverKit-AppleBCMWLAN
+  633     1   1.8 /usr/sbin/coreaudiod
+27383     1   1.0 /System/Volumes/Preboot/Cryptexes/App/System/Library/StagedFrameworks/Safari/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebKit.WebContent
+ 1302     1   0.9 /Applications/ChatGPT.app/Contents/MacOS/ChatGPT
+  610     1   0.9 /usr/sbin/bluetoothd
+ 1371  1302   0.7 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/155.0.8059.40/Helpers/Codex (Service).app/Contents/MacOS/Codex (Service) --type=gpu-process --gpu-recent-crash-count=0 --user-data-dir=/Users/mini/Library/Application Support/Codex --start-stack-profiler --gpu-preferences=WAAAAAAAAAAgAQAEAAAAAAAAAAAAAGAAQAAAAAAAAAADAAAAAAAAADgAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAKAAAAAAAAAAoAAAAAAAAAAgAAAAAAAAADAAAAAEAAAAAAAAAAAAAAAgAAAAAAAAACAAAAAAAAAA= --shared-files --metrics-shmem-handle=1752395122,r,15523689646188196156,12443931636890965565,262144 --field-trial-handle=1718379636,r,1134434832331618550,541845077033099486,262144 --enable-features=DevToolsWebMCPSupport,DocumentPolicyIncludeJSCallStacksInCrashReports,ReportStuckThrottle --disable-features=DropInputEventsWhilePaintHolding,WebUIOmniboxAimPopup,WebUIOmniboxPopup --variations-seed-version --pseudonymization-salt-handle=1935764596,r,14856443462277428546,1815651698753490127,4 --trace-process-track-uuid=3190708988185955192 --seatbelt-client=44
+ 1222     1   0.7 /System/Library/CoreServices/UniversalControl.app/Contents/MacOS/UniversalControl
+27272     1   0.6 /System/Volumes/Preboot/Cryptexes/App/System/Library/StagedFrameworks/Safari/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.GPU.xpc/Contents/MacOS/com.apple.WebKit.GPU
+ 1054     1   0.6 /usr/libexec/sharingd
+63211     1   0.4 /usr/libexec/wifip2pd

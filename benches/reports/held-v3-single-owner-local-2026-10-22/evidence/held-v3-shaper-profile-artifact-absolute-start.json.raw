@@ -1,0 +1,24 @@
+{
+  "argv": [
+    "mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "glyph:shaper-profile-artifact",
+    "--",
+    "--artifact",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/v3-combined/candidate/pmndrs-glyph-0.1.0.tgz",
+    "--source-root",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+    "--output",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/v3-combined/candidate/shaper-profile-authenticated",
+    "--simd",
+    "1",
+    "--one-caller-inline-max-function-size",
+    "0"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-22T20:41:33.293938+00:00"
+}

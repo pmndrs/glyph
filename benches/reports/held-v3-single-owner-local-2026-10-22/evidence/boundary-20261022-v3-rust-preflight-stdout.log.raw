@@ -1,0 +1,47 @@
+
+running 12 tests
+test engine::semantic_wire::tests::geometry_preflight_rejects_a_constraint_span_beyond_the_region_table ... ok
+test engine::semantic_wire::tests::geometry_preflight_rejects_a_region_span_beyond_the_exclusion_table ... ok
+test engine::state::tests::preflight_complete_replacement_avoids_old_units_and_preserves_ordered_edits ... ok
+test engine::state::tests::changed_text_preflight_analysis_is_transferred_without_reanalysis ... ok
+test engine::state::tests::measurement_geometry_owner_preflight_preserves_root_after_rejection ... ok
+test engine::state::tests::geometry_owner_preflight_rejects_before_lifecycle_writes_and_keeps_root_usable ... ok
+test engine::state::tests::invalid_later_paragraph_is_preflighted_before_any_child_or_lifecycle_commit ... ok
+test engine::state::tests::real_text_preflight_analyzes_once_and_queries_and_publication_reuse_it ... ok
+test engine::ordered_plan::tests::commit_preflight_rejects_invalid_range_and_reserves_commit_destinations ... ok
+test engine::positioning::tests::placement_binding_skips_proven_spans_and_preflights_revision_overflow ... ok
+test engine::state::tests::style_preflight_rejects_missing_lifecycle_target_and_stale_root_range ... ok
+test engine::state::tests::text_preflight_validates_the_resulting_style_set_before_applying_edits ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 476 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+

@@ -1,0 +1,9 @@
+{
+  "argv": [
+    "/bin/sh",
+    "-c",
+    "date -u; top -l 2 -s 1 -n 0; ps -Ao pid,ppid,%cpu,command -r | head -10"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-22T20:34:50.894733+00:00"
+}

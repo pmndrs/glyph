@@ -1,0 +1,14 @@
+$ node benches/scripts/workflows.mts run benchmark:static-check -- --runtime-packages-ready --static
+pnpm exited with 1
+file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/workflows.mts:168
+      if (code !== 0) reject(new Error(`${workflow.name} exited with ${String(code)}`));
+                             ^
+
+Error: benchmark:static-check exited with 2
+    at ChildProcess.<anonymous> (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/workflows.mts:168:30)
+    at Object.onceWrapper (node:events:631:26)
+    at ChildProcess.emit (node:events:509:28)
+    at maybeClose (node:internal/child_process:1124:16)
+    at ChildProcess._handle.onexit (node:internal/child_process:306:5)
+
+Node.js v24.18.0

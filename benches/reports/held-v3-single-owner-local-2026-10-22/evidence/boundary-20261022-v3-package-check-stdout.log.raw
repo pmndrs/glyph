@@ -1,0 +1,2150 @@
+✔ readGlyphs migration: repository (325.152583ms)
+✔ readGlyphs migration: installed-old (251.937625ms)
+✔ readGlyphs migration: installed-new (226.106625ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 805.226458
+✔ split migration: repository (334.253459ms)
+✔ split migration: installed-old (249.8935ms)
+✔ split migration: installed-new (223.897875ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 810.159667
+ℹ tsdown v0.22.14 powered by rolldown v1.2.6
+ℹ config file: /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/tsdown.config.ts 
+ℹ entry: src/shaders/typegpu/bitmap-reference.ts, src/shaders/typegpu/bitmap-shader.ts, src/shaders/typegpu/decoration-shader.ts, src/shaders/typegpu/index.ts, src/shaders/typegpu/msdf-shader.ts, src/shaders/typegpu/msdf/distance.ts, src/shaders/typegpu/slug/index.ts, src/shaders/typegpu/slug/slug-band.ts, src/shaders/typegpu/slug/slug-render.ts, src/shaders/typegpu/slug/slug-texture.ts, src/shaders/typegpu/slug/core/band.ts, src/shaders/typegpu/slug/core/coverage.ts, src/shaders/typegpu/slug/core/dilate.ts, src/shaders/typegpu/slug/core/index.ts, src/shaders/typegpu/slug/core/root-code.ts, src/shaders/typegpu/slug/core/solve-quadratic.ts
+ℹ target: es2025
+ℹ entry: src/bake.ts, src/bitmap-baker-abi.ts, src/core.ts, src/discovery-source.ts, src/discovery.ts, src/engine-encoding.ts, src/engine-error.ts, src/font-baker-abi.ts, src/font-face-transfer.ts, src/font-face.ts, src/font-feature.ts, src/font.ts, src/formatted-text.ts, src/glyph-engine.ts, src/glyph-error.ts, src/glyph-outline.ts, src/glyph-placement.ts, src/glyph.ts, src/identity.ts, src/index.ts, src/layout.ts, src/loaded-font.ts, src/loader.ts, src/mtsdf-baker-abi.ts, src/paint.ts, src/property-list.ts, src/raster-coverage.ts, src/raster.ts, src/react.ts, src/runtime-bake-worker.ts, src/runtime-bake.ts, src/shaper.ts, src/slug-baker-abi.ts, src/text-anchor.ts, src/text-properties.ts, src/text-shaper-abi.ts, src/three.ts, src/typegpu.ts, src/vue.ts, src/bakers/bitmap-validator.ts, src/bakers/bitmap.ts, src/bakers/msdf-validator.ts, src/bakers/msdf.ts, src/bakers/slug-validator.ts, src/bakers/slug.ts, src/config/codec-program.ts, src/config/codec.ts, src/config/glyph.ts, src/config/raster-format.ts, src/config/raster-host.ts, src/config/raster.ts, src/config/resources.ts, src/config/schema.ts, src/config/text-property.ts, src/config/text-span-owner.ts, src/font-baker/contract.ts, src/font-baker/index.ts, src/font-baker/validator.ts, src/font-baker/wasm-url.ts, src/generated/bitmap-baker-abi.ts, src/generated/font-artifact-schema.ts, src/generated/mtsdf-baker-abi.ts, src/generated/slug-baker-abi.ts, src/generated/text-shaper-abi.ts, src/node/bake.ts, src/node/cli.ts, src/raster/bitmap.ts, src/raster/msdf.ts, src/raster/slug.ts, src/react/bitmap.ts, src/react/index.ts, src/react/msdf.ts, src/react/slug.ts, src/internal/bake-progress-protocol.ts, src/internal/bind-command-buffer.ts, src/internal/bitmap-contract.ts, src/internal/bitmap-strike.ts, src/internal/borrowed-layout-view.ts, src/internal/codec-capability-selection.ts, src/internal/codec-program-contract.ts, src/internal/codec-program.ts, src/internal/compile-wasm-response.ts, src/internal/compose-bake.ts, src/internal/configured-handle.ts, src/internal/content-digest.ts, src/internal/core-bake-policy.ts, src/internal/create-engine.ts, src/internal/desired-text.ts, src/internal/dev.ts, src/internal/font-artifact-reader.ts, src/internal/font-bake-pipeline.ts, src/internal/font-binding.ts, src/internal/font-face-transfer-runtime.ts, src/internal/font-face-transfer.ts, src/internal/font-resource-key.ts, src/internal/font-selection.ts, src/internal/frame-wire.ts, src/internal/glb-reader.ts, src/internal/glyph-id.ts, src/internal/glyph-plan-target.ts, src/internal/handle-state.ts, src/internal/ktx2-constants.ts, src/internal/layout-query-view.ts, src/internal/msdf-contract.ts, src/internal/mtsdf-generator.ts, src/internal/node-bake-error.ts, src/internal/node-file-publication.ts, src/internal/owned-array-buffer.ts, src/internal/plan-view.ts, src/internal/raster-artifact-validation.ts, src/internal/raster-atlas.ts, src/internal/raster-bake-plan.ts, src/internal/raster-bake-worker-entry.ts, src/internal/raster-bake-worker-host.ts, src/internal/raster-bake-worker-protocol.ts, src/internal/raster-baker-profile.ts, src/internal/raster-baker-wasm.ts, src/internal/raster-codec-registry.ts, src/internal/raster-coverage-artifact.ts, src/internal/raster-format-compiler.ts, src/internal/raster-format-registry.ts, src/internal/raster-identity.ts, src/internal/raster-ktx.ts, src/internal/raster-records.ts, src/internal/registered-font.ts, src/internal/render-id.ts, src/internal/render-planner.ts, src/internal/resources.ts, src/internal/runtime-bake-protocol.ts, src/internal/runtime-font-cache.ts, src/internal/schema.ts, src/internal/serial-worker-host.ts, src/internal/shaper-wasm-url.ts, src/internal/slug-contract.ts, src/internal/span-cascade.ts, src/internal/successful-promise-cache.ts, src/internal/text-shaper-module.ts, src/internal/typed-command-identity.ts, src/internal/typed-command-tree.ts, src/runtime-bakers/bitmap-worker.ts, src/runtime-bakers/bitmap.ts, src/runtime-bakers/msdf-worker.ts, src/runtime-bakers/msdf.ts, src/runtime-bakers/slug-worker.ts, src/runtime-bakers/slug.ts, src/typegpu/config.ts, src/typegpu/text.ts, src/vue/bitmap.ts, src/vue/msdf.ts, src/vue/slug.ts, src/three/codec.ts, src/three/command-buffer-renderer.ts, src/three/decorations.ts, src/three/detached-object.ts, src/three/frame-error.ts, src/three/glyph-measurement.ts, src/three/glyphs.ts, src/three/material.ts, src/three/projected-flow.ts, src/three/raster-program.ts, src/three/schema.ts, src/three/span.ts, src/three/text.ts, src/three/transform-synchronizer.ts, src/three/typegpu.ts, src/font-baker/generated/font-baker-abi.ts, src/raster/internal/bitmap-decoder.ts, src/raster/internal/msdf-decoder.ts, src/raster/internal/slug-decoder.ts, src/shaders/tsl/bitmap-shader.ts, src/shaders/tsl/decoration-shader.ts, src/shaders/tsl/index.ts, src/shaders/tsl/msdf-shader.ts, src/shaders/tsl/packed-color.ts, src/typegpu/internal/bindings.ts, src/typegpu/internal/codec.ts, src/typegpu/internal/renderer.ts, src/typegpu/internal/resources.ts, src/vue/internal/flatten-slots.ts, src/vue/internal/property-snapshot.ts, src/three/internal/batch-scope.ts, src/three/internal/define-config.ts, src/three/internal/draw-realizer.ts, src/three/internal/geometry.ts, src/three/internal/handle-access.ts, src/three/internal/host-buffer.ts, src/three/internal/material-realizer.ts, src/three/internal/portable-resource.ts, src/three/internal/publication-boundary.ts, src/three/internal/raster-program-registry.ts, src/three/internal/render-state.ts, src/three/internal/renderer-resources.ts, src/three/internal/scene-tree.ts, src/three/internal/shader-set.ts, src/shaders/tsl/slug/calc-coverage.ts, src/shaders/tsl/slug/calc-root-code.ts, src/shaders/tsl/slug/index.ts, src/shaders/tsl/slug/primitives.ts, src/shaders/tsl/slug/shader.ts, src/shaders/tsl/slug/slug-band.ts, src/shaders/tsl/slug/slug-dilate.ts, src/shaders/tsl/slug/slug-render.ts, src/shaders/tsl/slug/slug-texture.ts, src/shaders/tsl/slug/solve-quadratic.ts, src/three/typegpu/internal/bitmap-shader.ts, src/three/typegpu/internal/decoration-shader.ts, src/three/typegpu/internal/msdf-shader.ts, src/three/typegpu/internal/slug-shader.ts, src/three/typegpu/internal/slug/slug-dilate.ts, src/shaders/tsl/slug/internal/reference.ts, src/shaders/tsl/slug/internal/three-compat.ts
+ℹ target: es2025
+ℹ tsconfig: tsconfig.build.json
+ℹ tsconfig: tsconfig.build.json
+ℹ Build start
+✔ Build complete in 101ms
+ℹ Granting execute permission to .cache/build/staging-6915-EstxXf/node/cli.js
+✔ Build complete in 143ms
+
+running 8 tests
+test tests::bounded_descriptor_key_matches_the_typescript_contract ... ok
+test tests::descriptor_key_matches_the_typescript_contract ... ok
+test tests::descriptor_rejects_strikes_larger_than_the_atlas_can_represent ... ok
+test tests::unicode_and_authored_text_seeds_resolve_through_the_selected_face ... ok
+test tests::a_font_without_outlines_is_refused_rather_than_baked_blank ... ok
+test tests::bounded_bitmap_rasterizes_only_selected_font_local_glyphs ... ok
+test tests::artifact_names_include_font_and_raster_identity ... ok
+test tests::inter_bitmap_is_deterministic_and_packaging_preserves_records ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+test arbitrary_font_bytes_fail_safely_and_deterministically ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 9 tests
+test sfnt::tests::bounds_are_rounded_outward ... ok
+test sfnt::tests::checksum_pads_partial_words ... ok
+test source_font::tests::selection_rejects_overlapping_ranges_before_font_parsing ... ok
+test sfnt::tests::variation_axis_tables_still_reject_variable_input ... ok
+test source_font::tests::prepares_a_shaping_complete_ascii_subset ... ok
+test source_font::tests::inspection_reports_exact_nominal_glyph_ids ... ok
+test sfnt::tests::stat_alone_does_not_make_a_static_font_variable ... ok
+test sfnt::tests::optional_cjk_layout_tables_are_absent_when_the_source_omits_them ... ok
+test sfnt::tests::optional_cjk_layout_tables_survive_as_exact_bounded_views ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.04s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+test arbitrary_font_bytes_fail_safely_and_deterministically ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 10 tests
+test public_api_rejects_an_unknown_descriptor_version_before_font_parsing ... ok
+test generated_abi_is_valid_and_names_the_public_exports ... ok
+test public_api_returns_a_structured_error_for_invalid_font_bytes ... ok
+test public_api_rejects_webfont_envelopes_before_sfnt_parsing ... ok
+test public_api_validates_required_and_unsupported_shaping_tables ... ok
+test baked_metrics_carry_underline_and_strikeout_values ... ok
+test public_api_refuses_outlines_for_a_face_that_draws_none ... ok
+test public_api_selects_one_collection_face_and_rejects_an_unknown_index ... ok
+test only_a_bake_with_outlines_writes_the_outlined_format_version ... ok
+test outlines_cost_about_the_face_outline_tables ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.48s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 488 tests
+test bidi::tests::bracket_data_normalizes_canonical_openings ... ok
+test bidi::tests::generated_data_is_unicode_17_and_covers_new_defaults ... ok
+test bidi::tests::utf16_analysis_preserves_surrogate_levels ... ok
+test bidi::tests::analysis_reuses_output_and_builds_equal_level_runs ... ok
+test engine::cluster_state::tests::canonical_revision_exhaustion_is_domain_specific_and_atomic ... ok
+test engine::cluster_state::tests::character_wrap_takes_every_safe_boundary_and_none_wraps_never ... ok
+test engine::cluster_state::tests::fixed_wide_lane_preserves_large_advances_and_chunk_summary_semantics ... ok
+test engine::cluster_state::tests::canonical_revision_invalidates_split_and_merge_topology ... ok
+test engine::cluster_state::tests::canonical_revision_reconciles_insertion_before_by_stable_anchor ... ok
+test engine::cluster_state::tests::canonical_revision_tracks_metrics_but_ignores_paint_and_binding ... ok
+test engine::cluster_state::tests::forced_breaks_terminate_intrinsic_segments ... ok
+test engine::cluster_state::tests::a_style_boundary_inside_a_cluster_reports_its_own_cause ... ok
+test engine::cluster_state::tests::a_line_break_inside_a_grapheme_cluster_is_ignored_rather_than_rejected ... ok
+test engine::cluster_state::tests::identity_scatter_admits_only_ordered_tiling_runs ... ok
+test engine::cluster_state::tests::aggregates_scaled_advances_spacing_and_legal_breaks ... ok
+test engine::cluster_state::tests::intrinsic_widths_mirror_the_word_wrap_break_decisions ... ok
+test engine::cluster_state::tests::intrinsic_word_width_uses_the_complete_shaped_segment ... ok
+test engine::cluster_state::tests::justification_and_negative_advances_do_not_split_shadow_runs ... ok
+test engine::cluster_state::tests::latin_font_fallback_and_bidi_direction_split_shadow_runs ... ok
+test engine::cluster_state::tests::layout_dirty_ranges_require_exact_coordinates_and_safe_boundaries ... ok
+test engine::cluster_state::tests::layout_runs_are_gapless_maximal_and_glyph_contiguous ... ok
+test engine::cluster_state::tests::layout_runs_merge_script_boundaries_but_keep_direction_and_geometry ... ok
+test engine::cluster_state::tests::negative_chunk_summary_packs_its_marker_and_tagged_auxiliary ... ok
+test engine::cluster_state::tests::glyphless_ligature_continuation_inherits_shape_run_ownership ... ok
+test engine::cluster_state::tests::paragraph_run_owns_direction_canonical_numeric_rows ... ok
+test engine::cluster_state::tests::reordered_glyph_offset_maps_to_its_containing_grapheme ... ok
+test engine::cluster_state::tests::stable_glyph_ids_follow_clusters_and_reuse_ordinals_transactionally ... ok
+test engine::cluster_state::tests::metrics_refresh_from_the_stream_matches_the_cold_build_oracle ... ok
+test engine::cluster_state::tests::placement_segment_anchors_are_precomputed_from_stable_word_and_run_roots ... ok
+test engine::cluster_state::tests::word_break_stream_is_compact_and_only_materialized_for_sparse_breaks ... ok
+test engine::cluster_state::tests::dense_cjk_break_paint_and_raster_lanes_do_not_split_shadow_runs ... ok
+test engine::cluster_state::tests::retained_source_run_rebuild_matches_the_cold_cluster_oracle ... ok
+test engine::cluster_state::tests::source_run_rebuild_resets_break_corrections_only_near_the_rebuilt_run ... ok
+test engine::codec::tests::all_input_masks_cover_the_validated_thirty_two_bit_boundary ... ok
+test engine::codec::tests::effect_inputs_follow_the_effect_change_bit ... ok
+test engine::codec::tests::compiles_each_operation_to_only_its_reachable_buffers ... ok
+test engine::codec::tests::accepts_complete_straight_line_program ... ok
+test engine::codec::tests::codec_and_executor_reject_nonfinite_physical_values ... ok
+test engine::codec::tests::decoration_buffer_limits_follow_first_matching_program_order ... ok
+test engine::codec::tests::capability_sets_select_exact_programs_and_reject_invalid_costs ... ok
+test engine::codec::tests::accepts_same_technique_with_distinct_variants ... ok
+test engine::codec::tests::executor_honors_codec_stride_without_touching_padding ... ok
+test engine::codec::tests::input_sources_are_exact_and_participate_in_codec_identity ... ok
+test engine::codec::tests::fingerprints_exact_validated_codec_content ... ok
+test engine::codec::tests::rejects_duplicate_technique_variants_and_program_ids ... ok
+test engine::codec::tests::rejects_partial_duplicate_and_out_of_range_stores ... ok
+test engine::codec::tests::later_overflow_preserves_only_the_completed_output_prefix ... ok
+test engine::codec::tests::rejects_uninitialized_and_wrong_type_registers ... ok
+test engine::codec::tests::rejects_programs_declaring_more_buffers_than_one_draw_binds ... ok
+test engine::codec::tests::scalar_executor_rejects_invalid_shapes_before_writing ... ok
+test engine::codec::tests::scalar_executor_preserves_typed_arithmetic_selection_and_narrowing ... ok
+test engine::codec::tests::scalar_executor_writes_a_bounded_record_range_without_touching_spares ... ok
+test engine::codec::tests::storage_and_draw_keys_validate_independently ... ok
+test engine::codec::tests::validates_buffer_limits_against_the_glyph_program_each_set_resolves ... ok
+test engine::codec_gather::tests::derives_local_geometry_and_direct_occurrence_placement ... ok
+test engine::codec_gather::tests::append_decorations_appends_resource_free_rows_with_lane_convention ... ok
+test engine::codec::tests::reused_scratch_matches_literal_bytes_across_groups_tails_and_masks ... ok
+test engine::codec_gather::tests::appends_independent_layouts_into_one_plan_input ... ok
+test engine::codec_gather::tests::fresh_gather_sources_every_declared_register_whatever_the_change_mask_says ... ok
+test engine::codec_gather::tests::gathers_program_specific_sources_without_a_union_record ... ok
+test engine::codec_gather::tests::gathered_decorations_preserve_the_producer_contract ... ok
+test engine::codec_gather::tests::changed_output_intervals_use_record_coordinates_and_revoke_on_rebuild ... ok
+test engine::codec_gather::tests::missing_program_binding_and_source_are_explicit ... ok
+test engine::codec_gather::tests::gathered_producer_contract_compiles_fresh_and_retained ... ok
+test engine::codec_gather::tests::positioned_origins_need_no_parallel_vectors ... ok
+test engine::codec_gather::tests::retained_gather_reads_only_inputs_reaching_changed_buffers ... ok
+test engine::codec_gather::tests::late_binding_operand_falls_back_without_discarded_semantic_reads ... ok
+test engine::codec_gather::tests::retained_gather_refreshes_binding_inputs_only_when_the_selected_strike_changes ... ok
+test engine::codec_gather::tests::mixed_owner_envelope_reuses_clean_gaps_after_a_retained_stop ... ok
+test engine::codec_gather::tests::changed_source_or_record_length_rejects_old_range_and_rebuilds_suffix ... ok
+test engine::codec_gather::tests::retained_gather_repacks_slots_a_topology_edit_hands_to_another_identity ... ok
+test engine::codec_gather::tests::retained_gather_realigns_when_a_paragraph_sheds_a_recordless_glyph ... ok
+test engine::codec_gather::tests::retained_gather_updates_changed_fields_and_rejects_storage_topology_changes ... ok
+test engine::codec_gather::tests::retained_position_only_gather_rebinds_slots_without_u32_operands ... ok
+test engine::codec_gather::tests::retained_position_only_gather_skips_binding_and_resource_resolution ... ok
+test engine::codec_gather::tests::sparse_mask_runs_coalesce_recordless_sources_and_clear_once ... ok
+test engine::codec_gather::tests::streamed_callback_failure_restores_source_owner_and_count_change_stops ... ok
+test engine::codec_gather::tests::scoped_zero_mask_translation_updates_only_derived_output_interval ... ok
+test engine::codec_gather::tests::retained_zero_mask_refreshes_derived_bounds_without_codec_writes ... ok
+test engine::codec_gather::tests::streamed_dirty_islands_borrow_clean_decorated_owner_between_them ... ok
+test engine::codec_gather::tests::streamed_owner_count_changes_stop_before_later_selected_owner ... ok
+test engine::codec_gather::tests::streamed_owner_offsets_preserve_clean_decoration_rows ... ok
+test engine::cluster_state::tests::rtl_numeric_chunks_preserve_glyphless_ownership_and_detached_breaks ... ok
+test engine::codec_wire::tests::decodes_compiler_mapped_codec_records ... ok
+test engine::codec_gather::tests::unchanged_ranges_skip_glyph_walks_and_clear_previous_deltas ... ok
+test engine::codec_wire::tests::rejects_forged_lengths_overlaps_and_reserved_data ... ok
+test engine::codec_wire::tests::rejects_unknown_and_noncanonical_operations ... ok
+test engine::codec_gather::tests::streamed_stop_names_the_owner_and_resumes_existing_suffix_gather ... ok
+test engine::codec_gather::tests::appended_splice_matches_range_composition ... ok
+test engine::flow_composition::tests::ellipsis_truncation_reuses_the_final_slot_and_removes_only_required_clusters ... ok
+test engine::flow_composition::tests::first_line_indent_narrows_only_the_paragraph_first_line ... ok
+test engine::flow_composition::tests::complete_no_wrap_line_still_requests_ellipsis_when_its_slot_overflows ... ok
+test engine::flow_composition::tests::explicit_line_height_uses_the_stack_primary_and_publishes_tight_flow ... ok
+test engine::flow_composition::tests::flexible_inline_end_updates_shared_multileaf_storage_in_one_ordered_walk ... ok
+test engine::flow_composition::tests::layout_run_extents_ignore_paint_only_style_boundaries ... ok
+test engine::flow_composition::tests::layout_run_extents_cover_partial_geometry_runs ... ok
+test engine::flow_composition::tests::layout_run_extents_preserve_hard_break_and_empty_line_behavior ... ok
+test engine::cluster_state::tests::placement_segments_stop_at_the_first_boundary_with_linear_work ... ok
+test engine::flow_composition::tests::localized_edit_clears_partial_layout_when_line_state_does_not_converge ... ok
+test engine::flow_composition::tests::localized_edit_recomposes_multiple_lines_until_cursor_state_converges ... ok
+test engine::flow_composition::tests::localized_edit_recomposes_one_line_and_reuses_converged_prefix_and_suffix ... ok
+test engine::flow_composition::tests::localized_drop_cap_source_edit_recomposes_cap_bands_and_reuses_suffix ... ok
+test engine::flow_composition::tests::one_update_flows_fragments_around_a_hole_and_retries_for_tall_text ... ok
+test engine::flow_composition::tests::localized_exclusion_move_recomposes_through_the_dirty_band_and_matches_cold ... ok
+test engine::flow_composition::tests::overflowing_text_continues_through_ordered_regions_without_balancing ... ok
+test engine::flow_composition::tests::only_clip_overflow_assigns_a_clip_id_to_lines ... ok
+test engine::flow_composition::tests::safety_limits_do_not_preallocate_their_full_bound ... ok
+test engine::flow_composition::tests::same_source_drop_cap_resumes_body_at_safe_boundary_and_cuts_first_lines ... ok
+test engine::flow_composition::tests::localized_exclusion_move_preserves_a_drop_cap_and_matches_cold ... ok
+test engine::flow_composition::tests::space_before_shifts_the_first_line_and_never_repeats_on_resume ... ok
+test engine::flow_geometry::tests::concave_region_and_polygon_exclusion_resolve_conservatively ... ok
+test engine::flow_geometry::tests::localized_change_unions_multiple_exclusions_and_ignores_revision_only_updates ... ok
+test engine::font_binding::tests::rejects_noncanonical_strikes_resources_and_field_shapes ... ok
+test engine::font_binding::tests::scalable_and_bitmap_selection_share_one_dense_address_model ... ok
+test engine::font_binding_wire::tests::decodes_exact_field_major_tables_and_dense_selection ... ok
+test engine::font_binding_wire::tests::rejects_reserved_overlap_nonfinite_and_out_of_range_data ... ok
+test engine::frame_wire::tests::accepts_only_the_canonical_empty_stage_one_transaction ... ok
+test engine::frame_wire::tests::rejects_invalid_geometry_before_admitting_a_valid_text_edit ... ok
+test engine::identity_index::tests::collisions_remain_exact_and_prepare_reuses_storage ... ok
+test engine::layout_query::tests::a_measurement_without_positioned_glyphs_withholds_the_ink_box ... ok
+test engine::layout_query::tests::constrained_measurement_preserves_demanded_intrinsic_content_extents ... ok
+test engine::layout_query::tests::line_and_paragraph_metrics_carry_ascent_and_a_true_ink_union ... ok
+test engine::layout_query::tests::measured_extent_rounds_outward_across_the_fixed_point_boundary ... ok
+test engine::layout_query::tests::measurement_carries_space_after_and_first_line_indent ... ok
+test engine::layout_query::tests::measurement_is_demand_shaped_from_retained_lines_without_glyph_arrays ... ok
+test engine::layout_query::tests::unconstrained_content_does_not_overflow_after_single_precision_publication ... ok
+test engine::layout_units::tests::conversion_is_monotonic_and_inverts_within_one_unit ... ok
+test engine::layout_units::tests::ratio_application_rounds_half_up_once_and_stays_within_one_unit ... ok
+test engine::layout_units::tests::the_rounding_contract_is_half_up_and_total ... ok
+test engine::line_composition::tests::a_corrected_start_still_consumes_whole_chunks ... ok
+test engine::line_composition::tests::a_negative_left_correction_admits_the_first_overflowing_candidate ... ok
+test engine::line_composition::tests::a_positive_left_correction_on_the_selected_end_steps_the_break_back ... ok
+test engine::cluster_state::tests::layout_run_property_matches_the_scalar_adjacency_oracle ... ok
+test engine::line_composition::tests::a_saturated_base_prices_a_whole_line_total_from_the_base_itself ... ok
+test engine::line_composition::tests::a_space_before_a_hard_break_hangs_like_any_other_terminating_space ... ok
+test engine::line_composition::tests::a_whole_line_total_is_charged_without_i32_saturation ... ok
+test engine::line_composition::tests::a_whole_line_total_replaces_the_seed_and_hangs_its_trailing_delta ... ok
+test engine::codec_gather::tests::full_frontier_of_1024_owners_matches_independent_cold_gather ... ok
+test engine::line_composition::tests::an_all_space_chunk_carries_the_incoming_trailing_run ... ok
+test engine::line_composition::tests::an_oversized_negative_stream_cannot_take_the_monotonic_chunk_path ... ok
+test engine::line_composition::tests::an_oversized_sparse_word_index_falls_back_to_the_exact_scalar_fit ... ok
+test engine::codec_gather::tests::seeded_range_edits_match_cold_gather_through_abort_and_retry ... ok
+test engine::line_composition::tests::composes_word_character_and_unwrapped_lines_without_allocating ... ok
+test engine::line_composition::tests::declared_word_space_shrink_admits_the_word_that_would_just_overflow ... ok
+test engine::flow_composition::tests::localized_edit_splices_a_long_suffix_without_walking_or_copying_its_records ... ok
+test engine::line_composition::tests::exact_integer_fit_edge_is_inclusive_and_stable ... ok
+test engine::line_composition::tests::chunked_fit_matches_the_scalar_fit_across_multi_chunk_lines ... ok
+test engine::line_composition::tests::integer_fit_saturates_extreme_caller_derived_advance_sums ... ok
+test engine::line_composition::tests::dense_negative_chunks_match_scalar_and_f64_without_a_word_sidecar ... ok
+test engine::line_composition::tests::integer_shrink_matches_f64_shrink_when_the_product_is_exact ... ok
+test engine::line_composition::tests::overlapping_islands_charge_the_whole_line_instead_of_the_sum ... ok
+test engine::codec_gather::tests::source_intervals_skip_clean_recordless_rows_and_match_full_gather ... ok
+test engine::line_composition::tests::overlong_word_uses_the_last_safe_boundary_inside_the_measure ... ok
+test engine::line_composition::tests::required_break_and_trailing_empty_line_match_paragraph_semantics ... ok
+test engine::flow_composition::tests::scattered_edits_reconverge_between_islands_and_retain_middle_chunks ... ok
+test engine::line_composition::tests::skipped_no_space_chunk_clears_a_negative_trailing_space ... ok
+test engine::line_composition::tests::rule_two_rescues_only_the_first_overflowing_candidate ... ok
+test engine::line_composition::tests::skipped_trailing_space_chunk_replaces_an_earlier_negative_space_run ... ok
+test engine::line_composition::tests::the_line_terminating_space_hangs_instead_of_consuming_the_measure ... ok
+test engine::line_composition::tests::word_fit_waits_for_the_shaped_word_before_breaking ... ok
+test engine::line_kernels::tests::flagged_visits_match_the_naive_filter_for_every_alignment ... ok
+test engine::line_composition::tests::uncorrected_trailing_space_trimming_matches_main_at_saturation ... ok
+test engine::line_kernels::tests::transitions_match_the_naive_scan_across_block_boundaries ... ok
+test engine::line_composition::tests::sparse_negative_words_keep_index_scalar_and_f64_parity ... ok
+test engine::ordered_plan::tests::codec_can_partition_physical_storage_by_material ... ok
+test engine::ordered_plan::tests::all_dirty_fragmented_root_repacks_computed_states_without_rederivation ... ok
+test engine::ordered_plan::tests::codec_selects_draw_split_or_instance_transform_indirection ... ok
+test engine::ordered_plan::tests::commit_preflight_rejects_invalid_range_and_reserves_commit_destinations ... ok
+test engine::ordered_plan::tests::derived_bounds_publish_metadata_without_local_instance_changes ... ok
+test engine::ordered_plan::tests::decoration_rows_pack_and_draw_without_resources ... ok
+test engine::flow_composition::tests::dense_cjk_extents_visit_one_layout_run ... ok
+test engine::ordered_plan::tests::draw_aggregation_preserves_bounds_semantics_and_split_edges ... ok
+test engine::ordered_plan::tests::equal_aligned_patch_crossing_live_tail_is_retained ... ok
+test engine::ordered_plan::tests::equal_physical_patches_compact_payload_across_buffers_and_jobs ... ok
+test engine::ordered_plan::tests::equal_values_still_write_on_checkpoint_resize_and_regrown_live_tail ... ok
+test engine::ordered_plan::tests::draw_boundary_split_merge_falls_back_and_survives_abort_retry ... ok
+test engine::ordered_plan::tests::cached_physical_blocks_match_original_sequential_float_bits_and_errors ... ok
+test engine::ordered_plan::tests::independent_compositing_batches_interleaved_resources ... ok
+test engine::line_composition::tests::a_zero_table_leaves_every_kernel_bit_identical_to_the_uncorrected_fit ... ok
+test engine::ordered_plan::tests::independent_compositing_flattens_paint_layers_and_preserves_layer_order ... ok
+test engine::ordered_plan::tests::draw_mode_witness_changes_only_with_accepted_publications ... ok
+test engine::flow_composition::tests::seeded_unicode_and_hard_break_edits_match_complete_recomposition ... ok
+test engine::ordered_plan::tests::independent_order_reuses_bindings_for_instance_only_changes_and_retries ... ok
+test engine::ordered_plan::tests::insertion_rewrites_only_the_ordered_batch_suffix_and_abort_preserves_state ... ok
+test engine::ordered_plan::tests::interleaved_resources_compile_to_ordered_spans_with_shared_bindings ... ok
+test engine::ordered_plan::tests::material_identity_splits_draws_without_splitting_physical_storage ... ok
+test engine::ordered_plan::tests::independent_dirty_logical_row_hits_its_nonadjacent_physical_span ... ok
+test engine::ordered_plan::tests::late_complete_admission_miss_discards_staged_rope_and_matches_cold_host ... ok
+test engine::ordered_plan::tests::multileaf_complete_writes_and_independent_draws_traverse_sequentially ... ok
+test engine::ordered_plan::tests::no_op_emits_nothing_and_tail_deletion_updates_only_live_metadata ... ok
+test engine::ordered_plan::tests::omitted_middle_buffer_moves_later_payload_without_touching_prior_job ... ok
+test engine::ordered_plan::tests::order_only_permutation_falls_back_for_changed_or_duplicate_requested_identities ... ok
+test engine::ordered_plan::tests::order_only_round_trip_preserves_an_aggregate_primitive_span ... ok
+test engine::ordered_plan::tests::order_only_permutation_falls_back_when_one_batch_contains_multiple_draws ... ok
+test engine::ordered_plan::tests::ordered_compositing_keeps_authored_order_across_paint_layers ... ok
+test engine::ordered_plan::tests::ordered_compositing_splits_a_draw_at_every_interleaved_resource ... ok
+test engine::ordered_plan::tests::ordered_direct_uses_identity_revisions_instead_of_scanning_physical_bytes ... ok
+test engine::ordered_plan::tests::placement_slot_changes_patch_only_the_occurrence_lane_without_changing_topology ... ok
+test engine::ordered_plan::tests::multileaf_rank_reorder_packs_chunks_and_matches_cold_publication ... ok
+test engine::ordered_plan::tests::rejected_host_publication_retries_with_checkpoint_writes ... ok
+test engine::ordered_plan::tests::repeated_warm_updates_keep_every_glyph_scaled_scratch_capacity ... ok
+test engine::ordered_plan::tests::retained_binding_skip_preserves_later_draw_entries ... ok
+test engine::ordered_plan::tests::rebuilt_bindings_check_retained_storage_once_after_buffer_construction ... ok
+test engine::ordered_plan::tests::retained_host_topology_refreshes_metadata_but_rejects_structural_changes ... ok
+test engine::ordered_plan::tests::retained_binding_skip_does_not_scan_one_large_shared_draw ... ok
+test engine::ordered_plan::tests::retained_topology_requires_unchanged_physical_storage_membership ... ok
+test engine::ordered_plan::tests::retiring_a_resource_free_decoration_batch_emits_no_resource_retirement ... ok
+test engine::ordered_plan::tests::semantic_dependencies_suppress_unrelated_physical_buffer_writes ... ok
+test engine::line_composition::tests::integer_shrink_matches_f64_shrink_for_odd_units_and_non_dyadic_ratios ... ok
+test engine::ordered_plan::tests::scoped_ordered_spans_match_cold_host_across_changed_boundaries ... ok
+test engine::codec_gather::tests::streamed_dirty_owners_match_cold_bytes_and_copy_sources_once_per_leaf ... ok
+test engine::placement_slot_arena::tests::abort_restores_reclaimed_slots_and_committed_handles ... ok
+test engine::placement_slot_arena::tests::abort_restores_multiple_free_slots_in_exact_stack_order ... ok
+test engine::placement_slot_arena::tests::acknowledgement_survives_a_later_aborted_prepare ... ok
+test engine::placement_slot_arena::tests::acknowledged_churn_reuses_two_slots_and_plateaus_scratch_capacity ... ok
+test engine::placement_slot_arena::tests::adjacent_occurrence_ranges_share_full_reconciliation_and_rollback ... ok
+test engine::placement_slot_arena::tests::duplicate_keys_and_regressing_acknowledgement_are_rejected ... ok
+test engine::placement_slot_arena::tests::generation_exhaustion_never_wraps_or_changes_committed_state ... ok
+test engine::placement_slot_arena::tests::retained_order_uses_the_allocation_free_fast_path ... ok
+test engine::placement_slot_arena::tests::retirement_quarantines_then_reuses_with_a_new_generation ... ok
+test engine::placement_slot_arena::tests::packed_placement_builders_preserve_leaf_boundaries_and_shared_gaps ... ok
+test engine::placement_slot_arena::tests::sparse_structural_edits_match_full_arena_with_quarantine_and_retry ... ok
+test engine::placement_slot_arena::tests::unchanged_publication_reuses_the_complete_committed_set ... ok
+test engine::placement_state::tests::extending_bound_segment_revokes_complete_span_proof ... ok
+test engine::placement_state::tests::retained_line_remaps_fragments_and_invalid_source_rolls_back ... ok
+test engine::placement_state::tests::segments_merge_by_the_published_f32_translation ... ok
+test engine::plan_packing::tests::a_single_small_tail_patch_does_not_pay_the_common_submission_cost ... ok
+test engine::plan_packing::tests::additional_fragmented_calls_still_promote_a_whole_buffer_update ... ok
+test engine::plan_packing::tests::identical_per_buffer_ranges_share_one_packing_job ... ok
+test engine::plan_packing::tests::physical_buffer_cost_promotes_fragmented_and_expensive_updates ... ok
+test engine::plan_packing::tests::physical_buffer_cost_rejects_zero_stride_and_arithmetic_overflow ... ok
+test engine::plan_packing::tests::physical_buffer_stride_controls_gap_coalescing ... ok
+test engine::plan_packing::tests::whole_buffer_promotion_preserves_the_declared_byte_alignment ... ok
+test engine::positioning::tests::a_hung_terminating_space_does_not_move_rtl_ink ... ok
+test engine::positioning::tests::bidi_fallback_records_an_unowned_hard_break ... ok
+test engine::positioning::tests::boundary_cluster_comparison_preserves_signed_relative_order ... ok
+test engine::positioning::tests::break_inserted_hyphen_glyph_positions_without_a_source_cluster ... ok
+test engine::positioning::tests::converged_lines_assign_revisions_only_inside_the_recomposed_glyph_range ... ok
+test engine::positioning::tests::decorated_runs_emit_underline_and_line_through_records ... ok
+test engine::positioning::tests::geometry_revision_scan_matches_full_semantic_comparison ... ok
+test engine::positioning::tests::justification_distributes_exact_unit_totals_in_either_sign ... ok
+test engine::positioning::tests::justification_totals_fill_the_deficit_exactly_including_remainders ... ok
+test engine::positioning::tests::justified_segments_store_only_resolved_xy_displacements ... ok
+test engine::positioning::tests::l2_reorders_exact_levels_without_allocating ... ok
+test engine::positioning::tests::last_line_codec_justifies_final_and_hard_broken_lines ... ok
+test engine::ordered_plan::tests::separated_replacements_copy_clean_batch_slots_and_match_cold_publication ... ok
+test engine::positioning::tests::nested_size_changes_keep_one_continuous_decoration_line ... ok
+test engine::positioning::tests::only_even_unoverridden_runs_skip_visual_reordering ... ok
+test engine::positioning::tests::placed_rounding_does_not_change_local_position_mask ... ok
+test engine::positioning::tests::layout_run_segments_match_renderer_placement_and_f32_rounding ... ok
+test engine::positioning::tests::placement_binding_checks_generation_when_numeric_slot_is_reused ... ok
+test engine::positioning::tests::placement_binding_skips_proven_spans_and_preflights_revision_overflow ... ok
+test engine::positioning::tests::positions_once_and_revisions_only_exact_content_changes ... ok
+test engine::positioning::tests::placement_binding_uses_exact_demand_when_segment_bound_exceeds_revision_headroom ... ok
+test engine::positioning::tests::replacement_reconciliation_ignores_record_order_and_binding ... ok
+test engine::positioning::tests::resize_equivalence_admits_only_position_identical_flows ... ok
+test engine::positioning::tests::retained_cursor_checks_outline_less_semantic_identity ... ok
+test engine::positioning::tests::retained_line_copy_rebases_local_placement_segments ... ok
+test engine::positioning::tests::retained_placement_rejects_writer_precision_repartition_atomically ... ok
+test engine::positioning::tests::retained_slot_reassignment_marks_the_exact_placement_delta ... ok
+test engine::positioning::tests::semantic_change_mask_abi_marks_instance_only_lanes_and_revision ... ok
+test engine::positioning::tests::static_geometry_retention_requires_the_same_contiguous_cluster_sequence ... ok
+test engine::positioning::tests::recomposed_range_merge_matches_covered_indices ... ok
+test engine::positioning::tests::translated_ink_preserves_local_codec_revisions ... ok
+test engine::positioning::tests::word_space_caps_spill_into_bounded_letter_expansion ... ok
+test engine::positioning::tests::word_spaces_shrink_only_to_the_declared_minimum ... ok
+test engine::render_plan_compiler::tests::acknowledged_ordered_state_can_publish_an_empty_reuse_transaction ... ok
+test engine::render_plan_compiler::tests::accepted_session_translation_proves_bounds_dirt_after_abort ... ok
+test engine::render_plan_compiler::tests::compacted_primary_payload_rebases_real_session_write_in_wire ... ok
+test engine::render_plan_compiler::tests::homogeneous_frames_delegate_without_allocating_merge_tables ... ok
+test engine::render_plan_compiler::tests::session_generation_mismatch_does_not_commit_ordered_or_placement_output ... ok
+test engine::render_plan_wire::tests::serializes_every_table_with_compiler_offsets_and_rebased_payloads ... ok
+test engine::render_plan_compiler::tests::empty_owner_commit_does_not_authorize_aborted_input_mappings ... ok
+test engine::render_plan_wire::tests::the_semantic_encoder_writes_every_field_of_the_record ... ok
+test engine::line_composition::tests::a_random_table_keeps_scalar_chunked_and_indexed_fits_on_the_reference ... ok
+test engine::retained_rope::tests::boundary_lookup_and_fragment_navigation_match_a_flat_oracle ... ok
+test engine::retained_rope::tests::clear_reuses_unique_leaf_and_preserves_shared_snapshots ... ok
+test engine::retained_rope::tests::exact_producer_failure_discards_partial_tree_and_preserves_snapshot ... ok
+test engine::ordered_plan::tests::trailing_output_replacement_retains_mixed_batch_prefix_and_matches_full ... ok
+test engine::retained_rope::tests::exact_shape_checks_midpoint_partition_even_with_full_leaves ... ok
+test engine::retained_rope::tests::ordered_range_stream_failure_and_stop_preserve_their_contracts ... ok
+test engine::retained_rope::tests::ordered_ranges_copy_each_leaf_once_across_owner_boundaries ... ok
+test engine::retained_rope::tests::ordered_stop_preserves_prefix_and_copies_only_unchanged_old_rows ... ok
+test engine::placement_slot_arena::tests::sparse_occurrence_ranges_preserve_canonical_order_through_abort_and_retry ... ok
+test engine::retained_rope::tests::range_cursor_matches_flat_oracle_without_per_record_root_lookups ... ok
+test engine::retained_rope::tests::ordered_updates_cross_leaves_transactionally_without_root_lookup_per_record ... ok
+test engine::retained_rope::tests::replace_ranges_match_vec_and_preserve_shared_snapshots ... ok
+test engine::retained_rope::tests::failed_summary_updates_leave_shared_committed_storage_unchanged ... ok
+test engine::retained_rope::tests::single_leaf_cursor_keeps_bounded_slice_and_index_in_sync ... ok
+test engine::retained_rope::tests::splice_retains_interior_chunks_with_bounded_record_copying ... ok
+test engine::retained_rope::tests::summary_composition_is_associative_with_an_identity ... ok
+test engine::retained_rope::tests::summary_composition_rejects_count_overflow ... ok
+test engine::retained_rope::tests::unique_updates_mutate_in_place_and_shared_updates_copy_only_the_leaf ... ok
+test engine::run_local::tests::block_geometry_preserves_offsets_baseline_and_extents ... ok
+test engine::run_local::tests::boundary_continuation_applies_spacing_in_current_order ... ok
+test engine::retained_rope::tests::seeded_mixed_mutations_match_vec_and_preserve_retained_snapshots ... ok
+test engine::run_local::tests::detached_hard_break_locator_does_not_create_a_block ... ok
+test engine::run_local::tests::distant_block_axis_geometry_anchors_without_origin_zero ... ok
+test engine::run_local::tests::extents_subtract_after_widening ... ok
+test engine::run_local::tests::fixed_blocks_split_on_the_full_resynchronized_envelope ... ok
+test engine::run_local::tests::glyphless_cluster_advance_precedes_the_next_glyph ... ok
+test engine::run_local::tests::multi_glyph_replay_preserves_shipping_parenthesization ... ok
+test engine::run_local::tests::numeric_blocks_obey_source_chunk_boundaries_with_detached_and_precision_splits ... ok
+test engine::run_local::tests::oversized_single_cluster_is_rejected_without_a_fallback ... ok
+test engine::run_local::tests::source_order_rows_remain_direct_after_a_reversed_run ... ok
+test engine::semantic_wire::tests::admits_and_borrows_style_payloads ... ok
+test engine::semantic_wire::tests::bounds_typography_controls_and_rejects_open_last_line_values ... ok
+test engine::semantic_wire::tests::decodes_explicit_paragraph_order_and_removal_records ... ok
+test engine::semantic_wire::tests::geometry_preflight_rejects_a_constraint_span_beyond_the_region_table ... ok
+test engine::semantic_wire::tests::geometry_preflight_rejects_a_region_span_beyond_the_exclusion_table ... ok
+test engine::semantic_wire::tests::rejects_invalid_geometry_values_and_work_bounds ... ok
+test engine::semantic_wire::tests::selects_borrowed_paragraph_spans_without_copying_records ... ok
+test engine::semantic_wire::tests::validates_and_borrows_utf16_replacements_without_decoding_objects ... ok
+test engine::semantic_wire::tests::validates_one_call_rectangle_flow_and_text_anchored_objects ... ok
+test engine::session_placement::tests::abort_retry_is_deterministic_and_removal_is_explicit ... ok
+test engine::session_placement::tests::allocates_and_patches_only_changed_xy_rows ... ok
+test engine::session_placement::tests::checkpoint_republishes_the_committed_table_without_changing_identity ... ok
+test engine::session_placement::tests::coalescing_preserves_committed_gap_bytes_and_respects_the_limit ... ok
+test engine::session_placement::tests::placement_writes_follow_the_selected_capability_policy ... ok
+test engine::session_placement::tests::rejects_unsorted_out_of_range_and_nonfinite_rows ... ok
+test engine::session_placement::tests::resize_rewrites_every_live_row_and_retires_the_old_generation ... ok
+test engine::shaping_state::tests::copies_and_rebases_one_contiguous_text_range_in_shaping_order ... ok
+test engine::shaping_state::tests::intersects_style_script_and_bidi_and_skips_hard_breaks ... ok
+test engine::shaping_state::tests::metric_style_boundaries_still_split_shaping_runs ... ok
+test engine::shaping_state::tests::paint_only_style_boundaries_do_not_split_shaping_runs ... ok
+test engine::shaping_state::tests::published_glyph_flag_names_match_the_shaper_that_produces_them ... ok
+test engine::sort::tests::apply_pair_order_permutes_and_restores_indices ... ok
+test engine::sort::tests::f64_key_matches_total_cmp ... ok
+test engine::sort::tests::pack2_matches_tuple_order ... ok
+test engine::sort::tests::prepare_pairs_rejects_visited_bit_index_without_clearing_scratch ... ok
+test engine::sort::tests::sort_f64_total_round_trips_payloads ... ok
+test engine::staged::tests::active_follows_preparation_and_commit_publishes_once ... ok
+test engine::staged::tests::committed_buffers_are_recycled_rather_than_dropped ... ok
+test engine::staged::tests::discarding_a_candidate_keeps_the_committed_value_and_commit_is_total ... ok
+test engine::run_local::tests::dense_cjk_run_retains_all_four_thousand_ninety_six_rows ... ok
+test engine::state::tests::a_committed_planner_accepts_another_capability_set_from_the_same_codec ... ok
+test engine::state::tests::a_committed_planner_retains_its_codec_registration ... ok
+test engine::state::tests::a_planner_prewarms_only_its_reusable_paragraph ... ok
+test engine::state::tests::a_measured_candidate_paragraph_is_accepted_and_published_by_the_next_frame ... ok
+test engine::state::tests::a_query_cannot_measure_the_paragraph_its_lifecycle_removes ... ok
+test engine::state::tests::ascii_text_reuse_does_not_suppress_an_independent_bidi_invalidation ... ok
+test engine::state::tests::an_invalid_later_replacement_cannot_partially_mutate_committed_text ... ok
+test engine::state::tests::binding_identity_is_distinct_from_shared_shaping_font_identity ... ok
+test engine::state::tests::borrowed_glyph_ranges_fill_only_valid_requested_records ... ok
+test engine::state::tests::changed_text_preflight_analysis_is_transferred_without_reanalysis ... ok
+test engine::retained_rope::tests::exact_producer_builds_packed_balanced_roots_with_flat_navigation ... ok
+test engine::state::tests::codec_run_accounting_respects_active_mask ... ok
+test engine::retained_rope::tests::bounded_iteration_and_cursor_match_flat_slices_across_leaf_boundaries ... ok
+test engine::state::tests::committed_measure_is_durable_and_failed_publication_delivery_discards_root ... ok
+test engine::state::tests::combining_cluster_keeps_retained_cluster_rebuild ... ok
+test engine::ordered_plan::tests::multileaf_scattered_warm_admission_uses_physical_order ... ok
+test engine::state::tests::crossing_style_update_is_rejected_before_measure_preparation ... ok
+test engine::state::tests::deleting_half_of_a_surrogate_pair_is_rejected_before_text_writes ... ok
+test engine::state::tests::crossing_style_update_is_rejected_before_publication_preparation ... ok
+test engine::state::tests::discarded_positioning_candidate_preserves_source_revision_checkpoint ... ok
+test engine::state::tests::discarded_text_candidate_reseeds_the_next_edit_from_committed_text ... ok
+test engine::state::tests::disposal_is_exact_and_missing_handles_are_observable ... ok
+test engine::state::tests::distant_replacements_preserve_middle_unit_identities_across_discard_and_commit ... ok
+test engine::state::tests::changed_resolved_dependencies_reject_copying_other_shaping_runs ... ok
+test engine::state::tests::existing_paragraphs_accept_content_only_mutations_without_lifecycle_upserts ... ok
+test engine::state::tests::explicit_rank_edits_allow_temporary_duplicate_base_orders ... ok
+test engine::state::tests::clipped_inspection_follows_measure_commit_and_failure ... ok
+test engine::state::tests::empty_old_run_and_whole_deletion_use_broad_cold_equivalent_shape ... ok
+test engine::state::tests::fallback_clusters_restore_logical_order_and_merge_missing_glyphs ... ok
+test engine::state::tests::first_measurement_commits_full_lifecycle_for_later_queries ... ok
+test engine::state::tests::font_stacks_retain_exact_order_and_reject_ambiguous_identity ... ok
+test engine::state::tests::full_replacement_discovers_scalar_aligned_insertions_and_removals_in_rust ... ok
+test engine::state::tests::geometry_owner_preflight_rejects_before_lifecycle_writes_and_keeps_root_usable ... ok
+test engine::state::tests::failed_measure_delivery_does_not_recycle_queried_glyph_identities ... ok
+test engine::state::tests::failed_text_preparation_discards_the_derived_root_until_reset ... ok
+test engine::state::tests::complete_retained_preparation_and_publication_avoid_per_fragment_root_descent ... ok
+test engine::state::tests::invalid_later_paragraph_is_preflighted_before_any_child_or_lifecycle_commit ... ok
+test engine::state::tests::invalid_utf16_rejects_text_and_unicode_analysis_together ... ok
+test engine::state::tests::late_grapheme_topology_failure_keeps_earlier_text_and_root_reusable ... ok
+test engine::state::tests::lifecycle_pair_order_preserves_source_lookup_and_rejects_duplicate_ids ... ok
+test engine::state::tests::many_sparse_windows_visit_each_retained_cluster_once_in_both_directions ... ok
+test engine::state::tests::measure_commits_sibling_removal_before_renderer_publication ... ok
+test engine::state::tests::measure_rejects_foreign_semantic_rows_before_preparation ... ok
+test engine::state::tests::intrinsic_width_cache_reuses_geometry_and_tracks_text_metrics_and_wrap ... ok
+test engine::state::tests::measurement_geometry_owner_preflight_preserves_root_after_rejection ... ok
+test engine::state::tests::ordered_paragraphs_commit_reorder_and_remove_as_one_planner ... ok
+test engine::state::tests::ordered_utf16_replacements_commit_with_the_planner_candidate ... ok
+test engine::state::tests::packed_utf16_change_scan_matches_a_scalar_reference ... ok
+test engine::state::tests::paint_only_style_partition_remaps_clusters_without_reflow_or_reshaping ... ok
+test engine::state::tests::paragraph_limits_unknown_semantics_and_order_collisions_are_atomic ... ok
+test engine::state::tests::placement_identity_survives_run_geometry_revisions_but_distinguishes_boundary_roles ... ok
+test engine::state::tests::positioned_revision_commits_without_a_pending_cluster_stage ... ok
+test engine::state::tests::preflight_complete_replacement_avoids_old_units_and_preserves_ordered_edits ... ok
+test engine::state::tests::production_independent_paint_update_skips_accepted_binding_compilation ... ok
+test engine::state::tests::publication_failure_invalidates_the_root_until_reset ... ok
+test engine::state::tests::real_text_preflight_analyzes_once_and_queries_and_publication_reuse_it ... ok
+test engine::state::tests::registration_is_idempotent_but_rejects_handle_conflicts ... ok
+test engine::state::tests::renderer_fence_acknowledgment_is_monotonic_and_cannot_name_the_pending_publication ... ok
+test engine::state::tests::replacement_lifecycle_commits_removal_before_following_query ... ok
+test engine::state::tests::reset_keeps_the_high_water_record_until_replacement_creation_succeeds ... ok
+test engine::state::tests::reset_preserves_publication_generation_high_water ... ok
+test engine::state::tests::reset_rejects_unknown_and_disposed_roots ... ok
+test engine::state::tests::reset_replay_publishes_after_renderer_acknowledgement ... ok
+test engine::state::tests::retained_edit_range_and_run_topology_track_insertions_without_crossing_run_boundaries ... ok
+test engine::state::tests::retained_first_line_consumes_drop_cap_across_exclusion_update ... ok
+test engine::state::tests::retained_gather_tracks_multi_owner_empty_output_transitions ... ok
+test engine::state::tests::retained_style_upserts_commit_and_root_removal_clears_retained_state ... ok
+test engine::state::tests::retained_styles_text_only_measurement_preserves_nesting_and_rejects_invalid_endpoints ... ok
+test engine::state::tests::revision_exhaustion_does_not_advance_the_acknowledgement_fence ... ok
+test engine::state::tests::root_direction_reanalyzes_bidi_without_a_text_mutation ... ok
+test engine::state::tests::run_metadata_rebuilds_when_text_loses_the_ascii_letter_certificate ... ok
+test engine::retained_rope::tests::seeded_disjoint_ordered_ranges_match_flat_updates_and_share_snapshots ... ok
+test engine::state::tests::run_metadata_retained_for_ascii_letter_edit_while_shaped_output_refreshes ... ok
+test engine::ordered_plan::tests::first_owner_identity_change_reuses_clean_draws_and_matches_cold_host ... ok
+test engine::line_composition::tests::integer_fit_matches_the_f64_fit_exactly_across_a_fractional_width_sweep ... ok
+test engine::state::tests::scattered_line_islands_do_not_retain_changed_paint_or_effects ... ok
+test engine::state::tests::semantic_mutation_groups_are_keyed_independent_of_planner_insertion_order ... ok
+test engine::state::tests::scattered_multi_run_setter_does_not_rebuild_run_lookup_per_clean_line ... ok
+test engine::state::tests::semantic_mutations_follow_authored_order_after_a_scoped_rank_commit ... ok
+test engine::state::tests::sequential_measure_queries_commit_independent_existing_paragraphs ... ok
+test engine::state::tests::sequential_measurements_accept_each_edit_before_render_publication ... ok
+test engine::state::tests::session_placement_row_order_keeps_translation_with_its_slot ... ok
+test engine::state::tests::single_paragraph_planner_rejects_mixed_and_rebound_paragraph_ids ... ok
+test engine::state::tests::spare_reset_discards_all_stage_candidates_in_both_text_modes ... ok
+test engine::state::tests::short_inter_label_assignments_use_incremental_shape_and_match_cold_output ... ok
+test engine::state::tests::scattered_line_islands_match_cold_after_wrap_and_numeric_basis_changes ... ok
+test engine::state::tests::sparse_preparation_owners_preserve_authored_order_without_root_entries ... ok
+test engine::state::tests::sparse_real_font_shaping_matches_cold_shape_and_shapes_only_safe_windows ... ok
+test engine::state::tests::sparse_rtl_windows_match_cold_shape_in_logical_order ... ok
+test engine::state::tests::stale_measure_result_invalidates_the_derived_root ... ok
+test engine::state::tests::stale_publication_failure_still_discards_derived_state ... ok
+test engine::state::tests::scattered_setters_retain_middle_line_positioning_before_publication ... ok
+test engine::state::tests::text_batch_returning_to_committed_units_keeps_identity_edits_and_reuses_unicode ... ok
+test engine::state::tests::style_preflight_rejects_missing_lifecycle_target_and_stale_root_range ... ok
+test engine::state::tests::text_only_edit_rejects_retained_ranges_that_collapse_after_grapheme_normalization ... ok
+test engine::state::tests::text_preflight_validates_the_resulting_style_set_before_applying_edits ... ok
+test engine::state::tests::unchanged_lifecycle_preserves_retained_order_and_scratch ... ok
+test engine::state::tests::unpublished_frontier_deduplicates_owners_and_retires_removed_identity ... ok
+test engine::state::tests::unchanged_paragraphs_skip_real_shaper_preparation_across_lifecycle_transitions ... ok
+test engine::state::tests::update_preparation_is_revisioned_and_commit_is_explicit ... ok
+test engine::state::tests::update_rejects_a_capability_set_outside_the_registered_codec ... ok
+test engine::state::tests::validated_mutation_boundaries_match_materialized_utf16 ... ok
+test engine::state::tests::width_only_cluster_prepare_skips_canonical_comparison ... ok
+test engine::state::unsafe_break_tests::a_chain_of_unsafe_boundaries_longer_than_the_cap_is_never_shaped ... ok
+test engine::state::unsafe_break_tests::a_cluster_rebuild_empties_the_island_cache_and_draws_what_a_cold_build_does ... ok
+test engine::state::unsafe_break_tests::a_geometry_only_relayout_shapes_no_island ... ok
+test engine::state::unsafe_break_tests::islands_compare_as_ordered_glyph_sequences ... ok
+test engine::state::unsafe_break_tests::no_break_is_classified_or_priced_without_word_wrap ... ok
+test engine::state::unsafe_break_tests::only_the_breaks_a_line_evaluates_are_classified ... ok
+test engine::style_state::tests::authored_style_ranges_advance_to_the_grapheme_end ... ok
+test engine::style_state::tests::each_caller_actionable_style_fault_reports_its_own_cause_and_names_its_style ... ok
+test engine::style_state::tests::invalidation_stops_at_the_first_affected_retained_stage ... ok
+test engine::style_state::tests::resolves_nested_and_equal_range_styles_once_per_boundary ... ok
+test engine::style_state::tests::retained_ranges_detect_grapheme_changes_from_authored_offsets ... ok
+test engine::style_state::tests::retained_style_validation_rechecks_text_features_and_fonts ... ok
+test engine::style_state::tests::root_mutation_merge_preserves_last_write_semantics ... ok
+test engine::style_state::tests::root_mutation_merge_work_scales_with_records_and_unique_mutations ... ok
+test engine::style_state::tests::style_range_checks_each_distinct_authored_and_effective_endpoint ... ok
+test engine::transport::bitmap_replay_auth::authenticate ... ignored, requires an authenticated shipping-package trace from benchmark:bitmap-native-replay-capture
+test engine::transport::tests::arenas_are_aligned_and_double_without_losing_request_bytes ... ok
+test engine::transport::tests::detached_checkpoints_do_not_advance_source_publication_state ... ok
+test engine::transport::tests::growing_the_output_preserves_bytes_and_reports_the_new_capacity ... ok
+test engine::transport::tests::publication_header_addresses_the_exact_plan_tables_and_payload ... ok
+test engine::transport::tests::publications_and_failures_share_one_borrowed_output ... ok
+test engine::transport::tests::rejected_update_batch_growth_and_bounds_preserve_the_owned_arena ... ok
+test engine::transport::tests::retained_host_topology_flag_is_staged_and_checkpoints_revoke_it ... ok
+test engine::transport::tests::update_batch_keeps_each_root_output_pointer_live ... ok
+test engine::transport::tests::update_batch_processes_every_unique_root_and_isolates_entry_failures ... ok
+test engine::work_attribution::tests::codec_run_eligibility_boundaries ... ok
+test line_break::tests::finds_required_and_allowed_utf16_breaks ... ok
+test tests::absent_optional_os2_heights_have_explicit_deterministic_fallbacks ... ok
+test engine::state::tests::unsafe_ligature_combining_bidi_and_length_edits_match_cold_recomputation ... ok
+test tests::dense_font_lookups_stay_exact_across_disposal_and_reuse ... ok
+test tests::flat_extents_preserve_the_baked_coordinate_contract ... ok
+test tests::languages_preserve_canonical_cjk_tags_and_reject_malformed_bytes ... ok
+test tests::registration_rejects_invalid_payloads_and_disposes_owned_state ... ok
+test tests::registration_retains_packed_decoration_metrics ... ok
+test tests::utf16_item_shaping_replaces_unpaired_surrogates ... ok
+test unicode::tests::analysis_resolves_contextual_script_extensions ... ok
+test unicode::tests::analysis_reuses_reserved_storage_and_rejects_unpaired_surrogates ... ok
+test unicode::tests::analysis_segments_emoji_and_resolves_neutral_scripts ... ok
+test unicode::tests::generated_tables_are_unicode_17_scalar_partitions ... ok
+test unicode::tests::only_equal_length_ascii_letter_edits_reuse_unicode_structure ... ok
+test unicode::tests::script_extensions_preserve_shared_marks ... ok
+test tests::context_decoder_matches_utf16_and_caps_both_directions_at_five_scalars ... ok
+test engine::ordered_plan::tests::retained_publication_mutations_match_forced_full_publications ... ok
+test engine::state::tests::inter_4000_glyph_midpoint_isolates_whole_affected_run_and_matches_cold ... ok
+test engine::ordered_plan::tests::glyph_spans_split_at_the_wire_record_limit ... ok
+test engine::state::tests::sparse_edit_work_attribution_separates_preparation_from_root_publication ... ok
+test engine::state::tests::sparse_edit_fuzz_matches_cold_real_font_recomputation ... ok
+test engine::state::tests::measured_first_label_edit_attributes_ordered_binding_expansion ... ok
+test engine::state::tests::dense_inter_setter_publication_attributes_actual_work ... ok
+test engine::state::tests::inter_assignment_labs_discriminator_matches_cold_preparation_and_gather ... ok
+
+test result: ok. 487 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 5.64s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 3 tests
+test diagnostic_live_memory::tests::requested_live_arithmetic_and_window ... ok
+test diagnostic_live_memory::tests::failed_operations_leave_snapshot_unchanged ... ok
+test diagnostic_live_memory::tests::overflow_and_underflow_are_visible ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 6 tests
+test corrupted_outline_tables_fail_or_draw_without_panicking ... ok
+test composites_that_multiply_their_components_are_refused ... ok
+test decoded_outlines_share_endpoints_flag_lines_and_use_em_units_y_down ... ok
+test point_anchored_and_scaled_offset_components_match_skrifa ... ok
+test contours_that_start_off_curve_or_have_no_on_curve_point_match_skrifa ... ok
+test every_fixture_glyph_draws_the_same_segments_as_skrifa ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.36s
+
+
+running 2 tests
+test unicode_17_bidi_character_test_is_fully_conformant ... ok
+test unicode_17_bidi_test_is_fully_conformant ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.38s
+
+
+running 1 test
+test unicode_17_grapheme_break_test_is_fully_conformant ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 1 test
+test unicode_17_line_break_test_is_fully_conformant ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 3 tests
+test artifact::tests::a_rate_outside_the_supported_range_is_refused_by_name ... ok
+test artifact::tests::a_configured_rate_derives_the_same_key_typescript_derives ... ok
+test artifact::tests::bakes_dense_inter_records_deterministically ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 9 tests
+test coverage::tests::rejects_unmapped_authored_text_but_skips_unmapped_range_scalars ... ok
+test atlas::tests::preserves_padding_and_row_major_texels ... ok
+test fingerprint_tests::compatibility_fingerprint_matches_its_published_canonical_form ... ok
+test ktx::tests::emits_lossless_native_formats ... ok
+test fingerprint_tests::fingerprint_vectors_are_stable ... ok
+test coverage::tests::resolves_the_union_without_adding_implicit_glyphs ... ok
+test records::tests::writes_the_canonical_dense_record ... ok
+test fingerprint_tests::domain_seeds_match_the_reference_corpus ... ok
+test fingerprint_tests::fingerprint_matches_independent_reference_vectors ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 22 tests
+test distance::tests::line_distance_handles_degenerate_edges ... ok
+test distance::tests::cubic_distance_terminates_for_degenerate_control_points ... ok
+test distance::tests::cubic_endpoint_selector_parameter_does_not_extrapolate_the_nearest_point ... ok
+test distance::tests::quadratic_distance_finds_a_stationary_point_missed_by_fixed_newton_starts ... ok
+test error_correction::tests::detects_diagonal_inversions_without_linear_neighbors ... ok
+test error_correction::tests::corrects_interpolation_inversions_without_changing_alpha ... ok
+test error_correction::tests::leaves_linear_single_channel_fields_unchanged ... ok
+test error_correction::tests::a_protected_texel_is_never_rewritten_by_correction ... ok
+test color::tests::one_edge_teardrop_is_split_without_flattening ... ok
+test error_correction::tests::colour_transition_protects_the_four_enveloping_texels ... ok
+test distance::tests::quadratic_segments_keep_zero_distance_on_their_shared_contour ... ok
+test error_correction::tests::correction_respects_the_expected_distance_span ... ok
+test distance::tests::perpendicular_rgb_preserves_a_magnified_square_corner ... ok
+test math::tests::normalization_handles_degenerate_vectors ... ok
+test error_correction::tests::two_shared_channels_are_not_a_corner ... ok
+test math::tests::quantization_saturates ... ok
+test outline::tests::sink_closes_and_reverses_contours ... ok
+test outline::tests::sink_records_limits_without_panicking ... ok
+test tests::invalid_regions_are_typed_errors ... ok
+test tests::corner_and_output_scratch_are_reused_between_glyphs ... ok
+test tests::fixed_transform_preserves_scale_and_rejects_clipping ... ok
+test tests::square_is_deterministic_and_signed ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 8 tests
+test artifact::tests::inter_mtsdf_is_deterministic_and_pages_are_always_embedded ... ignored, full Inter generation is the deterministic integration fixture
+test artifact::tests::quantized_glyph_uses_configured_scale_range_and_ceil_half_padding ... ok
+test artifact::tests::descriptor_requires_one_canonical_bounded_settings_pair ... ok
+test artifact::tests::descriptor_key_is_stable ... ok
+test artifact::tests::custom_descriptor_keys_match_the_typescript_contract ... ok
+test artifact::tests::bounded_descriptor_key_matches_the_typescript_contract ... ok
+test artifact::tests::custom_glb_records_the_authoritative_bake_settings ... ok
+test artifact::tests::bounded_mtsdf_rasterizes_only_selected_font_local_glyphs ... ok
+
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+
+running 4 tests
+test tests::owned_core_has_no_threshold_panic_surface ... ok
+test tests::candidate_rejects_empty_and_malformed_outlines ... ok
+test tests::synthetic_mtsdf_is_byte_deterministic ... ok
+test tests::oracle_corpus_is_deterministic_and_nonempty ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+
+running 14 tests
+test tests::a_rate_outside_the_supported_range_is_clamped_rather_than_panicking ... ok
+test packer::tests::half_float_encoding_is_finite_and_rounds_ties_even ... ok
+test tests::every_subdivision_rate_stays_continuous_and_spans_the_cubic ... ok
+test tests::bands_preserve_legacy_axis_filter_and_sort_order ... ok
+test packer::tests::shares_endpoints_and_pads_before_a_row_boundary_pair ... ok
+test packer::tests::record_layout_and_bytes_are_exactly_v0 ... ok
+test packer::tests::deduplicates_equal_lists_across_horizontal_and_vertical_bands ... ok
+test packer::tests::paging_never_splits_a_glyph_and_resets_page_local_offsets ... ok
+test tests::exact_bounds_exclude_unreached_control_point ... ok
+test tests::fixed_cubic_conversion_is_continuous ... ok
+test tests::line_bowing_keeps_axis_aligned_lines_exact ... ok
+test tests::unit_square_builds_default_bands ... ok
+test packer::tests::rejects_a_glyph_local_reference_offset_that_does_not_fit_u16 ... ok
+test tests::raising_the_rate_moves_the_fit_closer_to_the_true_cubic ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test tests::reads_complete_inter_identity_and_geometry ... ok
+test tests::converts_cff_cubics_without_nonfinite_output ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+ordinary-square: alpha 0.000, median 0.000, coverage 0
+acute-corner: alpha 0.000, median 0.000, coverage 0
+overlapping-contours: alpha 0.000, median 0.000, coverage 0
+self-intersection: alpha 0.000, median 0.000, coverage 0
+quadratic-oval: alpha 0.000, median 0.000, coverage 0
+cubic-teardrop: alpha 0.000, median 0.000, coverage 0
+complex-counter: alpha 0.000, median 0.000, coverage 0
+✔ bake progress protocol accepts bounded typed progress (1.057667ms)
+✔ bake progress protocol rejects impossible and unknown progress (0.20025ms)
+✔ ships one generated progress import and bundles its generated ABI in TypeScript (19.154667ms)
+✔ bakes canonical Inter deterministically through the public direct-memory shim (184.92675ms)
+✔ a bake publishes one artifact and keeps every page inside it (36.244917ms)
+✔ bakes bounded coverage with deterministic progress and a validated selection bitset (45.5695ms)
+✔ rejects mismatched shaping context and honors pre-bake cancellation (5.177375ms)
+✔ direct-memory allocations reject forged releases and recover after invalid requests (3.418917ms)
+✔ the direct-memory shim releases earlier allocations when a later copy fails (0.503167ms)
+✔ the direct-memory shim releases an allocation whose memory copy fails (0.180208ms)
+✔ matches the exact canonical Inter bitmap identities and payload bytes (182.752917ms)
+✔ round-trips embedded and split Inter pages through every bitmap validation layer (12.364291ms)
+✔ keeps every packaged bitmap schema byte-identical to its canonical source (4.089791ms)
+✔ covers every required bitmap field one deletion at a time (174.901666ms)
+✔ rejects reciprocal identity, strike, record, page, KTX2, and budget mutations (91.74975ms)
+✔ validates the pinned 65,535-glyph dense-record and multi-page boundary (16.992375ms)
+✔ an application/wasm response streams into the compiler (25.3135ms)
+✔ a response the engine declines to stream is buffered and compiled (11.265125ms)
+✔ invalid bytes reject with a compile error whether or not they streamed (2.178542ms)
+✔ compiles buffered bytes when streaming compilation is unavailable (1.687416ms)
+✔ a mixed-case Wasm compile failure preserves the error after streaming consumes the body (0.904791ms)
+✔ a correctly typed streaming failure propagates without a buffered retry (0.538542ms)
+✔ a stream failure propagates without buffering the consumed response again (0.887125ms)
+✔ deterministically embeds a companion while preserving both validated payloads (290.399042ms)
+✔ preserves the exact shaping-only artifact for the identity-neutral empty raster set (1.235291ms)
+✔ rebases opaque buffer-view references for multiple distinct embedded extensions (11.179167ms)
+✔ emits an external companion that carries every page inside it (46.17275ms)
+✔ rejects tampered artifacts, reciprocal mismatches, and duplicate raster keys (7.620916ms)
+✔ an omitted format discovers the default Bitmap, MSDF, and Slug bake set (89.5425ms)
+✔ discovers glyph.fontFace and immutable raster options through lexical bindings (16.188ms)
+✔ discovers plain JavaScript and JSX with the same symbol and constant semantics (15.061333ms)
+✔ resolves new URL inputs relative to the declaring module (27.8455ms)
+✔ follows imported constants and resolves literal, concatenated, and absolute URL sources (18.901709ms)
+✔ follows tsconfig aliases and re-exports without executing source, preserving declaration-relative URLs (20.802042ms)
+✔ ignores shadowed glyph bindings and reports shadowed options and cyclic constants as dynamic (25.582167ms)
+✔ cyclic re-exports terminate and explicit entries discover imported source once (22.036334ms)
+✔ resolves default and diamond exports while rejecting ambiguous and namespace values (28.59575ms)
+✔ workspace-linked packages preserve authored import identity and are not scanned as application source (35.329125ms)
+✔ discovers single and array format requests and skips baked GLB inputs (15.284792ms)
+✔ orders fonts and diagnostics by lexical source position despite concurrent analysis (16.97675ms)
+✔ reports ambiguity, unsafe paths, missing files, dynamic options, and dynamic sources (10.764459ms)
+✔ discovery respects hoisted, block, catch, pattern, class, and TypeScript value scopes (9.572166ms)
+✔ reassigned constants remain dynamic across direct, pattern, update, and loop writes (10.057917ms)
+✔ raster options accept JSON primitives and reject regex, bigint, and accessor values (10.943834ms)
+✔ invalid syntax rejects discovery instead of baking a recovered partial AST (10.968959ms)
+✔ rejects CommonJS and package-escaping raster baker manifests (23.955583ms)
+✔ drop-cap baseline contributes cap/x-height references while preserving the body strut (295.327417ms)
+✔ drop-cap text-top contributes cap/x-height references while preserving the body strut (57.044125ms)
+✔ shape registration queue membership ends at staging, including deferral and rejection (11.30625ms)
+✔ one immutable font binds independently into two glyph engines (53.313208ms)
+✔ a disposed Font rejects new binding while an existing glyphEngine lease remains valid (29.736041ms)
+✔ glyphEngine disposal releases bindings after owner observers and before the shaper (10.609584ms)
+✔ glyph engine font binding inputs are rejected at their calls (6.180209ms)
+✔ a glyph-engine-owned handle state installs a complete codec and deduplicates opaque font bindings (26.861958ms)
+✔ one handle state rejects colliding resource identities when the second font binds (72.581375ms)
+✔ a glyph-engine-owned handle state binds immutable font stacks and retains their fonts (29.741542ms)
+✔ the retained planner publishes canonical styles, flow, exclusions, and inline objects (85.947791ms)
+✔ retained style identities survive restyle, shrink, regrow, replay, and empty spans (32.539959ms)
+✔ style-clean text edits do not consume the setter preparation style-mutation limit (33.336583ms)
+✔ base-order publication admits swaps and preserves pending order across semantic preparation (36.311417ms)
+✔ single-text direct arena bytes match an independent ABI record across semantic views and offsets (1.089125ms)
+✔ prepared frame writes exact bytes into a nonzero-offset request arena (2.305916ms)
+✔ single-text preparation clears prior variable payload scratch and preserves general fallback (0.597708ms)
+✔ text request payloads preserve every UTF-16 unit at odd and even lengths and arena offsets (6.104334ms)
+✔ production frame compiler preserves the established benchmark request bytes (2.065625ms)
+✔ production frame compiler carries full style, polygon, exclusion, and inline-object payloads (0.446458ms)
+✔ style payloads stay in per-record order when several paragraphs carry language and features (0.219584ms)
+✔ production frame compiler encodes typography controls and their defaults (1.8625ms)
+✔ one Wasm engine rejects double ownership across handle states (19.109458ms)
+✔ registration retains a scoped ID independently of the scope that minted it (9.785375ms)
+✔ successful individual disposal releases registration ID provenance (5.552542ms)
+✔ randomized interactive sequences never fail to publish valid input (482.540917ms)
+✔ setter preparation and reads interleave across 10, 100, and 1000 labels (647.142959ms)
+✔ the authored shaping timeline types, wraps, and restyles without desynchronizing (361.6025ms)
+✔ font and loader teardown is total while Text retains its handle-owned renderer leases (18.552625ms)
+✔ renderer leases may dispose before their user font and loader handles (14.945459ms)
+✔ the corpus seeds are this package’s domain seeds (0.387958ms)
+✔ fingerprint128 matches independent reference vectors (41.236916ms)
+✔ fingerprint128 reads a subarray by its own bounds (0.105708ms)
+✔ the compatibility digest matches its published canonical form (1.408916ms)
+✔ production first-party bindings and benchmark codecs preserve every proven raster lane (552.74875ms)
+✔ FontFace rejects legacy loader and unowned source/config forms at its public boundary (25.370125ms)
+✔ disposing a pending FontFace aborts its load and immediately releases its family alias (1.651208ms)
+✔ a failed exact-format load is evicted so a later call receives a fresh Promise (52.666125ms)
+✔ a failed Blob read is evicted so the same FontFace can retry its source (1.381917ms)
+✔ Glyph owns FontFace loading for a non-Three configured handle (7.728833ms)
+✔ a configured adapter snapshots nested text records at the shared controller seam (90.645291ms)
+✔ a structural GlyphConfig honors spread overrides and releases a handle created before failure (1.0765ms)
+✔ configured renderer disposal preserves a first thrown undefined while completing later cleanup (23.939292ms)
+✔ a loaded FontFace constructs an imperative Three Text and owns its hidden Font lease (51.864458ms)
+✔ an undeclared FontFace load discovers every authoritative format for different handle defaults (23.338ms)
+✔ formats() preserves its successful Promise and reports authoritative format order (14.337166ms)
+✔ formats() retries after failed main-font inspection (2.216584ms)
+✔ FontFace family aliases reject collisions and Blob declarations load through the shared library (8.162209ms)
+✔ a declared format member loads narrowly before the aggregate FontFace (6.369333ms)
+✔ an explicit FontFace clone transfers one selected format without invalidating its source (78.009ms)
+✔ a declared format rejects when the authoritative font does not implement it (0.996542ms)
+✔ FontFace loading and explicit cloning do not initialize the Glyph engine (18.534667ms)
+✔ an explicit FontFace clone transfers to a Worker and reconstructs without fetching or initializing Glyph (74.486042ms)
+✔ every TrueType glyph, placed at its pen position and size, outlines exactly its ink box (11303.041458ms)
+✔ an outline is in em units with y down and its origin at the pen position on the baseline (19.446625ms)
+✔ a borrowed view shares endpoints, ends contours by segment, and flags each segment (51.686209ms)
+✔ a line segment keeps its midpoint as its control (45.746041ms)
+✔ a target is refilled with new views and returned (14.623416ms)
+✔ owned outlines from glyphs() equal the borrowed views as curve tuples (47.465333ms)
+✔ every CFF curve ends inside the glyph ink box (12.225833ms)
+✔ a fallback glyph decodes from the font that shaped it (21.108125ms)
+✔ a repeated read returns the same outlines, even when a decode grows engine memory (12.409833ms)
+✔ every raster format reads the same outlines (24.56675ms)
+✔ a glyph whose font was baked without outlines throws at the call (4.306125ms)
+✔ owned outlines are data: they read inside a render plan, after it, and after their font is disposed (19.696833ms)
+✔ Glyphs uses dense drawable indices and skips blanks while preserving source outlines (22.222584ms)
+✔ Glyphs.outlineAt keeps reading after the source re-lays out and after the font is disposed (16.149292ms)
+✔ Glyphs.outlineAt rejects an index that is not a glyph of the object (11.120417ms)
+✔ Glyphs.outlineAt throws the missing-outline error for a font without outlines (4.360375ms)
+✔ a leading space is skipped and dense matrix index zero moves the following drawable glyph (11.913375ms)
+✔ a detached glyph names its shape by fontHandle and glyphId, apart from its index and key (20.01925ms)
+✔ placement reads query desired layout before first publication and after edits (222.441625ms)
+✔ measureGlyphs publishes local geometry without traversing world matrices (22.460458ms)
+✔ glyph advances and ink extents agree with independently published paragraph measurements (5.659583ms)
+✔ caret and selection helpers resolve clusters without exposing a mutable snapshot (7.356125ms)
+✔ word and caret ranges preserve UTF-16 clusters and bidi direction (20.728834ms)
+✔ caretForOffset follows logical clusters through RTL and mixed-direction text (158.219542ms)
+✔ caretForOffset keeps hard-break gaps on the preceding line and soft wraps on the following line (38.194583ms)
+✔ caretForOffset pins interior UTF-16 offsets to their owning cluster and rejects invalid ranges (4.00925ms)
+✔ glyph flags decode through exported names rather than remembered indices (14.939167ms)
+✔ pending split matches publication and retains its independent copy across later edits (19.705375ms)
+✔ seeded pending split edits match freshly published Unicode layouts (210.658791ms)
+✔ split carries stable line and word metadata without presentation overrides (2.265291ms)
+✔ detached glyph keys survive movement-only reflow and change when text reshapes (9.067209ms)
+✔ commit state distinguishes unbound, pending, and committed paragraph state (2.228541ms)
+✔ split queries changed group presentation without publishing the source (1.800208ms)
+✔ split queries changed root material without publishing the source (1.603667ms)
+✔ layout reads answer nothing once the root is disposed (1.132791ms)
+✔ a caught reentrant setter leaves pending split and subsequent publication unchanged (4.204209ms)
+▶ publication capacity failure or repair preserves prepared sibling identities
+  ✔ output limit rejects (57.757708ms)
+  ✔ capacity repair succeeds (31.504167ms)
+✔ publication capacity failure or repair preserves prepared sibling identities (89.675292ms)
+▶ queries carry pending sibling lifecycle after renderer rejection without publishing an over-budget batch
+  ✔ first publication (2.972917ms)
+  ✔ previously published source (2.196292ms)
+✔ queries carry pending sibling lifecycle after renderer rejection without publishing an over-budget batch (5.313625ms)
+✔ sibling preparation refreshes split identities before and after publication (25.135042ms)
+▶ warm sibling placements recover after preparation commits but its result is rejected
+  ✔ before recovery publication (29.491875ms)
+  ✔ after recovery publication (9.271708ms)
+✔ warm sibling placements recover after preparation commits but its result is rejected (39.23525ms)
+✔ pending split uses desired render order before source publication (2.385583ms)
+✔ one transport writes changing frames through its retained arena after reserve growth (17.89425ms)
+✔ measurement capacity failure is surfaced without retrying the mutation (0.193625ms)
+✔ successful Rust preparation stays unadopted when TypeScript result decoding fails (0.151708ms)
+✔ a rejected measurement without the invalidated-root flag does not invalidate the root (0.135541ms)
+✔ a glyph engine owns every configured-handle state it creates (17.396125ms)
+✔ handle-scoped ID provenance expires with its owning handle state (11.776333ms)
+✔ font bindings cannot be disposed while an owned stack still references them (107.495667ms)
+✔ one deterministic Three codec registers Bitmap, MSDF, and Slug with material-directed draws (10.054458ms)
+✔ copy input creates one private GLB backing and exposes no mutable implementation handles (17.15375ms)
+✔ transfer input validates ownership before detaching and adopts a full ArrayBuffer (4.144083ms)
+✔ low-level loads share the FontFace graph while returned user leases remain live (32.557417ms)
+✔ font library and load options reject malformed values at their calls (0.213458ms)
+✔ immutable-font disposal remains total when one observer fails (17.669166ms)
+✔ canonical source forms converge on one validated baked hit without source or baker access (5190.718ms)
+✔ baked-only and explicit override requests obey their exact URLs (5.69125ms)
+✔ every canonical source suffix and extensionless path derives one exact sibling (50.579792ms)
+✔ an explicit baked null request skips sibling discovery and uses runtime baking (5.958459ms)
+✔ runtime persistence inherits source response cache policy (5.272625ms)
+✔ missing and invalid probes fall back once with deduplicated diagnostics (4.27525ms)
+✔ normal loading does not require Web Crypto or a secure context (1.003792ms)
+✔ baked-only failures never fetch a source or invoke fallback (0.364541ms)
+✔ normal loading trusts the runtime baker stamp instead of hashing source bytes again (0.768542ms)
+✔ shaping deduplication keeps differently sourced bytes qualified by provenance (55.346709ms)
+✔ shaping deduplication rejects equal stamps with contradictory payload shapes (63.893625ms)
+✔ registration merges embedded and external delivery without changing raster identity (0.983709ms)
+✔ external raster loading fetches the companion and resolves its pages in place (1.672958ms)
+✔ FontFace source leases share one canonical main and lazily loaded sidecar dependency graph (3.640542ms)
+✔ a serialized FontFace carries an external raster sidecar without another fetch (8.145833ms)
+✔ exact FontFace transfers progressively converge on one receiving content graph (35.416583ms)
+✔ serialized FontFace claiming trusts the package-produced transfer contract (3.16325ms)
+✔ FontFace source leases converge identical main content across locators and retain every dependency base (1.511292ms)
+✔ registries isolate generations, own their bytes, enforce limits, and invalidate disposal (3.381167ms)
+✔ raster handles are generation-scoped and become stale on disposal (1.877334ms)
+✔ fetch limits reject both declared and streamed excess before registration (4.249792ms)
+✔ cancellation detaches one caller while another retains the shared request (1.368208ms)
+✔ the final detached caller aborts underlying work and a later request starts fresh (0.720833ms)
+✔ a loaded format late-binds its exact Codec after loading (1.529167ms)
+✔ a one-character assignment sends the full candidate for Rust-owned sparse discovery (197.312709ms)
+✔ a scattered same-length assignment sends one full replacement to the packed Rust comparator (49.266709ms)
+✔ ships one generated progress import and bundles its artifact contract in TypeScript (9.706458ms)
+✔ bakes canonical Inter through the public direct-memory shim (32889.596209ms)
+✔ bakes and validates fingerprinted 32 px/em quality policies (4752.384666ms)
+✔ bakes bounded coverage with deterministic progress and a validated selection bitset (22.130625ms)
+✔ keeps the packaged MSDF schema byte-identical to its canonical source (1.232209ms)
+✔ releases a source allocation when the request allocation fails (0.269792ms)
+✔ copies a segmented response in bounded chunks and releases its Wasm ownership (0.289083ms)
+✔ ships an optimized module with the exact progress import and TypeScript ABI (6.327375ms)
+✔ matches every native-msdfgen admission case through the TypeScript host (22.412167ms)
+✔ copies borrowed output before the next generation and releases every request (9.025833ms)
+✔ rejects malformed host input before allocation and reports outline failures by status (2.291959ms)
+✔ rejects forged allocation ownership and recovers after invalid wire bytes (3.408333ms)
+✔ releases a request after output validation fails (0.472541ms)
+✔ bakeFont writes exact combined embedded and external artifacts with complete reports (5231.112333ms)
+✔ bakeFont preserves bounded raster options through the Node composition path (510.405541ms)
+✔ rolls back every earlier artifact when a later publication fails (3918.421208ms)
+✔ bakeProject rejects one font declaring the same technique twice (18.930916ms)
+✔ bakeProject groups static definitions, imports only the resolved baker, and mirrors outputs (3022.551584ms)
+✔ bakeProject resolves each plugin descriptor once before ordering and baking (1501.965042ms)
+✔ bakeProject rejects distinct sources that resolve to one output before baking (6.066792ms)
+✔ the installed CLI is a thin JSON-reporting layer over bakeProject (1800.761083ms)
+✔ the CLI directly bakes and checks one known font from arguments (3877.199917ms)
+✔ direct bake writes and checks a glyph-name lookup for its selected Unicode set (460.425125ms)
+✔ glyph-map aliases fail before either direct bake output is published (5.861541ms)
+✔ pre-cancellation and source/output overlap fail before filesystem mutation (1.174875ms)
+✔ a companion is named from its core font, so a package-owned ID never reaches disk (1284.819167ms)
+✔ rejects a lying plugin descriptor before calling its baker or publishing output (1.207291ms)
+✔ CLI help and malformed arguments are deterministic and side-effect free (0.753333ms)
+✔ the CLI surfaces font-provided icon names as JSON and reusable Unicode sets (8.682875ms)
+✔ a bake is skipped only when the artifact on disk is the whole result the request asks for (109.266458ms)
+✔ createRasterCodecProgram rejects a capability set that cannot bind every buffer of the assembled program (1.907125ms)
+✔ an indexed transform program built with createRasterCodecProgram publishes transform indices (58.374708ms)
+✔ registration preserves authenticated technique and schema witnesses (1.126875ms)
+✔ registration rejects structural techniques and reserved Glyph identities (0.164792ms)
+✔ registration rejects a resource-free schema before it can become an unusable font compiler (0.073834ms)
+✔ one registered Codec owns a raster ID even when another format declares the same string (0.112875ms)
+✔ font compilation accepts only live package fonts and exposes a constrained reader (1.687542ms)
+✔ a font created before Codec registration observes the later concrete compiler (0.261416ms)
+✔ font compilation owns binding metadata and normalizes retained payloads (0.226583ms)
+✔ compiled font views expose named fields and selected portable resources without decoded data (0.479167ms)
+✔ resource selection receives explicit glyph and strike coordinates (0.3225ms)
+✔ one authored resource identity describes the same immutable payload across compiler calls (0.342042ms)
+✔ standalone font compilation scopes dynamic resource collisions to one call (0.311833ms)
+✔ font resource identity mapping rejects counterfeit factories before reading keys (0.050583ms)
+✔ one loaded font reuses its immutable compilation across engine identity registries (0.151958ms)
+✔ independent Font leases over one immutable variant share compilation (0.134083ms)
+✔ retention rejects undeclared, duplicate, missing, and wrong-kind resources (1.102542ms)
+✔ binding readers and selected resources reject at compiler.compile (0.478042ms)
+✔ binding compilation snapshots reader accessors before serialization (0.417334ms)
+✔ a caught compiler input failure is terminal for that callback (0.168333ms)
+✔ compileFont must synchronously return this compiler invocation result (0.426166ms)
+✔ the compiler is revoked after its callback returns (0.343ms)
+✔ React: group material changes request an on-demand frame (110.100542ms)
+✔ React: replacing and removing paragraph props restores default state (26.800375ms)
+✔ React: paragraph changes request an on-demand frame (54.25375ms)
+✔ React: anchor presets remain shallow and measure tracks dynamic named references (24.1245ms)
+✔ React: malformed PropertyList input throws at the framework update (27.926708ms)
+✔ React: loaded and pending font switches retain a live paragraph and release leases (30.602334ms)
+✔ React: a re-render with an identical paragraph snapshot does not request a frame (17.076834ms)
+✔ React: equivalent PropertyList shapes do not republish paragraph state (21.163792ms)
+✔ React: presentation-only changes do not republish semantic text state (11.899542ms)
+✔ React: flow is paragraph state that survives unrelated updates and clears on removal (12.031292ms)
+✔ React: removing group batching, material, and renderOrder restores the defaults (10.892291ms)
+✔ React: nested property replacements publish new values without mutating prior state (6.461708ms)
+✔ React delegates fresh props after caller-owned input mutates in place (9.228375ms)
+✔ React does not let a mutated nested span swallow a fresh update (9.078416ms)
+✔ React preserves layout across fresh equivalent nested text (10.168333ms)
+
+⚠️ WebGlRenderer Usage
+WebGlRenderer usage is deprecated in favor of WebGPU. Import from /legacy directly or upgrade to WebGPU.
+
+More info: https://docs.pmnd.rs/react-three-fiber/api/renderer
+✔ Text and TextGroup retain their hosts after an application factory extension without a provider (104.049166ms)
+✔ R3F TextGroup material props update the retained Three material property (45.483083ms)
+✔ provider-free R3F roots isolate independent Canvas stores (43.785917ms)
+✔ GlyphProvider resolves a scoped string through its lazy fontFaces table (25.74975ms)
+✔ GlyphProvider reuses equal inline source tables and releases its declarations after StrictMode unmount (60.767209ms)
+✔ Text suspends on an existing unloaded FontFace selection (21.895ms)
+✔ nested Text suspends on a provider FontFace alias before publishing the paragraph (17.122291ms)
+✔ nested font prefetch observes rejection while an earlier font suspends (6.839334ms)
+✔ Text and TextGroup reject untyped object-level handle selection (8.843542ms)
+✔ GlyphProvider rejects a handle change instead of rebinding mounted objects (41.796625ms)
+✔ GlyphProvider string shorthand selects a named root on the built-in default handle (13.055791ms)
+✔ an R3F portal selects a distinct terminal root for its target Scene (12.256792ms)
+✔ StrictMode mount and replay balance every paragraph lease (6.5005ms)
+✔ a FontFace may dispose before React releases its mounted Text lease (9.533333ms)
+O [GlyphFontError]: font artifact could not be read
+    at K (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/dist/loader.js:1:38590)
+    at k._registerAsset (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/dist/loader.js:1:1862)
+    at #u (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/dist/loader.js:1:7383)
+    ... 4 lines matching cause stack trace ...
+    at file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/dist/loader.js:1:11593
+    at file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/dist/loader.js:1:13567 {
+  code: 'resource-unavailable',
+  reason: 'INVALID_FONT_ASSET',
+  url: undefined,
+  [cause]: n [GlbReadError]: GLB_TOO_SHORT: GLB must contain a header plus JSON and BIN chunks
+      at o (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/dist/internal/glb-reader.js:1:2639)
+      at r (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/dist/internal/glb-reader.js:1:296)
+      at i (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/dist/internal/font-artifact-reader.js:1:323)
+      at k._registerAsset (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/dist/loader.js:1:1841)
+      at #u (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/dist/loader.js:1:7383)
+      at #l (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/dist/loader.js:1:7104)
+      at ae.load (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/dist/loader.js:1:6613)
+      at xe (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/dist/loader.js:1:18660)
+      at #a (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/dist/loader.js:1:12396)
+      at file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/dist/loader.js:1:11593 {
+    code: 'artifact-invalid',
+    issues: [ [Object] ]
+  }
+} {
+  componentStack: '\n' +
+    '    at RejectedHookFont (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/tests/integration/react-lease-lifecycle.test.mjs:647:29)\n' +
+    '    at Suspense (<anonymous>)\n' +
+    '    at ge (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/dist/react.js:1:4364)\n' +
+    '    at ue (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/dist/react.js:1:1398)\n' +
+    '    at Provider (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@react-three+fiber@10.0.0-alpha.4_@types+react@19.2.14_react-dom@19.2.8_react@19.2.8__react@19.2.8_three@0.185.1/node_modules/@react-three/fiber/dist/index.mjs:14589:3)',
+  errorBoundary: <ref *1> ge {
+    props: { fallback: [Function: errorFallback], children: [Object] },
+    context: {},
+    refs: {},
+    updater: {
+      enqueueSetState: [Function: enqueueSetState],
+      enqueueReplaceState: [Function: enqueueReplaceState],
+      enqueueForceUpdate: [Function: enqueueForceUpdate]
+    },
+    state: { error: [O] },
+    _reactInternals: Vm {
+      tag: 1,
+      key: null,
+      elementType: [class ge extends Component],
+      type: [class ge extends Component],
+      stateNode: [Circular *1],
+      return: [Vm],
+      child: null,
+      sibling: null,
+      index: 0,
+      ref: null,
+      refCleanup: null,
+      pendingProps: [Object],
+      memoizedProps: [Object],
+      updateQueue: [Object],
+      memoizedState: [Object],
+      dependencies: null,
+      mode: 3,
+      flags: 193,
+      subtreeFlags: 0,
+      deletions: null,
+      lanes: 0,
+      childLanes: 0,
+      alternate: null,
+      actualDuration: 0.039335999999934756,
+      actualStartTime: 641.1595,
+      selfBaseDuration: 0.004416999999989457,
+      treeBaseDuration: 0.004416999999989457,
+      _debugInfo: null,
+      _debugOwner: [Vm],
+      _debugStack: Error: react-stack-top-frame
+          at process.env.NODE_ENV.exports.createElement (/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/react@19.2.8/node_modules/react/cjs/react.development.js:1053:20)
+          at ue (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/dist/react.js:1:2059)
+          at Object.react_stack_bottom_frame (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@react-three+fiber@10.0.0-alpha.4_@types+react@19.2.14_react-dom@19.2.8_react@19.2.8__react@19.2.8_three@0.185.1/node_modules/@react-three/fiber/dist/index.mjs:12152:18)
+          at It (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@react-three+fiber@10.0.0-alpha.4_@types+react@19.2.14_react-dom@19.2.8_react@19.2.8__react@19.2.8_three@0.185.1/node_modules/@react-three/fiber/dist/index.mjs:8483:17)
+          at ks (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@react-three+fiber@10.0.0-alpha.4_@types+react@19.2.14_react-dom@19.2.8_react@19.2.8__react@19.2.8_three@0.185.1/node_modules/@react-three/fiber/dist/index.mjs:9311:368)
+          at tt (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@react-three+fiber@10.0.0-alpha.4_@types+react@19.2.14_react-dom@19.2.8_react@19.2.8__react@19.2.8_three@0.185.1/node_modules/@react-three/fiber/dist/index.mjs:9595:20)
+          at B (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@react-three+fiber@10.0.0-alpha.4_@types+react@19.2.14_react-dom@19.2.8_react@19.2.8__react@19.2.8_three@0.185.1/node_modules/@react-three/fiber/dist/index.mjs:7407:60)
+          at Ph (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@react-three+fiber@10.0.0-alpha.4_@types+react@19.2.14_react-dom@19.2.8_react@19.2.8__react@19.2.8_three@0.185.1/node_modules/@react-three/fiber/dist/index.mjs:11432:42)
+          at wh (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@react-three+fiber@10.0.0-alpha.4_@types+react@19.2.14_react-dom@19.2.8_react@19.2.8__react@19.2.8_three@0.185.1/node_modules/@react-three/fiber/dist/index.mjs:11348:31)
+          at Ff (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@react-three+fiber@10.0.0-alpha.4_@types+react@19.2.14_react-dom@19.2.8_react@19.2.8__react@19.2.8_three@0.185.1/node_modules/@react-three/fiber/dist/index.mjs:11339:13),
+      _debugTask: [Object],
+      _debugNeedsRemount: false,
+      _debugHookTypes: null
+    },
+    _reactInternalInstance: {}
+  }
+}
+✔ preload, StrictMode consumers, clear, and remount share one font resource lifecycle (48.812833ms)
+O [GlyphFontError]: retryable test failure
+    at TestContext.<anonymous> (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/tests/integration/react-lease-lifecycle.test.mjs:589:19)
+    at async Test.run (node:internal/test_runner/test:1332:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+  code: 'resource-unavailable',
+  reason: 'test-retry',
+  url: undefined
+} {
+  componentStack: '\n' +
+    '    at RecoverableChild (<anonymous>)\n' +
+    '    at ge (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/dist/react.js:1:4364)\n' +
+    '    at ue (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/dist/react.js:1:1398)\n' +
+    '    at Provider (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@react-three+fiber@10.0.0-alpha.4_@types+react@19.2.14_react-dom@19.2.8_react@19.2.8__react@19.2.8_three@0.185.1/node_modules/@react-three/fiber/dist/index.mjs:14589:3)',
+  errorBoundary: <ref *1> ge {
+    props: { fallback: [Function: errorFallback], children: [Object] },
+    context: {},
+    refs: {},
+    updater: {
+      enqueueSetState: [Function: enqueueSetState],
+      enqueueReplaceState: [Function: enqueueReplaceState],
+      enqueueForceUpdate: [Function: enqueueForceUpdate]
+    },
+    state: { error: [O] },
+    _reactInternals: Vm {
+      tag: 1,
+      key: null,
+      elementType: [class ge extends Component],
+      type: [class ge extends Component],
+      stateNode: [Circular *1],
+      return: [Vm],
+      child: null,
+      sibling: null,
+      index: 0,
+      ref: null,
+      refCleanup: null,
+      pendingProps: [Object],
+      memoizedProps: [Object],
+      updateQueue: [Object],
+      memoizedState: [Object],
+      dependencies: null,
+      mode: 3,
+      flags: 193,
+      subtreeFlags: 0,
+      deletions: null,
+      lanes: 0,
+      childLanes: 0,
+      alternate: null,
+      actualDuration: 0.029999999999972715,
+      actualStartTime: 645.001459,
+      selfBaseDuration: 0.006416999999942163,
+      treeBaseDuration: 0.006416999999942163,
+      _debugInfo: null,
+      _debugOwner: [Vm],
+      _debugStack: Error: react-stack-top-frame
+          at process.env.NODE_ENV.exports.createElement (/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/react@19.2.8/node_modules/react/cjs/react.development.js:1053:20)
+          at ue (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/dist/react.js:1:2059)
+          at Object.react_stack_bottom_frame (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@react-three+fiber@10.0.0-alpha.4_@types+react@19.2.14_react-dom@19.2.8_react@19.2.8__react@19.2.8_three@0.185.1/node_modules/@react-three/fiber/dist/index.mjs:12152:18)
+          at It (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@react-three+fiber@10.0.0-alpha.4_@types+react@19.2.14_react-dom@19.2.8_react@19.2.8__react@19.2.8_three@0.185.1/node_modules/@react-three/fiber/dist/index.mjs:8483:17)
+          at ks (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@react-three+fiber@10.0.0-alpha.4_@types+react@19.2.14_react-dom@19.2.8_react@19.2.8__react@19.2.8_three@0.185.1/node_modules/@react-three/fiber/dist/index.mjs:9311:368)
+          at tt (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@react-three+fiber@10.0.0-alpha.4_@types+react@19.2.14_react-dom@19.2.8_react@19.2.8__react@19.2.8_three@0.185.1/node_modules/@react-three/fiber/dist/index.mjs:9595:20)
+          at B (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@react-three+fiber@10.0.0-alpha.4_@types+react@19.2.14_react-dom@19.2.8_react@19.2.8__react@19.2.8_three@0.185.1/node_modules/@react-three/fiber/dist/index.mjs:7407:60)
+          at Ph (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@react-three+fiber@10.0.0-alpha.4_@types+react@19.2.14_react-dom@19.2.8_react@19.2.8__react@19.2.8_three@0.185.1/node_modules/@react-three/fiber/dist/index.mjs:11432:42)
+          at wh (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@react-three+fiber@10.0.0-alpha.4_@types+react@19.2.14_react-dom@19.2.8_react@19.2.8__react@19.2.8_three@0.185.1/node_modules/@react-three/fiber/dist/index.mjs:11348:31)
+          at Ff (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@react-three+fiber@10.0.0-alpha.4_@types+react@19.2.14_react-dom@19.2.8_react@19.2.8__react@19.2.8_three@0.185.1/node_modules/@react-three/fiber/dist/index.mjs:11339:13),
+      _debugTask: [Object],
+      _debugNeedsRemount: false,
+      _debugHookTypes: null
+    },
+    _reactInternalInstance: {}
+  }
+}
+✔ a rejected hook resource stays stable for the error boundary and a later preload can retry (5.574ms)
+An update to ge inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+✔ a GlyphProvider error fallback retries children only when its caller dismisses it (3.426833ms)
+✔ registers compiler-mapped render codecs as retained typed Wasm state (8.915041ms)
+✔ publishes retained frame transactions through one aligned borrowed Wasm result (20.406875ms)
+✔ the runtime host transfers source and accepts one authoritative font artifact (34.480417ms)
+✔ the Worker entry runs the portable baker and transfers the exact canonical artifact (664.680542ms)
+✔ a runtime-bake cache hit returns before loading baker Wasm (8.958541ms)
+✔ the Worker prepares once and matches the Node canonical GLB for every built-in raster (7983.503708ms)
+✔ one portable source load sends its normalized ranges and complete raster tuple once (36.702208ms)
+✔ external techniques bake through their own declared baker, never the Worker plan (3248.387042ms)
+✔ runtime technique artifacts are rejected when bytes contradict their stamp (7.739208ms)
+✔ the Worker retries a failed Wasm fetch and retains the recovered core (7.465625ms)
+✔ runtime GLB cache keys include source, normalized ranges, and exact raster plans (1.5905ms)
+✔ runtime GLB cache returns exact bytes and honors the source response expiration (18.438542ms)
+✔ runtime GLB cache failure remains a transparent miss (0.175542ms)
+✔ Bitmap and MSDF runtime bakers execute through lazy module Workers (3.849125ms)
+✔ bounded runtime cancellation replaces the active Worker and recovers the serial queue (0.519959ms)
+✔ the raster Worker entry frees its baker result before transferring exact artifact buffers (0.287167ms)
+✔ Node and serial Worker entry produce identical bounded Bitmap and MSDF artifacts (75.593125ms)
+✔ worker request preparation failures preserve the asynchronous API contract (1.101041ms)
+✔ worker progress is reported without completing the active request (16.893084ms)
+✔ public initialization rejects incompatible modules before use and matched modules support semantic queries (120.885042ms)
+✔ ships a zero-import optimized shaper module whose published ABI is generated (8.386167ms)
+✔ the shaper registers only the exact shaping views retained from the validated GLB (65.974666ms)
+✔ compiled Wasm retains ordered font stacks and prevents dangling font disposal (37.942917ms)
+✔ text_update advances missing clusters through an ordered font stack (12.785375ms)
+✔ text_update appends a reordered Devanagari grapheme after a conjunct (9.898042ms)
+✔ shaper ownership stays scoped to its FontRegistry (24.833958ms)
+✔ measure_paragraph prepares synchronously without publishing or burning renderer revisions (10.68525ms)
+✔ the committing frame publishes the durable preparation without semantic replay (9.915333ms)
+✔ measurement-only results still commit complete positioned preparation (13.469459ms)
+✔ resize equivalence adopts committed positioning and still relayouts on break changes (11.043292ms)
+✔ measured f32 extents reproduce exactly at every pinned width (9.344208ms)
+✔ shipping Wasm Codec writes exact repeated-group and tail bytes from glyph binding columns (19.793583ms)
+✔ shipping Wasm rejects finite Codec arithmetic overflow and accepts a valid retry (7.838708ms)
+✔ ships the generated generic direct/segmented Slug ABI (14.485709ms)
+✔ bakes and validates exact external and embedded Inter Slug resources (182.369459ms)
+✔ surfaces structured identity failures before rasterizing (13.906833ms)
+✔ releases the source allocation when the request allocation fails (0.242334ms)
+✔ copies segmented Slug artifacts in bounded chunks and releases Wasm ownership (0.281834ms)
+✔ validates Slug page resources, which always travel inside the artifact (29.682875ms)
+✔ keeps package-owned Slug schemas byte-identical to their canonical sources (4.423458ms)
+✔ rejects identity, exact record, bounds, overflow, and address mutations (50.759083ms)
+✔ rejects malformed RGBA16F KTX2 data and nonzero integer-grid tails (16.95425ms)
+✔ measure exposes primary-face font dimensions and computed paragraph/line references (63.597291ms)
+✔ all anchor tokens resolve from measured box or named reference without reshaping on anchor changes (7.013291ms)
+✔ anchors use resolved at-most dimensions, wrapped lines and exact height including paragraph spacing (5.019791ms)
+✔ shallow property lists replace the whole anchor and explicit spread composes one axis (0.247667ms)
+✔ empty, tight leading, sizing, dynamic text, mixed fonts and fallback retain the same metric contract (61.75325ms)
+▶ Three draw transforms, bounds, glyph measures, carets, selection and split agree on anchoring
+  ✔ direct (17.891834ms)
+  ✔ indexed (9.153458ms)
+✔ Three draw transforms, bounds, glyph measures, carets, selection and split agree on anchoring (27.338417ms)
+▶ split preserves the source local frame, pivot and instance APIs through group motion
+  ✔ direct/default/rotation (6.36ms)
+  ✔ direct/default/scale (39.323ms)
+  ✔ direct/default/combined (3.424417ms)
+  ✔ direct/anchored/rotation (16.489292ms)
+  ✔ direct/anchored/scale (6.208167ms)
+  ✔ direct/anchored/combined (2.903542ms)
+  ✔ indexed/default/rotation (6.039083ms)
+  ✔ indexed/default/scale (10.173208ms)
+  ✔ indexed/default/combined (6.743042ms)
+  ✔ indexed/anchored/rotation (2.513292ms)
+  ✔ indexed/anchored/scale (2.333917ms)
+  ✔ indexed/anchored/combined (2.19225ms)
+✔ split preserves the source local frame, pivot and instance APIs through group motion (125.590208ms)
+✔ a rejected Three publication preserves the accepted anchor transform (3.231208ms)
+▶ inherited material rejection preserves accepted anchors in same-frame and previously failed updates
+  ✔ direct/root/same-frame (2.789583ms)
+  ✔ direct/root/already-rejected (2.025292ms)
+  ✔ direct/root/query-staged (1.80625ms)
+  ✔ direct/group/same-frame (1.967083ms)
+  ✔ direct/group/already-rejected (19.414416ms)
+  ✔ direct/group/query-staged (1.79275ms)
+  ✔ indexed/root/same-frame (1.560125ms)
+  ✔ indexed/root/already-rejected (1.591917ms)
+  ✔ indexed/root/query-staged (1.679292ms)
+  ✔ indexed/group/same-frame (1.548042ms)
+  ✔ indexed/group/already-rejected (6.679791ms)
+  ✔ indexed/group/query-staged (4.26825ms)
+✔ inherited material rejection preserves accepted anchors in same-frame and previously failed updates (47.856459ms)
+▶ inherited draw-order changes stay with a rejected material candidate
+  ✔ direct (4.178959ms)
+  ✔ indexed (5.380917ms)
+✔ inherited draw-order changes stay with a rejected material candidate (9.77925ms)
+▶ anchors compose in local axes under Three rotation and scale, including detached copies
+  ✔ direct (2.306208ms)
+  ✔ indexed (3.708166ms)
+✔ anchors compose in local axes under Three rotation and scale, including detached copies (6.267541ms)
+✔ explicit flow regions retain paragraph coordinates and anchored placement (2.889125ms)
+✔ prepared measurement leaves visible ink bounds queryable and cached, with the anchor applied once (39.946584ms)
+✔ empty and spaces-only bounds remain valid cached answers after prepared measurement (2.469625ms)
+✔ desired text edits refresh ink bounds without freezing the old or empty result (2.422292ms)
+✔ a text measured but never published disposes before the next publication (170.933542ms)
+✔ a text measured at two widths on a named root disposes before the next publication (2.481208ms)
+✔ a published text re-measures while a sibling removal waits for the next publication (10.7885ms)
+✔ canceling an unqueried creation leaves later copy queries free of lifecycle rows (11.842875ms)
+✔ copy resolves a cached glyph subset after a sibling restarts speculative identities (2.082208ms)
+✔ copy rejects a sibling identity after speculative preparation is restarted (1.232167ms)
+✔ raw offset spans are rejected where the caller writes them (50.888583ms)
+✔ Three rejects a later invalid range before processing an earlier span style (1.4245ms)
+✔ structural spans derive valid nested and disjoint ranges without an offset API (10.391375ms)
+✔ span validation preserves canonical order, duplicate selection, and overlap precedence (3.463667ms)
+✔ bounded span permutations agree with pairwise range validity (8.445375ms)
+✔ Rust aligns authored inline ranges to the pinned grapheme grid (7.493458ms)
+✔ structural spans authenticate a loaded Font instead of copying it into authored style data (3.2265ms)
+✔ invalid authored properties reject atomically while unknown properties are ignored (5.281625ms)
+✔ an unpaired surrogate throws where the caller wrote it (1.019ms)
+✔ a malformed feature range throws while constructing its structural span (0.106959ms)
+✔ structural span styles own nested caller data when the tag is authored (1.26825ms)
+✔ recomposing a styled fragment validates absolute feature ranges in its new scope (0.147375ms)
+✔ owned structural spans retain Unicode cluster and feature scope invariants across assignments (2.24425ms)
+✔ shortening text rejects an out-of-scope feature without changing the text (1.331791ms)
+✔ a fixed root budget keeps the last complete revision and self-heals (10.374875ms)
+✔ bitmap: deletion between a shared prefix and suffix (84.397875ms)
+✔ bitmap: deletion of an interior span (6.86025ms)
+✔ bitmap: suffix-only deletion (9.211209ms)
+✔ bitmap: prefix-only deletion (9.563417ms)
+✔ bitmap: insertion between a shared prefix and suffix (4.203208ms)
+✔ bitmap: insertion at the suffix (3.269708ms)
+✔ bitmap: insertion at the prefix (7.207709ms)
+✔ bitmap: same-length substitution (7.195083ms)
+✔ bitmap: shrink to empty (2.462792ms)
+✔ bitmap: grow from empty (9.670167ms)
+✔ bitmap: single character to single character (5.882333ms)
+✔ bitmap: collapse to one character (2.384875ms)
+✔ bitmap: repeated edits without remounting (21.238833ms)
+✔ bitmap: seeded chaotic edit sequences (275.847125ms)
+✔ msdf: deletion between a shared prefix and suffix (167.847292ms)
+✔ msdf: deletion of an interior span (9.834583ms)
+✔ msdf: suffix-only deletion (7.023791ms)
+✔ msdf: prefix-only deletion (2.73175ms)
+✔ msdf: insertion between a shared prefix and suffix (5.598833ms)
+✔ msdf: insertion at the suffix (6.782792ms)
+✔ msdf: insertion at the prefix (2.684292ms)
+✔ msdf: same-length substitution (2.162333ms)
+✔ msdf: shrink to empty (7.848916ms)
+✔ msdf: grow from empty (2.018333ms)
+✔ msdf: single character to single character (1.867583ms)
+✔ msdf: collapse to one character (32.74875ms)
+✔ msdf: repeated edits without remounting (7.45575ms)
+✔ msdf: seeded chaotic edit sequences (188.483042ms)
+✔ slug: deletion between a shared prefix and suffix (57.930292ms)
+✔ slug: deletion of an interior span (3.181417ms)
+✔ slug: suffix-only deletion (2.521209ms)
+✔ slug: prefix-only deletion (4.665709ms)
+✔ slug: insertion between a shared prefix and suffix (13.0785ms)
+✔ slug: insertion at the suffix (2.879083ms)
+✔ slug: insertion at the prefix (2.385334ms)
+✔ slug: same-length substitution (2.552834ms)
+✔ slug: shrink to empty (3.025083ms)
+✔ slug: grow from empty (24.755292ms)
+✔ slug: single character to single character (15.222375ms)
+✔ slug: collapse to one character (12.317292ms)
+✔ slug: repeated edits without remounting (7.494542ms)
+✔ slug: seeded chaotic edit sequences (190.971208ms)
+✔ 1. an unedited paragraph keeps every record when a bidi island is deleted above it (114.737167ms)
+✔ 2. Rust resolves authored spans after a text change joins a grapheme (55.1925ms)
+✔ 3. a break opportunity inside a grapheme cluster is ignored, not rejected (6.833625ms)
+✔ 3b. the same mark after a base the two standards agree on is accepted (17.83ms)
+✔ arabic-joining on amiri-bitmap: deletion inside a joined word reshapes its neighbours (101.407083ms)
+✔ arabic-joining on amiri-bitmap: clipped edits restore returning slots (29.395125ms)
+✔ arabic-joining on amiri-bitmap: deletion at the prefix reshapes the following letter (4.394625ms)
+✔ arabic-joining on amiri-bitmap: deletion at the suffix reshapes the preceding letter (4.736084ms)
+✔ arabic-joining on amiri-bitmap: insertion inside a joined word reshapes its neighbours (2.916458ms)
+✔ arabic-joining on amiri-bitmap: insertion at the prefix reshapes the following letter (6.89675ms)
+✔ arabic-joining on amiri-bitmap: substitution changes a neighbour from final to medial form (3.911333ms)
+✔ arabic-joining on amiri-bitmap: lam-alef ligature forms, absorbing two scalars into one glyph (2.96ms)
+✔ arabic-joining on amiri-bitmap: lam-alef ligature breaks, releasing a scalar into its own glyph (14.990875ms)
+✔ arabic-joining on amiri-bitmap: lam-alef ligature split by an inserted letter (2.608ms)
+✔ arabic-joining on amiri-bitmap: collapse to a single letter (2.171417ms)
+✔ arabic-joining on amiri-bitmap: shrink to empty (1.893167ms)
+✔ arabic-joining on amiri-bitmap: grow from empty (9.005ms)
+✔ arabic-joining on amiri-bitmap: seeded edit sequences at grapheme boundaries (222.676083ms)
+✔ arabic-joining on amiri-bitmap: seeded edit sequences at scalar boundaries (114.876375ms)
+✔ arabic-joining on amiri-slug: deletion inside a joined word reshapes its neighbours (94.241084ms)
+✔ arabic-joining on amiri-slug: clipped edits restore returning slots (62.407584ms)
+✔ arabic-joining on amiri-slug: deletion at the prefix reshapes the following letter (10.780375ms)
+✔ arabic-joining on amiri-slug: deletion at the suffix reshapes the preceding letter (11.767917ms)
+✔ arabic-joining on amiri-slug: insertion inside a joined word reshapes its neighbours (8.300667ms)
+✔ arabic-joining on amiri-slug: insertion at the prefix reshapes the following letter (4.954125ms)
+✔ arabic-joining on amiri-slug: substitution changes a neighbour from final to medial form (31.046375ms)
+✔ arabic-joining on amiri-slug: lam-alef ligature forms, absorbing two scalars into one glyph (4.407792ms)
+✔ arabic-joining on amiri-slug: lam-alef ligature breaks, releasing a scalar into its own glyph (2.971458ms)
+✔ arabic-joining on amiri-slug: lam-alef ligature split by an inserted letter (3.246125ms)
+✔ arabic-joining on amiri-slug: collapse to a single letter (19.499542ms)
+✔ arabic-joining on amiri-slug: shrink to empty (3.195375ms)
+✔ arabic-joining on amiri-slug: grow from empty (8.888458ms)
+✔ arabic-joining on amiri-slug: seeded edit sequences at grapheme boundaries (267.798916ms)
+✔ arabic-joining on amiri-slug: seeded edit sequences at scalar boundaries (322.161ms)
+✔ mixed-bidi on amiri-bitmap: latin island deleted from an rtl paragraph (7.303708ms)
+✔ mixed-bidi on amiri-bitmap: clipped edits restore returning slots (14.412625ms)
+✔ mixed-bidi on amiri-bitmap: latin island inserted into an rtl paragraph (1.890834ms)
+✔ mixed-bidi on amiri-bitmap: latin island grows, moving the direction boundary (1.776959ms)
+✔ mixed-bidi on amiri-bitmap: latin island shrinks, moving the direction boundary (5.39175ms)
+✔ mixed-bidi on amiri-bitmap: digit run grows inside an rtl paragraph (6.414875ms)
+✔ mixed-bidi on amiri-bitmap: digit run shrinks inside an rtl paragraph (2.227208ms)
+✔ mixed-bidi on amiri-bitmap: rtl run inserted between two latin islands (1.995583ms)
+✔ mixed-bidi on amiri-bitmap: rtl run deleted from between two latin islands (1.869834ms)
+✔ mixed-bidi on amiri-bitmap: substitution at the direction boundary (2.093417ms)
+✔ mixed-bidi on amiri-bitmap: the whole rtl half is deleted, collapsing the paragraph to one direction (1.747834ms)
+✔ mixed-bidi on amiri-bitmap: the whole latin half is deleted, collapsing the paragraph to one direction (1.773667ms)
+✔ mixed-bidi on amiri-bitmap: seeded edit sequences at grapheme boundaries (94.638042ms)
+✔ mixed-bidi on amiri-bitmap: seeded edit sequences at scalar boundaries (167.701959ms)
+✔ mixed-bidi on amiri-slug: latin island deleted from an rtl paragraph (9.345458ms)
+✔ mixed-bidi on amiri-slug: clipped edits restore returning slots (13.043167ms)
+✔ mixed-bidi on amiri-slug: latin island inserted into an rtl paragraph (11.796875ms)
+✔ mixed-bidi on amiri-slug: latin island grows, moving the direction boundary (12.192083ms)
+✔ mixed-bidi on amiri-slug: latin island shrinks, moving the direction boundary (20.071167ms)
+✔ mixed-bidi on amiri-slug: digit run grows inside an rtl paragraph (24.141167ms)
+✔ mixed-bidi on amiri-slug: digit run shrinks inside an rtl paragraph (11.135ms)
+✔ mixed-bidi on amiri-slug: rtl run inserted between two latin islands (9.03925ms)
+✔ mixed-bidi on amiri-slug: rtl run deleted from between two latin islands (18.530083ms)
+✔ mixed-bidi on amiri-slug: substitution at the direction boundary (3.04225ms)
+✔ mixed-bidi on amiri-slug: the whole rtl half is deleted, collapsing the paragraph to one direction (2.899916ms)
+✔ mixed-bidi on amiri-slug: the whole latin half is deleted, collapsing the paragraph to one direction (4.321041ms)
+✔ mixed-bidi on amiri-slug: seeded edit sequences at grapheme boundaries (306.954791ms)
+✔ mixed-bidi on amiri-slug: seeded edit sequences at scalar boundaries (250.364666ms)
+✔ latin-ligature on amiri-bitmap: the fixture actually substitutes the ligature these cases depend on (3.937666ms)
+✔ latin-ligature on amiri-bitmap: ligature forms by insertion, absorbing a cluster (3.330042ms)
+✔ latin-ligature on amiri-bitmap: clipped edits restore returning slots (16.345917ms)
+✔ latin-ligature on amiri-bitmap: ligature breaks by deletion, releasing a cluster (1.979708ms)
+✔ latin-ligature on amiri-bitmap: ligature split by a letter inserted between its members (1.771334ms)
+✔ latin-ligature on amiri-bitmap: ligature rejoined by deleting the letter that split it (1.509792ms)
+✔ latin-ligature on amiri-bitmap: ligature grows from a pair to a triple (1.619625ms)
+✔ latin-ligature on amiri-bitmap: ligature shrinks from a triple to a pair (1.48025ms)
+✔ latin-ligature on amiri-bitmap: ligature released at the tail (5.217042ms)
+✔ latin-ligature on amiri-bitmap: ligature formed at the tail (9.113917ms)
+✔ latin-ligature on amiri-bitmap: substitution breaks a ligature without changing length (7.135833ms)
+✔ latin-ligature on amiri-bitmap: prefix deletion shifts every ligature left (3.724375ms)
+✔ latin-ligature on amiri-bitmap: prefix insertion shifts every ligature right (1.843375ms)
+✔ latin-ligature on amiri-bitmap: seeded edit sequences at grapheme boundaries (224.699375ms)
+✔ latin-ligature on amiri-bitmap: seeded edit sequences at scalar boundaries (171.443959ms)
+✔ latin-ligature on amiri-slug: the fixture actually substitutes the ligature these cases depend on (6.715875ms)
+✔ latin-ligature on amiri-slug: ligature forms by insertion, absorbing a cluster (3.4085ms)
+✔ latin-ligature on amiri-slug: clipped edits restore returning slots (15.391292ms)
+✔ latin-ligature on amiri-slug: ligature breaks by deletion, releasing a cluster (3.746042ms)
+✔ latin-ligature on amiri-slug: ligature split by a letter inserted between its members (19.620875ms)
+✔ latin-ligature on amiri-slug: ligature rejoined by deleting the letter that split it (23.520792ms)
+✔ latin-ligature on amiri-slug: ligature grows from a pair to a triple (3.653167ms)
+✔ latin-ligature on amiri-slug: ligature shrinks from a triple to a pair (5.138042ms)
+✔ latin-ligature on amiri-slug: ligature released at the tail (4.945292ms)
+✔ latin-ligature on amiri-slug: ligature formed at the tail (30.415167ms)
+✔ latin-ligature on amiri-slug: substitution breaks a ligature without changing length (17.43575ms)
+✔ latin-ligature on amiri-slug: prefix deletion shifts every ligature left (4.35125ms)
+✔ latin-ligature on amiri-slug: prefix insertion shifts every ligature right (4.650916ms)
+✔ latin-ligature on amiri-slug: seeded edit sequences at grapheme boundaries (297.411333ms)
+✔ latin-ligature on amiri-slug: seeded edit sequences at scalar boundaries (242.239125ms)
+✔ indic-reordering on devanagari: virama deleted, splitting a conjunct into two glyphs (19.066458ms)
+✔ indic-reordering on devanagari: clipped edits restore returning slots (5.073209ms)
+✔ indic-reordering on devanagari: virama inserted, fusing two consonants into a conjunct (1.567625ms)
+✔ indic-reordering on devanagari: pre-base matra appended, rendering before the consonant it follows (2.890333ms)
+✔ indic-reordering on devanagari: pre-base matra deleted, unreordering the cluster (1.671041ms)
+✔ indic-reordering on devanagari: pre-base matra appended inside a word (1.534208ms)
+✔ indic-reordering on devanagari: deletion inside a conjunct cluster (1.737042ms)
+✔ indic-reordering on devanagari: insertion rebuilding a conjunct cluster (3.767833ms)
+✔ indic-reordering on devanagari: leading cluster deleted, shifting every later cluster (3.238042ms)
+✔ indic-reordering on devanagari: leading cluster inserted, shifting every later cluster (2.695916ms)
+✔ indic-reordering on devanagari: word inserted between two clusters (1.834917ms)
+✔ indic-reordering on devanagari: word deleted from between two clusters (1.737708ms)
+✔ indic-reordering on devanagari: collapse to a single consonant (1.589709ms)
+✔ indic-reordering on devanagari: shrink to empty (1.433792ms)
+✔ indic-reordering on devanagari: grow from empty (1.44575ms)
+✔ indic-reordering on devanagari: seeded edit sequences at grapheme boundaries (90.967042ms)
+✔ indic-reordering on devanagari: seeded edit sequences at scalar boundaries (77.484875ms)
+✔ cjk-line-breaks on cjk: deletion inside a spaceless run moves every later break (5.15975ms)
+✔ cjk-line-breaks on cjk: clipped edits restore returning slots (4.367417ms)
+✔ cjk-line-breaks on cjk: insertion inside a spaceless run moves every later break (1.285708ms)
+✔ cjk-line-breaks on cjk: punctuation removed, changing where the line may break (1.26275ms)
+✔ cjk-line-breaks on cjk: punctuation inserted, changing where the line may break (1.270375ms)
+✔ cjk-line-breaks on cjk: prefix deletion (1.281916ms)
+✔ cjk-line-breaks on cjk: suffix deletion (1.183167ms)
+✔ cjk-line-breaks on cjk: tail insertion (2.245708ms)
+✔ cjk-line-breaks on cjk: same-length substitution (9.741875ms)
+✔ cjk-line-breaks on cjk: collapse to one character (1.608834ms)
+✔ cjk-line-breaks on cjk: shrink to empty (1.136125ms)
+✔ cjk-line-breaks on cjk: grow from empty (1.279042ms)
+✔ cjk-line-breaks on cjk: seeded edit sequences at grapheme boundaries (72.966334ms)
+✔ cjk-line-breaks on cjk: seeded edit sequences at scalar boundaries (76.86375ms)
+✔ cjk-line-breaks on dot-gothic: deletion inside a spaceless run moves every later break (46.868208ms)
+✔ cjk-line-breaks on dot-gothic: clipped edits restore returning slots (6.1915ms)
+✔ cjk-line-breaks on dot-gothic: insertion inside a spaceless run moves every later break (1.581083ms)
+✔ cjk-line-breaks on dot-gothic: punctuation removed, changing where the line may break (1.571083ms)
+✔ cjk-line-breaks on dot-gothic: punctuation inserted, changing where the line may break (6.316958ms)
+✔ cjk-line-breaks on dot-gothic: prefix deletion (2.050334ms)
+✔ cjk-line-breaks on dot-gothic: suffix deletion (1.506625ms)
+✔ cjk-line-breaks on dot-gothic: tail insertion (1.625459ms)
+✔ cjk-line-breaks on dot-gothic: same-length substitution (1.536709ms)
+✔ cjk-line-breaks on dot-gothic: collapse to one character (1.377041ms)
+✔ cjk-line-breaks on dot-gothic: shrink to empty (1.168625ms)
+✔ cjk-line-breaks on dot-gothic: grow from empty (17.663083ms)
+✔ cjk-line-breaks on dot-gothic: seeded edit sequences at grapheme boundaries (69.675167ms)
+✔ cjk-line-breaks on dot-gothic: seeded edit sequences at scalar boundaries (74.359417ms)
+✔ the differential oracle fails when a single packed float is corrupted (33.69575ms)
+
+⚠️ WebGlRenderer Usage
+WebGlRenderer usage is deprecated in favor of WebGPU. Import from /legacy directly or upgrade to WebGPU.
+
+More info: https://docs.pmnd.rs/react-three-fiber/api/renderer
+✔ Rust resolves authored template ranges after fragments join into graphemes (68.114833ms)
+✔ nested structural spans preserve authored ranges until Rust resolves them (11.296584ms)
+✔ a rejected authored mutation leaves the accepted planner usable for the next edit (11.123958ms)
+✔ bound edits prepare once and reads plus renderer publication reuse that revision (25.36575ms)
+✔ same-length bound roundtrip keeps each prepared read and the first split independent (63.239625ms)
+✔ a post-commit preparation failure invalidates Rust and rebuilds accepted authored text (13.586958ms)
+✔ a failed create preparation leaves no accepted text and rebuilds the existing root (3.806625ms)
+✔ a failed multi-text recovery replays the full accepted root on the next read (6.056541ms)
+✔ post-write recovery keeps flow revisions monotonic and restores keyed count changes (12.736792ms)
+✔ a failed staged publication rebuilds accepted text without changing renderer-owned bytes (3.121334ms)
+✔ equivalent authored ranges resolve to the same measurement in Rust (1.969458ms)
+✔ raw span updates do not run JavaScript grapheme segmentation (2.420125ms)
+✔ seeded retained formatted batches match a cold full publication after sparse edits (46.717291ms)
+✔ nested React Text crossing a joining boundary mounts and publishes (41.489542ms)
+✔ nested React Text rejects box-only props before constructing a paragraph (4.181917ms)
+✔ variant registration rejects incompatible capabilities before an engine exists (1.604083ms)
+✔ registration selects one renderer variant per technique before engine construction (32.186625ms)
+✔ a technique registered after an engine exists is refused, not silently dropped (1.466875ms)
+✔ engine construction supplies system lanes outside portable codec authoring (1.076791ms)
+✔ sparse detached writes cap upload-range bookkeeping (0.493875ms)
+✔ retained storage uses version-driven uploads and repacks a detached vec3 upload view (0.444167ms)
+✔ a custom Three technique realizes supplied geometry through GlyphConfig (98.669875ms)
+✔ a custom Three material composes over the Bitmap shader in the Rust command-buffer draw path (58.52075ms)
+✔ the same custom material factory may override a separate decoration realization (18.535875ms)
+✔ Bitmap pixel snapping is an explicit opt-in graph specialization (14.376083ms)
+✔ a failed root recipe preserves its error and can be retried before creating a planner (20.498167ms)
+✔ failed Glyph initialization retains one rejected operation until the module is replaced (8.283291ms)
+✔ one initialized Glyph runtime creates independent named Three handles over immutable root fonts (88.854208ms)
+✔ host topology authority refreshes metadata and rejects changed scope or storage (27.384125ms)
+✔ spread schema overrides lose inherited host topology certification (15.520416ms)
+✔ glyph.shape preserves root, codec, and font ownership while batching handles (17.010041ms)
+✔ a configured renderer receives a command-buffer view only for its synchronous decode (10.561583ms)
+✔ one Three root binds one Scene and exposes its semantic name to material factories (11.875917ms)
+✔ Text renderOrder ranks grouped paragraphs while standalone Text keeps Three draw order (12.07175ms)
+▶ last Text removal retains its prepared font stack until publication or root teardown
+  ✔ unpublished / teardown (21.960917ms)
+  ✔ unpublished / publish removal (7.301666ms)
+  ✔ published / teardown (8.63225ms)
+  ✔ published / publish removal (7.113583ms)
+✔ last Text removal retains its prepared font stack until publication or root teardown (45.61625ms)
+✔ Three sibling rank changes publish complete order transactions over prepared content (31.868083ms)
+✔ a staged Three root rejects later-root assignment and disposal until its frame is consumed (12.717041ms)
+✔ TextGroup batching rejects before desired state changes while its root publication is staged (8.434ms)
+✔ Three Text creation gates before font selection and FontFace lease acquisition on a staged root (28.896792ms)
+✔ public Three root disposal rolls back above a staged owner and retries terminally (28.69375ms)
+✔ public Three handle disposal preflights staged and unstaged roots before terminal teardown (22.571375ms)
+✔ rank-only updates republish bindings when one storage batch has multiple materials (24.54575ms)
+✔ rank-only updates republish bindings for direct paragraph transforms (5.661625ms)
+✔ patch-only publications retain direct transform synchronization (15.971708ms)
+▶ patch-only publications refresh a standalone Text added after the publication root
+  ✔ indexed (6.48975ms)
+  ✔ direct (3.784291ms)
+✔ patch-only publications refresh a standalone Text added after the publication root (13.735833ms)
+✔ manual shaping preserves sibling Text transforms during draw replacement (19.965708ms)
+✔ an unstated TextGroup keeps child paragraph ranks out of Three material keys (32.711708ms)
+✔ Rust ranks interleaved TextGroup scopes only within their stable root slots (45.502625ms)
+✔ automatic sibling TextGroups own draws while shared siblings recover 0.1.0 coalescing (27.922625ms)
+✔ TextGroup batching resolves automatic roots, shared structure, and explicit nested boundaries (5.8615ms)
+▶ 0.2 manual visibility retains 1,000 labels across row and ancestor changes
+  ✔ indexed (476.202708ms)
+  ✔ direct (538.546208ms)
+✔ 0.2 manual visibility retains 1,000 labels across row and ancestor changes (1033.184ms)
+▶ groups without a committed batch scope skip scope visibility synchronization
+  ✔ indexed-auto (25.62ms)
+  ✔ indexed-shared (2.093459ms)
+  ✔ direct-auto (1.295042ms)
+✔ groups without a committed batch scope skip scope visibility synchronization (36.783917ms)
+▶ clean transform synchronization skips committed draw metadata and updates only changed batch scopes
+  ✔ indexed (7.78475ms)
+  ✔ direct (2.547583ms)
+✔ clean transform synchronization skips committed draw metadata and updates only changed batch scopes (19.487709ms)
+▶ deterministic retained renderer mutations match cold checkpoints in indexed and direct modes
+  ✔ indexed (163.666584ms)
+  ✔ direct (100.764625ms)
+✔ deterministic retained renderer mutations match cold checkpoints in indexed and direct modes (266.582292ms)
+✔ a hidden automatic TextGroup never exposes its first realized draw (26.26075ms)
+✔ a reused hidden boundary draw becomes visible after joining the shared pool (8.892416ms)
+✔ an empty root retains its publication until explicit teardown and can publish again (10.701125ms)
+✔ a root restores its draw object when the host clears and reattaches the authored tree (23.986666ms)
+✔ TextGroup ancestry cannot smuggle a Text across Glyph roots (4.44375ms)
+✔ text property registries validate and freeze reusable rules (0.381584ms)
+✔ public 2D flow accepts keyed polygons and composes around multiple exclusions (5.076458ms)
+✔ moving multiple exclusions matches cold LTR, RTL, and mixed-direction flow (55.253917ms)
+✔ same-source drop caps preserve source ownership and flow body lines beside the cap (36.584167ms)
+✔ same-source drop caps compose through an explicit multi-line flow region (40.165708ms)
+✔ detached matrix helpers round-trip aliased and independent targets with a hoisted inverse (0.230209ms)
+✔ Text.split imports a planner-assisted copy with exact world alignment and full matrices (91.298ms)
+✔ a clean anchor edit retains accepted drawn origins and drawable split membership (45.548333ms)
+✔ detached glyphs retain their engine domain after the source and font owners are disposed (68.025208ms)
+✔ Text.split returns a paragraph-scoped independent decoration plan when one exists (26.360958ms)
+✔ Text.split preserves TextGroup paint order across detached roots (72.495917ms)
+✔ Text.split preserves per-span material routing with independently owned instances (41.217125ms)
+✔ one portable request returns typed resources for every declared technique (16.17375ms)
+✔ Three carries supported text effects into MSDF lanes and rejects them for unsupported techniques (73.814625ms)
+✔ Three handle ownership follows immutable variants across user-font disposal (5.404375ms)
+✔ Three balances resolved font-stack ownership across measurement, updates, publication, and disposal (71.332333ms)
+✔ Three Text and TextGroup late-bind, synchronize, reparent, and dispose through the scene graph (40.946625ms)
+✔ nested TextGroup nodes inherit presentation without creating nested publication boundaries (21.97425ms)
+✔ pending copy survives a rejected publication followed by a sibling query (49.783792ms)
+▶ cached Three presentation still rejects nonfinite child and draw order
+  ✔ standalone draw order (17.625917ms)
+  ✔ grouped child rank (9.146709ms)
+✔ cached Three presentation still rejects nonfinite child and draw order (27.131417ms)
+✔ an already queued Three root observes presentation only during preparation (32.891834ms)
+✔ renderer rejection waits for explicit invalidation and then checkpoints without copied bytes (24.50175ms)
+✔ rejected draw replacement retains the accepted scope index and retry matches a cold preparation (5.537208ms)
+✔ material preparation rejection preserves the last accepted Three branch and core revision (27.939584ms)
+✔ a rejected fixed-capacity candidate releases its prepared font-stack lease after removal publication (27.595875ms)
+✔ TextGroup drops disposed descendants and reuses their committed transform identities (28.661792ms)
+✔ Three disposes superseded and final indexed-transform storage (24.615958ms)
+✔ Three retires materials bound to a replaced buffer generation (31.099875ms)
+▶ throwing Three retirement callbacks preserve the accepted publication
+  ✔ material (8.164708ms)
+  ✔ geometry (4.754291ms)
+✔ throwing Three retirement callbacks preserve the accepted publication (34.678709ms)
+▶ irreversible Three callback windows preserve primary notification precedence
+  ✔ material disposal (13.469084ms)
+  ✔ geometry disposal (2.676125ms)
+  ✔ draw addition (1.9625ms)
+  ✔ draw removal (1.760625ms)
+✔ irreversible Three callback windows preserve primary notification precedence (40.875209ms)
+✔ a traversal failure deferred during successful retirement commit surfaces through accepted settlement (49.226167ms)
+▶ retirement callbacks reject reentrant Text and root disposal before lifecycle mutation
+  ✔ material disposes Text (3.55725ms)
+  ✔ geometry disposes root (1.867667ms)
+✔ retirement callbacks reject reentrant Text and root disposal before lifecycle mutation (34.923208ms)
+✔ one root cannot unregister another root during borrowed retirement (24.938083ms)
+✔ accepted cleanup attribution snapshots participants before guarded onError callbacks (29.335833ms)
+▶ accepted cleanup preserves arbitrary thrown values through notification and shape
+  ✔ undefined (5.530625ms)
+  ✔ null (4.747709ms)
+  ✔ zero (5.170042ms)
+✔ accepted cleanup preserves arbitrary thrown values through notification and shape (42.62375ms)
+✔ two-root cleanup failures settle every root despite a throwing notification (27.070166ms)
+✔ accepted retirement failures outrank reentrant notification traversal and transform synchronization (25.4415ms)
+▶ a captured later root defers callback traversal until its own retirement outcome is known
+  ✔ primary zero (8.953ms)
+  ✔ no primary (6.517708ms)
+✔ a captured later root defers callback traversal until its own retirement outcome is known (44.408583ms)
+✔ a committed later root defers onError traversal until its accepted hook (32.398459ms)
+✔ a later root keeps its prepared revision and primary retirement failure through cross-root traversal (33.840791ms)
+▶ shape settlement rejects lifecycle disposal until every captured root consumes its failure
+  ✔ second root (7.585916ms)
+  ✔ handle (6.721833ms)
+✔ shape settlement rejects lifecycle disposal until every captured root consumes its failure (35.954375ms)
+✔ shape settlement rejects disposal of a detached unbound Text before local mutation (40.748375ms)
+✔ accepted group attribution follows the snapshotted owner until replacement or clear (27.942625ms)
+✔ disposing an attributed TextGroup releases root-owned error state (27.831625ms)
+✔ Three reflow patches only host placement while retaining raster geometry, draws, and materials (46.160083ms)
+✔ one Rust plan partitions a mixed Bitmap to Slug fallback stack (111.563959ms)
+✔ explicit line height follows the font-stack primary across fallback scripts (74.002667ms)
+✔ one Text coalesces interleaved font spans without crossing decoration paint layers (44.7555ms)
+✔ one Three root realizes two public Text objects as one indexed Rust draw (22.359875ms)
+✔ full assignments prepare one complete replacement while Rust discovers distant edits (28.414667ms)
+✔ sibling measurement terminates after expansion sparse replacement and shrink assignments (25.986333ms)
+✔ repeated public Text.set assignments match freshly published semantic glyph output (23.276291ms)
+✔ renderer rejection preserves raw falsy values and Text.set output through explicit retry (23.041792ms)
+✔ two real roots aggregate distinct raw renderer rejections in participant order and retry cold (12.560458ms)
+✔ placement reads retain their scoped inspection cache through matching publication (19.706042ms)
+✔ Text.measure answers attached first-frame state without traversing matrices or realizing draws (18.613375ms)
+✔ unqueried text omits summary records and the first query materializes a reusable summary (17.883292ms)
+✔ Text.measure retains unpublished lifecycle but skips published paragraph upserts (17.670375ms)
+✔ Text.readGlyphs demand-reads scalar records only inside one synchronous borrow (9.409625ms)
+✔ Text.readGlyphs reuses setter preparation without a query-side promotion pass (9.297792ms)
+✔ Text.readGlyphs promotes actual dense demand before the next callback and invalidates on successful edits (4.537208ms)
+✔ seeded inspection demand remains equal to cold recomputation across edits and rejected callbacks (14.416792ms)
+✔ owned inspection borrows complete bounded ranges and a final tail (4.9155ms)
+✔ Text.readGlyphs and owned inspection remain available beyond the publication output limit (11.601333ms)
+✔ empty Text bounding boxes cache their valid measurement (2.851583ms)
+✔ Three Box3 measures transformed Text and TextGroup ink without adding scene objects (4.537209ms)
+✔ root-owned Text.measure reads its setter preparation before traversal (21.174792ms)
+✔ measurement bindings do not retain unrelated detached Texts (7.927542ms)
+✔ alternating detached measurements retain one bounded prepared lifecycle (61.839ms)
+✔ synchronous Three scene events cannot replace a live member traversal with query members (6.622375ms)
+✔ Bitmap strike changes fully initialize a replacement indexed batch (85.193625ms)
+✔ multi-page Bitmap strikes remain one ordered texture-array draw (84.285ms)
+✔ large inspection queries grow the result arena to the reported requirement (67.394458ms)
+✔ Rust ellipsis reshapes only the narrowed unsafe line boundary (54.025291ms)
+✔ one Three root atomically replaces child paragraphs without multiplying retained text capacity (24.851583ms)
+✔ one Three root grows aggregate glyph storage without reserving one aggregate-sized paragraph (880.582208ms)
+✔ repeated layout under changing constraints stays on the paragraph preparation path (23.350083ms)
+✔ a standard ligature that absorbs a grapheme publishes and keeps typing (42.311625ms)
+✔ typed command trees project the trusted group hierarchy lazily (2.836417ms)
+✔ retained topology proof preserves complete lazy primitive metadata projection (0.31875ms)
+✔ one transform binding resolves every root instance identity that shares it (0.279875ms)
+✔ a paragraph with an RTL run never breaks at a boundary whose width needs the line shaped alone (49.419084ms)
+✔ paint and decoration spans that begin and end inside a corrected left-aligned line start keep their own extents (89.988334ms)
+✔ paint and decoration spans that begin and end inside a corrected justified line start keep their own extents (19.762625ms)
+✔ a terminal hard break measures without trapping the engine (38.516ms)
+✔ a clipped paragraph inspects the same lead glyphs as the unclipped paragraph (18.194167ms)
+✔ retained clipped inspection matches cold layouts across clipping, ellipsis and text changes (19.867958ms)
+✔ a text edit that also changes shaping features does not keep stale break corrections (29.993292ms)
+✔ justification expands the gaps inside a multi-cluster corrected lead (15.206291ms)
+✔ a corrected line start whose island holds a ligature spaces its glyphless cluster like the paragraph does (66.028792ms)
+✔ a clipped paragraph reports the corrected full content extent (106.288125ms)
+✔ a legal unsafe boundary reshapes the selected lines without disabling kerning (41.797459ms)
+✔ unsafe-boundary support preserves Arabic, Devanagari, and CJK line legality (67.480792ms)
+✔ unsafe fallback shaping keeps line metrics owned by the stack primary (11.886542ms)
+✔ unsafe fitting preserves hard breaks and narrow ellipsis lines (11.017459ms)
+✔ equal-length incremental edits use the same exact unsafe fit as a cold paragraph (11.571458ms)
+✔ an equal-length edit inside an unsafe boundary island draws the edited glyphs (42.824167ms)
+✔ each line wrapped at an unsafe boundary draws exactly what that line shaped alone draws (13.174416ms)
+✔ an edge glyph keeps its stable id when text inserted before it moves its offset (58.702084ms)
+✔ the extra glyphs of a line-start edge keep their stable ids across a relayout that keeps the break (88.197375ms)
+✔ no line ends at a corrected boundary that no space follows when shaping substitutes across it (69.676459ms)
+✔ a line starting at an unsafe boundary draws its start as the line shaped alone, and keeps the hanging-space end (72.762292ms)
+✔ an ellipsis line that starts at an unsafe boundary also draws its start shaped alone (15.146208ms)
+✔ no line overflows the min-content width of a paragraph with a substituting hyphen (36.033666ms)
+✔ a break after a hyphen whose standalone shaping substitutes glyphs is not taken, a kerning-only one is (105.655667ms)
+✔ Vue: group material changes request an on-demand frame (105.624167ms)
+✔ Vue: replacing and removing paragraph props restores default state (46.410708ms)
+✔ Vue: paragraph changes request an on-demand frame (14.974459ms)
+✔ Vue: anchor presets remain shallow and measure tracks dynamic named references (36.326625ms)
+✔ Vue: malformed PropertyList input throws at the framework update (9.648458ms)
+✔ Vue: loaded and pending font switches retain a live paragraph and release leases (38.349083ms)
+✔ Vue: a re-render with an identical paragraph snapshot does not request a frame (29.642ms)
+✔ Vue: equivalent PropertyList shapes do not republish paragraph state (27.701917ms)
+✔ Vue: presentation-only changes do not republish semantic text state (14.25525ms)
+✔ Vue: flow is paragraph state that survives unrelated updates and clears on removal (8.158417ms)
+✔ Vue: removing group batching, material, and renderOrder restores the defaults (25.829583ms)
+✔ Vue: nested property replacements publish new values without mutating prior state (34.545625ms)
+✔ Vue tracks in-place root and nested reactive property changes (22.990834ms)
+✔ mounting and unmounting a Vue Text returns every paragraph lease (116.688208ms)
+✔ Text and TextGroup share the built-in default handle without a provider (55.692167ms)
+✔ TextGroup material prop updates the retained Three material property (34.728292ms)
+✔ a nested Text flattens into the outer paragraph without a second Three object (13.303875ms)
+✔ a root textStyle list reaches the Three Text as a list (15.458167ms)
+✔ a reactive style change reaches canonical state and reuses an equal snapshot (26.036958ms)
+✔ Text waits for an unloaded FontFace selection and constructs once it loads (15.055917ms)
+✔ Text reports a failed FontFace load once and does not restart it on re-render (3.055375ms)
+✔ GlyphProvider resolves a scoped string alias and never disposes a caller-owned FontFace (23.896917ms)
+✔ GlyphProvider disposes declarations it creates from source forms (16.85225ms)
+✔ Text and TextGroup reject a handle prop (21.115333ms)
+✔ GlyphProvider rejects a handle change instead of rebinding mounted objects (37.566458ms)
+✔ GlyphProvider selects one terminal named root without rebinding the anonymous root (14.857625ms)
+✔ GlyphProvider string shorthand selects a named root on the built-in default handle (38.221209ms)
+✔ provider-free canvases isolate independent Glyph roots (16.991875ms)
+✔ useFont owns a mounted lease that the component scope releases (25.126166ms)
+✔ preloadFont and the composable share one default-handle resource (29.898166ms)
+✔ a rejected preload is shared, releases its declaration, and a later preload retries (1.0715ms)
+✔ canonicalizes bitmap strikes and owns its compatibility versions (0.96775ms)
+✔ rejects every invalid runtime strike form (0.242ms)
+✔ selects bitmap strikes from CSS size at the requested raster pixel ratio (0.322666ms)
+✔ chooses the deterministic lower strike at an exact distance tie (0.047708ms)
+✔ rejects invalid raster selection inputs (0.161292ms)
+✔ storing another scope’s value throws instead of misreading inputs (1.932542ms)
+✔ derived values carry their scope across combinators (0.249125ms)
+✔ combinators reject cross-scope operands at construction (0.146458ms)
+✔ deep shared expression DAGs stay cheap to store (0.889375ms)
+✔ constants are scope-free and same-scope programs still compile (0.500917ms)
+✔ sameSnapshot compares arrays by position and objects by key set (0.326375ms)
+✔ application values and types stay at root while integration construction lives on core (50.1345ms)
+✔ integrations re-export root names only when their own signatures use them (3.77425ms)
+✔ the published contract is ESM-only (3.510041ms)
+✔ the public FontFace graph hides loader and mutable registration machinery (35.561959ms)
+✔ generic raster baker construction lives only on the dedicated baker subpath (2.34675ms)
+✔ stable Three and TSL imports do not load the experimental TypeGPU bridge (102.694833ms)
+✔ a valid descriptor compiles header, tables, and reserved regions exactly as declared (1.201333ms)
+✔ compiled field-major lanes round-trip every f32 through Math.fround (0.191667ms)
+✔ populated table ranges are aligned, disjoint, and inside the allocation (0.194083ms)
+✔ each getter is read exactly once and each reader runs once per row on success (0.175917ms)
+✔ each table reader runs exactly once per row on a successful compile (0.09875ms)
+✔ table readers run exactly once per row with no retries when a later row fails (0.21175ms)
+✔ an invalid descriptor field rejects before any reader or resource reader runs (0.068041ms)
+✔ all table shapes validate before the resource selector or any table reader runs (0.085875ms)
+✔ every numeric width and category is rejected with a named error (2.988916ms)
+✔ resource indexes outside the declared table are rejected by row (0.241458ms)
+✔ f32 tables reject nonfinite values and doubles that overflow after fround, naming field and row (0.216416ms)
+✔ u32 tables reject negatives, fractions, nonfinite values, and overflow, naming field and row (0.107417ms)
+✔ unnamed fields are still named by table and field index (0.070958ms)
+✔ incorrect row domains are rejected for all six tables (0.181042ms)
+✔ excessive field counts and non-function readers are rejected (0.111125ms)
+✔ Glyph operational errors share one public base without erasing their reason or cause (0.35475ms)
+✔ the span compiler passes every official Unicode 17 extended-grapheme vector (8.84425ms)
+✔ requires exact size evidence freshness on the recorded host (1.291542ms)
+✔ accepts complete foreign-host evidence only within reviewed ceilings (0.228333ms)
+✔ keeps the portable admission contract exact on every host (0.141542ms)
+✔ requires exact experimental Wasm identity on the recorded host (1.548208ms)
+✔ accepts complete bounded foreign-host measurements without weakening the variant contract (0.284167ms)
+✔ real layouts bound the post-narrow observable-span representability experiment (185.514041ms)
+✔ digest module move preserves fingerprint symbols and is dry-run safe and idempotent (463.193083ms)
+✔ derives canonical MSDF fingerprints for default and custom quality (1.974375ms)
+✔ validates MSDF quality options at the package boundary (0.298417ms)
+✔ optimizer final indexes restore source identities and label generated functions honestly (4.417208ms)
+✔ diagnostic wrapper changes only the final shaper stripping option, preserving Cargo metadata (0.187083ms)
+✔ optimizer defined identities account for imported function indexes (0.511417ms)
+✔ named diagnostics retain the exact release bytes and authenticate final function indexes (0.414917ms)
+✔ authentication rejects a changed valid function body or any other executable section (0.277084ms)
+✔ authentication fails closed for missing, duplicated, empty or out-of-range names (0.247208ms)
+✔ section and name framing reject truncation, overflow and invalid UTF-8 (0.745ms)
+✔ diagnostic output cannot enter dist, including a dot-prefixed child (0.332708ms)
+✔ captured commands consume the supplied byte snapshot without reopening an artifact path (42.393791ms)
+✔ copies only the visible bytes of a nonzero-offset view into owned storage (1.223875ms)
+✔ the packed package exposes every ESM subpath and no CommonJS entry (9214.29675ms)
+✔ plain f32 placement has a pinned double-rounding counterexample (0.385542ms)
+✔ high/low translation can recover a tail without implying universal parity (0.059667ms)
+✔ the placement oracle rejects non-finite inputs and finite inputs that overflow f32 (0.213792ms)
+✔ the deterministic corpus reports error without claiming an encoding is bit-exact (9.146959ms)
+✔ direct raster offsets preserve the current f32 origin operation bits (9.371042ms)
+✔ the reserved portable kinds and topologies are the frozen closed sets (1.264625ms)
+✔ valid buffer, texture, and geometry payloads pass their reserved declared kind (1.106833ms)
+✔ resource groups own named leaf payloads and reject recursive groups (0.56075ms)
+✔ buffer payloads need byte arrays and whole record strides (0.188583ms)
+✔ texture payloads need a format and positive dimensions (0.403125ms)
+✔ geometry semantic names cannot mutate renderer-owned attribute objects (0.219042ms)
+✔ retained payloads must declare the reserved payload kind of their resource (0.173875ms)
+✔ geometry views and accessors must stay inside the immutable bytes (0.796458ms)
+✔ geometry attributes need a position and consistent counts per rate (0.589041ms)
+✔ indices must be scalar integers and draw ranges must fit the addressed stream (1.790167ms)
+✔ normalizing a retained payload owns bytes and structural metadata (0.226208ms)
+✔ instance count and per-record data remain command-buffer-owned (0.150583ms)
+✔ perspective projection clips a camera-side bound onto paragraph flow (2.3605ms)
+✔ orthographic projection preserves plane coordinates and clips to authored flow bounds (0.345875ms)
+✔ a bound enclosing the complete frustum conservatively excludes the complete flow rectangle (0.277333ms)
+✔ projection omits behind-plane bounds and rejects degenerate projection state (0.618667ms)
+✔ an explicit silhouette preserves a projected concavity without inflation (0.295125ms)
+✔ explicit silhouettes clip camera-side geometry and omit fully hidden rings (0.235458ms)
+✔ explicit silhouettes reject malformed caller-authored rings (0.172333ms)
+✔ staged JS and declaration maps resolve from the published tree and preserve mappings (11.573208ms)
+✔ source maps cannot escape the packaged source tree (2.860959ms)
+✔ portable codec assembly rejects host inputs before invoking technique code (0.742042ms)
+✔ portable codec assembly owns host identities, system buffers, and variant metadata (1.049833ms)
+✔ portable codec assembly rejects structurally copied programs (0.068375ms)
+✔ normalizes bounded raster seeds without changing their selection semantics (1.416459ms)
+✔ normalizes the complete Bitmap Worker option boundary without dropping coverage (0.515ms)
+✔ fingerprints identical bounded coverage in Bitmap and MSDF descriptors (1.032708ms)
+✔ rejects ambiguous, unbounded, and non-scalar coverage input (0.203916ms)
+✔ reports missing shaped glyphs as a stable public error (0.210583ms)
+✔ checks shaped font-local glyphs before publishing a bounded raster batch (0.257875ms)
+✔ portable raster format definitions retain their public identity (0.33275ms)
+✔ defined formats own a frozen snapshot of their associated callbacks (0.337792ms)
+✔ portable raster identities reject empty strings at their definition boundary (0.651ms)
+✔ portable raster formats reject unknown or duplicate text effects (0.270334ms)
+✔ canonicalizes JSON according to RFC 8785 member and number rules (0.903917ms)
+✔ rejects inputs outside the I-JSON domain before hashing (1.475875ms)
+✔ allows repeated non-cyclic references while canonicalizing their values independently (0.143166ms)
+✔ derives the raster key from the exact canonical contract object (0.477625ms)
+✔ reads every supported native format and retains a zero-copy base-level view (1.434542ms)
+✔ classifies unsupported native-image header and level variants (0.352333ms)
+✔ rejects malformed, truncated, out-of-range, and unsafe section coordinates (0.248875ms)
+✔ separates structural DFD failures from valid but incompatible descriptors (0.181625ms)
+✔ rejects bounded key/value and global data as unsupported metadata (0.653ms)
+✔ semantic ID helpers are stable and namespace program variants (0.397125ms)
+✔ wire identities preserve UTF-8 hashes across scratch boundaries and malformed surrogates (13.893917ms)
+✔ package-owned host IDs are stable, nonzero, domain-separated, and collision-checked (0.295541ms)
+✔ runtime ID scopes retain shared provenance until their last owner is disposed (0.150583ms)
+✔ identity registries reject colliding program names at assembly (0.080916ms)
+✔ capability profiles are selected from descriptors without exposing wire ordinals (0.339042ms)
+✔ program construction rejects reserved zero wire identities (0.067125ms)
+✔ program construction rejects unknown transform modes immediately (0.233333ms)
+✔ program construction snapshots accepted body and buffer records (0.370416ms)
+✔ codec compilation rejects a program id shared by different techniques (1.467166ms)
+✔ a fully specified codec retains every serialized value exactly (2.409208ms)
+✔ a decoration program may accept zero resource kinds (0.274541ms)
+✔ buffer ids collide only within one program (0.370334ms)
+✔ rejection happens before any output allocation or write (0.150041ms)
+✔ compiler rejects malformed descriptor shapes at its call boundary (0.164792ms)
+✔ preflight rejects a negative u8 input count (0.08875ms)
+✔ preflight rejects an overflowing u8 input count (0.17125ms)
+✔ preflight rejects a NaN u8 input count (0.144083ms)
+✔ preflight rejects an infinite u8 input count (0.122834ms)
+✔ preflight rejects a fractional opcode (0.240792ms)
+✔ preflight rejects an overflowing target (0.251542ms)
+✔ preflight rejects an overflowing input field (0.175459ms)
+✔ preflight rejects an unknown buffer scalar (0.121875ms)
+✔ preflight rejects a negative buffer vectorWidth (0.123917ms)
+✔ preflight rejects an overflowing variant (0.109708ms)
+✔ preflight rejects a negative variant (0.091ms)
+✔ preflight rejects an overflowing draw capacity (0.072125ms)
+✔ preflight rejects a fractional buffer id (0.12125ms)
+✔ preflight rejects an infinite stride (0.108416ms)
+✔ preflight rejects a NaN capacityClass (0.111333ms)
+✔ preflight rejects an unknown primitiveKind (0.091125ms)
+✔ preflight rejects an overflowing per-program input count (12.547292ms)
+✔ preflight rejects an overflowing maxBufferBytes (0.209542ms)
+✔ preflight rejects a fractional updateAlignment (0.273958ms)
+✔ preflight rejects an infinite resourceKindMask (0.344209ms)
+✔ preflight rejects a NaN drawKeyMask (0.3405ms)
+✔ preflight rejects negative paintCapabilities (0.161125ms)
+✔ preflight rejects an overflowing compositingCapabilities (0.150291ms)
+✔ preflight rejects a negative buffer usage (0.114584ms)
+✔ preflight rejects an overflowing immediate0 (0.13475ms)
+✔ preflight rejects a fractional immediate1 (0.125584ms)
+✔ preflight rejects a NaN immediate2 (0.116041ms)
+✔ preflight rejects unknown and inherited input scope keys before indexing the ABI (0.663792ms)
+✔ preflight rejects equivalent capability sets (0.16925ms)
+✔ compiler snapshots each declared capability field once (0.316958ms)
+✔ preflight rejects a program referencing an undeclared capability set (0.182916ms)
+✔ preflight rejects a repeated technique, capability set, and variant (0.309875ms)
+✔ preflight checks each glyph program only against capability sets that resolve to it (0.525709ms)
+✔ preflight follows first-match decoration selection order (0.153583ms)
+✔ engine rules reject empty capability sets (0.047458ms)
+✔ engine rules reject more than eight capability sets (0.048958ms)
+✔ engine rules reject unknown capability names (0.03225ms)
+✔ engine rules reject capabilities without ordered storage (0.034167ms)
+✔ engine rules reject zero max buffer bytes (0.029667ms)
+✔ engine rules reject a program declaring more buffers than one draw binds (0.107ms)
+✔ engine rules reject buffers per draw beyond the program maximum (0.028833ms)
+✔ engine rules reject zero resources per draw (0.028042ms)
+✔ engine rules reject a zero fragmentation budget (0.027917ms)
+✔ engine rules reject a non-power-of-two update alignment (0.029166ms)
+✔ engine rules reject an oversized update alignment (0.027541ms)
+✔ engine rules reject coalescing gaps beyond the buffer budget (0.04075ms)
+✔ engine rules reject range call penalties beyond the buffer budget (0.03825ms)
+✔ engine rules reject basis points above one hundred percent (0.02975ms)
+✔ engine rules reject zero basis points (0.026459ms)
+✔ engine rules reject the indirect capability without an indirect limit (0.029166ms)
+✔ engine rules reject an indirect limit without the indirect capability (0.028083ms)
+✔ engine rules reject an empty program list (0.03125ms)
+✔ engine rules reject more than thirty-two programs (0.204625ms)
+✔ engine rules reject glyph records without resource kinds (0.057958ms)
+✔ engine rules reject an unsupported primitive kind (0.039083ms)
+✔ engine rules reject storage keys missing a required batch field (0.053208ms)
+✔ engine rules reject storage keys carrying the draw-order bit (0.049792ms)
+✔ engine rules reject draw keys missing the order bit (0.273833ms)
+✔ engine rules reject draw keys carrying an unknown batch bit (0.063209ms)
+✔ engine rules reject a declared capability set no program references (0.092917ms)
+✔ engine rules reject input counts beyond the register file (0.051875ms)
+✔ engine rules reject an input table shorter than its declared counts (0.328667ms)
+✔ engine rules reject a program without buffers (0.249666ms)
+✔ engine rules reject more than sixteen buffers (0.402625ms)
+✔ engine rules reject a zero buffer id (0.174208ms)
+✔ engine rules reject a zero vector width (0.144917ms)
+✔ engine rules reject a five-lane vector width (0.118625ms)
+✔ engine rules reject a non-power-of-two buffer alignment (0.115417ms)
+✔ engine rules reject an oversized buffer alignment (0.108833ms)
+✔ engine rules reject a stride below the packed lanes (0.144042ms)
+✔ engine rules reject a stride unaligned to its alignment (0.100584ms)
+✔ engine rules reject zero buffer usage (0.196958ms)
+✔ engine rules reject buffer usage without copy destination (0.154917ms)
+✔ engine rules reject unknown buffer usage bits (0.159ms)
+✔ engine rules reject a zero capacity class (0.197458ms)
+✔ engine rules reject an unknown scalar type (0.144959ms)
+✔ engine rules reject a program without operations (0.15675ms)
+✔ engine rules reject more than one hundred twenty-eight operations (0.262ms)
+✔ engine rules reject stores reading a register never written (0.152041ms)
+✔ engine rules reject arithmetic mixing register types (0.133667ms)
+✔ engine rules reject targets beyond the register file (0.1295ms)
+✔ engine rules reject f32 loads beyond the declared count (0.125083ms)
+✔ engine rules reject u32 loads beyond the declared count (0.124042ms)
+✔ engine rules reject a NaN f32 constant (0.111917ms)
+✔ engine rules reject an infinite f32 constant (0.112584ms)
+✔ engine rules reject stores into an undeclared buffer (0.114958ms)
+✔ engine rules reject u32 stores into an f32 buffer (0.205334ms)
+✔ engine rules reject store lanes beyond the buffer width (0.128792ms)
+✔ engine rules reject two stores to one lane (0.128ms)
+✔ engine rules reject a buffer with unwritten lanes (0.170875ms)
+✔ the maintained benchmark case registry keeps specialized corpus requirements explicit (0.502208ms)
+✔ reflow cases produce deterministic geometry shapes (0.389875ms)
+✔ equivalent-width rejects render-plan writes while retaining publication generation attribution (0.110334ms)
+✔ active reflow and adopted query cases require every measured update to publish (0.099417ms)
+✔ retained edit churn keeps valid revisions after arenas warm (176.823125ms)
+✔ buffer ids appear only inside schema declarations (65.242959ms)
+✔ exact body and section accounting reconciles an imported function index (4.56625ms)
+✔ identical body bytes with different declared type indexes are not duplicate candidates (0.856ms)
+✔ a valid but tampered named executable is rejected before accounting (0.321708ms)
+✔ CLI accepts a frozen unnamed archive and reports measured sections without name attribution (94.89675ms)
+✔ every corner moves exactly to the edge of the antialiasing fringe, whatever the quad aspect or transform (24.314833ms)
+✔ an edge-on plane dilates by a finite amount (0.146875ms)
+✔ the dilated em coordinate follows the dilated position through the inverse scale (0.10525ms)
+✔ no pixel the core covers falls outside the dilated quad, whatever the affine transform (110.516958ms)
+✔ V0 header decoding preserves exact unsigned count and glyph-local offset (1.335416ms)
+✔ V0 logical indices cross declared grid rows without packing assumptions (1.009125ms)
+✔ V0 u16 references remain glyph-local before resolving a curve texel (0.241583ms)
+✔ fill band traversal stops at its sorted terminal and retains the 512-curve cap (0.299416ms)
+✔ root eligibility is confined to the two ordered-root bits (0.16475ms)
+✔ stable q-form retains separated roots for the documented grazing regression (0.205958ms)
+✔ horizontal and vertical solvers return finite intersections (0.122708ms)
+✔ coverage preserves nonzero, even-odd, boost, and stem-darkening behavior (0.156ms)
+✔ dilation expands in object space and scales the em-space adjustment (0.231ms)
+✔ the Slug material compiles on both backends and calls the portable core once per algorithm step (44.842292ms)
+✔ the portable core emits no WGSL-only builtin into the WebGL2 shader (52.106375ms)
+✔ shares a pending load and reuses its successful value (0.712875ms)
+✔ forgets a rejected load so the next request can recover (0.490584ms)
+✔ schema-keyed codec compilation requires every declared buffer exactly once (1.908917ms)
+✔ codec values reject wrong widths and scalar kinds at the compile call (0.141875ms)
+✔ technique authors cannot declare host system memory layout (0.05575ms)
+✔ defineTechniqueSchema freezes the whole declaration (0.612667ms)
+✔ every first-party schema is frozen (0.077959ms)
+✔ rejected declarations leave caller-owned input untouched (0.081167ms)
+✔ malformed schema containers fail with named call-time diagnostics (0.126042ms)
+✔ schema names are usable and lane metadata is unambiguous at construction (0.109333ms)
+✔ schemas own their data: caller accessors cannot change validated widths (0.352916ms)
+✔ schema lookups do not accept inherited prototype names (0.120292ms)
+✔ glyphOrigin metadata must name a declared f32 buffer with two origin lanes (0.126375ms)
+✔ first-party techniques declare where their glyph origin lives (0.051083ms)
+✔ Slug table-start lanes name the table each value indexes (0.081542ms)
+✔ schemaCodecBuffers derives the wire buffer list from each authoritative schema (0.1355ms)
+✔ the portable render contract freezes and accepts synthetic-quad and supplied geometry (0.271459ms)
+✔ synthetic-quad declares no resource and no coordinate convention (0.063458ms)
+✔ raw null render declarations produce a contract error (0.049ms)
+✔ resourceful schemas select one declared render resource at construction (0.081291ms)
+✔ one selected repeated role keeps every draw resource bundle representable (0.09375ms)
+✔ supplied geometry must name a declared geometry resource and state its coordinate convention (0.184125ms)
+✔ portable resource declarations are closed and geometry owns its vertex-input contract (0.322708ms)
+✔ declaring a render contract leaves wire buffer derivation and the generated primitive enum untouched (0.067666ms)
+✔ text property snapshots compare cyclic graphs without changing their topology (1.418ms)
+✔ text property snapshots preserve nested alias topology (0.123792ms)
+✔ text property snapshot equality includes primitive, symbol, and nonenumerable keys (0.121125ms)
+✔ unowned mutable records reread own keys across comparisons (0.052791ms)
+✔ owned accessor snapshots cache keys but read getter values on every comparison (0.062791ms)
+✔ package-created frozen snapshots cross normalization seams without another clone (0.04775ms)
+✔ caller-frozen records still receive an isolated owned snapshot (0.067166ms)
+✔ an equal prior snapshot wins over a different package-owned identity (0.050792ms)
+✔ span ownership detaches caller records and styles while retaining binding values (0.957041ms)
+✔ equal spans retain the exact prior array and records; a changed span preserves equal siblings (0.188625ms)
+✔ core validates each span style before reading a later span (0.177167ms)
+✔ core span object, integer, and bounds failures retain their exact boundary errors (0.101334ms)
+✔ Three owns only canonical fields and reads each binding/style getter once (0.078959ms)
+✔ frozen caller data is not provenance for owned styles or core range proof (0.082208ms)
+✔ unowned previous arrays and records are never adopted (0.064375ms)
+✔ Three compares a different owned array against its authenticated prior (0.089375ms)
+✔ owned range proof is checked again when text length changes (0.065333ms)
+✔ feature-scope proof is optional for ordinary core input and labeled when requested (0.312167ms)
+✔ binding projection preserves canonical data and transfers only proven span data (0.203292ms)
+✔ ownTextInput snapshots strings and envelopes and keeps empty spans immutable (0.116584ms)
+THREE.AttributeNode: Vertex attribute "pageIndex" not found on geometry.
+THREE.AttributeNode: Vertex attribute "pageIndex" not found on geometry.
+✔ atlas addressing matches the TSL realization (0.404666ms)
+✔ quad placement matches the TSL realization, including the y flip (0.081875ms)
+✔ coverage is an exact clamped texel fetch on both sides (0.079375ms)
+✔ paint composition scales alpha by coverage identically (0.05975ms)
+✔ pixel snapping rounds projected axes onto whole physical pixels identically (0.071875ms)
+✔ shader functions agree with their CPU reference mirrors (1.023208ms)
+✔ the fragment input contract carries exactly the vertex varyings the fragment needs (0.051042ms)
+✔ the default vertex stage realizes the canonical atlas addressing and quad placement (2.520208ms)
+✔ the default clip placement matches an explicit column-major model-view-projection (0.608417ms)
+✔ the pixel-snapped variant rounds device-space landing without moving other channels (1.96075ms)
+✔ snapClipAxis keeps whole-pixel device coordinates fixed (0.200208ms)
+✔ paint composition scales unpremultiplied alpha by coverage and keeps rgb (0.373417ms)
+✔ every shipped Bitmap stage resolves to WGSL without consumer-side tooling (6.155042ms)
+✔ TypeGPU Slug packs placement into its existing eighth-buffer program (2.033458ms)
+✔ TypeGPU width reflow retains raster bytes and changes only host placement (73.391542ms)
+✔ localized TypeGPU edits retain GPU buffers and discard leaves accepted bytes untouched (70.714625ms)
+ℹ Localized edit: 128 bytes uploaded; zero GPU allocations or draw preparations.
+✔ TypeGPU Bitmap omits equal retained color and page uploads but writes paint and checkpoints (20.023417ms)
+✔ TypeGPU roots consume real engine output, retain idle draws and isolate named roots (28.165625ms)
+✔ TypeGPU text snapshots nested desired state before comparing later updates (30.87575ms)
+✔ the shared planner rejects duplicate final orders while allowing atomic swaps (35.522875ms)
+✔ TypeGPU application and shader entrypoints have separate dependency boundaries (83.576167ms)
+✔ TypeGPU anchors translate the host origin while preserving paragraph metrics and idle publication (6.625ms)
+✔ TypeGPU holds the accepted anchor across pending and rejected semantic updates (5.256ms)
+✔ TypeGPU keeps accepted placement when a reused mutable paint and anchor change is rejected (9.060541ms)
+✔ TypeGPU keeps accepted placement when reused mutable layout and constraints change (7.277666ms)
+✔ TypeGPU retries accepted host placement after one uniform write fails (12.368084ms)
+✔ Bitmap coverage can come from a consumer function without a texture binding (5.886083ms)
+✔ MTSDF resources can be supplied through slots and accessors (2.696875ms)
+✔ Slug page data can come from consumer functions with accessor-provided widths (3.460042ms)
+✔ MTSDF placement converts downward paragraph y to upward Three y (0.643917ms)
+✔ the Bitmap Three adapter captures its texture instead of passing it to a GLSL function (47.332458ms)
+✔ the MTSDF Three adapter compiles the canonical TypeGPU functions on both backends (89.427709ms)
+✔ the decoration Three adapter compiles the canonical TypeGPU functions on both backends (2.783083ms)
+✔ stable and experimental handles retain independent shader selection in one scene (142.565792ms)
+✔ stable and experimental Three configs share the custom material override contract (21.464542ms)
+✔ strings, numbers, and text VNodes concatenate in order (0.791875ms)
+✔ fragments and nested arrays flatten while comments are skipped (0.095166ms)
+✔ a nested Text with a string child becomes one styled span (0.444875ms)
+✔ a nested Text textStyle list survives vnode creation and merges left to right (0.118541ms)
+✔ a nested Text with slot children inherits and merges the enclosing style (0.131417ms)
+✔ a nested Text without style, font, or material contributes text but no span (0.066417ms)
+✔ an empty nested Text contributes no span even when styled (0.068625ms)
+✔ nested string fonts resolve once through the resolver and are collected (0.09325ms)
+✔ key and ref props on a nested Text are not treated as box properties (0.087833ms)
+✔ a box property on a nested Text throws and names the camel-cased property (0.242333ms)
+✔ a foreign component child throws (0.058417ms)
+✔ Vue flattening preserves authored span offsets for Rust to resolve (0.063917ms)
+✔ equal Vue property lists and records reuse their detached snapshots (1.075083ms)
+✔ changed, removed, and malformed Vue property-list values cannot reuse a snapshot (1.030875ms)
+✔ non-enumerable properties do not shadow enumerable PropertyList values (0.149834ms)
+ℹ tests 1110
+ℹ suites 0
+ℹ pass 1110
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 38460.560959
+✔ fixed-seed bitmap artifact mutations fail safely and deterministically (286.988792ms)
+✔ fixed-seed codec and frame mutations fail safely, deterministically, and recoverably (93.875917ms)
+✔ fixed-seed loader artifact mutations fail safely, purely, and deterministically (81.955292ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 347.710625
+✔ captured command output waits for the stdout stream to close (53.609084ms)
+✔ compiles and accepts the canonical MTSDF V0 extension shape (23.559875ms)
+✔ compiles and accepts the canonical Slug V0 extension shape (0.715125ms)
+✔ the fuzz-only nightly exception is exact, isolated, and mise-owned (3.239083ms)
+✔ canonical Rust builds replace host paths and ambient flags (0.591333ms)
+✔ validates the canonical Inter artifact through every core layer (38.51625ms)
+✔ validates Node Buffer inputs repeatedly without mutating artifact bytes (4.258916ms)
+✔ accepts only the expanded closed CJK shaping-table profile (2.172667ms)
+✔ keeps the packaged extension schema byte-identical to the canonical schema (1.091583ms)
+✔ rejects malformed GLB framing before schema or payload work (0.276334ms)
+✔ covers every PMNDRS_font required field and raster-source union one field at a time (13.637125ms)
+✔ rejects semantic and embedded-payload mutations deterministically (2.144416ms)
+✔ an outlined bake validates, and a glyph the runtime cannot decode fails validation (11.358125ms)
+✔ the distributed module is the pinned size-optimized zero-import release module (4.254417ms)
+✔ the published and generated TypeScript ABI contracts are identical (1.624667ms)
+✔ the TypeScript wrapper returns structured Rust errors (3.355958ms)
+✔ JavaScript uses the MurmurHash3 x86 128 wire format (0.194042ms)
+✔ prepares and inspects one reusable subset through the packaged Wasm API (19.740709ms)
+✔ the direct-memory shim releases earlier allocations when a later copy fails (0.255083ms)
+✔ the direct-memory shim releases an allocation whose memory copy fails (0.119208ms)
+✔ the response decoder rejects metadata that does not prove the public result (0.140167ms)
+✔ direct-memory allocations reject forged releases and recover after invalid requests (2.199042ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 137.14125
+✔ fixed-seed font artifact mutations fail safely and deterministically (78.998542ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 132.142917
+✔ the canonical Inter fixture bakes deterministically and retains HarfRust shaping (1275.883333ms)
+✔ the canonical Amiri fixture preserves exact complex shaping through the GLB (59.898542ms)
+✔ the authenticated Noto CJK fixture retains the closed shaping profile at the u16 limit (895.384584ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2285.528708
+Checking formatting...
+
+All matched files use the correct format.
+Finished in 236ms on 494 files using 10 threads.

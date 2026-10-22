@@ -1,0 +1,28 @@
+$ node benches/scripts/workflows.mts run glyph:shaper-profile-artifact -- --artifact ../evidence/boundary-wave-20261022/v3-combined/candidate/pmndrs-glyph-0.1.0.tgz --source-root . --output ../evidence/boundary-wave-20261022/v3-combined/candidate/shaper-profile --simd 1 --one-caller-inline-max-function-size 0
+node:internal/fs/promises:640
+  return new FileHandle(await PromisePrototypeThen(
+                        ^
+
+Error: ENOENT: no such file or directory, open '/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/evidence/boundary-wave-20261022/v3-combined/candidate/pmndrs-glyph-0.1.0.tgz'
+    at async open (node:internal/fs/promises:640:25)
+    at async readFile (node:internal/fs/promises:1290:14)
+    at async file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/scripts/build-shaper-profile-artifact.mjs:51:23 {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/evidence/boundary-wave-20261022/v3-combined/candidate/pmndrs-glyph-0.1.0.tgz'
+}
+
+Node.js v24.18.0
+file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/workflows.mts:168
+      if (code !== 0) reject(new Error(`${workflow.name} exited with ${String(code)}`));
+                             ^
+
+Error: glyph:shaper-profile-artifact exited with 1
+    at ChildProcess.<anonymous> (file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/workflows.mts:168:30)
+    at Object.onceWrapper (node:events:631:26)
+    at ChildProcess.emit (node:events:509:28)
+    at maybeClose (node:internal/child_process:1124:16)
+    at ChildProcess._handle.onexit (node:internal/child_process:306:5)
+
+Node.js v24.18.0

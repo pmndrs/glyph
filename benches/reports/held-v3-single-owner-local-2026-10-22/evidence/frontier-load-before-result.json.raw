@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "mise",
+    "exec",
+    "--",
+    "sh",
+    "-c",
+    "date -u; top -l 2 -s 1 -n 0; ps -Ao pid,ppid,%cpu,command -r | head -15"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-22T20:49:54.072519+00:00",
+  "finished": "2026-10-22T20:49:55.733319+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "f6e1f896a892b3bc0350cc5782fbe8155db8302157ed8e175af31d40e555a5ec",
+    "stderr.log": "e777495d858545e9c2763d89190396d8ab9ac554311c332e5653435397021498"
+  }
+}
