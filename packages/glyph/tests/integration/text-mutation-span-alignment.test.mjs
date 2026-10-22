@@ -250,6 +250,91 @@ test('bound edits prepare once and reads plus renderer publication reuse that re
   }
 });
 
+test('same-length bound roundtrip keeps each prepared read and the first split independent', { timeout }, async () => {
+  const font = await fonts.load('inter');
+  const first = 'ticker 000';
+  const quote = 'quote! 000';
+  const properties = { constraints, layout, style, text: first };
+  const mounted = mount(font, [{ properties }]);
+  const node = mounted.nodes[0];
+  let firstCopy;
+  let firstSnapshot;
+  const copySnapshot = (copy) => ({
+    glyphs: Array.from({ length: copy.count }, (_, index) => copy.glyphAt(index)),
+    measurements: copy.measurements.map(({ anchorPoint, ...measurement }) => ({
+      ...measurement,
+      center: anchorPoint('center'),
+    })),
+  });
+  const readPrepared = (source, text, retainCopy = false) => {
+    const measurement = source.measure();
+    const glyphs = source.glyphs();
+    const [copy, decorations] = source.split();
+    const snapshot = {
+      measure: {
+        glyphCount: measurement.glyphCount,
+        lineCount: measurement.lineCount,
+        width: measurement.width,
+        height: measurement.height,
+      },
+      glyphs: {
+        glyphIds: [...glyphs.glyphIds],
+        x: [...glyphs.x],
+        y: [...glyphs.y],
+      },
+      caret: source.caretForOffset(text.length),
+      split: copySnapshot(copy),
+    };
+    decorations?.dispose();
+    if (retainCopy) firstCopy = copy;
+    else copy.dispose();
+    return snapshot;
+  };
+  try {
+    // A cold mount synchronizes its own scene. Capture those independent outputs before
+    // the retained source enters a pending publication, so the oracle cannot settle it.
+    const coldSnapshots = [first, quote, first].map((text) => {
+      const cold = mount(font, [{ properties: { ...properties, text } }]);
+      try {
+        return readPrepared(cold.nodes[0], text);
+      } finally {
+        unmount(cold);
+      }
+    });
+    for (const [index, text] of [first, quote, first].entries()) {
+      if (index !== 0) node.set({ text });
+      const warm = readPrepared(node, text, index === 0);
+      if (index === 0) firstSnapshot = warm.split;
+      assert.deepEqual(warm, coldSnapshots[index], `prepared state ${index} matches independent cold output`);
+      if (index !== 0) {
+        assert.equal(node.commitState().status, 'pending', `state ${index} awaits renderer publication`);
+        assert.deepEqual(copySnapshot(firstCopy), firstSnapshot, 'later edits cannot mutate the first split');
+      }
+    }
+
+    const originalPublish = PlanTransport.prototype.consumeStagedUpdate;
+    let publications = 0;
+    try {
+      PlanTransport.prototype.consumeStagedUpdate = function (...args) {
+        publications += 1;
+        return originalPublish.apply(this, args);
+      };
+      mounted.scene.updateMatrixWorld(true);
+    } finally {
+      PlanTransport.prototype.consumeStagedUpdate = originalPublish;
+    }
+    assert.equal(publications, 1, 'the two bound replacements publish once');
+    assert.equal(node.commitState().status, 'committed');
+    assertMatchesFreshBuild(font, mounted, [{ properties }], 'same-length roundtrip publication');
+
+    node.dispose();
+    assert.deepEqual(copySnapshot(firstCopy), firstSnapshot, 'the first split survives source disposal');
+  } finally {
+    firstCopy?.dispose();
+    unmount(mounted);
+  }
+});
+
 test(
   'a post-commit preparation failure invalidates Rust and rebuilds accepted authored text',
   { timeout },

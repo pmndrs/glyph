@@ -267,6 +267,12 @@ All seven families retain their fixed scope in the reconciliation table. Keep sy
 
 The first V3 p95 is148.512ms; repeat V3 is45.377ms while E4 rises23.243→150.919ms. Busy per-arm process snapshots and shifting sampling gaps prevent stable timing ranking or causal adapter attribution. Preserve both passes; neither is acceptance. No further timing selected. Fresh Sol High identifies single-owner preflight/frame setup inside the existing setter transaction as a bounded deletion candidate, with no supported promise of published parity; both designs still shape1024final distinct labels. Source/ownership review must name actual repeated work before implementation. Parity remains false, boost waves0, V3 preserved and full seven-family/final gates open. [Owned log](../log/2026-10-22-held-matched-profile-diagnosis.md). Raw UTC receipts fall on22October; client local date is21October.
 
+### Single-owner transaction wave — 22 October 2026
+
+Fresh source review selected full-replacement seed avoidance, fused single-owner text/style routing, empty frame-section elision and settled publication acknowledgement. Positioning remains synchronous because measurement, glyph/caret/anchor inspection and independent split consume it. Deferred render projection remains possible but unproved as a complete-operation saving; it would need additional provenance and demand materialization. No duplicate shaping or wire-buffer copy was found. [Wave diagnosis and evidence](../../../benches/reports/held-single-owner-local-2026-10-22/README.md).
+
+The four initial V3 files matched preserved `aac036f9` exactly and are also saved as local `boundary-wave-20261022/v3-original.patch` SHA `02e2d697…` before the new wave started from `01f23954`. Native Sol Medium implemented, fresh Sol High reviewed, and Luna owns the single execution lane. Full Glyph check and 1,024-owner renderer rejection/retry/cold-host oracle passed. Frozen archive `06fe22b7…`, shipping/named Wasm `66e6c463…` / `c94120f5…` have matching executable sections. Current main `4e25a96a` is already an ancestor. Timing has not started; final seven-family, delivery, memory and browser gates remain open. The candidate will run once, then its saved results will be reused against main and published0.1.0, with load checks before each actual arm. Stop optimization at verified parity or better; the latest user instruction supersedes the earlier three post-parity waves. Stack remains held/unmerged.
+
 ## Historical implementation record
 
 ### Archived active checkpoint before the 8cfa verdict

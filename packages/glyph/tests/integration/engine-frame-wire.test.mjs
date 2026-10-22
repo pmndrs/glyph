@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   compilePlannerFrameUpdate,
+  createPlannerFrameScratch,
   preparePlannerFrameUpdate,
   writePreparedPlannerFrameUpdate,
 } from '../../dist/internal/frame-wire.js';
@@ -21,6 +22,81 @@ const EXCLUSION_ID = permanentGlyphId('exclusion', 'engine-frame-wire/exclusion'
 const INLINE_OBJECT_ID = permanentGlyphId('inline-object', 'engine-frame-wire/inline-object');
 const MATERIAL_ID = permanentGlyphId('material', 'engine-frame-wire/material');
 const RESOURCE_ID = permanentGlyphId('resource', 'engine-frame-wire/resource');
+
+test('single-text direct arena bytes match an independent ABI record across semantic views and offsets', () => {
+  const abi = textShaperAbi;
+  const header = abi.layouts.engineUpdateRequest;
+  const record = abi.layouts.engineTextMutation;
+  const limits = {
+    maxParagraphs: 2,
+    maxClusters: 32,
+    maxLines: 8,
+    maxRegions: 1,
+    maxExclusions: 1,
+    maxInlineObjects: 1,
+    maxSlotsPerBand: 1,
+    maxOutputBytes: 65_536,
+  };
+  for (const [insert, semanticViewMask] of [
+    ['', 0],
+    ['A😀B', abi.engine.semanticViewMasks.all],
+  ]) {
+    const frame = {
+      rootId: ROOT_ID,
+      codecHandle: CODEC_ID,
+      expectedEngineRevision: 3,
+      consumedRevision: 4,
+      acknowledgedPublicationGeneration: 5,
+      semanticViewMask,
+      limits,
+      textMutations: [{ paragraphId: PARAGRAPH_ID, start: 1, deleteCount: 2, insert }],
+    };
+    const prepared = preparePlannerFrameUpdate(frame);
+    const textOffset = Math.ceil(header.size / 4) * 4;
+    const payloadOffset = insert.length === 0 ? 0 : Math.ceil((textOffset + record.size) / 2) * 2;
+    const byteLength = insert.length === 0 ? textOffset + record.size : payloadOffset + insert.length * 2;
+    const expected = new Uint8Array(byteLength);
+    const view = new DataView(expected.buffer);
+    for (const [field, value] of Object.entries({
+      abiVersion: abi.version,
+      byteLength,
+      rootId: ROOT_ID,
+      expectedEngineRevision: 3,
+      consumedRevision: 4,
+      acknowledgedPublicationGeneration: 5,
+      codecHandle: CODEC_ID,
+      capabilitySet: 1,
+      semanticViewMask,
+      ...limits,
+      textMutationsOffset: textOffset,
+      textMutationCount: 1,
+    })) {
+      view.setUint32(header[field], value, true);
+    }
+    view.setUint8(textOffset + record.opcode, abi.engine.textMutationOpcodes.replaceUtf16);
+    view.setUint8(textOffset + record.encoding, abi.engine.textEncodings.utf16Le);
+    view.setUint32(textOffset + record.paragraphId, PARAGRAPH_ID, true);
+    view.setUint32(textOffset + record.textStart, 1, true);
+    view.setUint32(textOffset + record.deleteCount, 2, true);
+    view.setUint32(textOffset + record.insertOffset, payloadOffset, true);
+    view.setUint32(textOffset + record.insertCount, insert.length, true);
+    expected.set(Buffer.from(insert, 'utf16le'), payloadOffset);
+    assert.equal(prepared.singleTextMutation, true);
+    assert.equal(prepared.byteLength, byteLength);
+    for (const offset of [0, 1, 8]) {
+      const storage = new Uint8Array(byteLength + offset + 5).fill(0xa5);
+      const arena = storage.subarray(offset, offset + byteLength);
+      writePreparedPlannerFrameUpdate(
+        prepared,
+        arena,
+        offset === 1 ? new DataView(arena.buffer, arena.byteOffset, arena.byteLength) : undefined,
+      );
+      assert.deepEqual(arena, expected);
+      assert.ok(storage.subarray(0, offset).every((byte) => byte === 0xa5));
+      assert.ok(storage.subarray(offset + byteLength).every((byte) => byte === 0xa5));
+    }
+  }
+});
 
 test('prepared frame writes exact bytes into a nonzero-offset request arena', () => {
   const frame = {
@@ -54,6 +130,61 @@ test('prepared frame writes exact bytes into a nonzero-offset request arena', ()
   assert.deepEqual(storage.subarray(0, 8), new Uint8Array(8).fill(0xa5));
   assert.deepEqual(storage.subarray(8 + prepared.byteLength), new Uint8Array(8).fill(0xa5));
   assert.throws(() => writePreparedPlannerFrameUpdate(prepared, arena.subarray(1)), /exactly/u);
+});
+
+test('single-text preparation clears prior variable payload scratch and preserves general fallback', () => {
+  const base = {
+    rootId: ROOT_ID,
+    codecHandle: CODEC_ID,
+    expectedEngineRevision: 0,
+    consumedRevision: 0,
+    acknowledgedPublicationGeneration: 0,
+    limits: {
+      maxParagraphs: 1,
+      maxClusters: 32,
+      maxLines: 8,
+      maxRegions: 1,
+      maxExclusions: 1,
+      maxInlineObjects: 1,
+      maxSlotsPerBand: 1,
+      maxOutputBytes: 65_536,
+    },
+  };
+  const styled = {
+    ...base,
+    styleMutations: [
+      {
+        opcode: 'upsert',
+        paragraphId: PARAGRAPH_ID,
+        styleId: STYLE_ID,
+        cascadeOrder: 0,
+        start: 0,
+        end: 1,
+        value: { language: 'en', features: [{ tag: 'kern', value: 1, start: 0, end: 1 }] },
+      },
+    ],
+  };
+  const scratch = createPlannerFrameScratch();
+  const first = preparePlannerFrameUpdate(styled, scratch);
+  assert.equal(first.singleTextMutation, false);
+  const firstBytes = new Uint8Array(first.byteLength);
+  writePreparedPlannerFrameUpdate(first, firstBytes);
+
+  const text = { ...base, textMutations: [{ paragraphId: PARAGRAPH_ID, start: 0, deleteCount: 0, insert: 'x' }] };
+  const middle = preparePlannerFrameUpdate(text, scratch);
+  assert.equal(middle.singleTextMutation, true);
+  assert.equal(scratch.languageBytes.length, 0);
+  assert.equal(scratch.featureOffsets.length, 0);
+  writePreparedPlannerFrameUpdate(middle, new Uint8Array(middle.byteLength));
+
+  const last = preparePlannerFrameUpdate(styled, scratch);
+  assert.equal(last.singleTextMutation, false);
+  const lastBytes = new Uint8Array(last.byteLength);
+  writePreparedPlannerFrameUpdate(last, lastBytes);
+  assert.deepEqual(lastBytes, firstBytes);
+  assert.throws(() => writePreparedPlannerFrameUpdate(last, lastBytes.subarray(1)), /exactly/u);
+  writePreparedPlannerFrameUpdate(last, lastBytes);
+  assert.deepEqual(lastBytes, firstBytes);
 });
 
 test('text request payloads preserve every UTF-16 unit at odd and even lengths and arena offsets', () => {

@@ -76,6 +76,9 @@ pub(crate) struct Work {
     pub gather_envelope_splices: usize,
     pub gather_suffix_copy_bytes: usize,
     pub publication_commit_visits: usize,
+    pub publication_ack_only_visits: usize,
+    /// Accepted UTF-16 units copied into a preflight destination before edits.
+    pub preflight_seeded_old_units: usize,
     pub placement_key_owner_visits: usize,
     pub placement_binding_owner_visits: usize,
     pub placement_binding_glyph_visits: usize,
@@ -209,6 +212,8 @@ std::thread_local! {
         gather_envelope_splices: 0,
         gather_suffix_copy_bytes: 0,
         publication_commit_visits: 0,
+        publication_ack_only_visits: 0,
+        preflight_seeded_old_units: 0,
         placement_key_owner_visits: 0,
         placement_binding_owner_visits: 0,
         placement_binding_glyph_visits: 0,

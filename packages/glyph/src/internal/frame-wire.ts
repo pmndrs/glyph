@@ -222,6 +222,7 @@ export interface PlannerFrameUpdate {
 /** @internal One validated frame encoding that can write directly into a retained request arena. */
 export interface PreparedPlannerFrameUpdate {
   readonly byteLength: number;
+  readonly singleTextMutation: boolean;
   readonly frame: PlannerFrameUpdate;
   readonly paragraphMutations: readonly PlannerParagraphMutation[];
   readonly paragraphOrderMutations: readonly PlannerParagraphOrderMutation[];
@@ -287,6 +288,15 @@ export function preparePlannerFrameUpdate(
   const regions = frame.regions ?? [];
   const exclusions = frame.exclusions ?? [];
   const inlineObjects = frame.inlineObjects ?? [];
+  const singleTextMutation =
+    textMutations.length === 1 &&
+    paragraphMutations.length === 0 &&
+    paragraphOrderMutations.length === 0 &&
+    styleMutations.length === 0 &&
+    constraints.length === 0 &&
+    regions.length === 0 &&
+    exclusions.length === 0 &&
+    inlineObjects.length === 0;
   let cursor: number = request.size;
   const allocate = (count: number, stride: number, alignment: number, label: string): number => {
     if (count === 0) return 0;
@@ -294,24 +304,35 @@ export function preparePlannerFrameUpdate(
     cursor = checkedAdd(offset, checkedProduct(count, stride, label), label);
     return offset;
   };
-  const paragraphOffset = allocate(
-    paragraphMutations.length,
-    abi.layouts.engineParagraphMutation.size,
-    abi.layouts.engineParagraphMutation.alignment,
-    'paragraph mutations',
-  );
-  const paragraphOrderOffset = allocate(
-    paragraphOrderMutations.length,
-    abi.layouts.engineParagraphOrderMutation.size,
-    abi.layouts.engineParagraphOrderMutation.alignment,
-    'paragraph order mutations',
-  );
+  let paragraphOffset = 0;
+  let paragraphOrderOffset = 0;
+  if (!singleTextMutation) {
+    paragraphOffset = allocate(
+      paragraphMutations.length,
+      abi.layouts.engineParagraphMutation.size,
+      abi.layouts.engineParagraphMutation.alignment,
+      'paragraph mutations',
+    );
+    paragraphOrderOffset = allocate(
+      paragraphOrderMutations.length,
+      abi.layouts.engineParagraphOrderMutation.size,
+      abi.layouts.engineParagraphOrderMutation.alignment,
+      'paragraph order mutations',
+    );
+  }
   const textOffset = allocate(textMutations.length, abi.layouts.engineTextMutation.size, 4, 'text mutations');
-  const styleOffset = allocate(styleMutations.length, abi.layouts.engineStyleMutation.size, 4, 'style mutations');
-  const constraintOffset = allocate(constraints.length, abi.layouts.engineConstraint.size, 4, 'constraints');
-  const regionOffset = allocate(regions.length, abi.layouts.engineRegion.size, 4, 'regions');
-  const exclusionOffset = allocate(exclusions.length, abi.layouts.engineExclusion.size, 4, 'exclusions');
-  const inlineObjectOffset = allocate(inlineObjects.length, abi.layouts.engineInlineObject.size, 4, 'inline objects');
+  let styleOffset = 0;
+  let constraintOffset = 0;
+  let regionOffset = 0;
+  let exclusionOffset = 0;
+  let inlineObjectOffset = 0;
+  if (!singleTextMutation) {
+    styleOffset = allocate(styleMutations.length, abi.layouts.engineStyleMutation.size, 4, 'style mutations');
+    constraintOffset = allocate(constraints.length, abi.layouts.engineConstraint.size, 4, 'constraints');
+    regionOffset = allocate(regions.length, abi.layouts.engineRegion.size, 4, 'regions');
+    exclusionOffset = allocate(exclusions.length, abi.layouts.engineExclusion.size, 4, 'exclusions');
+    inlineObjectOffset = allocate(inlineObjects.length, abi.layouts.engineInlineObject.size, 4, 'inline objects');
+  }
   const {
     textPayloads,
     languageBytes,
@@ -325,57 +346,67 @@ export function preparePlannerFrameUpdate(
   for (let index = 0; index < textMutations.length; index++) {
     textPayloads[index] = allocate(textMutations[index]!.insert.length, 2, 2, 'text mutation payload');
   }
-  languageBytes.length = styleMutations.length;
-  for (let index = 0; index < styleMutations.length; index++) {
-    const mutation = styleMutations[index]!;
-    languageBytes[index] =
-      mutation.opcode === 'upsert' && mutation.value.language !== undefined
-        ? encoder.encode(mutation.value.language)
-        : EMPTY_BYTES;
-  }
-  // Keep each record's payloads together in the monotonic allocation stream; producer tests prove disjoint ranges,
-  // while the runtime parser checks each borrowed slice.
-  languageOffsets.length = styleMutations.length;
-  featureOffsets.length = styleMutations.length;
-  for (let index = 0; index < styleMutations.length; index++) {
-    const mutation = styleMutations[index]!;
-    languageOffsets[index] = allocate(languageBytes[index]!.length, 1, 1, 'style language');
-    featureOffsets[index] = allocate(
-      mutation.opcode === 'upsert' ? (mutation.value.features?.length ?? 0) : 0,
-      abi.layouts.feature.size,
-      abi.layouts.feature.alignment,
-      'style features',
-    );
-  }
-  regionVertexOffsets.length = regions.length;
-  for (let index = 0; index < regions.length; index++) {
-    regionVertexOffsets[index] = allocate(
-      regions[index]!.vertices?.length ?? 0,
-      abi.layouts.engineFlowVertex.size,
-      4,
-      'region vertices',
-    );
-  }
-  exclusionVertexOffsets.length = exclusions.length;
-  for (let index = 0; index < exclusions.length; index++) {
-    exclusionVertexOffsets[index] = allocate(
-      exclusions[index]!.vertices?.length ?? 0,
-      abi.layouts.engineFlowVertex.size,
-      4,
-      'exclusion vertices',
-    );
-  }
-  dropCapVertexOffsets.length = constraints.length;
-  for (let index = 0; index < constraints.length; index++) {
-    dropCapVertexOffsets[index] = allocate(
-      constraints[index]!.dropCap?.contour?.length ?? 0,
-      abi.layouts.engineFlowVertex.size,
-      4,
-      'drop cap vertices',
-    );
+  if (singleTextMutation) {
+    languageBytes.length = 0;
+    languageOffsets.length = 0;
+    featureOffsets.length = 0;
+    regionVertexOffsets.length = 0;
+    exclusionVertexOffsets.length = 0;
+    dropCapVertexOffsets.length = 0;
+  } else {
+    languageBytes.length = styleMutations.length;
+    for (let index = 0; index < styleMutations.length; index++) {
+      const mutation = styleMutations[index]!;
+      languageBytes[index] =
+        mutation.opcode === 'upsert' && mutation.value.language !== undefined
+          ? encoder.encode(mutation.value.language)
+          : EMPTY_BYTES;
+    }
+    // Keep each record's payloads together in the monotonic allocation stream; producer tests prove disjoint ranges,
+    // while the runtime parser checks each borrowed slice.
+    languageOffsets.length = styleMutations.length;
+    featureOffsets.length = styleMutations.length;
+    for (let index = 0; index < styleMutations.length; index++) {
+      const mutation = styleMutations[index]!;
+      languageOffsets[index] = allocate(languageBytes[index]!.length, 1, 1, 'style language');
+      featureOffsets[index] = allocate(
+        mutation.opcode === 'upsert' ? (mutation.value.features?.length ?? 0) : 0,
+        abi.layouts.feature.size,
+        abi.layouts.feature.alignment,
+        'style features',
+      );
+    }
+    regionVertexOffsets.length = regions.length;
+    for (let index = 0; index < regions.length; index++) {
+      regionVertexOffsets[index] = allocate(
+        regions[index]!.vertices?.length ?? 0,
+        abi.layouts.engineFlowVertex.size,
+        4,
+        'region vertices',
+      );
+    }
+    exclusionVertexOffsets.length = exclusions.length;
+    for (let index = 0; index < exclusions.length; index++) {
+      exclusionVertexOffsets[index] = allocate(
+        exclusions[index]!.vertices?.length ?? 0,
+        abi.layouts.engineFlowVertex.size,
+        4,
+        'exclusion vertices',
+      );
+    }
+    dropCapVertexOffsets.length = constraints.length;
+    for (let index = 0; index < constraints.length; index++) {
+      dropCapVertexOffsets[index] = allocate(
+        constraints[index]!.dropCap?.contour?.length ?? 0,
+        abi.layouts.engineFlowVertex.size,
+        4,
+        'drop cap vertices',
+      );
+    }
   }
   return {
     byteLength: cursor,
+    singleTextMutation,
     frame,
     paragraphMutations,
     paragraphOrderMutations,
@@ -417,6 +448,10 @@ export function writePreparedPlannerFrameUpdate(
   const view = boundView ?? new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   bytes.fill(0);
   writeHeader(view, prepared.frame, bytes.length, prepared.offsets);
+  if (prepared.singleTextMutation) {
+    writeTextMutations(view, prepared.offsets.textOffset, prepared.textMutations, prepared.textPayloads);
+    return;
+  }
   writeParagraphMutations(view, prepared.offsets.paragraphOffset, prepared.paragraphMutations);
   writeParagraphOrderMutations(view, prepared.offsets.paragraphOrderOffset, prepared.paragraphOrderMutations);
   writeTextMutations(view, prepared.offsets.textOffset, prepared.textMutations, prepared.textPayloads);

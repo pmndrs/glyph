@@ -1461,8 +1461,8 @@ impl TextEngine {
         let mut preflight_edit_scratch = core::mem::take(&mut planner.preflight_edit_scratch);
         validate_planner_inputs(
             planner,
-            request.text_mutations,
-            request.style_mutations,
+            request,
+            ParagraphInputScope::Single(paragraph_id),
             font_stacks,
             spare_text_candidate_id,
             &mut preflight_text_candidates,
@@ -1642,8 +1642,8 @@ impl TextEngine {
         let mut preflight_edit_scratch = core::mem::take(&mut planner.preflight_edit_scratch);
         validate_planner_inputs(
             planner,
-            request.text_mutations,
-            request.style_mutations,
+            request,
+            ParagraphInputScope::Indexed,
             font_stacks,
             spare_text_candidate_id,
             &mut preflight_text_candidates,
@@ -2971,22 +2971,26 @@ impl PlannerState {
             return Ok(());
         }
 
-        route_paragraph_records(
-            &mut self.semantic_input_spans,
-            &self.lifecycle_membership_scratch,
-            request.text_mutations.len(),
-            |index| request.text_mutations.paragraph_id(index),
-            ParagraphInputKind::Text,
-            scope,
-        )?;
-        route_paragraph_records(
-            &mut self.semantic_input_spans,
-            &self.lifecycle_membership_scratch,
-            request.style_mutations.len(),
-            |index| request.style_mutations.paragraph_id(index),
-            ParagraphInputKind::Style,
-            scope,
-        )?;
+        // The single-owner preflight has already checked every text/style group against
+        // the selected owner and lifecycle membership. Indexed requests still need spans.
+        if matches!(scope, ParagraphInputScope::Indexed) {
+            route_paragraph_records(
+                &mut self.semantic_input_spans,
+                &self.lifecycle_membership_scratch,
+                request.text_mutations.len(),
+                |index| request.text_mutations.paragraph_id(index),
+                ParagraphInputKind::Text,
+                scope,
+            )?;
+            route_paragraph_records(
+                &mut self.semantic_input_spans,
+                &self.lifecycle_membership_scratch,
+                request.style_mutations.len(),
+                |index| request.style_mutations.paragraph_id(index),
+                ParagraphInputKind::Style,
+                scope,
+            )?;
+        }
         route_paragraph_records(
             &mut self.semantic_input_spans,
             &self.lifecycle_membership_scratch,
@@ -3125,15 +3129,13 @@ impl PlannerState {
                     // A valid mirror already contains the accepted text and avoids a full copy.
                     // Clear the fact before any write so errors cannot leave a false mirror.
                     paragraph.state.pending_text_mirrors_committed = false;
-                    if !was_mirrored {
-                        pending.units.clear();
-                        pending
-                            .units
-                            .try_reserve(committed.units.len())
-                            .map_err(|_| EngineError::ResultTooLarge)?;
-                        pending.units.extend_from_slice(&committed.units);
-                    }
-                    apply_text_mutations(&mut pending.units, text_mutations)?;
+                    populate_preflight_text(
+                        &mut pending.units,
+                        &committed.units,
+                        text_mutations,
+                        !was_mirrored,
+                        0,
+                    )?;
                 }
                 CandidateBuffers::SparePending => {
                     let spare = spare_paragraph
@@ -3145,7 +3147,7 @@ impl PlannerState {
                     pending.next_unit_id = 0;
                     spare.pending_text_mirrors_committed = false;
                     spare.unicode.pending_mut().clear();
-                    apply_text_mutations(&mut pending.units, text_mutations)?;
+                    populate_preflight_text(&mut pending.units, &[], text_mutations, false, 0)?;
                 }
                 CandidateBuffers::Owned => {
                     let committed_text = paragraph_index
@@ -3166,12 +3168,13 @@ impl PlannerState {
                                 .max(paragraph.state.text.committed().units.capacity())
                         })
                         .max(spare_text_capacity);
-                    candidate
-                        .text
-                        .try_reserve(committed_text.len().max(preserved_capacity))
-                        .map_err(|_| EngineError::ResultTooLarge)?;
-                    candidate.text.extend_from_slice(committed_text);
-                    apply_text_mutations(&mut candidate.text, text_mutations)?;
+                    populate_preflight_text(
+                        &mut candidate.text,
+                        committed_text,
+                        text_mutations,
+                        true,
+                        preserved_capacity,
+                    )?;
                 }
             }
             let committed_text = paragraph_index
@@ -3848,22 +3851,34 @@ impl PlannerState {
                     continue;
                 };
                 let paragraph = &mut self.paragraphs[index];
-                // Previously committed preparations are settled by the unpublished frontier below.
-                if paragraph.preparation_changed_since_publication {
-                    continue;
-                }
                 #[cfg(test)]
                 super::work_attribution::record(|work| work.publication_commit_visits += 1);
                 paragraph.commit_preparation(true);
             }
             for id in &self.unpublished_preparation_ids {
+                // The pending frontier settled this owner, including a newer candidate.
+                if self.pending_preparation_ids.binary_search(id).is_ok() {
+                    continue;
+                }
                 if let Ok(index) = self
                     .paragraphs
                     .binary_search_by_key(id, |paragraph| paragraph.id)
                 {
                     #[cfg(test)]
                     super::work_attribution::record(|work| work.publication_commit_visits += 1);
-                    self.paragraphs[index].commit_preparation(true);
+                    let paragraph = &mut self.paragraphs[index];
+                    if !paragraph.state.has_pending_preparation()
+                        && !paragraph.state.clipped_inspection.is_prepared()
+                        && !paragraph.positioned_changed
+                    {
+                        #[cfg(test)]
+                        super::work_attribution::record(|work| {
+                            work.publication_ack_only_visits += 1
+                        });
+                        paragraph.acknowledge_committed_preparation();
+                    } else {
+                        paragraph.commit_preparation(true);
+                    }
                 }
             }
             self.unpublished_preparation_ids.clear();
@@ -3959,6 +3974,13 @@ fn admit_preparation_owner(
 }
 
 impl RetainedParagraph {
+    fn acknowledge_committed_preparation(&mut self) {
+        if self.preparation_changed_since_publication {
+            self.state.positioned.active_mut().mark_published();
+            self.preparation_changed_since_publication = false;
+        }
+    }
+
     fn commit_preparation(&mut self, publishing: bool) {
         let published_changes =
             publishing && (self.positioned_changed || self.preparation_changed_since_publication);
@@ -6016,13 +6038,55 @@ fn apply_text_mutation(
     if new_len < old_len {
         text.truncate(new_len);
     }
-    for (unit, bytes) in text[start..start + insert_count]
+    for (unit, decoded) in text[start..start + insert_count]
         .iter_mut()
-        .zip(mutation.insert_utf16_le.chunks_exact(2))
+        .zip(decoded_inserted_units(mutation.insert_utf16_le))
     {
-        *unit = u16::from_le_bytes([bytes[0], bytes[1]]);
+        *unit = decoded;
     }
     Ok(())
+}
+
+fn decoded_inserted_units(utf16_le: &[u8]) -> impl Iterator<Item = u16> + '_ {
+    utf16_le
+        .chunks_exact(2)
+        .map(|bytes| u16::from_le_bytes([bytes[0], bytes[1]]))
+}
+
+/// Preflight has already validated every mutation against the accepted text. A single
+/// complete replacement can write directly into the reused destination without seeding
+/// or shifting old units; ordered and partial edits retain the shared mutation path.
+fn populate_preflight_text(
+    destination: &mut Vec<u16>,
+    committed: &[u16],
+    mutations: super::semantic_wire::TextMutationBatch<'_>,
+    seed_committed: bool,
+    preserved_capacity: usize,
+) -> Result<(), EngineError> {
+    if mutations.len() == 1 {
+        let mutation = mutations.get(0).ok_or(EngineError::InvalidRequest)?;
+        if mutation.text_start == 0
+            && usize::try_from(mutation.delete_count).ok() == Some(committed.len())
+        {
+            let insert_count = mutation.insert_utf16_le.len() / 2;
+            destination.clear();
+            destination
+                .try_reserve(insert_count.max(preserved_capacity))
+                .map_err(|_| EngineError::ResultTooLarge)?;
+            destination.extend(decoded_inserted_units(mutation.insert_utf16_le));
+            return Ok(());
+        }
+    }
+    if seed_committed {
+        destination.clear();
+        destination
+            .try_reserve(committed.len().max(preserved_capacity))
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        destination.extend_from_slice(committed);
+        #[cfg(test)]
+        super::work_attribution::record(|work| work.preflight_seeded_old_units += committed.len());
+    }
+    apply_text_mutations(destination, mutations)
 }
 
 fn apply_text_mutations(
@@ -6150,13 +6214,15 @@ fn has_text_mutations_for(
 
 fn validate_planner_inputs(
     planner: &mut PlannerState,
-    text_mutations: super::semantic_wire::TextMutationBatch<'_>,
-    style_mutations: super::semantic_wire::StyleMutationBatch<'_>,
+    request: UpdateRequest<'_>,
+    scope: ParagraphInputScope,
     font_stacks: &[RegisteredFontStack],
     spare_text_candidate_id: Option<u32>,
     preflight_text_candidates: &mut Vec<PreflightTextCandidate>,
     preflight_edit_scratch: &mut Vec<TextEdit>,
 ) -> Result<(), EngineError> {
+    let text_mutations = request.text_mutations;
+    let style_mutations = request.style_mutations;
     // Each adjacent text-record group can produce one candidate. Group IDs are
     // not required to be contiguous, so record count is the safe upper bound.
     // Reserve before preflight can write pending text/Unicode state.
@@ -6177,6 +6243,11 @@ fn validate_planner_inputs(
             (None, Some(style)) => style,
             (None, None) => return Err(EngineError::InvalidRequest),
         };
+        if let ParagraphInputScope::Single(selected) = scope
+            && paragraph_id != selected
+        {
+            return Err(EngineError::InvalidRequest);
+        }
         if !planner_contains_after_lifecycle(planner, paragraph_id) {
             return Err(EngineError::InvalidRequest);
         }
@@ -9404,6 +9475,66 @@ mod tests {
     }
 
     #[test]
+    fn preflight_complete_replacement_avoids_old_units_and_preserves_ordered_edits() {
+        let committed = [0x61, 0xd83d, 0xde00, 0x62];
+        let replacement = [0x63, 0xd83c, 0xdf0d];
+        let bytes = text_mutation_bytes(&[(0, committed.len() as u32, &replacement)]);
+        let mutations = parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        assert_eq!(
+            validate_text_mutations(&committed, mutations),
+            Ok(replacement.len())
+        );
+        let mut destination = vec![0xffff; committed.len()];
+        super::super::work_attribution::reset();
+        populate_preflight_text(&mut destination, &committed, mutations, true, 0).unwrap();
+        assert_eq!(destination, replacement);
+        assert_eq!(
+            super::super::work_attribution::snapshot().preflight_seeded_old_units,
+            0
+        );
+
+        let empty = text_mutation_bytes(&[(0, committed.len() as u32, &[])]);
+        let mutations = parse_text_mutations(&empty, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        assert_eq!(validate_text_mutations(&committed, mutations), Ok(0));
+        populate_preflight_text(&mut destination, &committed, mutations, true, 0).unwrap();
+        assert!(destination.is_empty());
+        assert_eq!(
+            super::super::work_attribution::snapshot().preflight_seeded_old_units,
+            0
+        );
+
+        let partial = text_mutation_bytes(&[(1, 2, &[0x78])]);
+        let mutations =
+            parse_text_mutations(&partial, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        assert_eq!(validate_text_mutations(&committed, mutations), Ok(3));
+        populate_preflight_text(&mut destination, &committed, mutations, true, 0).unwrap();
+        assert_eq!(destination, [0x61, 0x78, 0x62]);
+        assert_eq!(
+            super::super::work_attribution::snapshot().preflight_seeded_old_units,
+            committed.len()
+        );
+
+        let ordered = text_mutation_bytes(&[(0, 0, &[0x79]), (4, 1, &[0x7a])]);
+        let mutations =
+            parse_text_mutations(&ordered, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        assert_eq!(validate_text_mutations(&committed, mutations), Ok(5));
+        populate_preflight_text(&mut destination, &committed, mutations, true, 0).unwrap();
+        assert_eq!(destination, [0x79, 0x61, 0xd83d, 0xde00, 0x7a]);
+        assert_eq!(
+            super::super::work_attribution::snapshot().preflight_seeded_old_units,
+            committed.len() * 2
+        );
+
+        let malformed = text_mutation_bytes(&[(0, committed.len() as u32, &[0xd800])]);
+        let mutations =
+            parse_text_mutations(&malformed, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        assert_eq!(
+            validate_text_mutations(&committed, mutations),
+            Err(EngineError::InvalidRequest)
+        );
+    }
+
+    #[test]
     fn style_preflight_rejects_missing_lifecycle_target_and_stale_root_range() {
         let (mut engine, _shaper) = shaped_inter_engine("abcd");
         let revision = engine.root_revision(4).unwrap();
@@ -10562,11 +10693,25 @@ mod tests {
         )
         .unwrap();
         planner.paragraph_mut(1).unwrap().positioned_changed = true;
+        {
+            let inspection = &mut planner.paragraph_mut(1).unwrap().state.clipped_inspection;
+            inspection.pending_mut().mode = IntrinsicInspection::Flow;
+            inspection.mark_prepared();
+        }
         super::super::work_attribution::reset();
         planner.commit_paragraphs(true);
-        assert_eq!(
-            super::super::work_attribution::snapshot().publication_commit_visits,
-            3
+        let work = super::super::work_attribution::snapshot();
+        assert_eq!(work.publication_commit_visits, 3);
+        assert_eq!(work.publication_ack_only_visits, 2);
+        assert!(
+            planner
+                .paragraph(1)
+                .unwrap()
+                .state
+                .clipped_inspection
+                .active()
+                .mode
+                == IntrinsicInspection::Flow
         );
         assert!(planner.unpublished_preparation_ids.is_empty());
         assert!(planner.pending_preparation_ids.is_empty());
