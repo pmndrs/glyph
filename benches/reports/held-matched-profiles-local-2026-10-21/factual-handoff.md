@@ -2,16 +2,16 @@
 
 Eight archives each received exactly one current-harness `bulk-write` / `publication` / 1,024-label / first-position / 10-warmup / 80-iteration / zero-read / scene-publication CPU capture. The named Wasm in each E2–E6, main, and V3 capture was authenticated against the matching packed shipping Wasm by the repository's non-custom-section helper. Main named symbols were rebuilt from detached commit `4e25a96a` with the old production optimizer policy (default one-caller inlining) and matched executable bytes. Published has no authenticated named symbols; its Wasm rows are unresolved. The harness, fixture, lockfile and four frozen V3 Rust source hashes match before and after. Raw profile SHA and exact proof paths are in `raw-profile-index.json`.
 
-| Arm       | Profiled callback p50 / p95 ms | Setter/preparation sampled self ms | Publication sampled self ms | Detached sampled self ms | Publication gather sampled self ms |
-| --------- | -----------------------------: | ---------------------------------: | --------------------------: | -----------------------: | ---------------------------------: |
-| main      |                  14.80 / 17.17 |                              110.9 |                      1019.4 |                    105.0 |                               74.9 |
-| E4        |                  16.82 / 23.24 |                              953.6 |                       457.4 |                    126.8 |                              104.0 |
-| V3        |                 20.13 / 148.51 |                             2023.2 |                      1024.1 |                    167.6 |                              200.0 |
-| E2        |                  15.34 / 17.61 |                              823.0 |                       354.6 |                    101.7 |                               86.7 |
-| E3        |                  15.65 / 18.48 |                              800.9 |                       409.1 |                     98.9 |                              119.9 |
-| E5        |                  16.00 / 22.20 |                              797.7 |                       477.7 |                     98.7 |                               34.0 |
-| E6        |                  14.74 / 16.79 |                              764.5 |                       380.0 |                     84.4 |                               23.7 |
-| published |                  13.23 / 15.54 |                               95.8 |                       912.9 |                     95.6 |                         unresolved |
+| Arm | Profiled callback p50 / p95 ms | Setter/preparation sampled self ms | Publication sampled self ms | Detached sampled self ms | Publication gather sampled self ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| main | 14.80 / 17.17 | 110.9 | 1019.4 | 105.0 | 74.9 |
+| E4 | 16.82 / 23.24 | 953.6 | 457.4 | 126.8 | 104.0 |
+| V3 | 20.13 / 148.51 | 2023.2 | 1024.1 | 167.6 | 200.0 |
+| E2 | 15.34 / 17.61 | 823.0 | 354.6 | 101.7 | 86.7 |
+| E3 | 15.65 / 18.48 | 800.9 | 409.1 | 98.9 | 119.9 |
+| E5 | 16.00 / 22.20 | 797.7 | 477.7 | 98.7 | 34.0 |
+| E6 | 14.74 / 16.79 | 764.5 | 380.0 | 84.4 | 23.7 |
+| published | 13.23 / 15.54 | 95.8 | 912.9 | 95.6 | unresolved |
 
 All sampled self values are totals across each profile, while p50/p95 are callback wall durations from the profile run. The phase anchors are fresh disjoint child nodes under `updateBulk`, validated by `benchmark:cpu-profile-summary`; their sampled durations plus detached samples partition each whole profile. Sampled CPU divided by 80 gives only sampled CPU per callback, not a wall-time coefficient. Inclusive ancestry values must not be added.
 
