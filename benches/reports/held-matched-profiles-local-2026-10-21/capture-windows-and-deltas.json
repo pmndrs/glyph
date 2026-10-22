@@ -1,0 +1,130 @@
+{
+  "main": {
+    "captureStartedUtc": "2026-10-22T00:41:17.256313+00:00",
+    "captureFinishedUtc": "2026-10-22T00:41:23.613727+00:00",
+    "samples": 883,
+    "timeDeltaMicroseconds": {
+      "p50": 1459,
+      "p90": 1542,
+      "p95": 1542,
+      "p99": 1542,
+      "max": 31875,
+      "countOver10ms": 1,
+      "countOver50ms": 0,
+      "countOver100ms": 0,
+      "largest10": [31875, 1584, 1583, 1583, 1583, 1583, 1583, 1542, 1542, 1542]
+    }
+  },
+  "e4": {
+    "captureStartedUtc": "2026-10-22T00:41:31.242801+00:00",
+    "captureFinishedUtc": "2026-10-22T00:41:36.472903+00:00",
+    "samples": 1063,
+    "timeDeltaMicroseconds": {
+      "p50": 1500,
+      "p90": 1542,
+      "p95": 1583,
+      "p99": 2333,
+      "max": 41792,
+      "countOver10ms": 1,
+      "countOver50ms": 0,
+      "countOver100ms": 0,
+      "largest10": [41792, 7542, 7500, 2875, 2584, 2542, 2542, 2459, 2459, 2458]
+    }
+  },
+  "v3": {
+    "captureStartedUtc": "2026-10-22T00:41:49.384833+00:00",
+    "captureFinishedUtc": "2026-10-22T00:41:57.628720+00:00",
+    "samples": 1950,
+    "timeDeltaMicroseconds": {
+      "p50": 1458,
+      "p90": 2042,
+      "p95": 2792,
+      "p99": 8042,
+      "max": 66792,
+      "countOver10ms": 14,
+      "countOver50ms": 1,
+      "countOver100ms": 0,
+      "largest10": [66792, 35917, 31542, 19625, 17958, 17792, 16250, 15375, 15208, 11458]
+    }
+  },
+  "e2": {
+    "captureStartedUtc": "2026-10-22T00:42:43.826196+00:00",
+    "captureFinishedUtc": "2026-10-22T00:42:47.536246+00:00",
+    "samples": 831,
+    "timeDeltaMicroseconds": {
+      "p50": 1500,
+      "p90": 1542,
+      "p95": 1542,
+      "p99": 1542,
+      "max": 41542,
+      "countOver10ms": 1,
+      "countOver50ms": 0,
+      "countOver100ms": 0,
+      "largest10": [41542, 1667, 1666, 1583, 1583, 1583, 1583, 1542, 1542, 1542]
+    }
+  },
+  "e3": {
+    "captureStartedUtc": "2026-10-22T00:42:47.564867+00:00",
+    "captureFinishedUtc": "2026-10-22T00:42:50.747448+00:00",
+    "samples": 854,
+    "timeDeltaMicroseconds": {
+      "p50": 1500,
+      "p90": 1542,
+      "p95": 1542,
+      "p99": 1542,
+      "max": 32583,
+      "countOver10ms": 1,
+      "countOver50ms": 0,
+      "countOver100ms": 0,
+      "largest10": [32583, 4792, 3500, 2958, 1958, 1792, 1667, 1583, 1542, 1542]
+    }
+  },
+  "e5": {
+    "captureStartedUtc": "2026-10-22T00:42:50.775827+00:00",
+    "captureFinishedUtc": "2026-10-22T00:42:54.037702+00:00",
+    "samples": 900,
+    "timeDeltaMicroseconds": {
+      "p50": 1500,
+      "p90": 1542,
+      "p95": 1542,
+      "p99": 1542,
+      "max": 32833,
+      "countOver10ms": 1,
+      "countOver50ms": 0,
+      "countOver100ms": 0,
+      "largest10": [32833, 1958, 1625, 1625, 1625, 1584, 1542, 1542, 1542, 1542]
+    }
+  },
+  "e6": {
+    "captureStartedUtc": "2026-10-22T00:42:54.064367+00:00",
+    "captureFinishedUtc": "2026-10-22T00:42:57.338599+00:00",
+    "samples": 801,
+    "timeDeltaMicroseconds": {
+      "p50": 1500,
+      "p90": 1542,
+      "p95": 1542,
+      "p99": 1542,
+      "max": 33500,
+      "countOver10ms": 1,
+      "countOver50ms": 0,
+      "countOver100ms": 0,
+      "largest10": [33500, 1542, 1542, 1542, 1542, 1542, 1542, 1542, 1542, 1542]
+    }
+  },
+  "published": {
+    "captureStartedUtc": "2026-10-22T00:43:22.349180+00:00",
+    "captureFinishedUtc": "2026-10-22T00:43:26.158009+00:00",
+    "samples": 723,
+    "timeDeltaMicroseconds": {
+      "p50": 1500,
+      "p90": 1542,
+      "p95": 1542,
+      "p99": 1542,
+      "max": 35208,
+      "countOver10ms": 1,
+      "countOver50ms": 0,
+      "countOver100ms": 0,
+      "largest10": [35208, 1750, 1625, 1584, 1583, 1542, 1542, 1542, 1542, 1542]
+    }
+  }
+}

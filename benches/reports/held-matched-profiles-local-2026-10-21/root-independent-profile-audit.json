@@ -1,0 +1,78 @@
+{
+  "verifiedAt": "2026-10-22T00:49:22.818644+00:00",
+  "method": "Independent hash verification and raw tree descendants/sample delta re-sum; no inclusive double-counting",
+  "arms": {
+    "main": {
+      "hashes": "verified",
+      "exclusiveMicroseconds": {
+        "setter_preparation": 110876,
+        "publication": 1019374
+      },
+      "totalMicroseconds": 1235209,
+      "sampleIntervalsOver5ms": 1
+    },
+    "e4": {
+      "hashes": "verified",
+      "exclusiveMicroseconds": {
+        "setter_preparation": 953551,
+        "publication": 457411
+      },
+      "totalMicroseconds": 1537792,
+      "sampleIntervalsOver5ms": 3
+    },
+    "v3": {
+      "hashes": "verified",
+      "exclusiveMicroseconds": {
+        "setter_preparation": 2023206,
+        "publication": 1024130
+      },
+      "totalMicroseconds": 3214958,
+      "sampleIntervalsOver5ms": 39
+    },
+    "e2": {
+      "hashes": "verified",
+      "exclusiveMicroseconds": {
+        "setter_preparation": 822953,
+        "publication": 354630
+      },
+      "totalMicroseconds": 1279292,
+      "sampleIntervalsOver5ms": 1
+    },
+    "e3": {
+      "hashes": "verified",
+      "exclusiveMicroseconds": {
+        "setter_preparation": 800915,
+        "publication": 409125
+      },
+      "totalMicroseconds": 1308958,
+      "sampleIntervalsOver5ms": 1
+    },
+    "e5": {
+      "hashes": "verified",
+      "exclusiveMicroseconds": {
+        "setter_preparation": 797665,
+        "publication": 477711
+      },
+      "totalMicroseconds": 1374125,
+      "sampleIntervalsOver5ms": 1
+    },
+    "e6": {
+      "hashes": "verified",
+      "exclusiveMicroseconds": {
+        "setter_preparation": 764548,
+        "publication": 379993
+      },
+      "totalMicroseconds": 1228916,
+      "sampleIntervalsOver5ms": 1
+    },
+    "published": {
+      "hashes": "verified",
+      "exclusiveMicroseconds": {
+        "setter_preparation": 95832,
+        "publication": 912874
+      },
+      "totalMicroseconds": 1104292,
+      "sampleIntervalsOver5ms": 1
+    }
+  }
+}

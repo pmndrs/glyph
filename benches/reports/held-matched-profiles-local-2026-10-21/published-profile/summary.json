@@ -1,0 +1,211 @@
+{
+  "workload": {
+    "boundary": "publication",
+    "count": 1024,
+    "iterations": 80,
+    "position": "first",
+    "profileCase": "bulk-write",
+    "warmups": 10,
+    "reads": "none",
+    "publicationPath": "scene"
+  },
+  "operations": {
+    "perIteration": {
+      "sets": 1024,
+      "reads": 0,
+      "publications": 1
+    },
+    "timed": {
+      "sets": 81920,
+      "reads": 0,
+      "publications": 80
+    },
+    "warmup": {
+      "sets": 10240,
+      "reads": 0,
+      "publications": 10
+    },
+    "postTimedCorrectness": {
+      "measurementReads": 1024,
+      "commitStateReads": 1025,
+      "glyphReads": 1025
+    }
+  },
+  "drawTopology": {
+    "initial": {
+      "draws": 1,
+      "glyphs": 9216
+    },
+    "final": {
+      "draws": 1,
+      "glyphs": 9216
+    }
+  },
+  "elapsedMs": {
+    "mean": 13.378695875000009,
+    "p50": 13.22891699999991,
+    "p95": 15.536208999999872
+  },
+  "sampledMs": {
+    "total": 1104.292,
+    "stages": {
+      "other-wasm": 738.7940000000003,
+      "javascript": 292.747,
+      "host-runtime": 59.209,
+      "benchmark-harness": 7.625,
+      "external-javascript": 5.917
+    }
+  },
+  "cpuHotspots": [
+    {
+      "functionName": "wasm-function[161]",
+      "sampledMs": 67.71100000000001,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "wasm-function[270]",
+      "sampledMs": 53.042,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "wasm-function[152]",
+      "sampledMs": 50.956,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "wasm-function[468]",
+      "sampledMs": 40.043,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "wasm-function[38]",
+      "sampledMs": 37.25,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "post",
+      "sampledMs": 35.208,
+      "url": "node:inspector"
+    },
+    {
+      "functionName": "wasm-function[145]",
+      "sampledMs": 29.708000000000002,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "wasm-function[165]",
+      "sampledMs": 28.666999999999998,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "wasm-function[416]",
+      "sampledMs": 25.458,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "wasm-function[443]",
+      "sampledMs": 23.875999999999998,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "wasm-function[411]",
+      "sampledMs": 22.541999999999998,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "",
+      "sampledMs": 20.875,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-jCRx39/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_2bac986bec3962742a289ca13213491d/node_modules/@pmndrs/glyph/dist/internal/render-planner.js"
+    },
+    {
+      "functionName": "wasm-function[153]",
+      "sampledMs": 17.958,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "wasm-function[21]",
+      "sampledMs": 17.5,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "wasm-function[421]",
+      "sampledMs": 16.375,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "wasm-function[97]",
+      "sampledMs": 16.374000000000002,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "wasm-function[230]",
+      "sampledMs": 15.042,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "(garbage collector)",
+      "sampledMs": 15.001,
+      "url": ""
+    },
+    {
+      "functionName": "wasm-function[387]",
+      "sampledMs": 14.958,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "wasm-function[98]",
+      "sampledMs": 14.918,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "wasm-function[543]",
+      "sampledMs": 14.916,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "wasm-function[211]",
+      "sampledMs": 13.582,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "xe",
+      "sampledMs": 13.5,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-jCRx39/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_2bac986bec3962742a289ca13213491d/node_modules/@pmndrs/glyph/dist/internal/render-planner.js"
+    },
+    {
+      "functionName": "ge",
+      "sampledMs": 13.46,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-jCRx39/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_2bac986bec3962742a289ca13213491d/node_modules/@pmndrs/glyph/dist/internal/render-planner.js"
+    },
+    {
+      "functionName": "wasm-function[281]",
+      "sampledMs": 13.457,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "wasm-function[55]",
+      "sampledMs": 13.292,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "wasm-function[776]",
+      "sampledMs": 11.876999999999999,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "wasm-function[47]",
+      "sampledMs": 11.833,
+      "url": "wasm://wasm/005326c6"
+    },
+    {
+      "functionName": "#K",
+      "sampledMs": 11.751999999999999,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-jCRx39/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_2bac986bec3962742a289ca13213491d/node_modules/@pmndrs/glyph/dist/internal/render-planner.js"
+    },
+    {
+      "functionName": "#B",
+      "sampledMs": 11.625,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-jCRx39/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_2bac986bec3962742a289ca13213491d/node_modules/@pmndrs/glyph/dist/three/command-buffer-renderer.js"
+    }
+  ]
+}

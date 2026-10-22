@@ -1,0 +1,215 @@
+{
+  "workload": {
+    "boundary": "publication",
+    "count": 1024,
+    "iterations": 80,
+    "position": "first",
+    "profileCase": "bulk-write",
+    "warmups": 10,
+    "reads": "none",
+    "publicationPath": "scene"
+  },
+  "operations": {
+    "perIteration": {
+      "sets": 1024,
+      "reads": 0,
+      "publications": 1
+    },
+    "timed": {
+      "sets": 81920,
+      "reads": 0,
+      "publications": 80
+    },
+    "warmup": {
+      "sets": 10240,
+      "reads": 0,
+      "publications": 10
+    },
+    "postTimedCorrectness": {
+      "measurementReads": 1024,
+      "commitStateReads": 1025,
+      "glyphReads": 1025
+    }
+  },
+  "drawTopology": {
+    "initial": {
+      "draws": 1,
+      "glyphs": 9216
+    },
+    "final": {
+      "draws": 1,
+      "glyphs": 9216
+    }
+  },
+  "elapsedMs": {
+    "mean": 15.031552100000008,
+    "p50": 14.797041000000036,
+    "p95": 17.171875
+  },
+  "sampledMs": {
+    "total": 1235.209,
+    "stages": {
+      "other-wasm": 486.13099999999935,
+      "javascript": 333.16699999999963,
+      "shaping": 211.16199999999998,
+      "gather": 78.83200000000001,
+      "host-runtime": 64.916,
+      "render-plan": 33.791,
+      "external-javascript": 14.167,
+      "allocation": 7.125,
+      "benchmark-harness": 5.918
+    }
+  },
+  "cpuHotspots": [
+    {
+      "functionName": "_RNvMs5_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB5_14ParagraphState7prepare",
+      "sampledMs": 67.788,
+      "url": "wasm://wasm/005eb4b6"
+    },
+    {
+      "functionName": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state21append_planner_gather",
+      "sampledMs": 63.666000000000004,
+      "url": "wasm://wasm/005eb4b6"
+    },
+    {
+      "functionName": "_RNvNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper4wasm6update",
+      "sampledMs": 57.70700000000001,
+      "url": "wasm://wasm/005eb4b6"
+    },
+    {
+      "functionName": "_RNvMs4_NtNtCsbx9tMmkA0qL_8harfrust2hb4faceNtB5_9hb_font_t15shape_with_plan",
+      "sampledMs": 40.29,
+      "url": "wasm://wasm/005eb4b6"
+    },
+    {
+      "functionName": "_RINvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB6_20PositionedGlyphArena17position_fragmentNCNvMs5_NtB8_5stateNtB1V_14ParagraphState18prepare_positioneds1_0NCB1P_s2_0EBa_",
+      "sampledMs": 36.542,
+      "url": "wasm://wasm/005eb4b6"
+    },
+    {
+      "functionName": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb9ot_layout13apply_forward",
+      "sampledMs": 33.332,
+      "url": "wasm://wasm/005eb4b6"
+    },
+    {
+      "functionName": "i",
+      "sampledMs": 32.79200000000001,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-LVtB4f/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_ce09509db3bd9e196286bece8d2da14e/node_modules/@pmndrs/glyph/dist/internal/layout-query-view.js"
+    },
+    {
+      "functionName": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state28append_paragraph_measurement",
+      "sampledMs": 32.419000000000004,
+      "url": "wasm://wasm/005eb4b6"
+    },
+    {
+      "functionName": "post",
+      "sampledMs": 31.875,
+      "url": "node:inspector"
+    },
+    {
+      "functionName": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup16pair_pos2_cached",
+      "sampledMs": 31.787999999999993,
+      "url": "wasm://wasm/005eb4b6"
+    },
+    {
+      "functionName": "_RNvMs3_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine20render_plan_compilerNtB5_18RenderPlanCompiler7prepare",
+      "sampledMs": 31.290999999999997,
+      "url": "wasm://wasm/005eb4b6"
+    },
+    {
+      "functionName": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup16pair_pos1_cached",
+      "sampledMs": 30.668000000000003,
+      "url": "wasm://wasm/005eb4b6"
+    },
+    {
+      "functionName": "Fe",
+      "sampledMs": 25.499000000000002,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-LVtB4f/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_ce09509db3bd9e196286bece8d2da14e/node_modules/@pmndrs/glyph/dist/internal/render-planner.js"
+    },
+    {
+      "functionName": "(garbage collector)",
+      "sampledMs": 24.082,
+      "url": ""
+    },
+    {
+      "functionName": "_RINvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16line_composition24layout_next_line_integerNtNtB4_5state22ShapedBreakCorrectionsEB6_",
+      "sampledMs": 18.294,
+      "url": "wasm://wasm/005eb4b6"
+    },
+    {
+      "functionName": "#U",
+      "sampledMs": 16.376,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-LVtB4f/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_ce09509db3bd9e196286bece8d2da14e/node_modules/@pmndrs/glyph/dist/three/command-buffer-renderer.js"
+    },
+    {
+      "functionName": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12layout_query18line_inline_extent",
+      "sampledMs": 15.126999999999999,
+      "url": "wasm://wasm/005eb4b6"
+    },
+    {
+      "functionName": "binaryen:byn$mgfn-shared$233",
+      "sampledMs": 15.001,
+      "url": "wasm://wasm/005eb4b6"
+    },
+    {
+      "functionName": "adopt",
+      "sampledMs": 14.916,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-LVtB4f/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_ce09509db3bd9e196286bece8d2da14e/node_modules/@pmndrs/glyph/dist/internal/render-planner.js"
+    },
+    {
+      "functionName": "_RINvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16flow_compositionNtB6_15FlowLayoutArena19convergence_contextNCNvMs5_NtB8_5stateNtB1X_14ParagraphState18prepare_flow_liness0_0NCB1R_s1_0EBa_",
+      "sampledMs": 14.916,
+      "url": "wasm://wasm/005eb4b6"
+    },
+    {
+      "functionName": "we",
+      "sampledMs": 14.792,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-LVtB4f/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_ce09509db3bd9e196286bece8d2da14e/node_modules/@pmndrs/glyph/dist/internal/render-planner.js"
+    },
+    {
+      "functionName": "_RNvCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper13shape_segment",
+      "sampledMs": 14.25,
+      "url": "wasm://wasm/005eb4b6"
+    },
+    {
+      "functionName": "_RNvMNtNtCsbx9tMmkA0qL_8harfrust2hb7charmapNtB2_7Charmap3map",
+      "sampledMs": 14.083,
+      "url": "wasm://wasm/005eb4b6"
+    },
+    {
+      "functionName": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup15ligature_subst1",
+      "sampledMs": 13.251,
+      "url": "wasm://wasm/005eb4b6"
+    },
+    {
+      "functionName": "binaryen:byn$mgfn-shared$975",
+      "sampledMs": 13.042,
+      "url": "wasm://wasm/005eb4b6"
+    },
+    {
+      "functionName": "_RNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB5_20PositionedGlyphArena10push_glyph",
+      "sampledMs": 13.042,
+      "url": "wasm://wasm/005eb4b6"
+    },
+    {
+      "functionName": "Oe",
+      "sampledMs": 12.751,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-LVtB4f/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_ce09509db3bd9e196286bece8d2da14e/node_modules/@pmndrs/glyph/dist/internal/render-planner.js"
+    },
+    {
+      "functionName": "#F",
+      "sampledMs": 12.626,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-LVtB4f/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_ce09509db3bd9e196286bece8d2da14e/node_modules/@pmndrs/glyph/dist/internal/render-planner.js"
+    },
+    {
+      "functionName": "acceptShape",
+      "sampledMs": 12.292,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-LVtB4f/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_ce09509db3bd9e196286bece8d2da14e/node_modules/@pmndrs/glyph/dist/three/text.js"
+    },
+    {
+      "functionName": "",
+      "sampledMs": 12,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-LVtB4f/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_ce09509db3bd9e196286bece8d2da14e/node_modules/@pmndrs/glyph/dist/internal/render-planner.js"
+    }
+  ]
+}

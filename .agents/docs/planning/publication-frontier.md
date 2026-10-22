@@ -261,6 +261,12 @@ Existing and extended native counts rule out duplicated publication layout/query
 
 All seven families retain their fixed scope in the reconciliation table. Keep synchronous setters/prepared reads/split, batching/order, Rust semantic authority, SWAR/SIMD and packed/SoA locality. No second semantic executor, shadow Unicode parser, new global pool/cache or unapproved segmented storage migration. Empty publication retains the publisher lease; renderer rejection retains preparation; invalidating defects are separate. Use Sol6 Medium implementors, fresh scoped Sol High advice, and Luna only for bounded factual gates/benchmarks. Publish through real noninteractive gh stack submit --auto; no merge/tag/release/demo merge. Finish the handoff with a clean worktree and remote branch equal to HEAD.
 
+### Matched comparative profiles — 21 October 2026 local time
+
+[Portable twelve-capture packet](../../../benches/reports/held-matched-profiles-local-2026-10-21/README.md) compares main, published0.1.0, E2–E6 and frozen V3 with identical1024bulk-write/no-read/scene-publication/10warmup/80iteration options, plus one predetermined E6→V3→E4→main repeat. Root independently verifies all12exclusive ancestry partitions and seven named/shipping executable identities. Main defers preparation; HELD prepares per setter. Direct operands retain accessor/Codec costs; V3 removes range iteration while retaining source traversal. No new product edit was made.
+
+The first V3 p95 is148.512ms; repeat V3 is45.377ms while E4 rises23.243→150.919ms. Busy per-arm process snapshots and shifting sampling gaps prevent stable timing ranking or causal adapter attribution. Preserve both passes; neither is acceptance. No further timing selected. Fresh Sol High identifies single-owner preflight/frame setup inside the existing setter transaction as a bounded deletion candidate, with no supported promise of published parity; both designs still shape1024final distinct labels. Source/ownership review must name actual repeated work before implementation. Parity remains false, boost waves0, V3 preserved and full seven-family/final gates open. [Owned log](../log/2026-10-22-held-matched-profile-diagnosis.md). Raw UTC receipts fall on22October; client local date is21October.
+
 ## Historical implementation record
 
 ### Archived active checkpoint before the 8cfa verdict

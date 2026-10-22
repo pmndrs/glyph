@@ -1,0 +1,3576 @@
+{
+  "artifact": {
+    "file": "main-4e25a96a.tgz",
+    "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20"
+  },
+  "generatedAt": "2026-10-22T00:49:44.503Z",
+  "namedWasm": {
+    "file": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/main-named-artifact/text-shaper.named.wasm",
+    "sha256": "8068ac682653e22f185d419ca0623e28d2e8db70adc0a31451a670423808b8ea",
+    "releaseSha256": "059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4",
+    "executableSha256": "059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4",
+    "functions": [
+      {
+        "functionIndex": 0,
+        "name": "_RNvXs1_NtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper7outlineNtB5_12GlyphOutlineNtNtNtCsaDOWveanduf_10read_fonts5model3pen10OutlinePen5close"
+      },
+      {
+        "functionIndex": 1,
+        "name": "_RNvMs4_NtCsewWLk9TkM7w_5alloc7raw_vecNtB5_11RawVecInner11finish_growCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 2,
+        "name": "_RINvMs_NtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper7outlineINtB5_7PendingNtNtCs9aImQiHga9o_10font_types5fixed7F26Dot6E4emitNtB5_12GlyphOutlineEB7_"
+      },
+      {
+        "functionIndex": 3,
+        "name": "_RINvMNtCsdkdt1aaAg1T_4core5sliceSm16binary_search_byNCNvB2_13binary_search0ECs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 4,
+        "name": "_RNvMs_NtNtCsaDOWveanduf_10read_fonts2ps2csINtB4_9EvaluatorINtB4_13TransformSinkINtB4_13NopFilterSinkNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper7outline12GlyphOutlineEEE13evaluate_implB1E_"
+      },
+      {
+        "functionIndex": 5,
+        "name": "_RNvMs_NtNtCsaDOWveanduf_10read_fonts2ps2csINtB4_9EvaluatorINtB4_13TransformSinkINtB4_13NopFilterSinkNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper7outline12GlyphOutlineEEE17evaluate_operatorB1E_"
+      },
+      {
+        "functionIndex": 6,
+        "name": "_RNvMs4_NtNtCsaDOWveanduf_10read_fonts2ps2csINtB5_13NopFilterSinkNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper7outline12GlyphOutlineE13flush_pendingB14_"
+      },
+      {
+        "functionIndex": 7,
+        "name": "_RINvMNtNtNtCsaDOWveanduf_10read_fonts2ps3cff5stackNtB3_5Stack11fixed_arrayKj2_ECs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 8,
+        "name": "_RINvMNtNtNtCsaDOWveanduf_10read_fonts2ps3cff5stackNtB3_5Stack4pushNtNtCs9aImQiHga9o_10font_types5fixed5FixedECs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 9,
+        "name": "_RINvMs0_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12codec_gatherNtB6_20CodecGatherWorkspace11append_fromNCNvNtB8_5state21append_planner_gather0EBa_"
+      },
+      {
+        "functionIndex": 10,
+        "name": "_RNvMs_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12font_bindingNtB4_17FontRenderBinding6select"
+      },
+      {
+        "functionIndex": 11,
+        "name": "_RNvMs0_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12codec_gatherNtB5_20CodecGatherWorkspace13gather_fields"
+      },
+      {
+        "functionIndex": 12,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtCshggfqRjh6kr_22pmndrs_glyph_slug_core5PointE8grow_oneCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 13,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine10plan_input9PlanGlyphE8grow_oneBS_"
+      },
+      {
+        "functionIndex": 14,
+        "name": "_RINvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioning7reservemEB6_"
+      },
+      {
+        "functionIndex": 15,
+        "name": "_RINvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13cluster_state7reservetEB6_"
+      },
+      {
+        "functionIndex": 16,
+        "name": "_RNvMs1_NtCsewWLk9TkM7w_5alloc3vecINtB5_3VectE6resizeCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 17,
+        "name": "_RNvMs1_NtCsewWLk9TkM7w_5alloc3vecINtB5_3VecmE6resizeCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 18,
+        "name": "_RNvMs0_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13cluster_stateNtB5_12ClusterArena10cluster_at"
+      },
+      {
+        "functionIndex": 19,
+        "name": "_RNvMs0_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13cluster_stateNtB5_12ClusterArena24assign_cluster_ownership"
+      },
+      {
+        "functionIndex": 20,
+        "name": "_RNvMs0_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13cluster_stateNtB5_12ClusterArena28fill_glyphless_run_ownership"
+      },
+      {
+        "functionIndex": 21,
+        "name": "_RINvMs10_NtNtNtCsewWLk9TkM7w_5alloc11collections5btree4nodeINtB7_16BalancingContextmNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5codec14ValidatedCodecE8do_mergeNCINvB2_20merge_tracking_childNtNtBd_5alloc6GlobalE0INtB7_7NodeRefNtNtB7_6marker3MutmB1k_NtB3I_14LeafOrInternalEB36_EB1q_"
+      },
+      {
+        "functionIndex": 22,
+        "name": "_RNvMs1_NtCshoFYSnENQqs_4talc4baseINtB5_4TalcNtNtB7_4wasm16WasmGrowAndClaimNtBI_11WasmBinningE10deallocateCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 23,
+        "name": "_RINvMs10_NtNtNtCsewWLk9TkM7w_5alloc11collections5btree4nodeINtB7_16BalancingContextmNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state12PlannerStateE8do_mergeNCINvB2_20merge_tracking_childNtNtBd_5alloc6GlobalE0INtB7_7NodeRefNtNtB7_6marker3MutmB1k_NtB3G_14LeafOrInternalEB34_EB1q_"
+      },
+      {
+        "functionIndex": 24,
+        "name": "_RINvMs10_NtNtNtCsewWLk9TkM7w_5alloc11collections5btree4nodeINtB7_16BalancingContextmNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine9transport14FrameTransportE8do_mergeNCINvB2_20merge_tracking_childNtNtBd_5alloc6GlobalE0INtB7_7NodeRefNtNtB7_6marker3MutmB1k_NtB3M_14LeafOrInternalEB3a_EB1q_"
+      },
+      {
+        "functionIndex": 25,
+        "name": "_RINvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB6_20PositionedGlyphArena17position_boundaryNCNvMs5_NtB8_5stateNtB1V_14ParagraphState18prepare_positioneds1_0EBa_"
+      },
+      {
+        "functionIndex": 26,
+        "name": "_RNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB5_20PositionedGlyphArena21record_boundary_slice"
+      },
+      {
+        "functionIndex": 27,
+        "name": "_RINvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB6_20PositionedGlyphArena22position_boundary_spanNCNvMs5_NtB8_5stateNtB20_14ParagraphState18prepare_positioneds1_0EBa_"
+      },
+      {
+        "functionIndex": 28,
+        "name": "_RINvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB6_20PositionedGlyphArena19flush_decorated_runNCNvMs5_NtB8_5stateNtB1X_14ParagraphState18prepare_positioneds1_0EBa_"
+      },
+      {
+        "functionIndex": 29,
+        "name": "_RINvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB6_20PositionedGlyphArena17position_drop_capNCNvMs5_NtB8_5stateNtB1V_14ParagraphState18prepare_positioneds1_0NCB1P_s2_0EBa_"
+      },
+      {
+        "functionIndex": 30,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioning19prepare_line_levels"
+      },
+      {
+        "functionIndex": 31,
+        "name": "_RINvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB6_20PositionedGlyphArena17position_fragmentNCNvMs5_NtB8_5stateNtB1V_14ParagraphState18prepare_positioneds1_0NCB1P_s2_0EBa_"
+      },
+      {
+        "functionIndex": 32,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12font_binding10FontStrikeE8grow_oneBS_"
+      },
+      {
+        "functionIndex": 33,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioning13cluster_level"
+      },
+      {
+        "functionIndex": 34,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioning24justification_adjustment"
+      },
+      {
+        "functionIndex": 35,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioning22layout_run_for_cluster"
+      },
+      {
+        "functionIndex": 36,
+        "name": "_RNvMs0_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13cluster_stateNtB5_12ClusterArena20placement_cluster_at"
+      },
+      {
+        "functionIndex": 37,
+        "name": "_RNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB5_20PositionedGlyphArena25record_layout_run_segment"
+      },
+      {
+        "functionIndex": 38,
+        "name": "_RNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB5_20PositionedGlyphArena21update_retained_glyph"
+      },
+      {
+        "functionIndex": 39,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioning23PositionedSemanticGlyphE8grow_oneBS_"
+      },
+      {
+        "functionIndex": 40,
+        "name": "_RNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB5_20PositionedGlyphArena10push_glyph"
+      },
+      {
+        "functionIndex": 41,
+        "name": "_RNCINvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB8_20PositionedGlyphArena19flush_decorated_runNCNvMs5_NtBa_5stateNtB1Z_14ParagraphState18prepare_positioneds1_0E0Bc_"
+      },
+      {
+        "functionIndex": 42,
+        "name": "_RINvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11style_stateNtB6_10StyleArena8validateNCNvMs5_NtB8_5stateNtB1B_14ParagraphState7prepare0EBa_"
+      },
+      {
+        "functionIndex": 43,
+        "name": "_RNvMs2_NtCsewWLk9TkM7w_5alloc7raw_vecNtB5_11RawVecInner11try_reserveCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 44,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine4sort13prepare_pairs"
+      },
+      {
+        "functionIndex": 45,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13flow_geometry10InlineSlotE8grow_oneBS_"
+      },
+      {
+        "functionIndex": 46,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine4sort10sort_pairs"
+      },
+      {
+        "functionIndex": 47,
+        "name": "_RINvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16flow_compositionNtB6_15FlowLayoutArena12compose_bandNCNvMs5_NtB8_5stateNtB1Q_14ParagraphState18prepare_flow_liness0_0NCB1K_s1_0NtB1Q_22ShapedBreakCorrectionsEBa_"
+      },
+      {
+        "functionIndex": 48,
+        "name": "_RNvMs_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13flow_geometryNtB4_15InlineSlotArena21resolve_band_with_cut"
+      },
+      {
+        "functionIndex": 49,
+        "name": "_RINvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16line_composition24layout_next_line_integerNtNtB4_5state22ShapedBreakCorrectionsEB6_"
+      },
+      {
+        "functionIndex": 50,
+        "name": "_RINvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16flow_composition24line_metrics_for_clusterNCNvMs5_NtB4_5stateNtB1C_14ParagraphState18prepare_flow_liness0_0NCB1w_s1_0EB6_"
+      },
+      {
+        "functionIndex": 51,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16flow_composition12FlowFragmentE8grow_oneBS_"
+      },
+      {
+        "functionIndex": 52,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16flow_composition8FlowLineE8grow_oneBS_"
+      },
+      {
+        "functionIndex": 53,
+        "name": "_RINvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16flow_compositionNtB6_15FlowLayoutArena19convergence_contextNCNvMs5_NtB8_5stateNtB1X_14ParagraphState18prepare_flow_liness0_0NCB1R_s1_0EBa_"
+      },
+      {
+        "functionIndex": 54,
+        "name": "_RINvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16flow_composition16prepare_drop_capNCNvMs5_NtB4_5stateNtB1u_14ParagraphState18prepare_flow_liness0_0NCB1o_s1_0EB6_"
+      },
+      {
+        "functionIndex": 55,
+        "name": "_RNvXsj_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16flow_compositionNtB5_11FlowDropCapNtNtCsdkdt1aaAg1T_4core3cmp9PartialEq2eq"
+      },
+      {
+        "functionIndex": 56,
+        "name": "_RNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16flow_compositionNtB5_15FlowLayoutArena20append_retained_line"
+      },
+      {
+        "functionIndex": 57,
+        "name": "_RNvMs7_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB5_22ShapedBreakCorrections10correction"
+      },
+      {
+        "functionIndex": 58,
+        "name": "_RNvMNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16flow_compositionNtB2_11FlowDropCap12cut_for_band"
+      },
+      {
+        "functionIndex": 59,
+        "name": "_RNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16flow_compositionNtB5_15FlowLayoutArena23append_converged_suffix"
+      },
+      {
+        "functionIndex": 60,
+        "name": "_RNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16flow_compositionNtB5_15FlowLayoutArena27resolve_flexible_inline_end"
+      },
+      {
+        "functionIndex": 61,
+        "name": "_RNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16flow_compositionNtB5_15FlowLayoutArena7reserve"
+      },
+      {
+        "functionIndex": 62,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16flow_composition16positive_extents"
+      },
+      {
+        "functionIndex": 63,
+        "name": "_RNvCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper13shape_segment"
+      },
+      {
+        "functionIndex": 64,
+        "name": "_RNvMs_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13shaping_stateNtB4_10ShapeArena6append"
+      },
+      {
+        "functionIndex": 65,
+        "name": "_RNvMs0_NtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper7outlineNtB5_12GlyphOutline12push_segment"
+      },
+      {
+        "functionIndex": 66,
+        "name": "_RNvXs1_NtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper7outlineNtB5_12GlyphOutlineNtNtNtCsaDOWveanduf_10read_fonts5model3pen10OutlinePen8curve_to"
+      },
+      {
+        "functionIndex": 67,
+        "name": "_RINvMs_NtNtCsaDOWveanduf_10read_fonts2ps2csINtB5_9EvaluatorINtB5_13TransformSinkINtB5_13NopFilterSinkNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper7outline12GlyphOutlineEEE11emit_curvesKj3_EB1F_"
+      },
+      {
+        "functionIndex": 68,
+        "name": "_RINvMs_NtNtCsaDOWveanduf_10read_fonts2ps2csINtB5_9EvaluatorINtB5_13TransformSinkINtB5_13NopFilterSinkNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper7outline12GlyphOutlineEEE11emit_curvesKj6_EB1F_"
+      },
+      {
+        "functionIndex": 69,
+        "name": "_RINvMs_NtNtNtCsewWLk9TkM7w_5alloc11collections5btree6removeINtNtB7_4node6HandleINtBY_7NodeRefNtNtBY_6marker3MutmNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5codec14ValidatedCodecNtB1v_4LeafENtB1v_2KVE14remove_leaf_kvNCNvMs5_NtNtB7_3map5entryINtB3E_13OccupiedEntrymB1M_E9remove_kv0NtNtBb_5alloc6GlobalEB1S_"
+      },
+      {
+        "functionIndex": 70,
+        "name": "_RNvMs10_NtNtNtCsewWLk9TkM7w_5alloc11collections5btree4nodeINtB6_16BalancingContextmNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5codec14ValidatedCodecE16bulk_steal_rightB1p_"
+      },
+      {
+        "functionIndex": 71,
+        "name": "_RNvMs10_NtNtNtCsewWLk9TkM7w_5alloc11collections5btree4nodeINtB6_16BalancingContextmNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5codec14ValidatedCodecE15bulk_steal_leftB1p_"
+      },
+      {
+        "functionIndex": 72,
+        "name": "_RINvMs_NtNtNtCsewWLk9TkM7w_5alloc11collections5btree6removeINtNtB7_4node6HandleINtBY_7NodeRefNtNtBY_6marker3MutmNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state12PlannerStateNtB1v_4LeafENtB1v_2KVE14remove_leaf_kvNCNvMs5_NtNtB7_3map5entryINtB3C_13OccupiedEntrymB1M_E9remove_kv0NtNtBb_5alloc6GlobalEB1S_"
+      },
+      {
+        "functionIndex": 73,
+        "name": "_RNvMs10_NtNtNtCsewWLk9TkM7w_5alloc11collections5btree4nodeINtB6_16BalancingContextmNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state12PlannerStateE16bulk_steal_rightB1p_"
+      },
+      {
+        "functionIndex": 74,
+        "name": "_RNvMs10_NtNtNtCsewWLk9TkM7w_5alloc11collections5btree4nodeINtB6_16BalancingContextmNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state12PlannerStateE15bulk_steal_leftB1p_"
+      },
+      {
+        "functionIndex": 75,
+        "name": "_RINvMs_NtNtNtCsewWLk9TkM7w_5alloc11collections5btree6removeINtNtB7_4node6HandleINtBY_7NodeRefNtNtBY_6marker3MutmNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine9transport14FrameTransportNtB1v_4LeafENtB1v_2KVE14remove_leaf_kvNCNvMs5_NtNtB7_3map5entryINtB3I_13OccupiedEntrymB1M_E9remove_kv0NtNtBb_5alloc6GlobalEB1S_"
+      },
+      {
+        "functionIndex": 76,
+        "name": "_RNvMs10_NtNtNtCsewWLk9TkM7w_5alloc11collections5btree4nodeINtB6_16BalancingContextmNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine9transport14FrameTransportE16bulk_steal_rightB1p_"
+      },
+      {
+        "functionIndex": 77,
+        "name": "_RNvMs10_NtNtNtCsewWLk9TkM7w_5alloc11collections5btree4nodeINtB6_16BalancingContextmNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine9transport14FrameTransportE15bulk_steal_leftB1p_"
+      },
+      {
+        "functionIndex": 78,
+        "name": "_RINvMsi_NtNtNtCsewWLk9TkM7w_5alloc11collections5btree3mapINtB6_8BTreeMapmNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine9transport14FrameTransportE3getmEB1f_"
+      },
+      {
+        "functionIndex": 79,
+        "name": "_RINvNvMs2_NtCsewWLk9TkM7w_5alloc7raw_vecINtB8_11RawVecInnerpE7reserve21do_reserve_and_handleNtNtBa_5alloc6GlobalECs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 80,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueAINtNtCsewWLk9TkM7w_5alloc3vec3VecfEj9_ECs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 81,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueAINtNtCsewWLk9TkM7w_5alloc3vec3VecmEj8_ECs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 82,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueINtNtCsewWLk9TkM7w_5alloc3vec3VecNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5codec17ExecutableProgramEEB1e_"
+      },
+      {
+        "functionIndex": 83,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueINtNtCsewWLk9TkM7w_5alloc3vec3VecNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5codec17ProgramDescriptorEEB1e_"
+      },
+      {
+        "functionIndex": 84,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueINtNtCsewWLk9TkM7w_5alloc5boxed3BoxNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper4wasm9WasmStateEEB1e_"
+      },
+      {
+        "functionIndex": 85,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper14RegisteredFontEBD_"
+      },
+      {
+        "functionIndex": 86,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12font_binding17FontRenderBindingEBH_"
+      },
+      {
+        "functionIndex": 87,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state12PlannerStateEBH_"
+      },
+      {
+        "functionIndex": 88,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12codec_gather20CodecGatherWorkspaceEBH_"
+      },
+      {
+        "functionIndex": 89,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueINtNtNtCsewWLk9TkM7w_5alloc3vec5drain5DrainNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine9run_local12PendingGlyphEEB1o_"
+      },
+      {
+        "functionIndex": 90,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper10CachedPlanEBD_"
+      },
+      {
+        "functionIndex": 91,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueNtNtNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup5cache11LookupCacheECs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 92,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper4bidi12BidiAnalysisEBF_"
+      },
+      {
+        "functionIndex": 93,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper7unicode15UnicodeAnalysisEBF_"
+      },
+      {
+        "functionIndex": 94,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioning20PositionedGlyphArenaEBH_"
+      },
+      {
+        "functionIndex": 95,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine9run_local13RunLocalArenaEBH_"
+      },
+      {
+        "functionIndex": 96,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13cluster_state12ClusterArenaEBH_"
+      },
+      {
+        "functionIndex": 97,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13shaping_state10ShapeArenaEBH_"
+      },
+      {
+        "functionIndex": 98,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13flow_geometry15InlineSlotArenaEBH_"
+      },
+      {
+        "functionIndex": 99,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13flow_geometry17FlowGeometryArenaEBH_"
+      },
+      {
+        "functionIndex": 100,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16flow_composition15FlowLayoutArenaEBH_"
+      },
+      {
+        "functionIndex": 101,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine20render_plan_compiler18RenderPlanCompilerEBH_"
+      },
+      {
+        "functionIndex": 102,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state14ParagraphStateEBH_"
+      },
+      {
+        "functionIndex": 103,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine6staged10StyleStageEBH_"
+      },
+      {
+        "functionIndex": 104,
+        "name": "_RNCINvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioning27flow_positioning_equivalentNCNvMs5_NtB6_5stateNtB1C_14ParagraphState27prepare_geometry_and_layout0NCB1w_s_0Es_0B8_"
+      },
+      {
+        "functionIndex": 105,
+        "name": "_RINvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioning29push_boundary_run_local_glyphNCNvMs5_NtB4_5stateNtB1C_14ParagraphState18prepare_positioneds1_0NCB1w_s2_0EB6_"
+      },
+      {
+        "functionIndex": 106,
+        "name": "_RNvMs_Cs9Ydyzm5xZSQ_19pmndrs_glyph_shaperNtB4_14ShaperRegistry18font_glyph_extents"
+      },
+      {
+        "functionIndex": 107,
+        "name": "_RNvMs_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine9run_localNtB4_14RunLocalWriter10push_glyph"
+      },
+      {
+        "functionIndex": 108,
+        "name": "_RINvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioning7reservedEB6_"
+      },
+      {
+        "functionIndex": 109,
+        "name": "_RINvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioning7reservehEB6_"
+      },
+      {
+        "functionIndex": 110,
+        "name": "_RINvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13cluster_state24append_run_local_clusterNCNvMs5_NtB4_5stateNtB1z_14ParagraphState26finish_cluster_preparation0EB6_"
+      },
+      {
+        "functionIndex": 111,
+        "name": "_RNvMs_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine9run_localNtB4_14RunLocalWriter14finish_cluster"
+      },
+      {
+        "functionIndex": 112,
+        "name": "_RNvMs_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine9run_localNtB4_14RunLocalWriter21push_detached_cluster"
+      },
+      {
+        "functionIndex": 113,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16flow_composition17drop_cap_envelope"
+      },
+      {
+        "functionIndex": 114,
+        "name": "_RINvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16flow_composition24line_metrics_for_clusterNCNvMs5_NtB4_5stateNtB1C_14ParagraphState29prepare_intrinsic_flow_layouts2_0NCB1w_s3_0EB6_"
+      },
+      {
+        "functionIndex": 115,
+        "name": "_RINvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16line_composition10end_chargeNtNtB4_5state22ShapedBreakCorrectionsEB6_"
+      },
+      {
+        "functionIndex": 116,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16line_composition20trailing_space_units"
+      },
+      {
+        "functionIndex": 117,
+        "name": "_RNvMs4_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16line_compositionINtB5_7LineFitNtNtB7_5state22ShapedBreakCorrectionsE9overflowsB9_"
+      },
+      {
+        "functionIndex": 118,
+        "name": "_RNvMs4_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16line_compositionINtB5_7LineFitNtNtB7_5state22ShapedBreakCorrectionsE4fitsB9_"
+      },
+      {
+        "functionIndex": 119,
+        "name": "_RNvMs4_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16line_compositionINtB5_7LineFitNtNtB7_5state22ShapedBreakCorrectionsE7composeB9_"
+      },
+      {
+        "functionIndex": 120,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16line_composition20resolve_last_flagged"
+      },
+      {
+        "functionIndex": 121,
+        "name": "_RINvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine4sort16apply_pair_orderNtNtB4_5state15RankedParagraphEB6_"
+      },
+      {
+        "functionIndex": 122,
+        "name": "_RINvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state11reserve_vecNtB2_12FallbackSpanEB6_"
+      },
+      {
+        "functionIndex": 123,
+        "name": "_RINvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state11reserve_vecTymEEB6_"
+      },
+      {
+        "functionIndex": 124,
+        "name": "_RNvMs1_NtCshoFYSnENQqs_4talc4baseINtB5_4TalcNtNtB7_4wasm16WasmGrowAndClaimNtBI_11WasmBinningE8allocateCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 125,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6stable5drift4sortNtNtCs9P34ixSXtiq_12unicode_bidi8implicit11BracketPairNCINvMNtCsewWLk9TkM7w_5alloc5sliceSBW_11sort_by_keyjNCINvBY_22identify_bracket_pairsStNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper4bidi17Unicode17BidiDataE0E0EB3g_"
+      },
+      {
+        "functionIndex": 126,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort8unstable9quicksort9quicksortNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine17session_placement19SessionPlacementRowNCINvMB8_SB17_20sort_unstable_by_keymNCNCNvMs4_NtB1b_5stateNtB3i_12PlannerState23prepare_placement_slots0s6_0E0EB1d_"
+      },
+      {
+        "functionIndex": 127,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort8unstable9quicksort9quicksortTNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13cluster_state20RunCanonicalRevisionmENCINvMB8_SB17_20sort_unstable_by_keymNCNvNtB1c_15placement_state18prepare_run_lookups0_0E0EB1e_"
+      },
+      {
+        "functionIndex": 128,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort8unstable9quicksort9quicksortTNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state19PlacementLogicalKeyNtNtB1c_20placement_slot_arena13PlacementSlotENCINvMB8_SB17_20sort_unstable_by_keyB18_NCNvMs2_B2n_INtB2n_18PlacementSlotArenaB18_E26prepare_indexed_structurals_0E0EB1e_"
+      },
+      {
+        "functionIndex": 129,
+        "name": "_RINvNtNtNtCsdkdt1aaAg1T_4core5slice4sort8unstable7ipnsortTymENvYBT_NtNtB8_3cmp10PartialOrd2ltECs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 130,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort8unstable9quicksort9quicksortTymENvYB17_NtNtBa_3cmp10PartialOrd2ltECs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 131,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort8unstable9quicksort9quicksortmNCINvMB8_Sm20sort_unstable_by_keyTmmENCNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB1R_20PositionedGlyphArena24rebuild_replacement_runss5_0E0EB1V_"
+      },
+      {
+        "functionIndex": 132,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort8unstable9quicksort9quicksortmNCINvMB8_Sm20sort_unstable_by_keyTmmENCNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB1R_20PositionedGlyphArena24rebuild_replacement_runss6_0E0EB1V_"
+      },
+      {
+        "functionIndex": 133,
+        "name": "_RINvNtNtNtCsdkdt1aaAg1T_4core5slice4sort8unstable7ipnsortmNvYmNtNtB8_3cmp10PartialOrd2ltECs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 134,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort8unstable9quicksort9quicksortmNvYmNtNtBa_3cmp10PartialOrd2ltECs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 135,
+        "name": "_RINvNtNtNtCsdkdt1aaAg1T_4core5slice4sort8unstable7ipnsortyNvYyNtNtB8_3cmp10PartialOrd2ltECs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 136,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort8unstable9quicksort9quicksortyNvYyNtNtBa_3cmp10PartialOrd2ltECs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 137,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared5pivot11median3_recNtNtCs9P34ixSXtiq_12unicode_bidi8implicit11BracketPairNCINvMNtCsewWLk9TkM7w_5alloc5sliceSB14_11sort_by_keyjNCINvB16_22identify_bracket_pairsStNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper4bidi17Unicode17BidiDataE0E0EB3q_"
+      },
+      {
+        "functionIndex": 138,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared5pivot11median3_recNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine17session_placement19SessionPlacementRowNCINvMB8_SB14_20sort_unstable_by_keymNCNCNvMs4_NtB18_5stateNtB3f_12PlannerState23prepare_placement_slots0s6_0E0EB1a_"
+      },
+      {
+        "functionIndex": 139,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared5pivot11median3_recTNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13cluster_state20RunCanonicalRevisionmENCINvMB8_SB14_20sort_unstable_by_keymNCNvNtB19_15placement_state18prepare_run_lookups0_0E0EB1b_"
+      },
+      {
+        "functionIndex": 140,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared5pivot11median3_recTNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state19PlacementLogicalKeyNtNtB19_20placement_slot_arena13PlacementSlotENCINvMB8_SB14_20sort_unstable_by_keyB15_NCNvMs2_B2k_INtB2k_18PlacementSlotArenaB15_E26prepare_indexed_structurals_0E0EB1b_"
+      },
+      {
+        "functionIndex": 141,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared5pivot11median3_recTymENvYB14_NtNtBa_3cmp10PartialOrd2ltECs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 142,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared5pivot11median3_recmNCINvMB8_Sm20sort_unstable_by_keyTmmENCNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB1O_20PositionedGlyphArena24rebuild_replacement_runss5_0E0EB1S_"
+      },
+      {
+        "functionIndex": 143,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared5pivot11median3_recmNCINvMB8_Sm20sort_unstable_by_keyTmmENCNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB1O_20PositionedGlyphArena24rebuild_replacement_runss6_0E0EB1S_"
+      },
+      {
+        "functionIndex": 144,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared5pivot11median3_recmNvYmNtNtBa_3cmp10PartialOrd2ltECs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 145,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared5pivot11median3_recyNvYyNtNtBa_3cmp10PartialOrd2ltECs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 146,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared9smallsort11insert_tailTNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state19PlacementLogicalKeyNtNtB1d_20placement_slot_arena13PlacementSlotENCINvMB8_SB18_20sort_unstable_by_keyB19_NCNvMs2_B2o_INtB2o_18PlacementSlotArenaB19_E26prepare_indexed_structurals_0E0EB1f_"
+      },
+      {
+        "functionIndex": 147,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared9smallsort12sort4_stableTNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state19PlacementLogicalKeyNtNtB1e_20placement_slot_arena13PlacementSlotENCINvMB8_SB19_20sort_unstable_by_keyB1a_NCNvMs2_B2p_INtB2p_18PlacementSlotArenaB1a_E26prepare_indexed_structurals_0E0EB1g_"
+      },
+      {
+        "functionIndex": 148,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared9smallsort12sort8_stableNtNtCs9P34ixSXtiq_12unicode_bidi8implicit11BracketPairNCINvMNtCsewWLk9TkM7w_5alloc5sliceSB19_11sort_by_keyjNCINvB1b_22identify_bracket_pairsStNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper4bidi17Unicode17BidiDataE0E0EB3v_"
+      },
+      {
+        "functionIndex": 149,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared9smallsort12sort8_stableNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine17session_placement19SessionPlacementRowNCINvMB8_SB19_20sort_unstable_by_keymNCNCNvMs4_NtB1d_5stateNtB3k_12PlannerState23prepare_placement_slots0s6_0E0EB1f_"
+      },
+      {
+        "functionIndex": 150,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared9smallsort12sort8_stableTymENvYB19_NtNtBa_3cmp10PartialOrd2ltECs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 151,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared9smallsort25insertion_sort_shift_leftTymENvYB1m_NtNtBa_3cmp10PartialOrd2ltECs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 152,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared9smallsort25insertion_sort_shift_leftmNCINvMB8_Sm20sort_unstable_by_keyTmmENCNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB26_20PositionedGlyphArena24rebuild_replacement_runss5_0E0EB2a_"
+      },
+      {
+        "functionIndex": 153,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared9smallsort25insertion_sort_shift_leftmNCINvMB8_Sm20sort_unstable_by_keyTmmENCNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB26_20PositionedGlyphArena24rebuild_replacement_runss6_0E0EB2a_"
+      },
+      {
+        "functionIndex": 154,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared9smallsort25insertion_sort_shift_leftmNvYmNtNtBa_3cmp10PartialOrd2ltECs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 155,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared9smallsort25insertion_sort_shift_leftyNvYyNtNtBa_3cmp10PartialOrd2ltECs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 156,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6stable9quicksort9quicksortNtNtCs9P34ixSXtiq_12unicode_bidi8implicit11BracketPairNCINvMNtCsewWLk9TkM7w_5alloc5sliceSB15_11sort_by_keyjNCINvB17_22identify_bracket_pairsStNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper4bidi17Unicode17BidiDataE0E0EB3r_"
+      },
+      {
+        "functionIndex": 157,
+        "name": "_RNCNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioning24equivalent_retained_lines0_0B7_"
+      },
+      {
+        "functionIndex": 158,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioning16DecorationRecordE8grow_oneBS_"
+      },
+      {
+        "functionIndex": 159,
+        "name": "_RNCINvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB8_20PositionedGlyphArena5buildNCNvMs5_NtBa_5stateNtB1K_14ParagraphState18prepare_positioneds_0NCB1E_s0_0NCB1E_s1_0NCB1E_s2_0Esk_0Bc_"
+      },
+      {
+        "functionIndex": 160,
+        "name": "_RNCNCNvMs3_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB9_10TextEngine20prepare_update_inners_0s2_0Bd_"
+      },
+      {
+        "functionIndex": 161,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state28append_paragraph_measurement"
+      },
+      {
+        "functionIndex": 162,
+        "name": "_RNCNCNvMs7_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB9_22ShapedBreakCorrections17line_edge_recordss7_0s_0Bd_"
+      },
+      {
+        "functionIndex": 163,
+        "name": "_RNvMs_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13shaping_stateNtB4_10ShapeArena11append_from"
+      },
+      {
+        "functionIndex": 164,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state26append_boundary_source_ids"
+      },
+      {
+        "functionIndex": 165,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16render_plan_wire14write_semantic"
+      },
+      {
+        "functionIndex": 166,
+        "name": "_RNvMs4_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB5_12PlannerState17prepare_lifecycle"
+      },
+      {
+        "functionIndex": 167,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state23planner_has_decorations"
+      },
+      {
+        "functionIndex": 168,
+        "name": "_RNvMs2_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine20placement_slot_arenaINtB5_18PlacementSlotArenaNtNtB7_5state19PlacementLogicalKeyE13prepare_reuseB9_"
+      },
+      {
+        "functionIndex": 169,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecINtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine20placement_slot_arena12PendingWriteNtNtBR_5state19PlacementLogicalKeyEE8grow_oneBT_"
+      },
+      {
+        "functionIndex": 170,
+        "name": "_RNvMs5_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB5_14ParagraphState17speculative_match"
+      },
+      {
+        "functionIndex": 171,
+        "name": "_RNvMs5_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB5_14ParagraphState7prepare"
+      },
+      {
+        "functionIndex": 172,
+        "name": "_RNvMs5_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB5_14ParagraphState27prepare_geometry_and_layout"
+      },
+      {
+        "functionIndex": 173,
+        "name": "_RNvMs5_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB5_14ParagraphState18prepare_positioned"
+      },
+      {
+        "functionIndex": 174,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13shaping_state9ShapedRunE8grow_oneBS_"
+      },
+      {
+        "functionIndex": 175,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecINtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine20placement_slot_arena18PlacementSlotStateNtNtBR_5state19PlacementLogicalKeyEE8grow_oneBT_"
+      },
+      {
+        "functionIndex": 176,
+        "name": "_RNvXs1n_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB6_19PlacementLogicalKeyNtNtCsdkdt1aaAg1T_4core3cmp9PartialEq2eq"
+      },
+      {
+        "functionIndex": 177,
+        "name": "_RNvMs2_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine20placement_slot_arenaINtB5_18PlacementSlotArenaNtNtB7_5state19PlacementLogicalKeyE16assign_placementB9_"
+      },
+      {
+        "functionIndex": 178,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtCs9P34ixSXtiq_12unicode_bidi13ParagraphInfoE8grow_oneCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 179,
+        "name": "_RNvXs28_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB6_14GatherCacheKeyNtNtCsdkdt1aaAg1T_4core3cmp9PartialEq2eq"
+      },
+      {
+        "functionIndex": 180,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state21append_planner_gather"
+      },
+      {
+        "functionIndex": 181,
+        "name": "_RNvMs0_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12codec_gatherNtB5_20CodecGatherWorkspace5begin"
+      },
+      {
+        "functionIndex": 182,
+        "name": "_RNvMs0_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12codec_gatherNtB5_20CodecGatherWorkspace4view"
+      },
+      {
+        "functionIndex": 183,
+        "name": "_RNvMs3_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12codec_gatherNtB5_17GatheredPlanInput10plan_input"
+      },
+      {
+        "functionIndex": 184,
+        "name": "_RNvMs3_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine20render_plan_compilerNtB5_18RenderPlanCompiler7prepare"
+      },
+      {
+        "functionIndex": 185,
+        "name": "_RNvMs3_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine20render_plan_compilerNtB5_18RenderPlanCompiler15prepare_session"
+      },
+      {
+        "functionIndex": 186,
+        "name": "_RNvMs4_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB5_12PlannerState13paragraph_mut"
+      },
+      {
+        "functionIndex": 187,
+        "name": "_RNvMs2_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13semantic_wireNtB5_17TextMutationBatch11fingerprint"
+      },
+      {
+        "functionIndex": 188,
+        "name": "_RNCNvMs5_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB7_14ParagraphState18prepare_flow_liness9_0Bb_"
+      },
+      {
+        "functionIndex": 189,
+        "name": "_RNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11style_stateNtB5_10StyleArena17resolved_language"
+      },
+      {
+        "functionIndex": 190,
+        "name": "_RNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11style_stateNtB5_10StyleArena17resolved_features"
+      },
+      {
+        "functionIndex": 191,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state15find_font_stack"
+      },
+      {
+        "functionIndex": 192,
+        "name": "_RNCNvMs7_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB7_22ShapedBreakCorrections17line_edge_recordss7_0Bb_"
+      },
+      {
+        "functionIndex": 193,
+        "name": "_RNvMs7_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB5_22ShapedBreakCorrections11with_island"
+      },
+      {
+        "functionIndex": 194,
+        "name": "_RNCNvMs7_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB7_22ShapedBreakCorrections5deltas_0Bb_"
+      },
+      {
+        "functionIndex": 195,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16render_plan_wire18encode_publication"
+      },
+      {
+        "functionIndex": 196,
+        "name": "_RNCNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state31reconcile_same_length_candidate0B7_"
+      },
+      {
+        "functionIndex": 197,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecINtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12codec_gather12AlignedFieldfEE8grow_oneBT_"
+      },
+      {
+        "functionIndex": 198,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper10CachedPlanE8grow_oneBO_"
+      },
+      {
+        "functionIndex": 199,
+        "name": "_RNvCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper23decode_utf16_range_into"
+      },
+      {
+        "functionIndex": 200,
+        "name": "_RNvCs9wFQrvczXsK_7___rustc12___rust_alloc"
+      },
+      {
+        "functionIndex": 201,
+        "name": "_RNvCs9wFQrvczXsK_7___rustc14___rust_realloc"
+      },
+      {
+        "functionIndex": 202,
+        "name": "_RNvMNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper4bidiNtB2_12BidiAnalysis20reserve_for_analysis"
+      },
+      {
+        "functionIndex": 203,
+        "name": "_RNvMNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper7outlineNtB2_10GlyfLoader4load"
+      },
+      {
+        "functionIndex": 204,
+        "name": "_RNvMNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper7unicodeNtB2_15UnicodeAnalysis15accepts_context"
+      },
+      {
+        "functionIndex": 205,
+        "name": "_RNvMNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper7unicodeNtB2_15UnicodeAnalysis7reserve"
+      },
+      {
+        "functionIndex": 206,
+        "name": "_RNvMs_NtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper10line_breakNtB4_17LineBreakAnalysis7reserve"
+      },
+      {
+        "functionIndex": 207,
+        "name": "_RNvMNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12font_bindingINtB2_10FieldTablefE3newB6_"
+      },
+      {
+        "functionIndex": 208,
+        "name": "_RNvMNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12layout_queryNtB2_9InkBounds5write"
+      },
+      {
+        "functionIndex": 209,
+        "name": "_RNvMNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12ordered_planNtB2_19OrderedPlanCompiler31retained_storage_bindings_match"
+      },
+      {
+        "functionIndex": 210,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine9plan_draw15push_glyph_draw"
+      },
+      {
+        "functionIndex": 211,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12plan_packing22coalesce_buffer_ranges"
+      },
+      {
+        "functionIndex": 212,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12plan_packing17PendingAllocationE8grow_oneBS_"
+      },
+      {
+        "functionIndex": 213,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12ordered_plan12PendingBatchE8grow_oneBS_"
+      },
+      {
+        "functionIndex": 214,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper4wasm10AllocationE8grow_oneBQ_"
+      },
+      {
+        "functionIndex": 215,
+        "name": "_RNvMNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13shaping_stateNtB2_15ShapingRunArena4push"
+      },
+      {
+        "functionIndex": 216,
+        "name": "_RNvMNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13shaping_stateNtB2_15ShapingRunArena7reserve"
+      },
+      {
+        "functionIndex": 217,
+        "name": "_RNvMNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine14identity_indexNtB2_13IdentityIndex6insert"
+      },
+      {
+        "functionIndex": 218,
+        "name": "_RNvMNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine14identity_indexNtB2_13IdentityIndex7prepare"
+      },
+      {
+        "functionIndex": 219,
+        "name": "_RNvMNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine15placement_stateNtB2_14PlacementState11finish_line"
+      },
+      {
+        "functionIndex": 220,
+        "name": "_RNvMNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine15placement_stateNtB2_14PlacementState12push_segment"
+      },
+      {
+        "functionIndex": 221,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine15placement_state11joined_span"
+      },
+      {
+        "functionIndex": 222,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13cluster_state9LayoutRunE8grow_oneBS_"
+      },
+      {
+        "functionIndex": 223,
+        "name": "_RNvMNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine15placement_stateNtB2_14PlacementState19line_fragment_start"
+      },
+      {
+        "functionIndex": 224,
+        "name": "_RNvMNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine15placement_stateNtB2_14PlacementState20append_retained_line"
+      },
+      {
+        "functionIndex": 225,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine15placement_state18prepare_run_lookup"
+      },
+      {
+        "functionIndex": 226,
+        "name": "_RNvMNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine15placement_stateNtB2_14PlacementState20validate_occurrences"
+      },
+      {
+        "functionIndex": 227,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13flow_geometry18polygon_projection"
+      },
+      {
+        "functionIndex": 228,
+        "name": "_RNvMs0_NtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper10line_breakNtB5_10BreakState18class_after_spaces"
+      },
+      {
+        "functionIndex": 229,
+        "name": "_RNvMs0_NtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper10line_breakNtB5_10BreakState6decide"
+      },
+      {
+        "functionIndex": 230,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12codec_gather12semantic_f32"
+      },
+      {
+        "functionIndex": 231,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12codec_gather10source_u32"
+      },
+      {
+        "functionIndex": 232,
+        "name": "_RNvMs0_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12codec_gatherNtB5_20CodecGatherWorkspace13reserve_codec"
+      },
+      {
+        "functionIndex": 233,
+        "name": "_RNvMs0_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12codec_gatherNtB5_20CodecGatherWorkspace15reserve_records"
+      },
+      {
+        "functionIndex": 234,
+        "name": "_RNvMs0_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12codec_gatherNtB5_20CodecGatherWorkspace18append_decorations"
+      },
+      {
+        "functionIndex": 235,
+        "name": "_RNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5codecNtB5_14ValidatedCodec7program"
+      },
+      {
+        "functionIndex": 236,
+        "name": "_RNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5codecNtB5_14ValidatedCodec23input_masks_for_changes"
+      },
+      {
+        "functionIndex": 237,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12codec_gather20plan_glyph_placement"
+      },
+      {
+        "functionIndex": 238,
+        "name": "_RNvMs2_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12codec_gatherINtB5_12AlignedFieldmE3setB9_"
+      },
+      {
+        "functionIndex": 239,
+        "name": "_RNvMs0_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13cluster_stateNtB5_12ClusterArena19mark_optional_break"
+      },
+      {
+        "functionIndex": 240,
+        "name": "_RNvMs0_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13cluster_stateNtB5_12ClusterArena20refresh_layout_units"
+      },
+      {
+        "functionIndex": 241,
+        "name": "_RNvMs0_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13cluster_stateNtB5_12ClusterArena31rebuild_layout_runs_for_shaping"
+      },
+      {
+        "functionIndex": 242,
+        "name": "_RNvMs0_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13cluster_stateNtB5_12ClusterArena5clear"
+      },
+      {
+        "functionIndex": 243,
+        "name": "_RNvMs0_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13cluster_stateNtB5_12ClusterArena6island"
+      },
+      {
+        "functionIndex": 244,
+        "name": "_RNvMs0_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13cluster_stateNtB5_12ClusterArena7reserve"
+      },
+      {
+        "functionIndex": 245,
+        "name": "_RNvMs0_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13cluster_stateNtB5_12ClusterArena9copy_from"
+      },
+      {
+        "functionIndex": 246,
+        "name": "_RNvMs_NtCsewWLk9TkM7w_5alloc3vecINtB4_3VecmE15append_elementsCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 247,
+        "name": "_RNvMs_NtCsewWLk9TkM7w_5alloc3vecINtB4_3VecdE15append_elementsCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 248,
+        "name": "_RNvMs_NtCsewWLk9TkM7w_5alloc3vecINtB4_3VechE15append_elementsCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 249,
+        "name": "_RNvMs_NtCsewWLk9TkM7w_5alloc3vecINtB4_3VectE15append_elementsCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 250,
+        "name": "_RNvMs0_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13shaping_stateNtB5_18BoundaryShapeArena7reserve"
+      },
+      {
+        "functionIndex": 251,
+        "name": "_RNvMs_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13shaping_stateNtB4_10ShapeArena7reserve"
+      },
+      {
+        "functionIndex": 252,
+        "name": "_RNvMs0_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine9transportNtB5_12AlignedArena7reserve"
+      },
+      {
+        "functionIndex": 253,
+        "name": "_RNvMs2_NtCshoFYSnENQqs_4talc4baseINtB5_4TalcNtNtB7_4wasm16WasmGrowAndClaimNtBI_11WasmBinningE15full_search_binCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 254,
+        "name": "_RNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB5_20PositionedGlyphArena20append_retained_line"
+      },
+      {
+        "functionIndex": 255,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine9run_local14PendingClusterE8grow_oneBS_"
+      },
+      {
+        "functionIndex": 256,
+        "name": "_RNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB5_20PositionedGlyphArena23assign_content_revision"
+      },
+      {
+        "functionIndex": 257,
+        "name": "_RNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB5_20PositionedGlyphArena24assign_content_revisions"
+      },
+      {
+        "functionIndex": 258,
+        "name": "_RNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB5_20PositionedGlyphArena24rebuild_replacement_runs"
+      },
+      {
+        "functionIndex": 259,
+        "name": "_RNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioningNtB5_20PositionedGlyphArena7reserve"
+      },
+      {
+        "functionIndex": 260,
+        "name": "_RNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11style_stateNtB5_10StyleArena13push_mutation"
+      },
+      {
+        "functionIndex": 261,
+        "name": "_RNvMs3_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13semantic_wireNtB5_18StyleMutationBatch3get"
+      },
+      {
+        "functionIndex": 262,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11style_state13RetainedStyleE8grow_oneBS_"
+      },
+      {
+        "functionIndex": 263,
+        "name": "_RNvMs1_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11style_stateNtB5_10StyleArena15reserve_default"
+      },
+      {
+        "functionIndex": 264,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16flow_composition11FlowDropCapE8grow_oneBS_"
+      },
+      {
+        "functionIndex": 265,
+        "name": "_RNvMs1_NtNtCsaDOWveanduf_10read_fonts2ps2csINtB5_13TransformSinkINtB5_13NopFilterSinkNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper7outline12GlyphOutlineEE9transformB1p_"
+      },
+      {
+        "functionIndex": 266,
+        "name": "_RNvMs2_NtCsewWLk9TkM7w_5alloc7raw_vecNtB5_11RawVecInner17try_reserve_exactCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 267,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtCs9P34ixSXtiq_12unicode_bidi18ParagraphInfoFlagsE8grow_oneCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 268,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper10line_break9BreakCharE8grow_oneBQ_"
+      },
+      {
+        "functionIndex": 269,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11style_state12StyleSegmentE8grow_oneBS_"
+      },
+      {
+        "functionIndex": 270,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13semantic_view14SemanticRecordE8grow_oneBS_"
+      },
+      {
+        "functionIndex": 271,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine9run_local12PendingGlyphE8grow_oneBS_"
+      },
+      {
+        "functionIndex": 272,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine17session_placement27push_binding_and_allocation"
+      },
+      {
+        "functionIndex": 273,
+        "name": "_RNvMs3_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB5_10TextEngine12abort_update"
+      },
+      {
+        "functionIndex": 274,
+        "name": "_RNvMs4_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB5_12PlannerState13abort_pending"
+      },
+      {
+        "functionIndex": 275,
+        "name": "_RNvMs3_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB5_10TextEngine12dispose_root"
+      },
+      {
+        "functionIndex": 276,
+        "name": "_RNvMs3_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB5_10TextEngine17reserve_root_text"
+      },
+      {
+        "functionIndex": 277,
+        "name": "_RNvMs4_NtCsewWLk9TkM7w_5alloc7raw_vecNtB5_11RawVecInner15try_allocate_inCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 278,
+        "name": "_RNvMs4_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16line_compositionINtB5_7LineFitNtNtB7_5state22ShapedBreakCorrectionsE7chargedB9_"
+      },
+      {
+        "functionIndex": 279,
+        "name": "_RNvMs5_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB5_14ParagraphState9abort_all"
+      },
+      {
+        "functionIndex": 280,
+        "name": "_RNvMs4_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB5_12PlannerState15abort_lifecycle"
+      },
+      {
+        "functionIndex": 281,
+        "name": "_RNvMs4_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB5_12PlannerState14prepare_upsert"
+      },
+      {
+        "functionIndex": 282,
+        "name": "_RNvMs5_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB5_14ParagraphState10abort_text"
+      },
+      {
+        "functionIndex": 283,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state22set_whole_shape_window"
+      },
+      {
+        "functionIndex": 284,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state18push_fallback_span"
+      },
+      {
+        "functionIndex": 285,
+        "name": "_RNvMs5_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB5_14ParagraphState26finish_cluster_preparation"
+      },
+      {
+        "functionIndex": 286,
+        "name": "_RNvMs_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13semantic_wireNtB4_13GeometryBatch11fingerprint"
+      },
+      {
+        "functionIndex": 287,
+        "name": "_RNvMs_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine9run_localNtB4_14RunLocalWriter14finalize_block"
+      },
+      {
+        "functionIndex": 288,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13cluster_state16cluster_text_len"
+      },
+      {
+        "functionIndex": 289,
+        "name": "_RNvXs2_NtNtCsdkdt1aaAg1T_4core5slice3cmpNtNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13semantic_wire14FlowConstraintINtB5_14SlicePartialEqBC_E17equal_same_lengthBI_"
+      },
+      {
+        "functionIndex": 290,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state17attach_line_edges"
+      },
+      {
+        "functionIndex": 291,
+        "name": "_RNvMs_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13shaping_stateNtB4_10ShapeArena23append_glyph_range_from"
+      },
+      {
+        "functionIndex": 292,
+        "name": "_RNvMs6_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB5_19SparseWindowBuilder5visit"
+      },
+      {
+        "functionIndex": 293,
+        "name": "_RNvMs7_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5stateNtB5_22ShapedBreakCorrections5delta"
+      },
+      {
+        "functionIndex": 294,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13flow_geometry13subtract_slot"
+      },
+      {
+        "functionIndex": 295,
+        "name": "_RNvMs_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine13flow_geometryNtB4_15InlineSlotArena25intersect_polygon_section"
+      },
+      {
+        "functionIndex": 296,
+        "name": "_RNvMs_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine9run_localNtB4_14RunLocalWriter23replay_cluster_envelope"
+      },
+      {
+        "functionIndex": 297,
+        "name": "_RNvMs_NtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine9transportNtB4_14FrameTransport19stage_detached_plan"
+      },
+      {
+        "functionIndex": 298,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16render_plan_wire18publication_layout"
+      },
+      {
+        "functionIndex": 299,
+        "name": "_RNvMs_NtNtCsaDOWveanduf_10read_fonts2ps2csINtB4_9EvaluatorINtB4_13TransformSinkINtB4_13NopFilterSinkNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper7outline12GlyphOutlineEEE11handle_seacB1E_"
+      },
+      {
+        "functionIndex": 300,
+        "name": "_RNvMs_NtNtCsaDOWveanduf_10read_fonts2ps2csINtB4_9EvaluatorINtB4_13TransformSinkINtB4_13NopFilterSinkNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper7outline12GlyphOutlineEEE9emit_lineB1E_"
+      },
+      {
+        "functionIndex": 301,
+        "name": "_RNvXs2_NtNtCsaDOWveanduf_10read_fonts2ps2csINtB5_13TransformSinkINtB5_13NopFilterSinkNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper7outline12GlyphOutlineEENtB5_11CommandSink5closeB1p_"
+      },
+      {
+        "functionIndex": 302,
+        "name": "_RNvNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper4wasm13engine_status"
+      },
+      {
+        "functionIndex": 303,
+        "name": "_RNvNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper4wasm22publish_engine_failure"
+      },
+      {
+        "functionIndex": 304,
+        "name": "_RNvNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper4wasm24publish_prepared_failure"
+      },
+      {
+        "functionIndex": 305,
+        "name": "_RNvNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper4wasm6update"
+      },
+      {
+        "functionIndex": 306,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine10frame_wire20parse_update_request"
+      },
+      {
+        "functionIndex": 307,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state33speculative_lifecycle_fingerprint"
+      },
+      {
+        "functionIndex": 308,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine5state29request_semantic_paragraph_id"
+      },
+      {
+        "functionIndex": 309,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioning19boundary_shape_span"
+      },
+      {
+        "functionIndex": 310,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine11positioning35contiguous_positioned_cluster_range"
+      },
+      {
+        "functionIndex": 311,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12layout_query12flow_extents"
+      },
+      {
+        "functionIndex": 312,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12layout_query18line_inline_extent"
+      },
+      {
+        "functionIndex": 313,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine12layout_query12resolve_axis"
+      },
+      {
+        "functionIndex": 314,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16render_plan_wire11write_patch"
+      },
+      {
+        "functionIndex": 315,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16render_plan_wire12write_buffer"
+      },
+      {
+        "functionIndex": 316,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine16render_plan_wire16write_retirement"
+      },
+      {
+        "functionIndex": 317,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine17font_binding_wire10decode_f32"
+      },
+      {
+        "functionIndex": 318,
+        "name": "_RNvNtNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper6engine17font_binding_wire10decode_u32"
+      },
+      {
+        "functionIndex": 319,
+        "name": "_RNvXNtNtCsaDOWveanduf_10read_fonts2ps2csTRShRNtNtNtB4_3cff5index5IndexBG_BG_ENtB2_17CharstringContext4kind"
+      },
+      {
+        "functionIndex": 320,
+        "name": "_RNvXs0_Cs9Ydyzm5xZSQ_19pmndrs_glyph_shaperNtB5_11FlatExtentsNtNtNtCsbx9tMmkA0qL_8harfrust2hb10font_funcs9FontFuncs7extents"
+      },
+      {
+        "functionIndex": 321,
+        "name": "_RNvXs1g_NtCsdkdt1aaAg1T_4core3fmtRjNtB6_5Debug3fmtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 322,
+        "name": "_RNvXs_NtNtCsewWLk9TkM7w_5alloc3vec21spec_from_iter_nestedINtB6_3VecRSfEINtB4_18SpecFromIterNestedB13_INtNtNtNtCsdkdt1aaAg1T_4core4iter8adapters3map3MapINtNtNtB1K_5slice4iter4IterIBU_fEENvMs_B6_B2Q_8as_sliceEE9from_iterCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 323,
+        "name": "_RNvXsj_NtCs6oDYXx9p8OW_20unicode_segmentation8graphemeNtB5_18GraphemeIncompleteNtNtCsdkdt1aaAg1T_4core3fmt5Debug3fmt"
+      },
+      {
+        "functionIndex": 324,
+        "name": "_RNvYNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper11FlatExtentsNtNtNtCsbx9tMmkA0qL_8harfrust2hb10font_funcs9FontFuncs13advance_widthB4_"
+      },
+      {
+        "functionIndex": 325,
+        "name": "_RNvYNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper11FlatExtentsNtNtNtCsbx9tMmkA0qL_8harfrust2hb10font_funcs9FontFuncs13nominal_glyphB4_"
+      },
+      {
+        "functionIndex": 326,
+        "name": "_RNvYNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper11FlatExtentsNtNtNtCsbx9tMmkA0qL_8harfrust2hb10font_funcs9FontFuncs13variant_glyphB4_"
+      },
+      {
+        "functionIndex": 327,
+        "name": "_RNvYNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper11FlatExtentsNtNtNtCsbx9tMmkA0qL_8harfrust2hb10font_funcs9FontFuncs14advance_heightB4_"
+      },
+      {
+        "functionIndex": 328,
+        "name": "_RNvYNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper11FlatExtentsNtNtNtCsbx9tMmkA0qL_8harfrust2hb10font_funcs9FontFuncs15vertical_originB4_"
+      },
+      {
+        "functionIndex": 329,
+        "name": "_RNvYNtCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper11FlatExtentsNtNtNtCsbx9tMmkA0qL_8harfrust2hb10font_funcs9FontFuncs23populate_advance_widthsB4_"
+      },
+      {
+        "functionIndex": 330,
+        "name": "_RNvYTRShRNtNtNtNtCsaDOWveanduf_10read_fonts2ps3cff5index5IndexB6_B6_ENtNtBd_2cs17CharstringContext13weight_vectorCs9Ydyzm5xZSQ_19pmndrs_glyph_shaper"
+      },
+      {
+        "functionIndex": 331,
+        "name": "pmndrs_glyph_engine_borrow_paragraph_glyph"
+      },
+      {
+        "functionIndex": 332,
+        "name": "pmndrs_glyph_engine_borrow_paragraph_layout"
+      },
+      {
+        "functionIndex": 333,
+        "name": "pmndrs_glyph_engine_codec_count"
+      },
+      {
+        "functionIndex": 334,
+        "name": "pmndrs_glyph_engine_copy_decorations"
+      },
+      {
+        "functionIndex": 335,
+        "name": "pmndrs_glyph_engine_copy_glyphs"
+      },
+      {
+        "functionIndex": 336,
+        "name": "pmndrs_glyph_engine_create_root"
+      },
+      {
+        "functionIndex": 337,
+        "name": "pmndrs_glyph_engine_dispose_codec"
+      },
+      {
+        "functionIndex": 338,
+        "name": "pmndrs_glyph_engine_dispose_font_binding"
+      },
+      {
+        "functionIndex": 339,
+        "name": "pmndrs_glyph_engine_dispose_font_stack"
+      },
+      {
+        "functionIndex": 340,
+        "name": "pmndrs_glyph_engine_dispose_root"
+      },
+      {
+        "functionIndex": 341,
+        "name": "pmndrs_glyph_engine_font_binding_count"
+      },
+      {
+        "functionIndex": 342,
+        "name": "pmndrs_glyph_engine_font_stack_count"
+      },
+      {
+        "functionIndex": 343,
+        "name": "pmndrs_glyph_engine_measure_paragraph"
+      },
+      {
+        "functionIndex": 344,
+        "name": "pmndrs_glyph_engine_register_codec"
+      },
+      {
+        "functionIndex": 345,
+        "name": "pmndrs_glyph_engine_register_font_binding"
+      },
+      {
+        "functionIndex": 346,
+        "name": "pmndrs_glyph_engine_register_font_stack"
+      },
+      {
+        "functionIndex": 347,
+        "name": "pmndrs_glyph_engine_request_capacity"
+      },
+      {
+        "functionIndex": 348,
+        "name": "pmndrs_glyph_engine_request_ptr"
+      },
+      {
+        "functionIndex": 349,
+        "name": "pmndrs_glyph_engine_reserve_root"
+      },
+      {
+        "functionIndex": 350,
+        "name": "pmndrs_glyph_engine_reserve_update_batch"
+      },
+      {
+        "functionIndex": 351,
+        "name": "pmndrs_glyph_engine_root_count"
+      },
+      {
+        "functionIndex": 352,
+        "name": "pmndrs_glyph_engine_update"
+      },
+      {
+        "functionIndex": 353,
+        "name": "pmndrs_glyph_engine_update_batch"
+      },
+      {
+        "functionIndex": 354,
+        "name": "pmndrs_glyph_engine_update_batch_capacity"
+      },
+      {
+        "functionIndex": 355,
+        "name": "pmndrs_glyph_engine_update_batch_ptr"
+      },
+      {
+        "functionIndex": 356,
+        "name": "pmndrs_glyph_shaper_abi_version"
+      },
+      {
+        "functionIndex": 357,
+        "name": "pmndrs_glyph_shaper_alloc"
+      },
+      {
+        "functionIndex": 358,
+        "name": "pmndrs_glyph_shaper_dealloc"
+      },
+      {
+        "functionIndex": 359,
+        "name": "pmndrs_glyph_shaper_dispose_font"
+      },
+      {
+        "functionIndex": 360,
+        "name": "pmndrs_glyph_shaper_font_count"
+      },
+      {
+        "functionIndex": 361,
+        "name": "pmndrs_glyph_shaper_glyph_outline"
+      },
+      {
+        "functionIndex": 362,
+        "name": "pmndrs_glyph_shaper_glyph_outline_len"
+      },
+      {
+        "functionIndex": 363,
+        "name": "pmndrs_glyph_shaper_glyph_outline_ptr"
+      },
+      {
+        "functionIndex": 364,
+        "name": "pmndrs_glyph_shaper_initialize"
+      },
+      {
+        "functionIndex": 365,
+        "name": "pmndrs_glyph_shaper_register_font"
+      },
+      {
+        "functionIndex": 366,
+        "name": "pmndrs_glyph_shaper_retained_font_bytes"
+      },
+      {
+        "functionIndex": 367,
+        "name": "pmndrs_glyph_shaper_shape_plan_count"
+      },
+      {
+        "functionIndex": 368,
+        "name": "_RNvXNtCshoFYSnENQqs_4talc4wasmNtB2_11WasmBinningNtNtNtB4_4base7binning7Binning11size_to_bin"
+      },
+      {
+        "functionIndex": 369,
+        "name": "_RINvMNtNtCsdkdt1aaAg1T_4core4cell4onceINtB3_8OnceCellNtNtNtCsbx9tMmkA0qL_8harfrust2hb13glyph_metrics12GlyphMetricsE8try_initNCINvB2_11get_or_initNCNvMs1_NtBT_10font_funcsNtB2r_16BuiltinFontFuncs13glyph_metrics0E0zEBV_"
+      },
+      {
+        "functionIndex": 370,
+        "name": "_RINvMNtNtCsdkdt1aaAg1T_4core4cell4onceINtB3_8OnceCellNtNtNtCsbx9tMmkA0qL_8harfrust2hb7charmap7CharmapE8try_initNCINvB2_11get_or_initNCNvMs1_NtBT_10font_funcsNtB2e_16BuiltinFontFuncs7charmap0E0zEBV_"
+      },
+      {
+        "functionIndex": 371,
+        "name": "_RNvMs0_NtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookupNtB5_10LookupInfo3new"
+      },
+      {
+        "functionIndex": 372,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecINtNtCsdkdt1aaAg1T_4core6option6OptionNtNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup10LookupInfoEE8grow_oneB1w_"
+      },
+      {
+        "functionIndex": 373,
+        "name": "_RNvMs_NtNtCsbx9tMmkA0qL_8harfrust2hb10set_digestNtB4_15hb_set_digest_t12add_coverage"
+      },
+      {
+        "functionIndex": 374,
+        "name": "_RINvNvMs2_NtCsewWLk9TkM7w_5alloc7raw_vecINtB8_11RawVecInnerpE7reserve21do_reserve_and_handleNtNtBa_5alloc6GlobalECsbx9tMmkA0qL_8harfrust"
+      },
+      {
+        "functionIndex": 375,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtNtCsbx9tMmkA0qL_8harfrust2hb7kerning17KernSubtableCacheE8grow_oneBS_"
+      },
+      {
+        "functionIndex": 376,
+        "name": "_RINvMs4_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_15CoverageFormat13getNtNtCs9aImQiHga9o_10font_types8glyph_id7GlyphIdECsbx9tMmkA0qL_8harfrust"
+      },
+      {
+        "functionIndex": 377,
+        "name": "_RINvMs5_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_15CoverageFormat23getNtNtCs9aImQiHga9o_10font_types8glyph_id7GlyphIdECsbx9tMmkA0qL_8harfrust"
+      },
+      {
+        "functionIndex": 378,
+        "name": "_RINvMs6_NtNtCsaDOWveanduf_10read_fonts6tables3aatNtB6_6Lookup5valuetECsbx9tMmkA0qL_8harfrust"
+      },
+      {
+        "functionIndex": 379,
+        "name": "_RINvMsa_NtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot10contextualNtB6_10ParsedRule5applyNCINvB6_18match_class_cachedRNCNvXs1_B6_NtNtNtCsaDOWveanduf_10read_fonts6tables6layout22SequenceContextFormat2NtNtBa_18ot_layout_gsubgpos5Apply12apply_cacheds_0E0EBc_"
+      },
+      {
+        "functionIndex": 380,
+        "name": "_RNvMs2_NtNtCsbx9tMmkA0qL_8harfrust2hb2otNtB5_8OtTables18is_mark_glyph_gdef"
+      },
+      {
+        "functionIndex": 381,
+        "name": "_RNvMs5_NtNtCsbx9tMmkA0qL_8harfrust2hb2otNtB5_12ClassDefInfo5class"
+      },
+      {
+        "functionIndex": 382,
+        "name": "_RNvMse_Csl5HQUb1fuJP_8smallvecINtB5_8SmallVecAmj8_E6resizeCsbx9tMmkA0qL_8harfrust"
+      },
+      {
+        "functionIndex": 383,
+        "name": "_RNvMs7_NtNtCsbx9tMmkA0qL_8harfrust2hb6bufferNtB5_11hb_buffer_t15set_glyph_flags"
+      },
+      {
+        "functionIndex": 384,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb18ot_layout_gsubgpos12apply_lookup"
+      },
+      {
+        "functionIndex": 385,
+        "name": "_RINvMsa_NtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot10contextualNtB6_10ParsedRule5applyNCNvXs1_B6_NtNtNtCsaDOWveanduf_10read_fonts6tables6layout22SequenceContextFormat2NtNtBa_18ot_layout_gsubgpos5Apply25apply_with_external_caches0_0EBc_"
+      },
+      {
+        "functionIndex": 386,
+        "name": "_RINvMsa_NtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot10contextualNtB6_10ParsedRule5applyNvNtBa_18ot_layout_gsubgpos11match_glyphEBc_"
+      },
+      {
+        "functionIndex": 387,
+        "name": "_RINvNtCsdkdt1aaAg1T_4core9panicking13assert_failedNtNtNtCsbx9tMmkA0qL_8harfrust2hb6common9DirectionBM_EBS_"
+      },
+      {
+        "functionIndex": 388,
+        "name": "_RINvNtNtCsbx9tMmkA0qL_8harfrust2hb3tag12lang_matchesReBO_EB6_"
+      },
+      {
+        "functionIndex": 389,
+        "name": "_RINvNtNtCsbx9tMmkA0qL_8harfrust2hb3tag14subtag_matchesReBQ_EB6_"
+      },
+      {
+        "functionIndex": 390,
+        "name": "_RINvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot10contextual26apply_chain_with_sequencesNCNvXs7_B2_NtNtNtCsaDOWveanduf_10read_fonts6tables6layout29ChainedSequenceContextFormat2NtNtB6_18ot_layout_gsubgpos5Apply12apply_cacheds1_0NCINvB2_19match_class_cached2RNCB1h_s_0E0NCINvB2_19match_class_cached1RNCB1h_s0_0E0EB8_"
+      },
+      {
+        "functionIndex": 391,
+        "name": "_RINvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot10contextual26apply_chain_with_sequencesNCNvXs7_B2_NtNtNtCsaDOWveanduf_10read_fonts6tables6layout29ChainedSequenceContextFormat2NtNtB6_18ot_layout_gsubgpos5Apply25apply_with_external_caches_0NCB1h_s0_0NCB1h_s1_0EB8_"
+      },
+      {
+        "functionIndex": 392,
+        "name": "_RINvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot10contextual26apply_chain_with_sequencesNvNtB6_18ot_layout_gsubgpos11match_glyphB1f_B1f_EB8_"
+      },
+      {
+        "functionIndex": 393,
+        "name": "_RINvNtNtNtCsbx9tMmkA0qL_8harfrust2hb3aat17layout_kerx_table22collect_initial_glyphsINtNtCs9aImQiHga9o_10font_types3raw9BigEndiantEEB8_"
+      },
+      {
+        "functionIndex": 394,
+        "name": "_RNvMs_NtNtCsbx9tMmkA0qL_8harfrust2hb10set_digestNtB4_15hb_set_digest_t9add_range"
+      },
+      {
+        "functionIndex": 395,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6stable5drift4sortNtNtNtCsbx9tMmkA0qL_8harfrust2hb6buffer9GlyphInfoNCINvMNtCsewWLk9TkM7w_5alloc5sliceSBW_11sort_by_keyhNCNvNtB10_15ot_shaper_indic37initial_reordering_consonant_syllable0E0EB12_"
+      },
+      {
+        "functionIndex": 396,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6stable5drift4sortNtNtNtCsbx9tMmkA0qL_8harfrust2hb6ot_map12lookup_map_tNvYBW_NtNtBa_3cmp10PartialOrd2ltEB12_"
+      },
+      {
+        "functionIndex": 397,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6stable5drift4sortNtNtNtCsbx9tMmkA0qL_8harfrust2hb6ot_map13feature_map_tNvYBW_NtNtBa_3cmp10PartialOrd2ltEB12_"
+      },
+      {
+        "functionIndex": 398,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6stable5drift4sortNtNtNtCsbx9tMmkA0qL_8harfrust2hb6ot_map14feature_info_tNvYBW_NtNtBa_3cmp10PartialOrd2ltEB12_"
+      },
+      {
+        "functionIndex": 399,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6stable5drift4sortNtNtNtNtCsbx9tMmkA0qL_8harfrust2hb3aat3map11FeatureInfoNvYBW_NtNtBa_3cmp10PartialOrd2ltEB14_"
+      },
+      {
+        "functionIndex": 400,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6stable5drift4sortNtNtNtNtCsbx9tMmkA0qL_8harfrust2hb3aat3map12FeatureEventNvYBW_NtNtBa_3cmp10PartialOrd2ltEB14_"
+      },
+      {
+        "functionIndex": 401,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared5pivot11median3_recNtNtNtCsbx9tMmkA0qL_8harfrust2hb6buffer9GlyphInfoNCINvMNtCsewWLk9TkM7w_5alloc5sliceSB14_11sort_by_keyhNCNvNtB18_15ot_shaper_indic37initial_reordering_consonant_syllable0E0EB1a_"
+      },
+      {
+        "functionIndex": 402,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared5pivot11median3_recNtNtNtCsbx9tMmkA0qL_8harfrust2hb6ot_map12lookup_map_tNvYB14_NtNtBa_3cmp10PartialOrd2ltEB1a_"
+      },
+      {
+        "functionIndex": 403,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared5pivot11median3_recNtNtNtCsbx9tMmkA0qL_8harfrust2hb6ot_map13feature_map_tNvYB14_NtNtBa_3cmp10PartialOrd2ltEB1a_"
+      },
+      {
+        "functionIndex": 404,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared5pivot11median3_recNtNtNtCsbx9tMmkA0qL_8harfrust2hb6ot_map14feature_info_tNvYB14_NtNtBa_3cmp10PartialOrd2ltEB1a_"
+      },
+      {
+        "functionIndex": 405,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared5pivot11median3_recNtNtNtNtCsbx9tMmkA0qL_8harfrust2hb3aat3map11FeatureInfoNvYB14_NtNtBa_3cmp10PartialOrd2ltEB1c_"
+      },
+      {
+        "functionIndex": 406,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared5pivot11median3_recNtNtNtNtCsbx9tMmkA0qL_8harfrust2hb3aat3map12FeatureEventNvYB14_NtNtBa_3cmp10PartialOrd2ltEB1c_"
+      },
+      {
+        "functionIndex": 407,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared9smallsort12sort4_stableNtNtNtCsbx9tMmkA0qL_8harfrust2hb6ot_map12lookup_map_tNvYB19_NtNtBa_3cmp10PartialOrd2ltEB1f_"
+      },
+      {
+        "functionIndex": 408,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared9smallsort12sort4_stableNtNtNtCsbx9tMmkA0qL_8harfrust2hb6ot_map14feature_info_tNvYB19_NtNtBa_3cmp10PartialOrd2ltEB1f_"
+      },
+      {
+        "functionIndex": 409,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared9smallsort12sort4_stableNtNtNtNtCsbx9tMmkA0qL_8harfrust2hb3aat3map11FeatureInfoNvYB19_NtNtBa_3cmp10PartialOrd2ltEB1h_"
+      },
+      {
+        "functionIndex": 410,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared9smallsort12sort4_stableNtNtNtNtCsbx9tMmkA0qL_8harfrust2hb3aat3map12FeatureEventNvYB19_NtNtBa_3cmp10PartialOrd2ltEB1h_"
+      },
+      {
+        "functionIndex": 411,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared9smallsort12sort8_stableNtNtNtNtCsbx9tMmkA0qL_8harfrust2hb3aat3map11FeatureInfoNvYB19_NtNtBa_3cmp10PartialOrd2ltEB1h_"
+      },
+      {
+        "functionIndex": 412,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared9smallsort12sort8_stableNtNtNtNtCsbx9tMmkA0qL_8harfrust2hb3aat3map12FeatureEventNvYB19_NtNtBa_3cmp10PartialOrd2ltEB1h_"
+      },
+      {
+        "functionIndex": 413,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared9smallsort19bidirectional_mergeNtNtNtCsbx9tMmkA0qL_8harfrust2hb6ot_map12lookup_map_tNvYB1g_NtNtBa_3cmp10PartialOrd2ltEB1m_"
+      },
+      {
+        "functionIndex": 414,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6stable9quicksort9quicksortNtNtNtCsbx9tMmkA0qL_8harfrust2hb6buffer9GlyphInfoNCINvMNtCsewWLk9TkM7w_5alloc5sliceSB15_11sort_by_keyhNCNvNtB19_15ot_shaper_indic37initial_reordering_consonant_syllable0E0EB1b_"
+      },
+      {
+        "functionIndex": 415,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6stable9quicksort9quicksortNtNtNtCsbx9tMmkA0qL_8harfrust2hb6ot_map12lookup_map_tNvYB15_NtNtBa_3cmp10PartialOrd2ltEB1b_"
+      },
+      {
+        "functionIndex": 416,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6stable9quicksort9quicksortNtNtNtCsbx9tMmkA0qL_8harfrust2hb6ot_map13feature_map_tNvYB15_NtNtBa_3cmp10PartialOrd2ltEB1b_"
+      },
+      {
+        "functionIndex": 417,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6stable9quicksort9quicksortNtNtNtCsbx9tMmkA0qL_8harfrust2hb6ot_map14feature_info_tNvYB15_NtNtBa_3cmp10PartialOrd2ltEB1b_"
+      },
+      {
+        "functionIndex": 418,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6stable9quicksort9quicksortNtNtNtNtCsbx9tMmkA0qL_8harfrust2hb3aat3map11FeatureInfoNvYB15_NtNtBa_3cmp10PartialOrd2ltEB1d_"
+      },
+      {
+        "functionIndex": 419,
+        "name": "_RINvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6stable9quicksort9quicksortNtNtNtNtCsbx9tMmkA0qL_8harfrust2hb3aat3map12FeatureEventNvYB15_NtNtBa_3cmp10PartialOrd2ltEB1d_"
+      },
+      {
+        "functionIndex": 420,
+        "name": "_RINvXs0_NtNtNtCsbx9tMmkA0qL_8harfrust2hb3aat13layout_commonNtNtNtCsaDOWveanduf_10read_fonts6tables3aat6LookupNtB6_13CollectGlyphs14collect_glyphsmEBc_"
+      },
+      {
+        "functionIndex": 421,
+        "name": "_RINvXs0_NtNtNtCsbx9tMmkA0qL_8harfrust2hb3aat13layout_commonNtNtNtCsaDOWveanduf_10read_fonts6tables3aat6LookupNtB6_13CollectGlyphs14collect_glyphstEBc_"
+      },
+      {
+        "functionIndex": 422,
+        "name": "_RNCNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot10contextual11match_class0B9_"
+      },
+      {
+        "functionIndex": 423,
+        "name": "_RNCNvXs_NtNtNtCsbx9tMmkA0qL_8harfrust2hb3aat17layout_trak_tableNtNtNtCsaDOWveanduf_10read_fonts6tables4trak9TrackDataNtB6_12TrackDataExt12get_tracking0Bc_"
+      },
+      {
+        "functionIndex": 424,
+        "name": "_RNvMNtNtCsbx9tMmkA0qL_8harfrust2hb6commonNtB2_9Direction11from_script"
+      },
+      {
+        "functionIndex": 425,
+        "name": "_RNvMNtNtCsbx9tMmkA0qL_8harfrust2hb7charmapNtB2_7Charmap3map"
+      },
+      {
+        "functionIndex": 426,
+        "name": "_RNvMNtNtCsbx9tMmkA0qL_8harfrust2hb8ot_shapeNtB2_21hb_ot_shape_planner_t16collect_features"
+      },
+      {
+        "functionIndex": 427,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtNtCsbx9tMmkA0qL_8harfrust2hb6ot_map14feature_info_tE8grow_oneBS_"
+      },
+      {
+        "functionIndex": 428,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtNtCsbx9tMmkA0qL_8harfrust2hb6ot_map12stage_info_tE8grow_oneBS_"
+      },
+      {
+        "functionIndex": 429,
+        "name": "_RNvMNtNtCsbx9tMmkA0qL_8harfrust2hb8ot_shapeNtB2_21hb_ot_shape_planner_t3new"
+      },
+      {
+        "functionIndex": 430,
+        "name": "_RNvMsc_Csl5HQUb1fuJP_8smallvecINtB5_8SmallVecANtNtCs9aImQiHga9o_10font_types3tag3Tagj3_E21reserve_one_uncheckedCsbx9tMmkA0qL_8harfrust"
+      },
+      {
+        "functionIndex": 431,
+        "name": "_RNvMNtNtCsbx9tMmkA0qL_8harfrust2hb8ot_shapeNtB2_21hb_ot_shape_planner_t7compile"
+      },
+      {
+        "functionIndex": 432,
+        "name": "_RNvMs3_NtNtCsbx9tMmkA0qL_8harfrust2hb2otNtB5_11LayoutTable7langsys"
+      },
+      {
+        "functionIndex": 433,
+        "name": "_RNvMs1_NtNtCsbx9tMmkA0qL_8harfrust2hb6ot_mapNtB5_19hb_ot_map_builder_t11add_lookups"
+      },
+      {
+        "functionIndex": 434,
+        "name": "_RNvMs_NtNtNtCsbx9tMmkA0qL_8harfrust2hb3aat3mapNtB4_13AatMapBuilder7compile"
+      },
+      {
+        "functionIndex": 435,
+        "name": "_RNvMsc_Csl5HQUb1fuJP_8smallvecINtB5_8SmallVecANtNtNtCsbx9tMmkA0qL_8harfrust2hb6common7Featurej4_E8try_growBO_"
+      },
+      {
+        "functionIndex": 436,
+        "name": "_RNvMNtNtNtCsbx9tMmkA0qL_8harfrust2hb18ot_layout_gsubgpos2OTNtB2_21hb_ot_apply_context_t15set_glyph_class"
+      },
+      {
+        "functionIndex": 437,
+        "name": "_RNvMs2_NtNtCsbx9tMmkA0qL_8harfrust2hb2otNtB5_8OtTables11glyph_props"
+      },
+      {
+        "functionIndex": 438,
+        "name": "_RNvMs7_NtNtCsbx9tMmkA0qL_8harfrust2hb6bufferNtB5_11hb_buffer_t13replace_glyph"
+      },
+      {
+        "functionIndex": 439,
+        "name": "_RNvMNtNtNtCsbx9tMmkA0qL_8harfrust2hb3aat13layout_commonNtB2_15AatApplyContext12output_glyph"
+      },
+      {
+        "functionIndex": 440,
+        "name": "_RNvMs7_NtNtCsbx9tMmkA0qL_8harfrust2hb6bufferNtB5_11hb_buffer_t12output_glyph"
+      },
+      {
+        "functionIndex": 441,
+        "name": "_RNvMNtNtNtCsbx9tMmkA0qL_8harfrust2hb3aat13layout_commonNtB2_15AatApplyContext21replace_glyph_inplace"
+      },
+      {
+        "functionIndex": 442,
+        "name": "_RNvMs0_NtNtCsbx9tMmkA0qL_8harfrust2hb15ot_shaper_indicNtB5_27IndicWouldSubstituteFeature16would_substitute"
+      },
+      {
+        "functionIndex": 443,
+        "name": "_RNvMs0_NtNtCsbx9tMmkA0qL_8harfrust2hb15ot_shaper_indicNtB5_27IndicWouldSubstituteFeature3new"
+      },
+      {
+        "functionIndex": 444,
+        "name": "_RNvMs0_NtNtCsbx9tMmkA0qL_8harfrust2hb18ot_layout_gsubgposINtB5_19skipping_iterator_tFG_QL0_NtNtB7_6buffer9GlyphInfomEbE8match_atB9_"
+      },
+      {
+        "functionIndex": 445,
+        "name": "_RNvMs0_NtNtCsbx9tMmkA0qL_8harfrust2hb18ot_layout_gsubgposINtB5_19skipping_iterator_tNvB5_12match_alwaysE4nextB9_"
+      },
+      {
+        "functionIndex": 446,
+        "name": "_RNvMs0_NtNtCsbx9tMmkA0qL_8harfrust2hb4faceNtB5_13ShaperBuilder5build"
+      },
+      {
+        "functionIndex": 447,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup11single_pos2"
+      },
+      {
+        "functionIndex": 448,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup11single_pos1"
+      },
+      {
+        "functionIndex": 449,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup16pair_pos1_cached"
+      },
+      {
+        "functionIndex": 450,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup12cursive_pos1"
+      },
+      {
+        "functionIndex": 451,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup14mark_base_pos1"
+      },
+      {
+        "functionIndex": 452,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup13mark_lig_pos1"
+      },
+      {
+        "functionIndex": 453,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup14mark_mark_pos1"
+      },
+      {
+        "functionIndex": 454,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup16pair_pos2_cached"
+      },
+      {
+        "functionIndex": 455,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup13single_subst2"
+      },
+      {
+        "functionIndex": 456,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup13single_subst1"
+      },
+      {
+        "functionIndex": 457,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup15multiple_subst1"
+      },
+      {
+        "functionIndex": 458,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup16alternate_subst1"
+      },
+      {
+        "functionIndex": 459,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup15ligature_subst1"
+      },
+      {
+        "functionIndex": 460,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup15context3_cached"
+      },
+      {
+        "functionIndex": 461,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup15context1_cached"
+      },
+      {
+        "functionIndex": 462,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup15context2_cached"
+      },
+      {
+        "functionIndex": 463,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup8context2"
+      },
+      {
+        "functionIndex": 464,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup16chained_context3"
+      },
+      {
+        "functionIndex": 465,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup16chained_context1"
+      },
+      {
+        "functionIndex": 466,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup23chained_context2_cached"
+      },
+      {
+        "functionIndex": 467,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup16chained_context2"
+      },
+      {
+        "functionIndex": 468,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup23rev_chain_single_subst1"
+      },
+      {
+        "functionIndex": 469,
+        "name": "_RNvMs1_NtCsaDOWveanduf_10read_fonts12offset_arrayINtB5_22ArrayOfNullableOffsetsNtNtNtB7_6tables4gpos11AnchorTableE3getCsbx9tMmkA0qL_8harfrust"
+      },
+      {
+        "functionIndex": 470,
+        "name": "_RNvMs1_NtNtCsbx9tMmkA0qL_8harfrust2hb10font_funcsNtB5_16BuiltinFontFuncs13advance_width"
+      },
+      {
+        "functionIndex": 471,
+        "name": "_RNvMs1_NtNtCsbx9tMmkA0qL_8harfrust2hb10font_funcsNtB5_16BuiltinFontFuncs13nominal_glyph"
+      },
+      {
+        "functionIndex": 472,
+        "name": "_RNvMs1_NtNtCsbx9tMmkA0qL_8harfrust2hb10font_funcsNtB5_16BuiltinFontFuncs13variant_glyph"
+      },
+      {
+        "functionIndex": 473,
+        "name": "_RNvMs1_NtNtCsbx9tMmkA0qL_8harfrust2hb10font_funcsNtB5_16BuiltinFontFuncs14advance_height"
+      },
+      {
+        "functionIndex": 474,
+        "name": "_RNvMs1_NtNtCsbx9tMmkA0qL_8harfrust2hb10font_funcsNtB5_16BuiltinFontFuncs15vertical_origin"
+      },
+      {
+        "functionIndex": 475,
+        "name": "_RNvMs1_NtNtCsbx9tMmkA0qL_8harfrust2hb10font_funcsNtB5_16BuiltinFontFuncs7extents"
+      },
+      {
+        "functionIndex": 476,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtNtCsbx9tMmkA0qL_8harfrust2hb6ot_map12lookup_map_tE8grow_oneBS_"
+      },
+      {
+        "functionIndex": 477,
+        "name": "_RNvMs2_NtCsaDOWveanduf_10read_fonts5arrayINtB5_13ComputedArrayNtNtNtB7_6tables4gpos10BaseRecordE3getCsbx9tMmkA0qL_8harfrust"
+      },
+      {
+        "functionIndex": 478,
+        "name": "_RNvMs2_NtNtCsbx9tMmkA0qL_8harfrust2hb2otNtB5_8OtTables14resolve_anchor"
+      },
+      {
+        "functionIndex": 479,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtNtNtCsbx9tMmkA0qL_8harfrust2hb3aat3map12FeatureRangeE8grow_oneBU_"
+      },
+      {
+        "functionIndex": 480,
+        "name": "_RNvMs4_NtNtCsbx9tMmkA0qL_8harfrust2hb2otNtB5_12CoverageInfo5index"
+      },
+      {
+        "functionIndex": 481,
+        "name": "_RNvMs4_NtNtCsbx9tMmkA0qL_8harfrust2hb4faceNtB5_9hb_font_t15shape_with_plan"
+      },
+      {
+        "functionIndex": 482,
+        "name": "_RNvMs6_NtNtCsbx9tMmkA0qL_8harfrust2hb6bufferNtB5_9GlyphInfo18init_unicode_props"
+      },
+      {
+        "functionIndex": 483,
+        "name": "_RNvMs7_NtNtCsbx9tMmkA0qL_8harfrust2hb6bufferNtB5_11hb_buffer_t11output_info"
+      },
+      {
+        "functionIndex": 484,
+        "name": "_RNvMs7_NtNtCsbx9tMmkA0qL_8harfrust2hb6bufferNtB5_11hb_buffer_t11next_glyphs"
+      },
+      {
+        "functionIndex": 485,
+        "name": "_RNvXsl_NtNtCsbx9tMmkA0qL_8harfrust2hb6commonNtB5_9DirectionNtNtCsdkdt1aaAg1T_4core3fmt5Debug3fmt"
+      },
+      {
+        "functionIndex": 486,
+        "name": "_RNvMs7_NtNtCsbx9tMmkA0qL_8harfrust2hb6bufferNtB5_11hb_buffer_t19merge_clusters_impl"
+      },
+      {
+        "functionIndex": 487,
+        "name": "_RNvMs7_NtNtCsbx9tMmkA0qL_8harfrust2hb6bufferNtB5_11hb_buffer_t13reverse_range"
+      },
+      {
+        "functionIndex": 488,
+        "name": "_RNvMs_NtNtCsbx9tMmkA0qL_8harfrust2hb8ot_shapeNtB4_14OtShapeContext16position_by_plan"
+      },
+      {
+        "functionIndex": 489,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb8ot_shape24zero_mark_widths_by_gdef"
+      },
+      {
+        "functionIndex": 490,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb20ot_layout_gpos_table28propagate_attachment_offsets"
+      },
+      {
+        "functionIndex": 491,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb17ot_shape_fallback21position_cluster_impl"
+      },
+      {
+        "functionIndex": 492,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb3aat6layout21remove_deleted_glyphs"
+      },
+      {
+        "functionIndex": 493,
+        "name": "_RNvXsB_NtNtCsbx9tMmkA0qL_8harfrust2hb6commonNtB5_6ScriptNtNtCsdkdt1aaAg1T_4core3fmt5Debug3fmt"
+      },
+      {
+        "functionIndex": 494,
+        "name": "_RNvMs7_NtNtCsbx9tMmkA0qL_8harfrust2hb6bufferNtB5_11hb_buffer_t10copy_glyph"
+      },
+      {
+        "functionIndex": 495,
+        "name": "_RNvMs7_NtNtCsbx9tMmkA0qL_8harfrust2hb6bufferNtB5_11hb_buffer_t7enlarge"
+      },
+      {
+        "functionIndex": 496,
+        "name": "_RNvMs7_NtNtCsbx9tMmkA0qL_8harfrust2hb6bufferNtB5_11hb_buffer_t14replace_glyphs"
+      },
+      {
+        "functionIndex": 497,
+        "name": "_RNvMs7_NtNtCsbx9tMmkA0qL_8harfrust2hb6bufferNtB5_11hb_buffer_t23merge_out_clusters_impl"
+      },
+      {
+        "functionIndex": 498,
+        "name": "_RNvMs7_NtNtCsbx9tMmkA0qL_8harfrust2hb6bufferNtB5_11hb_buffer_t3new"
+      },
+      {
+        "functionIndex": 499,
+        "name": "_RNvMs7_NtNtCsbx9tMmkA0qL_8harfrust2hb6bufferNtB5_11hb_buffer_t5clear"
+      },
+      {
+        "functionIndex": 500,
+        "name": "_RNvMs7_NtNtCsbx9tMmkA0qL_8harfrust2hb6bufferNtB5_11hb_buffer_t7move_to"
+      },
+      {
+        "functionIndex": 501,
+        "name": "_RNvMs_NtNtCsbx9tMmkA0qL_8harfrust2hb18ot_shape_normalizeNtB4_31hb_ot_shape_normalize_context_t17set_current_glyph"
+      },
+      {
+        "functionIndex": 502,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb18ot_shape_normalize15compose_unicode"
+      },
+      {
+        "functionIndex": 503,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb18ot_shape_normalize17decompose_unicode"
+      },
+      {
+        "functionIndex": 504,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb18ot_shape_normalize27decompose_current_character"
+      },
+      {
+        "functionIndex": 505,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb9ot_layout14apply_backward"
+      },
+      {
+        "functionIndex": 506,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb9ot_layout13apply_forward"
+      },
+      {
+        "functionIndex": 507,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb3aat17layout_morx_table5apply"
+      },
+      {
+        "functionIndex": 508,
+        "name": "_RNvXs_NtNtNtCsbx9tMmkA0qL_8harfrust2hb3aat17layout_trak_tableNtNtNtCsaDOWveanduf_10read_fonts6tables4trak9TrackDataNtB4_12TrackDataExt12get_tracking"
+      },
+      {
+        "functionIndex": 509,
+        "name": "_RNvMsc_Csl5HQUb1fuJP_8smallvecINtB5_8SmallVecANtNtCs9aImQiHga9o_10font_types3tag3Tagj3_E8try_growCsbx9tMmkA0qL_8harfrust"
+      },
+      {
+        "functionIndex": 510,
+        "name": "_RNvMsc_Csl5HQUb1fuJP_8smallvecINtB5_8SmallVecANtNtCs9aImQiHga9o_10font_types3tag3Tagj3_E4pushCsbx9tMmkA0qL_8harfrust"
+      },
+      {
+        "functionIndex": 511,
+        "name": "_RNvMsc_Csl5HQUb1fuJP_8smallvecINtB5_8SmallVecAhj8_E8try_growCsbx9tMmkA0qL_8harfrust"
+      },
+      {
+        "functionIndex": 512,
+        "name": "_RNvMsc_Csl5HQUb1fuJP_8smallvecINtB5_8SmallVecAmj8_E21reserve_one_uncheckedCsbx9tMmkA0qL_8harfrust"
+      },
+      {
+        "functionIndex": 513,
+        "name": "_RNvMsc_Csl5HQUb1fuJP_8smallvecINtB5_8SmallVecAmj8_E8try_growCsbx9tMmkA0qL_8harfrust"
+      },
+      {
+        "functionIndex": 514,
+        "name": "_RNvMsd_Csl5HQUb1fuJP_8smallvecINtB5_8SmallVecANtNtCs9aImQiHga9o_10font_types3tag3Tagj3_E17insert_from_sliceCsbx9tMmkA0qL_8harfrust"
+      },
+      {
+        "functionIndex": 515,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb13ot_shaper_use11record_pref"
+      },
+      {
+        "functionIndex": 516,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb13ot_shaper_use11record_rphf"
+      },
+      {
+        "functionIndex": 517,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb13ot_shaper_use11reorder_use"
+      },
+      {
+        "functionIndex": 518,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb18ot_shaper_syllabic21insert_dotted_circles"
+      },
+      {
+        "functionIndex": 519,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb13ot_shaper_use11setup_masks"
+      },
+      {
+        "functionIndex": 520,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb16ot_shaper_arabic17setup_masks_inner"
+      },
+      {
+        "functionIndex": 521,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb13ot_shaper_use15preprocess_text"
+      },
+      {
+        "functionIndex": 522,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb13ot_shaper_use15setup_syllables"
+      },
+      {
+        "functionIndex": 523,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb13ot_shaper_use16collect_features"
+      },
+      {
+        "functionIndex": 524,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb9ot_layout28__hb_clear_substitution_flags"
+      },
+      {
+        "functionIndex": 525,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb18ot_shaper_syllabic18syllabic_clear_var"
+      },
+      {
+        "functionIndex": 526,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb13ot_shaper_use7compose"
+      },
+      {
+        "functionIndex": 527,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb7unicode7compose"
+      },
+      {
+        "functionIndex": 528,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb14ot_shaper_thai15preprocess_text"
+      },
+      {
+        "functionIndex": 529,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb14ot_shaper_thai9pua_shape"
+      },
+      {
+        "functionIndex": 530,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb15ot_shaper_indic11setup_masks"
+      },
+      {
+        "functionIndex": 531,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb15ot_shaper_indic15setup_syllables"
+      },
+      {
+        "functionIndex": 532,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb15ot_shaper_indic16collect_features"
+      },
+      {
+        "functionIndex": 533,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb15ot_shaper_indic18initial_reordering"
+      },
+      {
+        "functionIndex": 534,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb15ot_shaper_indic16final_reordering"
+      },
+      {
+        "functionIndex": 535,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb15ot_shaper_indic17override_features"
+      },
+      {
+        "functionIndex": 536,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb15ot_shaper_indic7compose"
+      },
+      {
+        "functionIndex": 537,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb15ot_shaper_indic9decompose"
+      },
+      {
+        "functionIndex": 538,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb7unicode9decompose"
+      },
+      {
+        "functionIndex": 539,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb15ot_shaper_khmer11setup_masks"
+      },
+      {
+        "functionIndex": 540,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb15ot_shaper_khmer13reorder_khmer"
+      },
+      {
+        "functionIndex": 541,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb15ot_shaper_khmer15setup_syllables"
+      },
+      {
+        "functionIndex": 542,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb15ot_shaper_khmer16collect_features"
+      },
+      {
+        "functionIndex": 543,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb15ot_shaper_khmer17override_features"
+      },
+      {
+        "functionIndex": 544,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb15ot_shaper_khmer9decompose"
+      },
+      {
+        "functionIndex": 545,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb16ot_shaper_arabic11record_stch"
+      },
+      {
+        "functionIndex": 546,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb16ot_shaper_arabic16collect_features"
+      },
+      {
+        "functionIndex": 547,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb16ot_shaper_arabic21deallocate_buffer_var"
+      },
+      {
+        "functionIndex": 548,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb16ot_shaper_arabic21arabic_fallback_shape"
+      },
+      {
+        "functionIndex": 549,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb16ot_shaper_arabic16get_joining_type"
+      },
+      {
+        "functionIndex": 550,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb16ot_shaper_arabic18data_create_arabic"
+      },
+      {
+        "functionIndex": 551,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb16ot_shaper_arabic20reorder_marks_arabic"
+      },
+      {
+        "functionIndex": 552,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb16ot_shaper_arabic23setup_masks_arabic_plan"
+      },
+      {
+        "functionIndex": 553,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb16ot_shaper_arabic25postprocess_glyphs_arabic"
+      },
+      {
+        "functionIndex": 554,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb16ot_shaper_hangul18is_zero_width_char"
+      },
+      {
+        "functionIndex": 555,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb16ot_shaper_hangul18setup_masks_hangul"
+      },
+      {
+        "functionIndex": 556,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb16ot_shaper_hangul22preprocess_text_hangul"
+      },
+      {
+        "functionIndex": 557,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb16ot_shaper_hangul23collect_features_hangul"
+      },
+      {
+        "functionIndex": 558,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb16ot_shaper_hangul24override_features_hangul"
+      },
+      {
+        "functionIndex": 559,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb16ot_shaper_hebrew20reorder_marks_hebrew"
+      },
+      {
+        "functionIndex": 560,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb16ot_shaper_hebrew7compose"
+      },
+      {
+        "functionIndex": 561,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb17ot_shaper_myanmar11setup_masks"
+      },
+      {
+        "functionIndex": 562,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb17ot_shaper_myanmar15reorder_myanmar"
+      },
+      {
+        "functionIndex": 563,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb17ot_shaper_myanmar15setup_syllables"
+      },
+      {
+        "functionIndex": 564,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb17ot_shaper_myanmar16collect_features"
+      },
+      {
+        "functionIndex": 565,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb18ot_shape_normalize9decompose"
+      },
+      {
+        "functionIndex": 566,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb18ot_shape_normalize9next_char"
+      },
+      {
+        "functionIndex": 567,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb27ot_shaper_vowel_constraints20output_dotted_circle"
+      },
+      {
+        "functionIndex": 568,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb27ot_shaper_vowel_constraints25output_with_dotted_circle"
+      },
+      {
+        "functionIndex": 569,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb2ot11glyph_class"
+      },
+      {
+        "functionIndex": 570,
+        "name": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb2ot14coverage_index"
+      },
+      {
+        "functionIndex": 571,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb18ot_layout_gsubgpos2OT21match_properties_mark"
+      },
+      {
+        "functionIndex": 572,
+        "name": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot4gpos11apply_value"
+      },
+      {
+        "functionIndex": 573,
+        "name": "_RNvNtNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot4gpos7cursive28reverse_cursive_minor_offset"
+      },
+      {
+        "functionIndex": 574,
+        "name": "_RNvNtNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot4gsub8ligature15collect_seconds"
+      },
+      {
+        "functionIndex": 575,
+        "name": "_RNvXNtCsdkdt1aaAg1T_4core3anyNtNtNtCsbx9tMmkA0qL_8harfrust2hb13ot_shaper_use18UniversalShapePlanNtB2_3Any7type_idBx_"
+      },
+      {
+        "functionIndex": 576,
+        "name": "_RNvXNtCsdkdt1aaAg1T_4core3anyNtNtNtCsbx9tMmkA0qL_8harfrust2hb15ot_shaper_indic14IndicShapePlanNtB2_3Any7type_idBx_"
+      },
+      {
+        "functionIndex": 577,
+        "name": "_RNvXNtCsdkdt1aaAg1T_4core3anyNtNtNtCsbx9tMmkA0qL_8harfrust2hb15ot_shaper_khmer14KhmerShapePlanNtB2_3Any7type_idBx_"
+      },
+      {
+        "functionIndex": 578,
+        "name": "_RNvXNtCsdkdt1aaAg1T_4core3anyNtNtNtCsbx9tMmkA0qL_8harfrust2hb16ot_shaper_arabic19arabic_shape_plan_tNtB2_3Any7type_idBx_"
+      },
+      {
+        "functionIndex": 579,
+        "name": "_RNvXNtCsdkdt1aaAg1T_4core3anyNtNtNtCsbx9tMmkA0qL_8harfrust2hb16ot_shaper_hangul19hangul_shape_plan_tNtB2_3Any7type_idBx_"
+      },
+      {
+        "functionIndex": 580,
+        "name": "_RNvXNtNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot4gpos4markNtNtNtCsaDOWveanduf_10read_fonts6tables4gpos9MarkArrayNtB2_12MarkArrayExt5apply"
+      },
+      {
+        "functionIndex": 581,
+        "name": "_RNvXs_NtNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot4gsub8ligatureNtNtNtCsaDOWveanduf_10read_fonts6tables4gsub8LigatureNtNtBa_18ot_layout_gsubgpos5Apply5apply"
+      },
+      {
+        "functionIndex": 582,
+        "name": "_RNvXs1g_NtCsdkdt1aaAg1T_4core3fmtRNtNtCs9aImQiHga9o_10font_types3tag3TagNtB6_5Debug3fmtCsbx9tMmkA0qL_8harfrust"
+      },
+      {
+        "functionIndex": 583,
+        "name": "_RNvXs1g_NtCsdkdt1aaAg1T_4core3fmtRNtNtNtB8_3mem9alignment9AlignmentNtB6_5Debug3fmtCsbx9tMmkA0qL_8harfrust"
+      },
+      {
+        "functionIndex": 584,
+        "name": "_RNvXs1g_NtCsdkdt1aaAg1T_4core3fmtRNtNtNtB8_3num5error12IntErrorKindNtB6_5Debug3fmtCsbx9tMmkA0qL_8harfrust"
+      },
+      {
+        "functionIndex": 585,
+        "name": "_RNvXs1g_NtCsdkdt1aaAg1T_4core3fmtRNtNtNtB8_5alloc6layout6LayoutNtB6_5Debug3fmtCsbx9tMmkA0qL_8harfrust"
+      },
+      {
+        "functionIndex": 586,
+        "name": "_RNvXs1g_NtCsdkdt1aaAg1T_4core3fmtRNtNtNtCsbx9tMmkA0qL_8harfrust2hb6common6ScriptNtB6_5Debug3fmtBC_"
+      },
+      {
+        "functionIndex": 587,
+        "name": "_RNvXs1g_NtCsdkdt1aaAg1T_4core3fmtRNtNtNtCsbx9tMmkA0qL_8harfrust2hb6common9DirectionNtB6_5Debug3fmtBC_"
+      },
+      {
+        "functionIndex": 588,
+        "name": "_RNvXs6_NtNtCsdkdt1aaAg1T_4core3num5errorNtB5_15TryFromIntErrorNtNtB9_3fmt5Debug3fmt"
+      },
+      {
+        "functionIndex": 589,
+        "name": "_RNvXsU_Csl5HQUb1fuJP_8smallvecNtB5_18CollectionAllocErrNtNtCsdkdt1aaAg1T_4core3fmt5Debug3fmt"
+      },
+      {
+        "functionIndex": 590,
+        "name": "_RNvXsZ_NtNtCsdkdt1aaAg1T_4core3fmt3numjNtB7_5Debug3fmt"
+      },
+      {
+        "functionIndex": 591,
+        "name": "_RNvYNCNvNtNtCsbx9tMmkA0qL_8harfrust2hb13ot_shaper_use16UNIVERSAL_SHAPER0INtNtNtCsdkdt1aaAg1T_4core3ops8function6FnOnceTRNtNtB8_13ot_shape_plan18hb_ot_shape_plan_tEE9call_onceBa_"
+      },
+      {
+        "functionIndex": 592,
+        "name": "_RNvYNCNvNtNtCsbx9tMmkA0qL_8harfrust2hb15ot_shaper_indic12INDIC_SHAPER0INtNtNtCsdkdt1aaAg1T_4core3ops8function6FnOnceTRNtNtB8_13ot_shape_plan18hb_ot_shape_plan_tEE9call_onceBa_"
+      },
+      {
+        "functionIndex": 593,
+        "name": "_RNvYNCNvNtNtCsbx9tMmkA0qL_8harfrust2hb15ot_shaper_khmer12KHMER_SHAPER0INtNtNtCsdkdt1aaAg1T_4core3ops8function6FnOnceTRNtNtB8_13ot_shape_plan18hb_ot_shape_plan_tEE9call_onceBa_"
+      },
+      {
+        "functionIndex": 594,
+        "name": "_RNvYNCNvNtNtCsbx9tMmkA0qL_8harfrust2hb16ot_shaper_arabic13ARABIC_SHAPER0INtNtNtCsdkdt1aaAg1T_4core3ops8function6FnOnceTRNtNtB8_13ot_shape_plan18hb_ot_shape_plan_tEE9call_onceBa_"
+      },
+      {
+        "functionIndex": 595,
+        "name": "_RNvYNCNvNtNtCsbx9tMmkA0qL_8harfrust2hb16ot_shaper_hangul13HANGUL_SHAPER0INtNtNtCsdkdt1aaAg1T_4core3ops8function6FnOnceTRNtNtB8_13ot_shape_plan18hb_ot_shape_plan_tEE9call_onceBa_"
+      },
+      {
+        "functionIndex": 596,
+        "name": "_RNvMs4_NtCs6oDYXx9p8OW_20unicode_segmentation8graphemeNtB5_14GraphemeCursor17grapheme_category"
+      },
+      {
+        "functionIndex": 597,
+        "name": "_RINvMNtNtCsaDOWveanduf_10read_fonts2ps7hintingNtB3_5Blues3newINtNtNtNtCsdkdt1aaAg1T_4core4iter8adapters3map3MapINtNtB12_3zip3ZipINtNtNtB16_5slice4iter4IterlEIB23_bEENCNvMNtNtB5_3cff5stackNtB2I_5Stack12fixed_values0EEB7_"
+      },
+      {
+        "functionIndex": 598,
+        "name": "_RINvMs1_NtNtCsiIQLRfdNxrF_9once_cell4race8once_boxINtB6_7OnceBoxINtNtCsdkdt1aaAg1T_4core6option6OptionTINtNtNtB15_4sync6atomic6AtomichENtNtNtNtCsaDOWveanduf_10read_fonts5model4font4blob8FontBlobEEE4initNtNvMs1_B6_IBN_pE11get_or_init4VoidNCINvB2_11get_or_initNCINvMNtNtB2f_4once9once_implINtB4e_4OnceB10_E11get_or_initNCNvXs0_NtB2d_6tablesRNtB5d_17FontTableFunctionNtB5d_17TableDataProvider11table_state0E0E0EB2h_"
+      },
+      {
+        "functionIndex": 599,
+        "name": "_RINvMs6_NtNtCsaDOWveanduf_10read_fonts6tables3aatNtB6_6Lookup5valuemEBa_"
+      },
+      {
+        "functionIndex": 600,
+        "name": "_RINvMs6_NtNtCsaDOWveanduf_10read_fonts6tables3aatNtB6_6Lookup5valuetEBa_"
+      },
+      {
+        "functionIndex": 601,
+        "name": "_RINvMs_NtNtCsaDOWveanduf_10read_fonts2ps7hintingNtB5_9StemSnaps3newINtNtNtNtCsdkdt1aaAg1T_4core4iter8adapters3map3MapINtNtB18_3zip3ZipINtNtNtB1c_5slice4iter4IterlEIB29_bEENCNvMNtNtB7_3cff5stackNtB2O_5Stack12fixed_values0EEB9_"
+      },
+      {
+        "functionIndex": 602,
+        "name": "_RNCNvNtNtNtCsaDOWveanduf_10read_fonts2ps3cff4dict7entries0B9_"
+      },
+      {
+        "functionIndex": 603,
+        "name": "_RNvMNtNtNtCsaDOWveanduf_10read_fonts2ps3cff5blendNtB2_10BlendState26update_precomputed_scalars"
+      },
+      {
+        "functionIndex": 604,
+        "name": "_RNvMNtNtCsaDOWveanduf_10read_fonts2ps3numNtB2_13BcdComponents5value"
+      },
+      {
+        "functionIndex": 605,
+        "name": "_RNvMNtNtNtCsaDOWveanduf_10read_fonts2ps3cff5stackNtB2_5Stack11apply_blend"
+      },
+      {
+        "functionIndex": 606,
+        "name": "_RNvMNtNtCsaDOWveanduf_10read_fonts2ps3numNtB2_13BcdComponents5parse"
+      },
+      {
+        "functionIndex": 607,
+        "name": "_RNvMNtNtCsaDOWveanduf_10read_fonts6tables4ankrNtB2_4Ankr13anchor_points"
+      },
+      {
+        "functionIndex": 608,
+        "name": "_RNvMs6_NtNtCsaDOWveanduf_10read_fonts6tables10variationsNtB5_18PackedPointNumbers9total_len"
+      },
+      {
+        "functionIndex": 609,
+        "name": "_RNvMNtNtCsaDOWveanduf_10read_fonts6tables4featNtB2_4Feat4find"
+      },
+      {
+        "functionIndex": 610,
+        "name": "_RNvMNtNtCsaDOWveanduf_10read_fonts6tables4hvarNtB2_4Hvar19advance_width_delta"
+      },
+      {
+        "functionIndex": 611,
+        "name": "_RNvNtNtCsaDOWveanduf_10read_fonts6tables10variations10item_delta"
+      },
+      {
+        "functionIndex": 612,
+        "name": "_RNvMNtNtCsaDOWveanduf_10read_fonts6tables4mvarNtB2_4Mvar12metric_delta"
+      },
+      {
+        "functionIndex": 613,
+        "name": "_RNvMss_NtNtCsaDOWveanduf_10read_fonts6tables10variationsNtB5_18ItemVariationStore13compute_delta"
+      },
+      {
+        "functionIndex": 614,
+        "name": "_RNvMNtNtCsaDOWveanduf_10read_fonts6tables4vvarNtB2_4Vvar11v_org_delta"
+      },
+      {
+        "functionIndex": 615,
+        "name": "_RNvMs2_NtNtNtCsaDOWveanduf_10read_fonts2ps3cff5indexNtNtB7_2v15Index3get"
+      },
+      {
+        "functionIndex": 616,
+        "name": "_RNvMs3_NtNtNtCsaDOWveanduf_10read_fonts2ps3cff5indexNtNtB7_2v25Index3get"
+      },
+      {
+        "functionIndex": 617,
+        "name": "_RNvXs0_NtNtNtCsaDOWveanduf_10read_fonts2ps3cff2v1NtB5_3CffNtNtBb_4read8FontRead4read"
+      },
+      {
+        "functionIndex": 618,
+        "name": "_RNvMs0_NtNtNtCsaDOWveanduf_10read_fonts2ps3cff4fontNtB5_7Subfont3new"
+      },
+      {
+        "functionIndex": 619,
+        "name": "_RNvMs_NtNtCsaDOWveanduf_10read_fonts2ps9transformNtB4_16ScaledFontMatrix9normalize"
+      },
+      {
+        "functionIndex": 620,
+        "name": "_RNvNtNtCsaDOWveanduf_10read_fonts2ps9transform14combine_scaled"
+      },
+      {
+        "functionIndex": 621,
+        "name": "_RNvMsy_NtNtCsaDOWveanduf_10read_fonts6tables10variationsNtB5_15VariationRegion14compute_scalar"
+      },
+      {
+        "functionIndex": 622,
+        "name": "_RNvMs2_NtNtNtCsaDOWveanduf_10read_fonts2ps3cff5indexNtNtB7_2v15Index10get_offset"
+      },
+      {
+        "functionIndex": 623,
+        "name": "_RNvMs3_NtNtNtCsaDOWveanduf_10read_fonts2ps3cff5indexNtNtB7_2v25Index10get_offset"
+      },
+      {
+        "functionIndex": 624,
+        "name": "_RNvMNtNtNtCsaDOWveanduf_10read_fonts2ps3cff5indexNtB2_5Index3get"
+      },
+      {
+        "functionIndex": 625,
+        "name": "_RNvMNtNtNtCsaDOWveanduf_10read_fonts2ps3cff5stackNtB2_5Stack22apply_delta_prefix_sum"
+      },
+      {
+        "functionIndex": 626,
+        "name": "_RNvMNtNtNtCsaDOWveanduf_10read_fonts2ps3cff7charsetNtB2_7Charset8glyph_id"
+      },
+      {
+        "functionIndex": 627,
+        "name": "_RNvMNtNtNtCsaDOWveanduf_10read_fonts6tables6layout6scriptNtB4_10ScriptList13index_for_tag"
+      },
+      {
+        "functionIndex": 628,
+        "name": "_RNvMNtNtNtCsaDOWveanduf_10read_fonts6tables6layout6scriptNtB4_10ScriptList3get"
+      },
+      {
+        "functionIndex": 629,
+        "name": "_RNvMNtNtNtCsaDOWveanduf_10read_fonts6tables6layout7featureNtB4_11FeatureList3get"
+      },
+      {
+        "functionIndex": 630,
+        "name": "_RNvMs0_NtNtCsaDOWveanduf_10read_fonts6tables4kernNtB5_4Kern9subtables"
+      },
+      {
+        "functionIndex": 631,
+        "name": "_RNvMs0_NtNtCsaDOWveanduf_10read_fonts6tables4morxNtB5_8Subtable4kind"
+      },
+      {
+        "functionIndex": 632,
+        "name": "_RNvMsr_NtNtCsaDOWveanduf_10read_fonts6tables10variationsNtB5_16DeltaSetIndexMap3get"
+      },
+      {
+        "functionIndex": 633,
+        "name": "_RNvMss_NtNtCsaDOWveanduf_10read_fonts6tables10variationsNtB5_18ItemVariationStore19compute_float_delta"
+      },
+      {
+        "functionIndex": 634,
+        "name": "_RNvMs0_NtNtNtCsaDOWveanduf_10read_fonts6tables6layout6scriptNtB7_7LangSys21feature_index_for_tag"
+      },
+      {
+        "functionIndex": 635,
+        "name": "_RNvMs10_NtNtCsaDOWveanduf_10read_fonts6tables4glyfNtB6_5Glyph5x_max"
+      },
+      {
+        "functionIndex": 636,
+        "name": "_RNvMs10_NtNtCsaDOWveanduf_10read_fonts6tables4glyfNtB6_5Glyph5x_min"
+      },
+      {
+        "functionIndex": 637,
+        "name": "_RNvMs10_NtNtCsaDOWveanduf_10read_fonts6tables4glyfNtB6_5Glyph5y_max"
+      },
+      {
+        "functionIndex": 638,
+        "name": "_RNvMs10_NtNtCsaDOWveanduf_10read_fonts6tables4glyfNtB6_5Glyph5y_min"
+      },
+      {
+        "functionIndex": 639,
+        "name": "_RNvMs10_NtNtCsaDOWveanduf_10read_fonts6tables4gposNtB6_16SinglePosFormat28coverage"
+      },
+      {
+        "functionIndex": 640,
+        "name": "_RNvMs12_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_15CoverageFormat213range_records"
+      },
+      {
+        "functionIndex": 641,
+        "name": "_RNvMs13_NtNtCsaDOWveanduf_10read_fonts6tables4gsubNtB6_30ReverseChainSingleSubstFormat18coverage"
+      },
+      {
+        "functionIndex": 642,
+        "name": "_RNvMs18_NtNtCsaDOWveanduf_10read_fonts6tables4gposNtB6_14PairPosFormat18coverage"
+      },
+      {
+        "functionIndex": 643,
+        "name": "_RNvMs1C_NtNtCsaDOWveanduf_10read_fonts6tables4gposNtB6_17CursivePosFormat18coverage"
+      },
+      {
+        "functionIndex": 644,
+        "name": "_RNvMs1G_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_22SequenceContextFormat219class_seq_rule_sets"
+      },
+      {
+        "functionIndex": 645,
+        "name": "_RNvMs1G_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_22SequenceContextFormat29class_def"
+      },
+      {
+        "functionIndex": 646,
+        "name": "_RNvMs1J_NtNtCsaDOWveanduf_10read_fonts6tables4gposNtB6_18MarkBasePosFormat113base_coverage"
+      },
+      {
+        "functionIndex": 647,
+        "name": "_RNvMs1J_NtNtCsaDOWveanduf_10read_fonts6tables4gposNtB6_18MarkBasePosFormat113mark_coverage"
+      },
+      {
+        "functionIndex": 648,
+        "name": "_RNvMs1J_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_20ClassSequenceRuleSet15class_seq_rules"
+      },
+      {
+        "functionIndex": 649,
+        "name": "_RNvMs1S_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_22SequenceContextFormat39coverages"
+      },
+      {
+        "functionIndex": 650,
+        "name": "_RNvMs1Z_NtNtCsaDOWveanduf_10read_fonts6tables4gposNtB6_17MarkLigPosFormat113mark_coverage"
+      },
+      {
+        "functionIndex": 651,
+        "name": "_RNvMs1_CsaDOWveanduf_10read_fontsNtB5_7FontRef10table_data"
+      },
+      {
+        "functionIndex": 652,
+        "name": "_RNvMs1_CsaDOWveanduf_10read_fontsNtB5_7FontRef3new"
+      },
+      {
+        "functionIndex": 653,
+        "name": "_RNvMs1_NtNtCsaDOWveanduf_10read_fonts6tables4gdefNtB5_4Gdef19mark_glyph_sets_def"
+      },
+      {
+        "functionIndex": 654,
+        "name": "_RNvMs1_NtNtCsaDOWveanduf_10read_fonts6tables4glyfNtB5_11SimpleGlyph10num_points"
+      },
+      {
+        "functionIndex": 655,
+        "name": "_RNvMs1_NtNtCsaDOWveanduf_10read_fonts6tables4maxpNtB5_4Maxp10num_glyphs"
+      },
+      {
+        "functionIndex": 656,
+        "name": "_RNvMs1c_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_15ClassDefFormat114start_glyph_id"
+      },
+      {
+        "functionIndex": 657,
+        "name": "_RNvMs1c_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_15ClassDefFormat117class_value_array"
+      },
+      {
+        "functionIndex": 658,
+        "name": "_RNvMs1h_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_15ClassDefFormat219class_range_records"
+      },
+      {
+        "functionIndex": 659,
+        "name": "_RNvMs1o_NtNtCsaDOWveanduf_10read_fonts6tables4gposNtB6_14PairPosFormat210class_def1"
+      },
+      {
+        "functionIndex": 660,
+        "name": "_RNvMs1o_NtNtCsaDOWveanduf_10read_fonts6tables4gposNtB6_14PairPosFormat210class_def2"
+      },
+      {
+        "functionIndex": 661,
+        "name": "_RNvMs1o_NtNtCsaDOWveanduf_10read_fonts6tables4gposNtB6_14PairPosFormat28coverage"
+      },
+      {
+        "functionIndex": 662,
+        "name": "_RNvMs1t_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_22SequenceContextFormat113seq_rule_sets"
+      },
+      {
+        "functionIndex": 663,
+        "name": "_RNvMs1t_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_22SequenceContextFormat18coverage"
+      },
+      {
+        "functionIndex": 664,
+        "name": "_RNvMs1x_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_15SequenceRuleSet9seq_rules"
+      },
+      {
+        "functionIndex": 665,
+        "name": "_RNvMs1y_NtNtCsaDOWveanduf_10read_fonts6tables10variationsNtB6_17ItemVariationData10delta_sets"
+      },
+      {
+        "functionIndex": 666,
+        "name": "_RNvMs20_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_29ChainedSequenceContextFormat121chained_seq_rule_sets"
+      },
+      {
+        "functionIndex": 667,
+        "name": "_RNvMs20_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_29ChainedSequenceContextFormat18coverage"
+      },
+      {
+        "functionIndex": 668,
+        "name": "_RNvMs24_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_22ChainedSequenceRuleSet17chained_seq_rules"
+      },
+      {
+        "functionIndex": 669,
+        "name": "_RNvMs2C_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_14VariationIndex21delta_set_inner_index"
+      },
+      {
+        "functionIndex": 670,
+        "name": "_RNvMs2C_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_14VariationIndex21delta_set_outer_index"
+      },
+      {
+        "functionIndex": 671,
+        "name": "_RNvMs2_NtNtCsaDOWveanduf_10read_fonts6tables4hheaNtB5_4Hhea8ascender"
+      },
+      {
+        "functionIndex": 672,
+        "name": "_RNvMs2_NtNtCsaDOWveanduf_10read_fonts6tables4hheaNtB5_4Hhea9descender"
+      },
+      {
+        "functionIndex": 673,
+        "name": "_RNvMs2d_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_29ChainedSequenceContextFormat215input_class_def"
+      },
+      {
+        "functionIndex": 674,
+        "name": "_RNvMs2d_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_29ChainedSequenceContextFormat227chained_class_seq_rule_sets"
+      },
+      {
+        "functionIndex": 675,
+        "name": "_RNvMs2g_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_27ChainedClassSequenceRuleSet23chained_class_seq_rules"
+      },
+      {
+        "functionIndex": 676,
+        "name": "_RNvMs2l_NtNtCsaDOWveanduf_10read_fonts6tables4gposNtB6_18MarkMarkPosFormat114mark1_coverage"
+      },
+      {
+        "functionIndex": 677,
+        "name": "_RNvMs2p_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_29ChainedSequenceContextFormat315input_coverages"
+      },
+      {
+        "functionIndex": 678,
+        "name": "_RNvMs3_NtNtCsaDOWveanduf_10read_fonts6tables4gsubNtB5_4Gsub11lookup_list"
+      },
+      {
+        "functionIndex": 679,
+        "name": "_RNvMs3_NtNtCsaDOWveanduf_10read_fonts6tables4gsubNtB5_4Gsub11script_list"
+      },
+      {
+        "functionIndex": 680,
+        "name": "_RNvMs3_NtNtCsaDOWveanduf_10read_fonts6tables4gsubNtB5_4Gsub12feature_list"
+      },
+      {
+        "functionIndex": 681,
+        "name": "_RNvMs3_NtNtCsaDOWveanduf_10read_fonts6tables4gvarNtB5_4Gvar20phantom_point_deltas"
+      },
+      {
+        "functionIndex": 682,
+        "name": "_RNvMs4_NtNtCsaDOWveanduf_10read_fonts6tables4hmtxNtB5_4Hmtx9h_metrics"
+      },
+      {
+        "functionIndex": 683,
+        "name": "_RNvMs5_CsaDOWveanduf_10read_fontsNtB5_14TableDirectory13table_records"
+      },
+      {
+        "functionIndex": 684,
+        "name": "_RNvMs5_NtNtCsaDOWveanduf_10read_fonts6tables4gposNtB5_4Gpos11lookup_list"
+      },
+      {
+        "functionIndex": 685,
+        "name": "_RNvMs5_NtNtCsaDOWveanduf_10read_fonts6tables4gposNtB5_4Gpos11script_list"
+      },
+      {
+        "functionIndex": 686,
+        "name": "_RNvMs5_NtNtCsaDOWveanduf_10read_fonts6tables4gposNtB5_4Gpos12feature_list"
+      },
+      {
+        "functionIndex": 687,
+        "name": "_RNvMs6_NtNtCsaDOWveanduf_10read_fonts6tables4kernNtB5_8Subtable4kind"
+      },
+      {
+        "functionIndex": 688,
+        "name": "_RNvMs9_NtNtCsaDOWveanduf_10read_fonts6tables4morxNtB5_4Morx6chains"
+      },
+      {
+        "functionIndex": 689,
+        "name": "_RNvMsA_NtNtCsaDOWveanduf_10read_fonts6tables3aatNtB5_7Lookup48segments"
+      },
+      {
+        "functionIndex": 690,
+        "name": "_RNvMsB_NtNtCsaDOWveanduf_10read_fonts6tables4kernNtB5_19Subtable2ClassTable11first_glyph"
+      },
+      {
+        "functionIndex": 691,
+        "name": "_RNvMsB_NtNtCsaDOWveanduf_10read_fonts6tables4kernNtB5_19Subtable2ClassTable8n_glyphs"
+      },
+      {
+        "functionIndex": 692,
+        "name": "_RNvMsF_NtNtCsaDOWveanduf_10read_fonts6tables4kernNtB5_9Subtable311glyph_count"
+      },
+      {
+        "functionIndex": 693,
+        "name": "_RNvMsG_NtNtCsaDOWveanduf_10read_fonts6tables3aatNtB5_7Lookup612entries_data"
+      },
+      {
+        "functionIndex": 694,
+        "name": "_RNvMsG_NtNtCsaDOWveanduf_10read_fonts6tables3aatNtB5_7Lookup67n_units"
+      },
+      {
+        "functionIndex": 695,
+        "name": "_RNvMsG_NtNtCsaDOWveanduf_10read_fonts6tables4gsubNtB5_20LigatureSubstFormat113ligature_sets"
+      },
+      {
+        "functionIndex": 696,
+        "name": "_RNvMsG_NtNtCsaDOWveanduf_10read_fonts6tables4gsubNtB5_20LigatureSubstFormat18coverage"
+      },
+      {
+        "functionIndex": 697,
+        "name": "_RNvMsK_NtNtCsaDOWveanduf_10read_fonts6tables3aatNtB5_7Lookup811first_glyph"
+      },
+      {
+        "functionIndex": 698,
+        "name": "_RNvMsK_NtNtCsaDOWveanduf_10read_fonts6tables3aatNtB5_7Lookup811value_array"
+      },
+      {
+        "functionIndex": 699,
+        "name": "_RNvMsK_NtNtCsaDOWveanduf_10read_fonts6tables4gposNtB5_9MarkArray12mark_records"
+      },
+      {
+        "functionIndex": 700,
+        "name": "_RNvMsK_NtNtCsaDOWveanduf_10read_fonts6tables4gsubNtB5_11LigatureSet9ligatures"
+      },
+      {
+        "functionIndex": 701,
+        "name": "_RNvMsM_NtNtCsaDOWveanduf_10read_fonts6tables4gposNtB5_10MarkRecord11mark_anchor"
+      },
+      {
+        "functionIndex": 702,
+        "name": "_RNvMsO_NtNtCsaDOWveanduf_10read_fonts6tables3aatNtB5_8Lookup1011first_glyph"
+      },
+      {
+        "functionIndex": 703,
+        "name": "_RNvMsO_NtNtCsaDOWveanduf_10read_fonts6tables3aatNtB5_8Lookup1011glyph_count"
+      },
+      {
+        "functionIndex": 704,
+        "name": "_RNvMsO_NtNtCsaDOWveanduf_10read_fonts6tables3aatNtB5_8Lookup1011values_data"
+      },
+      {
+        "functionIndex": 705,
+        "name": "_RNvMsO_NtNtCsaDOWveanduf_10read_fonts6tables3aatNtB5_8Lookup109unit_size"
+      },
+      {
+        "functionIndex": 706,
+        "name": "_RNvMsO_NtNtCsaDOWveanduf_10read_fonts6tables4gsubNtB5_8Ligature14ligature_glyph"
+      },
+      {
+        "functionIndex": 707,
+        "name": "_RNvMsO_NtNtCsaDOWveanduf_10read_fonts6tables4gsubNtB5_8Ligature19component_glyph_ids"
+      },
+      {
+        "functionIndex": 708,
+        "name": "_RNvMsR_NtNtCsaDOWveanduf_10read_fonts6tables3aatNtB5_11StateHeader18state_array_offset"
+      },
+      {
+        "functionIndex": 709,
+        "name": "_RNvMsV_NtNtCsaDOWveanduf_10read_fonts6tables4gposNtB5_16SinglePosFormat18coverage"
+      },
+      {
+        "functionIndex": 710,
+        "name": "_RNvMsX_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB5_15CoverageFormat111glyph_array"
+      },
+      {
+        "functionIndex": 711,
+        "name": "_RNvNtNtCsaDOWveanduf_10read_fonts2ps3num9parse_int"
+      },
+      {
+        "functionIndex": 712,
+        "name": "_RNvMs_NtNtCsaDOWveanduf_10read_fonts6tables4kerxNtB4_8Subtable4kind"
+      },
+      {
+        "functionIndex": 713,
+        "name": "_RNvMs_NtNtCsaDOWveanduf_10read_fonts6tables4locaNtB4_4Loca4read"
+      },
+      {
+        "functionIndex": 714,
+        "name": "_RNvMs_NtNtCsaDOWveanduf_10read_fonts6tables4locaNtB4_4Loca8get_glyf"
+      },
+      {
+        "functionIndex": 715,
+        "name": "_RNvMs_NtNtCsaDOWveanduf_10read_fonts6tables4trakNtB4_15TrackTableEntry15per_size_values"
+      },
+      {
+        "functionIndex": 716,
+        "name": "_RNvMs_NtNtNtCsaDOWveanduf_10read_fonts6tables6layout6scriptNtB6_6Script22lang_sys_index_for_tag"
+      },
+      {
+        "functionIndex": 717,
+        "name": "_RNvMsc_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB5_8ClassDef4cost"
+      },
+      {
+        "functionIndex": 718,
+        "name": "_RNvMsd_NtNtCsaDOWveanduf_10read_fonts6tables4kerxNtB5_4Kerx9subtables"
+      },
+      {
+        "functionIndex": 719,
+        "name": "_RNvMsd_NtNtCsaDOWveanduf_10read_fonts6tables4morxNtB5_5Chain9subtables"
+      },
+      {
+        "functionIndex": 720,
+        "name": "_RNvMsf_NtNtCsaDOWveanduf_10read_fonts6tables4baseNtB5_16BaseScriptRecord11base_script"
+      },
+      {
+        "functionIndex": 721,
+        "name": "_RNvMsf_NtNtCsaDOWveanduf_10read_fonts6tables4gsubNtB5_18SingleSubstFormat18coverage"
+      },
+      {
+        "functionIndex": 722,
+        "name": "_RNvMsh_NtNtCsaDOWveanduf_10read_fonts6tables4kerxNtB5_8Subtable11tuple_count"
+      },
+      {
+        "functionIndex": 723,
+        "name": "_RNvMsh_NtNtCsaDOWveanduf_10read_fonts6tables4kerxNtB5_8Subtable8coverage"
+      },
+      {
+        "functionIndex": 724,
+        "name": "_RNvMsj_NtNtCsaDOWveanduf_10read_fonts6tables4morxNtB5_8Subtable17sub_feature_flags"
+      },
+      {
+        "functionIndex": 725,
+        "name": "_RNvMsj_NtNtCsaDOWveanduf_10read_fonts6tables4morxNtB5_8Subtable8coverage"
+      },
+      {
+        "functionIndex": 726,
+        "name": "_RNvMsk_NtNtCsaDOWveanduf_10read_fonts6tables4gsubNtB5_18SingleSubstFormat28coverage"
+      },
+      {
+        "functionIndex": 727,
+        "name": "_RNvMsl_NtNtCsaDOWveanduf_10read_fonts6tables4glyfNtB5_11SimpleGlyph10glyph_data"
+      },
+      {
+        "functionIndex": 728,
+        "name": "_RNvMso_NtNtCsaDOWveanduf_10read_fonts6tables4gsubNtB5_20MultipleSubstFormat18coverage"
+      },
+      {
+        "functionIndex": 729,
+        "name": "_RNvMsp_NtNtCsaDOWveanduf_10read_fonts6tables4kernNtB5_10OtSubtable8coverage"
+      },
+      {
+        "functionIndex": 730,
+        "name": "_RNvMsp_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB5_6Script16default_lang_sys"
+      },
+      {
+        "functionIndex": 731,
+        "name": "_RNvMsp_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB5_6Script16lang_sys_records"
+      },
+      {
+        "functionIndex": 732,
+        "name": "_RNvMsr_NtNtCsaDOWveanduf_10read_fonts6tables3aatNtB5_7Lookup011values_data"
+      },
+      {
+        "functionIndex": 733,
+        "name": "_RNvMst_NtNtCsaDOWveanduf_10read_fonts6tables4kernNtB5_11AatSubtable8coverage"
+      },
+      {
+        "functionIndex": 734,
+        "name": "_RNvMsv_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB5_7LangSys22required_feature_index"
+      },
+      {
+        "functionIndex": 735,
+        "name": "_RNvMsw_NtNtCsaDOWveanduf_10read_fonts6tables3aatNtB5_7Lookup213segments_data"
+      },
+      {
+        "functionIndex": 736,
+        "name": "_RNvMsw_NtNtCsaDOWveanduf_10read_fonts6tables3aatNtB5_7Lookup27n_units"
+      },
+      {
+        "functionIndex": 737,
+        "name": "_RNvMsw_NtNtCsaDOWveanduf_10read_fonts6tables4cmapNtB5_4Cmap16encoding_records"
+      },
+      {
+        "functionIndex": 738,
+        "name": "_RNvMsx_NtNtCsaDOWveanduf_10read_fonts6tables4gsubNtB5_21AlternateSubstFormat18coverage"
+      },
+      {
+        "functionIndex": 739,
+        "name": "_RNvMsy_NtNtCsaDOWveanduf_10read_fonts6tables4cmapNtB5_14EncodingRecord8subtable"
+      },
+      {
+        "functionIndex": 740,
+        "name": "_RNvMsz_NtNtCsaDOWveanduf_10read_fonts6tables4headNtB5_4Head12units_per_em"
+      },
+      {
+        "functionIndex": 741,
+        "name": "_RNvMsz_NtNtCsaDOWveanduf_10read_fonts6tables4headNtB5_4Head19index_to_loc_format"
+      },
+      {
+        "functionIndex": 742,
+        "name": "_RNvXNtNtCsaDOWveanduf_10read_fonts2ps2csTRShRNtNtNtB4_3cff5index5IndexBG_BG_ENtB2_17CharstringContext11global_subr"
+      },
+      {
+        "functionIndex": 743,
+        "name": "_RNvXNtNtCsaDOWveanduf_10read_fonts2ps2csTRShRNtNtNtB4_3cff5index5IndexBG_BG_ENtB2_17CharstringContext15seac_components"
+      },
+      {
+        "functionIndex": 744,
+        "name": "_RNvXNtNtCsaDOWveanduf_10read_fonts2ps2csTRShRNtNtNtB4_3cff5index5IndexBG_BG_ENtB2_17CharstringContext4subr"
+      },
+      {
+        "functionIndex": 745,
+        "name": "_RNvXNtNtCsaDOWveanduf_10read_fonts6tables4kerxNtB2_8SubtableNtNtB6_4read7VarSize11read_len_at"
+      },
+      {
+        "functionIndex": 746,
+        "name": "_RNvXNtNtCsaDOWveanduf_10read_fonts6tables4morxNtB2_5ChainNtNtB6_4read7VarSize11read_len_at"
+      },
+      {
+        "functionIndex": 747,
+        "name": "_RNvXs17_NtNtCsaDOWveanduf_10read_fonts6tables6layoutNtB6_13CoverageTableNtNtBa_4read8FontRead4read"
+      },
+      {
+        "functionIndex": 748,
+        "name": "_RNvXs1_NtNtCsaDOWveanduf_10read_fonts6tables4kernNtB5_9SubtablesNtNtNtNtCsdkdt1aaAg1T_4core4iter6traits8iterator8Iterator4next"
+      },
+      {
+        "functionIndex": 749,
+        "name": "_RNvXsj_NtNtCsaDOWveanduf_10read_fonts6tables3aatINtB5_18ExtendedStateTableINtNtCs9aImQiHga9o_10font_types3raw9BigEndiantEENtNtB9_4read8FontRead4readB9_"
+      },
+      {
+        "functionIndex": 750,
+        "name": "_RNvXs1_NtNtCsaDOWveanduf_10read_fonts6tables4locaNtB5_4LocaNtNtB9_4read16FontReadWithArgs14read_with_args"
+      },
+      {
+        "functionIndex": 751,
+        "name": "_RNvXs1g_NtCsdkdt1aaAg1T_4core3fmtRReNtB6_5Debug3fmtCsaDOWveanduf_10read_fonts"
+      },
+      {
+        "functionIndex": 752,
+        "name": "_RNvXs1g_NtCsdkdt1aaAg1T_4core3fmtRxNtB6_5Debug3fmtCsaDOWveanduf_10read_fonts"
+      },
+      {
+        "functionIndex": 753,
+        "name": "_RNvXs2_CsaDOWveanduf_10read_fontsNtB5_7FontRefNtNtB5_14table_provider13TableProvider12data_for_tag"
+      },
+      {
+        "functionIndex": 754,
+        "name": "_RNvXs2_NtCsaDOWveanduf_10read_fonts4readNtB5_9ReadErrorNtNtCsdkdt1aaAg1T_4core3fmt5Debug3fmt"
+      },
+      {
+        "functionIndex": 755,
+        "name": "_RNvXs8_NtNtCsaDOWveanduf_10read_fonts6tables3aatINtB5_11TypedLookupmENtNtB9_4read8FontRead4readB9_"
+      },
+      {
+        "functionIndex": 756,
+        "name": "_RNvXs7_NtNtCsaDOWveanduf_10read_fonts6tables4glyfNtB5_13ComponentIterNtNtNtNtCsdkdt1aaAg1T_4core4iter6traits8iterator8Iterator4next"
+      },
+      {
+        "functionIndex": 757,
+        "name": "_RNvXs_NtNtCsaDOWveanduf_10read_fonts6tables4kernNtB4_4KernNtNtB8_4read8FontRead4read"
+      },
+      {
+        "functionIndex": 758,
+        "name": "_RNvXsm_NtNtCsaDOWveanduf_10read_fonts6tables3aatNtB5_6LookupNtNtB9_4read8FontRead4read"
+      },
+      {
+        "functionIndex": 759,
+        "name": "_RNvXs1i_NtCsdkdt1aaAg1T_4core3fmtRNtNtCs9aImQiHga9o_10font_types3tag3TagNtB6_7Display3fmtBA_"
+      },
+      {
+        "functionIndex": 760,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVectE8grow_oneCshggfqRjh6kr_22pmndrs_glyph_slug_core"
+      },
+      {
+        "functionIndex": 761,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecjE8grow_oneCshggfqRjh6kr_22pmndrs_glyph_slug_core"
+      },
+      {
+        "functionIndex": 762,
+        "name": "_RNvNtNtCs1UVKPErhcgr_4libm4math4ceil5ceilf"
+      },
+      {
+        "functionIndex": 763,
+        "name": "_RNvNtNtCs1UVKPErhcgr_4libm4math5floor6floorf"
+      },
+      {
+        "functionIndex": 764,
+        "name": "_RNvNtNtCs1UVKPErhcgr_4libm4math5round6roundf"
+      },
+      {
+        "functionIndex": 765,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecINtNtNtCsdkdt1aaAg1T_4core3ops5range5RangejEE8grow_oneCs9P34ixSXtiq_12unicode_bidi"
+      },
+      {
+        "functionIndex": 766,
+        "name": "_RNvMNtCs9P34ixSXtiq_12unicode_bidi7prepareNtB2_20IsolatingRunSequence18iter_forwards_from"
+      },
+      {
+        "functionIndex": 767,
+        "name": "_RNvMNtCs9P34ixSXtiq_12unicode_bidi7prepareNtB2_20IsolatingRunSequence19iter_backwards_from"
+      },
+      {
+        "functionIndex": 768,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecINtNtB7_3vec3VecINtNtNtCsdkdt1aaAg1T_4core3ops5range5RangejEEE8grow_oneCs9P34ixSXtiq_12unicode_bidi"
+      },
+      {
+        "functionIndex": 769,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVecNtNtCs9P34ixSXtiq_12unicode_bidi7prepare20IsolatingRunSequenceE8grow_oneBQ_"
+      },
+      {
+        "functionIndex": 770,
+        "name": "_RNvXs3_NtCs9P34ixSXtiq_12unicode_bidi5utf16StNtB7_10TextSource7char_at"
+      },
+      {
+        "functionIndex": 771,
+        "name": "_RNvXs7_NtCs9P34ixSXtiq_12unicode_bidi5utf16NtB5_18Utf16CharIndexIterNtNtNtNtCsdkdt1aaAg1T_4core4iter6traits8iterator8Iterator4next"
+      },
+      {
+        "functionIndex": 772,
+        "name": "_RNvXs9_NtCs9P34ixSXtiq_12unicode_bidi5utf16NtB5_13Utf16CharIterNtNtNtNtCsdkdt1aaAg1T_4core4iter6traits8iterator8Iterator4next"
+      },
+      {
+        "functionIndex": 773,
+        "name": "_RNvXsc_NtCs9P34ixSXtiq_12unicode_bidi5levelNtB5_5ErrorNtNtCsdkdt1aaAg1T_4core3fmt5Debug3fmt"
+      },
+      {
+        "functionIndex": 774,
+        "name": "_RNvNtCsewWLk9TkM7w_5alloc7raw_vec12handle_error"
+      },
+      {
+        "functionIndex": 775,
+        "name": "_RNvMs4_NtCsewWLk9TkM7w_5alloc7raw_vecNtB5_11RawVecInner11finish_growB7_"
+      },
+      {
+        "functionIndex": 776,
+        "name": "_RNvMs3_NtCsewWLk9TkM7w_5alloc7raw_vecINtB5_6RawVechE8grow_oneB7_"
+      },
+      {
+        "functionIndex": 777,
+        "name": "_RNvNtCsewWLk9TkM7w_5alloc5alloc18handle_alloc_error"
+      },
+      {
+        "functionIndex": 778,
+        "name": "_RNvNvMs_NtCsewWLk9TkM7w_5alloc3vecINtB6_3VecppE10insert_mut13assert_failed"
+      },
+      {
+        "functionIndex": 779,
+        "name": "_RNvNvMs_NtCsewWLk9TkM7w_5alloc3vecINtB6_3VecppE6remove13assert_failed"
+      },
+      {
+        "functionIndex": 780,
+        "name": "_RNvNtCsdkdt1aaAg1T_4core9panicking5panic"
+      },
+      {
+        "functionIndex": 781,
+        "name": "_RNvNtCsdkdt1aaAg1T_4core9panicking9panic_fmt"
+      },
+      {
+        "functionIndex": 782,
+        "name": "_RNvXs1i_NtCsdkdt1aaAg1T_4core3fmtReNtB6_7Display3fmtB8_"
+      },
+      {
+        "functionIndex": 783,
+        "name": "_RNvNtCsdkdt1aaAg1T_4core3fmt5write"
+      },
+      {
+        "functionIndex": 784,
+        "name": "_RNvNtNtCsdkdt1aaAg1T_4core5slice5index16slice_index_fail"
+      },
+      {
+        "functionIndex": 785,
+        "name": "_RNvMNtNtCsdkdt1aaAg1T_4core4char7methodsc16escape_debug_ext"
+      },
+      {
+        "functionIndex": 786,
+        "name": "_RNvNtCsdkdt1aaAg1T_4core9panicking18panic_bounds_check"
+      },
+      {
+        "functionIndex": 787,
+        "name": "_RNvXs0_NtNtCsdkdt1aaAg1T_4core3fmt8buildersNtB5_10PadAdapterNtB7_5Write9write_str"
+      },
+      {
+        "functionIndex": 788,
+        "name": "_RNvMs1_NtNtCsdkdt1aaAg1T_4core3fmt8buildersNtB5_11DebugStruct5field"
+      },
+      {
+        "functionIndex": 789,
+        "name": "_RNvMsa_NtCsdkdt1aaAg1T_4core3fmtNtB5_9Formatter12pad_integral"
+      },
+      {
+        "functionIndex": 790,
+        "name": "_RNvNtNtCsdkdt1aaAg1T_4core3str5count14do_count_chars"
+      },
+      {
+        "functionIndex": 791,
+        "name": "_RNvNvMsa_NtCsdkdt1aaAg1T_4core3fmtNtB7_9Formatter12pad_integral12write_prefix"
+      },
+      {
+        "functionIndex": 792,
+        "name": "_RNvMsa_NtCsdkdt1aaAg1T_4core3fmtNtB5_9Formatter25debug_tuple_field1_finish"
+      },
+      {
+        "functionIndex": 793,
+        "name": "_RNvMsa_NtCsdkdt1aaAg1T_4core3fmtNtB5_9Formatter3pad"
+      },
+      {
+        "functionIndex": 794,
+        "name": "_RNvMsa_NtCsdkdt1aaAg1T_4core3fmtNtB5_9Formatter9write_str"
+      },
+      {
+        "functionIndex": 795,
+        "name": "_RNvXs8_NtNtNtCsdkdt1aaAg1T_4core3fmt3num3impmNtB9_7Display3fmt"
+      },
+      {
+        "functionIndex": 796,
+        "name": "_RNvNtCsdkdt1aaAg1T_4core3str16slice_error_fail"
+      },
+      {
+        "functionIndex": 797,
+        "name": "_RNvXs_NtNtCsdkdt1aaAg1T_4core3ops5rangeINtB4_5RangejENtNtB8_3fmt5Debug3fmtB8_"
+      },
+      {
+        "functionIndex": 798,
+        "name": "_RNvXsj_NtCsdkdt1aaAg1T_4core3fmtcNtB5_5Debug3fmt"
+      },
+      {
+        "functionIndex": 799,
+        "name": "_RNvNtCsdkdt1aaAg1T_4core6option13unwrap_failed"
+      },
+      {
+        "functionIndex": 800,
+        "name": "_RNvNtCsdkdt1aaAg1T_4core4cell22panic_already_borrowed"
+      },
+      {
+        "functionIndex": 801,
+        "name": "_RNvXsr_NtCsdkdt1aaAg1T_4core4cellNtB5_14BorrowMutErrorNtNtB7_3fmt7Display3fmt"
+      },
+      {
+        "functionIndex": 802,
+        "name": "_RNvNtCsdkdt1aaAg1T_4core4cell30panic_already_mutably_borrowed"
+      },
+      {
+        "functionIndex": 803,
+        "name": "_RNvXsq_NtCsdkdt1aaAg1T_4core4cellNtB5_11BorrowErrorNtNtB7_3fmt7Display3fmt"
+      },
+      {
+        "functionIndex": 804,
+        "name": "_RNvNtCsdkdt1aaAg1T_4core6option13expect_failed"
+      },
+      {
+        "functionIndex": 805,
+        "name": "_RNvNtCsdkdt1aaAg1T_4core6result13unwrap_failed"
+      },
+      {
+        "functionIndex": 806,
+        "name": "_RNvXs1g_NtCsdkdt1aaAg1T_4core3fmtRDNtB6_5DebugEL_Bx_3fmtB8_"
+      },
+      {
+        "functionIndex": 807,
+        "name": "_RNvXs8_NtCsdkdt1aaAg1T_4core3fmtNtB5_9ArgumentsNtB5_7Display3fmt"
+      },
+      {
+        "functionIndex": 808,
+        "name": "_RNvXs6_NtNtCsdkdt1aaAg1T_4core3fmt3numjNtB7_8LowerHex3fmt"
+      },
+      {
+        "functionIndex": 809,
+        "name": "_RNvNtNtCsdkdt1aaAg1T_4core9panicking11panic_const23panic_const_div_by_zero"
+      },
+      {
+        "functionIndex": 810,
+        "name": "_RNvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6shared9smallsort22panic_on_ord_violation"
+      },
+      {
+        "functionIndex": 811,
+        "name": "_RNvNtNtNtNtCsdkdt1aaAg1T_4core5slice4sort6stable5drift11sqrt_approx"
+      },
+      {
+        "functionIndex": 812,
+        "name": "_RNvNvNtCsdkdt1aaAg1T_4core5slice20copy_from_slice_impl17len_mismatch_fail"
+      },
+      {
+        "functionIndex": 813,
+        "name": "_RNvXs0_NtNtCsdkdt1aaAg1T_4core3fmt8buildersNtB5_10PadAdapterNtB7_5Write10write_char"
+      },
+      {
+        "functionIndex": 814,
+        "name": "_RNvXsg_NtNtCsdkdt1aaAg1T_4core3fmt3numhNtB7_8UpperHex3fmt"
+      },
+      {
+        "functionIndex": 815,
+        "name": "_RNvXs1g_NtCsdkdt1aaAg1T_4core3fmtRjNtB6_5Debug3fmtB8_"
+      },
+      {
+        "functionIndex": 816,
+        "name": "_RNvXs8_NtNtCsdkdt1aaAg1T_4core3fmt3numjNtB7_8UpperHex3fmt"
+      },
+      {
+        "functionIndex": 817,
+        "name": "_RNvXsF_NtNtCsdkdt1aaAg1T_4core3num7nonzeroINtB5_7NonZerojENtNtB9_3fmt5Debug3fmtB9_"
+      },
+      {
+        "functionIndex": 818,
+        "name": "_RNvXsW_NtNtCsdkdt1aaAg1T_4core3fmt3nummNtB7_5Debug3fmt"
+      },
+      {
+        "functionIndex": 819,
+        "name": "_RNvXsk_NtCsdkdt1aaAg1T_4core3fmtcNtB5_7Display3fmt"
+      },
+      {
+        "functionIndex": 820,
+        "name": "_RNvYNtNtNtCsdkdt1aaAg1T_4core3fmt8builders10PadAdapterNtB6_5Write9write_fmtB8_"
+      },
+      {
+        "functionIndex": 821,
+        "name": "memcmp"
+      },
+      {
+        "functionIndex": 822,
+        "name": "binaryen:byn$mgfn-shared$1000"
+      },
+      {
+        "functionIndex": 823,
+        "name": "binaryen:byn$mgfn-shared$1003"
+      },
+      {
+        "functionIndex": 824,
+        "name": "binaryen:byn$mgfn-shared$1005"
+      },
+      {
+        "functionIndex": 825,
+        "name": "binaryen:byn$mgfn-shared$1007"
+      },
+      {
+        "functionIndex": 826,
+        "name": "binaryen:byn$mgfn-shared$1020"
+      },
+      {
+        "functionIndex": 827,
+        "name": "binaryen:byn$mgfn-shared$1021"
+      },
+      {
+        "functionIndex": 828,
+        "name": "binaryen:byn$mgfn-shared$1029"
+      },
+      {
+        "functionIndex": 829,
+        "name": "binaryen:byn$mgfn-shared$1035"
+      },
+      {
+        "functionIndex": 830,
+        "name": "binaryen:byn$mgfn-shared$1042"
+      },
+      {
+        "functionIndex": 831,
+        "name": "binaryen:byn$mgfn-shared$1049"
+      },
+      {
+        "functionIndex": 832,
+        "name": "binaryen:byn$mgfn-shared$1050"
+      },
+      {
+        "functionIndex": 833,
+        "name": "binaryen:byn$mgfn-shared$1051"
+      },
+      {
+        "functionIndex": 834,
+        "name": "binaryen:byn$mgfn-shared$1059"
+      },
+      {
+        "functionIndex": 835,
+        "name": "binaryen:byn$mgfn-shared$1086"
+      },
+      {
+        "functionIndex": 836,
+        "name": "binaryen:byn$mgfn-shared$1091"
+      },
+      {
+        "functionIndex": 837,
+        "name": "binaryen:byn$mgfn-shared$1092"
+      },
+      {
+        "functionIndex": 838,
+        "name": "binaryen:byn$mgfn-shared$1093"
+      },
+      {
+        "functionIndex": 839,
+        "name": "binaryen:byn$mgfn-shared$110"
+      },
+      {
+        "functionIndex": 840,
+        "name": "binaryen:byn$mgfn-shared$1100"
+      },
+      {
+        "functionIndex": 841,
+        "name": "binaryen:byn$mgfn-shared$1126"
+      },
+      {
+        "functionIndex": 842,
+        "name": "binaryen:byn$mgfn-shared$1129"
+      },
+      {
+        "functionIndex": 843,
+        "name": "binaryen:byn$mgfn-shared$1137"
+      },
+      {
+        "functionIndex": 844,
+        "name": "binaryen:byn$mgfn-shared$118"
+      },
+      {
+        "functionIndex": 845,
+        "name": "binaryen:byn$mgfn-shared$1186"
+      },
+      {
+        "functionIndex": 846,
+        "name": "binaryen:byn$mgfn-shared$1187"
+      },
+      {
+        "functionIndex": 847,
+        "name": "binaryen:byn$mgfn-shared$1216"
+      },
+      {
+        "functionIndex": 848,
+        "name": "binaryen:byn$mgfn-shared$1226"
+      },
+      {
+        "functionIndex": 849,
+        "name": "binaryen:byn$mgfn-shared$1229"
+      },
+      {
+        "functionIndex": 850,
+        "name": "binaryen:byn$mgfn-shared$1267"
+      },
+      {
+        "functionIndex": 851,
+        "name": "binaryen:byn$mgfn-shared$1275"
+      },
+      {
+        "functionIndex": 852,
+        "name": "binaryen:byn$mgfn-shared$1293"
+      },
+      {
+        "functionIndex": 853,
+        "name": "binaryen:byn$mgfn-shared$13"
+      },
+      {
+        "functionIndex": 854,
+        "name": "binaryen:byn$mgfn-shared$1323"
+      },
+      {
+        "functionIndex": 855,
+        "name": "binaryen:byn$mgfn-shared$139"
+      },
+      {
+        "functionIndex": 856,
+        "name": "binaryen:byn$mgfn-shared$147"
+      },
+      {
+        "functionIndex": 857,
+        "name": "binaryen:byn$mgfn-shared$163"
+      },
+      {
+        "functionIndex": 858,
+        "name": "binaryen:byn$mgfn-shared$18"
+      },
+      {
+        "functionIndex": 859,
+        "name": "binaryen:byn$mgfn-shared$203"
+      },
+      {
+        "functionIndex": 860,
+        "name": "binaryen:byn$mgfn-shared$212"
+      },
+      {
+        "functionIndex": 861,
+        "name": "binaryen:byn$mgfn-shared$22"
+      },
+      {
+        "functionIndex": 862,
+        "name": "binaryen:byn$mgfn-shared$221"
+      },
+      {
+        "functionIndex": 863,
+        "name": "binaryen:byn$mgfn-shared$233"
+      },
+      {
+        "functionIndex": 864,
+        "name": "binaryen:byn$mgfn-shared$234"
+      },
+      {
+        "functionIndex": 865,
+        "name": "binaryen:byn$mgfn-shared$26"
+      },
+      {
+        "functionIndex": 866,
+        "name": "binaryen:byn$mgfn-shared$27"
+      },
+      {
+        "functionIndex": 867,
+        "name": "binaryen:byn$mgfn-shared$407"
+      },
+      {
+        "functionIndex": 868,
+        "name": "binaryen:byn$mgfn-shared$548"
+      },
+      {
+        "functionIndex": 869,
+        "name": "binaryen:byn$mgfn-shared$591"
+      },
+      {
+        "functionIndex": 870,
+        "name": "binaryen:byn$mgfn-shared$612"
+      },
+      {
+        "functionIndex": 871,
+        "name": "binaryen:byn$mgfn-shared$657"
+      },
+      {
+        "functionIndex": 872,
+        "name": "binaryen:byn$mgfn-shared$69"
+      },
+      {
+        "functionIndex": 873,
+        "name": "binaryen:byn$mgfn-shared$816"
+      },
+      {
+        "functionIndex": 874,
+        "name": "binaryen:byn$mgfn-shared$914"
+      },
+      {
+        "functionIndex": 875,
+        "name": "binaryen:byn$mgfn-shared$924"
+      },
+      {
+        "functionIndex": 876,
+        "name": "binaryen:byn$mgfn-shared$973"
+      },
+      {
+        "functionIndex": 877,
+        "name": "binaryen:byn$mgfn-shared$975"
+      },
+      {
+        "functionIndex": 878,
+        "name": "binaryen:byn$mgfn-shared$976"
+      },
+      {
+        "functionIndex": 879,
+        "name": "binaryen:byn$mgfn-shared$977"
+      },
+      {
+        "functionIndex": 880,
+        "name": "binaryen:byn$mgfn-shared$986"
+      },
+      {
+        "functionIndex": 881,
+        "name": "binaryen:byn$mgfn-shared$987"
+      },
+      {
+        "functionIndex": 882,
+        "name": "binaryen:byn$mgfn-shared$989"
+      },
+      {
+        "functionIndex": 883,
+        "name": "binaryen:byn$mgfn-shared$990"
+      },
+      {
+        "functionIndex": 884,
+        "name": "binaryen:byn$mgfn-shared$995"
+      },
+      {
+        "functionIndex": 885,
+        "name": "binaryen:byn$mgfn-shared$998"
+      },
+      {
+        "functionIndex": 886,
+        "name": "binaryen:byn$mgfn-shared$999"
+      }
+    ]
+  },
+  "options": {
+    "artifact": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+    "boundary": "publication",
+    "count": 1024,
+    "iterations": 80,
+    "output": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/main-profile",
+    "position": "first",
+    "profileCase": "bulk-write",
+    "warmups": 10,
+    "reads": "none",
+    "publicationPath": "scene",
+    "wasm": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/main-named-artifact/text-shaper.named.wasm"
+  }
+}
