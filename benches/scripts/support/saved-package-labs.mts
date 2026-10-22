@@ -4,7 +4,13 @@ import { createHash } from 'node:crypto';
 import { closeSync, openSync, readSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { assertLabsResultHasNoErrors, assertLabsSamplingPolicy, type LabsSamplingPolicy } from './labs-result.mts';
+import {
+  assertLabsResultHasNoErrors,
+  assertLabsSamplingPolicy,
+  assertLabsWarmupPolicy,
+  type LabsSamplingPolicy,
+  type LabsWarmupPolicy,
+} from './labs-result.mts';
 
 const harnessPaths = [
   ':(top)benches/labs',
@@ -70,6 +76,7 @@ export function validateSavedPackageLabs(
     readonly suite: string;
     readonly blocks: number;
     readonly samplingPolicy: LabsSamplingPolicy;
+    readonly warmupPolicy: LabsWarmupPolicy;
   },
 ): void {
   if (!isRecord(manifest) || !isRecord(manifest.candidate) || !isRecord(result)) {
@@ -83,12 +90,16 @@ export function validateSavedPackageLabs(
     manifest.suite !== expected.suite ||
     manifest.blocks !== expected.blocks ||
     manifest.samplingPolicy !== expected.samplingPolicy ||
+    (manifest.warmupPolicy ?? 'conditional') !== expected.warmupPolicy ||
+    (manifest.warmupPolicy !== undefined &&
+      manifest.warmupPolicy !== 'conditional' &&
+      manifest.warmupPolicy !== 'fixed-20') ||
     result.blocks !== expected.blocks ||
     manifest.candidate.version !== expected.version ||
     expected.sha256 === undefined ||
     manifest.candidate.sha256 !== expected.sha256
   ) {
-    throw new Error('Saved candidate artifact, suite, blocks or Labs version does not match');
+    throw new Error('Saved candidate artifact, suite, blocks, sampling/warmup policy or Labs version does not match');
   }
   if (
     !isRecord(result.hardware) ||
@@ -102,6 +113,7 @@ export function validateSavedPackageLabs(
   }
   assertLabsResultHasNoErrors(result);
   assertLabsSamplingPolicy(result, expected.samplingPolicy, expected.blocks);
+  assertLabsWarmupPolicy(result, expected.warmupPolicy, expected.blocks);
   if (expected.samplingPolicy === 'single-call' && !Object.hasOwn(manifest, 'harnessDigest')) {
     throw new Error('Fixed-policy saved candidate requires a matching benchmark harness digest');
   }

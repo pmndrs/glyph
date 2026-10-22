@@ -1,4 +1,4 @@
-import { span, txt, type TextFlow, type TextFlowExclusion } from '@pmndrs/glyph';
+import { span, txt, type TextFlow, type TextFlowExclusion, type TextFlowRegion } from '@pmndrs/glyph';
 import { projectTextFlowBounds } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
@@ -272,8 +272,8 @@ export function animateEditorialEntries(
     if (
       !configuration.animationEnabled &&
       body.editorialProjectionInitialized === true &&
-      body.lastWidth !== undefined &&
-      Math.abs(width - body.lastWidth) < 1
+      body.lastWidth === width &&
+      sameEditorialFlow(flow, body.text.flow)
     ) {
       return;
     }
@@ -337,6 +337,68 @@ function projectedEditorialFlow(
     });
   });
   return editorialFlow(width, height, gap, exclusions);
+}
+
+/** Reproject the fixed paused page from its current scene transforms for capture proof. */
+export function projectedPausedEditorialFlow(
+  entry: ComparisonWorkloadEntry,
+  camera: THREE.Camera,
+  configuration: Pick<ComparisonWorkloadConfiguration, 'animationSpeed' | 'fontSize' | 'layoutWidthRatio'>,
+  viewportWidth: number,
+): TextFlow {
+  return projectedEditorialFlow(
+    entry,
+    camera,
+    editorialColumnWidth(configuration, viewportWidth, 0),
+    editorialBodyHeight(configuration.fontSize),
+    configuration.fontSize * EDITORIAL_COLUMN_GAP_SCALE,
+  );
+}
+
+/** Compare only the two authored rectangular regions and their optional projected polygon exclusions. */
+export function sameEditorialFlow(projected: TextFlow, committed: TextFlow | undefined): boolean {
+  if (committed?.regions.length !== 2 || projected.regions.length !== 2) return false;
+  return projected.regions.every((region, index) => {
+    const actual = committed.regions[index];
+    return actual !== undefined && sameEditorialRegion(region, actual);
+  });
+}
+
+function sameEditorialRegion(projected: TextFlowRegion, committed: TextFlowRegion): boolean {
+  if (
+    projected.key !== committed.key ||
+    projected.shape.kind !== 'rectangle' ||
+    committed.shape.kind !== 'rectangle' ||
+    projected.clip !== undefined ||
+    committed.clip !== undefined
+  ) {
+    return false;
+  }
+  const committedBounds = committed.shape.bounds;
+  if (!projected.shape.bounds.every((coordinate, index) => Math.fround(coordinate) === committedBounds[index])) {
+    return false;
+  }
+  const expectedExclusion = projected.exclusions?.[0];
+  const actualExclusion = committed.exclusions?.[0];
+  if ((projected.exclusions?.length ?? 0) !== (committed.exclusions?.length ?? 0)) return false;
+  if (expectedExclusion === undefined || actualExclusion === undefined) {
+    return expectedExclusion === actualExclusion;
+  }
+  if (
+    expectedExclusion.key !== actualExclusion.key ||
+    expectedExclusion.wrapSide !== actualExclusion.wrapSide ||
+    expectedExclusion.marginInline !== actualExclusion.marginInline ||
+    expectedExclusion.marginBlock !== actualExclusion.marginBlock ||
+    expectedExclusion.shape.kind !== 'polygon' ||
+    actualExclusion.shape.kind !== 'polygon' ||
+    expectedExclusion.shape.vertices.length !== actualExclusion.shape.vertices.length
+  ) {
+    return false;
+  }
+  const actualVertices = actualExclusion.shape.vertices;
+  return expectedExclusion.shape.vertices.every(
+    (point, index) => point[0] === actualVertices[index]?.[0] && point[1] === actualVertices[index]?.[1],
+  );
 }
 
 /** Paragraphs stack from their measured extents: space-after is part of the block size. */

@@ -1,0 +1,1588 @@
+{
+  "trial": {
+    "kind": "static",
+    "args": {},
+    "alias": "rewrite 512 labels in one group",
+    "group": 1,
+    "gcMode": true,
+    "baseline": false,
+    "runs": [
+      {
+        "stats": {
+          "kind": "yield",
+          "debug": "async function anonymous($fn,$gc,$now,$heap,$params,$counters,$consume,$after,$summary\n) {\n\n    \n    \n\n    let _ = 0; let t = 0;\n    let samples = new Array(2 ** 20);\n    let heap = new Array(2 ** 20);\n    let gc = new Array(2 ** 20);\n\n    \n\n    $gc();\n\n    \n      // A forced collection has a fixed cost that depends on the live heap,\n      // not on the bench. Take the cheapest of a few as the floor so per\n      // sample gc reports only what the bench adds.\n      let _gfloor = Infinity;\n      for (let _i = 0; _i < 5; _i++) {\n        const t0 = $now(); $gc();\n        _gfloor = Math.min(_gfloor, $now() - t0);\n      }\n    \n\n    \n      // Reading the heap and the clock allocates. Time an empty sample window\n      // and subtract its smallest delta as the measurement's own floor.\n      let _hself = Infinity;\n      for (let _i = 0; _i < 10; _i++) {\n        const _c1 = $heap();\n        const _t0 = $now();\n        const _t1 = $now();\n        const _d = $heap() - _c1;\n        if (0 <= _d && _d < _hself) _hself = _d;\n      }\n      if (!Number.isFinite(_hself)) _hself = 0;\n    \n\n    for (; _ < 20; _++) {\n      if (_ >= 20 && t >= 0) break;\n\n      \n\n      \n        igc: {\n          if (globalThis.__labsSpike?.active) globalThis.__labsSpike.gcMarker(_,  \"before\", \"start\");\n          const t0 = $now();\n          $gc(); t += $now() - t0;\n          if (globalThis.__labsSpike?.active) globalThis.__labsSpike.gcMarker(_,  \"before\", \"end\");\n        }\n      \n\n      \n      const h0 = $heap();\n       const t0 = $now();\n\n      \n        \n        {\n          const _result = $fn();\n          if (void 0 !== _result) $consume(_result);\n        }\n      \n      \n\n      const t1 = $now();\n      \n\n      \n        heap: {\n          const t0 = $now();\n          heap[_] = Math.max(0, ($heap() - h0 - _hself) ); t += $now() - t0;\n        }\n      \n\n      \n        igc: {\n          if (globalThis.__labsSpike?.active) globalThis.__labsSpike.gcMarker(_,  \"after\", \"start\");\n          const t0 = $now();\n          $gc(); const t1 = $now() - t0;\n          if (globalThis.__labsSpike?.active) globalThis.__labsSpike.gcMarker(_,  \"after\", \"end\");\n\n          t += t1;\n          gc[_] = Math.max(0, t1 - _gfloor);\n        }\n      ;\n\n      const diff = t1 - t0;\n      t += t1 - t0;\n      samples[_] = diff ;\n      if (globalThis.__labsSpike?.active) globalThis.__labsSpike.sample(_, t0, t1, diff);\n      \n    }\n\n    samples.length = _;\n    samples.sort((a, b) => a - b);\n    if (samples.length > 12) samples = samples.slice(2, -2);\n\n    return {\n      samples,\n      min: samples[0],\n      max: samples[samples.length - 1],\n      p25: samples[(.25 * (samples.length - 1)) | 0],\n      p50: samples[(.50 * (samples.length - 1)) | 0],\n      p75: samples[(.75 * (samples.length - 1)) | 0],\n      p99: samples[(.99 * (samples.length - 1)) | 0],\n      p999: samples[(.999 * (samples.length - 1)) | 0],\n      avg: samples.reduce((a, v) => a + v, 0) / samples.length,\n      ticks: samples.length ,\n      plan: { batch: false, batch_samples: 0, batch_unroll: 4, samples: _ },\n      heap: $summary(heap, _),\n      gc: $summary(gc, _),\n      \n    };\n\n    \n  \n}",
+          "samples": [
+            8012334,
+            8039917,
+            8114750,
+            8139500,
+            8158791,
+            8213041,
+            8255125,
+            8287208,
+            8340625,
+            8492125,
+            8492834,
+            8523000,
+            8572542,
+            8596000,
+            8661708,
+            9054583
+          ],
+          "min": 8012334,
+          "max": 9054583,
+          "p25": 8139500,
+          "p50": 8287208,
+          "p75": 8523000,
+          "p99": 8661708,
+          "p999": 8661708,
+          "avg": 8372130.1875,
+          "ticks": 16,
+          "plan": {
+            "batch": false,
+            "batch_samples": 0,
+            "batch_unroll": 4,
+            "samples": 20
+          },
+          "heap": {
+            "min": 2680096,
+            "max": 4187496,
+            "p50": 3399936
+          },
+          "gc": {
+            "min": 0,
+            "max": 8979875,
+            "p50": 107250
+          }
+        },
+        "args": {},
+        "name": "rewrite 512 labels in one group"
+      }
+    ],
+    "style": {
+      "highlight": false,
+      "compact": false
+    }
+  },
+  "trace": {
+    "arm": "warmed",
+    "block": 2,
+    "pid": 11529,
+    "timeOrigin": 1792690270330.929,
+    "clockAlignment": "Labs now() = performance.now() * 1e6 ns; callback and GC event timestamps are performance.now() ms in the same child",
+    "processCpuScope": "process-wide; may include V8 background threads",
+    "monotonicProcessStartEstimateNs": "272706236259625",
+    "input": {
+      "plan": [
+        {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 20
+        }
+      ],
+      "gc": "Labs default true",
+      "samplingPolicy": "single-call",
+      "nodeExecArgv": [
+        "--expose-gc",
+        "--import",
+        "file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/tsx@4.23.13/node_modules/tsx/dist/loader.mjs"
+      ],
+      "nodeOptions": null,
+      "archiveSha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+      "originalSourceSha256": "fff1017f8b652aaccb374d79b0fd1519e643f5cb51375849853bcb4a0d0ea30f",
+      "originalWorkerSha256": "baa7454da0fd065a101df5037b7346bf8afc6a590c68a5016a2d8fb739130b4d",
+      "traceSourceSha256": "c5b3b6791d036ca6d2a450d483d0c82a83d52d748948900dd9c0371ae9de3db0",
+      "traceWorkerSha256": "a7f3c37be387ee710d92e6552165ca4948731ee7bbe4b0a15a6c0a977657d8dc",
+      "benchmarkCopySha256": "3d66de536c29ca1318c526f58c195aef8bfd60810a9472f12fd59cc0f8d5b0ab"
+    },
+    "active": true,
+    "calls": [
+      {
+        "index": 0,
+        "start": 374.790042,
+        "end": 391.184958,
+        "wallMs": 16.394915999999967,
+        "processCpuUs": 55656,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 89,
+        "outcome": "returned"
+      },
+      {
+        "index": 1,
+        "start": 391.231917,
+        "end": 402.652458,
+        "wallMs": 11.420541000000014,
+        "processCpuUs": 25365,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 53,
+        "outcome": "returned"
+      },
+      {
+        "index": 2,
+        "start": 402.671375,
+        "end": 413.297625,
+        "wallMs": 10.62624999999997,
+        "processCpuUs": 35605,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 51,
+        "outcome": "returned"
+      },
+      {
+        "index": 3,
+        "start": 413.319833,
+        "end": 423.797208,
+        "wallMs": 10.477374999999995,
+        "processCpuUs": 25684,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 57,
+        "outcome": "returned"
+      },
+      {
+        "index": 4,
+        "start": 423.818,
+        "end": 433.334125,
+        "wallMs": 9.516124999999988,
+        "processCpuUs": 23337,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 50,
+        "outcome": "returned"
+      },
+      {
+        "index": 5,
+        "start": 433.356792,
+        "end": 441.917333,
+        "wallMs": 8.560541,
+        "processCpuUs": 22776,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 42,
+        "outcome": "returned"
+      },
+      {
+        "index": 6,
+        "start": 441.931917,
+        "end": 449.950833,
+        "wallMs": 8.01891599999999,
+        "processCpuUs": 11752,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 22,
+        "outcome": "returned"
+      },
+      {
+        "index": 7,
+        "start": 449.962167,
+        "end": 457.414417,
+        "wallMs": 7.452249999999992,
+        "processCpuUs": 9015,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 16,
+        "outcome": "returned"
+      },
+      {
+        "index": 8,
+        "start": 457.422625,
+        "end": 465.558208,
+        "wallMs": 8.135582999999997,
+        "processCpuUs": 10419,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 21,
+        "outcome": "returned"
+      },
+      {
+        "index": 9,
+        "start": 465.578708,
+        "end": 473.741125,
+        "wallMs": 8.162417000000005,
+        "processCpuUs": 10611,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 28,
+        "outcome": "returned"
+      },
+      {
+        "index": 10,
+        "start": 473.753708,
+        "end": 481.337458,
+        "wallMs": 7.583750000000009,
+        "processCpuUs": 11590,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 12,
+        "outcome": "returned"
+      },
+      {
+        "index": 11,
+        "start": 481.346583,
+        "end": 488.467667,
+        "wallMs": 7.121083999999996,
+        "processCpuUs": 8172,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 3,
+        "outcome": "returned"
+      },
+      {
+        "index": 12,
+        "start": 488.472458,
+        "end": 495.859208,
+        "wallMs": 7.386750000000006,
+        "processCpuUs": 11204,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 14,
+        "outcome": "returned"
+      },
+      {
+        "index": 13,
+        "start": 495.868708,
+        "end": 502.838042,
+        "wallMs": 6.969333999999947,
+        "processCpuUs": 7365,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 2,
+        "outcome": "returned"
+      },
+      {
+        "index": 14,
+        "start": 502.846,
+        "end": 510.995208,
+        "wallMs": 8.149207999999987,
+        "processCpuUs": 10218,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 17,
+        "outcome": "returned"
+      },
+      {
+        "index": 15,
+        "start": 511.01225,
+        "end": 519.604958,
+        "wallMs": 8.592708000000016,
+        "processCpuUs": 9460,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 8,
+        "outcome": "returned"
+      },
+      {
+        "index": 16,
+        "start": 519.615292,
+        "end": 527.474375,
+        "wallMs": 7.859083000000055,
+        "processCpuUs": 10033,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 12,
+        "outcome": "returned"
+      },
+      {
+        "index": 17,
+        "start": 527.482792,
+        "end": 535.128625,
+        "wallMs": 7.645833000000039,
+        "processCpuUs": 8748,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 2,
+        "outcome": "returned"
+      },
+      {
+        "index": 18,
+        "start": 535.137458,
+        "end": 542.622167,
+        "wallMs": 7.4847089999999525,
+        "processCpuUs": 11687,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 9,
+        "outcome": "returned"
+      },
+      {
+        "index": 19,
+        "start": 542.629333,
+        "end": 550.468125,
+        "wallMs": 7.838792000000012,
+        "processCpuUs": 18958,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 30,
+        "outcome": "returned"
+      },
+      {
+        "index": 20,
+        "start": 550.478417,
+        "end": 557.298792,
+        "wallMs": 6.820375000000013,
+        "processCpuUs": 15748,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 17,
+        "outcome": "returned"
+      },
+      {
+        "index": 21,
+        "start": 599.791708,
+        "end": 609.137125,
+        "wallMs": 9.345416999999998,
+        "processCpuUs": 14193,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 18,
+        "outcome": "returned"
+      },
+      {
+        "index": 22,
+        "start": 628.184083,
+        "end": 637.598792,
+        "wallMs": 9.414709000000016,
+        "processCpuUs": 16159,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 38,
+        "outcome": "returned"
+      },
+      {
+        "index": 23,
+        "start": 645.367083,
+        "end": 653.851375,
+        "wallMs": 8.484291999999982,
+        "processCpuUs": 16286,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 21,
+        "outcome": "returned"
+      },
+      {
+        "index": 24,
+        "start": 661.855083,
+        "end": 670.006875,
+        "wallMs": 8.151792,
+        "processCpuUs": 12689,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 7,
+        "outcome": "returned"
+      },
+      {
+        "index": 25,
+        "start": 677.587083,
+        "end": 685.718,
+        "wallMs": 8.130916999999954,
+        "processCpuUs": 12997,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 7,
+        "outcome": "returned"
+      },
+      {
+        "index": 26,
+        "start": 695.054208,
+        "end": 703.387,
+        "wallMs": 8.332791999999927,
+        "processCpuUs": 13513,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 9,
+        "outcome": "returned"
+      },
+      {
+        "index": 27,
+        "start": 711.279208,
+        "end": 719.76275,
+        "wallMs": 8.483541999999943,
+        "processCpuUs": 14600,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 8,
+        "outcome": "returned"
+      },
+      {
+        "index": 28,
+        "start": 729.247083,
+        "end": 737.761708,
+        "wallMs": 8.514625000000024,
+        "processCpuUs": 13476,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 11,
+        "outcome": "returned"
+      },
+      {
+        "index": 29,
+        "start": 747.11325,
+        "end": 755.319292,
+        "wallMs": 8.206042000000025,
+        "processCpuUs": 12904,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 9,
+        "outcome": "returned"
+      },
+      {
+        "index": 30,
+        "start": 763.381875,
+        "end": 771.945542,
+        "wallMs": 8.56366700000001,
+        "processCpuUs": 14261,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 16,
+        "outcome": "returned"
+      },
+      {
+        "index": 31,
+        "start": 780.204458,
+        "end": 788.20875,
+        "wallMs": 8.004291999999964,
+        "processCpuUs": 11776,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 4,
+        "outcome": "returned"
+      },
+      {
+        "index": 32,
+        "start": 795.984417,
+        "end": 804.264583,
+        "wallMs": 8.280166000000008,
+        "processCpuUs": 12731,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 8,
+        "outcome": "returned"
+      },
+      {
+        "index": 33,
+        "start": 812.454625,
+        "end": 821.499292,
+        "wallMs": 9.044667000000004,
+        "processCpuUs": 13837,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 27,
+        "outcome": "returned"
+      },
+      {
+        "index": 34,
+        "start": 833.971917,
+        "end": 842.559042,
+        "wallMs": 8.587125000000015,
+        "processCpuUs": 17455,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 21,
+        "outcome": "returned"
+      },
+      {
+        "index": 35,
+        "start": 850.583667,
+        "end": 858.527917,
+        "wallMs": 7.944250000000011,
+        "processCpuUs": 12714,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 8,
+        "outcome": "returned"
+      },
+      {
+        "index": 36,
+        "start": 866.888292,
+        "end": 874.919708,
+        "wallMs": 8.031416000000036,
+        "processCpuUs": 11874,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 4,
+        "outcome": "returned"
+      },
+      {
+        "index": 37,
+        "start": 885.467208,
+        "end": 893.3865,
+        "wallMs": 7.919291999999928,
+        "processCpuUs": 11499,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 3,
+        "outcome": "returned"
+      },
+      {
+        "index": 38,
+        "start": 900.799917,
+        "end": 908.907958,
+        "wallMs": 8.108040999999957,
+        "processCpuUs": 12951,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 16,
+        "outcome": "returned"
+      },
+      {
+        "index": 39,
+        "start": 918.394042,
+        "end": 926.64075,
+        "wallMs": 8.246708000000012,
+        "processCpuUs": 16456,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 20,
+        "outcome": "returned"
+      },
+      {
+        "index": 40,
+        "start": 936.1905,
+        "end": 944.844583,
+        "wallMs": 8.6540829999999,
+        "processCpuUs": 12541,
+        "voluntaryContextSwitches": 0,
+        "involuntaryContextSwitches": 15,
+        "outcome": "returned"
+      }
+    ],
+    "samples": [
+      {
+        "index": 0,
+        "callbackIndex": 21,
+        "t0": 599790333,
+        "t1": 609146583,
+        "diff": 9356250,
+        "survived": false
+      },
+      {
+        "index": 1,
+        "callbackIndex": 22,
+        "t0": 628182958,
+        "t1": 637606708,
+        "diff": 9423750,
+        "survived": false
+      },
+      {
+        "index": 2,
+        "callbackIndex": 23,
+        "t0": 645366333,
+        "t1": 653858458,
+        "diff": 8492125,
+        "survived": true
+      },
+      {
+        "index": 3,
+        "callbackIndex": 24,
+        "t0": 661854167,
+        "t1": 670012958,
+        "diff": 8158791,
+        "survived": true
+      },
+      {
+        "index": 4,
+        "callbackIndex": 25,
+        "t0": 677586083,
+        "t1": 685725583,
+        "diff": 8139500,
+        "survived": true
+      },
+      {
+        "index": 5,
+        "callbackIndex": 26,
+        "t0": 695052917,
+        "t1": 703393542,
+        "diff": 8340625,
+        "survived": true
+      },
+      {
+        "index": 6,
+        "callbackIndex": 27,
+        "t0": 711278083,
+        "t1": 719770917,
+        "diff": 8492834,
+        "survived": true
+      },
+      {
+        "index": 7,
+        "callbackIndex": 28,
+        "t0": 729246167,
+        "t1": 737769167,
+        "diff": 8523000,
+        "survived": true
+      },
+      {
+        "index": 8,
+        "callbackIndex": 29,
+        "t0": 747112167,
+        "t1": 755325208,
+        "diff": 8213041,
+        "survived": true
+      },
+      {
+        "index": 9,
+        "callbackIndex": 30,
+        "t0": 763380500,
+        "t1": 771953042,
+        "diff": 8572542,
+        "survived": true
+      },
+      {
+        "index": 10,
+        "callbackIndex": 31,
+        "t0": 780203083,
+        "t1": 788215417,
+        "diff": 8012334,
+        "survived": true
+      },
+      {
+        "index": 11,
+        "callbackIndex": 32,
+        "t0": 795983542,
+        "t1": 804270750,
+        "diff": 8287208,
+        "survived": true
+      },
+      {
+        "index": 12,
+        "callbackIndex": 33,
+        "t0": 812453375,
+        "t1": 821507958,
+        "diff": 9054583,
+        "survived": true
+      },
+      {
+        "index": 13,
+        "callbackIndex": 34,
+        "t0": 833970958,
+        "t1": 842566958,
+        "diff": 8596000,
+        "survived": true
+      },
+      {
+        "index": 14,
+        "callbackIndex": 35,
+        "t0": 850582875,
+        "t1": 858534542,
+        "diff": 7951667,
+        "survived": false
+      },
+      {
+        "index": 15,
+        "callbackIndex": 36,
+        "t0": 866887458,
+        "t1": 874927375,
+        "diff": 8039917,
+        "survived": true
+      },
+      {
+        "index": 16,
+        "callbackIndex": 37,
+        "t0": 885466750,
+        "t1": 893394458,
+        "diff": 7927708,
+        "survived": false
+      },
+      {
+        "index": 17,
+        "callbackIndex": 38,
+        "t0": 900799458,
+        "t1": 908914208,
+        "diff": 8114750,
+        "survived": true
+      },
+      {
+        "index": 18,
+        "callbackIndex": 39,
+        "t0": 918393750,
+        "t1": 926648875,
+        "diff": 8255125,
+        "survived": true
+      },
+      {
+        "index": 19,
+        "callbackIndex": 40,
+        "t0": 936190042,
+        "t1": 944851750,
+        "diff": 8661708,
+        "survived": true
+      }
+    ],
+    "gcEvents": [
+      {
+        "startTime": 60.967708,
+        "duration": 0.06616699695587158,
+        "kind": 8,
+        "flags": 0
+      },
+      {
+        "startTime": 92.620458,
+        "duration": 0.593375027179718,
+        "kind": 4,
+        "flags": 64
+      },
+      {
+        "startTime": 123.526958,
+        "duration": 0.421500027179718,
+        "kind": 1,
+        "flags": 0
+      },
+      {
+        "startTime": 127.909792,
+        "duration": 0.8243750333786011,
+        "kind": 1,
+        "flags": 0
+      },
+      {
+        "startTime": 140.348,
+        "duration": 0.2319580316543579,
+        "kind": 1,
+        "flags": 0
+      },
+      {
+        "startTime": 157.7795,
+        "duration": 0.39445799589157104,
+        "kind": 1,
+        "flags": 0
+      },
+      {
+        "startTime": 158.176917,
+        "duration": 0.0564579963684082,
+        "kind": 8,
+        "flags": 0
+      },
+      {
+        "startTime": 162.25,
+        "duration": 0.791333019733429,
+        "kind": 4,
+        "flags": 64
+      },
+      {
+        "startTime": 172.378292,
+        "duration": 0.06124997138977051,
+        "kind": 8,
+        "flags": 0
+      },
+      {
+        "startTime": 173.89625,
+        "duration": 0.6742920279502869,
+        "kind": 4,
+        "flags": 64
+      },
+      {
+        "startTime": 178.949458,
+        "duration": 0.06108403205871582,
+        "kind": 8,
+        "flags": 0
+      },
+      {
+        "startTime": 191.4915,
+        "duration": 0.7217079997062683,
+        "kind": 4,
+        "flags": 64
+      },
+      {
+        "startTime": 194.292417,
+        "duration": 4.6605000495910645,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 289.541833,
+        "duration": 0.6387499570846558,
+        "kind": 1,
+        "flags": 0
+      },
+      {
+        "startTime": 309.189083,
+        "duration": 2.886291980743408,
+        "kind": 1,
+        "flags": 0
+      },
+      {
+        "startTime": 336.006333,
+        "duration": 1.0806249976158142,
+        "kind": 1,
+        "flags": 0
+      },
+      {
+        "startTime": 342.793958,
+        "duration": 0.5245420336723328,
+        "kind": 1,
+        "flags": 0
+      },
+      {
+        "startTime": 361.7775,
+        "duration": 0.5148749947547913,
+        "kind": 1,
+        "flags": 0
+      },
+      {
+        "startTime": 366.574,
+        "duration": 0.07316702604293823,
+        "kind": 8,
+        "flags": 0
+      },
+      {
+        "startTime": 370.716333,
+        "duration": 2.450374960899353,
+        "kind": 4,
+        "flags": 64
+      },
+      {
+        "startTime": 428.145417,
+        "duration": 0.27833300828933716,
+        "kind": 1,
+        "flags": 0
+      },
+      {
+        "startTime": 468.960375,
+        "duration": 0.3079580068588257,
+        "kind": 1,
+        "flags": 0
+      },
+      {
+        "startTime": 506.244042,
+        "duration": 0.2159159779548645,
+        "kind": 1,
+        "flags": 0
+      },
+      {
+        "startTime": 547.5565,
+        "duration": 0.1992499828338623,
+        "kind": 1,
+        "flags": 0
+      },
+      {
+        "startTime": 558.038208,
+        "duration": 1.4911249876022339,
+        "kind": 1,
+        "flags": 0
+      },
+      {
+        "startTime": 560.673167,
+        "duration": 8.905416011810303,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 569.587833,
+        "duration": 7.151000022888184,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 576.750625,
+        "duration": 4.206332981586456,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 580.96625,
+        "duration": 4.041124999523163,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 585.01425,
+        "duration": 5.015666961669922,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 590.038417,
+        "duration": 5.1207499504089355,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 595.315083,
+        "duration": 4.459334015846252,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 609.162083,
+        "duration": 13.016583979129791,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 623.10775,
+        "duration": 5.0221670269966125,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 637.621708,
+        "duration": 3.675374984741211,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 641.34075,
+        "duration": 4.0025829672813416,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 653.871375,
+        "duration": 3.487249970436096,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 657.377417,
+        "duration": 4.465250015258789,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 670.021958,
+        "duration": 3.4730000495910645,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 673.512667,
+        "duration": 4.060958027839661,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 685.734083,
+        "duration": 3.767417013645172,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 689.520458,
+        "duration": 5.5225419998168945,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 703.402292,
+        "duration": 3.4244580268859863,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 706.842333,
+        "duration": 4.422958970069885,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 719.781208,
+        "duration": 4.768083989620209,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 724.570458,
+        "duration": 4.664750039577484,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 737.77825,
+        "duration": 4.78645795583725,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 742.583042,
+        "duration": 4.51816600561142,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 755.332458,
+        "duration": 3.379709005355835,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 758.731208,
+        "duration": 4.621666967868805,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 771.962125,
+        "duration": 4.197833001613617,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 776.190458,
+        "duration": 4.0012500286102295,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 788.223583,
+        "duration": 3.409749984741211,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 791.6485,
+        "duration": 4.323791980743408,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 804.28225,
+        "duration": 3.5464580059051514,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 807.838917,
+        "duration": 4.594375014305115,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 821.520958,
+        "duration": 7.504666984081268,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 829.043375,
+        "duration": 4.918457984924316,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 842.578417,
+        "duration": 4.148874998092651,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 846.740583,
+        "duration": 3.8318340182304382,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 858.543208,
+        "duration": 4.363334000110626,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 862.923667,
+        "duration": 3.9528329968452454,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 874.942125,
+        "duration": 5.14962500333786,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 880.111292,
+        "duration": 5.341291010379791,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 893.407167,
+        "duration": 3.5152080059051514,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 896.937417,
+        "duration": 3.8551250100135803,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 908.919958,
+        "duration": 4.493000030517578,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 913.422167,
+        "duration": 4.963208019733429,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 926.657792,
+        "duration": 4.682083010673523,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 931.348417,
+        "duration": 4.793832957744598,
+        "kind": 4,
+        "flags": 4
+      },
+      {
+        "startTime": 944.860458,
+        "duration": 4.896791994571686,
+        "kind": 4,
+        "flags": 4
+      }
+    ],
+    "forcedGcSpans": [
+      {
+        "index": 0,
+        "phase": "before",
+        "edge": "start",
+        "at": 595.311167
+      },
+      {
+        "index": 0,
+        "phase": "before",
+        "edge": "end",
+        "at": 599.786375
+      },
+      {
+        "index": 0,
+        "phase": "after",
+        "edge": "start",
+        "at": 609.16
+      },
+      {
+        "index": 0,
+        "phase": "after",
+        "edge": "end",
+        "at": 622.19925
+      },
+      {
+        "index": 1,
+        "phase": "before",
+        "edge": "start",
+        "at": 623.103625
+      },
+      {
+        "index": 1,
+        "phase": "before",
+        "edge": "end",
+        "at": 628.177667
+      },
+      {
+        "index": 1,
+        "phase": "after",
+        "edge": "start",
+        "at": 637.619292
+      },
+      {
+        "index": 1,
+        "phase": "after",
+        "edge": "end",
+        "at": 641.322542
+      },
+      {
+        "index": 2,
+        "phase": "before",
+        "edge": "start",
+        "at": 641.334542
+      },
+      {
+        "index": 2,
+        "phase": "before",
+        "edge": "end",
+        "at": 645.361833
+      },
+      {
+        "index": 2,
+        "phase": "after",
+        "edge": "start",
+        "at": 653.869583
+      },
+      {
+        "index": 2,
+        "phase": "after",
+        "edge": "end",
+        "at": 657.36625
+      },
+      {
+        "index": 3,
+        "phase": "before",
+        "edge": "start",
+        "at": 657.376833
+      },
+      {
+        "index": 3,
+        "phase": "before",
+        "edge": "end",
+        "at": 661.850958
+      },
+      {
+        "index": 3,
+        "phase": "after",
+        "edge": "start",
+        "at": 670.020458
+      },
+      {
+        "index": 3,
+        "phase": "after",
+        "edge": "end",
+        "at": 673.502667
+      },
+      {
+        "index": 4,
+        "phase": "before",
+        "edge": "start",
+        "at": 673.511583
+      },
+      {
+        "index": 4,
+        "phase": "before",
+        "edge": "end",
+        "at": 677.5825
+      },
+      {
+        "index": 4,
+        "phase": "after",
+        "edge": "start",
+        "at": 685.732083
+      },
+      {
+        "index": 4,
+        "phase": "after",
+        "edge": "end",
+        "at": 689.509375
+      },
+      {
+        "index": 5,
+        "phase": "before",
+        "edge": "start",
+        "at": 689.519792
+      },
+      {
+        "index": 5,
+        "phase": "before",
+        "edge": "end",
+        "at": 695.049458
+      },
+      {
+        "index": 5,
+        "phase": "after",
+        "edge": "start",
+        "at": 703.400542
+      },
+      {
+        "index": 5,
+        "phase": "after",
+        "edge": "end",
+        "at": 706.833625
+      },
+      {
+        "index": 6,
+        "phase": "before",
+        "edge": "start",
+        "at": 706.841625
+      },
+      {
+        "index": 6,
+        "phase": "before",
+        "edge": "end",
+        "at": 711.27475
+      },
+      {
+        "index": 6,
+        "phase": "after",
+        "edge": "start",
+        "at": 719.779042
+      },
+      {
+        "index": 6,
+        "phase": "after",
+        "edge": "end",
+        "at": 724.558333
+      },
+      {
+        "index": 7,
+        "phase": "before",
+        "edge": "start",
+        "at": 724.569667
+      },
+      {
+        "index": 7,
+        "phase": "before",
+        "edge": "end",
+        "at": 729.242667
+      },
+      {
+        "index": 7,
+        "phase": "after",
+        "edge": "start",
+        "at": 737.776375
+      },
+      {
+        "index": 7,
+        "phase": "after",
+        "edge": "end",
+        "at": 742.57275
+      },
+      {
+        "index": 8,
+        "phase": "before",
+        "edge": "start",
+        "at": 742.582292
+      },
+      {
+        "index": 8,
+        "phase": "before",
+        "edge": "end",
+        "at": 747.109083
+      },
+      {
+        "index": 8,
+        "phase": "after",
+        "edge": "start",
+        "at": 755.330958
+      },
+      {
+        "index": 8,
+        "phase": "after",
+        "edge": "end",
+        "at": 758.719
+      },
+      {
+        "index": 9,
+        "phase": "before",
+        "edge": "start",
+        "at": 758.730667
+      },
+      {
+        "index": 9,
+        "phase": "before",
+        "edge": "end",
+        "at": 763.372458
+      },
+      {
+        "index": 9,
+        "phase": "after",
+        "edge": "start",
+        "at": 771.960375
+      },
+      {
+        "index": 9,
+        "phase": "after",
+        "edge": "end",
+        "at": 776.171125
+      },
+      {
+        "index": 10,
+        "phase": "before",
+        "edge": "start",
+        "at": 776.189417
+      },
+      {
+        "index": 10,
+        "phase": "before",
+        "edge": "end",
+        "at": 780.199458
+      },
+      {
+        "index": 10,
+        "phase": "after",
+        "edge": "start",
+        "at": 788.221792
+      },
+      {
+        "index": 10,
+        "phase": "after",
+        "edge": "end",
+        "at": 791.639375
+      },
+      {
+        "index": 11,
+        "phase": "before",
+        "edge": "start",
+        "at": 791.647958
+      },
+      {
+        "index": 11,
+        "phase": "before",
+        "edge": "end",
+        "at": 795.98025
+      },
+      {
+        "index": 11,
+        "phase": "after",
+        "edge": "start",
+        "at": 804.276917
+      },
+      {
+        "index": 11,
+        "phase": "after",
+        "edge": "end",
+        "at": 807.834708
+      },
+      {
+        "index": 12,
+        "phase": "before",
+        "edge": "start",
+        "at": 807.838417
+      },
+      {
+        "index": 12,
+        "phase": "before",
+        "edge": "end",
+        "at": 812.449542
+      },
+      {
+        "index": 12,
+        "phase": "after",
+        "edge": "start",
+        "at": 821.518625
+      },
+      {
+        "index": 12,
+        "phase": "after",
+        "edge": "end",
+        "at": 829.037042
+      },
+      {
+        "index": 13,
+        "phase": "before",
+        "edge": "start",
+        "at": 829.042667
+      },
+      {
+        "index": 13,
+        "phase": "before",
+        "edge": "end",
+        "at": 833.968042
+      },
+      {
+        "index": 13,
+        "phase": "after",
+        "edge": "start",
+        "at": 842.575708
+      },
+      {
+        "index": 13,
+        "phase": "after",
+        "edge": "end",
+        "at": 846.735292
+      },
+      {
+        "index": 14,
+        "phase": "before",
+        "edge": "start",
+        "at": 846.739667
+      },
+      {
+        "index": 14,
+        "phase": "before",
+        "edge": "end",
+        "at": 850.580042
+      },
+      {
+        "index": 14,
+        "phase": "after",
+        "edge": "start",
+        "at": 858.541542
+      },
+      {
+        "index": 14,
+        "phase": "after",
+        "edge": "end",
+        "at": 862.913958
+      },
+      {
+        "index": 15,
+        "phase": "before",
+        "edge": "start",
+        "at": 862.923042
+      },
+      {
+        "index": 15,
+        "phase": "before",
+        "edge": "end",
+        "at": 866.883917
+      },
+      {
+        "index": 15,
+        "phase": "after",
+        "edge": "start",
+        "at": 874.935292
+      },
+      {
+        "index": 15,
+        "phase": "after",
+        "edge": "end",
+        "at": 880.099083
+      },
+      {
+        "index": 16,
+        "phase": "before",
+        "edge": "start",
+        "at": 880.110458
+      },
+      {
+        "index": 16,
+        "phase": "before",
+        "edge": "end",
+        "at": 885.463667
+      },
+      {
+        "index": 16,
+        "phase": "after",
+        "edge": "start",
+        "at": 893.405792
+      },
+      {
+        "index": 16,
+        "phase": "after",
+        "edge": "end",
+        "at": 896.928167
+      },
+      {
+        "index": 17,
+        "phase": "before",
+        "edge": "start",
+        "at": 896.936583
+      },
+      {
+        "index": 17,
+        "phase": "before",
+        "edge": "end",
+        "at": 900.796042
+      },
+      {
+        "index": 17,
+        "phase": "after",
+        "edge": "start",
+        "at": 908.918333
+      },
+      {
+        "index": 17,
+        "phase": "after",
+        "edge": "end",
+        "at": 913.418
+      },
+      {
+        "index": 18,
+        "phase": "before",
+        "edge": "start",
+        "at": 913.421208
+      },
+      {
+        "index": 18,
+        "phase": "before",
+        "edge": "end",
+        "at": 918.390583
+      },
+      {
+        "index": 18,
+        "phase": "after",
+        "edge": "start",
+        "at": 926.65575
+      },
+      {
+        "index": 18,
+        "phase": "after",
+        "edge": "end",
+        "at": 931.345167
+      },
+      {
+        "index": 19,
+        "phase": "before",
+        "edge": "start",
+        "at": 931.347625
+      },
+      {
+        "index": 19,
+        "phase": "before",
+        "edge": "end",
+        "at": 936.185875
+      },
+      {
+        "index": 19,
+        "phase": "after",
+        "edge": "start",
+        "at": 944.858625
+      },
+      {
+        "index": 19,
+        "phase": "after",
+        "edge": "end",
+        "at": 949.762625
+      }
+    ],
+    "faults": [],
+    "warmupCallCount": 21
+  },
+  "calibrationRate": 3.6530817519912007
+}

@@ -1,0 +1,335 @@
+Candidate timings reuse a saved run; only the baseline was measured in this job. CPU model, architecture, Node version, suite, blocks and package digest match. Separate-run machine variability remains.
+
+## Package performance: `full` suite
+
+81 faster · 33 slower · 31 neutral · 0 skipped
+
+Baseline `0.1.0 (bbb3375c)` → candidate `0.1.0 (06fe22b7)`
+
+> ⚠ candidate CPU clock drifted 5.9% during its run
+
+Latency distribution across 145 comparable workload p50s. Each workload counts once; these are not frame times.
+
+| statistic | baseline | candidate |
+| --- | ---: | ---: |
+| Median workload p50 | 1.080ms | 0.856ms |
+| Workloads ≤1 ms | 70 | 75 |
+| Workloads ≤2 ms | 86 | 94 |
+| Workloads ≤3 ms | 99 | 111 |
+| Workloads >3 ms | 46 | 34 |
+
+Largest candidate workloads (including neutral results):
+
+| workload | baseline | candidate | Δ time |
+| --- | ---: | ---: | ---: |
+| 1000 labels 100 edits interleaved edit-read publication | 125.80ms | 45.83ms | -79.970ms |
+| mutate one trailing span across 1000 formatted labels | 39.94ms | 35.56ms | -4.380ms |
+| mount and publish a 22k-glyph paragraph | 17.20ms | 19.56ms | +2.360ms |
+| 1000 labels 100 edits immediate measurements with publication | 94.07ms | 18.14ms | -75.930ms |
+| publish 1024 retained Text instances | 15.17ms | 17.38ms | +2.210ms |
+
+```diff
+                                                                faster ◀       ┊       ▶ slower    Δ p50      p  baseline   candidate
+- type one character into a long paragraph and measure                         ┊              ▶  +356.4%  <.001  █▁▁▁▁▁▁▁▅▄ ▁▁▁▁▁▁█▄▁▁
+- 1 labels first set                                                           ┊              ▶  +354.7%  <.001  █▁▁▁▁▁▁▁▁▁ ▁█▂▁▁▁▁▁▁▁
+- 100 labels first set                                                         ┊              ▶  +308.9%  <.001  █▂▁▁▁▁▁▁▁▁ ▁▁▅█▃▂▁▁▁▁
+- 1000 labels first set                                                        ┊              ▶  +273.7%  <.001  █▄▁▁▁▁▁▁▁▁ ▁▁▁▁▁▅█▄▂▁
+- long unsafe-boundary paragraph reflow                                        ┊              ▶   +90.9%  <.001  ▂█▄▂▁▁▁▁▁▁ ▁▁▁▁▁▄█▇▃▁
+- 100 labels first overwrite-before-scene-publication                          ┊              ▶   +65.7%  <.001  █▆▁▁▁▁▁▁▁▁ ▁▁█▅▂▁▁▁▁▁
+- 1 labels first overwrite-before-scene-publication                            ┊              ▶   +65.5%  <.001  ▂█▃▁▁▁▁▁▁▁ ▁▁▂██▄▂▁▁▁
+- long reporter workaround paragraph reflow                                    ┊             ├●   +49.1%  <.001  ▂█▇▃▂▁▁▁▁▁ ▁▁▁▁▂█▆▃▂▁
+- measure after text change                                                    ┊            ├●    +45.2%  <.001  ▂█▄▁▁▁▁▁▁▁ ▁▁▁▁▁▁▄█▃▁
+- measurement after width change                                               ┊         ├●┤      +36.4%  <.001  ▂▂▃██▂▁▁▁▁ ▁▁▁▁▂▃▄█▄▁
+- rewrite 64 labels in one group                                               ┊        ├●        +31.9%  <.001  ▄█▃▁▁▁▁▁▁▁ ▁▁▂█▆▂▂▁▁▁
+- type one character into a long Fredoka paragraph and measure                 ┊        ●         +29.5%  <.001  █▁▁▁▁▁█▂▁▁ ▁▁▁▁▁▁▁▁█▁
+- rewrite 128 labels in one group                                              ┊       ●┤         +28.3%  <.001  ▃█▆▂▁▁▁▁▁▁ ▁▁▁▁▁▄█▄▂▁
+- copy per-glyph metrics from 100 unchanged labels                             ┊       ●┤         +27.6%  <.001  ▂▇█▄▂▁▁▁▁▁ ▁▁▁▁▅█▄▂▁▁
+- rewrite 256 labels in one group                                              ┊       ●┤         +27.0%  <.001  ▂█▇▅▁▁▁▁▁▁ ▁▁▁▁▆▆▅█▃▁
+- publication after font-size change                                           ┊     ●            +20.8%  <.001  ▅█▆▁▁▁▁▁▁▁ ▁▁▁▁▂▅▅█▄▂
+- rewrite 512 labels in one group                                              ┊    ├●            +19.7%  <.001  ▂██▅▁▁▁▁▁▁ ▁▁▁▁▃▇█▄▂▁
+- 10 labels last same-length scene publication                                 ┊    ●┤            +17.4%  <.001  ▃█▇▅▂▂▁▁▁▁ ▁▃▇█▇▄▂▂▁▁
+- 10 labels first same-length engine publication                               ┊   ├●┤            +16.8%   .001  ▂██▇▄▂▁▁▁▁ ▁▂▇██▇▅▂▂▁
+- 10 labels last same-length engine publication                                ┊   ├●┤            +16.7%  <.001  ▂██▇▃▂▂▁▁▁ ▁▂▅█▇▅▃▂▂▁
+- publish 1024 retained Text instances                                         ┊   ●┤             +14.6%  <.001  ▃█▅▂▁▁▁▁▁▁ ▁▁▁▅█▇▃▁▁▁
+- 1000 labels no-op scene traversal                                            ┊ ├─●─┤            +13.8%  <.001  ▃█▆▃▂▁▁▁▁▁ ▁▄█▆▅▃▂▂▂▁
+- 10 labels first same-length scene publication                                ┊  ├●───┤          +13.7%   .003  ▃██▄▂▂▁▁▁▁ ▁▅██▇▃▂▁▁▁
+- mount and publish a 22k-glyph paragraph                                      ┊   ●              +13.7%  <.001  ▃█▅▁▁▁▁▁▁▁ ▁▁▁▁▁▁▅█▆▂
+- relayout after font-size change                                              ┊  ├●              +12.3%  <.001  ▄██▄▂▁▁▁▁▁ ▁▁▁▁█▇▆▄▂▁
+- mount 100 labels and borrow glyphs from each once                            ┊  ├●              +11.9%  <.001  ▃█▇▆▅▁▁▁▁▁ ▁▁▁▁▃██▆▃▂
+- long unsafe-boundary paragraph text edit                                     ┊  ●               +10.6%  <.001  ▂██▅▂▁▁▁▁▁ ▁▁▁▁██▆▂▂▁
+- toggle one group containing 1000 retained labels                             ├──●┤               +9.6%   .050  ▃█▆▄▃▂▁▁▁▁ ▁▆█▅▄▃▂▁▁▁
+- publish after color change                                                   ┊ ├●┤               +8.4%  <.001  ▃█▇▆▃▁▁▁▁▁ ▁▁▂█▆▅▄▃▂▁
+- 1000 labels first same-value-set                                             ├─●─────┤           +8.1%   .015  ▂█▆▄▃▂▁▁▁▁ ▁▇█▆▄▄▂▂▁▁
+- cached per-glyph inspection                                                  ┊├●┤                +7.1%  <.001  ▂█▄▄▃▃▂▂▁▁ ▁▆█▅▄▅▃▂▁▁
+- issue 216 unsafe-boundary word-wrap reflow                                   ┊├●┤                +6.6%   .010  ▂█▇▇▅▃▂▂▁▁ ▂████▆▃▂▂▁
+- publication after text change                                                ┊├●                 +5.4%  <.001  ▂▄█▇▄▅▂▁▁▁ ▁▁▄▅▃█▇▃▄▄
++ 100 labels last same-length scene publication                             ├●┤┊                   -5.3%   .007  ▁█▇▇▆▅▃▂▂▁ ▂█▇▇▄▂▂▂▁▁
++ 10 labels last color-only scene publication                                ●─┤                   -5.6%   .021  ▁▇▇█▆▃▂▁▁▁ ▂▇█▇▅▃▂▂▁▁
++ normalize 1000 equivalent retained label updates                           ●┤┊                   -5.7%  <.001  ▁▁▃▃▂▁▅█▅▁ ▁▄▃▂▁▆█▆▃▁
++ measure 100 unchanged labels                                              ├●┤┊                   -6.4%   .014  ▁▃█▆▄▂▁▁▁▁ ▂▆█▄▃▁▁▁▁▁
++ 100 labels separated balanced gro…k-space engine publication              ├●┤┊                   -6.8%   .005  ▁▁▅██▄▂▂▁▁ ▂▅█▇▄▃▂▁▁▁
++ reorder then edit one of 1000 retained labels                             ├●┤┊                   -8.0%   .007  ▁▂█▆█▆▂▃▂▁ ▄█▅▅▃▂▂▁▁▁
++ 100 labels separated balanced gro…nk-space scene publication              ●┤ ┊                   -9.1%  <.001  ▁▁▂▇█▆▄▂▁▁ ▁▄█▆▄▂▂▁▁▁
++ copy per-glyph metrics after text change                                  ●┤ ┊                   -9.1%  <.001  ▁▁▂▂▁▁▃█▇▂ ▂▂▄▁▁▁█▃▁▁
++ copy per-glyph metrics with outlines after text change                   ├●┤ ┊                   -9.5%  <.001  ▂▁▄▂▁▃█▄█▂ ▃▁▄▁▁█▃▁▁▁
++ 100 labels last length-changing scene publication                         ●┤ ┊                   -9.8%  <.001  ▁▁▆█▇▅▃▂▂▁ ▂▇██▃▂▁▁▁▁
++ 100 labels last length-changing engine publication                       ├●┤ ┊                  -10.4%  <.001  ▁▁▆▇█▆▃▂▂▁ ▂▅█▆▃▂▁▁▁▁
++ 100 labels separated unbalanced g…nk-space scene publication             ├●  ┊                  -10.4%  <.001  ▁▁▄██▅▃▂▁▁ ▂▆█▅▂▂▁▁▁▁
++ 100 labels first set+measure+scene-publication                           ├●  ┊                  -10.8%  <.001  ▁▁▇█▇▅▃▂▂▁ ▃██▇▄▂▁▁▁▁
++ normalize 1000 equivalent formatted flow updates                         ├●  ┊                  -10.9%  <.001  ▁▁▁▁▂▅█▇▆▃ ▂▆▆█▇▃▁▁▁▁
++ mutate one trailing span across 1000 formatted labels                    ├●  ┊                  -11.0%  <.001  ▁▁▁▁▁▂▆▇█▃ ▂▆██▇▃▁▁▁▁
++ write 1000 paragraph-order mutations                                    ├─●  ┊                  -11.3%  <.001  ▁▇█▇▃▂▁▁▁▁ ▂█▄▂▂▁▁▁▁▁
++ reorder 1000 unchanged retained labels                                   ├●  ┊                  -11.4%   .003  ▁▁▂▆█▇▅▄▂▁ ▂██▅▅▃▂▂▁▁
++ 100 labels separated unbalanced g…k-space engine publication             ●┤  ┊                  -11.7%  <.001  ▁▁▄█▆▃▂▁▁▁ ▂▆█▄▂▂▁▁▁▁
++ 1000 labels first set+measure                                           ├●┤  ┊                  -12.8%  <.001  ▁▆▇▆▆█▆▄▃▁ ▂▆█▅▄▂▂▁▁▁
++ type one character into a long paragraph and publish a frame            ├●   ┊                  -13.9%  <.001  ▁▁▁▁▁▃█▆▅▂ ▃█▆▅▂▁▁▁▁▁
++ write 1000 paragraph and text mutations                                 ├●   ┊                  -14.8%  <.001  ▁▁▃▃█▇▄▂▁▁ ▂▂█▆▄▂▁▁▁▁
++ edit and independently copy one label among 1 labels                    ├●   ┊                  -14.9%  <.001  ▁▁▂▆▇█▅▃▂▁ ▂███▄▃▂▁▁▁
++ edit and independently copy one label among 100 labels                  ●┤   ┊                  -15.7%  <.001  ▁▁▁▄█▆▄▃▂▁ ▂█▇▅▃▂▁▁▁▁
++ 100 labels batched edit-read publication                                ●┤   ┊                  -16.0%  <.001  ▁▁▁▁▂▅█▇▃▁ ▃▇█▄▂▁▁▁▁▁
++ bind and normalize 1000 framework…ped formatted flow updates           ├●    ┊                  -17.5%  <.001  ▁▁▁▁▂█▆▃▃▂ ▃██▄▁▁▁▁▁▁
++ write one paragraph and text mutation                                ├─●──┤  ┊                  -19.4%   .007  ▁██▇▃▂▂▁▁▁ ▃█▅▃▂▂▂▁▁▁
++ 100 labels first length-changing engine publication                   ├●┤    ┊                  -19.5%  <.001  ▁▁▁▄█▆▄▃▁▁ ▂▇█▄▂▂▁▁▁▁
++ reflow after width change                                             ├●     ┊                  -19.7%  <.001  ▁▁▁▇█▄▂▁▁▁ ▂█▇▄▂▁▁▁▁▁
++ broad end-to-end setter and publi…tion with 8192 paint spans           ●     ┊                  -20.4%  <.001  ▁▁▁▁▁▁▇█▅▂ ▃██▃▁▁▁▁▁▁
++ 100 labels first length-changing scene publication                    ├●┤    ┊                  -20.7%  <.001  ▁▁█▅▂▁▁▁▁▁ ▄█▃▁▁▁▁▁▁▁
++ edit and measure one of 100 retained labels                           ●─┤    ┊                  -22.1%   .010  ▁▁▆▇█▆▃▂▁▁ ▃█▇▆▃▂▂▂▁▁
++ 100 labels first color-only engine publication                        ●─┤    ┊                  -22.1%  <.001  ▁▁▅██▃▂▁▁▁ ▂██▄▂▁▁▁▁▁
++ 100 labels last color-only scene publication                         ├●┤     ┊                  -23.7%  <.001  ▁▁▁███▆▃▂▁ ▂██▅▃▂▁▁▁▁
++ 100 labels last color-only engine publication                       ├●┤      ┊                  -25.6%  <.001  ▁▁▁█▇█▅▃▂▁ ▃▇█▆▃▂▁▁▁▁
++ scattered end-to-end setter and p…tion with 8192 paint spans         ●       ┊                  -26.6%  <.001  ▁▁▁▁▁▁▃█▆▂ ▄█▁▁▁▁▁▁▁▁
++ edit and sparsely borrow one of 1000 retained labels                ├●─┤     ┊                  -27.4%   .010  ▁▁▇█▄▂▁▁▁▁ ▅█▃▂▁▁▁▁▁▁
++ 1000 labels 100 edits batched edit-read publication                  ●       ┊                  -27.5%  <.001  ▁▁▁▁▁▁▂█▅▁ ▃█▄▁▁▁▁▁▁▁
++ measurement then publication after width change                      ●       ┊                  -27.8%  <.001  ▁▁▁▁▂▂▅█▄▁ ▁▂█▇▂▁▁▁▁▁
++ split move and merge paint boundaries preparation only              ├●       ┊                  -28.1%  <.001  ▅▁▁▁▁▁▁▁▄█ ▁▁▁▁▁▁█▁▁▁
++ 100 labels first color-only scene publication                       ├●┤      ┊                  -28.2%  <.001  ▁█▂▁▁▁▁▁▁▁ █▄▁▁▁▁▁▁▁▁
++ edit and measure one of 1000 retained labels                       ├●─┤      ┊                  -29.3%  <.001  ▁▁▁▅█▅▃▂▁▁ ▅█▅▃▂▁▁▁▁▁
++ 100 labels 100 edits immediate me…ements without publication        ●        ┊                  -30.7%  <.001  ▁▁▁▁▁▂▄█▄▁ ▁█▅▂▁▁▁▁▁▁
++ edit and independently copy one label among 1000 labels            ●┤        ┊                  -32.0%  <.001  ▁▁▁▁▃█▇▅▄▁ ▄█▂▁▁▁▁▁▁▁
++ split move and merge paint boundaries publication                  ●         ┊                  -33.2%  <.001  ▁▁▁▁▁▁▄█▆▂ ▄█▃▁▁▁▁▁▁▁
++ monospaced unchanged end-to-end s…tion with 8192 paint spans      ├●         ┊                  -34.7%  <.001  ▁▁▁▁▁▁▂█▆▂ ▂▄█▃▁▁▁▁▁▁
++ publication after width change                                    ●┤         ┊                  -35.2%  <.001  ▁▁▁▁▆█▇█▆▂ ▄█▃▁▁▁▁▁▁▁
++ monospaced scattered end-to-end s…tion with 8192 paint spans      ●┤         ┊                  -35.2%  <.001  ▁▁▁▁▁▁▁▆█▂ ██▁▁▁▁▁▁▁▁
++ unchanged end-to-end setter and p…tion with 8192 paint spans     ├●┤         ┊                  -35.3%  <.001  ▁▁▁▁▁▁▅█▄▁ ▂▄█▂▁▁▁▁▁▁
++ per-glyph inspection after width change                           ●┤         ┊                  -35.7%  <.001  ▁▆▁█▄▁▆▁▇▆ █▁▁▄▂▃▄▁▁▁
++ monospaced unchanged setter prepa…raph with 8192 paint spans     ├●          ┊                  -38.0%  <.001  ▁▁▁▁▁▁▄█▄▁ ▃▆█▂▂▁▁▁▁▁
++ 1000 labels separated balanced gr…nk-space scene publication     ├●          ┊                  -38.3%  <.001  ▁▁▁▁▁▁▆█▃▁ ▃█▂▁▁▁▁▁▁▁
++ 100 labels interleaved edit-read publication                     ●┤          ┊                  -38.4%  <.001  ▁▁▁▁▁▁▅█▃▂ ▅█▂▂▁▁▁▁▁▁
++ 1000 labels separated unbalanced…nk-space scene publication      ●┤          ┊                  -38.4%  <.001  ▁▁▁▁▁▁▂█▅▁ ▄█▃▁▁▁▁▁▁▁
++ unchanged setter preparation in o…raph with 8192 paint spans     ●┤          ┊                  -38.6%  <.001  ▁▁▁▁▁▁██▃▁ ▄█▇▂▁▁▁▁▁▁
++ 1000 labels separated balanced gr…k-space engine publication     ●           ┊                  -39.2%  <.001  ▁▁▁▁▁▁▂█▃▁ ▃█▂▁▁▁▁▁▁▁
++ 1000 labels separated unbalanced…k-space engine publication      ●           ┊                  -40.6%  <.001  ▁▁▁▁▁▁▆█▂▁ ▆█▂▁▁▁▁▁▁▁
++ 1000 labels first same-length scene publication                 ├●┤          ┊                  -40.9%  <.001  ▁▁▁▁▁▄█▅▂▁ ▃█▄▁▁▁▁▁▁▁
++ 1000 labels last same-length scene publication                  ●┤           ┊                  -41.8%  <.001  ▁▁▁▁▁▂██▅▂ ▄█▃▁▁▁▁▁▁▁
++ 1000 labels first set+measure+scene-publication                 ●┤           ┊                  -42.2%  <.001  ▁▁▁▁▃█▅▁▁▁ ▃█▂▁▁▁▁▁▁▁
++ 1000 labels last length-changing scene publication              ●┤           ┊                  -42.5%  <.001  ▁▁▁▁▁▁▄█▅▂ ▄█▃▁▁▁▁▁▁▁
++ 1000 labels last length-changing engine publication             ●┤           ┊                  -44.2%  <.001  ▁▁▁▁▁▁▆█▄▁ ▂█▄▂▁▁▁▁▁▁
++ inspection then publication after width change                 ├●──┤         ┊                  -44.5%  <.001  ▁▁▃█▁▁▂▁█▆ █▁▁▃▃▃▄▂▁▁
++ 1000 labels last same-length engine publication                ├●            ┊                  -44.8%  <.001  ▁▁▁▁▁▂█▇▃▁ ▄█▄▂▁▁▁▁▁▁
++ 1000 labels 100 edits immediate m…ements without publication   ├●            ┊                  -45.0%  <.001  ▁▁▁▁▁▁▂█▄▁ █▇▂▁▁▁▁▁▁▁
++ 100 labels 100 edits immediate measurements with publication   ●             ┊                  -45.8%  <.001  ▁▁▁▁▁▁█▃▂▁ █▅▁▁▁▁▁▁▁▁
++ 1000 labels first same-length engine publication               ●┤            ┊                  -46.0%  <.001  ▁▁▁▁▁▃█▆▂▁ ▃█▃▁▁▁▁▁▁▁
++ shared-material scattered end-to-…tion with 8192 paint spans   ●             ┊                  -46.3%  <.001  ▁▁▁▁▁▁▁▃█▃ █▂▁▁▁▁▁▁▁▁
++ 1000 labels first length-changing scene publication           ◀              ┊                  -51.5%  <.001  ▁▁▁▁▁▁▁█▄▁ ▇█▂▁▁▁▁▁▁▁
++ 1000 labels first length-changing engine publication          ◀              ┊                  -53.7%  <.001  ▁▁▁▁▁▁▁▆█▂ ▇█▁▁▁▁▁▁▁▁
++ scattered setter preparation in o…raph with 8192 paint spans  ◀              ┊                  -59.7%  <.001  ▁▁▁▁▁▁▁█▆▆ █▁▁▁▁▁▁▁▁▁
++ monospaced broad setter preparati…raph with 8192 paint spans  ◀              ┊                  -61.2%  <.001  ▁█▁▁▁▁▁▁▁█ █▁▁▁▁▁▁▁▁▁
++ broad setter preparation in one l…raph with 8192 paint spans  ◀              ┊                  -62.3%  <.001  ▁▁▁▁▁▁▁▇█▂ █▂▁▁▁▁▁▁▁▁
++ 1000 labels 100 edits interleaved edit-read publication       ◀              ┊                  -63.6%  <.001  ▁▁▁▁▁▁▁▁▇█ █▁▁▁▁▁▁▁▁▁
++ 1000 labels first color-only scene publication                ◀              ┊                  -64.1%  <.001  ▁▁▁▁▁▁▇█▆▂ ▄█▂▁▁▁▁▁▁▁
++ 1000 labels last color-only scene publication                 ◀              ┊                  -64.3%  <.001  ▁▁▁▁▁▁▄█▅▂ ▄█▂▁▁▁▁▁▁▁
++ shared-material scattered setter…raph with 8192 paint spans   ◀              ┊                  -65.3%  <.001  ▁▁▁▁▁▁▁▂█▄ █▁▁▁▁▁▁▁▁▁
++ monospaced scattered setter prepa…raph with 8192 paint spans  ◀              ┊                  -67.1%  <.001  ▁▁▁▁▁▁▁▃█▅ █▁▁▁▁▁▁▁▁▁
++ 1000 labels first color-only engine publication               ◀              ┊                  -73.2%  <.001  ▁▁▁▁▁▇█▂▁▁ █▃▁▁▁▁▁▁▁▁
++ 1000 labels last color-only engine publication                ◀              ┊                  -73.6%  <.001  ▁▁▁▁▁▁▄█▅▂ █▅▁▁▁▁▁▁▁▁
++ 1000 labels 100 edits immediate m…surements with publication  ◀              ┊                  -80.7%  <.001  ▁▁▁▁▁▁▁▁▄█ █▁▁▁▁▁▁▁▁▁
++ monospaced broad end-to-end sette…tion with 8192 paint spans  ◀              ┊                  -88.0%  <.001  ▁▁▁▁▁▁▁▁▁█ █▁▁▁▁▁▁▁▁▁
+  100 labels first set+measure                                                ├┼─●────┤            +7.8%   .234  ▃█▄▁▁▁▁▁▁▁ ▂█▅▂▁▁▁▁▁▁
+  move 1000 retained TypeGPU labels                                          ├─┼─●┤                +5.2%   .328  ▁▆█▅▄▂▂▁▁▁ ▂▅██▅▃▂▁▁▁
+  10 labels last length-changing engine publication                            ┊●┤                 +4.6%   .002  ▂▆█▆▅▄▂▂▁▁ ▁▄▇█▇▅▃▂▂▁
+  10 labels first length-changing engine publication                           ├●┤                 +3.7%   .010  ▂▇█▇▅▂▂▁▁▁ ▁▄█▇▆▃▂▁▁▁
+  1 labels first set+measure                                                   ├●───┤              +3.5%   .328  █▇▁▁▁▁▁▁▁▁ ▆█▁▁▁▁▁▁▁▁
+  10 labels first length-changing scene publication                            ├●┤                 +3.3%   .007  ▂▇█▆▅▂▂▁▁▁ ▁▆█▇▅▃▂▂▁▁
+  borrow glyphs from 1000 steadily promoted retained labels           ├────────┼●──┤               +2.8%   .279  █▄▁▁▃█▁▁▁▁ ▄█▂▁▅▅▁▁▁▁
+  1 labels first same-value-set                                                ├●─┤                +2.7%   .161  ▂▆█▇▅▃▂▁▁▁ ▁▆█▇▅▃▂▁▁▁
+  1000 labels first overwrite-before-scene-publication                         ├●┤                 +2.7%   .050  ▂▇██▇▆▄▂▂▁ ▁▁▃█▅▄▃▃▂▁
+  10 labels no-op scene traversal                                              ├●┤                 +2.5%   .152  ▃██▅▃▃▂▂▁▁ ▂▇█▅▄▃▂▂▁▁
+  1 labels first set+measure+scene-publication                                ├┼●                  +1.9%   .505  ▂▇██▆▃▂▁▁▁ ▂▇██▆▃▂▂▂▁
+  mount a label and publish its first edit                                     ├●┤                 +1.7%   .005  ▂▇█▇▅▃▁▁▁▁ ▁▄█▇▅▄▃▂▁▁
+  reuse 1000 unchanged Vue property snapshots                                  ├●                  +1.7%   .035  ▂█▂▁▁▁▁▁▁▁ ▁█▅▁▁▁▁▁▁▁
+  publish after text change                                                    ●┤                  +1.6%   .015  █▅▁▁▁▁▁▁▁▁ █▇▁▁▁▁▁▁▁▁
+  100 labels first same-value-set                                             ├●┤                  +1.3%   .899  ▂▆█▆▄▃▂▁▁▁ ▂▇█▇▄▃▂▂▂▁
+  10 labels last length-changing scene publication                            ├●┤                  +0.6%   .574  ▁▇██▆▃▂▂▁▁ ▁▆██▇▄▃▂▁▁
+  read every outline from an unchanged copy                                    ●                   +0.6%   .442  ▁█▆▃▁▁▁▁▁▁ ▁▆█▂▁▁▁▁▁▁
+  100 labels last same-length engine publication                              ├●─┤                 +0.2%   .959  ▂▆██▇▄▂▂▂▁ ▁▆▇█▇▄▂▂▁▁
+  borrow per-glyph metrics from 100 promoted labels                          ├─●┤                  +0.2%   .645  ▁▁▁▁▂▄█▄▁▁ ▂▁▁▂▂▅█▄▁▁
+  measure 1000 unchanged retained labels                                     ├─●┤                  +0.1%   .959  ▁▅█▆▅▄▃▂▂▁ ▂▆██▆▄▃▃▂▁
+  100 labels no-op scene traversal                                            ├●─┤                 -0.1%   .878  ▁▄█▅▄▃▂▁▁▁ ▂▆█▇▆▄▃▂▁▁
+  issue 216 reporter workaround                                               ├●──┤                -0.8%   .645  ▁██▇▅▃▂▂▁▁ ▃█▇█▆▄▂▂▂▁
+  100 labels first same-length scene publication                              ●┤                   -2.7%   .279  ▁███▆▄▃▂▂▁ ▂▆▇█▅▄▂▁▁▁
+  10 labels first color-only scene publication                               ├●┤                   -2.9%   .065  ▂▇█▇▆▄▂▂▁▁ ▂███▅▃▂▂▁▁
+  cached measurement                                                         ├●┼─┤                 -2.9%   .986  ▂█▆▂▂▁▁▁▁▁ ▂█▅▃▂▁▁▁▁▁
+  write 22k UTF16 text into owned array control                               ●┤                   -3.1%   .065  ▁█▆▅▂▂▁▁▁▁ ▁█▅▂▂▁▁▁▁▁
+  write 22k UTF16 text into Wasm request arena                               ├●┤                   -3.4%   .050  ▁█▅▄▂▂▁▁▁▁ ▂█▄▂▂▁▁▁▁▁
+  10 labels first color-only engine publication                              ├●┼┤                  -3.5%   .442  ▂▇██▅▅▃▂▁▁ ▂▇██▆▃▂▂▁▁
+  common-safe word-wrap reflow                                               ├●┊                   -3.9%  <.001  ▁▄█▇▆▄▂▂▁▁ ▂██▇▆▃▂▁▂▁
+  100 labels first same-length engine publication                            ├●┤                   -4.7%   .050  ▁▆█▇▇▄▂▂▁▁ ▂▆█▇▇▃▂▁▁▁
+  10 labels last color-only engine publication                             ├─●─┤                   -5.6%   .065  ▂▇█▇▅▃▂▁▁▁ ▃██▅▃▂▁▁▁▁
+                                                                └──────────────┴──────────────┘
+                                                                -50%           0           +50%
+```
+
+| status | bench | baseline | candidate | Δ time | Δ p50 | p | 95% CI |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 🔴 slower | type one character into a long paragraph and measure | 373.63µs | 1.71ms | +1.336ms | +356.4% | <.001 | +215.4..+443.4% |
+| 🔴 slower | 1 labels first set | 27.98µs | 127.23µs | +0.099ms | +354.7% | <.001 | +327.1..+456.5% |
+| 🔴 slower | 100 labels first set | 28.63µs | 117.04µs | +0.088ms | +308.9% | <.001 | +290.3..+336.0% |
+| 🔴 slower | 1000 labels first set | 34.08µs | 127.35µs | +0.093ms | +273.7% | <.001 | +260.5..+307.7% |
+| 🔴 slower | long unsafe-boundary paragraph reflow | 330.94µs | 631.85µs | +0.301ms | +90.9% | <.001 | +84.7..+94.0% |
+| 🔴 slower | 100 labels first overwrite-before-scene-publication | 337.04µs | 558.60µs | +0.222ms | +65.7% | <.001 | +55.0..+81.8% |
+| 🔴 slower | 1 labels first overwrite-before-scene-publication | 242.73µs | 401.69µs | +0.159ms | +65.5% | <.001 | +61.3..+80.3% |
+| 🔴 slower | long reporter workaround paragraph reflow | 386.46µs | 576.40µs | +0.190ms | +49.1% | <.001 | +47.3..+50.3% |
+| 🔴 slower | measure after text change | 1.12ms | 1.62ms | +0.500ms | +45.2% | <.001 | +44.5..+47.0% |
+| 🔴 slower | measurement after width change | 813.73µs | 1.11ms | +0.296ms | +36.4% | <.001 | +34.6..+38.7% |
+| 🔴 slower | rewrite 64 labels in one group | 1.09ms | 1.44ms | +0.350ms | +31.9% | <.001 | +28.7..+34.8% |
+| 🔴 slower | type one character into a long Fredoka paragraph and measure | 1.57ms | 2.04ms | +0.470ms | +29.5% | <.001 | +28.5..+30.9% |
+| 🔴 slower | rewrite 128 labels in one group | 1.94ms | 2.49ms | +0.550ms | +28.3% | <.001 | +27.5..+29.8% |
+| 🔴 slower | copy per-glyph metrics from 100 unchanged labels | 146.27µs | 186.71µs | +0.040ms | +27.6% | <.001 | +25.6..+31.5% |
+| 🔴 slower | rewrite 256 labels in one group | 3.59ms | 4.56ms | +0.970ms | +27.0% | <.001 | +25.2..+30.0% |
+| 🔴 slower | publication after font-size change | 6.24ms | 7.54ms | +1.300ms | +20.8% | <.001 | +19.9..+21.3% |
+| 🔴 slower | rewrite 512 labels in one group | 6.91ms | 8.28ms | +1.370ms | +19.7% | <.001 | +17.3..+21.0% |
+| 🔴 slower | 10 labels last same-length scene publication | 341.48µs | 400.88µs | +0.059ms | +17.4% | <.001 | +15.3..+19.2% |
+| 🔴 slower | 10 labels first same-length engine publication | 330.83µs | 386.31µs | +0.055ms | +16.8% | .001 | +12.2..+20.5% |
+| 🔴 slower | 10 labels last same-length engine publication | 327.37µs | 382.00µs | +0.055ms | +16.7% | <.001 | +12.8..+19.7% |
+| 🔴 slower | publish 1024 retained Text instances | 15.17ms | 17.38ms | +2.210ms | +14.6% | <.001 | +13.3..+15.8% |
+| 🔴 slower | 1000 labels no-op scene traversal | 374.94µs | 426.56µs | +0.052ms | +13.8% | <.001 | +8.0..+20.2% |
+| 🔴 slower | 10 labels first same-length scene publication | 348.75µs | 396.60µs | +0.048ms | +13.7% | .003 | +11.1..+28.3% |
+| 🔴 slower | mount and publish a 22k-glyph paragraph | 17.20ms | 19.56ms | +2.360ms | +13.7% | <.001 | +13.1..+14.3% |
+| 🔴 slower | relayout after font-size change | 1.80ms | 2.03ms | +0.230ms | +12.3% | <.001 | +11.4..+13.4% |
+| 🔴 slower | mount 100 labels and borrow glyphs from each once | 9.78ms | 10.95ms | +1.170ms | +11.9% | <.001 | +10.4..+13.7% |
+| 🔴 slower | long unsafe-boundary paragraph text edit | 1.58ms | 1.75ms | +0.170ms | +10.6% | <.001 | +9.7..+11.3% |
+| 🔴 slower | toggle one group containing 1000 retained labels | 417.73µs | 457.79µs | +0.040ms | +9.6% | .050 | +1.0..+14.8% |
+| 🔴 slower | publish after color change | 1.27ms | 1.38ms | +0.110ms | +8.4% | <.001 | +7.2..+12.0% |
+| 🔴 slower | 1000 labels first same-value-set | 4.40µs | 4.75µs | +0.000350ms | +8.1% | .015 | +1.0..+28.3% |
+| 🔴 slower | cached per-glyph inspection | 70.08µs | 75.08µs | +0.005ms | +7.1% | <.001 | +3.5..+8.8% |
+| 🔴 slower | issue 216 unsafe-boundary word-wrap reflow | 165.17µs | 176.10µs | +0.011ms | +6.6% | .010 | +1.8..+9.9% |
+| 🔴 slower | publication after text change | 6.49ms | 6.84ms | +0.350ms | +5.4% | <.001 | +4.3..+5.8% |
+| 🟢 faster | 100 labels last same-length scene publication | 537.85µs | 509.25µs | -0.029ms | -5.3% | .007 | -8.9..-2.6% |
+| 🟢 faster | 10 labels last color-only scene publication | 287.85µs | 271.71µs | -0.016ms | -5.6% | .021 | -7.6..-1.3% |
+| 🟢 faster | normalize 1000 equivalent retained label updates | 2.41ms | 2.27ms | -0.140ms | -5.7% | <.001 | -7.3..-3.3% |
+| 🟢 faster | measure 100 unchanged labels | 19.08µs | 17.85µs | -0.001ms | -6.4% | .014 | -11.1..-2.3% |
+| 🟢 faster | 100 labels separated balanced grow-shrink-space engine publication | 833.58µs | 777.00µs | -0.057ms | -6.8% | .005 | -9.7..-3.3% |
+| 🟢 faster | reorder then edit one of 1000 retained labels | 6.00ms | 5.52ms | -0.480ms | -8.0% | .007 | -10.3..-3.3% |
+| 🟢 faster | 100 labels separated balanced grow-shrink-space scene publication | 874.67µs | 795.23µs | -0.079ms | -9.1% | <.001 | -11.6..-8.1% |
+| 🟢 faster | copy per-glyph metrics after text change | 3.42ms | 3.11ms | -0.310ms | -9.1% | <.001 | -10.0..-7.3% |
+| 🟢 faster | copy per-glyph metrics with outlines after text change | 3.45ms | 3.13ms | -0.320ms | -9.5% | <.001 | -13.6..-7.1% |
+| 🟢 faster | 100 labels last length-changing scene publication | 668.75µs | 603.04µs | -0.066ms | -9.8% | <.001 | -11.6..-6.1% |
+| 🟢 faster | 100 labels last length-changing engine publication | 641.25µs | 574.44µs | -0.067ms | -10.4% | <.001 | -12.4..-8.3% |
+| 🟢 faster | 100 labels separated unbalanced grow-shrink-space scene publication | 882.90µs | 790.67µs | -0.092ms | -10.4% | <.001 | -13.0..-9.0% |
+| 🟢 faster | 100 labels first set+measure+scene-publication | 598.48µs | 533.62µs | -0.065ms | -10.8% | <.001 | -13.5..-10.1% |
+| 🟢 faster | normalize 1000 equivalent formatted flow updates | 5.45ms | 4.85ms | -0.600ms | -10.9% | <.001 | -12.8..-9.6% |
+| 🟢 faster | mutate one trailing span across 1000 formatted labels | 39.94ms | 35.56ms | -4.380ms | -11.0% | <.001 | -12.1..-9.4% |
+| 🟢 faster | write 1000 paragraph-order mutations | 14.21µs | 12.60µs | -0.002ms | -11.3% | <.001 | -15.4..-8.5% |
+| 🟢 faster | reorder 1000 unchanged retained labels | 2.54ms | 2.25ms | -0.290ms | -11.4% | .003 | -13.6..-9.4% |
+| 🟢 faster | 100 labels separated unbalanced grow-shrink-space engine publication | 833.50µs | 735.96µs | -0.098ms | -11.7% | <.001 | -13.3..-8.5% |
+| 🟢 faster | 1000 labels first set+measure | 175.42µs | 152.92µs | -0.022ms | -12.8% | <.001 | -16.3..-10.3% |
+| 🟢 faster | type one character into a long paragraph and publish a frame | 3.28ms | 2.82ms | -0.460ms | -13.9% | <.001 | -15.1..-13.0% |
+| 🟢 faster | write 1000 paragraph and text mutations | 86.62µs | 73.83µs | -0.013ms | -14.8% | <.001 | -17.2..-12.8% |
+| 🟢 faster | edit and independently copy one label among 1 labels | 1.01ms | 855.54µs | -0.154ms | -14.9% | <.001 | -16.1..-12.3% |
+| 🟢 faster | edit and independently copy one label among 100 labels | 1.14ms | 962.21µs | -0.178ms | -15.7% | <.001 | -17.6..-13.9% |
+| 🟢 faster | 100 labels batched edit-read publication | 5.39ms | 4.53ms | -0.860ms | -16.0% | <.001 | -16.8..-14.5% |
+| 🟢 faster | bind and normalize 1000 framework-shaped formatted flow updates | 6.03ms | 4.98ms | -1.050ms | -17.5% | <.001 | -18.9..-16.1% |
+| 🟢 faster | write one paragraph and text mutation | 10.73µs | 8.65µs | -0.002ms | -19.4% | .007 | -27.9..-11.2% |
+| 🟢 faster | 100 labels first length-changing engine publication | 783.65µs | 630.65µs | -0.153ms | -19.5% | <.001 | -21.7..-16.4% |
+| 🟢 faster | reflow after width change | 409.96µs | 329.17µs | -0.081ms | -19.7% | <.001 | -22.7..-18.6% |
+| 🟢 faster | broad end-to-end setter and publication with 8192 paint spans | 19.76ms | 15.73ms | -4.030ms | -20.4% | <.001 | -21.3..-18.7% |
+| 🟢 faster | 100 labels first length-changing scene publication | 846.79µs | 671.75µs | -0.175ms | -20.7% | <.001 | -22.2..-18.2% |
+| 🟢 faster | edit and measure one of 100 retained labels | 168.33µs | 131.13µs | -0.037ms | -22.1% | .010 | -24.8..-15.8% |
+| 🟢 faster | 100 labels first color-only engine publication | 365.40µs | 284.52µs | -0.081ms | -22.1% | <.001 | -24.5..-16.4% |
+| 🟢 faster | 100 labels last color-only scene publication | 424.75µs | 324.29µs | -0.100ms | -23.7% | <.001 | -26.3..-20.9% |
+| 🟢 faster | 100 labels last color-only engine publication | 375.23µs | 279.27µs | -0.096ms | -25.6% | <.001 | -28.4..-22.0% |
+| 🟢 faster | scattered end-to-end setter and publication with 8192 paint spans | 20.01ms | 14.69ms | -5.320ms | -26.6% | <.001 | -27.3..-25.7% |
+| 🟢 faster | edit and sparsely borrow one of 1000 retained labels | 218.15µs | 158.38µs | -0.060ms | -27.4% | .010 | -29.0..-21.3% |
+| 🟢 faster | 1000 labels 100 edits batched edit-read publication | 9.02ms | 6.54ms | -2.480ms | -27.5% | <.001 | -28.3..-26.9% |
+| 🟢 faster | measurement then publication after width change | 1.84ms | 1.33ms | -0.510ms | -27.8% | <.001 | -28.3..-26.9% |
+| 🟢 faster | split move and merge paint boundaries preparation only | 6.42ms | 4.62ms | -1.800ms | -28.1% | <.001 | -28.5..-27.6% |
+| 🟢 faster | 100 labels first color-only scene publication | 438.54µs | 314.69µs | -0.124ms | -28.2% | <.001 | -30.7..-25.0% |
+| 🟢 faster | edit and measure one of 1000 retained labels | 212.06µs | 149.83µs | -0.062ms | -29.3% | <.001 | -32.8..-24.7% |
+| 🟢 faster | 100 labels 100 edits immediate measurements without publication | 2.82ms | 1.95ms | -0.870ms | -30.7% | <.001 | -31.6..-29.8% |
+| 🟢 faster | edit and independently copy one label among 1000 labels | 2.76ms | 1.87ms | -0.890ms | -32.0% | <.001 | -33.0..-31.3% |
+| 🟢 faster | split move and merge paint boundaries publication | 9.04ms | 6.04ms | -3.000ms | -33.2% | <.001 | -34.3..-32.3% |
+| 🟢 faster | monospaced unchanged end-to-end setter and publication with 8192 paint spans | 4.48ms | 2.92ms | -1.560ms | -34.7% | <.001 | -36.3..-34.1% |
+| 🟢 faster | publication after width change | 1.04ms | 676.31µs | -0.364ms | -35.2% | <.001 | -36.6..-33.7% |
+| 🟢 faster | monospaced scattered end-to-end setter and publication with 8192 paint spans | 17.70ms | 11.47ms | -6.230ms | -35.2% | <.001 | -36.3..-34.6% |
+| 🟢 faster | unchanged end-to-end setter and publication with 8192 paint spans | 4.54ms | 2.94ms | -1.600ms | -35.3% | <.001 | -38.8..-34.4% |
+| 🟢 faster | per-glyph inspection after width change | 7.09ms | 4.56ms | -2.530ms | -35.7% | <.001 | -37.1..-33.9% |
+| 🟢 faster | monospaced unchanged setter preparation in one large paragraph with 8192 paint spans | 4.41ms | 2.73ms | -1.680ms | -38.0% | <.001 | -39.5..-36.2% |
+| 🟢 faster | 1000 labels separated balanced grow-shrink-space scene publication | 4.80ms | 2.96ms | -1.840ms | -38.3% | <.001 | -39.0..-37.1% |
+| 🟢 faster | 100 labels interleaved edit-read publication | 17.48ms | 10.77ms | -6.710ms | -38.4% | <.001 | -39.7..-37.1% |
+| 🟢 faster | 1000 labels separated unbalanced grow-shrink-space scene publication | 4.92ms | 3.03ms | -1.890ms | -38.4% | <.001 | -39.0..-37.0% |
+| 🟢 faster | unchanged setter preparation in one large paragraph with 8192 paint spans | 4.49ms | 2.76ms | -1.730ms | -38.6% | <.001 | -39.8..-37.4% |
+| 🟢 faster | 1000 labels separated balanced grow-shrink-space engine publication | 4.46ms | 2.71ms | -1.750ms | -39.2% | <.001 | -41.2..-38.7% |
+| 🟢 faster | 1000 labels separated unbalanced grow-shrink-space engine publication | 4.61ms | 2.74ms | -1.870ms | -40.6% | <.001 | -41.6..-39.1% |
+| 🟢 faster | 1000 labels first same-length scene publication | 2.77ms | 1.64ms | -1.130ms | -40.9% | <.001 | -42.8..-36.8% |
+| 🟢 faster | 1000 labels last same-length scene publication | 2.80ms | 1.63ms | -1.170ms | -41.8% | <.001 | -42.8..-40.3% |
+| 🟢 faster | 1000 labels first set+measure+scene-publication | 2.88ms | 1.67ms | -1.210ms | -42.2% | <.001 | -43.8..-39.1% |
+| 🟢 faster | 1000 labels last length-changing scene publication | 3.27ms | 1.88ms | -1.390ms | -42.5% | <.001 | -44.7..-41.1% |
+| 🟢 faster | 1000 labels last length-changing engine publication | 2.95ms | 1.64ms | -1.310ms | -44.2% | <.001 | -44.8..-39.4% |
+| 🟢 faster | inspection then publication after width change | 8.58ms | 4.76ms | -3.820ms | -44.5% | <.001 | -48.1..-32.9% |
+| 🟢 faster | 1000 labels last same-length engine publication | 2.46ms | 1.36ms | -1.100ms | -44.8% | <.001 | -45.8..-43.3% |
+| 🟢 faster | 1000 labels 100 edits immediate measurements without publication | 3.77ms | 2.07ms | -1.700ms | -45.0% | <.001 | -45.4..-44.1% |
+| 🟢 faster | 100 labels 100 edits immediate measurements with publication | 11.71ms | 6.35ms | -5.360ms | -45.8% | <.001 | -46.4..-45.5% |
+| 🟢 faster | 1000 labels first same-length engine publication | 2.49ms | 1.35ms | -1.140ms | -46.0% | <.001 | -47.1..-44.7% |
+| 🟢 faster | shared-material scattered end-to-end setter and publication with 8192 paint spans | 28.66ms | 15.40ms | -13.260ms | -46.3% | <.001 | -46.7..-45.4% |
+| 🟢 faster | 1000 labels first length-changing scene publication | 4.87ms | 2.36ms | -2.510ms | -51.5% | <.001 | -52.1..-50.0% |
+| 🟢 faster | 1000 labels first length-changing engine publication | 4.57ms | 2.12ms | -2.450ms | -53.7% | <.001 | -54.7..-52.3% |
+| 🟢 faster | scattered setter preparation in one large paragraph with 8192 paint spans | 32.28ms | 13.00ms | -19.280ms | -59.7% | <.001 | -61.1..-58.2% |
+| 🟢 faster | monospaced broad setter preparation in one large paragraph with 8192 paint spans | 33.67ms | 13.07ms | -20.600ms | -61.2% | <.001 | -62.0..-60.1% |
+| 🟢 faster | broad setter preparation in one large paragraph with 8192 paint spans | 32.36ms | 12.19ms | -20.170ms | -62.3% | <.001 | -63.3..-61.6% |
+| 🟢 faster | 1000 labels 100 edits interleaved edit-read publication | 125.80ms | 45.83ms | -79.970ms | -63.6% | <.001 | -63.9..-63.1% |
+| 🟢 faster | 1000 labels first color-only scene publication | 2.21ms | 793.52µs | -1.416ms | -64.1% | <.001 | -65.5..-61.5% |
+| 🟢 faster | 1000 labels last color-only scene publication | 2.25ms | 802.31µs | -1.448ms | -64.3% | <.001 | -65.7..-60.9% |
+| 🟢 faster | shared-material scattered setter preparation in one large paragraph with 8192 paint spans | 40.38ms | 14.03ms | -26.350ms | -65.3% | <.001 | -65.8..-64.9% |
+| 🟢 faster | monospaced scattered setter preparation in one large paragraph with 8192 paint spans | 30.76ms | 10.11ms | -20.650ms | -67.1% | <.001 | -67.7..-66.5% |
+| 🟢 faster | 1000 labels first color-only engine publication | 1.85ms | 495.15µs | -1.355ms | -73.2% | <.001 | -74.4..-72.3% |
+| 🟢 faster | 1000 labels last color-only engine publication | 1.80ms | 475.69µs | -1.324ms | -73.6% | <.001 | -74.6..-72.0% |
+| 🟢 faster | 1000 labels 100 edits immediate measurements with publication | 94.07ms | 18.14ms | -75.930ms | -80.7% | <.001 | -80.8..-79.6% |
+| 🟢 faster | monospaced broad end-to-end setter and publication with 8192 paint spans | 137.98ms | 16.62ms | -121.360ms | -88.0% | <.001 | -88.0..-87.9% |
+
+<details><summary>31 neutral, 0 skipped</summary>
+
+| status | bench | baseline | candidate | Δ time | Δ p50 | p | 95% CI |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| neutral | 10 labels no-op scene traversal | 29.33µs | 30.06µs | +0.000730ms | +2.5% | .152 | -1.1..+5.0% |
+| neutral | 10 labels first length-changing scene publication | 474.44µs | 490.04µs | +0.016ms | +3.3% | .007 | +1.3..+6.2% |
+| neutral | 10 labels first color-only scene publication | 278.98µs | 270.98µs | -0.008ms | -2.9% | .065 | -5.2..+0.3% |
+| neutral | 10 labels first length-changing engine publication | 452.52µs | 469.35µs | +0.017ms | +3.7% | .010 | +0.7..+5.0% |
+| neutral | 10 labels first color-only engine publication | 266.96µs | 257.67µs | -0.009ms | -3.5% | .442 | -5.5..+2.4% |
+| neutral | 10 labels last length-changing scene publication | 466.33µs | 469.33µs | +0.003ms | +0.6% | .574 | -2.1..+3.8% |
+| neutral | 10 labels last length-changing engine publication | 437.52µs | 457.60µs | +0.020ms | +4.6% | .002 | +2.3..+8.1% |
+| neutral | 10 labels last color-only engine publication | 268.98µs | 253.79µs | -0.015ms | -5.6% | .065 | -14.3..+0.2% |
+| neutral | 100 labels no-op scene traversal | 64.52µs | 64.48µs | -0.000040ms | -0.1% | .878 | -2.7..+5.5% |
+| neutral | 100 labels first same-length scene publication | 527.19µs | 512.77µs | -0.014ms | -2.7% | .279 | -3.9..+1.0% |
+| neutral | 100 labels first same-length engine publication | 491.65µs | 468.67µs | -0.023ms | -4.7% | .050 | -6.2..-0.1% |
+| neutral | 100 labels last same-length engine publication | 476.52µs | 477.29µs | +0.000770ms | +0.2% | .959 | -3.4..+5.5% |
+| neutral | mount a label and publish its first edit | 2.22ms | 2.26ms | +0.040ms | +1.7% | .005 | +1.3..+6.0% |
+| neutral | publish after text change | 1.94ms | 1.97ms | +0.030ms | +1.6% | .015 | +0.5..+2.9% |
+| neutral | reuse 1000 unchanged Vue property snapshots | 188.90µs | 192.17µs | +0.003ms | +1.7% | .035 | +0.2..+3.7% |
+| neutral | borrow per-glyph metrics from 100 promoted labels | 232.25µs | 232.67µs | +0.000420ms | +0.2% | .645 | -7.9..+1.8% |
+| neutral | cached measurement | 4.37µs | 4.25µs | -0.000120ms | -2.9% | .986 | -6.5..+7.3% |
+| neutral | read every outline from an unchanged copy | 871.06µs | 876.69µs | +0.006ms | +0.6% | .442 | -0.9..+1.4% |
+| neutral | 1 labels first set+measure | 139.54µs | 144.40µs | +0.005ms | +3.5% | .328 | -1.5..+15.0% |
+| neutral | 1 labels first set+measure+scene-publication | 402.31µs | 409.90µs | +0.008ms | +1.9% | .505 | -2.0..+3.8% |
+| neutral | 1 labels first same-value-set | 3.13µs | 3.21µs | +0.000080ms | +2.7% | .161 | -0.0..+10.3% |
+| neutral | 100 labels first set+measure | 138.38µs | 149.12µs | +0.011ms | +7.8% | .234 | -2.6..+24.2% |
+| neutral | 100 labels first same-value-set | 3.21µs | 3.25µs | +0.000040ms | +1.3% | .899 | -2.5..+4.1% |
+| neutral | 1000 labels first overwrite-before-scene-publication | 1.64ms | 1.69ms | +0.050ms | +2.7% | .050 | +0.2..+5.9% |
+| neutral | write 22k UTF16 text into Wasm request arena | 38.65µs | 37.33µs | -0.001ms | -3.4% | .050 | -5.7..-0.2% |
+| neutral | write 22k UTF16 text into owned array control | 38.44µs | 37.25µs | -0.001ms | -3.1% | .065 | -4.7..+0.4% |
+| neutral | measure 1000 unchanged retained labels | 242.75µs | 242.96µs | +0.000210ms | +0.1% | .959 | -5.1..+4.1% |
+| neutral | borrow glyphs from 1000 steadily promoted retained labels | 1.08ms | 1.11ms | +0.030ms | +2.8% | .279 | -30.1..+14.6% |
+| neutral | move 1000 retained TypeGPU labels | 266.42µs | 280.31µs | +0.014ms | +5.2% | .328 | -6.9..+10.6% |
+| neutral | common-safe word-wrap reflow | 160.60µs | 154.42µs | -0.006ms | -3.9% | <.001 | -7.3..-2.3% |
+| neutral | issue 216 reporter workaround | 169.38µs | 168.08µs | -0.001ms | -0.8% | .645 | -2.9..+8.6% |
+
+</details>

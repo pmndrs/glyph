@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 /** Which side of a comparison produced a Labs result: the published base, or the package under review. */
 export type LabsResultRole = 'baseline' | 'candidate';
 export type LabsSamplingPolicy = 'adaptive' | 'single-call';
+export type LabsWarmupPolicy = 'conditional' | 'fixed-20';
 export type LabsBaselineAvailability = 'complete' | 'published-no-outlines';
 
 const publishedUnavailableOutlines = [
@@ -78,6 +79,27 @@ function labsIdentitySet(result: unknown): Set<string> {
     }
   }
   return identities;
+}
+
+/** A fixed warmup result must prove that every fresh worker ran the promised untimed calls. */
+export function assertLabsWarmupPolicy(result: unknown, policy: LabsWarmupPolicy, blocks: number): void {
+  if (policy === 'conditional') return;
+  const runs = labeledRuns(result);
+  if (runs.length === 0) throw new Error('Labs result did not contain any benchmark runs');
+  for (const { label, run } of runs) {
+    if (run.error !== undefined) continue;
+    if (
+      !isRecord(run.stats) ||
+      !isRecord(run.stats.plan) ||
+      run.stats.plan.warmup_calls !== 21 ||
+      !isRecord(run.stats.blocks) ||
+      !Array.isArray(run.stats.blocks.warmupCalls) ||
+      run.stats.blocks.warmupCalls.length !== blocks ||
+      !run.stats.blocks.warmupCalls.every((count: unknown) => count === 21)
+    ) {
+      throw new Error(`Labs fixed-20 warmup policy was not applied in every block: ${label}`);
+    }
+  }
 }
 
 /** Validate the complete saved worker output when fixed sampling was requested. */

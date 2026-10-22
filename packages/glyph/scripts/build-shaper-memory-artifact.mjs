@@ -1,7 +1,7 @@
 /* @workflow {
   "name": "glyph:shaper-memory-artifact",
   "summary": "Build isolated diagnostic-live-memory Wasm and prove the feature-off control equals a frozen package shaper.",
-  "requirements": "Pinned Rust/Binaryen through mise. Requires --artifact <frozen.tgz>; optional --source-root <worktree>, --output <ignored-directory>, --simd 0|1 (default 1). Fails on any feature-off byte difference.",
+  "requirements": "Pinned Rust/Binaryen through mise. Requires --artifact <frozen.tgz>; optional --source-root <worktree>, --output <ignored-directory>, --simd 0|1 (default 1), and --one-caller-inline-max-function-size 0|default (default 0). The 'default' value reproduces historical optimizer defaults by omitting only that flag. Fails on any feature-off byte difference.",
   "writes": "Ignored packages/glyph/.cache/shaper-memory-artifact (or --output): one isolated Cargo target, optimized control and diagnostic Wasm, and provenance manifest. Never writes dist."
 } */
 import { createHash } from 'node:crypto';
@@ -25,7 +25,10 @@ const arguments_ = process.argv.slice(2);
 if (arguments_.length % 2 !== 0) throw new Error('Options require values');
 for (let index = 0; index < arguments_.length; index += 2) {
   const key = arguments_[index];
-  if (!['--artifact', '--source-root', '--output', '--simd'].includes(key) || options.has(key)) {
+  if (
+    !['--artifact', '--source-root', '--output', '--simd', '--one-caller-inline-max-function-size'].includes(key) ||
+    options.has(key)
+  ) {
     throw new Error(`Unknown or repeated option: ${key}`);
   }
   options.set(key, arguments_[index + 1]);
@@ -34,6 +37,10 @@ if (!options.has('--artifact')) throw new Error('--artifact <frozen.tgz> is requ
 const simdOption = options.get('--simd') ?? '1';
 if (simdOption !== '0' && simdOption !== '1') throw new Error('--simd must be 0 or 1');
 const simd = simdOption === '1';
+const oneCallerInlineMaxFunctionSize = options.get('--one-caller-inline-max-function-size') ?? '0';
+if (oneCallerInlineMaxFunctionSize !== '0' && oneCallerInlineMaxFunctionSize !== 'default') {
+  throw new Error('--one-caller-inline-max-function-size must be 0 or default');
+}
 const sourceRoot = resolve(options.get('--source-root') ?? workspaceRoot);
 const sourcePackageRoot = resolve(sourceRoot, 'packages/glyph');
 const artifact = resolve(options.get('--artifact'));
@@ -44,7 +51,9 @@ assertDiagnosticOutputOutsideDist(resolve(sourcePackageRoot, 'dist'), output);
 const archive = await readFile(artifact);
 const release = await captureCommand('tar', ['-xzOf', '-', 'package/dist/text-shaper.wasm'], { input: archive });
 const wasmOpt = resolve(packageRoot, 'node_modules/.bin', process.platform === 'win32' ? 'wasm-opt.CMD' : 'wasm-opt');
-const optimization = shaperOptimizationArguments(simd);
+const optimization = shaperOptimizationArguments(simd).filter(
+  (argument) => oneCallerInlineMaxFunctionSize === '0' || argument !== '--one-caller-inline-max-function-size=0',
+);
 await mkdir(output, { recursive: true });
 const target = resolve(output, `target-${simd ? 'simd128' : 'scalar'}`);
 
@@ -135,6 +144,7 @@ const manifest = {
     rustc: String(await captureCommand('rustc', ['--version'])).trim(),
     wasmOpt: String(await captureCommand(wasmOpt, ['--version'])).trim(),
   },
+  oneCallerInlineMaxFunctionSize,
   optimization,
 };
 await writeFile(resolve(output, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);

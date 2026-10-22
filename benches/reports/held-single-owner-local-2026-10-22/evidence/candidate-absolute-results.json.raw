@@ -1,0 +1,1463 @@
+{
+  "candidateArchiveSha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+  "harnessDigest": "a89c95dd78c46dde9d10cd7698912ce7f4507b9bfd26c4d1fdfa8b4b5cb6ec1b",
+  "suite": "full",
+  "blocks": 8,
+  "samplingPolicy": "single-call",
+  "rawCandidateJsonSha256": "3f6e73670c82af0e78dcff1b6aebb90f73084a4e55717d45132b0da4298a5fb8",
+  "identityCount": 145,
+  "metric": "pooled normalized Labs yield samples; source nanoseconds converted to milliseconds",
+  "percentileMethod": "nearest rank: sorted samples[ceil(q*N)-1]",
+  "rows": [
+    {
+      "file": "adapter-publication.bench.ts",
+      "name": "normalize 1000 equivalent retained label updates",
+      "group": "allocation-light adapter publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 144,
+      "pooledNearestRankP50Ms": 2.681208,
+      "pooledNearestRankP95Ms": 5.147917
+    },
+    {
+      "file": "adapter-publication.bench.ts",
+      "name": "mutate one trailing span across 1000 formatted labels",
+      "group": "allocation-light adapter publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 128,
+      "pooledNearestRankP50Ms": 41.648,
+      "pooledNearestRankP95Ms": 443.60762500000095
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "edit and measure one of 100 retained labels",
+      "group": "batched text operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 456,
+      "pooledNearestRankP50Ms": 0.219375,
+      "pooledNearestRankP95Ms": 0.590333
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "rewrite 64 labels in one group",
+      "group": "batched text operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 352,
+      "pooledNearestRankP50Ms": 1.66,
+      "pooledNearestRankP95Ms": 2.796791
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "rewrite 128 labels in one group",
+      "group": "batched text operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 320,
+      "pooledNearestRankP50Ms": 2.757375,
+      "pooledNearestRankP95Ms": 3.9735
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "rewrite 256 labels in one group",
+      "group": "batched text operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 128,
+      "pooledNearestRankP50Ms": 5.556166,
+      "pooledNearestRankP95Ms": 61.656834
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "rewrite 512 labels in one group",
+      "group": "batched text operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 128,
+      "pooledNearestRankP50Ms": 10.295208,
+      "pooledNearestRankP95Ms": 117.498792
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels no-op scene traversal",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 128,
+      "pooledNearestRankP50Ms": 0.075417,
+      "pooledNearestRankP95Ms": 0.244458
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels first same-length scene publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 128,
+      "pooledNearestRankP50Ms": 0.67425,
+      "pooledNearestRankP95Ms": 1.615667
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels first length-changing scene publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 352,
+      "pooledNearestRankP50Ms": 0.722417,
+      "pooledNearestRankP95Ms": 1.590459
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels first color-only scene publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 336,
+      "pooledNearestRankP50Ms": 0.447417,
+      "pooledNearestRankP95Ms": 1.16225
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels first same-length engine publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 480,
+      "pooledNearestRankP50Ms": 0.51075,
+      "pooledNearestRankP95Ms": 0.902167
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels first length-changing engine publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 488,
+      "pooledNearestRankP50Ms": 0.663916,
+      "pooledNearestRankP95Ms": 1.177292
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels first color-only engine publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 176,
+      "pooledNearestRankP50Ms": 0.457292,
+      "pooledNearestRankP95Ms": 0.973166
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels last same-length scene publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 280,
+      "pooledNearestRankP50Ms": 0.601667,
+      "pooledNearestRankP95Ms": 1.192542
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels last length-changing scene publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 296,
+      "pooledNearestRankP50Ms": 0.6934999999999404,
+      "pooledNearestRankP95Ms": 2.308958
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels last color-only scene publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 480,
+      "pooledNearestRankP50Ms": 0.39875,
+      "pooledNearestRankP95Ms": 0.831875
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels last same-length engine publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 552,
+      "pooledNearestRankP50Ms": 0.497667,
+      "pooledNearestRankP95Ms": 0.927541
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels last length-changing engine publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 520,
+      "pooledNearestRankP50Ms": 0.6255,
+      "pooledNearestRankP95Ms": 1.115542
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels last color-only engine publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 552,
+      "pooledNearestRankP50Ms": 0.359792,
+      "pooledNearestRankP95Ms": 0.698084
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels no-op scene traversal",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 504,
+      "pooledNearestRankP50Ms": 0.081708,
+      "pooledNearestRankP95Ms": 0.187333
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels first same-length scene publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 376,
+      "pooledNearestRankP50Ms": 0.675292,
+      "pooledNearestRankP95Ms": 1.32975
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels first length-changing scene publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 432,
+      "pooledNearestRankP50Ms": 0.881584,
+      "pooledNearestRankP95Ms": 1.573792
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels first color-only scene publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 456,
+      "pooledNearestRankP50Ms": 0.434792,
+      "pooledNearestRankP95Ms": 0.920291
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels first same-length engine publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 424,
+      "pooledNearestRankP50Ms": 0.5862499999999404,
+      "pooledNearestRankP95Ms": 0.8763749999999404
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels first length-changing engine publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 392,
+      "pooledNearestRankP50Ms": 0.824542,
+      "pooledNearestRankP95Ms": 1.246333
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels first color-only engine publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 384,
+      "pooledNearestRankP50Ms": 0.399708,
+      "pooledNearestRankP95Ms": 0.7865420000000596
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels last same-length scene publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 408,
+      "pooledNearestRankP50Ms": 0.649792,
+      "pooledNearestRankP95Ms": 1.036458
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels last length-changing scene publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 480,
+      "pooledNearestRankP50Ms": 0.78325,
+      "pooledNearestRankP95Ms": 1.363583
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels last color-only scene publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 280,
+      "pooledNearestRankP50Ms": 0.4972909999998808,
+      "pooledNearestRankP95Ms": 1.034292
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels last same-length engine publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 496,
+      "pooledNearestRankP50Ms": 0.579166,
+      "pooledNearestRankP95Ms": 1.207166
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels last length-changing engine publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 272,
+      "pooledNearestRankP50Ms": 0.818167,
+      "pooledNearestRankP95Ms": 1.812333
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels last color-only engine publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 152,
+      "pooledNearestRankP50Ms": 0.440667,
+      "pooledNearestRankP95Ms": 1.749416
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels no-op scene traversal",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 208,
+      "pooledNearestRankP50Ms": 0.581041,
+      "pooledNearestRankP95Ms": 1.393292
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels first same-length scene publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 168,
+      "pooledNearestRankP50Ms": 2.079459,
+      "pooledNearestRankP95Ms": 3.769375
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels first length-changing scene publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 184,
+      "pooledNearestRankP50Ms": 2.854625,
+      "pooledNearestRankP95Ms": 4.25625
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels first color-only scene publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 240,
+      "pooledNearestRankP50Ms": 1.149084,
+      "pooledNearestRankP95Ms": 2.02175
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels first same-length engine publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 232,
+      "pooledNearestRankP50Ms": 1.756167,
+      "pooledNearestRankP95Ms": 2.669834
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels first length-changing engine publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 192,
+      "pooledNearestRankP50Ms": 2.542875,
+      "pooledNearestRankP95Ms": 4.016917
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels first color-only engine publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 232,
+      "pooledNearestRankP50Ms": 0.748041,
+      "pooledNearestRankP95Ms": 1.579958
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels last same-length scene publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 224,
+      "pooledNearestRankP50Ms": 2.083,
+      "pooledNearestRankP95Ms": 3.15425
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels last length-changing scene publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 128,
+      "pooledNearestRankP50Ms": 2.478375,
+      "pooledNearestRankP95Ms": 6.832208
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels last color-only scene publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 216,
+      "pooledNearestRankP50Ms": 1.188833,
+      "pooledNearestRankP95Ms": 2.269416000000119
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels last same-length engine publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 208,
+      "pooledNearestRankP50Ms": 1.82475,
+      "pooledNearestRankP95Ms": 3.065417
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels last length-changing engine publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 192,
+      "pooledNearestRankP50Ms": 2.16775,
+      "pooledNearestRankP95Ms": 3.447042
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels last color-only engine publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 240,
+      "pooledNearestRankP50Ms": 0.772125,
+      "pooledNearestRankP95Ms": 1.812791
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels 100 edits immediate measurements without publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 280,
+      "pooledNearestRankP50Ms": 2.171375,
+      "pooledNearestRankP95Ms": 10.217916
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels 100 edits immediate measurements with publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 216,
+      "pooledNearestRankP50Ms": 7.123292,
+      "pooledNearestRankP95Ms": 19.950208
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels batched edit-read publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 240,
+      "pooledNearestRankP50Ms": 5.525333,
+      "pooledNearestRankP95Ms": 17.461917
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels interleaved edit-read publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 128,
+      "pooledNearestRankP50Ms": 12.833375,
+      "pooledNearestRankP95Ms": 90.789625
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels 100 edits immediate measurements without publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 200,
+      "pooledNearestRankP50Ms": 2.319125,
+      "pooledNearestRankP95Ms": 6.767125
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels 100 edits immediate measurements with publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 128,
+      "pooledNearestRankP50Ms": 19.859459,
+      "pooledNearestRankP95Ms": 52.354541999999526
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels 100 edits batched edit-read publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 128,
+      "pooledNearestRankP50Ms": 7.641167,
+      "pooledNearestRankP95Ms": 43.759542
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels 100 edits interleaved edit-read publication",
+      "group": "edit-sized root publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 128,
+      "pooledNearestRankP50Ms": 49.777333,
+      "pooledNearestRankP95Ms": 78.359875
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels separated balanced grow-shrink-space engine publication",
+      "group": "multiple-owner publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 272,
+      "pooledNearestRankP50Ms": 1.052833,
+      "pooledNearestRankP95Ms": 8.449459
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels separated balanced grow-shrink-space scene publication",
+      "group": "multiple-owner publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 288,
+      "pooledNearestRankP50Ms": 1.096208,
+      "pooledNearestRankP95Ms": 1.97925
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels separated unbalanced grow-shrink-space engine publication",
+      "group": "multiple-owner publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 304,
+      "pooledNearestRankP50Ms": 0.951292,
+      "pooledNearestRankP95Ms": 1.659458
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels separated unbalanced grow-shrink-space scene publication",
+      "group": "multiple-owner publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 280,
+      "pooledNearestRankP50Ms": 0.991708,
+      "pooledNearestRankP95Ms": 1.681959
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels separated balanced grow-shrink-space engine publication",
+      "group": "multiple-owner publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 184,
+      "pooledNearestRankP50Ms": 3.153792,
+      "pooledNearestRankP95Ms": 4.698167
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels separated balanced grow-shrink-space scene publication",
+      "group": "multiple-owner publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 168,
+      "pooledNearestRankP50Ms": 3.592083,
+      "pooledNearestRankP95Ms": 5.375042
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels separated unbalanced grow-shrink-space engine publication",
+      "group": "multiple-owner publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 176,
+      "pooledNearestRankP50Ms": 3.327791,
+      "pooledNearestRankP95Ms": 4.995583
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels separated unbalanced grow-shrink-space scene publication",
+      "group": "multiple-owner publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 160,
+      "pooledNearestRankP50Ms": 3.76,
+      "pooledNearestRankP95Ms": 5.580375
+    },
+    {
+      "file": "cold.bench.ts",
+      "name": "mount and publish a 22k-glyph paragraph",
+      "group": "first-time operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 128,
+      "pooledNearestRankP50Ms": 21.120708,
+      "pooledNearestRankP95Ms": 23.615708
+    },
+    {
+      "file": "cold.bench.ts",
+      "name": "mount a label and publish its first edit",
+      "group": "first-time operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 392,
+      "pooledNearestRankP50Ms": 2.779541,
+      "pooledNearestRankP95Ms": 15.590083
+    },
+    {
+      "file": "cold.bench.ts",
+      "name": "mount 100 labels and borrow glyphs from each once",
+      "group": "first-time operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 152,
+      "pooledNearestRankP50Ms": 12.347292,
+      "pooledNearestRankP95Ms": 15.198
+    },
+    {
+      "file": "common.bench.ts",
+      "name": "measure after text change",
+      "group": "common text operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 416,
+      "pooledNearestRankP50Ms": 1.723208,
+      "pooledNearestRankP95Ms": 2.09825
+    },
+    {
+      "file": "common.bench.ts",
+      "name": "publish after text change",
+      "group": "common text operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 416,
+      "pooledNearestRankP50Ms": 2.116916,
+      "pooledNearestRankP95Ms": 2.677334
+    },
+    {
+      "file": "common.bench.ts",
+      "name": "reflow after width change",
+      "group": "common text operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 560,
+      "pooledNearestRankP50Ms": 0.45225,
+      "pooledNearestRankP95Ms": 0.826375
+    },
+    {
+      "file": "common.bench.ts",
+      "name": "publish after color change",
+      "group": "common text operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 448,
+      "pooledNearestRankP50Ms": 1.503209,
+      "pooledNearestRankP95Ms": 2.009208
+    },
+    {
+      "file": "common.bench.ts",
+      "name": "relayout after font-size change",
+      "group": "common text operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 344,
+      "pooledNearestRankP50Ms": 2.233459,
+      "pooledNearestRankP95Ms": 3.094791
+    },
+    {
+      "file": "common.bench.ts",
+      "name": "measure 100 unchanged labels",
+      "group": "common text operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 304,
+      "pooledNearestRankP50Ms": 0.0265,
+      "pooledNearestRankP95Ms": 0.076833
+    },
+    {
+      "file": "edit.bench.ts",
+      "name": "type one character into a long paragraph and measure",
+      "group": "typing into a long paragraph",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 432,
+      "pooledNearestRankP50Ms": 1.803791,
+      "pooledNearestRankP95Ms": 2.121708
+    },
+    {
+      "file": "edit.bench.ts",
+      "name": "type one character into a long Fredoka paragraph and measure",
+      "group": "typing into a long paragraph",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 456,
+      "pooledNearestRankP50Ms": 2.166834,
+      "pooledNearestRankP95Ms": 2.653167
+    },
+    {
+      "file": "edit.bench.ts",
+      "name": "type one character into a long paragraph and publish a frame",
+      "group": "typing into a long paragraph",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 376,
+      "pooledNearestRankP50Ms": 2.987334,
+      "pooledNearestRankP95Ms": 3.482875
+    },
+    {
+      "file": "framework-publication.bench.ts",
+      "name": "reuse 1000 unchanged Vue property snapshots",
+      "group": "framework normalization publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 416,
+      "pooledNearestRankP50Ms": 0.19625,
+      "pooledNearestRankP95Ms": 0.464125
+    },
+    {
+      "file": "framework-publication.bench.ts",
+      "name": "normalize 1000 equivalent formatted flow updates",
+      "group": "framework normalization publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 160,
+      "pooledNearestRankP50Ms": 5.194750000000119,
+      "pooledNearestRankP95Ms": 6.123083
+    },
+    {
+      "file": "framework-publication.bench.ts",
+      "name": "bind and normalize 1000 framework-shaped formatted flow updates",
+      "group": "framework normalization publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 160,
+      "pooledNearestRankP50Ms": 5.528834,
+      "pooledNearestRankP95Ms": 14.55575
+    },
+    {
+      "file": "inspection.bench.ts",
+      "name": "copy per-glyph metrics after text change",
+      "group": "per-glyph inspection",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 376,
+      "pooledNearestRankP50Ms": 3.2085,
+      "pooledNearestRankP95Ms": 4.899916
+    },
+    {
+      "file": "inspection.bench.ts",
+      "name": "copy per-glyph metrics from 100 unchanged labels",
+      "group": "per-glyph inspection",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 544,
+      "pooledNearestRankP50Ms": 0.195291,
+      "pooledNearestRankP95Ms": 0.435667
+    },
+    {
+      "file": "inspection.bench.ts",
+      "name": "edit and independently copy one label among 1 labels",
+      "group": "per-glyph inspection",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 536,
+      "pooledNearestRankP50Ms": 1.033792,
+      "pooledNearestRankP95Ms": 3.793209
+    },
+    {
+      "file": "inspection.bench.ts",
+      "name": "edit and independently copy one label among 100 labels",
+      "group": "per-glyph inspection",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 472,
+      "pooledNearestRankP50Ms": 1.175917,
+      "pooledNearestRankP95Ms": 2.23125
+    },
+    {
+      "file": "inspection.bench.ts",
+      "name": "edit and independently copy one label among 1000 labels",
+      "group": "per-glyph inspection",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 240,
+      "pooledNearestRankP50Ms": 2.13825,
+      "pooledNearestRankP95Ms": 2.789666
+    },
+    {
+      "file": "inspection.bench.ts",
+      "name": "borrow per-glyph metrics from 100 promoted labels",
+      "group": "per-glyph inspection",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 536,
+      "pooledNearestRankP50Ms": 0.241334,
+      "pooledNearestRankP95Ms": 0.450166
+    },
+    {
+      "file": "layout.bench.ts",
+      "name": "cached measurement",
+      "group": "public paragraph layout at 22k glyphs",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 432,
+      "pooledNearestRankP50Ms": 0.008583,
+      "pooledNearestRankP95Ms": 0.025084
+    },
+    {
+      "file": "layout.bench.ts",
+      "name": "measurement after width change",
+      "group": "public paragraph layout at 22k glyphs",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 128,
+      "pooledNearestRankP50Ms": 1.359166,
+      "pooledNearestRankP95Ms": 4.992542
+    },
+    {
+      "file": "layout.bench.ts",
+      "name": "measurement then publication after width change",
+      "group": "public paragraph layout at 22k glyphs",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 216,
+      "pooledNearestRankP50Ms": 1.5642919999998808,
+      "pooledNearestRankP95Ms": 3.504583
+    },
+    {
+      "file": "layout.bench.ts",
+      "name": "cached per-glyph inspection",
+      "group": "public paragraph layout at 22k glyphs",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 416,
+      "pooledNearestRankP50Ms": 0.097917,
+      "pooledNearestRankP95Ms": 0.18575
+    },
+    {
+      "file": "layout.bench.ts",
+      "name": "per-glyph inspection after width change",
+      "group": "public paragraph layout at 22k glyphs",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 192,
+      "pooledNearestRankP50Ms": 4.864209000000119,
+      "pooledNearestRankP95Ms": 8.399
+    },
+    {
+      "file": "layout.bench.ts",
+      "name": "inspection then publication after width change",
+      "group": "public paragraph layout at 22k glyphs",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 216,
+      "pooledNearestRankP50Ms": 5.384917,
+      "pooledNearestRankP95Ms": 44.407542
+    },
+    {
+      "file": "layout.bench.ts",
+      "name": "publication after font-size change",
+      "group": "public paragraph layout at 22k glyphs",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 216,
+      "pooledNearestRankP50Ms": 8.049833,
+      "pooledNearestRankP95Ms": 9.466208
+    },
+    {
+      "file": "layout.bench.ts",
+      "name": "publication after width change",
+      "group": "public paragraph layout at 22k glyphs",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 408,
+      "pooledNearestRankP50Ms": 0.817792,
+      "pooledNearestRankP95Ms": 1.391917
+    },
+    {
+      "file": "layout.bench.ts",
+      "name": "publication after text change",
+      "group": "public paragraph layout at 22k glyphs",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 192,
+      "pooledNearestRankP50Ms": 7.403916,
+      "pooledNearestRankP95Ms": 11.713583
+    },
+    {
+      "file": "outlines.bench.ts",
+      "name": "copy per-glyph metrics with outlines after text change",
+      "group": "glyph outlines",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 344,
+      "pooledNearestRankP50Ms": 3.171625,
+      "pooledNearestRankP95Ms": 3.538667
+    },
+    {
+      "file": "outlines.bench.ts",
+      "name": "read every outline from an unchanged copy",
+      "group": "glyph outlines",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 432,
+      "pooledNearestRankP50Ms": 0.891167,
+      "pooledNearestRankP95Ms": 1.2445
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "1 labels first set",
+      "group": "prepared label operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 600,
+      "pooledNearestRankP50Ms": 0.157167,
+      "pooledNearestRankP95Ms": 0.320042
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "1 labels first set+measure",
+      "group": "prepared label operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 584,
+      "pooledNearestRankP50Ms": 0.189209,
+      "pooledNearestRankP95Ms": 0.260792
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "1 labels first set+measure+scene-publication",
+      "group": "prepared label operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 504,
+      "pooledNearestRankP50Ms": 0.524958,
+      "pooledNearestRankP95Ms": 0.964125
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "1 labels first same-value-set",
+      "group": "prepared label operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 592,
+      "pooledNearestRankP50Ms": 0.004792,
+      "pooledNearestRankP95Ms": 0.021958
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "1 labels first overwrite-before-scene-publication",
+      "group": "prepared label operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 536,
+      "pooledNearestRankP50Ms": 0.528208,
+      "pooledNearestRankP95Ms": 1.023917
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "100 labels first set",
+      "group": "prepared label operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 512,
+      "pooledNearestRankP50Ms": 0.154375,
+      "pooledNearestRankP95Ms": 0.252
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "100 labels first set+measure",
+      "group": "prepared label operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 512,
+      "pooledNearestRankP50Ms": 0.180458,
+      "pooledNearestRankP95Ms": 0.379209
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "100 labels first set+measure+scene-publication",
+      "group": "prepared label operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 448,
+      "pooledNearestRankP50Ms": 0.661333,
+      "pooledNearestRankP95Ms": 1.152583
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "100 labels first same-value-set",
+      "group": "prepared label operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 544,
+      "pooledNearestRankP50Ms": 0.005625,
+      "pooledNearestRankP95Ms": 0.021041
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "100 labels first overwrite-before-scene-publication",
+      "group": "prepared label operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 496,
+      "pooledNearestRankP50Ms": 0.6638749999999404,
+      "pooledNearestRankP95Ms": 1.622625
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "1000 labels first set",
+      "group": "prepared label operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 328,
+      "pooledNearestRankP50Ms": 0.162459,
+      "pooledNearestRankP95Ms": 0.28425
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "1000 labels first set+measure",
+      "group": "prepared label operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 312,
+      "pooledNearestRankP50Ms": 0.193167,
+      "pooledNearestRankP95Ms": 0.3690420000001192
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "1000 labels first set+measure+scene-publication",
+      "group": "prepared label operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 280,
+      "pooledNearestRankP50Ms": 2.007125,
+      "pooledNearestRankP95Ms": 2.541958
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "1000 labels first same-value-set",
+      "group": "prepared label operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 336,
+      "pooledNearestRankP50Ms": 0.00675,
+      "pooledNearestRankP95Ms": 0.026125
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "1000 labels first overwrite-before-scene-publication",
+      "group": "prepared label operations",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 264,
+      "pooledNearestRankP50Ms": 2.075625,
+      "pooledNearestRankP95Ms": 3.272084
+    },
+    {
+      "file": "request-arena.bench.ts",
+      "name": "write one paragraph and text mutation",
+      "group": "direct request-arena encoding",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 848,
+      "pooledNearestRankP50Ms": 0.016042,
+      "pooledNearestRankP95Ms": 0.045083
+    },
+    {
+      "file": "request-arena.bench.ts",
+      "name": "write 1000 paragraph-order mutations",
+      "group": "direct request-arena encoding",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 920,
+      "pooledNearestRankP50Ms": 0.017500000000059603,
+      "pooledNearestRankP95Ms": 0.062042
+    },
+    {
+      "file": "request-arena.bench.ts",
+      "name": "write 1000 paragraph and text mutations",
+      "group": "direct request-arena encoding",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 840,
+      "pooledNearestRankP50Ms": 0.08175,
+      "pooledNearestRankP95Ms": 0.182458
+    },
+    {
+      "file": "request-arena.bench.ts",
+      "name": "write 22k UTF16 text into Wasm request arena",
+      "group": "direct request-arena encoding",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 976,
+      "pooledNearestRankP50Ms": 0.043084,
+      "pooledNearestRankP95Ms": 0.118166
+    },
+    {
+      "file": "request-arena.bench.ts",
+      "name": "write 22k UTF16 text into owned array control",
+      "group": "direct request-arena encoding",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 944,
+      "pooledNearestRankP50Ms": 0.043041,
+      "pooledNearestRankP95Ms": 0.113625
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "unchanged setter preparation in one large paragraph with 8192 paint spans",
+      "group": "large retained assignments",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 304,
+      "pooledNearestRankP50Ms": 2.867792,
+      "pooledNearestRankP95Ms": 3.9111669999999403
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "unchanged end-to-end setter and publication with 8192 paint spans",
+      "group": "large retained assignments",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 272,
+      "pooledNearestRankP50Ms": 2.931208,
+      "pooledNearestRankP95Ms": 3.7894999999999404
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "scattered setter preparation in one large paragraph with 8192 paint spans",
+      "group": "large retained assignments",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 144,
+      "pooledNearestRankP50Ms": 13.62325,
+      "pooledNearestRankP95Ms": 15.337292
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "scattered end-to-end setter and publication with 8192 paint spans",
+      "group": "large retained assignments",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 136,
+      "pooledNearestRankP50Ms": 15.734666,
+      "pooledNearestRankP95Ms": 18.13733300000012
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "broad setter preparation in one large paragraph with 8192 paint spans",
+      "group": "large retained assignments",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 152,
+      "pooledNearestRankP50Ms": 13.052166,
+      "pooledNearestRankP95Ms": 16.137416
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "broad end-to-end setter and publication with 8192 paint spans",
+      "group": "large retained assignments",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 128,
+      "pooledNearestRankP50Ms": 16.99120799999988,
+      "pooledNearestRankP95Ms": 19.06725
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "monospaced unchanged setter preparation in one large paragraph with 8192 paint spans",
+      "group": "monospaced retained assignments",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 312,
+      "pooledNearestRankP50Ms": 2.828958,
+      "pooledNearestRankP95Ms": 6.524166
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "monospaced unchanged end-to-end setter and publication with 8192 paint spans",
+      "group": "monospaced retained assignments",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 336,
+      "pooledNearestRankP50Ms": 2.907208,
+      "pooledNearestRankP95Ms": 3.846083
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "monospaced scattered setter preparation in one large paragraph with 8192 paint spans",
+      "group": "monospaced retained assignments",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 136,
+      "pooledNearestRankP50Ms": 10.883125,
+      "pooledNearestRankP95Ms": 14.557375
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "monospaced scattered end-to-end setter and publication with 8192 paint spans",
+      "group": "monospaced retained assignments",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 144,
+      "pooledNearestRankP50Ms": 12.400458,
+      "pooledNearestRankP95Ms": 24.122583
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "monospaced broad setter preparation in one large paragraph with 8192 paint spans",
+      "group": "monospaced retained assignments",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 144,
+      "pooledNearestRankP50Ms": 13.813583,
+      "pooledNearestRankP95Ms": 16.344792
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "monospaced broad end-to-end setter and publication with 8192 paint spans",
+      "group": "monospaced retained assignments",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 128,
+      "pooledNearestRankP50Ms": 17.493833,
+      "pooledNearestRankP95Ms": 18.7535
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "shared-material scattered setter preparation in one large paragraph with 8192 paint spans",
+      "group": "shared material large retained assignments",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 128,
+      "pooledNearestRankP50Ms": 14.71675,
+      "pooledNearestRankP95Ms": 15.922791
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "shared-material scattered end-to-end setter and publication with 8192 paint spans",
+      "group": "shared material large retained assignments",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 128,
+      "pooledNearestRankP50Ms": 16.292625,
+      "pooledNearestRankP95Ms": 17.782666
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "split move and merge paint boundaries preparation only",
+      "group": "paint-only style partition assignments",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 336,
+      "pooledNearestRankP50Ms": 4.768542,
+      "pooledNearestRankP95Ms": 5.19275
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "split move and merge paint boundaries publication",
+      "group": "paint-only style partition assignments",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 272,
+      "pooledNearestRankP50Ms": 6.210166,
+      "pooledNearestRankP95Ms": 6.85712499999994
+    },
+    {
+      "file": "stress.bench.ts",
+      "name": "toggle one group containing 1000 retained labels",
+      "group": "1,000-label stress",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 288,
+      "pooledNearestRankP50Ms": 0.562,
+      "pooledNearestRankP95Ms": 0.929292
+    },
+    {
+      "file": "stress.bench.ts",
+      "name": "reorder 1000 unchanged retained labels",
+      "group": "1,000-label stress",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 248,
+      "pooledNearestRankP50Ms": 2.615459,
+      "pooledNearestRankP95Ms": 3.289833
+    },
+    {
+      "file": "stress.bench.ts",
+      "name": "reorder then edit one of 1000 retained labels",
+      "group": "1,000-label stress",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 208,
+      "pooledNearestRankP50Ms": 6.235375,
+      "pooledNearestRankP95Ms": 13.081167
+    },
+    {
+      "file": "stress.bench.ts",
+      "name": "measure 1000 unchanged retained labels",
+      "group": "1,000-label stress",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 312,
+      "pooledNearestRankP50Ms": 0.3372919999998808,
+      "pooledNearestRankP95Ms": 0.497584
+    },
+    {
+      "file": "stress.bench.ts",
+      "name": "borrow glyphs from 1000 steadily promoted retained labels",
+      "group": "1,000-label stress",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 248,
+      "pooledNearestRankP50Ms": 1.531959,
+      "pooledNearestRankP95Ms": 2.499375
+    },
+    {
+      "file": "stress.bench.ts",
+      "name": "edit and measure one of 1000 retained labels",
+      "group": "1,000-label stress",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 320,
+      "pooledNearestRankP50Ms": 0.210541,
+      "pooledNearestRankP95Ms": 0.734042
+    },
+    {
+      "file": "stress.bench.ts",
+      "name": "edit and sparsely borrow one of 1000 retained labels",
+      "group": "1,000-label stress",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 208,
+      "pooledNearestRankP50Ms": 0.249083,
+      "pooledNearestRankP95Ms": 0.468042
+    },
+    {
+      "file": "stress.bench.ts",
+      "name": "publish 1024 retained Text instances",
+      "group": "1,000-label stress",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 128,
+      "pooledNearestRankP50Ms": 19.54762499999988,
+      "pooledNearestRankP95Ms": 22.203416
+    },
+    {
+      "file": "typegpu-publication.bench.ts",
+      "name": "move 1000 retained TypeGPU labels",
+      "group": "TypeGPU adapter CPU publication",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 312,
+      "pooledNearestRankP50Ms": 0.390958,
+      "pooledNearestRankP95Ms": 0.875875
+    },
+    {
+      "file": "unsafe-line-breaks.bench.ts",
+      "name": "common-safe word-wrap reflow",
+      "group": "unsafe legal line boundaries",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 440,
+      "pooledNearestRankP50Ms": 0.308125,
+      "pooledNearestRankP95Ms": 0.757625
+    },
+    {
+      "file": "unsafe-line-breaks.bench.ts",
+      "name": "issue 216 reporter workaround",
+      "group": "unsafe legal line boundaries",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 544,
+      "pooledNearestRankP50Ms": 0.340292,
+      "pooledNearestRankP95Ms": 1.371542
+    },
+    {
+      "file": "unsafe-line-breaks.bench.ts",
+      "name": "issue 216 unsafe-boundary word-wrap reflow",
+      "group": "unsafe legal line boundaries",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 184,
+      "pooledNearestRankP50Ms": 0.392875,
+      "pooledNearestRankP95Ms": 0.748042
+    },
+    {
+      "file": "unsafe-line-breaks.bench.ts",
+      "name": "long reporter workaround paragraph reflow",
+      "group": "unsafe legal line boundaries",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 200,
+      "pooledNearestRankP50Ms": 0.868375,
+      "pooledNearestRankP95Ms": 1.570458
+    },
+    {
+      "file": "unsafe-line-breaks.bench.ts",
+      "name": "long unsafe-boundary paragraph reflow",
+      "group": "unsafe legal line boundaries",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 176,
+      "pooledNearestRankP50Ms": 0.983625,
+      "pooledNearestRankP95Ms": 1.746708
+    },
+    {
+      "file": "unsafe-line-breaks.bench.ts",
+      "name": "long unsafe-boundary paragraph text edit",
+      "group": "unsafe legal line boundaries",
+      "args": {},
+      "sampleKind": "yield",
+      "sampleCount": 336,
+      "pooledNearestRankP50Ms": 2.099708,
+      "pooledNearestRankP95Ms": 10.1915
+    }
+  ]
+}

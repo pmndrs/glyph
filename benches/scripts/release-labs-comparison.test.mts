@@ -47,6 +47,7 @@ function savedFixture() {
     suite: 'full',
     blocks: 8,
     samplingPolicy: 'adaptive' as const,
+    warmupPolicy: 'conditional' as const,
   };
   const manifest = {
     ...expected,
@@ -106,6 +107,11 @@ test('accepts saved timings only for the exact package and matching benchmark en
     () => validateSavedPackageLabs({ ...manifest, samplingPolicy: undefined }, result, expected),
     /does not match/u,
   );
+  assert.doesNotThrow(() => validateSavedPackageLabs({ ...manifest, warmupPolicy: undefined }, result, expected));
+  assert.throws(
+    () => validateSavedPackageLabs({ ...manifest, warmupPolicy: 'fixed-20' }, result, expected),
+    /does not match/u,
+  );
   assert.throws(
     () => validateSavedPackageLabs({ ...manifest, profiling: { profileTag: '@target' } }, result, expected),
     /Diagnostic profiling results cannot be reused/u,
@@ -124,12 +130,52 @@ test('fixed-policy saved reuse requires its digest even when an untracked depend
       {
         file: 'fixture.bench.ts',
         benchmarks: [
-          { runs: [{ name: 'fixture', stats: { plan: { batch: false }, blocks: { medians: Array(8).fill(100) } } }] },
+          {
+            runs: [
+              {
+                name: 'fixture',
+                stats: {
+                  plan: { batch: false, warmup_calls: 21 },
+                  blocks: { medians: Array(8).fill(100), warmupCalls: Array(8).fill(21) },
+                },
+              },
+            ],
+          },
         ],
       },
     ],
   };
   assert.doesNotThrow(() => validateSavedPackageLabs(fixedManifest, fixedResult, fixedExpected));
+  const warmedExpected = { ...fixedExpected, warmupPolicy: 'fixed-20' as const };
+  const warmedManifest = { ...fixedManifest, warmupPolicy: 'fixed-20' as const };
+  assert.throws(() => validateSavedPackageLabs(fixedManifest, fixedResult, warmedExpected), /does not match/u);
+  assert.throws(() => validateSavedPackageLabs(warmedManifest, fixedResult, fixedExpected), /does not match/u);
+  assert.doesNotThrow(() => validateSavedPackageLabs(warmedManifest, fixedResult, warmedExpected));
+  const incompleteWarmup = {
+    ...fixedResult,
+    files: [
+      {
+        file: 'fixture.bench.ts',
+        benchmarks: [
+          {
+            runs: [
+              {
+                name: 'fixture',
+                stats: {
+                  plan: { batch: false, warmup_calls: 21 },
+                  blocks: { medians: Array(8).fill(100), warmupCalls: [21, 21, 21, 21, 21, 21, 20, 21] },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  assert.throws(
+    () => validateSavedPackageLabs(warmedManifest, incompleteWarmup, warmedExpected),
+    /was not applied in every block/u,
+  );
   const previousDirectory = process.cwd();
   const directory = mkdtempSync(join(tmpdir(), 'glyph-labs-fixed-reuse-'));
   try {

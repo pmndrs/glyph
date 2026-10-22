@@ -1,7 +1,7 @@
 /* @workflow {
   "name": "benchmark:labs-package",
   "summary": "Benchmark common installed-package workflows by default, select a focused/full pmndrs/labs suite, or capture a tagged diagnostic CPU profile.",
-  "requirements": "Network access for registry specs, or one or two packed @pmndrs/glyph .tgz artifacts. Never builds workspace source. --saved-candidate <report-directory> reuses an exact artifact's saved candidate instead of timing it again, with matching environment and sampling checks. Accepts --suite smoke|layout|measure|glyphs|publication|spans|batch|style|reflow|stress|cold|edit|assignment|edit-sized|multi-owner|bulk-1024-profile|full. --sampling adaptive|single-call defaults to adaptive; use single-call for every arm of a fixed-policy comparison. Full baselines require all 145 candidate identities unless --baseline-availability published-no-outlines explicitly permits the two documented outline omissions. Optional candidate-only diagnostic profiling requires both --profile-tag <@tag> and --cpu-profile-output <directory>; it selects that Labs tag and cannot be combined with --baseline or --saved-candidate. Profiled timings are diagnostic and are not a normal performance comparison.",
+  "requirements": "Network access for registry specs, or one or two packed @pmndrs/glyph .tgz artifacts. Never builds workspace source. --saved-candidate <report-directory> reuses an exact artifact's saved candidate instead of timing it again, with matching environment and sampling checks. Accepts --suite smoke|layout|measure|glyphs|publication|spans|batch|style|reflow|stress|cold|edit|assignment|edit-sized|multi-owner|bulk-1024-profile|full. --sampling adaptive|single-call defaults to adaptive; --warmup conditional|fixed-20 defaults to conditional. Use --sampling single-call --warmup fixed-20 uniformly for a fixed-warmup comparison. Full baselines require all 145 candidate identities unless --baseline-availability published-no-outlines explicitly permits the two documented outline omissions. Optional candidate-only diagnostic profiling requires both --profile-tag <@tag> and --cpu-profile-output <directory>; it selects that Labs tag and cannot be combined with --baseline or --saved-candidate. Profiled timings are diagnostic and are not a normal performance comparison.",
   "writes": "Ignored Labs results, an artifact manifest, and a Markdown summary.md (also appended to $GITHUB_STEP_SUMMARY when set) under --output (default .cache/labs-package); optional V8 CPU profiles are written under --cpu-profile-output."
 } */
 import { createHash } from 'node:crypto';
@@ -15,11 +15,13 @@ import {
   acceptLabsResult,
   assertFullLabsCoverage,
   assertLabsSamplingPolicy,
+  assertLabsWarmupPolicy,
   labsRunNames,
   labsRunMedianTimes,
   type LabsResultRole,
   type LabsBaselineAvailability,
   type LabsSamplingPolicy,
+  type LabsWarmupPolicy,
   readLabsResult,
   timingModeDifferences,
   timingModeMismatches,
@@ -39,6 +41,7 @@ interface Options {
   readonly suite: PackageLabsSuite;
   readonly savedCandidate?: string;
   readonly samplingPolicy: LabsSamplingPolicy;
+  readonly warmupPolicy: LabsWarmupPolicy;
   readonly baselineAvailability: LabsBaselineAvailability;
 }
 
@@ -82,6 +85,7 @@ try {
       suite: options.suite,
       blocks: options.blocks,
       samplingPolicy: options.samplingPolicy,
+      warmupPolicy: options.warmupPolicy,
     });
     await mkdir(labsResults, { recursive: true });
     await copyFile(resolve(savedCandidate, 'candidate.json'), resolve(labsResults, `${candidateRunName}.json`));
@@ -114,6 +118,7 @@ try {
     );
   }
   assertLabsSamplingPolicy(candidateRun.result, options.samplingPolicy, options.blocks);
+  assertLabsWarmupPolicy(candidateRun.result, options.warmupPolicy, options.blocks);
   if (options.suite === 'full') {
     assertFullLabsCoverage(candidateRun.result, baselineRun?.result, options.baselineAvailability);
   }
@@ -150,6 +155,7 @@ try {
         blocks: options.blocks,
         suite: options.suite,
         samplingPolicy: options.samplingPolicy,
+        warmupPolicy: options.warmupPolicy,
         baselineAvailability: options.baselineAvailability,
         baseline: baseline === undefined ? undefined : artifactIdentity(baseline),
         candidate: artifactIdentity(candidate),
@@ -232,6 +238,13 @@ async function parseOptions(argv: readonly string[]): Promise<Options> {
   if (samplingPolicy !== 'adaptive' && samplingPolicy !== 'single-call') {
     throw new Error('--sampling must be adaptive or single-call');
   }
+  const warmupPolicy = values.get('warmup') ?? 'conditional';
+  if (warmupPolicy !== 'conditional' && warmupPolicy !== 'fixed-20') {
+    throw new Error('--warmup must be conditional or fixed-20');
+  }
+  if (warmupPolicy === 'fixed-20' && samplingPolicy !== 'single-call') {
+    throw new Error('--warmup fixed-20 requires --sampling single-call');
+  }
   const baselineAvailability = values.get('baseline-availability') ?? 'complete';
   if (baselineAvailability !== 'complete' && baselineAvailability !== 'published-no-outlines') {
     throw new Error('--baseline-availability must be complete or published-no-outlines');
@@ -267,6 +280,7 @@ async function parseOptions(argv: readonly string[]): Promise<Options> {
     output: values.get('output') ?? '.cache/labs-package',
     suite,
     samplingPolicy,
+    warmupPolicy,
     baselineAvailability,
     ...(profileTag === undefined ? {} : { profileTag }),
     ...(cpuProfileOutput === undefined ? {} : { cpuProfileOutput }),
@@ -370,6 +384,7 @@ async function runLabs(
         GLYPH_LABS_ARTIFACT_ROLE: role,
         GLYPH_LABS_CPU_PROFILE_OUTPUT: cpuProfileOutput,
         GLYPH_LABS_SAMPLING_POLICY: options.samplingPolicy,
+        GLYPH_LABS_WARMUP_POLICY: options.warmupPolicy,
       },
     );
   } catch (error) {
@@ -377,6 +392,7 @@ async function runLabs(
   }
   const result = await readLabsResult(resultPath);
   assertLabsSamplingPolicy(result, options.samplingPolicy, blocks);
+  assertLabsWarmupPolicy(result, options.warmupPolicy, blocks);
   return { notComparable: acceptLabsResult(result, role), result };
 }
 

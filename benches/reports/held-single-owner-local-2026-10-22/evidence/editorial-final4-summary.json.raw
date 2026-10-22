@@ -1,0 +1,559 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-10-22T18:58:33Z",
+  "archivePins": {
+    "candidate": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+    "coldMain": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20"
+  },
+  "projectionOracle": "passed in all four completed capture receipts: each capture queried scene proof after scene-only PNG and asserted the current projected flow matches committed flow",
+  "receipts": {
+    "webgpu-bitmap-tsl-editorial": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final4/main/delivery/webgpu-bitmap-tsl-editorial.json",
+      "sha256": "e5a31e286f6faa39f4986f7699942ba5f6f0ea76fb82954da3952a21ba7a64ed",
+      "bytes": 106842
+    },
+    "webgl2-bitmap-tsl-editorial": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final4/main/delivery/webgl2-bitmap-tsl-editorial.json",
+      "sha256": "b7c12fe04c986d8e9a86f6b6c7ec5069067d0d04c1c55008ad8484da70a0e2e5",
+      "bytes": 106842
+    }
+  },
+  "comparisons": {
+    "webgpu.json": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-comparison-final4/webgpu.json",
+      "sha256": "bb41690a619995939b95e4cb2dfecefbe43ac68e86e5e9e8f370cfeb991d670a",
+      "bytes": 855
+    },
+    "webgpu-corrected.json": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-comparison-final4/webgpu-corrected.json",
+      "sha256": "cb7b8e1c06f590da6e132fffbe381cfb7f7bc23bf51a228a22245ea7b9f031c3",
+      "bytes": 3068
+    },
+    "webgl2.json": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-comparison-final4/webgl2.json",
+      "sha256": "942228999d09caf0f2420e81165ed8441cbd77f3307d19dc46970ec21effcb6c",
+      "bytes": 3068
+    }
+  },
+  "runReceipts": {
+    "boundary-20261022-editorial-pause-candidate-webgpu": {
+      "argv": [
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "env",
+        "PORTLESS_STATE_DIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/portless-dense-browser-candidate",
+        "PORTLESS_PORT=1357",
+        "PORTLESS_HTTPS=0",
+        "PORTLESS_SYNC_HOSTS=0",
+        "GLYPH_RETAINED_UPLOAD_PACKAGE_ROOT=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/presentation-consumers/candidate/node_modules/@pmndrs/glyph",
+        "PRESENTATION_ARCHIVE_ARTIFACT=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/pmndrs-glyph-0.1.0.tgz",
+        "PRESENTATION_ARCHIVE_SHA256=06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+        "PRESENTATION_DELIVERY_OUTPUT_DIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/editorial-delivery-final4",
+        "PRESENTATION_EDITORIAL_PIXEL_DIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/editorial-pixels-final4",
+        "PRESENTATION_EDITORIAL_PIXEL_ROLE=candidate",
+        "/Users/mini/.local/share/mise/installs/node/24.18.0/bin/node",
+        "/Users/mini/.npm/_npx/6a98873df99949c7/node_modules/portless/dist/cli.js",
+        "glyph-editorial-candidate-final4",
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "pnpm",
+        "scripts",
+        "run",
+        "benchmark:presentation",
+        "--",
+        "--workload",
+        "editorial",
+        "--technique",
+        "bitmap",
+        "--backend",
+        "webgpu"
+      ],
+      "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+      "started": "2026-10-22T18:50:41.789359+00:00",
+      "finished": "2026-10-22T18:50:56.428925+00:00",
+      "exit": 0,
+      "sha256": {
+        "stdout.log": "a86a4cc1388b73bc384a07318b4acaf77bb1800771ceff8c3be2267b01b38466",
+        "stderr.log": "74facabdb1bd340096ea688650192cbed1c158e7c6ea73127683907429bd2309"
+      }
+    },
+    "boundary-20261022-editorial-pause-main-webgpu": {
+      "argv": [
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "env",
+        "PORTLESS_STATE_DIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/portless-dense-browser-candidate",
+        "PORTLESS_PORT=1357",
+        "PORTLESS_HTTPS=0",
+        "PORTLESS_SYNC_HOSTS=0",
+        "GLYPH_RETAINED_UPLOAD_PACKAGE_ROOT=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/presentation-consumers/main-4e25a96a/node_modules/@pmndrs/glyph",
+        "PRESENTATION_ARCHIVE_ARTIFACT=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+        "PRESENTATION_ARCHIVE_SHA256=bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+        "PRESENTATION_DELIVERY_OUTPUT_DIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final4/main/delivery",
+        "PRESENTATION_EDITORIAL_PIXEL_DIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final4/main/pixels",
+        "PRESENTATION_EDITORIAL_PIXEL_ROLE=cold-main",
+        "/Users/mini/.local/share/mise/installs/node/24.18.0/bin/node",
+        "/Users/mini/.npm/_npx/6a98873df99949c7/node_modules/portless/dist/cli.js",
+        "glyph-editorial-main-webgpu-final4",
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "pnpm",
+        "scripts",
+        "run",
+        "benchmark:presentation",
+        "--",
+        "--workload",
+        "editorial",
+        "--technique",
+        "bitmap",
+        "--backend",
+        "webgpu"
+      ],
+      "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+      "started": "2026-10-22T18:51:07.292284+00:00",
+      "finished": "2026-10-22T18:51:21.119663+00:00",
+      "exit": 0,
+      "sha256": {
+        "stdout.log": "62bec419b46d87da0ad2e60d38c1a5a809d7e70a63b900740096a21062285374",
+        "stderr.log": "74facabdb1bd340096ea688650192cbed1c158e7c6ea73127683907429bd2309"
+      }
+    },
+    "boundary-20261022-editorial-pause-candidate-webgl2": {
+      "argv": [
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "env",
+        "PORTLESS_STATE_DIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/portless-dense-browser-candidate",
+        "PORTLESS_PORT=1357",
+        "PORTLESS_HTTPS=0",
+        "PORTLESS_SYNC_HOSTS=0",
+        "GLYPH_RETAINED_UPLOAD_PACKAGE_ROOT=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/presentation-consumers/candidate/node_modules/@pmndrs/glyph",
+        "PRESENTATION_ARCHIVE_ARTIFACT=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/pmndrs-glyph-0.1.0.tgz",
+        "PRESENTATION_ARCHIVE_SHA256=06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+        "PRESENTATION_DELIVERY_OUTPUT_DIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/editorial-delivery-final4",
+        "PRESENTATION_EDITORIAL_PIXEL_DIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/editorial-pixels-final4",
+        "PRESENTATION_EDITORIAL_PIXEL_ROLE=candidate",
+        "/Users/mini/.local/share/mise/installs/node/24.18.0/bin/node",
+        "/Users/mini/.npm/_npx/6a98873df99949c7/node_modules/portless/dist/cli.js",
+        "glyph-editorial-candidate-webgl2-final4",
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "pnpm",
+        "scripts",
+        "run",
+        "benchmark:presentation",
+        "--",
+        "--workload",
+        "editorial",
+        "--technique",
+        "bitmap",
+        "--backend",
+        "webgl2"
+      ],
+      "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+      "started": "2026-10-22T18:54:27.131345+00:00",
+      "finished": "2026-10-22T18:54:40.796899+00:00",
+      "exit": 0,
+      "sha256": {
+        "stdout.log": "61f0846ed9ace1353e0759375a67df6d65edfaa7b0d445d3690c12a67019264f",
+        "stderr.log": "92dc460f45555b6c4510fb0254d97568c74011234f5412e7b95bb964546ff878"
+      }
+    },
+    "boundary-20261022-editorial-pause-main-webgl2": {
+      "argv": [
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "env",
+        "PORTLESS_STATE_DIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/portless-dense-browser-candidate",
+        "PORTLESS_PORT=1357",
+        "PORTLESS_HTTPS=0",
+        "PORTLESS_SYNC_HOSTS=0",
+        "GLYPH_RETAINED_UPLOAD_PACKAGE_ROOT=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/presentation-consumers/main-4e25a96a/node_modules/@pmndrs/glyph",
+        "PRESENTATION_ARCHIVE_ARTIFACT=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+        "PRESENTATION_ARCHIVE_SHA256=bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+        "PRESENTATION_DELIVERY_OUTPUT_DIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final4/main/delivery",
+        "PRESENTATION_EDITORIAL_PIXEL_DIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final4/main/pixels",
+        "PRESENTATION_EDITORIAL_PIXEL_ROLE=cold-main",
+        "/Users/mini/.local/share/mise/installs/node/24.18.0/bin/node",
+        "/Users/mini/.npm/_npx/6a98873df99949c7/node_modules/portless/dist/cli.js",
+        "glyph-editorial-main-webgl2-final4",
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "pnpm",
+        "scripts",
+        "run",
+        "benchmark:presentation",
+        "--",
+        "--workload",
+        "editorial",
+        "--technique",
+        "bitmap",
+        "--backend",
+        "webgl2"
+      ],
+      "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+      "started": "2026-10-22T18:54:47.559491+00:00",
+      "finished": "2026-10-22T18:55:00.815415+00:00",
+      "exit": 0,
+      "sha256": {
+        "stdout.log": "a533543ba7f576575301b023038b83c3782471aae141abeaf10d7afe38ab0c21",
+        "stderr.log": "92dc460f45555b6c4510fb0254d97568c74011234f5412e7b95bb964546ff878"
+      }
+    },
+    "boundary-20261022-editorial-pause-compare-webgpu": {
+      "argv": [
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "pnpm",
+        "scripts",
+        "run",
+        "benchmark:editorial-hero-pixels",
+        "--",
+        "--candidate",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/editorial-delivery-final4/webgpu-bitmap-tsl-editorial.json",
+        "--reference",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final4/main/delivery/webgpu-bitmap-tsl-editorial.json",
+        "--expected-candidate-sha256",
+        "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+        "--expected-reference-sha256",
+        "bbb3375c08fb3db8196ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+        "--output",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-comparison-final4/webgpu.json"
+      ],
+      "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+      "started": "2026-10-22T18:51:33.412603+00:00",
+      "finished": "2026-10-22T18:51:34.131742+00:00",
+      "exit": 1,
+      "sha256": {
+        "stdout.log": "a87a64c42b25f33337953188fa8012600ac464c204992a3eee4fb5d827ed11fd",
+        "stderr.log": "7e9aeede0dba6c908e2e9b01200e8f700ee6b24a367e88db68081d739daefc4e"
+      }
+    },
+    "boundary-20261022-editorial-pause-compare-webgpu-corrected": {
+      "argv": [
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "pnpm",
+        "scripts",
+        "run",
+        "benchmark:editorial-hero-pixels",
+        "--",
+        "--candidate",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/editorial-delivery-final4/webgpu-bitmap-tsl-editorial.json",
+        "--reference",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final4/main/delivery/webgpu-bitmap-tsl-editorial.json",
+        "--expected-candidate-sha256",
+        "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+        "--expected-reference-sha256",
+        "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+        "--output",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-comparison-final4/webgpu-corrected.json"
+      ],
+      "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+      "started": "2026-10-22T18:53:33.482423+00:00",
+      "finished": "2026-10-22T18:53:34.873808+00:00",
+      "exit": 1,
+      "sha256": {
+        "stdout.log": "b290378c7bd02c41a07aa10871a4dd859a02e0e4376c9e03aea7b3ff52bb442f",
+        "stderr.log": "8de05ac138bca096f748fd5a04367f91a34621632530f948806be39ad6b96b27"
+      }
+    },
+    "boundary-20261022-editorial-pause-compare-webgl2": {
+      "argv": [
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "pnpm",
+        "scripts",
+        "run",
+        "benchmark:editorial-hero-pixels",
+        "--",
+        "--candidate",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/editorial-delivery-final4/webgl2-bitmap-tsl-editorial.json",
+        "--reference",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final4/main/delivery/webgl2-bitmap-tsl-editorial.json",
+        "--expected-candidate-sha256",
+        "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+        "--expected-reference-sha256",
+        "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+        "--output",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-comparison-final4/webgl2.json"
+      ],
+      "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+      "started": "2026-10-22T18:55:06.934643+00:00",
+      "finished": "2026-10-22T18:55:07.994527+00:00",
+      "exit": 1,
+      "sha256": {
+        "stdout.log": "6254293b9d44dd2937209fcc58294c1f178322b3afc2e8e3537a1763fe160d3c",
+        "stderr.log": "945926c311b859441c85bd1f67543e1d0993c67447297d977d230c3fb4af3c2a"
+      }
+    }
+  },
+  "results": {
+    "webgpu": {
+      "schemaVersion": 1,
+      "status": "failed",
+      "candidateReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/editorial-delivery-final4/webgpu-bitmap-tsl-editorial.json",
+      "referenceReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final4/main/delivery/webgpu-bitmap-tsl-editorial.json",
+      "expectedCandidateSha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+      "expectedReferenceSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "tolerance": {
+        "maximumDifferentPixels": 0,
+        "basis": "exact fixed-state comparison; no nonzero tolerance established"
+      },
+      "semanticComparison": {
+        "configurationDiffers": false,
+        "cameraDiffers": false,
+        "obstacleDiffers": false,
+        "texts": [
+          {
+            "role": "primary",
+            "authoredDiffers": false,
+            "flowDiffers": false,
+            "worldTransformsDiffer": false,
+            "aggregateMeasurementDiffers": true,
+            "aggregateGlyphCount": {
+              "candidate": 257,
+              "coldMain": 257
+            },
+            "inspectedMeasurementDiffers": false,
+            "inspectedGlyphCount": {
+              "candidate": 257,
+              "coldMain": 257
+            },
+            "lineRowsDiffer": 0,
+            "glyphGeometryRowsDiffer": 57,
+            "glyphIdentityRowsDiffer": 257
+          },
+          {
+            "role": "secondary",
+            "authoredDiffers": false,
+            "flowDiffers": false,
+            "worldTransformsDiffer": false,
+            "aggregateMeasurementDiffers": true,
+            "aggregateGlyphCount": {
+              "candidate": 1443,
+              "coldMain": 1443
+            },
+            "inspectedMeasurementDiffers": false,
+            "inspectedGlyphCount": {
+              "candidate": 1443,
+              "coldMain": 1443
+            },
+            "lineRowsDiffer": 0,
+            "glyphGeometryRowsDiffer": 1038,
+            "glyphIdentityRowsDiffer": 1443
+          }
+        ]
+      },
+      "candidate": {
+        "archiveSha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+        "capture": {
+          "width": 1280,
+          "height": 720,
+          "rgbaSha256": "49ceab6903d2d5b101686c3a736d95aecfadcd40735085673c349dd4fb8b769f",
+          "foregroundPixels": 75964,
+          "foregroundBounds": [
+            226,
+            144,
+            1053,
+            580
+          ]
+        }
+      },
+      "reference": {
+        "archiveSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+        "capture": {
+          "width": 1280,
+          "height": 720,
+          "rgbaSha256": "4933d6533989a9e8d587c79b5c00fa1e2e294fddeabdd29c5d5a7a7df6e9e8b7",
+          "foregroundPixels": 75957,
+          "foregroundBounds": [
+            226,
+            144,
+            1053,
+            580
+          ]
+        }
+      },
+      "diff": {
+        "differentPixels": 842,
+        "differentChannels": 2393,
+        "maximumChannelDelta": 1,
+        "meanChannelDelta": 0.0006491427951388889,
+        "differenceBounds": [
+          285,
+          282,
+          1053,
+          438
+        ]
+      },
+      "error": "Error: Editorial hero differs at 842 pixels; exact tolerance is zero"
+    },
+    "webgl2": {
+      "schemaVersion": 1,
+      "status": "failed",
+      "candidateReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/editorial-delivery-final4/webgl2-bitmap-tsl-editorial.json",
+      "referenceReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final4/main/delivery/webgl2-bitmap-tsl-editorial.json",
+      "expectedCandidateSha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+      "expectedReferenceSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "tolerance": {
+        "maximumDifferentPixels": 0,
+        "basis": "exact fixed-state comparison; no nonzero tolerance established"
+      },
+      "semanticComparison": {
+        "configurationDiffers": false,
+        "cameraDiffers": false,
+        "obstacleDiffers": false,
+        "texts": [
+          {
+            "role": "primary",
+            "authoredDiffers": false,
+            "flowDiffers": false,
+            "worldTransformsDiffer": false,
+            "aggregateMeasurementDiffers": true,
+            "aggregateGlyphCount": {
+              "candidate": 257,
+              "coldMain": 257
+            },
+            "inspectedMeasurementDiffers": false,
+            "inspectedGlyphCount": {
+              "candidate": 257,
+              "coldMain": 257
+            },
+            "lineRowsDiffer": 0,
+            "glyphGeometryRowsDiffer": 57,
+            "glyphIdentityRowsDiffer": 257
+          },
+          {
+            "role": "secondary",
+            "authoredDiffers": false,
+            "flowDiffers": false,
+            "worldTransformsDiffer": false,
+            "aggregateMeasurementDiffers": true,
+            "aggregateGlyphCount": {
+              "candidate": 1443,
+              "coldMain": 1443
+            },
+            "inspectedMeasurementDiffers": false,
+            "inspectedGlyphCount": {
+              "candidate": 1443,
+              "coldMain": 1443
+            },
+            "lineRowsDiffer": 0,
+            "glyphGeometryRowsDiffer": 1038,
+            "glyphIdentityRowsDiffer": 1443
+          }
+        ]
+      },
+      "candidate": {
+        "archiveSha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+        "capture": {
+          "width": 1280,
+          "height": 720,
+          "rgbaSha256": "e8482e2f7c350c62ba3ee9c0892a3a8d2c7b499498d57066f818657ec9cdc07a",
+          "foregroundPixels": 75964,
+          "foregroundBounds": [
+            226,
+            144,
+            1053,
+            580
+          ]
+        }
+      },
+      "reference": {
+        "archiveSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+        "capture": {
+          "width": 1280,
+          "height": 720,
+          "rgbaSha256": "9cf99476e32f6eda5c85c0258fa37fb6265fd3193ec2018be04fe6c477f326cb",
+          "foregroundPixels": 75957,
+          "foregroundBounds": [
+            226,
+            144,
+            1053,
+            580
+          ]
+        }
+      },
+      "diff": {
+        "differentPixels": 842,
+        "differentChannels": 2393,
+        "maximumChannelDelta": 1,
+        "meanChannelDelta": 0.0006491427951388889,
+        "differenceBounds": [
+          285,
+          282,
+          1053,
+          438
+        ]
+      },
+      "error": "Error: Editorial hero differs at 842 pixels; exact tolerance is zero"
+    },
+    "geometryFieldwiseMaxAbsFromSavedSemanticArtifacts": {
+      "bothBackends": true,
+      "identityFieldsExcluded": [
+        "stableId",
+        "fontHandle",
+        "fontSlot"
+      ],
+      "primary": {
+        "glyphRows": 257,
+        "x": {
+          "differentRows": 57,
+          "maxAbs": 6.103515625e-05
+        },
+        "inkX": {
+          "differentRows": 57,
+          "maxAbs": 6.103515625e-05
+        },
+        "allOtherGeometryFields": 0
+      },
+      "secondary": {
+        "glyphRows": 1443,
+        "x": {
+          "differentRows": 1038,
+          "maxAbs": 0.0005950927734375
+        },
+        "inkX": {
+          "differentRows": 1037,
+          "maxAbs": 0.0005950927734375
+        },
+        "allOtherGeometryFields": 0
+      },
+      "lineRowsDiffer": 0,
+      "flowDiffers": false,
+      "inspectedMeasurementsDiffer": false,
+      "aggregateMeasurementsDiffer": true,
+      "glyphCounts": {
+        "primary": [
+          257,
+          257
+        ],
+        "secondary": [
+          1443,
+          1443
+        ]
+      },
+      "glyphGeometryRowsDiffer": {
+        "primary": 57,
+        "secondary": 1038
+      },
+      "glyphIdentityRowsDiffer": {
+        "primary": 257,
+        "secondary": 1443
+      }
+    }
+  },
+  "note": "The first WebGPU comparison used a mistyped main digest; its failed receipt is preserved separately. Corrected comparison used the exact archive SHA read from the authenticated capture receipt. Both backend comparisons are exact-zero failures with max channel delta 1."
+}

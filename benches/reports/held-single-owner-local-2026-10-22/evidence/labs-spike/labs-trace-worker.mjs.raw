@@ -1,0 +1,267 @@
+import { c as runTrialAt, l as measure, n as getBenchRegistry, s as run } from "./src-DNyOXr2d.mjs";
+import { i as median, s as relativeSpread } from "./stats-DyCSLnVh.mjs";
+import { execFileSync } from "node:child_process";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { PerformanceObserver, performance } from "node:perf_hooks";
+import { tmpdir } from "node:os";
+//#region src/bench/worker.ts
+/** Per-block budget, sample floor, and explicit sampling policy forwarded by the CLI. */
+function parseTuneEnv() {
+	const blockTime = Number(process.env.LABS_BLOCK_TIME);
+	const minSamples = Number(process.env.LABS_MIN_SAMPLES);
+	const samplingPolicy = process.env.LABS_SAMPLING_POLICY ?? "adaptive";
+	if (samplingPolicy !== "adaptive" && samplingPolicy !== "single-call") throw new TypeError(`Invalid Labs samplingPolicy: ${samplingPolicy}`);
+	return {
+		...Number.isFinite(blockTime) && blockTime > 0 ? { min_cpu_time: blockTime } : {},
+		...Number.isFinite(minSamples) && minSamples > 0 ? { min_samples: minSamples } : {},
+		...samplingPolicy === "single-call" ? { batch: false } : {}
+	};
+}
+const file = process.env.LABS_BENCH_FILE;
+if (!file) {
+	console.error("LABS_BENCH_FILE env var not set");
+	process.exit(1);
+}
+/** Fresh processes per bench. Verdicts need replication, so never fewer than two. */
+function blockCount() {
+	const n = Number(process.env.LABS_BLOCKS);
+	return Number.isFinite(n) && n >= 2 ? Math.floor(n) : 2;
+}
+async function calibrateFreq() {
+	return 1 / (await measure(() => {}, { batch_unroll: 1 })).avg;
+}
+/** Short software calibration probe recording the machine state entering a block. */
+async function probeCalibrationRate() {
+	return 1 / (await measure(() => {}, {
+		batch_unroll: 1,
+		min_cpu_time: 5e7
+	})).avg;
+}
+/** Serializes Error instances the same way the `json` format does. */
+function errorReplacer(_, v) {
+	if (!(v instanceof Error)) return v;
+	return {
+		name: v.name,
+		message: String(v.message),
+		stack: v.stack
+	};
+}
+/**
+* Child mode: measure a single trial in this fresh process and write it out.
+* Skips calibration and rendering, the parent worker owns both. Records a
+* calibration rate for the clock gate and replays the pilot's plan when given.
+*/
+async function childMain(index) {
+	let trace;
+	try {
+	trace = makeSpikeTrace();
+	await import(file);
+	if (getBenchRegistry()[index]?.alias !== 'rewrite 512 labels in one group') throw new Error('Benchmark registry identity changed');
+	const calibrationRate = await probeCalibrationRate();
+	globalThis.__labsSpike = trace;
+	const plans = process.env.LABS_BLOCK_PLANS ? JSON.parse(process.env.LABS_BLOCK_PLANS) : void 0;
+	const trial = await runTrialAt(index, parseTuneEnv(), plans);
+	await new Promise((resolve) => setImmediate(resolve));
+	trace.finish(trial.runs[0]?.stats?.samples);
+	writeFileSync(process.env.LABS_RESULT_FILE, JSON.stringify({
+		trial,
+		trace,
+		calibrationRate
+	}, errorReplacer));
+	} catch (error) {
+		await new Promise((resolve) => setImmediate(resolve));
+		if (trace) { trace.drain(); trace.faults.push({ stage: 'childMain', message: String(error), stack: error?.stack }); }
+		writeFileSync(process.env.LABS_RESULT_FILE, JSON.stringify({ failure: error, trace }, errorReplacer));
+		throw error;
+	}
+}
+function makeSpikeTrace() {
+  const arm = process.env.LABS_SPIKE_ARM;
+  if (arm !== 'stock' && arm !== 'warmed') throw new Error('Unknown diagnostic arm');
+  const trace = { arm, block: Number(process.env.LABS_SPIKE_BLOCK), pid: process.pid,
+    timeOrigin: performance.timeOrigin, clockAlignment: 'Labs now() = performance.now() * 1e6 ns; callback and GC event timestamps are performance.now() ms in the same child', processCpuScope: 'process-wide; may include V8 background threads', monotonicProcessStartEstimateNs: (process.hrtime.bigint() - BigInt(Math.round(process.uptime() * 1e9))).toString(),
+    input: { plan: JSON.parse(process.env.LABS_BLOCK_PLANS), gc: 'Labs default true', samplingPolicy: process.env.LABS_SAMPLING_POLICY, nodeExecArgv: process.execArgv, nodeOptions: process.env.NODE_OPTIONS ?? null, archiveSha256: process.env.LABS_SPIKE_ARCHIVE_SHA256, originalSourceSha256: process.env.LABS_SPIKE_ORIGINAL_SOURCE_SHA256, originalWorkerSha256: process.env.LABS_SPIKE_ORIGINAL_WORKER_SHA256, traceSourceSha256: process.env.LABS_SPIKE_TRACE_SOURCE_SHA256, traceWorkerSha256: process.env.LABS_SPIKE_TRACE_WORKER_SHA256, benchmarkCopySha256: process.env.LABS_SPIKE_BENCH_COPY_SHA256 },
+    active: false, calls: [], samples: [], gcEvents: [], forcedGcSpans: [], faults: [],
+    gcMarker(index, phase, edge) { trace.forcedGcSpans.push({ index, phase, edge, at: performance.now() }); },
+    drain() { recordGc(observer.takeRecords()); observer.disconnect(); },
+    wrap(fn) { trace.active = true; return (...args) => {
+      const index = trace.calls.length;
+      const start = performance.now();
+      const cpu = process.cpuUsage();
+      const resources = process.resourceUsage();
+      let outcome = 'returned';
+      try { return fn(...args); }
+      catch (error) { outcome = 'threw'; trace.faults.push({ index, message: String(error) }); throw error; }
+      finally {
+        const end = performance.now();
+        const delta = process.cpuUsage(cpu);
+        const after = process.resourceUsage();
+        trace.calls.push({ index, start, end, wallMs: end - start,
+          processCpuUs: delta.user + delta.system,
+          voluntaryContextSwitches: after.voluntaryContextSwitches - resources.voluntaryContextSwitches,
+          involuntaryContextSwitches: after.involuntaryContextSwitches - resources.involuntaryContextSwitches,
+          outcome });
+      }
+    }; },
+    sample(index, t0, t1, diff) { trace.samples.push({ index, callbackIndex: trace.calls.length - 1, t0, t1, diff, survived: false }); },
+    finish(retained) {
+      trace.drain();
+      trace.warmupCallCount = trace.calls.length - trace.samples.length;
+      const ordered = [...trace.samples].sort((a, b) => a.diff - b.diff || a.index - b.index);
+      const survivors = ordered.length > 12 ? ordered.slice(2, -2) : ordered;
+      for (const sample of survivors) sample.survived = true;
+      const computed = survivors.map((sample) => sample.diff).sort((a, b) => a - b);
+      if (retained === undefined) { trace.faults.push({ message: 'Trial produced no retained samples' }); return; }
+      if (JSON.stringify(computed) !== JSON.stringify(retained)) throw new Error('Chronological sample identity does not reproduce Labs trim');
+    }
+  };
+  const recordGc = (entries) => {
+    for (const event of entries) trace.gcEvents.push({ startTime: event.startTime, duration: event.duration, kind: event.kind, flags: event.flags });
+  };
+  const observer = new PerformanceObserver((list) => recordGc(list.getEntries()));
+  observer.observe({ entryTypes: ['gc'] });
+  return trace;
+}
+let childSeq = 0;
+/**
+* Runs one trial in a fresh child process (same script, same node flags,
+* `LABS_ONLY_INDEX` selecting the trial) so each bench measures against a
+* pristine V8 — no IC/heap contamination from earlier benches in the file.
+*/
+function runTrialChild(trial, index, extraEnv = {}) {
+	const resultFile = join(tmpdir(), `labs-trial-${process.pid}-${index}-${childSeq++}.json`);
+	try {
+		execFileSync(process.execPath, [...process.execArgv, process.argv[1]], {
+			stdio: [
+				"ignore",
+				"inherit",
+				"inherit"
+			],
+			env: {
+				...process.env,
+				...extraEnv,
+				LABS_ONLY_INDEX: String(index),
+				LABS_RESULT_FILE: resultFile
+			}
+		});
+		return JSON.parse(readFileSync(resultFile, "utf-8"));
+	} catch (err) {
+		throw new Error(`isolated bench "${trial?._name ?? index}" failed: ${String(err)}`, { cause: err });
+	} finally {
+		rmSync(resultFile, { force: true });
+	}
+}
+/** Per run plans from a pilot trial, or null when any run failed to produce one. */
+function extractPlans(trial) {
+	const plans = [];
+	for (const run of trial.runs) {
+		if (!run.stats?.plan) return null;
+		plans.push(run.stats.plan);
+	}
+	return plans;
+}
+const percentile = (sorted, p) => sorted[p * (sorted.length - 1) | 0];
+/** Range across blocks and the median of the block medians. */
+function mergeRange(list) {
+	return {
+		min: Math.min(...list.map((v) => v.min)),
+		max: Math.max(...list.map((v) => v.max)),
+		p50: median(list.map((v) => v.p50))
+	};
+}
+/**
+* Pools samples across blocks and recomputes headline stats, keeping each
+* block's median, calibration rate, and within-block spread so between-run
+* variance and per-process noise both stay observable. Counters and debug
+* come from the pilot.
+*/
+function mergeStats(list, calibrationRates) {
+	const samples = list.flatMap((s) => s.samples).sort((a, b) => a - b);
+	const heaps = list.map((s) => s.heap).filter(Boolean);
+	const gcs = list.map((s) => s.gc).filter(Boolean);
+	const medians = list.map((s) => s.p50);
+	return {
+		...list[0],
+		samples,
+		min: samples[0],
+		max: samples[samples.length - 1],
+		p25: percentile(samples, .25),
+		p50: percentile(samples, .5),
+		p75: percentile(samples, .75),
+		p99: percentile(samples, .99),
+		p999: percentile(samples, .999),
+		avg: samples.reduce((a, v) => a + v, 0) / samples.length,
+		ticks: list.reduce((a, s) => a + s.ticks, 0),
+		...heaps.length === list.length ? { heap: mergeRange(heaps) } : {},
+		...gcs.length === list.length ? { gc: mergeRange(gcs) } : {},
+		blocks: {
+			medians,
+			freqs: calibrationRates,
+			spreads: list.map((s) => relativeSpread(s.samples))
+		}
+	};
+}
+function mergeBlocks(parts) {
+	const pilot = parts[0].trial;
+	return {
+		...pilot,
+		runs: pilot.runs.map((run, j) => {
+			if (run.error !== void 0 || !run.stats) return run;
+			const survivors = parts.filter((p) => p.trial.runs[j]?.stats);
+			if (survivors.length < parts.length) console.error(`labs: bench "${run.name || pilot.alias}" lost ${parts.length - survivors.length} of ${parts.length} blocks (no stats produced); merging the ${survivors.length} that completed`);
+			if (survivors.length < 2) return run;
+			if (new Set(survivors.map((p) => JSON.stringify(p.trial.runs[j].stats.snapshot))).size > 1) console.error(`labs: bench "${run.name || pilot.alias}" produced different snapshots across blocks; make its output deterministic or compare will report it as changed`);
+			return {
+				...run,
+				stats: mergeStats(survivors.map((p) => p.trial.runs[j].stats), survivors.map((p) => p.calibrationRate))
+			};
+		})
+	};
+}
+/**
+* Runs every bench as `blocks` fresh child processes. Block 0 is the pilot:
+* it samples until the block budget and sample floor are both met, and its
+* measurement plan freezes the remaining blocks. Blocks are scheduled round
+* robin across benches so each bench's blocks span the whole sitting and
+* between-block spread samples real environment drift, not just adjacent
+* seconds.
+*/
+function makeBlockExecutor(blocks) {
+	return async (jobs) => {
+		const collected = /* @__PURE__ */ new Map();
+		const plans = /* @__PURE__ */ new Map();
+		for (let block = 0; block < blocks; block++) for (const { trial, index } of jobs) {
+			if (block > 0 && !plans.has(index)) continue;
+			const out = runTrialChild(trial, index, block === 0 ? {} : { LABS_BLOCK_PLANS: JSON.stringify(plans.get(index)) });
+			let list = collected.get(index);
+			if (!list) collected.set(index, list = []);
+			list.push(out);
+			if (block === 0) {
+				const p = extractPlans(out.trial);
+				if (p) plans.set(index, p);
+			}
+		}
+		const results = /* @__PURE__ */ new Map();
+		for (const { index } of jobs) results.set(index, mergeBlocks(collected.get(index)));
+		return results;
+	};
+}
+async function main() {
+	await import(file);
+	const result = await run({
+		tune: parseTuneEnv(),
+		execute: makeBlockExecutor(blockCount())
+	});
+	const postFreq = await calibrateFreq();
+	const registry = getBenchRegistry();
+	for (let i = 0; i < result.benchmarks.length; i++) result.benchmarks[i].groupName = registry[i]?.groupName ?? "";
+	if (process.env.LABS_RESULT_FILE) writeFileSync(process.env.LABS_RESULT_FILE, JSON.stringify({
+		...result,
+		environment: { postFreq }
+	}, errorReplacer));
+}
+const onlyIndex = process.env.LABS_ONLY_INDEX;
+onlyIndex !== void 0 ? childMain(Number(onlyIndex)) : main();
+//#endregion
+export {};

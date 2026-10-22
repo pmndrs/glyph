@@ -1,0 +1,32 @@
+{
+  "argv": [
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "benchmark:labs-package",
+    "--",
+    "--candidate",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/pmndrs-glyph-0.1.0.tgz",
+    "--suite",
+    "full",
+    "--blocks",
+    "8",
+    "--sampling",
+    "single-call",
+    "--warmup",
+    "fixed-20",
+    "--output",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-fixed20-candidate"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-22T19:00:07.342915+00:00",
+  "finished": "2026-10-22T19:21:06.368333+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "a5c662d603407461c99ebe9f175539ee46206dc6d5636054f65a70ffd761a579",
+    "stderr.log": "4ab187596bbb4bf8ac51da844b2be6c4efde04e5a1828e4cf698ad9592a7c09a"
+  }
+}

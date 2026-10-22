@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "status": "failed",
+  "candidateReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/editorial-delivery-final4/webgpu-bitmap-tsl-editorial.json",
+  "referenceReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final4/main/delivery/webgpu-bitmap-tsl-editorial.json",
+  "expectedCandidateSha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+  "expectedReferenceSha256": "bbb3375c08fb3db8196ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+  "tolerance": {
+    "maximumDifferentPixels": 0,
+    "basis": "exact fixed-state comparison; no nonzero tolerance established"
+  },
+  "error": "Error: Capture archive SHA-256 does not match externally pinned candidate/reference digests"
+}

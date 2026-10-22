@@ -1,0 +1,41 @@
+# Dense browser boundary decision — 22 October 2026
+
+**Decision: retain the frozen, correct single-owner variant and hold parity admission. Do not select a product boundary wave from this evidence.** The browser probe shows the candidate close to main in complete CPU time on its matched flat fixture, but the maintained Node matrix still has material dense and other fixed-family losses. Neither result licenses discarding the candidate, declaring parity, or moving authoritative positioning to publication. V3 remains recoverable at `aac036f9` (`experiments/held-dense-frontier-v3-native-gated-20261021`); the frozen candidate is `dec7509b3` / archive SHA-256 `06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be`.
+
+## What the completed browser probe says
+
+The actual Chromium 149 / Apple M4 Metal probe used the same flat 512/1,024 grid, ten-unit alpha/bravo labels, 20 warmups per count and eight alternating-order blocks of 16 samples per count/backend. These are setter-to-ordinary-`renderer.render`-return CPU durations. WebGPU/WebGL2 identify active backends; the measured render-submit phase is CPU time, not GPU execution or presentation. No timed read was added. Cold output, readback, screenshot and delivery proofs passed. The ~0.1 ms clock granularity limits interpretation of small phase differences. Phase percentiles are separate marginals and cannot be added to reconstruct a complete percentile.
+
+| Backend/count | Main complete p50/p90 | Published complete p50/p90 | Candidate complete p50/p90 | Candidate setter / publication p50 |
+| --- | ---: | ---: | ---: | ---: |
+| WebGPU 512 | 6.4 / 7.0 ms | 6.9 / 14.6 ms | 6.6 / 7.2 ms | 4.5 / 1.9 ms |
+| WebGPU 1024 | 12.8 / 13.8 ms | 13.6 / 24.1 ms | 13.2 / 14.0 ms | 9.0 / 4.0 ms |
+| WebGL2 512 | 6.2 / 9.5 ms | 6.5 / 7.1 ms | 6.8 / 7.2 ms | 4.7 / 1.9 ms |
+| WebGL2 1024 | 12.4 / 20.4 ms | 12.8 / 13.5 ms | 13.2 / 13.9 ms | 9.0 / 4.0 ms |
+
+For WebGPU 1024, main's setter/publication p50 is 1.3/11.3 ms and the candidate's is 9.0/4.0 ms; CPU render-submit p50 is 0.2 ms in both. Thus the candidate visibly shifts work to setters and saves publication work on this fixture. The complete median gap to main is 0.4 ms, near the probe's resolution and much smaller than the phase shift. This is an observation about elapsed work boundaries, not a causal estimate of removable work.
+
+Per-block complete-operation medians (blocks 1–8, ms) retain the distribution that pooled tails conceal:
+
+| Backend/count | Main | Published | Candidate |
+| --- | --- | --- | --- |
+| WebGPU 512 | 6.3, 6.2, 5.8, 6.5, 6.6, 6.5, 6.6, 6.5 | 6.9, 6.5, 6.6, 6.5, 6.7, 9.8, 10.2, 13.5 | 6.6, 6.3, 6.2, 6.9, 6.9, 6.9, 6.4, 6.1 |
+| WebGPU 1024 | 12.9, 12.9, 12.3, 12.5, 13.7, 13.0, 12.8, 12.6 | 12.7, 13.0, 12.5, 12.9, 18.1, 16.7, 20.6, 21.0 | 13.1, 13.0, 13.2, 13.0, 13.3, 13.6, 13.1, 13.2 |
+| WebGL2 512 | 9.0, 7.0, 6.2, 5.9, 6.4, 5.9, 5.9, 6.2 | 6.8, 6.5, 6.5, 6.4, 6.4, 6.3, 6.4, 10.1 | 6.8, 6.7, 6.8, 7.0, 6.6, 6.8, 6.8, 6.3 |
+| WebGL2 1024 | 18.6, 17.8, 13.6, 12.0, 11.9, 12.0, 11.8, 11.8 | 13.4, 13.0, 12.7, 12.5, 12.8, 12.6, 12.6, 12.8 | 13.1, 13.6, 13.3, 12.9, 13.2, 12.8, 13.6, 12.8 |
+
+Controls have unstable late or early blocks too. The raw samples and transitions remain in `dense-browser/{candidate.json,main-final.json,published.json}` and the pooled comparison is `dense-browser/dense-browser-comparison.json`. No load or GPU-driver cause follows from these data, and no favorable rerun or tail replacement is warranted.
+
+## Why this does not clear the fixed matrix
+
+The maintained Node 1024 complete operation is 19.548 ms candidate versus 16.547 main and 16.686 published at pooled p50. Node 512 is 10.295 versus 7.602 and 8.143 ms. Its candidate p95 of 117.499 ms includes one 113.293 ms block median; the other seven block medians are 9.191–12.660 ms. Preserve that adverse tail without assigning its cause or using it alone to reject the correct variant. The full matrix also records long-edit, cold, width-measure and first-set losses and immediate prepared-query, sparse-publication, copy and inspection gains. The current seven-family admission is therefore open against **both** controls.
+
+The browser probe is not a replica of the Node identities. Browser uses font size 7, no wrap, width 44, root capacity 2048 and a flat grid. Node uses font size 16, default wrap, width 160 and capacity 16384; its 512 fixture has nested groups and unpadded text plus draw inspection, while its 1024 fixture calls `scene.updateMatrixWorld(true)`. `benches/scripts/support/dense-browser-entry.js`, `benches/labs/package/{fixture.ts,stress.bench.ts,batching.bench.ts}` are the producers. A browser/Node difference cannot be attributed to renderer, GPU, or count alone.
+
+## Boundary assessment and smallest discriminator
+
+The accepted `retained-prepare-publish` contract makes positioning authoritative at `set()`: `measure_paragraph_inner` calls `paragraph.state.prepare` before returning, and prepared measurements, glyphs, carets, selections, anchors and independent `split()` consume that state. Publication consumes accumulated dirty owners and render records. Main amortizes validation/admission over the publication transaction; the candidate repeats a transaction per changed owner so those immediate reads are ready. The present source review found no duplicate shaping, no full old-buffer copy in the current 1024 replacements, and no second render-plan executor. The single-owner wave already removed full-replacement old-text seeding, repeated owner routing, empty JS frame sections and settled eleven-stage commits. The remaining six owner lookups and roughly twelve shallow JS fields have no measured whole-path cost large enough to explain the Node gap.
+
+Deferring **all** positioning would require on-demand preparation for each immediate query and split, plus failure and revision handling across setters, copies and rejected publication. Keeping both positioned semantic state and a later render projection risks a second traversal, metadata store and lifetime boundary. A render-only projection could be sound only if a source ledger identifies exact redundant writes or copies it deletes, proves the semantic rows needed by all immediate consumers stay authoritative, and specifies admission, fallback, error invalidation, output ownership and renderer in-flight byte lifetimes. Current source/capture evidence does not identify a parity-sized whole-path deletion. It would otherwise move cost from setters to publication while losing transaction amortization again.
+
+**Next investigation, without a product patch or new timing run:** build one producer-to-consumer write/byte ledger for the exact Node 1024 and browser 1024 paths from the frozen source and existing raw receipts. For each `paragraph.state.prepare` output and publication field, record who writes it, the first observable consumer (prepared measurement, inspection, caret/selection/anchor, split or render), whether it is written or copied again, and the count/bytes for one alpha→bravo operation. Pair that ledger with existing named-profile inclusive/exclusive frames only where the frame genuinely covers the exact path; mark inlined or unmeasured costs unknown. The decisive threshold is an identified whole-path deletion plausibly exceeding the ~3 ms Node median deficit **without** a replacement traversal or semantic store. If the ledger cannot name one, do not launch a hybrid implementation or repeat the full matrix. If it can, review one coherent bounded wave with cold/output, failure/retry, ownership and seven-family gates before Luna measures its exact artifact once. This decision itself makes no parity or impossibility claim.

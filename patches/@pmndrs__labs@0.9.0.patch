@@ -1,45 +1,128 @@
 diff --git a/dist/cli/cli.mjs b/dist/cli/cli.mjs
-index ef292d6ca7dd2238611f982705b12cf8f2120b44..a0ffed2f2ef0ed19dbff4955f5ca66dcb9729127 100755
 --- a/dist/cli/cli.mjs
 +++ b/dist/cli/cli.mjs
-@@ -1238,6 +1238,7 @@ function runBench(file, nodeFlags, label, tune, tagFilter, resultFile) {
+@@ -1238,6 +1238,8 @@
  			LABS_BLOCKS: String(tune.blocks ?? 8),
  			...tune.blockTime !== void 0 ? { LABS_BLOCK_TIME: String(tune.blockTime * 1e9) } : {},
  			...tune.minSamples !== void 0 ? { LABS_MIN_SAMPLES: String(tune.minSamples) } : {},
 +			LABS_SAMPLING_POLICY: tune.samplingPolicy,
++			LABS_WARMUP_POLICY: tune.warmupPolicy,
  			...tagFilter ? { LABS_GREP_TAGS: tagFilter } : {},
  			...resultFile ? { LABS_RESULT_FILE: resultFile } : {}
  		}
-@@ -1392,6 +1393,7 @@ async function runCLI(args) {
+@@ -1392,6 +1394,8 @@
  	const benchTune = {
  		blockTime: config.blockTime,
  		minSamples: config.minSamples,
 +		samplingPolicy: config.samplingPolicy,
++		warmupPolicy: config.warmupPolicy,
  		blocks
  	};
  	const git = captureGitInfo(dirname(configPath));
 diff --git a/dist/index.d.ts b/dist/index.d.ts
-index 3256fe9e73a908be929b0976787c9c6ea201e647..ee364657e55e481e91e75090fc4c6f959c05e1f2 100644
 --- a/dist/index.d.ts
 +++ b/dist/index.d.ts
-@@ -130,6 +130,8 @@ interface LabsConfig {
+@@ -130,6 +130,10 @@
    blockTime?: number;
    /** Minimum samples per block. @default 20 */
    minSamples?: number;
 +  /** Sampling mode for every benchmark call. @default "adaptive" */
 +  samplingPolicy?: "adaptive" | "single-call";
++  /** Untimed warmup after the first-result callback. fixed-20 requires single-call sampling. @default "conditional" */
++  warmupPolicy?: "conditional" | "fixed-20";
    /** Mann-Whitney U significance level. @default 0.05 */
    alpha: number;
    /** Minimum |Hodges-Lehmann delta| required to flag a verdict. Filters environmental noise on identical code. @default 0.05 */
 diff --git a/dist/src-DNyOXr2d.mjs b/dist/src-DNyOXr2d.mjs
-index ae2209d4ec8ef176de4d8b2a5c17733b69de00f0..bc0b7313409b0318ebc1f0692a67098e6aad77d5 100644
 --- a/dist/src-DNyOXr2d.mjs
 +++ b/dist/src-DNyOXr2d.mjs
-@@ -1162,12 +1162,14 @@ const assert = Object.assign(assertCondition, { equal });
+@@ -244,6 +244,7 @@
+ 	let async = false;
+ 	let batch = false;
+ 	let single = 0;
++	let untimedCalls = 1;
+ 	const params = Object.keys(opts.params);
+ 	{
+ 		const $p = Array.from({ length: params.length }, () => 0);
+@@ -264,15 +265,17 @@
+ 		if (!opts.manual && opts.$first) await opts.$first(first);
+ 		if (opts.after) await opts.after();
+ 		single = t1 - t0;
+-		if (single <= opts.warmup_threshold) for (let o = 0; o < opts.warmup_samples; o++) {
++		const warmupCalls = opts.fixed_warmup_calls ?? (single <= opts.warmup_threshold ? opts.warmup_samples : 0);
++		for (let o = 0; o < warmupCalls; o++) {
+ 			for (let oo = 0; oo < params.length; oo++) $p[oo] = await opts.params[oo]();
+ 			const t0 = now();
+ 			const value = await fn(...$p);
++			untimedCalls++;
+ 			if (!opts.manual && value !== void 0) consume(value);
+ 			const t1 = now();
+ 			if (opts.after) await opts.after();
+ 			single = t1 - t0;
+-			if (batch = single <= opts.batch_threshold) break;
++			if (opts.fixed_warmup_calls === void 0 && (batch = single <= opts.batch_threshold)) break;
+ 		}
+ 	}
+ 	if (opts.batch !== void 0) batch = !!opts.batch;
+@@ -439,7 +442,7 @@
+       p999: samples[(.999 * (samples.length - 1)) | 0],
+       avg: samples.reduce((a, v) => a + v, 0) / samples.length,
+       ticks: samples.length ${!batch ? "" : `* ${batchSamples}`},
+-      plan: { batch: ${batch}, batch_samples: ${batchSamples}, batch_unroll: ${opts.batch_unroll}, samples: _ },
++      plan: { batch: ${batch}, batch_samples: ${batchSamples}, batch_unroll: ${opts.batch_unroll}, samples: _, warmup_calls: ${untimedCalls} },
+       ${!opts.heap ? "" : "heap: $summary(heap, _),"}
+       ${!(opts.gc && opts.sample_gc && !opts.gc.fallback) ? "" : "gc: $summary(gc, _),"}
+       ${!opts.$counters ? "" : `...(!_hc ? {} : { counters: $counters.translate(${!batch ? 1 : batchSamples}, _) }),`}
+@@ -465,6 +468,7 @@
+ 	const _ = {};
+ 	defaults$1(opts);
+ 	let batchSamples = 0;
++	let untimedCalls = 1;
+ 	let samples = Array.from({ length: 2 ** 20 }, () => 0);
+ 	const _i = { next() {
+ 		return _.next();
+@@ -487,11 +491,14 @@
+ 			const t0 = now();
+ 			yield void 0;
+ 			single = now() - t0;
+-			if (single <= opts.warmup_threshold) for (let o = 0; o < opts.warmup_samples; o++) {
++			// The iterator handoff below itself invokes the callback once outside the timed loop.
++			const warmupCalls = opts.fixed_warmup_calls === void 0 ? (single <= opts.warmup_threshold ? opts.warmup_samples : 0) : Math.max(0, opts.fixed_warmup_calls - 1);
++			for (let o = 0; o < warmupCalls; o++) {
+ 				const t0 = now();
+ 				yield void 0;
++				untimedCalls++;
+ 				single = now() - t0;
+-				if (batch = single <= opts.batch_threshold) break;
++				if (opts.fixed_warmup_calls === void 0 && (batch = single <= opts.batch_threshold)) break;
+ 			}
+ 		}
+ 		if (opts.batch !== void 0) batch = !!opts.batch;
+@@ -543,6 +550,7 @@
+     `)(opts.gc, opts.now, samples, _, summarize);
+ 		_.batch = batch;
+ 		_.next = loop.next.bind(loop);
++		untimedCalls++;
+ 		yield void 0;
+ 	})();
+ 	await iter((_.next = gen.next.bind(gen), ctx));
+@@ -557,7 +565,8 @@
+ 			batch: !!_.batch,
+ 			batch_samples: batchSamples,
+ 			batch_unroll: opts.batch_unroll,
+-			samples: rawCount
++			samples: rawCount,
++			warmup_calls: untimedCalls
+ 		},
+ 		debug: _.debug,
+ 		min: samples[0],
+@@ -1162,12 +1171,17 @@
  //#endregion
  //#region src/config.ts
  function defineConfig(config) {
 +	if (config.samplingPolicy !== void 0 && config.samplingPolicy !== "adaptive" && config.samplingPolicy !== "single-call") throw new TypeError(`Invalid Labs samplingPolicy: ${String(config.samplingPolicy)}`);
++	if (config.warmupPolicy !== void 0 && config.warmupPolicy !== "conditional" && config.warmupPolicy !== "fixed-20") throw new TypeError(`Invalid Labs warmupPolicy: ${String(config.warmupPolicy)}`);
++	if (config.warmupPolicy === "fixed-20" && config.samplingPolicy !== "single-call") throw new TypeError("Labs fixed-20 warmup requires single-call sampling");
  	return {
  		benchMatch: "**/*.bench.ts",
  		nodeFlags: ["--allow-natives-syntax", "--expose-gc"],
@@ -47,14 +130,14 @@ index ae2209d4ec8ef176de4d8b2a5c17733b69de00f0..bc0b7313409b0318ebc1f0692a67098e
  		blockTime: .5,
  		minSamples: 20,
 +		samplingPolicy: "adaptive",
++		warmupPolicy: "conditional",
  		alpha: .05,
  		minDelta: .05,
  		snapshotTolerance: 1e-9,
 diff --git a/dist/worker.mjs b/dist/worker.mjs
-index c31b0fe017c36e93aea53484b6475f91f6ba21fe..6e3a603c79252e813f51e71facb7468ac90f4d43 100644
 --- a/dist/worker.mjs
 +++ b/dist/worker.mjs
-@@ -5,13 +5,16 @@ import { readFileSync, rmSync, writeFileSync } from "node:fs";
+@@ -5,13 +5,20 @@
  import { join } from "node:path";
  import { tmpdir } from "node:os";
  //#region src/bench/worker.ts
@@ -64,12 +147,24 @@ index c31b0fe017c36e93aea53484b6475f91f6ba21fe..6e3a603c79252e813f51e71facb7468a
  	const blockTime = Number(process.env.LABS_BLOCK_TIME);
  	const minSamples = Number(process.env.LABS_MIN_SAMPLES);
 +	const samplingPolicy = process.env.LABS_SAMPLING_POLICY ?? "adaptive";
++	const warmupPolicy = process.env.LABS_WARMUP_POLICY ?? "conditional";
 +	if (samplingPolicy !== "adaptive" && samplingPolicy !== "single-call") throw new TypeError(`Invalid Labs samplingPolicy: ${samplingPolicy}`);
++	if (warmupPolicy !== "conditional" && warmupPolicy !== "fixed-20") throw new TypeError(`Invalid Labs warmupPolicy: ${warmupPolicy}`);
++	if (warmupPolicy === "fixed-20" && samplingPolicy !== "single-call") throw new TypeError("Labs fixed-20 warmup requires single-call sampling");
  	return {
  		...Number.isFinite(blockTime) && blockTime > 0 ? { min_cpu_time: blockTime } : {},
 -		...Number.isFinite(minSamples) && minSamples > 0 ? { min_samples: minSamples } : {}
 +		...Number.isFinite(minSamples) && minSamples > 0 ? { min_samples: minSamples } : {},
-+		...samplingPolicy === "single-call" ? { batch: false } : {}
++		...samplingPolicy === "single-call" ? { batch: false } : {},
++		...warmupPolicy === "fixed-20" ? { fixed_warmup_calls: 20 } : {}
  	};
  }
  const file = process.env.LABS_BENCH_FILE;
+@@ -131,6 +138,7 @@
+ 		...heaps.length === list.length ? { heap: mergeRange(heaps) } : {},
+ 		...gcs.length === list.length ? { gc: mergeRange(gcs) } : {},
+ 		blocks: {
++			warmupCalls: list.map((s) => s.plan.warmup_calls),
+ 			medians,
+ 			freqs: calibrationRates,
+ 			spreads: list.map((s) => relativeSpread(s.samples))

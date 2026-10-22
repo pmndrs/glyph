@@ -1,0 +1,19 @@
+# Editorial scene proof follow-up review
+
+The prior scene-to-capture linkage finding is closed in the reviewed source. The producer calls `assertEditorialSceneMatchesCapture` immediately after the post-PNG semantic request and before writing the semantic artifact (`benches/scripts/run-presentation-workload-probe.mts:623–639`). The assertion checks revision, workload, animation state, DPR, font fixture, grid state, camera kind, and integer viewport against the captured canvas CSS size (`benches/scripts/support/editorial-scene-capture.mts:75–112`). The comparator repeats that assertion against the authenticated semantic file in each arm (`benches/scripts/compare-editorial-hero-pixels.mts:270–282`). The captured-state copy is therefore no longer the sole linkage.
+
+The change retains the prior boundaries: the runtime event listener exists only under `editorialProof=1`, responds with a fresh nonce or explicit error, and is removed at disposal; no per-frame serialization was added (`benches/src/surfaces/benchmark/scenes/comparison-workload.ts:1091–1122,1195–1197`). The semantic query still follows the scene-only PNG, so `Text.glyphs()` inspection cannot affect that capture. The comparator still reports glyph geometry separately from runtime identities, and `differentPixels !== 0` still fails with zero tolerance (`compare-editorial-hero-pixels.mts:159–166,400–439`). The numeric `reduce<number>` fixes the row-difference accumulator type without changing the counts.
+
+I found no further source-review blocker to the next authorized capture. The check proves matching committed revision and key settings, not that no GPU/compositor work occurred between the PNG and semantic query; the paused scene and completed-frame signal are the available temporal evidence. The new capture has not yet run, so neither overlay absence in the actual PNG nor the cause of the earlier body pixel mismatch is verified by this review. The semantic comparison remains diagnostic and does not waive the pixel gate.
+
+Reviewed file SHA-256 digests (held checkout, at review time):
+
+| File | SHA-256 |
+| --- | --- |
+| `benches/scripts/run-presentation-workload-probe.mts` | `53d900ea66afb642017fd7cf04a2d102516d999575175a38ddbb9fa66e330048` |
+| `benches/scripts/compare-editorial-hero-pixels.mts` | `d569867134f9285421082dcc3471bf98b0af0ef5d61aace8f7994036666c996d` |
+| `benches/scripts/support/editorial-scene-capture.mts` | `d9b03d7d9c38496e69e720b8e9acacaec7087791df4001b35462ebd4b32036f7` |
+| `benches/src/surfaces/benchmark/scenes/comparison-workload.ts` | `1461ac66fc929a5715c04b400041f55974b68b5a892920d925cbb84aee31df16` |
+| `benches/src/surfaces/benchmark/scenes/editorial-scene-proof.ts` | `2ed1b8845c031cf55731be9b7e4867420835f372ea61c29b3c937771fc9ca791` |
+
+No builds, tests, gates, or browser captures were run in this follow-up review.

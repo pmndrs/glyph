@@ -2,7 +2,16 @@ import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three/webgpu';
 
 import type { ComparisonWorkloadEntry } from '../shared/scene-entry';
-import { editorialFlow, layoutEditorialEntries, positionEditorialObstacle } from './scene';
+import {
+  animateEditorialEntries,
+  editorialBodyHeight,
+  editorialColumnWidth,
+  editorialFlow,
+  layoutEditorialEntries,
+  positionEditorialObstacle,
+  projectedPausedEditorialFlow,
+  sameEditorialFlow,
+} from './scene';
 
 function editorialEntry(
   width: number,
@@ -85,5 +94,121 @@ describe('editorial layout', () => {
     expect(obstacle.rotation.equals(initialRotation)).toBe(false);
     expect(obstacle.position.toArray().every(Number.isFinite)).toBe(true);
     expect([obstacle.rotation.x, obstacle.rotation.y, obstacle.rotation.z].every(Number.isFinite)).toBe(true);
+  });
+});
+
+describe('paused editorial projection', () => {
+  it('publishes the final text-plane projection after animation and updates it for paused transforms', () => {
+    const configuration = {
+      animationEnabled: true,
+      animationSpeed: 30,
+      fontSize: 20,
+      layoutWidthRatio: 1,
+    };
+    const viewportWidth = 1_000;
+    const viewportHeight = 800;
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, viewportWidth / viewportHeight, 1, 2_000);
+    camera.position.set(500, -400, 900);
+    camera.lookAt(500, -400, 0);
+    const ledeNode = new THREE.Group();
+    const bodyNode = new THREE.Group();
+    const obstacle = new THREE.Mesh(new THREE.BoxGeometry(96, 96, 96));
+    const bodyText = new THREE.Object3D();
+    bodyNode.add(bodyText, obstacle);
+    scene.add(ledeNode, bodyNode);
+    const initialWidth = editorialColumnWidth(configuration, viewportWidth, 0);
+    const fixedHeight = editorialBodyHeight(configuration.fontSize);
+    const ledeState = { constraints: { width: { mode: 'exact', size: initialWidth } } };
+    const bodyState: {
+      constraints: { width: { mode: string; size: number } };
+      flow: ReturnType<typeof editorialFlow> | undefined;
+    } = { constraints: { width: { mode: 'exact', size: initialWidth } }, flow: undefined };
+    const ledeText = Object.assign(ledeNode, {
+      set(properties: { constraints: typeof ledeState.constraints }) {
+        ledeState.constraints = properties.constraints;
+      },
+      measure() {
+        return { width: ledeState.constraints.width.size, height: ledeState.constraints.width.size * 0.2 };
+      },
+    });
+    Object.defineProperty(ledeText, 'constraints', { get: () => ledeState.constraints });
+    const body = Object.assign(bodyText, {
+      set(properties: { constraints: typeof bodyState.constraints; flow: ReturnType<typeof editorialFlow> }) {
+        bodyState.constraints = properties.constraints;
+        bodyState.flow = {
+          regions: properties.flow.regions.map((region) => ({
+            ...region,
+            shape:
+              region.shape.kind === 'rectangle'
+                ? {
+                    kind: 'rectangle' as const,
+                    bounds: region.shape.bounds.map(Math.fround) as [number, number, number, number],
+                  }
+                : region.shape,
+          })),
+        };
+      },
+      measure() {
+        return { width: bodyState.constraints.width.size, height: fixedHeight };
+      },
+    });
+    Object.defineProperties(body, {
+      constraints: { get: () => bodyState.constraints },
+      flow: { get: () => bodyState.flow },
+    });
+    const entries: ComparisonWorkloadEntry[] = [
+      {
+        node: ledeNode,
+        role: 'primary',
+        sourceText: 'lede',
+        text: ledeText as unknown as ComparisonWorkloadEntry['text'],
+      },
+      {
+        node: bodyNode,
+        role: 'secondary',
+        sourceText: 'body',
+        text: body as unknown as ComparisonWorkloadEntry['text'],
+        editorialObstacle: obstacle,
+        editorialObstacleBounds: new THREE.Box3(new THREE.Vector3(-48, -48, -48), new THREE.Vector3(48, 48, 48)),
+      },
+    ];
+    const onError = (error: unknown) => {
+      throw error;
+    };
+    const onReflow = vi.fn<() => void>();
+    const animate = (animationEnabled: boolean, timestamp: number) =>
+      animateEditorialEntries(
+        entries,
+        { ...configuration, animationEnabled },
+        timestamp,
+        viewportWidth,
+        viewportHeight,
+        scene,
+        onError,
+        onReflow,
+        camera,
+      );
+    const currentFlow = () => projectedPausedEditorialFlow(entries[1]!, camera, configuration, viewportWidth);
+
+    animate(true, 5_000);
+    animate(false, 5_000);
+    expect(sameEditorialFlow(currentFlow(), bodyState.flow)).toBe(false);
+    animate(false, 5_000);
+    expect(sameEditorialFlow(currentFlow(), bodyState.flow)).toBe(true);
+    const settledReflows = onReflow.mock.calls.length;
+    animate(false, 5_000);
+    expect(onReflow).toHaveBeenCalledTimes(settledReflows);
+
+    camera.position.x += 25;
+    camera.lookAt(500, -400, 0);
+    animate(false, 5_000);
+    expect(onReflow).toHaveBeenCalledTimes(settledReflows + 1);
+    expect(sameEditorialFlow(currentFlow(), bodyState.flow)).toBe(true);
+
+    scene.position.x += 17;
+    animate(false, 5_000);
+    expect(onReflow).toHaveBeenCalledTimes(settledReflows + 2);
+    expect(sameEditorialFlow(currentFlow(), bodyState.flow)).toBe(true);
   });
 });

@@ -1,0 +1,14 @@
+# Main diagnostic allocator: isolated module source candidate
+
+This is a source-arrangement candidate from frozen main `4e25a96a57462fef5ad0d19065a822695b480f60`. It is **diagnostic only** and has not been built, gated, or used for a memory capture. The strict feature-off full-byte gate remains required against archived `package/dist/text-shaper.wasm` SHA-256 `059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4`.
+
+The new source worktree is `module-isolated-source`. Its only file changes are `packages/glyph/rust/shaper/Cargo.toml`, `src/wasm.rs`, and `src/diagnostic_live_memory.rs`. The Cargo feature and the existing feature-off allocator `cfg` match the earlier subset-B control. In `wasm.rs`, the original frozen source through its EOF remains byte-for-byte unchanged apart from that allocator `cfg`; the sole appended item is a feature-gated external module declaration. The diagnostic global allocator and its three exported functions now live in that module. Their exact caller-owned request allocation lookup, Talc delegation, requested-byte accounting, status codes, and probe sequence are carried over from the preserved earlier overlay. Module-local `wasm32` gates keep host feature tests from referring to Wasm-only allocator symbols.
+
+Source SHA-256:
+
+- `Cargo.toml`: `89e63906b1685010d3844fb540545215fd6f5514b390ea59818baa09a3423135`
+- `src/wasm.rs`: `ac57f93b4e3f29e88e1591532be9a00ba8b5913f50d7e7a02fc3e805921977ee`
+- `src/diagnostic_live_memory.rs`: `4e91c6dff9f1a68051a9905bb458a33192138f1d1201c48ff1d624eac1fcf461`
+- `module-isolated.patch`: `9574529f7b9b7a3fe300e680726465802bbf11e2c931d87a8357b9e424255032`
+
+The earlier `main-diagnostic-live-memory.patch` remains unchanged at `fb21db02461eb91feced1cce684017788449cb9f01b76ab191f5ba2f80e561b2`. `git diff --check` passes in the new worktree. A static source comparison verified the `wasm.rs` boundary described above. No Cargo, Binaryen, artifact gate, or benchmark was run. A fresh high-effort source review should precede Luna's sole-executor build and strict gate. This arrangement is a hypothesis about disabled-item ordering; it does not establish feature-off binary identity.
