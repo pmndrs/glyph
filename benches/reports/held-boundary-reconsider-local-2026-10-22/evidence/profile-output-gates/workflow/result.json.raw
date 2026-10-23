@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "benchmark:workflow-check"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-23T00:14:22.858919+00:00",
+  "finished": "2026-10-23T00:14:23.931833+00:00",
+  "exit": 0,
+  "stdoutSha256": "0b30ce432654557c2a3893b4bf0a243b6a2bab4c3d9474207d6d7a364cef9d63",
+  "stderrSha256": "ccb06545be9924b5b614ea12f430be2bf8c4a799b40b76bddf36491e126442f2"
+}

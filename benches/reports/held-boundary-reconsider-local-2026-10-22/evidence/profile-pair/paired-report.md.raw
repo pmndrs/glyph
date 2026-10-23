@@ -1,0 +1,61 @@
+# Current-artifact edit-sized publication diagnostic
+
+Diagnostic only. This is one paired capture, not an acceptance rerun or a causal comparison. The main arm has a highly unstable tail; do not use the pair-wide ranking to claim parity or to select a change.
+
+## Exact workload and artifact identities
+
+Both arms used the maintained `benchmark:edit-sized-publication-profile` workflow with `--case bulk-write --boundary publication --count 1024 --position first --warmups 10 --iterations 80 --reads none --publication-path scene`. Each timed callback performed 1,024 text setters followed by one scene publication. Timed reads were zero; correctness reads occurred after profiling. Topology was one draw and 9,216 glyphs before and after. There were 10 warmups and 80 measured callbacks per arm. No build was run. The captures ran sequentially, HELD first.
+
+| Arm | Product archive SHA-256 | Named Wasm SHA-256 | Shipping Wasm SHA-256 | V8 profile SHA-256 |
+| --- | --- | --- | --- | --- |
+| HELD frozen06fe | `06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be` | `c94120f523f9022eaac87733822df4cf1836ad73fc4ad0228f5fdebb03ed4f36` | `66e6c46357030d8457a8568af303d8552b16a68f0c3815877d01d634996bbffb` | `0828584cddb9182933e3cc3d58f7399cf99a7785e20aa52ca3a1de6a43d4beaf` |
+| Main frozen4e25 | `bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20` | `7b06007ee648bdf1ebd723ab398fd8928531901b03c56017edcb2d40e8cebe4c` | `059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4` | `caca34958cbcedd2704d16728af6e62b684aba95b1983b821a532a895ae6ef0e` |
+
+Each postflight receipt passed the archive/manifest, named/manifest, named-executable/shipping, callback, operation-count, topology, sample-count, and p90-output identity checks. Named Wasm executable hashes match their corresponding shipping Wasm hashes. The harness input digest was `e788ebad6b5b526c8cf98e496d9f65f85b35508fcdebf61a67c64a865c40a292` for both arms. The observer-only patch was `52ebbd2f3c0538dd17aa164b8e9b18bf049fa254b184fb01ab087f174cd80e09`.
+
+## Complete callback elapsed times
+
+Values are milliseconds across the full callback (all 1,024 setters and the publication). “Nearest rank” uses `ceil(n*q)-1`; harness values use its existing `floor(n*q)` array-index policy and are kept distinct.
+
+| Arm | N | p50 | p90 | p95 | Raw max | Harness p50 / p90 / p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| HELD | 80 | 13.9525 | 14.9594 | 15.2425 | 18.0190 | 13.9578 / 14.9843 / 15.4434 |
+| Main | 80 | 20.4961 | 181.8966 | 280.2592 | 547.7995 | 20.6489 / 186.8291 / 293.0189 |
+
+Chronological groups of ten callbacks (median; minimum–maximum, ms):
+
+| Block | HELD | Main |
+| --- | --- | --- |
+| 1 (1–10) | 14.737; 13.944–18.019 | 15.077; 14.136–21.963 |
+| 2 (11–20) | 14.495; 13.728–15.182 | 94.252; 40.287–280.259 |
+| 3 (21–30) | 14.018; 13.405–14.959 | 203.132; 98.377–547.800 |
+| 4 (31–40) | 13.548; 13.105–15.443 | 104.508; 25.509–155.590 |
+| 5 (41–50) | 14.163; 13.220–14.984 | 15.266; 13.060–20.649 |
+| 6 (51–60) | 13.388; 12.783–14.699 | 14.802; 13.712–19.008 |
+| 7 (61–70) | 13.227; 12.928–14.339 | 16.409; 13.752–20.496 |
+| 8 (71–80) | 13.694; 12.923–14.583 | 141.680; 13.798–181.897 |
+
+The main tail must remain intact: no favorable timing rerun or trimming was done. The complete per-callback arrays are in each `summary.json`.
+
+## Exclusive sampled ancestry
+
+The phase roots are direct, disjoint children of `updateBulk`; assignment is by descendant ancestry. HELD setter root is `set text` node 7 and publication root is Three.js `updateMatrixWorld` node 37. Main uses `set text` node 7 and `updateMatrixWorld` node 13. Root descendant sets do not overlap. Detached stacks are explicitly unresolved.
+
+| Arm | Profile samples | Setter samples / self µs | Publication samples / self µs | Unresolved samples / self µs |
+| --- | ---: | ---: | ---: | ---: |
+| HELD | 796 | 534 / 755,125 | 219 / 309,707 | 43 / 97,751 |
+| Main | 3,750 | 407 / 690,582 | 3,211 / 5,703,124 | 132 / 285,836 |
+
+The HELD setter exclusive stage buckets are JavaScript 146,081 µs, allocation 4,208 µs, host runtime 1,291 µs, shaping 226,211 µs, and other Wasm 377,334 µs. JavaScript plus allocation plus host runtime is a descriptive subset totaling 151,580 µs (1.895 ms per measured callback), not a compact-descriptor upper envelope: `other-wasm` also includes parsing, entry, and commit work. The category totals are profiler self-sample sums divided by 80 for description only, not savings. High's independent raw-frame sum identifies 39,668 µs in `frame-wire` JavaScript; 4,207 µs in `parse_update_request` plus `parse_text_mutations`; 16,127 µs in the named measure entry/wrapper (partly needed); 29,501 µs in `validate_planner_inputs` plus `validate_text_mutations`; and 13,833 µs in `commit_all` plus `commit_paragraphs` (needed). These are disjoint named self-sample totals, not removable-cost estimates; do not add them to broad stage totals or infer savings. JavaScript includes authoring work also needed on main, the allocation category is origin classification rather than bytes or exact allocation counts, and frozen source-map module labels do not provide dense semantic counters. High’s independent named-frame classification is preserved in `../current-cost-review.md` (SHA-256 `c525ea4748f76a321718047f47ee9d30c2a74a33517773c9ce57b4af182bdead`). It confirms the named sums are disjoint but not savings estimates. Raw frames and inputs are unchanged. No ABI or runtime candidate is selected.
+
+The main setter phase is JavaScript-only (690,582 µs). Main publication is dominated by other Wasm (2,771,132 µs), shaping (1,052,074 µs), JavaScript (1,008,419 µs), gather (469,625 µs), and external JavaScript (194,875 µs). Exclusive sample buckets are not elapsed callback phases and should not be compared as marginal medians.
+
+## Profile sample gaps and provenance
+
+V8 `timeDeltas` are microseconds. Strictly greater than 5,000 µs: HELD 1 of 796 (37.125 ms); Main 77 of 3,750 (nearest-rank p50 7.042 ms, p90 16.000 ms, p95 28.125 ms, max 44.125 ms). Main gap bins are 46 at ≤8 ms, 11 in (8,12] ms, 16 in (12,20] ms, and 4 above 20 ms. All 77 over-threshold values are retained, converted to milliseconds, in `ancestry-preflight.json` and repeated in `callback-analysis.json`. These are profiler sample intervals, not callback-latency observations. Main also has 132 samples detached from either phase root (285,836 µs self sampled CPU), including 61 GC self samples (139,792 µs); HELD has 43 detached samples (97,751 µs), including inspector/GC/runtime activity. They remain unresolved, not reassigned to a phase.
+
+Full node ancestry and raw URLs: `held-06fe/ancestry.json`, `main-4e25/ancestry.json`, and `ancestry-preflight.json`. Raw profiles are `held-06fe/cpu-profile.json` and `main-4e25/cpu-profile.json`; `summary/cpu-ancestry.md` preserves exclusive stage and named-frame tables. `manifest.json`, `postflight.json`, and per-arm preflight receipts retain exact identities and checks. No owned benchmark/build remains active; the existing unrelated Vite process was left untouched.
+
+## Evidence correction and limits
+
+`callback-analysis.json` was corrected after detecting that an initial calculation had labeled raw microseconds as milliseconds and used the wrong threshold. It now records units, strict `>5000µs` count, max, and the complete correctly converted value list from `ancestry-preflight.json`; SHA-256 `3af6f939d7f6b1a7931c04baf111923a02e43e3edb21484e5f2b2d9e993fc53d`. Raw profile files were not changed. This one pair is a current-artifact diagnostic only: the main tail makes pair-wide ranking unsuitable for causal budget or parity claims, and no counterfactual establishes savings.

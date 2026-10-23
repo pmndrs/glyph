@@ -1,0 +1,45 @@
+# Fixed-20 dense acceptance reference
+
+Performance admission reference: `fixed20-admission-review.md` (SHA-256 `f260c8c104908e6e556e02409f0174509e6094be1f7b22d890d2860913f3b454`). All latency values are ms for complete named callbacks. Saved nearest-rank p50/p90/p95 and N are copied without recalculation; all eight chronological fixed-20 block medians are copied verbatim. Labs per-block trim was already applied in the source data.
+
+## Dense rows
+
+### Rewrite 512 labels in one group
+
+| Arm | N | p50 | p90 | p95 | Blocks 1–8 (chronological medians, ms) |
+| --- | ---: | ---: | ---: | ---: | --- |
+| candidate | 208 | 8.294125 | 8.8365 | 9.000917 | 8.113167, 8.302625, 8.347292, 8.108792, 8.360333, 8.233083, 8.248666, 8.535417 |
+| main | 208 | 6.933292 | 7.391541 | 7.481625 | 7.087125, 6.984459, 6.910917, 6.897042, 6.858917, 7.0715, 6.830584, 6.914541 |
+| published | 200 | 7.457667 | 7.876959 | 7.981917 | 7.487333, 7.469209, 7.524333, 7.451459, 7.545125, 7.145542, 7.312083, 7.568667 |
+
+### Publish 1024 retained Text instances
+
+| Arm | N | p50 | p90 | p95 | Blocks 1–8 (chronological medians, ms) |
+| --- | ---: | ---: | ---: | ---: | --- |
+| candidate | 128 | 17.484625 | 18.343792 | 18.5845 | 17.201792, 17.133375, 17.350083, 17.227333, 18.52745899999988, 17.505334, 17.416583, 17.439916 |
+| main | 128 | 15.192542 | 16.085083 | 16.200666999999882 | 15.163833, 15.433791, 14.977749999999881, 15.180292, 15.192542, 15.084583, 15.08525, 15.272375 |
+| published | 128 | 15.156541 | 15.935708 | 16.122334 | 15.37875, 15.244875, 14.991625, 14.904541, 14.76775, 14.823542, 15.323833, 15.16 |
+
+## Saved result identities
+
+| Arm | Arm archive SHA-256 | Fixed candidate archive SHA-256 | Raw result SHA-256 | Distribution receipt SHA-256 | Manifest SHA-256 |
+| --- | --- | --- | --- | --- | --- |
+| candidate | `06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be` | `06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be` | `ad1c04fa0149ee123f831f91f126f7dfe1515ae77b4e141a826f346556b47e3b` | `f3dd909679430318195cd168ce1bc5cb4fac9c975a0b380906578e92e87e26fd` | `7684664b3b0b3bd41a7215041114090ec5af9c3bad6ee70da7a24300c4d2336b` |
+| main | `bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20` | `06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be` | `3888a3d1826a2e81e4612a23bb6fbea93eadff564e1daf7308ff5d15b343f3b7` | `e6223ee226c436004d9278c1d604e65703384d1b1d262f438164f5468f4cd139` | `0be57d3966f0b955de0894e5049c4e35adfa3a89aa64ebb35b35392246431f24` |
+| published | `6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b` | `06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be` | `d55c73d93007177e32dc439b32120d2c359176f1eba98b72b4b90d74105c06de` | `95747d590f3a7715f2d7105cc8e5afd1129c4771dfde5b8c0f038e6ee9a9221b` | `e0b686c7573035ae7837c34d7a54487ffd286b27cd9a6e1affc74a2634b1600a` |
+
+The candidate is the frozen `06fe22…` archive in both comparisons. Main and published rows refer to their respective control-arm raw baseline results; each matrix also uses the same frozen candidate archive. The raw fixed-20 sample result JSONs and all eight-block summaries remain at the paths recorded in the companion JSON.
+## Seven-family summary and retained gains
+
+The existing fixed-20 admission review concludes parity is not established against both controls: ordinary complete-operation losses remain in dense 512/1024, long unsafe-boundary reflow, cold mounting, width-change measurement, and small repeated setters. The draft stays held; sparse/inspection and prepared-edit gains do not cancel those losses. See the source report for the full family table and availability/calibration caveats.
+
+| Existing gain example | Main p50 / p90 / p95 | Published p50 / p90 / p95 | Candidate p50 / p90 / p95 |
+| --- | --- | --- | --- |
+| Sparse/root publication: separated balanced grow-shrink-space scene publication | 4.805500000000238 / 5.120667 / 5.238708 | 4.821042 / 5.161042 / 5.277834 | 2.969667 / 3.275 / 3.442792 |
+| Selected copy/inspection: edit and independently copy one label among 1,000 | 2.768667 / 3.116834 / 3.183541 | 5.913958000000119 / 6.317417 / 6.426542 | 1.873125 / 2.004333 / 2.059958 |
+| Per-glyph inspection after width change | 7.15175 / 9.558833 / 9.616375 | 9.296417 / 10.975334 / 12.029041 | 4.568542 / 7.118541 / 7.293917 |
+| Sparse inspection: edit and sparsely borrow one of 1,000 retained labels | 0.218083 / 0.257375 / 0.271667 | 0.218167 / 0.255083 / 0.27475 | 0.163708 / 0.221708 / 0.240875 |
+
+## Review inventory and current caveat
+
+The written fixed-20 admission review is a performance interpretation, not a source-only review. The written `v3-combination-source-review.md` is a read-only scoped source review of the earlier 10-file V3 diff; it does not review the current HELD variant. Root brief history records a clean High source review of the additive profile-output change, but no formal written artifact for that review was supplied here. High completed the named other-Wasm classification review, preserved at `current-cost-review.md` (SHA-256 `c525ea4748f76a321718047f47ee9d30c2a74a33517773c9ce57b4af182bdead`). It confirms the JavaScript/setter subtotal is not a compact-descriptor upper envelope because `other-wasm` includes parsing, entry, validation, commit, and semantic algorithms. The profile pair still supplies no fixed-work savings estimate. See `inventory.md` for exact paths and hashes.

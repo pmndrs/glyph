@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "mise",
+    "exec",
+    "--",
+    "pnpm",
+    "exec",
+    "oxfmt",
+    "--check",
+    "benches/labs/package/edit-sized-publication.profile.mts"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-23T00:14:21.353243+00:00"
+}

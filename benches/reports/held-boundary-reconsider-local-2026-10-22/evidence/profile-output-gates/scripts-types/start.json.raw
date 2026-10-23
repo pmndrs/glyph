@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "mise",
+    "exec",
+    "--",
+    "pnpm",
+    "exec",
+    "tsc",
+    "-p",
+    "benches/tsconfig.scripts.json",
+    "--noEmit"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-23T00:14:21.828280+00:00"
+}

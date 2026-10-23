@@ -1,0 +1,313 @@
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +22
+++++++++++++++++++++++
+Progress: resolved 64, reused 28, downloaded 0, added 22, done
+
+dependencies:
++ @pmndrs/glyph 0.1.0
++ react 19.2.8 (19.3.1 is available)
++ three 0.185.1 (0.186.1 is available)
++ typegpu 0.12.5
+
+Done in 423ms using pnpm v11.15.1
+{
+  "workload": {
+    "boundary": "publication",
+    "count": 1024,
+    "iterations": 80,
+    "position": "first",
+    "profileCase": "bulk-write",
+    "warmups": 10,
+    "reads": "none",
+    "publicationPath": "scene"
+  },
+  "operations": {
+    "perIteration": {
+      "sets": 1024,
+      "reads": 0,
+      "publications": 1
+    },
+    "timed": {
+      "sets": 81920,
+      "reads": 0,
+      "publications": 80
+    },
+    "warmup": {
+      "sets": 10240,
+      "reads": 0,
+      "publications": 10
+    },
+    "postTimedCorrectness": {
+      "measurementReads": 1024,
+      "commitStateReads": 1025,
+      "glyphReads": 1025
+    }
+  },
+  "drawTopology": {
+    "initial": {
+      "draws": 1,
+      "glyphs": 9216
+    },
+    "final": {
+      "draws": 1,
+      "glyphs": 9216
+    }
+  },
+  "elapsedMs": {
+    "mean": 83.14680307500001,
+    "p50": 20.64891699999953,
+    "p90": 186.8291250000002,
+    "p95": 293.01891700000033,
+    "iterations": [
+      17.511082999999985,
+      15.578917000000047,
+      14.746082999999999,
+      14.135707999999909,
+      15.675749999999994,
+      14.873583000000053,
+      14.780915999999934,
+      14.838208000000009,
+      15.280040999999983,
+      21.963458999999943,
+      45.298625000000015,
+      40.286500000000046,
+      44.04849999999999,
+      77.88308400000005,
+      167.329291,
+      110.62045899999998,
+      280.25916600000005,
+      125.78658300000006,
+      75.44566599999985,
+      137.68183299999987,
+      203.01774999999998,
+      186.8291250000002,
+      293.01891700000033,
+      203.24537499999997,
+      413.7515410000001,
+      470.31275000000005,
+      547.7995000000001,
+      153.136708,
+      98.37687499999993,
+      176.70358299999953,
+      44.102082999999766,
+      134.9124580000007,
+      109.66479199999958,
+      147.9598329999999,
+      153.69266599999992,
+      155.59037499999977,
+      99.35154200000034,
+      70.60674999999992,
+      33.85383300000012,
+      25.509208999999828,
+      18.010833000000275,
+      20.64891699999953,
+      13.060042000000067,
+      13.185583000000406,
+      13.977458000000297,
+      18.888875000000553,
+      20.376916999999594,
+      13.955832999999984,
+      16.554959000000053,
+      13.329291999999441,
+      16.581999999999425,
+      19.008499999999913,
+      14.481542000000445,
+      15.122041999999965,
+      14.10662499999944,
+      15.163084000000708,
+      13.865374999999403,
+      13.873833000000559,
+      15.996291999999812,
+      13.711500000000342,
+      15.582499999999527,
+      17.315458000000035,
+      16.437917000000198,
+      16.627792000000227,
+      20.496125000000575,
+      14.068707999999788,
+      16.381000000000313,
+      17.983165999999983,
+      14.214082999999846,
+      13.75183300000026,
+      13.798333000000639,
+      14.855375000000095,
+      97.0346669999999,
+      93.15254199999981,
+      175.0944580000005,
+      166.91529199999968,
+      163.41999999999916,
+      144.96662500000002,
+      181.89658299999974,
+      138.39316700000018
+    ]
+  },
+  "sampledMs": {
+    "total": 6679.542,
+    "stages": {
+      "other-wasm": 2799.592999999999,
+      "javascript": 1702.0429999999967,
+      "shaping": 1064.1580000000004,
+      "gather": 474.83300000000014,
+      "external-javascript": 194.875,
+      "host-runtime": 180.793,
+      "render-plan": 168.457,
+      "benchmark-harness": 54.748,
+      "allocation": 28.417,
+      "serialization": 10.125,
+      "wasm-transition": 1.5
+    }
+  },
+  "cpuHotspots": [
+    {
+      "functionName": "_RNvNtCs8ylJuIvglO0_19pmndrs_glyph_shaper4wasm6update",
+      "sampledMs": 592.2159999999998,
+      "url": "wasm://wasm/005eb4aa"
+    },
+    {
+      "functionName": "_RNvMs5_NtNtCs8ylJuIvglO0_19pmndrs_glyph_shaper6engine5stateNtB5_14ParagraphState7prepare",
+      "sampledMs": 433.4149999999998,
+      "url": "wasm://wasm/005eb4aa"
+    },
+    {
+      "functionName": "_RNvNtNtCs8ylJuIvglO0_19pmndrs_glyph_shaper6engine5state21append_planner_gather",
+      "sampledMs": 387.0830000000002,
+      "url": "wasm://wasm/005eb4aa"
+    },
+    {
+      "functionName": "_RNvNtNtCs8ylJuIvglO0_19pmndrs_glyph_shaper6engine5state28append_paragraph_measurement",
+      "sampledMs": 173.584,
+      "url": "wasm://wasm/005eb4aa"
+    },
+    {
+      "functionName": "_RNvMs3_NtNtCs8ylJuIvglO0_19pmndrs_glyph_shaper6engine20render_plan_compilerNtB5_18RenderPlanCompiler7prepare",
+      "sampledMs": 165.998,
+      "url": "wasm://wasm/005eb4aa"
+    },
+    {
+      "functionName": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup16pair_pos1_cached",
+      "sampledMs": 163.993,
+      "url": "wasm://wasm/005eb4aa"
+    },
+    {
+      "functionName": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb9ot_layout13apply_forward",
+      "sampledMs": 157.252,
+      "url": "wasm://wasm/005eb4aa"
+    },
+    {
+      "functionName": "(garbage collector)",
+      "sampledMs": 139.792,
+      "url": ""
+    },
+    {
+      "functionName": "_RNvMs4_NtNtCsbx9tMmkA0qL_8harfrust2hb4faceNtB5_9hb_font_t15shape_with_plan",
+      "sampledMs": 138.206,
+      "url": "wasm://wasm/005eb4aa"
+    },
+    {
+      "functionName": "Fe",
+      "sampledMs": 117.00099999999999,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-TjeqIT/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_ce09509db3bd9e196286bece8d2da14e/node_modules/@pmndrs/glyph/dist/internal/render-planner.js"
+    },
+    {
+      "functionName": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup15ligature_subst1",
+      "sampledMs": 106.16399999999999,
+      "url": "wasm://wasm/005eb4aa"
+    },
+    {
+      "functionName": "_RINvMs1_NtNtCs8ylJuIvglO0_19pmndrs_glyph_shaper6engine11positioningNtB6_20PositionedGlyphArena17position_fragmentNCNvMs5_NtB8_5stateNtB1V_14ParagraphState18prepare_positioneds1_0NCB1P_s2_0EBa_",
+      "sampledMs": 104.74999999999999,
+      "url": "wasm://wasm/005eb4aa"
+    },
+    {
+      "functionName": "multiplyMatrices",
+      "sampledMs": 102.66900000000001,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-TjeqIT/node_modules/.pnpm/three@0.185.1/node_modules/three/build/three.core.js"
+    },
+    {
+      "functionName": "_RNvMs5_NtNtCs8ylJuIvglO0_19pmndrs_glyph_shaper6engine5stateNtB5_14ParagraphState27prepare_geometry_and_layout",
+      "sampledMs": 102.46100000000001,
+      "url": "wasm://wasm/005eb4aa"
+    },
+    {
+      "functionName": "#F",
+      "sampledMs": 99.12099999999998,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-TjeqIT/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_ce09509db3bd9e196286bece8d2da14e/node_modules/@pmndrs/glyph/dist/internal/render-planner.js"
+    },
+    {
+      "functionName": "_RNvMs5_NtNtCs8ylJuIvglO0_19pmndrs_glyph_shaper6engine5stateNtB5_14ParagraphState18prepare_positioned",
+      "sampledMs": 98.87299999999999,
+      "url": "wasm://wasm/005eb4aa"
+    },
+    {
+      "functionName": "_RNvNtNtCs8ylJuIvglO0_19pmndrs_glyph_shaper6engine12layout_query12flow_extents",
+      "sampledMs": 88.086,
+      "url": "wasm://wasm/005eb4aa"
+    },
+    {
+      "functionName": "adopt",
+      "sampledMs": 86.91799999999999,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-TjeqIT/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_ce09509db3bd9e196286bece8d2da14e/node_modules/@pmndrs/glyph/dist/internal/render-planner.js"
+    },
+    {
+      "functionName": "_RNvNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot6lookup16pair_pos2_cached",
+      "sampledMs": 85.75099999999999,
+      "url": "wasm://wasm/005eb4aa"
+    },
+    {
+      "functionName": "",
+      "sampledMs": 72.74799999999999,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-TjeqIT/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_ce09509db3bd9e196286bece8d2da14e/node_modules/@pmndrs/glyph/dist/internal/render-planner.js"
+    },
+    {
+      "functionName": "updateMatrix",
+      "sampledMs": 63.95699999999998,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-TjeqIT/node_modules/.pnpm/three@0.185.1/node_modules/three/build/three.core.js"
+    },
+    {
+      "functionName": "binaryen:byn$mgfn-shared$233",
+      "sampledMs": 63.498,
+      "url": "wasm://wasm/005eb4aa"
+    },
+    {
+      "functionName": "i",
+      "sampledMs": 62.543000000000006,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-TjeqIT/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_ce09509db3bd9e196286bece8d2da14e/node_modules/@pmndrs/glyph/dist/internal/layout-query-view.js"
+    },
+    {
+      "functionName": "_RNvMs1_NtNtCs8ylJuIvglO0_19pmndrs_glyph_shaper6engine11positioningNtB5_20PositionedGlyphArena10push_glyph",
+      "sampledMs": 60.751000000000005,
+      "url": "wasm://wasm/005eb4aa"
+    },
+    {
+      "functionName": "acceptShape",
+      "sampledMs": 60.544000000000004,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-TjeqIT/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_ce09509db3bd9e196286bece8d2da14e/node_modules/@pmndrs/glyph/dist/three/text.js"
+    },
+    {
+      "functionName": "_RINvNtNtCs8ylJuIvglO0_19pmndrs_glyph_shaper6engine16line_composition24layout_next_line_integerNtNtB4_5state22ShapedBreakCorrectionsEB6_",
+      "sampledMs": 60.37500000000001,
+      "url": "wasm://wasm/005eb4aa"
+    },
+    {
+      "functionName": "_RNvMNtNtCsbx9tMmkA0qL_8harfrust2hb7charmapNtB2_7Charmap3map",
+      "sampledMs": 54.04099999999999,
+      "url": "wasm://wasm/005eb4aa"
+    },
+    {
+      "functionName": "#f",
+      "sampledMs": 53.66299999999998,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-TjeqIT/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_ce09509db3bd9e196286bece8d2da14e/node_modules/@pmndrs/glyph/dist/three/text.js"
+    },
+    {
+      "functionName": "#U",
+      "sampledMs": 51.457,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-TjeqIT/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_ce09509db3bd9e196286bece8d2da14e/node_modules/@pmndrs/glyph/dist/three/command-buffer-renderer.js"
+    },
+    {
+      "functionName": "",
+      "sampledMs": 50.791,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-TjeqIT/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_ce09509db3bd9e196286bece8d2da14e/node_modules/@pmndrs/glyph/dist/internal/create-engine.js"
+    }
+  ]
+}
+Edit-sized publication profile: /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/main-4e25

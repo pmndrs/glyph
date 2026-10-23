@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "mise",
+    "exec",
+    "--",
+    "pnpm",
+    "exec",
+    "tsc",
+    "-p",
+    "benches/tsconfig.scripts.json",
+    "--noEmit"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-23T00:14:21.828280+00:00",
+  "finished": "2026-10-23T00:14:22.445383+00:00",
+  "exit": 0,
+  "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

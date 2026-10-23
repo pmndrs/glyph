@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "mise",
+    "exec",
+    "--",
+    "pnpm",
+    "exec",
+    "oxfmt",
+    "--check",
+    "benches/labs/package/edit-sized-publication.profile.mts"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-23T00:14:21.353243+00:00",
+  "finished": "2026-10-23T00:14:21.827998+00:00",
+  "exit": 0,
+  "stdoutSha256": "323addd11bf5cc2b57557bea2f32ac1048e2998e7489e4308c7c7e671486d522",
+  "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

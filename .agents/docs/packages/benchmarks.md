@@ -1017,6 +1017,12 @@ the suite inspects it after publication for parity with the older controls.
 `benchmark:edit-sized-publication-profile` installs one packed artifact
 and optionally substitutes a named shaper Wasm, then emits a CPU profile, timing summary, and manifest for shaping,
 gather, render-plan, serialization, allocation, host-JavaScript, and other-Wasm attribution.
+The timing summary always includes `elapsedMs.iterations`, the raw chronological complete-callback durations
+in milliseconds, and `elapsedMs.p90` alongside its existing mean/p50/p95. The p90 uses this profiler's existing
+percentile array-index policy; nearest-rank values in Labs acceptance reports are separate. The output change adds no
+timed reads or callback work. The [HELD boundary reconsideration report](../../../benches/reports/held-boundary-reconsider-local-2026-10-22/README.md)
+contains one authenticated frozen 1024 named-Wasm profile pair, its unstable main tail, and portable raw evidence;
+it is diagnostic evidence, not a replacement for the fixed seven-family Labs admission.
 Its `--case prepared-read --count 100|1000 --boundary preparation|publication` profiles the same 100 scattered
 assignments and immediate semantic measurements as the paired Labs cases. Both boundaries use identical edited strings;
 only the publication boundary calls `glyph.shape()` after each assignment. Cold measurement oracles and untouched-label

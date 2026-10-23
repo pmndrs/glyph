@@ -1,0 +1,336 @@
+{
+  "format": "held-boundary-evidence-inventory-v1",
+  "note": "Copies preserve exact bytes; .raw suffix distinguishes evidence from executable source. Artifact tgz and Wasm binaries are excluded.",
+  "files": [
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/current-cost-review-v1.md",
+      "copy": "evidence/current-cost-review-v1.md.raw",
+      "bytes": 6880,
+      "sha256": "e312e4b9899635f007ff8eaa5353c73ec90eb7f148a9ac40dd4d606ed1258dfa"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/current-cost-review.md",
+      "copy": "evidence/current-cost-review.md.raw",
+      "bytes": 6899,
+      "sha256": "c525ea4748f76a321718047f47ee9d30c2a74a33517773c9ce57b4af182bdead"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/fixed20-admission-review.md",
+      "copy": "evidence/fixed20-admission-review.md.raw",
+      "bytes": 11065,
+      "sha256": "f260c8c104908e6e556e02409f0174509e6094be1f7b22d890d2860913f3b454"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/fixed20-reference-dense.json",
+      "copy": "evidence/fixed20-reference-dense.json.raw",
+      "bytes": 19041,
+      "sha256": "d4e480f3098e451105c49cb24cf1c1fa1f8c0695f01900fe84c052f08b79dea1"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/fixed20-reference-dense.md",
+      "copy": "evidence/fixed20-reference-dense.md.raw",
+      "bytes": 5431,
+      "sha256": "1ecc03e139a5923edcc2c8835751b2de52402b71b37280907eb2d89a89e9143a"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/inventory.md",
+      "copy": "evidence/inventory.md.raw",
+      "bytes": 10495,
+      "sha256": "a780c96ed10396fe1cf2d6e11310faaec6802f19e14c31c24255840aedcc2b8f"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-output-gates/benchmark-static/result.json",
+      "copy": "evidence/profile-output-gates/benchmark-static/result.json.raw",
+      "bytes": 410,
+      "sha256": "d22a2c4ef2317c500a9769474698d6a74091d7ab8ebb9aa4b8490261db35438f"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-output-gates/benchmark-static/start.json",
+      "copy": "evidence/profile-output-gates/benchmark-static/start.json.raw",
+      "bytes": 303,
+      "sha256": "87a5afae04a3ab84b18a92a08f859af7519031ad2734d61e5c2a21099e2420dd"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-output-gates/benchmark-static/stderr.log",
+      "copy": "evidence/profile-output-gates/benchmark-static/stderr.log.raw",
+      "bytes": 768,
+      "sha256": "bd039b8d18818776f9a55cfc44280cf7d2c0f2266f13e23b555866c8bc792c2c"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-output-gates/benchmark-static/stdout.log",
+      "copy": "evidence/profile-output-gates/benchmark-static/stdout.log.raw",
+      "bytes": 255,
+      "sha256": "89aa9baecba1b8c5f4f4f0d37236ab183a439b48b1d73ff12a636f8d9a3b65d4"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-output-gates/formatter/result.json",
+      "copy": "evidence/profile-output-gates/formatter/result.json.raw",
+      "bytes": 527,
+      "sha256": "13011ea63ca7b35129c2d226ad84e6dfde84e1552fc6f7b4980956a6ec69955c"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-output-gates/formatter/start.json",
+      "copy": "evidence/profile-output-gates/formatter/start.json.raw",
+      "bytes": 292,
+      "sha256": "2f931eaaa5a30ff3cfc238ec88e21dd809bc42b5641b5a7df9b981bd7e8f145c"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-output-gates/formatter/stderr.log",
+      "copy": "evidence/profile-output-gates/formatter/stderr.log.raw",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-output-gates/formatter/stdout.log",
+      "copy": "evidence/profile-output-gates/formatter/stdout.log.raw",
+      "bytes": 112,
+      "sha256": "323addd11bf5cc2b57557bea2f32ac1048e2998e7489e4308c7c7e671486d522"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-output-gates/harness-input-digest.json",
+      "copy": "evidence/profile-output-gates/harness-input-digest.json.raw",
+      "bytes": 2249,
+      "sha256": "0f2333d9e661c1ebb8e8fb884b75c4952c5c971dc8b7890bb848b76dba0d23fe"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-output-gates/scripts-types/result.json",
+      "copy": "evidence/profile-output-gates/scripts-types/result.json.raw",
+      "bytes": 510,
+      "sha256": "0d5b9cb1ada7676370233294cdaa1e06f542bb2c7f3e0194f233ef1e74020d65"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-output-gates/scripts-types/start.json",
+      "copy": "evidence/profile-output-gates/scripts-types/start.json.raw",
+      "bytes": 275,
+      "sha256": "c9f455339d3065948d88a1080595ed155e3535d52d72c94e031bf4b2855639c0"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-output-gates/scripts-types/stderr.log",
+      "copy": "evidence/profile-output-gates/scripts-types/stderr.log.raw",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-output-gates/scripts-types/stdout.log",
+      "copy": "evidence/profile-output-gates/scripts-types/stdout.log.raw",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-output-gates/state-comparison.json",
+      "copy": "evidence/profile-output-gates/state-comparison.json.raw",
+      "bytes": 80788,
+      "sha256": "a32d9709264b054dc33325e19c371ca6da473f8db24d2705374d721e6de4f0d9"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-output-gates/target-lint/result.json",
+      "copy": "evidence/profile-output-gates/target-lint/result.json.raw",
+      "bytes": 536,
+      "sha256": "c5467c9d27abf85b5519e005a596f95bda5f95f94b61dfa66c4251b7986f59b8"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-output-gates/target-lint/start.json",
+      "copy": "evidence/profile-output-gates/target-lint/start.json.raw",
+      "bytes": 301,
+      "sha256": "a6e12d3747f2118471807aa59647b3f50c3d3f3f91b38056c3fe8312acc58227"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-output-gates/target-lint/stderr.log",
+      "copy": "evidence/profile-output-gates/target-lint/stderr.log.raw",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-output-gates/target-lint/stdout.log",
+      "copy": "evidence/profile-output-gates/target-lint/stdout.log.raw",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-output-gates/workflow/result.json",
+      "copy": "evidence/profile-output-gates/workflow/result.json.raw",
+      "bytes": 482,
+      "sha256": "8459b3884242ec3dca05b6ea9a050974de82ef7f70cf41c2cf2a0dac27a8b673"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-output-gates/workflow/start.json",
+      "copy": "evidence/profile-output-gates/workflow/start.json.raw",
+      "bytes": 247,
+      "sha256": "18bc25ebf0c0adc8779a06101e195b62e729fe99a52d2382ef63e3b8f9adc0cc"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-output-gates/workflow/stderr.log",
+      "copy": "evidence/profile-output-gates/workflow/stderr.log.raw",
+      "bytes": 66,
+      "sha256": "ccb06545be9924b5b614ea12f430be2bf8c4a799b40b76bddf36491e126442f2"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-output-gates/workflow/stdout.log",
+      "copy": "evidence/profile-output-gates/workflow/stdout.log.raw",
+      "bytes": 1744,
+      "sha256": "0b30ce432654557c2a3893b4bf0a243b6a2bab4c3d9474207d6d7a364cef9d63"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/ancestry-preflight.json",
+      "copy": "evidence/profile-pair/ancestry-preflight.json.raw",
+      "bytes": 5206,
+      "sha256": "05f66e9f7199e8d12353a1212582005c696f863ddc63a452bb0a63f2caed7325"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/callback-analysis.json",
+      "copy": "evidence/profile-pair/callback-analysis.json.raw",
+      "bytes": 6963,
+      "sha256": "3af6f939d7f6b1a7931c04baf111923a02e43e3edb21484e5f2b2d9e993fc53d"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/held-06fe-preflight-02/preflight.json",
+      "copy": "evidence/profile-pair/held-06fe-preflight-02/preflight.json.raw",
+      "bytes": 1702,
+      "sha256": "69daf48986b9a7d84bf94520513845f66f6b446667acdecb99c2aa2f2866c164"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/held-06fe-preflight/preflight.json",
+      "copy": "evidence/profile-pair/held-06fe-preflight/preflight.json.raw",
+      "bytes": 3864,
+      "sha256": "90a4feac439dfa28b8ba653fe1ec633fb21714dc62573efce14e7bb646ec9e62"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/held-06fe/ancestry.json",
+      "copy": "evidence/profile-pair/held-06fe/ancestry.json.raw",
+      "bytes": 105,
+      "sha256": "ccd6328ff4c4f4815506697b9ed35edd638ecde2204532097927fed118eb3ac8"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/held-06fe/cpu-profile.json",
+      "copy": "evidence/profile-pair/held-06fe/cpu-profile.json.raw",
+      "bytes": 164304,
+      "sha256": "0828584cddb9182933e3cc3d58f7399cf99a7785e20aa52ca3a1de6a43d4beaf"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/held-06fe/manifest.json",
+      "copy": "evidence/profile-pair/held-06fe/manifest.json.raw",
+      "bytes": 281539,
+      "sha256": "fd6eb7f4942fe4557d08d26719069970e420d480400590e108baea0901a7c8fc"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/held-06fe/postflight.json",
+      "copy": "evidence/profile-pair/held-06fe/postflight.json.raw",
+      "bytes": 1705,
+      "sha256": "9aa5c7a7eff65907fc60c1f3f1111ff87ec1f9386590f4882bf6f9127998fd28"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/held-06fe/result.json",
+      "copy": "evidence/profile-pair/held-06fe/result.json.raw",
+      "bytes": 1309,
+      "sha256": "4ee94dc44a384ae8e09991b0f15507f8260b385f918231c249f57c3e70a06bbc"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/held-06fe/start.json",
+      "copy": "evidence/profile-pair/held-06fe/start.json.raw",
+      "bytes": 1028,
+      "sha256": "3618a7148fec4c1c18d99c839d2c2e25b1fa5f56ef343666cfe1d4c39c719fb5"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/held-06fe/stderr.log",
+      "copy": "evidence/profile-pair/held-06fe/stderr.log.raw",
+      "bytes": 630,
+      "sha256": "85e879f48731eee6d44dfdf86fc6e276ab2aeddb53a31480e09f00df99c2a4f6"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/held-06fe/stdout.log",
+      "copy": "evidence/profile-pair/held-06fe/stdout.log.raw",
+      "bytes": 11747,
+      "sha256": "3f277a9e83d00f4045b81f040ce702ee8c4e96f53cea13c90d96d4444b84df5a"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/held-06fe/summary.json",
+      "copy": "evidence/profile-pair/held-06fe/summary.json.raw",
+      "bytes": 11278,
+      "sha256": "2c8cd1f601d6412fa316c4d99eb19c977fc32b4d2e40fcb5c4b381b23633e836"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/main-4e25-preflight/preflight.json",
+      "copy": "evidence/profile-pair/main-4e25-preflight/preflight.json.raw",
+      "bytes": 1813,
+      "sha256": "8483d025b9757dbbfe5efa69ddc8a1a7c917b3c8caf4292f6f18b0ebae64a15a"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/main-4e25/ancestry.json",
+      "copy": "evidence/profile-pair/main-4e25/ancestry.json.raw",
+      "bytes": 105,
+      "sha256": "23b334f65c6af468cd7a5cec6cddfd6600a17f47961084bb5d46a077a4d2af9b"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/main-4e25/cpu-profile.json",
+      "copy": "evidence/profile-pair/main-4e25/cpu-profile.json.raw",
+      "bytes": 187413,
+      "sha256": "caca34958cbcedd2704d16728af6e62b684aba95b1983b821a532a895ae6ef0e"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/main-4e25/manifest.json",
+      "copy": "evidence/profile-pair/main-4e25/manifest.json.raw",
+      "bytes": 146634,
+      "sha256": "0a687b06bfe888faabeb6c33d6333ca148d6a44b42c92e1393f2b1eff0fe5e04"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/main-4e25/postflight.json",
+      "copy": "evidence/profile-pair/main-4e25/postflight.json.raw",
+      "bytes": 1703,
+      "sha256": "323005f5be4e26a8cf28fa18852111645020efd37ed246d54f4786aee7cf8772"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/main-4e25/result.json",
+      "copy": "evidence/profile-pair/main-4e25/result.json.raw",
+      "bytes": 1282,
+      "sha256": "6c94bf3eeb3882c0595c65d8ccda45f5ed4418c2d47c2060eef5cfdf0d295035"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/main-4e25/start.json",
+      "copy": "evidence/profile-pair/main-4e25/start.json.raw",
+      "bytes": 1001,
+      "sha256": "c1c6d3942186cd42e61f2fbd768bf2dd322eae5ee7c28916ff4eb879bacdedd2"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/main-4e25/stderr.log",
+      "copy": "evidence/profile-pair/main-4e25/stderr.log.raw",
+      "bytes": 606,
+      "sha256": "ebc811ee1d9184bfc466fa69794a16ddb57d0c39f31ac511554441a881cfd562"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/main-4e25/stdout.log",
+      "copy": "evidence/profile-pair/main-4e25/stdout.log.raw",
+      "bytes": 11640,
+      "sha256": "d9f41c276cac579f13cd51cd9c24f7cdf999bdd6e788f1927630ad966ff6f9d8"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/main-4e25/summary.json",
+      "copy": "evidence/profile-pair/main-4e25/summary.json.raw",
+      "bytes": 11170,
+      "sha256": "909952407c696275153bb38689c47cb38573f1b7e3a017ed95e7ebde978ddcfe"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/paired-report.md",
+      "copy": "evidence/profile-pair/paired-report.md.raw",
+      "bytes": 7795,
+      "sha256": "a3096b361f5cd0999069b5a55fe4a424a403770c9d7ac851e5164c8d9de0c76f"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/setter-raw-frames.md",
+      "copy": "evidence/profile-pair/setter-raw-frames.md.raw",
+      "bytes": 42750,
+      "sha256": "6497da07197ba232420ed6d441947f603ac192b0cf5a3bf0faf7ec74108a1018"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/snapshot.json",
+      "copy": "evidence/snapshot.json.raw",
+      "bytes": 86414,
+      "sha256": "0c0928b9d725e21aa87cf690617a95885c1db625fc77a1d67daecde186beefa1"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/status.txt",
+      "copy": "evidence/status.txt.raw",
+      "bytes": 713,
+      "sha256": "7f3daba7dc236fcb8ca6f1937ff5e4d9fc7d2db0400729fa16be52e8555102c6"
+    }
+  ]
+}

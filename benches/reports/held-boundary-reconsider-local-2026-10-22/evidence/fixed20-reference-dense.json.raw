@@ -1,0 +1,646 @@
+{
+  "title": "Corrected fixed-20 dense acceptance reference",
+  "sourceReport": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/fixed20-admission-review.md",
+  "sourceReportSha256": "f260c8c104908e6e556e02409f0174509e6094be1f7b22d890d2860913f3b454",
+  "percentilePolicy": "Values are copied from the saved nearest-rank distribution receipts; p50/p90/p95 = sample[ceil(q*N)-1]. Existing Labs per-block trim is retained; no further samples were removed. Do not recalculate or substitute another policy.",
+  "arms": {
+    "candidate": {
+      "distributionReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/fixed20-candidate-distribution-results.json",
+      "distributionReceiptSha256": "f3dd909679430318195cd168ce1bc5cb4fac9c975a0b380906578e92e87e26fd",
+      "sourceResultFile": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-fixed20-candidate/candidate.json",
+      "sourceResultSha256": "ad1c04fa0149ee123f831f91f126f7dfe1515ae77b4e141a826f346556b47e3b",
+      "manifest": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-fixed20-candidate/manifest.json",
+      "manifestSha256": "7684664b3b0b3bd41a7215041114090ec5af9c3bad6ee70da7a24300c4d2336b",
+      "comparisonBaselineSha256": null,
+      "comparisonCandidateSha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+      "harnessDigest": "2ac59f1c44447be4d5061003f3df32a66c87952ca297e4a804544f16c09b1f5e",
+      "warmupPolicy": "fixed-20",
+      "blocks": 8,
+      "suite": "full",
+      "samplingPolicy": "single-call",
+      "armArchiveSha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+      "fixedCandidateArchiveSha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be"
+    },
+    "main": {
+      "distributionReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/fixed20-main-distribution-results.json",
+      "distributionReceiptSha256": "e6223ee226c436004d9278c1d604e65703384d1b1d262f438164f5468f4cd139",
+      "sourceResultFile": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-fixed20-main/baseline.json",
+      "sourceResultSha256": "3888a3d1826a2e81e4612a23bb6fbea93eadff564e1daf7308ff5d15b343f3b7",
+      "manifest": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-fixed20-main/manifest.json",
+      "manifestSha256": "0be57d3966f0b955de0894e5049c4e35adfa3a89aa64ebb35b35392246431f24",
+      "comparisonBaselineSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "comparisonCandidateSha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+      "harnessDigest": "2ac59f1c44447be4d5061003f3df32a66c87952ca297e4a804544f16c09b1f5e",
+      "warmupPolicy": "fixed-20",
+      "blocks": 8,
+      "suite": "full",
+      "samplingPolicy": "single-call",
+      "armArchiveSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "fixedCandidateArchiveSha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be"
+    },
+    "published": {
+      "distributionReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/fixed20-published-distribution-results.json",
+      "distributionReceiptSha256": "95747d590f3a7715f2d7105cc8e5afd1129c4771dfde5b8c0f038e6ee9a9221b",
+      "sourceResultFile": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-fixed20-published/baseline.json",
+      "sourceResultSha256": "d55c73d93007177e32dc439b32120d2c359176f1eba98b72b4b90d74105c06de",
+      "manifest": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-fixed20-published/manifest.json",
+      "manifestSha256": "e0b686c7573035ae7837c34d7a54487ffd286b27cd9a6e1affc74a2634b1600a",
+      "comparisonBaselineSha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+      "comparisonCandidateSha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+      "harnessDigest": "2ac59f1c44447be4d5061003f3df32a66c87952ca297e4a804544f16c09b1f5e",
+      "warmupPolicy": "fixed-20",
+      "blocks": 8,
+      "suite": "full",
+      "samplingPolicy": "single-call",
+      "armArchiveSha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+      "fixedCandidateArchiveSha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be"
+    }
+  },
+  "denseRows": {
+    "candidate": {
+      "rewrite512": {
+        "file": "batching.bench.ts",
+        "group": "batched text operations",
+        "name": "rewrite 512 labels in one group",
+        "n": 208,
+        "p50Ms": 8.294125,
+        "p90Ms": 8.8365,
+        "p95Ms": 9.000917,
+        "minimumMs": 7.575792000000119,
+        "maximumMs": 9.412375,
+        "blockMediansMs": [
+          8.113167,
+          8.302625,
+          8.347292,
+          8.108792,
+          8.360333,
+          8.233083,
+          8.248666,
+          8.535417
+        ],
+        "blockWarmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ]
+      },
+      "publish1024": {
+        "file": "stress.bench.ts",
+        "group": "1,000-label stress",
+        "name": "publish 1024 retained Text instances",
+        "n": 128,
+        "p50Ms": 17.484625,
+        "p90Ms": 18.343792,
+        "p95Ms": 18.5845,
+        "minimumMs": 16.12375,
+        "maximumMs": 21.230125,
+        "blockMediansMs": [
+          17.201792,
+          17.133375,
+          17.350083,
+          17.227333,
+          18.52745899999988,
+          17.505334,
+          17.416583,
+          17.439916
+        ],
+        "blockWarmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ]
+      }
+    },
+    "main": {
+      "rewrite512": {
+        "file": "batching.bench.ts",
+        "group": "batched text operations",
+        "name": "rewrite 512 labels in one group",
+        "n": 208,
+        "p50Ms": 6.933292,
+        "p90Ms": 7.391541,
+        "p95Ms": 7.481625,
+        "minimumMs": 6.326,
+        "maximumMs": 7.784709,
+        "blockMediansMs": [
+          7.087125,
+          6.984459,
+          6.910917,
+          6.897042,
+          6.858917,
+          7.0715,
+          6.830584,
+          6.914541
+        ],
+        "blockWarmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ]
+      },
+      "publish1024": {
+        "file": "stress.bench.ts",
+        "group": "1,000-label stress",
+        "name": "publish 1024 retained Text instances",
+        "n": 128,
+        "p50Ms": 15.192542,
+        "p90Ms": 16.085083,
+        "p95Ms": 16.200666999999882,
+        "minimumMs": 14.384166,
+        "maximumMs": 16.4805,
+        "blockMediansMs": [
+          15.163833,
+          15.433791,
+          14.977749999999881,
+          15.180292,
+          15.192542,
+          15.084583,
+          15.08525,
+          15.272375
+        ],
+        "blockWarmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ]
+      }
+    },
+    "published": {
+      "rewrite512": {
+        "file": "batching.bench.ts",
+        "group": "batched text operations",
+        "name": "rewrite 512 labels in one group",
+        "n": 200,
+        "p50Ms": 7.457667,
+        "p90Ms": 7.876959,
+        "p95Ms": 7.981917,
+        "minimumMs": 6.768708,
+        "maximumMs": 8.258333,
+        "blockMediansMs": [
+          7.487333,
+          7.469209,
+          7.524333,
+          7.451459,
+          7.545125,
+          7.145542,
+          7.312083,
+          7.568667
+        ],
+        "blockWarmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ]
+      },
+      "publish1024": {
+        "file": "stress.bench.ts",
+        "group": "1,000-label stress",
+        "name": "publish 1024 retained Text instances",
+        "n": 128,
+        "p50Ms": 15.156541,
+        "p90Ms": 15.935708,
+        "p95Ms": 16.122334,
+        "minimumMs": 14.32475,
+        "maximumMs": 16.781917,
+        "blockMediansMs": [
+          15.37875,
+          15.244875,
+          14.991625,
+          14.904541,
+          14.76775,
+          14.823542,
+          15.323833,
+          15.16
+        ],
+        "blockWarmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ]
+      }
+    }
+  },
+  "gainExamples": {
+    "candidate": {
+      "sparsePublication": {
+        "file": "batching.bench.ts",
+        "group": "multiple-owner publication",
+        "name": "1000 labels separated balanced grow-shrink-space scene publication",
+        "n": 224,
+        "p50Ms": 2.969667,
+        "p90Ms": 3.275,
+        "p95Ms": 3.442792,
+        "minimumMs": 2.720458,
+        "maximumMs": 4.015625,
+        "blockMediansMs": [
+          2.912875,
+          3.000625,
+          2.959334,
+          3.030083,
+          3.026041,
+          2.899709,
+          2.959666,
+          2.958667
+        ],
+        "blockWarmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ]
+      },
+      "selectedCopyInspection": {
+        "file": "inspection.bench.ts",
+        "group": "per-glyph inspection",
+        "name": "edit and independently copy one label among 1000 labels",
+        "n": 312,
+        "p50Ms": 1.873125,
+        "p90Ms": 2.004333,
+        "p95Ms": 2.059958,
+        "minimumMs": 1.726916,
+        "maximumMs": 2.29525,
+        "blockMediansMs": [
+          1.8745,
+          1.873125,
+          1.891667,
+          1.861208,
+          1.8852080000001192,
+          1.882458,
+          1.861375,
+          1.865375
+        ],
+        "blockWarmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ]
+      },
+      "perGlyphInspectionAfterWidthChange": {
+        "file": "layout.bench.ts",
+        "group": "public paragraph layout at 22k glyphs",
+        "name": "per-glyph inspection after width change",
+        "n": 304,
+        "p50Ms": 4.568542,
+        "p90Ms": 7.118541,
+        "p95Ms": 7.293917,
+        "minimumMs": 1.908541,
+        "maximumMs": 7.512708,
+        "blockMediansMs": [
+          4.553292,
+          4.568542,
+          4.461959,
+          4.569916,
+          4.442792,
+          4.669458,
+          4.509542,
+          4.679875
+        ],
+        "blockWarmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ]
+      },
+      "sparseBorrow": {
+        "file": "stress.bench.ts",
+        "group": "1,000-label stress",
+        "name": "edit and sparsely borrow one of 1000 retained labels",
+        "n": 368,
+        "p50Ms": 0.163708,
+        "p90Ms": 0.221708,
+        "p95Ms": 0.240875,
+        "minimumMs": 0.137417,
+        "maximumMs": 0.440875,
+        "blockMediansMs": [
+          0.160625,
+          0.152334,
+          0.158125,
+          0.158625,
+          0.225709,
+          0.156291,
+          0.15675,
+          0.173708
+        ],
+        "blockWarmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ]
+      }
+    },
+    "main": {
+      "sparsePublication": {
+        "file": "batching.bench.ts",
+        "group": "multiple-owner publication",
+        "name": "1000 labels separated balanced grow-shrink-space scene publication",
+        "n": 192,
+        "p50Ms": 4.805500000000238,
+        "p90Ms": 5.120667,
+        "p95Ms": 5.238708,
+        "minimumMs": 4.526417,
+        "maximumMs": 5.861791,
+        "blockMediansMs": [
+          4.818875,
+          4.754583,
+          4.814791,
+          4.825417,
+          4.805500000000238,
+          4.794666,
+          4.792583,
+          4.755125
+        ],
+        "blockWarmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ]
+      },
+      "selectedCopyInspection": {
+        "file": "inspection.bench.ts",
+        "group": "per-glyph inspection",
+        "name": "edit and independently copy one label among 1000 labels",
+        "n": 256,
+        "p50Ms": 2.768667,
+        "p90Ms": 3.116834,
+        "p95Ms": 3.183541,
+        "minimumMs": 2.437375,
+        "maximumMs": 4.434,
+        "blockMediansMs": [
+          2.750416,
+          2.646375,
+          2.788291,
+          2.808166,
+          2.754249999999881,
+          2.79725,
+          2.758417,
+          2.725917
+        ],
+        "blockWarmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ]
+      },
+      "perGlyphInspectionAfterWidthChange": {
+        "file": "layout.bench.ts",
+        "group": "public paragraph layout at 22k glyphs",
+        "name": "per-glyph inspection after width change",
+        "n": 264,
+        "p50Ms": 7.15175,
+        "p90Ms": 9.558833,
+        "p95Ms": 9.616375,
+        "minimumMs": 2.737166,
+        "maximumMs": 9.982125,
+        "blockMediansMs": [
+          7.061917,
+          7.0625,
+          6.594667,
+          7.115792,
+          7.238417,
+          7.172041,
+          7.051709,
+          7.239833
+        ],
+        "blockWarmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ]
+      },
+      "sparseBorrow": {
+        "file": "stress.bench.ts",
+        "group": "1,000-label stress",
+        "name": "edit and sparsely borrow one of 1000 retained labels",
+        "n": 328,
+        "p50Ms": 0.218083,
+        "p90Ms": 0.257375,
+        "p95Ms": 0.271667,
+        "minimumMs": 0.182083,
+        "maximumMs": 0.306792,
+        "blockMediansMs": [
+          0.222625,
+          0.215792,
+          0.213209,
+          0.210959,
+          0.223417,
+          0.217542,
+          0.220833,
+          0.21875
+        ],
+        "blockWarmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ]
+      }
+    },
+    "published": {
+      "sparsePublication": {
+        "file": "batching.bench.ts",
+        "group": "multiple-owner publication",
+        "name": "1000 labels separated balanced grow-shrink-space scene publication",
+        "n": 216,
+        "p50Ms": 4.821042,
+        "p90Ms": 5.161042,
+        "p95Ms": 5.277834,
+        "minimumMs": 4.505166,
+        "maximumMs": 5.682917,
+        "blockMediansMs": [
+          4.839082999999881,
+          4.780125,
+          4.816,
+          4.774375,
+          4.920542000000119,
+          4.838,
+          4.835916,
+          4.771542
+        ],
+        "blockWarmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ]
+      },
+      "selectedCopyInspection": {
+        "file": "inspection.bench.ts",
+        "group": "per-glyph inspection",
+        "name": "edit and independently copy one label among 1000 labels",
+        "n": 208,
+        "p50Ms": 5.913958000000119,
+        "p90Ms": 6.317417,
+        "p95Ms": 6.426542,
+        "minimumMs": 5.495917,
+        "maximumMs": 6.57025,
+        "blockMediansMs": [
+          5.912459,
+          5.86675,
+          5.851375,
+          5.96875,
+          5.871167,
+          5.881209,
+          5.865458,
+          5.94525
+        ],
+        "blockWarmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ]
+      },
+      "perGlyphInspectionAfterWidthChange": {
+        "file": "layout.bench.ts",
+        "group": "public paragraph layout at 22k glyphs",
+        "name": "per-glyph inspection after width change",
+        "n": 232,
+        "p50Ms": 9.296417,
+        "p90Ms": 10.975334,
+        "p95Ms": 12.029041,
+        "minimumMs": 4.829875,
+        "maximumMs": 16.684333,
+        "blockMediansMs": [
+          7.538417,
+          9.299709,
+          9.581958,
+          11.508208,
+          7.624792,
+          7.657292,
+          7.767417,
+          9.496667
+        ],
+        "blockWarmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ]
+      },
+      "sparseBorrow": {
+        "file": "stress.bench.ts",
+        "group": "1,000-label stress",
+        "name": "edit and sparsely borrow one of 1000 retained labels",
+        "n": 336,
+        "p50Ms": 0.218167,
+        "p90Ms": 0.255083,
+        "p95Ms": 0.27475,
+        "minimumMs": 0.171333,
+        "maximumMs": 0.3564170000001192,
+        "blockMediansMs": [
+          0.221708,
+          0.215292,
+          0.214833,
+          0.22275,
+          0.216666,
+          0.211875,
+          0.208125,
+          0.233042
+        ],
+        "blockWarmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ]
+      }
+    }
+  },
+  "sevenFamilyAdmission": {
+    "verdict": "Verified performance parity was not established across the fixed seven families against both controls; the draft stack remains held.",
+    "reference": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/fixed20-admission-review.md",
+    "referenceSha256": "f260c8c104908e6e556e02409f0174509e6094be1f7b22d890d2860913f3b454",
+    "summary": "Dense 512 and 1024, long unsafe-boundary reflow, cold mounting, width-change measurement, and small repeated setter have complete-operation median losses. Sparse publication, independent copy/inspection, prepared inspection, sparse borrow, and repeated edit/read sequences retain gains. Gains and aggregate Labs counts do not offset required-family losses. No 5% floor or historical-tail-only veto was applied."
+  },
+  "profileEnvelopeStatus": {
+    "javascriptEnvelope": "incomplete; High review completed and confirms the JS+allocation+host subtotal is not a compact-descriptor upper envelope",
+    "review": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/current-cost-review.md",
+    "reviewSha256": "c525ea4748f76a321718047f47ee9d30c2a74a33517773c9ce57b4af182bdead",
+    "reason": "other-wasm includes parsing, entry, validation, commit, and semantic algorithms; named self samples are not removable-cost estimates."
+  },
+  "scope": "Factual export of already-saved fixed-20 acceptance evidence only. No measurement, sample reprocessing, or benchmark rerun."
+}

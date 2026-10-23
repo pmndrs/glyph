@@ -470,7 +470,7 @@ const summary = {
   drawTopology: { initial: initialDrawTopology, final: finalDrawTopology },
   elapsedMs: {
     ...distribution(elapsedMs),
-    ...(fontSizeText === undefined && phaseObserver === undefined ? {} : { iterations: elapsedMs }),
+    iterations: elapsedMs,
   },
   ...(timedPhaseIterations === undefined
     ? {}
@@ -599,6 +599,7 @@ function distribution(values: readonly number[]) {
   return {
     mean: sum(values) / values.length,
     p50: percentile(sorted, 0.5),
+    p90: percentile(sorted, 0.9),
     p95: percentile(sorted, 0.95),
   };
 }

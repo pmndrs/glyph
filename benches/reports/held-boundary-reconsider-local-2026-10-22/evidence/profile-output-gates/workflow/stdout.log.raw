@@ -1,0 +1,27 @@
+✔ indexes current specialized workflows from source metadata (90.271959ms)
+✔ describes requirements, writes, and source for one workflow (83.138333ms)
+✔ limits bulk profile reads option to measure or none (448.840833ms)
+✔ treats Vitexec browser and injected-module errors as workflow failures (0.175625ms)
+✔ rejects benchmark-body errors even when Labs exits successfully (0.327959ms)
+✔ lets a baseline fail checks for behavior it predates, but never the candidate (0.485042ms)
+✔ reports workloads whose baseline and candidate were timed in different modes (0.158125ms)
+✔ routes package Labs by event and one explicit pull-request label (0.150958ms)
+✔ measures a main push alone instead of against the canary released for that push (0.050459ms)
+✔ forwards runner options in the position each runner parses (0.105083ms)
+✔ installs the archive emitted by pnpm pack regardless of package version (0.058125ms)
+✔ pins the transitive React peer to the frozen workspace installation for offline core consumers (0.0705ms)
+✔ installs the optional peers exercised by installed-package Labs (0.04225ms)
+✔ selects and releases an available loopback port for private Vite servers (5.048083ms)
+✔ restores full names and statuses from a real Labs comparison (1.009375ms)
+✔ renders a forest plot, slower-first table, and details from mixed results (0.771209ms)
+✔ plots neutral-only results and carries Labs sparklines (0.398166ms)
+✔ hoists a shared name prefix, shortens long names in the middle, and caps the axis (0.186042ms)
+✔ appends to the Actions job summary only when it is configured (1.493166ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 19
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 635.402708

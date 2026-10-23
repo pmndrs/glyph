@@ -1,0 +1,1 @@
+$ node benches/scripts/workflows.mts run benchmark:workflow-check

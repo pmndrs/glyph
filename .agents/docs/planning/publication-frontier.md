@@ -25,6 +25,20 @@ generated:
 
 ## Current execution checkpoint — 22 October 2026
 
+**Boundary reconsideration update.** The frozen fixed-20 admission remains nonparity against both controls:
+complete-operation 512 candidate/main/published p50/p90 is 8.294125/8.836500, 6.933292/7.391541,
+and 7.457667/7.876959 ms; 1024 is 17.484625/18.343792, 15.192542/16.085083,
+and 15.156541/15.935708 ms. All eight dense block medians, sparse/inspection gains and seven-family
+counterexamples are preserved in the [boundary reconsideration report](../../../benches/reports/held-boundary-reconsider-local-2026-10-22/README.md).
+The new named 1024 profile pair (80 complete callbacks after 10 warmups, no timed reads) records HELD
+p50/p90 13.9525/14.9594 ms and an unstable main 20.4961/181.8966 ms with 547.7995 ms max;
+its chronological groups are not Labs independent-process blocks and cannot revise acceptance.
+The additive observer now saves `elapsedMs.iterations` and `elapsedMs.p90`; no product optimization,
+ABI change, allocation claim or parity-sized cost saving is selected. The held stack stays held.
+The cost review corrects the 151,580 µs JavaScript/allocation/host-runtime bucket: other Wasm includes
+parser, entry, validation and commit, so it is not a removable-work ceiling.
+The earlier whole V3 and preserved uncommitted empty-query-stage experiments showed no credible dense gain, remain unpromoted, and were not rerun here; the original checkout remains `experiments/held-empty-query-stage-20261022` at `797b4185` with its runtime, tests, and documentation untouched. No new hypothesis or experiment was selected.
+
 This checkpoint supersedes older execution directions below. The latest measurement correction forbids rejecting correct work solely on a load-confounded pooled p95. Report p50/p90 and block distributions prominently, preserve all raw tails, and apply the same policy to controls. No samples or correct variants are discarded to improve results. The user now requires stopping optimization at verified parity or better across the fixed seven families against both same-machine main and published 0.1.0; no post-parity boost waves. Luna owns all benchmark and gate execution. Only exact owned-system allocation accounting is admitted as memory evidence. Historical process-total measurements remain archived but are excluded from memory decisions.
 
 - Checkpoint `83ccb823` is submitted through real gh-stack; #310 is verified open/draft, with #292 → #301 → #302 unchanged and unmerged. Whole V3 combination now lives on separate experimental branch `experiments/held-v3-single-owner-20261022`. Medium implemented all four preserved Rust files plus exactly four callback tags; fresh High source review is clean. Six focused native workflows and full Glyph package check pass. Luna completed benchmark gates, package/named-Wasm authentication and the single focused comparison. Correct variant `8f62b707` is preserved; fresh High review did not admit it because both dense distributions overlap without a credible gain. Dense512 p50 8.325208→8.337834 ms; dense1024 17.213917→17.176875 ms. No tail-only veto, 5% floor or rerun. [Experiment report](../../../benches/reports/held-v3-single-owner-local-2026-10-22/README.md). No product acceptance or full-scope parity claim.
