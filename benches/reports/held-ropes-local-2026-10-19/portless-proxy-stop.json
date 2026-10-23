@@ -1,0 +1,8 @@
+{
+  "pid": 68409,
+  "command": "/Users/mini/.local/share/mise/installs/node/24.18.0/bin/node /Users/mini/.npm/_npx/6a98873df99949c7/node_modules/portless/dist/cli.js proxy start --foreground --port 1356 --no-tls",
+  "at": "2026-10-19T16:36:37.613666+00:00",
+  "signal": "SIGTERM",
+  "routesBefore": [],
+  "preserveUnownedPid": 34322
+}

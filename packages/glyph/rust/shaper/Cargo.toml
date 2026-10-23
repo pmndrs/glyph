@@ -21,6 +21,7 @@ std = ["serde_json/std"]
 kernel-lab = []
 simd128 = []
 debug-validation = []
+diagnostic-live-memory = []
 
 [dependencies]
 harfrust = { version = "0.12.0", default-features = false, features = ["libm"] }

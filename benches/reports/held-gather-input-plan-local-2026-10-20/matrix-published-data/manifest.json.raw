@@ -1,0 +1,26 @@
+{
+  "generatedAt": "2026-10-20T23:38:39.042Z",
+  "labsVersion": "0.9.0",
+  "harnessDigest": "024d0f4a23200fade2fda80676cab66eb0536656781ba44db88cf36b07236627",
+  "blocks": 8,
+  "suite": "full",
+  "baseline": {
+    "requested": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+    "version": "0.1.0",
+    "sha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b"
+  },
+  "candidate": {
+    "requested": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "version": "0.1.0",
+    "sha256": "9b1ad97a03f5af8eaa0613e5bdaab601edf7fccf69fdeacc6059759191b1fb18"
+  },
+  "savedCandidate": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-main-data",
+  "comparison": "comparison.txt",
+  "notComparable": {
+    "baselineCheckFailures": [],
+    "timingModeMismatches": [
+      "prepared-operations.bench.ts / 100 labels first set+measure / 100 labels first set+measure: baseline single-call, candidate batched",
+      "prepared-operations.bench.ts / 1000 labels first set+measure / 1000 labels first set+measure: baseline single-call, candidate batched"
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "argv": [
+    "/usr/bin/env",
+    "PORTLESS_STATE_DIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/portless-state",
+    "PORTLESS_PORT=1356",
+    "PORTLESS_HTTPS=0",
+    "PORTLESS_SYNC_HOSTS=0",
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "node",
+    "/Users/mini/.npm/_npx/6a98873df99949c7/node_modules/portless/dist/cli.js",
+    "proxy",
+    "start",
+    "--foreground",
+    "--port",
+    "1356",
+    "--no-tls"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-19T16:11:43.013075+00:00",
+  "finished": "2026-10-19T16:36:37.622914+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "42bc636f34a09a729f266f1a09801a27d7d6569b1d722373a75ef068bcee5290",
+    "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

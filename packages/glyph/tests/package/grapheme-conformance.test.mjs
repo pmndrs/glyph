@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { gunzipSync } from 'node:zlib';
 
-import { findGraphemeBoundaries } from '../../dist/internal/graphemes.js';
+import { findGraphemeBoundaries } from '../support/graphemes.mjs';
 
 const fixture = new URL('../fixtures/unicode-17.0.0/GraphemeBreakTest.txt.gz', import.meta.url);
 

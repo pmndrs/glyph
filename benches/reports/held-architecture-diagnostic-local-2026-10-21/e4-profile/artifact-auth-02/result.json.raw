@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "node",
+    "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/authenticate-e4.mjs"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-21T06:16:25.574327+00:00",
+  "finished": "2026-10-21T06:16:39.431434+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "3d04594f2e8456fbac15791b5d41492a804243b19fed4a3a46495c07dea749bf",
+    "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

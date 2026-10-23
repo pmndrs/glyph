@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-22T00:44:24.778440+00:00",
+  "sourceRevision": "9c7c9f36e5a2fb459e14ce67bed2c915c4e81a5b",
+  "sourceStatus": "M packages/glyph/rust/shaper/src/engine/codec_gather.rs\n M packages/glyph/rust/shaper/src/engine/state.rs\n M packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs\n M packages/glyph/rust/shaper/src/engine/work_attribution.rs",
+  "hashes": {
+    "benches/scripts/profile-edit-sized-publication.mts": "efbad689f0e5c1fd9098a859db690b039efc4bfe7910d669b9d5b6f8a5a8d195",
+    "benches/labs/package/edit-sized-publication.profile.mts": "a58bc03aa617daca3ca48a71014978d0869eb16263ef3083730788be5044411b",
+    "benches/labs/package/fixture.ts": "34b97032e1f035d6b15ae385f4a6aa4e6cc0b78d9239dc14e8253a1a6644dfe3",
+    "benches/scripts/support/package-labs-dependencies.mts": "4d1e1f5aeb982f985dc850d88cde1235c51960fd6e5ef25ceb3b75328fc555da",
+    "benches/src/benchmark/cpu-profile-stage.mts": "1392af3692ed873abe18840d91fcfbfbc5ecfe68c5b42e2b242e2cbf2f2bb09d",
+    "benches/fixtures/rendering/inter-bitmap-16.font.glb": "acdca408ed169c7aa1c2791dbbc2982afa1939c56fbc59ef43cc38f7ff366c14",
+    "benches/fixtures/rendering/dot-gothic-16-bitmap-16-32.font.glb": "f1895ea3bf8b69ee7430940a2ccf5d398c7a5f8c469635845c4b4b3b457b112b",
+    "benches/fixtures/rendering/fredoka-issue-216-bitmap-16.font.glb": "2be09acf3c5ebd2d08859eb8d5282cf9018d70f8e84b4bda9eb80c410ff532c0",
+    "pnpm-lock.yaml": "d8c2d8b5ee201fdf1a9e5270eda79d64cf7a79a2061937df49a54f5adf626e9a",
+    "packages/glyph/rust/shaper/src/engine/codec_gather.rs": "c99e9b88d72f408e306f948d1a648096e359bc69588727c76a962812522b1228",
+    "packages/glyph/rust/shaper/src/engine/state.rs": "2ab833cea383e671fb86c5b3e6fa789fd77da5a4ea64f3eaef56b08f4243ab81",
+    "packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs": "3cdcd3f4a916a77b4824db82d2b15a21c574fcd4d5b42082fb714331f2e167ad",
+    "packages/glyph/rust/shaper/src/engine/work_attribution.rs": "2885105896ea65c8792bbaea3e9d7a4ca21119c4fdbcbd65e5ef496c6341c9f9"
+  },
+  "sourceAndFixtureUnchanged": true
+}

@@ -1,0 +1,308 @@
+{
+  "schemaVersion": 1,
+  "environment": {
+    "browser": "149.0.7827.55",
+    "three": "0.185.1",
+    "glyph": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-YDlHdc/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+main-4e25a96a.tgz_@oxc-project+types@0.150.0_7cbe60a4751913b6ad25cb79aec6334d/node_modules/@pmndrs/glyph"
+  },
+  "workload": {
+    "model": "one retained Text inside one TextGroup",
+    "initialColorSpans": 240,
+    "initialGlyphs": 2880,
+    "idleFrames": 30
+  },
+  "usage": "stream",
+  "results": [
+    {
+      "backend": "webgpu",
+      "expectedUsage": "stream",
+      "initial": {
+        "publicationMs": 27.580000000074506,
+        "schedulingMs": 0,
+        "pixelHash": "edd436be",
+        "litPixels": 48898,
+        "draws": 1,
+        "instances": 2880,
+        "uploads": {
+          "attributeCreateBytes": 254080,
+          "attributeCreateCalls": 10,
+          "attributeUpdateBytes": 0,
+          "attributeUpdateCalls": 0,
+          "pboTextureCreateBytes": 0,
+          "pboTextureCreateCalls": 0,
+          "pboTextureUpdateBytes": 0,
+          "pboTextureUpdateCalls": 0
+        }
+      },
+      "changedContents": {
+        "publicationMs": 6.910000000149012,
+        "schedulingMs": 2.6650000009685755,
+        "pixelHash": "acb4311e",
+        "litPixels": 48917,
+        "draws": 1,
+        "instances": 2880,
+        "uploads": {
+          "attributeCreateBytes": 0,
+          "attributeCreateCalls": 0,
+          "attributeUpdateBytes": 180768,
+          "attributeUpdateCalls": 10,
+          "pboTextureCreateBytes": 0,
+          "pboTextureCreateCalls": 0,
+          "pboTextureUpdateBytes": 0,
+          "pboTextureUpdateCalls": 0
+        }
+      },
+      "changedCount": {
+        "publicationMs": 3.7799999993294477,
+        "schedulingMs": 0.8000000007450581,
+        "pixelHash": "08501d70",
+        "litPixels": 24491,
+        "draws": 1,
+        "instances": 1440,
+        "uploads": {
+          "attributeCreateBytes": 0,
+          "attributeCreateCalls": 0,
+          "attributeUpdateBytes": 88816,
+          "attributeUpdateCalls": 10,
+          "pboTextureCreateBytes": 0,
+          "pboTextureCreateCalls": 0,
+          "pboTextureUpdateBytes": 0,
+          "pboTextureUpdateCalls": 0
+        }
+      },
+      "resized": {
+        "publicationMs": 10.370000001043081,
+        "schedulingMs": 2.549999998882413,
+        "pixelHash": "4854a547",
+        "litPixels": 50569,
+        "draws": 1,
+        "instances": 5760,
+        "uploads": {
+          "attributeCreateBytes": 507904,
+          "attributeCreateCalls": 9,
+          "attributeUpdateBytes": 64,
+          "attributeUpdateCalls": 1,
+          "pboTextureCreateBytes": 0,
+          "pboTextureCreateCalls": 0,
+          "pboTextureUpdateBytes": 0,
+          "pboTextureUpdateCalls": 0
+        }
+      },
+      "drawReplacement": {
+        "publicationMs": 3.0549999997019768,
+        "schedulingMs": 0.7549999989569187,
+        "pixelHash": "bc1fd119",
+        "litPixels": 63301,
+        "draws": 2,
+        "instances": 5880,
+        "uploads": {
+          "attributeCreateBytes": 3584,
+          "attributeCreateCalls": 3,
+          "attributeUpdateBytes": 64,
+          "attributeUpdateCalls": 1,
+          "pboTextureCreateBytes": 0,
+          "pboTextureCreateCalls": 0,
+          "pboTextureUpdateBytes": 0,
+          "pboTextureUpdateCalls": 0
+        }
+      },
+      "transform": {
+        "publicationMs": 0.054999999701976776,
+        "schedulingMs": 0.005000000819563866,
+        "pixelHash": "a92799b9",
+        "litPixels": 63301,
+        "draws": 2,
+        "instances": 5880,
+        "uploads": {
+          "attributeCreateBytes": 0,
+          "attributeCreateCalls": 0,
+          "attributeUpdateBytes": 64,
+          "attributeUpdateCalls": 1,
+          "pboTextureCreateBytes": 0,
+          "pboTextureCreateCalls": 0,
+          "pboTextureUpdateBytes": 0,
+          "pboTextureUpdateCalls": 0
+        }
+      },
+      "idle": {
+        "frames": 30,
+        "medianCpuMs": 0.07000000029802322,
+        "p95CpuMs": 0.17999999970197678,
+        "totalCpuMs": 2.7349999994039536,
+        "uploads": {
+          "attributeCreateBytes": 0,
+          "attributeCreateCalls": 0,
+          "attributeUpdateBytes": 0,
+          "attributeUpdateCalls": 0,
+          "pboTextureCreateBytes": 0,
+          "pboTextureCreateCalls": 0,
+          "pboTextureUpdateBytes": 0,
+          "pboTextureUpdateCalls": 0
+        },
+        "versionsUnchanged": true
+      },
+      "storage": {
+        "attributes": 14,
+        "bytes": 528512,
+        "usage": [35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040],
+        "versions": [2, 2, 2, 2, 2, 2, 2, 2, 2, 6, 2, 2, 2, 2]
+      },
+      "shader": {
+        "language": "wgsl",
+        "vertexBytes": 3317,
+        "fragmentBytes": 2177,
+        "vertexHash": "97118076",
+        "fragmentHash": "8e8204d4",
+        "storageResourceDeclarations": 10
+      }
+    },
+    {
+      "backend": "webgl2",
+      "expectedUsage": "stream",
+      "initial": {
+        "publicationMs": 27.279999999329448,
+        "schedulingMs": 0,
+        "pixelHash": "04fac2ee",
+        "litPixels": 48898,
+        "draws": 1,
+        "instances": 2880,
+        "uploads": {
+          "attributeCreateBytes": 0,
+          "attributeCreateCalls": 0,
+          "attributeUpdateBytes": 0,
+          "attributeUpdateCalls": 0,
+          "pboTextureCreateBytes": 254080,
+          "pboTextureCreateCalls": 10,
+          "pboTextureUpdateBytes": 0,
+          "pboTextureUpdateCalls": 0
+        }
+      },
+      "changedContents": {
+        "publicationMs": 6.699999999254942,
+        "schedulingMs": 2.130000000819564,
+        "pixelHash": "de29bf5e",
+        "litPixels": 48917,
+        "draws": 1,
+        "instances": 2880,
+        "uploads": {
+          "attributeCreateBytes": 0,
+          "attributeCreateCalls": 0,
+          "attributeUpdateBytes": 0,
+          "attributeUpdateCalls": 0,
+          "pboTextureCreateBytes": 0,
+          "pboTextureCreateCalls": 0,
+          "pboTextureUpdateBytes": 254080,
+          "pboTextureUpdateCalls": 10
+        }
+      },
+      "changedCount": {
+        "publicationMs": 3.2850000001490116,
+        "schedulingMs": 0.8000000007450581,
+        "pixelHash": "b27298a8",
+        "litPixels": 24491,
+        "draws": 1,
+        "instances": 1440,
+        "uploads": {
+          "attributeCreateBytes": 0,
+          "attributeCreateCalls": 0,
+          "attributeUpdateBytes": 0,
+          "attributeUpdateCalls": 0,
+          "pboTextureCreateBytes": 0,
+          "pboTextureCreateCalls": 0,
+          "pboTextureUpdateBytes": 254080,
+          "pboTextureUpdateCalls": 10
+        }
+      },
+      "resized": {
+        "publicationMs": 10.444999998435378,
+        "schedulingMs": 2.1850000005215406,
+        "pixelHash": "a166a52b",
+        "litPixels": 50569,
+        "draws": 1,
+        "instances": 5760,
+        "uploads": {
+          "attributeCreateBytes": 0,
+          "attributeCreateCalls": 0,
+          "attributeUpdateBytes": 0,
+          "attributeUpdateCalls": 0,
+          "pboTextureCreateBytes": 507904,
+          "pboTextureCreateCalls": 9,
+          "pboTextureUpdateBytes": 128,
+          "pboTextureUpdateCalls": 1
+        }
+      },
+      "drawReplacement": {
+        "publicationMs": 2.7200000006705523,
+        "schedulingMs": 0.6600000001490116,
+        "pixelHash": "e9b75465",
+        "litPixels": 63301,
+        "draws": 2,
+        "instances": 5880,
+        "uploads": {
+          "attributeCreateBytes": 0,
+          "attributeCreateCalls": 0,
+          "attributeUpdateBytes": 0,
+          "attributeUpdateCalls": 0,
+          "pboTextureCreateBytes": 3584,
+          "pboTextureCreateCalls": 3,
+          "pboTextureUpdateBytes": 128,
+          "pboTextureUpdateCalls": 1
+        }
+      },
+      "transform": {
+        "publicationMs": 0.06000000052154064,
+        "schedulingMs": 0.009999999776482582,
+        "pixelHash": "ad4d2245",
+        "litPixels": 63301,
+        "draws": 2,
+        "instances": 5880,
+        "uploads": {
+          "attributeCreateBytes": 0,
+          "attributeCreateCalls": 0,
+          "attributeUpdateBytes": 0,
+          "attributeUpdateCalls": 0,
+          "pboTextureCreateBytes": 0,
+          "pboTextureCreateCalls": 0,
+          "pboTextureUpdateBytes": 128,
+          "pboTextureUpdateCalls": 1
+        }
+      },
+      "idle": {
+        "frames": 30,
+        "medianCpuMs": 0.05999999865889549,
+        "p95CpuMs": 0.18999999947845936,
+        "totalCpuMs": 2.6950000002980232,
+        "uploads": {
+          "attributeCreateBytes": 0,
+          "attributeCreateCalls": 0,
+          "attributeUpdateBytes": 0,
+          "attributeUpdateCalls": 0,
+          "pboTextureCreateBytes": 0,
+          "pboTextureCreateCalls": 0,
+          "pboTextureUpdateBytes": 0,
+          "pboTextureUpdateCalls": 0
+        },
+        "versionsUnchanged": true
+      },
+      "storage": {
+        "attributes": 14,
+        "bytes": 528512,
+        "usage": [35044, 35044, 35044, 35044, 35044, 35044, 35040, 35044, 35044, 35044, 35044, 35044, 35040, 35044],
+        "versions": [2, 2, 2, 2, 2, 2, 2, 2, 2, 6, 2, 2, 2, 2]
+      },
+      "shader": {
+        "language": "glsl",
+        "vertexBytes": 4078,
+        "fragmentBytes": 2811,
+        "vertexHash": "5f7508f7",
+        "fragmentHash": "fcf9431c",
+        "storageResourceDeclarations": 10
+      }
+    }
+  ],
+  "limitations": [
+    "Bytes are counted at Three common Attributes upload decisions and WebGL2 PBO texture updates; ordinary textures, uniforms, and swap-chain traffic are excluded.",
+    "CPU render timings measure synchronous renderer submission in one browser task, not display presentation cadence or GPU execution.",
+    "Headless project Chromium proves real backend execution and readback but is not labeled as a hardware-GPU timing result."
+  ]
+}

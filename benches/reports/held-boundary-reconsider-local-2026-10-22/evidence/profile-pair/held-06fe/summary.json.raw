@@ -1,0 +1,300 @@
+{
+  "workload": {
+    "boundary": "publication",
+    "count": 1024,
+    "iterations": 80,
+    "position": "first",
+    "profileCase": "bulk-write",
+    "warmups": 10,
+    "reads": "none",
+    "publicationPath": "scene"
+  },
+  "operations": {
+    "perIteration": {
+      "sets": 1024,
+      "reads": 0,
+      "publications": 1
+    },
+    "timed": {
+      "sets": 81920,
+      "reads": 0,
+      "publications": 80
+    },
+    "warmup": {
+      "sets": 10240,
+      "reads": 0,
+      "publications": 10
+    },
+    "postTimedCorrectness": {
+      "measurementReads": 1024,
+      "commitStateReads": 1025,
+      "glyphReads": 1025
+    }
+  },
+  "drawTopology": {
+    "initial": {
+      "draws": 1,
+      "glyphs": 9216
+    },
+    "final": {
+      "draws": 1,
+      "glyphs": 9216
+    }
+  },
+  "elapsedMs": {
+    "mean": 14.06442396249999,
+    "p50": 13.957832999999937,
+    "p90": 14.984291999999868,
+    "p95": 15.443374999999833,
+    "iterations": [
+      17.606374999999957,
+      18.019042000000013,
+      14.402834000000098,
+      14.648041000000035,
+      14.826084000000037,
+      16.204207999999994,
+      14.564166,
+      14.216249999999945,
+      13.944124999999985,
+      15.24249999999995,
+      13.952499999999986,
+      15.18220800000006,
+      14.939082999999982,
+      14.932124999999928,
+      15.039916000000062,
+      13.771749999999997,
+      13.727709000000004,
+      13.999292000000082,
+      14.299958999999944,
+      14.689957999999933,
+      14.405958999999939,
+      14.616624999999999,
+      13.957832999999937,
+      13.72729199999992,
+      13.40537500000005,
+      13.485584000000017,
+      14.959375000000023,
+      14.354958000000124,
+      14.077749999999924,
+      13.571165999999948,
+      13.424166999999898,
+      13.104749999999967,
+      13.522167000000081,
+      15.443374999999833,
+      14.707542000000103,
+      14.565499999999929,
+      13.60566700000004,
+      13.274791999999934,
+      13.36504200000013,
+      13.574707999999873,
+      14.417208000000073,
+      14.302083000000039,
+      14.591665999999805,
+      13.440708000000086,
+      13.372957999999926,
+      13.21958399999994,
+      13.241584000000103,
+      14.600750000000062,
+      14.984291999999868,
+      14.023208000000068,
+      13.553291999999828,
+      13.162665999999945,
+      13.389707999999928,
+      13.297458000000006,
+      13.385709000000134,
+      14.698957999999948,
+      14.40666699999997,
+      13.745083000000022,
+      13.18379200000004,
+      12.782708000000184,
+      12.928417000000081,
+      13.187833000000182,
+      14.062000000000126,
+      14.338666999999987,
+      14.197625000000016,
+      13.2521670000001,
+      13.202290999999832,
+      12.997708000000102,
+      13.61200000000008,
+      13.136332999999922,
+      14.293750000000045,
+      14.518249999999853,
+      13.665708999999879,
+      13.047374999999874,
+      13.090584000000035,
+      13.260999999999967,
+      12.922832999999855,
+      13.721832999999833,
+      14.582666999999901,
+      13.977040999999872
+    ]
+  },
+  "sampledMs": {
+    "total": 1162.583,
+    "stages": {
+      "other-wasm": 470.5429999999996,
+      "javascript": 237.62099999999998,
+      "shaping": 235.294,
+      "gather": 101.16900000000001,
+      "host-runtime": 50.956999999999994,
+      "render-plan": 30.083000000000002,
+      "external-javascript": 22.75,
+      "allocation": 8.458,
+      "benchmark-harness": 2.75,
+      "wasm-transition": 1.5,
+      "serialization": 1.458
+    }
+  },
+  "cpuHotspots": [
+    {
+      "functionName": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb9ot_layout13apply_forward",
+      "sampledMs": 45.25,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "post",
+      "sampledMs": 37.125,
+      "url": "node:inspector"
+    },
+    {
+      "functionName": "_RNvMs6_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine12codec_gatherNtB5_20CodecGatherWorkspace13update_fields",
+      "sampledMs": 32.335,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "_RINvMs1_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine11positioningNtB6_20PositionedGlyphArena28position_layout_run_fragmentNCNvMs7_NtB8_5stateNtB26_14ParagraphState18prepare_positioneds1_0NCB20_s2_0EBa_",
+      "sampledMs": 30.206,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "_RNvMs7_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine5stateNtB5_14ParagraphState16prepare_clusters",
+      "sampledMs": 26.832000000000004,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "_RNvNtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine5state23validate_planner_inputs",
+      "sampledMs": 25.418000000000003,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "_RNvXs3_NtNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot4gsub8ligatureNtNtNtCsaDOWveanduf_10read_fonts6tables4gsub20LigatureSubstFormat1NtNtBb_18ot_layout_gsubgpos5Apply25apply_with_external_cache",
+      "sampledMs": 23.291,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "_RINvNtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine13retained_rope19update_ordered_nodeNtNtB4_12codec_gather12GatherSourceNtB1o_11GatherErrorINtB1o_11OwnerRangesINtNtNtNtCsdkdt1aaAg1T_4core4iter8adapters3map3MapINtNtNtB2H_5slice4iter4IterTymEENCNvNtB4_5state21planner_gather_owners0EENCNCINvMs6_B1o_NtB1o_20CodecGatherWorkspace22append_retained_streamB2y_NCNvB3W_21append_planner_gather0E00EB6_",
+      "sampledMs": 22.751,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "_RNvMs_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine9run_localNtB4_14RunLocalWriter14finish_cluster",
+      "sampledMs": 22.621999999999996,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "c",
+      "sampledMs": 22.041999999999998,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-KXlxRI/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_76893355dddd52ac630b5d2be399a7af/node_modules/@pmndrs/glyph/dist/internal/frame-wire.js"
+    },
+    {
+      "functionName": "_RNvXs_NtNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot4gsub8ligatureNtNtNtCsaDOWveanduf_10read_fonts6tables4gsub8LigatureNtNtBa_18ot_layout_gsubgpos5Apply5apply",
+      "sampledMs": 21.541,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "_RNvXs_NtNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot4gpos4pairNtNtNtCsaDOWveanduf_10read_fonts6tables4gpos14PairPosFormat2NtNtBa_18ot_layout_gsubgpos5Apply25apply_with_external_cache",
+      "sampledMs": 20.918,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "_RNvMs_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine12ordered_planNtB4_19OrderedPlanCompiler16prepare_internal",
+      "sampledMs": 20.416,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "_updateText",
+      "sampledMs": 20.25,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-KXlxRI/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_76893355dddd52ac630b5d2be399a7af/node_modules/@pmndrs/glyph/dist/internal/render-planner.js"
+    },
+    {
+      "functionName": "_RNvMs7_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine5stateNtB5_14ParagraphState10commit_all",
+      "sampledMs": 19.541,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "_RNvXNtNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot4gpos4pairNtNtNtCsaDOWveanduf_10read_fonts6tables4gpos14PairPosFormat1NtNtB8_18ot_layout_gsubgpos5Apply25apply_with_external_cache",
+      "sampledMs": 17.875,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "_RNvMNtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine14identity_indexNtB2_13IdentityIndex6insert",
+      "sampledMs": 15.918,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "_RNvMs5_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine5stateNtB5_12PlannerState23prepare_placement_slots",
+      "sampledMs": 14.625,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "_RNvMs_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine13shaping_stateNtB4_10ShapeArena6append",
+      "sampledMs": 14.334,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "#f",
+      "sampledMs": 14.082,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-KXlxRI/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_76893355dddd52ac630b5d2be399a7af/node_modules/@pmndrs/glyph/dist/three/text.js"
+    },
+    {
+      "functionName": "_RNvMs7_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine5stateNtB5_14ParagraphState18prepare_positioned",
+      "sampledMs": 13.584,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "_RNvMs_NtNtCsbx9tMmkA0qL_8harfrust2hb8ot_shapeNtB4_14OtShapeContext14substitute_pre",
+      "sampledMs": 13.542,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "_RNvMs1_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine11positioningNtB5_20PositionedGlyphArena10push_glyph",
+      "sampledMs": 13.209,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "_RNvMsd_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine13retained_ropeINtB5_13OrderedRangesINtNtB7_12codec_gather11OwnerRangesINtNtNtNtCsdkdt1aaAg1T_4core4iter8adapters3map3MapINtNtNtB27_5slice4iter4IterTymEENCNvNtB7_5state21planner_gather_owners0EEE10advance_toB9_",
+      "sampledMs": 13.081,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "_RINvNtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine13cluster_state24append_run_local_clusterNCNvMs7_NtB4_5stateNtB1z_14ParagraphState26finish_cluster_preparation0EB6_",
+      "sampledMs": 12.751999999999999,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "_RINvMs1_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine13cluster_stateNtB6_12ClusterArena15aggregate_shapeNCNvMs7_NtB8_5stateNtB1N_14ParagraphState16prepare_clusterss3_0EBa_",
+      "sampledMs": 12.168,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "pmndrs_glyph_engine_measure_paragraph",
+      "sampledMs": 12.043,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "#R",
+      "sampledMs": 11.749,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-KXlxRI/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_76893355dddd52ac630b5d2be399a7af/node_modules/@pmndrs/glyph/dist/internal/render-planner.js"
+    },
+    {
+      "functionName": "_RNvMs1_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine11positioningNtB5_20PositionedGlyphArena23assign_content_revision",
+      "sampledMs": 11.291,
+      "url": "wasm://wasm/006d4396"
+    },
+    {
+      "functionName": "#P",
+      "sampledMs": 11.125,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-KXlxRI/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_76893355dddd52ac630b5d2be399a7af/node_modules/@pmndrs/glyph/dist/three/command-buffer-renderer.js"
+    }
+  ]
+}

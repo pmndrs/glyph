@@ -511,6 +511,10 @@ impl ShapeArena {
             .extend_from_slice(&source.y_offsets[selected_start..selected_end]);
         self.glyph_flags
             .extend_from_slice(&source.glyph_flags[selected_start..selected_end]);
+        #[cfg(test)]
+        super::work_attribution::record(|work| {
+            work.shape_range_copied_glyphs += selected_end - selected_start
+        });
         Ok(())
     }
 

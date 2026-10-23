@@ -1,0 +1,58 @@
+{
+  "base": "b81756a5ce4541b4e9b23d7ad04c9105345e7cff",
+  "sourceSha256": "e8c21cb9c7dddb99c9211bdadfd372bdc236d7a385c3f4868bac9ece36c33f7b",
+  "diffSha256": "8c97fe745e323dded14c7ec55a830aef9b0244073329ee2450edfc0985f04097",
+  "nativeEvents": 6157,
+  "encodedResultSlices": 4099,
+  "resultBytes": 1977392,
+  "retainedPublications": [
+    {
+      "phase": "forward",
+      "f32Reads": 97280,
+      "f32Writes": 97280
+    },
+    {
+      "phase": "reverse",
+      "f32Reads": 97280,
+      "f32Writes": 97280
+    }
+  ],
+  "copies": [
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/gather-invariant-wave-design.md",
+      "target": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/design.md",
+      "sha256": "7be8694cec433eda613de4e28734f73f4668d6f6f7c61091b93805f68f45e3c1"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/gather-input-plan-native-ledger-01/native-work-ledger.json",
+      "target": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/native-work-ledger.json.raw",
+      "sha256": "dbd09e5a767dc851a5f638d311c191c3ed712a733532191a8e48b769aac139f1"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/gather-input-plan-native-ledger-01/identity.json",
+      "target": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/native-work-identity.json.raw",
+      "sha256": "eef85890efd03c7ef65220392d8428a603b821d3135f755caacd56f10c4e12c8"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/gather-input-plan-tests-04/result.json",
+      "target": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/gather-input-plan-tests-04-result.json.raw",
+      "sha256": "96e660e2128243d9604fc8a63138a602557be0c5923279302830c7315b00cb01"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/gather-input-plan-clippy-01/result.json",
+      "target": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/gather-input-plan-clippy-01-result.json.raw",
+      "sha256": "8ad045174fe37b5e754fb62ac090a7a2d8e75774731bda09343ad10dbf6dae54"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/gather-input-plan-fmt-02/result.json",
+      "target": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/gather-input-plan-fmt-02-result.json.raw",
+      "sha256": "7444cbaa1ae6e482c818eea6c627216f915b6e921f745d89544cd60f7f398115"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/gather-input-plan-native-replay-01/result.json",
+      "target": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/gather-input-plan-native-replay-01-result.json.raw",
+      "sha256": "dd4708c2ee87d69aa9566bfb7c9c8290ec08bf28f625eeca90ab67f0e1216579"
+    }
+  ],
+  "scope": "Focused correctness/work reduction only; speed, size, memory and downstream full gates pending."
+}

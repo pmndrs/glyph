@@ -1,0 +1,10 @@
+{
+  "schema": "root-post-main-frozen-source-verification-v1",
+  "recordedUtc": "2026-10-21T04:50:45.797447+00:00",
+  "freeze": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/root-matrix-fixed-release.json",
+  "freezeSha256": "b776a9f0a3f1475b5385917e21c89e12f5c59f77b796da5f58ae1103cd776020",
+  "inputCount": 788,
+  "mismatches": [],
+  "missing": [],
+  "scope": "Independent read-only source/tooling freeze verification after terminal main arm, while published baseline runs. No build/timing/admission."
+}

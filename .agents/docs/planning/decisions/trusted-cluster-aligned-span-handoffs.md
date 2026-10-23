@@ -1,15 +1,18 @@
 ---
 type: Decision
-title: "Trust only package-owned cluster-aligned span handoffs"
-description: 'Let package-owned text compilers prove exact span arrays are cluster-aligned while treating every caller-owned or copied array as untrusted.'
-decision_status: Accepted
+title: 'Superseded: trust package-owned cluster-aligned span handoffs'
+description: 'Historical decision: package-authored arrays carried JS alignment proofs; rust-owned-authored-span-ranges moves range resolution into Rust and removes this provenance system.'
+decision_status: Superseded
 decided: '2026-10-08'
 generated:
   by: process:docs-new
   at: '2026-10-08T18:02:39Z'
 ---
 
-# Trust only package-owned cluster-aligned span handoffs
+# Superseded: trust only package-owned cluster-aligned span handoffs
+
+This decision is superseded by [rust-owned-authored-span-ranges](../../planning/decisions/rust-owned-authored-span-ranges.md). It documents the
+previous JavaScript alignment and provenance design for history only.
 
 ## Decision
 
@@ -23,9 +26,9 @@ and cluster-alignment path.
 
 React and Vue flatten nested text, align its ranges, then replace each span record while binding loaded fonts. Repeating
 the same Unicode segmentation in Three is redundant, but a structural brand or caller assertion would let mutable or
-foreign arrays bypass the engine's grapheme-grid contract. The [provenance implementation](../../../../packages/glyph/src/internal/graphemes.ts)
-uses exact object identity and text equality, and the [integration tests](../../../../packages/glyph/tests/integration/text-mutation-span-alignment.test.mjs)
-cover inherited proofs, duplicate/unproven input, changed text, changed boundaries, malformed UTF-16, and fresh raw input.
+foreign arrays bypass the engine's grapheme-grid contract. The former provenance implementation used exact object identity
+and text equality. The [historical integration tests](../../../../packages/glyph/tests/integration/text-mutation-span-alignment.test.mjs)
+covered inherited proofs, duplicate/unproven input, changed text, changed boundaries, malformed UTF-16, and fresh raw input.
 
 ## Consequences
 

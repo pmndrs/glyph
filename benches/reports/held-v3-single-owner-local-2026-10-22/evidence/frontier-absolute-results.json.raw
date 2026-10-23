@@ -1,0 +1,355 @@
+{
+  "method": "nearest-rank pooled raw single-call sample percentiles, nanoseconds normalized to milliseconds; block medians preserved separately",
+  "manifestSha256": "e0b594433b668ff8962c8aa88d271c0c35564d72b0abe249963b7536b20979e7",
+  "baselineRawSha256": "f76c842adc420e144f7b531f26b62030a60fd97729b988dccf5e36461ea8e314",
+  "candidateRawSha256": "77c36a6e9c76ecb8316b319be9b91cb72d6ad14cfa6cd7aa3e1e7207c52d8f08",
+  "comparisonSha256": "23f9ce68c529635aca4cea538f54a2da608e35026f6735989b8192486c2fa7bb",
+  "exclusions": {
+    "baselineCheckFailures": [],
+    "timingModeMismatches": [],
+    "matchedRows": 4,
+    "comparisonRowsNeutral": 4
+  },
+  "calibrationAndNoise": {
+    "baseline": {
+      "stableClockGHz": [
+        3.86,
+        3.95
+      ],
+      "medianSpreadPercent": 1.5,
+      "comparisonResolutionPercent": 2.0,
+      "clockExplainsSpreadPercent": 0,
+      "clockAffected": [
+        {
+          "identity": "1 labels first set",
+          "spreadPercent": 3.9
+        }
+      ],
+      "noisy": [
+        {
+          "identity": "1 labels first set",
+          "withinProcessSpreadPercent": 17.0
+        }
+      ]
+    },
+    "candidate": {
+      "stableClockGHz": [
+        3.92,
+        3.95
+      ],
+      "medianSpreadPercent": 1.2,
+      "comparisonResolutionPercent": 1.7,
+      "clockExplainsSpreadPercent": 0,
+      "clockAffected": [
+        {
+          "identity": "1 labels first set",
+          "spreadPercent": 5.3
+        }
+      ],
+      "noisy": [
+        {
+          "identity": "1 labels first set",
+          "withinProcessSpreadPercent": 16.6
+        }
+      ]
+    }
+  },
+  "rows": {
+    "rewrite 512 labels in one group": {
+      "baseline": {
+        "file": "batching.bench.ts",
+        "n": 184,
+        "p50Ms": 8.325208,
+        "p90Ms": 8.803042,
+        "p95Ms": 8.944167,
+        "minMs": 7.636458,
+        "maxMs": 9.440417,
+        "blockMediansMs": [
+          8.402625,
+          8.129416,
+          8.233542,
+          8.31925,
+          8.302291,
+          8.245333,
+          8.245041,
+          8.455209
+        ],
+        "warmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ],
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 27,
+          "warmup_calls": 21
+        }
+      },
+      "candidate": {
+        "file": "batching.bench.ts",
+        "n": 200,
+        "p50Ms": 8.337834,
+        "p90Ms": 8.868584,
+        "p95Ms": 9.068291,
+        "minMs": 7.753041999999881,
+        "maxMs": 9.359083,
+        "blockMediansMs": [
+          8.315083,
+          8.442958,
+          8.177,
+          8.535,
+          8.311709,
+          8.2405,
+          8.3925,
+          8.360666
+        ],
+        "warmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ],
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 29,
+          "warmup_calls": 21
+        }
+      }
+    },
+    "1000 labels first same-length scene publication": {
+      "baseline": {
+        "file": "batching.bench.ts",
+        "n": 272,
+        "p50Ms": 1.675208,
+        "p90Ms": 1.8465,
+        "p95Ms": 1.895375,
+        "minMs": 1.441875,
+        "maxMs": 2.454291,
+        "blockMediansMs": [
+          1.675167,
+          1.738834,
+          1.653958,
+          1.687875,
+          1.642083,
+          1.701458,
+          1.617292,
+          1.679917
+        ],
+        "warmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ],
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 38,
+          "warmup_calls": 21
+        }
+      },
+      "candidate": {
+        "file": "batching.bench.ts",
+        "n": 288,
+        "p50Ms": 1.697625,
+        "p90Ms": 2.11825,
+        "p95Ms": 4.633417,
+        "minMs": 1.473916,
+        "maxMs": 18.835542,
+        "blockMediansMs": [
+          1.670959,
+          1.662166,
+          2.911834,
+          1.637917,
+          1.665917,
+          1.684209,
+          1.686375,
+          1.691834
+        ],
+        "warmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ],
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 40,
+          "warmup_calls": 21
+        }
+      }
+    },
+    "1 labels first set": {
+      "baseline": {
+        "file": "prepared-operations.bench.ts",
+        "n": 584,
+        "p50Ms": 0.120833,
+        "p90Ms": 0.153709,
+        "p95Ms": 0.165208,
+        "minMs": 0.083625,
+        "maxMs": 0.255,
+        "blockMediansMs": [
+          0.12225,
+          0.123833,
+          0.119459,
+          0.13075,
+          0.125459,
+          0.117417,
+          0.110458,
+          0.11825
+        ],
+        "warmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ],
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 77,
+          "warmup_calls": 21
+        }
+      },
+      "candidate": {
+        "file": "prepared-operations.bench.ts",
+        "n": 600,
+        "p50Ms": 0.126541,
+        "p90Ms": 0.160625,
+        "p95Ms": 0.183666,
+        "minMs": 0.084209,
+        "maxMs": 0.313,
+        "blockMediansMs": [
+          0.121667,
+          0.117666,
+          0.1205,
+          0.127792,
+          0.128625,
+          0.130667,
+          0.136792,
+          0.125334
+        ],
+        "warmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ],
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 79,
+          "warmup_calls": 21
+        }
+      }
+    },
+    "publish 1024 retained Text instances": {
+      "baseline": {
+        "file": "stress.bench.ts",
+        "n": 128,
+        "p50Ms": 17.213917,
+        "p90Ms": 17.94,
+        "p95Ms": 18.062334,
+        "minMs": 16.127375,
+        "maxMs": 18.353625,
+        "blockMediansMs": [
+          17.16325,
+          17.15916700000012,
+          17.266167,
+          17.089833,
+          17.64983299999988,
+          17.027,
+          16.839166,
+          17.031375
+        ],
+        "warmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ],
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 20,
+          "warmup_calls": 21
+        }
+      },
+      "candidate": {
+        "file": "stress.bench.ts",
+        "n": 128,
+        "p50Ms": 17.176875,
+        "p90Ms": 17.954166,
+        "p95Ms": 18.107958,
+        "minMs": 16.233541,
+        "maxMs": 18.702083,
+        "blockMediansMs": [
+          17.033375,
+          17.21925,
+          17.043125,
+          17.01025,
+          16.951333,
+          17.462208,
+          17.289833,
+          17.212959
+        ],
+        "warmupCalls": [
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21,
+          21
+        ],
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 20,
+          "warmup_calls": 21
+        }
+      }
+    }
+  }
+}

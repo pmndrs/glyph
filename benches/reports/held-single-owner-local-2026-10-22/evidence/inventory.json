@@ -1,0 +1,911 @@
+{
+  "scope": "Frozen single-owner candidate matrix, matched browser diagnostic, exact archive proof and scoped reviews. Imported evidence uses .raw suffixes to preserve source bytes through formatting. Candidate matrix samples stored once and reused against both controls. Browser and Labs diagnostics are separate from acceptance timing.",
+  "files": [
+    {
+      "path": "candidate.json.raw",
+      "sha256": "3f6e73670c82af0e78dcff1b6aebb90f73084a4e55717d45132b0da4298a5fb8",
+      "bytes": 1618414,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-candidate/candidate.json"
+    },
+    {
+      "path": "candidate-absolute-results.json.raw",
+      "sha256": "f45080a9332032ba676c64b849a3fc4c0d304cec9fac849008c5525bf883e65c",
+      "bytes": 46803,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-candidate/absolute-results.json"
+    },
+    {
+      "path": "candidate-manifest.json.raw",
+      "sha256": "b491cbbb61635a49f141c9443ba6e844cdfc2d742df1fe465ea0027b88070eb3",
+      "bytes": 661,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-candidate/manifest.json"
+    },
+    {
+      "path": "main.json.raw",
+      "sha256": "804103028a3d039cdf9a1e00d9e8bf4260eb5d538176448ce3e2524919d2dda3",
+      "bytes": 1771227,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-main-final/baseline.json"
+    },
+    {
+      "path": "main-comparison.txt.raw",
+      "sha256": "0f8c2043965d9f11e3e47f0e4a309d7f01ee781efc4b1cdce236ddfa9f08b6fc",
+      "bytes": 57107,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-main-final/comparison.txt"
+    },
+    {
+      "path": "main-summary.md.raw",
+      "sha256": "76d59f088fc2d407b0cc2d1a4cb61b879030c17e1e21a99cea4410ef51778fab",
+      "bytes": 47326,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-main-final/summary.md"
+    },
+    {
+      "path": "main-manifest.json.raw",
+      "sha256": "55178797e3994011fba6b95ab4fb64ea68bd5931636d8207a95bad3be620f2b1",
+      "bytes": 1032,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-main-final/manifest.json"
+    },
+    {
+      "path": "published.json.raw",
+      "sha256": "95ff27780366f454fdf4faee4c32d249e94754512b228ad21163445ae87af13a",
+      "bytes": 1699062,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-published-final/baseline.json"
+    },
+    {
+      "path": "published-comparison.txt.raw",
+      "sha256": "ce9d2fcfb8d384b5c944fbdfd2005b535c9114549bd7d81d41dd30d778aab5da",
+      "bytes": 54998,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-published-final/comparison.txt"
+    },
+    {
+      "path": "published-summary.md.raw",
+      "sha256": "889fb23a9e431922616e6a95d6f65db8801426bc5407eb71f93d4bd18b7e9503",
+      "bytes": 45951,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-published-final/summary.md"
+    },
+    {
+      "path": "published-manifest.json.raw",
+      "sha256": "e35f1316688b14abd90844427e467a681c24f7377b96472b5abb50ff0e422cbd",
+      "bytes": 1047,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-published-final/manifest.json"
+    },
+    {
+      "path": "dense-tail-analysis.json.raw",
+      "sha256": "87994fb58cc04c4e61130f71605f46a772fd93de4c4923c2a2591769d83ef8f3",
+      "bytes": 5008,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/dense-tail-analysis.json"
+    },
+    {
+      "path": "freeze.json.raw",
+      "sha256": "7295bdfe75dfc1d1e21eab0d159507ef2638908263987edb9d20e219963a6315",
+      "bytes": 123364,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/freeze.json"
+    },
+    {
+      "path": "dense-browser-source-review.json.raw",
+      "sha256": "6f9bf2e701af51c8e346a0b02563aa161e4dbda6fd6dd6d96f716f8f4f820e30",
+      "bytes": 1025,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/dense-browser-source-review.json"
+    },
+    {
+      "path": "final-browser-proof-review.json.raw",
+      "sha256": "100fde73b627bf393541c5c4ca353beca3e4cfdcb71958f83bef7e7f6b91afb6",
+      "bytes": 973,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/final-browser-proof-review.json"
+    },
+    {
+      "path": "cluster-position-admission-audit.md.raw",
+      "sha256": "782048192a1182fae2bb539b6d4846ed4a7d35d5e29d4bddd98ff58144090a00",
+      "bytes": 2585,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/cluster-position-admission-audit.md"
+    },
+    {
+      "path": "main-absolute-results.json.raw",
+      "sha256": "a2a85aae66bba7fc2c2e09ef199741eeb8b4b3729803f9f152a81b4f98eaeeb7",
+      "bytes": 50341,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/main-absolute-results.json"
+    },
+    {
+      "path": "published-absolute-results.json.raw",
+      "sha256": "a0e0d3435396a1d07900feba923a98a1575f97f0183d0afc3b4f4cd6a7a20cd9",
+      "bytes": 50386,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/published-absolute-results.json"
+    },
+    {
+      "path": "matrix-admission-review.md.raw",
+      "sha256": "97c80a8bb8dc4d09b34905019c86f48d99615d506af4094b68574516c0d86a8f",
+      "bytes": 8763,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-admission-review.md"
+    },
+    {
+      "path": "candidate-distribution-results.json.raw",
+      "sha256": "70d8595245f06dbc9a4205cf6b726fdb5f8f585cbb75bc7a3a1fc24c70e27f08",
+      "bytes": 154962,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate-distribution-results.json"
+    },
+    {
+      "path": "main-distribution-results.json.raw",
+      "sha256": "2a4d35c0b856abac8965cc9dc3aaa6b148336dad42f85770f9599a6f6732dbbd",
+      "bytes": 154803,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/main-distribution-results.json"
+    },
+    {
+      "path": "published-distribution-results.json.raw",
+      "sha256": "ef67a0e27273d85347de8b335786006c74fafa5eba57c8ad9aab7d936a6d2d6b",
+      "bytes": 153607,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/published-distribution-results.json"
+    },
+    {
+      "path": "dense-browser-candidate.json.raw",
+      "sha256": "42947db75b135c6820090d8d9ec2a3be207ee50d4cb113e2d8cddc593e190924",
+      "bytes": 422345,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/dense-browser/candidate.json"
+    },
+    {
+      "path": "dense-browser-main.json.raw",
+      "sha256": "25c92d3457386538c8a75fb0e7c1bdc4490db00884ad30cf07767068cf7bac95",
+      "bytes": 27020,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/dense-browser/main.json"
+    },
+    {
+      "path": "dense-browser-main-final.json.raw",
+      "sha256": "e435b0480cea8323106c9ad658a752570cd9c3913174ff376415a153c35a564d",
+      "bytes": 422375,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/dense-browser/main-final.json"
+    },
+    {
+      "path": "dense-browser-published.json.raw",
+      "sha256": "0a539c45f64eea516b831794700aa7e18d26eb50ee2f3935a1225e68bfcc4095",
+      "bytes": 398880,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/dense-browser/published.json"
+    },
+    {
+      "path": "dense-browser-candidate-summary.json.raw",
+      "sha256": "99115bfa83d84b4f6285c9fdc40da8ed773b47b5b478a54d8f7d58656f9f81f7",
+      "bytes": 57435,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/dense-browser/candidate-summary.json"
+    },
+    {
+      "path": "dense-browser-dense-browser-comparison.json.raw",
+      "sha256": "efbcf068077faf1d9de30f0199ebc94aaca6c7eeb6dc12551ffd5e6af790e449",
+      "bytes": 197456,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/dense-browser/dense-browser-comparison.json"
+    },
+    {
+      "path": "dense-browser-browser-proof-cross-arm.json.raw",
+      "sha256": "ce81746ab8d87945e835b1d8d428dac760817cf0aa757b8206ea7227c6a7d8d0",
+      "bytes": 377476,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/dense-browser/browser-proof-cross-arm.json"
+    },
+    {
+      "path": "frozen-api-review.md.raw",
+      "sha256": "659612435e709cddade26d0cb2da3d0f3af0386b3c833fd8e0b68c4307dcc039",
+      "bytes": 5442,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/frozen-api-review.md"
+    },
+    {
+      "path": "archive-abi-inventory.json.raw",
+      "sha256": "7bfc9485b5bf430ca5fdf567fb01f129279164819e12d725eda9fdc73b567ae4",
+      "bytes": 348098,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/archive-abi-inventory.json"
+    },
+    {
+      "path": "export-surface-refinement.json.raw",
+      "sha256": "48d14de948938314fac1e63b137317b8c4fccaebff87e154820ce617ac07d005",
+      "bytes": 304583,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/export-surface-refinement.json"
+    },
+    {
+      "path": "browser-boundary-decision.md.raw",
+      "sha256": "c780a6bd300d59d684df72cefa7db12f37d10c06afc70319caca6383484dacff",
+      "bytes": 7696,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/browser-boundary-decision.md"
+    },
+    {
+      "path": "labs-spike-audit.md.raw",
+      "sha256": "4cc254a046d78e504e70d8fd2f1d5f073fcfcea7279477203f7e05e0910f1763",
+      "bytes": 8906,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-audit.md"
+    },
+    {
+      "path": "labs-spike/injection-rationale.txt.raw",
+      "sha256": "e609bc3d1f5731bbe21de9bacd82141527fa077ad9c32861d1fba2cefa13583f",
+      "bytes": 902,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/injection-rationale.txt"
+    },
+    {
+      "path": "labs-spike/block-02-warmed.json.raw",
+      "sha256": "4525ac7a1ac549c4721cd540149e9b35eb70c8e374cf344bec7a0304cd4d548c",
+      "bytes": 38832,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/block-02-warmed.json"
+    },
+    {
+      "path": "labs-spike/block-03-stock.json.raw",
+      "sha256": "632f00f875f2507eaaabb58fe780138d7d272896cd142c753052a18463feea23",
+      "bytes": 32843,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/block-03-stock.json"
+    },
+    {
+      "path": "labs-spike/block-07-warmed.json.raw",
+      "sha256": "3c45e690622b9bde790d4a6d7ab27fdc041d2525726d5f9d31155e3552bc24e5",
+      "bytes": 38875,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/block-07-warmed.json"
+    },
+    {
+      "path": "labs-spike/block-06-stock.json.raw",
+      "sha256": "4c33d5c2ebf9d67db2801ed5bab493925e8b4ebcaf7dd07ec512cac4ee21669d",
+      "bytes": 32679,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/block-06-stock.json"
+    },
+    {
+      "path": "labs-spike/block-01-stock.json.raw",
+      "sha256": "dfdcc41caee8c7cc513e56dffe57f9c184e00f5d822b4198fdaae492d0c72251",
+      "bytes": 32884,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/block-01-stock.json"
+    },
+    {
+      "path": "labs-spike/block-04-warmed.json.raw",
+      "sha256": "2153e8620e72a9129ed5c910c0130f5b12e20eb055f3bba796ea382833af89b5",
+      "bytes": 38705,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/block-04-warmed.json"
+    },
+    {
+      "path": "labs-spike/block-01-warmed.json.raw",
+      "sha256": "3705897038b076acd5532299aaab673b4acd83511b65e3781a7b12108c3c01fd",
+      "bytes": 39087,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/block-01-warmed.json"
+    },
+    {
+      "path": "labs-spike/block-04-stock.json.raw",
+      "sha256": "63c6765c3a0a45f14c0f65d9531b8dd159adadd54c5ae36ddc5e7c2b0aeeeb8a",
+      "bytes": 32786,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/block-04-stock.json"
+    },
+    {
+      "path": "labs-spike/labs-trace-worker.mjs.raw",
+      "sha256": "a7f3c37be387ee710d92e6552165ca4948731ee7bbe4b0a15a6c0a977657d8dc",
+      "bytes": 12170,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/labs-trace-worker.mjs"
+    },
+    {
+      "path": "labs-spike/labs-original-worker.mjs.raw",
+      "sha256": "baa7454da0fd065a101df5037b7346bf8afc6a590c68a5016a2d8fb739130b4d",
+      "bytes": 7886,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/labs-original-worker.mjs"
+    },
+    {
+      "path": "labs-spike/README.md.raw",
+      "sha256": "60047d7d6cb27dda93ad944c85db4978948ec2d7788748c9ca4236a1c49c41e6",
+      "bytes": 1638,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/README.md"
+    },
+    {
+      "path": "labs-spike/block-07-stock.json.raw",
+      "sha256": "2b2a5f8509c7a52d84f4b026397f3ea74f8345f251079288581cc6f6988ae684",
+      "bytes": 32960,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/block-07-stock.json"
+    },
+    {
+      "path": "labs-spike/block-06-warmed.json.raw",
+      "sha256": "eacc25599ffb64bdec8bdd74f367aef8c68e23e10fc39a15e432422da28d85ea",
+      "bytes": 38320,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/block-06-warmed.json"
+    },
+    {
+      "path": "labs-spike/block-03-warmed.json.raw",
+      "sha256": "11368c509e7e428af65c601ac224faa4e79194c73b0b617116601244b13e813c",
+      "bytes": 38442,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/block-03-warmed.json"
+    },
+    {
+      "path": "labs-spike/labs-original-src.mjs.raw",
+      "sha256": "fff1017f8b652aaccb374d79b0fd1519e643f5cb51375849853bcb4a0d0ea30f",
+      "bytes": 40870,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/labs-original-src.mjs"
+    },
+    {
+      "path": "labs-spike/block-02-stock.json.raw",
+      "sha256": "199c7f36f707a8a92fe6ce6cf48ba6174fc3886b8889700284b4376c9dce653d",
+      "bytes": 32951,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/block-02-stock.json"
+    },
+    {
+      "path": "labs-spike/block-05-stock.json.raw",
+      "sha256": "5e4ef7497bd785ba2e45a3985682b5375ec4cd8db78936831053f120e83ffba6",
+      "bytes": 32640,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/block-05-stock.json"
+    },
+    {
+      "path": "labs-spike/labs-trace-src.mjs.raw",
+      "sha256": "c5b3b6791d036ca6d2a450d483d0c82a83d52d748948900dd9c0371ae9de3db0",
+      "bytes": 41661,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/labs-trace-src.mjs"
+    },
+    {
+      "path": "labs-spike/labs-engine.diff.raw",
+      "sha256": "14e051d865c48ea962874ed83f37f67a3f7b4afd0dac6533bf3521799c9b7c1c",
+      "bytes": 2266,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/labs-engine.diff"
+    },
+    {
+      "path": "labs-spike/block-00-warmed.json.raw",
+      "sha256": "7e0763886914f84ca00534b67aa7d718a7a9a01a31b99030882ef1e3b746cc11",
+      "bytes": 38698,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/block-00-warmed.json"
+    },
+    {
+      "path": "labs-spike/labs-worker.diff.raw",
+      "sha256": "b989293ca9198637ec8e8bebacbde227cbea39204068dec538d5210a0239df68",
+      "bytes": 5595,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/labs-worker.diff"
+    },
+    {
+      "path": "labs-spike/block-05-warmed.json.raw",
+      "sha256": "44a65d692cc1c6f129023bfad4a6980bc0459932da018747c5084b3c5b89d96a",
+      "bytes": 38428,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/block-05-warmed.json"
+    },
+    {
+      "path": "labs-spike/block-00-stock.json.raw",
+      "sha256": "3e9b577e34417d17a894bb1fbf8a8b97a7166ecacf0ea930d1fae300b3e10d9a",
+      "bytes": 32945,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/block-00-stock.json"
+    },
+    {
+      "path": "labs-spike/receipt.json.raw",
+      "sha256": "826810ed45df1a386d40c1b28c2b6ffefcb40b033ebde5d1536240d3a0496a55",
+      "bytes": 30819,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/receipt.json"
+    },
+    {
+      "path": "labs-trace-review.md.raw",
+      "sha256": "eb64380ce5c444c88681dc60348f8148d29080a868b1f921268557a43393a403",
+      "bytes": 8676,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-trace-review.md"
+    },
+    {
+      "path": "labs-spike-interpretation.md.raw",
+      "sha256": "95dbe819d3cb1d697e717f0f4c52971469ab2c9041a87e65a3e3f230a1bfdf5d",
+      "bytes": 5008,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-interpretation.md"
+    },
+    {
+      "path": "prepared-write-ledger.md.raw",
+      "sha256": "c2cf24e139119a8cfccaa28630eb3a30e01591747812d20fcbfe6af101b920c7",
+      "bytes": 17239,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/prepared-write-ledger.md"
+    },
+    {
+      "path": "labs-spike/labs-spike-diagnostic-failure.json.raw",
+      "sha256": "bec65e24330195374977cf2b1439b5ddc7cfd4c52bcfffea81f4d23b95a64351",
+      "bytes": 26374,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic/failure.json"
+    },
+    {
+      "path": "labs-spike/labs-spike-diagnostic-corrected-failure.json.raw",
+      "sha256": "6c16242baca0e6954bc6895aabd952ddb2db61fad6943308b7affc4a450e6d86",
+      "bytes": 27669,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-corrected/failure.json"
+    },
+    {
+      "path": "editorial-mismatch-diagnosis.md.raw",
+      "sha256": "8d8110816e9f830bf8d0c4be569991b3136f0613a88b605bb056ca04b7dc6d51",
+      "bytes": 5806,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-mismatch-diagnosis.md"
+    },
+    {
+      "path": "editorial-scene-proof-review.md.raw",
+      "sha256": "1be9b49daeb3babead3fa76b0b44ebf9d2701233996f9d9995f3a00d28c4b2cd",
+      "bytes": 4547,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-review.md"
+    },
+    {
+      "path": "editorial-scene-proof-followup-review.md.raw",
+      "sha256": "45a59f9f13bef81c10a811b5e97eaf366e6a9c8c70589cc8da8560ec148dc45a",
+      "bytes": 2856,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-followup-review.md"
+    },
+    {
+      "path": "main-allocator-identity-review-v2.md.raw",
+      "sha256": "9dd8f099393574ca2008bcbddd2a93814cedc5df61265d1288462385c789e102",
+      "bytes": 12240,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/main-allocator-identity-review.md"
+    },
+    {
+      "path": "memory-policy-review.md.raw",
+      "sha256": "aee10af4e5c3f55ca368318f9a68b830a1d2cb6cf48f9b5f63f4fb021b216160",
+      "bytes": 1922,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/memory-policy-review.md"
+    },
+    {
+      "path": "main-shaper-memory-artifact-result.json.raw",
+      "sha256": "a1a555301580b759ad48fce6efe19387d3f23dedce0c3988e6d6a07813ec1324",
+      "bytes": 965,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-main-shaper-memory-artifact/result.json"
+    },
+    {
+      "path": "main-shaper-memory-artifact-historical-policy-result.json.raw",
+      "sha256": "2301b7de07d05ae7cbffc12ed1db6d9cdf70c059223c77aa8a5a25380fc8733e",
+      "bytes": 1043,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-main-shaper-memory-artifact-historical-policy/result.json"
+    },
+    {
+      "path": "main-control-profile-artifact-result.json.raw",
+      "sha256": "7eda6286908e720096e66194ca839c1d9c168e4a5ecdc8c09d423897e0ebeecb",
+      "bytes": 1028,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-main-control-profile-artifact/result.json"
+    },
+    {
+      "path": "main-shaper-memory-clean-control-result.json.raw",
+      "sha256": "9e22b49573908464dbba73c3267393fb50c38853df92bbfaa76646f477541608",
+      "bytes": 1040,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-main-shaper-memory-clean-control/result.json"
+    },
+    {
+      "path": "editorial-final-static-result.json.raw",
+      "sha256": "4ea23093607d9fa9d5dbb9cd552adfe6c62364cc67648b8f02eaff42ad067e4f",
+      "bytes": 546,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-editorial-final-static/result.json"
+    },
+    {
+      "path": "editorial-final-workflow-check-result.json.raw",
+      "sha256": "fc582e5f0bdd86e0b01901140a4d2ad1d15090a8aefcedfa64849c22d75445e0",
+      "bytes": 522,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-editorial-final-workflow-check/result.json"
+    },
+    {
+      "path": "final-performance-policy-review.md.raw",
+      "sha256": "c03619e5846be206d3d67132c86fff1114b427a4eec59aed0a51294d2d8b2c7d",
+      "bytes": 9538,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/final-performance-policy-review.md"
+    },
+    {
+      "path": "main-subset-a-memory-artifact-result.json.raw",
+      "sha256": "02af56e4a245075f40ddadaeee9da72063cc0054b6da63fb8ae5060cb3cf1981",
+      "bytes": 1034,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-main-subset-a-memory-artifact/result.json"
+    },
+    {
+      "path": "main-subset-b-memory-artifact-result.json.raw",
+      "sha256": "c00e4d995266d2e0939dc4f54b43c640de125989131c1acc549e1842732ebe95",
+      "bytes": 1034,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-main-subset-b-memory-artifact/result.json"
+    },
+    {
+      "path": "editorial-final-static-fixed-result.json.raw",
+      "sha256": "5454b1ef722858da807aad0b8bbb5c8ef0c4874671632748c714e7c8fb029557",
+      "bytes": 546,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-editorial-final-static-fixed/result.json"
+    },
+    {
+      "path": "editorial-scene-candidate-webgpu-result.json.raw",
+      "sha256": "352356bc03e63066d9d192cbc7c9e33dc53f7ea09fe8d5f39dc366bacdd9f30c",
+      "bytes": 1886,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-editorial-scene-candidate-webgpu/result.json"
+    },
+    {
+      "path": "editorial-scene-candidate-webgpu-fixed-result.json.raw",
+      "sha256": "bfa8fb2a1061f291bb178298cc6bbefe20cacfffd91a6cb2869fc095d83e0e27",
+      "bytes": 1895,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-editorial-scene-candidate-webgpu-fixed/result.json"
+    },
+    {
+      "path": "main-memory-module-review.md.raw",
+      "sha256": "0d882416bdb6fce6996b013d3bb9e0772fc742fdcf27b5a39edd46c8563e6ea3",
+      "bytes": 4722,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/main-memory-module-review.md"
+    },
+    {
+      "path": "main-memory-module-isolated-notes.md.raw",
+      "sha256": "337034789b578829973048b5778e238e89520d45008689331a07ddf90ca4209c",
+      "bytes": 2172,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/main-memory-overlay/module-isolated-notes.md"
+    },
+    {
+      "path": "main-memory-module-isolated.patch.raw",
+      "sha256": "9574529f7b9b7a3fe300e680726465802bbf11e2c931d87a8357b9e424255032",
+      "bytes": 12713,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/main-memory-overlay/module-isolated.patch"
+    },
+    {
+      "path": "main-memory-module-isolated-artifact-result.json.raw",
+      "sha256": "ba2a6d0fa562e9960886b8bc59a5db68585d78b435cb9f60351da5d5bb97e6b0",
+      "bytes": 1057,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-main-memory-module-isolated-artifact/result.json"
+    },
+    {
+      "path": "editorial-transition-fix-static-result.json.raw",
+      "sha256": "6bf7d7e53520a97a0895a3c05b4cb4d0b2db60fb3d6a7c8ddf26d50b6a2be88f",
+      "bytes": 546,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-editorial-transition-fix-static/result.json"
+    },
+    {
+      "path": "editorial-transition-fix-unit-tests-result.json.raw",
+      "sha256": "389f4c33cd7e285a47109b5637ce67beb2e9eb7b845236944e88902d4f5de8e4",
+      "bytes": 512,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-editorial-transition-fix-unit-tests/result.json"
+    },
+    {
+      "path": "editorial-transition-fix-workflow-check-result.json.raw",
+      "sha256": "e84600a087f42ae637f29ed3b2c1cd63b661b28d30d7384e95e8a88a8862854f",
+      "bytes": 522,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-editorial-transition-fix-workflow-check/result.json"
+    },
+    {
+      "path": "editorial-scene-compare-webgpu.json.raw",
+      "sha256": "6076ef2ad4913548353c45e762faea36c388b8bfa911455f8d91080f303badd4",
+      "bytes": 3080,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-comparison-final3/webgpu.json"
+    },
+    {
+      "path": "editorial-scene-candidate-webgpu-receipt.json.raw",
+      "sha256": "da7487f615ed9a148b741cc8344ee2c61c9c081e1cf0816528e8272b51e41837",
+      "bytes": 108043,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final3/candidate/delivery/webgpu-bitmap-tsl-editorial.json"
+    },
+    {
+      "path": "editorial-scene-candidate-webgpu.json.raw",
+      "sha256": "402673320f98b45c082dd49f30d279a2fe5f11915ad21094909153a15ffd3f81",
+      "bytes": 988091,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final3/candidate/pixels/webgpu-bitmap-tsl-editorial-scene.json"
+    },
+    {
+      "path": "editorial-scene-main-webgpu-receipt.json.raw",
+      "sha256": "7edcc530b45c86f2598b0f048a18a3e714732f7cdc5abf0b7333e46c7b92d9b5",
+      "bytes": 107904,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final3/main/delivery/webgpu-bitmap-tsl-editorial.json"
+    },
+    {
+      "path": "editorial-scene-main-webgpu.json.raw",
+      "sha256": "df04bf37b08142b890e8fbc5a8db3978c17c36a71c2581804f50c808dc4bc6f9",
+      "bytes": 983363,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final3/main/pixels/webgpu-bitmap-tsl-editorial-scene.json"
+    },
+    {
+      "path": "editorial-scene-compare-webgl2.json.raw",
+      "sha256": "226b0dfa0930d84e4be0045edc45bd7b66844dfe599daae7dcde903e900d894f",
+      "bytes": 3085,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-comparison-final3/webgl2.json"
+    },
+    {
+      "path": "editorial-scene-candidate-webgl2-receipt.json.raw",
+      "sha256": "b083d9c76bbf7a9676fb94243740b4d237b560d494ccee1542cd095149f1aa0b",
+      "bytes": 108043,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final3/candidate/delivery/webgl2-bitmap-tsl-editorial.json"
+    },
+    {
+      "path": "editorial-scene-candidate-webgl2.json.raw",
+      "sha256": "cd89eb2dfe66dd41abe20550b729e5e5ccd77bda07191e75385727544b2e80c8",
+      "bytes": 988095,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final3/candidate/pixels/webgl2-bitmap-tsl-editorial-scene.json"
+    },
+    {
+      "path": "editorial-scene-main-webgl2-receipt.json.raw",
+      "sha256": "51738b84f292c0e589a464cbbab87669a7a6f28c32b9832bf3e5274dc8bd17b7",
+      "bytes": 107904,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final3/main/delivery/webgl2-bitmap-tsl-editorial.json"
+    },
+    {
+      "path": "editorial-scene-main-webgl2.json.raw",
+      "sha256": "16a4de6cfe0669d6f66ca98549d804c40d85e89a72608096966af57f1585f78f",
+      "bytes": 983021,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final3/main/pixels/webgl2-bitmap-tsl-editorial-scene.json"
+    },
+    {
+      "path": "labs-fixed-warmup-review.md.raw",
+      "sha256": "1078b473b34b9d95084996554e1b92062e42233a12b1d80ba2fbbf425292783d",
+      "bytes": 4589,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-fixed-warmup-review.md"
+    },
+    {
+      "path": "labs-fixed-warmup-reviewed.patch.raw",
+      "sha256": "594eb3e73dc7da2b675a31c4c5922e7a981b5b7c90e2620a77c78be5b3da41ef",
+      "bytes": 32211,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-fixed-warmup-reviewed.patch"
+    },
+    {
+      "path": "editorial-first-difference-review.md.raw",
+      "sha256": "27a41bb9b70d24d50ebcba77613b4f79359ed69c76ccf8622db456031ddbf8d0",
+      "bytes": 5573,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-first-difference-review.md"
+    },
+    {
+      "path": "labs-sampling-protocol-check-receipt.json.raw",
+      "sha256": "ecf396e0f79674c595ac7bba921780fcf8b9b94072f49183467d8d34df22a783",
+      "bytes": 536,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-labs-sampling-protocol-check/result.json"
+    },
+    {
+      "path": "labs-fixedwarmup-unit-receipt.json.raw",
+      "sha256": "8a92fa76322a416093a5daeca5bf27017b537da4c3a1d3bc709bdd7ca7ae4371",
+      "bytes": 512,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-labs-fixedwarmup-unit/result.json"
+    },
+    {
+      "path": "labs-fixedwarmup-workflow-check-receipt.json.raw",
+      "sha256": "be13d2a8c1d1ddbe76675389aef0dddb35a4ff0a7c4780e69f21b297964bc67f",
+      "bytes": 522,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-labs-fixedwarmup-workflow-check/result.json"
+    },
+    {
+      "path": "labs-fixedwarmup-static-final-receipt.json.raw",
+      "sha256": "75a96e1adfef33473d26f654b3fbc27b8f6ab56221af211b27691b5ae5ad4835",
+      "bytes": 546,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-labs-fixedwarmup-static-final/result.json"
+    },
+    {
+      "path": "editorial-pause-static-receipt.json.raw",
+      "sha256": "6875d05edb8fe308fffed6eb407f27184290e31f4fc3dbddac0c9a55b5618247",
+      "bytes": 546,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-editorial-pause-static/result.json"
+    },
+    {
+      "path": "editorial-pause-static-followup-receipt.json.raw",
+      "sha256": "346b67bfc586ed9f17f9ce356f351b06d5ed1879c1ec0e70fed23e966383c268",
+      "bytes": 546,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-editorial-pause-static-followup/result.json"
+    },
+    {
+      "path": "editorial-pause-fix-final-review.md.raw",
+      "sha256": "c9933f0707a9db6b05b708f6ec6eb637f7b1fa43888a9852ad7e1cda12ba74da",
+      "bytes": 3207,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-pause-fix-review.md"
+    },
+    {
+      "path": "editorial-pause-static-final-receipt.json.raw",
+      "sha256": "a0fe3282a12e85c8019a40f30099cda234ea63a3fa0dc6d8944fb1e55634549b",
+      "bytes": 546,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-editorial-pause-static-final/result.json"
+    },
+    {
+      "path": "editorial-pause-focused-unit-receipt.json.raw",
+      "sha256": "74b71db6ca1f8b4509ac273ac2ff83c285b877270a57d4833439273d5ba71a2b",
+      "bytes": 567,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-editorial-pause-focused-unit/result.json"
+    },
+    {
+      "path": "editorial-pause-unit-receipt.json.raw",
+      "sha256": "c739e20df8e4edb24f1fdd5b1c83161e15e88f6f20080664ecc632052f4293fb",
+      "bytes": 512,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-editorial-pause-unit/result.json"
+    },
+    {
+      "path": "editorial-pause-workflow-check-receipt.json.raw",
+      "sha256": "a1f037c0dac41a9f01305d76d76c0637fa324014a823fc9c5d7f0f74cf74a3e4",
+      "bytes": 522,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-editorial-pause-workflow-check/result.json"
+    },
+    {
+      "path": "editorial-final4-webgpu-comparison.json.raw",
+      "sha256": "cb7b8e1c06f590da6e132fffbe381cfb7f7bc23bf51a228a22245ea7b9f031c3",
+      "bytes": 3068,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-comparison-final4/webgpu-corrected.json"
+    },
+    {
+      "path": "editorial-final4-candidate-webgpu-receipt.json.raw",
+      "sha256": "c01e377363650da13de7e63b454b17569b24a14c996d908fc427c2b8b1bfa497",
+      "bytes": 106131,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/editorial-delivery-final4/webgpu-bitmap-tsl-editorial.json"
+    },
+    {
+      "path": "editorial-final4-candidate-webgpu-scene.json.raw",
+      "sha256": "6c99c64783b39dadb8494f6e1202d62c0153e11fe1cb6ad74af1466c5617dfe5",
+      "bytes": 990702,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/editorial-pixels-final4/webgpu-bitmap-tsl-editorial-scene.json"
+    },
+    {
+      "path": "editorial-final4-main-webgpu-receipt.json.raw",
+      "sha256": "e5a31e286f6faa39f4986f7699942ba5f6f0ea76fb82954da3952a21ba7a64ed",
+      "bytes": 106842,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final4/main/delivery/webgpu-bitmap-tsl-editorial.json"
+    },
+    {
+      "path": "editorial-final4-main-webgpu-scene.json.raw",
+      "sha256": "9ac37335388be73736d0aefb9e951377626fe6df1c800163c02a1cc2e22d6f7c",
+      "bytes": 985746,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final4/main/pixels/webgpu-bitmap-tsl-editorial-scene.json"
+    },
+    {
+      "path": "editorial-final4-webgl2-comparison.json.raw",
+      "sha256": "942228999d09caf0f2420e81165ed8441cbd77f3307d19dc46970ec21effcb6c",
+      "bytes": 3068,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-comparison-final4/webgl2.json"
+    },
+    {
+      "path": "editorial-final4-candidate-webgl2-receipt.json.raw",
+      "sha256": "3f806e1af9c56db50ee2af51c446522388ec5416a845d7f055c11af7c3314191",
+      "bytes": 106957,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/editorial-delivery-final4/webgl2-bitmap-tsl-editorial.json"
+    },
+    {
+      "path": "editorial-final4-candidate-webgl2-scene.json.raw",
+      "sha256": "a6ba80ea11560860a40839cf583317ff45b108e34a55d36ec28e450bb25844c4",
+      "bytes": 990701,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/editorial-pixels-final4/webgl2-bitmap-tsl-editorial-scene.json"
+    },
+    {
+      "path": "editorial-final4-main-webgl2-receipt.json.raw",
+      "sha256": "b7c12fe04c986d8e9a86f6b6c7ec5069067d0d04c1c55008ad8484da70a0e2e5",
+      "bytes": 106842,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final4/main/delivery/webgl2-bitmap-tsl-editorial.json"
+    },
+    {
+      "path": "editorial-final4-main-webgl2-scene.json.raw",
+      "sha256": "2f29cf3e97c33eed852ef57f7ba2e2ac5cb10a69017f40cabc33c572bfba3954",
+      "bytes": 985745,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final4/main/pixels/webgl2-bitmap-tsl-editorial-scene.json"
+    },
+    {
+      "path": "editorial-final4-wrong-pin-failure.json.raw",
+      "sha256": "bb41690a619995939b95e4cb2dfecefbe43ac68e86e5e9e8f370cfeb991d670a",
+      "bytes": 855,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-comparison-final4/webgpu.json"
+    },
+    {
+      "path": "editorial-rounding-review.md.raw",
+      "sha256": "9e77405eb9a119f1cf73b6f971ad23bd08393e6b4e1e6f928743b1857965b7eb",
+      "bytes": 9008,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-rounding-review.md"
+    },
+    {
+      "path": "editorial-final4-summary.json.raw",
+      "sha256": "c2398190819a2ed0da43cd4b538069c7e427a62b8ddfbf9d135a771e02a95616",
+      "bytes": 23520,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-final4-summary.json"
+    },
+    {
+      "path": "fixed-warmup-freeze.json.raw",
+      "sha256": "42193d01242c88d310adca9e5e2f4af232f2203e9bfd6841db5669fbf790de01",
+      "bytes": 88325,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/fixed-warmup-freeze.json"
+    },
+    {
+      "path": "fixed20-prearm-load-receipt.json.raw",
+      "sha256": "131fe801d4eaf95f9d5558b306a63dfebda200f5feeb62bae6f4eb4a0ff44ff5",
+      "bytes": 656,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-fixed20-prearm-load/result.json"
+    },
+    {
+      "path": "labs-pilot-review.md.raw",
+      "sha256": "0a58725a9386f54590fc356159960dc6a2038cc0c48693f9269a19da03bfd4d4",
+      "bytes": 7058,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-pilot-review.md"
+    },
+    {
+      "path": "original-pilot-block-pattern.json.raw",
+      "sha256": "36c3d9129a99e7bbd9b9b7146e75441af1ddf7ff63c13e354d5bef5b21b43868",
+      "bytes": 15964,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/original-pilot-block-pattern.json"
+    },
+    {
+      "path": "fixed20-candidate.json.raw",
+      "sha256": "ad1c04fa0149ee123f831f91f126f7dfe1515ae77b4e141a826f346556b47e3b",
+      "bytes": 1986492,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-fixed20-candidate/candidate.json"
+    },
+    {
+      "path": "fixed20-candidate-manifest.json.raw",
+      "sha256": "7684664b3b0b3bd41a7215041114090ec5af9c3bad6ee70da7a24300c4d2336b",
+      "bytes": 691,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-fixed20-candidate/manifest.json"
+    },
+    {
+      "path": "fixed20-candidate-distribution-results.json.raw",
+      "sha256": "f3dd909679430318195cd168ce1bc5cb4fac9c975a0b380906578e92e87e26fd",
+      "bytes": 90880,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/fixed20-candidate-distribution-results.json"
+    },
+    {
+      "path": "fixed20-candidate-run-receipt.json.raw",
+      "sha256": "d66ffbf4dd09b687d8b164f1efcb28fc844da051d6961e933996d09219a98b5e",
+      "bytes": 938,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-matrix-fixed20-candidate/result.json"
+    },
+    {
+      "path": "v3-single-owner-compatibility.md.raw",
+      "sha256": "42adf76f17b317102d801481c8857782a8a554fc038360df7888d075802b36fb",
+      "bytes": 6454,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/v3-single-owner-compatibility.md"
+    },
+    {
+      "path": "fixed20-main.json.raw",
+      "sha256": "3888a3d1826a2e81e4612a23bb6fbea93eadff564e1daf7308ff5d15b343f3b7",
+      "bytes": 1935859,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-fixed20-main/baseline.json"
+    },
+    {
+      "path": "fixed20-main-manifest.json.raw",
+      "sha256": "0be57d3966f0b955de0894e5049c4e35adfa3a89aa64ebb35b35392246431f24",
+      "bytes": 1070,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-fixed20-main/manifest.json"
+    },
+    {
+      "path": "fixed20-main-comparison.txt.raw",
+      "sha256": "613844d69e70dd91134fc02931b4b222b0b7665bcb464554060d99516d4b5a61",
+      "bytes": 54824,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-fixed20-main/comparison.txt"
+    },
+    {
+      "path": "fixed20-main-summary.md.raw",
+      "sha256": "ea049829e95b241c2ff770ef03a4cff3fed0dbe2e969139182f1b60bc1fac3ed",
+      "bytes": 47161,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-fixed20-main/summary.md"
+    },
+    {
+      "path": "fixed20-main-distribution-results.json.raw",
+      "sha256": "e6223ee226c436004d9278c1d604e65703384d1b1d262f438164f5468f4cd139",
+      "bytes": 90834,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/fixed20-main-distribution-results.json"
+    },
+    {
+      "path": "fixed20-main-run-receipt.json.raw",
+      "sha256": "77d76fbd162d09a318289f7688eed9cd06d89ab44a898d3f2bd2e2ad992f211b",
+      "bytes": 1176,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-matrix-fixed20-main/result.json"
+    },
+    {
+      "path": "labs-upstream-context.json.raw",
+      "sha256": "ff651a0b9fab4ca56568ad7a152e34656905806393ed4ff124f2c1420f1b15e3",
+      "bytes": 9967,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-upstream-context.json"
+    },
+    {
+      "path": "next-wave-selection-fixed20.md.raw",
+      "sha256": "22becc760e3fed09d4fcd7f4973bbfcb040828182c510d5ccf319f51191e93df",
+      "bytes": 12267,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/next-wave-selection-fixed20.md"
+    },
+    {
+      "path": "fixed20-published.json.raw",
+      "sha256": "d55c73d93007177e32dc439b32120d2c359176f1eba98b72b4b90d74105c06de",
+      "bytes": 1857429,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-fixed20-published/baseline.json"
+    },
+    {
+      "path": "fixed20-published-manifest.json.raw",
+      "sha256": "e0b686c7573035ae7837c34d7a54487ffd286b27cd9a6e1affc74a2634b1600a",
+      "bytes": 1085,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-fixed20-published/manifest.json"
+    },
+    {
+      "path": "fixed20-published-comparison.txt.raw",
+      "sha256": "4716cc21c95d709140ec5ed813f7ade8c65fd3b8152e5252f44ce2d82f4e0756",
+      "bytes": 53939,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-fixed20-published/comparison.txt"
+    },
+    {
+      "path": "fixed20-published-summary.md.raw",
+      "sha256": "b57e2e3ec7e17550d7611de79f5968f8e248efb728de0f3ea2469c46a3ee807c",
+      "bytes": 46730,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-fixed20-published/summary.md"
+    },
+    {
+      "path": "fixed20-published-distribution-results.json.raw",
+      "sha256": "95747d590f3a7715f2d7105cc8e5afd1129c4771dfde5b8c0f038e6ee9a9221b",
+      "bytes": 89534,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/fixed20-published-distribution-results.json"
+    },
+    {
+      "path": "fixed20-published-run-receipt.json.raw",
+      "sha256": "50a0412268d35c3ac99e3e5ec2a6725f63b522c29e75257c59fc4051babe33e3",
+      "bytes": 1243,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-matrix-fixed20-published/result.json"
+    },
+    {
+      "path": "fixed20-admission-review.md.raw",
+      "sha256": "f260c8c104908e6e556e02409f0174509e6094be1f7b22d890d2860913f3b454",
+      "bytes": 11065,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/fixed20-admission-review.md"
+    },
+    {
+      "path": "fixed20-admission-analysis.json.raw",
+      "sha256": "9d5d981fddb17c3d4aa0e2183b839947eb87734a4bba851839d83b51a2059d22",
+      "bytes": 289884,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/fixed20-admission-analysis.json"
+    },
+    {
+      "path": "next-wave-selection-cost-correction.md.raw",
+      "sha256": "29764491ac82adcd2a043d03f8976abe0097d9d2d3d1b8e71c86259d628306f9",
+      "bytes": 1324,
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/next-wave-selection-cost-correction.md"
+    }
+  ]
+}

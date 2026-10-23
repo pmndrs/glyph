@@ -1,0 +1,9 @@
+{
+  "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-work-ledger-brief.md",
+  "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-auth/work-ledger-brief.md",
+  "sourceSha256": "d67c454e23fef2de0d3cb478cb7aabde21a22d487202227aeb02c736713c03f0",
+  "sourceBytes": 13178,
+  "targetSha256": "2c6eb89ee17909594fea4c227c1f0addaac6aecdc166db738707f874a4aca8a1",
+  "targetBytes": 16244,
+  "transformation": "Pinned Oxfmt formatting of copied design prose only; original fresh High brief preserved."
+}

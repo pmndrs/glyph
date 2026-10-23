@@ -1,0 +1,23 @@
+{
+  "archive": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+  "archiveSha256": "37c1e0882acfb16bc6ebc9e2538340b4a12eeff6d8006e0055e86423db3572e6",
+  "shippingMember": "package/dist/text-shaper.wasm",
+  "shippingWasmSha256": "81153a6202caef528f235ae69d34ff0c8b2515c8c711af84b92db57b1f700aa6",
+  "namedWasmSha256": "8e325fa4af7fb06a7ee99b411eff1e7255171331ff05d0ff0b0eeb0417b475b7",
+  "optimizedCandidateSha256": "81153a6202caef528f235ae69d34ff0c8b2515c8c711af84b92db57b1f700aa6",
+  "manifestReleaseSha256": "81153a6202caef528f235ae69d34ff0c8b2515c8c711af84b92db57b1f700aa6",
+  "manifestExecutableSha256": "81153a6202caef528f235ae69d34ff0c8b2515c8c711af84b92db57b1f700aa6",
+  "manifestNamedSha256": "8e325fa4af7fb06a7ee99b411eff1e7255171331ff05d0ff0b0eeb0417b475b7",
+  "sourceMatchesFreeze": true,
+  "sourcePathCount": 1059,
+  "ownedSourceSha256": {
+    "packages/glyph/rust/shaper/src/engine/state.rs": "af32b2539c9475775ab5845bb07336ac994d03fc8b1827b1d13b5e3e0358cce2",
+    "packages/glyph/rust/shaper/src/engine/work_attribution.rs": "c65ec9b203042818e5eaa997cb9e211a494ddf606fe1d96aeb2c95e58e1c0ac1"
+  },
+  "manifestTools": {
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+    "wasmOpt": "wasm-opt version 129 (version_129)"
+  },
+  "sourceRevision": "a829b86bfefcd0e39b6d947cb7a2571776cd06a0",
+  "sourceDirty": "M .agents/docs/packages/glyph.md\n M .agents/docs/planning/publication-frontier.md\n M packages/glyph/rust/shaper/src/engine/state.rs\n M packages/glyph/rust/shaper/src/engine/work_attribution.rs\n?? .agents/docs/log/2026-10-20-held-shared-layout-hybrid-wave.md"
+}

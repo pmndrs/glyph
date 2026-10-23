@@ -2,6 +2,7 @@ import type { CodecIdFactory, CodecProgramId, CodecResourceId, CodecTechniqueId 
 import type { RasterFormatMetadata, RasterResourceId } from '../config/raster-format.js';
 
 const encoder = new TextEncoder();
+const identityBytes = new Uint8Array(256);
 const renderIdFactories = new WeakSet<object>();
 
 export function renderWireId(identity: string): number {
@@ -9,7 +10,13 @@ export function renderWireId(identity: string): number {
     throw new TypeError('render identity must be a nonempty string');
   }
   let hash = 0x811c_9dc5;
-  for (const byte of encoder.encode(identity)) hash = Math.imul(hash ^ byte, 0x0100_0193) >>> 0;
+  // This synchronous leaf cannot reenter; encodeInto preserves UTF-8 boundaries in bounded shared scratch.
+  let offset = 0;
+  while (offset < identity.length) {
+    const { read, written } = encoder.encodeInto(identity.slice(offset), identityBytes);
+    for (let index = 0; index < written; index++) hash = Math.imul(hash ^ identityBytes[index]!, 0x0100_0193) >>> 0;
+    offset += read;
+  }
   if (hash === 0) throw new RangeError('render program family ID hashes to the reserved zero wire identity');
   return hash;
 }

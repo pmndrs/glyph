@@ -1,0 +1,123 @@
+{
+  "schema": "root-completed-main-dense-descriptive-v1",
+  "scope": "Complete main arm only; descriptive pooled quantiles, not parity/admission or E2 comparison. No timing retry.",
+  "quantile": "Sorted raw per-call samples indexed floor(q*(N-1)); nanoseconds divided by1e6",
+  "inputs": {
+    "baseline": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data/baseline.json",
+      "sha256": "dddfd51f1aabe9b9830a8fe2a5188725bdc856f2fdacc3345d8282059ea7c1ea"
+    },
+    "candidate": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data/candidate.json",
+      "sha256": "69c6b80d2059ebe32909aa0a098e1e3a6c2a1e5e442d645c7f959b129c8db3d8"
+    }
+  },
+  "rows": [
+    {
+      "arm": "baseline",
+      "file": "batching.bench.ts",
+      "name": "rewrite 512 labels in one group",
+      "sampleCount": 240,
+      "p50Ms": 6.968375,
+      "p95Ms": 7.768,
+      "blockMediansMs": [
+        6.864916,
+        6.921542,
+        6.910042,
+        7.016542,
+        7.077833,
+        6.939,
+        6.988709,
+        7.016875
+      ],
+      "plan": {
+        "batch": false,
+        "batch_samples": 0,
+        "batch_unroll": 4,
+        "samples": 34
+      }
+    },
+    {
+      "arm": "baseline",
+      "file": "stress.bench.ts",
+      "name": "publish 1024 retained Text instances",
+      "sampleCount": 128,
+      "p50Ms": 15.544292,
+      "p95Ms": 16.756375,
+      "blockMediansMs": [
+        15.647084,
+        15.371875,
+        15.031541,
+        15.461459,
+        15.99579100000012,
+        15.29975,
+        15.159209,
+        15.544292
+      ],
+      "plan": {
+        "batch": false,
+        "batch_samples": 0,
+        "batch_unroll": 4,
+        "samples": 20
+      }
+    },
+    {
+      "arm": "candidate",
+      "file": "batching.bench.ts",
+      "name": "rewrite 512 labels in one group",
+      "sampleCount": 200,
+      "p50Ms": 9.468042,
+      "p95Ms": 10.614125,
+      "blockMediansMs": [
+        9.591916,
+        9.452417,
+        9.297291,
+        9.600875,
+        9.646167,
+        9.364209,
+        9.57275,
+        9.344334
+      ],
+      "plan": {
+        "batch": false,
+        "batch_samples": 0,
+        "batch_unroll": 4,
+        "samples": 29
+      }
+    },
+    {
+      "arm": "candidate",
+      "file": "stress.bench.ts",
+      "name": "publish 1024 retained Text instances",
+      "sampleCount": 128,
+      "p50Ms": 20.212541,
+      "p95Ms": 45.056167,
+      "blockMediansMs": [
+        32.416916,
+        18.613042,
+        19.006375,
+        18.840167,
+        19.049292,
+        20.00525,
+        19.079833,
+        19.342292
+      ],
+      "plan": {
+        "batch": false,
+        "batch_samples": 0,
+        "batch_unroll": 4,
+        "samples": 20
+      }
+    }
+  ],
+  "baselineChecks": {
+    "identityCount": 145,
+    "batchModeFailures": [],
+    "eightFiniteBlockFailures": []
+  },
+  "candidateChecks": {
+    "identityCount": 145,
+    "batchModeFailures": [],
+    "eightFiniteBlockFailures": []
+  }
+}

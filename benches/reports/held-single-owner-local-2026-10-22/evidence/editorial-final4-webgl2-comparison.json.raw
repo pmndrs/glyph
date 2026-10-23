@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "status": "failed",
+  "candidateReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/editorial-delivery-final4/webgl2-bitmap-tsl-editorial.json",
+  "referenceReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final4/main/delivery/webgl2-bitmap-tsl-editorial.json",
+  "expectedCandidateSha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+  "expectedReferenceSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+  "tolerance": {
+    "maximumDifferentPixels": 0,
+    "basis": "exact fixed-state comparison; no nonzero tolerance established"
+  },
+  "semanticComparison": {
+    "configurationDiffers": false,
+    "cameraDiffers": false,
+    "obstacleDiffers": false,
+    "texts": [
+      {
+        "role": "primary",
+        "authoredDiffers": false,
+        "flowDiffers": false,
+        "worldTransformsDiffer": false,
+        "aggregateMeasurementDiffers": true,
+        "aggregateGlyphCount": {
+          "candidate": 257,
+          "coldMain": 257
+        },
+        "inspectedMeasurementDiffers": false,
+        "inspectedGlyphCount": {
+          "candidate": 257,
+          "coldMain": 257
+        },
+        "lineRowsDiffer": 0,
+        "glyphGeometryRowsDiffer": 57,
+        "glyphIdentityRowsDiffer": 257
+      },
+      {
+        "role": "secondary",
+        "authoredDiffers": false,
+        "flowDiffers": false,
+        "worldTransformsDiffer": false,
+        "aggregateMeasurementDiffers": true,
+        "aggregateGlyphCount": {
+          "candidate": 1443,
+          "coldMain": 1443
+        },
+        "inspectedMeasurementDiffers": false,
+        "inspectedGlyphCount": {
+          "candidate": 1443,
+          "coldMain": 1443
+        },
+        "lineRowsDiffer": 0,
+        "glyphGeometryRowsDiffer": 1038,
+        "glyphIdentityRowsDiffer": 1443
+      }
+    ]
+  },
+  "candidate": {
+    "archiveSha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+    "capture": {
+      "width": 1280,
+      "height": 720,
+      "rgbaSha256": "e8482e2f7c350c62ba3ee9c0892a3a8d2c7b499498d57066f818657ec9cdc07a",
+      "foregroundPixels": 75964,
+      "foregroundBounds": [
+        226,
+        144,
+        1053,
+        580
+      ]
+    }
+  },
+  "reference": {
+    "archiveSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+    "capture": {
+      "width": 1280,
+      "height": 720,
+      "rgbaSha256": "9cf99476e32f6eda5c85c0258fa37fb6265fd3193ec2018be04fe6c477f326cb",
+      "foregroundPixels": 75957,
+      "foregroundBounds": [
+        226,
+        144,
+        1053,
+        580
+      ]
+    }
+  },
+  "diff": {
+    "differentPixels": 842,
+    "differentChannels": 2393,
+    "maximumChannelDelta": 1,
+    "meanChannelDelta": 0.0006491427951388889,
+    "differenceBounds": [
+      285,
+      282,
+      1053,
+      438
+    ]
+  },
+  "error": "Error: Editorial hero differs at 842 pixels; exact tolerance is zero"
+}

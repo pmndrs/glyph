@@ -1,0 +1,169 @@
+{
+  "schema": "held-wave1-final-matrix-verification-v1",
+  "observedUtc": "2026-10-20T15:01:09Z",
+  "worktreeHead": "2fcf408e786fd49d2fe12108823d285cf8c137c5",
+  "sourceInputs": [
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/retained_rope.rs",
+      "expectedSha256": "771de87d95bc6842e7b2e6999ebc10c6ff68a6202d30720441d3c9b20e80aebb",
+      "actualSha256": "771de87d95bc6842e7b2e6999ebc10c6ff68a6202d30720441d3c9b20e80aebb",
+      "matches": true
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/ordered_plan.rs",
+      "expectedSha256": "1573808cec234f555b3cf88bb2eca2bd84b90b86c30abfde5748227b9828acce",
+      "actualSha256": "1573808cec234f555b3cf88bb2eca2bd84b90b86c30abfde5748227b9828acce",
+      "matches": true
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/codec_gather.rs",
+      "expectedSha256": "61f836f7b3210387edbe7cb3f7227d2d5534adedbb57474f8e0471a6f2959809",
+      "actualSha256": "61f836f7b3210387edbe7cb3f7227d2d5534adedbb57474f8e0471a6f2959809",
+      "matches": true
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/codec.rs",
+      "expectedSha256": "82df57f33ec343096a5e62f162c8de0c89c9eef58154c3510078da20ea8d21e2",
+      "actualSha256": "82df57f33ec343096a5e62f162c8de0c89c9eef58154c3510078da20ea8d21e2",
+      "matches": true
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/work_attribution.rs",
+      "expectedSha256": "4b9f016cdeb3d08509b602227801067dfa6ec43cc5e80473b03e04deb712d0a4",
+      "actualSha256": "4b9f016cdeb3d08509b602227801067dfa6ec43cc5e80473b03e04deb712d0a4",
+      "matches": true
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/state.rs",
+      "expectedSha256": "c46627f9ae5fb9966e5d57b9ad2d696440752e8670b08baf3675e947332e8158",
+      "actualSha256": "c46627f9ae5fb9966e5d57b9ad2d696440752e8670b08baf3675e947332e8158",
+      "matches": true
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/style_state.rs",
+      "expectedSha256": "1e848a48995c1d15d91af3654f97be066004d9594149ad6b50a29b484513a1c4",
+      "actualSha256": "1e848a48995c1d15d91af3654f97be066004d9594149ad6b50a29b484513a1c4",
+      "matches": true
+    }
+  ],
+  "allSevenSourceHashesMatch": true,
+  "archives": [
+    {
+      "identity": "candidate",
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-candidate/pmndrs-glyph-0.1.0.tgz",
+      "expectedSha256": "340cbe186620e51f7d0ec460e473d72332c1c112d6c07dfd7dab4e63f74f6804",
+      "actualSha256": "340cbe186620e51f7d0ec460e473d72332c1c112d6c07dfd7dab4e63f74f6804",
+      "matches": true
+    },
+    {
+      "identity": "main",
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+      "expectedSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "actualSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "matches": true
+    },
+    {
+      "identity": "published010",
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+      "expectedSha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+      "actualSha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+      "matches": true
+    },
+    {
+      "identity": "prior698",
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "expectedSha256": "2e4342243c55edb56d3a1a32cbd730185c8d172fa5634da9c1f8fc3b0edd9558",
+      "actualSha256": "2e4342243c55edb56d3a1a32cbd730185c8d172fa5634da9c1f8fc3b0edd9558",
+      "matches": true
+    }
+  ],
+  "allArchiveHashesMatch": true,
+  "arms": {
+    "main": {
+      "receiptPath": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/matrix-main/result.json",
+      "exit": 0,
+      "stdoutSha256": "f3185e057821cffcc20d584f2c59e23b09c1c01a85485e969be099f4b4daaf13",
+      "stderrSha256": "5479fe9d51a06b8fc801fdd749038d9ecdfa80750371fa135105749f95a4b19e",
+      "manifestPath": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/matrix-main-data/manifest.json",
+      "baselineCheckFailures": [],
+      "timingModeMismatches": [
+        "common.bench.ts / measure 100 unchanged labels / measure 100 unchanged labels: baseline single-call, candidate batched",
+        "prepared-operations.bench.ts / 100 labels first set+measure / 100 labels first set+measure: baseline single-call, candidate batched"
+      ]
+    },
+    "published010": {
+      "receiptPath": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/matrix-published/result.json",
+      "exit": 0,
+      "stdoutSha256": "9cefa479e5b3adee4ab0c740965299d50bd74d497219587ac9e6c787a3d6e262",
+      "stderrSha256": "a627fee967e5e9e450fc0c2231d929e397a108f3b9f76990b7415d46dd39d5c2",
+      "manifestPath": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/matrix-published-data/manifest.json",
+      "baselineCheckFailures": [],
+      "timingModeMismatches": [
+        "common.bench.ts / measure 100 unchanged labels / measure 100 unchanged labels: baseline single-call, candidate batched",
+        "prepared-operations.bench.ts / 100 labels first set+measure / 100 labels first set+measure: baseline single-call, candidate batched"
+      ]
+    },
+    "prior698": {
+      "receiptPath": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/matrix-prior698/result.json",
+      "exit": 0,
+      "stdoutSha256": "3c3e43841063544c989c13e2ead9af95086039bc62f3828a2721b317d3f93a4e",
+      "stderrSha256": "caf165d1163ff9b15931f9f50c8fbdad7825dfd229b3dc03b3e2de453a4f8668",
+      "manifestPath": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/matrix-prior698-data/manifest.json",
+      "baselineCheckFailures": [],
+      "timingModeMismatches": [
+        "prepared-operations.bench.ts / 1000 labels first set+measure / 1000 labels first set+measure: baseline batched, candidate single-call",
+        "request-arena.bench.ts / write one paragraph and text mutation / write one paragraph and text mutation: baseline single-call, candidate batched"
+      ]
+    }
+  },
+  "harnessDigests": [
+    "67d7e692d5b43266d3e3b5a2a8923cb004e5bcd2d24f565767b61cc435523a92",
+    "67d7e692d5b43266d3e3b5a2a8923cb004e5bcd2d24f565767b61cc435523a92",
+    "67d7e692d5b43266d3e3b5a2a8923cb004e5bcd2d24f565767b61cc435523a92"
+  ],
+  "allHarnessDigestsEqual": true,
+  "candidateRawJsonSha256": [
+    "dddf1f36aa19b37cdeb240b8c0e1ee20bbd4187e061c0f2c64333a57f4ab1c5b",
+    "dddf1f36aa19b37cdeb240b8c0e1ee20bbd4187e061c0f2c64333a57f4ab1c5b",
+    "dddf1f36aa19b37cdeb240b8c0e1ee20bbd4187e061c0f2c64333a57f4ab1c5b"
+  ],
+  "candidateRawJsonByteIdentical": true,
+  "candidateArchiveSha256PerArm": [
+    "340cbe186620e51f7d0ec460e473d72332c1c112d6c07dfd7dab4e63f74f6804",
+    "340cbe186620e51f7d0ec460e473d72332c1c112d6c07dfd7dab4e63f74f6804",
+    "340cbe186620e51f7d0ec460e473d72332c1c112d6c07dfd7dab4e63f74f6804"
+  ],
+  "absoluteDistributions": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/absolute-distributions.json",
+    "rows": {
+      "main": 145,
+      "candidate": 145,
+      "published010": 143,
+      "prior698": 145
+    },
+    "softwareCalibrationDriftPercent": {
+      "main": 9.216961336590472,
+      "candidate": 1.3720285387550448,
+      "published010": 1.0734969108679853,
+      "prior698": 1.8269935809702484
+    },
+    "clockDescription": "software calibration rates, not measured hardware clock frequency",
+    "scriptReceipt": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/absolute-report/result.json",
+      "exit": 0,
+      "stdoutSha256": "9d62dbd76625080c90e5e2496e8c4428585b879fd06e4ba9f7de865640ac4e6c",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "commands": {
+    "matrix": "mise exec -- pnpm scripts run benchmark:labs-package -- --candidate <candidate> --baseline <arm-control> --suite full --blocks 8 --output <arm-output> [--saved-candidate <matrix-main-data>]",
+    "absoluteReport": "/opt/homebrew/bin/python3 /Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/absolute-report.py",
+    "verification": "read-only Python SHA-256/hash-manifest comparisons plus git rev-parse/status; no builds or benchmarks"
+  },
+  "worktreeStatus": [
+    " M benches/reports/held-ropes-local-2026-10-19/README.md",
+    "?? .agents/docs/log/2026-10-20-held-publication-preflight-evidence.md"
+  ],
+  "knownWorkspaceDelta": "The README prose correction and the root-owned untracked .agents/docs/log/2026-10-20-held-publication-preflight-evidence.md were present during the final read-only status check; no source, harness or package delta was observed.",
+  "matrixScope": "All runs completed with wrapper exit 0; notComparable rows remain explicit. This receipt verifies identities and raw artifact consistency; it does not assert performance parity or acceptance."
+}

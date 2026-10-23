@@ -1,0 +1,5 @@
+{
+  "head": "291fb51ce5e61ca6903b67459872923ccab4ceee",
+  "allFiveJobsPassed": true,
+  "scope": "Already-pushed preceding evidence checkpoint only; current wave2 source is uncommitted and is not covered by this run. No CI timing or size artifact inspected here; no new candidate clearance inferred."
+}

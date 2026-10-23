@@ -1,0 +1,21 @@
+{
+  "argv": [
+    "mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "glyph:shaper-tests",
+    "--",
+    "full_frontier_of_1024_owners_matches_independent_cold_gather"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-22T20:36:08.814252+00:00",
+  "finished": "2026-10-22T20:36:09.326054+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "9d729f2b9fa9241f5266c4984a19029446447791c40832800e40d915913a4397",
+    "stderr.log": "037871f26d0ba3ea166c450129c9e0d38cb2e4804c80141f504b9f4c15bde32e"
+  }
+}

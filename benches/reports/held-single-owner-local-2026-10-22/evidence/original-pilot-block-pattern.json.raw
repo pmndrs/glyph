@@ -1,0 +1,693 @@
+{
+  "candidate": {
+    "sha256": "3f6e73670c82af0e78dcff1b6aebb90f73084a4e55717d45132b0da4298a5fb8",
+    "identities": 145,
+    "countsByRatioThresholdAndBlockIndex": {
+      "2": [
+        11,
+        12,
+        3,
+        2,
+        0,
+        1,
+        2,
+        0
+      ],
+      "3": [
+        7,
+        2,
+        2,
+        2,
+        0,
+        1,
+        1,
+        0
+      ],
+      "5": [
+        3,
+        0,
+        0,
+        1,
+        0,
+        1,
+        0,
+        0
+      ]
+    },
+    "highestRatios": [
+      {
+        "file": "batching.bench.ts",
+        "name": "rewrite 512 labels in one group",
+        "mediansMs": [
+          113.293458,
+          11.487834,
+          10.573292,
+          12.660042,
+          9.508167,
+          9.233583,
+          9.447208,
+          9.1905
+        ],
+        "maxRatioToOtherBlocks": 11.915383690673503,
+        "maxIndex": 0
+      },
+      {
+        "file": "batching.bench.ts",
+        "name": "rewrite 256 labels in one group",
+        "mediansMs": [
+          60.358041,
+          6.146958,
+          6.032333,
+          5.54175,
+          4.835333,
+          4.895333,
+          4.823542,
+          5.258084
+        ],
+        "maxRatioToOtherBlocks": 11.479094095872185,
+        "maxIndex": 0
+      },
+      {
+        "file": "layout.bench.ts",
+        "name": "inspection then publication after width change",
+        "mediansMs": [
+          6.171583000000119,
+          5.01375,
+          5.080125,
+          5.05875,
+          5.128625,
+          36.078375,
+          4.985541,
+          5.059417
+        ],
+        "maxRatioToOtherBlocks": 7.130935244120024,
+        "maxIndex": 5
+      },
+      {
+        "file": "batching.bench.ts",
+        "name": "100 labels interleaved edit-read publication",
+        "mediansMs": [
+          13.749458,
+          41.187167,
+          12.757916,
+          68.212709,
+          11.145375,
+          11.405667,
+          11.116625,
+          12.547583
+        ],
+        "maxRatioToOtherBlocks": 5.436322596949548,
+        "maxIndex": 3
+      },
+      {
+        "file": "batching.bench.ts",
+        "name": "1000 labels 100 edits batched edit-read publication",
+        "mediansMs": [
+          38.903916999999524,
+          12.926416,
+          8.594541,
+          7.264292000000119,
+          7.152542,
+          6.987333,
+          7.642292,
+          7.366834
+        ],
+        "maxRatioToOtherBlocks": 5.280954749353593,
+        "maxIndex": 0
+      },
+      {
+        "file": "adapter-publication.bench.ts",
+        "name": "mutate one trailing span across 1000 formatted labels",
+        "mediansMs": [
+          180.973083,
+          40.62675000000012,
+          39.32662500000024,
+          61.120125,
+          75.347291,
+          38.993709,
+          37.920375,
+          41.648
+        ],
+        "maxRatioToOtherBlocks": 4.454530155624052,
+        "maxIndex": 0
+      },
+      {
+        "file": "batching.bench.ts",
+        "name": "100 labels separated balanced grow-shrink-space engine publication",
+        "mediansMs": [
+          1.381125,
+          2.110625,
+          1.078875,
+          0.905083,
+          0.911958,
+          0.897959,
+          4.3565,
+          0.983083
+        ],
+        "maxRatioToOtherBlocks": 4.431467129428543,
+        "maxIndex": 6
+      },
+      {
+        "file": "unsafe-line-breaks.bench.ts",
+        "name": "long unsafe-boundary paragraph text edit",
+        "mediansMs": [
+          2.208459,
+          2.176125,
+          2.063334,
+          8.070791,
+          2.116375,
+          1.889417,
+          1.888458,
+          1.865667
+        ],
+        "maxRatioToOtherBlocks": 3.911529107745038,
+        "maxIndex": 3
+      },
+      {
+        "file": "cold.bench.ts",
+        "name": "mount a label and publish its first edit",
+        "mediansMs": [
+          2.616167,
+          2.771792,
+          10.79925,
+          2.824834,
+          2.522834,
+          2.583208,
+          3.057292,
+          2.828792
+        ],
+        "maxRatioToOtherBlocks": 3.8961256833124565,
+        "maxIndex": 2
+      },
+      {
+        "file": "batching.bench.ts",
+        "name": "100 labels 100 edits immediate measurements without publication",
+        "mediansMs": [
+          2.604375,
+          7.776834,
+          2.395542,
+          1.940375,
+          2.263625,
+          1.999584,
+          1.967667,
+          1.9616249999998807
+        ],
+        "maxRatioToOtherBlocks": 3.889225958999472,
+        "maxIndex": 1
+      },
+      {
+        "file": "batching.bench.ts",
+        "name": "100 labels last color-only engine publication",
+        "mediansMs": [
+          1.501208,
+          0.518708,
+          0.471875,
+          0.40675,
+          0.395208,
+          0.388875,
+          0.396041,
+          0.411791
+        ],
+        "maxRatioToOtherBlocks": 3.690738783036263,
+        "maxIndex": 0
+      },
+      {
+        "file": "layout.bench.ts",
+        "name": "measurement after width change",
+        "mediansMs": [
+          4.857542,
+          1.550875,
+          1.2456250000000597,
+          1.315417,
+          1.34425,
+          1.313333,
+          1.489583,
+          1.326958
+        ],
+        "maxRatioToOtherBlocks": 3.6606599455295497,
+        "maxIndex": 0
+      }
+    ]
+  },
+  "main": {
+    "sha256": "804103028a3d039cdf9a1e00d9e8bf4260eb5d538176448ce3e2524919d2dda3",
+    "identities": 145,
+    "countsByRatioThresholdAndBlockIndex": {
+      "2": [
+        5,
+        6,
+        6,
+        3,
+        1,
+        5,
+        5,
+        4
+      ],
+      "3": [
+        2,
+        5,
+        3,
+        2,
+        0,
+        2,
+        3,
+        2
+      ],
+      "5": [
+        2,
+        0,
+        1,
+        1,
+        0,
+        1,
+        1,
+        0
+      ]
+    },
+    "highestRatios": [
+      {
+        "file": "batching.bench.ts",
+        "name": "1000 labels separated balanced grow-shrink-space engine publication",
+        "mediansMs": [
+          48.080667,
+          5.071708,
+          4.720667,
+          4.843875,
+          5.167709,
+          4.72225,
+          4.7665,
+          4.879917
+        ],
+        "maxRatioToOtherBlocks": 9.926075094836262,
+        "maxIndex": 0
+      },
+      {
+        "file": "batching.bench.ts",
+        "name": "1000 labels 100 edits batched edit-read publication",
+        "mediansMs": [
+          74.292458,
+          9.66925,
+          10.1895,
+          60.51975,
+          9.588083,
+          10.884,
+          9.492458,
+          42.84725
+        ],
+        "maxRatioToOtherBlocks": 7.291079837087198,
+        "maxIndex": 0
+      },
+      {
+        "file": "batching.bench.ts",
+        "name": "1000 labels last length-changing scene publication",
+        "mediansMs": [
+          4.439125,
+          3.459833,
+          24.496834,
+          3.767916,
+          3.618875,
+          3.4135,
+          3.444333,
+          3.458708
+        ],
+        "maxRatioToOtherBlocks": 7.0803515661016005,
+        "maxIndex": 2
+      },
+      {
+        "file": "edit.bench.ts",
+        "name": "type one character into a long paragraph and publish a frame",
+        "mediansMs": [
+          3.757667,
+          3.621542,
+          3.468583,
+          3.486625,
+          3.5171250000000596,
+          3.918791,
+          19.912375,
+          3.457917
+        ],
+        "maxRatioToOtherBlocks": 5.661548850268234,
+        "maxIndex": 6
+      },
+      {
+        "file": "framework-publication.bench.ts",
+        "name": "bind and normalize 1000 framework-shaped formatted flow updates",
+        "mediansMs": [
+          6.537416,
+          6.640292,
+          6.415084,
+          6.567875,
+          6.458166,
+          33.3735,
+          6.387542,
+          6.597334
+        ],
+        "maxRatioToOtherBlocks": 5.104998672258274,
+        "maxIndex": 5
+      },
+      {
+        "file": "batching.bench.ts",
+        "name": "1000 labels first length-changing engine publication",
+        "mediansMs": [
+          4.588584,
+          4.683583,
+          22.352,
+          4.64425,
+          4.60275,
+          4.717584,
+          4.54025,
+          4.554
+        ],
+        "maxRatioToOtherBlocks": 4.8562272554451145,
+        "maxIndex": 2
+      },
+      {
+        "file": "batching.bench.ts",
+        "name": "1000 labels no-op scene traversal",
+        "mediansMs": [
+          0.457334,
+          0.451,
+          0.480166,
+          0.452792,
+          0.47825,
+          0.493667,
+          1.9295,
+          0.458417
+        ],
+        "maxRatioToOtherBlocks": 4.209049838902135,
+        "maxIndex": 6
+      },
+      {
+        "file": "common.bench.ts",
+        "name": "publish after color change",
+        "mediansMs": [
+          1.3976659999999403,
+          1.375459,
+          1.34175,
+          1.337459,
+          1.338625,
+          5.520791,
+          1.421834,
+          1.360125
+        ],
+        "maxRatioToOtherBlocks": 4.059032074257881,
+        "maxIndex": 5
+      },
+      {
+        "file": "batching.bench.ts",
+        "name": "10 labels last color-only engine publication",
+        "mediansMs": [
+          0.327209,
+          0.333584,
+          0.317542,
+          1.284083,
+          0.347166,
+          0.333458,
+          0.402083,
+          0.362458
+        ],
+        "maxRatioToOtherBlocks": 3.849354285577246,
+        "maxIndex": 3
+      },
+      {
+        "file": "batching.bench.ts",
+        "name": "100 labels separated unbalanced grow-shrink-space engine publication",
+        "mediansMs": [
+          0.919875,
+          0.902916,
+          3.529084,
+          0.990541,
+          0.924458,
+          0.899625,
+          0.903125,
+          1.006583
+        ],
+        "maxRatioToOtherBlocks": 3.836482130724283,
+        "maxIndex": 2
+      },
+      {
+        "file": "batching.bench.ts",
+        "name": "100 labels first color-only engine publication",
+        "mediansMs": [
+          0.442083,
+          1.632875,
+          0.420625,
+          0.421084,
+          0.414625,
+          0.487875,
+          0.437084,
+          0.445958
+        ],
+        "maxRatioToOtherBlocks": 3.735837962496911,
+        "maxIndex": 1
+      },
+      {
+        "file": "edit.bench.ts",
+        "name": "type one character into a long paragraph and measure",
+        "mediansMs": [
+          1.372958,
+          2.288417,
+          0.571041,
+          0.586583,
+          0.449334,
+          0.632083,
+          0.699,
+          0.835167
+        ],
+        "maxRatioToOtherBlocks": 3.620437505833886,
+        "maxIndex": 1
+      }
+    ]
+  },
+  "published": {
+    "sha256": "95ff27780366f454fdf4faee4c32d249e94754512b228ad21163445ae87af13a",
+    "identities": 143,
+    "countsByRatioThresholdAndBlockIndex": {
+      "2": [
+        2,
+        0,
+        1,
+        0,
+        0,
+        3,
+        15,
+        13
+      ],
+      "3": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ],
+      "5": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "highestRatios": [
+      {
+        "file": "batching.bench.ts",
+        "name": "rewrite 64 labels in one group",
+        "mediansMs": [
+          10.249125,
+          1.724208,
+          1.536792,
+          1.592792,
+          1.6217079999998807,
+          1.6592919999999405,
+          1.600875,
+          2.0489159999999402
+        ],
+        "maxRatioToOtherBlocks": 6.319957106951901,
+        "maxIndex": 0
+      },
+      {
+        "file": "prepared-operations.bench.ts",
+        "name": "1 labels first set+measure+scene-publication",
+        "mediansMs": [
+          0.668542,
+          0.677958,
+          0.663417,
+          0.70475,
+          0.69575,
+          0.688,
+          2.200125,
+          1.953708
+        ],
+        "maxRatioToOtherBlocks": 3.1978561046511627,
+        "maxIndex": 6
+      },
+      {
+        "file": "batching.bench.ts",
+        "name": "edit and measure one of 100 retained labels",
+        "mediansMs": [
+          0.644125,
+          0.269625,
+          0.207916,
+          0.239209,
+          0.258916,
+          0.221792,
+          0.209708,
+          0.219041
+        ],
+        "maxRatioToOtherBlocks": 2.9041850021641897,
+        "maxIndex": 0
+      },
+      {
+        "file": "prepared-operations.bench.ts",
+        "name": "100 labels first set",
+        "mediansMs": [
+          0.033125,
+          0.042042,
+          0.038916,
+          0.035542,
+          0.033458,
+          0.034167,
+          0.10025,
+          0.092292
+        ],
+        "maxRatioToOtherBlocks": 2.82060660626864,
+        "maxIndex": 6
+      },
+      {
+        "file": "prepared-operations.bench.ts",
+        "name": "100 labels first overwrite-before-scene-publication",
+        "mediansMs": [
+          0.476042,
+          0.477125,
+          0.557166,
+          0.539833,
+          0.484042,
+          0.471292,
+          1.337333,
+          0.588
+        ],
+        "maxRatioToOtherBlocks": 2.762844959734899,
+        "maxIndex": 6
+      },
+      {
+        "file": "prepared-operations.bench.ts",
+        "name": "1000 labels first overwrite-before-scene-publication",
+        "mediansMs": [
+          2.126709,
+          2.138708,
+          2.439041,
+          2.000459,
+          2.029791,
+          2.271875,
+          5.693166,
+          2.583833
+        ],
+        "maxRatioToOtherBlocks": 2.661965074241084,
+        "maxIndex": 6
+      },
+      {
+        "file": "prepared-operations.bench.ts",
+        "name": "1 labels first overwrite-before-scene-publication",
+        "mediansMs": [
+          0.341042,
+          0.464166,
+          0.349041,
+          0.373667,
+          0.348959,
+          0.338667,
+          0.808834,
+          0.882375
+        ],
+        "maxRatioToOtherBlocks": 2.5279981434845764,
+        "maxIndex": 7
+      },
+      {
+        "file": "prepared-operations.bench.ts",
+        "name": "100 labels first set+measure",
+        "mediansMs": [
+          0.182875,
+          0.186708,
+          0.214583,
+          0.19875,
+          0.183417,
+          0.1925,
+          0.478625,
+          0.407
+        ],
+        "maxRatioToOtherBlocks": 2.4863636363636363,
+        "maxIndex": 6
+      },
+      {
+        "file": "prepared-operations.bench.ts",
+        "name": "100 labels first same-value-set",
+        "mediansMs": [
+          0.004584,
+          0.006333,
+          0.004834,
+          0.00525,
+          0.004417,
+          0.004834,
+          0.011583,
+          0.009834
+        ],
+        "maxRatioToOtherBlocks": 2.3961522548613985,
+        "maxIndex": 6
+      },
+      {
+        "file": "request-arena.bench.ts",
+        "name": "write 1000 paragraph and text mutations",
+        "mediansMs": [
+          0.107709,
+          0.115208,
+          0.115875,
+          0.115042,
+          0.113667,
+          0.226625,
+          0.269,
+          0.269542
+        ],
+        "maxRatioToOtherBlocks": 2.3396118325116313,
+        "maxIndex": 7
+      },
+      {
+        "file": "prepared-operations.bench.ts",
+        "name": "1 labels first same-value-set",
+        "mediansMs": [
+          0.004,
+          0.004875,
+          0.004584,
+          0.004791,
+          0.004458,
+          0.004292,
+          0.010708,
+          0.009375
+        ],
+        "maxRatioToOtherBlocks": 2.3359511343804535,
+        "maxIndex": 6
+      },
+      {
+        "file": "request-arena.bench.ts",
+        "name": "write one paragraph and text mutation",
+        "mediansMs": [
+          0.019167,
+          0.020167,
+          0.02025,
+          0.022375,
+          0.019125,
+          0.021000000000029804,
+          0.046583,
+          0.039
+        ],
+        "maxRatioToOtherBlocks": 2.3003950617283953,
+        "maxIndex": 6
+      }
+    ]
+  },
+  "scope": "Read-only descriptive check of original conditional-policy block medians. Each ratio compares one block with the median of the other seven. 2/3/5 thresholds describe clustering only; they do not exclude samples, establish a cause or change admission."
+}

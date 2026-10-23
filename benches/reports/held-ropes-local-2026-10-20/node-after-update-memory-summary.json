@@ -1,0 +1,49 @@
+{
+  "scope": "maxima only of8after-update-and-publish forced-GC checkpoints; whole-commandOSsweep separately; GCcheckpoint liveheap is not allocationchurn or peakheap",
+  "arms": {
+    "main": {
+      "rawSha256": "49147a84e5290db4ac03870baea34f51e2aa97a2635bb91414b4b8b4f673dfc9",
+      "updatePoints": 8,
+      "afterUpdateMax": {
+        "rss": 394035200,
+        "heapUsed": 26409976,
+        "external": 218007573,
+        "arrayBuffers": 57378568
+      },
+      "wasmCapacityMax": 158662656
+    },
+    "candidate": {
+      "rawSha256": "72d45739918a6551d1cdf7ddfa1f4fec5dc78e94b0b4815be189fa72f93a4cfa",
+      "updatePoints": 8,
+      "afterUpdateMax": {
+        "rss": 324272128,
+        "heapUsed": 30760008,
+        "external": 104019761,
+        "arrayBuffers": 57371208
+      },
+      "wasmCapacityMax": 44630016
+    },
+    "published010": {
+      "rawSha256": "b2272ff30c85d31c06c8fe5d615392a300009623da045b8b33556c7de0c80218",
+      "updatePoints": 8,
+      "afterUpdateMax": {
+        "rss": 391790592,
+        "heapUsed": 31049296,
+        "external": 217439361,
+        "arrayBuffers": 57378568
+      },
+      "wasmCapacityMax": 158072832
+    },
+    "prior698": {
+      "rawSha256": "b15143556abf965b309911bbfbc6c12bfbd43054b9bdc76416faf364c4c3b9bb",
+      "updatePoints": 8,
+      "afterUpdateMax": {
+        "rss": 323305472,
+        "heapUsed": 30727184,
+        "external": 104019761,
+        "arrayBuffers": 57371208
+      },
+      "wasmCapacityMax": 44630016
+    }
+  }
+}

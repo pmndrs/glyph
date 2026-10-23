@@ -1,0 +1,30 @@
+{
+  "recordedUtc": "2026-10-20T16:00:46.502344+00:00",
+  "gate": {
+    "argv": ["/Users/mini/.local/bin/mise", "exec", "--", "pnpm", "--filter", "@pmndrs/glyph", "check"],
+    "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+    "started": "2026-10-20T15:57:08.014335+00:00",
+    "finished": "2026-10-20T15:59:51.475028+00:00",
+    "exit": 0,
+    "sha256": {
+      "stdout.log": "01508b87b36bbc78896c8034d620b8a49037ca040f4bdd81e2bb301331550226",
+      "stderr.log": "8a75a30d942d6b74fad2592706efdb77fa61ff162291d650de59b232b1701dc5"
+    }
+  },
+  "rustTotals": {
+    "passed": 587,
+    "failed": 0,
+    "ignored": 1
+  },
+  "nodeTotals": {
+    "tests": 1142,
+    "pass": 1142,
+    "fail": 0
+  },
+  "observedPassingTests": [
+    "shipping Wasm Codec writes exact repeated-group and tail bytes from glyph binding columns",
+    "shipping Wasm rejects finite Codec arithmetic overflow and accepts a valid retry",
+    "base-order publication admits swaps and preserves pending order across semantic preparation"
+  ],
+  "scope": "Fresh candidate shipping build and full package check; no timing, compiled loop, downstream full-repository, peer or live browser clearance yet."
+}

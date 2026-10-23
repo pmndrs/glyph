@@ -1,0 +1,11 @@
+{
+  "argv": ["/Users/mini/.local/bin/mise", "exec", "--", "pnpm", "--filter", "@pmndrs/glyph", "check"],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-19T14:16:41.633094+00:00",
+  "finished": "2026-10-19T14:16:45.106617+00:00",
+  "exit": 2,
+  "sha256": {
+    "stdout.log": "7623faa36a3cfac93f87e5ec9b7a82df10bc6263c080c737510d0d8053b7d8c2",
+    "stderr.log": "afbc739f01b98c337b5dcf8edbdee3234dae8cf78b5b0b5be447896baf3829f1"
+  }
+}

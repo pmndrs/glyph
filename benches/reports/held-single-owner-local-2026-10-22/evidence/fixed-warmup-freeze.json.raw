@@ -1,0 +1,2320 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-10-22T18:59:21Z",
+  "status": "prepared-awaiting-arm-launch",
+  "gitHead": "dec7509b3a18b2d71e27de023419f45c32fb10e7",
+  "candidateArtifacts": {
+    "candidate": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/pmndrs-glyph-0.1.0.tgz",
+      "sha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+      "bytes": 3197306
+    },
+    "main": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+      "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "bytes": 3120073
+    },
+    "published": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+      "sha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+      "bytes": 2271693
+    },
+    "namedCandidateWasm": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/shaper-profile/text-shaper.named.wasm",
+      "sha256": "c94120f523f9022eaac87733822df4cf1836ad73fc4ad0228f5fdebb03ed4f36",
+      "bytes": 1790181
+    }
+  },
+  "namedCandidateWasmFromPriorFrozenManifest": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/shaper-profile/text-shaper.named.wasm",
+    "sha256": "c94120f523f9022eaac87733822df4cf1836ad73fc4ad0228f5fdebb03ed4f36",
+    "executableSha256": "66e6c46357030d8457a8568af303d8552b16a68f0c3815877d01d634996bbffb"
+  },
+  "packageLabsHarnessDigest": "2ac59f1c44447be4d5061003f3df32a66c87952ca297e4a804544f16c09b1f5e",
+  "harnessInputs": [
+    {
+      "path": "benches/fixtures/admission/harness-v0.json",
+      "sha256": "1ce7f031bd0ae0a40f24aec7415b99ddd70c419b7f946e0463943d912713ca7c",
+      "bytes": 4619
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive-bands-001/amiri-slug-adaptive.font.glb.gz",
+      "sha256": "0e58244b97368f51d813a30d5d368202e6b3c9b1c5f4ce5f25040a61bfff6509",
+      "bytes": 2338188
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive-bands-001/artifacts-v0.json",
+      "sha256": "c68ca2299d690e50e54d57d017d21661aa9a812163837ee930a3827a5750b2d4",
+      "bytes": 6622
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive-bands-001/dancing-script-slug-adaptive.font.glb.gz",
+      "sha256": "f5a5f2ed0ae5892b5ca7c5b7a5ec3d1fd172de300fe8a73c1528520da004acb6",
+      "bytes": 375180
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive-bands-001/dot-gothic-16-slug-adaptive.font.glb.gz",
+      "sha256": "8ffbeb16241ef698c470026238aba6fd8c65eaa562618473be63b34ce1f557ea",
+      "bytes": 4578533
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive-bands-001/environment.json",
+      "sha256": "cf1dd474fe04e49665c7fc7f03195af5fb54553b7f176d70ad1fbd33619f6f80",
+      "bytes": 164
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive-bands-001/inter-slug-adaptive.font.glb.gz",
+      "sha256": "a6fae9569b3249024a46fc68830d20148a2abea1a1ee2e94551043c7719ac7d4",
+      "bytes": 678172
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive-bands-001/manifest.yaml",
+      "sha256": "4866020c52ea4d197cdc724ddcc97c0c64aafc3f21991f059281a7fcc9893732",
+      "bytes": 940
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive-bands-001/noto-sans-cjk-showcase-slug-adaptive.font.glb.gz",
+      "sha256": "fdfc5737137211b442506fe8252d95ab2997d25313f84be09110b6cdc52d509a",
+      "bytes": 120449
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive-bands-001/noto-sans-devanagari-slug-adaptive.font.glb.gz",
+      "sha256": "a3bef0195d4add40daaf77382766c93dd4b223d6e65daed1d5e97b8985ca8157",
+      "bytes": 369051
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive-bands-001/result.md",
+      "sha256": "cb79b2776feb7a6ffc49d9593346ee99f1e935d36b1942b500bfffc4b8929348",
+      "bytes": 2166
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive-bands-001/source-serif-4-slug-adaptive.font.glb.gz",
+      "sha256": "55e13f376473919bd52c34f9df3e2cd380e1783fe9e983d6ec65001beed29169",
+      "bytes": 456612
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive32-bands-001/amiri-slug-adaptive32.font.glb.gz",
+      "sha256": "bc2c8d216b115585bf8758bb623b039929403ceb76eea77b32653dde32c0c428",
+      "bytes": 2207144
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive32-bands-001/artifacts-v0.json",
+      "sha256": "0efed454e4db9b56b9cc7ba27cdedc4a2c7bcd971eb64728b9968227c7db961c",
+      "bytes": 6634
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive32-bands-001/dancing-script-slug-adaptive32.font.glb.gz",
+      "sha256": "f6b58483e22739b65a968e08153c02c56143513de6e77f5ba76b093d5ccd25ce",
+      "bytes": 337155
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive32-bands-001/dot-gothic-16-slug-adaptive32.font.glb.gz",
+      "sha256": "d3e70592c19a62c7995b43233cdd81e91d2e4c288210e9543c2245806dba1659",
+      "bytes": 4242913
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive32-bands-001/environment.json",
+      "sha256": "c1a93c77813549cb9e890502b70e51f4829fdc61924fcdf7cb264e7c227faff3",
+      "bytes": 572
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive32-bands-001/inter-slug-adaptive32.font.glb.gz",
+      "sha256": "bade1b308bffecaf3c391f81142d921e8c07eb111a73727e65fe2683d0ab55a8",
+      "bytes": 658661
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive32-bands-001/manifest.yaml",
+      "sha256": "a5005dee0f7c6425be29c43a8cb61a28a3ce3680ddff24ecd491b34393dd3fac",
+      "bytes": 933
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive32-bands-001/noto-sans-cjk-showcase-slug-adaptive32.font.glb.gz",
+      "sha256": "dcb3bceb01985d95e37dc9002e335a594ad6c1a1a978f29778f5cea4714bc697",
+      "bytes": 107754
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive32-bands-001/noto-sans-devanagari-slug-adaptive32.font.glb.gz",
+      "sha256": "22190ff29c478ebb36dd2f84c3eb94b6a9a1789eeff74ad65e087515d5be4a9b",
+      "bytes": 338959
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive32-bands-001/performance-chromium149.json",
+      "sha256": "94c57011d0a8f3e446f78cfee929b49da4092d8f06becaf9f075c433f53c17c6",
+      "bytes": 1000789
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive32-bands-001/quality-chromium149.json",
+      "sha256": "97841032b4146a239c73c0f50694b0befb8aeca398cef508d21086e2cf58fa57",
+      "bytes": 11656
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive32-bands-001/result.md",
+      "sha256": "0037c77479e05042f7146752010cb7c60eb7abd38c82c8e56760dadc529884dd",
+      "bytes": 4465
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-adaptive32-bands-001/source-serif-4-slug-adaptive32.font.glb.gz",
+      "sha256": "f655f83c9c8c668f0f08eec1f057ed7e1e2c647b642136e585ee769001774872",
+      "bytes": 443682
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-fixed32-bands-001/amiri-slug-fixed32.font.glb.gz",
+      "sha256": "148905539db7e602a908a55f89c2383828e9f6446dd6676ee82e4ac3d1d9877f",
+      "bytes": 2377829
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-fixed32-bands-001/artifacts-v0.json",
+      "sha256": "09b9620191248e7cd3f9ee06d3a61b3e60ff8f06295206c36980e22a81b4d4ba",
+      "bytes": 5637
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-fixed32-bands-001/dancing-script-slug-fixed32.font.glb.gz",
+      "sha256": "2c43c4d5251587c778a62f4fc6640fc21dd247901555dbfed816475ada688a4e",
+      "bytes": 349048
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-fixed32-bands-001/dot-gothic-16-slug-fixed32.font.glb.gz",
+      "sha256": "fdd952473543231355b9d909a99fccb895a6caa255ce4bb2a1287a38970cc65a",
+      "bytes": 4305481
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-fixed32-bands-001/environment.json",
+      "sha256": "6ca5d00cb12c8620cd2dfc23cd13b24b048e2ba047a01bbbf68802966b8ad347",
+      "bytes": 272
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-fixed32-bands-001/inter-slug-fixed32.font.glb.gz",
+      "sha256": "9f8b7eda762350f947f66b6dacbe02b32be53255bc42cabacac4076627158336",
+      "bytes": 710793
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-fixed32-bands-001/manifest.yaml",
+      "sha256": "acd5c5fc075f40d09faf5b076315e46e33b58b64ca4241571775b12d78828f68",
+      "bytes": 668
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-fixed32-bands-001/noto-sans-cjk-showcase-slug-fixed32.font.glb.gz",
+      "sha256": "92a70b10b7412fea3e4ee47e649109baa96aba5481e0c11a65d2793e33bd8447",
+      "bytes": 110015
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-fixed32-bands-001/noto-sans-devanagari-slug-fixed32.font.glb.gz",
+      "sha256": "b9fd4aafc3b6d9a1eabda4c92d7f6c631d7906fa14d76fcdb120dc2eb3c0004a",
+      "bytes": 358540
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-fixed32-bands-001/performance-chromium149.json",
+      "sha256": "1d2dfe73a0e4f402bd887a0a61582d094bf8672b76b16a7eef2fdff02b458698",
+      "bytes": 240839
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-fixed32-bands-001/quality-chromium149.json",
+      "sha256": "40de5f399f6f513b9c812467c9e986bf965a5d447889706161b870c1caf68f60",
+      "bytes": 11650
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-fixed32-bands-001/result.md",
+      "sha256": "ffa273a095e38a6eae2d37502a1622276d7f009c62f7be8b9dde13faf25454d2",
+      "bytes": 3017
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-fixed32-bands-001/source-serif-4-slug-fixed32.font.glb.gz",
+      "sha256": "3cb4fc800f9aff13a3bbdb12402c8b18a55caa9f976ba0a17a145f845879ded9",
+      "bytes": 478241
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-hull-bands-001/amiri-slug-hull.font.glb.gz",
+      "sha256": "13d09ff4cba35a4a88b4b31344577584a58466926d29a9c5dac1ca8d53aad271",
+      "bytes": 2819448
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-hull-bands-001/artifacts-v0.json",
+      "sha256": "8f2065305a52552551fef14425f8f0131f2190797d4250ec21ce08fe00ec3ee8",
+      "bytes": 5784
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-hull-bands-001/dancing-script-slug-hull.font.glb.gz",
+      "sha256": "a2ee93bc69047153497faf2c93cc21b6f92ee17d406c8ad112adf6caf9e4c0fd",
+      "bytes": 394357
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-hull-bands-001/dot-gothic-16-slug-hull.font.glb.gz",
+      "sha256": "0b3d7a2f52070baa4c8ef524fe7a46394549a5a29d719bffac322a79864ea042",
+      "bytes": 4982008
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-hull-bands-001/environment.json",
+      "sha256": "ea7ab6e7e2192626cdbd9d1d72f1869fac74068019ca2fd15b2284faa75ab72b",
+      "bytes": 632
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-hull-bands-001/inter-slug-hull.font.glb.gz",
+      "sha256": "bf152b724e2a98acbdf60c32ac98b72e168c4a982ce38cde617b82e6a1437f69",
+      "bytes": 797997
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-hull-bands-001/manifest.yaml",
+      "sha256": "1650fe8b3de4db9a2545b91f72cdf5f263ee0c92fce2ccc01e48da00ebcc3757",
+      "bytes": 925
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-hull-bands-001/noto-sans-cjk-showcase-slug-hull.font.glb.gz",
+      "sha256": "096441f500c5bc1266932c425dd88bc8617c9735c5c82b5fafae61636c1540c8",
+      "bytes": 128446
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-hull-bands-001/noto-sans-devanagari-slug-hull.font.glb.gz",
+      "sha256": "315be4bad4256b1f9654f34bb2c315a3f7c8905e4cab930554a6e326760dff2d",
+      "bytes": 414432
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-hull-bands-001/performance-chromium149.json",
+      "sha256": "24592c21f54fd102c19f8cabeb5680c2b0a78337bbe0bad0c0e1f95ac0e30b62",
+      "bytes": 1003782
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-hull-bands-001/quality-chromium149.json",
+      "sha256": "5b979cdc02e2b34dbf5220fae6f6fd0572179e117521e050aa290aa63251d205",
+      "bytes": 11644
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-hull-bands-001/result.md",
+      "sha256": "98e2904a0b7a70b3e7e01668ea948376cdc2230f87a8515b5abca8307fce5b5c",
+      "bytes": 5168
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-hull-bands-001/source-serif-4-slug-hull.font.glb.gz",
+      "sha256": "eaaefafa73c1d4cd2a2a19d7569b00b89dd7f0ee1447b156e401ec579c46c601",
+      "bytes": 547625
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-root-branch-001/environment.json",
+      "sha256": "f231c5d426b0bbcfdd86e1efc696b2f6dc82a4c6fba5251ba7f368860755b3ab",
+      "bytes": 1248
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-root-branch-001/experiment-v0.json",
+      "sha256": "93a3c6efba6c288983b307305aee7becc502ef6f751bd05269eee4245ce3520e",
+      "bytes": 835
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-root-branch-001/manifest.yaml",
+      "sha256": "40d5a3e6cc5000d5be7f0cb1ed7926b2223c0e4bf2fe95f2b24306dfbabb8d28",
+      "bytes": 599
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-root-branch-001/performance-chromium149.json",
+      "sha256": "aea936b1bc41936477bbc5d206b81f33b0f810374bd9c35cbce27e998d2963c4",
+      "bytes": 1008269
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-root-branch-001/quality-chromium149.json",
+      "sha256": "c8eebb34e0ec54f5a1a6a0ac92137108865d79d5eee36ba9e24d48e51f067e1a",
+      "bytes": 12895
+    },
+    {
+      "path": "benches/fixtures/autoresearch/slug-root-branch-001/result.md",
+      "sha256": "46c07cd779e93db437de7461f12c4b067c5c90373025e0b45ef6ef9b58ec874e",
+      "bytes": 5440
+    },
+    {
+      "path": "benches/fixtures/contracts/max-glyph-pages-v0.json",
+      "sha256": "54f4b962ebfdc6010d75fdeec2cd8731984184883f27880536878f3f9fcd94a0",
+      "bytes": 553
+    },
+    {
+      "path": "benches/fixtures/contracts/paragraph-bidi-layout-v0.json",
+      "sha256": "461ea485fd75cdd570dfdbca9e305e89bee4fdc2103f0071d78ae26427f2718e",
+      "bytes": 39171
+    },
+    {
+      "path": "benches/fixtures/contracts/paragraph-cjk-layout-v0.json",
+      "sha256": "79e4359fa5169324acabf3f11d0f5f98886599a8923923cc80285272c859b2c7",
+      "bytes": 66921
+    },
+    {
+      "path": "benches/fixtures/contracts/paragraph-layout-v0.json",
+      "sha256": "ab48591c2dbd2fca12174cd53741238518916c75c8056ea0098346c2983442ac",
+      "bytes": 3013
+    },
+    {
+      "path": "benches/fixtures/fonts/amiri-1.002/Amiri-Regular.ttf",
+      "sha256": "ab391c4147d054c48976e98322ad0eefe1427aa0e0502a12a4c75d80a70cfcd7",
+      "bytes": 431116
+    },
+    {
+      "path": "benches/fixtures/fonts/amiri-1.002/METADATA.pb",
+      "sha256": "3df4f62489d9b01bb900d36e73120c06dfed0c49b585ff4398fd8a11410fd114",
+      "bytes": 1857
+    },
+    {
+      "path": "benches/fixtures/fonts/amiri-1.002/OFL.txt",
+      "sha256": "72de68e5954f4fdd24702292ef5a32f003ca960ec9330dc86e5eefb5dffb9b22",
+      "bytes": 4389
+    },
+    {
+      "path": "benches/fixtures/fonts/amiri-1.002/manifest.json",
+      "sha256": "b253a696dab4033d28ffea04f5a4a123f2c6a0df79712ed85b701498250c09b7",
+      "bytes": 3278
+    },
+    {
+      "path": "benches/fixtures/fonts/amiri-1.002/source.md",
+      "sha256": "72241438e622f6ce495b4ac6f99412f2b439f980c63a9bdc9753b8b41c6fc605",
+      "bytes": 822
+    },
+    {
+      "path": "benches/fixtures/fonts/dancing-script-3.000/DancingScript-Regular.otf",
+      "sha256": "d71f864af9c13eeb740230fd67309c2390a902dba2326ae06f2275ca52663c6a",
+      "bytes": 110396
+    },
+    {
+      "path": "benches/fixtures/fonts/dancing-script-3.000/OFL.txt",
+      "sha256": "6f090277c00af96651ce6dbcc38ff1591047a3bffef486e80b6a32e8276a8201",
+      "bytes": 4443
+    },
+    {
+      "path": "benches/fixtures/fonts/dancing-script-3.000/manifest.json",
+      "sha256": "5d43254bfb7d1003895f399e4187f62de115717e67601ae7ad4b50676c269310",
+      "bytes": 950
+    },
+    {
+      "path": "benches/fixtures/fonts/dancing-script-3.000/source.md",
+      "sha256": "391e33467b779735fc02387c9994297839b7cd4dfd51a88b8602db1cfd3c8548",
+      "bytes": 819
+    },
+    {
+      "path": "benches/fixtures/fonts/dot-gothic-16/.gitattributes",
+      "sha256": "1b012412695da67ef7ef392e7eb6edd90c122c5a52cacced5555be1c80c6956d",
+      "bytes": 15
+    },
+    {
+      "path": "benches/fixtures/fonts/dot-gothic-16/DotGothic16-Regular.ttf",
+      "sha256": "3ad9af88726d42b40f7f365f0dcac785af73cf20ea6f1d5b44e57cc21150b8f1",
+      "bytes": 2069236
+    },
+    {
+      "path": "benches/fixtures/fonts/dot-gothic-16/METADATA.pb",
+      "sha256": "ab13744709b98ba1196c45bc1bf9ba89e86df9620673e19ece14a8c6efe8c014",
+      "bytes": 986
+    },
+    {
+      "path": "benches/fixtures/fonts/dot-gothic-16/OFL.txt",
+      "sha256": "b6630c61ea078cacd7fabe37d14ffe557a0b45b06683374a9aa9e24262993e33",
+      "bytes": 4492
+    },
+    {
+      "path": "benches/fixtures/fonts/dot-gothic-16/manifest.json",
+      "sha256": "757a33cf02bc533bd6e05c89f0b5f11ee016a3bb3040eeacca622170595f1390",
+      "bytes": 1010
+    },
+    {
+      "path": "benches/fixtures/fonts/dot-gothic-16/source.md",
+      "sha256": "f0e56eeadff9f510935a653b83116d62378217403e4534ce60ca25a2032623d4",
+      "bytes": 821
+    },
+    {
+      "path": "benches/fixtures/fonts/font-awesome-free-6.7.2/LICENSE.txt",
+      "sha256": "16d63be001097ca4a253a0a6b3ce30eb0010c446f0460b7e47901f9eb7d212e5",
+      "bytes": 7428
+    },
+    {
+      "path": "benches/fixtures/fonts/font-awesome-free-6.7.2/fa-solid-900.ttf",
+      "sha256": "af19d135d3a935b3ebfbd80320716ffe1202052c5f68dc2c5f1abc57005ac605",
+      "bytes": 426112
+    },
+    {
+      "path": "benches/fixtures/fonts/font-awesome-free-6.7.2/icons.json",
+      "sha256": "1619fee77e078bc015218bd2c0ac0ae045c307b843bd09dba99c52e20ae5079d",
+      "bytes": 94348
+    },
+    {
+      "path": "benches/fixtures/fonts/font-awesome-free-6.7.2/manifest.json",
+      "sha256": "3226366be655aacfd776c381a64a7d001b742764119a14b487f06be18c9d888c",
+      "bytes": 1191
+    },
+    {
+      "path": "benches/fixtures/fonts/font-awesome-free-6.7.2/source.md",
+      "sha256": "e40794ac04ec4af0e8ce5ccb4f94c3de1c8b073b5fffc918be3d5e0ebd50c503",
+      "bytes": 1432
+    },
+    {
+      "path": "benches/fixtures/fonts/fredoka-issue-216/Fredoka-Regular.ttf",
+      "sha256": "cc3f6b1abf402bbabbccc0fe7970c11ae478a0edcc2cea944ff84c0bd0261fbe",
+      "bytes": 50196
+    },
+    {
+      "path": "benches/fixtures/fonts/fredoka-issue-216/OFL.txt",
+      "sha256": "5c9e7eee5c6b25f4b05b8d53b2e470ea4962f9ced742d044a98f7d95d1375bab",
+      "bytes": 4388
+    },
+    {
+      "path": "benches/fixtures/fonts/fredoka-issue-216/manifest.json",
+      "sha256": "e861094fea3258c7e7d822d738345527228fff36978dcd0f0f5806f3ec465622",
+      "bytes": 608
+    },
+    {
+      "path": "benches/fixtures/fonts/fredoka-issue-216/source.md",
+      "sha256": "816a97128f244eee29f774987aaae2f128b1a05a633a057aac560129e63947cd",
+      "bytes": 717
+    },
+    {
+      "path": "benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf",
+      "sha256": "40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82",
+      "bytes": 411640
+    },
+    {
+      "path": "benches/fixtures/fonts/inter-v4.1/LICENSE.txt",
+      "sha256": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a",
+      "bytes": 4380
+    },
+    {
+      "path": "benches/fixtures/fonts/inter-v4.1/manifest.json",
+      "sha256": "e429a7356f0e43c6306238a3151b9a1db7dd8c24700fceb9955cf15408184d49",
+      "bytes": 3188
+    },
+    {
+      "path": "benches/fixtures/fonts/inter-v4.1/source.md",
+      "sha256": "85313de57afba87ba48f6f20209c2e62b5b5c72a0b11ccd4e616928d4df98866",
+      "bytes": 760
+    },
+    {
+      "path": "benches/fixtures/fonts/noto-sans-cjk-2.004/LICENSE.txt",
+      "sha256": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2",
+      "bytes": 4301
+    },
+    {
+      "path": "benches/fixtures/fonts/noto-sans-cjk-2.004/NotoSansCJKjp-Regular.otf",
+      "sha256": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5",
+      "bytes": 16467736
+    },
+    {
+      "path": "benches/fixtures/fonts/noto-sans-cjk-2.004/manifest.json",
+      "sha256": "e838dc052910a6b3a612c2d0cea6ce02eae9b0edebbd7c3a89590c9c39b908e2",
+      "bytes": 6295
+    },
+    {
+      "path": "benches/fixtures/fonts/noto-sans-cjk-2.004/source.md",
+      "sha256": "edc6eed713ef2251ceef533c1117445abc216f2be30252d4ff2e0d238ffcf4f8",
+      "bytes": 855
+    },
+    {
+      "path": "benches/fixtures/fonts/noto-sans-cjk-showcase-v0/LICENSE.txt",
+      "sha256": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2",
+      "bytes": 4301
+    },
+    {
+      "path": "benches/fixtures/fonts/noto-sans-cjk-showcase-v0/NotoSansCJKjp-Showcase.otf",
+      "sha256": "1fe4cf952bf410cf4dc22d17be08b5b5bffa137549a25e1122af6a3f96c2ab3f",
+      "bytes": 38092
+    },
+    {
+      "path": "benches/fixtures/fonts/noto-sans-cjk-showcase-v0/manifest.json",
+      "sha256": "0c962fb82a331849289d6662b66f7d8d21e55eceefbfec266a148af5fc5cbce4",
+      "bytes": 1206
+    },
+    {
+      "path": "benches/fixtures/fonts/noto-sans-cjk-showcase-v0/source.md",
+      "sha256": "f0470199dbe57ca550873bba5fc36b3c8470d0c818ca627d8effbe7317525215",
+      "bytes": 762
+    },
+    {
+      "path": "benches/fixtures/fonts/noto-sans-devanagari/METADATA.pb",
+      "sha256": "3c201abfcd49b2b8f8b8ae6041bad70cdeb2ef03a1c5c0870772e137f1f450c0",
+      "bytes": 5459
+    },
+    {
+      "path": "benches/fixtures/fonts/noto-sans-devanagari/NotoSansDevanagari.ttf",
+      "sha256": "79a470365ccb210fa3c7d8d8ff2e005ef9d983cfd067f735a0caf7e15070ca9f",
+      "bytes": 229336
+    },
+    {
+      "path": "benches/fixtures/fonts/noto-sans-devanagari/OFL.txt",
+      "sha256": "5e0da210fb04058a8c0087985d2d456b931c2579811a49655721d3cf0c36b6d6",
+      "bytes": 4350
+    },
+    {
+      "path": "benches/fixtures/fonts/noto-sans-devanagari/manifest.json",
+      "sha256": "1f463b4afb796a8dcdfc77a4f030677231de27f83304f0de212db7fe74ab6955",
+      "bytes": 962
+    },
+    {
+      "path": "benches/fixtures/fonts/noto-sans-devanagari/source.md",
+      "sha256": "e2f4fc1e12a150911d6653a9cf66c087442a19d5603c59508194afe7505266f1",
+      "bytes": 839
+    },
+    {
+      "path": "benches/fixtures/fonts/source-serif-4.005/OFL.md",
+      "sha256": "c21d7293d87b6d7ab1d0229a2f55b77f33a7613a6a4e66f6693d68d7d8d09464",
+      "bytes": 4491
+    },
+    {
+      "path": "benches/fixtures/fonts/source-serif-4.005/SourceSerif4-Regular.ttf",
+      "sha256": "e5a4ee6a3d87bb9024796be390c6771e2a0eb1883dae25effaf57ca01668e24b",
+      "bytes": 261868
+    },
+    {
+      "path": "benches/fixtures/fonts/source-serif-4.005/manifest.json",
+      "sha256": "e1d0d66644faac559781660a356dc4f355c2daec1c1a1b0ec61ae51586c287e4",
+      "bytes": 950
+    },
+    {
+      "path": "benches/fixtures/fonts/source-serif-4.005/source.md",
+      "sha256": "611f115afb4b75d7b7d082d31d77438f8d4ef99cf1d39f24124c4b13299e2851",
+      "bytes": 863
+    },
+    {
+      "path": "benches/fixtures/rendering/amiri-bitmap-16-32.font.glb",
+      "sha256": "c1a80827300cadfe6035707475d5005a923588ff70b57ec0b889789e9a425884",
+      "bytes": 7232804
+    },
+    {
+      "path": "benches/fixtures/rendering/amiri-bitmap-16.font.glb",
+      "sha256": "bb8f4384563dd362e246de8ec2610c04f4f002d112e9b86ad427ff37f17548e7",
+      "bytes": 1987664
+    },
+    {
+      "path": "benches/fixtures/rendering/amiri-mtsdf.font.glb.gz",
+      "sha256": "0e6ac4ac252859ea9d993cfe84c16a0139cf5b96e01b20eb71c77c07fedbac39",
+      "bytes": 16818158
+    },
+    {
+      "path": "benches/fixtures/rendering/amiri-slug.font.glb.gz",
+      "sha256": "194afe9cf7a382f040465e85de1773924c97c751a297169edb86853b537fbd2a",
+      "bytes": 1955013
+    },
+    {
+      "path": "benches/fixtures/rendering/cross-space-2-bitmap-16.font.glb",
+      "sha256": "bbdec33b65fab91d0a591418cd4b28074a457923f2e7f312f18eb4187babb61a",
+      "bytes": 362136
+    },
+    {
+      "path": "benches/fixtures/rendering/cross-space-3-bitmap-16.font.glb",
+      "sha256": "c08a0c26f3dadab765e419e72207abad9ba33f7af4d5ac439810ddab2d717312",
+      "bytes": 27896
+    },
+    {
+      "path": "benches/fixtures/rendering/cross-space-4-bitmap-16.font.glb",
+      "sha256": "7612e890f1445f283354ab5953e4f4c3eec129a5cf1144e206e3107bac4a790a",
+      "bytes": 39672
+    },
+    {
+      "path": "benches/fixtures/rendering/cross-space-5-bitmap-16.font.glb",
+      "sha256": "3056f401e953cb05751dbc0195d487759aa4f987da821f90ca6063c593f30a8c",
+      "bytes": 28080
+    },
+    {
+      "path": "benches/fixtures/rendering/cross-space-bitmap-16.font.glb",
+      "sha256": "2667cb18683e126b912bded1c0017c6c0ecc0b14f7b95c0fa01bf2d0d60276a5",
+      "bytes": 362004
+    },
+    {
+      "path": "benches/fixtures/rendering/dancing-script-bitmap-16-32.font.glb",
+      "sha256": "438cd97852a4ef2c605a2fda57182ffb7534b8830c910e2660f3d2e73661b55f",
+      "bytes": 1008916
+    },
+    {
+      "path": "benches/fixtures/rendering/dancing-script-bitmap-16.font.glb",
+      "sha256": "c8af9ef06aa5ce27f0dd6d5496be573afc3636c57bce2f443801e65dab32d6d7",
+      "bytes": 291372
+    },
+    {
+      "path": "benches/fixtures/rendering/dancing-script-mtsdf.font.glb.gz",
+      "sha256": "7318de07602cf4253251dd53f8338e824628a33c86a07e10bb11b0b06d045a86",
+      "bytes": 2604842
+    },
+    {
+      "path": "benches/fixtures/rendering/dancing-script-slug.font.glb.gz",
+      "sha256": "ef9a0cdb840024f62aa835233c7b0cb91f866e15fb301a51ce2bb948bbb5f84d",
+      "bytes": 464656
+    },
+    {
+      "path": "benches/fixtures/rendering/dot-gothic-16-bitmap-16-32.font.glb",
+      "sha256": "f1895ea3bf8b69ee7430940a2ccf5d398c7a5f8c469635845c4b4b3b457b112b",
+      "bytes": 13057004
+    },
+    {
+      "path": "benches/fixtures/rendering/dot-gothic-16-bitmap-16.font.glb",
+      "sha256": "74a3775a107f34aa3561143a9e699a79e5a927afa84265b425f20ba8c55700fc",
+      "bytes": 3294200
+    },
+    {
+      "path": "benches/fixtures/rendering/dot-gothic-16-mtsdf.font.glb.gz",
+      "sha256": "db9e1d2d3e748287a40099d315481c826cc974dc89934e7bfcbba10bbaa6c304",
+      "bytes": 58845619
+    },
+    {
+      "path": "benches/fixtures/rendering/dot-gothic-16-slug.font.glb.gz",
+      "sha256": "cf7f584bbbde99ca151221c6542692d555b01d2ce4e7b625eeaba9a17e96b9d3",
+      "bytes": 3639700
+    },
+    {
+      "path": "benches/fixtures/rendering/font-awesome-free-6.7.2-bitmap-16-32.font.glb",
+      "sha256": "049af0fc36aac7de8fc11a8382449992302de04e28b9ac516cf77d6eec6db3f2",
+      "bytes": 2381548
+    },
+    {
+      "path": "benches/fixtures/rendering/font-awesome-free-6.7.2-bitmap-16.font.glb",
+      "sha256": "eade4bb6929b47d541184ec75d8ea1b732412cf1fcf43750ebef4323f7d66689",
+      "bytes": 596396
+    },
+    {
+      "path": "benches/fixtures/rendering/font-awesome-free-6.7.2-mtsdf.font.glb.gz",
+      "sha256": "731af50ecb439056a04f4c353f86aa07465f1315c5dd406fd93aeeff5b381c38",
+      "bytes": 8760100
+    },
+    {
+      "path": "benches/fixtures/rendering/font-awesome-free-6.7.2-slug.font.glb.gz",
+      "sha256": "51ffcc031a4d2dd2f36f82af12cc9574fffd06fedf855a61159b7752c5d82642",
+      "bytes": 657922
+    },
+    {
+      "path": "benches/fixtures/rendering/fredoka-issue-216-bitmap-16.font.glb",
+      "sha256": "2be09acf3c5ebd2d08859eb8d5282cf9018d70f8e84b4bda9eb80c410ff532c0",
+      "bytes": 44280
+    },
+    {
+      "path": "benches/fixtures/rendering/inter-bitmap-16-32.font.glb",
+      "sha256": "d9a84e2b3fb656a7082ce1653e66c43b8a2447cfd61d684ab56a15a3ab89e3dc",
+      "bytes": 3149464
+    },
+    {
+      "path": "benches/fixtures/rendering/inter-bitmap-16.font.glb",
+      "sha256": "acdca408ed169c7aa1c2791dbbc2982afa1939c56fbc59ef43cc38f7ff366c14",
+      "bytes": 926984
+    },
+    {
+      "path": "benches/fixtures/rendering/inter-mtsdf.font.glb.gz",
+      "sha256": "2dd8582a3b342bc33b2630184516520d3f944cd146f19ca994fcf66e1e63c472",
+      "bytes": 8167587
+    },
+    {
+      "path": "benches/fixtures/rendering/inter-slug.font.glb.gz",
+      "sha256": "1f6b3f51c1e9a1c598e43c83e4430cafd437a1e3642c3d97a7c1d6e2fcc7f5ee",
+      "bytes": 618310
+    },
+    {
+      "path": "benches/fixtures/rendering/noto-sans-cjk-contract-bitmap-16.font.glb",
+      "sha256": "3e4bbfa705c26bd04f9584df97cb41b4459aa04c6c0768fdd8535a2a0b35823b",
+      "bytes": 2897028
+    },
+    {
+      "path": "benches/fixtures/rendering/noto-sans-cjk-showcase-bitmap-16-32.font.glb",
+      "sha256": "8c37ab8b104dbc5b89a4ef17ded115cbcf960e27687cbd1e62fe73c1d5f94290",
+      "bytes": 238936
+    },
+    {
+      "path": "benches/fixtures/rendering/noto-sans-cjk-showcase-bitmap-16.font.glb",
+      "sha256": "5ae0588f990278bce8ff32e336bd348f13a32aa3dd2c35ac6d0d354e16a9f507",
+      "bytes": 65812
+    },
+    {
+      "path": "benches/fixtures/rendering/noto-sans-cjk-showcase-mtsdf.font.glb.gz",
+      "sha256": "90fdcce5287836731ec462d2967351ec3b589dd5569fa021e2b6583cedfd41e8",
+      "bytes": 1293271
+    },
+    {
+      "path": "benches/fixtures/rendering/noto-sans-cjk-showcase-slug.font.glb.gz",
+      "sha256": "b031d9544140e132c320853e327958c4a191447f69e845ac3967f91ce1c3e232",
+      "bytes": 139456
+    },
+    {
+      "path": "benches/fixtures/rendering/noto-sans-devanagari-bitmap-16-32.font.glb",
+      "sha256": "cdac26a78e4e20c9019dbaaf63fc8f77740b16aab74365e9d27ca3e99f77ba54",
+      "bytes": 1062820
+    },
+    {
+      "path": "benches/fixtures/rendering/noto-sans-devanagari-bitmap-16.font.glb",
+      "sha256": "f1c6e1fa039f9eaf5353f1faa2f39b3ebaea72f3768341cc859786e6c17ce74a",
+      "bytes": 312064
+    },
+    {
+      "path": "benches/fixtures/rendering/noto-sans-devanagari-mtsdf.font.glb.gz",
+      "sha256": "b829049bd689358b9b5ec9ba07160bd3a46f8a83c12522a42b72e0c9f4e60391",
+      "bytes": 3721083
+    },
+    {
+      "path": "benches/fixtures/rendering/noto-sans-devanagari-slug.font.glb.gz",
+      "sha256": "a16a1b3b1e83c37bb83bc424e8793e11bb830298fce0880b366d423ff036bc15",
+      "bytes": 296579
+    },
+    {
+      "path": "benches/fixtures/rendering/showcase-bitmap-density-fixtures-v0.json",
+      "sha256": "9f8773bfd06d884f7161acd64497ce17e2791bd3168d035d616c92c1af42a0cc",
+      "bytes": 8816
+    },
+    {
+      "path": "benches/fixtures/rendering/showcase-mtsdf-fixtures-v0.json",
+      "sha256": "6e2e78e6736c106592b5bcfb4088335786f1b836796afb24278a778abb9d51cb",
+      "bytes": 24909
+    },
+    {
+      "path": "benches/fixtures/rendering/showcase-raster-fixtures-v0.json",
+      "sha256": "0ddf04277ff115619746ae3e753d5014aabb1ef8e14ec4b00816bd50f98ab872",
+      "bytes": 4481
+    },
+    {
+      "path": "benches/fixtures/rendering/showcase-slug-fixtures-v0.json",
+      "sha256": "11eccb414e508d323948e94ff3d187ca53644fc4b43d00df7c0f230f0deb0e76",
+      "bytes": 6544
+    },
+    {
+      "path": "benches/fixtures/rendering/source-serif-4-bitmap-16-32.font.glb",
+      "sha256": "0612e198b835adf8d6fe1892b14a4254c5c4df619de22a2d4c17d390775168f7",
+      "bytes": 1418996
+    },
+    {
+      "path": "benches/fixtures/rendering/source-serif-4-bitmap-16.font.glb",
+      "sha256": "90b5fa04773b430a04ff1bf59b538e54dbdd516556c52ac6178466c0151edc67",
+      "bytes": 468600
+    },
+    {
+      "path": "benches/fixtures/rendering/source-serif-4-mtsdf.font.glb.gz",
+      "sha256": "05f8d0cfe1c6c5231ac538332c632666b5617c90ed579afbd1abdcd8e7e861e7",
+      "bytes": 4665457
+    },
+    {
+      "path": "benches/fixtures/rendering/source-serif-4-slug.font.glb.gz",
+      "sha256": "eada0d61f3a47b36cf8e352b479e2df18b77647e5418d4d3a63e2a35fee9842e",
+      "bytes": 407507
+    },
+    {
+      "path": "benches/fixtures/results/advanced-shaping-conformance-chromium149.json",
+      "sha256": "5f3af9f2c1ac79facf57a598ac426c08c2d012d76bda035d280fac347dff28a0",
+      "bytes": 1899
+    },
+    {
+      "path": "benches/fixtures/results/advanced-shaping-performance-chromium149.json",
+      "sha256": "2d19dd573f8628cbb5e01b03a28288da45b6b653a925d5a5e3de8d3be377380d",
+      "bytes": 3597
+    },
+    {
+      "path": "benches/fixtures/results/bake-host-baseline-v0.json",
+      "sha256": "89ecdd338da96c5dc063b67c0ba8aff9249bf2277d0bf0d963551c3fcb033b55",
+      "bytes": 1061
+    },
+    {
+      "path": "benches/fixtures/results/icon-grid-retained-evidence-chromium149.json",
+      "sha256": "3d5475cf3d59ddda11cb4be4d5be990839713287ebd5c485ec789c6d949b2e50",
+      "bytes": 3302
+    },
+    {
+      "path": "benches/fixtures/results/raster-performance-chromium149.json",
+      "sha256": "a88953ecf9222c56d43b387895595add0bc2d797312e1022f4eaf3ed634ea4bf",
+      "bytes": 3668
+    },
+    {
+      "path": "benches/fixtures/results/rust-layout-bitmap-0bdb9e93-darwin-arm64.json",
+      "sha256": "2bcb3f6cecd81679fae5ed63c189776402a694457392ce6594d39dbd5a6f4f6c",
+      "bytes": 2105
+    },
+    {
+      "path": "benches/fixtures/results/rust-layout-bitmap-integer-units-c2e895e-darwin-arm64.json",
+      "sha256": "08ff49a9ea0d0937f073e4fd86218a800d1ffc7136971d7ae1c7be9bbf222c96",
+      "bytes": 2358
+    },
+    {
+      "path": "benches/fixtures/results/rust-layout-bitmap-measure-a42c976-darwin-arm64.json",
+      "sha256": "f767ddade60bf86c8fc615e48be7bf9cd1c9ffdc26ce97bc92e548c9d32ef163",
+      "bytes": 2361
+    },
+    {
+      "path": "benches/fixtures/results/rust-layout-mtsdf-0bdb9e93-darwin-arm64.json",
+      "sha256": "8104dd27adf588025c1b5bf2d6d4825300e09ab7d44882ddec5e120de7d348c6",
+      "bytes": 2108
+    },
+    {
+      "path": "benches/fixtures/results/rust-layout-slug-0bdb9e93-darwin-arm64.json",
+      "sha256": "84de16a313741dbb3871a1a45425530fe63c9be8738de5b616a013e4a82f4262",
+      "bytes": 2108
+    },
+    {
+      "path": "benches/fixtures/results/slug-external-render-parity-chromium149.json",
+      "sha256": "92dd8299f04099458ae3376bd24417e244bdeec439fb4f85edc28b19358fea56",
+      "bytes": 5333
+    },
+    {
+      "path": "benches/fixtures/results/slug-performance-matrix-chromium149.json",
+      "sha256": "a13ee31561a4841bd3885028ca590024f7f5151ad42177495070616bd499f57a",
+      "bytes": 174729
+    },
+    {
+      "path": "benches/fixtures/results/slug-quality-matrix-chromium149.json",
+      "sha256": "42ff78d8444fd1b18be3a5fdb83ff89f61d84a06759c5031bb23f742678987a1",
+      "bytes": 43813
+    },
+    {
+      "path": "benches/fixtures/results/slug-role-scenes-chromium149.json",
+      "sha256": "69aa87ba0fc44af89c8d2e325c147d48f3d62a09e741a35d38e2c2cdf3897134",
+      "bytes": 34328
+    },
+    {
+      "path": "benches/fixtures/results/typescript-layout-baseline-90964be0-darwin-arm64.json",
+      "sha256": "df06cb82c54a194ab7e121adc9f56cdba26ae66b5063fdf5b577fd2e9e7173c7",
+      "bytes": 1364
+    },
+    {
+      "path": "benches/fixtures/shaping/amiri-regular/cases.json",
+      "sha256": "2aaa4ddcaf904d0aac0241da51f4fab4965981657a531cce0c001bacc6120c86",
+      "bytes": 1985
+    },
+    {
+      "path": "benches/fixtures/shaping/amiri-regular/harfbuzz.json",
+      "sha256": "c33cc55d9a6516b0fb11893c617c3139ed1445731408b9d0e6b391cef25b8b36",
+      "bytes": 11893
+    },
+    {
+      "path": "benches/fixtures/shaping/amiri-regular/harfrust.json",
+      "sha256": "d5b8931fc05c0100ff4b9c3e68296fb8e4a4480437d597fe1710d9ee43d616cf",
+      "bytes": 11798
+    },
+    {
+      "path": "benches/fixtures/shaping/inter-regular/cases.json",
+      "sha256": "b9ded177be662575360bf79df290ccce341003f36ef31d6e7cb0769b33ab9e71",
+      "bytes": 3533
+    },
+    {
+      "path": "benches/fixtures/shaping/inter-regular/harfbuzz.json",
+      "sha256": "b9ea5fcd2cf0d923ecbc1efa84f9a4cda7ba6c1d727718eb4caeea254ff3f88f",
+      "bytes": 20943
+    },
+    {
+      "path": "benches/fixtures/shaping/inter-regular/harfrust.json",
+      "sha256": "635792e926277da0b3f2a5f83ceab8c862dffe7a47930eb733833b3dada61f22",
+      "bytes": 20848
+    },
+    {
+      "path": "benches/fixtures/shaping/noto-sans-cjk/cases.json",
+      "sha256": "5b07180ee6a4d4ed841f5047dd396126a0a43fa5657a790b861d41c54d61e9d6",
+      "bytes": 3686
+    },
+    {
+      "path": "benches/fixtures/shaping/noto-sans-cjk/harfbuzz.json",
+      "sha256": "ae547fbea0d8bc665f0ddb2af596847cbdcdefa9da75005c3f08c05d1e4832f1",
+      "bytes": 15908
+    },
+    {
+      "path": "benches/fixtures/shaping/noto-sans-cjk/harfrust.json",
+      "sha256": "e6c33731851d51a11c633bbbb798fd2da3b0a43d0c9222b2c6e3b7d8642010ae",
+      "bytes": 15813
+    },
+    {
+      "path": "benches/fixtures/visual/inter-regular/browser-html.json",
+      "sha256": "f1a23f08e9a001ec28bead949d6065562049e3bb782b98aa3f05f786cf038a82",
+      "bytes": 800
+    },
+    {
+      "path": "benches/fixtures/visual/inter-regular/browser-html.png",
+      "sha256": "7b6f580ab3800018ad2b0f6f1e16f1f09e70c6a8c09b2e7a4cdf37ccd43e73ff",
+      "bytes": 23283
+    },
+    {
+      "path": "benches/labs.config.ts",
+      "sha256": "aed5bd57a4e9390b975e2ee71ac44643bd726217be0750a190f50f3767245354",
+      "bytes": 1024
+    },
+    {
+      "path": "benches/labs/package/adapter-publication-workload.ts",
+      "sha256": "0437a398c22a8cb916c73193c3f9bc0dc14109b6614f65a1161a17d3c0cfc745",
+      "bytes": 2242
+    },
+    {
+      "path": "benches/labs/package/adapter-publication.bench.ts",
+      "sha256": "44253c4785d036e21d12197e1da6b5bbda2fd8772fd8af8ead320b8a43be6184",
+      "bytes": 1907
+    },
+    {
+      "path": "benches/labs/package/batching.bench.ts",
+      "sha256": "ebbf03ef22b7a7e80877692531b1dc8cd57d97597ed89087732f490303f61bde",
+      "bytes": 11879
+    },
+    {
+      "path": "benches/labs/package/bitmap-native-replay.capture.mts",
+      "sha256": "486e0e87816b42a7969b8fcc151add92d4f07af98f9d2607878d2d2ccbb92879",
+      "bytes": 11544
+    },
+    {
+      "path": "benches/labs/package/bulk-memory.observe.mts",
+      "sha256": "4d2279410700bcc1a1eca9287d3dc144d626b658cd26b0bc2584fef935aaae35",
+      "bytes": 6476
+    },
+    {
+      "path": "benches/labs/package/cold.bench.ts",
+      "sha256": "74b043084391d02d2ca07d525cf8a47e09b6d0c8b557ce1cf3bd841d219157cf",
+      "bytes": 2275
+    },
+    {
+      "path": "benches/labs/package/common.bench.ts",
+      "sha256": "f907744ef8f24ce3ac101a25f680404259abca94fd76d0cc4f8a92d6c141d0ef",
+      "bytes": 3821
+    },
+    {
+      "path": "benches/labs/package/edit.bench.ts",
+      "sha256": "93e9ff1aef88efdd96607320fe855fe8bfde6b95424c51239dd0334555841809",
+      "bytes": 2405
+    },
+    {
+      "path": "benches/labs/package/fixture.ts",
+      "sha256": "34b97032e1f035d6b15ae385f4a6aa4e6cc0b78d9239dc14e8253a1a6644dfe3",
+      "bytes": 14245
+    },
+    {
+      "path": "benches/labs/package/framework-publication.bench.ts",
+      "sha256": "d0eca017ea30341d5240ceaee050d37be007309b62db0c5454e361910c5f9567",
+      "bytes": 6417
+    },
+    {
+      "path": "benches/labs/package/inspection.bench.ts",
+      "sha256": "6e30da7f3c074b09f5a0fbe4d6e0ebbe137adc3adf9d9cdfbaab4250c1b6eaf4",
+      "bytes": 2584
+    },
+    {
+      "path": "benches/labs/package/layout.bench.ts",
+      "sha256": "7c0a3b709464c13d9db6ec4d16a54342243855dedb20addbf22eb70e8ef920a9",
+      "bytes": 5474
+    },
+    {
+      "path": "benches/labs/package/outlines.bench.ts",
+      "sha256": "e33004150d5274c5a7cea55d8b77ebf6550c3990e35551c313974ca26baceae9",
+      "bytes": 1653
+    },
+    {
+      "path": "benches/labs/package/prepared-operations.bench.ts",
+      "sha256": "04dd8f3ecffa6da84867371958987db06e23c531d099be73084d1dc25a5e87b6",
+      "bytes": 6349
+    },
+    {
+      "path": "benches/labs/package/request-arena.bench.ts",
+      "sha256": "52410273892d49f9017ccf31129ccdb7ee199c0fdcf0552976f4015b8adf76d9",
+      "bytes": 4744
+    },
+    {
+      "path": "benches/labs/package/sparse-assignment.bench.ts",
+      "sha256": "48798c53c5b2ef00bcf546d5089d2be1e3e63534bc1aa1ae6bc8e40896f75356",
+      "bytes": 9759
+    },
+    {
+      "path": "benches/labs/package/stress.bench.ts",
+      "sha256": "ee706b190b82178cb227fa9f1e739d99759815ee808deb874ee6e2aeb064c664",
+      "bytes": 5971
+    },
+    {
+      "path": "benches/labs/package/typegpu-publication.bench.ts",
+      "sha256": "c68214d545d5e45baa07f991f2a7dd84499a42fdd1eebb84fc0c795dbacd00e8",
+      "bytes": 3942
+    },
+    {
+      "path": "benches/labs/unsafe-line-breaks.bench.ts",
+      "sha256": "7beba76978dc165fe94a56f7acee8b42b433f9de253c7bd3bc347c6322225a00",
+      "bytes": 5487
+    },
+    {
+      "path": "benches/package.json",
+      "sha256": "28003e0a483da077cf45907fb9b73e8377b6efb522a652d962f8b973a4475fe4",
+      "bytes": 1852
+    },
+    {
+      "path": "benches/scripts/run-package-labs.mts",
+      "sha256": "ee8dfba4724cd6f8261b63f5a594762981636a43663db39b65e3f406e26fbc57",
+      "bytes": 21317
+    },
+    {
+      "path": "benches/scripts/support/labs-result.mts",
+      "sha256": "a5fc37f1c5d84811f1e249bd46f4d616eff85480c26caba7c6635d3d8782a31a",
+      "bytes": 10975
+    },
+    {
+      "path": "benches/scripts/support/saved-package-labs.mts",
+      "sha256": "b7a2c9720bc0610d98b9595fb885250010432781a53716d39dbe379aef2fbb6c",
+      "bytes": 5883
+    },
+    {
+      "path": "benches/src/app.tsx",
+      "sha256": "0990df14a8f065cc11599bca9899d62b8d3ef63da2fe16fcdf640d408b06c8e3",
+      "bytes": 1001
+    },
+    {
+      "path": "benches/src/benchmark/autoresearch-baseline-v0.schema.json",
+      "sha256": "9a6f428c02272b921806fe48fe56971b8865cc28721092de22f4336e165e2dbc",
+      "bytes": 1440
+    },
+    {
+      "path": "benches/src/benchmark/autoresearch.ts",
+      "sha256": "5ba676f77ba575d8907b0bd13ef35aa43680f66a090bfa9dd26e99171ecda946",
+      "bytes": 3676
+    },
+    {
+      "path": "benches/src/benchmark/bake-host-baseline.ts",
+      "sha256": "7cf5157f6601474db639a9b7ddff441ce1e200fdd11bd1809649e7ef72a7fd18",
+      "bytes": 2038
+    },
+    {
+      "path": "benches/src/benchmark/contracts.ts",
+      "sha256": "8980a8856e946eb735a2316285a600b882a68fe3164d5cd10dc3818b5f5f885b",
+      "bytes": 3051
+    },
+    {
+      "path": "benches/src/benchmark/cpu-profile-stage.mts",
+      "sha256": "1392af3692ed873abe18840d91fcfbfbc5ecfe68c5b42e2b242e2cbf2f2bb09d",
+      "bytes": 1943
+    },
+    {
+      "path": "benches/src/benchmark/cpu-profile-summary.test.ts",
+      "sha256": "d9c593c7ae88d3b45f94f76e4b309490cb4e8be43b09f3892fc29f4c1b6d781d",
+      "bytes": 21617
+    },
+    {
+      "path": "benches/src/benchmark/environment.ts",
+      "sha256": "285eaaf11fa981e183ce1c0aa2cb00e320825a16856376746d661cb1f05d6923",
+      "bytes": 543
+    },
+    {
+      "path": "benches/src/benchmark/exact-value.test.ts",
+      "sha256": "424a2ed16a1b2857bb25d3052215c0ab533314282523682aa6040282c3a3043a",
+      "bytes": 719
+    },
+    {
+      "path": "benches/src/benchmark/exact-value.ts",
+      "sha256": "355fb1b990a53ed5b7e3521b016ce40719d37e09b429da785a278acc508fdba8",
+      "bytes": 1253
+    },
+    {
+      "path": "benches/src/benchmark/execution.test.ts",
+      "sha256": "4bdb87dd5fd490366e5c623534e75dfba4288b860bbf6b5c252513027fb7d590",
+      "bytes": 1554
+    },
+    {
+      "path": "benches/src/benchmark/execution.ts",
+      "sha256": "fb8ef590e944bc2ecfd314f8c4d0bbe4d25e8151d898849c64db818eb8a4292c",
+      "bytes": 1422
+    },
+    {
+      "path": "benches/src/benchmark/fixture-contracts.test.ts",
+      "sha256": "59b222f1e376e65d46aca06fae9fc848898f4b93e85862ee932cd21479ec9ef6",
+      "bytes": 820
+    },
+    {
+      "path": "benches/src/benchmark/fixtures.test.ts",
+      "sha256": "91a6c48d1bfa496195ad577d17d78432e24aca6b00a2db3c946fa735a98601d4",
+      "bytes": 8541
+    },
+    {
+      "path": "benches/src/benchmark/font-family-fixtures.test.ts",
+      "sha256": "5e28c21c176ca0de7c6959f74d832b414fd6621f0f37b6a0ac7de9ea2d011892",
+      "bytes": 4366
+    },
+    {
+      "path": "benches/src/benchmark/font-fixtures.ts",
+      "sha256": "4744d3a46b8bffd79877650f8dd67e099bd57092378eea994cde331c5c5f9df5",
+      "bytes": 5756
+    },
+    {
+      "path": "benches/src/benchmark/framework-adapter-size.ts",
+      "sha256": "69415a6fc154b2d59dfe95b228006ccf4a395b4f23383f4d75af9d48304430a1",
+      "bytes": 3302
+    },
+    {
+      "path": "benches/src/benchmark/labs/render-technique-three.ts",
+      "sha256": "f38b3e11d4a011849d5409a381f0fa7b39dbfeebd3c0158b7a2f24ceaa4e26fa",
+      "bytes": 6454
+    },
+    {
+      "path": "benches/src/benchmark/labs/render-technique-typegpu.ts",
+      "sha256": "d3f81d4603503dc159e7133c505e41f551e52788e40f6f6f2266b73b546c0c1c",
+      "bytes": 7861
+    },
+    {
+      "path": "benches/src/benchmark/low-level/raster/bitmap-finite-scene.test.ts",
+      "sha256": "70733f7ddd52f005186b8100561bd1b395c94b5dd4d0f12125a6498df2aebbce",
+      "bytes": 1779
+    },
+    {
+      "path": "benches/src/benchmark/low-level/raster/bitmap-finite-scene.ts",
+      "sha256": "86eedd960bbda7c535f69cfc25cb2fb221d108d49ddcc72ffe6a9b5f0a7a4722",
+      "bytes": 20303
+    },
+    {
+      "path": "benches/src/benchmark/low-level/raster/mtsdf-cpu-reference.test.ts",
+      "sha256": "de5d168bd3adcbc7d4151c99dde7eb21b1f377cb1865a50ec6ed105cf74fcbad",
+      "bytes": 8339
+    },
+    {
+      "path": "benches/src/benchmark/low-level/raster/mtsdf-cpu-reference.ts",
+      "sha256": "2e7de7a5f173f865e98f9eae55270f4d4843d6ffebf3cf623556edc52ba4f7fd",
+      "bytes": 13209
+    },
+    {
+      "path": "benches/src/benchmark/low-level/raster/rgba-readback.test.ts",
+      "sha256": "6f6eb85cf936808487b046ac68f9a6f1cdfc4ae30d255e748be147c53a782ccb",
+      "bytes": 950
+    },
+    {
+      "path": "benches/src/benchmark/low-level/raster/rgba-readback.ts",
+      "sha256": "6dad9066b2e83b6906d0221c633c752df666955cd46aaa3600b45c8149e609c0",
+      "bytes": 1147
+    },
+    {
+      "path": "benches/src/benchmark/low-level/raster/slug-cpu-reference.test.ts",
+      "sha256": "48e8fd46a01805351c18c01b7d8a802dc365ca2497dc87c83d5c0c8574b3c980",
+      "bytes": 6903
+    },
+    {
+      "path": "benches/src/benchmark/low-level/raster/slug-cpu-reference.ts",
+      "sha256": "d7d438b4f927fb1cb24c21ec204058093f92ec1179c6c07188bd20efcdb01309",
+      "bytes": 19163
+    },
+    {
+      "path": "benches/src/benchmark/low-level/raster/source-outline-reference.test.ts",
+      "sha256": "30d40bfafd60f07269e8f615a24b3b202e28f6d4a0867949969caf4a91e64c3e",
+      "bytes": 704
+    },
+    {
+      "path": "benches/src/benchmark/low-level/raster/source-outline-reference.ts",
+      "sha256": "29246ece0c6618030b37e446a835576e155cbb6dfec9f13126150865193a3cc2",
+      "bytes": 6247
+    },
+    {
+      "path": "benches/src/benchmark/mtsdf-scenarios.test.ts",
+      "sha256": "a060daa11fb39c5c962f14a27bbf0bdf7df234c561887bf019fd45b124722aba",
+      "bytes": 6591
+    },
+    {
+      "path": "benches/src/benchmark/package-size-baseline.test.ts",
+      "sha256": "e600857f6757921af41239cfb9f8dae7e2e21de407f682aaf1c1df9402b578b0",
+      "bytes": 1293
+    },
+    {
+      "path": "benches/src/benchmark/package-size-baseline.ts",
+      "sha256": "1e9b4241048509a98f301dfc6c0ccbdda2bff4f34811dcd79c49d697c3e700a7",
+      "bytes": 1131
+    },
+    {
+      "path": "benches/src/benchmark/package-size-comment.mts",
+      "sha256": "4e0aca9453c7360c28d5ba91cc8b9f20b7b02e204462382d5c8ec51ffb88ffa1",
+      "bytes": 3247
+    },
+    {
+      "path": "benches/src/benchmark/package-size-summary.ts",
+      "sha256": "87c43ea0d75a46961b0ca421099329f422bbe9831d54783522247bbaeccc2c0c",
+      "bytes": 6576
+    },
+    {
+      "path": "benches/src/benchmark/package-sizes.test.ts",
+      "sha256": "45292de9a1d7a2b63095ef9f8cd03fdf4ad28c9a9ca18baa4f32611ddc15f051",
+      "bytes": 4861
+    },
+    {
+      "path": "benches/src/benchmark/paragraph-contract-corpus.ts",
+      "sha256": "f768d34a370bf10265d297c12b7f898aeb1e0a6e84d6b143776c71440760c026",
+      "bytes": 372
+    },
+    {
+      "path": "benches/src/benchmark/paragraph-layout-digest.ts",
+      "sha256": "343e8d73749754a254b838c3359d06de59cdbd8677affe5e1231cc11a3098ac4",
+      "bytes": 3331
+    },
+    {
+      "path": "benches/src/benchmark/paragraph-stress-motion.ts",
+      "sha256": "d84234274398042af56afcfbe84ec265db56500df4ee3b5a3ea216bebfa5aeb1",
+      "bytes": 2856
+    },
+    {
+      "path": "benches/src/benchmark/payload-summary.ts",
+      "sha256": "fa76d79c7328457c5e57bb3b4a2f597eacd12ed62162fd586c9dbc56a2eb5725",
+      "bytes": 8316
+    },
+    {
+      "path": "benches/src/benchmark/presentation-draw-topology.test.ts",
+      "sha256": "840f67fc7fa6a56056620d3735ab1fbfc7cf6997ab2d4247707920b388d63e47",
+      "bytes": 1444
+    },
+    {
+      "path": "benches/src/benchmark/presentation-draw-topology.ts",
+      "sha256": "c884eb22251bd48e42e7169a1b7db016c2ada184b88ae79e2ad1d3c8d5af4325",
+      "bytes": 893
+    },
+    {
+      "path": "benches/src/benchmark/presentation-sequence.test.ts",
+      "sha256": "db8e714aae723f053caa1df8f8d665f7e5e701fb7de87d34d6650d4057b727bb",
+      "bytes": 2749
+    },
+    {
+      "path": "benches/src/benchmark/presentation-sequence.ts",
+      "sha256": "c0924b09fa698baffd38e14edbb768c736649c650f9499c89ee3e47c83604359",
+      "bytes": 3070
+    },
+    {
+      "path": "benches/src/benchmark/probes/comparison-workload-preview.ts",
+      "sha256": "bdb22347794df131d7ba104224a2e35d8dd9119a0897043878429a63a6f679fd",
+      "bytes": 2443
+    },
+    {
+      "path": "benches/src/benchmark/product-result.test.ts",
+      "sha256": "c13a4a2dd2438ab3ffa272a3e95b90f4b1ef5cc7825e9eed767656b79d326601",
+      "bytes": 2150
+    },
+    {
+      "path": "benches/src/benchmark/product-result.ts",
+      "sha256": "b56156134d97d0f5539fef52e63d6722de650291fd0d5892c66f4510dadae312",
+      "bytes": 6284
+    },
+    {
+      "path": "benches/src/benchmark/production-app-size.ts",
+      "sha256": "9d542fead92715b15213baeea94aae165e724d0c35fd733d2b5a3a62c61b6635",
+      "bytes": 2696
+    },
+    {
+      "path": "benches/src/benchmark/raster-fixture-manifests.test.ts",
+      "sha256": "cf8ec4b1b63e4e5657378b7c85f6d9aeaf9c28441e19f0c8c20f03c01124cb00",
+      "bytes": 11161
+    },
+    {
+      "path": "benches/src/benchmark/runner.test.ts",
+      "sha256": "482b95acccca8a51daca773235e39707ea0972409062a193f3b02ac4f4db4163",
+      "bytes": 5156
+    },
+    {
+      "path": "benches/src/benchmark/runner.ts",
+      "sha256": "86becba740179eb56e71ca82ed144eece7ec5215c5d1ef37912f82058ee6b65c",
+      "bytes": 4506
+    },
+    {
+      "path": "benches/src/benchmark/runtime-world-instance.ts",
+      "sha256": "f0683dd386b74be2dba8b21169de34d8b613d4981dab1c7206d74f4c39154d7f",
+      "bytes": 773
+    },
+    {
+      "path": "benches/src/benchmark/runtime-world-provider.tsx",
+      "sha256": "5ccfd40f40dc1142954ccc0dd8658970ecd102fe02bc7e31673fc89423092363",
+      "bytes": 306
+    },
+    {
+      "path": "benches/src/benchmark/runtime-world.ts",
+      "sha256": "c15b15fa12c9504756fd5cc8d463ed022536dc632dad734d7edd0089d31e31da",
+      "bytes": 4682
+    },
+    {
+      "path": "benches/src/benchmark/scenarios.ts",
+      "sha256": "e3e072a30678478dbd5777952cd8b37ad59bb0d332533119af6fc06650cd8390",
+      "bytes": 24843
+    },
+    {
+      "path": "benches/src/benchmark/statistics.test.ts",
+      "sha256": "d27f0ccee776c45b3c5de9ec8b4b432bb1691ef3d9ff394221040d55323cf363",
+      "bytes": 472
+    },
+    {
+      "path": "benches/src/benchmark/statistics.ts",
+      "sha256": "29f81acaf12f233b60ff5b2282484fd62e89afa4cfd9eaf1961c848bea6b6560",
+      "bytes": 644
+    },
+    {
+      "path": "benches/src/benchmark/targets.ts",
+      "sha256": "409a4001986e11a749fa1ee2f2461955b6857de917fc645b69d526b0efd91ead",
+      "bytes": 158
+    },
+    {
+      "path": "benches/src/benchmark/targets/conformance/advanced-shaping.ts",
+      "sha256": "7542e6e7106f2fc0cfef54b7abef3e034f6495f9956a7a59655710601b9b7825",
+      "bytes": 9597
+    },
+    {
+      "path": "benches/src/benchmark/targets/conformance/font-loader-worker.ts",
+      "sha256": "2b5f84a4c9d287ce8102ab1326a3f15966a7904a240043efa73222a928d73c54",
+      "bytes": 2654
+    },
+    {
+      "path": "benches/src/benchmark/targets/conformance/index.ts",
+      "sha256": "3e9303b79a682026f4550a32f91517c958a2bdb322285d2dea7e636cd564ea00",
+      "bytes": 7339
+    },
+    {
+      "path": "benches/src/benchmark/targets/conformance/paragraph-contracts.ts",
+      "sha256": "3f467e62a267e9b6bc7fed0af228f472679caae6c51d20283f5c00ec5e314dcb",
+      "bytes": 15258
+    },
+    {
+      "path": "benches/src/benchmark/targets/conformance/raster/bitmap-capture.ts",
+      "sha256": "0031f21faec6e5d2686b2fa69901217586fa57f522a37efc906aee3b4511120f",
+      "bytes": 2781
+    },
+    {
+      "path": "benches/src/benchmark/targets/conformance/raster/contracts.ts",
+      "sha256": "48a7069e1de5c030d093d582584b9b480b18546904e398ca180c39aec0a34db8",
+      "bytes": 1436
+    },
+    {
+      "path": "benches/src/benchmark/targets/conformance/raster/mtsdf-capture.ts",
+      "sha256": "96016991e8b9606068a3c74b36a7f839abd736fdf6402ccc4019a75e8d3df0d8",
+      "bytes": 12233
+    },
+    {
+      "path": "benches/src/benchmark/targets/conformance/raster/mtsdf.ts",
+      "sha256": "d47d9a0f798d04b6af1df2a87eb000f5d9b2b702af9c92b8cc51816b9f099f15",
+      "bytes": 311
+    },
+    {
+      "path": "benches/src/benchmark/targets/conformance/raster/runtime-fallback.ts",
+      "sha256": "22acda99736a00fb1fd7c25559d1bbe6fe79dd202b7bd36d147e63397fe74350",
+      "bytes": 4259
+    },
+    {
+      "path": "benches/src/benchmark/targets/conformance/raster/slug-capture.ts",
+      "sha256": "1ce213724c2a84b469cee3401f92b7392dd25dc8a0eab3253828a6f4c613bc7a",
+      "bytes": 37047
+    },
+    {
+      "path": "benches/src/benchmark/targets/conformance/raster/slug-role-scenes.ts",
+      "sha256": "e3a33f32f29db95c12599322d89336b8e222fdbe6e937413230b316b18eb4078",
+      "bytes": 4755
+    },
+    {
+      "path": "benches/src/benchmark/targets/conformance/raster/slug.ts",
+      "sha256": "2319242b18677aeda1f9d899afb64ad1f794ed2c450bc58ef281835cf5a307d7",
+      "bytes": 306
+    },
+    {
+      "path": "benches/src/benchmark/targets/conformance/raster/target.test.ts",
+      "sha256": "b5e2384daa706ef04c1bbc97f5209345ff32ffe179d3a71c3bfd3db7fa619bcd",
+      "bytes": 6586
+    },
+    {
+      "path": "benches/src/benchmark/targets/conformance/raster/target.ts",
+      "sha256": "56da1eda09d07c333d0b42a21a18cd0f0188b75aefa45e342b17b0b158502c35",
+      "bytes": 5986
+    },
+    {
+      "path": "benches/src/benchmark/targets/conformance/rich-text-spans.ts",
+      "sha256": "08078da563b5a489c173724bb0314ca86a5daff80ffb69b3e8cd563a223da7e3",
+      "bytes": 20110
+    },
+    {
+      "path": "benches/src/benchmark/targets/conformance/tsl-baseline.test.ts",
+      "sha256": "513e0ff7b1a1e4c5b1cba1c459662b4778456fae36fdf14a64a1863821c633ec",
+      "bytes": 787
+    },
+    {
+      "path": "benches/src/benchmark/targets/conformance/tsl-baseline.ts",
+      "sha256": "2f3a02e441ef6bde01d532a0b3b80d22254faab5455af1653c23b0fd81c81b17",
+      "bytes": 6247
+    },
+    {
+      "path": "benches/src/benchmark/targets/measurement/font-baker.ts",
+      "sha256": "1fc8e2c58d9cb0e1ffe07ae05ba809da2b1d140aa42b951bb46c68a6bb164358",
+      "bytes": 1977
+    },
+    {
+      "path": "benches/src/benchmark/targets/product/bitmap-text.test.ts",
+      "sha256": "ce5e20b48313e9885cefd82fa52c134142f1578ecb0410c5e562a44188e0f4dd",
+      "bytes": 802
+    },
+    {
+      "path": "benches/src/benchmark/targets/product/bitmap-text.ts",
+      "sha256": "972a5806aa5f83c54e79ed2601d1adbb82a403eb499b353b3987ea9ca1794b3d",
+      "bytes": 2171
+    },
+    {
+      "path": "benches/src/benchmark/targets/product/external-raster-proof.ts",
+      "sha256": "4bcc195f453fbf70bb998126521da804cf2e691557ec7ea3aef26d0ed37de6eb",
+      "bytes": 12668
+    },
+    {
+      "path": "benches/src/benchmark/targets/product/external-raster-three.ts",
+      "sha256": "f38ac608c726b6081ef995a3f897c1c7d4b424107a721767dc4a68e26aec979a",
+      "bytes": 3635
+    },
+    {
+      "path": "benches/src/benchmark/targets/product/index.ts",
+      "sha256": "46ef827584191e10454e1f017a5a4c9c025e4dc3a23e5c165650b7be74578654",
+      "bytes": 3893
+    },
+    {
+      "path": "benches/src/benchmark/targets/product/mtsdf-text.test.ts",
+      "sha256": "27f86aab1b267791c70871ff027d3736b614a110adbcd4c112e0147675f28d39",
+      "bytes": 793
+    },
+    {
+      "path": "benches/src/benchmark/targets/product/mtsdf-text.ts",
+      "sha256": "0dc2b5a7f10255c0c192bd84b18462617c9affeca503ee9a3415c6dd20cf5fda",
+      "bytes": 10198
+    },
+    {
+      "path": "benches/src/benchmark/targets/product/react-text.ts",
+      "sha256": "9ffe62ce9a8e55b44f98522ab9aa81e6daa41f4da8e28cae271cf00af5f5fb7a",
+      "bytes": 15116
+    },
+    {
+      "path": "benches/src/benchmark/targets/product/slug-text.test.ts",
+      "sha256": "827eac59890b9ab9228cfe9c671e2a8f0b2d9b623a82315f00b27f78f0cd4837",
+      "bytes": 790
+    },
+    {
+      "path": "benches/src/benchmark/targets/product/slug-text.ts",
+      "sha256": "e99f75f803245a384f7f25bab4abf12b1ff2322480580e5e578127fdf0eb496c",
+      "bytes": 10872
+    },
+    {
+      "path": "benches/src/benchmark/targets/registry.ts",
+      "sha256": "fd1f3fb972b51dcc8e3f229bafef01c0c3536d3e6424606070ef5b2392643128",
+      "bytes": 2344
+    },
+    {
+      "path": "benches/src/benchmark/targets/shared.ts",
+      "sha256": "21723315bdd46dc3808e046a611a15165c3bf5af6af1ffb40233ddc826611eaa",
+      "bytes": 1880
+    },
+    {
+      "path": "benches/src/benchmark/targets/shared/direct-wasm.ts",
+      "sha256": "880400be9bfd106d2b6e753eacf7d5e99fed79f54654bbaab327d48c5f7e0ad7",
+      "bytes": 967
+    },
+    {
+      "path": "benches/src/benchmark/targets/three-policy-buffer-evidence.ts",
+      "sha256": "4dca012db378914365a7d68a514168f65c81a2d0a182c3a5f56e6772efa84eca",
+      "bytes": 950
+    },
+    {
+      "path": "benches/src/benchmark/texture-memory.test.ts",
+      "sha256": "9b73e86216f596f77f52f9ea855dd022fdc024e9ff3a005b2c7f3eba4a35f59e",
+      "bytes": 1138
+    },
+    {
+      "path": "benches/src/benchmark/texture-memory.ts",
+      "sha256": "75f9af047478bb64818e74775c84ed35caa0bedaf889bbe1b914b9f2651d0407",
+      "bytes": 960
+    },
+    {
+      "path": "benches/src/benchmark/uikit-layout-fixture.ts",
+      "sha256": "b6c7ec8004f714262a446fceb5811006e9182028b30b2e2a81c069d13b20897f",
+      "bytes": 4562
+    },
+    {
+      "path": "benches/src/benchmark/url-state.test.ts",
+      "sha256": "f1579f31e3c7ce95f1951cc62548d75e927fefe504777b1ceedfad0b4b2a1698",
+      "bytes": 2805
+    },
+    {
+      "path": "benches/src/benchmark/url-state.ts",
+      "sha256": "487cb3463300dbff9b01b90f0fcff6124eeb8b6533c15b3ca932deede12c829e",
+      "bytes": 4261
+    },
+    {
+      "path": "benches/src/benchmark/vite-size-bundle.ts",
+      "sha256": "a1299883149aaa771f81e553bbfafdad01bb656d22be0e27f7f2ab3b6d37caff",
+      "bytes": 7471
+    },
+    {
+      "path": "benches/src/benchmark/worker-queue-evidence.ts",
+      "sha256": "b692417aad7af72108192becf6654fff2fefdfdca68fabb4155d32c309833894",
+      "bytes": 1837
+    },
+    {
+      "path": "benches/src/benchmark/workloads.ts",
+      "sha256": "0cf8f70aae23939e5d66cf29025348d965baf68e2d4b67062f79ed6b6f00ab29",
+      "bytes": 3629
+    },
+    {
+      "path": "benches/src/components/custom-select.tsx",
+      "sha256": "6449851921372d88270e7dbc41a60d9d7f2d6693cecc9cfeb2b63339a9abfc6f",
+      "bytes": 2489
+    },
+    {
+      "path": "benches/src/components/export-panel.tsx",
+      "sha256": "28dd15ead609140d26952c9e3ed4346367ed8116bf3b589442c2bffa2843cc08",
+      "bytes": 2619
+    },
+    {
+      "path": "benches/src/components/font-fixture-buttons.tsx",
+      "sha256": "22ab8d4e5e31a2a383ed2d3c4a446450c524986117575a51fb8ddcdcb6585714",
+      "bytes": 1620
+    },
+    {
+      "path": "benches/src/components/font-notices-dialog.tsx",
+      "sha256": "941735485328866dcbcdf866c68bd26e19fbff2fad1fadfa86ad68a8e40b5f52",
+      "bytes": 1417
+    },
+    {
+      "path": "benches/src/components/harness-layout.tsx",
+      "sha256": "53e44300350d76db1ba8abc4e5e50b32bafb065737418eabafa8235a3f1fa48f",
+      "bytes": 11139
+    },
+    {
+      "path": "benches/src/components/presentation-control-dock.tsx",
+      "sha256": "8d1fe5d97a60c67095d465621829b46ea6805ac90f1b5f0c03cbdefe02e11b50",
+      "bytes": 17736
+    },
+    {
+      "path": "benches/src/components/presentation-layout.tsx",
+      "sha256": "37f9a24397007d4a4c31accab8723de6b36cb0d82a4384896c03a0dd537a67f5",
+      "bytes": 3251
+    },
+    {
+      "path": "benches/src/components/presentation-payload-pills.tsx",
+      "sha256": "172d9393d4274cb8673c4b882f843b6962c45b34ba844f6021dfb9001ee38e95",
+      "bytes": 1832
+    },
+    {
+      "path": "benches/src/components/range-values.ts",
+      "sha256": "3baa6f6df8f86435973bee64191b9b5187252da61e5faf673e441f016cd9e65f",
+      "bytes": 1188
+    },
+    {
+      "path": "benches/src/components/raster-format-switcher.tsx",
+      "sha256": "ea8aba42ef41318b37ddeddec720fa67c030dfa37ed1cfa77f4e7ee28b3fdf1e",
+      "bytes": 1422
+    },
+    {
+      "path": "benches/src/components/render-controls.tsx",
+      "sha256": "c241af8374cd82446681343ef3348b732ec8269ca49b7f8de52ca7436272382b",
+      "bytes": 41156
+    },
+    {
+      "path": "benches/src/components/report.tsx",
+      "sha256": "a30febc8ad27b725f5052def157d041fc64a0eb67cb0aa1e43ba0875229345b4",
+      "bytes": 10034
+    },
+    {
+      "path": "benches/src/components/responsive-shell.tsx",
+      "sha256": "34001cad1196fdb675190b4a094442906c3386628fb002e89182b8a4588358df",
+      "bytes": 3016
+    },
+    {
+      "path": "benches/src/components/runtime-controls.tsx",
+      "sha256": "1acf063dee081c7a16c84089ca3ccbc5c7daaa567b87c6b79904c81d723f1cbc",
+      "bytes": 4178
+    },
+    {
+      "path": "benches/src/components/sparkline.ts",
+      "sha256": "525324c5c56000167dbc051ef53305f1721bf504b5ed82e0f6e7e935bbe88256",
+      "bytes": 2304
+    },
+    {
+      "path": "benches/src/components/telemetry-charts.tsx",
+      "sha256": "2a9b69cc23d5830ae336b4347efc7a2bd32923187239cd9b707eefe9d3226a1d",
+      "bytes": 11413
+    },
+    {
+      "path": "benches/src/components/top-bar.tsx",
+      "sha256": "199f7c6941ae5ff86f78aaa24ce061f12423915c321f819553e4c005075695f9",
+      "bytes": 5731
+    },
+    {
+      "path": "benches/src/components/ui.tsx",
+      "sha256": "c68a071be8bab6d3d00c20c60799186b423e26fa43864bfae8d699af8e347ea7",
+      "bytes": 7360
+    },
+    {
+      "path": "benches/src/components/ui/button-group.tsx",
+      "sha256": "c71e0af9432e996fbd5dc13b66130b51f143eb854c2b804a33911d1d18789517",
+      "bytes": 2585
+    },
+    {
+      "path": "benches/src/components/ui/button.tsx",
+      "sha256": "a559cb0a1dfd4394a1fc09675d1f191c66dd53982aef0f2876dfc5ef28ca0933",
+      "bytes": 3179
+    },
+    {
+      "path": "benches/src/components/ui/popover.tsx",
+      "sha256": "f3b0d2b58bd1b1dfde51da0cba8d143ef9d1d2a8ec058a5580245be9d84233f3",
+      "bytes": 2478
+    },
+    {
+      "path": "benches/src/components/ui/select.tsx",
+      "sha256": "787e5da867badeb1f99b9dff4f5020fe49f84e8c812ece8e7489a4692600e6a7",
+      "bytes": 6558
+    },
+    {
+      "path": "benches/src/components/ui/separator.tsx",
+      "sha256": "9b670a02662195a145ac27be3de20c4467c6a625afb022440b3e6a8d60d427ee",
+      "bytes": 545
+    },
+    {
+      "path": "benches/src/components/ui/slider.tsx",
+      "sha256": "d6df9c3b5c2a853f11677c04ab2733371b0fbdd1e5a02098a5f81daa2fd16d50",
+      "bytes": 1845
+    },
+    {
+      "path": "benches/src/components/ui/switch.tsx",
+      "sha256": "e3d3e0f87ed2c0dfe59b9b9a239258ca9ea214bd4fa30988e86ea9850541ca92",
+      "bytes": 1699
+    },
+    {
+      "path": "benches/src/components/ui/textarea.tsx",
+      "sha256": "7ae7f0f5d907be24658652c771fee1685193102bf3200aafbf578d144d379fbf",
+      "bytes": 847
+    },
+    {
+      "path": "benches/src/components/workload-rail.tsx",
+      "sha256": "e7c29a74273b79dc409784ca66f9dacba254699c953fac140bbe697cb748d16d",
+      "bytes": 12364
+    },
+    {
+      "path": "benches/src/controllers/harness-controller.tsx",
+      "sha256": "640639b345a2fa3b03dcc30b3ab26604fdc207e212a75070c7e401c099083b1a",
+      "bytes": 29554
+    },
+    {
+      "path": "benches/src/generated/package-sizes.json",
+      "sha256": "ebee95f67385f9a494f308595ec560356d223ecff4080a26695dbf68fc741d5f",
+      "bytes": 10926
+    },
+    {
+      "path": "benches/src/lib/utils.ts",
+      "sha256": "9304a861c8673bee09e0f12de31773abbde503b02e59dfd74763ddec2e37cf05",
+      "bytes": 169
+    },
+    {
+      "path": "benches/src/main.tsx",
+      "sha256": "1ece425f655c3e795a81f0f98bc8f7dbfd1e6a886e1239608a128d71a93e61b4",
+      "bytes": 324
+    },
+    {
+      "path": "benches/src/renderer/canvas-surface.ts",
+      "sha256": "3e4ea5116c9b423ea03563387de0046bc8b7cd117092c9cac09ff31e47df61fc",
+      "bytes": 4503
+    },
+    {
+      "path": "benches/src/renderer/canvas-view-controller.ts",
+      "sha256": "100bed403122747cf40bc80835a938effc1a0a9ebcc4b401829a65dd4e8c127f",
+      "bytes": 198
+    },
+    {
+      "path": "benches/src/renderer/canvas-view.ts",
+      "sha256": "b4e791bda563f56928aa04760c1157e98f2de6ccc1744194aed96d6319b12b29",
+      "bytes": 171
+    },
+    {
+      "path": "benches/src/renderer/exclusive-lifecycle.ts",
+      "sha256": "f60b011c7dffee0e853a1fc023aefcb59ffbbd71abe6ade543984a0b924ce376",
+      "bytes": 988
+    },
+    {
+      "path": "benches/src/renderer/gpu-frame-timer.test.ts",
+      "sha256": "a05eabedef1746f7239ec4a71ac3782de731c0eed628e9faee60a7e2619cd61d",
+      "bytes": 6036
+    },
+    {
+      "path": "benches/src/renderer/gpu-frame-timer.ts",
+      "sha256": "53c98e1fe995f8663783c308e952061d8510ed24141d1305790b772e7d4f0414",
+      "bytes": 14317
+    },
+    {
+      "path": "benches/src/renderer/live-frame-telemetry.test.ts",
+      "sha256": "ea574245fe74ec0851428f1ec5fddc5c24232ed106e8e9789aab831ebaa961ce",
+      "bytes": 8073
+    },
+    {
+      "path": "benches/src/renderer/live-frame-telemetry.ts",
+      "sha256": "1bde428f693a80706b795a205989fa7f4b4ebf90cfa2bae0d25faf3ba97c1388",
+      "bytes": 22110
+    },
+    {
+      "path": "benches/src/renderer/persistent-render-host-context.test.ts",
+      "sha256": "381aa08dc1dc67f3e7c906f66a772090f091ada2a30db3feda5d5f5a62567e61",
+      "bytes": 7176
+    },
+    {
+      "path": "benches/src/renderer/persistent-render-host-context.tsx",
+      "sha256": "15667a1af94a36192c924242dc42b9e7c7ea078de1c8bd8825f7871d5bfeab2c",
+      "bytes": 12308
+    },
+    {
+      "path": "benches/src/renderer/persistent-render-host.test.ts",
+      "sha256": "3e6b75ce06fa24977355d6e6307ac5d2945a4e856dd6eb2baca83799a7ef0e69",
+      "bytes": 2703
+    },
+    {
+      "path": "benches/src/renderer/persistent-render-host.ts",
+      "sha256": "f1b36e09e5234228bf1e66b6aedb1386ff9898b59426e9458d8d0d8fe2a8c284",
+      "bytes": 16027
+    },
+    {
+      "path": "benches/src/renderer/persistent-scene-activation.ts",
+      "sha256": "9a6616267d742aab876e7aaf2edbb9e3283630a8cd23ee8f081b2b3da1f07cfe",
+      "bytes": 800
+    },
+    {
+      "path": "benches/src/renderer/pixel-readback-comparison.test.ts",
+      "sha256": "64acf32abd755a45189edd2c5184ee87ec86cbde81c32bb967acf620109f3ddf",
+      "bytes": 1235
+    },
+    {
+      "path": "benches/src/renderer/pixel-readback-comparison.ts",
+      "sha256": "15df67658e9ef855f33b157dd36449ca47c78140b63d33e7b29768e883f69272",
+      "bytes": 1378
+    },
+    {
+      "path": "benches/src/renderer/renderer-state-transaction.ts",
+      "sha256": "b3d12f7349a8b9a954c2a0df6159cc953d8c1783f111bd1245bbbcef068270c4",
+      "bytes": 1796
+    },
+    {
+      "path": "benches/src/renderer/retained-font-fixture.ts",
+      "sha256": "6e4416f9662331afc97676a56aeeb9cf652e23ad3961ee283e5cb033fb252245",
+      "bytes": 4767
+    },
+    {
+      "path": "benches/src/renderer/text-update-telemetry.ts",
+      "sha256": "83eb3703d20bc73ddbfddb0dfc8333c63d3801a726a06e869102e18b9695fc0d",
+      "bytes": 2576
+    },
+    {
+      "path": "benches/src/renderer/webgpu-renderer.ts",
+      "sha256": "f61e43bc1d9f2dbe269757274e0aabe525c6355dbdbeee23105de4dae61fcfd0",
+      "bytes": 6793
+    },
+    {
+      "path": "benches/src/retained-upload-proof.ts",
+      "sha256": "eaf0c8f0f729896218e30fd7ced1537b0d612d016f0156c5699719ac569b0ef8",
+      "bytes": 17609
+    },
+    {
+      "path": "benches/src/routes/harness-route.tsx",
+      "sha256": "e1f4bc235ed21ca6ff18f3a3346f111e7ec45b44e42c4d04db81cd94fe4b360f",
+      "bytes": 405
+    },
+    {
+      "path": "benches/src/slug-nonlinear-fixture.ts",
+      "sha256": "314e78556ecab54fb72cd3d54e3d58adea28888145e98e16b40fa98d785c0bdb",
+      "bytes": 2625
+    },
+    {
+      "path": "benches/src/slug-nonlinear-proof.ts",
+      "sha256": "1880d0731c02bc790111e592b91e24f34d638b512ba79ec34d1436c340c4f6dd",
+      "bytes": 5870
+    },
+    {
+      "path": "benches/src/styles.css",
+      "sha256": "8092d6a0b167aa289900c6fe4533b75e3a7097488ac1b4ec48140274a2935fec",
+      "bytes": 8732
+    },
+    {
+      "path": "benches/src/surfaces/benchmark/bake-progress-overlay.tsx",
+      "sha256": "dc3e8ba083b009f4dd82dec36ff6a469ec83c9ad0288ad4f61137458d824c738",
+      "bytes": 3056
+    },
+    {
+      "path": "benches/src/surfaces/benchmark/benchmark-surface.tsx",
+      "sha256": "6e63832ff83e01a2a5712171a3a24bce60c56388fa3bfaa4dc65957eea6709d0",
+      "bytes": 6440
+    },
+    {
+      "path": "benches/src/surfaces/benchmark/bitmap-text-viewport.tsx",
+      "sha256": "5766f95476332892c3b580d63c5579f5f8fa77db089e761cdbecbbef41c9c115",
+      "bytes": 15719
+    },
+    {
+      "path": "benches/src/surfaces/benchmark/comparison-workload-viewport.tsx",
+      "sha256": "210f10dd2da45b0b9aecd3ef09e63f1c3d2d2501424dc6fd160f2a6a63237d39",
+      "bytes": 17951
+    },
+    {
+      "path": "benches/src/surfaces/benchmark/labels.ts",
+      "sha256": "b2c6837350e7468e009ccb4dce4d1aa71904def0cb442397c10cd0c6dead8621",
+      "bytes": 592
+    },
+    {
+      "path": "benches/src/surfaces/benchmark/live-benchmark-surface.tsx",
+      "sha256": "3a9df087029dafc6d59bca7f3780b2784d475f7c93109eabf55293b15d7099ba",
+      "bytes": 3447
+    },
+    {
+      "path": "benches/src/surfaces/benchmark/live-text-viewport-contracts.ts",
+      "sha256": "1553ab9dca5d4ac290f2ffea5bcb4ae11720ed70bf3fe6740775b11f0670c8b6",
+      "bytes": 1095
+    },
+    {
+      "path": "benches/src/surfaces/benchmark/scene-preload.ts",
+      "sha256": "24b6b674228e0d228e771f1c068cba595ac47d5394980f1cab7d773168c4d515",
+      "bytes": 2292
+    },
+    {
+      "path": "benches/src/surfaces/benchmark/scenes/comparison-workload.test.ts",
+      "sha256": "6f84b86137f0904e3bc4a53f0cbd7c855d3133c2f3e1713ec3541883304610a4",
+      "bytes": 698
+    },
+    {
+      "path": "benches/src/surfaces/benchmark/scenes/comparison-workload.ts",
+      "sha256": "1461ac66fc929a5715c04b400041f55974b68b5a892920d925cbb84aee31df16",
+      "bytes": 72903
+    },
+    {
+      "path": "benches/src/surfaces/benchmark/scenes/editorial-scene-proof.ts",
+      "sha256": "3df177a1757f91dfe6df703005f3a8aa22bfd5cb0f4435abddf70ec543df4f4d",
+      "bytes": 4699
+    },
+    {
+      "path": "benches/src/surfaces/benchmark/sdf-text-viewports.tsx",
+      "sha256": "0c77ed0196c783f985c0d935d18e2e755f0fc9623b12733744de5f0f4fdfe675",
+      "bytes": 25588
+    },
+    {
+      "path": "benches/src/surfaces/conformance/capture.ts",
+      "sha256": "b2e65df88f1d8373128e0c4ba485782a951d8bbcd34af7c70e2b26fbed307fd5",
+      "bytes": 4223
+    },
+    {
+      "path": "benches/src/surfaces/conformance/conformance-surface.tsx",
+      "sha256": "37d09e2d63ce8b303a3198d79fb597d2e909cca48796026825eae9274400aa1c",
+      "bytes": 820
+    },
+    {
+      "path": "benches/src/surfaces/conformance/finite-conformance-surface.tsx",
+      "sha256": "6b7d309b564fa80ff3d6005096f249f85371d106ebdbb4bad0619cad39173970",
+      "bytes": 18934
+    },
+    {
+      "path": "benches/src/surfaces/conformance/raster-format-comparison-surface.tsx",
+      "sha256": "7866a15172ab64dae75db42f18e2d91be379e3fc055b9e64e84ec3ec45572c3c",
+      "bytes": 6770
+    },
+    {
+      "path": "benches/src/surfaces/conformance/scenes/raster-format-comparison.ts",
+      "sha256": "51c1e3a36d171e4e058354ae95260f44c765668c300fe618c70ebc002e800961",
+      "bytes": 25171
+    },
+    {
+      "path": "benches/src/surfaces/conformance/types.ts",
+      "sha256": "e8c39b3528b313054e11f7020bbb723869b8061574b70f1ee83ddcc692480e72",
+      "bytes": 912
+    },
+    {
+      "path": "benches/src/surfaces/harness/persistent-layout.tsx",
+      "sha256": "95c3cbbb92ee10335fd24eb02a623e862be72638a34e7fd4b1fd5deba92fa41b",
+      "bytes": 1583
+    },
+    {
+      "path": "benches/src/surfaces/harness/scene-error-boundary.tsx",
+      "sha256": "6faae8e700118ad191c3d65cc6b71d1c437fbfdc46ef16448ff04e491d4045a5",
+      "bytes": 1876
+    },
+    {
+      "path": "benches/src/surfaces/harness/scene.tsx",
+      "sha256": "f0b655e36d92d22fd19c877ec0996c035ba0746147ad0cc9a16361900218d89c",
+      "bytes": 9064
+    },
+    {
+      "path": "benches/src/techniques/bitmap/conformance-line.ts",
+      "sha256": "4c3ca6f8002506c8ca40cc50f12e3e972d599573979594137293ebca85821a51",
+      "bytes": 3497
+    },
+    {
+      "path": "benches/src/techniques/bitmap/metadata.ts",
+      "sha256": "eae8f923a2ebb74c59702fdf10e2f1af3836c3ef36c6dda594b71e9966672334",
+      "bytes": 1099
+    },
+    {
+      "path": "benches/src/techniques/bitmap/persistent-scene.ts",
+      "sha256": "eff5098018e3981da0a676d7db8fea5f8ccd8fb12e924928a481c252c9e1e057",
+      "bytes": 26121
+    },
+    {
+      "path": "benches/src/techniques/mtsdf/metadata.ts",
+      "sha256": "ba3f6a63dd674e95587097592f20009ec2fe285530422727c36390adeec58024",
+      "bytes": 396
+    },
+    {
+      "path": "benches/src/techniques/mtsdf/persistent-scene.ts",
+      "sha256": "05ed2ab1339cd062194858acd106f0b8fab7d2b979e40b03281c79c2c332f3ac",
+      "bytes": 24942
+    },
+    {
+      "path": "benches/src/techniques/shared/glyph-origin-presentation.ts",
+      "sha256": "f10fc6886ab72dde2ea338ad8ae60069be78179bda821015506bf3550927e9c6",
+      "bytes": 893
+    },
+    {
+      "path": "benches/src/techniques/slug/metadata.ts",
+      "sha256": "8e88ceb31a6d40cf61aed6a84891c10f4502c59ed304e73b28591b437c6cc027",
+      "bytes": 1596
+    },
+    {
+      "path": "benches/src/techniques/slug/persistent-scene.ts",
+      "sha256": "533f991f8e3a4bfcffd82b85da03ab89d0cc3541183cd55eb484102b064890ce",
+      "bytes": 25021
+    },
+    {
+      "path": "benches/src/three-root.ts",
+      "sha256": "fef2aaf44354016dda19a90a8a98572bb81b88ce2d25551845e5e138f4c680f7",
+      "bytes": 1852
+    },
+    {
+      "path": "benches/src/tooling/harfbuzz-bundle.test.ts",
+      "sha256": "712d0791aa0bda6ab5a7e9b9c3986f424ecb79ae71d9b8f9f014b7e51dcc780b",
+      "bytes": 5446
+    },
+    {
+      "path": "benches/src/tooling/harfbuzz-bundle.ts",
+      "sha256": "f4290c763ca2e80ff1e670029ca4a6a5f10f991cf91895474c4d32b3aea57086",
+      "bytes": 10886
+    },
+    {
+      "path": "benches/src/v1-bitmap-proof.ts",
+      "sha256": "28499bdf89f360c7e2006d761db4ff84fd8c456e16ccab0a166bbad6036501bd",
+      "bytes": 4391
+    },
+    {
+      "path": "benches/src/v1-compose-proof.ts",
+      "sha256": "5425ce043f779cb636eda6cc4e40719c38388c9c3567ce5d228a5a04cb032e8a",
+      "bytes": 10619
+    },
+    {
+      "path": "benches/src/v1-decoration-proof.ts",
+      "sha256": "e7e5cf4fc331269ef1fe82c669666dca176a075d35059ff048280128e3d75678",
+      "bytes": 1557
+    },
+    {
+      "path": "benches/src/v1-detached-proof.ts",
+      "sha256": "86c0207af4af688581815a34148bbb4bbf1efb2e11b84a1d69177932e4ba19c2",
+      "bytes": 2443
+    },
+    {
+      "path": "benches/src/v1-msdf-distance-proof.ts",
+      "sha256": "49016af71c3303db5af052f4519ce02f4e3eec60cd4379c00950df44d970a8f5",
+      "bytes": 7486
+    },
+    {
+      "path": "benches/src/v1-mtsdf-proof.ts",
+      "sha256": "06ed054b6819e00bf0f88751e5f950b2d83758015b88cc1c8338c670df360224",
+      "bytes": 5181
+    },
+    {
+      "path": "benches/src/v1-slug-proof.ts",
+      "sha256": "b05db9a5ad57c772ddd38305038574c063cddbee5ab9ae3874e2a063b7d2de45",
+      "bytes": 4912
+    },
+    {
+      "path": "benches/src/virtual-modules.d.ts",
+      "sha256": "c28c5df993166cd99b547fbf67999872fe0364cdce544a3f75604e5818c01390",
+      "bytes": 101
+    },
+    {
+      "path": "benches/src/workloads/advanced-shaping/definition.ts",
+      "sha256": "93320fb822d171ba5d210db2698617de434be5e3a8a19297a80346745ae91e3e",
+      "bytes": 702
+    },
+    {
+      "path": "benches/src/workloads/advanced-shaping/scene.ts",
+      "sha256": "66157bc8a859d1b049600f74c17c90cd01644e9e6a95b0c9cdfeb4e37ada5380",
+      "bytes": 14735
+    },
+    {
+      "path": "benches/src/workloads/benchmark-ipsum/definition.ts",
+      "sha256": "54569c7dc218feae0043e7b6c2e2e18230043e90b1b2c8fcde1a5d2c703dba5c",
+      "bytes": 738
+    },
+    {
+      "path": "benches/src/workloads/benchmark-ipsum/scene.ts",
+      "sha256": "39c420981ba85acbbdd04cf4fc3ecfaca9d034e0f5fd03374a267f3f558f92ca",
+      "bytes": 3172
+    },
+    {
+      "path": "benches/src/workloads/billboard-labels/definition.ts",
+      "sha256": "5f5925c8e0fd19db917f8451f4bc7696c13d816909adf78f14096abef250da62",
+      "bytes": 785
+    },
+    {
+      "path": "benches/src/workloads/billboard-labels/scene.test.ts",
+      "sha256": "dfea32af0b7bf466a8bac7a511b0c06ef196adfbd5ecb42f583f3a4496ab9644",
+      "bytes": 1466
+    },
+    {
+      "path": "benches/src/workloads/billboard-labels/scene.ts",
+      "sha256": "a915ae977311443f716923b668c9d4bb66bb01c2a232e979934a9fb5b4e34471",
+      "bytes": 7433
+    },
+    {
+      "path": "benches/src/workloads/catalog.ts",
+      "sha256": "d11e32483aec207c21dce59c41d3dc8eea89d0d0784d519d03ac0f62459836c3",
+      "bytes": 2818
+    },
+    {
+      "path": "benches/src/workloads/comparison/contracts.ts",
+      "sha256": "2837557bd0d802d682c37bce6cc71cd6d3d4ba04f67ef4eef5e13bd13f654110",
+      "bytes": 4674
+    },
+    {
+      "path": "benches/src/workloads/comparison/registry.ts",
+      "sha256": "6a211c961cbb3fd7fdb265a0f818f923f7bb85ef26b2c3cc6ece6335e2df54cc",
+      "bytes": 2288
+    },
+    {
+      "path": "benches/src/workloads/dynamic-layout/definition.ts",
+      "sha256": "9ae5e3b3ae7108ecf0e8c45b8527d5897f3729864a43c5040d2dc3fba12fcd2b",
+      "bytes": 849
+    },
+    {
+      "path": "benches/src/workloads/dynamic-layout/scene.ts",
+      "sha256": "57dcbd961763a4573b0481838c8a36fd774924ebca4a1b97723d3a13a2a7cdbd",
+      "bytes": 8237
+    },
+    {
+      "path": "benches/src/workloads/editorial/definition.ts",
+      "sha256": "4ad05f1fda9760abcee1636f58198b43c483e340c1705db2ee56099c549355ba",
+      "bytes": 840
+    },
+    {
+      "path": "benches/src/workloads/editorial/scene.test.ts",
+      "sha256": "d8b80bb9845aa24609b242cd05cec755047b08ea8e33e950fdea67ce5feb3bad",
+      "bytes": 7735
+    },
+    {
+      "path": "benches/src/workloads/editorial/scene.ts",
+      "sha256": "9d74a3f6787100e14404f07f2491a3f6c5cdc89fdfd0bfbcec4f61cd69d0c329",
+      "bytes": 16429
+    },
+    {
+      "path": "benches/src/workloads/font-assets/authenticated-gzip.ts",
+      "sha256": "7e084a33b78635292af205f83c26d62dc9b9de06bb567644707b1b561debd973",
+      "bytes": 1977
+    },
+    {
+      "path": "benches/src/workloads/font-assets/bitmap.ts",
+      "sha256": "b52485b92ea3e9f0985bd36fb7abba6c3116fa9434be949dfdc383f03b13370a",
+      "bytes": 6158
+    },
+    {
+      "path": "benches/src/workloads/font-assets/compiled-data.ts",
+      "sha256": "a95e3e42a7fe08f095658d31a79cdbb148ca915a5fc87ff5b2bcc7587fba2f4f",
+      "bytes": 13611
+    },
+    {
+      "path": "benches/src/workloads/font-assets/contracts.ts",
+      "sha256": "f6802507ba76de89705c87cbffa55b95ba3996d438fca011b9e93a7d0eeeafae",
+      "bytes": 3143
+    },
+    {
+      "path": "benches/src/workloads/font-assets/index.ts",
+      "sha256": "4cfd19b453e92e5c48c952ae87384a5d92dbb70a10d17afae81e260ad61500e4",
+      "bytes": 1535
+    },
+    {
+      "path": "benches/src/workloads/font-assets/library.ts",
+      "sha256": "e1a3e144dd41cd4c714bc533279c7ed57d75d760cfd7ef08a5d4490ad63dbe58",
+      "bytes": 1983
+    },
+    {
+      "path": "benches/src/workloads/font-assets/limits.ts",
+      "sha256": "cc04746e8fafd46a004f05816e2b6b7729a99213227d01865f797e5b394f42c4",
+      "bytes": 422
+    },
+    {
+      "path": "benches/src/workloads/font-assets/mtsdf.ts",
+      "sha256": "8f661104362ca90c8445ace2965de57b7ce184b63386234cb9099033c143ae57",
+      "bytes": 4302
+    },
+    {
+      "path": "benches/src/workloads/font-assets/runtime.test.ts",
+      "sha256": "2422156dbb6f55f1ed0887fd81e7503577820a02d116d6a4675f01e30743f7f0",
+      "bytes": 2252
+    },
+    {
+      "path": "benches/src/workloads/font-assets/runtime.ts",
+      "sha256": "5083662423468e193ed67bbb969e2a609a31930dcf3c28e28223537d0558c74b",
+      "bytes": 5883
+    },
+    {
+      "path": "benches/src/workloads/font-assets/slug.ts",
+      "sha256": "d9e6065f08c5af04d51de9596be86c3a45fc925a6f57d33f26c099d08a7b39a3",
+      "bytes": 4486
+    },
+    {
+      "path": "benches/src/workloads/icon-grid/definition.ts",
+      "sha256": "87f802feeae1843b9aff4b7978aac66a441e17a0fd640a19e439434604e9abec",
+      "bytes": 791
+    },
+    {
+      "path": "benches/src/workloads/icon-grid/scene.ts",
+      "sha256": "b018502c74068326800f9aae6934c3f4e8c8858182a871e1666df70fff371be3",
+      "bytes": 38625
+    },
+    {
+      "path": "benches/src/workloads/live-text-scene.ts",
+      "sha256": "7a8879594e1efdb1405674d989bc0fda5d10a3e4018d73e32e0f10c83ab9150e",
+      "bytes": 163
+    },
+    {
+      "path": "benches/src/workloads/live-text-scenes.ts",
+      "sha256": "26dcae26a93c896f5d967727653a79122a1a3140d7bb8929ea340ee2749b6a93",
+      "bytes": 1235
+    },
+    {
+      "path": "benches/src/workloads/off-axis-3d/definition.ts",
+      "sha256": "029c51147b705fca213f563c1127987ca2eda8cbdb15a1cb87cb822b1344a299",
+      "bytes": 878
+    },
+    {
+      "path": "benches/src/workloads/off-axis-3d/scene.ts",
+      "sha256": "bb8d4b45d8a6501ca753948a589626d20c991d5604b3c458bc632cb8a632c37e",
+      "bytes": 5131
+    },
+    {
+      "path": "benches/src/workloads/paint-effects/definition.ts",
+      "sha256": "59ed607293e92321c454d4808c6ae121a446df7cbe52c373bfce345041b6335d",
+      "bytes": 867
+    },
+    {
+      "path": "benches/src/workloads/paint-effects/scene.ts",
+      "sha256": "3d586d3d694bcbebe1a73fb9e5eae71e516c05ca99b8120d30a65dcff2a374c0",
+      "bytes": 8972
+    },
+    {
+      "path": "benches/src/workloads/paragraph-stress/definition.ts",
+      "sha256": "f3f95f11e0ea04df0e7968fe3a47254155f14634f51a3ff0bc97a01378f48f6c",
+      "bytes": 865
+    },
+    {
+      "path": "benches/src/workloads/paragraph-stress/scene.test.ts",
+      "sha256": "13ddc191c6d00971ba385484e6cd603abf8d8034a3fb148529a3514e95ac5139",
+      "bytes": 2458
+    },
+    {
+      "path": "benches/src/workloads/paragraph-stress/scene.ts",
+      "sha256": "28cbd1b589ff1cccc0de30790d64546c006ec63e41f33d786f2247c586406618",
+      "bytes": 6058
+    },
+    {
+      "path": "benches/src/workloads/rich-text/definition.ts",
+      "sha256": "ea196ddee1e683ebc4382b0f1192f30756fc0d6163a30e3cfbfd23f7595500e5",
+      "bytes": 1053
+    },
+    {
+      "path": "benches/src/workloads/rich-text/scene.test.ts",
+      "sha256": "b7e4254090333f2c4048fb94e598c099e3e974fffc46296d399ca27cc71f1be9",
+      "bytes": 3794
+    },
+    {
+      "path": "benches/src/workloads/rich-text/scene.ts",
+      "sha256": "6474cbf62b8897b5b2b771776f94e4dc7da67fc5e216bf32e7d4d7b3bd951906",
+      "bytes": 16736
+    },
+    {
+      "path": "benches/src/workloads/shared/definition.ts",
+      "sha256": "3f8daa5ae1d86fe03811437ad81d774d2a18fdf94daa9560bcef4cdd074fa92d",
+      "bytes": 6169
+    },
+    {
+      "path": "benches/src/workloads/shared/formatted-ranges.ts",
+      "sha256": "ad250935302d8abce1c015531828026960de30ba6f2c3a1bb72b6347f405497a",
+      "bytes": 1394
+    },
+    {
+      "path": "benches/src/workloads/shared/live-text-scene.ts",
+      "sha256": "a0a03c177b7a8dbdee360d57abce4a50ef47d6bafc53373e2f137fbfd1f9c51e",
+      "bytes": 918
+    },
+    {
+      "path": "benches/src/workloads/shared/oklab-color-cycle.ts",
+      "sha256": "8d568046653b8e8e2efd568ffc050fa0916dfb3083471c2044feaa93e8cda241",
+      "bytes": 3032
+    },
+    {
+      "path": "benches/src/workloads/shared/scene-entry.ts",
+      "sha256": "079c91203b9d226c2cdf5ec9f6c5290934c52f94a319204434ac1afb5b637191",
+      "bytes": 3901
+    },
+    {
+      "path": "benches/src/workloads/shared/text-style.ts",
+      "sha256": "a28bc305694974eb36c2166d972e4dcf432086a0eae154432b4404c6f6174ec4",
+      "bytes": 1981
+    },
+    {
+      "path": "benches/src/workloads/text-ladder/definition.ts",
+      "sha256": "e3b7579aea547bfe52fb54683c334ada4d613c4fa4bd533e32aa4615463d11a6",
+      "bytes": 613
+    },
+    {
+      "path": "benches/src/workloads/text-ladder/scene.ts",
+      "sha256": "8ebee56e4d1b6d896501b9958abff9b2f6dfc7d8a4a369c213030a00ac041396",
+      "bytes": 6761
+    },
+    {
+      "path": "benches/src/workloads/zoom-text/definition.ts",
+      "sha256": "3d8af67295c9432c988fd181c9da708cc7f680925faec333d0c1608e1e80f65f",
+      "bytes": 644
+    },
+    {
+      "path": "benches/src/workloads/zoom-text/scene.ts",
+      "sha256": "b959aee0d5054301c08fdd6bcc273ec5c89646d564fe47f1c4e49ef480bd7807",
+      "bytes": 8520
+    },
+    {
+      "path": "patches/@pmndrs__labs@0.9.0.patch",
+      "sha256": "b8e7a138ac39971c07511bf81dc841a4aaa3f8cc70f066a61e25febac937d455",
+      "bytes": 7723
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "sha256": "8c917e2458486f6ad931f0f1a41cb06957edb90c9bd5c96d0e918cabfa6226b9",
+      "bytes": 270003
+    },
+    {
+      "path": "pnpm-workspace.yaml",
+      "sha256": "900bb0bc5ea9f2a1c19120ef404950a81dd36b271dc6ac110d1fa86fe8483469",
+      "bytes": 845
+    }
+  ],
+  "sourceAndLockFiles": {
+    "benches/src/workloads/editorial/scene.ts": "9d74a3f6787100e14404f07f2491a3f6c5cdc89fdfd0bfbcec4f61cd69d0c329",
+    "benches/src/workloads/editorial/scene.test.ts": "d8b80bb9845aa24609b242cd05cec755047b08ea8e33e950fdea67ce5feb3bad",
+    "benches/src/surfaces/benchmark/scenes/editorial-scene-proof.ts": "3df177a1757f91dfe6df703005f3a8aa22bfd5cb0f4435abddf70ec543df4f4d",
+    "pnpm-lock.yaml": "8c917e2458486f6ad931f0f1a41cb06957edb90c9bd5c96d0e918cabfa6226b9",
+    "patches/@pmndrs__labs@0.9.0.patch": "b8e7a138ac39971c07511bf81dc841a4aaa3f8cc70f066a61e25febac937d455"
+  },
+  "fixedWarmupPlan": {
+    "suite": "full",
+    "identities": 145,
+    "blocks": 8,
+    "sampling": "single-call",
+    "warmup": "fixed-20",
+    "order": [
+      "candidate-only",
+      "main-with-saved-candidate",
+      "published-with-saved-candidate"
+    ],
+    "explicitCandidatePathRequired": true,
+    "candidateOutput": "matrix-fixed20-candidate",
+    "mainOutput": "matrix-fixed20-main",
+    "publishedOutput": "matrix-fixed20-published"
+  },
+  "loadSnapshotAfterCaptureCleanup": {
+    "capturedAtUtc": "2026-10-22T18:59:21Z",
+    "receipt": "../evidence/boundary-20261022-fixed20-prearm-load",
+    "receiptExit": 1,
+    "receiptExitNote": "final `ps -p 71035` returned 1 because the owned proxy PID is absent; all preceding load/process sampling completed",
+    "logicalCores": 10,
+    "performanceCores": 4,
+    "efficiencyCores": 6,
+    "loadAverage": [
+      2.34,
+      3.06,
+      3.29
+    ],
+    "cpuSamples": [
+      {
+        "userPercent": 6.73,
+        "systemPercent": 23.5,
+        "idlePercent": 70.2
+      },
+      {
+        "userPercent": 4.2,
+        "systemPercent": 14.15,
+        "idlePercent": 81.81
+      }
+    ],
+    "topCpuProcess": {
+      "pid": 42659,
+      "command": "Vite server /Volumes/Depot/Developer/text/apps/pixi3d-hello-world",
+      "cpuPercent": 141.1,
+      "elapsed": "04:23:42",
+      "action": "left running"
+    },
+    "otherCaptureOwnedJobs": "none observed; dedicated Portless proxy PID 71035 exited after SIGTERM; capture browser sessions had exited with each completed workflow"
+  },
+  "timingStatus": "authorized by root after High rounding disposition; not yet launched; pre-arm load acceptable under shared policy (70.20% and 81.81% idle); unrelated Vite left running",
+  "packageLabsHarnessDigestReceipt": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-20261022-fixed20-harness-digest/stdout.log",
+    "stdoutSha256": "870dc967b7f8f8fba1ca729be89752cf5156139b5202a77c7a3146e03e81a8c0",
+    "output": "2ac59f1c44447be4d5061003f3df32a66c87952ca297e4a804544f16c09b1f5e",
+    "method": "repository packageLabsHarnessDigest() via pinned mise and local tsx"
+  }
+}

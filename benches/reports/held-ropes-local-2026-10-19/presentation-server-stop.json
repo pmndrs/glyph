@@ -1,0 +1,6 @@
+{
+  "pid": 84874,
+  "command": "/Users/mini/.local/share/mise/installs/node/24.18.0/bin/node /Users/mini/.npm/_npx/6a98873df99949c7/node_modules/portless/dist/cli.js held-presentation /Users/mini/.local/bin/mise exec -- pnpm --dir /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo scripts run benchmark:dev-built",
+  "signal": "SIGTERM",
+  "at": "2026-10-19T16:36:21.793326+00:00"
+}

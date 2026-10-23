@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Glyph text-shaper Wasm size audit</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font:
+          16px/1.55 system-ui,
+          sans-serif;
+      }
+      body {
+        max-width: 980px;
+        margin: 3rem auto;
+        padding: 0 1.25rem 4rem;
+      }
+      h1,
+      h2 {
+        line-height: 1.2;
+      }
+      h1 {
+        font-size: 2rem;
+      }
+      h2 {
+        margin-top: 2.5rem;
+        border-bottom: 1px solid #8885;
+        padding-bottom: 0.35rem;
+      }
+      p,
+      li {
+        max-width: 82ch;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 1rem 0 1.5rem;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.55rem 0.7rem;
+        border-bottom: 1px solid #8885;
+        vertical-align: top;
+      }
+      th {
+        background: #8882;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.92em;
+      }
+      .meta {
+        color: #888;
+      }
+      .callout {
+        border-left: 4px solid #4f9;
+        padding: 0.5rem 1rem;
+        background: #8881;
+      }
+      a {
+        color: #55aaff;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Text-shaper Wasm size audit</h1>
+    <p class="meta">
+      Audited revision: <code>main</code> at <code>2f62d6bae1da688904dfd1aba40b0ed507262824</code>. Artifact:
+      <a href="https://github.com/pmndrs/glyph/actions/runs/38096962674">CI run 38096962674</a>, artifact 11687095277.
+      Scope: text-shaper Wasm only.
+    </p>
+
+    <h2>Findings</h2>
+    <p class="callout">
+      The shaper is built <code>no_std</code>, but still uses Rust <code>alloc</code>. Talc is the Wasm global
+      allocator. Rust <code>core</code> remains because it is the language foundation for <code>no_std</code>. The
+      135,530-byte <code>core</code> attribution is not <code>std</code> and is not a generic-expansion measurement.
+    </p>
+    <p>
+      HarfRust is a direct runtime dependency: font registration builds HarfRust state and shape plans, and the runtime
+      calls its shaping API. <code>read-fonts</code> provides SFNT access. The strongest identified size areas are
+      first-party engine code, static data, HarfRust, and font parsing.
+    </p>
+
+    <h2>Shipped artifact</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Measure</th>
+          <th>CI package</th>
+          <th>Local rebuild</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Raw Wasm</td>
+          <td>1,456,090 B</td>
+          <td>1,456,306 B</td>
+        </tr>
+        <tr>
+          <td>SHA-256</td>
+          <td><code>dc0d918f28e67591417ecd29c86d442b9fc8d703a992781fc25803b05f415403</code></td>
+          <td><code>81d395325ef756a1c3afea4eaa722d9190cb7862c4eb6058e697d0227bcee21b</code></td>
+        </tr>
+        <tr>
+          <td>gzip-9</td>
+          <td>534,013 B</td>
+          <td>533,899 B</td>
+        </tr>
+        <tr>
+          <td>Brotli-11</td>
+          <td>420,940 B</td>
+          <td>421,405 B</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      The CI artifact is authoritative because the local rebuild differs by 216 raw bytes. Its sections contain
+      1,161,104 bytes of code (about 80%), 291,747 bytes of data (about 20%), and about 3.2 KB of other sections. It has
+      886 functions, 61 types, and 37 exports.
+    </p>
+
+    <h2>Approximate code attribution</h2>
+    <p>
+      Twiggy attribution from a names-retained optimized build is approximate: about 10 KB is not assigned cleanly, and
+      data-section ownership is unresolved.
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Symbol owner</th>
+          <th>Approx. bytes</th>
+          <th>Meaning and limits</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Glyph shaper and <code>slug-core</code></td>
+          <td>564,908</td>
+          <td>First-party runtime and ABI code</td>
+        </tr>
+        <tr>
+          <td>HarfRust</td>
+          <td>334,328</td>
+          <td>Runtime shaping engine</td>
+        </tr>
+        <tr>
+          <td>Rust <code>core</code></td>
+          <td>135,530</td>
+          <td>Core-library symbols and concrete instantiations; not <code>std</code> or a monomorphization total</td>
+        </tr>
+        <tr>
+          <td><code>read-fonts</code></td>
+          <td>84,012</td>
+          <td>Font table access</td>
+        </tr>
+        <tr>
+          <td>Rust <code>alloc</code></td>
+          <td>16,940</td>
+          <td>Collection APIs; allocator is separate</td>
+        </tr>
+        <tr>
+          <td>Other named crates</td>
+          <td>about 6,800</td>
+          <td>Includes Talc, Unicode crates, <code>smallvec</code>, <code>font-types</code>, math support</td>
+        </tr>
+        <tr>
+          <td>Ambiguous/builtins</td>
+          <td>28,616</td>
+          <td>Could not be assigned cleanly by symbol prefix</td>
+        </tr>
+        <tr>
+          <td>Static data (<code>.rodata</code>)</td>
+          <td>291,961</td>
+          <td>Unicode tables and constants are candidates; ownership not resolved</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      Largest first-party bodies include <code>ParagraphState::prepare</code> (65,324 B), Wasm
+      <code>update</code> (37,926 B), <code>RenderPlanCompiler::prepare</code> (31,789 B), and
+      <code>PlannerState::prepare_upsert</code> (29,944 B). Their size marks audit targets, not proof of duplication.
+    </p>
+
+    <h2>What the source confirms</h2>
+    <ul>
+      <li>
+        The crate defaults to <code>std</code>, but its shipping build passes <code>--no-default-features</code>; the
+        crate root then enables <code>no_std</code> and imports <code>alloc</code>.
+      </li>
+      <li>
+        Runtime collections include <code>Vec</code>, <code>Box</code>, and <code>BTreeMap</code>. They allocate without
+        requiring <code>std</code>.
+      </li>
+      <li>
+        <code>wasm.rs</code> installs <code>talc::wasm::WasmDynamicTalc</code>. Replacing Talc would not remove Rust
+        <code>alloc</code> collection code.
+      </li>
+      <li>
+        Runtime code calls HarfRust APIs including <code>FontRef::new</code>, <code>ShaperData::new</code>,
+        <code>ShapePlan</code>, <code>UnicodeBuffer</code>, and <code>shaper.shape(...)</code>.
+      </li>
+      <li>
+        The shipping graph includes HarfRust, <code>read-fonts</code>, Unicode crates, <code>serde_json</code> with
+        <code>alloc</code>, <code>slug-core</code>, and target-specific Talc. Build-time <code>serde_json/std</code> and
+        dev dependencies <code>flate2</code>/<code>skrifa</code> are not part of the Wasm runtime graph.
+      </li>
+      <li>
+        Release LTO, one codegen unit, panic abort, stripping, and two Binaryen <code>-Oz</code>/merge-similar-functions
+        passes are already enabled.
+      </li>
+    </ul>
+    <p>
+      Source:
+      <a
+        href="https://github.com/pmndrs/glyph/blob/2f62d6bae1da688904dfd1aba40b0ed507262824/packages/glyph/rust/shaper/Cargo.toml"
+        >manifest</a
+      >,
+      <a
+        href="https://github.com/pmndrs/glyph/blob/2f62d6bae1da688904dfd1aba40b0ed507262824/packages/glyph/rust/shaper/src/lib.rs"
+        >crate and shaping code</a
+      >,
+      <a
+        href="https://github.com/pmndrs/glyph/blob/2f62d6bae1da688904dfd1aba40b0ed507262824/packages/glyph/rust/shaper/src/wasm.rs"
+        >Wasm allocator</a
+      >, and
+      <a
+        href="https://github.com/pmndrs/glyph/blob/2f62d6bae1da688904dfd1aba40b0ed507262824/packages/glyph/scripts/build.mjs#L235-L307"
+        >shipping build and Binaryen flags</a
+      >.
+    </p>
+
+    <h2>SIMD and generic expansion</h2>
+    <p>
+      The scalar control build was 2,638 bytes smaller raw than SIMD (under 0.2%); gzip was 666 bytes larger and Brotli
+      was 3,055 bytes smaller. This is a size-only probe. Keep SIMD based on timing evidence.
+    </p>
+    <p>
+      The 135,530-byte <code>core</code> bucket may contain concrete instantiations, but the audit did not isolate
+      generic monomorphization. A controlled compiler-level build and final-artifact comparison is required to estimate
+      it.
+    </p>
+
+    <h2>Next probes</h2>
+    <ol>
+      <li>Simplify first-party preparation/layout/publication/ABI code and measure the exact artifact.</li>
+      <li>Experiment with Unicode data representation independently; static data is about one fifth of the binary.</li>
+      <li>
+        Test HarfRust feature reductions only against explicit shaping support and Unicode conformance requirements.
+      </li>
+      <li>
+        Test allocator alternatives only if they preserve allocation behavior and improve size or speed;
+        <code>alloc</code> and Talc do different jobs.
+      </li>
+      <li>Choose SIMD based on performance, not binary-size expectations.</li>
+    </ol>
+    <p>
+      This audit does not show that the shaper is irreducible, nor does it prove a safe cut. Each candidate needs
+      exact-artifact correctness, performance, and size validation. These numbers exclude other Wasm modules,
+      TypeScript, and total package size.
+    </p>
+  </body>
+</html>

@@ -1,8 +1,8 @@
 /* @workflow {
   "name": "benchmark:labs-package",
-  "summary": "Benchmark common installed-package workflows by default, or select a focused/full pmndrs/labs suite.",
-  "requirements": "Network access for registry specs, or one or two packed @pmndrs/glyph .tgz artifacts. Never builds workspace source. --saved-candidate <report-directory> reuses an exact artifact's saved candidate instead of timing it again, with matching environment checks. Accepts --suite smoke|layout|measure|glyphs|publication|spans|batch|style|reflow|stress|cold|edit|assignment|edit-sized|full.",
-  "writes": "Ignored Labs results, an artifact manifest, and a Markdown summary.md (also appended to $GITHUB_STEP_SUMMARY when set) under --output (default .cache/labs-package)."
+  "summary": "Benchmark common installed-package workflows by default, select a focused/full pmndrs/labs suite, or capture a tagged diagnostic CPU profile.",
+  "requirements": "Network access for registry specs, or one or two packed @pmndrs/glyph .tgz artifacts. Never builds workspace source. --saved-candidate <report-directory> reuses an exact artifact's saved candidate instead of timing it again, with matching environment and sampling checks. Accepts --suite smoke|layout|measure|glyphs|publication|spans|batch|style|reflow|stress|cold|edit|assignment|edit-sized|multi-owner|bulk-1024-profile|full. --sampling adaptive|single-call defaults to adaptive; --warmup conditional|fixed-20 defaults to conditional. Use --sampling single-call --warmup fixed-20 uniformly for a fixed-warmup comparison. Full baselines require all 145 candidate identities unless --baseline-availability published-no-outlines explicitly permits the two documented outline omissions. Optional candidate-only diagnostic profiling requires both --profile-tag <@tag> and --cpu-profile-output <directory>; it selects that Labs tag and cannot be combined with --baseline or --saved-candidate. Profiled timings are diagnostic and are not a normal performance comparison.",
+  "writes": "Ignored Labs results, an artifact manifest, and a Markdown summary.md (also appended to $GITHUB_STEP_SUMMARY when set) under --output (default .cache/labs-package); optional V8 CPU profiles are written under --cpu-profile-output."
 } */
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
@@ -13,8 +13,15 @@ import { fileURLToPath } from 'node:url';
 
 import {
   acceptLabsResult,
+  assertFullLabsCoverage,
+  assertLabsSamplingPolicy,
+  assertLabsWarmupPolicy,
   labsRunNames,
+  labsRunMedianTimes,
   type LabsResultRole,
+  type LabsBaselineAvailability,
+  type LabsSamplingPolicy,
+  type LabsWarmupPolicy,
   readLabsResult,
   timingModeDifferences,
   timingModeMismatches,
@@ -22,15 +29,20 @@ import {
 import { parseLabsComparison, renderLabsSummary, writeLabsSummary } from './support/labs-summary.mts';
 import { installedPackageDependencies } from './support/package-labs-dependencies.mts';
 import { type PackageLabsSuite, requirePackageLabsSuite } from './support/package-labs-suite.mts';
-import { validateSavedPackageLabs } from './support/saved-package-labs.mts';
+import { packageLabsHarnessDigest, validateSavedPackageLabs } from './support/saved-package-labs.mts';
 
 interface Options {
   readonly baseline?: string;
   readonly blocks: number;
   readonly candidate: string;
   readonly output: string;
+  readonly profileTag?: string;
+  readonly cpuProfileOutput?: string;
   readonly suite: PackageLabsSuite;
   readonly savedCandidate?: string;
+  readonly samplingPolicy: LabsSamplingPolicy;
+  readonly warmupPolicy: LabsWarmupPolicy;
+  readonly baselineAvailability: LabsBaselineAvailability;
 }
 
 interface InstalledArtifact {
@@ -47,16 +59,22 @@ const labsExecutable = resolve(benchesRoot, 'node_modules/.bin/labs');
 const labsResults = resolve(benchesRoot, '.cache/labs-store/results');
 const options = await parseOptions(process.argv.slice(2));
 const output = resolve(benchesRoot, options.output);
+const resolvedCpuProfileDirectory =
+  options.cpuProfileOutput === undefined ? undefined : resolve(benchesRoot, options.cpuProfileOutput);
 const temporaryRoot = await mkdtemp(resolve(tmpdir(), 'glyph-labs-package-'));
 
 await mkdir(output, { recursive: true });
+if (resolvedCpuProfileDirectory !== undefined) await mkdir(resolvedCpuProfileDirectory, { recursive: true });
 
 try {
+  const harnessDigest = packageLabsHarnessDigest();
   const baseline =
     options.baseline === undefined ? undefined : await installArtifact('baseline', options.baseline, temporaryRoot);
   const candidate = await installArtifact('candidate', options.candidate, temporaryRoot);
   const baselineRunName = baseline === undefined ? undefined : artifactRunName('baseline', baseline);
-  const candidateRunName = artifactRunName('candidate', candidate);
+  const candidateRunName = `${artifactRunName('candidate', candidate)}${
+    options.profileTag === undefined ? '' : '-diagnostic-profile'
+  }`;
   const savedCandidate =
     options.savedCandidate === undefined ? undefined : resolve(benchesRoot, options.savedCandidate);
   if (savedCandidate !== undefined) {
@@ -66,6 +84,8 @@ try {
       ...artifactIdentity(candidate),
       suite: options.suite,
       blocks: options.blocks,
+      samplingPolicy: options.samplingPolicy,
+      warmupPolicy: options.warmupPolicy,
     });
     await mkdir(labsResults, { recursive: true });
     await copyFile(resolve(savedCandidate, 'candidate.json'), resolve(labsResults, `${candidateRunName}.json`));
@@ -81,8 +101,27 @@ try {
       : await runLabs(baselineRunName, baseline.packageRoot, options.blocks, options.suite, 'baseline');
   const candidateRun =
     savedCandidate === undefined
-      ? await runLabs(candidateRunName, candidate.packageRoot, options.blocks, options.suite, 'candidate')
+      ? await runLabs(
+          candidateRunName,
+          candidate.packageRoot,
+          options.blocks,
+          options.suite,
+          'candidate',
+          options.profileTag,
+          resolvedCpuProfileDirectory,
+        )
       : { result: await readLabsResult(resolve(labsResults, `${candidateRunName}.json`)), notComparable: [] };
+  if (options.profileTag !== undefined && labsRunNames(candidateRun.result).length !== 1) {
+    const selectedBenchmarks = labsRunNames(candidateRun.result).length;
+    throw new Error(
+      `Diagnostic profile tag ${options.profileTag} selected ${selectedBenchmarks} benchmarks; expected one`,
+    );
+  }
+  assertLabsSamplingPolicy(candidateRun.result, options.samplingPolicy, options.blocks);
+  assertLabsWarmupPolicy(candidateRun.result, options.warmupPolicy, options.blocks);
+  if (options.suite === 'full') {
+    assertFullLabsCoverage(candidateRun.result, baselineRun?.result, options.baselineAvailability);
+  }
 
   let comparison: string | undefined;
   const timingMismatches =
@@ -95,6 +134,7 @@ try {
     await writeFile(resolve(output, 'comparison.txt'), comparison);
   }
 
+  if (packageLabsHarnessDigest() !== harnessDigest) throw new Error('Benchmark inputs changed during the run');
   await copyFile(resolve(labsResults, `${candidateRunName}.json`), resolve(output, 'candidate.json'));
   if (baselineRunName !== undefined) {
     await copyFile(resolve(labsResults, `${baselineRunName}.json`), resolve(output, 'baseline.json'));
@@ -111,11 +151,24 @@ try {
       {
         generatedAt: new Date().toISOString(),
         labsVersion: labsPackage.version,
+        harnessDigest,
         blocks: options.blocks,
         suite: options.suite,
+        samplingPolicy: options.samplingPolicy,
+        warmupPolicy: options.warmupPolicy,
+        baselineAvailability: options.baselineAvailability,
         baseline: baseline === undefined ? undefined : artifactIdentity(baseline),
         candidate: artifactIdentity(candidate),
         savedCandidate,
+        ...(options.profileTag === undefined
+          ? {}
+          : {
+              profiling: {
+                label: 'diagnostic profiling; not a normal performance comparison',
+                profileTag: options.profileTag,
+                output: resolvedCpuProfileDirectory!,
+              },
+            }),
         comparison: comparison === undefined ? 'not requested' : 'comparison.txt',
         notComparable: {
           baselineCheckFailures: baselineRun?.notComparable ?? [],
@@ -157,6 +210,7 @@ async function publishSummary(
           baselineResult === undefined
             ? []
             : timingModeDifferences(baselineResult, candidateResult).map(({ name }) => name),
+          labsRunMedianTimes(candidateResult),
         ),
       });
     await writeLabsSummary(markdown, output, process.env);
@@ -180,13 +234,56 @@ async function parseOptions(argv: readonly string[]): Promise<Options> {
     values.set(name.slice(2), value);
   }
   const suite = requirePackageLabsSuite(values.get('suite') ?? 'smoke');
+  const samplingPolicy = values.get('sampling') ?? 'adaptive';
+  if (samplingPolicy !== 'adaptive' && samplingPolicy !== 'single-call') {
+    throw new Error('--sampling must be adaptive or single-call');
+  }
+  const warmupPolicy = values.get('warmup') ?? 'conditional';
+  if (warmupPolicy !== 'conditional' && warmupPolicy !== 'fixed-20') {
+    throw new Error('--warmup must be conditional or fixed-20');
+  }
+  if (warmupPolicy === 'fixed-20' && samplingPolicy !== 'single-call') {
+    throw new Error('--warmup fixed-20 requires --sampling single-call');
+  }
+  const baselineAvailability = values.get('baseline-availability') ?? 'complete';
+  if (baselineAvailability !== 'complete' && baselineAvailability !== 'published-no-outlines') {
+    throw new Error('--baseline-availability must be complete or published-no-outlines');
+  }
+  if (baselineAvailability !== 'complete' && !values.has('baseline')) {
+    throw new Error('--baseline-availability requires --baseline');
+  }
+  if (baselineAvailability !== 'complete' && suite !== 'full') {
+    throw new Error('--baseline-availability published-no-outlines requires --suite full');
+  }
   const blocks = Number(values.get('blocks') ?? (suite === 'smoke' ? 4 : 8));
   if (!Number.isSafeInteger(blocks) || blocks < 2) throw new RangeError('--blocks must be an integer of at least 2');
+  const profileTag = values.get('profile-tag');
+  const cpuProfileOutput = values.get('cpu-profile-output');
+  if ((profileTag === undefined) !== (cpuProfileOutput === undefined)) {
+    throw new Error('--profile-tag and --cpu-profile-output must be provided together');
+  }
+  if (profileTag !== undefined && !/^@[^\s@]+$/u.test(profileTag)) {
+    throw new Error('--profile-tag must be one @tag');
+  }
+  if (cpuProfileOutput !== undefined && cpuProfileOutput.trim().length === 0) {
+    throw new Error('--cpu-profile-output must name a directory');
+  }
+  if (profileTag !== undefined && values.has('baseline')) {
+    throw new Error('--baseline cannot be used with candidate-only diagnostic profiling');
+  }
+  if (profileTag !== undefined && values.has('saved-candidate')) {
+    throw new Error('--saved-candidate cannot be used with diagnostic profiling');
+  }
   return {
     candidate: values.get('candidate') ?? '@pmndrs/glyph@canary',
     blocks,
     output: values.get('output') ?? '.cache/labs-package',
     suite,
+    samplingPolicy,
+    warmupPolicy,
+    baselineAvailability,
+    ...(profileTag === undefined ? {} : { profileTag }),
+    ...(cpuProfileOutput === undefined ? {} : { cpuProfileOutput }),
     ...(values.has('baseline') ? { baseline: values.get('baseline')! } : {}),
     ...(values.has('saved-candidate') ? { savedCandidate: values.get('saved-candidate')! } : {}),
   };
@@ -269,8 +366,10 @@ async function runLabs(
   blocks: number,
   suite: PackageLabsSuite,
   role: LabsResultRole,
+  profileTag?: string,
+  cpuProfileOutput?: string,
 ): Promise<{ readonly notComparable: readonly string[]; readonly result: unknown }> {
-  const selection = suite === 'full' ? [] : [`@${suite}`];
+  const selection = profileTag === undefined ? (suite === 'full' ? [] : [`@${suite}`]) : [profileTag];
   const resultPath = resolve(labsResults, `${name}.json`);
   // A result left by an earlier run under this name must never stand in for this one.
   await rm(resultPath, { force: true });
@@ -283,12 +382,17 @@ async function runLabs(
       {
         GLYPH_LABS_PACKAGE_ROOT: packageRoot,
         GLYPH_LABS_ARTIFACT_ROLE: role,
+        GLYPH_LABS_CPU_PROFILE_OUTPUT: cpuProfileOutput,
+        GLYPH_LABS_SAMPLING_POLICY: options.samplingPolicy,
+        GLYPH_LABS_WARMUP_POLICY: options.warmupPolicy,
       },
     );
   } catch (error) {
     if (role === 'candidate' || !(await exists(resultPath))) throw error;
   }
   const result = await readLabsResult(resultPath);
+  assertLabsSamplingPolicy(result, options.samplingPolicy, blocks);
+  assertLabsWarmupPolicy(result, options.warmupPolicy, blocks);
   return { notComparable: acceptLabsResult(result, role), result };
 }
 
@@ -339,7 +443,7 @@ async function run(
   arguments_: readonly string[],
   cwd: string,
   capture = false,
-  environment: Readonly<Record<string, string>> = {},
+  environment: Readonly<Record<string, string | undefined>> = {},
 ): Promise<string> {
   return await new Promise((resolveRun, reject) => {
     const child = spawn(command, arguments_, {

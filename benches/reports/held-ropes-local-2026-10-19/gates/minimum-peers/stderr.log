@@ -1,0 +1,7 @@
+$ node benches/scripts/workflows.mts run glyph:peer-check
+$ node ./scripts/unicode.mts check-data && node ./scripts/build.mjs
+    Finished `release` profile [optimized] target(s) in 0.05s
+    Finished `release` profile [optimized] target(s) in 0.04s
+    Finished `release` profile [optimized] target(s) in 0.04s
+    Finished `release` profile [optimized] target(s) in 0.03s
+    Finished `release` profile [optimized] target(s) in 0.06s

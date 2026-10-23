@@ -1,0 +1,21 @@
+{
+  "schema": "held-e6-post-peer-shipped-dist-bridge-v1",
+  "head": "b331b12b26c17d861c5570caf76ddbe4feb75eb6",
+  "frozenInputCount": 759,
+  "sourceInputsUnchanged": true,
+  "gitStatusUnchanged": true,
+  "candidateArchiveSha256": "d2f7a01ffb47aeaf87499979310286f1c980b88389e20bd1fc0f39794a0fc18c",
+  "archivedShippedDistMemberCount": 947,
+  "currentDistFileCount": 952,
+  "shippedMembersMissingFromCurrentDist": [],
+  "shippedMembersDifferentFromArchive": [],
+  "currentUnshippedExtrasExcludedByPackageManifest": {
+    ".tsbuildinfo": "aff13e4b66065f622821058167bfed9aa537ddb46bf2be241a57b3948339754e",
+    "internal/raster-baker-profile.d.ts": "f7315f1320fa8926e8d4b3bb5cfccf60bfd2f2e9009e01b7774d17ce6f1bacb9",
+    "internal/raster-baker-profile.d.ts.map": "487937979bca00133d8cd669dbb257e92166f87c95f72b1493610ecbaa0c4e28",
+    "internal/raster-baker-profile.js": "e02774d0f50fa0356ce65bebb01b0296c3468d2a4c93d3885a78d6efce820311",
+    "internal/raster-baker-profile.js.map": "5138b3812933f6d7b1729cb0c091d9e3fb8dc42891eab491581a02392670946b"
+  },
+  "allShippedDistMembersExact": true,
+  "note": "The initial unfiltered local-file comparison treated the five package-manifest-excluded local outputs as archive mismatch; this corrected bridge compares shipped archive members and confirms all 947 match."
+}

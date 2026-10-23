@@ -1,0 +1,7 @@
+Checking formatting...
+
+reports/held-empty-query-stage-local-2026-10-22/README.md (101ms)
+
+Format issues found in above 1 files. Run without `--check` to fix.
+Finished in 1969ms on 725 files using 10 threads.
+[ELIFECYCLE] Command failed with exit code 1.

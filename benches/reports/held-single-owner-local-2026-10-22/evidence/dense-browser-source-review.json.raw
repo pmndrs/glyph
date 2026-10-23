@@ -1,0 +1,24 @@
+{
+  "reviewer": "native gpt-6-sol High /root/dense_browser_review",
+  "completedUtc": "2026-10-22T16:42:31.393223+00:00",
+  "scope": [
+    "run-dense-browser-timing.mts",
+    "support/dense-browser-entry.js",
+    "support/dense-canvas-png.mts"
+  ],
+  "fixedFindings": [
+    "ten-unit matching label text",
+    "actual canvas timing with offscreen readback outside timing",
+    "previous-count rAF interval attribution and transition exclusion",
+    "partial creation rollback and independent cleanup",
+    "post-timing live canvas screenshot binding",
+    "active GPU device adapter information",
+    "final measured callback long-task drain"
+  ],
+  "finalDisposition": "No further concrete source defect found in scoped review. Runtime backend, screenshot and output behavior remain unverified.",
+  "execution": "Source only; Luna owns all gates and benchmarks.",
+  "limitations": [
+    "rAF intervals are callback pacing, not displayed frame drops.",
+    "CPU render submission is not GPU execution or presentation."
+  ]
+}

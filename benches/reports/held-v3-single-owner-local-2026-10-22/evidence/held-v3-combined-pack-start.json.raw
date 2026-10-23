@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "mise",
+    "exec",
+    "--",
+    "pnpm",
+    "--filter",
+    "@pmndrs/glyph",
+    "pack",
+    "--pack-destination",
+    "../evidence/boundary-wave-20261022/v3-combined/candidate"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-22T20:41:04.208218+00:00"
+}

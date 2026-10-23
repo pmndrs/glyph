@@ -1,0 +1,112 @@
+{
+  "schema": "root-complete-three-arm-freeze-verification-v1",
+  "recordedUtc": "2026-10-21T05:31:31.984951+00:00",
+  "freezeSha256": "b776a9f0a3f1475b5385917e21c89e12f5c59f77b796da5f58ae1103cd776020",
+  "frozenInputCount": 788,
+  "changedOrMissing": [],
+  "archiveSha256": {
+    "main": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+    "published": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+    "priorE2": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+    "e6": "d2f7a01ffb47aeaf87499979310286f1c980b88389e20bd1fc0f39794a0fc18c"
+  },
+  "arms": {
+    "main": {
+      "receiptSha256": "ce794465e78ebb1953f64e38214f546282c388454792892872772546466d4a57",
+      "exit": 0,
+      "started": "2026-10-21T04:07:44.185900+00:00",
+      "finished": "2026-10-21T04:48:22.164049+00:00",
+      "candidateJsonSha256": "69c6b80d2059ebe32909aa0a098e1e3a6c2a1e5e442d645c7f959b129c8db3d8",
+      "manifest": {
+        "generatedAt": "2026-10-21T04:48:21.994Z",
+        "labsVersion": "0.9.0",
+        "harnessDigest": "badf82b0d84dbced158f4bb44ee50b7adac7169323f295d108909c2b93413627",
+        "blocks": 8,
+        "suite": "full",
+        "samplingPolicy": "single-call",
+        "baselineAvailability": "complete",
+        "baseline": {
+          "requested": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+          "version": "0.1.0",
+          "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20"
+        },
+        "candidate": {
+          "requested": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "version": "0.1.0",
+          "sha256": "d2f7a01ffb47aeaf87499979310286f1c980b88389e20bd1fc0f39794a0fc18c"
+        },
+        "comparison": "comparison.txt",
+        "notComparable": {
+          "baselineCheckFailures": [],
+          "timingModeMismatches": []
+        }
+      }
+    },
+    "published": {
+      "receiptSha256": "46a64f9c7e4c1a34694afeb6bd332968c0f8e7f40169f72816d567e0fb27370d",
+      "exit": 0,
+      "started": "2026-10-21T04:49:22.165563+00:00",
+      "finished": "2026-10-21T05:10:25.615558+00:00",
+      "candidateJsonSha256": "69c6b80d2059ebe32909aa0a098e1e3a6c2a1e5e442d645c7f959b129c8db3d8",
+      "manifest": {
+        "generatedAt": "2026-10-21T05:10:25.471Z",
+        "labsVersion": "0.9.0",
+        "harnessDigest": "badf82b0d84dbced158f4bb44ee50b7adac7169323f295d108909c2b93413627",
+        "blocks": 8,
+        "suite": "full",
+        "samplingPolicy": "single-call",
+        "baselineAvailability": "published-no-outlines",
+        "baseline": {
+          "requested": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+          "version": "0.1.0",
+          "sha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b"
+        },
+        "candidate": {
+          "requested": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "version": "0.1.0",
+          "sha256": "d2f7a01ffb47aeaf87499979310286f1c980b88389e20bd1fc0f39794a0fc18c"
+        },
+        "savedCandidate": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data",
+        "comparison": "comparison.txt",
+        "notComparable": {
+          "baselineCheckFailures": [],
+          "timingModeMismatches": []
+        }
+      }
+    },
+    "prior-e2": {
+      "receiptSha256": "65a8524ee4e162079303ce7d02c6f1e87ca249674c31558ef18eed4ed43fbf0f",
+      "exit": 0,
+      "started": "2026-10-21T05:10:40.015537+00:00",
+      "finished": "2026-10-21T05:30:06.502178+00:00",
+      "candidateJsonSha256": "69c6b80d2059ebe32909aa0a098e1e3a6c2a1e5e442d645c7f959b129c8db3d8",
+      "manifest": {
+        "generatedAt": "2026-10-21T05:30:06.282Z",
+        "labsVersion": "0.9.0",
+        "harnessDigest": "badf82b0d84dbced158f4bb44ee50b7adac7169323f295d108909c2b93413627",
+        "blocks": 8,
+        "suite": "full",
+        "samplingPolicy": "single-call",
+        "baselineAvailability": "complete",
+        "baseline": {
+          "requested": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "version": "0.1.0",
+          "sha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb"
+        },
+        "candidate": {
+          "requested": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "version": "0.1.0",
+          "sha256": "d2f7a01ffb47aeaf87499979310286f1c980b88389e20bd1fc0f39794a0fc18c"
+        },
+        "savedCandidate": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data",
+        "comparison": "comparison.txt",
+        "notComparable": {
+          "baselineCheckFailures": [],
+          "timingModeMismatches": []
+        }
+      }
+    }
+  },
+  "allCandidateJsonByteIdentical": true,
+  "scope": "Identityandterminalreceipt/logverification. No parity/admission claim. Sourcecannotbemutateduntilsourcechoiceandpreservation."
+}

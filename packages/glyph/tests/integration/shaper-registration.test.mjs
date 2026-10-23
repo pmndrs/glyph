@@ -1212,3 +1212,356 @@ test('measured f32 extents reproduce exactly at every pinned width', async () =>
   }
   assert.equal(fn.disposeRoot(31), abi.status.ok);
 });
+
+// This wire-level oracle reads authored glyph binding columns and independently borrowed glyph
+// identities before publication. The physical Codec executor does not produce either source.
+test('shipping Wasm Codec writes exact repeated-group and tail bytes from glyph binding columns', async () => {
+  const [artifact, wasm, abi] = await Promise.all([
+    readFile(new URL('../../../../benches/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
+    readFile(shaperWasmUrl),
+    textShaperAbi,
+  ]);
+  const validated = await validateFontArtifact(artifact);
+  const instance = await WebAssembly.instantiate(await WebAssembly.compile(wasm), {});
+  const memory = instance.exports[abi.memory];
+  const fn = Object.fromEntries(
+    Object.entries(abi.functions).map(([name, exported]) => [name, instance.exports[exported]]),
+  );
+  assert.equal(fn.initialize(), abi.status.ok);
+  registerValidatedFont({ abi, fn, memory }, 101, validated);
+  const glyphCount = validated.glyphExtents.byteLength / 8;
+  const columnA = Array.from({ length: glyphCount }, (_, glyph) => (glyph % 5) - 2);
+  const columnB = Array.from({ length: glyphCount }, (_, glyph) => (glyph % 7) + 0.5);
+  const columnWord = Array.from({ length: glyphCount }, (_, glyph) => 0xabc0_0000 + glyph);
+  const binding = fontBindingBytes(abi, {
+    techniqueId: 1,
+    glyphCount,
+    strikes: [0],
+    resources: [{ id: 71, generation: 1, kind: 1, reference: 71 }],
+    resourceIndices: new Array(glyphCount).fill(0),
+    glyphF32: [columnA, columnB],
+    glyphU32: [columnWord],
+  });
+  const bindingAllocation = copyToWasm(memory, fn.allocate, binding);
+  assert.equal(fn.registerFontBinding(1001, 101, bindingAllocation.pointer, bindingAllocation.length), abi.status.ok);
+  fn.deallocate(bindingAllocation.pointer, bindingAllocation.length);
+  const stack = copyToWasm(memory, fn.allocate, Uint8Array.of(0xe9, 3, 0, 0));
+  assert.equal(fn.registerFontStack(17, stack.pointer, 1), abi.status.ok);
+  fn.deallocate(stack.pointer, stack.length);
+
+  const op = abi.codec.opcodes;
+  const f32 = abi.codec.scalarTypes.f32;
+  const u32 = abi.codec.scalarTypes.u32;
+  const u16 = abi.codec.scalarTypes.u16;
+  const codecBytes = renderCodecBytesFromPrograms(abi, [
+    {
+      techniqueId: 1,
+      programId: 1,
+      f32InputCount: 2,
+      u32InputCount: 1,
+      inputs: [
+        { scope: 'glyph', field: 0 },
+        { scope: 'glyph', field: 1 },
+        { scope: 'glyph', field: 0 },
+      ],
+      buffers: [
+        { id: 11, scalar: f32, vectorWidth: 4, stride: 20 },
+        { id: 12, scalar: u32, vectorWidth: 2 },
+        { id: 13, scalar: u16, vectorWidth: 3, stride: 8 },
+      ],
+      operations: [
+        { opcode: op.loadF32, target: 0, operand0: 0 },
+        { opcode: op.loadF32, target: 1, operand0: 1 },
+        { opcode: op.addF32, target: 0, operand0: 0, operand1: 1 },
+        { opcode: op.lessThanF32, target: 2, operand0: 0, operand1: 1 },
+        { opcode: op.selectF32, target: 3, operand0: 2, operand1: 0, immediate0: 1 },
+        { opcode: op.constantF32, target: 4, immediate0: 0x4000_0000 },
+        { opcode: op.multiplyF32, target: 4, operand0: 0, operand1: 4 },
+        { opcode: op.loadU32, target: 5, operand0: 0 },
+        ...[0, 3, 4, 1].map((source, lane) => ({
+          opcode: op.storeF32,
+          operand0: source,
+          operand1: lane,
+          immediate0: 11,
+        })),
+        ...[0, 1].map((lane) => ({ opcode: op.storeU32, operand0: 5, operand1: lane, immediate0: 12 })),
+        ...[0, 1, 2].map((lane) => ({ opcode: op.storeU16, operand0: 5, operand1: lane, immediate0: 13 })),
+      ],
+    },
+  ]);
+  const codec = copyToWasm(memory, fn.allocate, codecBytes);
+  assert.equal(fn.registerCodec(23, codec.pointer, codec.length), abi.status.ok);
+  fn.deallocate(codec.pointer, codec.length);
+
+  const resultLayout = abi.layouts.engineResult;
+  const bufferLayout = abi.layouts.engineBuffer;
+  const patchLayout = abi.layouts.enginePatch;
+  const glyphLayout = abi.layouts.borrowedGlyph;
+  const borrowedLayout = abi.layouts.borrowedLayoutDescriptor;
+  const requestLayout = abi.layouts.engineUpdateRequest;
+  const putRequest = (root, bytes, entry) => {
+    const pointer = fn.requestPointer(root);
+    assert.notEqual(pointer, 0);
+    new Uint8Array(memory.buffer, pointer, bytes.byteLength).set(bytes);
+    const resultPointer =
+      entry === 'measure'
+        ? fn.measureParagraph(root, pointer, bytes.byteLength, 1)
+        : fn.textUpdate(root, pointer, bytes.byteLength);
+    const view = new DataView(memory.buffer, resultPointer, resultLayout.size);
+    return {
+      pointer: resultPointer,
+      view,
+      status: view.getUint32(resultLayout.status, true),
+      engineRevision: view.getUint32(resultLayout.engineRevision, true),
+      publicationGeneration: view.getUint32(resultLayout.publicationGeneration, true),
+    };
+  };
+  const selectedArms = new Set();
+  for (let count = 0; count <= 11; count += 1) {
+    const root = 100 + count;
+    assert.equal(fn.createRoot(root, 4096, 256 * 1024, 0), abi.status.ok);
+    const text = Array.from('AB'.repeat(Math.ceil(count / 2)).slice(0, count), (character) => character.charCodeAt(0));
+    const prepareBytes = engineStyleUpdateBytes(abi, {
+      rootId: root,
+      codecHandle: 23,
+      fontStackHandle: 17,
+      text,
+      maxClusters: 32,
+      geometry: { width: 300, height: 200, maxLines: 16 },
+    });
+    new DataView(prepareBytes.buffer).setUint32(
+      requestLayout.semanticViewMask,
+      abi.engine.semanticViewMasks.borrowedLayout,
+      true,
+    );
+    const prepared = putRequest(root, prepareBytes, 'measure');
+    assert.equal(prepared.status, abi.status.ok, `prepare count=${count}`);
+    const glyphIds = [];
+    if (count > 0) {
+      const descriptorPointer = fn.borrowParagraphLayout(root, 1);
+      assert.notEqual(descriptorPointer, 0);
+      const descriptor = new DataView(memory.buffer, descriptorPointer, borrowedLayout.size);
+      const produced = descriptor.getUint32(borrowedLayout.glyphCount, true);
+      assert.equal(produced, count, `authored ASCII glyph count=${count}`);
+      const generation = descriptor.getUint32(borrowedLayout.generation, true);
+      const glyphPointer = fn.borrowParagraphGlyphs(root, 1, generation, 0, produced);
+      assert.notEqual(glyphPointer, 0);
+      const glyphs = new DataView(memory.buffer, glyphPointer, produced * glyphLayout.size);
+      for (let index = 0; index < produced; index += 1) {
+        const glyphId = glyphs.getUint16(index * glyphLayout.size + glyphLayout.glyphId, true);
+        assert.ok(glyphId < glyphCount, `borrowed glyph ${glyphId} must index authored binding ${glyphCount}`);
+        glyphIds.push(glyphId);
+      }
+    }
+    const publishBytes = engineStyleUpdateBytes(abi, {
+      rootId: root,
+      codecHandle: 23,
+      fontStackHandle: 17,
+      expectedEngineRevision: prepared.engineRevision,
+      consumedRevision: prepared.engineRevision,
+      acknowledgedPublicationGeneration: prepared.publicationGeneration,
+      maxClusters: 32,
+      styles: false,
+      geometry: false,
+    });
+    new DataView(publishBytes.buffer).setUint32(requestLayout.semanticViewMask, 0, true);
+    const published = putRequest(root, publishBytes, 'update');
+    assert.equal(published.status, abi.status.ok, `publish count=${count}`);
+    assert.equal(
+      published.view.getUint32(resultLayout.semanticViewCount, true),
+      0,
+      'publication does not replay semantic glyphs',
+    );
+    const resultLength = published.view.getUint32(resultLayout.byteLength, true);
+    const bufferOffset = published.view.getUint32(resultLayout.buffersOffset, true);
+    const bufferCount = published.view.getUint32(resultLayout.bufferCount, true);
+    const patchOffset = published.view.getUint32(resultLayout.patchesOffset, true);
+    const patchCount = published.view.getUint32(resultLayout.patchCount, true);
+    if (count === 0) {
+      assert.equal(bufferCount, 0, 'empty text allocates no Codec buffers');
+      assert.equal(patchCount, 0, 'empty text emits no physical patches');
+    }
+    const result = new DataView(memory.buffer, published.pointer, resultLength);
+    const buffers = new Map();
+    for (let index = 0; index < bufferCount; index += 1) {
+      const offset = bufferOffset + index * bufferLayout.size;
+      const codecBufferId = result.getUint16(offset + bufferLayout.codecBufferId, true);
+      if (![11, 12, 13].includes(codecBufferId)) continue;
+      buffers.set(codecBufferId, {
+        id: result.getUint32(offset + bufferLayout.id, true),
+        generation: result.getUint32(offset + bufferLayout.generation, true),
+        liveRecords: result.getUint32(offset + bufferLayout.liveRecords, true),
+      });
+    }
+    for (const [codecBufferId, stride] of [
+      [11, 20],
+      [12, 8],
+      [13, 8],
+    ]) {
+      const buffer = buffers.get(codecBufferId);
+      if (count === 0 && buffer === undefined) continue;
+      assert.ok(buffer, `buffer ${codecBufferId} count=${count}`);
+      assert.equal(buffer.liveRecords, count);
+      const actual = new Uint8Array(count * stride);
+      for (let index = 0; index < patchCount; index += 1) {
+        const offset = patchOffset + index * patchLayout.size;
+        const opcode = result.getUint8(offset + patchLayout.opcode);
+        const id = result.getUint32(offset + patchLayout.bufferId, true);
+        const generation = result.getUint32(offset + patchLayout.bufferGeneration, true);
+        if (id !== buffer.id || generation !== buffer.generation) continue;
+        if (opcode === abi.engine.patchOpcodes.allocateOrResize) continue;
+        assert.equal(opcode, abi.engine.patchOpcodes.write, `initial buffer patch opcode ${codecBufferId}`);
+        const destination = result.getUint32(offset + patchLayout.destinationOffset, true);
+        const length = result.getUint32(offset + patchLayout.byteLength, true);
+        const payload = result.getUint32(offset + patchLayout.payloadOffset, true);
+        assert.ok(payload + length <= resultLength);
+        assert.ok(destination + length <= actual.byteLength);
+        actual.set(new Uint8Array(memory.buffer, published.pointer + payload, length), destination);
+      }
+      const expected = new Uint8Array(count * stride);
+      const view = new DataView(expected.buffer);
+      for (const [index, glyph] of glyphIds.entries()) {
+        const a = columnA[glyph];
+        const b = columnB[glyph];
+        const word = columnWord[glyph];
+        const sum = Math.fround(a + b);
+        selectedArms.add(sum < b);
+        const selected = sum < b ? sum : b;
+        if (codecBufferId === 11) {
+          const offset = index * stride;
+          for (const [lane, value] of [sum, selected, Math.fround(sum * 2), b].entries()) {
+            view.setFloat32(offset + lane * 4, value, true);
+          }
+        } else if (codecBufferId === 12) {
+          view.setUint32(index * stride, word, true);
+          view.setUint32(index * stride + 4, word, true);
+        } else {
+          for (let lane = 0; lane < 3; lane += 1) view.setUint16(index * stride + lane * 2, word & 0xffff, true);
+        }
+      }
+      assert.deepEqual(actual, expected, `physical Codec bytes ${codecBufferId} count=${count}`);
+    }
+    assert.equal(fn.disposeRoot(root), abi.status.ok);
+  }
+  assert.deepEqual(selectedArms, new Set([true, false]), 'authored glyphs exercise both Select arms');
+});
+
+test('shipping Wasm rejects finite Codec arithmetic overflow and accepts a valid retry', async () => {
+  const [artifact, wasm, abi] = await Promise.all([
+    readFile(new URL('../../../../benches/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
+    readFile(shaperWasmUrl),
+    textShaperAbi,
+  ]);
+  const validated = await validateFontArtifact(artifact);
+  const instance = await WebAssembly.instantiate(await WebAssembly.compile(wasm), {});
+  const memory = instance.exports[abi.memory];
+  const fn = Object.fromEntries(
+    Object.entries(abi.functions).map(([name, exported]) => [name, instance.exports[exported]]),
+  );
+  assert.equal(fn.initialize(), abi.status.ok);
+  registerValidatedFont({ abi, fn, memory }, 101, validated);
+  registerSimpleBinding({ abi, fn, memory }, 1001, 101, validated, 71, 1);
+  const stack = copyToWasm(memory, fn.allocate, Uint8Array.of(0xe9, 3, 0, 0));
+  assert.equal(fn.registerFontStack(17, stack.pointer, 1), abi.status.ok);
+  fn.deallocate(stack.pointer, stack.length);
+
+  const op = abi.codec.opcodes;
+  const program = (constantBits) => ({
+    techniqueId: 1,
+    programId: 1,
+    f32InputCount: 0,
+    u32InputCount: 0,
+    buffers: [{ id: 11, scalar: abi.codec.scalarTypes.f32, vectorWidth: 1 }],
+    operations: [
+      { opcode: op.constantF32, target: 0, immediate0: constantBits },
+      { opcode: op.constantF32, target: 1, immediate0: 0x4000_0000 },
+      { opcode: op.multiplyF32, target: 0, operand0: 0, operand1: 1 },
+      { opcode: op.storeF32, operand0: 0, operand1: 0, immediate0: 11 },
+    ],
+  });
+  for (const [handle, bits] of [
+    [23, 0x7f7f_ffff], // finite f32 max; multiplying by finite two overflows
+    [24, 0x3fa0_0000], // finite 1.25; independent retry output is exactly 2.5
+  ]) {
+    const bytes = renderCodecBytesFromPrograms(abi, [program(bits)]);
+    const allocation = copyToWasm(memory, fn.allocate, bytes);
+    assert.equal(fn.registerCodec(handle, allocation.pointer, allocation.length), abi.status.ok);
+    fn.deallocate(allocation.pointer, allocation.length);
+  }
+  const root = 129;
+  assert.equal(fn.createRoot(root, 4096, 256 * 1024, 0), abi.status.ok);
+  const layout = abi.layouts.engineResult;
+  const request = (handle) =>
+    engineStyleUpdateBytes(abi, {
+      rootId: root,
+      codecHandle: handle,
+      fontStackHandle: 17,
+      text: [0x41, 0x42, 0x41, 0x42, 0x41],
+      maxClusters: 32,
+      geometry: { width: 300, height: 200, maxLines: 16 },
+    });
+  const publish = (bytes) => {
+    const pointer = fn.requestPointer(root);
+    assert.notEqual(pointer, 0);
+    new Uint8Array(memory.buffer, pointer, bytes.byteLength).set(bytes);
+    const resultPointer = fn.textUpdate(root, pointer, bytes.byteLength);
+    assert.notEqual(resultPointer, 0, 'the root has an engine result');
+    return {
+      pointer: resultPointer,
+      view: new DataView(memory.buffer, resultPointer, layout.size),
+    };
+  };
+  const failed = publish(request(23));
+  assert.equal(failed.view.getUint32(layout.status, true), abi.status.invalidRequest);
+  assert.equal(failed.view.getUint32(layout.engineRevision, true), 0);
+  assert.equal(failed.view.getUint32(layout.bufferCount, true), 0);
+  assert.equal(failed.view.getUint32(layout.patchCount, true), 0);
+
+  assert.equal(fn.resetRoot(root), abi.status.ok, 'failed publication invalidates derived root state');
+  const recovered = publish(request(24));
+  assert.equal(recovered.view.getUint32(layout.status, true), abi.status.ok);
+  assert.equal(recovered.view.getUint32(layout.engineRevision, true), 1);
+  const length = recovered.view.getUint32(layout.byteLength, true);
+  const result = new DataView(memory.buffer, recovered.pointer, length);
+  const bufferLayout = abi.layouts.engineBuffer;
+  const patchLayout = abi.layouts.enginePatch;
+  const buffersOffset = result.getUint32(layout.buffersOffset, true);
+  const bufferCount = result.getUint32(layout.bufferCount, true);
+  let physical;
+  for (let index = 0; index < bufferCount; index += 1) {
+    const offset = buffersOffset + index * bufferLayout.size;
+    if (result.getUint16(offset + bufferLayout.codecBufferId, true) !== 11) continue;
+    physical = {
+      id: result.getUint32(offset + bufferLayout.id, true),
+      generation: result.getUint32(offset + bufferLayout.generation, true),
+      records: result.getUint32(offset + bufferLayout.liveRecords, true),
+    };
+  }
+  assert.ok(physical, 'valid retry publishes the authored Codec buffer');
+  assert.equal(physical.records, 5);
+  const actual = new Uint8Array(physical.records * 4);
+  const patchesOffset = result.getUint32(layout.patchesOffset, true);
+  const patchCount = result.getUint32(layout.patchCount, true);
+  for (let index = 0; index < patchCount; index += 1) {
+    const offset = patchesOffset + index * patchLayout.size;
+    if (
+      result.getUint32(offset + patchLayout.bufferId, true) !== physical.id ||
+      result.getUint32(offset + patchLayout.bufferGeneration, true) !== physical.generation
+    )
+      continue;
+    const opcode = result.getUint8(offset + patchLayout.opcode);
+    if (opcode === abi.engine.patchOpcodes.allocateOrResize) continue;
+    assert.equal(opcode, abi.engine.patchOpcodes.write);
+    const destination = result.getUint32(offset + patchLayout.destinationOffset, true);
+    const byteLength = result.getUint32(offset + patchLayout.byteLength, true);
+    const payload = result.getUint32(offset + patchLayout.payloadOffset, true);
+    assert.ok(payload + byteLength <= length);
+    assert.ok(destination + byteLength <= actual.byteLength);
+    actual.set(new Uint8Array(memory.buffer, recovered.pointer + payload, byteLength), destination);
+  }
+  const expected = new Uint8Array(5 * 4);
+  const expectedView = new DataView(expected.buffer);
+  for (let index = 0; index < 5; index += 1) expectedView.setFloat32(index * 4, 2.5, true);
+  assert.deepEqual(actual, expected, 'recovery bytes follow literal finite arithmetic');
+  assert.equal(fn.disposeRoot(root), abi.status.ok);
+});

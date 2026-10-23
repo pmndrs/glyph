@@ -1,0 +1,48 @@
+{
+  "declaredAt": "2026-10-19T14:17:53.486779+00:00",
+  "source": "6987418cc49495c60097801e0d675dec7ae84f77",
+  "main": "4e25a96a57462fef5ad0d19065a822695b480f60",
+  "candidate": {
+    "archive": "candidate/pmndrs-glyph-0.1.0.tgz",
+    "sha256": "2e4342243c55edb56d3a1a32cbd730185c8d172fa5634da9c1f8fc3b0edd9558",
+    "releaseWasmSha256": "244078b186e9de0414331ff9de2632c8a57c4ec20f19b6e0a41ce964f8e1b30a",
+    "namedWasmSha256": "cfb3213f4b7acc111ef057621081b102e25f64fdd2df8e0c5e6c09b0e2ee36b3"
+  },
+  "suite": "full",
+  "blocks": 8,
+  "order": [
+    "main baseline",
+    "candidate once",
+    "published0.1.0 baseline using saved candidate",
+    "prior328 baseline using saved candidate"
+  ],
+  "controls": "controls/authentication.json",
+  "oneHeavyCpuLane": true,
+  "retention": "Keep every raw sample, error, operational failure and clock/mode exclusion; no favorable retries or spike deletion. Fresh run does not pair absolute timings across machines.",
+  "p50": "median of eight block medians",
+  "p95": "pooled retained samples sorted, index floor(.95*(N-1))",
+  "timingWorkflow": "mise exec -- pnpm scripts run benchmark:labs-package -- --candidate ABS --baseline ABS --suite full --blocks 8 --output ABS; subsequent comparisons add --saved-candidate FIRST_OUTPUT",
+  "profile": {
+    "workflow": "benchmark:edit-sized-publication-profile",
+    "case": "bulk-write",
+    "boundary": "publication",
+    "count": 1024,
+    "reads": "none",
+    "publicationPath": "scene",
+    "warmups": 10,
+    "iterations": 80,
+    "captures": 1,
+    "attribution": "exclusive CPU by disjoint ancestry anchors in that capture; detached runtime/GC remains separate"
+  },
+  "additionalGates": [
+    "fresh full package check",
+    "named Wasm executable authentication",
+    "native work counters",
+    "size raw/gzip and member identity",
+    "engine requested live/completed-call high water and capacity; physical scope separately stated",
+    "API/ABI/peers/lifetime",
+    "Portless browser conformance and current committed ASCII scene both backends"
+  ],
+  "platform": "macOS-26.7.1-arm64-arm-64bit-Mach-O",
+  "TMPDIR": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch"
+}

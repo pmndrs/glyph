@@ -37,10 +37,17 @@ sources:
 
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-10T23:36:28Z'
+  at: '2026-10-12T11:22:21Z'
 ---
 
 # Canonical implementation roadmap
+
+## Current held implementation wave
+
+The [retained preparation/publication decision](../planning/decisions/retained-prepare-publish.md) and
+[compact tracker](../planning/publication-frontier.md) define the current work: finish one Rust preparation pipeline,
+reuse it for synchronous queries and independent copies, then publish dirty renderer data without relayout.
+Validate each slice and the integrated candidate. Ropes remain unmerged and no release/tag/demo merge is authorized.
 
 This is the only active execution order.
 

@@ -170,6 +170,7 @@ export function assertMatchesFreshBuild(font, mounted, paragraphs, context) {
     for (const [index, entry] of got.paragraphs.entries()) {
       const expected = want.paragraphs[index];
       const where = `${context}: paragraph ${index}`;
+      assert.equal(mounted.nodes[index]?.error, undefined, `${where}: renderer publication failed`);
       assert.equal(entry.glyphCount, expected.glyphCount, `${where} glyph count`);
       assert.equal(entry.lineCount, expected.lineCount, `${where} line count`);
       assert.deepEqual(entry.glyphIds, expected.glyphIds, `${where} glyph ids`);

@@ -1,0 +1,55 @@
+{
+  "method": "Node zlib gzipSync level 9 independently per .js member and shipping dist/text-shaper.wasm; raw totals sum member bytes",
+  "reports": [
+    {
+      "archive": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/pmndrs-glyph-0.1.0.tgz",
+      "archiveBytes": 3197306,
+      "archiveSha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+      "javascript": {
+        "method": "all packaged .js members sorted by archive path; raw=sum bytes; Node zlib.gzipSync(level 9) independently per member",
+        "files": 0,
+        "rawBytes": 0,
+        "sumOfPerMemberNodeGzip9Bytes": 0
+      },
+      "shippingShaper": {
+        "path": "dist/text-shaper.wasm",
+        "rawBytes": 1610555,
+        "nodeGzip9Bytes": 599761,
+        "sha256": "66e6c46357030d8457a8568af303d8552b16a68f0c3815877d01d634996bbffb"
+      }
+    },
+    {
+      "archive": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/v3-combined/candidate/pmndrs-glyph-0.1.0.tgz",
+      "archiveBytes": 3198611,
+      "archiveSha256": "383fcbdd1cc12e59a4e563e55527aaa1f3f31e442b8ebfaaf26802063b4990bd",
+      "javascript": {
+        "method": "all packaged .js members sorted by archive path; raw=sum bytes; Node zlib.gzipSync(level 9) independently per member",
+        "files": 0,
+        "rawBytes": 0,
+        "sumOfPerMemberNodeGzip9Bytes": 0
+      },
+      "shippingShaper": {
+        "path": "dist/text-shaper.wasm",
+        "rawBytes": 1611109,
+        "nodeGzip9Bytes": 601177,
+        "sha256": "055549d52d1fa7233687863e609a939bc00d080fc0e9e9adeba30de5160b8d35"
+      }
+    }
+  ],
+  "javascriptMembers": {
+    "baselineCount": 0,
+    "candidateCount": 0,
+    "identicalNameCount": 0,
+    "added": [],
+    "removed": [],
+    "changed": []
+  },
+  "deltas": {
+    "archiveBytes": 1305,
+    "javascriptCount": 0,
+    "javascriptRawBytes": 0,
+    "javascriptPerMemberGzip9Bytes": 0,
+    "shippingShaperRawBytes": 554,
+    "shippingShaperGzip9Bytes": 1416
+  }
+}\n

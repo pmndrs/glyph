@@ -1,0 +1,10 @@
+{
+  "schema": "independent-root-main-all145-quantile-verification-v1",
+  "extractionReadPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/main-fixed-facts/all145-quantiles.json",
+  "extractionSha256": "ffabc39de707c49854834b20c2b3678024c0f662a46ba7d3eadb3e912426d0ac",
+  "scope": "Raw sample counts, pooledfloor-quantiles,8blockmediansandactualplans only. v1printedstatlabelserroneousandbeingcorrected separately; no inference/admission.",
+  "pairedIdentities": 145,
+  "armCells": 290,
+  "checkedFieldsPerArmCell": 5,
+  "mismatches": []
+}

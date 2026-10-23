@@ -2,6 +2,8 @@
 
 use core::{mem, slice};
 
+#[cfg(test)]
+use super::codec::Operation;
 use super::{
     codec::{
         CapabilitySetId, CodecExecutionError, PhysicalBufferMut, SemanticInputBatch, ValidatedCodec,
@@ -49,7 +51,7 @@ pub struct PendingAllocation {
 /// Allocates one retained physical buffer through the shared cold growth path.
 #[inline(never)]
 pub fn push_pending_allocation(
-    allocations: &mut alloc::vec::Vec<PendingAllocation>,
+    allocations: &mut alloc::vec::Vec<Option<PendingAllocation>>,
     id: u32,
     generation: u32,
     program_id: u32,
@@ -59,9 +61,9 @@ pub fn push_pending_allocation(
     allocations
         .try_reserve(1)
         .map_err(|_| PackingError::AllocationFailed)?;
-    allocations.push(PendingAllocation {
+    allocations.push(Some(PendingAllocation {
         state: PhysicalBufferState::new(id, generation, program_id, schema, capacity)?,
-    });
+    }));
     Ok(())
 }
 
@@ -93,42 +95,27 @@ impl PhysicalBufferState {
     }
 }
 
-pub fn apply_writes(
-    buffer: &mut PhysicalBufferState,
+pub fn apply_writes_prevalidated(
+    bytes: &mut [u8],
+    id: u32,
+    generation: u32,
     patches: &[PatchRecord],
     payload: &[u8],
-) -> Result<(), PackingError> {
+) {
     for patch in patches.iter().filter(|patch| {
         patch.opcode == PATCH_WRITE
-            && patch.buffer_id == buffer.id
-            && patch.buffer_generation == buffer.generation
+            && patch.buffer_id == id
+            && patch.buffer_generation == generation
     }) {
         let destination = patch.destination_offset as usize;
         let source = patch.payload_start as usize;
         let length = patch.byte_length as usize;
-        let destination = buffer
-            .bytes
-            .get_mut(destination..destination + length)
-            .ok_or(PackingError::InvalidIdentity)?;
-        let source = payload
-            .get(source..source + length)
-            .ok_or(PackingError::InvalidIdentity)?;
+        let destination_end = destination + length;
+        let source_end = source + length;
+        let destination = &mut bytes[destination..destination_end];
+        let source = &payload[source..source_end];
         destination.copy_from_slice(source);
     }
-    Ok(())
-}
-
-pub fn take_allocation(
-    allocations: &mut alloc::vec::Vec<PendingAllocation>,
-    id: u32,
-    generation: u32,
-) -> Option<PendingAllocation> {
-    allocations
-        .iter()
-        .position(|allocation| {
-            allocation.state.id == id && allocation.state.generation == generation
-        })
-        .map(|index| allocations.swap_remove(index))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -145,6 +132,8 @@ pub fn execute_run(
     output_records: u32,
     active_buffers: u32,
 ) -> Result<(), PackingError> {
+    #[cfg(test)]
+    super::work_attribution::record(|work| work.codec_executed_records += record_count as usize);
     let input_end = input_index
         .checked_add(record_count as usize)
         .ok_or(PackingError::ArithmeticOverflow)?;
@@ -205,7 +194,32 @@ pub fn execute_run(
             outputs,
             active_buffers,
         )
-        .map_err(PackingError::Codec)
+        .map_err(PackingError::Codec)?;
+    #[cfg(test)]
+    {
+        let executed_program = codec
+            .program(capability_set, program.technique, program.variant)
+            .expect("successful execution selected a validated program");
+        let active_f32_stores = executed_program
+            .operations
+            .iter()
+            .filter_map(|operation| match operation {
+                Operation::StoreF32 { buffer, .. } => Some(buffer),
+                _ => None,
+            })
+            .filter(|buffer| {
+                executed_program
+                    .buffers
+                    .iter()
+                    .enumerate()
+                    .any(|(index, schema)| {
+                        schema.id == **buffer && active_buffers & (1_u32 << index) != 0
+                    })
+            })
+            .count();
+        super::work_attribution::record_successful_codec_run(record_count, active_f32_stores);
+    }
+    Ok(())
 }
 
 pub fn grown_capacity(mut capacity: u32, required: u32) -> Result<u32, PackingError> {

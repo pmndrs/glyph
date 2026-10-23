@@ -1,0 +1,45 @@
+{
+  "stdoutSha256": "a7b4812a51bd60bd8a99af495d5c6d526e686b9303e27bda34e11df616e656e6",
+  "reporter": "Node spec \u2139 summaries",
+  "summaryBlocks": {
+    "tests": [
+      3,
+      3,
+      1107,
+      3,
+      22,
+      1,
+      3
+    ],
+    "pass": [
+      3,
+      3,
+      1107,
+      3,
+      22,
+      1,
+      3
+    ],
+    "fail": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "skipped": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "aggregatePassedResults": 1142,
+  "aggregateFailedResults": 0,
+  "scope": "Aggregate result occurrences, not unique test identity count."
+}

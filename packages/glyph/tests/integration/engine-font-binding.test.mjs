@@ -11,6 +11,7 @@ import { createRasterCodecProgram, registerRasterCodec } from '../../dist/config
 import { defineTechniqueSchema } from '../../dist/config/schema.js';
 import { bitmap } from '../../dist/raster/bitmap.js';
 import { getRegisteredFontData } from '../../dist/internal/registered-font.js';
+import { GlyphIdScope } from '../../dist/internal/glyph-id.js';
 import { createFontStack, immutableFontResources } from '../../dist/loaded-font.js';
 import { loadFont } from '../../dist/loader.js';
 import { observeRenderPlannerDirty, stageRenderPlanner } from '../../dist/internal/render-planner.js';
@@ -137,7 +138,7 @@ test('shape registration queue membership ends at staging, including deferral an
 function captureNextMeasureRequest() {
   const originalInstantiate = WebAssembly.instantiate;
   let latestRequest;
-  let requestCount = 0;
+  let measurementRequests = 0;
   WebAssembly.instantiate = async (source, imports) => {
     const instance = await originalInstantiate(source, imports);
     const exports = { ...instance.exports };
@@ -145,8 +146,8 @@ function captureNextMeasureRequest() {
     assert.equal(typeof measure, 'function', 'instrumented shaper must export measure_paragraph');
     exports[textShaperAbi.functions.measureParagraph] = (...arguments_) => {
       const [, pointer, length] = arguments_;
+      measurementRequests += 1;
       latestRequest = new Uint8Array(exports.memory.buffer, pointer, length).slice();
-      requestCount += 1;
       return measure(...arguments_);
     };
     return { exports };
@@ -160,7 +161,7 @@ function captureNextMeasureRequest() {
       return latestRequest;
     },
     get count() {
-      return requestCount;
+      return measurementRequests;
     },
   };
 }
@@ -370,12 +371,12 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
       };
     },
     limits: {
-      maxParagraphs: 1,
+      maxParagraphs: 2,
       maxClusters: 64,
       maxLines: 16,
-      maxRegions: 2,
-      maxExclusions: 2,
-      maxInlineObjects: 2,
+      maxRegions: 4,
+      maxExclusions: 4,
+      maxInlineObjects: 4,
       maxSlotsPerBand: 4,
       maxOutputBytes: 1_048_576,
     },
@@ -501,8 +502,9 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
   const text = planner.createText(options);
 
   try {
+    const setterBytes = capture.bytes();
     assert.equal(text.measure().lineCount > 0, true);
-    const bytes = capture.bytes();
+    const bytes = setterBytes;
     assert.equal(text.glyphs().glyphCount > 0, true, 'explicit glyph inspection remains available after measurement');
     const request = textShaperAbi.layouts.engineUpdateRequest;
     const readRecords = (requestBytes, offsetField, countField, record) => {
@@ -766,7 +768,7 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
         ],
       },
     });
-    assert.equal(text.measure(), sparseMeasurement, 'an equal normalized batch reuses its prepared measurement');
+    assert.deepEqual(text.measure(), sparseMeasurement, 'an equal normalized batch reuses its prepared measurement');
     assert.equal(capture.count, requestsBeforeEqualUpdate, 'an equal normalized batch does not reprepare Rust state');
     shapeGlyphEngine(glyphEngine);
     assert.equal(acceptedPublications, 3);
@@ -869,6 +871,130 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
         .map((entry) => entry.binding)
         .reverse(),
     );
+    const reorderedFlow = {
+      regions: [
+        { region: region('right', transforms[1], 80, 160), exclusions: [exclusion('right-hole', 100, 110)] },
+        { region: region('left', transforms[0], 0, 80), exclusions: [exclusion('left-hole', 24, 34)] },
+      ],
+    };
+    text.update({ flow: { regions: [reorderedFlow.regions[0]] } });
+    const oneRegionBytes = capture.bytes();
+    const oneRegion = readRecords(
+      oneRegionBytes,
+      request.regionsOffset,
+      request.regionCount,
+      textShaperAbi.layouts.engineRegion,
+    );
+    const oneExclusion = readRecords(
+      oneRegionBytes,
+      request.exclusionsOffset,
+      request.exclusionCount,
+      textShaperAbi.layouts.engineExclusion,
+    );
+    assert.deepEqual(
+      oneRegion.map((value) => value.getUint32(textShaperAbi.layouts.engineRegion.id, true)),
+      [regionIds[1]],
+    );
+    assert.deepEqual(
+      oneExclusion.map((value) => value.getUint32(textShaperAbi.layouts.engineExclusion.id, true)),
+      [exclusionIds[1]],
+    );
+    const acceptedRegionRevision = oneRegion[0].getUint32(textShaperAbi.layouts.engineRegion.geometryRevision, true);
+    const acceptedExclusionRevision = oneExclusion[0].getUint32(
+      textShaperAbi.layouts.engineExclusion.geometryRevision,
+      true,
+    );
+    const acceptedOneRegion = text.measure();
+    assert.throws(
+      () => text.update({ text: 'bad\ud800text', flow: reorderedFlow }),
+      (error) => error instanceof GlyphEngineStatusError && error.statusCode === 'invalid-request',
+      'a failed semantic preparation cannot commit the expanded flow maps',
+    );
+    const requestsAfterRejectedFlow = capture.count;
+    assert.deepEqual(text.measure(), acceptedOneRegion, 'preflight rejection preserves the accepted one-region layout');
+    assert.equal(
+      capture.count,
+      requestsAfterRejectedFlow,
+      'cached measurement needs no request after preflight rejection',
+    );
+    text.update({ flow: reorderedFlow });
+    const regrownBytes = capture.bytes();
+    const regrownRegions = readRecords(
+      regrownBytes,
+      request.regionsOffset,
+      request.regionCount,
+      textShaperAbi.layouts.engineRegion,
+    );
+    const regrownExclusions = readRecords(
+      regrownBytes,
+      request.exclusionsOffset,
+      request.exclusionCount,
+      textShaperAbi.layouts.engineExclusion,
+    );
+    assert.deepEqual(
+      regrownRegions.map((value) => value.getUint32(textShaperAbi.layouts.engineRegion.id, true)),
+      [regionIds[1], regionIds[0]],
+      'a removed keyed region regains its stable identity after count growth',
+    );
+    assert.deepEqual(
+      regrownExclusions.map((value) => value.getUint32(textShaperAbi.layouts.engineExclusion.id, true)),
+      [exclusionIds[1], exclusionIds[0]],
+      'a removed keyed exclusion regains its stable identity after count growth',
+    );
+    assert.equal(
+      regrownRegions[0].getUint32(textShaperAbi.layouts.engineRegion.geometryRevision, true),
+      acceptedRegionRevision,
+      'the surviving region keeps its accepted revision',
+    );
+    assert.equal(
+      regrownExclusions[0].getUint32(textShaperAbi.layouts.engineExclusion.geometryRevision, true),
+      acceptedExclusionRevision,
+      'the surviving exclusion keeps its accepted revision',
+    );
+    const fresh = planner.createText({
+      ...options,
+      text: {
+        text: sourceText,
+        spans: [{ start: 1, end: 4, style: { language: 'fr', features: [{ tag: 'liga' }], color: '#3366cc' } }],
+      },
+      flow: reorderedFlow,
+    });
+    try {
+      assert.deepEqual(text.measure(), fresh.measure(), 'regrown warm layout matches a freshly prepared paragraph');
+    } finally {
+      fresh.dispose();
+    }
+    shapeGlyphEngine(glyphEngine);
+    text.update({ flow: undefined });
+    text.update({ flow: reorderedFlow });
+    const restoredBytes = capture.bytes();
+    const restoredRegions = readRecords(
+      restoredBytes,
+      request.regionsOffset,
+      request.regionCount,
+      textShaperAbi.layouts.engineRegion,
+    );
+    const restoredExclusions = readRecords(
+      restoredBytes,
+      request.exclusionsOffset,
+      request.exclusionCount,
+      textShaperAbi.layouts.engineExclusion,
+    );
+    assert.deepEqual(
+      restoredRegions.map((value) => value.getUint32(textShaperAbi.layouts.engineRegion.id, true)),
+      [regionIds[1], regionIds[0]],
+    );
+    assert.equal(
+      restoredRegions[0].getUint32(textShaperAbi.layouts.engineRegion.geometryRevision, true) > acceptedRegionRevision,
+      true,
+      'ordinary geometry clears flow revision ownership before the keyed region returns',
+    );
+    assert.equal(
+      restoredExclusions[0].getUint32(textShaperAbi.layouts.engineExclusion.geometryRevision, true) >
+        acceptedExclusionRevision,
+      true,
+      'ordinary geometry clears flow exclusion ownership before the keyed exclusion returns',
+    );
     text.update({ text: sourceText });
     assert.equal(
       text.measure().lineCount > 0,
@@ -892,6 +1018,48 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
       'remove records zero every field outside their opcode and identities',
     );
     shapeGlyphEngine(glyphEngine);
+    const mutableStyle = {
+      fontSize: 18,
+      features: [{ tag: 'kern', value: 2, start: 0, end: sourceText.length }],
+    };
+    text.update({ style: mutableStyle });
+    mutableStyle.features[0].value = 7;
+    const ownedStyleBytes = capture.bytes();
+    const ownedStyle = readRecords(ownedStyleBytes, request.styleMutationsOffset, request.styleMutationCount, style)[0];
+    assert.equal(
+      new DataView(
+        ownedStyleBytes.buffer,
+        ownedStyleBytes.byteOffset + ownedStyle.getUint32(style.featuresOffset, true),
+        feature.size,
+      ).getUint32(feature.value, true),
+      2,
+      'later feature mutation cannot change the prepared style bytes',
+    );
+    const requestsBeforeEqualStyle = capture.count;
+    text.update({ style: { fontSize: 18, features: [{ tag: 'kern', value: 2, start: 0, end: sourceText.length }] } });
+    assert.equal(capture.count, requestsBeforeEqualStyle, 'caller mutation cannot change the retained style snapshot');
+    shapeGlyphEngine(glyphEngine);
+    const inheritedInvalidStyle = Object.create({ features: [{ tag: 'bad' }] });
+    assert.throws(() => text.update({ style: inheritedInvalidStyle }), /feature 0 tag/u);
+    let colorReads = 0;
+    text.update({
+      style: {
+        get color() {
+          colorReads += 1;
+          return '#3366cc';
+        },
+      },
+    });
+    assert.equal(colorReads > 0, true, 'the authored style getter is evaluated during validation and ownership');
+    const getterStyleBytes = capture.bytes();
+    const getterStyle = readRecords(
+      getterStyleBytes,
+      request.styleMutationsOffset,
+      request.styleMutationCount,
+      style,
+    )[0];
+    assert.equal(getterStyle.getUint32(style.foregroundRgba, true), 0xffcc_6633);
+    shapeGlyphEngine(glyphEngine);
     const stableTransforms = transformTables.at(-1);
     assert.throws(() => text.update({ style: { fontSize: -1 } }), /fontSize/);
     duringAccept = () => assert.throws(() => text.update({ text: 'reentrant' }), /borrow|publication|mutation/);
@@ -903,6 +1071,105 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
       'invalid setters and checkpoints preserve the complete table',
     );
     duringAccept = undefined;
+
+    const sharedMaterial = handleState.createMaterialBinding();
+    const foreignHandleState = createGlyphHandleState(glyphEngine, {
+      integration: 'test.render-planner-foreign-material',
+    });
+    const foreignMaterial = foreignHandleState.createMaterialBinding();
+    const retainedMaterial = handleState._retainOpaqueBinding;
+    const materialAcquisitions = [];
+    handleState._retainOpaqueBinding = function (binding, kind) {
+      if (kind === 'material') materialAcquisitions.push(binding);
+      return retainedMaterial.call(this, binding, kind);
+    };
+    try {
+      text.update({
+        material: sharedMaterial,
+        text: {
+          text: sourceText,
+          spans: [{ start: 1, end: 4, material: sharedMaterial }],
+        },
+        inlineObjects: [
+          inlineObject(1, sharedMaterial, inlineResources[0]),
+          inlineObject(3, sharedMaterial, inlineResources[1]),
+        ],
+      });
+      assert.deepEqual(materialAcquisitions, [sharedMaterial], 'one source binding acquires one resolved lease');
+      const publicationsBeforeSharedMaterial = acceptedPublications;
+      const repeatedBytes = capture.bytes();
+      const repeatedStyles = readRecords(
+        repeatedBytes,
+        request.styleMutationsOffset,
+        request.styleMutationCount,
+        style,
+      );
+      const repeatedObjects = readRecords(
+        repeatedBytes,
+        request.inlineObjectsOffset,
+        request.inlineObjectCount,
+        textShaperAbi.layouts.engineInlineObject,
+      );
+      const repeatedMaterialIds = [
+        ...repeatedStyles.map((record) => record.getUint32(style.materialId, true)),
+        ...repeatedObjects.map((record) => record.getUint32(textShaperAbi.layouts.engineInlineObject.materialId, true)),
+      ];
+      assert.equal(new Set(repeatedMaterialIds).size, 1, 'root, span, and inline records keep one material identity');
+      shapeGlyphEngine(glyphEngine);
+      assert.equal(acceptedPublications, publicationsBeforeSharedMaterial + 1);
+
+      text.update({
+        style: { fontSize: 19 },
+        material: sharedMaterial,
+        text: {
+          text: sourceText,
+          spans: [{ start: 1, end: 4, material: sharedMaterial }],
+        },
+        inlineObjects: [
+          inlineObject(1, sharedMaterial, inlineResources[0]),
+          inlineObject(3, sharedMaterial, inlineResources[1]),
+        ],
+      });
+      assert.deepEqual(
+        materialAcquisitions,
+        [sharedMaterial, sharedMaterial],
+        'the old and desired text revisions each own one lease for the same binding',
+      );
+      sharedMaterial.dispose();
+      assert.equal(sharedMaterial.disposed, true, 'disposing the caller binding does not dispose resolved owners');
+      assert.equal(text.measure().lineCount > 0, true);
+      shapeGlyphEngine(glyphEngine);
+      assert.equal(acceptedPublications, publicationsBeforeSharedMaterial + 2);
+
+      assert.throws(
+        () =>
+          text.update({
+            text: { text: sourceText, spans: [{ start: 1, end: 4, material: foreignMaterial }] },
+          }),
+        /material binding must be live and owned by this Glyph handle state/u,
+      );
+      assert.throws(() => text.update({ material: sharedMaterial }), /material binding must be live and owned/u);
+      assert.equal(foreignMaterial.disposed, false, 'failed candidate cleanup leaves the foreign owner alive');
+      assert.equal(text.measure().lineCount > 0, true, 'the prior desired revision remains usable after failure');
+      shapeGlyphEngine(glyphEngine);
+      assert.equal(
+        acceptedPublications,
+        publicationsBeforeSharedMaterial + 2,
+        'rejected inputs leave the accepted frame unchanged and require no renderer publication',
+      );
+      text.dispose();
+      shapeGlyphEngine(glyphEngine);
+      assert.throws(
+        () => handleState._resolveOpaqueBinding('material', repeatedMaterialIds[0]),
+        /unknown material binding/u,
+        'the material registration is released when its resolved text owner dies',
+      );
+    } finally {
+      handleState._retainOpaqueBinding = retainedMaterial;
+      if (!sharedMaterial.disposed) sharedMaterial.dispose();
+      foreignMaterial.dispose();
+      foreignHandleState.dispose();
+    }
   } finally {
     stopObservingDirty();
     registration.dispose();
@@ -916,6 +1183,246 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
     font.dispose();
   }
 });
+
+test(
+  'retained style identities survive restyle, shrink, regrow, replay, and empty spans',
+  { concurrency: false },
+  async () => {
+    const font = await fixtureFont();
+    let capture;
+    let glyphEngine;
+    let handleState;
+    let codec;
+    let fontBinding;
+    let planner;
+    let registration;
+    let stopObservingDirty;
+    let originalId;
+    let text;
+    let nextOwner;
+    let styleMints = 0;
+    try {
+      capture = captureNextMeasureRequest();
+      try {
+        glyphEngine = await fixtureEngine();
+      } finally {
+        capture.restore();
+      }
+      handleState = createGlyphHandleState(glyphEngine, { integration: 'test.render-planner-style-identities' });
+      codec = handleState.installCodec(threeCodecDescriptor);
+      fontBinding = handleState.bindFontStack(createFontStack(font));
+      let rejectNext = false;
+      planner = handleState.createRootPlanner({
+        codec,
+        capabilitySetIndex: 0,
+        target: () => ({
+          delivery: 'borrowed',
+          accept() {
+            if (rejectNext) {
+              rejectNext = false;
+              throw new Error('deliberate retained style replay');
+            }
+            return { accepted: true };
+          },
+          dispose() {},
+        }),
+        limits: {
+          maxParagraphs: 2,
+          maxClusters: 64,
+          maxLines: 16,
+          maxRegions: 1,
+          maxExclusions: 1,
+          maxInlineObjects: 1,
+          maxSlotsPerBand: 4,
+          maxOutputBytes: 1_048_576,
+        },
+        requestCapacity: 65_536,
+        resultCapacity: 1_048_576,
+        textCapacity: 1_024,
+      });
+      registration = registerGlyphShapeParticipant(glyphEngine, {
+        stage: () => stageRenderPlanner(planner),
+        accepted() {},
+        rejected() {},
+      });
+      stopObservingDirty = observeRenderPlannerDirty(planner, () => registration.invalidate());
+      const readStyleMutations = () => {
+        const bytes = capture.bytes();
+        const request = textShaperAbi.layouts.engineUpdateRequest;
+        const record = textShaperAbi.layouts.engineStyleMutation;
+        const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        const offset = header.getUint32(request.styleMutationsOffset, true);
+        const count = header.getUint32(request.styleMutationCount, true);
+        return Array.from({ length: count }, (_value, index) => {
+          const mutation = new DataView(bytes.buffer, bytes.byteOffset + offset + index * record.size, record.size);
+          return {
+            opcode: mutation.getUint8(record.opcode),
+            styleId: mutation.getUint32(record.styleId, true),
+          };
+        });
+      };
+      const readStyleForegrounds = () => {
+        const bytes = capture.bytes();
+        const request = textShaperAbi.layouts.engineUpdateRequest;
+        const record = textShaperAbi.layouts.engineStyleMutation;
+        const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        const offset = header.getUint32(request.styleMutationsOffset, true);
+        const count = header.getUint32(request.styleMutationCount, true);
+        return Array.from({ length: count }, (_value, index) =>
+          new DataView(bytes.buffer, bytes.byteOffset + offset + index * record.size, record.size).getUint32(
+            record.foregroundRgba,
+            true,
+          ),
+        );
+      };
+      const span = (start, end, color) => ({ start, end, style: { color } });
+      const initialSpans = [span(0, 2, '#aa0000'), span(2, 4, '#00aa00')];
+      originalId = GlyphIdScope.prototype.id;
+      GlyphIdScope.prototype.id = function (kind, name) {
+        if (kind === 'style') styleMints += 1;
+        return originalId.call(this, kind, name);
+      };
+      text = planner.createText({ font: fontBinding, text: { text: 'abcd', spans: initialSpans } });
+      initialSpans[0].style.color = '#ff00ff';
+      const initial = readStyleMutations();
+      const styleIds = initial.map(({ styleId }) => styleId);
+      assert.equal(styleMints, 3, 'root and two non-empty span identities are minted once');
+      assert.equal(readStyleForegrounds()[1], 0xff00_00aa, 'nested caller mutation cannot change retained RGBA bytes');
+      assert.deepEqual(
+        initial.map(({ opcode }) => opcode),
+        [
+          textShaperAbi.engine.styleMutationOpcodes.upsert,
+          textShaperAbi.engine.styleMutationOpcodes.upsert,
+          textShaperAbi.engine.styleMutationOpcodes.upsert,
+        ],
+      );
+      const initialMeasurement = text.measure();
+      initialSpans[0].style.color = '#aa0000';
+      shapeGlyphEngine(glyphEngine);
+
+      text.update({ text: { text: 'abcd', spans: [span(0, 2, '#0000aa'), initialSpans[1]] } });
+      assert.deepEqual(readStyleMutations(), [
+        { opcode: textShaperAbi.engine.styleMutationOpcodes.upsert, styleId: styleIds[1] },
+      ]);
+      assert.equal(styleMints, 3, 'restyling reuses its retained canonical identity');
+      assert.deepEqual(text.measure(), initialMeasurement, 'paint-only restyling preserves shaped metrics');
+      shapeGlyphEngine(glyphEngine);
+
+      text.update({ text: { text: 'abcd', spans: [span(0, 2, '#0000aa')] } });
+      assert.deepEqual(readStyleMutations(), [
+        { opcode: textShaperAbi.engine.styleMutationOpcodes.remove, styleId: styleIds[2] },
+      ]);
+      assert.equal(styleMints, 3, 'shrink removes the retained high-water identity without reminting');
+      shapeGlyphEngine(glyphEngine);
+
+      text.update({ text: { text: 'abcd', spans: [span(0, 2, '#0000aa'), span(2, 4, '#00aa00')] } });
+      assert.deepEqual(readStyleMutations(), [
+        { opcode: textShaperAbi.engine.styleMutationOpcodes.upsert, styleId: styleIds[2] },
+      ]);
+      assert.equal(styleMints, 3, 'regrowth restores the same style identity');
+      shapeGlyphEngine(glyphEngine);
+
+      text.update({
+        text: {
+          text: 'abcd',
+          spans: [span(0, 2, '#0000aa'), { start: 2, end: 2, style: { color: '#ffffff' } }, span(2, 4, '#00aa00')],
+        },
+      });
+      assert.equal(
+        readStyleMutations().every(
+          ({ opcode, styleId }) =>
+            opcode !== textShaperAbi.engine.styleMutationOpcodes.upsert || styleIds.includes(styleId),
+        ),
+        true,
+        'empty spans do not create an engine style identity',
+      );
+      assert.equal(styleMints, 3, 'empty spans do not allocate retained identities');
+      assert.deepEqual(text.measure(), initialMeasurement, 'empty spans preserve the prepared measurement');
+      shapeGlyphEngine(glyphEngine);
+
+      text.update({
+        text: {
+          text: 'abcd',
+          spans: [span(0, 2, '#0000aa'), span(2, 3, '#00aa00'), span(3, 4, '#aa00aa')],
+        },
+      });
+      const grownStyleMutations = readStyleMutations();
+      assert.equal(grownStyleMutations.length, 2, 'the new high-water slot emits one additional style mutation');
+      const newSlotId = grownStyleMutations[1].styleId;
+      assert.deepEqual(
+        grownStyleMutations.map(({ styleId }) => styleId),
+        [styleIds[2], newSlotId],
+        'growth updates the retained span and assigns the new high-water slot its own wire identity',
+      );
+      assert.equal(styleMints, 4, 'growth into one unused style slot mints exactly one identity');
+      assert.equal(styleIds.includes(newSlotId), false, 'the new slot identity was not used by an earlier style');
+      shapeGlyphEngine(glyphEngine);
+
+      rejectNext = true;
+      text.update({
+        text: {
+          text: 'abcd',
+          spans: [span(0, 2, '#0000aa'), span(2, 3, '#00aa00'), span(3, 4, '#bb00bb')],
+        },
+      });
+      assert.deepEqual(readStyleMutations(), [
+        { opcode: textShaperAbi.engine.styleMutationOpcodes.upsert, styleId: newSlotId },
+      ]);
+      assert.throws(() => shapeGlyphEngine(glyphEngine), /deliberate retained style replay/u);
+      text.update({ style: { color: '#223344' } });
+      assert.equal(styleMints, 4, 'replay reuses the newly grown slot and all earlier style identities');
+      assert.deepEqual(text.measure(), initialMeasurement, 'replay preserves the prepared layout');
+      shapeGlyphEngine(glyphEngine);
+
+      text.update({
+        text: {
+          text: 'wxyz',
+          spans: [span(0, 2, '#0000aa'), span(2, 3, '#00aa00'), span(3, 4, '#bb00bb')],
+        },
+      });
+      assert.deepEqual(readStyleMutations(), [], 'text changes reuse unchanged style slots across the new text value');
+      const changedTextMeasurement = text.measure();
+      shapeGlyphEngine(glyphEngine);
+      assert.deepEqual(
+        text.measure(),
+        changedTextMeasurement,
+        'the warm query matches the published changed-text result',
+      );
+      assert.equal(styleMints, 4, 'changed text with unchanged spans does not mint style identities');
+
+      assert.throws(
+        () => text.update({ text: { text: 'x', spans: [span(0, 2, '#0000aa')] } }),
+        /outside the text/u,
+        'reused spans are still checked against newly shortened text',
+      );
+      assert.deepEqual(
+        text.measure(),
+        changedTextMeasurement,
+        'invalid shortened text leaves the accepted query intact',
+      );
+      shapeGlyphEngine(glyphEngine);
+
+      text.dispose();
+      nextOwner = planner.createText({ font: fontBinding, text: { text: 'xy', spans: [span(0, 2, '#445566')] } });
+      const newOwnerIds = readStyleMutations().map(({ styleId }) => styleId);
+      assert.equal(styleMints, 6, 'a distinct retained owner mints only its root and first span identities');
+      assert.equal(new Set([...styleIds, newSlotId, ...newOwnerIds]).size, 6, 'style IDs remain paragraph-scoped');
+      shapeGlyphEngine(glyphEngine);
+    } finally {
+      if (originalId !== undefined) GlyphIdScope.prototype.id = originalId;
+      stopObservingDirty?.();
+      registration?.dispose();
+      text?.dispose();
+      nextOwner?.dispose();
+      planner?.dispose();
+      fontBinding?.dispose();
+      codec?.dispose();
+      handleState?.dispose();
+      glyphEngine?.dispose();
+      font.dispose();
+    }
+  },
+);
 
 test('style-clean text edits do not consume the setter preparation style-mutation limit', async () => {
   const font = await fixtureFont();

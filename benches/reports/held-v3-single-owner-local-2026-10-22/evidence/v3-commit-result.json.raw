@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "git",
+    "commit",
+    "-m",
+    "perf(engine): combine full-frontier retained gather"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-22T20:48:41.117878+00:00",
+  "finished": "2026-10-22T20:48:43.686572+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "b3e83c12e849f6d037af35d3e1bb673ee6233bdf25707f02f3cd5ac2d82ac550",
+    "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

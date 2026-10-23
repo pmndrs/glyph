@@ -200,7 +200,9 @@ export async function createRawEngineSession({
       const previous = state;
       state = execute(bytes, allowGrowth, measureParagraphId);
       assertRustLayoutBenchmarkResult(name, previous, state);
-      return state.glyphCount + state.patchCount * 1_000_000;
+      // A retained publication can commit a real edit without emitting primitives or writes.
+      // Include the committed engine revision so the benchmark's result stays a progress checksum.
+      return state.engineRevision + state.glyphCount + state.patchCount * 1_000_000;
     }
   }
 

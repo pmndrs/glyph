@@ -1,0 +1,145 @@
+{
+  "policy": "Node v24.18.0 gzipSync level9 mtime0, sum individual dist members per suffix group; shaper separately. No concatenated bundle or Brotli claim.",
+  "arms": {
+    "candidate": {
+      "js": {
+        "files": 237,
+        "rawBytes": 875885,
+        "gzipBytes": 298974
+      },
+      "declarations": {
+        "files": 226,
+        "rawBytes": 494232,
+        "gzipBytes": 160334
+      },
+      "wasm": {
+        "files": 5,
+        "rawBytes": 4308455,
+        "gzipBytes": 1619610
+      },
+      "shaper": {
+        "rawBytes": 1610254,
+        "gzipBytes": 599952
+      }
+    },
+    "prior28fd": {
+      "js": {
+        "files": 237,
+        "rawBytes": 875885,
+        "gzipBytes": 298974
+      },
+      "declarations": {
+        "files": 226,
+        "rawBytes": 494232,
+        "gzipBytes": 160334
+      },
+      "wasm": {
+        "files": 5,
+        "rawBytes": 4307448,
+        "gzipBytes": 1619207
+      },
+      "shaper": {
+        "rawBytes": 1609247,
+        "gzipBytes": 599549
+      }
+    },
+    "main": {
+      "js": {
+        "files": 237,
+        "rawBytes": 864183,
+        "gzipBytes": 295743
+      },
+      "declarations": {
+        "files": 226,
+        "rawBytes": 497005,
+        "gzipBytes": 161416
+      },
+      "wasm": {
+        "files": 5,
+        "rawBytes": 4160059,
+        "gzipBytes": 1560914
+      },
+      "shaper": {
+        "rawBytes": 1462005,
+        "gzipBytes": 541363
+      }
+    },
+    "published010": {
+      "js": {
+        "files": 230,
+        "rawBytes": 837472,
+        "gzipBytes": 289977
+      },
+      "declarations": {
+        "files": 219,
+        "rawBytes": 474185,
+        "gzipBytes": 153004
+      },
+      "wasm": {
+        "files": 5,
+        "rawBytes": 4052612,
+        "gzipBytes": 1517196
+      },
+      "shaper": {
+        "rawBytes": 1362353,
+        "gzipBytes": 500993
+      }
+    }
+  },
+  "deltas": {
+    "prior28fd": {
+      "js": {
+        "rawBytes": 0,
+        "gzipBytes": 0
+      },
+      "declarations": {
+        "rawBytes": 0,
+        "gzipBytes": 0
+      },
+      "wasm": {
+        "rawBytes": 1007,
+        "gzipBytes": 403
+      },
+      "shaper": {
+        "rawBytes": 1007,
+        "gzipBytes": 403
+      }
+    },
+    "main": {
+      "js": {
+        "rawBytes": 11702,
+        "gzipBytes": 3231
+      },
+      "declarations": {
+        "rawBytes": -2773,
+        "gzipBytes": -1082
+      },
+      "wasm": {
+        "rawBytes": 148396,
+        "gzipBytes": 58696
+      },
+      "shaper": {
+        "rawBytes": 148249,
+        "gzipBytes": 58589
+      }
+    },
+    "published010": {
+      "js": {
+        "rawBytes": 38413,
+        "gzipBytes": 8997
+      },
+      "declarations": {
+        "rawBytes": 20047,
+        "gzipBytes": 7330
+      },
+      "wasm": {
+        "rawBytes": 255843,
+        "gzipBytes": 102414
+      },
+      "shaper": {
+        "rawBytes": 247901,
+        "gzipBytes": 98959
+      }
+    }
+  }
+}

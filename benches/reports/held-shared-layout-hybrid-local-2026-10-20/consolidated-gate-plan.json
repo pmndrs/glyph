@@ -1,0 +1,368 @@
+{
+  "recordedAtMethod": "preflight prepared from read-only named-workflow show output, prior durable wrapper start/result receipts, and measurement-protocol.json; no build/test/benchmark executed for this plan",
+  "worktree": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "currentSourceScopeFromBrief": {
+    "startCommit": "a829b86bfefcd0e39b6d947cb7a2571776cd06a0",
+    "authorizedImplementationFiles": [
+      "packages/glyph/rust/shaper/src/engine/state.rs",
+      "packages/glyph/rust/shaper/src/engine/work_attribution.rs"
+    ],
+    "freezeMustBeRecordedAfterFinalReview": true
+  },
+  "format": {
+    "workflow": "glyph:shaper-format",
+    "description": "Pinned Rust formatter; mutates Rust source. Run before final source freeze/review.",
+    "command": ["/Users/mini/.local/bin/mise", "exec", "--", "pnpm", "scripts", "run", "glyph:shaper-format"],
+    "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+    "prior": {
+      "startReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/preparation-extension/format-final/start.json",
+      "resultReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/preparation-extension/format-final/result.json",
+      "argv": ["/Users/mini/.local/bin/mise", "exec", "--", "pnpm", "scripts", "run", "glyph:shaper-format"],
+      "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+      "observedExit": 0,
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "f5d4540c9b1d5678e276d2f19e517d1405a8d5a01f858a6020694a1e48078ffd"
+    }
+  },
+  "static": {
+    "workflow": "glyph:static-check",
+    "description": "Shared TypeScript/declaration/formatting/Rust lint static gates; requires current built dist; no tests/build. Do not pass --format after freeze.",
+    "command": ["/Users/mini/.local/bin/mise", "exec", "--", "pnpm", "scripts", "run", "glyph:static-check"],
+    "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+    "prior": {
+      "startReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/preparation-extension/static-final/start.json",
+      "resultReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/preparation-extension/static-final/result.json",
+      "argv": ["/Users/mini/.local/bin/mise", "exec", "--", "pnpm", "scripts", "run", "glyph:static-check"],
+      "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+      "observedExit": 0,
+      "stdoutSha256": "b2a667ec059651f57446fc6d04bcf1aa62c2595d9d88e028698e20ba4018c31a",
+      "stderrSha256": "f8a7d57cc5db4f2d074c6bfa6f29e686f75a642f6dbe3924ff22c46da8e49e72"
+    }
+  },
+  "native": {
+    "workflow": "glyph:shaper-tests",
+    "description": "Full retained Rust shaping/publication suite with deterministic mutation coverage.",
+    "command": ["/Users/mini/.local/bin/mise", "exec", "--", "pnpm", "scripts", "run", "glyph:shaper-tests"],
+    "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+    "prior": {
+      "startReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/preparation-extension/full-native-final/start.json",
+      "resultReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/preparation-extension/full-native-final/result.json",
+      "argv": ["/Users/mini/.local/bin/mise", "exec", "--", "pnpm", "scripts", "run", "glyph:shaper-tests"],
+      "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+      "observedExit": 0,
+      "stdoutSha256": "b52d10042e7bf94597c10d9f017b5b432990a64d27f0a63a93772cc272ffe67e",
+      "stderrSha256": "83e15e3a80f752366c1f71a9b0623d05b772327b0e9afbc0ed275da86729a3ec"
+    }
+  },
+  "packageCheck": {
+    "command": ["/Users/mini/.local/bin/mise", "exec", "--", "pnpm", "--filter", "@pmndrs/glyph", "check"],
+    "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+    "description": "Package check script is the consolidated build + native + Node integration + static package gates; inspect complete log/test counts.",
+    "packageScriptEvidence": "packages/glyph/package.json scripts: build=node ./scripts/unicode.mts check-data && node ./scripts/build.mjs; test=node ./scripts/test.mts; check=node ./scripts/check.mts",
+    "prior": {
+      "startReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/glyph-full-check/start.json",
+      "resultReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/glyph-full-check/result.json",
+      "argv": ["/Users/mini/.local/bin/mise", "exec", "--", "pnpm", "--filter", "@pmndrs/glyph", "check"],
+      "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+      "observedExit": 0,
+      "stdoutSha256": "75b038df710e2c11b249d8fe47e869d1a1ca66cfcd265f7691e5b5adbcdb29bc",
+      "stderrSha256": "4bc8f5f81fa89912904ece5c2c953a8f6cfa783d5ed1c1eca7044b60fb3de9b1"
+    }
+  },
+  "pack": {
+    "command": [
+      "/Users/mini/.local/bin/mise",
+      "exec",
+      "--",
+      "pnpm",
+      "pack",
+      "--pack-destination",
+      "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate"
+    ],
+    "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph",
+    "outputArchive": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "prior": {
+      "startReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-pack-package/start.json",
+      "resultReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-pack-package/result.json",
+      "argv": [
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "pnpm",
+        "pack",
+        "--pack-destination",
+        "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-candidate"
+      ],
+      "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph",
+      "observedExit": 0,
+      "stdoutSha256": "dcd67bf387bfad9cb66482514da077c91ab78f139b87400d41bff729cd87f793",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "namedWasm": {
+    "workflow": "glyph:shaper-profile-artifact",
+    "command": [
+      "/Users/mini/.local/bin/mise",
+      "exec",
+      "--",
+      "pnpm",
+      "scripts",
+      "run",
+      "glyph:shaper-profile-artifact",
+      "--",
+      "--artifact",
+      "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "--source-root",
+      "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+      "--output",
+      "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/shaper-profile"
+    ],
+    "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+    "description": "Authenticates optimized executable sections against exact packed release artifact; never writes dist.",
+    "prior": {
+      "startReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-profile-artifact/start.json",
+      "resultReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-profile-artifact/result.json",
+      "argv": [
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "pnpm",
+        "scripts",
+        "run",
+        "glyph:shaper-profile-artifact",
+        "--",
+        "--artifact",
+        "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-candidate/pmndrs-glyph-0.1.0.tgz",
+        "--source-root",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "--output",
+        "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-candidate/shaper-profile"
+      ],
+      "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+      "observedExit": 0,
+      "stdoutSha256": "b425747c5c21a2ab509fe05f60db847fabe884b8e7be4a3e81fda71b084a1482",
+      "stderrSha256": "51ce6e6f59f4e54a3da950454135be25916290950cfa0a93fab9bdcfc1c7b174"
+    }
+  },
+  "fullSevenFamilyThreeControlTiming": {
+    "workflow": "benchmark:labs-package",
+    "showEvidence": {
+      "command": ["/Users/mini/.local/bin/mise", "exec", "--", "pnpm", "scripts", "show", "benchmark:labs-package"],
+      "observedDescription": "full installed-package suite; supported suite is full; --saved-candidate reuses exact saved candidate and checks environment; never builds workspace source"
+    },
+    "protocolSource": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/measurement-protocol.json",
+    "suite": "full",
+    "blocks": 8,
+    "candidate": "<single frozen E3 candidate archive; measure only in main arm>",
+    "controlIdentities": {
+      "main": {
+        "source": "4e25a96a57462fef5ad0d19065a822695b480f60",
+        "archive": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+        "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20"
+      },
+      "publishedRelease": {
+        "archive": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+        "sha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b"
+      },
+      "priorCurrent28fd": {
+        "source": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+        "archive": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+        "sha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+        "identityNote": "Exact authenticated prior/current candidate archive from E2 measurement-protocol.json; distinct from the older prior340 control."
+      }
+    },
+    "orderedArms": [
+      {
+        "name": "main",
+        "baseline": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+        "output": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/matrix-main-data",
+        "savedCandidate": false,
+        "commandTemplate": [
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "benchmark:labs-package",
+          "--",
+          "--candidate",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "--baseline",
+          "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+          "--suite",
+          "full",
+          "--blocks",
+          "8",
+          "--output",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/matrix-main-data"
+        ],
+        "precedent": {
+          "priorStartReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/matrix-main/start.json",
+          "priorResultReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/matrix-main/result.json",
+          "argv": [
+            "/usr/bin/env",
+            "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/scratch",
+            "/Users/mini/.local/bin/mise",
+            "exec",
+            "--",
+            "pnpm",
+            "scripts",
+            "run",
+            "benchmark:labs-package",
+            "--",
+            "--candidate",
+            "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+            "--baseline",
+            "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+            "--suite",
+            "full",
+            "--blocks",
+            "8",
+            "--output",
+            "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/matrix-main-data"
+          ],
+          "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+          "observedExit": 0,
+          "stdoutSha256": "7bd91f82c666723f59a9596ec4c145c22ee7ab378355936abbce9a2f6fc69fbb",
+          "stderrSha256": "24994d218769e3df604ee24f2a87893b16e7d062760385ab5d3e36541560605d"
+        }
+      },
+      {
+        "name": "published-release",
+        "baseline": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+        "output": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/matrix-published-data",
+        "savedCandidate": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/matrix-main-data",
+        "commandTemplate": [
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "benchmark:labs-package",
+          "--",
+          "--candidate",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "--baseline",
+          "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+          "--suite",
+          "full",
+          "--blocks",
+          "8",
+          "--output",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/matrix-published-data",
+          "--saved-candidate",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/matrix-main-data"
+        ],
+        "precedent": {
+          "priorStartReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/matrix-published/start.json",
+          "priorResultReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/matrix-published/result.json",
+          "argv": [
+            "/usr/bin/env",
+            "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/scratch",
+            "/Users/mini/.local/bin/mise",
+            "exec",
+            "--",
+            "pnpm",
+            "scripts",
+            "run",
+            "benchmark:labs-package",
+            "--",
+            "--candidate",
+            "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+            "--baseline",
+            "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+            "--suite",
+            "full",
+            "--blocks",
+            "8",
+            "--output",
+            "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/matrix-published-data",
+            "--saved-candidate",
+            "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/matrix-main-data"
+          ],
+          "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+          "observedExit": 0,
+          "stdoutSha256": "30efb336e6d137079667dfdf6a57e1503f4cec025fc2a008dc47be1696cdd7dd",
+          "stderrSha256": "acd3a933dfcf9e68ed54f0d095df4d24bc98d18674a7d31e0ec06b5f61978937"
+        }
+      },
+      {
+        "name": "prior-current-28fd",
+        "baseline": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+        "output": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/matrix-prior28fd-data",
+        "savedCandidate": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/matrix-main-data",
+        "commandTemplate": [
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "benchmark:labs-package",
+          "--",
+          "--candidate",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "--baseline",
+          "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "--suite",
+          "full",
+          "--blocks",
+          "8",
+          "--output",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/matrix-prior28fd-data",
+          "--saved-candidate",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/matrix-main-data"
+        ],
+        "precedent": {
+          "priorStartReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/matrix-prior340/start.json",
+          "priorResultReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/matrix-prior340/result.json",
+          "argv": [
+            "/usr/bin/env",
+            "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/scratch",
+            "/Users/mini/.local/bin/mise",
+            "exec",
+            "--",
+            "pnpm",
+            "scripts",
+            "run",
+            "benchmark:labs-package",
+            "--",
+            "--candidate",
+            "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+            "--baseline",
+            "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-candidate/pmndrs-glyph-0.1.0.tgz",
+            "--suite",
+            "full",
+            "--blocks",
+            "8",
+            "--output",
+            "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/matrix-prior340-data",
+            "--saved-candidate",
+            "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/matrix-main-data"
+          ],
+          "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+          "observedExit": 0,
+          "stdoutSha256": "4fb62cb3b110d74da4fa6791897fbd1de1ef7e1f00b29393d171a6556e0d11ee",
+          "stderrSha256": "aa04efc94087421ee40f3d79d6f901a6ef86af988d195f967ce3db4a36696211",
+          "note": "Prior E2 matrix prior340 shows exact --saved-candidate pattern; baseline path substituted with authenticated current 28fd archive per this task."
+        },
+        "baselineSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb"
+      }
+    ],
+    "reuseRule": "The first arm measures the candidate once and saves its report directory. The two subsequent arms pass that exact report directory via --saved-candidate; do not measure candidate again. Confirm byte-identical candidate artifact/manifest and environment validation in workflow receipts.",
+    "interpretationNotes": {
+      "allRows": "Preserve all rows, mode exclusions, slower and neutral cases, raw samples, calibration/exclusion metadata.",
+      "calibration": "Labs frequency values are software calibration readings, not measured hardware frequency.",
+      "drift": "Do not synthesize aggregate drift from start-frequency delta; use the workflow\u2019s recorded method/fields only.",
+      "limits": "Full matrix is a separate timing gate after source freeze and all correctness/packaging gates; no inferred speed or parity from this plan."
+    }
+  },
+  "executionConstraints": {
+    "durableWrapper": "Use E3/run.py with unique receipt names, persistent E3/scratch TMPDIR, pinned mise; preserve numeric exit and raw stdout/stderr logs.",
+    "sequence": "format before freeze; final scoped review and freeze; static/native/package checks; pack exact package artifact; authenticate archive and named optimized Wasm; then three timing arms sequentially with no retries or overlapping heavy work.",
+    "verification": "Recheck source/tool/harness/artifact identities at prescribed boundaries; stop on failures and preserve receipts."
+  },
+  "priorCommandsNote": "Prior argv and receipt digests are archived from actual start.json/result.json records under E1/E2; result.json field is named exit, not exit_code."
+}

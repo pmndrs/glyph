@@ -1,0 +1,34 @@
+# Editorial pixel mismatch diagnosis
+
+The exact pixel gate is correctly failing on the saved candidate and cold-main captures. The live FPS/CPU/GPU panel contaminates both screenshots, but it explains only a minority of the changed pixels. Most changed pixels are in the editorial body's flowed text below the panel. The saved evidence does not establish whether that body change is a product regression, an intended layout change, or a remaining capture/state nondeterminism.
+
+## Evidence from the saved artifacts
+
+The producer calls `page.locator('canvas[data-configured-renderer-active="true"]').screenshot()` in `benches/scripts/run-presentation-workload-probe.mts`. The resulting 1280×720 PNG visibly includes controls, footer labels, and the FPS/CPU/GPU panel. Playwright's element screenshot records the browser-composited rectangle occupied by the canvas, including overlapping DOM. The graph's `benches/src/components/telemetry-charts.tsx` continues a `requestAnimationFrame` drawing loop and displays live history and values after editorial animation is disabled.
+
+Read-only RGBA accounting of the four retained PNGs gives the following disjoint counts. The “panel” is the observed graph rectangle x=816–1247, y=32–271; this is a diagnostic partition, **not** a proposed pass mask.
+
+| Backend | Total changed pixels | Inside graph panel | Outside graph panel | Outside-panel bounds |
+| --- | ---: | ---: | ---: | --- |
+| WebGPU | 39,912 | 6,161 | 33,751 | x=251–1053, y=282–553 |
+| WebGL2 | 49,501 | 6,328 | 43,173 | x=251–1053, y=282–553 |
+
+These totals reproduce `editorial-comparison/{webgpu,webgl2}.json`. Outside the panel, the change lies in the editorial body text on both sides of the obstacle. The unobscured lede (x=225–814, y=135–264), cube core (x=570–699, y=360–509), and sampled empty background are pixel-identical in each backend. This is a localized scene difference; removing the graph would still leave 33,751 WebGPU and 43,173 WebGL2 mismatches. In the WebGPU body regions, changed-channel intensity is generally small (maximum channel delta 70 in the measured left/right text boxes), consistent with placement or coverage changes; the WebGL2 body has larger deltas (up to 254). Pixel evidence alone does not identify the faulty layer.
+
+The receipts authenticate distinct externally pinned archives and PNG hashes. They agree on Chromium 149.0.7827.55, scene source hash, viewport source hash, Inter fixture hash, workspace lock hash, backend/technique/shader scenario, 1280×720 CSS viewport, 2560×1440 canvas backing, DPR 2, perspective camera kind, grid enabled, three draws, 702 glyphs, animation disabled, and configuration revision 3. Frame counts differ (WebGPU 634 vs 621; WebGL2 652 vs 623), as expected for separate runs. The archive's `text-shaper.wasm` and `three/text.js` digests differ between candidate and main; the identical scenario and source scene do not imply identical runtime layout output.
+
+The fixed-state mechanism is stronger than a simple pause click: `pauseEditorialForCapture` waits for animation=false and a newer configuration revision, then two later frame-counter increments. `animateEditorialEntries` uses timestamp zero when animation is disabled and reflows the projected two-column body before rendering. Still, the receipt records only camera *kind* and aggregate glyph/draw counts, not camera matrices, projected exclusion geometry, per-line breaks, glyph placements, or a scene-content digest. Thus it proves a plausibly settled paused scene, not semantic identity of its body layout.
+
+## Comparator scope and gaps
+
+`compare-editorial-hero-pixels.mts` verifies receipt roles, pinned archive hashes, delivered shaper integrity, common fixture hashes, PNG bytes, decoded RGBA hashes, and zero-tolerance pixel equality. `support/editorial-pixel-proof.mts` correctly reports every changed RGBA channel; its foreground count, however, includes the overlaid UI and cannot alone prove editorial content. The comparator is an independent cold-main differential check, not an independent layout oracle. Its exact failure must stand until the body difference is explained.
+
+The capture state omits several stable visual inputs from the receipt comparison: actual amount, font size, layout ratio, camera transform/projection, and flow/layout output. The producer chooses fixed workload values, but the receipt does not independently authenticate their committed scene values. Two later frame counts do not rule out a product-specific difference after both scenes settle.
+
+## Smallest useful correction path
+
+1. Make the editorial proof capture a dedicated scene-only image, with the overlapping DOM controls and live telemetry explicitly absent from that capture path. An element screenshot by itself does not isolate canvas pixels. Keep the existing exact decoded-RGBA comparison, archive pins, and distinct installed roots; do not pass by ignoring a rectangle or increasing tolerance.
+2. In the next authorized capture run, retain a compact semantic scene receipt for the paused editorial body: committed configuration, camera matrices, column/obstacle flow bounds, line breaks, and/or glyph-placement digest from a producer boundary independent of the screenshot. This will distinguish a layout change from GPU coverage drift without regenerating a golden.
+3. Compare the resulting scene-only pixels against cold main. If the body still differs, adjudicate the projected-flow layout against a separate expected-layout invariant. Fix candidate behavior if that invariant fails; if the change is intentional, document why the main image is no longer the desired oracle before changing the parity requirement.
+
+No product code, tests, builds, gates, benchmarks, or fresh captures were run or changed for this diagnosis.

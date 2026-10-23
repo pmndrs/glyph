@@ -1,0 +1,87 @@
+--- /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/labs-original-worker.mjs	2026-10-22 13:31:05
++++ /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/labs-trace-worker.mjs	2026-10-22 13:31:05
+@@ -3,6 +3,7 @@
+ import { execFileSync } from "node:child_process";
+ import { readFileSync, rmSync, writeFileSync } from "node:fs";
+ import { join } from "node:path";
++import { PerformanceObserver, performance } from "node:perf_hooks";
+ import { tmpdir } from "node:os";
+ //#region src/bench/worker.ts
+ /** Per-block budget, sample floor, and explicit sampling policy forwarded by the CLI. */
+@@ -52,15 +53,76 @@
+ * calibration rate for the clock gate and replays the pilot's plan when given.
+ */
+ async function childMain(index) {
++	let trace;
++	try {
++	trace = makeSpikeTrace();
+ 	await import(file);
++	if (getBenchRegistry()[index]?.alias !== 'rewrite 512 labels in one group') throw new Error('Benchmark registry identity changed');
+ 	const calibrationRate = await probeCalibrationRate();
++	globalThis.__labsSpike = trace;
+ 	const plans = process.env.LABS_BLOCK_PLANS ? JSON.parse(process.env.LABS_BLOCK_PLANS) : void 0;
+ 	const trial = await runTrialAt(index, parseTuneEnv(), plans);
++	await new Promise((resolve) => setImmediate(resolve));
++	trace.finish(trial.runs[0]?.stats?.samples);
+ 	writeFileSync(process.env.LABS_RESULT_FILE, JSON.stringify({
+ 		trial,
++		trace,
+ 		calibrationRate
+ 	}, errorReplacer));
++	} catch (error) {
++		await new Promise((resolve) => setImmediate(resolve));
++		if (trace) { trace.drain(); trace.faults.push({ stage: 'childMain', message: String(error), stack: error?.stack }); }
++		writeFileSync(process.env.LABS_RESULT_FILE, JSON.stringify({ failure: error, trace }, errorReplacer));
++		throw error;
++	}
+ }
++function makeSpikeTrace() {
++  const arm = process.env.LABS_SPIKE_ARM;
++  if (arm !== 'stock' && arm !== 'warmed') throw new Error('Unknown diagnostic arm');
++  const trace = { arm, block: Number(process.env.LABS_SPIKE_BLOCK), pid: process.pid,
++    timeOrigin: performance.timeOrigin, clockAlignment: 'Labs now() = performance.now() * 1e6 ns; callback and GC event timestamps are performance.now() ms in the same child', processCpuScope: 'process-wide; may include V8 background threads', monotonicProcessStartEstimateNs: (process.hrtime.bigint() - BigInt(Math.round(process.uptime() * 1e9))).toString(),
++    input: { plan: JSON.parse(process.env.LABS_BLOCK_PLANS), gc: 'Labs default true', samplingPolicy: process.env.LABS_SAMPLING_POLICY, nodeExecArgv: process.execArgv, nodeOptions: process.env.NODE_OPTIONS ?? null, archiveSha256: process.env.LABS_SPIKE_ARCHIVE_SHA256, originalSourceSha256: process.env.LABS_SPIKE_ORIGINAL_SOURCE_SHA256, originalWorkerSha256: process.env.LABS_SPIKE_ORIGINAL_WORKER_SHA256, traceSourceSha256: process.env.LABS_SPIKE_TRACE_SOURCE_SHA256, traceWorkerSha256: process.env.LABS_SPIKE_TRACE_WORKER_SHA256, benchmarkCopySha256: process.env.LABS_SPIKE_BENCH_COPY_SHA256 },
++    active: false, calls: [], samples: [], gcEvents: [], forcedGcSpans: [], faults: [],
++    gcMarker(index, phase, edge) { trace.forcedGcSpans.push({ index, phase, edge, at: performance.now() }); },
++    drain() { recordGc(observer.takeRecords()); observer.disconnect(); },
++    wrap(fn) { trace.active = true; return (...args) => {
++      const index = trace.calls.length;
++      const start = performance.now();
++      const cpu = process.cpuUsage();
++      const resources = process.resourceUsage();
++      let outcome = 'returned';
++      try { return fn(...args); }
++      catch (error) { outcome = 'threw'; trace.faults.push({ index, message: String(error) }); throw error; }
++      finally {
++        const end = performance.now();
++        const delta = process.cpuUsage(cpu);
++        const after = process.resourceUsage();
++        trace.calls.push({ index, start, end, wallMs: end - start,
++          processCpuUs: delta.user + delta.system,
++          voluntaryContextSwitches: after.voluntaryContextSwitches - resources.voluntaryContextSwitches,
++          involuntaryContextSwitches: after.involuntaryContextSwitches - resources.involuntaryContextSwitches,
++          outcome });
++      }
++    }; },
++    sample(index, t0, t1, diff) { trace.samples.push({ index, callbackIndex: trace.calls.length - 1, t0, t1, diff, survived: false }); },
++    finish(retained) {
++      trace.drain();
++      trace.warmupCallCount = trace.calls.length - trace.samples.length;
++      const ordered = [...trace.samples].sort((a, b) => a.diff - b.diff || a.index - b.index);
++      const survivors = ordered.length > 12 ? ordered.slice(2, -2) : ordered;
++      for (const sample of survivors) sample.survived = true;
++      const computed = survivors.map((sample) => sample.diff).sort((a, b) => a - b);
++      if (retained === undefined) { trace.faults.push({ message: 'Trial produced no retained samples' }); return; }
++      if (JSON.stringify(computed) !== JSON.stringify(retained)) throw new Error('Chronological sample identity does not reproduce Labs trim');
++    }
++  };
++  const recordGc = (entries) => {
++    for (const event of entries) trace.gcEvents.push({ startTime: event.startTime, duration: event.duration, kind: event.kind, flags: event.flags });
++  };
++  const observer = new PerformanceObserver((list) => recordGc(list.getEntries()));
++  observer.observe({ entryTypes: ['gc'] });
++  return trace;
++}
+ let childSeq = 0;
+ /**
+ * Runs one trial in a fresh child process (same script, same node flags,

@@ -1,0 +1,28 @@
+{
+  "compile": {
+    "wrapperExit": 0,
+    "binarySha256": "44db63989ae28f4b6b5549303afcca3f43644da7731cb1c097362d130c2f1fbb",
+    "sourceSha256": "68c87a7309981bdb1f00d2274997577b81298932f2a8f0ef3a2203f04c438141"
+  },
+  "nonzeroChild": {
+    "wrapperExit": 1,
+    "rootPid": 61537,
+    "childExit": 7,
+    "rootObserved": true,
+    "cleanupProven": true,
+    "remainingIdentities": [],
+    "childHandshake": "{\"handshake\": \"own-identity-observed\", \"pid\": 61537, \"sweep\": 0}",
+    "knownProcessAbsentAfterExit": true
+  },
+  "descendantOutlivesParent": {
+    "wrapperExit": 1,
+    "rootPid": 62029,
+    "descendantPid": 62031,
+    "parentHandshake": "{\"handshake\": \"observer-saw-descendant-before-parent-exit\", \"parentPid\": 62029, \"descendantPid\": 62031, \"sweep\": 1}",
+    "signalHandshake": "{\"handshake\": \"descendant-received-cleanup-signal\", \"pid\": 62031, \"signal\": 15}",
+    "survivingBeforeCleanup": 1,
+    "cleanupProven": true,
+    "remainingIdentities": [],
+    "knownProcessesAbsentAfterExit": true
+  }
+}

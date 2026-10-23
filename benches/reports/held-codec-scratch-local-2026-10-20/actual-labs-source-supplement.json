@@ -1,0 +1,33 @@
+{
+  "observedUtc": "2026-10-20T16:42:01.233417+00:00",
+  "scope": "Additional actual Labs source inventory observed during active matrix, not claimed collected before launch. The pre-build1039-input freeze covers package/benches src+scripts/lockfiles; the runner manifest separately authenticates the actual Labs harness at execution. All tracked Labs sources remain identical toHEAD291. No source changed.",
+  "trackedLabsHashes": {
+    "benches/labs/package/adapter-publication-workload.ts": "0437a398c22a8cb916c73193c3f9bc0dc14109b6614f65a1161a17d3c0cfc745",
+    "benches/labs/package/adapter-publication.bench.ts": "44253c4785d036e21d12197e1da6b5bbda2fd8772fd8af8ead320b8a43be6184",
+    "benches/labs/package/adapter-publication.profile.mts": "a6ca9b5a9ccc030aab3332d57c070de611b781d195dd8262166785caa3070d28",
+    "benches/labs/package/batching.bench.ts": "ebbf03ef22b7a7e80877692531b1dc8cd57d97597ed89087732f490303f61bde",
+    "benches/labs/package/bulk-memory.observe.mts": "4d2279410700bcc1a1eca9287d3dc144d626b658cd26b0bc2584fef935aaae35",
+    "benches/labs/package/cold.bench.ts": "74b043084391d02d2ca07d525cf8a47e09b6d0c8b557ce1cf3bd841d219157cf",
+    "benches/labs/package/common.bench.ts": "f907744ef8f24ce3ac101a25f680404259abca94fd76d0cc4f8a92d6c141d0ef",
+    "benches/labs/package/edit-sized-publication.profile.mts": "7dd108a81e3bbba12c3cbed35295950badd0142814bf7e9021771e3210f08d85",
+    "benches/labs/package/edit.bench.ts": "93e9ff1aef88efdd96607320fe855fe8bfde6b95424c51239dd0334555841809",
+    "benches/labs/package/fixture.ts": "34b97032e1f035d6b15ae385f4a6aa4e6cc0b78d9239dc14e8253a1a6644dfe3",
+    "benches/labs/package/framework-publication.bench.ts": "d0eca017ea30341d5240ceaee050d37be007309b62db0c5454e361910c5f9567",
+    "benches/labs/package/inspection.bench.ts": "6e30da7f3c074b09f5a0fbe4d6e0ebbe137adc3adf9d9cdfbaab4250c1b6eaf4",
+    "benches/labs/package/layout.bench.ts": "7c0a3b709464c13d9db6ec4d16a54342243855dedb20addbf22eb70e8ef920a9",
+    "benches/labs/package/outlines.bench.ts": "e33004150d5274c5a7cea55d8b77ebf6550c3990e35551c313974ca26baceae9",
+    "benches/labs/package/prepared-operations.bench.ts": "04dd8f3ecffa6da84867371958987db06e23c531d099be73084d1dc25a5e87b6",
+    "benches/labs/package/request-arena.bench.ts": "52410273892d49f9017ccf31129ccdb7ee199c0fdcf0552976f4015b8adf76d9",
+    "benches/labs/package/sparse-assignment.bench.ts": "48798c53c5b2ef00bcf546d5089d2be1e3e63534bc1aa1ae6bc8e40896f75356",
+    "benches/labs/package/stress.bench.ts": "ee706b190b82178cb227fa9f1e739d99759815ee808deb874ee6e2aeb064c664",
+    "benches/labs/package/typegpu-publication.bench.ts": "c68214d545d5e45baa07f991f2a7dd84499a42fdd1eebb84fc0c795dbacd00e8",
+    "benches/labs/unsafe-line-breaks.bench.ts": "7beba76978dc165fe94a56f7acee8b42b433f9de253c7bd3bc347c6322225a00"
+  },
+  "producerSources": {
+    "benches/labs/package/fixture.ts": "34b97032e1f035d6b15ae385f4a6aa4e6cc0b78d9239dc14e8253a1a6644dfe3",
+    "benches/labs/package/stress.bench.ts": "ee706b190b82178cb227fa9f1e739d99759815ee808deb874ee6e2aeb064c664",
+    "benches/labs/package/batching.bench.ts": "ebbf03ef22b7a7e80877692531b1dc8cd57d97597ed89087732f490303f61bde",
+    "packages/glyph/rust/shaper/src/engine/state.rs": "e59ab9f1ef5d2d294dc30fe7045e866d83e7e7d5647317262633bda132a57492",
+    "packages/glyph/src/raster/bitmap.ts": "dc8de44809b7531d83f2304c96b707d3021b376c8b851018ae2c37614d9f567e"
+  }
+}

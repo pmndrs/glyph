@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "mise",
+    "exec",
+    "--",
+    "./benches/node_modules/.bin/tsx",
+    "-e",
+    "import { packageLabsHarnessDigest } from './benches/scripts/support/saved-package-labs.mts'; console.log(packageLabsHarnessDigest());"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-22T20:49:02.307452+00:00"
+}

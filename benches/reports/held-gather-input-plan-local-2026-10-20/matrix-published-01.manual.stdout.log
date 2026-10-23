@@ -1,0 +1,6 @@
+Direct-session capture (not E4/run.py wrapper). Initial visible output from launch tool call:
+$ node benches/scripts/workflows.mts run benchmark:labs-package -- --candidate /Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz --baseline /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz --suite full --blocks 8 --output /Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-published-data --saved-candidate /Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-main-data
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +23
++++++++++++++++++++++++
+SESSION_ID=32117

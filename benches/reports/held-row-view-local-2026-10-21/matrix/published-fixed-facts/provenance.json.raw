@@ -1,0 +1,711 @@
+{
+  "schema": "published-fixed-facts-provenance-v1",
+  "method": "Read-only extraction from saved JSON/text and existing saved software calibration readings. No build, test, benchmark, profile, server, Git, source mutation, bootstrap, or inference work.",
+  "inputs": {
+    "receipt": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-published-fixed-01/result.json",
+      "sha256": "46a64f9c7e4c1a34694afeb6bd332968c0f8e7f40169f72816d567e0fb27370d"
+    },
+    "manifest": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-published-fixed-data/manifest.json",
+      "sha256": "8ed48b7ce866dab6bf248d9c4ee1250031a47e69902d0f251f4c8634275eef0f"
+    },
+    "baseline": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-published-fixed-data/baseline.json",
+      "sha256": "9f585d52508dee7414978f2c3276272d42ff6c4b9d83a1557116b42def72372d"
+    },
+    "candidate": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-published-fixed-data/candidate.json",
+      "sha256": "69c6b80d2059ebe32909aa0a098e1e3a6c2a1e5e442d645c7f959b129c8db3d8"
+    },
+    "summary": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-published-fixed-data/summary.md",
+      "sha256": "1449cf1013e8a39e3110db36feeb1ffcb8f86e6d7c04df4006449044b8b7b3ec"
+    },
+    "comparison": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-published-fixed-data/comparison.txt",
+      "sha256": "4022343af42b7c9ee8f1a11f4e7cad817daeff32c02984c4a9654659d55364cd"
+    },
+    "mainManifest": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data/manifest.json",
+      "sha256": "df99790bdfe7cb0083216d250715da8ec2cd4a916fbae31ffc24b85f051219dd"
+    },
+    "mainBaseline": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data/baseline.json",
+      "sha256": "dddfd51f1aabe9b9830a8fe2a5188725bdc856f2fdacc3345d8282059ea7c1ea"
+    },
+    "mainCandidate": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data/candidate.json",
+      "sha256": "69c6b80d2059ebe32909aa0a098e1e3a6c2a1e5e442d645c7f959b129c8db3d8"
+    },
+    "rootDenseReference": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/root-published-fixed-dense-descriptive.json",
+      "sha256": "211241e8c857ea2eb2c62a21a12cf367dd36339ea06a0ae1d967ee786e1feb3e"
+    },
+    "clockFormulaSource": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@pmndrs+labs@0.9.0_patch_hash=1475111a563f675ba8de804b57a4a7500acad4f500771713dad8ad33b5be3002/node_modules/@pmndrs/labs/dist/cli/cli.mjs",
+      "sha256": "6385fc4a9511b3d68d9e9cf1f9eb1e897125bfdfd0bdb4d6c6e1177efb8fffd4"
+    },
+    "medianHelperSource": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@pmndrs+labs@0.9.0_patch_hash=1475111a563f675ba8de804b57a4a7500acad4f500771713dad8ad33b5be3002/node_modules/@pmndrs/labs/dist/stats-DyCSLnVh.mjs",
+      "sha256": "ddab0c388cd7e24851c504cbc8788e9e244f03adf6b3915ea8f4615f5bde2668"
+    },
+    "baselineArchive": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+      "exists": true,
+      "sha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b"
+    },
+    "candidateArchive": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "exists": true,
+      "sha256": "d2f7a01ffb47aeaf87499979310286f1c980b88389e20bd1fc0f39794a0fc18c"
+    }
+  },
+  "identityCounts": {
+    "baselineRawRuns": 143,
+    "candidateRawRuns": 145,
+    "exactPairedIdentities": 143,
+    "candidateOnlyIdentities": 2,
+    "baselineOnlyIdentities": 0,
+    "printedReportRowsValidated": 143,
+    "printedFaster": 104,
+    "printedSlower": 28,
+    "printedNeutral": 11,
+    "printedSkipped": 0,
+    "candidateOnlyStatus": "unsupported"
+  },
+  "candidateOnlyUnsupported": [
+    {
+      "identity": {
+        "file": "outlines.bench.ts",
+        "group": 1,
+        "groupName": "glyph outlines",
+        "name": "copy per-glyph metrics with outlines after text change",
+        "args": {}
+      },
+      "comparisonStatus": "unsupported",
+      "reason": "Published baseline availability is published-no-outlines, and the baseline has no matching identity. This is not a fail or pass.",
+      "candidateRawRun": {
+        "statsKind": "yield",
+        "sampleCount": 408,
+        "pooledP50Ms": 3.086583,
+        "pooledP95Ms": 3.31,
+        "blockMediansMs": [
+          3.055209,
+          3.091417,
+          3.0565,
+          3.084458,
+          3.128959,
+          3.124416,
+          3.054334,
+          3.086292
+        ],
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 55
+        },
+        "gcMode": true,
+        "benchmarkKind": "static"
+      }
+    },
+    {
+      "identity": {
+        "file": "outlines.bench.ts",
+        "group": 1,
+        "groupName": "glyph outlines",
+        "name": "read every outline from an unchanged copy",
+        "args": {}
+      },
+      "comparisonStatus": "unsupported",
+      "reason": "Published baseline availability is published-no-outlines, and the baseline has no matching identity. This is not a fail or pass.",
+      "candidateRawRun": {
+        "statsKind": "yield",
+        "sampleCount": 552,
+        "pooledP50Ms": 0.865958,
+        "pooledP95Ms": 1.036167,
+        "blockMediansMs": [
+          0.869875,
+          0.870541,
+          0.855167,
+          0.871417,
+          0.8675,
+          0.852125,
+          0.852333,
+          0.887625
+        ],
+        "plan": {
+          "batch": false,
+          "batch_samples": 0,
+          "batch_unroll": 4,
+          "samples": 73
+        },
+        "gcMode": true,
+        "benchmarkKind": "static"
+      }
+    }
+  ],
+  "clockDiagnostics": {
+    "formula": "freqDrift(freqs) flattens all runFreq/postFreq readings and returns (max-min)/((max+min)/2); percent = value×100. Source uses a 5% environment-warning threshold; this is diagnostic only, not admission.",
+    "formulaSource": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@pmndrs+labs@0.9.0_patch_hash=1475111a563f675ba8de804b57a4a7500acad4f500771713dad8ad33b5be3002/node_modules/@pmndrs/labs/dist/cli/cli.mjs",
+      "sha256": "6385fc4a9511b3d68d9e9cf1f9eb1e897125bfdfd0bdb4d6c6e1177efb8fffd4",
+      "symbols": [
+        "freqDrift",
+        "warnClockDrift"
+      ]
+    },
+    "medianHelperSource": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@pmndrs+labs@0.9.0_patch_hash=1475111a563f675ba8de804b57a4a7500acad4f500771713dad8ad33b5be3002/node_modules/@pmndrs/labs/dist/stats-DyCSLnVh.mjs",
+      "sha256": "ddab0c388cd7e24851c504cbc8788e9e244f03adf6b3915ea8f4615f5bde2668",
+      "symbol": "median"
+    },
+    "published": {
+      "baseline": {
+        "sourceInput": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-published-fixed-data/baseline.json",
+        "sourceInputSha256": "9f585d52508dee7414978f2c3276272d42ff6c4b9d83a1557116b42def72372d",
+        "recordCount": 15,
+        "readingCount": 30,
+        "rawCalibrationRecords": [
+          {
+            "file": "adapter-publication.bench.ts",
+            "runFreq": 4.0008638287765175,
+            "postFreq": 4.001622913440842
+          },
+          {
+            "file": "batching.bench.ts",
+            "runFreq": 3.9982011366439942,
+            "postFreq": 3.9993751671009594
+          },
+          {
+            "file": "cold.bench.ts",
+            "runFreq": 3.996965696913866,
+            "postFreq": 3.934983460792513
+          },
+          {
+            "file": "common.bench.ts",
+            "runFreq": 3.9320378993761427,
+            "postFreq": 3.994912449390959
+          },
+          {
+            "file": "edit.bench.ts",
+            "runFreq": 3.986978420683383,
+            "postFreq": 4.00668850440615
+          },
+          {
+            "file": "framework-publication.bench.ts",
+            "runFreq": 3.93324161866336,
+            "postFreq": 4.009970171948707
+          },
+          {
+            "file": "inspection.bench.ts",
+            "runFreq": 3.985904956166985,
+            "postFreq": 4.001110222951005
+          },
+          {
+            "file": "layout.bench.ts",
+            "runFreq": 3.9868725016863436,
+            "postFreq": 3.9957485542157873
+          },
+          {
+            "file": "outlines.bench.ts",
+            "runFreq": 3.9964269786249833,
+            "postFreq": 3.9973183437441406
+          },
+          {
+            "file": "prepared-operations.bench.ts",
+            "runFreq": 3.973804438314523,
+            "postFreq": 4.010828957230618
+          },
+          {
+            "file": "request-arena.bench.ts",
+            "runFreq": 3.995158933928611,
+            "postFreq": 4.005638345756556
+          },
+          {
+            "file": "sparse-assignment.bench.ts",
+            "runFreq": 3.982336599211701,
+            "postFreq": 4.007368335551854
+          },
+          {
+            "file": "stress.bench.ts",
+            "runFreq": 3.944890209424598,
+            "postFreq": 3.968504932759127
+          },
+          {
+            "file": "typegpu-publication.bench.ts",
+            "runFreq": 3.9970008435664237,
+            "postFreq": 3.978615378714393
+          },
+          {
+            "file": "unsafe-line-breaks.bench.ts",
+            "runFreq": 3.9961176046496063,
+            "postFreq": 4.010359709591714
+          }
+        ],
+        "rawReadingsGHz": [
+          4.0008638287765175,
+          4.001622913440842,
+          3.9982011366439942,
+          3.9993751671009594,
+          3.996965696913866,
+          3.934983460792513,
+          3.9320378993761427,
+          3.994912449390959,
+          3.986978420683383,
+          4.00668850440615,
+          3.93324161866336,
+          4.009970171948707,
+          3.985904956166985,
+          4.001110222951005,
+          3.9868725016863436,
+          3.9957485542157873,
+          3.9964269786249833,
+          3.9973183437441406,
+          3.973804438314523,
+          4.010828957230618,
+          3.995158933928611,
+          4.005638345756556,
+          3.982336599211701,
+          4.007368335551854,
+          3.944890209424598,
+          3.968504932759127,
+          3.9970008435664237,
+          3.978615378714393,
+          3.9961176046496063,
+          4.010359709591714
+        ],
+        "minGHz": 3.9320378993761427,
+        "maxGHz": 4.010828957230618,
+        "driftPercent": 1.9839450736591022,
+        "medianGHz": 3.996272291637295
+      },
+      "candidate": {
+        "sourceInput": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-published-fixed-data/candidate.json",
+        "sourceInputSha256": "69c6b80d2059ebe32909aa0a098e1e3a6c2a1e5e442d645c7f959b129c8db3d8",
+        "recordCount": 15,
+        "readingCount": 30,
+        "rawCalibrationRecords": [
+          {
+            "file": "adapter-publication.bench.ts",
+            "runFreq": 3.992391962998275,
+            "postFreq": 4.002759930900502
+          },
+          {
+            "file": "batching.bench.ts",
+            "runFreq": 3.9949464604034506,
+            "postFreq": 4.010505886755314
+          },
+          {
+            "file": "cold.bench.ts",
+            "runFreq": 3.996503575667072,
+            "postFreq": 4.011404148685074
+          },
+          {
+            "file": "common.bench.ts",
+            "runFreq": 3.997220218885298,
+            "postFreq": 4.000110045263744
+          },
+          {
+            "file": "edit.bench.ts",
+            "runFreq": 3.8535089043173993,
+            "postFreq": 4.0075581791533805
+          },
+          {
+            "file": "framework-publication.bench.ts",
+            "runFreq": 4.000567021779938,
+            "postFreq": 4.009382788516351
+          },
+          {
+            "file": "inspection.bench.ts",
+            "runFreq": 3.9949151031308854,
+            "postFreq": 4.00456511468349
+          },
+          {
+            "file": "layout.bench.ts",
+            "runFreq": 3.9938061757371037,
+            "postFreq": 4.000195579466999
+          },
+          {
+            "file": "outlines.bench.ts",
+            "runFreq": 4.011709569898063,
+            "postFreq": 4.0046582996539835
+          },
+          {
+            "file": "prepared-operations.bench.ts",
+            "runFreq": 3.9920466100441856,
+            "postFreq": 3.9977249505164307
+          },
+          {
+            "file": "request-arena.bench.ts",
+            "runFreq": 3.9914400372129126,
+            "postFreq": 3.9887115952091494
+          },
+          {
+            "file": "sparse-assignment.bench.ts",
+            "runFreq": 3.9940674171037407,
+            "postFreq": 4.008541800507364
+          },
+          {
+            "file": "stress.bench.ts",
+            "runFreq": 3.9966912729789974,
+            "postFreq": 4.003395982740481
+          },
+          {
+            "file": "typegpu-publication.bench.ts",
+            "runFreq": 3.997960133470942,
+            "postFreq": 4.010724048689414
+          },
+          {
+            "file": "unsafe-line-breaks.bench.ts",
+            "runFreq": 3.9999989547714114,
+            "postFreq": 4.00269042403418
+          }
+        ],
+        "rawReadingsGHz": [
+          3.992391962998275,
+          4.002759930900502,
+          3.9949464604034506,
+          4.010505886755314,
+          3.996503575667072,
+          4.011404148685074,
+          3.997220218885298,
+          4.000110045263744,
+          3.8535089043173993,
+          4.0075581791533805,
+          4.000567021779938,
+          4.009382788516351,
+          3.9949151031308854,
+          4.00456511468349,
+          3.9938061757371037,
+          4.000195579466999,
+          4.011709569898063,
+          4.0046582996539835,
+          3.9920466100441856,
+          3.9977249505164307,
+          3.9914400372129126,
+          3.9887115952091494,
+          3.9940674171037407,
+          4.008541800507364,
+          3.9966912729789974,
+          4.003395982740481,
+          3.997960133470942,
+          4.010724048689414,
+          3.9999989547714114,
+          4.00269042403418
+        ],
+        "minGHz": 3.8535089043173993,
+        "maxGHz": 4.011709569898063,
+        "driftPercent": 4.022791384607878,
+        "medianGHz": 4.000054500017578
+      },
+      "crossRunMedianFrequencyDifferencePercent": 0.0945986445734101,
+      "printedClockWarnings": [],
+      "baselineCheckFailures": [],
+      "timingModeMismatches": [],
+      "clockWarningAbsenceMeansZeroDrift": false
+    },
+    "mainDiagnostic": {
+      "baseline": {
+        "sourceInput": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data/baseline.json",
+        "sourceInputSha256": "dddfd51f1aabe9b9830a8fe2a5188725bdc856f2fdacc3345d8282059ea7c1ea",
+        "recordCount": 15,
+        "readingCount": 30,
+        "rawCalibrationRecords": [
+          {
+            "file": "adapter-publication.bench.ts",
+            "runFreq": 4.404809411942287,
+            "postFreq": 4.244087542691064
+          },
+          {
+            "file": "batching.bench.ts",
+            "runFreq": 4.301293691194012,
+            "postFreq": 4.008851056836569
+          },
+          {
+            "file": "cold.bench.ts",
+            "runFreq": 3.9984695702247652,
+            "postFreq": 4.009705046345504
+          },
+          {
+            "file": "common.bench.ts",
+            "runFreq": 3.994446497556142,
+            "postFreq": 4.010678953472385
+          },
+          {
+            "file": "edit.bench.ts",
+            "runFreq": 3.9987693788125678,
+            "postFreq": 4.009180679448612
+          },
+          {
+            "file": "framework-publication.bench.ts",
+            "runFreq": 3.9707029435378067,
+            "postFreq": 4.010329541170302
+          },
+          {
+            "file": "inspection.bench.ts",
+            "runFreq": 3.994943148189607,
+            "postFreq": 4.005105956343427
+          },
+          {
+            "file": "layout.bench.ts",
+            "runFreq": 3.999260631257498,
+            "postFreq": 4.006576121062266
+          },
+          {
+            "file": "outlines.bench.ts",
+            "runFreq": 4.009667415914891,
+            "postFreq": 4.013471672481365
+          },
+          {
+            "file": "prepared-operations.bench.ts",
+            "runFreq": 3.993930493495765,
+            "postFreq": 3.997967663066682
+          },
+          {
+            "file": "request-arena.bench.ts",
+            "runFreq": 3.9922331609667285,
+            "postFreq": 3.9909457337503276
+          },
+          {
+            "file": "sparse-assignment.bench.ts",
+            "runFreq": 3.9670019518362603,
+            "postFreq": 4.008976824228293
+          },
+          {
+            "file": "stress.bench.ts",
+            "runFreq": 3.9942348892072173,
+            "postFreq": 3.994028616786745
+          },
+          {
+            "file": "typegpu-publication.bench.ts",
+            "runFreq": 3.9461535702491366,
+            "postFreq": 4.001065816537319
+          },
+          {
+            "file": "unsafe-line-breaks.bench.ts",
+            "runFreq": 3.9856202243477203,
+            "postFreq": 4.000678186756489
+          }
+        ],
+        "rawReadingsGHz": [
+          4.404809411942287,
+          4.244087542691064,
+          4.301293691194012,
+          4.008851056836569,
+          3.9984695702247652,
+          4.009705046345504,
+          3.994446497556142,
+          4.010678953472385,
+          3.9987693788125678,
+          4.009180679448612,
+          3.9707029435378067,
+          4.010329541170302,
+          3.994943148189607,
+          4.005105956343427,
+          3.999260631257498,
+          4.006576121062266,
+          4.009667415914891,
+          4.013471672481365,
+          3.993930493495765,
+          3.997967663066682,
+          3.9922331609667285,
+          3.9909457337503276,
+          3.9670019518362603,
+          4.008976824228293,
+          3.9942348892072173,
+          3.994028616786745,
+          3.9461535702491366,
+          4.001065816537319,
+          3.9856202243477203,
+          4.000678186756489
+        ],
+        "minGHz": 3.9461535702491366,
+        "maxGHz": 4.404809411942287,
+        "driftPercent": 10.984501851373114,
+        "medianGHz": 3.9999694090069937
+      },
+      "candidate": {
+        "sourceInput": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data/candidate.json",
+        "sourceInputSha256": "69c6b80d2059ebe32909aa0a098e1e3a6c2a1e5e442d645c7f959b129c8db3d8",
+        "recordCount": 15,
+        "readingCount": 30,
+        "rawCalibrationRecords": [
+          {
+            "file": "adapter-publication.bench.ts",
+            "runFreq": 3.992391962998275,
+            "postFreq": 4.002759930900502
+          },
+          {
+            "file": "batching.bench.ts",
+            "runFreq": 3.9949464604034506,
+            "postFreq": 4.010505886755314
+          },
+          {
+            "file": "cold.bench.ts",
+            "runFreq": 3.996503575667072,
+            "postFreq": 4.011404148685074
+          },
+          {
+            "file": "common.bench.ts",
+            "runFreq": 3.997220218885298,
+            "postFreq": 4.000110045263744
+          },
+          {
+            "file": "edit.bench.ts",
+            "runFreq": 3.8535089043173993,
+            "postFreq": 4.0075581791533805
+          },
+          {
+            "file": "framework-publication.bench.ts",
+            "runFreq": 4.000567021779938,
+            "postFreq": 4.009382788516351
+          },
+          {
+            "file": "inspection.bench.ts",
+            "runFreq": 3.9949151031308854,
+            "postFreq": 4.00456511468349
+          },
+          {
+            "file": "layout.bench.ts",
+            "runFreq": 3.9938061757371037,
+            "postFreq": 4.000195579466999
+          },
+          {
+            "file": "outlines.bench.ts",
+            "runFreq": 4.011709569898063,
+            "postFreq": 4.0046582996539835
+          },
+          {
+            "file": "prepared-operations.bench.ts",
+            "runFreq": 3.9920466100441856,
+            "postFreq": 3.9977249505164307
+          },
+          {
+            "file": "request-arena.bench.ts",
+            "runFreq": 3.9914400372129126,
+            "postFreq": 3.9887115952091494
+          },
+          {
+            "file": "sparse-assignment.bench.ts",
+            "runFreq": 3.9940674171037407,
+            "postFreq": 4.008541800507364
+          },
+          {
+            "file": "stress.bench.ts",
+            "runFreq": 3.9966912729789974,
+            "postFreq": 4.003395982740481
+          },
+          {
+            "file": "typegpu-publication.bench.ts",
+            "runFreq": 3.997960133470942,
+            "postFreq": 4.010724048689414
+          },
+          {
+            "file": "unsafe-line-breaks.bench.ts",
+            "runFreq": 3.9999989547714114,
+            "postFreq": 4.00269042403418
+          }
+        ],
+        "rawReadingsGHz": [
+          3.992391962998275,
+          4.002759930900502,
+          3.9949464604034506,
+          4.010505886755314,
+          3.996503575667072,
+          4.011404148685074,
+          3.997220218885298,
+          4.000110045263744,
+          3.8535089043173993,
+          4.0075581791533805,
+          4.000567021779938,
+          4.009382788516351,
+          3.9949151031308854,
+          4.00456511468349,
+          3.9938061757371037,
+          4.000195579466999,
+          4.011709569898063,
+          4.0046582996539835,
+          3.9920466100441856,
+          3.9977249505164307,
+          3.9914400372129126,
+          3.9887115952091494,
+          3.9940674171037407,
+          4.008541800507364,
+          3.9966912729789974,
+          4.003395982740481,
+          3.997960133470942,
+          4.010724048689414,
+          3.9999989547714114,
+          4.00269042403418
+        ],
+        "minGHz": 3.8535089043173993,
+        "maxGHz": 4.011709569898063,
+        "driftPercent": 4.022791384607878,
+        "medianGHz": 4.000054500017578
+      },
+      "crossRunMedianFrequencyDifferencePercent": 0.002127268906991749
+    }
+  },
+  "denseReference": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/root-published-fixed-dense-descriptive.json",
+    "sha256": "211241e8c857ea2eb2c62a21a12cf367dd36339ea06a0ae1d967ee786e1feb3e",
+    "expectedSha256": "211241e8c857ea2eb2c62a21a12cf367dd36339ea06a0ae1d967ee786e1feb3e",
+    "rowsCompared": [
+      {
+        "arm": "baseline",
+        "file": "batching.bench.ts",
+        "name": "rewrite 512 labels in one group",
+        "sampleCountMatches": true,
+        "p50Matches": true,
+        "p95Matches": true,
+        "blockMediansMatch": true
+      },
+      {
+        "arm": "candidate",
+        "file": "batching.bench.ts",
+        "name": "rewrite 512 labels in one group",
+        "sampleCountMatches": true,
+        "p50Matches": true,
+        "p95Matches": true,
+        "blockMediansMatch": true
+      },
+      {
+        "arm": "baseline",
+        "file": "stress.bench.ts",
+        "name": "publish 1024 retained Text instances",
+        "sampleCountMatches": true,
+        "p50Matches": true,
+        "p95Matches": true,
+        "blockMediansMatch": true
+      },
+      {
+        "arm": "candidate",
+        "file": "stress.bench.ts",
+        "name": "publish 1024 retained Text instances",
+        "sampleCountMatches": true,
+        "p50Matches": true,
+        "p95Matches": true,
+        "blockMediansMatch": true
+      }
+    ],
+    "allFourRowsMatch": true,
+    "rootMainCandidateJsonSha256": "69c6b80d2059ebe32909aa0a098e1e3a6c2a1e5e442d645c7f959b129c8db3d8"
+  },
+  "outputs": {
+    "all143-quantiles.json": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/published-fixed-facts/all143-quantiles.json",
+      "sha256": "3b00b3896e2e547e1853bfef2253dac34b4fbb7780f841bec7a6c2152d5bff9b"
+    },
+    "all143-quantiles.csv": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/published-fixed-facts/all143-quantiles.csv",
+      "sha256": "cbcd5101834d89624172aad7c4c4aee0b5d2bd0c01e3385f4a25313e8ffa5d8b"
+    },
+    "factual-published-handoff.md": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/published-fixed-facts/factual-published-handoff.md",
+      "sha256": "f1b6e2b18f70e479744cd291a6d68f53ff3676b20226280c2d24b68a0029206b"
+    }
+  },
+  "provenanceSelfHash": "omitted; record externally after writing"
+}

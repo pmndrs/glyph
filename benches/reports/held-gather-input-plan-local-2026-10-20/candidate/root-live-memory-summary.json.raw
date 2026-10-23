@@ -1,0 +1,33 @@
+{
+  "phaseCount": 71,
+  "maxRequestedLive": 40471115,
+  "maxCompletedCallRequestedPeak": 40671431,
+  "maxWasmPages": 728,
+  "retainedBaseline": {
+    "requestedLive": 7641020,
+    "requestedPeak": 7641020,
+    "allocations": 0,
+    "reallocations": 0,
+    "deallocations": 0,
+    "cumulativeRequested": 0,
+    "wasmPages": 728
+  },
+  "scope": {
+    "cycles": 8,
+    "recordBytes": 32,
+    "scope": "captured engine Wasm instance only",
+    "exclusions": [
+      "JS tokens",
+      "GPU",
+      "font decoder instances"
+    ],
+    "requestedPeak": "completed allocator-call high water; excludes Talc fragmentation and transient internal realloc peak",
+    "cumulativeRequested": "full new size of successful realloc, not net growth",
+    "wasmPages": "capacity, reported separately from requested live bytes"
+  },
+  "priorE2MethodEqual": true,
+  "priorE2PhaseNamesCyclesEqual": true,
+  "priorE2AllSnapshotsEqual": true,
+  "priorE2MaxRequestedLive": 40471115,
+  "priorE2MaxCompletedCallRequestedPeak": 40671431
+}

@@ -1,0 +1,54 @@
+{
+  "recordedUtc": "2026-10-20T21:28:45.373353+00:00",
+  "capture": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-replay-auth/full-05",
+  "archiveSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+  "captureManifestSha256": "09eb23a2fe41bad3578a4dfd8d42403ee66586da555f358f6317a477e3695412",
+  "eventsSha256": "51667f42fd2f4bde967dffab2b18048cf38a35174142952f09999815186d0fa6",
+  "eventsByteIdenticalToFull04": true,
+  "eventCount": 6157,
+  "eventKinds": {
+    "initialize": 1,
+    "registerCodec": 1,
+    "createRoot": 1,
+    "registerFont": 1,
+    "registerFontBinding": 1,
+    "registerFontStack": 1024,
+    "measureParagraph": 4096,
+    "reserveUpdateBatch": 1,
+    "textUpdateBatch": 3,
+    "disposeRoot": 1,
+    "disposeFontStack": 1024,
+    "disposeFontBinding": 1,
+    "disposeFont": 1,
+    "disposeCodec": 1
+  },
+  "allStatusesZero": true,
+  "initializeFirstExactlyOnce": true,
+  "allBatchesSingleEntry": true,
+  "totals": {
+    "measureResults": 4096,
+    "measureResultBytes": 589824,
+    "requestBytes": 1155504,
+    "publicationResults": 3,
+    "publicationResultBytes": 1387568
+  },
+  "blobCount": 9227,
+  "allBlobsUniqueReferencedAndHashVerified": true,
+  "installedJsCount": 237,
+  "fourCurrentSourceHashesMatch": true,
+  "sourceHashes": {
+    "observerSha256": "486e0e87816b42a7969b8fcc151add92d4f07af98f9d2607878d2d2ccbb92879",
+    "workflowSha256": "9687336b92838f78c35c60b3cb795a00e1cb9fdad74468adf532c0c31826578f",
+    "nativeHarnessSha256": "10fdba8800b41f7e9b22db64f864d9ba5cdf8d2d5dd15fe0ad4912a977086607",
+    "transportSha256": "11b6ddf6917ace16d9dbe8919d590565d09e436145adf5c24a6b9c1f016d57da"
+  },
+  "nativeReplayResult": {
+    "result": "exact-byte-pass",
+    "eventCount": 6157,
+    "archiveSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb"
+  },
+  "packageCheckExit": 0,
+  "shippingRebuildExit": 0,
+  "shippingMemberReceiptSha256": "929f2c938a362be5cbbd9200053203063b920b0a4f08ac6bb4a22d8f42368092",
+  "scope": "Authentication for reproduced native field/physical-work paths only; no batch process/allocator/host-private-buffer/timing/GC/seven-family parity claim. No counters added yet."
+}

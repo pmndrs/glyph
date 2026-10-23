@@ -1,0 +1,168 @@
+{
+  "schema": "glyph-final-bounded-artifact-gates-v1",
+  "recordedUtc": "2026-10-21T01:16:36.392940+00:00",
+  "scope": "Final source-frozen package, size, memory, and static artifact gates. No timing matrix or runtime renderer gate was run here.",
+  "source": {
+    "head": "277417596afbe2a8cd87454317d05607dc9ba51b",
+    "reviewedCorrectionFreeze": "root-review-correction-freeze.json",
+    "packageGateInputs672Unchanged": true,
+    "tenReviewedRustSourceFilesMatchCorrectionFreeze": true
+  },
+  "artifacts": {
+    "candidate/pmndrs-glyph-0.1.0.tgz": {
+      "sha256": "83949860ae65b99fe6d7471b9782398234852668b54412870fafa81878c366a3",
+      "bytes": 3203463
+    },
+    "candidate/shaper-profile/text-shaper.named.wasm": {
+      "sha256": "fb54c6442677f8cf6a8adbc220b86ed2031a68322669f79413a9ca1e6a2ea449",
+      "bytes": 1806646
+    },
+    "candidate/shaper-profile/text-shaper.named.wat": {
+      "sha256": "8a7bedae9fc6de4dda85fc9d3537d217c181bf0721f48b502267337a2bc59a20",
+      "bytes": 27859535
+    },
+    "candidate/shaper-live-memory-final.json": {
+      "sha256": "80182196ab912d2a227ae09388ac748f638529a6a88a824aab31fdd32847c3e7",
+      "bytes": 77738
+    },
+    "candidate/shaper-size-accounting-final/report.json": {
+      "sha256": "36852c4130a4d43baec58895451a7a669301c772e6906a9c772a6660da08d4f5",
+      "bytes": 778409
+    },
+    "candidate/package-gate-summary.json": {
+      "sha256": "37e6812e9adc273d4f99744b3406d98f7aad18cab7e14ec3238d9d1d943e152f",
+      "bytes": 8163
+    },
+    "package-member-contract-comparison.json": {
+      "sha256": "4f5dff2b0084df8c42d8e915d03f434e13746d2e3e7929c0b102031ba8d695a4",
+      "bytes": 305146
+    },
+    "scratch/package-member-gzip/node-gzip9.json": {
+      "sha256": "c9ecce9d5a7efcfffa3b93b6d9bf8220e650ae5bff778dc742395e36e5bdcc97",
+      "bytes": 1134
+    },
+    "wasm-abi-and-section-evidence.json": {
+      "sha256": "2eae4d5fe4fb414e6a9cba13a9d79361441a9f6de1dbb12420b89a758b3a712c",
+      "bytes": 138355
+    },
+    "wasm-abi-structural-summary.json": {
+      "sha256": "bc3640ccaf05e479f794db0f451c9638068f46ef602deea082fb073c416d3794",
+      "bytes": 5479
+    },
+    "wasm-simd-decoded-witness.json": {
+      "sha256": "eef6e2332bfb3f34bd51d00d40b763c2bb9d92207342b2e5739713ad320f9edb",
+      "bytes": 1954
+    }
+  },
+  "workflowReceipts": {
+    "package-check-final-01": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/package-check-final-01/result.json",
+      "sha256": "d7a1f702e16c88f53e4351f3708ca1b289fa04b62a7c442a9ce87923f2e69975",
+      "exit": 0
+    },
+    "pack-final-01": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/pack-final-01/result.json",
+      "sha256": "1d009df407bea399c3e5d79a9c7890971760e0b1587e2eeba2dfc1ee3b62df50",
+      "exit": 0
+    },
+    "named-artifact-final-01": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/named-artifact-final-01/result.json",
+      "sha256": "e5fb49cd71c07ad23f560d5a5ac4c179febf74aad2f9fd16880c2640269c9022",
+      "exit": 0
+    },
+    "shaper-size-accounting-final-01": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/shaper-size-accounting-final-01/result.json",
+      "sha256": "bc2d906f286356fcba2fdf86ef27c27ab84cbfc2f233ab5cac233236d743c7ee",
+      "exit": 0
+    },
+    "shaper-memory-artifact-final-01": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/shaper-memory-artifact-final-01/result.json",
+      "sha256": "055e9a13f7839f5fc824e1cd9e5f3cbf9146b1cde543a1fa1bdb45391a9a8b70",
+      "exit": 0
+    },
+    "shaper-live-memory-final-01": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/shaper-live-memory-final-01/result.json",
+      "sha256": "1511769f334ab41bffbff5a62e4183b4b7d316306e3a28b3336c000eb00c8685",
+      "exit": 0
+    },
+    "wasm-dis-named-final-01": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/wasm-dis-named-final-01/result.json",
+      "sha256": "cd997113ebd21b64cee3c7a74a0e14b7187bb41c71f822db8903da3450a09802",
+      "exit": 0
+    }
+  },
+  "packageFacts": {
+    "archiveSha256": "83949860ae65b99fe6d7471b9782398234852668b54412870fafa81878c366a3",
+    "archiveBytes": 3203463,
+    "members": 1222,
+    "distMemberCount": 947,
+    "missingOrMismatchedDistMembers": 0,
+    "localUnshippedDistExtras": [
+      "dist/.tsbuildinfo",
+      "dist/internal/raster-baker-profile.d.ts",
+      "dist/internal/raster-baker-profile.d.ts.map",
+      "dist/internal/raster-baker-profile.js",
+      "dist/internal/raster-baker-profile.js.map"
+    ],
+    "shippingWasmSha256": "8b594e2b123c35c0789a1e38ee15761e9a6a2245fdce6da1181efacbc0ab366a",
+    "namedWasmSha256": "fb54c6442677f8cf6a8adbc220b86ed2031a68322669f79413a9ca1e6a2ea449"
+  },
+  "comparisonFacts": {
+    "candidateVsPriorE2": "Only package/dist/text-shaper.wasm differs among 1,222 archive members; package contract, all 238 JS files, and all 227 declaration files are byte-identical.",
+    "candidateVsMain": "5 added and 5 removed members, 121 changed overlapping members; selected package contract fields (exports, peers, peer metadata, etc.) unchanged. 209/238 JS and 219/227 declarations are byte-identical.",
+    "candidateVsPublished": "465 added, 7 removed, 331 changed overlapping members; selected package contract fields unchanged.",
+    "jsAndDeclarationGzip": "Node zlib.gzipSync per file, level 9; summed lengths only, not a combined-package claim. Candidate JS 876009 raw/299100 gzip; declarations 494999 raw/160655 gzip."
+  },
+  "wasmFacts": {
+    "candidateVsPriorE2ImportsExact": true,
+    "candidateVsPriorE2ExportsExactByNameKindSignatureOrResourceType": true,
+    "candidateVsMainImportsExact": true,
+    "candidateVsMainExportDifferences": [
+      "pmndrs_glyph_engine_borrow_paragraph_glyph absent from candidate while plural borrow_paragraph_glyphs is present",
+      "pmndrs_glyph_engine_reset_root present only in candidate"
+    ],
+    "candidateNamedVsShippingStandardSectionsByteIdentical": true,
+    "otherFourWasmModulesByteIdenticalToPriorE2": true,
+    "staticSIMDAndDirectPathWitness": "SIMD vector operations and DirectRowContext helper calls are emitted in named codec::execute_program; presence does not establish runtime invocation/utilization."
+  },
+  "memoryFacts": {
+    "featureOffControlEqualsShippingWasm": true,
+    "phases": 71,
+    "cycles": 8,
+    "maxRequestedLiveBytes": 41848831,
+    "maxCompletedCallRequestedPeakBytes": 42049147,
+    "maxPages": 774,
+    "scope": "Wasm allocator requested-live and completed-call-peak only; excludes JS/GPU/font decoder, physical fragmentation, and transient internal realloc stack peak."
+  },
+  "exactHeadGitHubCI": {
+    "runId": "39519105927",
+    "headSha": "277417596afbe2a8cd87454317d05607dc9ba51b",
+    "lastObservedStatus": "in_progress",
+    "lastObservedConclusion": null,
+    "completedJobs": [
+      "Static checks: success",
+      "Docs report: success",
+      "Package size report: success",
+      "Check: success"
+    ],
+    "activeJob": "Package performance report; Measure installed-package performance"
+  },
+  "peerCheck": {
+    "summaryPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/peer-check-result-summary.json",
+    "summarySha256": "724292b8f4f366643813367da25b4f43fb269eb44dd7f2be97c581a636fa9f04",
+    "exit": 0,
+    "peerFloorVersions": {
+      "@react-three/fiber": "9.7.0",
+      "@tresjs/core": "5.8.3",
+      "@typegpu/gl": "0.12.4",
+      "@typegpu/three": "0.12.1",
+      "react": "19.0.0",
+      "three": "0.185.0",
+      "typegpu": "0.12.5",
+      "vue": "3.5"
+    },
+    "nodeTests": "55 passed, 0 failed, 0 skipped",
+    "distIdentityBridge": "all 947 archived members match local dist before/after; no shipped member changed; archive stayed 83949860ae65b99fe6d7471b9782398234852668b54412870fafa81878c366a3",
+    "sourceIdentityBridge": "all 672 frozen inputs and all 10 reviewed Rust source files match before/after"
+  }
+}

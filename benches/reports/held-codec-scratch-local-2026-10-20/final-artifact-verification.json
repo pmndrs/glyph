@@ -1,0 +1,212 @@
+{
+  "schema": "wave2-final-artifact-verification-v1",
+  "recordedUtc": "2026-10-20T16:02:25Z",
+  "head": "291fb51ce5e61ca6903b67459872923ccab4ceee",
+  "expectedHead": "291fb51ce5e61ca6903b67459872923ccab4ceee",
+  "packageCheck": {
+    "exit": 0,
+    "receipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/wave2-package-check/result.json",
+    "node": {
+      "groups": 7,
+      "tests": 1142,
+      "passed": 1142,
+      "failed": 0,
+      "groupTotals": [3, 3, 1107, 3, 22, 1, 3]
+    },
+    "rust": {
+      "testGroups": 26,
+      "passed": 587,
+      "failed": 0,
+      "ignored": 1,
+      "measured": 0,
+      "filtered": 0
+    },
+    "shaperRegistrationIntegration": {
+      "declaredTests": 13,
+      "confirmedOutputTests": 13,
+      "missingOutputNames": [],
+      "normalAndOverflowOracleNames": [
+        "shipping Wasm Codec writes exact repeated-group and tail bytes from glyph binding columns",
+        "shipping Wasm rejects finite Codec arithmetic overflow and accepts a valid retry"
+      ]
+    }
+  },
+  "pack": {
+    "exit": 0,
+    "archive": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "archiveBytes": 3196121,
+    "archiveSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb"
+  },
+  "namedProfile": {
+    "exit": 0,
+    "receipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/wave2-profile-artifact/result.json",
+    "stdoutSha256": "a276561a1125a9d163989f710a58328b90b1ee8fb3db2ec52e4dea4103a94a51",
+    "stderrSha256": "39ea87cea20ed67f343afc6e2202626f76ba25073961fd3376152eb79109c379",
+    "manifest": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/shaper-profile/manifest.json",
+    "manifestArchiveSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+    "manifestReleaseSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+    "manifestNamedSha256": "6fa7083f44eb1b652e0bf7d772f6c7b5e8f0136a75f8a883257fd52550e2a909",
+    "manifestExecutableSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+    "releaseWasmPath": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/shaper-profile/candidate.wasm",
+    "releaseWasmBytes": 1609247,
+    "releaseWasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+    "namedWasmPath": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/shaper-profile/text-shaper.named.wasm",
+    "namedWasmBytes": 1788749,
+    "namedWasmSha256": "6fa7083f44eb1b652e0bf7d772f6c7b5e8f0136a75f8a883257fd52550e2a909",
+    "packageMember": {
+      "name": "package/dist/text-shaper.wasm",
+      "size": 1609247,
+      "sha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd"
+    },
+    "releaseWasmMatchesArchiveMember": true,
+    "standardSectionIdsEqual": true,
+    "standardSectionCount": 10,
+    "allStandardSectionBytesEqual": true,
+    "namedCustomSections": [
+      {
+        "id": 0,
+        "customName": "name",
+        "payloadBytes": 179498,
+        "sectionSha256": "623b7130c88b6608d02e940429bd35b8979d215e10e3062b934ff97ae963c9ec"
+      }
+    ],
+    "shippingCustomSections": [],
+    "sectionsNamed": [
+      {
+        "id": 1,
+        "customName": null,
+        "payloadBytes": 796,
+        "sectionSha256": "027df9553f9ee775b269efdcf864119daeed075981ca70abd3e7a6a9cfb97535"
+      },
+      {
+        "id": 3,
+        "customName": null,
+        "payloadBytes": 1595,
+        "sectionSha256": "3f9d05678a5789cb37980090391e483eb8b42d350cf239868924516b7dbe8804"
+      },
+      {
+        "id": 4,
+        "customName": null,
+        "payloadBytes": 5,
+        "sectionSha256": "fa6d5b41c4bd0d977ff72eace9d886d52104eea044e40e7a631dcb63dd21980e"
+      },
+      {
+        "id": 5,
+        "customName": null,
+        "payloadBytes": 3,
+        "sectionSha256": "33e2aeac0e17d17abf54b183d1d4bf64ea2fee2be72bd174c5bd63e86bca9df9"
+      },
+      {
+        "id": 6,
+        "customName": null,
+        "payloadBytes": 9,
+        "sectionSha256": "9f3cfe5176ae52746cd84164515877d028e9591e51c615e41f3a33b6c52e9608"
+      },
+      {
+        "id": 7,
+        "customName": null,
+        "payloadBytes": 1469,
+        "sectionSha256": "5964e3f8fbfbc64ad2cef6b61961844694ff0344e7661b7ae56e3b021c581f99"
+      },
+      {
+        "id": 9,
+        "customName": null,
+        "payloadBytes": 258,
+        "sectionSha256": "c9a7ece5fd1beff4aab594678d03b293db5f86c1b9e3cd07945e4f4f877b44ac"
+      },
+      {
+        "id": 12,
+        "customName": null,
+        "payloadBytes": 2,
+        "sectionSha256": "7a682b1c694cd58ec5682bca6c748572a293e162f1b4fdcf0e278dfe6ed3bfb4"
+      },
+      {
+        "id": 10,
+        "customName": null,
+        "payloadBytes": 1311607,
+        "sectionSha256": "e39a95cd045706ebb12d153d5decdab668636b98b6010d07433ec4e1a9adaa8c"
+      },
+      {
+        "id": 11,
+        "customName": null,
+        "payloadBytes": 293467,
+        "sectionSha256": "7af7632c43b211df183c9d4d99b26c4505ad3ea4b0bb76949121a469f34354cf"
+      },
+      {
+        "id": 0,
+        "customName": "name",
+        "payloadBytes": 179498,
+        "sectionSha256": "623b7130c88b6608d02e940429bd35b8979d215e10e3062b934ff97ae963c9ec"
+      }
+    ],
+    "sectionsShipping": [
+      {
+        "id": 1,
+        "customName": null,
+        "payloadBytes": 796,
+        "sectionSha256": "027df9553f9ee775b269efdcf864119daeed075981ca70abd3e7a6a9cfb97535"
+      },
+      {
+        "id": 3,
+        "customName": null,
+        "payloadBytes": 1595,
+        "sectionSha256": "3f9d05678a5789cb37980090391e483eb8b42d350cf239868924516b7dbe8804"
+      },
+      {
+        "id": 4,
+        "customName": null,
+        "payloadBytes": 5,
+        "sectionSha256": "fa6d5b41c4bd0d977ff72eace9d886d52104eea044e40e7a631dcb63dd21980e"
+      },
+      {
+        "id": 5,
+        "customName": null,
+        "payloadBytes": 3,
+        "sectionSha256": "33e2aeac0e17d17abf54b183d1d4bf64ea2fee2be72bd174c5bd63e86bca9df9"
+      },
+      {
+        "id": 6,
+        "customName": null,
+        "payloadBytes": 9,
+        "sectionSha256": "9f3cfe5176ae52746cd84164515877d028e9591e51c615e41f3a33b6c52e9608"
+      },
+      {
+        "id": 7,
+        "customName": null,
+        "payloadBytes": 1469,
+        "sectionSha256": "5964e3f8fbfbc64ad2cef6b61961844694ff0344e7661b7ae56e3b021c581f99"
+      },
+      {
+        "id": 9,
+        "customName": null,
+        "payloadBytes": 258,
+        "sectionSha256": "c9a7ece5fd1beff4aab594678d03b293db5f86c1b9e3cd07945e4f4f877b44ac"
+      },
+      {
+        "id": 12,
+        "customName": null,
+        "payloadBytes": 2,
+        "sectionSha256": "7a682b1c694cd58ec5682bca6c748572a293e162f1b4fdcf0e278dfe6ed3bfb4"
+      },
+      {
+        "id": 10,
+        "customName": null,
+        "payloadBytes": 1311607,
+        "sectionSha256": "e39a95cd045706ebb12d153d5decdab668636b98b6010d07433ec4e1a9adaa8c"
+      },
+      {
+        "id": 11,
+        "customName": null,
+        "payloadBytes": 293467,
+        "sectionSha256": "7af7632c43b211df183c9d4d99b26c4505ad3ea4b0bb76949121a469f34354cf"
+      }
+    ]
+  },
+  "freezeAfterNamed": {
+    "sourceFileCount": 6,
+    "sourceMismatches": [],
+    "trackedInputCount": 1039,
+    "trackedInputMismatches": [],
+    "allFrozenInputsMatch": true
+  }
+}

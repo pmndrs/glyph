@@ -1,0 +1,7 @@
+Checking formatting...
+
+labs/package/batching.bench.ts (0ms)
+
+Format issues found in above 1 files. Run without `--check` to fix.
+Finished in 2147ms on 723 files using 10 threads.
+[ELIFECYCLE] Command failed with exit code 1.

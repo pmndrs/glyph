@@ -1,0 +1,295 @@
+{
+  "purpose": "Portable completed-wave evidence; large raw packages/profiles/samples/logs remain local and identified by receipts. No historical result reassigned to this source.",
+  "files": [
+    {
+      "path": "measurement-protocol.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/measurement-protocol.json",
+      "bytes": 3778,
+      "sha256": "49cdccb4c2671c11778fdca26150d814fab198b5b15cad877a0367bb2d051d22",
+      "packetSha256": "49cdccb4c2671c11778fdca26150d814fab198b5b15cad877a0367bb2d051d22",
+      "packetBytes": 3778
+    },
+    {
+      "path": "combined-source-freeze.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-source-freeze.json",
+      "bytes": 10055,
+      "sha256": "c14776414a6ccf92291e03b801f45c56a12d4245f510b7ae081db0886bf51a37",
+      "packetSha256": "c14776414a6ccf92291e03b801f45c56a12d4245f510b7ae081db0886bf51a37",
+      "packetBytes": 10055
+    },
+    {
+      "path": "pre-timing-source-bridge.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/pre-timing-source-bridge.json",
+      "bytes": 493,
+      "sha256": "af3ed279abcf8fa0bf9615a136ebed017187f7367a6d427523f72d8d10a7a923",
+      "packetSha256": "af3ed279abcf8fa0bf9615a136ebed017187f7367a6d427523f72d8d10a7a923",
+      "packetBytes": 493
+    },
+    {
+      "path": "remote-main-before-timing.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/remote-main-before-timing.json",
+      "bytes": 256,
+      "sha256": "c68a86914740548762d92739cd1706b62bdd938f7f73c0be0b08a2a19177be00",
+      "packetSha256": "e7956ea05088cc71fc3b38bf389361a306dfa8eb3ca407adde5398e8a2a9e660",
+      "packetBytes": 236
+    },
+    {
+      "path": "comparisons-all.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/comparisons-all.json",
+      "bytes": 801066,
+      "sha256": "dba238be46921ed21ccaf7801648288abe3556dd16f80bd9a158903d6af0af85",
+      "packetSha256": "3752505eec6512901dae3c0c9b02dccf7da4c80c74732cc0da9e8b36036a5c60",
+      "packetBytes": 622228
+    },
+    {
+      "path": "comparisons-all.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/comparisons-all.md",
+      "bytes": 244626,
+      "sha256": "ced5c592daa1c925b6dfc3bf8c40d043d1d64756f1a7f7a6d45559e9420d38ea",
+      "packetSha256": "079e5b6e0494720b9f880e3cf0caa3fde88b9029e8e307c60045d03dc9e18d69",
+      "packetBytes": 327528
+    },
+    {
+      "path": "absolute-distributions.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/absolute-distributions.json",
+      "bytes": 975317,
+      "sha256": "4d6d2a7dbc83e5334abf41a8bf3ac3241101392bc929bc504dc1d8d04ab9f8ab",
+      "packetSha256": "72692f4739e3a5986d03d87515737e7b91879ff8869726ad8990d51db1be20c5",
+      "packetBytes": 807779
+    },
+    {
+      "path": "transaction-review.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/transaction-review.md",
+      "bytes": 6213,
+      "sha256": "ec41c9e2a6e96fe83ea734e3f2fd66d172ceadfc7fceb3ca5745c01f0db8aee6",
+      "packetSha256": "dd33db306b1c181e49a5c11229a9fe0ece41842915444aadb189b1bd0279084d",
+      "packetBytes": 6555
+    },
+    {
+      "path": "preparation-extension/review.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/preparation-extension/review.md",
+      "bytes": 4960,
+      "sha256": "a514e7f304432017a2feca0d86d5714ab6bac64fe53408d7ed4e8d8d609db636",
+      "packetSha256": "a514e7f304432017a2feca0d86d5714ab6bac64fe53408d7ed4e8d8d609db636",
+      "packetBytes": 4960
+    },
+    {
+      "path": "final-downstream-gate-summary.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/final-downstream-gate-summary.json",
+      "bytes": 10108,
+      "sha256": "9489fe19dc7f8738d6de9dc22a356f100315dbbd2ba701df11b49c179581ab2a",
+      "packetSha256": "6d703917283a4afab85b3e127c1d951db978344ce517e333e2ad4fe82beecd37",
+      "packetBytes": 10076
+    },
+    {
+      "path": "repository-check-coverage-supplement.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/repository-check-coverage-supplement.json",
+      "bytes": 4431,
+      "sha256": "7121e980f9ebcb2e538a1b5d1d76bea517ba273f4f4b450f27a30710f82b5777",
+      "packetSha256": "7121e980f9ebcb2e538a1b5d1d76bea517ba273f4f4b450f27a30710f82b5777",
+      "packetBytes": 4431
+    },
+    {
+      "path": "combined-api-binary-signatures.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-api-binary-signatures.json",
+      "bytes": 246145,
+      "sha256": "b53897ecc76bf80823ecd0334918f8f30cdb289d9a2dd0bc031a6ba3419f4b36",
+      "packetSha256": "261395ae10db1af7db95585f40f1a682d721d8506174fe7d9363819f1c356f9d",
+      "packetBytes": 229459
+    },
+    {
+      "path": "combined-candidate/authentication.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-candidate/authentication.json",
+      "bytes": 337728,
+      "sha256": "3d78591ba75e2a6f48020593001fab6caa732d98468cfd78a76c47360d5d64ad",
+      "packetSha256": "3d78591ba75e2a6f48020593001fab6caa732d98468cfd78a76c47360d5d64ad",
+      "packetBytes": 337728
+    },
+    {
+      "path": "combined-candidate/archive-comparison.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-candidate/archive-comparison.json",
+      "bytes": 40122,
+      "sha256": "082eed9cb509ae5f1fdf33f49557250c8729c5b7ae9ac327022c0f946092d605",
+      "packetSha256": "284ff2770731d242ad0570f461a5b6fe7767375f5538367a06bb708d44700616",
+      "packetBytes": 40050
+    },
+    {
+      "path": "combined-candidate/wasm-gzip-comparison.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-candidate/wasm-gzip-comparison.json",
+      "bytes": 5429,
+      "sha256": "767084658ce5dc5c010bdd61f948b8e948a43caf7c47013746de511fb5cf2e97",
+      "packetSha256": "767084658ce5dc5c010bdd61f948b8e948a43caf7c47013746de511fb5cf2e97",
+      "packetBytes": 5429
+    },
+    {
+      "path": "combined-candidate/production-package-size.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-candidate/production-package-size.json",
+      "bytes": 10929,
+      "sha256": "41cd7f384b3efcf5912ae4e806b8ae839f1acdabda2d7d7865ae5e12baafd136",
+      "packetSha256": "41cd7f384b3efcf5912ae4e806b8ae839f1acdabda2d7d7865ae5e12baafd136",
+      "packetBytes": 10929
+    },
+    {
+      "path": "allocator-summary.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/allocator-summary.json",
+      "bytes": 15669,
+      "sha256": "aa49a635f2570dd142ec4dee8df419e4ae8691b53c9b0001a01f4a5084c87f3c",
+      "packetSha256": "423c05d294532d5673192a1fcc5e9d214e0663b10e8be5aafcbcc8f0871d729e",
+      "packetBytes": 15645
+    },
+    {
+      "path": "memory-presentation-summary.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/memory-presentation-summary.json",
+      "bytes": 88445,
+      "sha256": "dc6495e5a7f3a48edcf6ba2512f1dcbae3e8f3a4006b1c11df4c9fc0aa9ec8a1",
+      "packetSha256": "8dd9dca3ff13ccecf6c6db47967ab2b55640826543e2699f0f92f0e2a7f0eaf9",
+      "packetBytes": 88173
+    },
+    {
+      "path": "node-after-update-memory-summary.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/node-after-update-memory-summary.json",
+      "bytes": 1493,
+      "sha256": "28bba943a6c34de714a8fec73243f29ca8d87924b2f33ad8cdf87f47d36345c3",
+      "packetSha256": "28bba943a6c34de714a8fec73243f29ca8d87924b2f33ad8cdf87f47d36345c3",
+      "packetBytes": 1493
+    },
+    {
+      "path": "browser-oracle-comparison.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/browser-oracle-comparison.json",
+      "bytes": 7790,
+      "sha256": "15224e0147a2239e683060bdb98c9e9e27661be2b53ba3fb446364e7d40b6b97",
+      "packetSha256": "15224e0147a2239e683060bdb98c9e9e27661be2b53ba3fb446364e7d40b6b97",
+      "packetBytes": 7790
+    },
+    {
+      "path": "release-idle-wording-correction.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/release-idle-wording-correction.json",
+      "bytes": 2444,
+      "sha256": "23ddbca7251cb5f8f40bf1ce4f7b8eb3de542f68d38ce48d4166bd4c194f9ecd",
+      "packetSha256": "23ddbca7251cb5f8f40bf1ce4f7b8eb3de542f68d38ce48d4166bd4c194f9ecd",
+      "packetBytes": 2444
+    },
+    {
+      "path": "inter-1024-work-summary.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/inter-1024-work-summary.json",
+      "bytes": 8301,
+      "sha256": "101550777f684d91e28eb90aaed0622af17faad5ca618324ca2bb859df525769",
+      "packetSha256": "4350d16a98a376459c5be776688662438512583f1a03337902fc1cc46210e000",
+      "packetBytes": 8277
+    },
+    {
+      "path": "tres-probe-contract/authentication.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/tres-probe-contract/authentication.json",
+      "bytes": 1841,
+      "sha256": "55dc4caa9bd15dda0095d0ea44a59061ff9fffc9e20faff8ca025c38abd1d143",
+      "packetSha256": "55dc4caa9bd15dda0095d0ea44a59061ff9fffc9e20faff8ca025c38abd1d143",
+      "packetBytes": 1841
+    },
+    {
+      "path": "tres-probe-contract/review.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/tres-probe-contract/review.md",
+      "bytes": 2576,
+      "sha256": "cc4decda54331a7f00371297836076e030977f274dfaa0e575df8df899c6c6ee",
+      "packetSha256": "cc4decda54331a7f00371297836076e030977f274dfaa0e575df8df899c6c6ee",
+      "packetBytes": 2576
+    },
+    {
+      "path": "ci-exact-head/final.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/ci-exact-head/final.json",
+      "bytes": 15177,
+      "sha256": "6dc0414c2e5380c44426a09849e3de140369f45a1fc39bb36e55139bf7db5fdc",
+      "packetSha256": "67179a2cddab8577ea3f2fd2bc9068102b436cf98cc6ad0110305cb0378a8e17",
+      "packetBytes": 22998
+    },
+    {
+      "path": "ci-exact-head/immutable-artifact-verification.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/ci-exact-head/immutable-artifact-verification.json",
+      "bytes": 2759,
+      "sha256": "96523fb6448727d623623fa954e0ebbdac854c3e8a4283f3e04fd143a96194ec",
+      "packetSha256": "96523fb6448727d623623fa954e0ebbdac854c3e8a4283f3e04fd143a96194ec",
+      "packetBytes": 2759
+    },
+    {
+      "path": "ci-exact-head/artifacts/glyph-package-performance/summary.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/ci-exact-head/artifacts/glyph-package-performance/summary.md",
+      "bytes": 28686,
+      "sha256": "8e3db918a5a079aa76cac71b4ebe86378e7cf8bf8bf2de6074bfb3b33f9806de",
+      "packetSha256": "ddb7289a9d3266ba4a3d0a2653aaa665b098ffbd83f7a157ded98ec75562df03",
+      "packetBytes": 33287
+    },
+    {
+      "path": "ci-exact-head/artifacts/glyph-package-performance/comparison.txt",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/ci-exact-head/artifacts/glyph-package-performance/comparison.txt",
+      "bytes": 32907,
+      "sha256": "0fc07cf2ec60d4761c49d41b85f907a62bd59810b88634f81a4a5dd8392559b0",
+      "packetSha256": "a5884c85666a95a75a12c4da970a1a563f672c38045af35e05551a56b1568c2f",
+      "packetBytes": 32906,
+      "formatting": "Packet copy omits trailing blank lines; original downloaded artifact and its source hash remain unchanged."
+    },
+    {
+      "path": "publication-only-preservation.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/publication-only-preservation.json",
+      "bytes": 843,
+      "sha256": "8d1833a86d6bd85298bc76e99d92e08c54320f6d61e8d8a66dd35e95da3f15d9",
+      "packetSha256": "8d1833a86d6bd85298bc76e99d92e08c54320f6d61e8d8a66dd35e95da3f15d9",
+      "packetBytes": 843
+    },
+    {
+      "path": "rope-followup-ruled-out.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/rope-followup-ruled-out.md",
+      "bytes": 1769,
+      "sha256": "0ce26c4da54da98062284e814d89ffd2f34c3fc3fb7f06e4a32032048f273850",
+      "packetSha256": "0ce26c4da54da98062284e814d89ffd2f34c3fc3fb7f06e4a32032048f273850",
+      "packetBytes": 1769
+    },
+    {
+      "path": "setter-work-boundary.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/setter-work-boundary.md",
+      "bytes": 1617,
+      "sha256": "aba5187a80d79569bd8923121245a973eb1dff08c2374205cb40bee8e69f177c",
+      "packetSha256": "8164f7a5b4d4e1ed42f49e9f5d6de1b9f225ff202ed95cd5350c0a40cca1cee2",
+      "packetBytes": 1619
+    },
+    {
+      "path": "dense-updater-tradeoff-advice.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/dense-updater-tradeoff-advice.md",
+      "bytes": 5809,
+      "sha256": "4c6731021492a446f99bf952b6a50858548eb47fe22404933cbc4432e1df8384",
+      "packetSha256": "4c6731021492a446f99bf952b6a50858548eb47fe22404933cbc4432e1df8384",
+      "packetBytes": 5809
+    },
+    {
+      "path": "matrix-final-verification.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/matrix-final-verification.json",
+      "bytes": 9052,
+      "sha256": "6e02e4852a4a74ac66a29efe52aeb9b5549d6fe3faeb60b62547d5bd72e103fa",
+      "packetSha256": "6e02e4852a4a74ac66a29efe52aeb9b5549d6fe3faeb60b62547d5bd72e103fa",
+      "packetBytes": 9052
+    },
+    {
+      "path": "codec-scratch-codegen/README.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/codec-scratch-codegen/README.md",
+      "bytes": 7521,
+      "sha256": "b5f704f068fc16d2ca288502bf2ca97e23c8b17c3681d7e76a36ace3fcfc729a",
+      "packetSha256": "b5f704f068fc16d2ca288502bf2ca97e23c8b17c3681d7e76a36ace3fcfc729a",
+      "packetBytes": 7521
+    },
+    {
+      "path": "codec-scratch-codegen/receipt.json",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/codec-scratch-codegen/receipt.json",
+      "bytes": 16209,
+      "sha256": "81049ebe28dd78aab115fb45685afc5482448a63efdea4765eb08c574aaf29ff",
+      "packetSha256": "81cbd10294e1e584fb0b583fd4803975c826e241f6d982b55db625230e0f1507",
+      "packetBytes": 16191
+    },
+    {
+      "path": "codec-run-producer-notes.md",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/codec-run-producer-notes.md",
+      "bytes": 1488,
+      "sha256": "8dd051882446f91ec98d42fe966fda7cf2564a2b780532de90db87917c5db548",
+      "packetSha256": "8dd051882446f91ec98d42fe966fda7cf2564a2b780532de90db87917c5db548",
+      "packetBytes": 1488
+    }
+  ],
+  "formatting": "Source SHA-256 authenticates original evidence bytes. packetSha256 authenticates oxfmt-formatted copied evidence; JSON semantic equality independently checked. No digest includes this self-inventory."
+}

@@ -1,0 +1,818 @@
+{
+  "recordedUtc": "2026-10-20T18:35:55.840738+00:00",
+  "gates": {
+    "rootCheck": {
+      "command": [
+        "/usr/bin/env",
+        "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch",
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "pnpm",
+        "check"
+      ],
+      "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+      "exit": 0,
+      "started": "2026-10-20T18:28:12.908859+00:00",
+      "finished": "2026-10-20T18:31:56.985392+00:00",
+      "stdoutSha256": "2ebad4794183f284e7eba9118e3c7b3508d9f4789a8354f0bc4de66e4e241ac4",
+      "stderrSha256": "e568338f5da661b2f505b70ca4517e3f733bbfcf19e20eac3368c102e4d684b5",
+      "completeRawStdout": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/root-check/stdout.log",
+      "completeRawStderr": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/root-check/stderr.log",
+      "rustTestResultLines": [
+        {
+          "line": 81,
+          "text": "packages/glyph check: test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s"
+        },
+        {
+          "line": 84,
+          "text": "packages/glyph check: test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        },
+        {
+          "line": 88,
+          "text": "packages/glyph check: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+        },
+        {
+          "line": 91,
+          "text": "packages/glyph check: test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        },
+        {
+          "line": 105,
+          "text": "packages/glyph check: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s"
+        },
+        {
+          "line": 108,
+          "text": "packages/glyph check: test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        },
+        {
+          "line": 112,
+          "text": "packages/glyph check: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        },
+        {
+          "line": 125,
+          "text": "packages/glyph check: test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.41s"
+        },
+        {
+          "line": 128,
+          "text": "packages/glyph check: test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        },
+        {
+          "line": 617,
+          "text": "packages/glyph check: test result: ok. 485 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.35s"
+        },
+        {
+          "line": 620,
+          "text": "packages/glyph check: test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        },
+        {
+          "line": 626,
+          "text": "packages/glyph check: test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        },
+        {
+          "line": 635,
+          "text": "packages/glyph check: test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.14s"
+        },
+        {
+          "line": 640,
+          "text": "packages/glyph check: test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.34s"
+        },
+        {
+          "line": 644,
+          "text": "packages/glyph check: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+        },
+        {
+          "line": 648,
+          "text": "packages/glyph check: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s"
+        },
+        {
+          "line": 651,
+          "text": "packages/glyph check: test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        },
+        {
+          "line": 658,
+          "text": "packages/glyph check: test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s"
+        },
+        {
+          "line": 661,
+          "text": "packages/glyph check: test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        },
+        {
+          "line": 664,
+          "text": "packages/glyph check: test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        },
+        {
+          "line": 677,
+          "text": "packages/glyph check: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        },
+        {
+          "line": 703,
+          "text": "packages/glyph check: test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+        },
+        {
+          "line": 715,
+          "text": "packages/glyph check: test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.10s"
+        },
+        {
+          "line": 723,
+          "text": "packages/glyph check: test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s"
+        },
+        {
+          "line": 741,
+          "text": "packages/glyph check: test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        },
+        {
+          "line": 747,
+          "text": "packages/glyph check: test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        }
+      ],
+      "nodeTestSummaryLines": [
+        {
+          "line": 20,
+          "text": "\u2139 tests 19"
+        },
+        {
+          "line": 33,
+          "text": "packages/glyph check: \u2139 tests 3"
+        },
+        {
+          "line": 44,
+          "text": "packages/glyph check: \u2139 tests 3"
+        },
+        {
+          "line": 2060,
+          "text": "packages/glyph check: \u2139 tests 1107"
+        },
+        {
+          "line": 2071,
+          "text": "packages/glyph check: \u2139 tests 3"
+        },
+        {
+          "line": 2101,
+          "text": "packages/glyph check: \u2139 tests 22"
+        },
+        {
+          "line": 2110,
+          "text": "packages/glyph check: \u2139 tests 1"
+        },
+        {
+          "line": 2121,
+          "text": "packages/glyph check: \u2139 tests 3"
+        },
+        {
+          "line": 2347,
+          "text": "\u2139 tests 28"
+        }
+      ],
+      "noCrossRunnerTotalComputed": true
+    },
+    "pack": {
+      "command": [
+        "/usr/bin/env",
+        "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch",
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "pnpm",
+        "pack",
+        "--pack-destination",
+        "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate"
+      ],
+      "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph",
+      "exit": 0,
+      "stdoutSha256": "f5a071aaf5db4acc518a890b92cd657ebfdcbe37258dd3a6e931d9476436d89c",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "namedArtifact": {
+      "command": [
+        "/usr/bin/env",
+        "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch",
+        "/Users/mini/.local/bin/mise",
+        "exec",
+        "--",
+        "pnpm",
+        "scripts",
+        "run",
+        "glyph:shaper-profile-artifact",
+        "--",
+        "--artifact",
+        "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+        "--source-root",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "--output",
+        "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/shaper-profile"
+      ],
+      "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+      "exit": 0,
+      "stdoutSha256": "7779c4d896d2e8d3fb3f52862fd6db4f21c51aac055955cb2ec56b3457b9382f",
+      "stderrSha256": "de621fcc4a7603464d301eca9f102d5af5576e6593a9a811ab38a90e49adebca",
+      "rawStdout": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/named-artifact-final/stdout.log",
+      "rawStderr": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/named-artifact-final/stderr.log"
+    }
+  },
+  "integrity": {
+    "freezePathCount": 1059,
+    "sourceMatchesFreezeBeforeRootCheck": true,
+    "sourceMatchesFreezeAfterRootCheck": true,
+    "sourceMatchesFreezeAfterNamed": true,
+    "ownedSourceSha256": {
+      "packages/glyph/rust/shaper/src/engine/state.rs": "af32b2539c9475775ab5845bb07336ac994d03fc8b1827b1d13b5e3e0358cce2",
+      "packages/glyph/rust/shaper/src/engine/work_attribution.rs": "c65ec9b203042818e5eaa997cb9e211a494ddf606fe1d96aeb2c95e58e1c0ac1"
+    },
+    "freezeReceipts": [
+      "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/root-check-input-before.json",
+      "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/root-check-input-after.json",
+      "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/post-named-authentication.json"
+    ]
+  },
+  "archive": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "sha256": "37c1e0882acfb16bc6ebc9e2538340b4a12eeff6d8006e0055e86423db3572e6",
+    "bytes": 3196557,
+    "regularFileMembers": 1222,
+    "prior28fd": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "sha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+      "bytes": 3196121,
+      "regularFileMembers": 1222
+    },
+    "memberPathSetMatchesPrior28fd": true,
+    "changedMemberPaths": ["package/dist/text-shaper.wasm"],
+    "currentOnly": [],
+    "priorOnly": [],
+    "changedWasmMemberDetails": [
+      {
+        "path": "package/dist/text-shaper.wasm",
+        "prior28fd": {
+          "size": 1609247,
+          "sha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd"
+        },
+        "candidate": {
+          "size": 1610254,
+          "sha256": "81153a6202caef528f235ae69d34ff0c8b2515c8c711af84b92db57b1f700aa6"
+        }
+      }
+    ],
+    "wasmMembers": [
+      {
+        "path": "package/dist/bitmap-baker.wasm",
+        "candidate": {
+          "size": 614383,
+          "sha256": "af4892531eeab1b5d7e40844e2ab261628f51456345fb4c515fae248ae8449bc"
+        },
+        "prior28fd": {
+          "size": 614383,
+          "sha256": "af4892531eeab1b5d7e40844e2ab261628f51456345fb4c515fae248ae8449bc"
+        }
+      },
+      {
+        "path": "package/dist/font-baker.wasm",
+        "candidate": {
+          "size": 1080865,
+          "sha256": "10b15d3d9359fdc76629a52d8ff68158e0396f2fd0a4581be5b83b194eecd793"
+        },
+        "prior28fd": {
+          "size": 1080865,
+          "sha256": "10b15d3d9359fdc76629a52d8ff68158e0396f2fd0a4581be5b83b194eecd793"
+        }
+      },
+      {
+        "path": "package/dist/mtsdf-baker.wasm",
+        "candidate": {
+          "size": 548605,
+          "sha256": "27a205b72a77fa81016c90e4be2cbfdda7a0ba587f0c9d18169a8399ff557728"
+        },
+        "prior28fd": {
+          "size": 548605,
+          "sha256": "27a205b72a77fa81016c90e4be2cbfdda7a0ba587f0c9d18169a8399ff557728"
+        }
+      },
+      {
+        "path": "package/dist/slug-baker.wasm",
+        "candidate": {
+          "size": 454348,
+          "sha256": "418c895d6b5460e4a6ed1e3c35e37bc8e2fad31695e874cea5f33e144f71bee4"
+        },
+        "prior28fd": {
+          "size": 454348,
+          "sha256": "418c895d6b5460e4a6ed1e3c35e37bc8e2fad31695e874cea5f33e144f71bee4"
+        }
+      },
+      {
+        "path": "package/dist/text-shaper.wasm",
+        "candidate": {
+          "size": 1610254,
+          "sha256": "81153a6202caef528f235ae69d34ff0c8b2515c8c711af84b92db57b1f700aa6"
+        },
+        "prior28fd": {
+          "size": 1609247,
+          "sha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd"
+        }
+      }
+    ],
+    "packageJsonSha256Equal": true,
+    "packageExports": {
+      ".": {
+        "types": {
+          "source": "./src/index.ts",
+          "default": "./dist/index.d.ts"
+        },
+        "source": "./src/index.ts",
+        "import": "./dist/index.js"
+      },
+      "./shaders/tsl": {
+        "types": {
+          "source": "./src/shaders/tsl/index.ts",
+          "default": "./dist/shaders/tsl/index.d.ts"
+        },
+        "source": "./src/shaders/tsl/index.ts",
+        "import": "./dist/shaders/tsl/index.js"
+      },
+      "./shaders/tsl/internal/*": null,
+      "./shaders/tsl/slug/internal/*": null,
+      "./shaders/typegpu": {
+        "types": {
+          "source": "./src/shaders/typegpu/index.ts",
+          "default": "./dist/shaders/typegpu/index.d.ts"
+        },
+        "source": "./src/shaders/typegpu/index.ts",
+        "import": "./dist/shaders/typegpu/index.js"
+      },
+      "./shaders/typegpu/internal/*": null,
+      "./shaders/typegpu/slug/internal/*": null,
+      "./three": {
+        "types": {
+          "source": "./src/three.ts",
+          "default": "./dist/three.d.ts"
+        },
+        "source": "./src/three.ts",
+        "import": "./dist/three.js"
+      },
+      "./three/internal/*": null,
+      "./three/handle": null,
+      "./three/schema": null,
+      "./three/plan-program-registry": null,
+      "./three/codec": null,
+      "./three/command-buffer-renderer": null,
+      "./three/decorations": null,
+      "./three/detached-object": null,
+      "./three/engine-plan-target": null,
+      "./three/frame-error": null,
+      "./three/glyph-measurement": null,
+      "./three/glyphs": null,
+      "./three/font-loader": null,
+      "./three/loader": null,
+      "./three/renderer-resources": null,
+      "./three/text": null,
+      "./three/transform-synchronizer": null,
+      "./react": {
+        "types": {
+          "source": "./src/react/index.ts",
+          "default": "./dist/react/index.d.ts"
+        },
+        "source": "./src/react/index.ts",
+        "import": "./dist/react/index.js"
+      },
+      "./vue": {
+        "types": {
+          "source": "./src/vue.ts",
+          "default": "./dist/vue.d.ts"
+        },
+        "source": "./src/vue.ts",
+        "import": "./dist/vue.js"
+      },
+      "./vue/internal/*": null,
+      "./vue/*": {
+        "types": {
+          "source": "./src/vue/*.ts",
+          "default": "./dist/vue/*.d.ts"
+        },
+        "source": "./src/vue/*.ts",
+        "import": "./dist/vue/*.js"
+      },
+      "./raster/internal/*": null,
+      "./config/font-library": null,
+      "./config/raster-host": null,
+      "./config/text-property": null,
+      "./bakers/bitmap": {
+        "types": {
+          "source": "./src/bakers/bitmap.ts",
+          "default": "./dist/bakers/bitmap.d.ts"
+        },
+        "source": "./src/bakers/bitmap.ts",
+        "import": "./dist/bakers/bitmap.js"
+      },
+      "./bakers/msdf": {
+        "types": {
+          "source": "./src/bakers/msdf.ts",
+          "default": "./dist/bakers/msdf.d.ts"
+        },
+        "source": "./src/bakers/msdf.ts",
+        "import": "./dist/bakers/msdf.js"
+      },
+      "./bakers/slug": {
+        "types": {
+          "source": "./src/bakers/slug.ts",
+          "default": "./dist/bakers/slug.d.ts"
+        },
+        "source": "./src/bakers/slug.ts",
+        "import": "./dist/bakers/slug.js"
+      },
+      "./baker": {
+        "types": {
+          "source": "./src/bake.ts",
+          "default": "./dist/bake.d.ts"
+        },
+        "source": "./src/bake.ts",
+        "import": "./dist/bake.js"
+      },
+      "./bake": {
+        "types": {
+          "source": "./src/node/bake.ts",
+          "default": "./dist/node/bake.d.ts"
+        },
+        "source": "./src/node/bake.ts",
+        "import": "./dist/node/bake.js"
+      },
+      "./runtime-bake": {
+        "types": {
+          "source": "./src/runtime-bake.ts",
+          "default": "./dist/runtime-bake.d.ts"
+        },
+        "source": "./src/runtime-bake.ts",
+        "import": "./dist/runtime-bake.js"
+      },
+      "./loader": null,
+      "./internal/*": null,
+      "./generated/*": null,
+      "./font-baker/*": null,
+      "./text-shaper.wasm": "./dist/text-shaper.wasm",
+      "./bitmap-baker.wasm": "./dist/bitmap-baker.wasm",
+      "./mtsdf-baker.wasm": "./dist/mtsdf-baker.wasm",
+      "./slug-baker.wasm": "./dist/slug-baker.wasm",
+      "./font-baker.wasm": "./dist/font-baker.wasm",
+      "./package.json": "./package.json",
+      "./typegpu": {
+        "types": {
+          "source": "./src/typegpu.ts",
+          "default": "./dist/typegpu.d.ts"
+        },
+        "source": "./src/typegpu.ts",
+        "import": "./dist/typegpu.js"
+      },
+      "./three/typegpu": {
+        "types": {
+          "source": "./src/three/typegpu.ts",
+          "default": "./dist/three/typegpu.d.ts"
+        },
+        "source": "./src/three/typegpu.ts",
+        "import": "./dist/three/typegpu.js"
+      },
+      "./three/typegpu/internal/*": null,
+      "./core": {
+        "types": {
+          "source": "./src/core.ts",
+          "default": "./dist/core.d.ts"
+        },
+        "source": "./src/core.ts",
+        "import": "./dist/core.js"
+      }
+    },
+    "packagePeerDependencies": {
+      "@react-three/fiber": ">=9.7.0 <10 || >=10.0.0-alpha.4 <11",
+      "@tresjs/core": ">=5.8.3 <6",
+      "@typegpu/gl": ">=0.12.4 <0.13",
+      "@typegpu/three": ">=0.12.1 <0.13",
+      "react": ">=19.0.0 <19.3",
+      "three": ">=0.185.0",
+      "typegpu": ">=0.12.5 <0.13",
+      "vue": ">=3.5 <4"
+    },
+    "packageOptionalPeerDependencies": {
+      "@react-three/fiber": {
+        "optional": true
+      },
+      "@tresjs/core": {
+        "optional": true
+      },
+      "@typegpu/gl": {
+        "optional": true
+      },
+      "@typegpu/three": {
+        "optional": true
+      },
+      "react": {
+        "optional": true
+      },
+      "three": {
+        "optional": true
+      },
+      "typegpu": {
+        "optional": true
+      },
+      "vue": {
+        "optional": true
+      }
+    }
+  },
+  "workspaceDistComparison": {
+    "packedDistMembers": 947,
+    "workspaceDistFiles": 952,
+    "allPackedDistMembersMatchWorkspace": true,
+    "workspaceOnlyIgnoredOrUnpackedFiles": [
+      ".tsbuildinfo",
+      "internal/raster-baker-profile.d.ts",
+      "internal/raster-baker-profile.d.ts.map",
+      "internal/raster-baker-profile.js",
+      "internal/raster-baker-profile.js.map"
+    ],
+    "archiveOnly": [],
+    "details": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/workspace-dist-comparison.json"
+  },
+  "namedWasm": {
+    "namedSha256": "8e325fa4af7fb06a7ee99b411eff1e7255171331ff05d0ff0b0eeb0417b475b7",
+    "optimizedCandidateSha256": "81153a6202caef528f235ae69d34ff0c8b2515c8c711af84b92db57b1f700aa6",
+    "shippingSha256": "81153a6202caef528f235ae69d34ff0c8b2515c8c711af84b92db57b1f700aa6",
+    "manifestReleaseEqualsExecutable": true,
+    "namedVsShippingCustomSectionDifference": "Named artifact workflow exited 0; its registered contract checks optimized executable sections and the manifest release/executable SHA agrees with the packed shipping Wasm. Named binary SHA differs due to named artifact provenance/custom metadata.",
+    "manifest": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/shaper-profile/manifest.json",
+    "functionsMap": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/shaper-profile/functions.map",
+    "standardSectionGuard": "Workflow glyph:shaper-profile-artifact says it fails if optimized executable sections differ; exit 0, releaseSha256==executableSha256. No separate bytewise section-list receipt was emitted by this workflow."
+  },
+  "densityTallyCodegen": {
+    "receipt": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/codec-codegen/current-density-scan.json",
+    "excerpt": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/codec-codegen/prepare_dense_complete_gather_count.wat.txt",
+    "function": {
+      "functionIndex": 387,
+      "name": "_RNvMs5_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine5stateNtB5_12PlannerState35prepare_dense_complete_gather_count"
+    },
+    "lineRange": [246818, 247265],
+    "staticOpcodeCounts": {
+      "loop": 4,
+      "v128.load64_zero": 1,
+      "i16x8.eq": 1,
+      "i32x4.extend_low_i16x8_u": 1,
+      "v128.and": 1,
+      "i32x4.add": 3,
+      "i32x4.extract_lane": 1,
+      "i8x16.shuffle": 2,
+      "i16x8": 0,
+      "memory.fill": 0,
+      "i32.load16_u": 1,
+      "i32.store": 3
+    },
+    "interpretation": "A separately named helper is present in the final optimized named Wasm. Its WAT includes a packed i16 mask comparison/count loop using Wasm SIMD opcodes plus a scalar tail loop. This reports emitted Wasm instructions only; it does not establish runtime execution, hardware SIMD use, or scan frequency. The native test fixture does not establish production Bitmap program counts."
+  },
+  "warnings": {
+    "rootCheckWarningLines": [
+      {
+        "source": "stderr",
+        "line": 4,
+        "text": "$ oxlint --deny-warnings ."
+      },
+      {
+        "source": "stderr",
+        "line": 16,
+        "text": "- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit."
+      },
+      {
+        "source": "stderr",
+        "line": 20,
+        "text": "$ oxlint --deny-warnings ."
+      },
+      {
+        "source": "stderr",
+        "line": 29,
+        "text": "- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit."
+      },
+      {
+        "source": "stderr",
+        "line": 40,
+        "text": "- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit."
+      },
+      {
+        "source": "stderr",
+        "line": 105,
+        "text": "- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit."
+      }
+    ],
+    "namedBuildWarningLines": [
+      {
+        "source": "stderr",
+        "line": 11,
+        "text": "warning: failed to connect to jobserver from environment variable `CARGO_MAKEFLAGS=\"-j --jobserver-fds=3,5 --jobserver-auth=3,5\"`: cannot open file descriptor 3 from the jobserver environment variable value: Bad file descriptor (os error 9)"
+      },
+      {
+        "source": "stderr",
+        "line": 15,
+        "text": "warning: `unicode-ident` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 17,
+        "text": "warning: `itoa` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 19,
+        "text": "warning: `libm` (build script) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 20,
+        "text": "warning: `serde_json` (build script) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 21,
+        "text": "warning: `serde_core` (build script) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 22,
+        "text": "warning: `zmij` (build script) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 23,
+        "text": "warning: `serde_core` (build script) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 24,
+        "text": "warning: `quote` (build script) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 25,
+        "text": "warning: `proc-macro2` (build script) generated 1 warning"
+      },
+      {
+        "source": "stderr",
+        "line": 26,
+        "text": "warning: `scopeguard` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 28,
+        "text": "warning: `memchr` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 30,
+        "text": "warning: `once_cell` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 32,
+        "text": "warning: `serde_json` (build script) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 33,
+        "text": "warning: `lock_api` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 35,
+        "text": "warning: `zmij` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 36,
+        "text": "warning: `smallvec` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 38,
+        "text": "warning: `zmij` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 40,
+        "text": "warning: `itoa` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 42,
+        "text": "warning: `allocator-api2` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 43,
+        "text": "warning: `bitflags` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 44,
+        "text": "warning: `proc-macro2` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 45,
+        "text": "warning: `talc` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 48,
+        "text": "warning: `quote` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 49,
+        "text": "warning: `memchr` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 50,
+        "text": "warning: `unicode-segmentation` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 52,
+        "text": "warning: `core_maths` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 53,
+        "text": "warning: `unicode-bidi` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 54,
+        "text": "warning: `libm` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 55,
+        "text": "warning: `pmndrs-glyph-slug-core` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 56,
+        "text": "warning: `serde_core` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 57,
+        "text": "warning: `serde_core` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 58,
+        "text": "warning: `syn` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 60,
+        "text": "warning: `serde_json` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 62,
+        "text": "warning: `pmndrs-glyph-shaper` (build script) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 63,
+        "text": "warning: `bytemuck_derive` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 66,
+        "text": "warning: `bytemuck` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 68,
+        "text": "warning: `font-types` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 69,
+        "text": "warning: `serde_json` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 71,
+        "text": "warning: `read-fonts` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 72,
+        "text": "warning: `harfrust` (lib) generated 1 warning (1 duplicate)"
+      },
+      {
+        "source": "stderr",
+        "line": 73,
+        "text": "warning: `pmndrs-glyph-shaper` (lib) generated 1 warning (1 duplicate)"
+      }
+    ],
+    "fullLogsRetained": true
+  },
+  "limitations": [
+    "No timing, memory, browser, production-profile, or package-size workflow was run in this gate.",
+    "Static Wasm SIMD opcodes do not establish runtime execution or hardware SIMD utilization.",
+    "The existing native custom program fixture does not establish production Bitmap program counts.",
+    "The full root check ran a shaper test suite as part of package check; its results are reported in the per-run section lines rather than combined with the standalone native run."
+  ]
+}

@@ -1,0 +1,104 @@
+{
+  "created": "2026-10-19T16:14:07.402623+00:00",
+  "baselineArchive": {
+    "basename": "main-4e25a96a.tgz",
+    "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20"
+  },
+  "sourceDirectory": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/application-memory-browser-main-root-dir",
+  "sourceSha256": {
+    "report.json": "7885a32f2e06ec87141ac3b4c9448b1a472c6388f800f282c524704b377b9d9f",
+    "browser-delivery.json": "ac983f3798d29f5bece00841c9295188b51cf8fefc685dc6ddc7be95c41b500c",
+    "command.stdout.log": "db0aae5e1b3890c383f0dca7537cb0aa892e27c9edc8693dbb23a36fcaf64cb2",
+    "physical-footprint.ndjson": "7cf4214818b98522fa87573ec9f47b81040413a7c6302113e5069d53d2192b1e"
+  },
+  "scope": "Current committed ASCII-rich retained-upload fixture, six phases per WebGPU/WebGL2; pixelHash is the existing noncryptographic framebuffer digest plus lit-pixel count, not retained full pixel arrays. This is not the missing historical ignored hero source. No synchronous CPU timings are acceptance evidence in the untimed memory observer.",
+  "workload": {
+    "model": "one retained Text inside one TextGroup",
+    "initialColorSpans": 240,
+    "initialGlyphs": 2880,
+    "idleFrames": 30
+  },
+  "environment": {
+    "browser": "149.0.7827.55",
+    "three": "0.185.1",
+    "glyph": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-YDlHdc/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+main-4e25a96a.tgz_@oxc-project+types@0.150.0_7cbe60a4751913b6ad25cb79aec6334d/node_modules/@pmndrs/glyph"
+  },
+  "backends": {
+    "webgpu": {
+      "initial": {
+        "pixelHash": "edd436be",
+        "litPixels": 48898,
+        "draws": 1,
+        "instances": 2880
+      },
+      "changedContents": {
+        "pixelHash": "acb4311e",
+        "litPixels": 48917,
+        "draws": 1,
+        "instances": 2880
+      },
+      "changedCount": {
+        "pixelHash": "08501d70",
+        "litPixels": 24491,
+        "draws": 1,
+        "instances": 1440
+      },
+      "resized": {
+        "pixelHash": "4854a547",
+        "litPixels": 50569,
+        "draws": 1,
+        "instances": 5760
+      },
+      "drawReplacement": {
+        "pixelHash": "bc1fd119",
+        "litPixels": 63301,
+        "draws": 2,
+        "instances": 5880
+      },
+      "transform": {
+        "pixelHash": "a92799b9",
+        "litPixels": 63301,
+        "draws": 2,
+        "instances": 5880
+      }
+    },
+    "webgl2": {
+      "initial": {
+        "pixelHash": "04fac2ee",
+        "litPixels": 48898,
+        "draws": 1,
+        "instances": 2880
+      },
+      "changedContents": {
+        "pixelHash": "de29bf5e",
+        "litPixels": 48917,
+        "draws": 1,
+        "instances": 2880
+      },
+      "changedCount": {
+        "pixelHash": "b27298a8",
+        "litPixels": 24491,
+        "draws": 1,
+        "instances": 1440
+      },
+      "resized": {
+        "pixelHash": "a166a52b",
+        "litPixels": 50569,
+        "draws": 1,
+        "instances": 5760
+      },
+      "drawReplacement": {
+        "pixelHash": "e9b75465",
+        "litPixels": 63301,
+        "draws": 2,
+        "instances": 5880
+      },
+      "transform": {
+        "pixelHash": "ad4d2245",
+        "litPixels": 63301,
+        "draws": 2,
+        "instances": 5880
+      }
+    }
+  }
+}

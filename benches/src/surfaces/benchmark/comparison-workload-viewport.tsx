@@ -81,6 +81,7 @@ function comparisonViewportEvidence({
     'data-label-font-fixture': appliedWorkloadFonts?.kind === 'icon-grid' ? appliedWorkloadFonts.labels : undefined,
     'data-font-load-ms': stats?.fontLoadMs,
     'data-frames-per-second': stats?.framesPerSecond,
+    'data-frame-count': stats?.frameCount,
     'data-glyph-count': stats?.glyphCount,
     'data-gpu-history-length': stats?.gpuHistoryLength,
     'data-gpu-timing-supported': stats?.gpuTimingSupported,

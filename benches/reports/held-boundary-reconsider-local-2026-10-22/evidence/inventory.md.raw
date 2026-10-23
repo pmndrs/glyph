@@ -1,0 +1,56 @@
+# Boundary reconsideration state and workflow inventory
+
+Created additively on 2026-10-22. No product source, branch, workstate, or original evidence was changed. No gates, builds, timings, or browser captures were run during this inventory.
+
+## Preserved checkout
+
+- Checkout: `/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo`
+- Branch / HEAD: `experiments/held-empty-query-stage-20261022` / `797b41859b6d22cf01bd760cc5f330bb258f59cd`
+- Dirty-state snapshot: `snapshot.json`; tracked diff: `tracked.diff`; current git status: `status.txt`.
+- Every dirty tracked and untracked file has a SHA-256 and byte count in `snapshot.json`. All untracked logs and report files are preserved in `untracked.tar.gz`.
+- Timed source patch at `boundary-wave-20261022/empty-query-stage/source.diff` matches `d422ce5368fca507b53bd329fc238d3d8217d64607340651755c7c110eba71e0`. The final tracked patch matches `453f5fb9747985b9bf5de68eb9a05c88283915e7f736b994da6df6f10abebf06`; its bytes equal the current dirty tracked diff.
+- Frozen candidate archive: `boundary-wave-20261022/empty-query-stage/candidate/pmndrs-glyph-0.1.0.tgz`, SHA-256 `71c1f01afdc812c3ddfbaabbfce2b13524bc14b97b166e46e030c9b67f6faa70` (3,197,348 bytes).
+- Matching named Wasm: `boundary-wave-20261022/empty-query-stage/named-profile/text-shaper.named.wasm`, SHA-256 `1d3bc7035f856809440fa3cdb27c28d71458fdb8e0c97a097a46990d970c395c` (1,790,257 bytes). Prior postflight authenticates source, 454 harness inputs, both candidate archives, all 238 JS archive members, and named Wasm; `overallPass: true`.
+- Final package-check receipt `.../empty-query-stage/package-check-formatted/result.json`: `mise exec -- pnpm --filter @pmndrs/glyph check`, exit 0, 2026-10-22 21:30:20–21:32:59 UTC. Benchmark static and workflow receipts both exit 0. Scoped native cold-output, prepared-query, independent-paragraph, and measure-delivery-rollback receipts all exit 0 (paths and command filters are in the existing evidence directories).
+- Workstate was read only. Its scoped `singleOwnerBoundary20261022.emptyQueryStage` says no active session/wrapper/process, no further execution selected, and no parity. The generic top-level workstate still contains older historical status; the scoped handoff and this checkout's HEAD/branch are authoritative for this task.
+
+## Pinned toolchain and named workflow map
+
+`mise --version` reports `2026.7.6 macos-arm64`; `mise exec -- pnpm --version` reports `11.15.1`. Repository instructions require all commands through pinned `mise`, named workflows through `pnpm scripts run`, and no `ai-cli`. Workflow inventory was read with `mise exec -- pnpm scripts list` and metadata with `scripts show`.
+
+- Full Glyph package gate: `mise exec -- pnpm --filter @pmndrs/glyph check`. Latest candidate receipt passes. Its component named workflows include `glyph:static-check`, `glyph:node-tests`, `glyph:shaper-tests`, `glyph:bake-check`, and `glyph:typegpu-check`; static check requires a current distribution, and shaper tests use pinned Rust/authenticated fonts.
+- Native cold/prepared-query/split/rollback coverage: `glyph:shaper-tests` with the appropriate test filter. Prior specific passing receipts include `short_inter_label_assignments_use_incremental_shape_and_match_cold_output`, `sequential_measure_queries_commit_independent_existing_paragraphs`, `sequential_measurements_accept_each_edit_before_render_publication`, and `committed_measure_is_durable_and_failed_publication_delivery_discards_root`. Do not rerun without a selected candidate.
+- Prepared Labs generator check: `benchmark:prepared-operations-check -- --package-root <installed Glyph root>`; deterministic only, no build/server/timing.
+- Fixed seven-family acceptance: `benchmark:labs-package -- --suite full` with the repository's fixed single-call / fixed-20 policy and exact frozen candidate and saved-candidate baseline arms. Full baseline expects 145 identities; published permits two documented no-outline omissions. The handoff explicitly requires candidate, main, and published comparisons; one frozen source/archive/named-Wasm identity must bind the candidate first. Do not run now.
+- Exact owned allocator memory: `benchmark:shaper-live-memory` with explicit authenticated manifest, output and frozen archive/package root. The `benchmark:application-memory-observe` workflow reports Darwin process-family physical footprint and is explicitly unsuitable for memory admission under the user's exact-owned-allocation rule.
+- Browser timing diagnostic: `benchmark:dense-browser-timing` requires frozen archive SHA, Chromium and authenticated Inter Bitmap fixture; writes JSON and post-timing canvas captures. It measures CPU/render-submit and rAF timing, not GPU completion, and does not replace seven-family acceptance.
+- Hero pixel check: `benchmark:editorial-hero-pixels` compares completed candidate and independent cold-main presentation receipts with externally pinned hashes; no repository source changes. Existing strict comparison retains 842 pixels differing by at most one color level, traced to prior f32 rounding; do not change tolerance.
+- API/ABI and installed-consumer checks: `benchmark:packed-consumer` proves runtime baking from a frozen archive in an isolated browser consumer; `benchmark:release-comparison-check` checks exact-release Labs selection and unsafe-input rejection; `glyph:peer-check` checks declared peer floors and can add browser WebGPU verification. `glyph:node-tests` covers package/integration callers.
+- Delivery sizes: `benchmark:package-size` requires built Glyph and R3F/Tres outputs plus Binaryen and can write an external report; `glyph:shaper-size-accounting` accounts for an authenticated frozen shaper. Do not refresh release snapshots.
+
+## Process/session snapshot
+
+A read-only process scan found no owned pnpm, Cargo, benchmark, Wasm optimizer, Playwright, or Chromium workload. It did find the already-running Vite process for `/Volumes/Depot/Developer/text/apps/pixi3d-hello-world` on port 5173; it was left untouched, as required. Chrome/Claude crashpad and application helper processes also appeared but are not owned workloads. No job was started or stopped.
+
+## Current decision boundary
+
+This work only preserves state and inventories named workflows. No candidate has been selected for further evaluation. Keep #292 → #301 → #302 → draft #310 held and unmerged. Once selected, freeze exact source, archive and matching named Wasm before any consolidated evaluation; retain complete-operation p50/p90, blocks and tails, apply no 5% floor, and count only exact allocations owned by the measured subsystem.
+
+## Fixed-20 acceptance reference export and review inventory
+
+The saved corrected fixed-20 dense rows are exported additively to `fixed20-reference-dense.json` and `fixed20-reference-dense.md` in this evidence directory. They copy the candidate/main/published distribution rows for `rewrite 512 labels in one group` and `publish 1024 retained Text instances`, including exact p50/p90/p95/N and all eight chronological block medians. They do not reprocess the samples or change the nearest-rank policy. The JSON pins the source distributions, raw result files, manifests, archive identities, and their SHA-256 values. The companion Markdown includes existing sparse and inspection gains and links the seven-family nonparity decision to the frozen report.
+
+- Existing fixed-20 performance admission review: `boundary-wave-20261022/fixed20-admission-review.md`, SHA-256 `f260c8c104908e6e556e02409f0174509e6094be1f7b22d890d2860913f3b454`. It concludes that parity is not established across the fixed seven families against both controls; draft stays held. This is an evidence/performance review, not a source-only review.
+- Existing written read-only source review: `boundary-wave-20261022/v3-combination-source-review.md`, SHA-256 `ea27f88846cc013ce5e0c1589c5aa7ab6eba81a0afff1e5efe297417bc49f1a6`. It covers an earlier V3 combination diff, not the current HELD source or the profile-output observer patch.
+- Root brief history reports a clean High source review of the two-line additive profile-output change, with no callback/timing changes. No standalone written review file for that brief was supplied in this evidence tree; this inventory records the report without presenting it as a saved formal review artifact.
+- High completed the named other-Wasm classification review in `current-cost-review.md` (SHA-256 `c525ea4748f76a321718047f47ee9d30c2a74a33517773c9ce57b4af182bdead`). It finds that JavaScript plus allocation plus host runtime is a descriptive subset, not a compact-descriptor upper envelope, because `other-wasm` also contains parsing, entry, validation, commit, and semantic algorithms. The profile still does not provide a fixed-work savings estimate.
+
+No source, branch, artifact, raw timing sample, or seven-family acceptance result was changed to create this reference export.
+
+## Clean submission worktree preparation
+
+- Submission worktree: `/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/submit-source`; branch `feat/rust-text-input-wire`, HEAD `797b41859b6d22cf01bd760cc5f330bb258f59cd`. It was clean before dependency preparation.
+- For dependency access without installation/build, `submit-source/node_modules` is a symlink to the original checkout's existing `/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules`. This link appears as untracked in the submit worktree; remove it before staging or committing.
+- `core.hooksPath` is unset; the shared default hook directory resolves to `/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/.git/hooks`. The active pre-commit wrapper runs the checkout's `.githooks/pre-commit.mjs`, which autoformats staged formatable files, runs `oxlint --fix --deny-warnings` for staged JS/TS, then runs the nonblocking `.githooks/okf-docs-report.mjs`. Inspect/finalize docs attestation before triggering this formatter-on-commit hook.
+- Shared pre-push hook runs `git lfs pre-push`; `git-lfs` is installed (3.8.0). GPG commit signing is enabled in user config; a user name/email are configured. Remote `origin` is HTTPS `https://github.com/pmndrs/glyph` for fetch and push.
+- No gates, build, install, commit, push, or PR submission was run from this prepared worktree. Work is pending Medium's additive doc/evidence copy and root's final authorization for attestation, scoped checks, hooks, commit, and submission.

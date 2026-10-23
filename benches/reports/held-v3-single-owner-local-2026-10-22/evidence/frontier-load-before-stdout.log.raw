@@ -1,0 +1,40 @@
+Thu Oct 22 20:49:54 UTC 2026
+Processes: 729 total, 3 running, 726 sleeping, 5940 threads 
+2026/10/22 16:49:54
+Load Avg: 2.63, 3.19, 3.60 
+CPU usage: 5.62% user, 22.76% sys, 71.61% idle 
+SharedLibs: 499M resident, 152M data, 102M linkedit.
+MemRegions: 601273 total, 4899M resident, 182M private, 1429M shared.
+PhysMem: 15G used (3497M wired, 4222M compressor), 650M unused.
+VM: 338T vsize, 6144M framework vsize, 2341710(0) swapins, 3606251(0) swapouts.
+Networks: packets: 68204967/81G in, 52303463/69G out.
+Disks: 669495207/7004G read, 27367835/2092G written.
+
+
+Processes: 729 total, 2 running, 727 sleeping, 5937 threads 
+2026/10/22 16:49:55
+Load Avg: 2.63, 3.19, 3.60 
+CPU usage: 6.33% user, 14.56% sys, 79.9% idle 
+SharedLibs: 499M resident, 152M data, 102M linkedit.
+MemRegions: 0 total, 0B resident, 182M private, 1429M shared.
+PhysMem: 15G used (3377M wired, 4221M compressor), 654M unused.
+VM: 338T vsize, 6144M framework vsize, 2341710(0) swapins, 3606251(0) swapouts.
+Networks: packets: 68205096/81G in, 52303566/69G out.
+Disks: 669495207/7004G read, 27367849/2092G written.
+
+
+  PID  PPID  %CPU COMMAND
+42659 42601 131.3 node /Volumes/Depot/Developer/text/apps/pixi3d-hello-world/node_modules/.bin/../../../../node_modules/.pnpm/vite@8.1.5_@types+node@24.13.3_esbuild@0.28.2_jiti@2.7.0_tsx@4.23.13/node_modules/vite/bin/vite.js --port 5173 --host 127.0.0.1 --strictPort --force
+ 1995     1  19.5 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -m sidepulse status-bar --foreground
+  618     1  12.8 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+ 1445  1302   3.9 /Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex -c features.code_mode_host=true app-server --analytics-default-enabled -c plugins.codex-app-tools@openai-bundled.mcp_servers.codex_app.enabled=true -c plugins.code-review@openai-bundled.mcp_servers.code-review.enabled=true
+  738     1   2.1 /System/Library/DriverExtensions/com.apple.DriverKit-AppleBCMWLAN.dext/com.apple.DriverKit-AppleBCMWLAN com.apple.bcmwlan 0x100000f43 com.apple.DriverKit-AppleBCMWLAN
+ 1222     1   1.9 /System/Library/CoreServices/UniversalControl.app/Contents/MacOS/UniversalControl
+  633     1   1.6 /usr/sbin/coreaudiod
+ 1302     1   1.2 /Applications/ChatGPT.app/Contents/MacOS/ChatGPT
+  611     1   0.8 /usr/sbin/notifyd
+  610     1   0.7 /usr/sbin/bluetoothd
+  544     1   0.6 /usr/libexec/logd
+27272     1   0.6 /System/Volumes/Preboot/Cryptexes/App/System/Library/StagedFrameworks/Safari/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.GPU.xpc/Contents/MacOS/com.apple.WebKit.GPU
+27383     1   0.5 /System/Volumes/Preboot/Cryptexes/App/System/Library/StagedFrameworks/Safari/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebKit.WebContent
+ 1054     1   0.4 /usr/libexec/sharingd

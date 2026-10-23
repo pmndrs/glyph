@@ -30,6 +30,7 @@ export function shaperOptimizationArguments(simd) {
     '--enable-bulk-memory',
     '--enable-nontrapping-float-to-int',
     ...(simd ? ['--enable-simd'] : []),
+    '--one-caller-inline-max-function-size=0',
     '--merge-similar-functions',
     '-Oz',
     '--merge-similar-functions',

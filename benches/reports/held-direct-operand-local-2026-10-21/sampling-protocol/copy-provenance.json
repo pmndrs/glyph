@@ -1,0 +1,47 @@
+{
+  "scope": "Later fixed-policy protocol proof/reviews; no E5 adaptive data was reclassified as fixed and no E6 elapsed results are claimed. Original review findings preserved; correction review closes both.",
+  "files": [
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/sampling-protocol/sampling-protocol-implementation-handoff.md",
+      "destination": "sampling-protocol-implementation-handoff.md",
+      "bytes": 5176,
+      "sha256": "eda918dd1ccf44a69c79cce0b92f839bb4dda28c800a506dcce6cab677d3e160"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/sampling-protocol/protocol-proof.json",
+      "destination": "protocol-proof.json",
+      "bytes": 323,
+      "sha256": "f6270b39bcb2b7a45fd90885342e75c0b075a1ec8c2fa1c7af65cfdaac6fd7b0"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/sampling-protocol/static-audit.json",
+      "destination": "static-audit.json",
+      "bytes": 504,
+      "sha256": "875e2de92e49f8c2f02542024ce1388685566f11114689255529da94b73c9673"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/sampling-protocol/fixed-sampling-high-review.md",
+      "destination": "fixed-sampling-high-review.md",
+      "bytes": 10206,
+      "sha256": "416e8f2b22be516d5cdd9fa87ea91e4e315b4200558abee9b3479886da2b86fb"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/sampling-protocol/high-correction-handoff.md",
+      "destination": "high-correction-handoff.md",
+      "bytes": 5383,
+      "sha256": "ba4c0cdbf1275c6357bbf709c83cb38059f1814e62761b9f74df9ed892c02d00"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/sampling-protocol/high-correction-receipt.json",
+      "destination": "high-correction-receipt.json",
+      "bytes": 1425,
+      "sha256": "95d48985d58432a60a78973422d4bdf4c523b08386e20e2b218e84c8f0f5d950"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/sampling-protocol/fixed-sampling-high-correction-review.md",
+      "destination": "fixed-sampling-high-correction-review.md",
+      "bytes": 6190,
+      "sha256": "bfb38d4a49cd9299e492df96f583a2a0cef0a14b8764ed82aeef85e44a8f297a"
+    }
+  ]
+}

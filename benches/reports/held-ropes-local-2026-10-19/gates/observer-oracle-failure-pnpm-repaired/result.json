@@ -1,0 +1,32 @@
+{
+  "argv": [
+    "/usr/bin/env",
+    "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch",
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "benchmark:application-memory-observe",
+    "--",
+    "--artifact",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "--output",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/failure-output-pnpm-repaired",
+    "--mode",
+    "browser",
+    "--",
+    "/Users/mini/.local/share/mise/installs/node/24.18.0/bin/node",
+    "--expose-gc",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/faultcopy/bulk-memory.observe.fault.mts"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-19T16:07:21.189113+00:00",
+  "finished": "2026-10-19T16:07:23.127448+00:00",
+  "exit": 1,
+  "sha256": {
+    "stdout.log": "8358fb96a8efad37e6860f3fe2c25c765b0c66ea28724e8b17631e8f23132661",
+    "stderr.log": "d0988100f8db7af4f63b7b38b8c825205cc24f99e5d0ff213e13987a62a194db"
+  }
+}

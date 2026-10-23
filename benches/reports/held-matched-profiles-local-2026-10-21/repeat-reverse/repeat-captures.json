@@ -1,0 +1,56 @@
+{
+  "atUtc": "2026-10-22T00:49:44.616267+00:00",
+  "order": [
+    "e6",
+    "v3",
+    "e4",
+    "main"
+  ],
+  "results": [
+    {
+      "arm": "e6",
+      "archive": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "archiveSha256": "d2f7a01ffb47aeaf87499979310286f1c980b88389e20bd1fc0f39794a0fc18c",
+      "named": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/shaper-profile/text-shaper.named.wasm",
+      "namedSha256": "94d12b02cf7a5cc331196fe8e24844ff89db23d72eaa0654c28af8fc4fa14f47",
+      "beforeProcess": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/e6-before-process.json",
+      "afterProcess": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/e6-after-process.json",
+      "captureResult": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/e6-capture/result.json",
+      "exit": 0
+    },
+    {
+      "arm": "v3",
+      "archive": "/Volumes/Depot/Developer/glyph/.cache/held-dense-frontier-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "archiveSha256": "104be64f889f04989ee2660f8b9fc1c4fca22e5ea83539b2ace4d9075a9adacd",
+      "named": "/Volumes/Depot/Developer/glyph/.cache/held-dense-frontier-20261021/evidence/candidate/shaper-profile/text-shaper.named.wasm",
+      "namedSha256": "2ba09b4ab6c0170c879cdd59d53cd9aec55fde7dc9aa01ca3b6330e6f15ac9a5",
+      "beforeProcess": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/v3-before-process.json",
+      "afterProcess": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/v3-after-process.json",
+      "captureResult": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/v3-capture/result.json",
+      "exit": 0
+    },
+    {
+      "arm": "e4",
+      "archive": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "archiveSha256": "9b1ad97a03f5af8eaa0613e5bdaab601edf7fccf69fdeacc6059759191b1fb18",
+      "named": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/shaper-profile/text-shaper.named.wasm",
+      "namedSha256": "806066af37452bbf5781955c8bb6f2083997cc68fd0e5eae485612ea5b608826",
+      "beforeProcess": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/e4-before-process.json",
+      "afterProcess": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/e4-after-process.json",
+      "captureResult": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/e4-capture/result.json",
+      "exit": 0
+    },
+    {
+      "arm": "main",
+      "archive": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+      "archiveSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "named": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/main-named-artifact/text-shaper.named.wasm",
+      "namedSha256": "8068ac682653e22f185d419ca0623e28d2e8db70adc0a31451a670423808b8ea",
+      "beforeProcess": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/main-before-process.json",
+      "afterProcess": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/main-after-process.json",
+      "captureResult": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/main-capture/result.json",
+      "exit": 0
+    }
+  ],
+  "sourceAndFixturesUnchanged": true
+}

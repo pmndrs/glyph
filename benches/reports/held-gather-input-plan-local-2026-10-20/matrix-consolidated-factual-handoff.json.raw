@@ -1,0 +1,271 @@
+{
+  "capturedAtUtc": "2026-10-20T23:58:49.276780+00:00",
+  "repo": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "head": "b81756a5ce4541b4e9b23d7ad04c9105345e7cff",
+  "tree": "0b626625d9599c5c0c3579e87a446e5a11e55ff3",
+  "soleDirtySource": {
+    "path": "packages/glyph/rust/shaper/src/engine/codec_gather.rs",
+    "sha256": "e8c21cb9c7dddb99c9211bdadfd372bdc236d7a385c3f4868bac9ece36c33f7b"
+  },
+  "frozenTrackedGateInputCount": 666,
+  "changedTrackedGateInputsAfterAllRuns": [],
+  "artifacts": {
+    "candidate": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "sha256": "9b1ad97a03f5af8eaa0613e5bdaab601edf7fccf69fdeacc6059759191b1fb18",
+      "expectedSha256": "9b1ad97a03f5af8eaa0613e5bdaab601edf7fccf69fdeacc6059759191b1fb18",
+      "matches": true,
+      "bytes": 3196682
+    },
+    "main": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+      "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "expectedSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "matches": true,
+      "bytes": 3120073
+    },
+    "published": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+      "sha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+      "expectedSha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+      "matches": true,
+      "bytes": 2271693
+    },
+    "priorE2": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "sha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+      "expectedSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+      "matches": true,
+      "bytes": 3196121
+    }
+  },
+  "candidateSavedRun": "matrix-main-data",
+  "arms": {
+    "main": {
+      "exitCode": 0,
+      "receipt": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-main-01/result.json",
+      "manifest": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-main-data/manifest.json",
+      "manifestSha256": "2ddffd0a4d6ed3224ab491c89764650987bad8f445385f331c5beece4bff4988",
+      "manifestContent": {
+        "generatedAt": "2026-10-20T23:17:22.506Z",
+        "labsVersion": "0.9.0",
+        "harnessDigest": "024d0f4a23200fade2fda80676cab66eb0536656781ba44db88cf36b07236627",
+        "blocks": 8,
+        "suite": "full",
+        "baseline": {
+          "requested": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+          "version": "0.1.0",
+          "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20"
+        },
+        "candidate": {
+          "requested": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "version": "0.1.0",
+          "sha256": "9b1ad97a03f5af8eaa0613e5bdaab601edf7fccf69fdeacc6059759191b1fb18"
+        },
+        "comparison": "comparison.txt",
+        "notComparable": {
+          "baselineCheckFailures": [],
+          "timingModeMismatches": [
+            "layout.bench.ts / cached per-glyph inspection / cached per-glyph inspection: baseline batched, candidate single-call",
+            "prepared-operations.bench.ts / 100 labels first set+measure / 100 labels first set+measure: baseline single-call, candidate batched",
+            "prepared-operations.bench.ts / 1000 labels first set+measure / 1000 labels first set+measure: baseline single-call, candidate batched"
+          ]
+        }
+      },
+      "files": {
+        "comparison.txt": {
+          "bytes": 54366,
+          "sha256": "a497c2b55260733a37e2ecd5376aecadb875b16a9191c87c2f825d3cf985513e"
+        },
+        "summary.md": {
+          "bytes": 46212,
+          "sha256": "d462f2d7bb70decff0a3ac1823f0c72fad39ab25e99aa4fabbd0182c90760d16"
+        },
+        "candidate.json": {
+          "bytes": 2169151,
+          "sha256": "e859be4b34068b7060601af793cae68b4363dd3ce168b75df4875167f7cfcfc5"
+        },
+        "candidate-pnpm-lock.yaml": {
+          "bytes": 21986,
+          "sha256": "6ec8e50701f4c1d7abfda1f03457bd12e569616aca21f0ff1f63abdd33c90c84"
+        },
+        "baseline-package.json": {
+          "bytes": 294,
+          "sha256": "16ffa2af94825b4df40e73b72549828113463cf23b41e1c27bc0a24860c43438"
+        },
+        "baseline-pnpm-lock.yaml": {
+          "bytes": 22302,
+          "sha256": "1b72a1762336ffebf98096b25e913dbf0d90e33b5341d79ece8dca16f5a23f80"
+        },
+        "baseline.json": {
+          "bytes": 2135466,
+          "sha256": "a29d9966f677c29ea3a2660bfa567e4b9a0a845644dfd3b51bc759175d70bc3d"
+        },
+        "candidate-package.json": {
+          "bytes": 313,
+          "sha256": "66ff88aa5b26a9886c7f00965524e5dfb3f17a83800c9ef2ce206db70c503d98"
+        },
+        "manifest.json": {
+          "bytes": 1232,
+          "sha256": "2ddffd0a4d6ed3224ab491c89764650987bad8f445385f331c5beece4bff4988"
+        }
+      },
+      "comparison": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-main-data/comparison.txt",
+      "summary": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-main-data/summary.md"
+    },
+    "published": {
+      "exitCode": 0,
+      "receipt": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-published-01.direct-session.json",
+      "manifest": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-published-data/manifest.json",
+      "manifestSha256": "44ae7371b2e4843f18f7e5b8aacad3722c33444a6cddd1ee26be6c78332e865f",
+      "manifestContent": {
+        "generatedAt": "2026-10-20T23:38:39.042Z",
+        "labsVersion": "0.9.0",
+        "harnessDigest": "024d0f4a23200fade2fda80676cab66eb0536656781ba44db88cf36b07236627",
+        "blocks": 8,
+        "suite": "full",
+        "baseline": {
+          "requested": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+          "version": "0.1.0",
+          "sha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b"
+        },
+        "candidate": {
+          "requested": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "version": "0.1.0",
+          "sha256": "9b1ad97a03f5af8eaa0613e5bdaab601edf7fccf69fdeacc6059759191b1fb18"
+        },
+        "savedCandidate": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-main-data",
+        "comparison": "comparison.txt",
+        "notComparable": {
+          "baselineCheckFailures": [],
+          "timingModeMismatches": [
+            "prepared-operations.bench.ts / 100 labels first set+measure / 100 labels first set+measure: baseline single-call, candidate batched",
+            "prepared-operations.bench.ts / 1000 labels first set+measure / 1000 labels first set+measure: baseline single-call, candidate batched"
+          ]
+        }
+      },
+      "files": {
+        "comparison.txt": {
+          "bytes": 53059,
+          "sha256": "81ded37966eb1aa793683c3c5368004fe79d43881540dd990af4b0cc021f596c"
+        },
+        "summary.md": {
+          "bytes": 46089,
+          "sha256": "98e22f0e229b3e6e362a6d8f24c41b974cd916b1aedba23b213adeedd37c1659"
+        },
+        "candidate.json": {
+          "bytes": 2169151,
+          "sha256": "e859be4b34068b7060601af793cae68b4363dd3ce168b75df4875167f7cfcfc5"
+        },
+        "candidate-pnpm-lock.yaml": {
+          "bytes": 21986,
+          "sha256": "6ec8e50701f4c1d7abfda1f03457bd12e569616aca21f0ff1f63abdd33c90c84"
+        },
+        "saved-candidate-manifest.json": {
+          "bytes": 1232,
+          "sha256": "2ddffd0a4d6ed3224ab491c89764650987bad8f445385f331c5beece4bff4988"
+        },
+        "baseline-package.json": {
+          "bytes": 296,
+          "sha256": "e0eb83881d74c87a7f1fa7461017eae5a67d1c34ee02a020682f61bb9514e779"
+        },
+        "baseline-pnpm-lock.yaml": {
+          "bytes": 22503,
+          "sha256": "8396e1af0369fafdc051cc47277155b83d847b556e6b6976407a5f9b0c7ef05a"
+        },
+        "baseline.json": {
+          "bytes": 2049882,
+          "sha256": "e71c1da0832bd3ce499a678a065f5379cc4eb16db8385bacb8fb1d3722368d10"
+        },
+        "candidate-package.json": {
+          "bytes": 313,
+          "sha256": "66ff88aa5b26a9886c7f00965524e5dfb3f17a83800c9ef2ce206db70c503d98"
+        },
+        "manifest.json": {
+          "bytes": 1227,
+          "sha256": "44ae7371b2e4843f18f7e5b8aacad3722c33444a6cddd1ee26be6c78332e865f"
+        }
+      },
+      "comparison": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-published-data/comparison.txt",
+      "summary": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-published-data/summary.md"
+    },
+    "prior-e2": {
+      "exitCode": 0,
+      "receipt": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-prior-e2-01/result.json",
+      "manifest": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-prior-e2-data/manifest.json",
+      "manifestSha256": "7af480e730b9334534e58cde5f51ec63a96675871ecf1f20cf882f7807fe7481",
+      "manifestContent": {
+        "generatedAt": "2026-10-20T23:58:26.476Z",
+        "labsVersion": "0.9.0",
+        "harnessDigest": "024d0f4a23200fade2fda80676cab66eb0536656781ba44db88cf36b07236627",
+        "blocks": 8,
+        "suite": "full",
+        "baseline": {
+          "requested": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "version": "0.1.0",
+          "sha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb"
+        },
+        "candidate": {
+          "requested": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "version": "0.1.0",
+          "sha256": "9b1ad97a03f5af8eaa0613e5bdaab601edf7fccf69fdeacc6059759191b1fb18"
+        },
+        "savedCandidate": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-main-data",
+        "comparison": "comparison.txt",
+        "notComparable": {
+          "baselineCheckFailures": [],
+          "timingModeMismatches": []
+        }
+      },
+      "files": {
+        "comparison.txt": {
+          "bytes": 54140,
+          "sha256": "79fdb3ed7bfb7d9b2942dffa6e30c2d23804efc266d5e8dc6a4c2d748f7c9c4e"
+        },
+        "summary.md": {
+          "bytes": 46167,
+          "sha256": "7f8e28bb2446b84b7d5c83845e3fed7114952da81780bf36be52e68043ebc2d0"
+        },
+        "candidate.json": {
+          "bytes": 2169151,
+          "sha256": "e859be4b34068b7060601af793cae68b4363dd3ce168b75df4875167f7cfcfc5"
+        },
+        "candidate-pnpm-lock.yaml": {
+          "bytes": 21986,
+          "sha256": "6ec8e50701f4c1d7abfda1f03457bd12e569616aca21f0ff1f63abdd33c90c84"
+        },
+        "saved-candidate-manifest.json": {
+          "bytes": 1232,
+          "sha256": "2ddffd0a4d6ed3224ab491c89764650987bad8f445385f331c5beece4bff4988"
+        },
+        "baseline-package.json": {
+          "bytes": 300,
+          "sha256": "128a30f6ea8f8aae6d38ce28115d5bd67f76e193f2893c52729aab687b193b28"
+        },
+        "baseline-pnpm-lock.yaml": {
+          "bytes": 22114,
+          "sha256": "ba30bf660ffa274a640645b65f1b17c2b7d3090b31a7f57bfa9fc269bb9e9f10"
+        },
+        "baseline.json": {
+          "bytes": 2166598,
+          "sha256": "627c921d47ec79c19c90df72eb2fd22d004e0f6fba8d10a44f03f27f55bce693"
+        },
+        "candidate-package.json": {
+          "bytes": 313,
+          "sha256": "66ff88aa5b26a9886c7f00965524e5dfb3f17a83800c9ef2ce206db70c503d98"
+        },
+        "manifest.json": {
+          "bytes": 943,
+          "sha256": "7af480e730b9334534e58cde5f51ec63a96675871ecf1f20cf882f7807fe7481"
+        }
+      },
+      "comparison": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-prior-e2-data/comparison.txt",
+      "summary": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-prior-e2-data/summary.md"
+    }
+  },
+  "limitations": [
+    "Published arm was launched directly via exec_command rather than E4/run.py; exact command, observed PID/session/OS start and poll stream including missing/truncated chunks are recorded in matrix-published-01.direct-session.json; no synthetic wrapper receipt was created.",
+    "All arms are diagnostics; this collection makes no product acceptance or nonregression decision.",
+    "Labs software clock/calibration labels are not independent hardware-frequency measurements. Preserve per-run warning/drift and exclusions from raw reports."
+  ]
+}

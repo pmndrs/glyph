@@ -1,13 +1,12 @@
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import type {
-  BorrowedGlyphLayout,
   LayoutBox,
   GlyphLayoutColumns,
   ParagraphLayoutSummary,
   ParagraphLineMetrics,
   LineFontMetrics,
 } from '../layout.js';
-import type { PlanPublication } from './handle-state.js';
+import type { BorrowedLayoutPublication, PlanPublication, PlanTransport } from './handle-state.js';
 
 const zeroFontMetrics: LineFontMetrics = Object.freeze({
   ascent: 0,
@@ -188,12 +187,10 @@ export function measurementFromLayoutInspection(layout: GlyphLayoutColumns): Par
 /** Copies owned inspection columns from the current prepared borrowed layout without replaying text preparation. */
 export function copyPreparedLayoutInspection(
   measurement: ParagraphLayoutSummary,
-  borrowed: BorrowedGlyphLayout,
+  transport: PlanTransport,
+  borrowed: BorrowedLayoutPublication,
 ): GlyphLayoutColumns {
   const glyphCount = borrowed.glyphCount;
-  if (glyphCount !== measurement.glyphCount) {
-    throw new TypeError('prepared glyph demand disagrees with its measurement');
-  }
   const fontHandles: number[] = [];
   const fontSlots = new Map<number, number>();
   const glyphStableIds = new Uint32Array(glyphCount);
@@ -210,29 +207,36 @@ export function copyPreparedLayoutInspection(
   const glyphInkWidths = new Float32Array(glyphCount);
   const glyphInkHeights = new Float32Array(glyphCount);
   const glyphFlags = new Uint16Array(glyphCount);
-  for (let index = 0; index < glyphCount; index += 1) {
-    const glyph = borrowed.glyphAt(index);
-    let fontSlot = fontSlots.get(glyph.fontHandle);
-    if (fontSlot === undefined) {
-      fontSlot = fontHandles.length;
-      if (fontSlot > 0xffff) throw new RangeError('prepared layout exceeds the font-slot range');
-      fontSlots.set(glyph.fontHandle, fontSlot);
-      fontHandles.push(glyph.fontHandle);
+  const record = textShaperAbi.layouts.borrowedGlyph;
+  for (let start = 0; start < glyphCount; start += textShaperAbi.engine.borrowedGlyphCapacity) {
+    const count = Math.min(textShaperAbi.engine.borrowedGlyphCapacity, glyphCount - start);
+    const view = transport.borrowParagraphGlyphs(borrowed, start, count);
+    for (let offset = 0; offset < count; offset += 1) {
+      const index = start + offset;
+      const base = offset * record.size;
+      const fontHandle = view.getUint32(base + record.fontHandle, true);
+      let fontSlot = fontSlots.get(fontHandle);
+      if (fontSlot === undefined) {
+        fontSlot = fontHandles.length;
+        if (fontSlot > 0xffff) throw new RangeError('prepared layout exceeds the font-slot range');
+        fontSlots.set(fontHandle, fontSlot);
+        fontHandles.push(fontHandle);
+      }
+      glyphStableIds[index] = view.getUint32(base + record.stableId, true);
+      glyphFontSlots[index] = fontSlot;
+      glyphIds[index] = view.getUint16(base + record.glyphId, true);
+      clusters[index] = view.getUint32(base + record.cluster, true);
+      glyphBidiLevels[index] = view.getUint8(base + record.bidiLevel);
+      glyphFontSizes[index] = view.getFloat32(base + record.fontSize, true);
+      x[index] = view.getFloat32(base + record.inlineOrigin, true);
+      y[index] = view.getFloat32(base + record.blockOrigin, true);
+      glyphAdvances[index] = view.getFloat32(base + record.inlineAdvance, true);
+      glyphInkX[index] = view.getFloat32(base + record.inkInlineStart, true);
+      glyphInkY[index] = view.getFloat32(base + record.inkBlockStart, true);
+      glyphInkWidths[index] = view.getFloat32(base + record.inkInlineExtent, true);
+      glyphInkHeights[index] = view.getFloat32(base + record.inkBlockExtent, true);
+      glyphFlags[index] = view.getUint16(base + record.flags, true);
     }
-    glyphStableIds[index] = glyph.stableId;
-    glyphFontSlots[index] = fontSlot;
-    glyphIds[index] = glyph.glyphId;
-    clusters[index] = glyph.cluster;
-    glyphBidiLevels[index] = glyph.bidiLevel;
-    glyphFontSizes[index] = glyph.fontSize;
-    x[index] = glyph.x;
-    y[index] = glyph.y;
-    glyphAdvances[index] = glyph.advance;
-    glyphInkX[index] = glyph.inkX;
-    glyphInkY[index] = glyph.inkY;
-    glyphInkWidths[index] = glyph.inkWidth;
-    glyphInkHeights[index] = glyph.inkHeight;
-    glyphFlags[index] = glyph.flags;
   }
   const lineTextStarts = new Uint32Array(measurement.lineCount);
   const lineTextEnds = new Uint32Array(measurement.lineCount);
@@ -248,8 +252,23 @@ export function copyPreparedLayoutInspection(
     lineBaselines[index] = line.baseline;
     lineAdvances[index] = line.advance;
   }
+  const lines = measurement.lines.map((line) =>
+    Object.freeze({
+      ...line,
+      inkBounds: glyphInkBounds(
+        glyphInkX,
+        glyphInkY,
+        glyphInkWidths,
+        glyphInkHeights,
+        line.glyphStart,
+        line.glyphCount,
+      ),
+    }),
+  );
   return Object.freeze({
     ...measurement,
+    inkBounds: glyphInkBounds(glyphInkX, glyphInkY, glyphInkWidths, glyphInkHeights, 0, glyphCount),
+    lines: Object.freeze(lines),
     fontHandles: Uint32Array.from(fontHandles),
     glyphStableIds,
     glyphFontSlots,
@@ -272,6 +291,29 @@ export function copyPreparedLayoutInspection(
     lineBaselines,
     lineAdvances,
   });
+}
+
+/** Copied borrowed glyph records carry positioned ink; aggregate it only for an owned inspection. */
+function glyphInkBounds(
+  x: Float32Array,
+  y: Float32Array,
+  widths: Float32Array,
+  heights: Float32Array,
+  start: number,
+  count: number,
+): LayoutBox | undefined {
+  if (count === 0) return undefined;
+  let minX = x[start]!;
+  let minY = y[start]!;
+  let maxX = minX + widths[start]!;
+  let maxY = minY + heights[start]!;
+  for (let index = start + 1; index < start + count; index += 1) {
+    minX = Math.min(minX, x[index]!);
+    minY = Math.min(minY, y[index]!);
+    maxX = Math.max(maxX, x[index]! + widths[index]!);
+    maxY = Math.max(maxY, y[index]! + heights[index]!);
+  }
+  return Object.freeze({ x: minX, y: minY, width: maxX - minX, height: maxY - minY });
 }
 
 /** Copies one explicitly requested retained layout out of borrowed Wasm publication memory. */

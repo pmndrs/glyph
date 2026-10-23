@@ -1,0 +1,149 @@
+{
+  "schema": "held-e6-consolidated-package-gate-summary-v1",
+  "recordedUtc": "2026-10-21T03:34:28.971560+00:00",
+  "status": "package/artifact gates terminal; matrix/timing not authorized here",
+  "releaseFreeze": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/root-package-gate-release.json",
+    "sha256": "b5fb904dc85252ecdef9e71d72ffbe1499f616878b997445ac1bec35cf5cfdb5",
+    "inputCount": 759,
+    "head": "b331b12b26c17d861c5570caf76ddbe4feb75eb6",
+    "sourceInputsUnchangedThroughPeerGate": true,
+    "highReviewSha256": "3eec345c4e70a4fac287ad23185c67c5cccf5e785f8c75a606f2638431f3c13e",
+    "formatterPolicy": ".oxfmtrc.json included in freeze"
+  },
+  "packageCheck": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/package-check-final-01/result.json",
+    "exit": 0,
+    "rustSummaryLines": 26,
+    "rustPassed": 593,
+    "rustFailed": 0,
+    "rustIgnored": 2,
+    "postflight": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/package-check-postflight.json"
+  },
+  "toolchain": {
+    "node": "v24.18.0",
+    "pnpm": "11.15.1",
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+    "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+    "binaryen": "129.0.0"
+  },
+  "candidate": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "sha256": "d2f7a01ffb47aeaf87499979310286f1c980b88389e20bd1fc0f39794a0fc18c",
+    "bytes": 3205032,
+    "shippedDistMembers": 947,
+    "exactDistBridgeAfterPeer": true,
+    "postPeerBridge": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/post-peer-bridge-summary.json"
+  },
+  "namedShipping": {
+    "manifest": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/shaper-profile/manifest.json",
+    "namedWasmSha256": "94d12b02cf7a5cc331196fe8e24844ff89db23d72eaa0654c28af8fc4fa14f47",
+    "shippingShaperSha256": "a1cc22c755d72f5d745ed09d42f7ee3cd6e7120c2f89b8dfed3a1c3ace16ef33",
+    "simd": true,
+    "oneCallerInlineMaxFunctionSize": "0",
+    "namedVsShippingStandardSectionsExact": true,
+    "binaryen": "wasm-opt version 129 (version_129)"
+  },
+  "size": {
+    "report": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/shaper-size/report.json",
+    "shippingRawBytes": 1629518,
+    "shippingWholeFileGzipBytes": 609071,
+    "mainBaselineRawBytes": 1462005,
+    "mainBaselineWholeFileGzipBytes": 541363,
+    "deltaRawBytes": 167513,
+    "deltaGzipBytes": 67708,
+    "definedFunctions": 1607,
+    "baselineDefinedFunctions": 887
+  },
+  "abi": {
+    "report": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/wasm-abi-and-section-evidence.json",
+    "imports": 0,
+    "e2NamesKindsSignaturesExact": true,
+    "e5NamesKindsSignaturesExact": true,
+    "mainNamesKindsSignaturesExact": false,
+    "otherFourWasmExactVsE2": true,
+    "namedStandardSectionsExact": true
+  },
+  "simdStaticWitness": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/wasm-simd-decoded-witness.json",
+    "namedWasmSha256": "94d12b02cf7a5cc331196fe8e24844ff89db23d72eaa0654c28af8fc4fa14f47",
+    "executeProgramOperators": {
+      "v128.load": 25,
+      "i8x16.shuffle": 10,
+      "i32x4.ne": 1,
+      "f32x4.add": 1,
+      "v128.store": 19
+    },
+    "scope": "static compiled-code presence only; no runtime utilization claim"
+  },
+  "memberContract": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/package-member-contract-comparison.json",
+    "e5MemberCounts": {
+      "E6": 1222,
+      "baseline": 1222,
+      "exactCommon": 1221,
+      "differentBytesCount": 1,
+      "missingFromE6Count": 0,
+      "onlyInE6Count": 0
+    },
+    "e2MemberCounts": {
+      "E6": 1222,
+      "baseline": 1222,
+      "exactCommon": 1221,
+      "differentBytesCount": 1,
+      "missingFromE6Count": 0,
+      "onlyInE6Count": 0
+    },
+    "e5PackageMetadataExact": true,
+    "e2PackageMetadataExact": true,
+    "e5DeclarationsJsSourceExact": true,
+    "e2DeclarationsJsSourceExact": true
+  },
+  "memory": {
+    "artifactReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/memory-artifact-final-01/result.json",
+    "liveReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/live-memory-final-01/result.json",
+    "liveReport": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/shaper-live-memory.json",
+    "phases": 71,
+    "cycles": 8,
+    "maxRequestedLiveBytes": 41848831,
+    "maxCompletedCallPeakBytes": 42049147,
+    "maxWasmPages": 774,
+    "featureOffEqualsShipping": true,
+    "scope": "captured engine Wasm instance only",
+    "exclusions": [
+      "JS tokens",
+      "GPU",
+      "font decoder instances"
+    ],
+    "limitations": "completed allocator-call high water; excludes Talc fragmentation and transient internal realloc peak"
+  },
+  "rendererRecovery": {
+    "result": "renderer-recovery-pass",
+    "identityScope": "authenticated archive SHA-256; installed dist JavaScript and Wasm members only",
+    "count": 1024,
+    "initialDecodeCount": 1,
+    "rejectedDecodeCount": 2,
+    "finalDecodeCount": 3,
+    "preparedGlyphCount": 10,
+    "acceptedHostSha256": "5ac654bca4d133c2775edf95642267f6b1c700bed66f9270a7465e114ef4c323",
+    "recoveredHostSha256": "787799dff98de97b1ec794b29681fcf2752821d9f030be3a5ad928608508988e",
+    "archiveSha256": "d2f7a01ffb47aeaf87499979310286f1c980b88389e20bd1fc0f39794a0fc18c",
+    "installedDistMemberCount": 242,
+    "allInstalledDistMembersWereArchiveAuthenticated": true
+  },
+  "peerCheck": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/peer-check-final-01/result.json",
+    "exit": 0,
+    "stdoutSha256": "62f53d31dcc81a22be84396bd63571c53e28c12048631a0beeac5c5fcf11e0b7",
+    "stderrSha256": "0d466dea38110d6f26950ea91c4290fecb28f937586a0eaac23aeaf1f9b7e954",
+    "tests": {
+      "total": 55,
+      "passed": 55,
+      "failed": 0,
+      "skipped": 0
+    },
+    "minimumPeers": "  '@react-three/fiber': '9.7.0',\n  '@tresjs/core': '5.8.3',\n  '@typegpu/gl': '0.12.4',\n  '@typegpu/three': '0.12.1',\n  react: '19.0.0',\n  three: '0.185.0',\n  typegpu: '0.12.5',\n  vue: '3.5'",
+    "postPeerBridge": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/post-peer-bridge-summary.json"
+  },
+  "scopeAndNextBoundary": "All package/artifact/size/ABI/SIMD/memory/recovery/peer gates completed once. E5 remains preserved slower evidence. Do not start the full matrix until root reviews this summary and issues a separate timing release. No final browser/hero/whole-app physical-memory evidence was authorized here."
+}

@@ -1,0 +1,11 @@
+{
+  "recordedAt": "2026-10-20T12:36:35.015223+00:00",
+  "commit": "5fa855ed06a6bfa32655378be5eedddcd7c13ff3",
+  "ref": "experiments/held-fused-publication-validated-20261020",
+  "archive": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+  "archiveSha256": "d7c0a674695e65b567a875a7d6fc751ebe6d232f8b100d2fe0746c84fab59918",
+  "shippingWasmSha256": "43e73e38064f6f6ce20c7a08449bc5b63b072eb8d4f4789f601356e7ec163461",
+  "namedWasmSha256": "2eb15a88b464fae758940e906f2bacbcea3f7255ad0613e2cf32d687f9d2efe6",
+  "validation": "1140Node/581Rustpass1ignored;static/build/pack/namedparity;freshSolHighsourceclean;exactonechangedtarballmembertextshaper",
+  "timings": "None collected; preserve as validated publication-only component for later combinations, not measured speedup or regression."
+}

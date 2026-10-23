@@ -1,0 +1,85 @@
+{
+  "purpose": "Scoped verification of the output-only profile observer change and accompanying documentation; no install, build, runtime, or benchmark was run.",
+  "toolchain": {
+    "node": "v24.18.0",
+    "oxfmt": "0.35.0",
+    "oxlint": "1.75.0",
+    "typescript": "7.0.2",
+    "runner": "repository-pinned mise exec"
+  },
+  "dependencyLinks": [
+    {
+      "path": "benches/node_modules",
+      "target": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/node_modules"
+    },
+    {
+      "path": "packages/glyph/node_modules",
+      "target": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/node_modules"
+    },
+    {
+      "path": "packages/glyph/dist",
+      "target": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/dist",
+      "verification": "target exists; original target files are ignored by dist/ rule; submit checkout symlink itself appears untracked and is explicitly excluded from staging"
+    }
+  ],
+  "checks": [
+    {
+      "command": "mise exec -- ./node_modules/.bin/oxfmt --check benches/labs/package/edit-sized-publication.profile.mts .agents/docs/packages/benchmarks.md .agents/docs/planning/publication-frontier.md .agents/docs/log/2026-10-22-held-boundary-reconsideration.md benches/reports/held-boundary-reconsider-local-2026-10-22/README.md",
+      "exit": 1,
+      "note": "Initial check: only added log and report README needed formatting. Both formatted; redundant H1 removed from Log Entry to satisfy flat-prose schema. Final rerun passed."
+    },
+    {
+      "command": "mise exec -- ./node_modules/.bin/oxfmt .agents/docs/log/2026-10-22-held-boundary-reconsideration.md benches/reports/held-boundary-reconsider-local-2026-10-22/README.md",
+      "exit": 0
+    },
+    {
+      "command": "mise exec -- ./node_modules/.bin/oxfmt --check benches/labs/package/edit-sized-publication.profile.mts .agents/docs/packages/benchmarks.md .agents/docs/planning/publication-frontier.md .agents/docs/log/2026-10-22-held-boundary-reconsideration.md benches/reports/held-boundary-reconsider-local-2026-10-22/README.md",
+      "exit": 0
+    },
+    {
+      "command": "mise exec -- ./node_modules/.bin/oxlint --deny-warnings benches/labs/package/edit-sized-publication.profile.mts",
+      "exit": 0
+    },
+    {
+      "command": "mise exec -- ./node_modules/.bin/tsc -p benches/tsconfig.scripts.json --noEmit",
+      "exit": 1,
+      "note": "Initial attempt lacked workspace dependencies; after adding existing package-owned symlinks, retry reported only missing packages/glyph/dist artifacts. No build was attempted."
+    },
+    {
+      "command": "mise exec -- node benches/scripts/workflows.mts run benchmark:workflow-check",
+      "exit": 1,
+      "note": "Initial attempt lacked React from package-owned dependency tree. After adding existing package-owned symlinks, retry passed all 19 tests."
+    },
+    {
+      "command": "mise exec -- node benches/scripts/workflows.mts run benchmark:workflow-check",
+      "retryExit": 0,
+      "note": "19 passed, 0 failed after adding package-owned symlinks."
+    },
+    {
+      "command": "mise exec -- node benches/scripts/workflows.mts run docs:attest -- @pmndrs/glyph-benchmarks \"Added p90 and always-retained callback iterations to the edit-sized publication profile summary. Scoped formatter, lint, benchmark workflow, and docs validation passed. The scripts-wide TypeScript check remains blocked by missing ignored packages/glyph/dist build artifacts; no build was run.\"",
+      "exit": 0,
+      "output": ".agents/docs/attestations/2026-10-23-glyph-benchmarks-05cd3848.md"
+    },
+    {
+      "command": "mise exec -- node benches/scripts/workflows.mts run docs:check",
+      "exit": 1,
+      "note": "Initial check detected redundant H1 in new Log Entry. Removed H1; final rerun passed."
+    },
+    {
+      "command": "mise exec -- node benches/scripts/workflows.mts run docs:check",
+      "retryExit": 0,
+      "note": "OKF v0.2 validation: conformance errors 0; producer-profile errors 0; warnings 0."
+    },
+    {
+      "command": "git diff --check && git diff --cached --check",
+      "exit": 0
+    },
+    {
+      "command": "mise exec -- ./node_modules/.bin/tsc -p benches/tsconfig.scripts.json --noEmit",
+      "retryExit": 0,
+      "note": "Passed after linking the existing ignored original packages/glyph/dist; no build or install."
+    }
+  ],
+  "staging": "Only benches/labs/package/edit-sized-publication.profile.mts is staged for index-based docs attestation. Exclude temporary symlinks benches/node_modules, packages/glyph/node_modules, packages/glyph/dist, and root node_modules. No commit or submission performed.",
+  "timing": "No profile or timing command was run."
+}

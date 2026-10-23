@@ -1,0 +1,38 @@
+{
+  "argv": [
+    "mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "benchmark:labs-package",
+    "--",
+    "--candidate",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/pmndrs-glyph-0.1.0.tgz",
+    "--baseline",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+    "--saved-candidate",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-fixed20-candidate",
+    "--suite",
+    "full",
+    "--blocks",
+    "8",
+    "--sampling",
+    "single-call",
+    "--warmup",
+    "fixed-20",
+    "--baseline-availability",
+    "published-no-outlines",
+    "--output",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-fixed20-published"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-22T19:50:31.607685+00:00",
+  "finished": "2026-10-22T20:15:15.998252+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "85c3e96399903eabc17754518ee7adac35ed7ca5cc2f6f58f1729fbaf8e0a7e2",
+    "stderr.log": "0557ed6fb1e307725c968c1e55765c81d3be9515aaab56ccb158dfd8216c9088"
+  }
+}

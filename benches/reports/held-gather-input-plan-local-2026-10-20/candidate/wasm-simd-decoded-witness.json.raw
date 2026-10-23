@@ -1,0 +1,62 @@
+{
+  "format": "glyph-named-wasm-simd-decoded-witness-v1",
+  "disassembler": "Binaryen wasm-dis",
+  "disassemblerWrapper": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/wasm-dis-packed-simd-01/result.json",
+  "disassemblerExit": 0,
+  "namedWasm": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/shaper-profile/text-shaper.named.wasm",
+  "namedWasmSha256": "806066af37452bbf5781955c8bb6f2083997cc68fd0e5eae485612ea5b608826",
+  "wat": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/shaper-profile/text-shaper.named.wat",
+  "watSha256": "d565e116e1e1c1767a0f9d2eebf6ddbbc31bd39c4ca988f759128415313bccec",
+  "watBytes": 27574642,
+  "decodedWith": [
+    "--enable-simd",
+    "--enable-bulk-memory",
+    "--enable-nontrapping-float-to-int"
+  ],
+  "packingOwner": {
+    "source": "packages/glyph/rust/shaper/src/engine/plan_packing.rs",
+    "symbol": "_RNvNtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine12plan_packing11execute_run",
+    "functionIndex": 636,
+    "watLines": [
+      485202,
+      486263
+    ],
+    "vectorOpcodeOccurrences": 0,
+    "sourceCallsCodecExecutor": true
+  },
+  "codecExecutor": {
+    "source": "packages/glyph/rust/shaper/src/engine/codec.rs",
+    "symbol": "_RNvNtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine5codec15execute_program",
+    "functionIndex": 497,
+    "watLines": [
+      318971,
+      322973
+    ],
+    "vectorOpcodeCounts": {
+      "f32x4.add": 1,
+      "f32x4.convert_i32x4_u": 1,
+      "f32x4.extract_lane": 4,
+      "f32x4.lt": 1,
+      "f32x4.mul": 1,
+      "f32x4.sub": 1,
+      "i32x4.ne": 1,
+      "i8x16.shuffle": 10,
+      "v128.and": 1,
+      "v128.bitselect": 1,
+      "v128.const": 2,
+      "v128.load": 25,
+      "v128.load32_splat": 2,
+      "v128.store": 19,
+      "v128.store16_lane": 4,
+      "v128.store32_lane": 4
+    },
+    "vectorOpcodeOccurrences": 78,
+    "sourceDispatchesToSimdRecordsUnderWasmSimdCfg": true,
+    "sourceExecuteSimdRecordsStartLine": 1219
+  },
+  "claims": [
+    "The authenticated named Wasm contains decoded SIMD instructions in the named codec execution function.",
+    "The named plan_packing::execute_run function itself has no vector opcodes; it calls the codec executor.",
+    "This establishes emitted instructions only, not runtime path selection, hardware SIMD usage, or execution frequency."
+  ]
+}

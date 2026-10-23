@@ -1,0 +1,61 @@
+{
+  "gate": {
+    "argv": [
+      "/usr/bin/env",
+      "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch",
+      "/Users/mini/.local/bin/mise",
+      "exec",
+      "--",
+      "pnpm",
+      "--filter",
+      "@pmndrs/glyph",
+      "check"
+    ],
+    "exit": 0,
+    "test_result_lines": [
+      "Node test-runner totals: 1107 + 3 + 22 + 1 + 3 = 1136 tests; all reported suites completed with exit 0.",
+      "Rust unit, integration, fuzz-smoke, and doc-test commands completed; formatting and strict Clippy checks completed with exit 0."
+    ],
+    "warnings": ["One React test-renderer act(...) warning appeared in stdout at line 1194; the gate still exited 0."],
+    "failures": []
+  },
+  "archive": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "sha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+    "dist_member_count": 947,
+    "workspace_dist_member_count": 952,
+    "mismatch_count": 0,
+    "mismatches": [],
+    "shaper_wasm_sha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd"
+  },
+  "source": {
+    "baseline": "a829b86bfefcd0e39b6d947cb7a2571776cd06a0",
+    "package_diff_empty": true,
+    "files": {
+      "packages/glyph/rust/shaper/src/engine/state.rs": {
+        "working_sha256": "e59ab9f1ef5d2d294dc30fe7045e866d83e7e7d5647317262633bda132a57492",
+        "a829_blob_sha256": "e59ab9f1ef5d2d294dc30fe7045e866d83e7e7d5647317262633bda132a57492",
+        "matches_a829": true
+      },
+      "packages/glyph/rust/shaper/src/engine/work_attribution.rs": {
+        "working_sha256": "803ef8d8eb71026fbebbb97e461a9deb4eddb2432ad5fdac45aac227fcd3cbd0",
+        "a829_blob_sha256": "803ef8d8eb71026fbebbb97e461a9deb4eddb2432ad5fdac45aac227fcd3cbd0",
+        "matches_a829": true
+      }
+    }
+  },
+  "raw_logs": {
+    "stdout.log": {
+      "sha256": "da00260f963a759093ac4c9a19cf8786a211f8d13ac5a8bc423d3aec078a4a11",
+      "expected_sha256": "da00260f963a759093ac4c9a19cf8786a211f8d13ac5a8bc423d3aec078a4a11",
+      "matches_wrapper": true,
+      "bytes": 180064
+    },
+    "stderr.log": {
+      "sha256": "906394877863967058c0f0fb0c73b3690a48f4d3ec7285c9243e838c3e2b797f",
+      "expected_sha256": "906394877863967058c0f0fb0c73b3690a48f4d3ec7285c9243e838c3e2b797f",
+      "matches_wrapper": true,
+      "bytes": 5122
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "recorded": "2026-10-20T13:15:12.084060+00:00",
+  "priorArchiveSha256": "2e4342243c55edb56d3a1a32cbd730185c8d172fa5634da9c1f8fc3b0edd9558",
+  "priorShippingAndSavedWasmSha256": "244078b186e9de0414331ff9de2632c8a57c4ec20f19b6e0a41ce964f8e1b30a",
+  "originalProbeGitHead273Sha256": "fc2092bc0a8fe0ada764eccca1f372a0077971f6dd0549224c39f04b936e1424",
+  "correctedProbeCurrentSha256": "c2f07ba6be916f269b50490c3d77b6f3e5639d202f945ef96dcc6bd6415c01fc",
+  "controlExits": {
+    "prior-original": 1,
+    "prior-corrected": 0,
+    "candidate-check": 0
+  },
+  "files": {
+    "candidate-check-exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "candidate-check-stderr.log": "d5ce1e432276975dc4cdc0227aa3006324525804dbe05696bf56252f18cb13e1",
+    "candidate-check-stdout.log": "74419c7c13180dad248b53bb7e1d324288e1125884feb6ae6f8735dcaba7f272",
+    "prior-corrected-exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "prior-corrected-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "prior-corrected-stdout.log": "0afd83c6da517e460329abcbf797fb1b2130c0ecc4a62bf43911876088e0b8e8",
+    "prior-original-exit": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "prior-original-stderr.log": "e7089b21f244867f0dd8f2b019f452e4c202ffd01712d2f31f797c1b9f45d9f7",
+    "prior-original-stdout.log": "78dbee3b815b5bf1848124781a5d443928b7a2dd68a26789080b7d92455b1fc6",
+    "prior-text-shaper.wasm": "244078b186e9de0414331ff9de2632c8a57c4ec20f19b6e0a41ce964f8e1b30a",
+    "review.md": "cc4decda54331a7f00371297836076e030977f274dfaa0e575df8df899c6c6ee"
+  },
+  "limit": "Temporary middleware removed; raw log attests served priorWasm. Later corrected full repository check owns fresh current-source proof; no performance or rendered-pixel claim."
+}

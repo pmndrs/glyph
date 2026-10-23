@@ -1,0 +1,28 @@
+{
+  "argv": [
+    "/usr/bin/env",
+    "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/scratch",
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "benchmark:renderer-recovery",
+    "--",
+    "--artifact",
+    "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "--expected-sha256",
+    "d2f7a01ffb47aeaf87499979310286f1c980b88389e20bd1fc0f39794a0fc18c",
+    "--output",
+    "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/renderer-recovery-run-01"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-21T03:31:31.419846+00:00",
+  "finished": "2026-10-21T03:31:33.135632+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "34603ff5411cd52e411aafabc8f2d2b2c75cf95072a5987b8efb99939b519aed",
+    "stderr.log": "a82a629498f84115cdd9b07b2fe93d665d54eccc26896be60e0d242d612208af"
+  }
+}

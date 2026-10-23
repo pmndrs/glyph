@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "mise",
+    "exec",
+    "--",
+    "pnpm",
+    "--filter",
+    "@pmndrs/glyph",
+    "check"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-22T20:36:33.366784+00:00",
+  "finished": "2026-10-22T20:39:26.038745+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "b6349f769b73e97995548c270c57249c8a17e8233d2ffe920f8476e35c079b52",
+    "stderr.log": "18bb9d908f9e61a7572e9799eb565c69c93c292b20644fa54a541f870535dc4b"
+  }
+}

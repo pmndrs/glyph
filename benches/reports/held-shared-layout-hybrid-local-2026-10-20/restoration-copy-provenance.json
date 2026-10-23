@@ -1,0 +1,24 @@
+{
+  "recordedUtc": "2026-10-20T20:44:03.184097+00:00",
+  "copies": [
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/independent-next-decision-addendum.md",
+      "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/independent-next-decision-addendum.md",
+      "bytes": 8063,
+      "sha256": "7b2095e22a2ef1ff6cd2c80da379053178faa6bc938318a4591a25871b3a0f77"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/restored-prior-package-authentication.json",
+      "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/restored-prior-package-authentication.json",
+      "bytes": 2409,
+      "sha256": "9bc6d08a2c9a7784a110099e60070058e9704eade2296539d990f420c7bd9e46"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/live-source-restoration.json",
+      "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/live-source-restoration.json",
+      "bytes": 1802,
+      "sha256": "a9ebd43c6f9b6cf1830a791e10756b19bd1d7d773eb7a775cd5d3459aa339831"
+    }
+  ],
+  "notes": "Byte-identical addendum/restoration receipt copies. Earlier live-source-restoration receipt records pending build at its own source stage; later restored-prior-package-authentication confirms rebuild."
+}

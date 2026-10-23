@@ -1,0 +1,254 @@
+{
+  "recorded": "2026-10-20T13:31:50.446791+00:00",
+  "oracle": "fresh authenticated main capture completed before comparison arms; compare pixelHash/litPixels/draws/instances for all six phases per backend",
+  "mainRawLogSha256": "19cd74b86acbc59c720a975c4cfd7b87face87a994334dc952bad0a7928a99c4",
+  "main": {
+    "webgpu": {
+      "initial": {
+        "pixelHash": "edd436be",
+        "litPixels": 48898,
+        "draws": 1,
+        "instances": 2880
+      },
+      "changedContents": {
+        "pixelHash": "acb4311e",
+        "litPixels": 48917,
+        "draws": 1,
+        "instances": 2880
+      },
+      "changedCount": {
+        "pixelHash": "08501d70",
+        "litPixels": 24491,
+        "draws": 1,
+        "instances": 1440
+      },
+      "resized": {
+        "pixelHash": "4854a547",
+        "litPixels": 50569,
+        "draws": 1,
+        "instances": 5760
+      },
+      "drawReplacement": {
+        "pixelHash": "bc1fd119",
+        "litPixels": 63301,
+        "draws": 2,
+        "instances": 5880
+      },
+      "transform": {
+        "pixelHash": "a92799b9",
+        "litPixels": 63301,
+        "draws": 2,
+        "instances": 5880
+      }
+    },
+    "webgl2": {
+      "initial": {
+        "pixelHash": "04fac2ee",
+        "litPixels": 48898,
+        "draws": 1,
+        "instances": 2880
+      },
+      "changedContents": {
+        "pixelHash": "de29bf5e",
+        "litPixels": 48917,
+        "draws": 1,
+        "instances": 2880
+      },
+      "changedCount": {
+        "pixelHash": "b27298a8",
+        "litPixels": 24491,
+        "draws": 1,
+        "instances": 1440
+      },
+      "resized": {
+        "pixelHash": "a166a52b",
+        "litPixels": 50569,
+        "draws": 1,
+        "instances": 5760
+      },
+      "drawReplacement": {
+        "pixelHash": "e9b75465",
+        "litPixels": 63301,
+        "draws": 2,
+        "instances": 5880
+      },
+      "transform": {
+        "pixelHash": "ad4d2245",
+        "litPixels": 63301,
+        "draws": 2,
+        "instances": 5880
+      }
+    }
+  },
+  "arms": {
+    "main": {
+      "rawLogSha256": "19cd74b86acbc59c720a975c4cfd7b87face87a994334dc952bad0a7928a99c4",
+      "usage": "stream",
+      "signaturesEqualFreshMain": true,
+      "idle": {
+        "webgpu": {
+          "frames": 30,
+          "medianCpuMs": 0.0650000125169754,
+          "p95CpuMs": 0.20499999821186066,
+          "totalCpuMs": 2.820000007748604,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        },
+        "webgl2": {
+          "frames": 30,
+          "medianCpuMs": 0.06499999761581421,
+          "p95CpuMs": 0.3799999952316284,
+          "totalCpuMs": 3.0650000125169754,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        }
+      }
+    },
+    "candidate": {
+      "rawLogSha256": "a32cc321eeb8176da03caa818694a40fcd704b74dec774803e1f6691bfa64cc5",
+      "usage": "stream",
+      "signaturesEqualFreshMain": true,
+      "idle": {
+        "webgpu": {
+          "frames": 30,
+          "medianCpuMs": 0.07000000774860382,
+          "p95CpuMs": 0.2150000035762787,
+          "totalCpuMs": 3.2849999964237213,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        },
+        "webgl2": {
+          "frames": 30,
+          "medianCpuMs": 0.06000000238418579,
+          "p95CpuMs": 0.18000000715255737,
+          "totalCpuMs": 2.5699999928474426,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        }
+      }
+    },
+    "published010": {
+      "rawLogSha256": "cb4c3f722d4c8bbaf54b644af5ebdc3fb04ceb47c523f4e1bba8e18f6ac979fd",
+      "usage": "dynamic",
+      "signaturesEqualFreshMain": true,
+      "idle": {
+        "webgpu": {
+          "frames": 30,
+          "medianCpuMs": 0.125,
+          "p95CpuMs": 0.25,
+          "totalCpuMs": 4.544999986886978,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 15244800,
+            "attributeUpdateCalls": 600,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        },
+        "webgl2": {
+          "frames": 30,
+          "medianCpuMs": 0.07000000774860382,
+          "p95CpuMs": 0.17000000178813934,
+          "totalCpuMs": 2.7250000089406967,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        }
+      }
+    },
+    "prior698": {
+      "rawLogSha256": "9a72dc2a928faabb60228f56ff6f6e32d8d13a6ee6f461233d54f7bba915c09c",
+      "usage": "stream",
+      "signaturesEqualFreshMain": true,
+      "idle": {
+        "webgpu": {
+          "frames": 30,
+          "medianCpuMs": 0.06499999761581421,
+          "p95CpuMs": 0.19999998807907104,
+          "totalCpuMs": 2.929999992251396,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        },
+        "webgl2": {
+          "frames": 30,
+          "medianCpuMs": 0.05500000715255737,
+          "p95CpuMs": 0.17000000178813934,
+          "totalCpuMs": 2.550000011920929,
+          "uploads": {
+            "attributeCreateBytes": 0,
+            "attributeCreateCalls": 0,
+            "attributeUpdateBytes": 0,
+            "attributeUpdateCalls": 0,
+            "pboTextureCreateBytes": 0,
+            "pboTextureCreateCalls": 0,
+            "pboTextureUpdateBytes": 0,
+            "pboTextureUpdateCalls": 0
+          },
+          "versionsUnchanged": true
+        }
+      }
+    }
+  },
+  "limits": [
+    "Pixel digest is noncryptographic; complete framebuffer arrays were not retained.",
+    "Observed browser CPU durations are perturbed diagnostic data excluded from latency acceptance.",
+    "Release requires dynamic usage and shows 15244800 WebGPU update bytes/600calls across30idleframes; versions unchanged does not mean zero uploads."
+  ]
+}

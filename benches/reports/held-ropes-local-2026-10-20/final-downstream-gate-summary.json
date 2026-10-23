@@ -1,0 +1,268 @@
+{
+  "schema": "held-wave1-final-downstream-gate-v1",
+  "capturedUtc": "2026-10-20T13:19:47.256390+00:00",
+  "sourceCommitAtFinalCapture": "2fcf408e786fd49d2fe12108823d285cf8c137c5",
+  "sevenRuntimeSourceHashes": [
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/retained_rope.rs",
+      "sha256": "771de87d95bc6842e7b2e6999ebc10c6ff68a6202d30720441d3c9b20e80aebb",
+      "matchesFrozen": true
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/ordered_plan.rs",
+      "sha256": "1573808cec234f555b3cf88bb2eca2bd84b90b86c30abfde5748227b9828acce",
+      "matchesFrozen": true
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/codec_gather.rs",
+      "sha256": "61f836f7b3210387edbe7cb3f7227d2d5534adedbb57474f8e0471a6f2959809",
+      "matchesFrozen": true
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/codec.rs",
+      "sha256": "82df57f33ec343096a5e62f162c8de0c89c9eef58154c3510078da20ea8d21e2",
+      "matchesFrozen": true
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/work_attribution.rs",
+      "sha256": "4b9f016cdeb3d08509b602227801067dfa6ec43cc5e80473b03e04deb712d0a4",
+      "matchesFrozen": true
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/state.rs",
+      "sha256": "c46627f9ae5fb9966e5d57b9ad2d696440752e8670b08baf3675e947332e8158",
+      "matchesFrozen": true
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/style_state.rs",
+      "sha256": "1e848a48995c1d15d91af3654f97be066004d9594149ad6b50a29b484513a1c4",
+      "matchesFrozen": true
+    }
+  ],
+  "allSevenFrozen": true,
+  "preservedCombinedArchive": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-candidate/pmndrs-glyph-0.1.0.tgz",
+    "sha256": "340cbe186620e51f7d0ec460e473d72332c1c112d6c07dfd7dab4e63f74f6804",
+    "expectedSha256": "340cbe186620e51f7d0ec460e473d72332c1c112d6c07dfd7dab4e63f74f6804",
+    "bytes": 3196033,
+    "unchanged": true
+  },
+  "workspaceDistComparedWithPackedArchive": {
+    "packedFiles": 947,
+    "workspaceFiles": 952,
+    "packedFilesMissing": [],
+    "packedFileShaMismatches": [],
+    "allPackedMembersMatch": true,
+    "unpackedWorkspaceExtras": [
+      ".tsbuildinfo",
+      "internal/raster-baker-profile.d.ts",
+      "internal/raster-baker-profile.d.ts.map",
+      "internal/raster-baker-profile.js",
+      "internal/raster-baker-profile.js.map"
+    ]
+  },
+  "receipts": {
+    "repository-check": {
+      "exit": 1,
+      "started": "2026-10-20T12:57:19.650837+00:00",
+      "finished": "2026-10-20T13:00:39.750996+00:00",
+      "stdout": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/repository-check/stdout.log",
+        "bytes": 242160,
+        "sha256": "c78d0a0a01d025caefb934990782feb996e86b4680eb81bf9aa741c03ff2f7a2"
+      },
+      "stderr": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/repository-check/stderr.log",
+        "bytes": 2732,
+        "sha256": "ff60affa7e472625206dbfa92786e6a905a0bb202cd6c5f2252180988162d9c4"
+      }
+    },
+    "repository-check-corrected": {
+      "exit": 0,
+      "started": "2026-10-20T13:12:43.890705+00:00",
+      "finished": "2026-10-20T13:16:19.409539+00:00",
+      "stdout": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/repository-check-corrected/stdout.log",
+        "bytes": 306484,
+        "sha256": "f119ca39d98882c6cdf35fbc40cadf13a8a2b1c336551d98345d1a8fa02e918f"
+      },
+      "stderr": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/repository-check-corrected/stderr.log",
+        "bytes": 7665,
+        "sha256": "7087929e804d9cc9ee23c3dffc2b1937685e7e47925339715cda113fa469a812"
+      }
+    },
+    "r3f-production-build": {
+      "exit": 0,
+      "started": "2026-10-20T13:16:39.880337+00:00",
+      "finished": "2026-10-20T13:16:41.323334+00:00",
+      "stdout": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/r3f-production-build/stdout.log",
+        "bytes": 3386,
+        "sha256": "e8fd729de0b54bee8d4284d0dfcfd1c05535d91fb92c968cbbab1800922aba84"
+      },
+      "stderr": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/r3f-production-build/stderr.log",
+        "bytes": 373,
+        "sha256": "71c384b4a1fc1546eb87bba07c964be608de350d69432bec5e901de1eb81699c"
+      }
+    },
+    "tres-production-build": {
+      "exit": 0,
+      "started": "2026-10-20T13:16:46.022404+00:00",
+      "finished": "2026-10-20T13:16:46.751950+00:00",
+      "stdout": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/tres-production-build/stdout.log",
+        "bytes": 2042,
+        "sha256": "7aaa70688b1ce39d1636cef44e43febd93cf2ee3164bfd0530faa1ba6a6f78d0"
+      },
+      "stderr": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/tres-production-build/stderr.log",
+        "bytes": 654,
+        "sha256": "2a5015c96a533e1cfde3c7773c886d478450294970d9961fe5dda5b5281cc797"
+      }
+    },
+    "peer-check": {
+      "exit": 0,
+      "started": "2026-10-20T13:16:51.018908+00:00",
+      "finished": "2026-10-20T13:18:03.175040+00:00",
+      "stdout": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/peer-check/stdout.log",
+        "bytes": 23213,
+        "sha256": "b288744f9f073e5bcf3656f912359dc00f1395652f312383f013c93c4a863dee"
+      },
+      "stderr": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/peer-check/stderr.log",
+        "bytes": 436,
+        "sha256": "331ebd4feb660fa08d9d5e7f2a1fc16214539fb0eb39366c4005167009f536d2"
+      }
+    },
+    "production-package-size": {
+      "exit": 0,
+      "started": "2026-10-20T13:18:21.825588+00:00",
+      "finished": "2026-10-20T13:19:25.131509+00:00",
+      "stdout": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/production-package-size/stdout.log",
+        "bytes": 10929,
+        "sha256": "41cd7f384b3efcf5912ae4e806b8ae839f1acdabda2d7d7865ae5e12baafd136"
+      },
+      "stderr": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/production-package-size/stderr.log",
+        "bytes": 1625,
+        "sha256": "a3ad729b840ca0a1be96b28e0ce12416161f5850facc4e2387ef7ae2424a7346"
+      }
+    }
+  },
+  "productionPackageSize": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-candidate/production-package-size.json",
+    "sha256": "41cd7f384b3efcf5912ae4e806b8ae839f1acdabda2d7d7865ae5e12baafd136",
+    "entryCount": 32,
+    "statusCounts": {
+      "measured": 32
+    },
+    "entryIds": [
+      "glyph-config-js",
+      "typegpu-direct-renderer-js",
+      "browser-core",
+      "text-shaper-wasm",
+      "three-runtime-js",
+      "react-runtime-js",
+      "vue-runtime-js",
+      "three-typegpu-runtime-js",
+      "r3f-hello-world-production-js",
+      "tres-playground-production-js",
+      "font-inter-bitmap-16-32",
+      "font-inter-mtsdf",
+      "font-inter-slug",
+      "font-icons-bitmap-16-32",
+      "font-icons-mtsdf",
+      "font-icons-slug",
+      "font-validator-js",
+      "runtime-baker-host-js",
+      "runtime-baker-worker-js",
+      "bitmap-runtime-js",
+      "mtsdf-runtime-js",
+      "slug-runtime-js",
+      "bitmap-baker-wasm",
+      "bitmap-baker-js",
+      "mtsdf-generator-js",
+      "mtsdf-generator-wasm",
+      "mtsdf-baker-wasm",
+      "mtsdf-baker-js",
+      "slug-baker-wasm",
+      "slug-baker-js",
+      "portable-baker-js",
+      "portable-baker-wasm"
+    ]
+  },
+  "peerCheck": {
+    "versions": {
+      "@react-three/fiber": "9.7.0",
+      "@tresjs/core": "5.8.3",
+      "@typegpu/gl": "0.12.4",
+      "@typegpu/three": "0.12.1",
+      "react": "19.0.0",
+      "three": "0.185.0",
+      "typegpu": "0.12.5",
+      "vue": "3.5"
+    },
+    "tests": 55,
+    "passed": 55,
+    "failed": 0,
+    "isolatedConsumerInstallAndExecution": "completed; workflow exit 0"
+  },
+  "ownedProxy": {
+    "initialWrapperPid": "96091",
+    "initialWrapperResult": "no result.json observed; initial foreground pid no longer listed in ps after repository check",
+    "activePidFromIsolatedState": "12359",
+    "activeListenerPid": "12359",
+    "port": "1358",
+    "stateDir": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/portless-state",
+    "activeProcess": "node /Users/mini/.npm/_npx/6a98873df99949c7/node_modules/portless/dist/cli.js proxy start --foreground --port 1358 --no-tls --skip-trust",
+    "routesAfterChecks": [],
+    "listenerKeptForNextStage": true,
+    "preexistingPort1355": "PID 34322 observed and untouched"
+  },
+  "gateOutcomes": {
+    "originalRepositoryCheck": {
+      "exit": 1,
+      "preserved": true,
+      "reason": "Tres playground live probe did not settle slug raster format"
+    },
+    "correctedRepositoryCheck": {
+      "exit": 0,
+      "counts": {
+        "glyphNodeTests": "1140/1140",
+        "glyphRustTests": "583 passed, 0 failed, 1 ignored",
+        "rasterExample": "13/13",
+        "rendererExample": "5/5",
+        "benchmarkVitest": "166 across 39 files"
+      },
+      "liveMarkers": ["r3f-hello-world-live-ok", "three-hello-world-live-ok", "tres-playground-live-ok"],
+      "documentationValidation": "0 conformance errors, 0 producer-profile errors, 0 warnings"
+    },
+    "r3fProductionBuild": 0,
+    "tresProductionBuild": 0,
+    "minimumPeerCheck": {
+      "exit": 0,
+      "tests": "55 passed, 0 failed",
+      "versions": {
+        "@react-three/fiber": "9.7.0",
+        "@tresjs/core": "5.8.3",
+        "@typegpu/gl": "0.12.4",
+        "@typegpu/three": "0.12.1",
+        "react": "19.0.0",
+        "three": "0.185.0",
+        "typegpu": "0.12.5",
+        "vue": "3.5"
+      },
+      "isolatedConsumerInstallAndExecution": "completed"
+    },
+    "productionPackageSize": {
+      "exit": 0,
+      "entries": 32,
+      "allStatusMeasured": true
+    }
+  },
+  "capturedFinalUtc": "2026-10-20T13:20:19.282823+00:00"
+}

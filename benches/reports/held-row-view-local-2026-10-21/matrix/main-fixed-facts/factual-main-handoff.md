@@ -1,0 +1,38 @@
+# Main fixed matrix: factual handoff
+
+This records the completed main E6 arm only. It does not make an admission decision, perform parity analysis, compare E2, or support publication claims. All 145 exact paired identities were matched by `(file, group, name, args)`. Each arm has 145 successful `yield` runs with raw samples. The printed Labs summary reports 92 faster, 30 slower, 22 neutral, and one skipped workload.
+
+The report printed `baseline CPU clock drifted 11.0% during its run`. The only skipped row is `normalize 1000 equivalent retained label updates` in `adapter-publication.bench.ts`, group 1 (`allocation-light adapter publication`), args `{}`; the printed exclusion is `clock-confounded` (`neutral→faster`, 4.13→3.79 GHz). Manifest-reported baseline check failures and timing-mode mismatches are both empty. These observations do not establish admission.
+
+Pooled p50/p95 use all raw per-call samples and sorted index `floor(q*(N-1))`. They differ from the median of eight block medians. Values below and in the JSON/CSV are milliseconds. No timing retry was performed.
+
+## Representative cells
+
+| Cell | File / group / workload | Baseline pooled p50 / p95 (ms) | Candidate pooled p50 / p95 (ms) | Block medians (ms), baseline → candidate | Printed Labs fields (status; Δp50; p; 95% CI) |
+|---|---|---:|---:|---|---|
+| dense512 | `batching.bench.ts` / 1 / rewrite 512 labels in one group | 6.968375 / 7.768000 | 9.468042 / 10.614125 | `6.864916, 6.921542, 6.910042, 7.016542, 7.077833, 6.939000, 6.988709, 7.016875` → `9.591916, 9.452417, 9.297291, 9.600875, 9.646167, 9.364209, 9.572750, 9.344334` | slower; Δp50 +36.6%; p <.001; CI +34.0..+38.3% |
+| dense1024 | `stress.bench.ts` / 1 / publish 1024 retained Text instances | 15.544292 / 16.756375 | 20.212541 / 45.056167 | `15.647084, 15.371875, 15.031541, 15.461459, 15.995791, 15.299750, 15.159209, 15.544292` → `32.416916, 18.613042, 19.006375, 18.840167, 19.049292, 20.005250, 19.079833, 19.342292` | slower; Δp50 +23.7%; p <.001; CI +21.7..+28.7% |
+| cold22kMount | `cold.bench.ts` / 1 / mount and publish a 22k-glyph paragraph | 17.431208 / 18.227625 | 20.024292 / 21.045125 | `17.311917, 17.471917, 17.659417, 17.431208, 17.344500, 17.475167, 17.392834, 17.186583` → `19.976792, 20.024292, 20.068917, 19.807333, 19.912875, 19.960750, 20.092959, 19.919834` | slower; Δp50 +14.7%; p <.001; CI +14.0..+15.5% |
+| coldFirstEdit | `cold.bench.ts` / 1 / mount a label and publish its first edit | 2.288833 / 3.172209 | 2.277916 / 3.059417 | `2.291750, 2.293209, 2.289083, 2.289833, 2.288833, 2.259959, 2.257125, 2.236875` → `2.277709, 2.254625, 2.301042, 2.252125, 2.310542, 2.272750, 2.270834, 2.260542` | neutral; Δp50 -0.7%; p .878; CI -1.2..+0.9% |
+| preparedFirstSet | `prepared-operations.bench.ts` / 1 / 1000 labels first set | 0.036125 / 0.066000 | 0.126875 / 0.162208 | `0.032458, 0.033666, 0.037000, 0.044709, 0.032125, 0.032458, 0.040958, 0.043125` → `0.134709, 0.131875, 0.119958, 0.121208, 0.128500, 0.128500, 0.125500, 0.118042` | slower; Δp50 +259.4%; p <.001; CI +195.9..+291.7% |
+| preparedSetMeasure | `prepared-operations.bench.ts` / 1 / 1000 labels first set+measure | 0.181750 / 0.299542 | 0.151917 / 0.198958 | `0.179917, 0.181125, 0.190792, 0.178709, 0.176583, 0.174792, 0.175541, 0.241708` → `0.150250, 0.141250, 0.152125, 0.145666, 0.165000, 0.149084, 0.143083, 0.170834` | faster; Δp50 -16.5%; p <.001; CI -21.5..-13.0% |
+| longUnsafe | `unsafe-line-breaks.bench.ts` / 1 / long unsafe-boundary paragraph reflow | 0.359625 / 0.559291 | 0.644167 / 0.945125 | `0.361166, 0.354458, 0.370500, 0.355792, 0.357792, 0.351833, 0.353500, 0.365833` → `0.672083, 0.638333, 0.637625, 0.642708, 0.644167, 0.646500, 0.632542, 0.640084` | slower; Δp50 +79.8%; p <.001; CI +76.1..+81.9% |
+| inspection | `layout.bench.ts` / 1 / per-glyph inspection after width change | 7.137625 / 9.620542 | 4.377625 / 5.764916 | `5.102750, 5.317333, 5.153167, 7.137625, 5.315667, 7.232500, 7.323875, 5.150042` → `4.363583, 4.369208, 4.388209, 4.426833, 4.384584, 4.334125, 4.364500, 4.352792` | faster; Δp50 -17.9%; p <.001; CI -39.4..-15.1% |
+| sparsePreparation | `sparse-assignment.bench.ts` / 1 / scattered setter preparation in one large paragraph with 8192 paint spans | 33.074167 / 36.433333 | 12.803542 / 14.272208 | `32.363041, 33.442958, 33.098959, 33.074167, 33.307875, 33.293708, 32.943667, 31.889417` → `12.823125, 12.748750, 12.815250, 12.932750, 12.727167, 12.696833, 12.821834, 12.838333` | faster; Δp50 -61.3%; p <.001; CI -61.6..-60.6% |
+| independentCopy1000 | `inspection.bench.ts` / 1 / edit and independently copy one label among 1000 labels | 2.531791 / 3.044291 | 1.817542 / 2.256541 | `2.522750, 2.529584, 2.517334, 2.567666, 2.542666, 2.529083, 2.575083, 2.508292` → `1.792084, 1.795875, 1.817542, 1.815917, 1.803500, 1.857916, 1.819167, 1.849334` | faster; Δp50 -28.2%; p <.001; CI -29.2..-27.5% |
+| paintBoundaryPreparation | `sparse-assignment.bench.ts` / 7 / split move and merge paint boundaries preparation only | 6.436250 / 6.697667 | 4.608250 / 4.947625 | `6.446458, 6.412833, 6.459833, 6.386583, 6.489250, 6.458625, 6.460958, 6.432417` → `4.586125, 4.554167, 4.646542, 4.576458, 4.753500, 4.557917, 4.623459, 4.589625` | faster; Δp50 -28.9%; p <.001; CI -29.2..-27.9% |
+| paintBoundaryPublication | `sparse-assignment.bench.ts` / 7 / split move and merge paint boundaries publication | 8.964500 / 9.556042 | 6.042875 / 6.399875 | `8.968666, 9.046083, 8.916417, 9.128416, 8.955250, 8.861417, 8.970916, 8.986375` → `6.051417, 6.057833, 6.042875, 6.043166, 6.065208, 6.016792, 5.991833, 6.030250` | faster; Δp50 -32.6%; p <.001; CI -33.2..-32.4% |
+
+The dense 1024 candidate cell keeps pooled values separate from block medians: candidate pooled p50/p95 are 20.212541/45.056167 ms, while block 1 is 32.416916 ms and the other seven range from 18.613042 to 20.005250 ms. The observed spread remains as measurement noise; no timing retry was used.
+
+The matrix contains the exact `edit and independently copy one label among 1000 labels` workload in `inspection.bench.ts`, included above as an independent-copy timing observation. The two `split move and merge paint boundaries` rows are paint-boundary preparation/publication workloads. They do not measure `Text.split()` or establish independent `Text` lifetime. No separately named `Text.split()` or selected-copy lifetime timing cell appears among the 145 identities.
+
+## Provenance and limits
+
+- Fixed input freeze: `/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/root-matrix-fixed-release.json`; the source records 788 current inputs.
+- Main receipt: `/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-01/result.json`; exit 0.
+- Labs manifest: `/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data/manifest.json`; harness digest `badf82b0d84dbced158f4bb44ee50b7adac7169323f295d108909c2b93413627`, 8 blocks, `single-call` sampling.
+- Candidate archive SHA-256: `d2f7a01ffb47aeaf87499979310286f1c980b88389e20bd1fc0f39794a0fc18c`; baseline archive SHA-256: `bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20`.
+- Full raw sample arrays remain in the source JSON; this output records counts, quantiles, plans, and eight block medians per row.
+- Printed verdicts, 5% display labels, p values, and rounded confidence intervals are report observations only. The Labs comparison uses Hodges–Lehmann delta for its effect estimate. All unrounded all-arm CI/p/Hodges–Lehmann delta analysis remains for later, after all three arms; this file does not perform that analysis.
+- This is not an E5 adaptive comparison, an E2 comparison, or a publication claim.

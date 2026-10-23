@@ -30,10 +30,7 @@ use super::{
     line_composition::{BreakCorrections, Correction},
     placement_slot_arena::{PlacementSlotArena, PlacementSlotError},
     placement_state::{GlyphSource, LayoutRunOwner, PlacementIdentity, PlacementSegment},
-    positioning::{
-        PlacementBindingRollback, PositionedGlyphArena, SEMANTIC_F32_FIELD_COUNT,
-        SEMANTIC_U32_FIELD_COUNT,
-    },
+    positioning::{PositionedGlyphArena, SEMANTIC_F32_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT},
     render_plan::RenderPlanView,
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
     retained_rope::RopeEditError,
@@ -46,7 +43,8 @@ use super::{
     sort,
     staged::{Staged, StyleStage, TextStage},
     style_state::{
-        DEFAULT_STYLE_CAPACITY, MutationKey, ResolutionScope, StyleArena, StyleInvalidation,
+        DEFAULT_STYLE_CAPACITY, MutationKey, MutationTopologyScratch, ResolutionScope, StyleArena,
+        StyleInvalidation, StyleTopologyRecord,
     },
 };
 
@@ -156,9 +154,17 @@ pub struct TextEngine {
     font_bindings: Vec<RegisteredFontBinding>,
     font_stacks: Vec<RegisteredFontStack>,
     planners: BTreeMap<u32, PlannerState>,
+    invalidated_roots: BTreeMap<u32, RootHighWater>,
     gather: CodecGatherWorkspace,
     gather_cache: Option<GatherCacheKey>,
     prepared_gather_cache: Option<GatherCacheKey>,
+}
+
+#[derive(Clone, Copy, Default)]
+struct RootHighWater {
+    next_glyph_id: u32,
+    next_content_revision: u32,
+    acknowledged_publication_generation: u32,
 }
 
 struct RegisteredFontBinding {
@@ -233,30 +239,15 @@ struct BoundaryCandidate {
     ellipsis_advance: f64,
 }
 
-/// One retained speculative measure transaction. It extends across sequential
-/// paragraph queries while the committed revision and lifecycle input still match,
-/// reserving identities linearly from its high-water marks; any ordinary frame drops
-/// it leave-committed before preparing.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct SpeculativeTransaction {
-    revision: RootRevision,
-    codec_binding: CodecBinding,
-    /// Increments whenever a queried paragraph's semantic prefix (text/style) or the
-    /// lifecycle input rebuilds cold; geometry-only extension keeps the generation.
-    generation: u32,
-    lifecycle_fingerprint: u64,
-    next_glyph_id: u32,
-    next_content_revision: u32,
-}
-
 #[derive(Default)]
 struct PlannerState {
     revision: RootRevision,
     preparation_revision: u32,
     published_preparation_revision: u32,
     acknowledged_publication_generation: u32,
+    placement_acknowledgement_rebased: bool,
+    measure_generation: u32,
     codec_binding: Option<CodecBinding>,
-    speculative: Option<SpeculativeTransaction>,
     /// Stable keys of semantic nodes owned by the current preparation transaction.
     pending_preparation_ids: Vec<u32>,
     /// Successfully prepared owners awaiting publication; membership is the paragraph's dirty flag.
@@ -286,12 +277,90 @@ struct PlannerState {
     semantic_input_spans: Vec<ParagraphInputSpans>,
     order_sort_scratch: Vec<(u64, u32)>,
     rank_sort_scratch: Vec<(u64, u32)>,
+    lifecycle_id_scratch: Vec<(u64, u32)>,
+    lifecycle_membership_scratch: Vec<u32>,
+    /// Reused when validating styles for a paragraph not yet retained by this planner.
+    style_validation_mutation_scratch: Vec<MutationKey>,
+    style_validation_sort_pair_scratch: Vec<(u64, u32)>,
+    style_validation_topology_scratch: Vec<StyleTopologyRecord>,
+    /// Sorted request-local metadata; owned buffers exist only when an accepted pending value
+    /// must remain intact during full caller preflight.
+    preflight_text_candidates: Vec<PreflightTextCandidate>,
+    preflight_edit_scratch: Vec<TextEdit>,
+    style_validation_order_scratch: Vec<usize>,
+    style_validation_nesting_scratch: Vec<u32>,
+    style_validation_sort_pairs_pass: Vec<(u64, u32)>,
     ranked_paragraphs: Vec<RankedParagraph>,
     reorder_stable_ids: Vec<u32>,
     lifecycle_prepared: bool,
     lifecycle_changed: bool,
     compositing_independent: bool,
     pending_compositing_independent: bool,
+}
+
+/// Request-scoped routing for text and its Unicode prefix. Most candidates live directly in the
+/// paragraph's inactive buffers; this owns buffers only when those buffers already hold a valid
+/// pending candidate that must survive until full caller preflight succeeds.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum CandidateBuffers {
+    #[default]
+    Owned,
+    ExistingPending {
+        unit_ids_mirror_committed: bool,
+    },
+    SparePending,
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum CandidateUnicode {
+    #[default]
+    ReuseCommitted,
+    Prepared,
+}
+
+#[derive(Default)]
+struct PreflightTextCandidate {
+    paragraph_id: u32,
+    buffers: CandidateBuffers,
+    unicode_state: CandidateUnicode,
+    edit_start: usize,
+    edit_end: usize,
+    text: Vec<u16>,
+    unicode: UnicodeAnalysis,
+}
+
+impl PreflightTextCandidate {
+    fn uses_pending_buffers(&self) -> bool {
+        matches!(
+            self.buffers,
+            CandidateBuffers::ExistingPending { .. } | CandidateBuffers::SparePending
+        )
+    }
+
+    fn pending_unit_ids_are_mirrored(&self) -> bool {
+        matches!(
+            self.buffers,
+            CandidateBuffers::ExistingPending {
+                unit_ids_mirror_committed: true
+            }
+        )
+    }
+}
+
+fn preflight_text_candidate_mut(
+    candidates: &mut [PreflightTextCandidate],
+    paragraph_id: u32,
+) -> Option<&mut PreflightTextCandidate> {
+    let index = candidates
+        .binary_search_by_key(&paragraph_id, |candidate| candidate.paragraph_id)
+        .ok()?;
+    candidates.get_mut(index)
+}
+
+fn clear_preflight_text_candidates(candidates: &mut Vec<PreflightTextCandidate>) {
+    // Candidates are request-owned; dropping their rows releases any old pending capacity
+    // swapped out during preparation while retaining the outer vector's metadata capacity.
+    candidates.clear();
 }
 
 struct RetainedParagraph {
@@ -340,6 +409,19 @@ struct ParagraphOrder {
     id: u32,
 }
 
+enum RetainedOrderPurpose {
+    Gather,
+    ReplacementGather,
+    Placement,
+}
+
+struct LifecyclePlan {
+    creates: usize,
+    removals: usize,
+    placement_changes: usize,
+    ordered: Vec<ParagraphOrder>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct ParagraphPlacement {
     order: u32,
@@ -372,6 +454,12 @@ enum ParagraphInputKind {
     InlineObject,
 }
 
+#[derive(Clone, Copy)]
+enum ParagraphInputScope {
+    Single(u32),
+    Indexed,
+}
+
 impl ParagraphInputSpans {
     fn is_empty(self) -> bool {
         self.text.is_empty()
@@ -390,12 +478,13 @@ impl ParagraphInputSpans {
     }
 }
 
-fn index_paragraph_records(
+fn route_paragraph_records(
     paragraphs: &mut Vec<ParagraphInputSpans>,
-    live_paragraphs: &[RetainedParagraph],
+    lifecycle_membership: &[u32],
     record_count: usize,
     paragraph_id: impl Fn(usize) -> Option<u32>,
     kind: ParagraphInputKind,
+    scope: ParagraphInputScope,
 ) -> Result<(), EngineError> {
     let mut start = 0;
     while start < record_count {
@@ -404,31 +493,45 @@ fn index_paragraph_records(
         while end < record_count && paragraph_id(end) == Some(id) {
             end += 1;
         }
-        let live_index = live_paragraphs
-            .binary_search_by_key(&id, |paragraph| paragraph.id)
-            .map_err(|_| EngineError::InvalidRequest)?;
-        if live_paragraphs[live_index].pending_remove {
+        if lifecycle_membership.binary_search(&id).is_err() {
             return Err(EngineError::InvalidRequest);
         }
-        paragraphs
-            .try_reserve(1)
-            .map_err(|_| EngineError::ResultTooLarge)?;
-        let mut spans = ParagraphInputSpans {
-            id,
-            ..ParagraphInputSpans::default()
-        };
-        *spans.span_mut(kind) = RecordSpan { start, end };
-        paragraphs.push(spans);
+        match scope {
+            ParagraphInputScope::Single(selected) => {
+                if id != selected {
+                    return Err(EngineError::InvalidRequest);
+                }
+            }
+            ParagraphInputScope::Indexed => {
+                paragraphs
+                    .try_reserve(1)
+                    .map_err(|_| EngineError::ResultTooLarge)?;
+                let mut spans = ParagraphInputSpans {
+                    id,
+                    ..ParagraphInputSpans::default()
+                };
+                *spans.span_mut(kind) = RecordSpan { start, end };
+                paragraphs.push(spans);
+            }
+        }
         start = end;
     }
     Ok(())
 }
 
 /// Full clipped inspection is derived during preparation and adopted with that same
-/// revision. Its buffers survive aborts without exposing a rejected candidate.
+/// revision. Its buffers survive candidate discards without exposing a rejected candidate.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum IntrinsicInspection {
+    #[default]
+    None,
+    Flow,
+    Positioned,
+}
+
 #[derive(Default)]
 struct ClippedLayoutInspection {
-    enabled: bool,
+    mode: IntrinsicInspection,
     positioned: PositionedGlyphArena,
 }
 
@@ -436,6 +539,8 @@ struct ClippedLayoutInspection {
 struct ParagraphState {
     #[cfg(test)]
     preparation_count: usize,
+    #[cfg(test)]
+    text_mutation_apply_count: usize,
     text: Staged<TextStage>,
     /// Whether the pending buffers are a byte-identical copy of the committed ones, so a
     /// mutation batch can skip re-seeding them.
@@ -460,6 +565,7 @@ struct ParagraphState {
     flow_layout: Staged<FlowLayoutArena>,
     intrinsic_geometry_scratch: FlowGeometryArena,
     intrinsic_flow_layout_scratch: FlowLayoutArena,
+    intrinsic_widths_cache: Option<(u8, super::cluster_state::IntrinsicWidths)>,
     intrinsic_flow_slot_scratch: super::flow_geometry::InlineSlotArena,
     clipped_inspection: Staged<ClippedLayoutInspection>,
     intrinsic_boundary_shape: BoundaryShapeArena,
@@ -472,7 +578,6 @@ struct ParagraphState {
     ellipsis_shape_scratch: ShapeArena,
     ellipsis_text_scratch: Vec<u16>,
     positioned: Staged<PositionedGlyphArena>,
-    publication_placement_rollback: PlacementBindingRollback,
     flow_slot_scratch: super::flow_geometry::InlineSlotArena,
     fallback_spans: Vec<FallbackSpan>,
     pending_fallback_spans: Vec<FallbackSpan>,
@@ -485,10 +590,6 @@ struct ParagraphState {
     style_nesting_scratch: Vec<u32>,
     style_resolution_scratch: Vec<ResolutionScope>,
     style_invalidation: StyleInvalidation,
-    geometry_fingerprint: u64,
-    pending_geometry_fingerprint: u64,
-    speculative_text_fingerprint: u64,
-    speculative_style_fingerprint: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -726,24 +827,118 @@ impl TextEngine {
     }
 
     pub fn create_root(&mut self, handle: u32) -> Result<(), EngineError> {
+        let high_water = self
+            .invalidated_roots
+            .get(&handle)
+            .copied()
+            .unwrap_or_default();
+        self.create_root_with_high_water(handle, high_water)?;
+        self.invalidated_roots.remove(&handle);
+        Ok(())
+    }
+
+    fn create_root_with_high_water(
+        &mut self,
+        handle: u32,
+        high_water: RootHighWater,
+    ) -> Result<(), EngineError> {
         if handle == 0 {
             return Err(EngineError::InvalidHandle);
         }
         if self.planners.contains_key(&handle) {
             return Err(EngineError::RootConflict);
         }
-        let mut planner = PlannerState::default();
-        let mut spare = ParagraphState::default();
-        spare.initialize()?;
-        planner.spare_paragraph = Some(spare);
+        let planner = Self::new_planner(high_water)?;
         self.planners.insert(handle, planner);
         Ok(())
     }
 
-    pub fn dispose_root(&mut self, handle: u32) -> Result<(), EngineError> {
-        self.planners
+    fn new_planner(high_water: RootHighWater) -> Result<PlannerState, EngineError> {
+        let mut planner = PlannerState {
+            next_glyph_id: high_water.next_glyph_id,
+            next_content_revision: high_water.next_content_revision,
+            acknowledged_publication_generation: high_water.acknowledged_publication_generation,
+            placement_acknowledgement_rebased: high_water.acknowledged_publication_generation != 0,
+            ..PlannerState::default()
+        };
+        let mut spare = ParagraphState::default();
+        spare.initialize()?;
+        planner.spare_paragraph = Some(spare);
+        Ok(planner)
+    }
+
+    /// Replaces one planner's derived state while retaining the caller-owned root transport.
+    /// Used only after an unexpected failure crossed the Wasm/TypeScript commit boundary.
+    pub fn reset_root(&mut self, handle: u32) -> Result<(), EngineError> {
+        if handle == 0 {
+            return Err(EngineError::InvalidHandle);
+        }
+        let high_water = self
+            .invalidated_roots
+            .get(&handle)
+            .copied()
+            .or_else(|| {
+                self.planners.get(&handle).map(|planner| RootHighWater {
+                    next_glyph_id: planner.next_glyph_id.max(planner.pending_next_glyph_id),
+                    next_content_revision: planner
+                        .next_content_revision
+                        .max(planner.pending_next_content_revision),
+                    acknowledged_publication_generation: planner
+                        .acknowledged_publication_generation,
+                })
+            })
+            .ok_or(EngineError::RootMissing)?;
+        let mut replacement = Self::new_planner(high_water)?;
+        // The renderer may have accepted a generation that the invalidated planner never
+        // observed. Its replacement placement arena starts empty, so the next renderer
+        // acknowledgement must be treated as a fence from the previous arena.
+        replacement.placement_acknowledgement_rebased = true;
+        self.planners.insert(handle, replacement);
+        self.invalidated_roots.remove(&handle);
+        if self
+            .gather_cache
+            .is_some_and(|cache| cache.root_id == handle)
+            || self
+                .prepared_gather_cache
+                .is_some_and(|cache| cache.root_id == handle)
+        {
+            self.invalidate_gather_cache();
+        }
+        Ok(())
+    }
+
+    fn invalidate_root(&mut self, handle: u32) -> Result<(), EngineError> {
+        let planner = self
+            .planners
             .remove(&handle)
             .ok_or(EngineError::RootMissing)?;
+        let high_water = RootHighWater {
+            next_glyph_id: planner.next_glyph_id.max(planner.pending_next_glyph_id),
+            next_content_revision: planner
+                .next_content_revision
+                .max(planner.pending_next_content_revision),
+            acknowledged_publication_generation: planner.acknowledged_publication_generation,
+        };
+        self.invalidated_roots.insert(handle, high_water);
+        if self
+            .gather_cache
+            .is_some_and(|cache| cache.root_id == handle)
+            || self
+                .prepared_gather_cache
+                .is_some_and(|cache| cache.root_id == handle)
+        {
+            self.invalidate_gather_cache();
+        }
+        Ok(())
+    }
+
+    pub fn dispose_root(&mut self, handle: u32) -> Result<(), EngineError> {
+        if self.planners.remove(&handle).is_none()
+            && self.invalidated_roots.remove(&handle).is_none()
+        {
+            return Err(EngineError::RootMissing);
+        }
+        self.invalidated_roots.remove(&handle);
         if self
             .gather_cache
             .is_some_and(|cache| cache.root_id == handle)
@@ -762,6 +957,14 @@ impl TextEngine {
             .planners
             .get_mut(&handle)
             .ok_or(EngineError::RootMissing)?;
+        planner
+            .preflight_text_candidates
+            .try_reserve(1)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        planner
+            .preflight_edit_scratch
+            .try_reserve(1)
+            .map_err(|_| EngineError::ResultTooLarge)?;
         if let Some(paragraph) = planner.spare_paragraph.as_mut() {
             paragraph.reserve_text(capacity)?;
         }
@@ -791,12 +994,13 @@ impl TextEngine {
         Ok(positioned.semantic_glyphs().len())
     }
 
-    pub(crate) fn borrowed_paragraph_glyph(
+    pub(crate) fn borrowed_paragraph_glyphs(
         &self,
         root_id: u32,
         paragraph_id: u32,
-        glyph_index: usize,
-    ) -> Result<super::positioning::SemanticGlyph, EngineError> {
+        start: usize,
+        output: &mut [super::positioning::SemanticGlyph],
+    ) -> Result<(), EngineError> {
         let planner = self
             .planners
             .get(&root_id)
@@ -804,10 +1008,15 @@ impl TextEngine {
         let paragraph = planner
             .paragraph(paragraph_id)
             .ok_or(EngineError::InvalidRequest)?;
-        paragraph
-            .state
-            .inspection_positioned()
-            .placed_semantic_glyph(glyph_index)
+        let positioned = paragraph.state.inspection_positioned();
+        let end = start
+            .checked_add(output.len())
+            .filter(|&end| end <= positioned.semantic_glyphs().len())
+            .ok_or(EngineError::InvalidRequest)?;
+        for (record, index) in output.iter_mut().zip(start..end) {
+            *record = positioned.placed_semantic_glyph(index)?;
+        }
+        Ok(())
     }
 
     #[cfg(test)]
@@ -922,13 +1131,7 @@ impl TextEngine {
             .planners
             .get(&root_id)
             .ok_or(EngineError::RootMissing)?;
-        let speculative = planner
-            .speculative
-            .filter(|transaction| transaction.revision == planner.revision);
-        let binding = speculative
-            .map(|transaction| transaction.codec_binding)
-            .or(planner.codec_binding)
-            .ok_or(EngineError::InvalidRequest)?;
+        let binding = planner.codec_binding.ok_or(EngineError::InvalidRequest)?;
         if binding.handle != codec_handle {
             return Err(EngineError::InvalidRequest);
         }
@@ -949,11 +1152,7 @@ impl TextEngine {
         let paragraph = planner
             .paragraph(paragraph_id)
             .ok_or(EngineError::InvalidRequest)?;
-        let positioned = if speculative.is_some() {
-            paragraph.state.positioned.active()
-        } else {
-            paragraph.state.positioned.committed()
-        };
+        let positioned = paragraph.state.positioned.committed();
         let source_glyphs = positioned.glyphs();
         let source_semantic = positioned.semantic_glyphs();
         let source_f32 = positioned.semantic_f32();
@@ -1093,13 +1292,7 @@ impl TextEngine {
             .planners
             .get(&root_id)
             .ok_or(EngineError::RootMissing)?;
-        let speculative = planner
-            .speculative
-            .filter(|transaction| transaction.revision == planner.revision);
-        let binding = speculative
-            .map(|transaction| transaction.codec_binding)
-            .or(planner.codec_binding)
-            .ok_or(EngineError::InvalidRequest)?;
+        let binding = planner.codec_binding.ok_or(EngineError::InvalidRequest)?;
         if binding.handle != codec_handle {
             return Err(EngineError::InvalidRequest);
         }
@@ -1117,11 +1310,7 @@ impl TextEngine {
         let paragraph = planner
             .paragraph(paragraph_id)
             .ok_or(EngineError::InvalidRequest)?;
-        let positioned = if speculative.is_some() {
-            paragraph.state.positioned.active()
-        } else {
-            paragraph.state.positioned.committed()
-        };
+        let positioned = paragraph.state.positioned.committed();
 
         let mut gather = CodecGatherWorkspace::default();
         gather
@@ -1213,7 +1402,7 @@ impl TextEngine {
         if planner.codec_binding.is_some_and(|binding| {
             binding.handle != request.codec_handle || binding.fingerprint != codec_fingerprint
         }) {
-            return Err(EngineError::InvalidRequest);
+            return Err(EngineError::HandleConflict);
         }
         if request.expected_engine_revision != planner.revision.engine
             || request.consumed_revision > planner.revision.root
@@ -1249,107 +1438,75 @@ impl TextEngine {
         if !queried_paragraph_present {
             return Err(EngineError::InvalidRequest);
         }
-        let lifecycle_fingerprint = speculative_lifecycle_fingerprint(planner, request)?;
-        let prior_generation = planner
-            .speculative
-            .map_or(0, |transaction| transaction.generation);
-        let transaction = planner.speculative.filter(|transaction| {
-            transaction.revision == planner.revision
-                && transaction.codec_binding
-                    == CodecBinding {
-                        handle: request.codec_handle,
-                        fingerprint: codec_fingerprint,
-                    }
-                && transaction.lifecycle_fingerprint == lifecycle_fingerprint
-        });
-        if planner.speculative.is_some() && transaction.is_none() {
-            planner.abort_pending();
-        }
-        let (mut next_glyph_id, mut next_content_revision) = match transaction {
-            Some(transaction) => (transaction.next_glyph_id, transaction.next_content_revision),
-            None => (
-                planner.next_glyph_id.max(1),
-                planner.next_content_revision.max(1),
-            ),
-        };
-        let mut generation = match transaction {
-            Some(transaction) => transaction.generation,
-            None => prior_generation.wrapping_add(1),
-        };
-        let implicit_paragraph =
-            if request.paragraph_mutations.len() == 0 && planner.paragraphs.is_empty() {
-                request_semantic_paragraph_id(request)?
-            } else {
-                None
-            };
-        let preparation = (|| {
+        let implicit_paragraph = implicit_paragraph_id(planner, request)?;
+        let lifecycle_plan = validate_lifecycle_input(
+            planner,
+            request.paragraph_mutations,
+            request.paragraph_order_mutations,
+            implicit_paragraph,
+            request.limits.max_paragraphs,
+        )?;
+        let spare_text_candidate_id = (lifecycle_plan.creates == 1
+            && lifecycle_plan.removals == 0
+            && request.paragraph_mutations.len() == 0
+            && request.paragraph_order_mutations.len() == 0)
+            .then_some(implicit_paragraph)
+            .flatten()
+            .filter(|id| {
+                planner.paragraph(*id).is_none()
+                    && planner.spare_paragraph.is_some()
+                    && has_text_mutations_for(request.text_mutations, *id)
+            });
+        let mut preflight_text_candidates = core::mem::take(&mut planner.preflight_text_candidates);
+        let mut preflight_edit_scratch = core::mem::take(&mut planner.preflight_edit_scratch);
+        validate_planner_inputs(
+            planner,
+            request,
+            ParagraphInputScope::Single(paragraph_id),
+            font_stacks,
+            spare_text_candidate_id,
+            &mut preflight_text_candidates,
+            &mut preflight_edit_scratch,
+        )?;
+        planner.prepare_semantic_inputs(request, ParagraphInputScope::Single(paragraph_id))?;
+        let text = request.text_mutations;
+        let styles = request.style_mutations;
+        let geometry = request.geometry;
+        let next_measure_generation = planner
+            .measure_generation
+            .checked_add(1)
+            .ok_or(EngineError::RevisionExhausted)?;
+        let (mut next_glyph_id, mut next_content_revision) = (
+            planner.next_glyph_id.max(1),
+            planner.next_content_revision.max(1),
+        );
+        let preparation: Result<(), EngineError> = (|| {
             planner.semantic_records.clear();
-            if transaction.is_none() {
-                planner.prepare_lifecycle(
-                    request.paragraph_mutations,
-                    request.paragraph_order_mutations,
-                    implicit_paragraph,
-                    request.limits.max_paragraphs,
-                )?;
-            }
-            let (mut text_cursor, mut style_cursor) = (0, 0);
-            let (mut constraint_cursor, mut inline_object_cursor) = (0, 0);
-            let text = request
-                .text_mutations
-                .take_paragraph(paragraph_id, &mut text_cursor)
-                .map_err(|_| EngineError::InvalidRequest)?;
-            let styles = request
-                .style_mutations
-                .take_paragraph(paragraph_id, &mut style_cursor)
-                .map_err(|_| EngineError::InvalidRequest)?;
-            let geometry = request
-                .geometry
-                .take_paragraph(
-                    paragraph_id,
-                    &mut constraint_cursor,
-                    &mut inline_object_cursor,
-                )
-                .map_err(|_| EngineError::InvalidRequest)?;
-            if text_cursor != request.text_mutations.len()
-                || style_cursor != request.style_mutations.len()
-                || constraint_cursor != request.geometry.constraint_count()
-                || inline_object_cursor != request.geometry.inline_object_count()
-            {
-                return Err(EngineError::InvalidRequest);
-            }
-            // Reserve ownership before any semantic stage mutates its pending state. Repeated
-            // queries extend this same frontier; a failed query aborts the whole transaction.
+            planner.prepare_lifecycle(
+                request.paragraph_mutations,
+                request.paragraph_order_mutations,
+                implicit_paragraph,
+                request.limits.max_paragraphs,
+                lifecycle_plan,
+                spare_text_candidate_id,
+            )?;
+            // Reserve ownership before any semantic stage mutates its candidate state. Each
+            // successful query accepts that preparation before returning.
             admit_preparation_owner(
                 &mut planner.pending_preparation_ids,
                 &mut planner.unpublished_preparation_ids,
                 paragraph_id,
             )?;
-            let paragraph = planner
-                .paragraph_mut(paragraph_id)
-                .ok_or(EngineError::InvalidRequest)?;
-            let (prefix_retained, geometry_retained) = if transaction.is_some() {
-                paragraph.state.speculative_match(text, styles, geometry)
-            } else {
-                (false, false)
-            };
+            let preflight_candidate =
+                preflight_text_candidate_mut(&mut preflight_text_candidates, paragraph_id);
             // Preparation is durable independently of the result sidecar the host requested, so
             // it always includes positioning. A semantic mask controls serialization, not which
             // stage becomes the current retained preparation.
-            if prefix_retained {
-                if !geometry_retained {
-                    paragraph.positioned_changed = paragraph.state.prepare_geometry_and_layout(
-                        shaper.as_deref_mut(),
-                        font_stacks,
-                        font_bindings,
-                        geometry,
-                        request.limits,
-                        &mut next_glyph_id,
-                        &mut next_content_revision,
-                    )?;
-                }
-            } else {
-                generation = prior_generation.wrapping_add(1);
-                paragraph.positioned_changed = paragraph.state.prepare(
+            let prepared = {
+                let paragraph = planner
+                    .paragraph_mut(paragraph_id)
+                    .ok_or(EngineError::InvalidRequest)?;
+                paragraph.state.prepare(
                     shaper.as_deref_mut(),
                     font_stacks,
                     font_bindings,
@@ -1359,10 +1516,14 @@ impl TextEngine {
                     request.limits,
                     &mut next_glyph_id,
                     &mut next_content_revision,
-                )?;
-                paragraph.state.speculative_text_fingerprint = text.fingerprint();
-                paragraph.state.speculative_style_fingerprint = styles.fingerprint();
-            }
+                    preflight_candidate,
+                    &preflight_edit_scratch,
+                )
+            };
+            planner
+                .paragraph_mut(paragraph_id)
+                .ok_or(EngineError::InvalidRequest)?
+                .positioned_changed = prepared?;
             if request.semantic_view_mask
                 & (super::frame::SEMANTIC_VIEW_MEASUREMENT
                     | super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION)
@@ -1380,7 +1541,7 @@ impl TextEngine {
                         .ok_or(EngineError::InvalidRequest)?
                         .state,
                     paragraph_id,
-                    shaper.as_deref_mut(),
+                    shaper,
                     font_stacks,
                     font_bindings,
                     request.limits,
@@ -1393,25 +1554,24 @@ impl TextEngine {
             Ok(())
         })();
         if let Err(error) = preparation {
-            planner.abort_pending();
+            self.invalidate_root(request.root_id)?;
             return Err(error.in_paragraph(paragraph_id));
         }
-        planner.speculative = Some(SpeculativeTransaction {
-            revision: planner.revision,
-            codec_binding: CodecBinding {
-                handle: request.codec_handle,
-                fingerprint: codec_fingerprint,
-            },
-            generation,
-            lifecycle_fingerprint,
-            next_glyph_id,
-            next_content_revision,
-        });
-        // Reserve identities when they become observable, even if adoption later fails.
+        clear_preflight_text_candidates(&mut preflight_text_candidates);
+        planner.preflight_text_candidates = preflight_text_candidates;
+        preflight_edit_scratch.clear();
+        planner.preflight_edit_scratch = preflight_edit_scratch;
+        // Reserve identities when they become observable, even if result encoding later fails.
         planner.next_glyph_id = planner.next_glyph_id.max(next_glyph_id);
+        planner.next_content_revision = planner.next_content_revision.max(next_content_revision);
+        planner.measure_generation = next_measure_generation;
         Ok(MeasuredParagraph {
             root_id: request.root_id,
             revision: planner.revision,
+            preparation_revision: planner.preparation_revision,
+            measure_generation: next_measure_generation,
+            codec_handle: request.codec_handle,
+            codec_fingerprint,
         })
     }
 
@@ -1459,50 +1619,53 @@ impl TextEngine {
         {
             return Err(EngineError::RevisionConflict);
         }
-        // Accept the renderer's monotonic fence before speculation; a later abort does not
-        // roll external acknowledgement back.
-        planner
-            .placement_slots
-            .acknowledge(request.acknowledged_publication_generation)
-            .map_err(placement_slot_error)?;
+        let implicit_paragraph = implicit_paragraph_id(planner, request)?;
+        let lifecycle_plan = validate_lifecycle_input(
+            planner,
+            request.paragraph_mutations,
+            request.paragraph_order_mutations,
+            implicit_paragraph,
+            request.limits.max_paragraphs,
+        )?;
+        let spare_text_candidate_id = (lifecycle_plan.creates == 1
+            && lifecycle_plan.removals == 0
+            && request.paragraph_mutations.len() == 0
+            && request.paragraph_order_mutations.len() == 0)
+            .then_some(implicit_paragraph)
+            .flatten()
+            .filter(|id| {
+                planner.paragraph(*id).is_none()
+                    && planner.spare_paragraph.is_some()
+                    && has_text_mutations_for(request.text_mutations, *id)
+            });
+        let mut preflight_text_candidates = core::mem::take(&mut planner.preflight_text_candidates);
+        let mut preflight_edit_scratch = core::mem::take(&mut planner.preflight_edit_scratch);
+        validate_planner_inputs(
+            planner,
+            request,
+            ParagraphInputScope::Indexed,
+            font_stacks,
+            spare_text_candidate_id,
+            &mut preflight_text_candidates,
+            &mut preflight_edit_scratch,
+        )?;
+        planner.prepare_semantic_inputs(request, ParagraphInputScope::Indexed)?;
+        let next = match (
+            planner.revision.engine.checked_add(1),
+            planner.revision.root.checked_add(1),
+        ) {
+            (Some(engine), Some(root)) => RootRevision { engine, root },
+            _ => return Err(EngineError::RevisionExhausted),
+        };
+        // Accept the renderer's monotonic fence before preparing. Failure recovery preserves
+        // this fence when it rebuilds the derived root.
+        if !planner.placement_acknowledgement_rebased {
+            planner
+                .placement_slots
+                .acknowledge(request.acknowledged_publication_generation)
+                .map_err(placement_slot_error)?;
+        }
         planner.acknowledged_publication_generation = request.acknowledged_publication_generation;
-        // Candidate adoption: a retained speculative transaction whose committed
-        // revision and lifecycle input match this frame hands its pending state and
-        // reserved identities to the commit; per-paragraph adoption is
-        // fingerprint-gated inside the preparation loop. Any other transaction drops
-        // leave-committed, so the frame proceeds exactly from committed state.
-        let adopted = match planner.speculative {
-            Some(transaction)
-                if transaction.revision == planner.revision
-                    && transaction.codec_binding
-                        == CodecBinding {
-                            handle: request.codec_handle,
-                            fingerprint: codec_fingerprint,
-                        }
-                    && transaction.lifecycle_fingerprint
-                        == speculative_lifecycle_fingerprint(planner, request)? =>
-            {
-                Some(transaction)
-            }
-            Some(_) => {
-                planner.abort_pending();
-                None
-            }
-            None => None,
-        };
-        planner.speculative = None;
-        let next = RootRevision {
-            engine: planner
-                .revision
-                .engine
-                .checked_add(1)
-                .ok_or(EngineError::RevisionExhausted)?,
-            root: planner
-                .revision
-                .root
-                .checked_add(1)
-                .ok_or(EngineError::RevisionExhausted)?,
-        };
         let current_gather_key = GatherCacheKey {
             root_id: request.root_id,
             revision: planner.revision,
@@ -1518,36 +1681,28 @@ impl TextEngine {
             planner.revision.root == 0 || request.consumed_revision != planner.revision.root;
         let preparation_changed =
             planner.preparation_revision != planner.published_preparation_revision;
-        let (mut next_glyph_id, mut next_content_revision) = match adopted {
-            Some(transaction) => (
-                transaction.next_glyph_id.max(1),
-                transaction.next_content_revision.max(1),
-            ),
-            None => (
-                planner.next_glyph_id.max(1),
-                planner.next_content_revision.max(1),
-            ),
-        };
-        let implicit_paragraph =
-            if request.paragraph_mutations.len() == 0 && planner.paragraphs.is_empty() {
-                request_semantic_paragraph_id(request)?
-            } else {
-                None
-            };
+        #[cfg(test)]
+        super::work_attribution::record(|work| {
+            work.prepare_checkpoints += usize::from(checkpoint);
+            work.prepare_changed += usize::from(preparation_changed);
+        });
+        let (mut next_glyph_id, mut next_content_revision) = (
+            planner.next_glyph_id.max(1),
+            planner.next_content_revision.max(1),
+        );
         let mut gather_output_matches_next = false;
         let preparation = (|| {
             planner.semantic_records.clear();
-            if adopted.is_none() {
-                planner.prepare_lifecycle(
-                    request.paragraph_mutations,
-                    request.paragraph_order_mutations,
-                    implicit_paragraph,
-                    request.limits.max_paragraphs,
-                )?;
-            }
+            planner.prepare_lifecycle(
+                request.paragraph_mutations,
+                request.paragraph_order_mutations,
+                implicit_paragraph,
+                request.limits.max_paragraphs,
+                lifecycle_plan,
+                spare_text_candidate_id,
+            )?;
             if !checkpoint
                 && !preparation_changed
-                && adopted.is_none()
                 && planner.lifecycle_changed
                 && order_only_request(request)
                 && request.compositing_independent == planner.compositing_independent
@@ -1623,11 +1778,10 @@ impl TextEngine {
                     return Ok(());
                 }
             }
-            planner.prepare_semantic_input_spans(request)?;
             planner.prepare_semantic_work_order()?;
             for order_index in 0..planner.order_sort_scratch.len() {
                 let paragraph_id = planner.order_sort_scratch[order_index].1;
-                let spans = planner.semantic_input_spans(paragraph_id)?;
+                let spans = planner.semantic_input_spans(paragraph_id);
                 let text = request
                     .text_mutations
                     .span(spans.text)
@@ -1652,45 +1806,31 @@ impl TextEngine {
                     &mut planner.unpublished_preparation_ids,
                     paragraph_id,
                 )?;
-                let paragraph = planner
+                let preflight_candidate =
+                    preflight_text_candidate_mut(&mut preflight_text_candidates, paragraph_id);
+                let prepared = {
+                    let paragraph = planner
+                        .paragraph_mut(paragraph_id)
+                        .ok_or(EngineError::InvalidRequest)?;
+                    paragraph.state.prepare(
+                        shaper.as_deref_mut(),
+                        font_stacks,
+                        font_bindings,
+                        text,
+                        styles,
+                        geometry,
+                        request.limits,
+                        &mut next_glyph_id,
+                        &mut next_content_revision,
+                        preflight_candidate,
+                        &preflight_edit_scratch,
+                    )
+                };
+                planner
                     .paragraph_mut(paragraph_id)
-                    .ok_or(EngineError::InvalidRequest)?;
-                let (prefix_adopted, geometry_adopted) = if adopted.is_some() {
-                    paragraph.state.speculative_match(text, styles, geometry)
-                } else {
-                    (false, false)
-                };
-                paragraph.positioned_changed = if geometry_adopted {
-                    paragraph.state.speculative_positioned_changed()
-                } else if prefix_adopted {
-                    paragraph
-                        .state
-                        .prepare_geometry_and_layout(
-                            shaper.as_deref_mut(),
-                            font_stacks,
-                            font_bindings,
-                            geometry,
-                            request.limits,
-                            &mut next_glyph_id,
-                            &mut next_content_revision,
-                        )
-                        .map_err(|error| error.in_paragraph(paragraph_id))?
-                } else {
-                    paragraph
-                        .state
-                        .prepare(
-                            shaper.as_deref_mut(),
-                            font_stacks,
-                            font_bindings,
-                            text,
-                            styles,
-                            geometry,
-                            request.limits,
-                            &mut next_glyph_id,
-                            &mut next_content_revision,
-                        )
-                        .map_err(|error| error.in_paragraph(paragraph_id))?
-                };
+                    .ok_or(EngineError::InvalidRequest)?
+                    .positioned_changed =
+                    prepared.map_err(|error| error.in_paragraph(paragraph_id))?;
             }
             let positioned_changed = preparation_changed
                 || planner.lifecycle_changed
@@ -1720,20 +1860,20 @@ impl TextEngine {
                 && request.compositing_independent == planner.compositing_independent;
             if reuse_ordered_plan {
                 planner.plan.prepare_reuse().map_err(plan_error)?;
+                #[cfg(test)]
+                super::work_attribution::record(|work| work.prepare_reuse_modes += 1);
                 gather_output_matches_next = cached_gather == Some(current_gather_key);
             } else {
                 let sparse = cached_gather == Some(current_gather_key)
                     && !checkpoint
-                    && planner.prepare_sparse_gather_order()?;
-                let replacement = if cached_gather == Some(current_gather_key) && !checkpoint {
-                    planner.prepare_replacement_gather_order()?
-                } else {
-                    None
-                };
-                let tail_prefix = replacement
-                    .filter(|(index, _, _)| *index + 1 == planner.active_order().len())
-                    .map(|(_, prefix, count)| (prefix, count));
-                let record_count = if let Some((_, _, count)) = replacement {
+                    && planner.prepare_retained_order(RetainedOrderPurpose::Gather)?;
+                let replacement =
+                    if cached_gather == Some(current_gather_key) && !checkpoint && !sparse {
+                        planner.prepare_replacement_gather_order()?
+                    } else {
+                        None
+                    };
+                let record_count = if let Some(count) = replacement {
                     count
                 } else if sparse {
                     planner
@@ -1767,9 +1907,8 @@ impl TextEngine {
                     && gather
                         .begin_retained(codec, record_count)
                         .map_err(gather_error)?;
-                let mut retained_prefix = 0;
                 if retained {
-                    retained_prefix = append_planner_gather(
+                    append_planner_gather(
                         gather,
                         planner,
                         codec,
@@ -1777,7 +1916,7 @@ impl TextEngine {
                         font_bindings,
                         true,
                         sparse || replacement.is_some(),
-                        replacement.map(|(index, _, _)| index),
+                        replacement.is_some(),
                     )?;
                 }
                 if !retained {
@@ -1790,9 +1929,22 @@ impl TextEngine {
                         font_bindings,
                         false,
                         false,
-                        None,
+                        false,
                     )?;
                 }
+                #[cfg(test)]
+                super::work_attribution::record(|work| {
+                    if retained && sparse {
+                        work.prepare_retained_sparse_modes += 1;
+                    } else if retained && replacement.is_some() {
+                        work.prepare_retained_replacement_modes += 1;
+                    } else {
+                        work.prepare_fresh_modes += 1;
+                    }
+                    work.gather_output_source_rows += gather.diagnostic_source_count();
+                    work.gather_output_selected_rows += gather.view().plan_input().glyphs.len();
+                    work.prepared_positioned_source_rows += record_count;
+                });
                 planner.gathered_source_count = if ranges_reusable {
                     Some(record_count)
                 } else {
@@ -1811,16 +1963,16 @@ impl TextEngine {
                     None
                 }
                 .or_else(|| {
-                    tail_prefix
-                        .filter(|(prefix, _)| retained && retained_prefix >= *prefix)
-                        .map(
-                            |(prefix, _)| super::render_plan_compiler::OwnedOutputScope {
-                                previous_revision: planner.revision.root,
-                                scope: super::ordered_plan::RetainedOutputScope::ReplaceTail {
-                                    unchanged_prefix: prefix,
-                                },
-                            },
-                        )
+                    gather
+                        .correspondence()
+                        .first()
+                        .filter(|_| retained)
+                        .map(|_| super::render_plan_compiler::OwnedOutputScope {
+                            previous_revision: planner.revision.root,
+                            scope: super::ordered_plan::RetainedOutputScope::Replacement(
+                                gather.correspondence(),
+                            ),
+                        })
                 });
                 let gathered = gather.view();
                 let mut plan_input = gathered.plan_input();
@@ -1865,8 +2017,7 @@ impl TextEngine {
                 let query = (|| {
                     for order_index in 0..planner.active_order().len() {
                         let paragraph_id = planner.active_order()[order_index].id;
-                        let input_unchanged =
-                            planner.semantic_input_spans(paragraph_id)?.is_empty();
+                        let input_unchanged = planner.semantic_input_spans(paragraph_id).is_empty();
                         let paragraph = planner
                             .paragraph(paragraph_id)
                             .ok_or(EngineError::InvalidRequest)?;
@@ -1892,7 +2043,9 @@ impl TextEngine {
                             font_bindings,
                             request.limits,
                             include_layout_inspection,
-                            false,
+                            request.semantic_view_mask
+                                & super::frame::SEMANTIC_VIEW_BORROWED_LAYOUT
+                                != 0,
                         )
                         .map_err(|error| error.in_paragraph(paragraph_id))?;
                     }
@@ -1908,9 +2061,13 @@ impl TextEngine {
             Ok(())
         })();
         if let Err(error) = preparation {
-            planner.abort_pending();
+            self.invalidate_root(request.root_id)?;
             return Err(error);
         }
+        clear_preflight_text_candidates(&mut preflight_text_candidates);
+        planner.preflight_text_candidates = preflight_text_candidates;
+        preflight_edit_scratch.clear();
+        planner.preflight_edit_scratch = preflight_edit_scratch;
         if gather_output_matches_next {
             *prepared_gather_cache = Some(next_gather_key);
         }
@@ -1962,19 +2119,24 @@ impl TextEngine {
         Ok(&planner.semantic_records)
     }
 
-    /// Drops a measure query's speculative transaction leave-committed. Used when
-    /// staging the query result fails terminally: a query the caller only observed
-    /// as failed must not leave an adoptable transaction behind.
-    pub(crate) fn abort_measure(&mut self, measured: MeasuredParagraph) -> Result<(), EngineError> {
+    /// Discards the derived root when a prepared query cannot be delivered.
+    /// The caller-owned text remains authoritative and can be replayed after reset.
+    pub(crate) fn invalidate_after_measure_failure(
+        &mut self,
+        measured: MeasuredParagraph,
+    ) -> Result<(), EngineError> {
         let planner = self
             .planners
-            .get_mut(&measured.root_id)
+            .get(&measured.root_id)
             .ok_or(EngineError::RootMissing)?;
-        if planner.revision != measured.revision {
+        if planner.revision != measured.revision
+            || planner.preparation_revision != measured.preparation_revision
+            || planner.measure_generation != measured.measure_generation
+        {
+            self.invalidate_root(measured.root_id)?;
             return Err(EngineError::RevisionConflict);
         }
-        planner.abort_pending();
-        Ok(())
+        self.invalidate_root(measured.root_id)
     }
 
     /// Commits one successfully encoded paragraph preparation without advancing renderer-plan
@@ -1984,32 +2146,50 @@ impl TextEngine {
         &mut self,
         measured: MeasuredParagraph,
     ) -> Result<u32, EngineError> {
-        let revision = {
-            let planner = self
-                .planners
-                .get_mut(&measured.root_id)
-                .ok_or(EngineError::RootMissing)?;
-            if planner.revision != measured.revision {
+        let validation = self.planners.get(&measured.root_id).map(|planner| {
+            if planner.revision != measured.revision
+                || planner.preparation_revision != measured.preparation_revision
+                || planner.measure_generation != measured.measure_generation
+            {
                 return Err(EngineError::RevisionConflict);
             }
-            let transaction = planner.speculative.ok_or(EngineError::InvalidRequest)?;
-            if transaction.revision != planner.revision {
-                planner.abort_pending();
-                return Err(EngineError::RevisionConflict);
-            }
-            let Some(revision) = planner.preparation_revision.checked_add(1) else {
-                planner.abort_pending();
-                return Err(EngineError::RevisionExhausted);
+            let preparation_changed = planner.lifecycle_changed
+                || planner.pending_preparation_ids.iter().any(|id| {
+                    planner
+                        .paragraph(*id)
+                        .is_some_and(|paragraph| paragraph.state.has_pending_preparation())
+                });
+            let revision = if preparation_changed {
+                planner
+                    .preparation_revision
+                    .checked_add(1)
+                    .ok_or(EngineError::RevisionExhausted)?
+            } else {
+                planner.preparation_revision
             };
-            planner.codec_binding = Some(transaction.codec_binding);
-            planner.speculative = None;
-            planner.commit_paragraphs(false);
-            planner.next_glyph_id = transaction.next_glyph_id;
-            planner.next_content_revision = transaction.next_content_revision;
-            planner.preparation_revision = revision;
-            planner.semantic_input_spans.clear();
-            revision
+            Ok(revision)
+        });
+        let revision = match validation {
+            None => return Err(EngineError::RootMissing),
+            Some(Ok(validated)) => validated,
+            Some(Err(error)) => {
+                // Encoding succeeded, so a failed adoption is an internal contract breach.
+                // Retire the derived root and let the host rebuild it from accepted authored data.
+                self.invalidate_root(measured.root_id)?;
+                return Err(error);
+            }
         };
+        let planner = self
+            .planners
+            .get_mut(&measured.root_id)
+            .ok_or(EngineError::RootMissing)?;
+        planner.codec_binding = Some(CodecBinding {
+            handle: measured.codec_handle,
+            fingerprint: measured.codec_fingerprint,
+        });
+        planner.commit_paragraphs(false);
+        planner.preparation_revision = revision;
+        planner.semantic_input_spans.clear();
         // Preparation changes no gathered rows or renderer revision. The published gather key
         // remains the comparison baseline until publication consumes the accumulated deltas.
         Ok(revision)
@@ -2023,26 +2203,30 @@ impl TextEngine {
             .planners
             .get(&measured.root_id)
             .ok_or(EngineError::RootMissing)?;
-        if planner.revision != measured.revision {
+        if planner.revision != measured.revision
+            || planner.preparation_revision != measured.preparation_revision
+            || planner.measure_generation != measured.measure_generation
+        {
             return Err(EngineError::RevisionConflict);
         }
         Ok(&planner.semantic_records)
     }
 
-    pub(crate) fn abort_update(&mut self, prepared: PreparedUpdate) -> Result<(), EngineError> {
-        let next_gather_key = prepared_gather_key(prepared, prepared.next);
+    pub(crate) fn invalidate_after_publication_failure(
+        &mut self,
+        prepared: PreparedUpdate,
+    ) -> Result<(), EngineError> {
         let planner = self
             .planners
-            .get_mut(&prepared.root_id)
+            .get(&prepared.root_id)
             .ok_or(EngineError::RootMissing)?;
-        if planner.revision != prepared.previous {
-            return Err(EngineError::RevisionConflict);
+        let revision_matches = planner.revision == prepared.previous;
+        self.invalidate_root(prepared.root_id)?;
+        if revision_matches {
+            Ok(())
+        } else {
+            Err(EngineError::RevisionConflict)
         }
-        planner.abort_pending();
-        if self.prepared_gather_cache == Some(next_gather_key) {
-            self.prepared_gather_cache = None;
-        }
-        Ok(())
     }
 
     pub(crate) fn commit_update(
@@ -2066,6 +2250,7 @@ impl TextEngine {
             .commit_owned(prepared.next.root)
             .map_err(plan_error)?;
         planner.placement_slots.commit();
+        planner.placement_acknowledgement_rebased = false;
         planner.desired_placements.clear();
         planner.session_placement_rows.clear();
         planner.placement_slot_count = planner.pending_placement_slot_count;
@@ -2127,6 +2312,21 @@ fn prepared_gather_key(prepared: PreparedUpdate, revision: RootRevision) -> Gath
     }
 }
 
+fn sort_session_placement_rows(
+    rows: &mut [SessionPlacementRow],
+    sort_pairs: &mut Vec<(u64, u32)>,
+) -> Result<(), EngineError> {
+    if rows.windows(2).any(|pair| pair[0].slot >= pair[1].slot) {
+        sort::prepare_pairs(sort_pairs, rows.len())?;
+        for (index, row) in rows.iter().enumerate() {
+            sort_pairs.push((u64::from(row.slot), index as u32));
+        }
+        sort::sort_pairs(sort_pairs);
+        sort::apply_pair_order(rows, sort_pairs);
+    }
+    Ok(())
+}
+
 fn placement_logical_key(
     paragraph: ParagraphIncarnation,
     segment: PlacementSegment,
@@ -2167,10 +2367,6 @@ fn order_only_request(request: UpdateRequest<'_>) -> bool {
         && request.semantic_view_mask == 0
 }
 
-/// Emits the measurement (and optional layout-inspection) semantic records for one
-/// paragraph, preparing intrinsic layouts on demand. Every stage reads pending state
-/// when prepared and committed state otherwise, so the same emission serves the full
-/// update path and the paragraph-scoped measure query.
 /// Whether a rebuilt shaping-run list keeps the previous list's positional
 /// topology: same count and, per index, the same text span and shaping
 /// identity. Style VALUES may differ — that is what a metrics-only refresh
@@ -2190,9 +2386,8 @@ fn shaping_run_topology_stable(
         })
 }
 
-// Stage aggregation: each argument is one explicit input threaded through the
-// pipeline rather than hidden mutable state, and D-244 measured outlining these
-// bodies as size-neutral. Arity is the shape, not a smell.
+/// Emits prepared measurements and optional inspection, building missing intrinsic layout in the shared pipeline.
+// D-244 found outlining this stage size-neutral; keep its inputs explicit.
 #[allow(clippy::too_many_arguments)]
 fn append_paragraph_measurement(
     records: &mut Vec<super::semantic_view::SemanticRecord>,
@@ -2232,13 +2427,20 @@ fn append_paragraph_measurement(
         .first()
         .copied()
         .ok_or(EngineError::InvalidRequest)?;
-    // Intrinsic extents ride the same measurement pass: one scan over the cluster
-    // arena, mirroring the breaker's wrap decisions (see `ClusterArena::
-    // intrinsic_widths`), so hosts never re-measure at zero width to size a
-    // flex item.
-    let intrinsics = state.clusters.active().intrinsic_widths(constraint.wrap);
+    // Intrinsic widths depend on cluster advances/breaks and wrap; unchanged reads reuse them.
+    let intrinsics = state
+        .intrinsic_widths_cache
+        .filter(|(wrap, _)| *wrap == constraint.wrap)
+        .map(|(_, widths)| widths)
+        .unwrap_or_else(|| {
+            let widths = state.clusters.active().intrinsic_widths(constraint.wrap);
+            state.intrinsic_widths_cache = Some((constraint.wrap, widths));
+            widths
+        });
     let needs_intrinsic = visible_extents.consumed_clusters < cluster_count || has_ellipsis;
-    if needs_intrinsic {
+    let reuse_intrinsic = !state.has_pending_preparation()
+        && state.clipped_inspection.active().mode != IntrinsicInspection::None;
+    if needs_intrinsic && !reuse_intrinsic {
         state.prepare_intrinsic_flow_layout(
             shaper.as_deref_mut().ok_or(EngineError::InvalidRequest)?,
             font_stacks,
@@ -2252,7 +2454,7 @@ fn append_paragraph_measurement(
             >= usize::try_from(constraint.max_lines).map_err(|_| EngineError::ResultTooLarge)?;
     let inspect_full_clipped_layout =
         needs_intrinsic && constraint.overflow == OVERFLOW_CLIP && !max_lines_truncated;
-    if inspect_full_clipped_layout {
+    if inspect_full_clipped_layout && !reuse_intrinsic {
         state
             .prepare_intrinsic_positioned(shaper.as_deref().ok_or(EngineError::InvalidRequest)?)?;
     }
@@ -2267,7 +2469,11 @@ fn append_paragraph_measurement(
         active_flow
     };
     let positioned = if inspect_full_clipped_layout {
-        &state.clipped_inspection.pending().positioned
+        if reuse_intrinsic {
+            &state.clipped_inspection.active().positioned
+        } else {
+            &state.clipped_inspection.pending().positioned
+        }
     } else {
         active_positioned
     };
@@ -2314,8 +2520,16 @@ fn append_paragraph_measurement(
         include_layout_inspection || include_borrowed_layout,
         include_layout_inspection,
     )?;
-    state.clipped_inspection.pending_mut().enabled = inspect_full_clipped_layout;
-    state.clipped_inspection.mark_prepared();
+    if !reuse_intrinsic {
+        state.clipped_inspection.pending_mut().mode = if inspect_full_clipped_layout {
+            IntrinsicInspection::Positioned
+        } else if needs_intrinsic {
+            IntrinsicInspection::Flow
+        } else {
+            IntrinsicInspection::None
+        };
+        state.clipped_inspection.mark_prepared();
+    }
     Ok(())
 }
 
@@ -2328,39 +2542,15 @@ fn append_planner_gather(
     font_bindings: &[RegisteredFontBinding],
     retained: bool,
     sparse: bool,
-    replacement: Option<usize>,
-) -> Result<usize, EngineError> {
-    let mut retained_prefix = 0;
+    replacement: bool,
+) -> Result<(), EngineError> {
+    if retained && replacement {
+        return replace_planner_gather(gather, planner, codec, capability_set, font_bindings);
+    }
     let mut retaining = retained;
     let mut order_index = 0;
-    let mut dirty_index = 0;
-    let mut resume = None;
-    if retaining && sparse && replacement.is_none() {
-        let owners = planner.order_sort_scratch.iter().map(|entry| {
-            let paragraph = planner
-                .paragraph(entry.1)
-                .ok_or(GatherError::InvalidSemanticShape)?;
-            let positioned = paragraph.state.positioned.active();
-            let range = paragraph
-                .gather_range
-                .ok_or(GatherError::InvalidSemanticShape)?;
-            let masks = if !paragraph.positioned_changed
-                && !paragraph.preparation_changed_since_publication
-            {
-                &[][..]
-            } else {
-                positioned.semantic_change_masks()
-            };
-            Ok(RetainedGatherOwner::positioned(
-                range,
-                entry.1,
-                positioned,
-                masks,
-                (paragraph.positioned_changed || paragraph.preparation_changed_since_publication)
-                    .then(|| positioned.unpublished_source_intervals())
-                    .flatten(),
-            ))
-        });
+    if retaining && sparse {
+        let owners = planner_gather_owners(planner);
         let stop = gather
             .append_retained_stream(codec, capability_set, owners, |handle| {
                 font_bindings
@@ -2369,15 +2559,8 @@ fn append_planner_gather(
                     .map(|binding| &binding.binding)
             })
             .map_err(gather_error)?;
-        if let Some(stop) = stop {
-            let paragraph = planner
-                .paragraph(stop.transform_id)
-                .ok_or(EngineError::InvalidRequest)?;
-            order_index = paragraph.renderer_order_index;
-            resume = Some((
-                stop.source_index,
-                paragraph.gather_range.ok_or(EngineError::InvalidRequest)?,
-            ));
+        if stop.is_some() {
+            return replace_planner_gather(gather, planner, codec, capability_set, font_bindings);
         } else {
             order_index = planner.order_sort_scratch.last().map_or(Ok(0), |entry| {
                 usize::try_from(entry.0)
@@ -2401,47 +2584,13 @@ fn append_planner_gather(
                 }
             }
             if order_index == planner.active_order().len() && gather.finish_retained() {
-                return Ok(0);
+                return Ok(());
             }
         }
         gather.truncate_to_retained_prefix().map_err(gather_error)?;
         retaining = false;
     }
     while order_index < planner.active_order().len() {
-        if sparse && retaining {
-            let next_dirty = match planner.order_sort_scratch.get(dirty_index) {
-                Some(entry) => usize::try_from(entry.0).map_err(|_| EngineError::InvalidRequest)?,
-                None => planner.active_order().len(),
-            };
-            if next_dirty > order_index {
-                let first = planner
-                    .paragraph(planner.active_order()[order_index].id)
-                    .and_then(|paragraph| paragraph.gather_range);
-                let last = planner
-                    .paragraph(planner.active_order()[next_dirty - 1].id)
-                    .and_then(|paragraph| paragraph.gather_range);
-                if let Some(end) = first.zip(last).and_then(|(first, last)| {
-                    gather
-                        .retain_unchanged(first.through(last))
-                        .then_some(last.record_end())
-                }) {
-                    // Capture the clean emitted prefix before the dirty owner can rewrite
-                    // its gather metadata or force suffix reconstruction.
-                    retained_prefix = end;
-                    order_index = next_dirty;
-                    if order_index == planner.active_order().len() {
-                        break;
-                    }
-                }
-            }
-            // A failed range authorization continues through the existing broad executor.
-            if next_dirty != order_index {
-                retaining = false;
-                gather.truncate_to_retained_prefix().map_err(gather_error)?;
-            } else {
-                dirty_index += 1;
-            }
-        }
         let ordered = planner.active_order()[order_index];
         let paragraph_index = planner
             .paragraphs
@@ -2467,8 +2616,7 @@ fn append_planner_gather(
             order_index += 1;
             continue;
         }
-        let resumed = resume.take();
-        let start = resumed.map_or_else(|| gather.position(), |(_, range)| range.start_position());
+        let start = gather.position();
         let positioned = paragraph.state.positioned.active();
         let semantic_f32 = positioned.semantic_f32();
         let semantic_u32 = positioned.semantic_u32();
@@ -2505,21 +2653,7 @@ fn append_planner_gather(
                 super::codec_gather::DecorationPass::Under,
             )
             .map_err(gather_error)?;
-        let mut replaced_range = None;
-        if retaining
-            && replacement == Some(order_index)
-            && paragraph
-                .gather_range
-                .is_some_and(|range| range.source_count() != input.glyphs.len())
-        {
-            #[cfg(test)]
-            super::work_attribution::record(|work| work.gather_paragraph_visits += 1);
-            let old = paragraph.gather_range.ok_or(EngineError::InvalidRequest)?;
-            let next = gather
-                .replace_retained_owner(codec, capability_set, input, old, binding_for_font)
-                .map_err(gather_error)?;
-            replaced_range = Some((old, next));
-        } else if retaining {
+        if retaining {
             match gather
                 .append_retained_scoped(
                     codec,
@@ -2551,13 +2685,7 @@ fn append_planner_gather(
             #[cfg(test)]
             super::work_attribution::record(|work| work.gather_paragraph_visits += 1);
             gather
-                .append_from(
-                    codec,
-                    capability_set,
-                    input,
-                    resumed.map_or(0, |(index, _)| index),
-                    binding_for_font,
-                )
+                .append_from(codec, capability_set, input, 0, binding_for_font)
                 .map_err(gather_error)?;
         }
         gather
@@ -2571,86 +2699,138 @@ fn append_planner_gather(
             )
             .map_err(gather_error)?;
         let range = gather.range_since(start);
-        if let Some((old, next)) = replaced_range {
-            for suffix_index in order_index + 1..planner.active_order().len() {
-                let id = planner.active_order()[suffix_index].id;
-                let suffix = planner
-                    .paragraph_mut(id)
-                    .ok_or(EngineError::InvalidRequest)?;
-                suffix.gather_range = Some(
-                    suffix
-                        .gather_range
-                        .ok_or(EngineError::InvalidRequest)?
-                        .shifted_after(old, next)
-                        .map_err(gather_error)?,
-                );
-            }
-        }
         planner.paragraphs[paragraph_index].gather_range = Some(range);
         order_index += 1;
     }
     if retaining && !gather.finish_retained() {
         gather.truncate_to_retained_prefix().map_err(gather_error)?;
     }
-    Ok(retained_prefix)
+    Ok(())
+}
+
+fn planner_gather_owners(
+    planner: &PlannerState,
+) -> impl Iterator<Item = Result<RetainedGatherOwner<'_>, GatherError>> + Clone {
+    planner.order_sort_scratch.iter().map(|entry| {
+        let paragraph = planner
+            .paragraph(entry.1)
+            .ok_or(GatherError::InvalidSemanticShape)?;
+        let positioned = paragraph.state.positioned.active();
+        let range = paragraph
+            .gather_range
+            .ok_or(GatherError::InvalidSemanticShape)?;
+        let masks =
+            if !paragraph.positioned_changed && !paragraph.preparation_changed_since_publication {
+                &[][..]
+            } else {
+                positioned.semantic_change_masks()
+            };
+        Ok(RetainedGatherOwner::positioned(
+            range,
+            entry.1,
+            positioned,
+            masks,
+            (paragraph.positioned_changed || paragraph.preparation_changed_since_publication)
+                .then(|| positioned.unpublished_source_intervals())
+                .flatten(),
+        ))
+    })
+}
+
+fn replace_planner_gather(
+    gather: &mut CodecGatherWorkspace,
+    planner: &mut PlannerState,
+    codec: &ValidatedCodec,
+    capability_set: CapabilitySetId,
+    font_bindings: &[RegisteredFontBinding],
+) -> Result<(), EngineError> {
+    let owners = planner_gather_owners(planner);
+    gather
+        .replace_retained_owners(codec, capability_set, owners, |handle| {
+            font_bindings
+                .iter()
+                .find(|binding| binding.handle == handle)
+                .map(|binding| &binding.binding)
+        })
+        .map_err(gather_error)?;
+    let mut owners = gather
+        .correspondence()
+        .iter()
+        .filter(|entry| entry.owner.is_some());
+    let mut current = owners.next();
+    let mut shift = None;
+    let first = planner
+        .order_sort_scratch
+        .first()
+        .ok_or(EngineError::InvalidRequest)?;
+    let first = usize::try_from(first.0).map_err(|_| EngineError::InvalidRequest)?;
+    // Prefix coordinates do not move. Reconcile owner and suffix offsets once in renderer order.
+    for index in first..planner.active_order().len() {
+        let id = planner.active_order()[index].id;
+        let paragraph = planner
+            .paragraph_mut(id)
+            .ok_or(EngineError::InvalidRequest)?;
+        let old = paragraph.gather_range.ok_or(EngineError::InvalidRequest)?;
+        paragraph.gather_range = Some(
+            if let Some(entry) = current.filter(|entry| entry.owner == Some(id)) {
+                if entry.old != old {
+                    return Err(EngineError::InvalidRequest);
+                }
+                shift = Some((entry.old, entry.next));
+                current = owners.next();
+                entry.next
+            } else if let Some((previous, next)) = shift {
+                old.shifted_after(previous, next).map_err(gather_error)?
+            } else {
+                old
+            },
+        );
+    }
+    if current.is_some() || !gather.finish_retained() {
+        return Err(EngineError::InvalidRequest);
+    }
+    Ok(())
 }
 
 impl PlannerState {
-    /// One count-changing owner may replace its rows while preserving an unchanged suffix.
-    /// The existing preparation frontier covers semantic, geometry and binding changes.
-    fn prepare_replacement_gather_order(
-        &mut self,
-    ) -> Result<Option<(usize, usize, usize)>, EngineError> {
-        let Some(source_count) = self.gathered_source_count else {
+    /// A count-changing frontier shares one envelope and a clean cached suffix.
+    fn prepare_replacement_gather_order(&mut self) -> Result<Option<usize>, EngineError> {
+        let Some(mut count) = self.gathered_source_count else {
             return Ok(None);
         };
-        if self.lifecycle_changed {
+        if !self.prepare_retained_order(RetainedOrderPurpose::ReplacementGather)? {
             return Ok(None);
         }
-        let mut ids = self
-            .pending_preparation_ids
-            .iter()
-            .chain(&self.unpublished_preparation_ids);
-        let Some(&id) = ids.next() else {
-            return Ok(None);
-        };
-        if ids.any(|other| *other != id) {
+        if self.order_sort_scratch.is_empty() {
             return Ok(None);
         }
-        let paragraph = self.paragraph(id).ok_or(EngineError::InvalidRequest)?;
-        let positioned = paragraph.state.positioned.active();
-        let Some(range) = paragraph.gather_range else {
-            return Ok(None);
-        };
-        let index = paragraph.renderer_order_index;
-        if paragraph.pending_remove
-            || !positioned.decorations().is_empty()
-            || self
-                .active_order()
-                .get(index)
-                .is_none_or(|ordered| ordered.id != id)
-            || (range.source_count() == positioned.glyphs().len()
-                && index + 1 != self.active_order().len())
-        {
-            return Ok(None);
+        let mut changed_count = false;
+        for entry in &self.order_sort_scratch {
+            let paragraph = self.paragraph(entry.1).ok_or(EngineError::InvalidRequest)?;
+            let range = paragraph.gather_range.ok_or(EngineError::InvalidRequest)?;
+            let next_count = paragraph.state.positioned.active().glyphs().len();
+            changed_count |= range.source_count() != next_count;
+            count = count
+                .checked_sub(range.source_count())
+                .and_then(|count| count.checked_add(next_count))
+                .ok_or(EngineError::ResultTooLarge)?;
         }
-        let count = source_count
-            .checked_sub(range.source_count())
-            .and_then(|count| count.checked_add(positioned.glyphs().len()))
-            .ok_or(EngineError::ResultTooLarge)?;
-        let prefix = range.record_start();
-        self.order_sort_scratch.clear();
-        self.order_sort_scratch
-            .try_reserve(1)
-            .map_err(|_| EngineError::ResultTooLarge)?;
-        self.order_sort_scratch.push((index as u64, id));
-        Ok(Some((index, prefix, count)))
+        Ok(changed_count.then_some(count))
     }
 
-    /// Reuse the lifecycle renderer order and preparation frontier. The exact gather key
-    /// authorizes all untouched ranges; only changed owners need count/decoration checks.
-    fn prepare_sparse_gather_order(&mut self) -> Result<bool, EngineError> {
-        if self.lifecycle_changed || self.gathered_source_count.is_none() {
+    /// Reuse renderer order and the preparation frontier without inspecting clean owners.
+    fn prepare_retained_order(
+        &mut self,
+        purpose: RetainedOrderPurpose,
+    ) -> Result<bool, EngineError> {
+        if self.lifecycle_changed
+            || match purpose {
+                RetainedOrderPurpose::Gather | RetainedOrderPurpose::ReplacementGather => {
+                    self.gathered_source_count.is_none()
+                }
+                RetainedOrderPurpose::Placement => !self.placement_ranges_current,
+            }
+        {
             return Ok(false);
         }
         self.order_sort_scratch.clear();
@@ -2669,12 +2849,23 @@ impl PlannerState {
         {
             let paragraph = self.paragraph(*id).ok_or(EngineError::InvalidRequest)?;
             let positioned = paragraph.state.positioned.active();
-            let Some(range) = paragraph.gather_range else {
-                return Ok(false);
+            let reusable = match purpose {
+                RetainedOrderPurpose::Gather => {
+                    positioned.decorations().is_empty()
+                        && paragraph
+                            .gather_range
+                            .is_some_and(|range| range.source_count() == positioned.glyphs().len())
+                }
+                RetainedOrderPurpose::ReplacementGather => {
+                    positioned.decorations().is_empty() && paragraph.gather_range.is_some()
+                }
+                RetainedOrderPurpose::Placement => {
+                    paragraph.placement_range.end - paragraph.placement_range.start
+                        == positioned.placement_segments().len()
+                }
             };
-            if paragraph.pending_remove
-                || !positioned.decorations().is_empty()
-                || range.source_count() != positioned.glyphs().len()
+            if !reusable
+                || paragraph.pending_remove
                 || self
                     .active_order()
                     .get(paragraph.renderer_order_index)
@@ -2688,6 +2879,10 @@ impl PlannerState {
         }
         sort::sort_pairs(&mut self.order_sort_scratch);
         self.order_sort_scratch.dedup();
+        #[cfg(test)]
+        super::work_attribution::record(|work| {
+            work.retained_owner_admissions += self.order_sort_scratch.len();
+        });
         Ok(true)
     }
 
@@ -2762,9 +2957,10 @@ impl PlannerState {
             .map(|index| &mut self.paragraphs[index])
     }
 
-    fn prepare_semantic_input_spans(
+    fn prepare_semantic_inputs(
         &mut self,
         request: UpdateRequest<'_>,
+        scope: ParagraphInputScope,
     ) -> Result<(), EngineError> {
         self.semantic_input_spans.clear();
         if request.text_mutations.len() == 0
@@ -2775,31 +2971,38 @@ impl PlannerState {
             return Ok(());
         }
 
-        index_paragraph_records(
+        // The single-owner preflight has already checked every text/style group against
+        // the selected owner and lifecycle membership. Indexed requests still need spans.
+        if matches!(scope, ParagraphInputScope::Indexed) {
+            route_paragraph_records(
+                &mut self.semantic_input_spans,
+                &self.lifecycle_membership_scratch,
+                request.text_mutations.len(),
+                |index| request.text_mutations.paragraph_id(index),
+                ParagraphInputKind::Text,
+                scope,
+            )?;
+            route_paragraph_records(
+                &mut self.semantic_input_spans,
+                &self.lifecycle_membership_scratch,
+                request.style_mutations.len(),
+                |index| request.style_mutations.paragraph_id(index),
+                ParagraphInputKind::Style,
+                scope,
+            )?;
+        }
+        route_paragraph_records(
             &mut self.semantic_input_spans,
-            &self.paragraphs,
-            request.text_mutations.len(),
-            |index| request.text_mutations.paragraph_id(index),
-            ParagraphInputKind::Text,
-        )?;
-        index_paragraph_records(
-            &mut self.semantic_input_spans,
-            &self.paragraphs,
-            request.style_mutations.len(),
-            |index| request.style_mutations.paragraph_id(index),
-            ParagraphInputKind::Style,
-        )?;
-        index_paragraph_records(
-            &mut self.semantic_input_spans,
-            &self.paragraphs,
+            &self.lifecycle_membership_scratch,
             request.geometry.constraint_count(),
             |index| request.geometry.paragraph_id(index),
             ParagraphInputKind::Constraint,
+            scope,
         )?;
         let constraint_count = request.geometry.constraint_count();
-        index_paragraph_records(
+        route_paragraph_records(
             &mut self.semantic_input_spans,
-            &self.paragraphs,
+            &self.lifecycle_membership_scratch,
             request.geometry.inline_object_count(),
             |index| {
                 constraint_count
@@ -2807,9 +3010,26 @@ impl PlannerState {
                     .and_then(|index| request.geometry.paragraph_id(index))
             },
             ParagraphInputKind::InlineObject,
+            scope,
         )?;
-        self.semantic_input_spans
-            .sort_unstable_by_key(|spans| spans.id);
+        if matches!(scope, ParagraphInputScope::Single(_)) {
+            return Ok(());
+        }
+        if self.semantic_input_spans.len() > 1 {
+            sort::prepare_pairs(
+                &mut self.style_validation_sort_pair_scratch,
+                self.semantic_input_spans.len(),
+            )?;
+            for (index, spans) in self.semantic_input_spans.iter().enumerate() {
+                self.style_validation_sort_pair_scratch
+                    .push((u64::from(spans.id), index as u32));
+            }
+            sort::sort_pairs(&mut self.style_validation_sort_pair_scratch);
+            sort::apply_pair_order(
+                &mut self.semantic_input_spans,
+                &mut self.style_validation_sort_pair_scratch,
+            );
+        }
         let mut count = 0;
         for index in 0..self.semantic_input_spans.len() {
             let mut next = self.semantic_input_spans[index];
@@ -2840,21 +3060,303 @@ impl PlannerState {
         Ok(())
     }
 
-    fn semantic_input_spans(&self, paragraph_id: u32) -> Result<ParagraphInputSpans, EngineError> {
-        if self.semantic_input_spans.is_empty() {
-            return Ok(ParagraphInputSpans {
-                id: paragraph_id,
-                ..ParagraphInputSpans::default()
-            });
-        }
+    fn validate_style_topology_for_inputs(
+        &mut self,
+        paragraph_id: u32,
+        text_mutations: super::semantic_wire::TextMutationBatch<'_>,
+        style_mutations: super::semantic_wire::StyleMutationBatch<'_>,
+        spare_text_candidate_id: Option<u32>,
+        preflight_text_candidates: &mut Vec<PreflightTextCandidate>,
+        preflight_edit_scratch: &mut Vec<TextEdit>,
+    ) -> Result<(), EngineError> {
+        let PlannerState {
+            paragraphs,
+            spare_paragraph,
+            style_validation_mutation_scratch,
+            style_validation_sort_pair_scratch,
+            style_validation_topology_scratch,
+            style_validation_order_scratch,
+            style_validation_nesting_scratch,
+            style_validation_sort_pairs_pass,
+            ..
+        } = self;
+        let spare_text_capacity = spare_paragraph.as_ref().map_or(0, |paragraph| {
+            paragraph
+                .text
+                .pending()
+                .units
+                .capacity()
+                .max(paragraph.text.committed().units.capacity())
+        });
+        let paragraph_index = paragraphs
+            .binary_search_by_key(&paragraph_id, |paragraph| paragraph.id)
+            .ok();
+        let mut empty_styles = StyleArena::default();
+
+        let candidate_index = if text_mutations.len() == 0 {
+            None
+        } else {
+            preflight_text_candidates
+                .try_reserve(1)
+                .map_err(|_| EngineError::ResultTooLarge)?;
+            let index = preflight_text_candidates.len();
+            preflight_text_candidates.push(PreflightTextCandidate::default());
+            let candidate = &mut preflight_text_candidates[index];
+            candidate.paragraph_id = paragraph_id;
+            candidate.buffers = if paragraph_index
+                .and_then(|index| paragraphs.get(index))
+                .is_some_and(|paragraph| {
+                    !paragraph.state.text.is_prepared() && !paragraph.state.unicode.is_prepared()
+                }) {
+                CandidateBuffers::ExistingPending {
+                    unit_ids_mirror_committed: false,
+                }
+            } else if spare_text_candidate_id == Some(paragraph_id) && spare_paragraph.is_some() {
+                CandidateBuffers::SparePending
+            } else {
+                CandidateBuffers::Owned
+            };
+            match candidate.buffers {
+                CandidateBuffers::ExistingPending { .. } => {
+                    let paragraph = paragraph_index
+                        .and_then(|index| paragraphs.get_mut(index))
+                        .ok_or(EngineError::InvalidRequest)?;
+                    let was_mirrored = paragraph.state.pending_text_mirrors_committed;
+                    candidate.buffers = CandidateBuffers::ExistingPending {
+                        unit_ids_mirror_committed: was_mirrored,
+                    };
+                    let (pending, committed) = paragraph.state.text.derive_mut();
+                    // A valid mirror already contains the accepted text and avoids a full copy.
+                    // Clear the fact before any write so errors cannot leave a false mirror.
+                    paragraph.state.pending_text_mirrors_committed = false;
+                    populate_preflight_text(
+                        &mut pending.units,
+                        &committed.units,
+                        text_mutations,
+                        !was_mirrored,
+                        0,
+                    )?;
+                }
+                CandidateBuffers::SparePending => {
+                    let spare = spare_paragraph
+                        .as_mut()
+                        .ok_or(EngineError::InvalidRequest)?;
+                    let pending = spare.text.pending_mut();
+                    pending.units.clear();
+                    pending.unit_ids.clear();
+                    pending.next_unit_id = 0;
+                    spare.pending_text_mirrors_committed = false;
+                    spare.unicode.pending_mut().clear();
+                    populate_preflight_text(&mut pending.units, &[], text_mutations, false, 0)?;
+                }
+                CandidateBuffers::Owned => {
+                    let committed_text = paragraph_index
+                        .and_then(|index| paragraphs.get(index))
+                        .map_or(&[][..], |paragraph| {
+                            paragraph.state.text.committed().units.as_slice()
+                        });
+                    candidate.text.clear();
+                    let preserved_capacity = paragraph_index
+                        .and_then(|index| paragraphs.get(index))
+                        .map_or(0, |paragraph| {
+                            paragraph
+                                .state
+                                .text
+                                .pending()
+                                .units
+                                .capacity()
+                                .max(paragraph.state.text.committed().units.capacity())
+                        })
+                        .max(spare_text_capacity);
+                    populate_preflight_text(
+                        &mut candidate.text,
+                        committed_text,
+                        text_mutations,
+                        true,
+                        preserved_capacity,
+                    )?;
+                }
+            }
+            let committed_text = paragraph_index
+                .and_then(|index| paragraphs.get(index))
+                .map_or(&[][..], |paragraph| {
+                    paragraph.state.text.committed().units.as_slice()
+                });
+            let candidate_text = match candidate.buffers {
+                CandidateBuffers::ExistingPending { .. } => paragraph_index
+                    .and_then(|index| paragraphs.get(index))
+                    .ok_or(EngineError::InvalidRequest)?
+                    .state
+                    .text
+                    .pending()
+                    .units
+                    .as_slice(),
+                CandidateBuffers::SparePending => spare_paragraph
+                    .as_ref()
+                    .ok_or(EngineError::InvalidRequest)?
+                    .text
+                    .pending()
+                    .units
+                    .as_slice(),
+                CandidateBuffers::Owned => candidate.text.as_slice(),
+            };
+            candidate.unicode_state = CandidateUnicode::ReuseCommitted;
+            let edit_start = preflight_edit_scratch.len();
+            let reconciliation = text_reconciliation(text_mutations, committed_text.len());
+            if let Some(reconciliation) = reconciliation {
+                collect_text_edits(
+                    committed_text,
+                    candidate_text,
+                    reconciliation,
+                    preflight_edit_scratch,
+                    edit_start,
+                )?;
+            }
+            let edit_end = preflight_edit_scratch.len();
+            candidate.edit_start = edit_start;
+            candidate.edit_end = edit_end;
+            let candidate_edits = &preflight_edit_scratch[edit_start..edit_end];
+            let text_changed = if reconciliation.is_some() {
+                !candidate_edits.is_empty()
+            } else {
+                candidate_text != committed_text
+            };
+            if text_changed {
+                let unicode_reusable = paragraph_index
+                    .and_then(|index| paragraphs.get(index))
+                    .is_some_and(|paragraph| {
+                        !paragraph.created
+                            && !candidate_edits.is_empty()
+                            && candidate_edits.iter().copied().all(|edit| {
+                                paragraph
+                                    .state
+                                    .unicode
+                                    .committed()
+                                    .reusable_for_ascii_letter_edit(
+                                        committed_text,
+                                        candidate_text,
+                                        edit.old_start,
+                                        edit.old_end,
+                                        edit.new_end,
+                                    )
+                            })
+                    });
+                if unicode_reusable {
+                    candidate.unicode_state = CandidateUnicode::ReuseCommitted;
+                } else {
+                    match candidate.buffers {
+                        CandidateBuffers::ExistingPending { .. } => {
+                            let state = &mut paragraph_index
+                                .and_then(|index| paragraphs.get_mut(index))
+                                .ok_or(EngineError::InvalidRequest)?
+                                .state;
+                            let candidate_text = state.text.pending().units.as_slice();
+                            state
+                                .unicode
+                                .pending_mut()
+                                .analyze(candidate_text)
+                                .map_err(unicode_error)?;
+                        }
+                        CandidateBuffers::SparePending => {
+                            let spare = spare_paragraph
+                                .as_mut()
+                                .ok_or(EngineError::InvalidRequest)?;
+                            let candidate_text = spare.text.pending().units.as_slice();
+                            spare
+                                .unicode
+                                .pending_mut()
+                                .analyze(candidate_text)
+                                .map_err(unicode_error)?;
+                        }
+                        CandidateBuffers::Owned => {
+                            let preserved_capacity = paragraph_index
+                                .and_then(|index| paragraphs.get(index))
+                                .map_or(0, |paragraph| {
+                                    paragraph
+                                        .state
+                                        .text
+                                        .pending()
+                                        .units
+                                        .capacity()
+                                        .max(paragraph.state.text.committed().units.capacity())
+                                })
+                                .max(spare_text_capacity);
+                            candidate
+                                .unicode
+                                .reserve(preserved_capacity)
+                                .map_err(unicode_error)?;
+                            candidate
+                                .unicode
+                                .analyze(candidate_text)
+                                .map_err(unicode_error)?;
+                        }
+                    }
+                    candidate.unicode_state = CandidateUnicode::Prepared;
+                }
+            }
+            Some(index)
+        };
+        let grapheme_boundaries = if let Some(index) = candidate_index {
+            let candidate = &preflight_text_candidates[index];
+            if candidate.unicode_state == CandidateUnicode::Prepared {
+                match candidate.buffers {
+                    CandidateBuffers::ExistingPending { .. } => paragraph_index
+                        .and_then(|index| paragraphs.get(index))
+                        .ok_or(EngineError::InvalidRequest)?
+                        .state
+                        .unicode
+                        .pending()
+                        .grapheme_boundaries(),
+                    CandidateBuffers::SparePending => spare_paragraph
+                        .as_ref()
+                        .ok_or(EngineError::InvalidRequest)?
+                        .unicode
+                        .pending()
+                        .grapheme_boundaries(),
+                    CandidateBuffers::Owned => candidate.unicode.grapheme_boundaries(),
+                }
+            } else {
+                paragraph_index
+                    .and_then(|index| paragraphs.get(index))
+                    .map_or(&[0][..], |paragraph| {
+                        paragraph.state.unicode.committed().grapheme_boundaries()
+                    })
+            }
+        } else {
+            paragraph_index
+                .and_then(|index| paragraphs.get(index))
+                .map_or(&[0][..], |paragraph| {
+                    paragraph.state.unicode.committed().grapheme_boundaries()
+                })
+        };
+        let committed_styles = paragraph_index
+            .and_then(|index| paragraphs.get(index))
+            .map(|paragraph| &paragraph.state.styles.committed().arena);
+        let mut scratch = MutationTopologyScratch {
+            topology: style_validation_topology_scratch,
+            mutations: style_validation_mutation_scratch,
+            sort_pairs: style_validation_sort_pair_scratch,
+            order: style_validation_order_scratch,
+            nesting: style_validation_nesting_scratch,
+            sort_pairs_pass: style_validation_sort_pairs_pass,
+        };
+        StyleArena::validate_mutation_topology(
+            committed_styles.unwrap_or(&empty_styles),
+            style_mutations,
+            grapheme_boundaries,
+            &mut scratch,
+        )?;
+        empty_styles.clear();
+        Ok(())
+    }
+
+    fn semantic_input_spans(&self, paragraph_id: u32) -> ParagraphInputSpans {
         self.semantic_input_spans
             .binary_search_by_key(&paragraph_id, |spans| spans.id)
             .map(|index| self.semantic_input_spans[index])
-            .or_else(|_| {
-                Ok(ParagraphInputSpans {
-                    id: paragraph_id,
-                    ..ParagraphInputSpans::default()
-                })
+            .unwrap_or(ParagraphInputSpans {
+                id: paragraph_id,
+                ..ParagraphInputSpans::default()
             })
     }
 
@@ -2864,6 +3366,8 @@ impl PlannerState {
         order_mutations: super::semantic_wire::ParagraphOrderMutationBatch<'_>,
         implicit_paragraph: Option<u32>,
         max_paragraphs: u32,
+        plan: LifecyclePlan,
+        spare_text_candidate_id: Option<u32>,
     ) -> Result<(), EngineError> {
         if self.lifecycle_prepared {
             return Err(EngineError::InvalidRequest);
@@ -2871,212 +3375,137 @@ impl PlannerState {
         if mutations.len() == 0 && order_mutations.len() == 0 && implicit_paragraph.is_none() {
             return Ok(());
         }
-        let result = (|| {
-            let mut creates =
-                usize::from(implicit_paragraph.is_some_and(|id| self.paragraph(id).is_none()));
-            let mut removals = 0usize;
-            let mut placement_changes = creates;
-            for index in 0..mutations.len() {
-                match mutations.get(index).ok_or(EngineError::InvalidRequest)? {
-                    super::semantic_wire::ParagraphMutation::Upsert {
-                        paragraph_id,
-                        order,
-                    } => match self.paragraph(paragraph_id) {
-                        Some(paragraph) => {
-                            placement_changes += usize::from(paragraph.placement.order != order);
-                        }
-                        None => {
-                            creates += 1;
-                            placement_changes += 1;
-                        }
-                    },
-                    super::semantic_wire::ParagraphMutation::Remove { paragraph_id } => {
-                        if self.paragraph(paragraph_id).is_none() {
-                            return Err(EngineError::InvalidRequest);
-                        }
-                        removals += 1;
-                    }
+        let LifecyclePlan {
+            creates,
+            removals,
+            placement_changes,
+            ordered,
+        } = plan;
+        if placement_changes == 0 && removals == 0 {
+            return Ok(());
+        }
+        self.lifecycle_prepared = true;
+        self.pending_next_paragraph_incarnation = self.next_paragraph_incarnation.max(1);
+        let final_count = self
+            .paragraphs
+            .len()
+            .checked_add(creates)
+            .and_then(|count| count.checked_sub(removals))
+            .ok_or(EngineError::InvalidRequest)?;
+        if final_count > usize::try_from(max_paragraphs).map_err(|_| EngineError::InvalidRequest)? {
+            return Err(EngineError::InvalidRequest);
+        }
+        self.paragraphs
+            .try_reserve(creates)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        self.pending_ordered_paragraphs = ordered;
+        if self.pending_ordered_paragraphs.len() != final_count {
+            return Err(EngineError::InvalidRequest);
+        }
+        self.rank_sort_scratch
+            .try_reserve(final_count)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        self.ranked_paragraphs
+            .try_reserve(final_count)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+
+        for index in 0..mutations.len() {
+            match mutations.get(index).ok_or(EngineError::InvalidRequest)? {
+                super::semantic_wire::ParagraphMutation::Upsert {
+                    paragraph_id,
+                    order,
+                } => self.prepare_upsert(paragraph_id, order, false)?,
+                super::semantic_wire::ParagraphMutation::Remove { paragraph_id } => {
+                    self.paragraph_mut(paragraph_id)
+                        .ok_or(EngineError::InvalidRequest)?
+                        .pending_remove = true;
                 }
             }
-            for index in 0..order_mutations.len() {
-                let mutation = order_mutations
-                    .get(index)
-                    .ok_or(EngineError::InvalidRequest)?;
-                if !mutation.rank.is_finite() {
-                    return Err(EngineError::InvalidRequest);
-                }
-                placement_changes += self
-                    .paragraph(mutation.paragraph_id)
-                    .map_or(1, |paragraph| {
-                        usize::from(
-                            paragraph.placement.scope != mutation.scope
-                                || paragraph.placement.rank != mutation.rank,
-                        )
-                    });
-            }
-            if placement_changes == 0 && removals == 0 {
-                return Ok(());
-            }
-            self.lifecycle_prepared = true;
-            self.pending_next_paragraph_incarnation = self.next_paragraph_incarnation.max(1);
-            let final_count = self
-                .paragraphs
-                .len()
-                .checked_add(creates)
-                .and_then(|count| count.checked_sub(removals))
+        }
+        for index in 0..order_mutations.len() {
+            let mutation = order_mutations
+                .get(index)
                 .ok_or(EngineError::InvalidRequest)?;
-            if final_count
-                > usize::try_from(max_paragraphs).map_err(|_| EngineError::InvalidRequest)?
-            {
-                return Err(EngineError::InvalidRequest);
-            }
-            self.paragraphs
-                .try_reserve(creates)
-                .map_err(|_| EngineError::ResultTooLarge)?;
-            self.pending_ordered_paragraphs
-                .try_reserve(final_count)
-                .map_err(|_| EngineError::ResultTooLarge)?;
-            self.rank_sort_scratch
-                .try_reserve(final_count)
-                .map_err(|_| EngineError::ResultTooLarge)?;
-            self.ranked_paragraphs
-                .try_reserve(final_count)
-                .map_err(|_| EngineError::ResultTooLarge)?;
-
-            for index in 0..mutations.len() {
-                match mutations.get(index).ok_or(EngineError::InvalidRequest)? {
-                    super::semantic_wire::ParagraphMutation::Upsert {
-                        paragraph_id,
-                        order,
-                    } => self.prepare_upsert(paragraph_id, order)?,
-                    super::semantic_wire::ParagraphMutation::Remove { paragraph_id } => {
-                        self.paragraph_mut(paragraph_id)
-                            .ok_or(EngineError::InvalidRequest)?
-                            .pending_remove = true;
-                    }
-                }
-            }
-            for index in 0..order_mutations.len() {
-                let mutation = order_mutations
-                    .get(index)
-                    .ok_or(EngineError::InvalidRequest)?;
-                self.prepare_order(mutation.paragraph_id, mutation.scope, mutation.rank)?;
-            }
-            if let Some(paragraph_id) = implicit_paragraph
-                && self.paragraph(paragraph_id).is_none()
-            {
-                self.prepare_upsert(paragraph_id, 0)?;
-            }
-
-            self.pending_ordered_paragraphs.clear();
-            for paragraph in &self.paragraphs {
-                if paragraph.pending_remove {
-                    continue;
-                }
-                let placement = paragraph.pending_placement.unwrap_or(paragraph.placement);
-                self.pending_ordered_paragraphs.push(ParagraphOrder {
-                    order: placement.order,
-                    id: paragraph.id,
-                });
-            }
-            sort::prepare_pairs(
-                &mut self.order_sort_scratch,
-                self.pending_ordered_paragraphs.len(),
+            self.prepare_order(mutation.paragraph_id, mutation.scope, mutation.rank)?;
+        }
+        if let Some(paragraph_id) = implicit_paragraph
+            && self.paragraph(paragraph_id).is_none()
+        {
+            self.prepare_upsert(
+                paragraph_id,
+                0,
+                spare_text_candidate_id == Some(paragraph_id),
             )?;
-            for (index, paragraph) in self.pending_ordered_paragraphs.iter().enumerate() {
-                self.order_sort_scratch
-                    .push((sort::pack2(paragraph.order, paragraph.id), index as u32));
+        }
+
+        self.ranked_paragraphs.clear();
+        for (slot, ordered) in self.pending_ordered_paragraphs.iter().enumerate() {
+            let paragraph = self
+                .paragraph(ordered.id)
+                .ok_or(EngineError::InvalidRequest)?;
+            let placement = paragraph.pending_placement.unwrap_or(paragraph.placement);
+            if placement.scope == 0 {
+                continue;
             }
-            sort::sort_pairs(&mut self.order_sort_scratch);
-            for (paragraph, &(key, _)) in self
-                .pending_ordered_paragraphs
-                .iter_mut()
-                .zip(self.order_sort_scratch.iter())
+            self.ranked_paragraphs.push(RankedParagraph {
+                scope: placement.scope,
+                id: paragraph.id,
+                rank: placement.rank,
+                slot: u32::try_from(slot).map_err(|_| EngineError::ResultTooLarge)?,
+            });
+        }
+        sort::prepare_pairs(&mut self.rank_sort_scratch, self.ranked_paragraphs.len())?;
+        for (index, ranked) in self.ranked_paragraphs.iter().enumerate() {
+            self.rank_sort_scratch
+                .push((sort::f64_key(ranked.rank), index as u32));
+        }
+        sort::sort_pairs(&mut self.rank_sort_scratch);
+        let one_scope = self.ranked_paragraphs.first().is_none_or(|first| {
+            self.ranked_paragraphs
+                .iter()
+                .all(|ranked| ranked.scope == first.scope)
+        });
+        if one_scope {
+            for (destination, &(_, source)) in
+                self.ranked_paragraphs.iter().zip(&self.rank_sort_scratch)
             {
-                *paragraph = ParagraphOrder {
-                    order: (key >> 32) as u32,
-                    id: key as u32,
-                };
+                let source = usize::try_from(source).map_err(|_| EngineError::InvalidRequest)?;
+                self.pending_ordered_paragraphs[destination.slot as usize].id =
+                    self.ranked_paragraphs[source].id;
             }
-            if self
-                .pending_ordered_paragraphs
-                .windows(2)
-                .any(|pair| pair[0].order == pair[1].order)
-            {
-                return Err(EngineError::InvalidRequest);
-            }
-            self.ranked_paragraphs.clear();
-            for (slot, ordered) in self.pending_ordered_paragraphs.iter().enumerate() {
-                let paragraph = self
-                    .paragraph(ordered.id)
-                    .ok_or(EngineError::InvalidRequest)?;
-                let placement = paragraph.pending_placement.unwrap_or(paragraph.placement);
-                if placement.scope == 0 {
-                    continue;
-                }
-                if !placement.rank.is_finite() {
-                    return Err(EngineError::InvalidRequest);
-                }
-                self.ranked_paragraphs.push(RankedParagraph {
-                    scope: placement.scope,
-                    id: paragraph.id,
-                    rank: placement.rank,
-                    slot: u32::try_from(slot).map_err(|_| EngineError::ResultTooLarge)?,
-                });
-            }
+        } else {
+            sort::apply_pair_order(&mut self.ranked_paragraphs, &mut self.rank_sort_scratch);
             sort::prepare_pairs(&mut self.rank_sort_scratch, self.ranked_paragraphs.len())?;
             for (index, ranked) in self.ranked_paragraphs.iter().enumerate() {
                 self.rank_sort_scratch
-                    .push((sort::f64_key(ranked.rank), index as u32));
+                    .push((u64::from(ranked.scope), index as u32));
             }
             sort::sort_pairs(&mut self.rank_sort_scratch);
-            let one_scope = self.ranked_paragraphs.first().is_none_or(|first| {
-                self.ranked_paragraphs
-                    .iter()
-                    .all(|ranked| ranked.scope == first.scope)
-            });
-            if one_scope {
-                for (destination, &(_, source)) in
-                    self.ranked_paragraphs.iter().zip(&self.rank_sort_scratch)
-                {
-                    let source =
-                        usize::try_from(source).map_err(|_| EngineError::InvalidRequest)?;
-                    self.pending_ordered_paragraphs[destination.slot as usize].id =
-                        self.ranked_paragraphs[source].id;
-                }
-            } else {
-                sort::apply_pair_order(&mut self.ranked_paragraphs, &mut self.rank_sort_scratch);
-                sort::prepare_pairs(&mut self.rank_sort_scratch, self.ranked_paragraphs.len())?;
-                for (index, ranked) in self.ranked_paragraphs.iter().enumerate() {
-                    self.rank_sort_scratch
-                        .push((u64::from(ranked.scope), index as u32));
-                }
-                sort::sort_pairs(&mut self.rank_sort_scratch);
-                sort::apply_pair_order(&mut self.ranked_paragraphs, &mut self.rank_sort_scratch);
-                sort::prepare_pairs(&mut self.order_sort_scratch, self.ranked_paragraphs.len())?;
-                for ranked in &self.ranked_paragraphs {
-                    self.order_sort_scratch
-                        .push((sort::pack2(ranked.scope, ranked.slot), ranked.slot));
-                }
-                sort::sort_pairs(&mut self.order_sort_scratch);
-                for (&(_, destination), ranked) in
-                    self.order_sort_scratch.iter().zip(&self.ranked_paragraphs)
-                {
-                    let destination =
-                        usize::try_from(destination).map_err(|_| EngineError::InvalidRequest)?;
-                    self.pending_ordered_paragraphs[destination].id = ranked.id;
-                }
+            sort::apply_pair_order(&mut self.ranked_paragraphs, &mut self.rank_sort_scratch);
+            sort::prepare_pairs(&mut self.order_sort_scratch, self.ranked_paragraphs.len())?;
+            for ranked in &self.ranked_paragraphs {
+                self.order_sort_scratch
+                    .push((sort::pack2(ranked.scope, ranked.slot), ranked.slot));
             }
-            self.lifecycle_changed = self.pending_ordered_paragraphs != self.ordered_paragraphs;
-            Ok(())
-        })();
-        if result.is_err() {
-            self.abort_lifecycle();
+            sort::sort_pairs(&mut self.order_sort_scratch);
+            for (&(_, destination), ranked) in
+                self.order_sort_scratch.iter().zip(&self.ranked_paragraphs)
+            {
+                let destination =
+                    usize::try_from(destination).map_err(|_| EngineError::InvalidRequest)?;
+                self.pending_ordered_paragraphs[destination].id = ranked.id;
+            }
         }
-        result
+        self.lifecycle_changed = self.pending_ordered_paragraphs != self.ordered_paragraphs;
+        Ok(())
     }
 
-    fn prepare_upsert(&mut self, id: u32, order: u32) -> Result<(), EngineError> {
+    fn prepare_upsert(
+        &mut self,
+        id: u32,
+        order: u32,
+        preserve_spare_text_candidate: bool,
+    ) -> Result<(), EngineError> {
         match self
             .paragraphs
             .binary_search_by_key(&id, |paragraph| paragraph.id)
@@ -3094,7 +3523,11 @@ impl PlannerState {
                     ParagraphIncarnation::allocate(&mut self.pending_next_paragraph_incarnation)?;
                 let state = if let Some(spare) = self.spare_paragraph.take() {
                     let mut spare = spare;
-                    spare.reset_for_reuse();
+                    if preserve_spare_text_candidate {
+                        spare.reset_for_reuse_preserving_text_candidate();
+                    } else {
+                        spare.reset_for_reuse();
+                    }
                     spare
                 } else {
                     // Only the reusable spare is prewarmed. New retained paragraphs grow
@@ -3132,9 +3565,6 @@ impl PlannerState {
     }
 
     fn prepare_order(&mut self, id: u32, scope: u32, rank: f64) -> Result<(), EngineError> {
-        if !rank.is_finite() {
-            return Err(EngineError::InvalidRequest);
-        }
         let paragraph = self.paragraph_mut(id).ok_or(EngineError::InvalidRequest)?;
         let mut placement = paragraph.pending_placement.unwrap_or(paragraph.placement);
         placement.scope = scope;
@@ -3167,7 +3597,7 @@ impl PlannerState {
         next_content_revision: &mut u32,
     ) -> Result<(), EngineError> {
         let mut sparse =
-            !checkpoint && self.placement_ranges_current && self.prepare_sparse_gather_order()?;
+            !checkpoint && self.prepare_retained_order(RetainedOrderPurpose::Placement)?;
         let mut desired = core::mem::take(&mut self.desired_placements);
         let mut rows = core::mem::take(&mut self.session_placement_rows);
         desired.clear();
@@ -3343,14 +3773,11 @@ impl PlannerState {
                             id,
                         )?;
                         let state = &mut paragraph.state;
-                        state
-                            .positioned
-                            .active_mut()
-                            .bind_placement_handles_transactional(
-                                assigned,
-                                next_content_revision,
-                                &mut state.publication_placement_rollback,
-                            )?;
+                        state.positioned.active_mut().bind_placement_handles(
+                            assigned,
+                            None,
+                            next_content_revision,
+                        )?;
                         paragraph.positioned_changed = true;
                     } else if paragraph
                         .state
@@ -3403,9 +3830,7 @@ impl PlannerState {
                     }
                 }
             }
-            if rows.windows(2).any(|pair| pair[0].slot >= pair[1].slot) {
-                rows.sort_unstable_by_key(|row| row.slot);
-            }
+            sort_session_placement_rows(&mut rows, &mut self.rank_sort_scratch)?;
             if assignment_start != assignment_count {
                 return Err(EngineError::InvalidRequest);
             }
@@ -3414,52 +3839,6 @@ impl PlannerState {
         self.desired_placements = desired;
         self.session_placement_rows = rows;
         result
-    }
-
-    fn abort_pending(&mut self) {
-        self.speculative = None;
-        self.pending_preparation_ids.clear();
-        self.plan.abort();
-        self.placement_slots.abort();
-        self.pending_placement_ranges_refresh = false;
-        self.desired_placements.clear();
-        self.session_placement_rows.clear();
-        self.pending_placement_slot_count = self.placement_slot_count;
-        self.semantic_records.clear();
-        self.semantic_input_spans.clear();
-        for paragraph in &mut self.paragraphs {
-            paragraph.state.abort_all();
-            paragraph.positioned_changed = false;
-        }
-        self.abort_lifecycle();
-        self.pending_next_glyph_id = 0;
-        self.pending_next_content_revision = 0;
-        self.pending_compositing_independent = self.compositing_independent;
-    }
-
-    fn abort_lifecycle(&mut self) {
-        let mut index = 0;
-        while index < self.paragraphs.len() {
-            if self.paragraphs[index].created {
-                let mut paragraph = self.paragraphs.remove(index);
-                paragraph.state.abort_all();
-                if self.spare_paragraph.is_none() {
-                    self.spare_paragraph = Some(paragraph.state);
-                }
-            } else {
-                let paragraph = &mut self.paragraphs[index];
-                paragraph.pending_placement = None;
-                paragraph.pending_remove = false;
-                paragraph.positioned_changed = false;
-                index += 1;
-            }
-        }
-        self.pending_ordered_paragraphs.clear();
-        self.rank_sort_scratch.clear();
-        self.ranked_paragraphs.clear();
-        self.lifecycle_prepared = false;
-        self.lifecycle_changed = false;
-        self.pending_next_paragraph_incarnation = 0;
     }
 
     fn commit_paragraphs(&mut self, publishing: bool) {
@@ -3472,22 +3851,34 @@ impl PlannerState {
                     continue;
                 };
                 let paragraph = &mut self.paragraphs[index];
-                // Previously committed preparations are settled by the unpublished frontier below.
-                if paragraph.preparation_changed_since_publication {
-                    continue;
-                }
                 #[cfg(test)]
                 super::work_attribution::record(|work| work.publication_commit_visits += 1);
                 paragraph.commit_preparation(true);
             }
             for id in &self.unpublished_preparation_ids {
+                // The pending frontier settled this owner, including a newer candidate.
+                if self.pending_preparation_ids.binary_search(id).is_ok() {
+                    continue;
+                }
                 if let Ok(index) = self
                     .paragraphs
                     .binary_search_by_key(id, |paragraph| paragraph.id)
                 {
                     #[cfg(test)]
                     super::work_attribution::record(|work| work.publication_commit_visits += 1);
-                    self.paragraphs[index].commit_preparation(true);
+                    let paragraph = &mut self.paragraphs[index];
+                    if !paragraph.state.has_pending_preparation()
+                        && !paragraph.state.clipped_inspection.is_prepared()
+                        && !paragraph.positioned_changed
+                    {
+                        #[cfg(test)]
+                        super::work_attribution::record(|work| {
+                            work.publication_ack_only_visits += 1
+                        });
+                        paragraph.acknowledge_committed_preparation();
+                    } else {
+                        paragraph.commit_preparation(true);
+                    }
                 }
             }
             self.unpublished_preparation_ids.clear();
@@ -3583,6 +3974,13 @@ fn admit_preparation_owner(
 }
 
 impl RetainedParagraph {
+    fn acknowledge_committed_preparation(&mut self) {
+        if self.preparation_changed_since_publication {
+            self.state.positioned.active_mut().mark_published();
+            self.preparation_changed_since_publication = false;
+        }
+    }
+
     fn commit_preparation(&mut self, publishing: bool) {
         let published_changes =
             publishing && (self.positioned_changed || self.preparation_changed_since_publication);
@@ -3616,20 +4014,31 @@ impl ParagraphState {
     /// Clears paragraph identity and committed/pending semantics while retaining every allocation.
     #[inline(never)]
     fn reset_for_reuse(&mut self) {
+        self.reset_for_reuse_inner(false);
+    }
+
+    fn reset_for_reuse_preserving_text_candidate(&mut self) {
+        self.reset_for_reuse_inner(true);
+    }
+
+    fn reset_for_reuse_inner(&mut self, preserve_text_candidate: bool) {
+        self.intrinsic_widths_cache = None;
         {
             let (committed, pending) = self.text.pair_mut();
             committed.units.clear();
             committed.unit_ids.clear();
-            pending.units.clear();
+            if !preserve_text_candidate {
+                pending.units.clear();
+            }
             pending.unit_ids.clear();
         }
-        self.pending_text_mirrors_committed = true;
+        self.pending_text_mirrors_committed = !preserve_text_candidate;
         {
             let (committed, pending) = self.text.pair_mut();
             committed.next_unit_id = 0;
             pending.next_unit_id = 0;
         }
-        self.text.abort();
+        self.text.discard_candidate();
         self.text_edits.clear();
         {
             let (committed, pending) = self.styles.pair_mut();
@@ -3638,32 +4047,34 @@ impl ParagraphState {
             pending.arena.clear();
             pending.resolved.clear();
         }
-        self.styles.abort();
+        self.styles.discard_candidate();
         {
             let (committed, pending) = self.unicode.pair_mut();
             committed.clear();
-            pending.clear();
+            if !preserve_text_candidate {
+                pending.clear();
+            }
         }
-        self.unicode.abort();
+        self.unicode.discard_candidate();
         self.unicode_reused_for_text_edit = false;
         {
             let (committed, pending) = self.bidi.pair_mut();
             committed.clear();
             pending.clear();
         }
-        self.bidi.abort();
+        self.bidi.discard_candidate();
         {
             let (committed, pending) = self.shaping_runs.pair_mut();
             committed.clear();
             pending.clear();
         }
-        self.shaping_runs.abort();
+        self.shaping_runs.discard_candidate();
         {
             let (committed, pending) = self.shape.pair_mut();
             committed.clear();
             pending.clear();
         }
-        self.shape.abort();
+        self.shape.discard_candidate();
         self.shape_window_scratch.clear();
         self.incremental_shape_source_run = None;
         {
@@ -3671,7 +4082,7 @@ impl ParagraphState {
             committed.clear();
             pending.clear();
         }
-        self.clusters.abort();
+        self.clusters.discard_candidate();
         self.layout_dirty.clear();
         self.next_run_canonical_revision = 0;
         self.pending_source_run_canonical_revision = 0;
@@ -3681,23 +4092,23 @@ impl ParagraphState {
             committed.clear();
             pending.clear();
         }
-        self.geometry.abort();
+        self.geometry.discard_candidate();
         {
             let (committed, pending) = self.flow_layout.pair_mut();
             committed.clear();
             pending.clear();
         }
-        self.flow_layout.abort();
+        self.flow_layout.discard_candidate();
         self.intrinsic_geometry_scratch.clear();
         self.intrinsic_flow_layout_scratch.clear();
         {
             let (committed, pending) = self.clipped_inspection.pair_mut();
-            committed.enabled = false;
+            committed.mode = IntrinsicInspection::None;
             committed.positioned.clear();
-            pending.enabled = false;
+            pending.mode = IntrinsicInspection::None;
             pending.positioned.clear();
         }
-        self.clipped_inspection.abort();
+        self.clipped_inspection.discard_candidate();
         self.intrinsic_boundary_shape.clear();
         self.boundary_shape.clear();
         self.pending_boundary_shape.clear();
@@ -3709,7 +4120,7 @@ impl ParagraphState {
             committed.clear();
             pending.clear();
         }
-        self.positioned.abort();
+        self.positioned.discard_candidate();
         self.fallback_spans.clear();
         self.pending_fallback_spans.clear();
         self.fallback_span_scratch.clear();
@@ -3718,20 +4129,7 @@ impl ParagraphState {
         self.style_order_scratch.clear();
         self.style_nesting_scratch.clear();
         self.style_resolution_scratch.clear();
-        self.styles.abort();
         self.style_invalidation = StyleInvalidation::default();
-        self.unicode.abort();
-        self.bidi.abort();
-        self.shaping_runs.abort();
-        self.shape.abort();
-        self.clusters.abort();
-        self.geometry_fingerprint = 0;
-        self.pending_geometry_fingerprint = 0;
-        self.speculative_text_fingerprint = 0;
-        self.speculative_style_fingerprint = 0;
-        self.geometry.abort();
-        self.flow_layout.abort();
-        self.positioned.abort();
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -3746,25 +4144,32 @@ impl ParagraphState {
         limits: super::frame::UpdateLimits,
         next_glyph_id: &mut u32,
         next_content_revision: &mut u32,
+        mut preflight_candidate: Option<&mut PreflightTextCandidate>,
+        preflight_edits: &[TextEdit],
     ) -> Result<bool, EngineError> {
         #[cfg(test)]
         {
             self.preparation_count += 1;
         }
-        self.prepare_text(text_mutations)?;
+        self.prepare_text(
+            text_mutations,
+            preflight_candidate.as_deref_mut(),
+            preflight_edits,
+        )?;
+        self.prepare_unicode(preflight_candidate)?;
         self.prepare_styles(style_mutations, |handle| {
             font_stacks
                 .binary_search_by_key(&handle, |stack| stack.handle)
                 .is_ok()
         })?;
-        self.prepare_unicode()?;
         self.prepare_bidi()?;
         self.prepare_shaping_runs()?;
+        let mut cluster_geometry_changed = self.clusters.is_prepared();
         if let Some(shaper) = shaper.as_deref_mut() {
             self.prepare_shape(shaper, font_stacks, font_bindings)?;
-            self.prepare_clusters(shaper, next_glyph_id)?;
+            cluster_geometry_changed = self.prepare_clusters(shaper, next_glyph_id)?;
         }
-        self.prepare_geometry_and_layout(
+        let positioned_changed = self.prepare_geometry_and_layout(
             shaper,
             font_stacks,
             font_bindings,
@@ -3772,52 +4177,15 @@ impl ParagraphState {
             limits,
             next_glyph_id,
             next_content_revision,
-        )
-    }
-
-    /// Compares this paragraph's retained speculative prefix against incoming inputs.
-    /// The first value reports a text/style fingerprint match; the second additionally
-    /// reports that the applied geometry (pending when prepared, committed otherwise)
-    /// matches the incoming constraints, so no preparation at all is required.
-    fn speculative_match(
-        &self,
-        text: super::semantic_wire::TextMutationBatch<'_>,
-        styles: super::semantic_wire::StyleMutationBatch<'_>,
-        geometry: super::semantic_wire::GeometryBatch<'_>,
-    ) -> (bool, bool) {
-        let prefix = self.speculative_text_fingerprint == text.fingerprint()
-            && self.speculative_style_fingerprint == styles.fingerprint();
-        if !prefix {
-            return (false, false);
+            cluster_geometry_changed,
+        )?;
+        if cluster_geometry_changed {
+            self.intrinsic_widths_cache = None;
         }
-        let geometry_fingerprint = if geometry.is_empty() {
-            0
-        } else {
-            geometry.fingerprint()
-        };
-        let applied_geometry_fingerprint = if self.geometry.is_prepared() {
-            self.pending_geometry_fingerprint
-        } else if geometry_fingerprint == 0 {
-            0
-        } else {
-            self.geometry_fingerprint
-        };
-        (true, geometry_fingerprint == applied_geometry_fingerprint)
+        Ok(positioned_changed)
     }
 
-    /// The `positioned_changed` answer for a fully adopted speculative paragraph:
-    /// exactly the formula [`ParagraphState::prepare`] would have reported for the
-    /// pending state this paragraph already carries.
-    fn speculative_positioned_changed(&self) -> bool {
-        self.clusters.is_prepared()
-            || self.geometry.is_prepared()
-            || self.style_invalidation.metrics
-            || self.style_invalidation.positioning
-    }
-
-    /// The geometry-and-layout tail of [`ParagraphState::prepare`]: applied alone by a
-    /// retained measure query whose semantic prefix (text/style/shaping) fingerprints
-    /// still match the speculative transaction.
+    /// Prepares geometry, flow and positioning after the shared semantic prefix.
     #[allow(clippy::too_many_arguments)]
     fn prepare_geometry_and_layout(
         &mut self,
@@ -3828,19 +4196,18 @@ impl ParagraphState {
         limits: super::frame::UpdateLimits,
         next_glyph_id: &mut u32,
         next_content_revision: &mut u32,
+        cluster_geometry_changed: bool,
     ) -> Result<bool, EngineError> {
         self.prepare_geometry(geometry)?;
-        let flow_changed = self.clusters.is_prepared()
+        let flow_changed = cluster_geometry_changed
             || self.geometry.is_prepared()
             || self.style_invalidation.metrics;
         let positioned_changed = flow_changed || self.style_invalidation.positioning;
-        // Reverting to committed geometry must also revert the speculative layout
-        // tail: without this, a query at the committed constraint after a query at a
-        // different one reads (and a matching frame would commit) flow and
-        // positioning prepared for the earlier speculative geometry.
+        // Reverting to accepted geometry must also revert the derived layout tail;
+        // otherwise it would publish flow and positioning prepared for the prior width.
         if !flow_changed && (self.flow_layout.is_prepared() || self.positioned.is_prepared()) {
-            self.abort_flow_layout();
-            self.abort_positioned();
+            self.discard_flow_layout_candidate();
+            self.discard_positioned_candidate();
         }
         if let Some(shaper) = shaper {
             if flow_changed {
@@ -3879,8 +4246,8 @@ impl ParagraphState {
                         |thread| thread_typography(self.geometry.committed(), thread),
                     )?
                 {
-                    self.abort_flow_layout();
-                    self.abort_positioned();
+                    self.discard_flow_layout_candidate();
+                    self.discard_positioned_candidate();
                     return Ok(false);
                 }
             }
@@ -3891,29 +4258,7 @@ impl ParagraphState {
         Ok(positioned_changed)
     }
 
-    fn abort_all(&mut self) {
-        // Publication may have bound renderer placement metadata directly onto a complete
-        // setter-owned preparation. Restore it before aborting independently staged lanes.
-        self.positioned
-            .active_mut()
-            .restore_placement_binding(&mut self.publication_placement_rollback);
-        self.abort_text();
-        self.abort_styles();
-        self.abort_unicode();
-        self.abort_bidi();
-        self.abort_shaping_runs();
-        self.abort_shape();
-        self.abort_clusters();
-        self.abort_geometry();
-        self.abort_flow_layout();
-        self.abort_positioned();
-        self.clipped_inspection.abort();
-        self.speculative_text_fingerprint = 0;
-        self.speculative_style_fingerprint = 0;
-    }
-
     fn commit_all(&mut self) {
-        PositionedGlyphArena::commit_placement_binding(&mut self.publication_placement_rollback);
         self.commit_text();
         self.commit_styles();
         self.commit_unicode();
@@ -3925,8 +4270,6 @@ impl ParagraphState {
         self.commit_flow_layout();
         self.commit_positioned();
         self.clipped_inspection.commit();
-        self.speculative_text_fingerprint = 0;
-        self.speculative_style_fingerprint = 0;
     }
 
     fn initialize(&mut self) -> Result<(), EngineError> {
@@ -4012,47 +4355,51 @@ impl ParagraphState {
         reserve_vec(&mut self.sort_pair_scratch, glyph_capacity)
     }
 
+    #[inline(never)]
     fn prepare_text(
         &mut self,
         mutations: super::semantic_wire::TextMutationBatch<'_>,
+        preflight_candidate: Option<&mut PreflightTextCandidate>,
+        preflight_edits: &[TextEdit],
     ) -> Result<(), EngineError> {
-        self.abort_text();
+        // Preflight may have filled the inactive text buffer, but it has not marked that
+        // stage prepared. This is where stable unit identities join the validated text.
+        let unit_ids_mirrored = preflight_candidate
+            .as_ref()
+            .is_some_and(|candidate| candidate.pending_unit_ids_are_mirrored());
+        self.discard_text_candidate();
         if mutations.len() == 0 {
             return Ok(());
         }
-        if !self.pending_text_mirrors_committed {
-            let (pending, committed) = self.text.derive_mut();
-            if pending.units.try_reserve(committed.units.len()).is_err()
-                || pending
-                    .unit_ids
-                    .try_reserve(committed.unit_ids.len())
-                    .is_err()
-            {
-                return Err(EngineError::ResultTooLarge);
-            }
-            pending.units.clear();
-            pending.units.extend_from_slice(&committed.units);
+        let Some(preflight_candidate) = preflight_candidate else {
+            return Err(EngineError::InvalidRequest);
+        };
+        let (pending, committed) = self.text.derive_mut();
+        if !unit_ids_mirrored {
+            pending
+                .unit_ids
+                .try_reserve(committed.unit_ids.len())
+                .map_err(|_| EngineError::ResultTooLarge)?;
             pending.unit_ids.clear();
             pending.unit_ids.extend_from_slice(&committed.unit_ids);
-            self.pending_text_mirrors_committed = true;
         }
+        if preflight_candidate.buffers == CandidateBuffers::Owned {
+            core::mem::swap(&mut pending.units, &mut preflight_candidate.text);
+        }
+        self.pending_text_mirrors_committed = false;
         let seed_next_unit_id = self.text.committed().next_unit_id.max(1);
         self.text.pending_mut().next_unit_id = seed_next_unit_id;
         self.text.mark_prepared();
-        self.pending_text_mirrors_committed = false;
         let reconciliation = text_reconciliation(mutations, self.text.committed().units.len());
         self.text_edits.clear();
         for index in 0..mutations.len() {
             let Some(mutation) = mutations.get(index) else {
-                self.abort_text();
+                self.discard_text_candidate();
                 return Err(EngineError::InvalidRequest);
             };
-            if let Err(error) = apply_text_mutation(&mut self.text.pending_mut().units, mutation) {
-                self.abort_text();
-                return Err(match error {
-                    TextMutationError::Invalid => EngineError::InvalidRequest,
-                    TextMutationError::Allocation => EngineError::ResultTooLarge,
-                });
+            #[cfg(test)]
+            {
+                self.text_mutation_apply_count += 1;
             }
             if reconciliation.is_none() {
                 let TextStage {
@@ -4063,98 +4410,92 @@ impl ParagraphState {
                 if let Err(error) =
                     apply_text_identity_mutation(pending_unit_ids, pending_next_unit_id, mutation)
                 {
-                    self.abort_text();
+                    self.discard_text_candidate();
                     return Err(error);
                 }
             }
         }
-        let reconciliation_result = match reconciliation {
-            Some(TextReconciliation::SameLength { start, end }) => {
-                if self.text.pending().units.len() != self.text.pending().unit_ids.len() {
-                    Err(EngineError::InvalidRequest)
-                } else {
-                    let edits = &mut self.text_edits;
-                    let (pending, committed) = self.text.derive_mut();
-                    reconcile_same_length_candidate(committed, pending, edits, start, end)
-                }
+        let reconciliation_result = (|| {
+            if reconciliation.is_some() {
+                copy_preflight_text_edits(
+                    &mut self.text_edits,
+                    preflight_edits,
+                    preflight_candidate.edit_start,
+                    preflight_candidate.edit_end,
+                )?;
             }
-            Some(TextReconciliation::FullReplacement) => {
-                let edits = &mut self.text_edits;
-                let (pending, committed) = self.text.derive_mut();
-                reconcile_full_replacement(committed, pending, edits)
+            let text_edits = &mut self.text_edits;
+            let (pending, committed) = self.text.derive_mut();
+            if reconciliation.is_none()
+                && let Some(edit) = changed_identity_range(&committed.unit_ids, &pending.unit_ids)
+            {
+                text_edits
+                    .try_reserve(1)
+                    .map_err(|_| EngineError::ResultTooLarge)?;
+                text_edits.push(edit);
             }
-            None => {
-                if self.text.pending().units.len() != self.text.pending().unit_ids.len() {
-                    Err(EngineError::InvalidRequest)
-                } else {
-                    let (pending, committed) = self.text.derive_mut();
-                    if let Some(edit) =
-                        changed_identity_range(&committed.unit_ids, &pending.unit_ids)
-                    {
-                        self.text_edits.push(edit);
-                    }
-                    Ok(())
-                }
-            }
-        };
+            reconcile_text_identities(committed, pending, text_edits, reconciliation)
+        })();
         if let Err(error) = reconciliation_result {
-            self.abort_text();
+            self.discard_text_candidate();
             return Err(error);
         }
         if reconciliation.is_some() && self.text_edits.is_empty() {
-            self.abort_text();
+            self.discard_text_candidate();
         }
         Ok(())
     }
 
-    fn abort_text(&mut self) {
+    fn discard_text_candidate(&mut self) {
         if self.text.is_prepared() {
-            // Restore the pending buffers to mirror the committed ones, so the next
-            // mutation batch can skip re-seeding them.
-            let (pending, committed) = self.text.derive_mut();
-            pending.units.clear();
-            pending.units.extend_from_slice(&committed.units);
-            pending.unit_ids.clear();
-            pending.unit_ids.extend_from_slice(&committed.unit_ids);
-            self.pending_text_mirrors_committed = true;
+            // The pending candidate is disposable; the committed buffer remains the source for
+            // the next edit, which seeds the reusable destination only when it is needed.
+            self.pending_text_mirrors_committed = false;
         }
         self.clear_text_preparation();
     }
 
     fn clear_text_preparation(&mut self) {
         self.text.pending_mut().next_unit_id = 0;
-        self.text.abort();
+        self.text.discard_candidate();
         self.text_edits.clear();
     }
 
+    #[inline(never)]
     fn prepare_styles(
         &mut self,
         mutations: super::semantic_wire::StyleMutationBatch<'_>,
         font_stack_exists: impl FnMut(u32) -> bool,
     ) -> Result<(), EngineError> {
-        self.abort_styles();
+        self.discard_style_candidate();
         if mutations.len() == 0 {
             if !self.text.is_prepared() || self.styles.committed().arena.len() == 0 {
                 return Ok(());
             }
-            // Committed style ordering/nesting is unchanged; only the new text can invalidate it.
-            return self
+            let grapheme_boundaries = self.unicode.active().grapheme_boundaries();
+            if !self
                 .styles
                 .committed()
                 .arena
-                .validate_text(self.text.pending().units.as_slice(), font_stack_exists);
+                .needs_range_realign(grapheme_boundaries)
+            {
+                // Planner preflight validated retained ranges and features against this text; rooted
+                // font stacks remain registered while committed planner state references them.
+                return Ok(());
+            }
         }
         {
             let (pending_styles, committed_styles) = self.styles.derive_mut();
             pending_styles.arena.prepare_from(
                 &committed_styles.arena,
                 mutations,
+                self.unicode.active().grapheme_boundaries(),
                 &mut self.style_mutation_scratch,
                 &mut self.sort_pair_scratch,
             )?;
         }
         if self.styles.committed().arena.len() != 0 && self.styles.pending().arena.len() == 0 {
-            self.abort_styles();
+            self.discard_style_candidate();
             return Err(EngineError::InvalidRequest);
         }
         let text = self.text.active().units.as_slice();
@@ -4166,7 +4507,7 @@ impl ParagraphState {
             &mut self.sort_pair_scratch,
             &mut self.style_sort_pair_scratch,
         ) {
-            self.abort_styles();
+            self.discard_style_candidate();
             return Err(error);
         }
         let StyleStage {
@@ -4178,7 +4519,7 @@ impl ParagraphState {
             pending_resolved,
             &mut self.style_resolution_scratch,
         ) {
-            self.abort_styles();
+            self.discard_style_candidate();
             return Err(error);
         }
         let (pending_styles, committed_styles) = self.styles.derive_mut();
@@ -4191,21 +4532,21 @@ impl ParagraphState {
         Ok(())
     }
 
-    fn abort_styles(&mut self) {
+    fn discard_style_candidate(&mut self) {
         self.styles.pending_mut().arena.clear();
         self.styles.pending_mut().resolved.clear();
         self.style_mutation_scratch.clear();
         self.style_order_scratch.clear();
         self.style_nesting_scratch.clear();
         self.style_resolution_scratch.clear();
-        self.styles.abort();
+        self.styles.discard_candidate();
         self.style_invalidation = StyleInvalidation::default();
     }
 
     fn commit_styles(&mut self) {
         // One swap publishes both buffers, because they are one stage.
         self.styles.commit();
-        self.abort_styles();
+        self.discard_style_candidate();
     }
 
     fn commit_text(&mut self) {
@@ -4240,35 +4581,33 @@ impl ParagraphState {
         self.clear_text_preparation();
     }
 
-    fn prepare_unicode(&mut self) -> Result<(), EngineError> {
-        self.abort_unicode();
+    fn prepare_unicode(
+        &mut self,
+        preflight_candidate: Option<&mut PreflightTextCandidate>,
+    ) -> Result<(), EngineError> {
+        self.discard_unicode_candidate();
         if !self.text.is_prepared() {
             return Ok(());
         }
-        if !self.text_edits.is_empty()
-            && self.text_edits.iter().copied().all(|edit| {
-                self.unicode.committed().reusable_for_ascii_letter_edit(
-                    &self.text.committed().units,
-                    &self.text.pending().units,
-                    edit.old_start,
-                    edit.old_end,
-                    edit.new_end,
-                )
-            })
-        {
+        let Some(preflight_candidate) = preflight_candidate else {
+            return Err(EngineError::InvalidRequest);
+        };
+        if preflight_candidate.unicode_state == CandidateUnicode::ReuseCommitted {
             self.unicode_reused_for_text_edit = true;
             return Ok(());
         }
-        self.unicode
-            .pending_mut()
-            .analyze(&self.text.pending().units)
-            .map_err(unicode_error)?;
+        if preflight_candidate.uses_pending_buffers() {
+            // The preflight analysis already occupies the inactive buffer. It remains
+            // invisible until this point, after every caller-authored input has passed.
+        } else {
+            core::mem::swap(self.unicode.pending_mut(), &mut preflight_candidate.unicode);
+        }
         self.unicode.mark_prepared();
         Ok(())
     }
 
-    fn abort_unicode(&mut self) {
-        self.unicode.abort();
+    fn discard_unicode_candidate(&mut self) {
+        self.unicode.discard_candidate();
         self.unicode_reused_for_text_edit = false;
     }
 
@@ -4276,11 +4615,11 @@ impl ParagraphState {
         if self.unicode.is_prepared() {
             self.unicode.commit();
         }
-        self.abort_unicode();
+        self.discard_unicode_candidate();
     }
 
     fn prepare_bidi(&mut self) -> Result<(), EngineError> {
-        self.abort_bidi();
+        self.discard_bidi_candidate();
         if self.unicode_reused_for_text_edit && !self.style_invalidation.bidi {
             return Ok(());
         }
@@ -4302,23 +4641,26 @@ impl ParagraphState {
         Ok(())
     }
 
-    fn abort_bidi(&mut self) {
-        self.bidi.abort();
+    fn discard_bidi_candidate(&mut self) {
+        self.bidi.discard_candidate();
     }
 
     fn commit_bidi(&mut self) {
         if self.bidi.is_prepared() {
             self.bidi.commit();
         }
-        self.abort_bidi();
+        self.discard_bidi_candidate();
     }
 
     fn prepare_shaping_runs(&mut self) -> Result<(), EngineError> {
-        self.abort_shaping_runs();
-        if !self.text.is_prepared()
+        self.discard_shaping_runs_candidate();
+        // The Unicode reuse certificate changes only equal-length ASCII letters, so it
+        // preserves script ranges and every hard-break position consumed by the run builder.
+        if (!self.text.is_prepared() || self.unicode_reused_for_text_edit)
             && !self.style_invalidation.shaping
             && !self.style_invalidation.metrics
             && !self.bidi.is_prepared()
+            && !self.styles.is_prepared()
         {
             return Ok(());
         }
@@ -4334,36 +4676,37 @@ impl ParagraphState {
         Ok(())
     }
 
-    fn abort_shaping_runs(&mut self) {
+    fn discard_shaping_runs_candidate(&mut self) {
         self.shaping_runs.pending_mut().clear();
-        self.shaping_runs.abort();
+        self.shaping_runs.discard_candidate();
     }
 
     fn commit_shaping_runs(&mut self) {
         if self.shaping_runs.is_prepared() {
             self.shaping_runs.commit();
         }
-        self.abort_shaping_runs();
+        self.discard_shaping_runs_candidate();
     }
 
+    #[inline(never)]
     fn prepare_shape(
         &mut self,
         shaper: &mut ShaperRegistry,
         font_stacks: &[RegisteredFontStack],
         font_bindings: &[RegisteredFontBinding],
     ) -> Result<(), EngineError> {
-        self.abort_shape();
+        self.discard_shape_candidate();
         // Metric-only styles must refresh the retained run values consumed by cluster aggregation, but the underlying
         // HarfRust result remains valid. Keeping those two invalidations distinct avoids reshaping on size, tracking,
         // word-spacing, line-height, or baseline changes while still rebuilding advances from the new run styles.
         // One exception: a metric change can MERGE adjacent runs whose layout styles became identical, and the
         // retained shaped runs then index a run list that no longer exists — the shape must re-run whenever the
         // rebuilt run list breaks positional topology with the committed one.
-        if !self.shaping_runs.is_prepared()
-            || (!self.text.is_prepared()
-                && !self.style_invalidation.shaping
-                && !self.bidi.is_prepared()
-                && shaping_run_topology_stable(
+        if !self.text.is_prepared()
+            && !self.style_invalidation.shaping
+            && !self.bidi.is_prepared()
+            && (!self.shaping_runs.is_prepared()
+                || shaping_run_topology_stable(
                     self.shaping_runs.committed().runs(),
                     self.shaping_runs.pending().runs(),
                 ))
@@ -4380,7 +4723,7 @@ impl ParagraphState {
             return Ok(());
         }
         let styles = &self.styles.active().arena;
-        let runs = self.shaping_runs.pending_mut().runs();
+        let runs = self.shaping_runs.active().runs();
         let mut max_stack_depth = 0usize;
         for (index, run) in runs.iter().copied().enumerate() {
             let stack = find_font_stack(font_stacks, run.style.font_stack_handle)?;
@@ -4545,7 +4888,7 @@ impl ParagraphState {
             return Ok(false);
         };
         let old_runs = self.shaping_runs.committed().runs();
-        let new_runs = self.shaping_runs.pending().runs();
+        let new_runs = self.shaping_runs.active().runs();
         if old_runs.len() != new_runs.len() || old_runs.is_empty() {
             return Ok(false);
         }
@@ -4556,7 +4899,15 @@ impl ParagraphState {
             return Ok(false);
         };
         if old_run_index != new_run_index
-            || !same_edit_run_topology(old_runs, new_runs, edit, old_run_index)?
+            || !same_edit_run_topology(
+                old_runs,
+                new_runs,
+                edit,
+                old_run_index,
+                self.style_invalidation
+                    .shaping
+                    .then_some((&self.styles.committed().arena, &self.styles.active().arena)),
+            )?
         {
             return Ok(false);
         }
@@ -4782,6 +5133,42 @@ impl ParagraphState {
                     self.boundary_shape_scratch.clear();
                     return Ok(ShapeAttempt::RetryWholeRun);
                 }
+                // A complete sole run is already shaped in its final coordinates. Move its
+                // owned columns into pending; the old empty pending arena becomes reusable
+                // scratch, while committed shape remains available for reconciliation.
+                if source_run_index == 0
+                    && self.shaping_runs.committed().runs().len() == 1
+                    && self.shaping_runs.active().runs().len() == 1
+                    && run_count == 1
+                    && affected_shape_index == 0
+                    && self.shape_window_scratch.len() == 1
+                    && old_run.text_start == 0
+                    && new_run.text_start == 0
+                    && usize::try_from(old_run.text_end).ok()
+                        == Some(self.text.committed().units.len())
+                    && usize::try_from(new_run.text_end).ok()
+                        == Some(self.text.active().units.len())
+                    && affected_shape.text_start == old_run.text_start
+                    && affected_shape.text_end == old_run.text_end
+                    && run_glyph_start == 0
+                    && run_glyph_end == self.shape.committed().glyph_ids.len()
+                    && window.old_start == old_run.text_start
+                    && window.old_end == old_run.text_end
+                    && window.old_glyph_start == run_glyph_start
+                    && window.old_glyph_end == run_glyph_end
+                    && window.new_start == new_run.text_start
+                    && window.new_end == new_run.text_end
+                    && window.probe_end == window.new_end
+                {
+                    #[cfg(test)]
+                    super::work_attribution::record(|work| {
+                        work.shape_scratch_arena_moves += 1;
+                        work.shape_scratch_moved_glyphs +=
+                            self.boundary_shape_scratch.glyph_ids.len();
+                    });
+                    core::mem::swap(&mut self.boundary_shape_scratch, self.shape.pending_mut());
+                    return Ok(ShapeAttempt::Prepared);
+                }
                 {
                     let scratch = &self.boundary_shape_scratch;
                     self.shape.pending_mut().append_text_range_from(
@@ -4828,14 +5215,14 @@ impl ParagraphState {
         Ok(ShapeAttempt::Prepared)
     }
 
-    fn abort_shape(&mut self) {
+    fn discard_shape_candidate(&mut self) {
         self.shape.pending_mut().clear();
         self.shape_window_scratch.clear();
         self.pending_fallback_spans.clear();
         self.fallback_span_scratch.clear();
         self.fallback_cluster_scratch.clear();
         self.incremental_shape_source_run = None;
-        self.shape.abort();
+        self.shape.discard_candidate();
     }
 
     fn commit_shape(&mut self) {
@@ -4843,17 +5230,22 @@ impl ParagraphState {
             self.shape.commit();
             core::mem::swap(&mut self.fallback_spans, &mut self.pending_fallback_spans);
         }
-        self.abort_shape();
+        self.discard_shape_candidate();
     }
 
+    /// Returns whether cluster geometry changed and flow needs preparation.
+    #[inline(never)]
     fn prepare_clusters(
         &mut self,
         shaper: &ShaperRegistry,
         next_glyph_id: &mut u32,
-    ) -> Result<(), EngineError> {
-        self.abort_clusters();
-        if !self.shape.is_prepared() && !self.style_invalidation.metrics {
-            return Ok(());
+    ) -> Result<bool, EngineError> {
+        self.discard_clusters_candidate();
+        if !self.shape.is_prepared()
+            && !self.style_invalidation.metrics
+            && !self.style_invalidation.cluster_mapping
+        {
+            return Ok(false);
         }
         let text = self.text.active().units.as_slice();
         let text_unit_ids = self.text.active().unit_ids.as_slice();
@@ -4862,25 +5254,26 @@ impl ParagraphState {
         let runs = self.shaping_runs.active().runs();
         if runs.is_empty() {
             self.clusters.pending_mut().clear();
-            return self.finish_cluster_preparation(shaper);
+            return self.finish_cluster_preparation(shaper).map(|()| true);
         }
-        // A metrics-only restyle retains the shape, so the cluster arena needs
-        // only its advance lanes re-derived from the retained adjacency stream
-        // — no topology walk, no scatter, and the stable glyph identities
-        // carry over. The retained arena indexes shaped runs by position, and a
-        // metrics-only restyle can still MERGE adjacent runs whose layout
-        // styles became identical, so the refresh additionally requires the
-        // rebuilt run list to keep the previous topology. Any admission
-        // failure falls back to the full build.
+        // Retained run ordinals require stable topology. Refresh style mappings
+        // and, for metric edits, advances; uncovered clusters use the full build.
         let run_topology_stable = !self.shaping_runs.is_prepared()
             || shaping_run_topology_stable(self.shaping_runs.committed().runs(), runs);
         if !self.shape.is_prepared() && run_topology_stable && {
             let (pending_clusters, committed_clusters) = self.clusters.derive_mut();
             pending_clusters
-                .refresh_scales_from_stream(committed_clusters, styles)?
+                .refresh_styles_from_stream(
+                    committed_clusters,
+                    styles,
+                    self.style_invalidation.metrics,
+                )?
                 .is_some()
         } {
-            return self.finish_cluster_preparation(shaper);
+            let geometry_changed = self.style_invalidation.metrics;
+            return self
+                .finish_cluster_preparation(shaper)
+                .map(|()| geometry_changed);
         }
         let shape = self.shape.active();
         let build_input = || ClusterBuildInput {
@@ -4891,7 +5284,20 @@ impl ParagraphState {
             runs,
             shape,
         };
+        // The sole source run owns every cluster. Direct construction avoids copying old
+        // flat columns before replacing them, while equal grapheme/text cardinality keeps
+        // the existing full builder's reserve at the retained cluster granularity.
+        let full_source_run = self.incremental_shape_source_run == Some(0)
+            && runs.len() == 1
+            && self.shaping_runs.committed().runs().len() == 1
+            && runs[0].text_start == 0
+            && usize::try_from(runs[0].text_end).ok() == Some(text.len())
+            && self.shaping_runs.committed().runs()[0].text_start == 0
+            && usize::try_from(self.shaping_runs.committed().runs()[0].text_end).ok()
+                == Some(self.text.committed().units.len())
+            && unicode.grapheme_boundaries().len().saturating_sub(1) == text.len();
         if let Some(source_run) = self.incremental_shape_source_run
+            && !full_source_run
             && let Some((cluster_start, cluster_end)) = {
                 let (pending_clusters, committed_clusters) = self.clusters.derive_mut();
                 pending_clusters.rebuild_source_run_if_topology_is_stable(
@@ -4910,10 +5316,10 @@ impl ParagraphState {
                 &mut self.glyph_identity_index,
                 next_glyph_id,
             ) {
-                self.abort_clusters();
+                self.discard_clusters_candidate();
                 return Err(error);
             }
-            return self.finish_cluster_preparation(shaper);
+            return self.finish_cluster_preparation(shaper).map(|()| true);
         }
         self.clusters
             .pending_mut()
@@ -4924,10 +5330,10 @@ impl ParagraphState {
             &mut self.glyph_identity_index,
             next_glyph_id,
         ) {
-            self.abort_clusters();
+            self.discard_clusters_candidate();
             return Err(error);
         }
-        self.finish_cluster_preparation(shaper)
+        self.finish_cluster_preparation(shaper).map(|()| true)
     }
 
     /// Completes every cluster-producing path through one exact retained-run comparison.
@@ -4938,7 +5344,7 @@ impl ParagraphState {
             self.styles.active().resolved.segments(),
             |handle, glyph| shaper.font_glyph_extents(handle, glyph),
         ) {
-            self.abort_clusters();
+            self.discard_clusters_candidate();
             return Err(error);
         }
         let current = RunCanonicalInput {
@@ -4977,16 +5383,16 @@ impl ParagraphState {
                 Ok(())
             }
             Err(error) => {
-                self.abort_clusters();
+                self.discard_clusters_candidate();
                 Err(error)
             }
         }
     }
 
-    fn abort_clusters(&mut self) {
+    fn discard_clusters_candidate(&mut self) {
         self.layout_dirty.clear();
         self.clusters.pending_mut().clear();
-        self.clusters.abort();
+        self.clusters.discard_candidate();
         self.pending_source_run_canonical_revision = self.next_run_canonical_revision;
         self.pending_next_run_canonical_revision = self.next_run_canonical_revision;
     }
@@ -4997,44 +5403,41 @@ impl ParagraphState {
         }
         // The shared cursor also includes replacement runs prepared after the cluster stage.
         self.next_run_canonical_revision = self.pending_next_run_canonical_revision;
-        self.abort_clusters();
+        self.discard_clusters_candidate();
     }
 
     fn prepare_geometry(
         &mut self,
         geometry: super::semantic_wire::GeometryBatch<'_>,
     ) -> Result<(), EngineError> {
-        self.abort_geometry();
+        self.discard_geometry_candidate();
         if geometry.is_empty() {
             return Ok(());
         }
         self.geometry.pending_mut().build(geometry)?;
-        self.pending_geometry_fingerprint = geometry.fingerprint();
         if geometry.inline_object_count() == 0
             && self.geometry.pending() == self.geometry.committed()
         {
             self.geometry.pending_mut().clear();
-            self.pending_geometry_fingerprint = 0;
             return Ok(());
         }
         self.geometry.mark_prepared();
         Ok(())
     }
 
-    fn abort_geometry(&mut self) {
+    fn discard_geometry_candidate(&mut self) {
         self.geometry.pending_mut().clear();
-        self.pending_geometry_fingerprint = 0;
-        self.geometry.abort();
+        self.geometry.discard_candidate();
     }
 
     fn commit_geometry(&mut self) {
         if self.geometry.is_prepared() {
-            self.geometry_fingerprint = self.pending_geometry_fingerprint;
             self.geometry.commit();
         }
-        self.abort_geometry();
+        self.discard_geometry_candidate();
     }
 
+    #[inline(never)]
     fn prepare_flow_layout(
         &mut self,
         shaper: &mut ShaperRegistry,
@@ -5081,13 +5484,13 @@ impl ParagraphState {
         max_slots_per_band: u32,
         next_glyph_id: &mut u32,
     ) -> Result<(), EngineError> {
-        self.abort_flow_layout();
+        self.discard_flow_layout_candidate();
         // Positioning is derived from one specific flow: its per-line lanes describe the
         // lines that flow composed. Re-running the flow therefore invalidates any pending
         // positioning by construction, so dropping it here — at the single place a new
         // flow is staged — is what makes "positioning that describes a superseded flow"
         // unrepresentable rather than something each caller has to remember to repair.
-        self.abort_positioned();
+        self.discard_positioned_candidate();
         self.pending_boundary_shape.clear();
         previous_edge_ids(
             &mut self.previous_edge_ids,
@@ -5395,6 +5798,8 @@ impl ParagraphState {
         max_lines: u32,
         max_slots_per_band: u32,
     ) -> Result<(), EngineError> {
+        #[cfg(test)]
+        super::work_attribution::record(|work| work.intrinsic_flow_preparations += 1);
         let source_geometry = self.geometry.active();
         self.intrinsic_geometry_scratch.clone_from(source_geometry);
         let constraint = self
@@ -5472,7 +5877,7 @@ impl ParagraphState {
 
     fn inspection_positioned(&self) -> &PositionedGlyphArena {
         let clipped = self.clipped_inspection.active();
-        if clipped.enabled {
+        if clipped.mode == IntrinsicInspection::Positioned {
             &clipped.positioned
         } else {
             self.positioned.active()
@@ -5480,6 +5885,8 @@ impl ParagraphState {
     }
 
     fn prepare_intrinsic_positioned(&mut self, shaper: &ShaperRegistry) -> Result<(), EngineError> {
+        #[cfg(test)]
+        super::work_attribution::record(|work| work.intrinsic_positioning_preparations += 1);
         let text = self.text.active().units.as_slice();
         let clusters = self.clusters.active();
         let runs = self.shaping_runs.active().runs();
@@ -5514,10 +5921,10 @@ impl ParagraphState {
         )
     }
 
-    fn abort_flow_layout(&mut self) {
+    fn discard_flow_layout_candidate(&mut self) {
         self.flow_layout.pending_mut().clear();
         self.pending_boundary_shape.clear();
-        self.flow_layout.abort();
+        self.flow_layout.discard_candidate();
     }
 
     fn commit_flow_layout(&mut self) {
@@ -5526,15 +5933,16 @@ impl ParagraphState {
             core::mem::swap(&mut self.boundary_shape, &mut self.pending_boundary_shape);
         }
         self.flow_layout.commit();
-        self.abort_flow_layout();
+        self.discard_flow_layout_candidate();
     }
 
+    #[inline(never)]
     fn prepare_positioned(
         &mut self,
         shaper: &ShaperRegistry,
         next_content_revision: &mut u32,
     ) -> Result<(), EngineError> {
-        self.abort_positioned();
+        self.discard_positioned_candidate();
         let text = self.text.active().units.as_slice();
         let clusters = self.clusters.active();
         let runs = self.shaping_runs.active().runs();
@@ -5593,14 +6001,14 @@ impl ParagraphState {
         self.positioned.mark_prepared();
         // A changed visible layout retires the prior derived inspection. Measurement
         // replaces this selection with full clipped positioning when requested.
-        self.clipped_inspection.pending_mut().enabled = false;
+        self.clipped_inspection.pending_mut().mode = IntrinsicInspection::None;
         self.clipped_inspection.mark_prepared();
         Ok(())
     }
 
-    fn abort_positioned(&mut self) {
+    fn discard_positioned_candidate(&mut self) {
         self.positioned.pending_mut().clear();
-        self.positioned.abort();
+        self.positioned.discard_candidate();
         self.pending_next_run_canonical_revision = self.pending_source_run_canonical_revision;
     }
 
@@ -5614,24 +6022,13 @@ fn apply_text_mutation(
     text: &mut Vec<u16>,
     mutation: super::semantic_wire::TextMutation<'_>,
 ) -> Result<(), TextMutationError> {
-    let start = usize::try_from(mutation.text_start).map_err(|_| TextMutationError::Invalid)?;
-    let delete_count =
-        usize::try_from(mutation.delete_count).map_err(|_| TextMutationError::Invalid)?;
-    let delete_end = start
-        .checked_add(delete_count)
-        .ok_or(TextMutationError::Invalid)?;
-    if delete_end > text.len() || !mutation.insert_utf16_le.len().is_multiple_of(2) {
-        return Err(TextMutationError::Invalid);
-    }
-    let insert_count = mutation.insert_utf16_le.len() / 2;
     let old_len = text.len();
-    let new_len = old_len
-        .checked_sub(delete_count)
-        .and_then(|length| length.checked_add(insert_count))
-        .ok_or(TextMutationError::Invalid)?;
-    if u32::try_from(new_len).is_err() {
-        return Err(TextMutationError::Invalid);
-    }
+    let CheckedTextMutation {
+        start,
+        delete_end,
+        insert_count,
+        new_len,
+    } = check_text_mutation(old_len, mutation)?;
     if new_len > old_len {
         text.try_reserve(new_len - old_len)
             .map_err(|_| TextMutationError::Allocation)?;
@@ -5641,13 +6038,747 @@ fn apply_text_mutation(
     if new_len < old_len {
         text.truncate(new_len);
     }
-    for (unit, bytes) in text[start..start + insert_count]
+    for (unit, decoded) in text[start..start + insert_count]
         .iter_mut()
-        .zip(mutation.insert_utf16_le.chunks_exact(2))
+        .zip(decoded_inserted_units(mutation.insert_utf16_le))
     {
-        *unit = u16::from_le_bytes([bytes[0], bytes[1]]);
+        *unit = decoded;
     }
     Ok(())
+}
+
+fn decoded_inserted_units(utf16_le: &[u8]) -> impl Iterator<Item = u16> + '_ {
+    utf16_le
+        .chunks_exact(2)
+        .map(|bytes| u16::from_le_bytes([bytes[0], bytes[1]]))
+}
+
+/// Preflight has already validated every mutation against the accepted text. A single
+/// complete replacement can write directly into the reused destination without seeding
+/// or shifting old units; ordered and partial edits retain the shared mutation path.
+fn populate_preflight_text(
+    destination: &mut Vec<u16>,
+    committed: &[u16],
+    mutations: super::semantic_wire::TextMutationBatch<'_>,
+    seed_committed: bool,
+    preserved_capacity: usize,
+) -> Result<(), EngineError> {
+    if mutations.len() == 1 {
+        let mutation = mutations.get(0).ok_or(EngineError::InvalidRequest)?;
+        if mutation.text_start == 0
+            && usize::try_from(mutation.delete_count).ok() == Some(committed.len())
+        {
+            let insert_count = mutation.insert_utf16_le.len() / 2;
+            destination.clear();
+            destination
+                .try_reserve(insert_count.max(preserved_capacity))
+                .map_err(|_| EngineError::ResultTooLarge)?;
+            destination.extend(decoded_inserted_units(mutation.insert_utf16_le));
+            return Ok(());
+        }
+    }
+    if seed_committed {
+        destination.clear();
+        destination
+            .try_reserve(committed.len().max(preserved_capacity))
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        destination.extend_from_slice(committed);
+        #[cfg(test)]
+        super::work_attribution::record(|work| work.preflight_seeded_old_units += committed.len());
+    }
+    apply_text_mutations(destination, mutations)
+}
+
+fn apply_text_mutations(
+    text: &mut Vec<u16>,
+    mutations: super::semantic_wire::TextMutationBatch<'_>,
+) -> Result<(), EngineError> {
+    for index in 0..mutations.len() {
+        let mutation = mutations.get(index).ok_or(EngineError::InvalidRequest)?;
+        apply_text_mutation(text, mutation).map_err(|error| match error {
+            TextMutationError::Invalid => EngineError::InvalidRequest,
+            TextMutationError::Allocation => EngineError::ResultTooLarge,
+        })?;
+    }
+    Ok(())
+}
+
+fn copy_preflight_text_edits(
+    destination: &mut Vec<TextEdit>,
+    source: &[TextEdit],
+    start: usize,
+    end: usize,
+) -> Result<(), EngineError> {
+    let edits = source.get(start..end).ok_or(EngineError::InvalidRequest)?;
+    destination.clear();
+    destination
+        .try_reserve(edits.len())
+        .map_err(|_| EngineError::ResultTooLarge)?;
+    destination.extend_from_slice(edits);
+    Ok(())
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct CheckedTextMutation {
+    start: usize,
+    delete_end: usize,
+    insert_count: usize,
+    new_len: usize,
+}
+
+fn check_text_mutation(
+    old_len: usize,
+    mutation: super::semantic_wire::TextMutation<'_>,
+) -> Result<CheckedTextMutation, TextMutationError> {
+    let start = usize::try_from(mutation.text_start).map_err(|_| TextMutationError::Invalid)?;
+    let delete_count =
+        usize::try_from(mutation.delete_count).map_err(|_| TextMutationError::Invalid)?;
+    let delete_end = start
+        .checked_add(delete_count)
+        .ok_or(TextMutationError::Invalid)?;
+    if delete_end > old_len || !mutation.insert_utf16_le.len().is_multiple_of(2) {
+        return Err(TextMutationError::Invalid);
+    }
+    let insert_count = mutation.insert_utf16_le.len() / 2;
+    let new_len = old_len
+        .checked_sub(delete_count)
+        .and_then(|length| length.checked_add(insert_count))
+        .ok_or(TextMutationError::Invalid)?;
+    if u32::try_from(new_len).is_err() {
+        return Err(TextMutationError::Invalid);
+    }
+    Ok(CheckedTextMutation {
+        start,
+        delete_end,
+        insert_count,
+        new_len,
+    })
+}
+
+fn validate_text_mutations(
+    committed: &[u16],
+    mutations: super::semantic_wire::TextMutationBatch<'_>,
+) -> Result<usize, EngineError> {
+    let mut text_len = committed.len();
+    for index in 0..mutations.len() {
+        let mutation = mutations.get(index).ok_or(EngineError::InvalidRequest)?;
+        let checked =
+            check_text_mutation(text_len, mutation).map_err(|_| EngineError::InvalidRequest)?;
+        let left = checked
+            .start
+            .checked_sub(1)
+            .and_then(|unit| text_unit_before_mutation(committed, mutations, index, unit));
+        let start_right = text_unit_before_mutation(committed, mutations, index, checked.start);
+        let end_left = checked
+            .delete_end
+            .checked_sub(1)
+            .and_then(|unit| text_unit_before_mutation(committed, mutations, index, unit));
+        let right = text_unit_before_mutation(committed, mutations, index, checked.delete_end);
+        if !valid_utf16_boundary_pair(left, start_right)
+            || !valid_utf16_boundary_pair(end_left, right)
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+
+        let inserted_units = mutation
+            .insert_utf16_le
+            .chunks_exact(2)
+            .map(|bytes| u16::from_le_bytes([bytes[0], bytes[1]]));
+        if core::char::decode_utf16(inserted_units).any(|decoded| decoded.is_err()) {
+            return Err(EngineError::InvalidRequest);
+        }
+        let first = inserted_unit(mutation, 0);
+        let last = checked
+            .insert_count
+            .checked_sub(1)
+            .and_then(|index| inserted_unit(mutation, index));
+        let seam_valid = if checked.insert_count == 0 {
+            valid_utf16_join(left, right)
+        } else {
+            valid_utf16_join(left, first) && valid_utf16_join(last, right)
+        };
+        if !seam_valid {
+            return Err(EngineError::InvalidRequest);
+        }
+        text_len = checked.new_len;
+    }
+    Ok(text_len)
+}
+
+fn has_text_mutations_for(
+    mutations: super::semantic_wire::TextMutationBatch<'_>,
+    paragraph_id: u32,
+) -> bool {
+    (0..mutations.len()).any(|index| mutations.paragraph_id(index) == Some(paragraph_id))
+}
+
+fn validate_planner_inputs(
+    planner: &mut PlannerState,
+    request: UpdateRequest<'_>,
+    scope: ParagraphInputScope,
+    font_stacks: &[RegisteredFontStack],
+    spare_text_candidate_id: Option<u32>,
+    preflight_text_candidates: &mut Vec<PreflightTextCandidate>,
+    preflight_edit_scratch: &mut Vec<TextEdit>,
+) -> Result<(), EngineError> {
+    let text_mutations = request.text_mutations;
+    let style_mutations = request.style_mutations;
+    // Each adjacent text-record group can produce one candidate. Group IDs are
+    // not required to be contiguous, so record count is the safe upper bound.
+    // Reserve before preflight can write pending text/Unicode state.
+    if text_mutations.len() > 1 {
+        sort::prepare_pairs(
+            &mut planner.style_validation_sort_pairs_pass,
+            text_mutations.len(),
+        )?;
+    }
+    let (mut text_cursor, mut style_cursor) = (0, 0);
+    while text_cursor < text_mutations.len() || style_cursor < style_mutations.len() {
+        let paragraph_id = match (
+            text_mutations.paragraph_id(text_cursor),
+            style_mutations.paragraph_id(style_cursor),
+        ) {
+            (Some(text), Some(style)) => text.min(style),
+            (Some(text), None) => text,
+            (None, Some(style)) => style,
+            (None, None) => return Err(EngineError::InvalidRequest),
+        };
+        if let ParagraphInputScope::Single(selected) = scope
+            && paragraph_id != selected
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        if !planner_contains_after_lifecycle(planner, paragraph_id) {
+            return Err(EngineError::InvalidRequest);
+        }
+
+        let text_start = text_cursor;
+        while text_cursor < text_mutations.len()
+            && text_mutations.paragraph_id(text_cursor) == Some(paragraph_id)
+        {
+            text_cursor += 1;
+        }
+        let paragraph_text = text_mutations
+            .span(super::semantic_wire::RecordSpan {
+                start: text_start,
+                end: text_cursor,
+            })
+            .map_err(|_| EngineError::InvalidRequest)?;
+        let style_start = style_cursor;
+        while style_cursor < style_mutations.len()
+            && style_mutations.paragraph_id(style_cursor) == Some(paragraph_id)
+        {
+            style_cursor += 1;
+        }
+        let paragraph_styles = style_mutations
+            .span(super::semantic_wire::RecordSpan {
+                start: style_start,
+                end: style_cursor,
+            })
+            .map_err(|_| EngineError::InvalidRequest)?;
+
+        if let Some(paragraph) = planner.paragraph_mut(paragraph_id) {
+            let committed_text = if paragraph.created {
+                &[][..]
+            } else {
+                paragraph.state.text.committed().units.as_slice()
+            };
+            let text_length = validate_text_mutations(committed_text, paragraph_text)
+                .map_err(|error| error.in_paragraph(paragraph_id))?;
+            let text_length =
+                u32::try_from(text_length).map_err(|_| EngineError::InvalidRequest)?;
+            let mut is_boundary = |offset| {
+                utf16_boundary_after_mutations(committed_text, paragraph_text, text_length, offset)
+            };
+            paragraph
+                .state
+                .styles
+                .committed()
+                .arena
+                .validate_retained_ranges_for_text(
+                    paragraph_styles,
+                    text_length,
+                    &mut is_boundary,
+                    &mut paragraph.state.style_mutation_scratch,
+                    &mut paragraph.state.style_sort_pair_scratch,
+                )
+                .map_err(|error| error.in_paragraph(paragraph_id))?;
+            if paragraph_styles.len() != 0 {
+                let mut font_stack_exists = |handle| {
+                    font_stacks
+                        .binary_search_by_key(&handle, |stack| stack.handle)
+                        .is_ok()
+                };
+                paragraph
+                    .state
+                    .styles
+                    .committed()
+                    .arena
+                    .validate_mutations_for_text(
+                        paragraph_styles,
+                        text_length,
+                        &mut is_boundary,
+                        &mut font_stack_exists,
+                        &mut paragraph.state.style_mutation_scratch,
+                        &mut paragraph.state.style_sort_pair_scratch,
+                    )
+                    .map_err(|error| error.in_paragraph(paragraph_id))?;
+            }
+        } else {
+            let text_length = validate_text_mutations(&[], paragraph_text)
+                .map_err(|error| error.in_paragraph(paragraph_id))?;
+            if paragraph_styles.len() != 0 {
+                let text_length =
+                    u32::try_from(text_length).map_err(|_| EngineError::InvalidRequest)?;
+                let mut is_boundary = |offset| {
+                    utf16_boundary_after_mutations(&[], paragraph_text, text_length, offset)
+                };
+                let mut font_stack_exists = |handle| {
+                    font_stacks
+                        .binary_search_by_key(&handle, |stack| stack.handle)
+                        .is_ok()
+                };
+                StyleArena::default()
+                    .validate_mutations_for_text(
+                        paragraph_styles,
+                        text_length,
+                        &mut is_boundary,
+                        &mut font_stack_exists,
+                        &mut planner.style_validation_mutation_scratch,
+                        &mut planner.style_validation_sort_pair_scratch,
+                    )
+                    .map_err(|error| error.in_paragraph(paragraph_id))?;
+            }
+        }
+
+        planner
+            .validate_style_topology_for_inputs(
+                paragraph_id,
+                paragraph_text,
+                paragraph_styles,
+                spare_text_candidate_id,
+                preflight_text_candidates,
+                preflight_edit_scratch,
+            )
+            .map_err(|error| error.in_paragraph(paragraph_id))?;
+    }
+    if preflight_text_candidates.len() > 1 {
+        // The preflight reservation covers one candidate per adjacent text group.
+        planner.style_validation_sort_pairs_pass.clear();
+        for (index, candidate) in preflight_text_candidates.iter().enumerate() {
+            planner
+                .style_validation_sort_pairs_pass
+                .push((u64::from(candidate.paragraph_id), index as u32));
+        }
+        sort::sort_pairs(&mut planner.style_validation_sort_pairs_pass);
+        sort::apply_pair_order(
+            preflight_text_candidates,
+            &mut planner.style_validation_sort_pairs_pass,
+        );
+    }
+    Ok(())
+}
+
+fn inserted_unit(mutation: super::semantic_wire::TextMutation<'_>, index: usize) -> Option<u16> {
+    let offset = index.checked_mul(2)?;
+    Some(u16::from_le_bytes([
+        *mutation.insert_utf16_le.get(offset)?,
+        *mutation.insert_utf16_le.get(offset + 1)?,
+    ]))
+}
+
+fn text_unit_before_mutation(
+    committed: &[u16],
+    mutations: super::semantic_wire::TextMutationBatch<'_>,
+    mutation_index: usize,
+    mut unit_index: usize,
+) -> Option<u16> {
+    for prior_index in (0..mutation_index).rev() {
+        let prior = mutations.get(prior_index)?;
+        let start = usize::try_from(prior.text_start).ok()?;
+        let deleted = usize::try_from(prior.delete_count).ok()?;
+        let inserted = prior.insert_utf16_le.len() / 2;
+        let inserted_end = start.checked_add(inserted)?;
+        if unit_index < start {
+            continue;
+        }
+        if unit_index < inserted_end {
+            let offset = (unit_index - start).checked_mul(2)?;
+            return Some(u16::from_le_bytes([
+                *prior.insert_utf16_le.get(offset)?,
+                *prior.insert_utf16_le.get(offset + 1)?,
+            ]));
+        }
+        unit_index = unit_index.checked_sub(inserted)?.checked_add(deleted)?;
+    }
+    committed.get(unit_index).copied()
+}
+
+fn utf16_boundary_after_mutations(
+    committed: &[u16],
+    mutations: super::semantic_wire::TextMutationBatch<'_>,
+    length: u32,
+    offset: u32,
+) -> bool {
+    if offset > length {
+        return false;
+    }
+    if offset == 0 || offset == length {
+        return true;
+    }
+    // Both callers pass the final length returned by validate_text_mutations
+    // for this same committed text and mutation batch.
+    let Ok(offset) = usize::try_from(offset) else {
+        return false;
+    };
+    let Some(left) = text_unit_before_mutation(committed, mutations, mutations.len(), offset - 1)
+    else {
+        return false;
+    };
+    let Some(right) = text_unit_before_mutation(committed, mutations, mutations.len(), offset)
+    else {
+        return false;
+    };
+    valid_utf16_boundary_pair(Some(left), Some(right))
+}
+
+fn valid_utf16_join(left: Option<u16>, right: Option<u16>) -> bool {
+    let left_high = left.is_some_and(|unit| (0xd800..=0xdbff).contains(&unit));
+    let right_low = right.is_some_and(|unit| (0xdc00..=0xdfff).contains(&unit));
+    left_high == right_low
+}
+
+fn valid_utf16_boundary_pair(left: Option<u16>, right: Option<u16>) -> bool {
+    !(left.is_some_and(|unit| (0xd800..=0xdbff).contains(&unit))
+        && right.is_some_and(|unit| (0xdc00..=0xdfff).contains(&unit)))
+}
+
+fn implicit_paragraph_id(
+    planner: &PlannerState,
+    request: UpdateRequest<'_>,
+) -> Result<Option<u32>, EngineError> {
+    if request.paragraph_mutations.len() == 0 && planner.paragraphs.is_empty() {
+        request_semantic_paragraph_id(request)
+    } else {
+        Ok(None)
+    }
+}
+
+fn planner_contains_after_lifecycle(planner: &PlannerState, paragraph_id: u32) -> bool {
+    planner
+        .lifecycle_membership_scratch
+        .binary_search(&paragraph_id)
+        .is_ok()
+}
+
+fn validate_lifecycle_input(
+    planner: &mut PlannerState,
+    mutations: super::semantic_wire::ParagraphMutationBatch<'_>,
+    order_mutations: super::semantic_wire::ParagraphOrderMutationBatch<'_>,
+    implicit_paragraph: Option<u32>,
+    max_paragraphs: u32,
+) -> Result<LifecyclePlan, EngineError> {
+    if mutations.len() == 0 && order_mutations.len() == 0 && implicit_paragraph.is_none() {
+        if planner.ordered_paragraphs.len()
+            > usize::try_from(max_paragraphs).map_err(|_| EngineError::InvalidRequest)?
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        return Ok(LifecyclePlan {
+            creates: 0,
+            removals: 0,
+            placement_changes: 0,
+            ordered: Vec::new(),
+        });
+    }
+
+    planner.lifecycle_id_scratch.clear();
+    planner
+        .lifecycle_id_scratch
+        .try_reserve(mutations.len().max(order_mutations.len()))
+        .map_err(|_| EngineError::ResultTooLarge)?;
+    for index in 0..mutations.len() {
+        let mutation = mutations.get(index).ok_or(EngineError::InvalidRequest)?;
+        let paragraph_id = match mutation {
+            super::semantic_wire::ParagraphMutation::Upsert { paragraph_id, .. }
+            | super::semantic_wire::ParagraphMutation::Remove { paragraph_id } => paragraph_id,
+        };
+        planner.lifecycle_id_scratch.push((
+            u64::from(paragraph_id),
+            u32::try_from(index).map_err(|_| EngineError::ResultTooLarge)?,
+        ));
+    }
+    sort::sort_pairs(&mut planner.lifecycle_id_scratch);
+    if planner
+        .lifecycle_id_scratch
+        .windows(2)
+        .any(|pair| pair[0].0 == pair[1].0)
+    {
+        return Err(EngineError::InvalidRequest);
+    }
+
+    planner.lifecycle_membership_scratch.clear();
+    planner
+        .lifecycle_membership_scratch
+        .try_reserve(planner.ordered_paragraphs.len())
+        .map_err(|_| EngineError::ResultTooLarge)?;
+    planner
+        .lifecycle_membership_scratch
+        .extend(planner.ordered_paragraphs.iter().map(|item| item.id));
+    planner.lifecycle_membership_scratch.sort_unstable();
+
+    let mut creates = usize::from(implicit_paragraph.is_some_and(|id| {
+        planner
+            .lifecycle_membership_scratch
+            .binary_search(&id)
+            .is_err()
+    }));
+    let mut removals = 0usize;
+    let mut placement_changes = creates;
+    for index in 0..mutations.len() {
+        let mutation = mutations.get(index).ok_or(EngineError::InvalidRequest)?;
+        match mutation {
+            super::semantic_wire::ParagraphMutation::Upsert {
+                paragraph_id,
+                order,
+            } => {
+                let current = planner
+                    .paragraph(paragraph_id)
+                    .filter(|paragraph| !paragraph.created);
+                creates += usize::from(current.is_none());
+                placement_changes += current.map_or(1, |paragraph| {
+                    usize::from(paragraph.placement.order != order)
+                });
+            }
+            super::semantic_wire::ParagraphMutation::Remove { paragraph_id } => {
+                if planner
+                    .lifecycle_membership_scratch
+                    .binary_search(&paragraph_id)
+                    .is_err()
+                {
+                    return Err(EngineError::InvalidRequest);
+                }
+                removals += 1;
+            }
+        }
+    }
+    let final_count = planner
+        .ordered_paragraphs
+        .len()
+        .checked_add(creates)
+        .and_then(|count| count.checked_sub(removals))
+        .ok_or(EngineError::InvalidRequest)?;
+    if final_count > usize::try_from(max_paragraphs).map_err(|_| EngineError::InvalidRequest)? {
+        return Err(EngineError::InvalidRequest);
+    }
+    planner.pending_ordered_paragraphs.clear();
+    planner
+        .pending_ordered_paragraphs
+        .try_reserve(final_count)
+        .map_err(|_| EngineError::ResultTooLarge)?;
+    for current in &planner.ordered_paragraphs {
+        let mutation_index = planner
+            .lifecycle_id_scratch
+            .binary_search_by_key(&u64::from(current.id), |entry| entry.0)
+            .ok()
+            .map(|position| planner.lifecycle_id_scratch[position].1);
+        let mutation = mutation_index
+            .map(|index| {
+                mutations
+                    .get(usize::try_from(index).map_err(|_| EngineError::InvalidRequest)?)
+                    .ok_or(EngineError::InvalidRequest)
+            })
+            .transpose()?;
+        match mutation {
+            Some(super::semantic_wire::ParagraphMutation::Remove { .. }) => {}
+            Some(super::semantic_wire::ParagraphMutation::Upsert { order, .. }) => {
+                planner.pending_ordered_paragraphs.push(ParagraphOrder {
+                    order,
+                    id: current.id,
+                });
+            }
+            None => {
+                planner.pending_ordered_paragraphs.push(*current);
+            }
+        }
+    }
+    for index in 0..mutations.len() {
+        if let Some(super::semantic_wire::ParagraphMutation::Upsert {
+            paragraph_id,
+            order,
+        }) = mutations.get(index)
+            && planner
+                .lifecycle_membership_scratch
+                .binary_search(&paragraph_id)
+                .is_err()
+        {
+            planner.pending_ordered_paragraphs.push(ParagraphOrder {
+                order,
+                id: paragraph_id,
+            });
+        }
+    }
+    if let Some(paragraph_id) = implicit_paragraph
+        && planner
+            .lifecycle_membership_scratch
+            .binary_search(&paragraph_id)
+            .is_err()
+        && planner
+            .lifecycle_id_scratch
+            .binary_search_by_key(&u64::from(paragraph_id), |entry| entry.0)
+            .is_err()
+    {
+        planner.pending_ordered_paragraphs.push(ParagraphOrder {
+            order: 0,
+            id: paragraph_id,
+        });
+    }
+    if planner.pending_ordered_paragraphs.len() != final_count {
+        return Err(EngineError::InvalidRequest);
+    }
+    if planner.pending_ordered_paragraphs.len() > 1 {
+        sort::prepare_pairs(
+            &mut planner.rank_sort_scratch,
+            planner.pending_ordered_paragraphs.len(),
+        )?;
+        for (index, paragraph) in planner.pending_ordered_paragraphs.iter().enumerate() {
+            planner
+                .rank_sort_scratch
+                .push((sort::pack2(paragraph.order, paragraph.id), index as u32));
+        }
+        sort::sort_pairs(&mut planner.rank_sort_scratch);
+        sort::apply_pair_order(
+            &mut planner.pending_ordered_paragraphs,
+            &mut planner.rank_sort_scratch,
+        );
+    }
+    planner.lifecycle_membership_scratch.clear();
+    planner
+        .lifecycle_membership_scratch
+        .try_reserve(final_count)
+        .map_err(|_| EngineError::ResultTooLarge)?;
+    planner.lifecycle_membership_scratch.extend(
+        planner
+            .pending_ordered_paragraphs
+            .iter()
+            .map(|paragraph| paragraph.id),
+    );
+    planner.lifecycle_membership_scratch.sort_unstable();
+    if planner
+        .lifecycle_membership_scratch
+        .windows(2)
+        .any(|pair| pair[0] == pair[1])
+    {
+        return Err(EngineError::InvalidRequest);
+    }
+    planner.lifecycle_id_scratch.clear();
+    planner
+        .lifecycle_id_scratch
+        .try_reserve(order_mutations.len())
+        .map_err(|_| EngineError::ResultTooLarge)?;
+    for index in 0..order_mutations.len() {
+        let mutation = order_mutations
+            .get(index)
+            .ok_or(EngineError::InvalidRequest)?;
+        planner.lifecycle_id_scratch.push((
+            u64::from(mutation.paragraph_id),
+            u32::try_from(index).map_err(|_| EngineError::ResultTooLarge)?,
+        ));
+    }
+    sort::sort_pairs(&mut planner.lifecycle_id_scratch);
+    if planner
+        .lifecycle_id_scratch
+        .windows(2)
+        .any(|pair| pair[0].0 == pair[1].0)
+    {
+        return Err(EngineError::InvalidRequest);
+    }
+    for &(_, index) in planner.lifecycle_id_scratch.iter() {
+        let mutation = order_mutations
+            .get(usize::try_from(index).map_err(|_| EngineError::InvalidRequest)?)
+            .ok_or(EngineError::InvalidRequest)?;
+        if !mutation.rank.is_finite() {
+            return Err(EngineError::InvalidRequest);
+        }
+        if planner
+            .lifecycle_membership_scratch
+            .binary_search(&mutation.paragraph_id)
+            .is_err()
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        placement_changes += planner
+            .paragraph(mutation.paragraph_id)
+            .filter(|paragraph| !paragraph.created)
+            .map_or(1, |paragraph| {
+                usize::from(
+                    paragraph.placement.scope != mutation.scope
+                        || paragraph.placement.rank != mutation.rank,
+                )
+            });
+    }
+    for pair in planner.pending_ordered_paragraphs.windows(2) {
+        if pair[0].order != pair[1].order {
+            continue;
+        }
+        let left = planned_paragraph_rank(
+            planner,
+            order_mutations,
+            &planner.lifecycle_id_scratch,
+            pair[0].id,
+        )?;
+        let right = planned_paragraph_rank(
+            planner,
+            order_mutations,
+            &planner.lifecycle_id_scratch,
+            pair[1].id,
+        )?;
+        if left.0 == right.0 && left.1 == right.1 {
+            return Err(EngineError::InvalidRequest);
+        }
+    }
+    if placement_changes == 0 && removals == 0 {
+        return Ok(LifecyclePlan {
+            creates,
+            removals,
+            placement_changes,
+            ordered: Vec::new(),
+        });
+    }
+    if planner.lifecycle_prepared {
+        return Err(EngineError::InvalidRequest);
+    }
+    Ok(LifecyclePlan {
+        creates,
+        removals,
+        placement_changes,
+        ordered: core::mem::take(&mut planner.pending_ordered_paragraphs),
+    })
+}
+
+fn planned_paragraph_rank(
+    planner: &PlannerState,
+    mutations: super::semantic_wire::ParagraphOrderMutationBatch<'_>,
+    mutation_indices: &[(u64, u32)],
+    paragraph_id: u32,
+) -> Result<(u32, f64), EngineError> {
+    if let Ok(index) =
+        mutation_indices.binary_search_by_key(&u64::from(paragraph_id), |entry| entry.0)
+    {
+        let mutation_index =
+            usize::try_from(mutation_indices[index].1).map_err(|_| EngineError::InvalidRequest)?;
+        let mutation = mutations
+            .get(mutation_index)
+            .ok_or(EngineError::InvalidRequest)?;
+        return Ok((mutation.scope, mutation.rank));
+    }
+
+    Ok(planner
+        .paragraph(paragraph_id)
+        .map_or((0, 0.0), |paragraph| {
+            let placement = paragraph.pending_placement.unwrap_or(paragraph.placement);
+            (placement.scope, placement.rank)
+        }))
 }
 
 fn changed_identity_range(previous: &[u32], next: &[u32]) -> Option<TextEdit> {
@@ -5985,50 +7116,89 @@ fn text_reconciliation(
     (start == 0 && delete_count == committed_len).then_some(TextReconciliation::FullReplacement)
 }
 
-fn reconcile_same_length_candidate(
-    committed: &TextStage,
-    pending: &mut TextStage,
+fn collect_text_edits(
+    committed: &[u16],
+    pending: &[u16],
+    reconciliation: TextReconciliation,
     edits: &mut Vec<TextEdit>,
-    start: usize,
-    end: usize,
+    append_start: usize,
 ) -> Result<(), EngineError> {
-    edits.clear();
-    for_each_changed_utf16_unit(
-        &committed.units[start..end],
-        &pending.units[start..end],
-        |relative_offset| {
-            let offset = start + relative_offset;
-            if let Some(edit) = edits.last_mut()
-                && edit.old_end == offset
+    if append_start > edits.len() {
+        return Err(EngineError::InvalidRequest);
+    }
+    match reconciliation {
+        TextReconciliation::SameLength { start, end } => {
+            for_each_changed_utf16_unit(
+                &committed[start..end],
+                &pending[start..end],
+                |relative_offset| {
+                    let offset = start + relative_offset;
+                    if let Some(last_index) = edits.len().checked_sub(1)
+                        && last_index >= append_start
+                        && edits[last_index].old_end == offset
+                    {
+                        let edit = &mut edits[last_index];
+                        edit.old_end += 1;
+                        edit.new_end += 1;
+                        return Ok(());
+                    }
+                    edits
+                        .try_reserve(1)
+                        .map_err(|_| EngineError::ResultTooLarge)?;
+                    edits.push(TextEdit {
+                        old_start: offset,
+                        old_end: offset + 1,
+                        new_start: offset,
+                        new_end: offset + 1,
+                    });
+                    Ok(())
+                },
+            )?;
+            align_same_length_edits_to_utf16_scalars(committed, pending, edits, append_start);
+        }
+        TextReconciliation::FullReplacement => {
+            let mut start = packed_common_utf16_prefix(committed, pending);
+            while start > 0
+                && (!valid_utf16_boundary(committed, u32::try_from(start).unwrap_or(u32::MAX))
+                    || !valid_utf16_boundary(pending, u32::try_from(start).unwrap_or(u32::MAX)))
             {
-                edit.old_end += 1;
-                edit.new_end += 1;
-                return Ok(());
+                start -= 1;
             }
-            edits
-                .try_reserve(1)
-                .map_err(|_| EngineError::ResultTooLarge)?;
-            edits.push(TextEdit {
-                old_start: offset,
-                old_end: offset + 1,
-                new_start: offset,
-                new_end: offset + 1,
-            });
-            Ok(())
-        },
-    )?;
-    align_same_length_edits_to_utf16_scalars(&committed.units, &pending.units, edits);
-    for edit in edits.iter().copied() {
-        for identity in &mut pending.unit_ids[edit.new_start..edit.new_end] {
-            *identity = take_next_unit_identity(&mut pending.next_unit_id)?;
+            let suffix = packed_common_utf16_suffix(&committed[start..], &pending[start..]);
+            let mut old_end = committed.len() - suffix;
+            let mut new_end = pending.len() - suffix;
+            while old_end < committed.len()
+                && new_end < pending.len()
+                && (!valid_utf16_boundary(committed, u32::try_from(old_end).unwrap_or(u32::MAX))
+                    || !valid_utf16_boundary(pending, u32::try_from(new_end).unwrap_or(u32::MAX)))
+            {
+                old_end += 1;
+                new_end += 1;
+            }
+            if start != old_end || start != new_end {
+                edits
+                    .try_reserve(1)
+                    .map_err(|_| EngineError::ResultTooLarge)?;
+                edits.push(TextEdit {
+                    old_start: start,
+                    old_end,
+                    new_start: start,
+                    new_end,
+                });
+            }
         }
     }
     Ok(())
 }
 
-fn align_same_length_edits_to_utf16_scalars(old: &[u16], new: &[u16], edits: &mut Vec<TextEdit>) {
-    let mut written = 0usize;
-    for read in 0..edits.len() {
+fn align_same_length_edits_to_utf16_scalars(
+    old: &[u16],
+    new: &[u16],
+    edits: &mut Vec<TextEdit>,
+    start: usize,
+) {
+    let mut written = start;
+    for read in start..edits.len() {
         let mut edit = edits[read];
         while edit.old_start > 0
             && (!valid_utf16_boundary(old, u32::try_from(edit.old_start).unwrap_or(u32::MAX))
@@ -6044,7 +7214,7 @@ fn align_same_length_edits_to_utf16_scalars(old: &[u16], new: &[u16], edits: &mu
             edit.old_end += 1;
             edit.new_end += 1;
         }
-        if written > 0 && edits[written - 1].old_end >= edit.old_start {
+        if written > start && edits[written - 1].old_end >= edit.old_start {
             let previous = &mut edits[written - 1];
             previous.old_end = previous.old_end.max(edit.old_end);
             previous.new_end = previous.new_end.max(edit.new_end);
@@ -6056,46 +7226,49 @@ fn align_same_length_edits_to_utf16_scalars(old: &[u16], new: &[u16], edits: &mu
     edits.truncate(written);
 }
 
-fn reconcile_full_replacement(
+fn reconcile_text_identities(
     committed: &TextStage,
     pending: &mut TextStage,
-    edits: &mut Vec<TextEdit>,
+    edits: &[TextEdit],
+    reconciliation: Option<TextReconciliation>,
 ) -> Result<(), EngineError> {
-    edits.clear();
-    let mut start = packed_common_utf16_prefix(&committed.units, &pending.units);
-    while start > 0
-        && (!valid_utf16_boundary(&committed.units, u32::try_from(start).unwrap_or(u32::MAX))
-            || !valid_utf16_boundary(&pending.units, u32::try_from(start).unwrap_or(u32::MAX)))
-    {
-        start -= 1;
+    let expected_pending_ids =
+        if matches!(reconciliation, Some(TextReconciliation::FullReplacement)) {
+            committed.units.len()
+        } else {
+            pending.units.len()
+        };
+    if pending.unit_ids.len() != expected_pending_ids {
+        return Err(EngineError::InvalidRequest);
     }
-    let suffix = packed_common_utf16_suffix(&committed.units[start..], &pending.units[start..]);
-    let mut old_end = committed.units.len() - suffix;
-    let mut new_end = pending.units.len() - suffix;
-    while old_end < committed.units.len()
-        && new_end < pending.units.len()
-        && (!valid_utf16_boundary(&committed.units, u32::try_from(old_end).unwrap_or(u32::MAX))
-            || !valid_utf16_boundary(&pending.units, u32::try_from(new_end).unwrap_or(u32::MAX)))
-    {
-        old_end += 1;
-        new_end += 1;
+    match reconciliation {
+        Some(TextReconciliation::SameLength { .. }) => {
+            for edit in edits {
+                let identities = pending
+                    .unit_ids
+                    .get_mut(edit.new_start..edit.new_end)
+                    .ok_or(EngineError::InvalidRequest)?;
+                for identity in identities {
+                    *identity = take_next_unit_identity(&mut pending.next_unit_id)?;
+                }
+            }
+        }
+        Some(TextReconciliation::FullReplacement) => {
+            if let Some(edit) = edits.first().copied() {
+                apply_text_identity_edit(
+                    &mut pending.unit_ids,
+                    &mut pending.next_unit_id,
+                    edit.new_start,
+                    edit.old_end - edit.old_start,
+                    edit.new_end - edit.new_start,
+                )?;
+            }
+        }
+        None => (),
     }
-    apply_text_identity_edit(
-        &mut pending.unit_ids,
-        &mut pending.next_unit_id,
-        start,
-        old_end - start,
-        new_end - start,
-    )?;
-    edits
-        .try_reserve(1)
-        .map_err(|_| EngineError::ResultTooLarge)?;
-    edits.push(TextEdit {
-        old_start: start,
-        old_end,
-        new_start: start,
-        new_end,
-    });
+    if pending.unit_ids.len() != pending.units.len() {
+        return Err(EngineError::InvalidRequest);
+    }
     Ok(())
 }
 
@@ -6246,9 +7419,7 @@ fn containing_run(runs: &[ShapingRun], start: usize, end: usize) -> Option<usize
     let start = u32::try_from(start).ok()?;
     let end = u32::try_from(end).ok()?;
     runs.iter().position(|run| {
-        run.text_start <= start
-            && end <= run.text_end
-            && (start < end || (run.text_start < start && start < run.text_end))
+        run.text_start <= start && end <= run.text_end && run.text_start < run.text_end
     })
 }
 
@@ -6275,9 +7446,15 @@ fn same_edit_run_topology(
     new_runs: &[ShapingRun],
     edit: TextEdit,
     affected: usize,
+    styles: Option<(&StyleArena, &StyleArena)>,
 ) -> Result<bool, EngineError> {
     for (index, (&old, &new)) in old_runs.iter().zip(new_runs).enumerate() {
-        if !same_shaping_properties(old, new) {
+        if !same_shaping_properties(old, new)
+            || styles.is_some_and(|(previous, next)| {
+                previous.resolved_language(old.style) != next.resolved_language(new.style)
+                    || previous.resolved_features(old.style) != next.resolved_features(new.style)
+            })
+        {
             return Ok(false);
         }
         let expected_start = map_old_offset(old.text_start, edit);
@@ -7085,122 +8262,6 @@ fn reserve_vec<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineErro
     Ok(())
 }
 
-/// Identity of a request's structure-changing lifecycle input relative to committed
-/// planner state. Upserts that restate an existing paragraph at its committed placement
-/// are lifecycle-neutral and do not participate — queries routed at different
-/// existing paragraphs therefore share one transaction, which is what makes the
-/// multi-paragraph retained story reachable. Creations, removals, reorders, and the
-/// implicit creation of a missing semantic paragraph all fold; a request with no
-/// structure-changing content fingerprints to the neutral 0 sentinel. Committed
-/// structure cannot change without a revision advance, and the transaction already
-/// requires revision equality, so neutrality is stable for the transaction's life.
-fn speculative_lifecycle_fingerprint(
-    planner: &PlannerState,
-    request: UpdateRequest<'_>,
-) -> Result<u64, EngineError> {
-    let mut hash = 0_u64;
-    let mut mixed = false;
-    for index in 0..request.paragraph_mutations.len() {
-        let mutation = request
-            .paragraph_mutations
-            .get(index)
-            .ok_or(EngineError::InvalidRequest)?;
-        let (opcode, paragraph_id, placement) = match mutation {
-            super::semantic_wire::ParagraphMutation::Upsert {
-                paragraph_id,
-                order,
-            } => {
-                let placement = planner.paragraph(paragraph_id).map_or(
-                    ParagraphPlacement {
-                        order,
-                        scope: 0,
-                        rank: 0.0,
-                    },
-                    |paragraph| ParagraphPlacement {
-                        order,
-                        ..paragraph.placement
-                    },
-                );
-                if planner.paragraph(paragraph_id).is_some_and(|paragraph| {
-                    !paragraph.created && paragraph.placement.order == order
-                }) {
-                    continue;
-                }
-                (1_u64, paragraph_id, placement)
-            }
-            super::semantic_wire::ParagraphMutation::Remove { paragraph_id } => (
-                2_u64,
-                paragraph_id,
-                ParagraphPlacement {
-                    order: 0,
-                    scope: 0,
-                    rank: 0.0,
-                },
-            ),
-        };
-        if !mixed {
-            hash = 0xcbf2_9ce4_8422_2325;
-            mixed = true;
-        }
-        for value in [
-            opcode,
-            u64::from(paragraph_id),
-            u64::from(placement.order),
-            u64::from(placement.scope),
-            placement.rank.to_bits(),
-        ] {
-            for byte in value.to_le_bytes() {
-                hash ^= u64::from(byte);
-                hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-            }
-        }
-    }
-    for index in 0..request.paragraph_order_mutations.len() {
-        let mutation = request
-            .paragraph_order_mutations
-            .get(index)
-            .ok_or(EngineError::InvalidRequest)?;
-        if !mutation.rank.is_finite() {
-            return Err(EngineError::InvalidRequest);
-        }
-        if planner
-            .paragraph(mutation.paragraph_id)
-            .is_some_and(|paragraph| {
-                !paragraph.created
-                    && paragraph.placement.scope == mutation.scope
-                    && paragraph.placement.rank == mutation.rank
-            })
-        {
-            continue;
-        }
-        if !mixed {
-            hash = 0xcbf2_9ce4_8422_2325;
-            mixed = true;
-        }
-        for value in [
-            3_u64,
-            u64::from(mutation.paragraph_id),
-            u64::from(mutation.scope),
-            mutation.rank.to_bits(),
-        ] {
-            for byte in value.to_le_bytes() {
-                hash ^= u64::from(byte);
-                hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-            }
-        }
-    }
-    if request.paragraph_mutations.len() == 0
-        && planner.paragraphs.is_empty()
-        && let Some(paragraph_id) = request_semantic_paragraph_id(request)?
-        && !planner
-            .paragraph(paragraph_id)
-            .is_some_and(|paragraph| !paragraph.created)
-    {
-        hash ^= 0x9e37_79b9_7f4a_7c15 ^ u64::from(paragraph_id);
-    }
-    Ok(hash)
-}
-
 fn request_semantic_paragraph_id(request: UpdateRequest<'_>) -> Result<Option<u32>, EngineError> {
     let mut paragraph_id = None;
     for index in 0..request.text_mutations.len() {
@@ -7298,7 +8359,9 @@ mod unsafe_break_tests;
 
 #[cfg(test)]
 mod tests {
+    use super::super::semantic_wire::ParagraphOrderMutationBatch;
     use crate::engine::style_state::ResolvedStyle;
+    use read_fonts::TableProvider;
 
     use super::*;
 
@@ -7367,7 +8430,7 @@ mod tests {
     }
 
     #[test]
-    fn positioned_abort_preserves_source_revision_checkpoint() {
+    fn discarded_positioning_candidate_preserves_source_revision_checkpoint() {
         let mut paragraph = ParagraphState {
             next_run_canonical_revision: 17,
             pending_source_run_canonical_revision: 23,
@@ -7375,7 +8438,7 @@ mod tests {
             ..ParagraphState::default()
         };
 
-        paragraph.abort_positioned();
+        paragraph.discard_positioned_candidate();
 
         assert_eq!(paragraph.next_run_canonical_revision, 17);
         assert_eq!(paragraph.pending_source_run_canonical_revision, 23);
@@ -7456,7 +8519,21 @@ mod tests {
             next_unit_id: committed.next_unit_id,
         };
         let mut edits = Vec::new();
-        reconcile_full_replacement(&committed, &mut inserted, &mut edits).unwrap();
+        collect_text_edits(
+            &committed.units,
+            &inserted.units,
+            TextReconciliation::FullReplacement,
+            &mut edits,
+            0,
+        )
+        .unwrap();
+        reconcile_text_identities(
+            &committed,
+            &mut inserted,
+            &edits,
+            Some(TextReconciliation::FullReplacement),
+        )
+        .unwrap();
         assert_eq!(inserted.unit_ids, [1, 2, 5, 6, 3, 4]);
         assert_eq!(edits.len(), 1);
         assert_eq!(
@@ -7474,21 +8551,32 @@ mod tests {
             unit_ids: inserted.unit_ids,
             next_unit_id: inserted.next_unit_id,
         };
-        reconcile_full_replacement(
-            &TextStage {
-                units: vec![
-                    b'a' as u16,
-                    b'b' as u16,
-                    b'X' as u16,
-                    b'Y' as u16,
-                    b'c' as u16,
-                    b'd' as u16,
-                ],
-                unit_ids: vec![1, 2, 5, 6, 3, 4],
-                next_unit_id: 7,
-            },
-            &mut removed,
+        let removed_from = TextStage {
+            units: vec![
+                b'a' as u16,
+                b'b' as u16,
+                b'X' as u16,
+                b'Y' as u16,
+                b'c' as u16,
+                b'd' as u16,
+            ],
+            unit_ids: vec![1, 2, 5, 6, 3, 4],
+            next_unit_id: 7,
+        };
+        edits.clear();
+        collect_text_edits(
+            &removed_from.units,
+            &removed.units,
+            TextReconciliation::FullReplacement,
             &mut edits,
+            0,
+        )
+        .unwrap();
+        reconcile_text_identities(
+            &removed_from,
+            &mut removed,
+            &edits,
+            Some(TextReconciliation::FullReplacement),
         )
         .unwrap();
         assert_eq!(removed.unit_ids, [1, 2, 3, 4]);
@@ -7512,7 +8600,18 @@ mod tests {
             unit_ids: emoji.unit_ids.clone(),
             next_unit_id: emoji.next_unit_id,
         };
-        reconcile_same_length_candidate(&emoji, &mut same_length_emoji, &mut edits, 0, 2).unwrap();
+        let same_length = TextReconciliation::SameLength { start: 0, end: 2 };
+        edits.clear();
+        collect_text_edits(
+            &emoji.units,
+            &same_length_emoji.units,
+            same_length,
+            &mut edits,
+            0,
+        )
+        .unwrap();
+        reconcile_text_identities(&emoji, &mut same_length_emoji, &edits, Some(same_length))
+            .unwrap();
         assert_eq!(same_length_emoji.unit_ids, [13, 14]);
         assert_eq!(
             (
@@ -7530,7 +8629,22 @@ mod tests {
             unit_ids: emoji.unit_ids.clone(),
             next_unit_id: emoji.next_unit_id,
         };
-        reconcile_full_replacement(&emoji, &mut changed_emoji, &mut edits).unwrap();
+        edits.clear();
+        collect_text_edits(
+            &emoji.units,
+            &changed_emoji.units,
+            TextReconciliation::FullReplacement,
+            &mut edits,
+            0,
+        )
+        .unwrap();
+        reconcile_text_identities(
+            &emoji,
+            &mut changed_emoji,
+            &edits,
+            Some(TextReconciliation::FullReplacement),
+        )
+        .unwrap();
         assert_eq!((edits[0].old_start, edits[0].new_start), (0, 0));
         assert_eq!(changed_emoji.unit_ids, [13, 14, 15]);
     }
@@ -7579,7 +8693,27 @@ mod tests {
         ];
         assert_eq!(containing_run(&old, edit.old_start, edit.old_end), Some(0));
         assert_eq!(containing_run(&new, edit.old_start, edit.new_end), Some(0));
-        assert!(same_edit_run_topology(&old, &new, edit, 0).unwrap());
+        assert!(same_edit_run_topology(&old, &new, edit, 0, None).unwrap());
+        assert_eq!(containing_run(&old, 4, 4), Some(0));
+        assert_eq!(
+            containing_run(
+                &[ShapingRun {
+                    text_end: 0,
+                    ..old[0]
+                }],
+                0,
+                0
+            ),
+            None
+        );
+        let changed_neighbor = [
+            new[0],
+            ShapingRun {
+                script: 2,
+                ..new[1]
+            },
+        ];
+        assert!(!same_edit_run_topology(&old, &changed_neighbor, edit, 0, None).unwrap());
     }
     use crate::{
         abi_contract::{
@@ -7912,13 +9046,13 @@ mod tests {
             [0x79]
         );
 
-        let speculative_text = paragraph_text_mutation_bytes(&[(1, 0, 1, &[0x71])]);
+        let candidate_text = paragraph_text_mutation_bytes(&[(1, 0, 1, &[0x71])]);
         let mut query = update(2, 2, 2);
         query.limits.max_paragraphs = 3;
         query.limits.max_clusters = 8;
         query.limits.max_lines = 8;
         query.text_mutations =
-            parse_text_mutations(&speculative_text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            parse_text_mutations(&candidate_text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
         engine
             .measure_paragraph_with_shaper(&mut shaper, query, 1)
             .unwrap();
@@ -7998,30 +9132,10 @@ mod tests {
         let prepared = engine
             .prepare_update_with_shaper(&mut shaper, retry_request, 4)
             .unwrap();
-        engine.abort_update(prepared).unwrap();
-        assert_eq!(engine.planner_paragraph_preparation_count(4, 1), Ok(3));
-        assert_eq!(engine.planner_paragraph_preparation_count(4, 2), Ok(3));
-        assert_eq!(engine.planner_paragraph_preparation_count(4, 3), Ok(2));
-        assert_eq!(
-            engine
-                .planners
-                .get(&4)
-                .unwrap()
-                .paragraph(3)
-                .unwrap()
-                .state
-                .text
-                .committed()
-                .units,
-            [0x63]
-        );
-        let prepared = engine
-            .prepare_update_with_shaper(&mut shaper, retry_request, 4)
-            .unwrap();
         engine.commit_update(prepared).unwrap();
         assert_eq!(engine.planner_paragraph_preparation_count(4, 1), Ok(3));
         assert_eq!(engine.planner_paragraph_preparation_count(4, 2), Ok(3));
-        assert_eq!(engine.planner_paragraph_preparation_count(4, 3), Ok(3));
+        assert_eq!(engine.planner_paragraph_preparation_count(4, 3), Ok(2));
         assert_eq!(
             engine
                 .planners
@@ -8144,13 +9258,8 @@ mod tests {
         assert!(delta.primitives.is_empty());
         assert!(delta.draws.is_empty());
         assert_eq!(engine.retained_binding_compilation_skips(4), Ok(1));
-        engine.abort_update(prepared).unwrap();
-
-        let retry = engine
-            .prepare_update_with_shaper(&mut shaper, changed, 2)
-            .unwrap();
-        assert_eq!(engine.retained_binding_compilation_skips(4), Ok(2));
-        engine.commit_update(retry).unwrap();
+        engine.commit_update(prepared).unwrap();
+        assert_eq!(engine.retained_binding_compilation_skips(4), Ok(1));
     }
 
     #[test]
@@ -8167,6 +9276,296 @@ mod tests {
             Err(EngineError::InvalidRequest)
         );
         assert_eq!(engine.root_revision(4).unwrap(), RootRevision::default());
+    }
+
+    #[test]
+    fn revision_exhaustion_does_not_advance_the_acknowledgement_fence() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_codec(TechniqueId(1)))
+            .unwrap();
+        engine.create_root(4).unwrap();
+        let first = engine.prepare_update(update(0, 0, 0), 1).unwrap();
+        engine.commit_update(first).unwrap();
+
+        let planner = engine.planners.get_mut(&4).unwrap();
+        planner.revision.engine = u32::MAX;
+        let request = update(u32::MAX, planner.revision.root, 1);
+        assert_eq!(
+            engine.prepare_update(request, 2),
+            Err(EngineError::RevisionExhausted)
+        );
+        assert_eq!(
+            engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .acknowledged_publication_generation,
+            0
+        );
+    }
+
+    #[test]
+    fn failed_text_preparation_discards_the_derived_root_until_reset() {
+        let (mut engine, mut shaper) = shaped_inter_engine("A");
+        let replacement = utf16("BC");
+        let bytes = text_mutation_bytes(&[(0, 1, &replacement)]);
+        let styles = root_style_bytes_for_text(7, replacement.len() as u32);
+        let mut request = update(1, 1, 1);
+        request.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION;
+        request.limits.max_clusters = 1;
+        request.text_mutations =
+            parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        request.style_mutations =
+            parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+
+        assert!(
+            engine
+                .prepare_update_with_shaper(&mut shaper, request, 2)
+                .is_err()
+        );
+        assert_eq!(engine.root_revision(4), Err(EngineError::RootMissing));
+
+        engine.reset_root(4).unwrap();
+        assert_eq!(engine.root_revision(4), Ok(RootRevision::default()));
+        let empty = engine.prepare_update(update(0, 0, 1), 2).unwrap();
+        engine.commit_update(empty).unwrap();
+        assert_eq!(
+            engine.root_revision(4),
+            Ok(RootRevision { engine: 1, root: 1 })
+        );
+    }
+
+    #[test]
+    fn reset_preserves_publication_generation_high_water() {
+        let mut engine = TextEngine::default();
+        engine.create_root(4).unwrap();
+        engine
+            .planners
+            .get_mut(&4)
+            .unwrap()
+            .acknowledged_publication_generation = 17;
+
+        engine.reset_root(4).unwrap();
+
+        assert_eq!(
+            engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .acknowledged_publication_generation,
+            17
+        );
+    }
+
+    #[test]
+    fn reset_rejects_unknown_and_disposed_roots() {
+        let mut engine = TextEngine::default();
+
+        assert_eq!(engine.reset_root(4), Err(EngineError::RootMissing));
+
+        engine.create_root(5).unwrap();
+        engine.dispose_root(5).unwrap();
+
+        assert_eq!(engine.reset_root(5), Err(EngineError::RootMissing));
+    }
+
+    #[test]
+    fn reset_replay_publishes_after_renderer_acknowledgement() {
+        let (mut engine, mut shaper) = shaped_inter_engine("A");
+        {
+            let planner = engine.planners.get_mut(&4).unwrap();
+            assert_eq!(planner.acknowledged_publication_generation, 0);
+        }
+        engine.invalidate_root(4).unwrap();
+        engine.reset_root(4).unwrap();
+        assert!(
+            engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .placement_acknowledgement_rebased
+        );
+
+        let units = utf16("A");
+        let text_bytes = text_mutation_bytes(&[(0, 0, &units)]);
+        let styles = root_style_bytes_for_text(7, units.len() as u32);
+        let lifecycle = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_UPSERT, 1, 0)]);
+        let mut replay = update(0, 0, 1);
+        replay.text_mutations =
+            parse_text_mutations(&text_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        replay.style_mutations =
+            parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        replay.paragraph_mutations =
+            parse_paragraph_mutations(&lifecycle, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let measured = engine
+            .measure_paragraph_with_shaper(&mut shaper, replay, 1)
+            .unwrap();
+        engine.commit_measure(measured).unwrap();
+
+        let mut publication = update(0, 0, 1);
+        publication.paragraph_mutations =
+            parse_paragraph_mutations(&lifecycle, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, publication, 2)
+            .unwrap();
+        engine.commit_update(prepared).unwrap();
+    }
+
+    #[test]
+    fn reset_keeps_the_high_water_record_until_replacement_creation_succeeds() {
+        let mut engine = TextEngine::default();
+        engine.invalidated_roots.insert(
+            0,
+            RootHighWater {
+                next_glyph_id: 12,
+                next_content_revision: 8,
+                acknowledged_publication_generation: 6,
+            },
+        );
+
+        assert_eq!(engine.reset_root(0), Err(EngineError::InvalidHandle));
+        assert_eq!(
+            engine
+                .invalidated_roots
+                .get(&0)
+                .copied()
+                .unwrap()
+                .next_glyph_id,
+            12
+        );
+    }
+
+    #[test]
+    fn deleting_half_of_a_surrogate_pair_is_rejected_before_text_writes() {
+        let (mut engine, _shaper) = shaped_inter_engine("😀");
+        let revision = engine.root_revision(4).unwrap();
+        let bytes = text_mutation_bytes(&[(0, 1, &[])]);
+        let mut request = update(revision.engine, revision.root, 0);
+        request.text_mutations =
+            parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+
+        assert_eq!(
+            engine.prepare_update(request, 2),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(engine.root_revision(4), Ok(revision));
+        assert_eq!(engine.root_text(4).unwrap(), &[0xd83d, 0xde00]);
+    }
+
+    #[test]
+    fn validated_mutation_boundaries_match_materialized_utf16() {
+        let committed = [0x41, 0xd83d, 0xde00, 0x42, 0x43];
+        let bytes = text_mutation_bytes(&[
+            (3, 1, &[0x44, 0x45]),
+            (1, 2, &[0xd83c, 0xdf0d]),
+            (0, 0, &[0x5a]),
+        ]);
+        let mutations = parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 3).unwrap();
+        let length = validate_text_mutations(&committed, mutations).unwrap() as u32;
+        let materialized = [0x5a, 0x41, 0xd83c, 0xdf0d, 0x44, 0x45, 0x43];
+        assert_eq!(length as usize, materialized.len());
+        for offset in 0..=length + 1 {
+            assert_eq!(
+                utf16_boundary_after_mutations(&committed, mutations, length, offset),
+                valid_utf16_boundary(&materialized, offset),
+                "offset {offset}",
+            );
+        }
+    }
+
+    #[test]
+    fn preflight_complete_replacement_avoids_old_units_and_preserves_ordered_edits() {
+        let committed = [0x61, 0xd83d, 0xde00, 0x62];
+        let replacement = [0x63, 0xd83c, 0xdf0d];
+        let bytes = text_mutation_bytes(&[(0, committed.len() as u32, &replacement)]);
+        let mutations = parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        assert_eq!(
+            validate_text_mutations(&committed, mutations),
+            Ok(replacement.len())
+        );
+        let mut destination = vec![0xffff; committed.len()];
+        super::super::work_attribution::reset();
+        populate_preflight_text(&mut destination, &committed, mutations, true, 0).unwrap();
+        assert_eq!(destination, replacement);
+        assert_eq!(
+            super::super::work_attribution::snapshot().preflight_seeded_old_units,
+            0
+        );
+
+        let empty = text_mutation_bytes(&[(0, committed.len() as u32, &[])]);
+        let mutations = parse_text_mutations(&empty, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        assert_eq!(validate_text_mutations(&committed, mutations), Ok(0));
+        populate_preflight_text(&mut destination, &committed, mutations, true, 0).unwrap();
+        assert!(destination.is_empty());
+        assert_eq!(
+            super::super::work_attribution::snapshot().preflight_seeded_old_units,
+            0
+        );
+
+        let partial = text_mutation_bytes(&[(1, 2, &[0x78])]);
+        let mutations =
+            parse_text_mutations(&partial, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        assert_eq!(validate_text_mutations(&committed, mutations), Ok(3));
+        populate_preflight_text(&mut destination, &committed, mutations, true, 0).unwrap();
+        assert_eq!(destination, [0x61, 0x78, 0x62]);
+        assert_eq!(
+            super::super::work_attribution::snapshot().preflight_seeded_old_units,
+            committed.len()
+        );
+
+        let ordered = text_mutation_bytes(&[(0, 0, &[0x79]), (4, 1, &[0x7a])]);
+        let mutations =
+            parse_text_mutations(&ordered, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        assert_eq!(validate_text_mutations(&committed, mutations), Ok(5));
+        populate_preflight_text(&mut destination, &committed, mutations, true, 0).unwrap();
+        assert_eq!(destination, [0x79, 0x61, 0xd83d, 0xde00, 0x7a]);
+        assert_eq!(
+            super::super::work_attribution::snapshot().preflight_seeded_old_units,
+            committed.len() * 2
+        );
+
+        let malformed = text_mutation_bytes(&[(0, committed.len() as u32, &[0xd800])]);
+        let mutations =
+            parse_text_mutations(&malformed, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        assert_eq!(
+            validate_text_mutations(&committed, mutations),
+            Err(EngineError::InvalidRequest)
+        );
+    }
+
+    #[test]
+    fn style_preflight_rejects_missing_lifecycle_target_and_stale_root_range() {
+        let (mut engine, _shaper) = shaped_inter_engine("abcd");
+        let revision = engine.root_revision(4).unwrap();
+
+        let mut missing_target = root_style_bytes_for_text(7, 4);
+        write_u32(
+            &mut missing_target,
+            ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize + abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID,
+            99,
+        );
+        let mut request = update(revision.engine, revision.root, 0);
+        request.style_mutations =
+            parse_style_mutations(&missing_target, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        assert_eq!(
+            engine.prepare_update(request, 2),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(engine.root_revision(4), Ok(revision));
+
+        let stale_root = root_style_bytes_for_text(7, 3);
+        let mut request = update(revision.engine, revision.root, 0);
+        request.style_mutations =
+            parse_style_mutations(&stale_root, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        assert_eq!(
+            engine.prepare_update(request, 2),
+            Err(EngineError::StyleRootInvalid(FrameFault {
+                paragraph_id: 1,
+                style_id: 1,
+            }))
+        );
+        assert_eq!(engine.root_revision(4), Ok(revision));
     }
 
     #[test]
@@ -8209,7 +9608,7 @@ mod tests {
     }
 
     #[test]
-    fn aborting_a_prepared_plan_preserves_revisions_and_allows_retry() {
+    fn publication_failure_invalidates_the_root_until_reset() {
         let mut engine = TextEngine::default();
         engine
             .register_codec(9, validated_codec(TechniqueId(1)))
@@ -8220,36 +9619,40 @@ mod tests {
         request.paragraph_mutations =
             parse_paragraph_mutations(&lifecycle, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
         let prepared = engine.prepare_update(request, 1).unwrap();
-        let aborted_incarnation = engine
-            .planners
-            .get(&4)
-            .unwrap()
-            .paragraph(7)
-            .unwrap()
-            .incarnation;
         assert!(engine.prepared_gather_cache.is_some());
-        engine.abort_update(prepared).unwrap();
+        engine
+            .invalidate_after_publication_failure(prepared)
+            .unwrap();
         assert!(engine.gather_cache.is_none());
         assert!(engine.prepared_gather_cache.is_none());
-        assert_eq!(engine.root_revision(4).unwrap(), RootRevision::default());
-        assert!(engine.planners.get(&4).unwrap().paragraph(7).is_none());
+        assert_eq!(engine.root_revision(4), Err(EngineError::RootMissing));
+        engine.reset_root(4).unwrap();
         let retry = engine.prepare_update(request, 1).unwrap();
-        assert_eq!(
-            engine
-                .planners
-                .get(&4)
-                .unwrap()
-                .paragraph(7)
-                .unwrap()
-                .incarnation,
-            aborted_incarnation,
-            "an aborted creation must not consume the committed incarnation counter"
-        );
+        assert!(engine.planners.get(&4).unwrap().paragraph(7).is_some());
         engine.commit_update(retry).unwrap();
     }
 
     #[test]
-    fn sequential_measure_queries_extend_one_retained_speculative_transaction() {
+    fn stale_publication_failure_still_discards_derived_state() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_codec(TechniqueId(1)))
+            .unwrap();
+        engine.create_root(4).unwrap();
+        let stale = engine.prepare_update(update(0, 0, 0), 1).unwrap();
+        engine.commit_update(stale).unwrap();
+        let current = engine.prepare_update(update(1, 1, 1), 2).unwrap();
+        engine.commit_update(current).unwrap();
+
+        assert_eq!(
+            engine.invalidate_after_publication_failure(stale),
+            Err(EngineError::RevisionConflict)
+        );
+        assert_eq!(engine.root_revision(4), Err(EngineError::RootMissing));
+    }
+
+    #[test]
+    fn sequential_measurements_accept_each_edit_before_render_publication() {
         let mut engine = TextEngine::default();
         engine
             .register_codec(9, validated_codec(TechniqueId(1)))
@@ -8264,66 +9667,170 @@ mod tests {
         let prepared = engine.prepare_update(initial, 1).unwrap();
         engine.commit_update(prepared).unwrap();
 
-        // A speculative append prepares pending state that outlives the query while
-        // committed text stays untouched (leave-committed retention).
+        // The query result must encode successfully before its prepared text becomes accepted.
         let edit_bytes = text_mutation_bytes(&[(4, 0, &[0x58, 0x59])]);
         let mut query = update(1, 1, 1);
         query.text_mutations =
             parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
-        engine.measure_paragraph(query, 1).unwrap();
+        let measured = engine.measure_paragraph(query, 1).unwrap();
         assert_eq!(engine.root_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
-        let planner = engine.planners.get(&4).unwrap();
-        let state = planner.first_paragraph_state().unwrap();
-        assert!(state.text.is_prepared());
+        assert_eq!(engine.commit_measure(measured), Ok(1));
         assert_eq!(
-            state.text.pending().units,
-            [0x61, 0x62, 0x63, 0x64, 0x58, 0x59]
-        );
-        let transaction = planner.speculative.unwrap();
-        assert_eq!(transaction.revision, planner.revision);
-
-        // The same speculative input extends the transaction instead of rebuilding it.
-        let mut repeat = update(1, 1, 1);
-        repeat.text_mutations =
-            parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
-        engine.measure_paragraph(repeat, 1).unwrap();
-        let planner = engine.planners.get(&4).unwrap();
-        assert_eq!(
-            planner.speculative.unwrap().generation,
-            transaction.generation
+            engine.root_text(4).unwrap(),
+            &[0x61, 0x62, 0x63, 0x64, 0x58, 0x59]
         );
 
-        // A different speculative input rebuilds the paragraph prefix cold, and the
-        // rebuilt transaction is retained in its place.
-        let changed_bytes = text_mutation_bytes(&[(4, 0, &[0x5a])]);
+        // A later edit starts from accepted query state and commits independently.
+        let changed_bytes = text_mutation_bytes(&[(4, 2, &[0x5a])]);
         let mut changed = update(1, 1, 1);
         changed.text_mutations =
             parse_text_mutations(&changed_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
-        engine.measure_paragraph(changed, 1).unwrap();
-        let planner = engine.planners.get(&4).unwrap();
-        assert!(planner.speculative.unwrap().generation > transaction.generation);
+        let measured = engine.measure_paragraph(changed, 1).unwrap();
+        assert_eq!(engine.commit_measure(measured), Ok(2));
         assert_eq!(
-            planner
-                .first_paragraph_state()
-                .unwrap()
-                .text
-                .pending()
-                .units,
-            [0x61, 0x62, 0x63, 0x64, 0x5a]
+            engine.root_text(4).unwrap(),
+            &[0x61, 0x62, 0x63, 0x64, 0x5a]
         );
-        assert_eq!(engine.root_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
 
-        // An ordinary frame drops the transaction leave-committed at entry and
-        // proceeds exactly as if no query had happened.
+        // Rendering publishes the already accepted preparation without replaying text edits.
         let follow = engine.prepare_update(update(1, 1, 1), 2).unwrap();
-        assert!(engine.planners.get(&4).unwrap().speculative.is_none());
         let committed = engine.commit_update(follow).unwrap();
         assert_eq!(committed.revision, RootRevision { engine: 2, root: 2 });
-        assert_eq!(engine.root_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
+        assert_eq!(
+            engine.root_text(4).unwrap(),
+            &[0x61, 0x62, 0x63, 0x64, 0x5a]
+        );
     }
 
     #[test]
-    fn clipped_inspection_follows_measure_commit_and_abort() {
+    fn intrinsic_width_cache_reuses_geometry_and_tracks_text_metrics_and_wrap() {
+        const INTER: &[u8] =
+            include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
+        let original = "alpha beta gamma";
+        let mut geometry = root_geometry_bytes();
+        let mut styles = root_style_bytes_for_text(7, original.encode_utf16().count() as u32);
+        let (mut engine, mut shaper) = shaped_engine_with_font_styles_and_geometry(
+            original,
+            INTER,
+            2_937,
+            &styles,
+            1,
+            Some((&geometry, 0)),
+        );
+        let mut query = update(1, 1, 1);
+        query.limits.max_clusters = 256;
+        query.limits.max_lines = 256;
+        query.limits.max_output_bytes = 1 << 20;
+        query.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_MEASUREMENT;
+        let measured = engine
+            .measure_paragraph_with_shaper(&mut shaper, query, 1)
+            .unwrap();
+        engine.commit_measure(measured).unwrap();
+        let mut previous_text = original;
+        let mut previous_size = 16.0;
+        let constraint = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let region = constraint + abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
+        for (text, size, width, wrap, rescans) in [
+            (original, 16.0, 54.0, WRAP_WORD, false),
+            ("longestword tiny", 16.0, 54.0, WRAP_WORD, true),
+            ("longestword tiny", 20.0, 54.0, WRAP_WORD, true),
+            (
+                "longestword tiny",
+                20.0,
+                54.0,
+                super::super::frame::WRAP_CHARACTER,
+                true,
+            ),
+            (
+                "longestword tiny",
+                20.0,
+                112.0,
+                super::super::frame::WRAP_CHARACTER,
+                false,
+            ),
+        ] {
+            write_f32(
+                &mut geometry,
+                constraint + abi::ENGINE_CONSTRAINT_WIDTH,
+                width,
+            );
+            write_f32(&mut geometry, region + abi::ENGINE_REGION_INLINE_END, width);
+            write_f32(
+                &mut geometry,
+                region + abi::ENGINE_REGION_CLIP_INLINE_END,
+                width,
+            );
+            geometry[constraint + abi::ENGINE_CONSTRAINT_WRAP] = wrap;
+            let units = utf16(text);
+            styles = root_style_bytes_for_text(7, units.len() as u32);
+            write_f32(
+                &mut styles,
+                constraint + abi::ENGINE_STYLE_MUTATION_FONT_SIZE,
+                size,
+            );
+            let text_bytes =
+                text_mutation_bytes(&[(0, previous_text.encode_utf16().count() as u32, &units)]);
+            let mut change = query;
+            change.geometry = parse_root_geometry(&geometry, change.limits);
+            if text != previous_text {
+                change.text_mutations =
+                    parse_text_mutations(&text_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                        .unwrap();
+            }
+            if text != previous_text || size != previous_size {
+                change.style_mutations =
+                    parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            }
+            super::super::work_attribution::reset();
+            let measured = engine
+                .measure_paragraph_with_shaper(&mut shaper, change, 1)
+                .unwrap();
+            let visits =
+                super::super::work_attribution::snapshot().measurement_intrinsic_cluster_visits;
+            assert_eq!(
+                visits > 0,
+                rescans,
+                "intrinsic scan for {text}, size {size}, wrap {wrap}, width {width}"
+            );
+            let retained = *engine
+                .measured_semantic_views(measured)
+                .unwrap()
+                .iter()
+                .find(|record| {
+                    record.kind == super::super::semantic_view::SEMANTIC_PARAGRAPH_MEASUREMENT
+                })
+                .unwrap();
+            engine.commit_measure(measured).unwrap();
+            let (mut cold, mut cold_shaper) = shaped_engine_with_font_styles_and_geometry(
+                text,
+                INTER,
+                2_937,
+                &styles,
+                1,
+                Some((&geometry, 0)),
+            );
+            let measured = cold
+                .measure_paragraph_with_shaper(&mut cold_shaper, query, 1)
+                .unwrap();
+            let recomputed = cold
+                .measured_semantic_views(measured)
+                .unwrap()
+                .iter()
+                .find(|record| {
+                    record.kind == super::super::semantic_view::SEMANTIC_PARAGRAPH_MEASUREMENT
+                })
+                .unwrap();
+            assert_eq!(
+                &retained, recomputed,
+                "cold measurement for {text}, size {size}, wrap {wrap}, width {width}"
+            );
+            previous_text = text;
+            previous_size = size;
+        }
+    }
+
+    #[test]
+    fn clipped_inspection_follows_measure_commit_and_failure() {
         const INTER: &[u8] =
             include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
         const GLYPH_COUNT: u32 = 2937;
@@ -8355,7 +9862,7 @@ mod tests {
         let lifecycle = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_UPSERT, 1, 0)]);
         let text = paragraph_text_mutation_bytes(&[(1, 0, 0, &units)]);
         let styles = root_style_bytes_for_text(7, units.len() as u32);
-        let mut geometry = root_geometry_bytes();
+        let mut geometry = multiline_root_geometry_bytes();
         let constraint = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
         let region = constraint + abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
         write_u32(
@@ -8392,6 +9899,31 @@ mod tests {
             .measure_paragraph_with_shaper(&mut shaper, initial, 1)
             .unwrap();
         engine.commit_measure(measured).unwrap();
+        super::super::work_attribution::reset();
+        let mut repeated_read = update(0, 0, 0);
+        repeated_read.limits = initial.limits;
+        repeated_read.semantic_view_mask = initial.semantic_view_mask;
+        let measured = engine
+            .measure_paragraph_with_shaper(&mut shaper, repeated_read, 1)
+            .unwrap();
+        assert!(
+            !engine.measured_semantic_views(measured).unwrap().is_empty(),
+            "the cached intrinsic widths still serve the measurement"
+        );
+        engine.commit_measure(measured).unwrap();
+        assert_eq!(
+            super::super::work_attribution::snapshot().measurement_intrinsic_cluster_visits,
+            0,
+            "reading one prepared revision must not rescan its clusters for intrinsic widths"
+        );
+        assert_eq!(
+            super::super::work_attribution::snapshot().intrinsic_flow_preparations,
+            0
+        );
+        assert_eq!(
+            super::super::work_attribution::snapshot().intrinsic_positioning_preparations,
+            0
+        );
         let accepted_count = engine.borrowed_paragraph_layout(4, 1).unwrap();
         let visible_count = engine
             .planners
@@ -8408,10 +9940,6 @@ mod tests {
             accepted_count > visible_count,
             "clipping must retain full inspection"
         );
-        let accepted: Vec<_> = (0..accepted_count)
-            .map(|index| engine.borrowed_paragraph_glyph(4, 1, index).unwrap())
-            .collect();
-
         let replacement: Vec<u16> = "new first\nnew second\nnew third\nnew fourth"
             .encode_utf16()
             .collect();
@@ -8431,17 +9959,17 @@ mod tests {
             engine.borrowed_paragraph_layout(4, 1).unwrap(),
             accepted_count
         );
-        engine.abort_measure(rejected).unwrap();
+        engine.invalidate_after_measure_failure(rejected).unwrap();
         assert_eq!(
-            engine.borrowed_paragraph_layout(4, 1).unwrap(),
-            accepted_count
+            engine.borrowed_paragraph_layout(4, 1),
+            Err(EngineError::RootMissing),
+            "failed query delivery discards derived state instead of restoring it"
         );
-        for (index, expected) in accepted.into_iter().enumerate() {
-            assert_eq!(
-                engine.borrowed_paragraph_glyph(4, 1, index).unwrap(),
-                expected
-            );
-        }
+        engine.reset_root(4).unwrap();
+        let replayed = engine
+            .measure_paragraph_with_shaper(&mut shaper, initial, 1)
+            .unwrap();
+        engine.commit_measure(replayed).unwrap();
         let retry = engine
             .measure_paragraph_with_shaper(&mut shaper, candidate, 1)
             .unwrap();
@@ -8449,10 +9977,427 @@ mod tests {
         engine.commit_measure(retry).unwrap();
         assert_eq!(engine.borrowed_paragraph_layout(4, 1).unwrap(), retry_count);
         assert_ne!(retry_count, accepted_count);
+        let mut inspection = repeated_read;
+        inspection.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_MEASUREMENT
+            | super::super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION;
+        let measured = engine
+            .measure_paragraph_with_shaper(&mut shaper, inspection, 1)
+            .unwrap();
+        let expected = engine.measured_semantic_views(measured).unwrap().to_vec();
+        engine.commit_measure(measured).unwrap();
+        let (mut cold, mut cold_shaper) = shaped_engine_with_font_styles_and_geometry(
+            "new first\nnew second\nnew third\nnew fourth",
+            INTER,
+            GLYPH_COUNT,
+            &restyled,
+            1,
+            Some((&geometry, 0)),
+        );
+        let mut cold_query = update(1, 1, 1);
+        cold_query.limits = inspection.limits;
+        cold_query.semantic_view_mask = inspection.semantic_view_mask;
+        let cold_measure = cold
+            .measure_paragraph_with_shaper(&mut cold_shaper, cold_query, 1)
+            .unwrap();
+        let without_runtime_identity =
+            |records: &[super::super::semantic_view::SemanticRecord]| {
+                records
+                    .iter()
+                    .copied()
+                    .map(|mut record| {
+                        if record.kind == super::super::semantic_view::SEMANTIC_GLYPH {
+                            record.id = 0;
+                            record.text_end = 0; // Font handles are local to each independently constructed engine.
+                        }
+                        record
+                    })
+                    .collect::<Vec<_>>()
+            };
+        assert_eq!(
+            without_runtime_identity(&expected),
+            without_runtime_identity(cold.measured_semantic_views(cold_measure).unwrap()),
+            "prepared clipped records must match independently cold layout apart from runtime identities"
+        );
+        let publication = inspection;
+        super::super::work_attribution::reset();
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, publication, 1)
+            .unwrap();
+        assert_eq!(engine.prepared_semantic_views(prepared).unwrap(), expected);
+        assert_eq!(
+            super::super::work_attribution::snapshot().intrinsic_flow_preparations,
+            0
+        );
+        assert_eq!(
+            super::super::work_attribution::snapshot().intrinsic_positioning_preparations,
+            0
+        );
+        engine.commit_update(prepared).unwrap();
+        assert_eq!(engine.borrowed_paragraph_layout(4, 1).unwrap(), retry_count);
+        for (width, height, max_lines, overflow, mode) in [
+            (
+                54.0,
+                20.0,
+                0,
+                OVERFLOW_CLIP,
+                IntrinsicInspection::Positioned,
+            ),
+            (54.0, 20.0, 1, OVERFLOW_CLIP, IntrinsicInspection::Flow),
+            (54.0, 20.0, 1, OVERFLOW_ELLIPSIS, IntrinsicInspection::Flow),
+            (200.0, 1000.0, 0, OVERFLOW_CLIP, IntrinsicInspection::None),
+        ] {
+            for (offset, value) in [
+                (constraint + abi::ENGINE_CONSTRAINT_WIDTH, width),
+                (region + abi::ENGINE_REGION_INLINE_END, width),
+                (region + abi::ENGINE_REGION_CLIP_INLINE_END, width),
+                (constraint + abi::ENGINE_CONSTRAINT_HEIGHT, height),
+                (
+                    constraint + abi::ENGINE_CONSTRAINT_VIEWPORT_BLOCK_END,
+                    height,
+                ),
+                (region + abi::ENGINE_REGION_BLOCK_END, height),
+                (region + abi::ENGINE_REGION_CLIP_BLOCK_END, height),
+            ] {
+                write_f32(&mut geometry, offset, value);
+            }
+            write_u32(
+                &mut geometry,
+                constraint + abi::ENGINE_CONSTRAINT_MAX_LINES,
+                max_lines,
+            );
+            geometry[constraint + abi::ENGINE_CONSTRAINT_OVERFLOW] = overflow;
+            let mut changed = update(1, 1, 1);
+            changed.limits = inspection.limits;
+            changed.semantic_view_mask = inspection.semantic_view_mask;
+            changed.geometry = parse_root_geometry(&geometry, changed.limits);
+            super::super::work_attribution::reset();
+            let measured = engine
+                .measure_paragraph_with_shaper(&mut shaper, changed, 1)
+                .unwrap();
+            let expected = engine.measured_semantic_views(measured).unwrap().to_vec();
+            let work = super::super::work_attribution::snapshot();
+            assert_eq!(
+                work.intrinsic_flow_preparations,
+                usize::from(mode != IntrinsicInspection::None)
+            );
+            assert_eq!(
+                work.intrinsic_positioning_preparations,
+                usize::from(mode == IntrinsicInspection::Positioned)
+            );
+            engine.commit_measure(measured).unwrap();
+            assert!(
+                engine
+                    .planners
+                    .get(&4)
+                    .unwrap()
+                    .paragraph(1)
+                    .unwrap()
+                    .state
+                    .clipped_inspection
+                    .active()
+                    .mode
+                    == mode
+            );
+            let (mut cold, mut cold_shaper) = shaped_engine_with_font_styles_and_geometry(
+                "new first\nnew second\nnew third\nnew fourth",
+                INTER,
+                GLYPH_COUNT,
+                &restyled,
+                1,
+                Some((&geometry, 0)),
+            );
+            let cold_measure = cold
+                .measure_paragraph_with_shaper(&mut cold_shaper, cold_query, 1)
+                .unwrap();
+            assert_eq!(
+                without_runtime_identity(&expected),
+                without_runtime_identity(cold.measured_semantic_views(cold_measure).unwrap())
+            );
+            let mut cached = update(1, 1, 1);
+            cached.limits = inspection.limits;
+            cached.semantic_view_mask = inspection.semantic_view_mask;
+            super::super::work_attribution::reset();
+            let measured = engine
+                .measure_paragraph_with_shaper(&mut shaper, cached, 1)
+                .unwrap();
+            assert_eq!(engine.measured_semantic_views(measured).unwrap(), expected);
+            let work = super::super::work_attribution::snapshot();
+            assert_eq!(work.intrinsic_flow_preparations, 0);
+            assert_eq!(work.intrinsic_positioning_preparations, 0);
+            engine.commit_measure(measured).unwrap();
+        }
+
+        let published_text = "new first\nnew second\nnew third\nnew fourth";
+        let setter_text = "new first\nnew second\nnew third\nnew fifth";
+        let setter_units = utf16(setter_text);
+        let setter_text_bytes = paragraph_text_mutation_bytes(&[(
+            1,
+            0,
+            published_text.encode_utf16().count() as u32,
+            &setter_units,
+        )]);
+        let setter_styles = root_style_bytes_for_text(7, setter_units.len() as u32);
+        let mut setter_geometry = geometry.clone();
+        for (offset, value) in [
+            (constraint + abi::ENGINE_CONSTRAINT_WIDTH, 54.0),
+            (region + abi::ENGINE_REGION_INLINE_END, 54.0),
+            (region + abi::ENGINE_REGION_CLIP_INLINE_END, 54.0),
+            (constraint + abi::ENGINE_CONSTRAINT_HEIGHT, 20.0),
+            (constraint + abi::ENGINE_CONSTRAINT_VIEWPORT_BLOCK_END, 20.0),
+            (region + abi::ENGINE_REGION_BLOCK_END, 20.0),
+            (region + abi::ENGINE_REGION_CLIP_BLOCK_END, 20.0),
+        ] {
+            write_f32(&mut setter_geometry, offset, value);
+        }
+        write_u32(
+            &mut setter_geometry,
+            constraint + abi::ENGINE_CONSTRAINT_MAX_LINES,
+            1,
+        );
+        setter_geometry[constraint + abi::ENGINE_CONSTRAINT_OVERFLOW] = OVERFLOW_ELLIPSIS;
+        let root_revision_before_setter = engine.root_revision(4).unwrap();
+        let preparation_revision_before_setter = engine.planner_preparation_revision(4).unwrap();
+        let mut setter = update(1, 1, 1);
+        setter.limits = inspection.limits;
+        let query_limits = setter.limits;
+        setter.semantic_view_mask = 0;
+        setter.text_mutations =
+            parse_text_mutations(&setter_text_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        setter.style_mutations =
+            parse_style_mutations(&setter_styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        setter.geometry = parse_root_geometry(&setter_geometry, setter.limits);
+        super::super::work_attribution::reset();
+        let setter = engine
+            .measure_paragraph_with_shaper(&mut shaper, setter, 1)
+            .unwrap();
+        assert!(
+            engine.measured_semantic_views(setter).unwrap().is_empty(),
+            "the mask-zero setter prepares durable text without building query records"
+        );
+        let setter_shape_calls = crate::SHAPINGS.with(core::cell::Cell::get);
+        let setter_work = super::super::work_attribution::snapshot();
+        assert_eq!(setter_work.intrinsic_flow_preparations, 0);
+        assert_eq!(setter_work.intrinsic_positioning_preparations, 0);
+        engine.commit_measure(setter).unwrap();
+        let setter_preparation_revision = engine.planner_preparation_revision(4).unwrap();
+        assert!(
+            setter_shape_calls > 0,
+            "the changed text is shaped by its setter"
+        );
+        assert_eq!(
+            setter_preparation_revision,
+            preparation_revision_before_setter + 1
+        );
+        assert_eq!(
+            engine.root_revision(4).unwrap(),
+            root_revision_before_setter
+        );
+
+        let mut borrowed_query = update(1, 1, 1);
+        borrowed_query.limits = query_limits;
+        borrowed_query.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_MEASUREMENT
+            | super::super::frame::SEMANTIC_VIEW_BORROWED_LAYOUT;
+        super::super::work_attribution::reset();
+        let before_query_shape_calls = crate::SHAPINGS.with(core::cell::Cell::get);
+        let measured = engine
+            .measure_paragraph_with_shaper(&mut shaper, borrowed_query, 1)
+            .unwrap();
+        let expected = engine.measured_semantic_views(measured).unwrap().to_vec();
+        let first_query_work = super::super::work_attribution::snapshot();
+        let first_query_shape_calls =
+            crate::SHAPINGS.with(core::cell::Cell::get) - before_query_shape_calls;
+        assert!(expected.iter().any(|record| {
+            record.kind == super::super::semantic_view::SEMANTIC_PARAGRAPH_MEASUREMENT
+        }));
+        assert!(
+            expected
+                .iter()
+                .any(|record| { record.kind == super::super::semantic_view::SEMANTIC_LINE })
+        );
+        assert!(
+            engine.borrowed_paragraph_layout(4, 1).unwrap() > 0,
+            "borrowed layout is available through its dedicated accessor"
+        );
+        assert_eq!(first_query_work.intrinsic_flow_preparations, 1);
+        assert_eq!(first_query_work.intrinsic_positioning_preparations, 0);
+        assert_eq!(first_query_work.measurement_intrinsic_cluster_visits, 40);
+        assert_eq!(first_query_work.measurement_ink_glyph_visits, 5);
+        assert_eq!(first_query_shape_calls, 0);
+        engine.commit_measure(measured).unwrap();
+        assert_eq!(
+            engine.planner_preparation_revision(4).unwrap(),
+            setter_preparation_revision,
+            "query-only clipped inspection does not advance the durable preparation revision"
+        );
+        assert_eq!(
+            engine.root_revision(4).unwrap(),
+            root_revision_before_setter
+        );
+
+        let (mut cold, mut cold_shaper) = shaped_engine_with_font_styles_and_geometry(
+            setter_text,
+            INTER,
+            GLYPH_COUNT,
+            &setter_styles,
+            1,
+            Some((&setter_geometry, 0)),
+        );
+        let cold_measure = cold
+            .measure_paragraph_with_shaper(&mut cold_shaper, borrowed_query, 1)
+            .unwrap();
+        assert_eq!(engine.root_text(4).unwrap(), cold.root_text(4).unwrap());
+        assert_eq!(
+            engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .paragraph(1)
+                .unwrap()
+                .state
+                .styles
+                .active()
+                .resolved
+                .segments(),
+            cold.planners
+                .get(&4)
+                .unwrap()
+                .paragraph(1)
+                .unwrap()
+                .state
+                .styles
+                .active()
+                .resolved
+                .segments()
+        );
+        assert_eq!(engine.font_binding(20), cold.font_binding(42));
+        assert!(
+            engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .paragraph(1)
+                .unwrap()
+                .state
+                .geometry
+                .active()
+                == cold
+                    .planners
+                    .get(&4)
+                    .unwrap()
+                    .paragraph(1)
+                    .unwrap()
+                    .state
+                    .geometry
+                    .active(),
+            "retained and cold geometry fixtures match"
+        );
+        assert_eq!(
+            without_runtime_identity(&expected),
+            without_runtime_identity(cold.measured_semantic_views(cold_measure).unwrap()),
+            "first-demand ellipsis measurement and lines match a cold query"
+        );
+        let borrowed_glyphs = |engine: &TextEngine| {
+            let count = engine.borrowed_paragraph_layout(4, 1).unwrap();
+            let mut glyphs = vec![super::super::positioning::SemanticGlyph::default(); count];
+            for (chunk_index, chunk) in glyphs
+                .chunks_mut(super::super::layout_borrow::BORROWED_GLYPH_CAPACITY)
+                .enumerate()
+            {
+                engine
+                    .borrowed_paragraph_glyphs(
+                        4,
+                        1,
+                        chunk_index * super::super::layout_borrow::BORROWED_GLYPH_CAPACITY,
+                        chunk,
+                    )
+                    .unwrap();
+            }
+            glyphs
+        };
+        // Both fixtures were built with the same authenticated INTER bytes, glyph count, binding,
+        // and stack by `shaped_engine_with_font_styles_and_geometry`; only runtime handles differ.
+        let without_glyph_runtime_identity =
+            |glyphs: &[super::super::positioning::SemanticGlyph]| {
+                glyphs
+                    .iter()
+                    .copied()
+                    .map(|mut glyph| {
+                        glyph.stable_id = 0;
+                        glyph.font_handle = 0;
+                        glyph
+                    })
+                    .collect::<Vec<_>>()
+            };
+        assert_eq!(
+            without_glyph_runtime_identity(&borrowed_glyphs(&engine)),
+            without_glyph_runtime_identity(&borrowed_glyphs(&cold)),
+            "borrowed renderer glyphs match the cold ellipsis output"
+        );
+        super::super::work_attribution::reset();
+        let before_repeat_shape_calls = crate::SHAPINGS.with(core::cell::Cell::get);
+        let repeated = engine
+            .measure_paragraph_with_shaper(&mut shaper, borrowed_query, 1)
+            .unwrap();
+        assert_eq!(engine.measured_semantic_views(repeated).unwrap(), expected);
+        let repeated_work = super::super::work_attribution::snapshot();
+        assert_eq!(
+            crate::SHAPINGS.with(core::cell::Cell::get) - before_repeat_shape_calls,
+            0
+        );
+        assert_eq!(repeated_work.intrinsic_flow_preparations, 0);
+        assert_eq!(repeated_work.intrinsic_positioning_preparations, 0);
+        engine.commit_measure(repeated).unwrap();
+        let prepared_revision = engine.planner_preparation_revision(4).unwrap();
+        assert_eq!(prepared_revision, setter_preparation_revision);
+
+        super::super::work_attribution::reset();
+        let before_publication_shape_calls = crate::SHAPINGS.with(core::cell::Cell::get);
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, borrowed_query, 2)
+            .unwrap();
+        assert_eq!(engine.prepared_semantic_views(prepared).unwrap(), expected);
+        let publication_work = super::super::work_attribution::snapshot();
+        assert_eq!(
+            crate::SHAPINGS.with(core::cell::Cell::get) - before_publication_shape_calls,
+            0
+        );
+        assert_eq!(publication_work.intrinsic_flow_preparations, 0);
+        assert_eq!(publication_work.intrinsic_positioning_preparations, 0);
+        let committed = engine.commit_update(prepared).unwrap();
+        assert_eq!(committed.revision, RootRevision { engine: 2, root: 2 });
+        assert_eq!(engine.root_revision(4).unwrap(), committed.revision);
+        assert_eq!(
+            engine.planner_preparation_revision(4).unwrap(),
+            prepared_revision
+        );
+        let planner = engine.planners.get(&4).unwrap();
+        assert_eq!(
+            planner.published_preparation_revision,
+            planner.preparation_revision
+        );
+        assert_visible_shape_equal(
+            engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap(),
+            cold.planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap(),
+            "mask-zero setter followed by ellipsis query and publication",
+        );
+        assert_eq!(
+            without_glyph_runtime_identity(&borrowed_glyphs(&engine)),
+            without_glyph_runtime_identity(&borrowed_glyphs(&cold)),
+            "published borrowed glyphs remain cold-equivalent"
+        );
     }
 
     #[test]
-    fn committed_measure_is_a_durable_preparation_until_renderer_publication() {
+    fn committed_measure_is_durable_and_failed_publication_delivery_discards_root() {
         let mut engine = TextEngine::default();
         engine
             .register_codec(9, validated_codec(TechniqueId(1)))
@@ -8479,11 +10424,10 @@ mod tests {
 
         let measured = engine.measure_paragraph(assignment, 7).unwrap();
         assert_eq!(engine.root_revision(4).unwrap(), RootRevision::default());
-        assert!(engine.planners.get(&4).unwrap().speculative.is_some());
+        assert_eq!(engine.planners.get(&4).unwrap().measure_generation, 1);
         assert_eq!(engine.commit_measure(measured), Ok(1));
         assert_eq!(engine.planner_preparation_revision(4), Ok(1));
         assert_eq!(engine.root_revision(4).unwrap(), RootRevision::default());
-        assert!(engine.planners.get(&4).unwrap().speculative.is_none());
         assert!(
             engine
                 .planners
@@ -8532,16 +10476,14 @@ mod tests {
         );
 
         let rejected_publication = engine.prepare_update(update(0, 0, 0), 1).unwrap();
-        engine.abort_update(rejected_publication).unwrap();
-        let planner = engine.planners.get(&4).unwrap();
-        assert_eq!(planner.published_preparation_revision, 0);
-        assert!(
-            planner
-                .paragraph(7)
-                .unwrap()
-                .preparation_changed_since_publication,
-            "an aborted plan must leave the prepared revision publishable"
-        );
+        engine
+            .invalidate_after_publication_failure(rejected_publication)
+            .unwrap();
+        assert_eq!(engine.root_revision(4), Err(EngineError::RootMissing));
+        engine.reset_root(4).unwrap();
+
+        let replayed = engine.measure_paragraph(assignment, 7).unwrap();
+        assert_eq!(engine.commit_measure(replayed), Ok(1));
 
         let prepared = engine.prepare_update(update(0, 0, 0), 1).unwrap();
         assert_eq!(prepared.preparation_revision, 1);
@@ -8558,7 +10500,40 @@ mod tests {
     }
 
     #[test]
-    fn rejected_adoption_does_not_recycle_queried_glyph_identities() {
+    fn stale_measure_result_invalidates_the_derived_root() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_codec(TechniqueId(1)))
+            .unwrap();
+        engine.create_root(4).unwrap();
+        engine.reserve_root_text(4, 8).unwrap();
+
+        let initial_bytes = text_mutation_bytes(&[(0, 0, &[0x61, 0x62, 0x63])]);
+        let mut initial = update(0, 0, 0);
+        initial.text_mutations =
+            parse_text_mutations(&initial_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        let edit_bytes = text_mutation_bytes(&[(1, 1, &[0x78])]);
+        let mut query = update(1, 1, 1);
+        query.text_mutations =
+            parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let measured = engine.measure_paragraph(query, 1).unwrap();
+
+        // A result must belong to the latest measured preparation. A mismatched witness is an
+        // internal contract breach, so discard the derived root rather than restoring it.
+        engine.planners.get_mut(&4).unwrap().measure_generation += 1;
+        assert_eq!(
+            engine.commit_measure(measured),
+            Err(EngineError::RevisionConflict)
+        );
+        assert_eq!(engine.root_revision(4), Err(EngineError::RootMissing));
+        assert!(engine.invalidated_roots.contains_key(&4));
+    }
+
+    #[test]
+    fn failed_measure_delivery_does_not_recycle_queried_glyph_identities() {
         let (mut engine, mut shaper) = shaped_inter_engine("A");
         let replacement = utf16("BB");
         let bytes = text_mutation_bytes(&[(0, 1, &replacement)]);
@@ -8571,61 +10546,18 @@ mod tests {
             parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
         query.style_mutations =
             parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
-        engine
+        let measured = engine
             .measure_paragraph_with_shaper(&mut shaper, query, 1)
             .unwrap();
-        let reserved = engine
-            .planners
-            .get(&4)
-            .unwrap()
-            .speculative
-            .unwrap()
-            .next_glyph_id;
-        let mut rejected = query;
-        rejected.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION;
-        rejected.limits.max_clusters = 1;
-        assert!(
-            engine
-                .prepare_update_with_shaper(&mut shaper, rejected, 2)
-                .is_err()
-        );
-        assert!(engine.planners.get(&4).unwrap().speculative.is_none());
+        let reserved = engine.planners.get(&4).unwrap().next_glyph_id;
+        engine.invalidate_after_measure_failure(measured).unwrap();
+        assert_eq!(engine.root_revision(4), Err(EngineError::RootMissing));
+        engine.reset_root(4).unwrap();
         assert!(engine.planners.get(&4).unwrap().next_glyph_id >= reserved);
-        engine
-            .measure_paragraph_with_shaper(&mut shaper, query, 1)
-            .unwrap();
-        assert!(
-            engine
-                .planners
-                .get(&4)
-                .unwrap()
-                .speculative
-                .unwrap()
-                .next_glyph_id
-                > reserved
-        );
     }
 
     #[test]
-    fn text_fingerprints_delimit_mutation_boundaries() {
-        // The Sol review's aliasing construction: one six-unit replacement whose
-        // twelve payload bytes spell the little-endian fields of a second mutation
-        // must not fingerprint like the two-mutation batch it imitates.
-        let paragraph = 1_u32;
-        let mut payload = [0_u16; 6];
-        payload[0] = paragraph as u16;
-        let aliased_bytes = text_mutation_bytes(&[(0, 6, &payload)]);
-        let aliased =
-            parse_text_mutations(&aliased_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
-        let pair_bytes = text_mutation_bytes(&[(0, 6, &[]), (0, 0, &[])]);
-        let pair = parse_text_mutations(&pair_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
-        assert_ne!(aliased.fingerprint(), pair.fingerprint());
-        assert_ne!(aliased.fingerprint(), 0);
-        assert_ne!(pair.fingerprint(), 0);
-    }
-
-    #[test]
-    fn one_transaction_retains_queries_for_different_existing_paragraphs() {
+    fn sequential_measure_queries_commit_independent_existing_paragraphs() {
         let mut engine = TextEngine::default();
         engine
             .register_codec(9, validated_codec(TechniqueId(1)))
@@ -8646,8 +10578,7 @@ mod tests {
         let prepared = engine.prepare_update(initial, 1).unwrap();
         engine.commit_update(prepared).unwrap();
 
-        // Measure paragraph 1 with a lifecycle-neutral upsert (its committed order),
-        // speculating a text edit onto it.
+        // Measure paragraph 1 with a lifecycle-neutral upsert (its committed order).
         let edit_bytes = text_mutation_bytes(&[(0, 0, &[0x61, 0x62])]);
         let first_lifecycle = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_UPSERT, 1, 1)]);
         let mut first = update(1, 1, 1);
@@ -8657,14 +10588,16 @@ mod tests {
                 .unwrap();
         first.text_mutations =
             parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
-        engine.measure_paragraph(first, 1).unwrap();
+        let measured = engine.measure_paragraph(first, 1).unwrap();
+        engine.commit_measure(measured).unwrap();
         let planner = engine.planners.get(&4).unwrap();
-        assert!(planner.paragraph(1).unwrap().state.text.is_prepared());
-        let generation = planner.speculative.unwrap().generation;
+        assert!(!planner.paragraph(1).unwrap().state.text.is_prepared());
+        assert_eq!(
+            planner.paragraph(1).unwrap().state.text.committed().units,
+            [0x61, 0x62]
+        );
 
-        // Measuring paragraph 2 extends the SAME transaction: a lifecycle-neutral
-        // upsert of a different existing paragraph must not abort paragraph 1's
-        // retained speculative state.
+        // The next query independently commits paragraph 2 without disturbing paragraph 1.
         let second_lifecycle = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_UPSERT, 2, 2)]);
         let second_edit = text_mutation_bytes(&[(0, 0, &[0x63])]);
         let mut second = update(1, 1, 1);
@@ -8681,37 +10614,35 @@ mod tests {
         }
         second.text_mutations =
             parse_text_mutations(&second_edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
-        engine.measure_paragraph(second, 2).unwrap();
-        // A repeated query consumes the retained candidate without duplicating its owner key.
         let measured = engine.measure_paragraph(second, 2).unwrap();
-        let planner = engine.planners.get(&4).unwrap();
-        let _ = generation;
-        assert!(
-            planner.speculative.is_some(),
-            "a query for a second existing paragraph extends the transaction"
-        );
-        assert!(
-            planner.paragraph(1).unwrap().state.text.is_prepared(),
-            "the first paragraph's speculative state survives the second query"
-        );
-        assert!(planner.paragraph(2).unwrap().state.text.is_prepared());
-        assert_eq!(planner.pending_preparation_ids, [1, 2]);
         engine.commit_measure(measured).unwrap();
         let planner = engine.planners.get(&4).unwrap();
         assert!(planner.pending_preparation_ids.is_empty());
         for (id, expected) in [(1, &[0x61_u16, 0x62][..]), (2, &[0x63_u16][..])] {
             let paragraph = planner.paragraph(id).unwrap();
             assert!(!paragraph.state.has_pending_preparation());
-            assert_eq!(paragraph.state.text.active().units, expected);
+            assert_eq!(paragraph.state.text.committed().units, expected);
             assert!(paragraph.preparation_changed_since_publication);
         }
+
+        // A read against the already retained revision must not manufacture a newer
+        // preparation revision merely because its measurement transaction was accepted.
+        let retained_revision = engine.planner_preparation_revision(4).unwrap();
+        let mut unchanged = update(1, 1, 1);
+        unchanged.limits.max_paragraphs = 2;
+        let measured = engine.measure_paragraph(unchanged, 1).unwrap();
+        assert_eq!(engine.commit_measure(measured), Ok(retained_revision));
+        assert_eq!(
+            engine.planner_preparation_revision(4),
+            Ok(retained_revision)
+        );
     }
 
     #[test]
-    fn unpublished_frontier_survives_abort_and_retires_removed_identity() {
+    fn unpublished_frontier_deduplicates_owners_and_retires_removed_identity() {
         let mut planner = PlannerState::default();
         for id in 1..=3 {
-            planner.prepare_upsert(id, id).unwrap();
+            planner.prepare_upsert(id, id, false).unwrap();
         }
         planner.lifecycle_prepared = true;
         planner.commit_paragraphs(true);
@@ -8729,8 +10660,6 @@ mod tests {
             assert_eq!(planner.unpublished_preparation_ids.capacity(), capacity);
         }
         assert_eq!(planner.unpublished_preparation_ids, [3, 1, 2]);
-        planner.abort_pending();
-        assert_eq!(planner.unpublished_preparation_ids, [3, 1, 2]);
 
         // Successful measurement can adopt removal before renderer publication.
         let removed_incarnation = planner.paragraph(3).unwrap().incarnation;
@@ -8740,7 +10669,7 @@ mod tests {
         planner.commit_paragraphs(false);
         assert_eq!(planner.unpublished_preparation_ids, [1, 2]);
         planner.pending_next_paragraph_incarnation = planner.next_paragraph_incarnation;
-        planner.prepare_upsert(3, 3).unwrap();
+        planner.prepare_upsert(3, 3, false).unwrap();
         assert_ne!(
             planner.paragraph(3).unwrap().incarnation,
             removed_incarnation
@@ -8764,11 +10693,25 @@ mod tests {
         )
         .unwrap();
         planner.paragraph_mut(1).unwrap().positioned_changed = true;
+        {
+            let inspection = &mut planner.paragraph_mut(1).unwrap().state.clipped_inspection;
+            inspection.pending_mut().mode = IntrinsicInspection::Flow;
+            inspection.mark_prepared();
+        }
         super::super::work_attribution::reset();
         planner.commit_paragraphs(true);
-        assert_eq!(
-            super::super::work_attribution::snapshot().publication_commit_visits,
-            3
+        let work = super::super::work_attribution::snapshot();
+        assert_eq!(work.publication_commit_visits, 3);
+        assert_eq!(work.publication_ack_only_visits, 2);
+        assert!(
+            planner
+                .paragraph(1)
+                .unwrap()
+                .state
+                .clipped_inspection
+                .active()
+                .mode
+                == IntrinsicInspection::Flow
         );
         assert!(planner.unpublished_preparation_ids.is_empty());
         assert!(planner.pending_preparation_ids.is_empty());
@@ -8833,7 +10776,67 @@ mod tests {
     }
 
     #[test]
-    fn one_lifecycle_retains_queries_for_different_new_paragraphs() {
+    fn spare_reset_discards_all_stage_candidates_in_both_text_modes() {
+        for preserve_text in [false, true] {
+            let mut state = ParagraphState::default();
+            state.initialize().unwrap();
+            state.reserve_text(8).unwrap();
+            state.text.pending_mut().units.push(0x61);
+            state.unicode.pending_mut().analyze(&[0x61]).unwrap();
+            let text_capacity = state.text.pending().units.capacity();
+            let boundaries = state.unicode.pending().grapheme_boundaries().to_vec();
+            state.text.mark_prepared();
+            state.styles.mark_prepared();
+            state.unicode.mark_prepared();
+            state.bidi.mark_prepared();
+            state.shaping_runs.mark_prepared();
+            state.shape.mark_prepared();
+            state.clusters.mark_prepared();
+            state.geometry.mark_prepared();
+            state.flow_layout.mark_prepared();
+            state.clipped_inspection.mark_prepared();
+            state.positioned.mark_prepared();
+
+            if preserve_text {
+                state.reset_for_reuse_preserving_text_candidate();
+            } else {
+                state.reset_for_reuse();
+            }
+            assert!(
+                [
+                    state.text.is_prepared(),
+                    state.styles.is_prepared(),
+                    state.unicode.is_prepared(),
+                    state.bidi.is_prepared(),
+                    state.shaping_runs.is_prepared(),
+                    state.shape.is_prepared(),
+                    state.clusters.is_prepared(),
+                    state.geometry.is_prepared(),
+                    state.flow_layout.is_prepared(),
+                    state.clipped_inspection.is_prepared(),
+                    state.positioned.is_prepared(),
+                ]
+                .into_iter()
+                .all(|prepared| !prepared)
+            );
+            assert_eq!(state.text.pending().units.capacity(), text_capacity);
+            assert_eq!(
+                state.text.pending().units.as_slice(),
+                if preserve_text { &[0x61][..] } else { &[] }
+            );
+            assert_eq!(
+                state.unicode.pending().grapheme_boundaries(),
+                if preserve_text {
+                    boundaries.as_slice()
+                } else {
+                    &[]
+                },
+            );
+        }
+    }
+
+    #[test]
+    fn first_measurement_commits_full_lifecycle_for_later_queries() {
         let mut engine = TextEngine::default();
         engine
             .register_codec(9, validated_codec(TechniqueId(1)))
@@ -8853,7 +10856,8 @@ mod tests {
                 .unwrap();
         first.text_mutations =
             parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
-        engine.measure_paragraph(first, 1).unwrap();
+        let measured = engine.measure_paragraph(first, 1).unwrap();
+        engine.commit_measure(measured).unwrap();
 
         let mut second_edit_bytes = edit_bytes.clone();
         {
@@ -8868,16 +10872,23 @@ mod tests {
                 .unwrap();
         second.text_mutations =
             parse_text_mutations(&second_edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
-        engine.measure_paragraph(second, 2).unwrap();
+        let measured = engine.measure_paragraph(second, 2).unwrap();
+        engine.commit_measure(measured).unwrap();
 
         let planner = engine.planners.get(&4).unwrap();
-        assert!(planner.speculative.is_some());
-        assert!(planner.paragraph(1).unwrap().state.text.is_prepared());
-        assert!(planner.paragraph(2).unwrap().state.text.is_prepared());
+        assert_eq!(planner.measure_generation, 2);
+        assert_eq!(
+            planner.paragraph(1).unwrap().state.text.committed().units,
+            [0x61]
+        );
+        assert_eq!(
+            planner.paragraph(2).unwrap().state.text.committed().units,
+            [0x61]
+        );
     }
 
     #[test]
-    fn replacement_lifecycle_retains_queries_after_a_paragraph_removal() {
+    fn replacement_lifecycle_commits_removal_before_following_query() {
         let mut engine = TextEngine::default();
         engine
             .register_codec(9, validated_codec(TechniqueId(1)))
@@ -8909,17 +10920,23 @@ mod tests {
         first.paragraph_mutations =
             parse_paragraph_mutations(&replacement_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 4)
                 .unwrap();
-        engine.measure_paragraph(first, 4).unwrap();
+        let measured = engine.measure_paragraph(first, 4).unwrap();
+        engine.commit_measure(measured).unwrap();
 
+        let remaining_bytes = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 1, 0),
+            (PARAGRAPH_MUTATION_UPSERT, 3, 1),
+            (PARAGRAPH_MUTATION_UPSERT, 4, 2),
+        ]);
         let mut second = update(1, 1, 1);
         second.limits.max_paragraphs = 3;
         second.paragraph_mutations =
-            parse_paragraph_mutations(&replacement_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 4)
+            parse_paragraph_mutations(&remaining_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 3)
                 .unwrap();
-        engine.measure_paragraph(second, 3).unwrap();
+        let measured = engine.measure_paragraph(second, 3).unwrap();
+        engine.commit_measure(measured).unwrap();
 
         let planner = engine.planners.get(&4).unwrap();
-        assert!(planner.speculative.is_some());
         assert_eq!(
             planner
                 .active_order()
@@ -8931,7 +10948,7 @@ mod tests {
     }
 
     #[test]
-    fn a_committed_paragraph_measures_while_a_sibling_removal_is_pending() {
+    fn measure_commits_sibling_removal_before_renderer_publication() {
         let mut engine = TextEngine::default();
         engine
             .register_codec(9, validated_codec(TechniqueId(1)))
@@ -8959,9 +10976,9 @@ mod tests {
         query.paragraph_mutations =
             parse_paragraph_mutations(&removal_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
                 .unwrap();
-        engine.measure_paragraph(query, 1).unwrap();
+        let measured = engine.measure_paragraph(query, 1).unwrap();
+        engine.commit_measure(measured).unwrap();
         let planner = engine.planners.get(&4).unwrap();
-        assert!(planner.speculative.is_some());
         assert_eq!(
             planner
                 .active_order()
@@ -8971,17 +10988,143 @@ mod tests {
             [1]
         );
 
-        // The frame carrying the same removal adopts the transaction and commits it.
-        let mut frame = update(1, 1, 1);
-        frame.limits.max_paragraphs = 2;
-        frame.paragraph_mutations =
-            parse_paragraph_mutations(&removal_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
-                .unwrap();
-        let prepared = engine.prepare_update(frame, 2).unwrap();
+        // Rendering consumes the accepted removal without replaying that mutation.
+        let prepared = engine.prepare_update(update(1, 1, 1), 2).unwrap();
         engine.commit_update(prepared).unwrap();
         let planner = engine.planners.get(&4).unwrap();
         assert!(planner.paragraph(1).is_some());
         assert!(planner.paragraph(2).is_none());
+    }
+
+    #[test]
+    fn measure_rejects_foreign_semantic_rows_before_preparation() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_codec(TechniqueId(1)))
+            .unwrap();
+        engine.register_font_stack(7, &[42]).unwrap();
+        engine.create_root(4).unwrap();
+        engine.reserve_root_text(4, 8).unwrap();
+
+        let lifecycle = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 1, 0),
+            (PARAGRAPH_MUTATION_UPSERT, 2, 1),
+        ]);
+        let text = paragraph_text_mutation_bytes(&[(1, 0, 0, &[0x61]), (2, 0, 0, &[0x62])]);
+        let mut initial = update(0, 0, 0);
+        initial.limits.max_paragraphs = 2;
+        initial.paragraph_mutations =
+            parse_paragraph_mutations(&lifecycle, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        initial.text_mutations =
+            parse_text_mutations(&text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        let revision_before = engine.root_revision(4).unwrap();
+        let preparation_revision_before = engine.planner_preparation_revision(4).unwrap();
+        let committed_text_before = [1, 2].map(|id| {
+            (
+                id,
+                engine
+                    .planners
+                    .get(&4)
+                    .unwrap()
+                    .paragraph(id)
+                    .unwrap()
+                    .state
+                    .text
+                    .committed()
+                    .units
+                    .clone(),
+            )
+        });
+        for (input, label) in [
+            (ParagraphInputKind::Text, "text"),
+            (ParagraphInputKind::Style, "style"),
+            (ParagraphInputKind::Constraint, "constraint"),
+            (ParagraphInputKind::InlineObject, "inline object"),
+        ] {
+            let mut query = update(1, 1, 1);
+            query.limits.max_paragraphs = 2;
+            let mut bytes: Vec<u8>;
+            match input {
+                ParagraphInputKind::Text => {
+                    bytes =
+                        paragraph_text_mutation_bytes(&[(1, 0, 0, &[0x78]), (2, 0, 0, &[0x79])]);
+                    query.text_mutations =
+                        parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+                }
+                ParagraphInputKind::Style => {
+                    bytes = root_style_bytes_for_text(7, 1);
+                    write_u32(
+                        &mut bytes,
+                        ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize
+                            + abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID,
+                        2,
+                    );
+                    query.style_mutations =
+                        parse_style_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                            .unwrap();
+                }
+                ParagraphInputKind::Constraint => {
+                    bytes = geometry_with_constraint_owners(&[2]);
+                    query.geometry = parse_test_geometry(&bytes, 1, 0, query.limits);
+                }
+                ParagraphInputKind::InlineObject => {
+                    bytes = geometry_with_inline_object_owners(&[2]);
+                    query.geometry = parse_test_geometry(&bytes, 0, 1, query.limits);
+                }
+            }
+            assert_eq!(
+                engine.measure_paragraph(query, 1),
+                Err(EngineError::InvalidRequest),
+                "foreign {label} rows cannot be applied while measuring paragraph 1"
+            );
+            assert_eq!(engine.root_revision(4), Ok(revision_before));
+            assert_eq!(
+                engine.planner_preparation_revision(4),
+                Ok(preparation_revision_before)
+            );
+            for (id, expected) in &committed_text_before {
+                assert_eq!(
+                    engine
+                        .planners
+                        .get(&4)
+                        .unwrap()
+                        .paragraph(*id)
+                        .unwrap()
+                        .state
+                        .text
+                        .committed()
+                        .units
+                        .as_slice(),
+                    expected.as_slice()
+                );
+            }
+        }
+
+        // Empty semantic input remains a valid query, and a sibling lifecycle removal is
+        // allowed because lifecycle rows are separate from the single-paragraph input index.
+        let mut empty_query = update(1, 1, 1);
+        empty_query.limits.max_paragraphs = 2;
+        let measured = engine.measure_paragraph(empty_query, 1).unwrap();
+        engine.commit_measure(measured).unwrap();
+        let removal = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_REMOVE, 2, 0)]);
+        let mut sibling_removal = update(1, 1, 1);
+        sibling_removal.limits.max_paragraphs = 2;
+        sibling_removal.paragraph_mutations =
+            parse_paragraph_mutations(&removal, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let measured = engine.measure_paragraph(sibling_removal, 1).unwrap();
+        engine.commit_measure(measured).unwrap();
+        assert!(engine.planners.get(&4).unwrap().paragraph(2).is_none());
+
+        let prepared = engine.prepare_update(update(1, 1, 1), 2).unwrap();
+        engine.commit_update(prepared).unwrap();
+        assert_eq!(
+            engine.root_revision(4),
+            Ok(RootRevision { engine: 2, root: 2 })
+        );
+        assert_eq!(engine.planners.get(&4).unwrap().active_order().len(), 1);
     }
 
     #[test]
@@ -9019,7 +11162,7 @@ mod tests {
     }
 
     #[test]
-    fn a_speculative_candidate_paragraph_survives_queries_and_yields_to_the_frame() {
+    fn a_measured_candidate_paragraph_is_accepted_and_published_by_the_next_frame() {
         let mut engine = TextEngine::default();
         engine
             .register_codec(9, validated_codec(TechniqueId(1)))
@@ -9029,47 +11172,37 @@ mod tests {
         let prepared = engine.prepare_update(update(0, 0, 0), 1).unwrap();
         engine.commit_update(prepared).unwrap();
 
-        // Measure a paragraph the retained plan has never committed: the query owns the
-        // candidate speculatively.
+        // A successful measurement accepts the previously absent paragraph in the
+        // synchronous engine state, while renderer publication remains pending.
         let lifecycle_bytes = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_UPSERT, 7, 1)]);
         let mut query = update(1, 1, 1);
         query.limits.max_paragraphs = 2;
         query.paragraph_mutations =
             parse_paragraph_mutations(&lifecycle_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
                 .unwrap();
-        engine.measure_paragraph(query, 7).unwrap();
+        let measured = engine.measure_paragraph(query, 7).unwrap();
+        engine.commit_measure(measured).unwrap();
         let planner = engine.planners.get(&4).unwrap();
         assert!(planner.paragraph(7).is_some());
-        assert!(planner.speculative.is_some());
 
-        // A repeated identical lifecycle extends the transaction without recreating
-        // the candidate.
+        // The accepted lifecycle can be restated by a later query without duplicating
+        // the paragraph or replaying its text edit.
         let mut repeat = update(1, 1, 1);
         repeat.limits.max_paragraphs = 2;
         repeat.paragraph_mutations =
             parse_paragraph_mutations(&lifecycle_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
                 .unwrap();
-        engine.measure_paragraph(repeat, 7).unwrap();
-        let generation = engine
-            .planners
-            .get(&4)
-            .unwrap()
-            .speculative
-            .unwrap()
-            .generation;
-        assert_eq!(generation, 1);
+        let measured = engine.measure_paragraph(repeat, 7).unwrap();
+        engine.commit_measure(measured).unwrap();
 
-        // An ordinary frame reclaims the candidate: committed state never saw it.
+        // The ordinary frame publishes the already accepted candidate.
         let follow = engine.prepare_update(update(1, 1, 1), 2).unwrap();
-        let planner = engine.planners.get(&4).unwrap();
-        assert!(planner.speculative.is_none());
-        assert!(planner.paragraph(7).is_none());
         engine.commit_update(follow).unwrap();
-        assert!(engine.planners.get(&4).unwrap().paragraph(7).is_none());
+        assert!(engine.planners.get(&4).unwrap().paragraph(7).is_some());
     }
 
     #[test]
-    fn ordered_utf16_replacements_commit_and_abort_with_the_planner_transaction() {
+    fn ordered_utf16_replacements_commit_with_the_planner_candidate() {
         let mut engine = TextEngine::default();
         engine
             .register_codec(9, validated_codec(TechniqueId(1)))
@@ -9111,37 +11244,22 @@ mod tests {
             &[0, 1, 2, 3, 4]
         );
 
+        // The second edit starts at the end of the intermediate five-unit string; preflight must
+        // carry the first edit's resulting length forward rather than validate both against four.
         let edit_bytes = text_mutation_bytes(&[(1, 1, &[0x58, 0x59]), (5, 0, &[0x21])]);
         let edit_batch =
             parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
         let mut edit = update(1, 1, 1);
         edit.text_mutations = edit_batch;
         let prepared = engine.prepare_update(edit, 2).unwrap();
-        engine.abort_update(prepared).unwrap();
-        assert_eq!(engine.root_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
-        let planner = engine.planners.get(&4).unwrap();
-        let paragraph = planner.first_paragraph_state().unwrap();
-        assert_eq!(paragraph.text.committed().unit_ids, [1, 2, 3, 4]);
-        assert_eq!(paragraph.text.committed().next_unit_id, 5);
-
-        let retry = engine.prepare_update(edit, 2).unwrap();
-        engine.commit_update(retry).unwrap();
+        engine.commit_update(prepared).unwrap();
         assert_eq!(
             engine.root_text(4).unwrap(),
             &[0x61, 0x58, 0x59, 0x63, 0x64, 0x21]
         );
-        assert_eq!(
-            engine
-                .planners
-                .get(&4)
-                .unwrap()
-                .first_paragraph_state()
-                .unwrap()
-                .text
-                .committed()
-                .unit_ids,
-            [1, 5, 6, 3, 4, 7]
-        );
+        let planner = engine.planners.get(&4).unwrap();
+        let paragraph = planner.first_paragraph_state().unwrap();
+        assert_eq!(paragraph.text.committed().unit_ids, [1, 5, 6, 3, 4, 7]);
 
         let settled_capacities = {
             let planner = engine.planners.get(&4).unwrap();
@@ -9180,7 +11298,55 @@ mod tests {
     }
 
     #[test]
-    fn distant_replacements_preserve_middle_unit_identities_across_abort_and_commit() {
+    fn discarded_text_candidate_reseeds_the_next_edit_from_committed_text() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_codec(TechniqueId(1)))
+            .unwrap();
+        engine.create_root(4).unwrap();
+        engine.reserve_root_text(4, 8).unwrap();
+
+        let initial_bytes = text_mutation_bytes(&[(0, 0, &[0x61, 0x62, 0x63])]);
+        let mut initial = update(0, 0, 0);
+        initial.text_mutations =
+            parse_text_mutations(&initial_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        let first_bytes = text_mutation_bytes(&[(1, 1, &[0x78])]);
+        let first =
+            parse_text_mutations(&first_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let paragraph = &mut engine
+            .planners
+            .get_mut(&4)
+            .unwrap()
+            .paragraph_mut(1)
+            .unwrap()
+            .state;
+        let (mut candidate, edits) =
+            test_preflight_candidate(paragraph.text.committed().units.as_slice(), first);
+        paragraph
+            .prepare_text(first, Some(&mut candidate), &edits)
+            .unwrap();
+        paragraph.discard_text_candidate();
+
+        assert_eq!(paragraph.text.active().units, [0x61, 0x62, 0x63]);
+        assert_eq!(paragraph.text.pending().units, [0x61, 0x78, 0x63]);
+        assert!(!paragraph.pending_text_mirrors_committed);
+
+        let next_bytes = text_mutation_bytes(&[(1, 1, &[0x79])]);
+        let next = parse_text_mutations(&next_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let (mut candidate, edits) =
+            test_preflight_candidate(paragraph.text.committed().units.as_slice(), next);
+        paragraph
+            .prepare_text(next, Some(&mut candidate), &edits)
+            .unwrap();
+        assert_eq!(paragraph.text.pending().units, [0x61, 0x79, 0x63]);
+        assert_eq!(paragraph.text.committed().units, [0x61, 0x62, 0x63]);
+    }
+
+    #[test]
+    fn distant_replacements_preserve_middle_unit_identities_across_discard_and_commit() {
         let mut engine = TextEngine::default();
         engine
             .register_codec(9, validated_codec(TechniqueId(1)))
@@ -9231,22 +11397,7 @@ mod tests {
             assert_eq!(paragraph.text.pending().unit_ids[8], 12);
             assert_eq!(paragraph.text.pending().next_unit_id, 13);
         }
-        engine.abort_update(prepared).unwrap();
-        assert_eq!(
-            engine
-                .planners
-                .get(&4)
-                .unwrap()
-                .first_paragraph_state()
-                .unwrap()
-                .text
-                .committed()
-                .unit_ids,
-            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-        );
-
-        let retry = engine.prepare_update(edit, 2).unwrap();
-        engine.commit_update(retry).unwrap();
+        engine.commit_update(prepared).unwrap();
         let paragraph = engine
             .planners
             .get(&4)
@@ -9563,10 +11714,410 @@ mod tests {
     }
 
     #[test]
+    fn measured_first_label_edit_attributes_ordered_binding_expansion() {
+        const INITIAL: &str = "ticker 000";
+        const CHANGED: &str = "quote! 000";
+        let initial_units = utf16(INITIAL);
+        let changed_units = utf16(CHANGED);
+        assert_eq!(initial_units.len(), changed_units.len());
+
+        let mut template = root_geometry_bytes();
+        write_u32(
+            &mut template,
+            ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize + abi::ENGINE_CONSTRAINT_MAX_LINES,
+            0,
+        );
+        let header = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let stride = abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
+        for (paragraph_count, compositing_independent, split_transform) in [
+            (100_u32, false, true),
+            (100, true, true),
+            (1_000, false, true),
+            (1_000, true, true),
+            (100, false, false),
+            (100, true, false),
+            (1_000, false, false),
+            (1_000, true, false),
+        ] {
+            // This native structural discriminator uses the repository's DotGothic fixture;
+            // the named publication profile uses Inter and has a separate artifact receipt.
+            let (mut engine, mut shaper) =
+                shaped_outlined_engine_with_draw_transform(INITIAL, split_transform);
+            let draw_key_mode = if split_transform { "direct" } else { "indexed" };
+            let draw_key_mask = engine.codec(9).unwrap().programs()[0].draw_key_mask;
+            assert_eq!(
+                draw_key_mask & crate::engine::codec::BATCH_TRANSFORM != 0,
+                split_transform
+            );
+            let lifecycle_records: Vec<_> = (2..=paragraph_count)
+                .map(|id| (PARAGRAPH_MUTATION_UPSERT, id, id - 1))
+                .collect();
+            let text_records: Vec<_> = (2..=paragraph_count)
+                .map(|id| (id, 0, 0, initial_units.as_slice()))
+                .collect();
+            let style_records: Vec<_> = (2..=paragraph_count).map(|id| (id, 0)).collect();
+            let lifecycle = paragraph_mutation_bytes(&lifecycle_records);
+            let texts = paragraph_text_mutation_bytes(&text_records);
+            let mut styles = paragraph_root_style_bytes(&style_records);
+            for index in 0..style_records.len() {
+                write_u32(
+                    &mut styles,
+                    header
+                        + index * abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize
+                        + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+                    initial_units.len() as u32,
+                );
+            }
+            let region_offset = header + paragraph_count as usize * stride;
+            let mut geometry = vec![0; region_offset + abi::ENGINE_REGION_RECORD_SIZE as usize];
+            for id in 1..=paragraph_count {
+                let offset = header + (id as usize - 1) * stride;
+                geometry[offset..offset + stride]
+                    .copy_from_slice(&template[header..header + stride]);
+                write_u32(
+                    &mut geometry,
+                    offset + abi::ENGINE_CONSTRAINT_PARAGRAPH_ID,
+                    id,
+                );
+            }
+            geometry[region_offset..].copy_from_slice(&template[header + stride..]);
+
+            let mut initial = update(1, 1, 1);
+            initial.compositing_independent = compositing_independent;
+            initial.limits.max_paragraphs = paragraph_count;
+            initial.limits.max_regions = paragraph_count;
+            initial.limits.max_clusters = paragraph_count * initial_units.len() as u32;
+            initial.limits.max_lines = paragraph_count;
+            initial.limits.max_output_bytes = 1 << 24;
+            initial.paragraph_mutations = parse_paragraph_mutations(
+                &lifecycle,
+                ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+                paragraph_count - 1,
+            )
+            .unwrap();
+            initial.text_mutations = parse_text_mutations(
+                &texts,
+                ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+                paragraph_count - 1,
+            )
+            .unwrap();
+            initial.style_mutations = parse_style_mutations(
+                &styles,
+                ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+                paragraph_count - 1,
+            )
+            .unwrap();
+            initial.geometry = parse_geometry(
+                &geometry,
+                ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+                paragraph_count,
+                region_offset as u32,
+                1,
+                0,
+                0,
+                0,
+                0,
+                initial.limits,
+            )
+            .unwrap();
+            let limits = initial.limits;
+            let prepared = engine
+                .prepare_update_with_shaper(&mut shaper, initial, 2)
+                .unwrap();
+            let initial_plan = engine.prepared_plan(prepared).unwrap();
+            assert_eq!(
+                initial_plan.primitives.len(),
+                if split_transform {
+                    paragraph_count as usize
+                } else {
+                    1
+                }
+            );
+            assert_eq!(
+                initial_plan.draws.len(),
+                if split_transform {
+                    paragraph_count as usize
+                } else {
+                    1
+                }
+            );
+            engine.commit_update(prepared).unwrap();
+
+            let before = engine.gather.view().plan_input().glyphs.to_vec();
+            let glyphs_per_owner = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .paragraph(1)
+                .unwrap()
+                .state
+                .positioned
+                .committed()
+                .glyphs()
+                .len();
+            assert_eq!(glyphs_per_owner, 10);
+            assert_eq!(before.len(), paragraph_count as usize * glyphs_per_owner);
+            let bytes = paragraph_text_mutation_bytes(&[(
+                1,
+                0,
+                initial_units.len() as u32,
+                changed_units.as_slice(),
+            )]);
+            let mut edit = update(2, 2, 2);
+            edit.compositing_independent = compositing_independent;
+            edit.limits = limits;
+            edit.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_MEASUREMENT;
+            edit.text_mutations =
+                parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            let measured = engine
+                .measure_paragraph_with_shaper(&mut shaper, edit, 1)
+                .unwrap();
+            assert!(!engine.measured_semantic_views(measured).unwrap().is_empty());
+            engine.commit_measure(measured).unwrap();
+
+            let binding_skips_before = engine.retained_binding_compilation_skips(4).unwrap();
+            super::super::work_attribution::reset();
+            let mut publication = update(2, 2, 2);
+            publication.compositing_independent = compositing_independent;
+            publication.limits = limits;
+            let prepared = engine
+                .prepare_update_with_shaper(&mut shaper, publication, 3)
+                .unwrap();
+            let plan = engine.prepared_plan(prepared).unwrap();
+            let primitive_count = plan.primitives.len();
+            let changed_draw_glyphs = usize::from(plan.primitives.first().unwrap().record_count);
+            let draw_count = plan.draws.len();
+            let retained_host_topology = plan.retained_host_topology;
+            let warm_host: Vec<_> = plan
+                .primitives
+                .iter()
+                .map(|primitive| {
+                    (
+                        primitive.record_count,
+                        primitive.logical_order,
+                        primitive.record_index,
+                        primitive.inline_start.to_bits(),
+                        primitive.block_start.to_bits(),
+                        primitive.inline_extent.to_bits(),
+                        primitive.block_extent.to_bits(),
+                    )
+                })
+                .collect();
+            engine.commit_update(prepared).unwrap();
+            let work = super::super::work_attribution::snapshot();
+            let after = engine.gather.view().plan_input().glyphs.to_vec();
+            let changed_glyphs = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .paragraph(1)
+                .unwrap()
+                .state
+                .positioned
+                .committed()
+                .glyphs()
+                .len();
+            assert_eq!(changed_glyphs, 10);
+            assert_eq!(
+                after.len(),
+                (paragraph_count as usize - 1) * glyphs_per_owner + changed_glyphs
+            );
+            assert_ne!(after[0].stable_id, before[0].stable_id);
+            assert!((1..=changed_glyphs).contains(&work.ordered_admission_visits));
+            assert!((1..=work.ordered_admission_visits).contains(&work.ordered_instance_rewrites));
+            assert_eq!(
+                changed_draw_glyphs,
+                if split_transform {
+                    changed_glyphs
+                } else {
+                    after.len()
+                }
+            );
+            let (block_size, block_bytes, retained_blocks, block_capacity) =
+                engine.planners.get(&4).unwrap().plan.block_stats();
+            assert_eq!(block_size, 32);
+            assert!(block_bytes > 0);
+            if split_transform || !compositing_independent {
+                assert_eq!(
+                    work.draw_reduced_glyphs,
+                    if split_transform {
+                        changed_glyphs
+                    } else {
+                        after.len()
+                    }
+                );
+                assert_eq!(work.draw_folded_blocks, 0);
+                assert_eq!((retained_blocks, block_capacity), (0, 0));
+            } else {
+                assert!(work.draw_reduced_glyphs <= 2 * block_size + changed_glyphs);
+                assert!(work.draw_folded_blocks >= after.len() / block_size - 2);
+                assert_eq!(retained_blocks, after.len() / block_size);
+                assert!(block_capacity >= retained_blocks);
+            }
+            assert_eq!(
+                engine.retained_binding_compilation_skips(4),
+                Ok(binding_skips_before)
+            );
+            assert_eq!(
+                primitive_count,
+                if split_transform {
+                    paragraph_count as usize
+                } else {
+                    1
+                }
+            );
+            assert_eq!(
+                draw_count,
+                if split_transform {
+                    paragraph_count as usize
+                } else {
+                    1
+                }
+            );
+            assert_gather_matches_full(&mut engine);
+            let (mut cold, mut cold_shaper) =
+                shaped_outlined_engine_with_draw_transform(CHANGED, split_transform);
+            let mut cold_initial = update(1, 1, 1);
+            cold_initial.compositing_independent = compositing_independent;
+            cold_initial.limits = limits;
+            cold_initial.paragraph_mutations = parse_paragraph_mutations(
+                &lifecycle,
+                ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+                paragraph_count - 1,
+            )
+            .unwrap();
+            cold_initial.text_mutations = parse_text_mutations(
+                &texts,
+                ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+                paragraph_count - 1,
+            )
+            .unwrap();
+            cold_initial.style_mutations = parse_style_mutations(
+                &styles,
+                ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+                paragraph_count - 1,
+            )
+            .unwrap();
+            cold_initial.geometry = parse_geometry(
+                &geometry,
+                ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+                paragraph_count,
+                region_offset as u32,
+                1,
+                0,
+                0,
+                0,
+                0,
+                limits,
+            )
+            .unwrap();
+            let cold_prepared = cold
+                .prepare_update_with_shaper(&mut cold_shaper, cold_initial, 2)
+                .unwrap();
+            let cold_plan = cold.prepared_plan(cold_prepared).unwrap();
+            assert_eq!(cold_plan.primitives.len(), primitive_count);
+            assert_eq!(cold_plan.draws.len(), draw_count);
+            let cold_host: Vec<_> = cold_plan
+                .primitives
+                .iter()
+                .map(|primitive| {
+                    (
+                        primitive.record_count,
+                        primitive.logical_order,
+                        primitive.record_index,
+                        primitive.inline_start.to_bits(),
+                        primitive.block_start.to_bits(),
+                        primitive.inline_extent.to_bits(),
+                        primitive.block_extent.to_bits(),
+                    )
+                })
+                .collect();
+            assert_eq!(warm_host, cold_host);
+            assert_eq!(
+                cold_plan
+                    .primitives
+                    .iter()
+                    .map(|primitive| u32::from(primitive.record_count))
+                    .sum::<u32>(),
+                after.len() as u32
+            );
+            cold.commit_update(cold_prepared).unwrap();
+            assert_gather_matches_full(&mut cold);
+            let cold_gather = cold.gather.view();
+            let cold_output = cold_gather.plan_input();
+            assert_eq!(cold_output.glyphs.len(), after.len());
+            for (warm_glyph, cold_glyph) in after.iter().zip(cold_output.glyphs) {
+                let mut expected = *cold_glyph;
+                expected.stable_id = warm_glyph.stable_id;
+                expected.content_revision = warm_glyph.content_revision;
+                expected.semantic_id = warm_glyph.semantic_id;
+                assert_eq!(*warm_glyph, expected);
+            }
+            let warm_output = engine.gather.view();
+            let warm_output = warm_output.plan_input();
+            assert_eq!(
+                warm_output.placement_slots.len(),
+                cold_output.placement_slots.len()
+            );
+            let warm_placements = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .plan
+                .buffer_bytes(super::super::render_plan::SESSION_PLACEMENT_BUFFER_ID)
+                .unwrap();
+            let cold_placements = cold
+                .planners
+                .get(&4)
+                .unwrap()
+                .plan
+                .buffer_bytes(super::super::render_plan::SESSION_PLACEMENT_BUFFER_ID)
+                .unwrap();
+            for (warm_slot, cold_slot) in warm_output
+                .placement_slots
+                .iter()
+                .zip(cold_output.placement_slots)
+            {
+                assert_ne!(*warm_slot, u32::MAX);
+                assert_ne!(*cold_slot, u32::MAX);
+                let warm_offset = usize::try_from(*warm_slot).unwrap().checked_mul(8).unwrap();
+                let cold_offset = usize::try_from(*cold_slot).unwrap().checked_mul(8).unwrap();
+                assert_eq!(
+                    warm_placements.get(warm_offset..warm_offset + 8).unwrap(),
+                    cold_placements.get(cold_offset..cold_offset + 8).unwrap()
+                );
+            }
+            assert_eq!(warm_output.f32_fields, cold_output.f32_fields);
+            assert_eq!(warm_output.u32_fields, cold_output.u32_fields);
+            let warm_planner = engine.planners.get(&4).unwrap();
+            let cold_planner = cold.planners.get(&4).unwrap();
+            for id in 1..=paragraph_count {
+                assert_visible_shape_equal(
+                    &warm_planner.paragraph(id).unwrap().state,
+                    &cold_planner.paragraph(id).unwrap().state,
+                    "draw-key cold scene",
+                );
+            }
+            std::eprintln!(
+                "binding discriminator {paragraph_count} owners, compositing_independent={compositing_independent}, draw_key_mode={draw_key_mode}: glyphs={}, admission={}, rewrites={}, draw_reduced={}, primitives={primitive_count}, draws={draw_count}, retained_host_topology={retained_host_topology}",
+                after.len(),
+                work.ordered_admission_visits,
+                work.ordered_instance_rewrites,
+                work.draw_reduced_glyphs,
+            );
+        }
+    }
+
+    #[test]
     fn sparse_edit_work_attribution_separates_preparation_from_root_publication() {
         // Reuse the shaped cold oracle, real font and wire encoders. Counter assertions describe
         // work, not elapsed time; each phase resets after fixture setup/cold construction.
         let mut template = root_geometry_bytes();
+        write_u32(
+            &mut template,
+            ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize + abi::ENGINE_CONSTRAINT_MAX_LINES,
+            0,
+        );
         let template_region = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize
             + abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
         for (start, clip_start, end, clip_end, offset) in [
@@ -9981,7 +12532,8 @@ mod tests {
 
             // First/middle/last dirty owners and separated islands must jump whole clean
             // intervals. Count changes and recordless selection changes use the same fallback.
-            for (step, (ids, units, sparse_expected)) in [
+            let mut order_revision = 3;
+            for (ids, units, sparse_expected) in [
                 (vec![1], vec![0x63], true),
                 (vec![paragraph_count / 2], vec![0x64], true),
                 (vec![paragraph_count], vec![0x65], true),
@@ -9998,11 +12550,12 @@ mod tests {
                 (vec![paragraph_count], vec![0x61], false),
                 (vec![paragraph_count], vec![0xffff], false),
                 (vec![paragraph_count], vec![0x61], false),
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                let revision = 3 + u32::try_from(step).unwrap();
+                // Separated growing/shrinking owners exercise cumulative range offsets.
+                (vec![1, paragraph_count / 2], vec![0x61, 0x62], false),
+                (vec![1, paragraph_count / 2], vec![0x61], false),
+            ] {
+                let revision = order_revision;
+                order_revision += 1;
                 let mut count_changed = false;
                 for id in &ids {
                     let count = engine
@@ -10068,12 +12621,32 @@ mod tests {
                 }
                 let mut publication = update(revision, revision, revision);
                 publication.limits = initial.limits;
+                let placement_ranges_unchanged = ids.iter().all(|id| {
+                    let paragraph = engine.planners.get(&4).unwrap().paragraph(*id).unwrap();
+                    paragraph.placement_range.end - paragraph.placement_range.start
+                        == paragraph
+                            .state
+                            .positioned
+                            .active()
+                            .placement_segments()
+                            .len()
+                });
                 super::super::work_attribution::reset();
                 let prepared = engine
                     .prepare_update_with_shaper(&mut shaper, publication, revision + 1)
                     .unwrap();
                 engine.commit_update(prepared).unwrap();
                 let work = super::super::work_attribution::snapshot();
+                if placement_ranges_unchanged {
+                    assert_eq!(work.placement_key_owner_visits, ids.len());
+                    assert_eq!(work.placement_binding_owner_visits, ids.len());
+                }
+                if count_changed && ids.len() > 1 {
+                    assert_eq!(work.gather_paragraph_visits, ids.len());
+                    assert!(work.gather_glyph_visits <= ids.len() * (units.len() + 1));
+                    assert_eq!(work.gather_envelope_splices, 1);
+                    assert!(work.gather_retained_gap_rows > 0);
+                }
                 if count_changed && ids == [paragraph_count / 2] {
                     assert_eq!(work.gather_paragraph_visits, 1);
                     assert!(work.gather_glyph_visits <= units.len() + 1);
@@ -10109,14 +12682,130 @@ mod tests {
                 assert_gather_matches_full(&mut engine);
             }
 
+            let middle = paragraph_count / 2;
+            for (first_text, middle_text, segment_counts, sparse, decorate) in [
+                ("aa", "a\na", [1, 3], false, false),
+                ("a\na", "aa", [3, 1], false, false),
+                ("b\nb", "aa", [3, 1], true, false),
+                ("b\nb", "aa", [3, 1], true, true),
+                ("c\nc", "aa", [3, 1], true, true),
+            ] {
+                for (id, value) in [(1, first_text), (middle, middle_text)] {
+                    let units: Vec<_> = value.encode_utf16().collect();
+                    let old = &engine
+                        .planners
+                        .get(&4)
+                        .unwrap()
+                        .paragraph(id)
+                        .unwrap()
+                        .state;
+                    if old.text.committed().units == units && !(decorate && id == 1) {
+                        continue;
+                    }
+                    let bytes = paragraph_text_mutation_bytes(&[(
+                        id,
+                        0,
+                        u32::try_from(old.text.committed().units.len()).unwrap(),
+                        units.as_slice(),
+                    )]);
+                    let mut styles = if decorate && id == 1 {
+                        decorated_root_style_bytes_for_text(7, u32::try_from(units.len()).unwrap())
+                    } else {
+                        paragraph_root_style_bytes(&[(id, 0)])
+                    };
+                    write_u32(
+                        &mut styles,
+                        ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize
+                            + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+                        u32::try_from(units.len()).unwrap(),
+                    );
+                    let mut edit = update(order_revision, order_revision, order_revision);
+                    edit.limits = initial.limits;
+                    edit.text_mutations =
+                        parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+                    edit.style_mutations =
+                        parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                            .unwrap();
+                    let measured = engine
+                        .measure_paragraph_with_shaper(&mut shaper, edit, id)
+                        .unwrap();
+                    engine.commit_measure(measured).unwrap();
+                }
+                let planner = engine.planners.get(&4).unwrap();
+                assert_eq!(
+                    [1, middle].map(|id| planner
+                        .paragraph(id)
+                        .unwrap()
+                        .state
+                        .positioned
+                        .active()
+                        .placement_segments()
+                        .len()),
+                    segment_counts,
+                    "balanced segment changes preserve the total, not per-owner ranges",
+                );
+                let mut publication = update(order_revision, order_revision, order_revision);
+                publication.limits = initial.limits;
+                super::super::work_attribution::reset();
+                let prepared = engine
+                    .prepare_update_with_shaper(&mut shaper, publication, order_revision + 1)
+                    .unwrap();
+                engine.commit_update(prepared).unwrap();
+                let work = super::super::work_attribution::snapshot();
+                let owners = if sparse { 1 } else { paragraph_count as usize };
+                assert_eq!(work.placement_key_owner_visits, owners);
+                assert_eq!(work.placement_binding_owner_visits, owners);
+                assert_gather_matches_full(&mut engine);
+                for (id, value) in [(1, first_text), (middle, middle_text)] {
+                    let styles = if decorate && id == 1 {
+                        decorated_root_style_bytes_for_text(7, value.len() as u32)
+                    } else {
+                        root_style_bytes_for_text(7, value.len() as u32)
+                    };
+                    let (cold, _) = shaped_engine_with_font_styles_geometry_and_extents(
+                        value,
+                        FONT,
+                        9_362,
+                        &styles,
+                        1,
+                        Some((&template, 0)),
+                        true,
+                    );
+                    let warm = &engine
+                        .planners
+                        .get(&4)
+                        .unwrap()
+                        .paragraph(id)
+                        .unwrap()
+                        .state;
+                    let cold = cold
+                        .planners
+                        .get(&4)
+                        .unwrap()
+                        .first_paragraph_state()
+                        .unwrap();
+                    assert_visible_shape_equal(warm, cold, "balanced placement cold parity");
+                }
+                if decorate {
+                    assert!(
+                        engine
+                            .planners
+                            .get(&4)
+                            .unwrap()
+                            .gathered_source_count
+                            .is_none()
+                    );
+                }
+                order_revision += 1;
+            }
+
             // Synchronous measurement can adopt an interior order change while the old
             // gathered workspace still exists. Bulk ranges must not borrow those endpoints.
-            let middle = paragraph_count / 2;
             let lifecycle = paragraph_mutation_bytes(&[
                 (PARAGRAPH_MUTATION_UPSERT, middle, middle),
                 (PARAGRAPH_MUTATION_UPSERT, middle + 1, middle - 1),
             ]);
-            let mut reordered = update(15, 15, 15);
+            let mut reordered = update(order_revision, order_revision, order_revision);
             reordered.limits = initial.limits;
             reordered.paragraph_mutations =
                 parse_paragraph_mutations(&lifecycle, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
@@ -10133,26 +12822,21 @@ mod tests {
                     .gathered_source_count
                     .is_none()
             );
-            let mut publication = update(15, 15, 15);
+            let mut publication = update(order_revision, order_revision, order_revision);
             publication.limits = initial.limits;
             let prepared = engine
-                .prepare_update_with_shaper(&mut shaper, publication, 16)
+                .prepare_update_with_shaper(&mut shaper, publication, order_revision + 1)
                 .unwrap();
             assert_gather_matches_full(&mut engine);
-            engine.abort_update(prepared).unwrap();
-            assert!(engine.gather_cache.is_none());
-            let prepared = engine
-                .prepare_update_with_shaper(&mut shaper, publication, 16)
-                .unwrap();
             engine.commit_update(prepared).unwrap();
             assert_gather_matches_full(&mut engine);
             // A renderer that has not accepted the Rust-canonical revision requests a
             // checkpoint. Sparse occurrence metadata must not suppress full retransmission.
-            let mut checkpoint = update(16, 15, 15);
+            let mut checkpoint = update(order_revision + 1, order_revision, order_revision);
             checkpoint.limits = initial.limits;
             super::super::work_attribution::reset();
             let prepared = engine
-                .prepare_update_with_shaper(&mut shaper, checkpoint, 17)
+                .prepare_update_with_shaper(&mut shaper, checkpoint, order_revision + 2)
                 .unwrap();
             assert!(prepared.checkpoint);
             let work = super::super::work_attribution::snapshot();
@@ -10164,7 +12848,7 @@ mod tests {
             let plan = engine.prepared_plan(prepared).unwrap();
             assert!(!plan.session_buffers.is_empty());
             assert!(!plan.session_payload.is_empty());
-            engine.abort_update(prepared).unwrap();
+            engine.commit_update(prepared).unwrap();
             assert!(engine.planners.get(&4).unwrap().placement_ranges_current);
             assert!(
                 !engine
@@ -10173,10 +12857,6 @@ mod tests {
                     .unwrap()
                     .pending_placement_ranges_refresh
             );
-            let prepared = engine
-                .prepare_update_with_shaper(&mut shaper, checkpoint, 17)
-                .unwrap();
-            engine.commit_update(prepared).unwrap();
             assert_gather_matches_full(&mut engine);
             let clean = engine
                 .planners
@@ -10198,6 +12878,403 @@ mod tests {
                     .unwrap()[clean_offset..clean_offset + 8],
                 clean_bytes
             );
+        }
+    }
+
+    #[test]
+    fn codec_run_accounting_respects_active_mask() {
+        let codec = validated_codec(TechniqueId(1));
+        let program = &codec.programs()[0];
+        let field = [1.0_f32, 2.0, 3.0, 4.0, 5.0];
+        let fields: [&[f32]; 1] = [&field];
+        let input = super::super::plan_input::PlanInput {
+            glyphs: &[],
+            placement_slots: &[],
+            semantic_change_masks: &[],
+            f32_fields: &fields,
+            u32_fields: &[],
+            order_independent: false,
+        };
+        let starts = [0; super::super::plan_packing::MAX_PHYSICAL_BUFFERS];
+        let mut payload = [0_u8; 20];
+        super::super::work_attribution::reset();
+        for active_buffers in [0, 1] {
+            super::super::plan_packing::execute_run(
+                &codec,
+                CapabilitySetId(1),
+                program,
+                input,
+                0,
+                5,
+                0,
+                &mut payload,
+                &starts,
+                5,
+                active_buffers,
+            )
+            .unwrap();
+        }
+        let work = super::super::work_attribution::snapshot();
+        assert_eq!(work.codec_successful_runs, 2);
+        assert_eq!(work.codec_run_count_bins[0].records, 5);
+        assert_eq!(work.codec_run_count_bins[0].invocations, 2);
+        assert_eq!(work.codec_simd_eligible_groups, 2);
+        assert_eq!(work.codec_eligible_scalar_tails, 2);
+        assert_eq!(work.codec_repeated_group_steps, 0);
+        assert_eq!(work.codec_repeated_scalar_tail_steps, 0);
+        assert_eq!(work.codec_active_f32_store_group_operations, 1);
+    }
+
+    #[test]
+    fn dense_inter_setter_publication_attributes_actual_work() {
+        const INTER: &[u8] =
+            include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
+        const OWNERS: u32 = 1_024;
+        let alpha: Vec<Vec<u16>> = (0..OWNERS)
+            .map(|index| utf16(&alloc::format!("alpha {index:04}")))
+            .collect();
+        let bravo: Vec<Vec<u16>> = (0..OWNERS)
+            .map(|index| utf16(&alloc::format!("bravo {index:04}")))
+            .collect();
+        assert!(alpha.iter().chain(&bravo).all(|text| text.len() == 10));
+        let style = root_style_bytes_for_text(7, 10);
+        let mut template = root_geometry_bytes();
+        let constraint = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let region = constraint + abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
+        write_f32(
+            &mut template,
+            constraint + abi::ENGINE_CONSTRAINT_WIDTH,
+            160.0,
+        );
+        write_f32(&mut template, region + abi::ENGINE_REGION_INLINE_END, 160.0);
+        write_f32(
+            &mut template,
+            region + abi::ENGINE_REGION_CLIP_INLINE_END,
+            160.0,
+        );
+        let (mut engine, mut shaper) = shaped_engine_with_font_styles_geometry_and_extents(
+            "alpha 0000",
+            INTER,
+            2_937,
+            &style,
+            1,
+            Some((&template, 0)),
+            true,
+        );
+        let lifecycle_records: Vec<_> = (2..=OWNERS)
+            .map(|id| (PARAGRAPH_MUTATION_UPSERT, id, id - 1))
+            .collect();
+        let text_records: Vec<_> = (2..=OWNERS)
+            .map(|id| (id, 0, 0, alpha[(id - 1) as usize].as_slice()))
+            .collect();
+        let style_records: Vec<_> = (2..=OWNERS).map(|id| (id, 0)).collect();
+        let lifecycle = paragraph_mutation_bytes(&lifecycle_records);
+        let texts = paragraph_text_mutation_bytes(&text_records);
+        let mut styles = paragraph_root_style_bytes(&style_records);
+        let style_stride = abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize;
+        for index in 0..style_records.len() {
+            write_u32(
+                &mut styles,
+                ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize
+                    + index * style_stride
+                    + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+                10,
+            );
+        }
+        let header = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let constraint_stride = abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
+        let region_offset = header + OWNERS as usize * constraint_stride;
+        let mut geometry = vec![0; region_offset + abi::ENGINE_REGION_RECORD_SIZE as usize];
+        for id in 1..=OWNERS {
+            let offset = header + (id as usize - 1) * constraint_stride;
+            geometry[offset..offset + constraint_stride]
+                .copy_from_slice(&template[header..header + constraint_stride]);
+            write_u32(
+                &mut geometry,
+                offset + abi::ENGINE_CONSTRAINT_PARAGRAPH_ID,
+                id,
+            );
+        }
+        geometry[region_offset..].copy_from_slice(&template[header + constraint_stride..]);
+        let mut limits = update(1, 1, 1).limits;
+        limits.max_paragraphs = OWNERS;
+        limits.max_regions = OWNERS;
+        limits.max_clusters = OWNERS * 10;
+        limits.max_lines = OWNERS;
+        limits.max_output_bytes = 1 << 24;
+        let mut added = update(1, 1, 1);
+        added.limits = limits;
+        added.paragraph_mutations =
+            parse_paragraph_mutations(&lifecycle, ENGINE_UPDATE_REQUEST_HEADER_SIZE, OWNERS - 1)
+                .unwrap();
+        added.text_mutations =
+            parse_text_mutations(&texts, ENGINE_UPDATE_REQUEST_HEADER_SIZE, OWNERS - 1).unwrap();
+        added.style_mutations =
+            parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, OWNERS - 1).unwrap();
+        added.geometry = parse_geometry(
+            &geometry,
+            ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+            OWNERS,
+            region_offset as u32,
+            1,
+            0,
+            0,
+            0,
+            0,
+            limits,
+        )
+        .unwrap();
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, added, 2)
+            .unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        for (cycle, target) in [&bravo, &alpha].into_iter().enumerate() {
+            let revision = 2 + cycle as u32;
+            let before_view = engine.gather.view();
+            let before_output = before_view.plan_input();
+            let before = before_output.glyphs.to_vec();
+            let before_f32: Vec<Vec<u32>> = before_output
+                .f32_fields
+                .iter()
+                .map(|field| field.iter().map(|value| value.to_bits()).collect())
+                .collect();
+            let before_u32: Vec<Vec<u32>> = before_output
+                .u32_fields
+                .iter()
+                .map(|field| field.to_vec())
+                .collect();
+            super::super::work_attribution::reset();
+            for id in 1..=OWNERS {
+                let bytes = paragraph_text_mutation_bytes(&[(
+                    id,
+                    0,
+                    10,
+                    target[(id - 1) as usize].as_slice(),
+                )]);
+                let mut edit = update(revision, revision, revision);
+                edit.limits = limits;
+                edit.semantic_view_mask = 0;
+                edit.text_mutations =
+                    parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+                let measured = engine
+                    .measure_paragraph_with_shaper(&mut shaper, edit, id)
+                    .unwrap();
+                engine.commit_measure(measured).unwrap();
+            }
+            let preparation = super::super::work_attribution::snapshot();
+            assert_eq!(preparation.harfrust_calls, OWNERS as usize);
+            assert_eq!(preparation.harfrust_utf16_units, OWNERS as usize * 10);
+            assert_eq!(preparation.query_serialized_records, 0);
+            assert_eq!(preparation.query_serialized_bytes, 0);
+            super::super::work_attribution::reset();
+            let mut publication = update(revision, revision, revision);
+            publication.limits = limits;
+            assert_eq!(publication.text_mutations.len(), 0);
+            assert_eq!(publication.style_mutations.len(), 0);
+            assert_eq!(publication.semantic_view_mask, 0);
+            let prepared = engine
+                .prepare_update_with_shaper(&mut shaper, publication, revision + 1)
+                .unwrap();
+            engine.commit_update(prepared).unwrap();
+            let published = super::super::work_attribution::snapshot();
+            assert_eq!(published.harfrust_calls, 0);
+            assert_eq!(published.recomposed_flow_lines, 0);
+            assert_eq!(published.newly_positioned_glyphs, 0);
+            assert_eq!(published.query_serialized_records, 0);
+            assert_eq!(published.query_serialized_bytes, 0);
+            let run_bins: Vec<_> = published
+                .codec_run_count_bins
+                .iter()
+                .filter(|bin| bin.invocations != 0)
+                .map(|bin| (bin.records, bin.invocations))
+                .collect();
+            assert_eq!(published.codec_run_count_bin_overflow, 0);
+            assert_eq!(
+                run_bins.iter().map(|(_, count)| count).sum::<usize>(),
+                published.codec_successful_runs
+            );
+            assert_eq!(
+                run_bins
+                    .iter()
+                    .map(|(records, count)| *records as usize * count)
+                    .sum::<usize>(),
+                published.codec_executed_records
+            );
+            assert_eq!(
+                published.codec_simd_eligible_groups,
+                run_bins
+                    .iter()
+                    .map(|(records, count)| (*records as usize / 4) * count)
+                    .sum::<usize>()
+            );
+            assert_eq!(
+                published.codec_eligible_scalar_tails,
+                run_bins
+                    .iter()
+                    .map(|(records, count)| (*records as usize % 4) * count)
+                    .sum::<usize>()
+            );
+            // This fixture's validated program has exactly one active F32 store.
+            assert_eq!(
+                published.codec_active_f32_store_group_operations,
+                published.codec_simd_eligible_groups
+            );
+            std::eprintln!(
+                "dense Inter codec cycle{cycle}: successful_runs={}, record_count_histogram={run_bins:?}, simd_eligible_groups={}, eligible_scalar_tails={}, repeated_group_steps={}, repeated_scalar_tail_steps={}, active_f32_store_group_operations={}",
+                published.codec_successful_runs,
+                published.codec_simd_eligible_groups,
+                published.codec_eligible_scalar_tails,
+                published.codec_repeated_group_steps,
+                published.codec_repeated_scalar_tail_steps,
+                published.codec_active_f32_store_group_operations
+            );
+            let after_view = engine.gather.view();
+            let after_output = after_view.plan_input();
+            let after = after_output.glyphs.to_vec();
+            let after_f32: Vec<Vec<u32>> = after_output
+                .f32_fields
+                .iter()
+                .map(|field| field.iter().map(|value| value.to_bits()).collect())
+                .collect();
+            let after_u32: Vec<Vec<u32>> = after_output
+                .u32_fields
+                .iter()
+                .map(|field| field.to_vec())
+                .collect();
+            let masks = after_output.semantic_change_masks;
+            assert_eq!(before.len(), OWNERS as usize * 10);
+            assert_eq!(after.len(), before.len());
+            for (old_owner, new_owner) in before.chunks_exact(10).zip(after.chunks_exact(10)) {
+                for (old_glyph, new_glyph) in old_owner[5..].iter().zip(&new_owner[5..]) {
+                    assert_eq!(old_glyph.stable_id, new_glyph.stable_id);
+                }
+            }
+            assert_eq!(masks.len(), after.len());
+            assert_eq!(
+                published.gather_mask_bit_counts.iter().sum::<usize>(),
+                published.gather_mask_bits
+            );
+            assert_eq!(
+                published.gather_all_masks,
+                published.gather_identity_mismatches
+            );
+            let changed_id = before
+                .iter()
+                .zip(&after)
+                .filter(|(a, b)| a.stable_id != b.stable_id)
+                .count();
+            let changed_material = before
+                .iter()
+                .zip(&after)
+                .filter(|(a, b)| a.material_id != b.material_id)
+                .count();
+            let changed_position = before
+                .iter()
+                .zip(&after)
+                .filter(|(a, b)| {
+                    a.inline_start.to_bits() != b.inline_start.to_bits()
+                        || a.block_start.to_bits() != b.block_start.to_bits()
+                })
+                .count();
+            let changed_extent = before
+                .iter()
+                .zip(&after)
+                .filter(|(a, b)| {
+                    a.inline_extent.to_bits() != b.inline_extent.to_bits()
+                        || a.block_extent.to_bits() != b.block_extent.to_bits()
+                })
+                .count();
+            let f32_changed: Vec<usize> = before_f32
+                .iter()
+                .zip(&after_f32)
+                .map(|(old, new)| old.iter().zip(new).filter(|(a, b)| a != b).count())
+                .collect();
+            let u32_changed: Vec<usize> = before_u32
+                .iter()
+                .zip(&after_u32)
+                .map(|(old, new)| old.iter().zip(new).filter(|(a, b)| a != b).count())
+                .collect();
+            let all_mask_rows = masks.iter().filter(|&&mask| mask == u16::MAX).count();
+            assert_eq!(all_mask_rows, published.gather_all_masks);
+            let all_mask_unchanged_f32: Vec<usize> = before_f32
+                .iter()
+                .zip(&after_f32)
+                .map(|(old, new)| {
+                    old.iter()
+                        .zip(new)
+                        .zip(masks)
+                        .filter(|((a, b), mask)| **mask == u16::MAX && a == b)
+                        .count()
+                })
+                .collect();
+            let all_mask_unchanged_u32: Vec<usize> = before_u32
+                .iter()
+                .zip(&after_u32)
+                .map(|(old, new)| {
+                    old.iter()
+                        .zip(new)
+                        .zip(masks)
+                        .filter(|((a, b), mask)| **mask == u16::MAX && a == b)
+                        .count()
+                })
+                .collect();
+            std::eprintln!(
+                "dense Inter {OWNERS}x10 cycle{cycle}: preparation={preparation:?}; publication={published:?}; output_changed={{stable_id:{changed_id},material_id:{changed_material},position:{changed_position},extent:{changed_extent},f32:{f32_changed:?},u32:{u32_changed:?}}}; all_mask_rows={all_mask_rows}; all_mask_unchanged={{f32:{all_mask_unchanged_f32:?},u32:{all_mask_unchanged_u32:?}}}"
+            );
+            for id in 1..=OWNERS {
+                let index = id - 1;
+                let cold_text =
+                    alloc::format!("{} {index:04}", if cycle == 0 { "bravo" } else { "alpha" });
+                assert_eq!(target[index as usize], utf16(&cold_text));
+                let (cold, _) = shaped_engine_with_font_styles_geometry_and_extents(
+                    &cold_text,
+                    INTER,
+                    2_937,
+                    &style,
+                    1,
+                    Some((&template, 0)),
+                    true,
+                );
+                let cold_view = cold.gather.view();
+                let cold_output = cold_view.plan_input();
+                let start = index as usize * 10;
+                let end = start + 10;
+                assert_eq!(cold_output.glyphs.len(), 10);
+                for (warm_glyph, cold_glyph) in after[start..end].iter().zip(cold_output.glyphs) {
+                    let mut expected = *cold_glyph;
+                    expected.stable_id = warm_glyph.stable_id;
+                    expected.content_revision = warm_glyph.content_revision;
+                    expected.semantic_id = warm_glyph.semantic_id;
+                    expected.transform_id = warm_glyph.transform_id;
+                    assert_eq!(*warm_glyph, expected);
+                }
+                assert_eq!(cold_output.f32_fields.len(), after_f32.len());
+                for (field, warm) in cold_output.f32_fields.iter().zip(&after_f32) {
+                    let expected: Vec<_> = field.iter().map(|value| value.to_bits()).collect();
+                    assert_eq!(&warm[start..end], expected.as_slice());
+                }
+                assert_eq!(cold_output.u32_fields.len(), after_u32.len());
+                for (field, warm) in cold_output.u32_fields.iter().zip(&after_u32) {
+                    assert_eq!(&warm[start..end], *field);
+                }
+                assert_visible_shape_equal(
+                    &engine
+                        .planners
+                        .get(&4)
+                        .unwrap()
+                        .paragraph(id)
+                        .unwrap()
+                        .state,
+                    cold.planners
+                        .get(&4)
+                        .unwrap()
+                        .first_paragraph_state()
+                        .unwrap(),
+                    "dense Inter setter cold parity",
+                );
+            }
+            assert_gather_matches_full(&mut engine);
         }
     }
 
@@ -10306,7 +13383,7 @@ mod tests {
             &engine.font_bindings,
             false,
             false,
-            None,
+            false,
         )
         .unwrap();
         for (paragraph, range) in planner.paragraphs.iter_mut().zip(ranges) {
@@ -10334,7 +13411,7 @@ mod tests {
     }
 
     #[test]
-    fn retained_first_line_consumes_drop_cap_across_exclusion_abort_and_retry() {
+    fn retained_first_line_consumes_drop_cap_across_exclusion_update() {
         const FONT: &[u8] = include_bytes!(
             "../../../../../../benches/fixtures/fonts/dot-gothic-16/DotGothic16-Regular.ttf"
         );
@@ -10360,22 +13437,6 @@ mod tests {
             .first_paragraph_state()
             .unwrap();
         let accepted_first_line = accepted.flow_layout.committed().lines[0];
-        let accepted_lines = accepted
-            .flow_layout
-            .committed()
-            .lines
-            .iter()
-            .copied()
-            .collect::<Vec<_>>();
-        let accepted_fragments = accepted
-            .flow_layout
-            .committed()
-            .fragments
-            .iter()
-            .copied()
-            .collect::<Vec<_>>();
-        let accepted_glyphs = accepted.positioned.committed().glyphs().to_vec();
-        let accepted_decorations = accepted.positioned.committed().decorations().to_vec();
 
         let mut moved = update(1, 1, 1);
         moved.limits.max_clusters = 256;
@@ -10407,48 +13468,7 @@ mod tests {
             crate::engine::retained_rope::index_lookups() <= 16,
             "complete exclusion preparation must not index each retained line"
         );
-        engine.abort_update(prepared).unwrap();
-
-        let aborted = engine
-            .planners
-            .get(&4)
-            .unwrap()
-            .first_paragraph_state()
-            .unwrap();
-        assert_eq!(
-            aborted
-                .flow_layout
-                .committed()
-                .lines
-                .iter()
-                .copied()
-                .collect::<Vec<_>>(),
-            accepted_lines
-        );
-        assert_eq!(
-            aborted
-                .flow_layout
-                .committed()
-                .fragments
-                .iter()
-                .copied()
-                .collect::<Vec<_>>(),
-            accepted_fragments
-        );
-        assert_eq!(
-            aborted.positioned.committed().glyphs(),
-            accepted_glyphs.as_slice()
-        );
-        assert_eq!(
-            aborted.positioned.committed().decorations(),
-            accepted_decorations.as_slice()
-        );
-
-        let retry = engine
-            .prepare_update_with_shaper(&mut shaper, moved, 2)
-            .unwrap();
-        let _publication = engine.prepared_plan(retry).unwrap();
-        engine.commit_update(retry).unwrap();
+        engine.commit_update(prepared).unwrap();
 
         let (cold_engine, _) = shaped_engine_with_font_styles_and_geometry(
             &text,
@@ -10493,20 +13513,6 @@ mod tests {
             .first_paragraph_state()
             .unwrap();
         let original_ids = original_state.text.committed().unit_ids.clone();
-        let original_lines = original_state
-            .flow_layout
-            .committed()
-            .lines
-            .iter()
-            .copied()
-            .collect::<Vec<_>>();
-        let original_fragments = original_state
-            .flow_layout
-            .committed()
-            .fragments
-            .iter()
-            .copied()
-            .collect::<Vec<_>>();
 
         let replacement = utf16(edited);
         let mutations = [(
@@ -10521,42 +13527,11 @@ mod tests {
         edit.limits.max_output_bytes = 1 << 20;
         edit.text_mutations =
             parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let before_units = crate::SHAPED_UNITS.with(core::cell::Cell::get);
         let prepared = engine
             .prepare_update_with_shaper(&mut shaper, edit, 2)
             .unwrap();
-        engine.abort_update(prepared).unwrap();
-        let aborted = engine
-            .planners
-            .get(&4)
-            .unwrap()
-            .first_paragraph_state()
-            .unwrap();
-        assert_eq!(
-            aborted
-                .flow_layout
-                .committed()
-                .lines
-                .iter()
-                .copied()
-                .collect::<Vec<_>>(),
-            original_lines
-        );
-        assert_eq!(
-            aborted
-                .flow_layout
-                .committed()
-                .fragments
-                .iter()
-                .copied()
-                .collect::<Vec<_>>(),
-            original_fragments
-        );
-
-        let before_units = crate::SHAPED_UNITS.with(core::cell::Cell::get);
-        let retry = engine
-            .prepare_update_with_shaper(&mut shaper, edit, 2)
-            .unwrap();
-        engine.commit_update(retry).unwrap();
+        engine.commit_update(prepared).unwrap();
         let sparse_units = crate::SHAPED_UNITS.with(core::cell::Cell::get) - before_units;
         assert_eq!(sparse_units, 5, "three distant edits reshape five units");
 
@@ -10614,6 +13589,530 @@ mod tests {
             .unwrap();
         assert_visible_shape_equal(warm, cold, "second sparse assignment");
         assert_eq!(warm.shape.committed().runs.len(), 1);
+
+        assert_local_length_edits_match_cold(
+            &mut engine,
+            &mut shaper,
+            original,
+            3,
+            |length| (root_style_bytes_for_text(7, length), 1),
+            shaped_engine,
+        );
+    }
+
+    #[test]
+    fn short_inter_label_assignments_use_incremental_shape_and_match_cold_output() {
+        let (mut engine, mut shaper) = shaped_inter_engine("alpha 0000");
+
+        for next in ["bravo 0000", "alpha 0000"] {
+            let replacement = utf16(next);
+            let bytes = text_mutation_bytes(&[(0, replacement.len() as u32, &replacement)]);
+            let mut request = update(1, 1, 1);
+            request.limits.max_clusters = 256;
+            request.limits.max_lines = 256;
+            request.limits.max_output_bytes = 1 << 20;
+            request.text_mutations =
+                parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+
+            let old_pending_capacity = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap()
+                .shape
+                .pending()
+                .glyph_ids
+                .capacity();
+            super::super::work_attribution::reset();
+            let before_calls = crate::SHAPINGS.with(core::cell::Cell::get);
+            let before_units = crate::SHAPED_UNITS.with(core::cell::Cell::get);
+            let measured = engine
+                .measure_paragraph_with_shaper(&mut shaper, request, 1)
+                .unwrap();
+            let candidate = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            let source_run = candidate.incremental_shape_source_run;
+            let windows = candidate.shape_window_scratch.clone();
+            let work = super::super::work_attribution::snapshot();
+            assert_eq!(work.shape_scratch_arena_moves, 1);
+            assert_eq!(work.shape_range_copied_glyphs, 0);
+            assert_eq!(work.cluster_full_builds, 1);
+            assert_eq!(work.cluster_copied_old_rows, 0);
+            assert_eq!(
+                work.shape_scratch_moved_glyphs,
+                candidate.shape.pending().glyph_ids.len()
+            );
+            assert_eq!(
+                candidate.boundary_shape_scratch.glyph_ids.capacity(),
+                old_pending_capacity
+            );
+            let pending_shape = candidate.shape.pending();
+            let mut appended_shape = ShapeArena::default();
+            appended_shape
+                .append_text_range_from(pending_shape, 0, 0, 0, 10, 0)
+                .unwrap();
+            appended_shape.collapse_appended_runs(0, 0, 10).unwrap();
+            assert_eq!(pending_shape.runs, appended_shape.runs);
+            assert_eq!(pending_shape.glyph_ids, appended_shape.glyph_ids);
+            assert_eq!(pending_shape.clusters, appended_shape.clusters);
+            assert_eq!(pending_shape.x_advances, appended_shape.x_advances);
+            assert_eq!(pending_shape.y_advances, appended_shape.y_advances);
+            assert_eq!(pending_shape.x_offsets, appended_shape.x_offsets);
+            assert_eq!(pending_shape.y_offsets, appended_shape.y_offsets);
+            assert_eq!(pending_shape.glyph_flags, appended_shape.glyph_flags);
+            engine.commit_measure(measured).unwrap();
+
+            let calls = crate::SHAPINGS.with(core::cell::Cell::get) - before_calls;
+            let units = crate::SHAPED_UNITS.with(core::cell::Cell::get) - before_units;
+            assert_eq!(
+                source_run,
+                Some(0),
+                "short label replacement keeps the existing incremental shape path"
+            );
+            assert_eq!(windows.len(), 1, "the selected window remains observable");
+            assert_eq!((windows[0].new_start, windows[0].new_end), (0, 10));
+            assert_eq!(calls, 1, "one selected window invokes the shaper once");
+            assert_eq!(units, 10, "the selected window covers the full short label");
+
+            let (cold_engine, _) = shaped_inter_engine(next);
+            let warm = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            let cold = cold_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert_eq!(warm.shape.committed().runs, cold.shape.committed().runs);
+            assert_visible_shape_equal(warm, cold, "short Inter label assignment");
+        }
+    }
+
+    #[test]
+    fn combining_cluster_keeps_retained_cluster_rebuild() {
+        let (mut engine, mut shaper) = shaped_inter_engine("a\u{301}bc");
+        let replacement = utf16("e");
+        let bytes = text_mutation_bytes(&[(0, 1, &replacement)]);
+        let mut request = update(1, 1, 1);
+        request.limits.max_clusters = 256;
+        request.limits.max_lines = 256;
+        request.limits.max_output_bytes = 1 << 20;
+        request.text_mutations =
+            parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        super::super::work_attribution::reset();
+        let measured = engine
+            .measure_paragraph_with_shaper(&mut shaper, request, 1)
+            .unwrap();
+        let candidate = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap();
+        assert_eq!(candidate.incremental_shape_source_run, Some(0));
+        assert!(
+            candidate.unicode.active().grapheme_boundaries().len() - 1
+                < candidate.text.active().units.len()
+        );
+        let work = super::super::work_attribution::snapshot();
+        assert_eq!(work.cluster_copied_old_rows, 3);
+        assert_eq!(work.cluster_full_builds, 0);
+        engine.commit_measure(measured).unwrap();
+        let (cold_engine, _) = shaped_inter_engine("e\u{301}bc");
+        let warm = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap();
+        let cold = cold_engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap();
+        assert_visible_shape_equal(warm, cold, "combining-cluster retained rebuild");
+    }
+
+    #[test]
+    fn inter_4000_glyph_midpoint_isolates_whole_affected_run_and_matches_cold() {
+        const FONT: &[u8] =
+            include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
+        fn benchmark_styles(length: u32) -> (Vec<u8>, u32) {
+            let mut styles = root_style_bytes_for_text(7, length);
+            write_f32(
+                &mut styles,
+                ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize + abi::ENGINE_STYLE_MUTATION_FONT_SIZE,
+                24.0,
+            );
+            (styles, 1)
+        }
+        fn benchmark_engine(text: &str) -> (TextEngine, ShaperRegistry) {
+            let (styles, _) = benchmark_styles(text.encode_utf16().count() as u32);
+            let mut geometry = multiline_root_geometry_bytes();
+            let constraint = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+            let region = constraint + abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
+            write_f32(
+                &mut geometry,
+                constraint + abi::ENGINE_CONSTRAINT_WIDTH,
+                600.0,
+            );
+            for field in [
+                abi::ENGINE_REGION_INLINE_END,
+                abi::ENGINE_REGION_CLIP_INLINE_END,
+            ] {
+                write_f32(&mut geometry, region + field, 600.0);
+            }
+            // The large codec capacity admits every output record; shaping still uses Inter.
+            shaped_engine_with_font_styles_geometry_and_extents(
+                text,
+                FONT,
+                2_937,
+                &styles,
+                1,
+                Some((&geometry, 0)),
+                true,
+            )
+        }
+        // Exact paragraphSource and copy count of paragraphTextForGlyphs(4_000).
+        let source = concat!(
+            "Typography is a moving system. AVATAR To Wa Yo repeat familiar kerning pairs ",
+            "while a responsive panel changes the space around them. ",
+            "A practical interface mixes prose with 0123456789, prices such as 24.50, ",
+            "ranges from 8-512 px, and punctuation. ",
+            "Repeated office, affine, difficult, and shuffle words retain ff, fi, fl, ffi, ",
+            "and ffl shaping candidates."
+        );
+        assert_eq!(source.len(), 350);
+        let original = [source; 14].join("\n");
+        assert_eq!(original.encode_utf16().count(), 4_913);
+        let middle = original.len() >> 1;
+        assert_eq!(middle, 2_456);
+        assert_eq!(original.as_bytes()[middle], b'\n');
+        let grown = alloc::format!("{}x{}", &original[..middle], &original[middle..]);
+        let (mut engine, mut shaper) = benchmark_engine(&original);
+        for (index, (value, old_end, new_end, shaped_units)) in [
+            (grown.as_str(), 2_456, 2_457, 351),
+            (original.as_str(), 2_457, 2_456, 350),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let previous = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            let old_later_runs = previous
+                .shape
+                .committed()
+                .runs
+                .iter()
+                .filter(|run| run.source_run > 6)
+                .copied()
+                .collect::<Vec<_>>();
+            let previous_len = previous.text.committed().units.len();
+            let units = utf16(value);
+            let text = text_mutation_bytes(&[(0, previous_len as u32, units.as_slice())]);
+            let (styles, style_count) = benchmark_styles(units.len() as u32);
+            let revision = index as u32 + 1;
+            let mut request = update(revision, revision, revision);
+            request.limits.max_clusters = units.len() as u32;
+            request.limits.max_lines = units.len() as u32;
+            request.limits.max_output_bytes = 1 << 20;
+            request.text_mutations =
+                parse_text_mutations(&text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            request.style_mutations =
+                parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, style_count)
+                    .unwrap();
+            let before_calls = crate::SHAPINGS.with(core::cell::Cell::get);
+            let before_units = crate::SHAPED_UNITS.with(core::cell::Cell::get);
+            let prepared = engine
+                .prepare_update_with_shaper(&mut shaper, request, revision + 1)
+                .unwrap();
+            let candidate = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            let edit = bounding_text_edit(&candidate.text_edits).unwrap();
+            assert_eq!(
+                containing_run(
+                    candidate.shaping_runs.committed().runs(),
+                    edit.old_start,
+                    edit.old_end
+                ),
+                Some(6),
+            );
+            assert_eq!(
+                containing_run(
+                    candidate.shaping_runs.pending().runs(),
+                    edit.old_start,
+                    edit.new_end
+                ),
+                Some(6),
+            );
+            assert_eq!(candidate.incremental_shape_source_run, Some(6));
+            assert_eq!(candidate.shape_window_scratch.len(), 1);
+            let window = candidate.shape_window_scratch[0];
+            assert_eq!((window.old_start, window.old_end), (2_106, old_end));
+            assert_eq!((window.new_start, window.new_end), (2_106, new_end));
+            assert_eq!(window.probe_end, new_end);
+            engine.commit_update(prepared).unwrap();
+            assert_eq!(
+                crate::SHAPINGS.with(core::cell::Cell::get) - before_calls,
+                1
+            );
+            assert_eq!(
+                crate::SHAPED_UNITS.with(core::cell::Cell::get) - before_units,
+                shaped_units,
+            );
+            let (cold, _) = benchmark_engine(value);
+            let warm = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            let cold = cold
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert_visible_shape_equal(warm, cold, "Inter 4,000-glyph midpoint edit");
+            assert_eq!(warm.shape.committed().runs, cold.shape.committed().runs);
+            let shifted_later = warm
+                .shape
+                .committed()
+                .runs
+                .iter()
+                .filter(|run| run.source_run > 6)
+                .collect::<Vec<_>>();
+            assert_eq!(shifted_later.len(), old_later_runs.len());
+            let delta = i64::from(new_end) - i64::from(old_end);
+            for (before, after) in old_later_runs.iter().zip(shifted_later) {
+                assert_eq!(
+                    after.text_start,
+                    shifted_text_offset(before.text_start, delta).unwrap()
+                );
+                assert_eq!(
+                    after.text_end,
+                    shifted_text_offset(before.text_end, delta).unwrap()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn empty_old_run_and_whole_deletion_use_broad_cold_equivalent_shape() {
+        let (mut engine, mut shaper) = shaped_engine("alpha");
+        for (index, value) in ["", "x"].into_iter().enumerate() {
+            let previous_len = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap()
+                .text
+                .committed()
+                .units
+                .len();
+            let units = utf16(value);
+            let text = text_mutation_bytes(&[(0, previous_len as u32, units.as_slice())]);
+            let styles = root_style_bytes_for_text(7, units.len() as u32);
+            let revision = index as u32 + 1;
+            let mut request = update(revision, revision, revision);
+            request.limits.max_clusters = 256;
+            request.limits.max_lines = 256;
+            request.limits.max_output_bytes = 1 << 20;
+            request.text_mutations =
+                parse_text_mutations(&text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            request.style_mutations =
+                parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            let prepared = engine
+                .prepare_update_with_shaper(&mut shaper, request, revision + 1)
+                .unwrap();
+            assert_eq!(
+                engine
+                    .planners
+                    .get(&4)
+                    .unwrap()
+                    .first_paragraph_state()
+                    .unwrap()
+                    .incremental_shape_source_run,
+                None,
+            );
+            engine.commit_update(prepared).unwrap();
+            let (cold, _) = shaped_engine(value);
+            assert_visible_shape_equal(
+                engine
+                    .planners
+                    .get(&4)
+                    .unwrap()
+                    .first_paragraph_state()
+                    .unwrap(),
+                cold.planners
+                    .get(&4)
+                    .unwrap()
+                    .first_paragraph_state()
+                    .unwrap(),
+                "empty old run or whole deletion",
+            );
+        }
+    }
+
+    #[test]
+    fn changed_resolved_dependencies_reject_copying_other_shaping_runs() {
+        const FONT: &[u8] =
+            include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
+        fn dependency_style(
+            text_end: u32,
+            language: Option<&[u8]>,
+            feature: Option<u32>,
+        ) -> Vec<u8> {
+            let mut bytes = root_style_bytes_for_text(7, text_end);
+            let record = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+            let mut mask =
+                crate::wire::read_u32(&bytes, record + abi::ENGINE_STYLE_MUTATION_FIELD_MASK)
+                    .unwrap();
+            if let Some(language) = language {
+                mask |= crate::engine::frame::STYLE_FIELD_LANGUAGE;
+                let offset = bytes.len();
+                write_u32(
+                    &mut bytes,
+                    record + abi::ENGINE_STYLE_MUTATION_LANGUAGE_OFFSET,
+                    offset as u32,
+                );
+                bytes[record + abi::ENGINE_STYLE_MUTATION_LANGUAGE_LENGTH
+                    ..record + abi::ENGINE_STYLE_MUTATION_LANGUAGE_LENGTH + 2]
+                    .copy_from_slice(&(language.len() as u16).to_le_bytes());
+                bytes.extend_from_slice(language);
+            }
+            if let Some(value) = feature {
+                mask |= crate::engine::frame::STYLE_FIELD_FEATURES;
+                let offset = bytes.len();
+                bytes.resize(offset + abi::FEATURE_RECORD_SIZE as usize, 0);
+                bytes[record + abi::ENGINE_STYLE_MUTATION_FEATURE_COUNT
+                    ..record + abi::ENGINE_STYLE_MUTATION_FEATURE_COUNT + 2]
+                    .copy_from_slice(&1_u16.to_le_bytes());
+                write_u32(
+                    &mut bytes,
+                    record + abi::ENGINE_STYLE_MUTATION_FEATURES_OFFSET,
+                    offset as u32,
+                );
+                write_u32(
+                    &mut bytes,
+                    offset + abi::FEATURE_TAG,
+                    u32::from_be_bytes(*b"kern"),
+                );
+                write_u32(&mut bytes, offset + abi::FEATURE_VALUE, value);
+                write_u32(&mut bytes, offset + abi::FEATURE_START, 0);
+                write_u32(&mut bytes, offset + abi::FEATURE_END, 1);
+            }
+            write_u32(
+                &mut bytes,
+                record + abi::ENGINE_STYLE_MUTATION_FIELD_MASK,
+                mask,
+            );
+            bytes
+        }
+
+        let original = "alpha|bravo|charlie|delta|ΩΩΩΩ|echo";
+        let edited = original.replacen("charlie", "charliX", 1);
+        for (old_language, new_language, old_feature, new_feature) in [
+            (Some(&b"en"[..]), Some(&b"tr"[..]), None, None),
+            (None, None, Some(0), Some(1)),
+        ] {
+            let initial_style =
+                dependency_style(utf16(original).len() as u32, old_language, old_feature);
+            let (mut engine, mut shaper) =
+                shaped_engine_with_font_and_styles(original, FONT, 2_937, &initial_style, 1);
+            let old_runs = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap()
+                .shaping_runs
+                .committed()
+                .runs()
+                .len();
+            assert!(old_runs > 1, "the dependency must also affect a copied run");
+            let units = utf16(&edited);
+            let text = text_mutation_bytes(&[(0, utf16(original).len() as u32, &units)]);
+            let next_style = dependency_style(units.len() as u32, new_language, new_feature);
+            let mut request = update(1, 1, 1);
+            request.limits.max_clusters = 256;
+            request.limits.max_lines = 256;
+            request.limits.max_output_bytes = 1 << 20;
+            request.text_mutations =
+                parse_text_mutations(&text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            request.style_mutations =
+                parse_style_mutations(&next_style, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            let prepared = engine
+                .prepare_update_with_shaper(&mut shaper, request, 2)
+                .unwrap();
+            assert!(
+                engine
+                    .planners
+                    .get(&4)
+                    .unwrap()
+                    .first_paragraph_state()
+                    .unwrap()
+                    .unicode_reused_for_text_edit,
+                "the text edit must satisfy the Unicode reuse certificate"
+            );
+            assert!(
+                engine
+                    .planners
+                    .get(&4)
+                    .unwrap()
+                    .first_paragraph_state()
+                    .unwrap()
+                    .shaping_runs
+                    .is_prepared(),
+                "changed shaping feature or language must rebuild run metadata"
+            );
+            assert_eq!(
+                engine
+                    .planners
+                    .get(&4)
+                    .unwrap()
+                    .first_paragraph_state()
+                    .unwrap()
+                    .incremental_shape_source_run,
+                None
+            );
+            engine.commit_update(prepared).unwrap();
+            let (cold, _) =
+                shaped_engine_with_font_and_styles(&edited, FONT, 2_937, &next_style, 1);
+            assert_visible_shape_equal(
+                engine
+                    .planners
+                    .get(&4)
+                    .unwrap()
+                    .first_paragraph_state()
+                    .unwrap(),
+                cold.planners
+                    .get(&4)
+                    .unwrap()
+                    .first_paragraph_state()
+                    .unwrap(),
+                "changed shaping dependency",
+            );
+        }
     }
 
     #[test]
@@ -11051,11 +14550,7 @@ mod tests {
                     assert!(publication.gather_glyph_visits < original_units.len());
                 }
                 assert_gather_matches_full(&mut warm_engine);
-                warm_engine.abort_update(candidate).unwrap();
-                let retry = warm_engine
-                    .prepare_update_with_shaper(&mut warm_shaper, request, revision + 1)
-                    .unwrap();
-                warm_engine.commit_update(retry).unwrap();
+                warm_engine.commit_update(candidate).unwrap();
                 assert_gather_matches_full(&mut warm_engine);
             }
         }
@@ -11164,11 +14659,7 @@ mod tests {
             .prepare_update_with_shaper(&mut shaper, request, 2)
             .unwrap();
         assert_gather_matches_full(&mut engine);
-        engine.abort_update(publication).unwrap();
-        let retry = engine
-            .prepare_update_with_shaper(&mut shaper, request, 2)
-            .unwrap();
-        engine.commit_update(retry).unwrap();
+        engine.commit_update(publication).unwrap();
         assert_gather_matches_full(&mut engine);
     }
 
@@ -11323,11 +14814,7 @@ mod tests {
         assert!(output_visits >= dirty_records && output_visits < desired.len() / 2);
         assert_eq!(work.ordered_admission_visits, output_visits, "{work:?}");
         assert_gather_matches_full(&mut engine);
-        engine.abort_update(candidate).unwrap();
-        let retry = engine
-            .prepare_update_with_shaper(&mut shaper, publication, 2)
-            .unwrap();
-        engine.commit_update(retry).unwrap();
+        engine.commit_update(candidate).unwrap();
         assert_gather_matches_full(&mut engine);
 
         // A length-changing assignment cannot reuse same-coordinate interval authority.
@@ -11499,11 +14986,7 @@ mod tests {
                 assert!(!plan.draws.is_empty());
             }
             assert_gather_matches_full(&mut engine);
-            engine.abort_update(candidate).unwrap();
-            let retry = engine
-                .prepare_update_with_shaper(&mut shaper, publication, 2)
-                .unwrap();
-            engine.commit_update(retry).unwrap();
+            engine.commit_update(candidate).unwrap();
             assert_gather_matches_full(&mut engine);
         }
     }
@@ -11692,6 +15175,14 @@ mod tests {
             .unwrap();
         assert_eq!(warm.shaping_runs.committed().runs()[0].direction, 1);
         assert_visible_shape_equal(warm, cold, "RTL sparse assignment");
+        assert_local_length_edits_match_cold(
+            &mut engine,
+            &mut shaper,
+            edited,
+            2,
+            |length| (override_style_bytes_for_text(7, length, DIRECTION_RTL), 2),
+            shaped_rtl_engine,
+        );
     }
 
     #[test]
@@ -11708,6 +15199,32 @@ mod tests {
             1,
         );
         write_u32(&mut styles, child + abi::ENGINE_STYLE_MUTATION_TEXT_END, 3);
+        let feature_offset = styles.len();
+        let feature_offset_u32 = u32::try_from(feature_offset).unwrap();
+        styles.resize(feature_offset + abi::FEATURE_RECORD_SIZE as usize, 0);
+        let field_mask =
+            crate::wire::read_u32(&styles, child + abi::ENGINE_STYLE_MUTATION_FIELD_MASK).unwrap();
+        write_u32(
+            &mut styles,
+            child + abi::ENGINE_STYLE_MUTATION_FIELD_MASK,
+            field_mask | crate::engine::frame::STYLE_FIELD_FEATURES,
+        );
+        styles[child + abi::ENGINE_STYLE_MUTATION_FEATURE_COUNT
+            ..child + abi::ENGINE_STYLE_MUTATION_FEATURE_COUNT + 2]
+            .copy_from_slice(&1_u16.to_le_bytes());
+        write_u32(
+            &mut styles,
+            child + abi::ENGINE_STYLE_MUTATION_FEATURES_OFFSET,
+            feature_offset_u32,
+        );
+        write_u32(
+            &mut styles,
+            feature_offset + abi::FEATURE_TAG,
+            u32::from_be_bytes(*b"kern"),
+        );
+        write_u32(&mut styles, feature_offset + abi::FEATURE_VALUE, 1);
+        write_u32(&mut styles, feature_offset + abi::FEATURE_START, 1);
+        write_u32(&mut styles, feature_offset + abi::FEATURE_END, 2);
         let geometry = root_geometry_bytes();
         let (mut engine, mut shaper) = shaped_engine_with_font_styles_and_geometry(
             "abcd",
@@ -11717,11 +15234,20 @@ mod tests {
             2,
             Some((&geometry, 0)),
         );
-        for (text, valid) in [
-            ("wxyz", true),
-            ("😀ab", false),
-            ("abcde", false),
-            ("abcd", true),
+        let span_error = EngineError::StyleRangeInvalid(FrameFault {
+            paragraph_id: 1,
+            style_id: 2,
+        });
+        let root_error = EngineError::StyleRootInvalid(FrameFault {
+            paragraph_id: 1,
+            style_id: 1,
+        });
+        for (text, expected_error) in [
+            ("wxyz", None),
+            ("😀ab", Some(span_error)),
+            ("abcde", Some(root_error)),
+            ("a😀d", Some(span_error)),
+            ("abcd", None),
         ] {
             let units = utf16(text);
             let bytes = text_mutation_bytes(&[(0, 4, &units)]);
@@ -11732,8 +15258,15 @@ mod tests {
             request.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_MEASUREMENT;
             request.text_mutations =
                 parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            let preparation_count = engine.planner_paragraph_preparation_count(4, 1).unwrap();
             let result = engine.measure_paragraph_with_shaper(&mut shaper, request, 1);
-            if valid {
+            if let Some(expected_error) = expected_error {
+                assert_eq!(result.as_ref().err().copied(), Some(expected_error));
+                assert_eq!(
+                    engine.planner_paragraph_preparation_count(4, 1),
+                    Ok(preparation_count)
+                );
+            } else {
                 let measured = result.unwrap();
                 let state = engine
                     .planners
@@ -11745,11 +15278,6 @@ mod tests {
                 assert!(state.style_order_scratch.is_empty());
                 assert!(state.style_nesting_scratch.is_empty());
                 engine.commit_measure(measured).unwrap();
-            } else {
-                assert!(matches!(
-                    result,
-                    Err(EngineError::StyleRangeInvalid(_) | EngineError::StyleRootInvalid(_))
-                ));
             }
             let state = engine
                 .planners
@@ -11759,11 +15287,347 @@ mod tests {
                 .unwrap();
             assert_eq!(
                 state.text.committed().units,
-                utf16(if valid { text } else { "wxyz" })
+                utf16(if expected_error.is_none() {
+                    text
+                } else {
+                    "wxyz"
+                })
             );
             assert_eq!(state.styles.committed().arena.len(), 2);
             assert!(!state.styles.is_prepared());
         }
+    }
+
+    fn topology_style_upsert_bytes(text_start: u32, text_end: u32) -> Vec<u8> {
+        let header = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let record = header;
+        let mut bytes = vec![0; header + abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize];
+        bytes[record + abi::ENGINE_STYLE_MUTATION_OPCODE] = STYLE_MUTATION_UPSERT;
+        write_u32(&mut bytes, record + abi::ENGINE_STYLE_MUTATION_STYLE_ID, 3);
+        write_u32(
+            &mut bytes,
+            record + abi::ENGINE_STYLE_MUTATION_CASCADE_ORDER,
+            2,
+        );
+        write_u32(
+            &mut bytes,
+            record + abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID,
+            1,
+        );
+        write_u32(
+            &mut bytes,
+            record + abi::ENGINE_STYLE_MUTATION_FIELD_MASK,
+            STYLE_FIELD_DIRECTION,
+        );
+        write_u32(
+            &mut bytes,
+            record + abi::ENGINE_STYLE_MUTATION_TEXT_START,
+            text_start,
+        );
+        write_u32(
+            &mut bytes,
+            record + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+            text_end,
+        );
+        bytes[record + abi::ENGINE_STYLE_MUTATION_DIRECTION] = DIRECTION_RTL;
+        bytes
+    }
+
+    #[test]
+    fn crossing_style_update_is_rejected_before_measure_preparation() {
+        const FONT: &[u8] = include_bytes!(
+            "../../../../../../benches/fixtures/fonts/dot-gothic-16/DotGothic16-Regular.ttf"
+        );
+        let mut initial_styles = override_style_bytes_for_text(7, 4, DIRECTION_RTL);
+        let child = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize
+            + abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize;
+        write_u32(
+            &mut initial_styles,
+            child + abi::ENGINE_STYLE_MUTATION_TEXT_START,
+            0,
+        );
+        write_u32(
+            &mut initial_styles,
+            child + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+            2,
+        );
+        let (mut engine, mut shaper) =
+            shaped_engine_with_font_and_styles("abcd", FONT, 9_362, &initial_styles, 2);
+        let revision = engine.root_revision(4).unwrap();
+        let preparation_count = engine.planner_paragraph_preparation_count(4, 1).unwrap();
+        let text = utf16("wxyz");
+        let text_bytes = text_mutation_bytes(&[(0, 4, &text)]);
+        let crossing_bytes = topology_style_upsert_bytes(1, 3);
+        let mut crossing = update(revision.engine, revision.root, 1);
+        crossing.limits.max_clusters = 256;
+        crossing.limits.max_lines = 256;
+        crossing.limits.max_output_bytes = 1 << 20;
+        crossing.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_MEASUREMENT;
+        crossing.text_mutations =
+            parse_text_mutations(&text_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        crossing.style_mutations =
+            parse_style_mutations(&crossing_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+
+        assert!(matches!(
+            engine.measure_paragraph_with_shaper(&mut shaper, crossing, 1),
+            Err(EngineError::StyleNestingInvalid(FrameFault {
+                paragraph_id: 1,
+                style_id: 3,
+            }))
+        ));
+        assert_eq!(engine.root_revision(4), Ok(revision));
+        assert_eq!(engine.root_text(4).unwrap(), utf16("abcd"));
+        assert_eq!(
+            engine.planner_paragraph_preparation_count(4, 1),
+            Ok(preparation_count)
+        );
+        assert!(engine.planners.contains_key(&4));
+
+        let valid_bytes = topology_style_upsert_bytes(1, 2);
+        crossing.style_mutations =
+            parse_style_mutations(&valid_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        crossing.semantic_view_mask = 0;
+        let measured = engine.measure_paragraph_with_shaper(&mut shaper, crossing, 1);
+        assert!(
+            measured.is_ok(),
+            "valid nested update failed: {:?}",
+            measured.err()
+        );
+        let measured = measured.unwrap();
+        engine.commit_measure(measured).unwrap();
+        assert_eq!(engine.root_text(4).unwrap(), utf16("wxyz"));
+    }
+
+    #[test]
+    fn crossing_style_update_is_rejected_before_publication_preparation() {
+        const FONT: &[u8] = include_bytes!(
+            "../../../../../../benches/fixtures/fonts/dot-gothic-16/DotGothic16-Regular.ttf"
+        );
+        let mut initial_styles = override_style_bytes_for_text(7, 4, DIRECTION_RTL);
+        let child = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize
+            + abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize;
+        write_u32(
+            &mut initial_styles,
+            child + abi::ENGINE_STYLE_MUTATION_TEXT_START,
+            0,
+        );
+        write_u32(
+            &mut initial_styles,
+            child + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+            2,
+        );
+        let (mut engine, mut shaper) =
+            shaped_engine_with_font_and_styles("abcd", FONT, 9_362, &initial_styles, 2);
+        let revision = engine.root_revision(4).unwrap();
+        let preparation_count = engine.planner_paragraph_preparation_count(4, 1).unwrap();
+        let text = utf16("wxyz");
+        let text_bytes = text_mutation_bytes(&[(0, 4, &text)]);
+        let crossing_bytes = topology_style_upsert_bytes(1, 3);
+        let mut crossing = update(revision.engine, revision.root, 1);
+        crossing.limits.max_clusters = 256;
+        crossing.limits.max_lines = 256;
+        crossing.limits.max_output_bytes = 1 << 20;
+        crossing.text_mutations =
+            parse_text_mutations(&text_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        crossing.style_mutations =
+            parse_style_mutations(&crossing_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+
+        assert!(matches!(
+            engine.prepare_update_with_shaper(&mut shaper, crossing, 2),
+            Err(EngineError::StyleNestingInvalid(FrameFault {
+                paragraph_id: 1,
+                style_id: 3,
+            }))
+        ));
+        assert_eq!(engine.root_revision(4), Ok(revision));
+        assert_eq!(engine.root_text(4).unwrap(), utf16("abcd"));
+        assert_eq!(
+            engine.planner_paragraph_preparation_count(4, 1),
+            Ok(preparation_count)
+        );
+        assert!(engine.planners.contains_key(&4));
+
+        let valid_bytes = topology_style_upsert_bytes(1, 2);
+        crossing.style_mutations =
+            parse_style_mutations(&valid_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, crossing, 2)
+            .unwrap();
+        engine.commit_update(prepared).unwrap();
+        assert_eq!(engine.root_text(4).unwrap(), utf16("wxyz"));
+    }
+
+    #[test]
+    fn text_preflight_validates_the_resulting_style_set_before_applying_edits() {
+        const FONT: &[u8] = include_bytes!(
+            "../../../../../../benches/fixtures/fonts/dot-gothic-16/DotGothic16-Regular.ttf"
+        );
+        let mut initial_styles = override_style_bytes_for_text(7, 4, DIRECTION_RTL);
+        let header = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let stride = abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize;
+        let child = header + stride;
+        write_u32(
+            &mut initial_styles,
+            child + abi::ENGINE_STYLE_MUTATION_TEXT_START,
+            1,
+        );
+        write_u32(
+            &mut initial_styles,
+            child + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+            4,
+        );
+        let third = initial_styles.len();
+        initial_styles.extend_from_within(child..child + stride);
+        write_u32(
+            &mut initial_styles,
+            third + abi::ENGINE_STYLE_MUTATION_STYLE_ID,
+            3,
+        );
+        write_u32(
+            &mut initial_styles,
+            third + abi::ENGINE_STYLE_MUTATION_CASCADE_ORDER,
+            2,
+        );
+        write_u32(
+            &mut initial_styles,
+            third + abi::ENGINE_STYLE_MUTATION_TEXT_START,
+            2,
+        );
+        write_u32(
+            &mut initial_styles,
+            third + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+            3,
+        );
+        let (mut engine, _) =
+            shaped_engine_with_font_and_styles("abcd", FONT, 9_362, &initial_styles, 3);
+
+        // An unrelated incoming upsert cannot hide two retained ranges invalidated by the edit.
+        let text = text_mutation_bytes(&[(2, 2, &[])]);
+        let mut unrelated_style = override_style_bytes_for_text(7, 2, DIRECTION_RTL);
+        let unrelated = header + stride;
+        write_u32(
+            &mut unrelated_style,
+            unrelated + abi::ENGINE_STYLE_MUTATION_STYLE_ID,
+            4,
+        );
+        write_u32(
+            &mut unrelated_style,
+            unrelated + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+            1,
+        );
+        let text_batch = parse_text_mutations(&text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let style_batch =
+            parse_style_mutations(&unrelated_style, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        let apply_count = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap()
+            .text_mutation_apply_count;
+        let revision = engine.root_revision(4).unwrap();
+        let mut invalid = update(revision.engine, revision.root, 1);
+        invalid.text_mutations = text_batch;
+        invalid.style_mutations = style_batch;
+        assert_eq!(
+            engine.prepare_update(invalid, 2),
+            Err(EngineError::StyleRangeInvalid(FrameFault {
+                paragraph_id: 1,
+                style_id: 2,
+            }))
+        );
+        assert_eq!(engine.root_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
+        assert_eq!(
+            engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap()
+                .text_mutation_apply_count,
+            apply_count
+        );
+
+        // Replacing style 2 and removing style 3 makes the same text edit valid. The preflight
+        // must validate the resulting set, not reject stale committed ranges being retired.
+        let mut replacement_and_removal = override_style_bytes_for_text(7, 2, DIRECTION_RTL);
+        write_u32(
+            &mut replacement_and_removal,
+            child + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+            1,
+        );
+        let remove = remove_style_bytes(3);
+        replacement_and_removal.extend_from_slice(&remove[header..]);
+        let mut valid = update(1, 1, 1);
+        valid.text_mutations =
+            parse_text_mutations(&text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        valid.style_mutations = parse_style_mutations(
+            &replacement_and_removal,
+            ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+            3,
+        )
+        .unwrap();
+        let prepared = engine.prepare_update(valid, 2).unwrap();
+        engine.commit_update(prepared).unwrap();
+        assert_eq!(engine.root_text(4).unwrap(), &[0x61, 0x62]);
+        assert_eq!(engine.planner_style_count(4), Ok(2));
+    }
+
+    #[test]
+    fn text_only_edit_rejects_retained_ranges_that_collapse_after_grapheme_normalization() {
+        const FONT: &[u8] = include_bytes!(
+            "../../../../../../benches/fixtures/fonts/dot-gothic-16/DotGothic16-Regular.ttf"
+        );
+        let header = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let stride = abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize;
+        let mut styles = override_style_bytes_for_text(7, 4, DIRECTION_RTL);
+        let first = header + stride;
+        write_u32(
+            &mut styles,
+            first + abi::ENGINE_STYLE_MUTATION_TEXT_START,
+            1,
+        );
+        write_u32(&mut styles, first + abi::ENGINE_STYLE_MUTATION_TEXT_END, 4);
+        let second = styles.len();
+        styles.extend_from_within(first..first + stride);
+        write_u32(&mut styles, second + abi::ENGINE_STYLE_MUTATION_STYLE_ID, 3);
+        write_u32(
+            &mut styles,
+            second + abi::ENGINE_STYLE_MUTATION_TEXT_START,
+            2,
+        );
+        write_u32(&mut styles, second + abi::ENGINE_STYLE_MUTATION_TEXT_END, 4);
+        let (mut engine, _) = shaped_engine_with_font_and_styles("abcd", FONT, 9_362, &styles, 3);
+        let revision = engine.root_revision(4).unwrap();
+        let preparation_count = engine.planner_paragraph_preparation_count(4, 1).unwrap();
+
+        // Both accepted style ranges are nested and valid for ASCII. Adding two combining
+        // marks makes their grapheme-normalized ranges identical, which shares one cascade
+        // order and therefore cannot produce a deterministic style topology.
+        let combining_text = utf16("a\u{301}\u{302}d");
+        let bytes = text_mutation_bytes(&[(0, 3, &combining_text[..3])]);
+        let mut invalid = update(revision.engine, revision.root, 1);
+        invalid.text_mutations =
+            parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        assert!(matches!(
+            engine.prepare_update(invalid, 2),
+            Err(EngineError::StyleNestingInvalid(_))
+        ));
+        assert_eq!(engine.root_revision(4), Ok(revision));
+        assert_eq!(engine.root_text(4).unwrap(), utf16("abcd"));
+        assert_eq!(
+            engine.planner_paragraph_preparation_count(4, 1),
+            Ok(preparation_count)
+        );
+
+        let replacement = utf16("xyz");
+        let bytes = text_mutation_bytes(&[(0, 3, &replacement)]);
+        let mut valid = update(revision.engine, revision.root, 1);
+        valid.text_mutations =
+            parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine.prepare_update(valid, 2).unwrap();
+        engine.commit_update(prepared).unwrap();
+        assert_eq!(engine.root_text(4).unwrap(), utf16("xyzd"));
     }
 
     #[test]
@@ -11831,20 +15695,20 @@ mod tests {
             let prepared = warm_engine
                 .prepare_update_with_shaper(&mut warm_shaper, update, step + 2)
                 .unwrap();
+            let candidate = warm_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert!(candidate.unicode_reused_for_text_edit);
+            assert!(!candidate.shaping_runs.is_prepared());
+            assert!(candidate.shape.is_prepared());
             retained_steps += usize::from(
                 super::super::work_attribution::snapshot().copied_positioned_records > 0,
             );
             assert_gather_matches_full(&mut warm_engine);
-            if step % 4 == 0 {
-                warm_engine.abort_update(prepared).unwrap();
-                let retry = warm_engine
-                    .prepare_update_with_shaper(&mut warm_shaper, update, step + 2)
-                    .unwrap();
-                assert_gather_matches_full(&mut warm_engine);
-                warm_engine.commit_update(retry).unwrap();
-            } else {
-                warm_engine.commit_update(prepared).unwrap();
-            }
+            warm_engine.commit_update(prepared).unwrap();
             assert_gather_matches_full(&mut warm_engine);
 
             let current = String::from_utf16(&text).unwrap();
@@ -11873,6 +15737,148 @@ mod tests {
             retained_steps > 0,
             "seed must exercise clean-line retention"
         );
+    }
+
+    #[test]
+    fn run_metadata_retained_for_ascii_letter_edit_while_shaped_output_refreshes() {
+        const FONT: &[u8] =
+            include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
+        let original = "alpha bravo";
+        let edited = "omega bravx";
+        for nested_style in [false, true] {
+            let styles = if nested_style {
+                let mut styles = override_style_bytes_for_text(7, 11, DIRECTION_RTL);
+                let child = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize
+                    + abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize;
+                write_u32(
+                    &mut styles,
+                    child + abi::ENGINE_STYLE_MUTATION_TEXT_START,
+                    6,
+                );
+                styles
+            } else {
+                root_style_bytes_for_text(7, 11)
+            };
+            let style_count = if nested_style { 2 } else { 1 };
+            let (mut warm_engine, mut shaper) =
+                shaped_engine_with_font_and_styles(original, FONT, 2_937, &styles, style_count);
+            let before = warm_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            let old_glyphs = before.shape.committed().glyph_ids.clone();
+            let old_runs = before.shaping_runs.committed().runs().to_vec();
+            let units = utf16(edited);
+            let bytes = text_mutation_bytes(&[(0, 11, units.as_slice())]);
+            let mut request = update(1, 1, 1);
+            request.text_mutations =
+                parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            let prepared = warm_engine
+                .prepare_update_with_shaper(&mut shaper, request, 2)
+                .unwrap();
+            let pending = warm_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert!(pending.unicode_reused_for_text_edit);
+            assert!(!pending.shaping_runs.is_prepared());
+            assert_eq!(pending.shaping_runs.active().runs(), old_runs);
+            assert!(pending.shape.is_prepared());
+            warm_engine.commit_update(prepared).unwrap();
+            let (cold_engine, _) =
+                shaped_engine_with_font_and_styles(edited, FONT, 2_937, &styles, style_count);
+            let cold = cold_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert_ne!(old_glyphs, cold.shape.committed().glyph_ids);
+            let warm = warm_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert_visible_shape_equal(warm, cold, "retained ASCII run metadata");
+
+            let same_bytes = text_mutation_bytes(&[(0, 11, units.as_slice())]);
+            let mut same = update(2, 2, 2);
+            same.text_mutations =
+                parse_text_mutations(&same_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            let prepared = warm_engine
+                .prepare_update_with_shaper(&mut shaper, same, 3)
+                .unwrap();
+            let same = warm_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert!(!same.shaping_runs.is_prepared());
+            assert!(!same.shape.is_prepared());
+            warm_engine.commit_update(prepared).unwrap();
+        }
+    }
+
+    #[test]
+    fn run_metadata_rebuilds_when_text_loses_the_ascii_letter_certificate() {
+        for (original, edited) in [
+            ("alphaXbravo", "alpha\nbravo"),
+            ("alpha\nbravo", "alphaXbravo"),
+            ("alphaXbravo", "alpha.bravo"),
+            ("alphaXbravo", "alphaΩbravo"),
+            ("alphaXbravo", "alphaXYbravo"),
+        ] {
+            let (mut warm_engine, mut shaper) = shaped_inter_engine(original);
+            let units = utf16(edited);
+            let bytes = text_mutation_bytes(&[(0, utf16(original).len() as u32, units.as_slice())]);
+            let styles = (utf16(original).len() != units.len())
+                .then(|| root_style_bytes_for_text(7, units.len() as u32));
+            let mut request = update(1, 1, 1);
+            request.limits.max_clusters = 256;
+            request.limits.max_lines = 256;
+            request.limits.max_output_bytes = 1 << 20;
+            request.text_mutations =
+                parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            if let Some(styles) = &styles {
+                request.style_mutations =
+                    parse_style_mutations(styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            }
+            let prepared = warm_engine
+                .prepare_update_with_shaper(&mut shaper, request, 2)
+                .unwrap();
+            let pending = warm_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert!(
+                !pending.unicode_reused_for_text_edit,
+                "{original} → {edited}"
+            );
+            assert!(pending.shaping_runs.is_prepared(), "{original} → {edited}");
+            warm_engine.commit_update(prepared).unwrap();
+            let (cold_engine, _) = shaped_inter_engine(edited);
+            let warm = warm_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            let cold = cold_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert_visible_shape_equal(warm, cold, "uncertified text edit");
+        }
     }
 
     #[test]
@@ -11988,7 +15994,7 @@ mod tests {
     }
 
     #[test]
-    fn invalid_utf16_aborts_text_and_unicode_analysis_together() {
+    fn invalid_utf16_rejects_text_and_unicode_analysis_together() {
         let mut engine = TextEngine::default();
         engine
             .register_codec(9, validated_codec(TechniqueId(1)))
@@ -12003,11 +16009,15 @@ mod tests {
             engine.prepare_update(invalid, 1),
             Err(EngineError::InvalidRequest)
         );
-        let planner = engine.planners.get(&4).unwrap();
-        let paragraph = planner.first_paragraph_state().unwrap();
-        assert!(paragraph.text.committed().units.is_empty());
-        assert!(paragraph.unicode.active().grapheme_boundaries().is_empty());
-        assert!(paragraph.bidi.active().levels.is_empty());
+        assert!(engine.root_revision(4).is_ok());
+
+        let valid_bytes = text_mutation_bytes(&[(0, 0, &[0x61, 0x62])]);
+        let mut valid = update(0, 0, 0);
+        valid.text_mutations =
+            parse_text_mutations(&valid_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine.prepare_update(valid, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+        assert_eq!(engine.root_text(4).unwrap(), &[0x61, 0x62]);
     }
 
     #[test]
@@ -12032,11 +16042,138 @@ mod tests {
             .analyze(&paragraph.text.committed().units)
             .unwrap();
 
-        paragraph.prepare_unicode().unwrap();
+        let mut candidate = PreflightTextCandidate {
+            unicode_state: CandidateUnicode::ReuseCommitted,
+            ..PreflightTextCandidate::default()
+        };
+        paragraph.prepare_unicode(Some(&mut candidate)).unwrap();
         assert!(paragraph.unicode_reused_for_text_edit);
         paragraph.prepare_bidi().unwrap();
         assert!(paragraph.bidi.is_prepared());
         assert_eq!(paragraph.bidi.pending().paragraph_levels, [0]);
+    }
+
+    #[test]
+    fn text_batch_returning_to_committed_units_keeps_identity_edits_and_reuses_unicode() {
+        let committed = utf16("ab");
+        let bytes = text_mutation_bytes(&[(1, 1, &[]), (1, 0, &[0x62])]);
+        let mutations = parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        let mut paragraph = ParagraphState::default();
+        {
+            let (committed_text, _) = paragraph.text.pair_mut();
+            committed_text.units = committed.clone();
+            committed_text.unit_ids = [1, 2].to_vec();
+            committed_text.next_unit_id = 3;
+        }
+        paragraph.unicode.pair_mut().0.analyze(&committed).unwrap();
+        let committed_boundaries = paragraph.unicode.committed().grapheme_boundaries().to_vec();
+        let (mut candidate, edits) = test_preflight_candidate(&committed, mutations);
+        candidate.unicode_state = CandidateUnicode::ReuseCommitted;
+
+        paragraph
+            .prepare_text(mutations, Some(&mut candidate), &edits)
+            .unwrap();
+        paragraph.prepare_unicode(Some(&mut candidate)).unwrap();
+
+        assert_eq!(paragraph.text.pending().units, committed);
+        assert_ne!(
+            paragraph.text.pending().unit_ids,
+            paragraph.text.committed().unit_ids
+        );
+        assert!(paragraph.unicode_reused_for_text_edit);
+        assert_eq!(
+            paragraph.unicode.active().grapheme_boundaries(),
+            committed_boundaries
+        );
+    }
+
+    #[test]
+    fn changed_text_preflight_analysis_is_transferred_without_reanalysis() {
+        let committed = utf16("abc");
+        let bytes = text_mutation_bytes(&[(1, 1, &[0x78])]);
+        let mutations = parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let mut paragraph = ParagraphState::default();
+        {
+            let (committed_text, _) = paragraph.text.pair_mut();
+            committed_text.units = committed.clone();
+            committed_text.unit_ids = [1, 2, 3].to_vec();
+            committed_text.next_unit_id = 4;
+            paragraph.unicode.pair_mut().0.analyze(&committed).unwrap();
+        }
+        let (mut candidate, edits) = test_preflight_candidate(&committed, mutations);
+        assert_eq!(candidate.unicode.analysis_count(), 1);
+        paragraph
+            .prepare_text(mutations, Some(&mut candidate), &edits)
+            .unwrap();
+        paragraph.prepare_unicode(Some(&mut candidate)).unwrap();
+
+        let mut cold = UnicodeAnalysis::default();
+        cold.analyze(&paragraph.text.pending().units).unwrap();
+        assert_eq!(paragraph.unicode.pending().analysis_count(), 1);
+        assert_eq!(
+            paragraph.unicode.pending().grapheme_boundaries(),
+            cold.grapheme_boundaries()
+        );
+        assert_eq!(
+            paragraph.unicode.pending().line_breaks(),
+            cold.line_breaks()
+        );
+    }
+
+    #[test]
+    fn real_text_preflight_analyzes_once_and_queries_and_publication_reuse_it() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_codec(TechniqueId(1)))
+            .unwrap();
+        engine.create_root(4).unwrap();
+
+        let initial_text = utf16("abc");
+        let initial_bytes = text_mutation_bytes(&[(0, 0, &initial_text)]);
+        let mut initial = update(0, 0, 0);
+        initial.text_mutations =
+            parse_text_mutations(&initial_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        let changed_text = utf16("a\u{301}b");
+        let changed_bytes = text_mutation_bytes(&[(0, 3, &changed_text)]);
+        let mut changed = update(1, 1, 1);
+        changed.text_mutations =
+            parse_text_mutations(&changed_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let measured = engine.measure_paragraph(changed, 1).unwrap();
+        let paragraph = engine.planners.get(&4).unwrap().paragraph(1).unwrap();
+        assert_eq!(paragraph.state.unicode.pending().analysis_count(), 1);
+        engine.commit_measure(measured).unwrap();
+
+        let state = &engine.planners.get(&4).unwrap().paragraph(1).unwrap().state;
+        let mut cold = UnicodeAnalysis::default();
+        cold.analyze(&changed_text).unwrap();
+        assert_eq!(state.unicode.active().analysis_count(), 1);
+        assert_eq!(
+            state.unicode.active().grapheme_boundaries(),
+            cold.grapheme_boundaries()
+        );
+        assert_eq!(state.unicode.active().line_breaks(), cold.line_breaks());
+        let analysis_total =
+            state.unicode.committed().analysis_count() + state.unicode.pending().analysis_count();
+
+        let query = update(1, 1, 1);
+        let measured = engine.measure_paragraph(query, 1).unwrap();
+        engine.commit_measure(measured).unwrap();
+        let state = &engine.planners.get(&4).unwrap().paragraph(1).unwrap().state;
+        assert_eq!(
+            state.unicode.committed().analysis_count() + state.unicode.pending().analysis_count(),
+            analysis_total
+        );
+
+        let prepared = engine.prepare_update(update(1, 1, 1), 3).unwrap();
+        engine.commit_update(prepared).unwrap();
+        let state = &engine.planners.get(&4).unwrap().paragraph(1).unwrap().state;
+        assert_eq!(
+            state.unicode.committed().analysis_count() + state.unicode.pending().analysis_count(),
+            analysis_total
+        );
     }
 
     #[test]
@@ -12097,16 +16234,596 @@ mod tests {
                 .paragraph_levels,
             &[1]
         );
-        assert_eq!(
-            engine.dispose_font_stack(7),
-            Err(EngineError::RegistrationInUse)
-        );
+        let revision = engine.root_revision(4).unwrap();
+        let edit_bytes = text_mutation_bytes(&[(0, 4, &utf16("wxyz"))]);
+        let mut edit = update(revision.engine, revision.root, 1);
+        edit.text_mutations =
+            parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let measured = engine.measure_paragraph(edit, 1).unwrap();
+        engine.commit_measure(measured).unwrap();
+        for publication_generation in [None, Some(3)] {
+            if let Some(generation) = publication_generation {
+                let follow = engine
+                    .prepare_update(update(revision.engine, revision.root, 1), generation)
+                    .unwrap();
+                engine.commit_update(follow).unwrap();
+            }
+            assert_eq!(engine.root_text(4).unwrap(), utf16("wxyz"));
+            assert_eq!(
+                engine
+                    .planners
+                    .get(&4)
+                    .unwrap()
+                    .first_paragraph_state()
+                    .unwrap()
+                    .bidi
+                    .committed()
+                    .paragraph_levels,
+                &[1]
+            );
+            assert_eq!(
+                engine.dispose_font_stack(7),
+                Err(EngineError::RegistrationInUse)
+            );
+        }
         engine.dispose_root(4).unwrap();
         assert_eq!(engine.dispose_font_stack(7), Ok(()));
     }
 
     #[test]
-    fn retained_style_upserts_commit_and_root_removal_aborts_transactionally() {
+    fn paint_only_style_partition_remaps_clusters_without_reflow_or_reshaping() {
+        fn paint_partition_bytes(
+            root_style: &[u8],
+            start: u32,
+            end: u32,
+            feature: Option<(u32, u32, u32, u32)>,
+        ) -> Vec<u8> {
+            let header = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+            let stride = abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize;
+            let feature_offset = header + stride * 2;
+            let mut bytes = vec![
+                0;
+                feature_offset
+                    + usize::from(feature.is_some())
+                        * abi::FEATURE_RECORD_SIZE as usize
+            ];
+            bytes[header..header + stride].copy_from_slice(&root_style[header..header + stride]);
+            if let Some((tag, value, feature_start, feature_end)) = feature {
+                let mask =
+                    crate::wire::read_u32(&bytes, header + abi::ENGINE_STYLE_MUTATION_FIELD_MASK)
+                        .unwrap();
+                write_u32(
+                    &mut bytes,
+                    header + abi::ENGINE_STYLE_MUTATION_FIELD_MASK,
+                    mask | crate::engine::frame::STYLE_FIELD_FEATURES,
+                );
+                bytes[header + abi::ENGINE_STYLE_MUTATION_FEATURE_COUNT
+                    ..header + abi::ENGINE_STYLE_MUTATION_FEATURE_COUNT + 2]
+                    .copy_from_slice(&1_u16.to_le_bytes());
+                write_u32(
+                    &mut bytes,
+                    header + abi::ENGINE_STYLE_MUTATION_FEATURES_OFFSET,
+                    feature_offset as u32,
+                );
+                write_u32(&mut bytes, feature_offset + abi::FEATURE_TAG, tag);
+                write_u32(&mut bytes, feature_offset + abi::FEATURE_VALUE, value);
+                write_u32(
+                    &mut bytes,
+                    feature_offset + abi::FEATURE_START,
+                    feature_start,
+                );
+                write_u32(&mut bytes, feature_offset + abi::FEATURE_END, feature_end);
+            }
+            let child = header + stride;
+            bytes[child + abi::ENGINE_STYLE_MUTATION_OPCODE] = STYLE_MUTATION_UPSERT;
+            write_u32(&mut bytes, child + abi::ENGINE_STYLE_MUTATION_STYLE_ID, 2);
+            write_u32(
+                &mut bytes,
+                child + abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID,
+                1,
+            );
+            write_u32(
+                &mut bytes,
+                child + abi::ENGINE_STYLE_MUTATION_CASCADE_ORDER,
+                1,
+            );
+            write_u32(
+                &mut bytes,
+                child + abi::ENGINE_STYLE_MUTATION_FIELD_MASK,
+                STYLE_FIELD_FOREGROUND,
+            );
+            write_u32(
+                &mut bytes,
+                child + abi::ENGINE_STYLE_MUTATION_TEXT_START,
+                start,
+            );
+            write_u32(&mut bytes, child + abi::ENGINE_STYLE_MUTATION_TEXT_END, end);
+            write_u32(
+                &mut bytes,
+                child + abi::ENGINE_STYLE_MUTATION_FOREGROUND_RGBA,
+                0xff00_00ff,
+            );
+            bytes
+        }
+
+        const FONT: &[u8] = include_bytes!(
+            "../../../../../../benches/fixtures/fonts/dot-gothic-16/DotGothic16-Regular.ttf"
+        );
+        const GLYPH_COUNT: u32 = 9_362;
+        let text = "abcdefg";
+        let text_end = u32::try_from(text.encode_utf16().count()).unwrap();
+        let root_style = root_style_bytes_for_text(7, text_end);
+        let split = paint_partition_bytes(&root_style, 1, 4, None);
+        let moved = paint_partition_bytes(&root_style, 2, 5, None);
+        let root_only = root_style_bytes_for_text(7, text_end);
+        let steps = [
+            (split.clone(), 2, split, 2, vec![0, 1, 1, 1, 2, 2, 2]),
+            (moved.clone(), 2, moved, 2, vec![0, 0, 1, 1, 1, 2, 2]),
+            (
+                remove_style_bytes(2),
+                1,
+                root_only,
+                1,
+                vec![0, 0, 0, 0, 0, 0, 0],
+            ),
+        ];
+        let (mut engine, mut shaper) = shaped_engine(text);
+
+        for (
+            step,
+            (mutation_bytes, mutation_count, cold_bytes, cold_count, expected_style_indexes),
+        ) in steps.into_iter().enumerate()
+        {
+            let mut request = update(step as u32 + 1, step as u32 + 1, step as u32 + 1);
+            request.style_mutations = parse_style_mutations(
+                &mutation_bytes,
+                ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+                mutation_count,
+            )
+            .unwrap();
+            let before_calls = crate::SHAPINGS.with(core::cell::Cell::get);
+            let before_units = crate::SHAPED_UNITS.with(core::cell::Cell::get);
+            let before_lines = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap()
+                .flow_layout
+                .committed()
+                .lines
+                .clone();
+            let before_corrections = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap()
+                .clusters
+                .committed()
+                .break_corrections
+                .iter()
+                .map(|slots| slots.iter().map(|slot| slot.get()).collect::<Vec<_>>())
+                .collect::<Vec<_>>();
+            let prepared = engine
+                .prepare_update_with_shaper(&mut shaper, request, step as u32 + 2)
+                .unwrap();
+            let staged = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert!(!staged.style_invalidation.bidi);
+            assert!(!staged.style_invalidation.shaping);
+            assert!(!staged.style_invalidation.metrics);
+            assert!(staged.style_invalidation.positioning);
+            assert!(staged.style_invalidation.cluster_mapping);
+            assert!(!staged.bidi.is_prepared());
+            assert!(!staged.shape.is_prepared());
+            assert!(!staged.flow_layout.is_prepared());
+            engine.commit_update(prepared).unwrap();
+            assert_eq!(
+                crate::SHAPINGS.with(core::cell::Cell::get) - before_calls,
+                0,
+                "paint-only partition step {step} must retain HarfRust output"
+            );
+            assert_eq!(
+                crate::SHAPED_UNITS.with(core::cell::Cell::get) - before_units,
+                0,
+                "paint-only partition step {step} must not shape text"
+            );
+
+            let warm = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert_eq!(warm.shaping_runs.committed().runs().len(), 1);
+            assert_eq!(
+                warm.clusters.committed().style_indexes,
+                expected_style_indexes,
+                "style-index remapping for paint-only partition step {step}"
+            );
+            assert_eq!(warm.flow_layout.committed().lines, before_lines);
+            assert_eq!(
+                warm.clusters
+                    .committed()
+                    .break_corrections
+                    .iter()
+                    .map(|slots| slots.iter().map(|slot| slot.get()).collect::<Vec<_>>())
+                    .collect::<Vec<_>>(),
+                before_corrections,
+                "mapping-only updates preserve cached boundary corrections"
+            );
+
+            let (cold_engine, _) = shaped_engine_with_font_and_styles(
+                text,
+                FONT,
+                GLYPH_COUNT,
+                &cold_bytes,
+                cold_count,
+            );
+            let cold = cold_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert_visible_shape_equal(warm, cold, &alloc::format!("paint partition step {step}"));
+            assert_eq!(
+                warm.clusters.committed().style_indexes,
+                cold.clusters.committed().style_indexes,
+                "warm/cold style-index lanes at paint partition step {step}"
+            );
+        }
+
+        // Amiri's `liga=1` glyph stream is shorter than its `liga=0` control below;
+        // the combining mark also remains one grapheme range. Moving paint coverage
+        // between them must remap current styles without reshaping either sequence.
+        const AMIRI: &[u8] = include_bytes!(
+            "../../../../../../benches/fixtures/fonts/amiri-1.002/Amiri-Regular.ttf"
+        );
+        let amiri_glyph_count = u32::from(
+            read_fonts::FontRef::new(AMIRI)
+                .unwrap()
+                .maxp()
+                .unwrap()
+                .num_glyphs(),
+        );
+        let unicode_text = "office a\u{301} office";
+        let unicode_text_end = u32::try_from(unicode_text.encode_utf16().count()).unwrap();
+        let unicode_root_style = root_style_bytes_for_text(7, unicode_text_end);
+        let liga = u32::from_be_bytes(*b"liga");
+        let unicode_initial_styles = paint_partition_bytes(
+            &unicode_root_style,
+            0,
+            6,
+            Some((liga, 1, 0, unicode_text_end)),
+        );
+        let unicode_moved_styles = paint_partition_bytes(
+            &unicode_root_style,
+            7,
+            9,
+            Some((liga, 1, 0, unicode_text_end)),
+        );
+        let (mut unicode_engine, mut unicode_shaper) = shaped_engine_with_font_and_styles(
+            unicode_text,
+            AMIRI,
+            amiri_glyph_count,
+            &unicode_initial_styles,
+            2,
+        );
+        let unicode_initial = unicode_engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap();
+        let initial_clusters = unicode_initial.clusters.committed();
+        let ligated_glyph_count = unicode_initial.shape.committed().glyph_ids.len();
+        assert!(
+            initial_clusters
+                .starts
+                .iter()
+                .zip(&initial_clusters.ends)
+                .any(|(&start, &end)| (start, end) == (7, 9)),
+            "combining acute must remain one grapheme cluster"
+        );
+        let mut unicode_update = update(1, 1, 1);
+        unicode_update.style_mutations =
+            parse_style_mutations(&unicode_moved_styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
+                .unwrap();
+        let unicode_before_calls = crate::SHAPINGS.with(core::cell::Cell::get);
+        let unicode_before_units = crate::SHAPED_UNITS.with(core::cell::Cell::get);
+        let prepared = unicode_engine
+            .prepare_update_with_shaper(&mut unicode_shaper, unicode_update, 2)
+            .unwrap();
+        unicode_engine.commit_update(prepared).unwrap();
+        assert_eq!(
+            crate::SHAPINGS.with(core::cell::Cell::get) - unicode_before_calls,
+            0,
+            "Unicode paint remapping must reuse HarfRust output"
+        );
+        assert_eq!(
+            crate::SHAPED_UNITS.with(core::cell::Cell::get) - unicode_before_units,
+            0,
+            "Unicode paint remapping must not reshape ligatures or combining text"
+        );
+        let unicode_warm = unicode_engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap();
+        let (unicode_cold_engine, _) = shaped_engine_with_font_and_styles(
+            unicode_text,
+            AMIRI,
+            amiri_glyph_count,
+            &unicode_moved_styles,
+            2,
+        );
+        let (plain_engine, _) = shaped_engine_with_font_and_styles(
+            unicode_text,
+            AMIRI,
+            amiri_glyph_count,
+            &paint_partition_bytes(
+                &unicode_root_style,
+                0,
+                6,
+                Some((liga, 0, 0, unicode_text_end)),
+            ),
+            2,
+        );
+        assert!(
+            ligated_glyph_count
+                < plain_engine
+                    .planners
+                    .get(&4)
+                    .unwrap()
+                    .first_paragraph_state()
+                    .unwrap()
+                    .shape
+                    .committed()
+                    .glyph_ids
+                    .len(),
+            "Amiri's liga feature must reduce the glyph count for the authenticated `office` fixture"
+        );
+        assert_visible_shape_equal(
+            unicode_warm,
+            unicode_cold_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap(),
+            "ligature and combining-grapheme paint remapping",
+        );
+
+        // The Fredoka #216 fixture exercises actual wrapped unsafe-boundary corrections and
+        // their cached island shapes while paint-only segments move across the paragraph.
+        const FREDOKA: &[u8] = include_bytes!(
+            "../../../../../../benches/fixtures/fonts/fredoka-issue-216/Fredoka-Regular.ttf"
+        );
+        let fredoka_glyph_count = u32::from(
+            read_fonts::FontRef::new(FREDOKA)
+                .unwrap()
+                .maxp()
+                .unwrap()
+                .num_glyphs(),
+        );
+        let wrapped_text = "Reveals one grapheme at a time over a duration. Layout stays put and a trigger fires at the end.";
+        let wrapped_text_end = u32::try_from(wrapped_text.encode_utf16().count()).unwrap();
+        let mut wrapped_root_style = root_style_bytes_for_text(7, wrapped_text_end);
+        write_f32(
+            &mut wrapped_root_style,
+            ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize + abi::ENGINE_STYLE_MUTATION_FONT_SIZE,
+            24.0,
+        );
+        let wrapped_initial_styles = paint_partition_bytes(&wrapped_root_style, 0, 7, None);
+        let moved_start = u32::try_from(wrapped_text.find("Layout").unwrap()).unwrap();
+        let wrapped_moved_styles =
+            paint_partition_bytes(&wrapped_root_style, moved_start, moved_start + 6, None);
+        let wrapped_root_only_styles = wrapped_root_style.clone();
+        let mut wrapped_geometry = multiline_root_geometry_bytes();
+        let constraint = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let region = constraint + abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
+        for (offset, value) in [
+            (constraint + abi::ENGINE_CONSTRAINT_WIDTH, 420.0),
+            (region + abi::ENGINE_REGION_INLINE_END, 420.0),
+            (region + abi::ENGINE_REGION_CLIP_INLINE_END, 420.0),
+        ] {
+            write_f32(&mut wrapped_geometry, offset, value);
+        }
+        let (mut wrapped_engine, mut wrapped_shaper) =
+            shaped_engine_with_font_styles_geometry_and_extents(
+                wrapped_text,
+                FREDOKA,
+                fredoka_glyph_count,
+                &wrapped_initial_styles,
+                2,
+                Some((&wrapped_geometry, 0)),
+                false,
+            );
+        let wrapped_initial = wrapped_engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap();
+        let wrapped_line_count = wrapped_initial.flow_layout.committed().lines.len();
+        assert!(
+            wrapped_line_count > 1,
+            "fixture must wrap across multiple lines"
+        );
+        let initial_corrections = wrapped_initial
+            .clusters
+            .committed()
+            .break_corrections
+            .iter()
+            .map(|slots| slots.iter().map(|slot| slot.get()).collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+        assert!(
+            initial_corrections.iter().flatten().any(Option::is_some),
+            "Fredoka wrapping must populate unsafe-boundary corrections"
+        );
+        let initial_islands = wrapped_initial
+            .clusters
+            .committed()
+            .islands
+            .borrow()
+            .shape
+            .runs
+            .len();
+        assert!(
+            initial_islands > 0,
+            "fixture must cache boundary island shapes"
+        );
+
+        for (step, (mutation_bytes, cold_bytes, mutation_count, cold_count)) in [
+            (wrapped_moved_styles.clone(), wrapped_moved_styles, 2, 2),
+            (
+                remove_style_bytes(2),
+                wrapped_root_only_styles.clone(),
+                1,
+                1,
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let before = wrapped_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            let before_corrections = before
+                .clusters
+                .committed()
+                .break_corrections
+                .iter()
+                .map(|slots| slots.iter().map(|slot| slot.get()).collect::<Vec<_>>())
+                .collect::<Vec<_>>();
+            let before_island_runs = before
+                .clusters
+                .committed()
+                .islands
+                .borrow()
+                .shape
+                .runs
+                .len();
+            let mut request = update(step as u32 + 1, step as u32 + 1, step as u32 + 1);
+            request.style_mutations = parse_style_mutations(
+                &mutation_bytes,
+                ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+                mutation_count,
+            )
+            .unwrap();
+            let before_calls = crate::SHAPINGS.with(core::cell::Cell::get);
+            let before_units = crate::SHAPED_UNITS.with(core::cell::Cell::get);
+            let prepared = wrapped_engine
+                .prepare_update_with_shaper(&mut wrapped_shaper, request, step as u32 + 2)
+                .unwrap();
+            wrapped_engine.commit_update(prepared).unwrap();
+            assert_eq!(
+                crate::SHAPINGS.with(core::cell::Cell::get) - before_calls,
+                0,
+                "paint-only wrapped update {step} must reuse boundary shaping"
+            );
+            assert_eq!(
+                crate::SHAPED_UNITS.with(core::cell::Cell::get) - before_units,
+                0,
+                "paint-only wrapped update {step} must not reshape paragraph text"
+            );
+            let warm = wrapped_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert_eq!(warm.flow_layout.committed().lines.len(), wrapped_line_count);
+            assert_eq!(
+                warm.clusters
+                    .committed()
+                    .break_corrections
+                    .iter()
+                    .map(|slots| slots.iter().map(|slot| slot.get()).collect::<Vec<_>>())
+                    .collect::<Vec<_>>(),
+                before_corrections,
+                "paint-only wrapped updates preserve boundary corrections"
+            );
+            assert_eq!(
+                warm.clusters.committed().islands.borrow().shape.runs.len(),
+                before_island_runs,
+                "paint-only wrapped updates preserve cached island shapes"
+            );
+            let (cold_engine, _) = shaped_engine_with_font_styles_geometry_and_extents(
+                wrapped_text,
+                FREDOKA,
+                fredoka_glyph_count,
+                &cold_bytes,
+                cold_count,
+                Some((&wrapped_geometry, 0)),
+                false,
+            );
+            let cold = cold_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert_visible_shape_equal(warm, cold, &alloc::format!("wrapped paint step {step}"));
+        }
+
+        // A later width edit must rebuild the geometry from the retained mapping and still
+        // match an independent cold layout after the paint-only refreshes.
+        let mut narrower_geometry = wrapped_geometry.clone();
+        for (offset, value) in [
+            (constraint + abi::ENGINE_CONSTRAINT_WIDTH, 380.0),
+            (region + abi::ENGINE_REGION_INLINE_END, 380.0),
+            (region + abi::ENGINE_REGION_CLIP_INLINE_END, 380.0),
+        ] {
+            write_f32(&mut narrower_geometry, offset, value);
+        }
+        let mut width_edit = update(3, 3, 3);
+        width_edit.limits.max_clusters = wrapped_text_end.max(256);
+        width_edit.limits.max_lines = wrapped_text_end.max(256);
+        width_edit.limits.max_output_bytes = 1 << 20;
+        width_edit.geometry = parse_root_geometry(&narrower_geometry, width_edit.limits);
+        let prepared = wrapped_engine
+            .prepare_update_with_shaper(&mut wrapped_shaper, width_edit, 4)
+            .unwrap();
+        wrapped_engine.commit_update(prepared).unwrap();
+        let (cold_width_engine, _) = shaped_engine_with_font_styles_geometry_and_extents(
+            wrapped_text,
+            FREDOKA,
+            fredoka_glyph_count,
+            &wrapped_root_only_styles,
+            1,
+            Some((&narrower_geometry, 0)),
+            false,
+        );
+        assert_visible_shape_equal(
+            wrapped_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap(),
+            cold_width_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap(),
+            "width edit after wrapped paint-only refresh",
+        );
+    }
+
+    #[test]
+    fn retained_style_upserts_commit_and_root_removal_clears_retained_state() {
         let mut engine = TextEngine::default();
         engine
             .register_codec(9, validated_codec(TechniqueId(1)))
@@ -12167,15 +16884,42 @@ mod tests {
             .register_codec(9, validated_codec(TechniqueId(1)))
             .unwrap();
         engine.create_root(4).unwrap();
-        let bytes = text_mutation_bytes(&[(0, 0, &[0x61]), (9, 0, &[0x62])]);
+        let initial_bytes = text_mutation_bytes(&[(0, 0, &[0x61, 0x62, 0x63, 0x64])]);
+        let mut initial = update(0, 0, 0);
+        initial.text_mutations =
+            parse_text_mutations(&initial_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        let apply_count = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap()
+            .text_mutation_apply_count;
+        // The first edit grows the retained text to six units. The later offset is outside that
+        // intermediate text, so the batch must fail before applying its valid prefix.
+        let bytes = text_mutation_bytes(&[(1, 0, &[0x58, 0x59]), (7, 0, &[0x62])]);
         let batch = parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
-        let mut request = update(0, 0, 0);
+        let mut request = update(1, 1, 1);
         request.text_mutations = batch;
         assert_eq!(
-            engine.prepare_update(request, 1),
+            engine.prepare_update(request, 2),
             Err(EngineError::InvalidRequest)
         );
-        assert!(engine.root_text(4).unwrap().is_empty());
+        assert_eq!(engine.root_text(4).unwrap(), &[0x61, 0x62, 0x63, 0x64]);
+        assert_eq!(
+            engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap()
+                .text_mutation_apply_count,
+            apply_count,
+            "preflight must reject the full batch before applying its first mutation"
+        );
     }
 
     #[test]
@@ -12316,6 +17060,97 @@ mod tests {
     }
 
     #[test]
+    fn explicit_rank_edits_allow_temporary_duplicate_base_orders() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_codec(TechniqueId(1)))
+            .unwrap();
+        engine.create_root(4).unwrap();
+        engine.reserve_root_text(4, 8).unwrap();
+
+        let initial_lifecycle = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 1, 0),
+            (PARAGRAPH_MUTATION_UPSERT, 2, 1),
+            (PARAGRAPH_MUTATION_UPSERT, 3, 2),
+        ]);
+        let initial_order =
+            paragraph_order_mutation_bytes(&[(1, 7, 0.0), (2, 7, 1.0), (3, 7, 2.0)]);
+        let mut initial = update(0, 0, 0);
+        initial.limits.max_paragraphs = 3;
+        initial.paragraph_mutations =
+            parse_paragraph_mutations(&initial_lifecycle, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 3)
+                .unwrap();
+        initial.paragraph_order_mutations =
+            parse_paragraph_order_mutations(&initial_order, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 3)
+                .unwrap();
+        let prepared = engine.prepare_update(initial, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        let accepted_revision = engine.planners.get(&4).unwrap().revision;
+        for rank in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let bytes = paragraph_order_mutation_bytes(&[(1, 7, rank)]);
+            let mut invalid_update = update(1, 1, 1);
+            invalid_update.limits.max_paragraphs = 3;
+            invalid_update.paragraph_order_mutations =
+                parse_paragraph_order_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                    .unwrap();
+            assert_eq!(
+                engine.prepare_update(invalid_update, 2),
+                Err(EngineError::InvalidRequest)
+            );
+            let mut invalid_measure = update(1, 1, 1);
+            invalid_measure.limits.max_paragraphs = 3;
+            invalid_measure.paragraph_order_mutations =
+                parse_paragraph_order_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                    .unwrap();
+            assert_eq!(
+                engine.measure_paragraph(invalid_measure, 1),
+                Err(EngineError::InvalidRequest)
+            );
+            let planner = engine.planners.get(&4).unwrap();
+            assert_eq!(planner.revision, accepted_revision);
+            assert!(!planner.lifecycle_prepared);
+            assert_eq!(planner.paragraph(1).unwrap().placement.rank, 0.0);
+        }
+
+        // A later query with no lifecycle edit must preserve valid duplicate base orders using
+        // their already-committed scoped ranks.
+        let mut retained_query = update(1, 1, 1);
+        retained_query.limits.max_paragraphs = 3;
+        let measured = engine.measure_paragraph(retained_query, 2).unwrap();
+        engine.commit_measure(measured).unwrap();
+
+        let partial_lifecycle = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 1, 1),
+            (PARAGRAPH_MUTATION_UPSERT, 2, 2),
+        ]);
+        let explicit_order =
+            paragraph_order_mutation_bytes(&[(1, 7, 0.0), (2, 7, 1.0), (3, 7, 2.0)]);
+        let mut partial_update = update(1, 1, 1);
+        partial_update.limits.max_paragraphs = 3;
+        partial_update.paragraph_mutations =
+            parse_paragraph_mutations(&partial_lifecycle, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
+                .unwrap();
+        partial_update.paragraph_order_mutations =
+            parse_paragraph_order_mutations(&explicit_order, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 3)
+                .unwrap();
+        let prepared = engine.prepare_update(partial_update, 2).unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        assert_eq!(
+            engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .ordered_paragraphs
+                .iter()
+                .map(|entry| entry.id)
+                .collect::<Vec<_>>(),
+            [1, 2, 3]
+        );
+    }
+
+    #[test]
     fn semantic_mutations_follow_authored_order_after_a_scoped_rank_commit() {
         let mut engine = TextEngine::default();
         engine
@@ -12395,13 +17230,27 @@ mod tests {
     fn sparse_preparation_owners_preserve_authored_order_without_root_entries() {
         let mut planner = PlannerState::default();
         for id in 1..=1_000 {
-            planner.prepare_upsert(id, 1_000 - id).unwrap();
+            planner.prepare_upsert(id, 1_000 - id, false).unwrap();
         }
         let bytes = paragraph_text_mutation_bytes(&[(7, 0, 0, &[0x61])]);
         let mut request = update(0, 0, 0);
         request.text_mutations =
             parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
-        planner.prepare_semantic_input_spans(request).unwrap();
+        let lifecycle_bytes = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_UPSERT, 7, 0)]);
+        let lifecycle =
+            parse_paragraph_mutations(&lifecycle_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        validate_lifecycle_input(
+            &mut planner,
+            lifecycle,
+            ParagraphOrderMutationBatch::empty(),
+            None,
+            10_000,
+        )
+        .unwrap();
+        planner
+            .prepare_semantic_inputs(request, ParagraphInputScope::Indexed)
+            .unwrap();
         assert_eq!(planner.semantic_input_spans.len(), 1);
         planner.pending_preparation_ids.extend_from_slice(&[7, 990]);
         planner.prepare_semantic_work_order().unwrap();
@@ -12413,15 +17262,327 @@ mod tests {
                 .collect::<Vec<_>>(),
             [990, 7]
         );
-        assert!(planner.semantic_input_spans(500).unwrap().is_empty());
+        assert!(planner.semantic_input_spans(500).is_empty());
         planner.paragraph_mut(990).unwrap().pending_remove = true;
         planner.prepare_semantic_work_order().unwrap();
         assert_eq!(planner.order_sort_scratch.len(), 1);
-        planner.paragraph_mut(7).unwrap().pending_remove = true;
+        let removal_bytes = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_REMOVE, 7, 0)]);
+        let removal =
+            parse_paragraph_mutations(&removal_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        assert!(
+            validate_lifecycle_input(
+                &mut planner,
+                removal,
+                ParagraphOrderMutationBatch::empty(),
+                None,
+                10_000,
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn session_placement_row_order_keeps_translation_with_its_slot() {
+        let mut sort_pairs = vec![(42, 7)];
+        let mut empty: [SessionPlacementRow; 0] = [];
+        sort_session_placement_rows(&mut empty, &mut sort_pairs).unwrap();
+        let mut single = [SessionPlacementRow {
+            slot: 4,
+            inline: 8.0,
+            block: -8.0,
+        }];
+        sort_session_placement_rows(&mut single, &mut sort_pairs).unwrap();
+        assert_eq!(sort_pairs, [(42, 7)]);
+
+        let mut rows = [
+            SessionPlacementRow {
+                slot: 9,
+                inline: 1.0,
+                block: -1.0,
+            },
+            SessionPlacementRow {
+                slot: 2,
+                inline: 2.0,
+                block: -2.0,
+            },
+            SessionPlacementRow {
+                slot: 7,
+                inline: 3.0,
+                block: -3.0,
+            },
+        ];
+        sort_session_placement_rows(&mut rows, &mut sort_pairs).unwrap();
+        assert_eq!(
+            rows,
+            [
+                SessionPlacementRow {
+                    slot: 2,
+                    inline: 2.0,
+                    block: -2.0,
+                },
+                SessionPlacementRow {
+                    slot: 7,
+                    inline: 3.0,
+                    block: -3.0,
+                },
+                SessionPlacementRow {
+                    slot: 9,
+                    inline: 1.0,
+                    block: -1.0,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn lifecycle_pair_order_preserves_source_lookup_and_rejects_duplicate_ids() {
+        let bytes = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 9, 2),
+            (PARAGRAPH_MUTATION_UPSERT, 2, 0),
+            (PARAGRAPH_MUTATION_UPSERT, 7, 1),
+        ]);
+        let mutations =
+            parse_paragraph_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 3).unwrap();
+        let order_bytes =
+            paragraph_order_mutation_bytes(&[(7, 5, 0.5), (9, 6, 0.75), (2, 4, 0.25)]);
+        let order_mutations =
+            parse_paragraph_order_mutations(&order_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 3)
+                .unwrap();
+        let mut planner = PlannerState::default();
+        let plan =
+            validate_lifecycle_input(&mut planner, mutations, order_mutations, None, 3).unwrap();
+        assert_eq!(
+            plan.ordered
+                .iter()
+                .map(|paragraph| paragraph.id)
+                .collect::<Vec<_>>(),
+            [2, 7, 9]
+        );
+        // The lifecycle ID scratch is reused for order mutations before return.
+        assert_eq!(planner.lifecycle_id_scratch, [(2, 2), (7, 0), (9, 1)]);
+        for (id, expected) in [(2, (4, 0.25)), (7, (5, 0.5)), (9, (6, 0.75))] {
+            assert_eq!(
+                planned_paragraph_rank(
+                    &planner,
+                    order_mutations,
+                    &planner.lifecycle_id_scratch,
+                    id,
+                )
+                .unwrap(),
+                expected
+            );
+        }
+        assert_eq!(core::mem::size_of::<(u32, u32)>(), 8);
+        assert_eq!(core::mem::size_of::<(u64, u32)>(), 16);
+
+        let duplicate = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 7, 0),
+            (PARAGRAPH_MUTATION_UPSERT, 7, 1),
+        ]);
+        let duplicate =
+            parse_paragraph_mutations(&duplicate, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
         assert!(matches!(
-            planner.prepare_semantic_input_spans(request),
+            validate_lifecycle_input(
+                &mut PlannerState::default(),
+                duplicate,
+                ParagraphOrderMutationBatch::empty(),
+                None,
+                3,
+            ),
             Err(EngineError::InvalidRequest)
         ));
+    }
+
+    #[test]
+    fn unchanged_lifecycle_preserves_retained_order_and_scratch() {
+        let mut planner = PlannerState {
+            ordered_paragraphs: (1..=1_000)
+                .map(|id| ParagraphOrder { order: id, id })
+                .collect(),
+            pending_ordered_paragraphs: vec![ParagraphOrder { order: 9, id: 9 }],
+            lifecycle_id_scratch: vec![(17, 4)],
+            lifecycle_membership_scratch: vec![17],
+            ..PlannerState::default()
+        };
+
+        assert!(
+            validate_lifecycle_input(
+                &mut planner,
+                super::super::semantic_wire::ParagraphMutationBatch::empty(),
+                ParagraphOrderMutationBatch::empty(),
+                None,
+                999,
+            )
+            .is_err()
+        );
+        assert_eq!(planner.lifecycle_id_scratch, [(17, 4)]);
+        assert_eq!(planner.lifecycle_membership_scratch, [17]);
+
+        let plan = validate_lifecycle_input(
+            &mut planner,
+            super::super::semantic_wire::ParagraphMutationBatch::empty(),
+            ParagraphOrderMutationBatch::empty(),
+            None,
+            10_000,
+        )
+        .unwrap();
+
+        assert_eq!(plan.creates, 0);
+        assert_eq!(plan.removals, 0);
+        assert_eq!(plan.placement_changes, 0);
+        assert!(plan.ordered.is_empty());
+        assert_eq!(planner.ordered_paragraphs.len(), 1_000);
+        assert_eq!(
+            planner.pending_ordered_paragraphs,
+            [ParagraphOrder { order: 9, id: 9 }]
+        );
+        assert_eq!(planner.lifecycle_id_scratch, [(17, 4)]);
+        assert_eq!(planner.lifecycle_membership_scratch, [17]);
+    }
+
+    #[test]
+    fn geometry_owner_preflight_rejects_before_lifecycle_writes_and_keeps_root_usable() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_codec(TechniqueId(1)))
+            .unwrap();
+        engine.create_root(4).unwrap();
+
+        let lifecycle_bytes = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 7, 0),
+            (PARAGRAPH_MUTATION_UPSERT, 8, 1),
+        ]);
+        let lifecycle =
+            parse_paragraph_mutations(&lifecycle_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
+                .unwrap();
+        let mut publication = update(0, 0, 0);
+        publication.limits.max_paragraphs = 2;
+        publication.limits.max_regions = 3;
+        publication.paragraph_mutations = lifecycle;
+        let constraints = geometry_with_constraint_owners(&[7, 8, 7]);
+        publication.geometry = parse_test_geometry(&constraints, 3, 0, publication.limits);
+
+        assert_eq!(
+            engine.prepare_update(publication, 1),
+            Err(EngineError::InvalidRequest),
+            "noncontiguous repeated constraint owners must fail during preflight"
+        );
+        assert_eq!(engine.root_revision(4), Ok(RootRevision::default()));
+        let planner = engine.planners.get(&4).unwrap();
+        assert!(planner.paragraph(7).is_none());
+        assert!(planner.paragraph(8).is_none());
+        assert!(!planner.lifecycle_prepared);
+
+        // An invalid inline-object owner is rejected through the same shared preflight.
+        let inline_lifecycle = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_UPSERT, 7, 0)]);
+        let inline_lifecycle =
+            parse_paragraph_mutations(&inline_lifecycle, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        let inline_bytes = geometry_with_inline_object_owners(&[99]);
+        let mut invalid_inline = update(0, 0, 0);
+        invalid_inline.limits.max_paragraphs = 2;
+        invalid_inline.paragraph_mutations = inline_lifecycle;
+        invalid_inline.geometry = parse_test_geometry(&inline_bytes, 0, 1, invalid_inline.limits);
+        assert_eq!(
+            engine.prepare_update(invalid_inline, 1),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(engine.root_revision(4), Ok(RootRevision::default()));
+        assert!(engine.planners.get(&4).unwrap().paragraph(7).is_none());
+
+        let inline_group_lifecycle_bytes = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 7, 0),
+            (PARAGRAPH_MUTATION_UPSERT, 8, 1),
+        ]);
+        let inline_group_lifecycle = parse_paragraph_mutations(
+            &inline_group_lifecycle_bytes,
+            ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+            2,
+        )
+        .unwrap();
+        let inline_group_bytes = geometry_with_inline_object_owners(&[7, 8, 7]);
+        let mut invalid_inline_group = update(0, 0, 0);
+        invalid_inline_group.limits.max_paragraphs = 2;
+        invalid_inline_group.limits.max_inline_objects = 3;
+        invalid_inline_group.paragraph_mutations = inline_group_lifecycle;
+        invalid_inline_group.geometry =
+            parse_test_geometry(&inline_group_bytes, 0, 3, invalid_inline_group.limits);
+        assert_eq!(
+            engine.prepare_update(invalid_inline_group, 1),
+            Err(EngineError::InvalidRequest),
+            "noncontiguous repeated inline-object owners must fail during preflight"
+        );
+        assert_eq!(engine.root_revision(4), Ok(RootRevision::default()));
+        assert!(engine.planners.get(&4).unwrap().paragraph(7).is_none());
+        assert!(engine.planners.get(&4).unwrap().paragraph(8).is_none());
+
+        // The rejected inputs did not poison the root or retain the proposed lifecycle.
+        let mut valid = update(0, 0, 0);
+        valid.limits.max_paragraphs = 2;
+        valid.paragraph_mutations = inline_lifecycle;
+        let prepared = engine.prepare_update(valid, 1).unwrap();
+        engine.commit_update(prepared).unwrap();
+        assert_eq!(
+            engine.root_revision(4),
+            Ok(RootRevision { engine: 1, root: 1 })
+        );
+        assert!(engine.planners.get(&4).unwrap().paragraph(7).is_some());
+
+        // Geometry for a paragraph removed by this request is also outside the projected set,
+        // even though that paragraph is retained in the committed plan.
+        let removal_bytes = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_REMOVE, 7, 0)]);
+        let removal =
+            parse_paragraph_mutations(&removal_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        let removed_owner_bytes = geometry_with_inline_object_owners(&[7]);
+        let mut removed_owner = update(1, 1, 1);
+        removed_owner.paragraph_mutations = removal;
+        removed_owner.geometry =
+            parse_test_geometry(&removed_owner_bytes, 0, 1, removed_owner.limits);
+        assert_eq!(
+            engine.prepare_update(removed_owner, 2),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(
+            engine.root_revision(4),
+            Ok(RootRevision { engine: 1, root: 1 })
+        );
+        assert!(engine.planners.get(&4).unwrap().paragraph(7).is_some());
+    }
+
+    #[test]
+    fn measurement_geometry_owner_preflight_preserves_root_after_rejection() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_codec(TechniqueId(1)))
+            .unwrap();
+        engine.create_root(4).unwrap();
+        engine.reserve_root_text(4, 8).unwrap();
+
+        let lifecycle_bytes = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_UPSERT, 7, 0)]);
+        let lifecycle =
+            parse_paragraph_mutations(&lifecycle_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        let geometry_bytes = geometry_with_inline_object_owners(&[99]);
+        let mut invalid = update(0, 0, 0);
+        invalid.paragraph_mutations = lifecycle;
+        invalid.geometry = parse_test_geometry(&geometry_bytes, 0, 1, invalid.limits);
+        assert_eq!(
+            engine.measure_paragraph(invalid, 7),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(engine.root_revision(4), Ok(RootRevision::default()));
+        let planner = engine.planners.get(&4).unwrap();
+        assert!(planner.paragraph(7).is_none());
+        assert!(!planner.lifecycle_prepared);
+
+        let mut valid = update(0, 0, 0);
+        valid.paragraph_mutations = lifecycle;
+        let measured = engine.measure_paragraph(valid, 7).unwrap();
+        engine.commit_measure(measured).unwrap();
+        assert_eq!(engine.root_revision(4), Ok(RootRevision::default()));
+        assert!(engine.planners.get(&4).unwrap().paragraph(7).is_some());
     }
 
     #[test]
@@ -12569,7 +17730,141 @@ mod tests {
     }
 
     #[test]
-    fn a_later_paragraph_failure_rolls_back_every_child_and_lifecycle_change() {
+    fn retained_gather_tracks_multi_owner_empty_output_transitions() {
+        let (mut engine, mut shaper) = shaped_outlined_engine("aa");
+        let lifecycle = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 2, 1),
+            (PARAGRAPH_MUTATION_UPSERT, 3, 2),
+        ]);
+        let text =
+            paragraph_text_mutation_bytes(&[(2, 0, 0, &[0x62, 0x62]), (3, 0, 0, &[0x63, 0x63])]);
+        let mut styles = paragraph_root_style_bytes(&[(2, 2), (3, 3)]);
+        for index in 0..2 {
+            write_u32(
+                &mut styles,
+                ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize
+                    + index * abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize
+                    + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+                2,
+            );
+        }
+        let mut initial = update(1, 1, 1);
+        initial.limits.max_paragraphs = 3;
+        initial.limits.max_regions = 3;
+        let template = root_geometry_bytes();
+        let header = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let constraint_stride = abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
+        let region_offset = header + 3 * constraint_stride;
+        let mut geometry = vec![0; region_offset + abi::ENGINE_REGION_RECORD_SIZE as usize];
+        for id in 1..=3 {
+            let offset = header + (id as usize - 1) * constraint_stride;
+            geometry[offset..offset + constraint_stride]
+                .copy_from_slice(&template[header..header + constraint_stride]);
+            write_u32(
+                &mut geometry,
+                offset + abi::ENGINE_CONSTRAINT_PARAGRAPH_ID,
+                id,
+            );
+        }
+        geometry[region_offset..].copy_from_slice(&template[header + constraint_stride..]);
+        initial.geometry = parse_geometry(
+            &geometry,
+            ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+            3,
+            region_offset as u32,
+            1,
+            0,
+            0,
+            0,
+            0,
+            initial.limits,
+        )
+        .unwrap();
+        initial.paragraph_mutations =
+            parse_paragraph_mutations(&lifecycle, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        initial.text_mutations =
+            parse_text_mutations(&text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        initial.style_mutations =
+            parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, initial, 2)
+            .unwrap();
+        engine.commit_update(prepared).unwrap();
+        assert_gather_matches_full(&mut engine);
+
+        for (revision, records, style_records, expected_counts) in [
+            (
+                2,
+                vec![(2, 0, 2, vec![]), (3, 0, 2, vec![0x64, 0x64, 0x64])],
+                vec![(2, 2, 0), (3, 3, 3)],
+                [2, 0, 3],
+            ),
+            (3, vec![(3, 0, 3, vec![])], vec![(3, 3, 0)], [2, 0, 0]),
+            (
+                4,
+                vec![(2, 0, 0, vec![0x66, 0x66, 0x66]), (3, 0, 0, vec![0x67])],
+                vec![(2, 2, 3), (3, 3, 1)],
+                [2, 3, 1],
+            ),
+        ] {
+            let records: Vec<_> = records
+                .iter()
+                .map(|(id, start, delete, units)| (*id, *start, *delete, units.as_slice()))
+                .collect();
+            let bytes = paragraph_text_mutation_bytes(&records);
+            let mut request = update(revision, revision, revision);
+            request.limits.max_paragraphs = 3;
+            request.text_mutations = parse_text_mutations(
+                &bytes,
+                ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+                u32::try_from(records.len()).unwrap(),
+            )
+            .unwrap();
+            let style_pairs: Vec<_> = style_records
+                .iter()
+                .map(|(id, material, _)| (*id, *material))
+                .collect();
+            let mut styles = paragraph_root_style_bytes(&style_pairs);
+            for (index, (_, _, end)) in style_records.iter().enumerate() {
+                write_u32(
+                    &mut styles,
+                    ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize
+                        + index * abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize
+                        + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+                    *end,
+                );
+            }
+            request.style_mutations = parse_style_mutations(
+                &styles,
+                ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+                u32::try_from(style_records.len()).unwrap(),
+            )
+            .unwrap();
+            let prepared = engine
+                .prepare_update_with_shaper(&mut shaper, request, revision + 1)
+                .unwrap();
+            engine.commit_update(prepared).unwrap();
+
+            let planner = engine.planners.get(&4).unwrap();
+            for (id, expected) in (1..=3).zip(expected_counts) {
+                let paragraph = planner.paragraph(id).unwrap();
+                assert_eq!(
+                    paragraph.gather_range.unwrap().source_count(),
+                    expected,
+                    "paragraph {id} source range at revision {revision}"
+                );
+            }
+            let expected_total: usize = expected_counts.into_iter().sum();
+            assert_eq!(
+                engine.gather.view().plan_input().glyphs.len(),
+                expected_total
+            );
+            assert_gather_matches_full(&mut engine);
+        }
+    }
+
+    #[test]
+    fn invalid_later_paragraph_is_preflighted_before_any_child_or_lifecycle_commit() {
         let mut engine = TextEngine::default();
         engine
             .register_codec(9, validated_codec(TechniqueId(1)))
@@ -12595,7 +17890,8 @@ mod tests {
             (PARAGRAPH_MUTATION_UPSERT, 2, 0),
         ]);
         let invalid_text = paragraph_text_mutation_bytes(&[(1, 0, 1, &[0x78]), (2, 9, 0, &[0x79])]);
-        let mut invalid = update(1, 1, 1);
+        let revision = engine.root_revision(4).unwrap();
+        let mut invalid = update(revision.engine, revision.root, 1);
         invalid.limits.max_paragraphs = 2;
         invalid.paragraph_mutations =
             parse_paragraph_mutations(&reorder_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
@@ -12607,6 +17903,8 @@ mod tests {
             Err(EngineError::InvalidRequest)
         );
 
+        // The invalid range is rejected before preparation begins. No rollback is needed: the
+        // accepted paragraph text and committed ordering were never changed.
         let planner = engine.planners.get(&4).unwrap();
         assert_eq!(planner.revision, RootRevision { engine: 1, root: 1 });
         assert_eq!(
@@ -12626,6 +17924,179 @@ mod tests {
             [0x62]
         );
         assert!(!planner.lifecycle_prepared);
+    }
+
+    #[test]
+    fn late_grapheme_topology_failure_keeps_earlier_text_and_root_reusable() {
+        const FONT: &[u8] = include_bytes!(
+            "../../../../../../benches/fixtures/fonts/dot-gothic-16/DotGothic16-Regular.ttf"
+        );
+        let mut shaper = ShaperRegistry::default();
+        let extents = vec![0; 9_362 * 8];
+        let availability = vec![0; 9_362_usize.div_ceil(8)];
+        assert_eq!(
+            shaper.register_font(1, FONT, &extents, &availability, 0, 0),
+            0
+        );
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_codec(TechniqueId(1)))
+            .unwrap();
+        engine
+            .register_font_binding(42, 1, 9_362, render_binding(9_362, 1))
+            .unwrap();
+        engine.register_font_stack(7, &[42]).unwrap();
+        engine.create_root(4).unwrap();
+        let lifecycle_bytes = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 1, 0),
+            (PARAGRAPH_MUTATION_UPSERT, 2, 1),
+        ]);
+        let initial_text = paragraph_text_mutation_bytes(&[
+            (1, 0, 0, &[0x61]),
+            (2, 0, 0, &utf16("a\u{301}\u{300}bc")),
+        ]);
+        let stride = abi::ENGINE_STYLE_MUTATION_RECORD_SIZE as usize;
+        let header = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let mut initial_styles = root_style_bytes_for_text(7, 1);
+        let mut paragraph_two_styles = override_style_bytes_for_text(7, 5, DIRECTION_RTL);
+        write_u32(
+            &mut paragraph_two_styles,
+            header + abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID,
+            2,
+        );
+        write_u32(
+            &mut paragraph_two_styles,
+            header + stride + abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID,
+            2,
+        );
+        write_u32(
+            &mut paragraph_two_styles,
+            header + stride + abi::ENGINE_STYLE_MUTATION_TEXT_START,
+            0,
+        );
+        write_u32(
+            &mut paragraph_two_styles,
+            header + stride + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+            3,
+        );
+        let mut second_child = paragraph_two_styles[header + stride..header + stride * 2].to_vec();
+        write_u32(&mut second_child, abi::ENGINE_STYLE_MUTATION_STYLE_ID, 3);
+        write_u32(
+            &mut second_child,
+            abi::ENGINE_STYLE_MUTATION_CASCADE_ORDER,
+            2,
+        );
+        write_u32(&mut second_child, abi::ENGINE_STYLE_MUTATION_TEXT_START, 2);
+        write_u32(&mut second_child, abi::ENGINE_STYLE_MUTATION_TEXT_END, 5);
+        initial_styles.extend_from_slice(&paragraph_two_styles[header..]);
+        initial_styles.extend_from_slice(&second_child);
+        let mut initial = update(0, 0, 0);
+        initial.limits.max_paragraphs = 2;
+        initial.limits.max_clusters = 256;
+        initial.limits.max_lines = 256;
+        initial.limits.max_output_bytes = 1 << 20;
+        initial.paragraph_mutations =
+            parse_paragraph_mutations(&lifecycle_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
+                .unwrap();
+        initial.text_mutations =
+            parse_text_mutations(&initial_text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        initial.style_mutations =
+            parse_style_mutations(&initial_styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 4).unwrap();
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, initial, 1)
+            .unwrap();
+        engine.commit_update(prepared).unwrap();
+
+        let normalized_crossing = utf16("abc\u{301}d");
+        let attempted_text =
+            paragraph_text_mutation_bytes(&[(1, 0, 1, &[0x78]), (2, 0, 5, &normalized_crossing)]);
+        let sibling_creation = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_UPSERT, 3, 2)]);
+        let revision = engine.root_revision(4).unwrap();
+        let mut invalid = update(revision.engine, revision.root, 1);
+        invalid.limits.max_paragraphs = 3;
+        invalid.paragraph_mutations =
+            parse_paragraph_mutations(&sibling_creation, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        invalid.text_mutations =
+            parse_text_mutations(&attempted_text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+        invalid.style_mutations = super::super::semantic_wire::StyleMutationBatch::empty();
+        let (planner_revision, accepted_ack) = {
+            let planner = engine.planners.get(&4).unwrap();
+            (
+                planner.revision,
+                planner.acknowledged_publication_generation,
+            )
+        };
+        let rejection = engine
+            .prepare_update_with_shaper(&mut shaper, invalid, 2)
+            .unwrap_err();
+        assert!(
+            matches!(
+                rejection,
+                EngineError::StyleNestingInvalid(FrameFault {
+                    paragraph_id: 2,
+                    style_id: 3,
+                })
+            ),
+            "unexpected rejection: {rejection:?}; revision={revision:?}, planner={:?}, consumed={}, ack={}, accepted_ack={}",
+            planner_revision,
+            invalid.consumed_revision,
+            invalid.acknowledged_publication_generation,
+            accepted_ack
+        );
+
+        let planner = engine.planners.get(&4).unwrap();
+        assert_eq!(planner.revision, revision);
+        assert!(planner.paragraph(3).is_none());
+        assert_eq!(
+            planner
+                .ordered_paragraphs
+                .iter()
+                .map(|item| (item.order, item.id))
+                .collect::<Vec<_>>(),
+            [(0, 1), (1, 2)]
+        );
+        assert_eq!(
+            planner.paragraph(1).unwrap().state.text.committed().units,
+            [0x61]
+        );
+        assert_eq!(
+            planner.paragraph(2).unwrap().state.text.committed().units,
+            utf16("a\u{301}\u{300}bc")
+        );
+        assert!(!planner.lifecycle_prepared);
+
+        write_u32(
+            &mut paragraph_two_styles,
+            header + stride + abi::ENGINE_STYLE_MUTATION_TEXT_START,
+            0,
+        );
+        write_u32(
+            &mut paragraph_two_styles,
+            header + stride + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+            1,
+        );
+        write_u32(&mut second_child, abi::ENGINE_STYLE_MUTATION_TEXT_START, 4);
+        write_u32(&mut second_child, abi::ENGINE_STYLE_MUTATION_TEXT_END, 5);
+        let mut recovered_styles = root_style_bytes_for_text(7, 1);
+        recovered_styles.extend_from_slice(&paragraph_two_styles[header..]);
+        recovered_styles.extend_from_slice(&second_child);
+        invalid.style_mutations =
+            parse_style_mutations(&recovered_styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 4).unwrap();
+        invalid.paragraph_mutations = super::super::semantic_wire::ParagraphMutationBatch::empty();
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, invalid, 2)
+            .unwrap();
+        engine.commit_update(prepared).unwrap();
+        let planner = engine.planners.get(&4).unwrap();
+        assert_eq!(
+            planner.paragraph(1).unwrap().state.text.committed().units,
+            [0x78]
+        );
+        assert_eq!(
+            planner.paragraph(2).unwrap().state.text.committed().units,
+            normalized_crossing
+        );
     }
 
     #[test]
@@ -12666,6 +18137,25 @@ mod tests {
         assert_eq!(
             engine.prepare_update(collision, 2),
             Err(EngineError::InvalidRequest)
+        );
+
+        let duplicate_base_order = paragraph_mutation_bytes(&[
+            (PARAGRAPH_MUTATION_UPSERT, 1, 1),
+            (PARAGRAPH_MUTATION_UPSERT, 2, 1),
+        ]);
+        let duplicate_rank = paragraph_order_mutation_bytes(&[(1, 7, 0.0), (2, 7, 0.0)]);
+        let mut ambiguous = update(1, 1, 1);
+        ambiguous.limits.max_paragraphs = 2;
+        ambiguous.paragraph_mutations =
+            parse_paragraph_mutations(&duplicate_base_order, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
+                .unwrap();
+        ambiguous.paragraph_order_mutations =
+            parse_paragraph_order_mutations(&duplicate_rank, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
+                .unwrap();
+        assert_eq!(
+            engine.prepare_update(ambiguous, 2),
+            Err(EngineError::InvalidRequest),
+            "duplicate base order needs distinct explicit ranks within its scope"
         );
 
         let unknown_text = paragraph_text_mutation_bytes(&[(3, 0, 0, &[0x61])]);
@@ -12851,6 +18341,105 @@ mod tests {
         }
     }
 
+    fn assert_local_length_edits_match_cold(
+        engine: &mut TextEngine,
+        shaper: &mut ShaperRegistry,
+        original: &str,
+        first_revision: u32,
+        styles_for_text: fn(u32) -> (Vec<u8>, u32),
+        cold_engine: fn(&str) -> (TextEngine, ShaperRegistry),
+    ) {
+        let grown = original.replacen("charlie", "charliex", 1);
+        for (index, value) in [grown.as_str(), original].into_iter().enumerate() {
+            let revision = first_revision + index as u32;
+            let previous_len = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap()
+                .text
+                .committed()
+                .units
+                .len();
+            let units = utf16(value);
+            let bytes = text_mutation_bytes(&[(0, previous_len as u32, units.as_slice())]);
+            let (styles, style_count) = styles_for_text(units.len() as u32);
+            let mut edit = update(revision, revision, revision);
+            edit.limits.max_clusters = 256;
+            edit.limits.max_lines = 256;
+            edit.limits.max_output_bytes = 1 << 20;
+            edit.text_mutations =
+                parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            edit.style_mutations =
+                parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, style_count)
+                    .unwrap();
+            let prepared = engine
+                .prepare_update_with_shaper(shaper, edit, revision + 1)
+                .unwrap();
+            engine.commit_update(prepared).unwrap();
+            let (cold, _) = cold_engine(value);
+            assert_visible_shape_equal(
+                engine
+                    .planners
+                    .get(&4)
+                    .unwrap()
+                    .first_paragraph_state()
+                    .unwrap(),
+                cold.planners
+                    .get(&4)
+                    .unwrap()
+                    .first_paragraph_state()
+                    .unwrap(),
+                "retained insertion/deletion",
+            );
+        }
+    }
+
+    #[test]
+    fn borrowed_glyph_ranges_fill_only_valid_requested_records() {
+        let text = "x".repeat(65);
+        let styles = root_style_bytes_for_text(7, 65);
+        let mut geometry = root_geometry_bytes();
+        let constraint = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let region = constraint + abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
+        write_f32(
+            &mut geometry,
+            constraint + abi::ENGINE_CONSTRAINT_WIDTH,
+            2_000.0,
+        );
+        for field in [
+            abi::ENGINE_REGION_INLINE_END,
+            abi::ENGINE_REGION_CLIP_INLINE_END,
+        ] {
+            write_f32(&mut geometry, region + field, 2_000.0);
+        }
+        let (engine, _) = shaped_outlined_engine_with_styles_geometry(&text, &styles, &geometry);
+        assert_eq!(engine.borrowed_paragraph_layout(4, 1).unwrap(), 65);
+        let mut records = [super::super::positioning::SemanticGlyph::default(); 32];
+        for (start, count) in [(0, 1), (0, 31), (0, 32), (31, 32), (32, 32), (64, 1)] {
+            engine
+                .borrowed_paragraph_glyphs(4, 1, start, &mut records[..count])
+                .unwrap();
+            for (offset, glyph) in records[..count].iter().enumerate() {
+                assert_eq!(glyph.cluster as usize, start + offset);
+            }
+        }
+        let before = records;
+        for start in [65, usize::MAX] {
+            assert_eq!(
+                engine.borrowed_paragraph_glyphs(4, 1, start, &mut records[..1]),
+                Err(EngineError::InvalidRequest)
+            );
+            assert_eq!(records, before, "invalid ranges must not write scratch");
+        }
+        assert_eq!(
+            engine.borrowed_paragraph_glyphs(4, 1, 64, &mut records[..2]),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(records, before);
+    }
+
     fn shaped_engine(text: &str) -> (TextEngine, ShaperRegistry) {
         const FONT: &[u8] = include_bytes!(
             "../../../../../../benches/fixtures/fonts/dot-gothic-16/DotGothic16-Regular.ttf"
@@ -12922,8 +18511,7 @@ mod tests {
     }
 
     fn shaped_outlined_engine(text: &str) -> (TextEngine, ShaperRegistry) {
-        let styles = root_style_bytes_for_text(7, text.encode_utf16().count() as u32);
-        shaped_outlined_engine_with_styles_geometry(text, &styles, &root_geometry_bytes())
+        shaped_outlined_engine_with_draw_transform(text, true)
     }
 
     fn shaped_outlined_engine_with_styles_geometry(
@@ -12931,18 +18519,7 @@ mod tests {
         styles: &[u8],
         geometry: &[u8],
     ) -> (TextEngine, ShaperRegistry) {
-        const FONT: &[u8] = include_bytes!(
-            "../../../../../../benches/fixtures/fonts/dot-gothic-16/DotGothic16-Regular.ttf"
-        );
-        shaped_engine_with_font_styles_geometry_and_extents(
-            text,
-            FONT,
-            9_362,
-            styles,
-            1,
-            Some((geometry, 0)),
-            true,
-        )
+        shaped_outlined_engine_with_styles_geometry_and_draw_transform(text, styles, geometry, true)
     }
 
     fn shaped_engine_with_font_styles_geometry_and_extents(
@@ -12953,6 +18530,63 @@ mod tests {
         style_count: u32,
         geometry: Option<(&[u8], u32)>,
         outlined: bool,
+    ) -> (TextEngine, ShaperRegistry) {
+        shaped_engine_with_font_styles_geometry_extents_and_draw_transform(
+            text,
+            font,
+            glyph_count,
+            style_bytes,
+            style_count,
+            geometry,
+            outlined,
+            true,
+        )
+    }
+
+    fn shaped_outlined_engine_with_draw_transform(
+        text: &str,
+        split_transform: bool,
+    ) -> (TextEngine, ShaperRegistry) {
+        let styles = root_style_bytes_for_text(7, text.encode_utf16().count() as u32);
+        shaped_outlined_engine_with_styles_geometry_and_draw_transform(
+            text,
+            &styles,
+            &root_geometry_bytes(),
+            split_transform,
+        )
+    }
+
+    fn shaped_outlined_engine_with_styles_geometry_and_draw_transform(
+        text: &str,
+        styles: &[u8],
+        geometry: &[u8],
+        split_transform: bool,
+    ) -> (TextEngine, ShaperRegistry) {
+        const FONT: &[u8] = include_bytes!(
+            "../../../../../../benches/fixtures/fonts/dot-gothic-16/DotGothic16-Regular.ttf"
+        );
+        shaped_engine_with_font_styles_geometry_extents_and_draw_transform(
+            text,
+            FONT,
+            9_362,
+            styles,
+            1,
+            Some((geometry, 0)),
+            true,
+            split_transform,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn shaped_engine_with_font_styles_geometry_extents_and_draw_transform(
+        text: &str,
+        font: &[u8],
+        glyph_count: u32,
+        style_bytes: &[u8],
+        style_count: u32,
+        geometry: Option<(&[u8], u32)>,
+        outlined: bool,
+        split_transform: bool,
     ) -> (TextEngine, ShaperRegistry) {
         let mut shaper = ShaperRegistry::default();
         let mut extents = vec![0; glyph_count as usize * 8];
@@ -12981,6 +18615,18 @@ mod tests {
             codec = ValidatedCodec::new(CodecDescriptor {
                 capability_sets,
                 programs: codec.programs().to_vec(),
+            })
+            .unwrap();
+        }
+        if !split_transform {
+            let capability_sets = codec.capability_sets().to_vec();
+            let mut programs = codec.programs().to_vec();
+            for program in &mut programs {
+                program.draw_key_mask &= !crate::engine::codec::BATCH_TRANSFORM;
+            }
+            codec = ValidatedCodec::new(CodecDescriptor {
+                capability_sets,
+                programs,
             })
             .unwrap();
         }
@@ -13027,7 +18673,8 @@ mod tests {
     }
 
     fn validated_paint_codec(technique: TechniqueId) -> ValidatedCodec {
-        validated_codec_with_input(technique, 8)
+        // The paint fixture changes blue while preserving red and green.
+        validated_codec_with_input(technique, super::super::frame::SEMANTIC_F32_FOREGROUND_BLUE)
     }
 
     fn validated_codec_with_input(technique: TechniqueId, semantic_field: u8) -> ValidatedCodec {
@@ -13518,6 +19165,78 @@ mod tests {
         bytes
     }
 
+    fn geometry_with_constraint_owners(owners: &[u32]) -> Vec<u8> {
+        let template = root_geometry_bytes();
+        let header = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let constraint_stride = abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
+        let region_stride = abi::ENGINE_REGION_RECORD_SIZE as usize;
+        let region_template = header + constraint_stride;
+        let regions_offset = header + owners.len() * constraint_stride;
+        let mut bytes = vec![0; regions_offset + region_stride];
+        for (index, &owner) in owners.iter().enumerate() {
+            let start = header + index * constraint_stride;
+            bytes[start..start + constraint_stride]
+                .copy_from_slice(&template[header..header + constraint_stride]);
+            write_u32(
+                &mut bytes,
+                start + abi::ENGINE_CONSTRAINT_PARAGRAPH_ID,
+                owner,
+            );
+        }
+        bytes[regions_offset..regions_offset + region_stride]
+            .copy_from_slice(&template[region_template..region_template + region_stride]);
+        bytes
+    }
+
+    fn geometry_with_inline_object_owners(owners: &[u32]) -> Vec<u8> {
+        let header = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let stride = abi::ENGINE_INLINE_OBJECT_RECORD_SIZE as usize;
+        let mut bytes = vec![0; header + owners.len() * stride];
+        for (index, &owner) in owners.iter().enumerate() {
+            let start = header + index * stride;
+            write_u32(
+                &mut bytes,
+                start + abi::ENGINE_INLINE_OBJECT_PARAGRAPH_ID,
+                owner,
+            );
+            bytes[start + abi::ENGINE_INLINE_OBJECT_BASELINE_ALIGNMENT] = 1;
+        }
+        bytes
+    }
+
+    fn parse_test_geometry(
+        bytes: &[u8],
+        constraint_count: u32,
+        inline_object_count: u32,
+        limits: super::super::frame::UpdateLimits,
+    ) -> super::super::semantic_wire::GeometryBatch<'_> {
+        let header = ENGINE_UPDATE_REQUEST_HEADER_SIZE;
+        let constraints_length = constraint_count * abi::ENGINE_CONSTRAINT_RECORD_SIZE;
+        let regions_offset = if constraint_count == 0 {
+            0
+        } else {
+            header + constraints_length
+        };
+        let inline_objects_offset = if inline_object_count == 0 {
+            0
+        } else {
+            header + constraints_length
+        };
+        parse_geometry(
+            bytes,
+            if constraint_count == 0 { 0 } else { header },
+            constraint_count,
+            regions_offset,
+            u32::from(constraint_count != 0),
+            0,
+            0,
+            inline_objects_offset,
+            inline_object_count,
+            limits,
+        )
+        .unwrap()
+    }
+
     fn multiline_root_geometry_bytes() -> Vec<u8> {
         let mut bytes = root_geometry_bytes();
         let constraint = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
@@ -13632,6 +19351,29 @@ mod tests {
             limits,
         )
         .unwrap()
+    }
+
+    fn test_preflight_candidate(
+        committed: &[u16],
+        mutations: super::super::semantic_wire::TextMutationBatch<'_>,
+    ) -> (PreflightTextCandidate, Vec<TextEdit>) {
+        let mut candidate = PreflightTextCandidate::default();
+        candidate.text.extend_from_slice(committed);
+        for index in 0..mutations.len() {
+            apply_text_mutation(
+                &mut candidate.text,
+                mutations.get(index).expect("test mutation exists"),
+            )
+            .expect("test mutation applies");
+        }
+        let mut edits = Vec::new();
+        if let Some(reconciliation) = text_reconciliation(mutations, committed.len()) {
+            collect_text_edits(committed, &candidate.text, reconciliation, &mut edits, 0).unwrap();
+        }
+        candidate.edit_end = edits.len();
+        candidate.unicode.analyze(&candidate.text).unwrap();
+        candidate.unicode_state = CandidateUnicode::Prepared;
+        (candidate, edits)
     }
 
     fn text_mutation_bytes(records: &[(u32, u32, &[u16])]) -> Vec<u8> {

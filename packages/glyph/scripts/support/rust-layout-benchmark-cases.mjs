@@ -64,6 +64,12 @@ export function rustLayoutBenchmarkInitialGeometry(name, base) {
 
 export function assertRustLayoutBenchmarkResult(name, previous, next) {
   if (
+    (name === 'localized-edit' || name === 'localized-splice') &&
+    (next.engineRevision <= previous.engineRevision || next.publicationGeneration <= previous.publicationGeneration)
+  ) {
+    throw new Error(`${name} did not commit a new engine revision at generation ${next.publicationGeneration}`);
+  }
+  if (
     (name === 'active-column-resize' ||
       name === 'adopt-measure-query' ||
       name === 'adopt-position-query' ||

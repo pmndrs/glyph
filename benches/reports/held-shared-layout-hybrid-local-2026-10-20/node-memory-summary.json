@@ -1,0 +1,66 @@
+{
+  "schema": "held-hybrid-node-memory-summary-v1",
+  "method": {
+    "checkpoints": "Per-field maxima across eight after-update-and-publish checkpoints of the untimed1024label fixture; maxima need not coincide",
+    "wholeCommand": "Maximum complete25ms non-atomic process-family sweep across bootstrap,1024cold oracles and teardown; not simultaneous/edit-only peak",
+    "limits": [
+      "Do not sum heap/Wasm/RSS/physical views",
+      "No allocation rate or GC-churn inference",
+      "Wasm entries are capacities, not requested live bytes"
+    ]
+  },
+  "arms": {
+    "main": {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-node-main/node-checkpoints.json",
+      "sourceSha256": "ea2f445a2e33abb5ceb5e618854c32df648de855bb41f4c77539256b49be2d62",
+      "archive": {
+        "basename": "main-4e25a96a.tgz",
+        "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20"
+      },
+      "checkpointCount": 8,
+      "jsHeapUsedMaxBytes": 26411632,
+      "rssMaxBytes": 396001280,
+      "engineWasmCapacityMaxBytes": 158662656,
+      "wholeCommandObservedNonAtomicSweepMaxBytes": 620604832
+    },
+    "published010": {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-node-published010/node-checkpoints.json",
+      "sourceSha256": "7020a027e7c9557beb5a6ff54cce74830026c0c4ca7d8e9a8b135a69411a202e",
+      "archive": {
+        "basename": "published-0.1.0.tgz",
+        "sha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b"
+      },
+      "checkpointCount": 8,
+      "jsHeapUsedMaxBytes": 31032384,
+      "rssMaxBytes": 388972544,
+      "engineWasmCapacityMaxBytes": 158072832,
+      "wholeCommandObservedNonAtomicSweepMaxBytes": 581951568
+    },
+    "prior28fd": {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-node-prior28fd/node-checkpoints.json",
+      "sourceSha256": "1b04a28c40dd33a7d026ac131cc9c1ac3b99a4ae0342132743678efc0ca6d9b8",
+      "archive": {
+        "basename": "pmndrs-glyph-0.1.0.tgz",
+        "sha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb"
+      },
+      "checkpointCount": 8,
+      "jsHeapUsedMaxBytes": 30790320,
+      "rssMaxBytes": 326942720,
+      "engineWasmCapacityMaxBytes": 44630016,
+      "wholeCommandObservedNonAtomicSweepMaxBytes": 654644888
+    },
+    "candidate": {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-node-candidate/node-checkpoints.json",
+      "sourceSha256": "cc2a0449b1fe9df3e2afdee27c96f0c4d1d0f7501529b7d69642a515a06f96d3",
+      "archive": {
+        "basename": "pmndrs-glyph-0.1.0.tgz",
+        "sha256": "37c1e0882acfb16bc6ebc9e2538340b4a12eeff6d8006e0055e86423db3572e6"
+      },
+      "checkpointCount": 8,
+      "jsHeapUsedMaxBytes": 30846776,
+      "rssMaxBytes": 327565312,
+      "engineWasmCapacityMaxBytes": 44695552,
+      "wholeCommandObservedNonAtomicSweepMaxBytes": 651957192
+    }
+  }
+}

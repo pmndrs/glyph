@@ -1,0 +1,25 @@
+{
+  "generatedAt": "2026-10-21T05:30:06.282Z",
+  "labsVersion": "0.9.0",
+  "harnessDigest": "badf82b0d84dbced158f4bb44ee50b7adac7169323f295d108909c2b93413627",
+  "blocks": 8,
+  "suite": "full",
+  "samplingPolicy": "single-call",
+  "baselineAvailability": "complete",
+  "baseline": {
+    "requested": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "version": "0.1.0",
+    "sha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb"
+  },
+  "candidate": {
+    "requested": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "version": "0.1.0",
+    "sha256": "d2f7a01ffb47aeaf87499979310286f1c980b88389e20bd1fc0f39794a0fc18c"
+  },
+  "savedCandidate": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data",
+  "comparison": "comparison.txt",
+  "notComparable": {
+    "baselineCheckFailures": [],
+    "timingModeMismatches": []
+  }
+}

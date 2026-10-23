@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "mise",
+    "exec",
+    "--",
+    "python3",
+    "-c",
+    "import json,math,hashlib; from pathlib import Path; root=Path(\"/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/v3-combined/frontier-comparison\"); out=Path(\"/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/v3-combined/frontier-absolute-results.json\"); files={n:json.loads((root/(n+\".json\")).read_text()) for n in (\"baseline\",\"candidate\")}; sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest(); rows={}; nearest=lambda xs,p:sorted(xs)[math.ceil(p*len(xs))-1];\nfor arm,d in files.items():\n for f in d[\"files\"]:\n  for b in f[\"benchmarks\"]:\n   s=b[\"runs\"][0][\"stats\"]; ns=s[\"samples\"]; name=b[\"alias\"]; rows.setdefault(name,{})[arm]={\"file\":f[\"file\"],\"n\":len(ns),\"p50Ms\":nearest(ns,.5)/1e6,\"p90Ms\":nearest(ns,.9)/1e6,\"p95Ms\":nearest(ns,.95)/1e6,\"minMs\":min(ns)/1e6,\"maxMs\":max(ns)/1e6,\"blockMediansMs\":[x/1e6 for x in s[\"blocks\"][\"medians\"]],\"warmupCalls\":s[\"blocks\"][\"warmupCalls\"],\"plan\":s[\"plan\"]}; result={\"method\":\"nearest-rank pooled raw single-call sample percentiles, nanoseconds normalized to milliseconds; block medians preserved separately\", \"manifestSha256\":sha(root/\"manifest.json\"),\"baselineRawSha256\":sha(root/\"baseline.json\"),\"candidateRawSha256\":sha(root/\"candidate.json\"),\"comparisonSha256\":sha(root/\"comparison.txt\"),\"exclusions\":{\"baselineCheckFailures\":[],\"timingModeMismatches\":[],\"matchedRows\":4,\"comparisonRowsNeutral\":4},\"calibrationAndNoise\":{\"baseline\":{\"stableClockGHz\":[3.86,3.95],\"medianSpreadPercent\":1.5,\"comparisonResolutionPercent\":2.0,\"clockExplainsSpreadPercent\":0,\"clockAffected\":[{\"identity\":\"1 labels first set\",\"spreadPercent\":3.9}],\"noisy\":[{\"identity\":\"1 labels first set\",\"withinProcessSpreadPercent\":17.0}]},\"candidate\":{\"stableClockGHz\":[3.92,3.95],\"medianSpreadPercent\":1.2,\"comparisonResolutionPercent\":1.7,\"clockExplainsSpreadPercent\":0,\"clockAffected\":[{\"identity\":\"1 labels first set\",\"spreadPercent\":5.3}],\"noisy\":[{\"identity\":\"1 labels first set\",\"withinProcessSpreadPercent\":16.6}]}},\"rows\":rows}; out.write_text(json.dumps(result,indent=2)+\"\\n\"); print(json.dumps({\"output\":str(out),\"sha256\":sha(out),\"rows\":list(rows),\"raw\":{\"baseline\":sha(root/\"baseline.json\"),\"candidate\":sha(root/\"candidate.json\")}},indent=2))"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-22T20:53:03.794250+00:00",
+  "finished": "2026-10-22T20:53:03.978840+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "09f739802f637835e8c197240e56f02217e14802eebce89176f416ba754dd0fe",
+    "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

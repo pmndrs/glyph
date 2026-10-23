@@ -1,0 +1,271 @@
+{
+  "format": "glyph-held-physical-byte-evidence-index-v1",
+  "frozenRuntimeHead": "ad6327d9199cedf88217f1098db3aeb439ec3e66",
+  "limits": "Absolute paths identify this machine only. Packages, raw samples, profiles and build outputs are not on GitHub; authenticate exact artifacts or establish a new baseline elsewhere. Numeric exits not inferred from log text. Timing receipts carry their own raw file index.",
+  "localEvidence": [
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/package/package-evidence-final.json",
+      "bytes": 272075,
+      "sha256": "92666e959a9f2d329bed46eefd6cd65f8dd0d62865fcfbdb3118000741d10d7a",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/package/pmndrs-glyph-0.1.0.tgz",
+      "bytes": 3167719,
+      "sha256": "880255c15c9822ded79cc934dba755070348faf729bc96af9cd6f450a57cb332",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/candidate-memory.json",
+      "bytes": 77156,
+      "sha256": "0692784bbedc55d45923964d285ccf70564a4f17321ea26c2cd9674fc70da50d",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/static-archive-comparison.json",
+      "bytes": 471409,
+      "sha256": "825dacd3e0f78dae841f135bbf655f5c52a098ed5e7dce1c49ed47851f8156ef",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/static-archive-comparison.pre-correction-20261018.json",
+      "bytes": 465852,
+      "sha256": "0453379c31374f4fcc586b0a1155faf7b9e409b5c612862d25405027f49eedfc",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/static-comparison-final.json",
+      "bytes": 495038,
+      "sha256": "c0e9baa3d365a58193fb8776149c237a4462aa8a5427a2dc7aa42e88523c0880",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/static-four-way-verified.json",
+      "bytes": 59741,
+      "sha256": "e6665fcfbf2f49d0862655d20976c645b00518e5ae6b0fb7736896584a36fd38",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/static-four-way-verified.v1.json",
+      "bytes": 46431,
+      "sha256": "1e476fcdb8c2d8948c7040dfc3b650159d1636c38dc9a1f2df79ff66931045b8",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/packages/glyph/.cache/physical-byte-elision-named/manifest.json",
+      "bytes": 264289,
+      "sha256": "d71117295cceecf58cfcca29521ffbf775917a331870086e637c8845e4f389b6",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/packages/glyph/.cache/physical-byte-elision-memory/manifest.json",
+      "bytes": 3685,
+      "sha256": "a7e64c4f8b49a7efebd9e53010567de341ef2911db3ed89f3698eb2eab66f0b0",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/benchmark-static-check.log",
+      "bytes": 179,
+      "sha256": "1dd3b121334e04906073155690eff2653ce03ee074c1313bae727a7c8714dc92",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/docs-check.log",
+      "bytes": 183,
+      "sha256": "43bfd29a3558c7545ef6e95e75a115a7dc3fb87102a470c18a112a3677d569fa",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/glyph-package-check-final.log",
+      "bytes": 177147,
+      "sha256": "8d20bf48ed6ee289d87d66539832f366af9a899467c5d21e09f1454d39dd3a15",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/glyph-package-check.log",
+      "bytes": 177980,
+      "sha256": "957501918d0f4e53860fbf0da12afce6c99cf1e6197a13880b66f79a3b95cb0c",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/glyph-peer-check-final.log",
+      "bytes": 22954,
+      "sha256": "e6b0b69f398e80073a809ec3e8e6d35e8a8c8c8e8bf77173876eeb1d81c55a35",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/glyph-peer-check.log",
+      "bytes": 23053,
+      "sha256": "0ecee8f51cee5c886ecdc91029da5cdf5cbd95494758087913c060732aa8c598",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/package-size.log",
+      "bytes": 12538,
+      "sha256": "136ff2ef56ea27334f6ab132b28118bcc69f12a20de7694e6d4d2a6db6ae62a8",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/pnpm-pack.log",
+      "bytes": 43013,
+      "sha256": "6ab8b084b71d19fbe24d7ff1a57599c820e1c1966788163f0f391003a8291b3f",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/prepared-operations-check-final.log",
+      "bytes": 191,
+      "sha256": "c4be549f6ec82cf68992b71864adae2f359de3287462b44fe1a4547e52a19cde",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/prepared-operations-check.log",
+      "bytes": 1869,
+      "sha256": "6f81a69be4aab88a9bfdd1c85ef98453efa1a74e234e0f4fb5681c9d11012975",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/r3f-hello-world-build.log",
+      "bytes": 3759,
+      "sha256": "ca7f1e3f3cceaa4f3cb7c15d43c8e3d69f8c2ad1e81a6ec3e31778f4c38ae4f6",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/shaper-live-memory.log",
+      "bytes": 832,
+      "sha256": "7cfea42b61a2ff75162d2e1a9fead1b4b5a69e2255692a026ddc072c4eb32cb2",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/shaper-memory-artifact.log",
+      "bytes": 1660,
+      "sha256": "7fd08233411c47e2e3ad122b22b6c083c570dd46030c787c83e91ef960b125d3",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/static-four-way-closure-correction.log",
+      "bytes": 2944,
+      "sha256": "be10e1672121a078eb6370f378d2ac1c36094f43ab7fe795c9f50dc595b1a76b",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/static-four-way-verified.log",
+      "bytes": 39545,
+      "sha256": "88f31086da92b3245a6dfb12106292080aeb6913c55150d0a4ab3b826272a963",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/text-shaper-wasm-exports.log",
+      "bytes": 3547,
+      "sha256": "a2813a4bc3401a37eb0ce9827db2a7643980af992d36b3ec46f729cfdb53aca3",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/tres-playground-build.log",
+      "bytes": 2696,
+      "sha256": "623dc9364a2cdd54ae61b5fb8032027b3aa9d7c5ccbcef337956e8374b190a33",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/browser/cleanup-machine-receipt.json",
+      "bytes": 1612,
+      "sha256": "065ab82bd515d82d467d02cda122d980b7a9c5b1aa0ad3863acddee289af5457",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/browser/conformance-machine-receipt.json",
+      "bytes": 2136,
+      "sha256": "86ce52c02231efb0864f2e1810d44e3ae358544d5089b1efd77f3ab84183f28f",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/browser/presentation-machine-receipt.json",
+      "bytes": 2546,
+      "sha256": "eb113cf8103dca64595a4b7134056205e0f50d9301c563c51a4e8d54d625b814",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/gates/browser/retained-uploads-machine-receipt.json",
+      "bytes": 5145,
+      "sha256": "68f390f00a621711b21da48f74d2b8ae8e583e6621ec6c932120e2d6c5493e13",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-bug-review-20261017/bitmap-equal-patch-proof/raw.json",
+      "bytes": 1206636,
+      "sha256": "206a7d39dd86f1941666624b2e8e0d4fb76e9b1c610e5ef57b07984b7bcb8e96",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-bug-review-20261017/bitmap-equal-patch-proof/summary-parent-recomputed.json",
+      "bytes": 6938,
+      "sha256": "b31507f540384d2f6d67e573fa03d17d94b7516c7e28efd523929f6a99262d86",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-bug-review-20261017/bitmap-equal-patch-proof/observe.mjs",
+      "bytes": 10540,
+      "sha256": "1b8d94f4ab4c63e5d2d3a53937d55fd12cfd9cfc60eb09e238da63603586dcc3",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-bug-review-20261017/bitmap-equal-patch-proof/summarize.py",
+      "bytes": 3784,
+      "sha256": "1781c3306cca8e61d42ebdb6a1191d3e6ac7818d35be55a2e7edd50c154e2f76",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-bug-review-20261017/bitmap-equal-patch-proof/rust-source.json",
+      "bytes": 183,
+      "sha256": "8be8eb658383550b5a1a4283d08681ce4ada0f0b6bd4e029ca93847fb0541c48",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-bug-review-20261017/bitmap-equal-patch-proof/native-full-final.log",
+      "bytes": 49371,
+      "sha256": "d97e2f63d116ab2ddff33ccfe6be9812cca0a3289173dfd64fbaf242c724a8a2",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-bug-review-20261017/bitmap-equal-patch-proof/native-full-session.log",
+      "bytes": 49583,
+      "sha256": "5f39b590d1ca7f57dbcf8e9257ab005e651c7d24c861db5cc781adc928ead559",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-bug-review-20261017/bitmap-equal-patch-proof/implementation-receipt.md",
+      "bytes": 5410,
+      "sha256": "8d4ca13eaa7a412c9b5b5d8c695a0fe880ce7c0350bd7e628a87da33f3e93050",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-bug-review-20261017/bitmap-equal-patch-proof/post-wave/raw.json",
+      "bytes": 983522,
+      "sha256": "73691f804ba973f91bd75c5dfa163cd423801b7e0bc097da74b469263152918d",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-bug-review-20261017/bitmap-equal-patch-proof/post-wave/summary.json",
+      "bytes": 6054,
+      "sha256": "b446d7d1af9fb078e4082f74899fae990248031e6ad17d52ffd1206d72836d3b",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-bug-review-20261017/bitmap-equal-patch-proof/post-wave/observe.mjs",
+      "bytes": 12395,
+      "sha256": "7b16b3386b8dab5cee4026dc4203e13ff5f665720a6f5b03dad835188a62a7b1",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-bug-review-20261017/bitmap-equal-patch-proof/post-wave/summarize.py",
+      "bytes": 4410,
+      "sha256": "1078f91c9785335af42f9f16fcde27bf5c6ca5df8e821cf4e428ae4aa74c914e",
+      "availability": "local-only unless separately curated in this report"
+    },
+    {
+      "localPath": "/private/tmp/glyph-bug-review-20261017/bitmap-equal-patch-proof/post-wave/preflight.py",
+      "bytes": 1643,
+      "sha256": "9dee6413f1276e7c2d877d4c81b18f9eeeb5c80c8888e956410725fd2efa3fcb",
+      "availability": "local-only unless separately curated in this report"
+    }
+  ]
+}

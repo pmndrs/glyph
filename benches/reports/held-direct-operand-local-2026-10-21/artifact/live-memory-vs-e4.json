@@ -1,0 +1,43 @@
+{
+  "scope": "Matched maintained 71-phase eight-cycle engine allocator protocol; no latency implication",
+  "old": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/shaper-live-memory.json",
+    "sha256": "b4c4a5d4b889a440e0e0073e2a408bc20820a89087732b68b89cdc15d7ba44c6"
+  },
+  "new": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/shaper-live-memory-final.json",
+    "sha256": "80182196ab912d2a227ae09388ac748f638529a6a88a824aab31fdd32847c3e7"
+  },
+  "methodExact": true,
+  "phaseScheduleExact": true,
+  "maxima": {
+    "requestedLive": {
+      "old": 40471115,
+      "new": 41848831,
+      "delta": 1377716
+    },
+    "requestedPeak": {
+      "old": 40671431,
+      "new": 42049147,
+      "delta": 1377716
+    },
+    "wasmPages": {
+      "old": 728,
+      "new": 774,
+      "delta": 46
+    }
+  },
+  "exclusions": {
+    "cycles": 8,
+    "recordBytes": 32,
+    "scope": "captured engine Wasm instance only",
+    "exclusions": [
+      "JS tokens",
+      "GPU",
+      "font decoder instances"
+    ],
+    "requestedPeak": "completed allocator-call high water; excludes Talc fragmentation and transient internal realloc peak",
+    "cumulativeRequested": "full new size of successful realloc, not net growth",
+    "wasmPages": "capacity, reported separately from requested live bytes"
+  }
+}

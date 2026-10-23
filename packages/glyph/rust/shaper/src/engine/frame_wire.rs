@@ -179,6 +179,7 @@ fn positive(bytes: &[u8], offset: usize) -> Result<u32, u32> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::frame::{TEXT_ENCODING_UTF16_LE, TEXT_MUTATION_REPLACE_UTF16};
     use super::*;
     use crate::wire::write_u32;
     use alloc::vec;
@@ -244,6 +245,64 @@ mod tests {
             parse_update_request(&nonempty, 4),
             Err(STATUS_INVALID_REQUEST)
         );
+    }
+
+    #[test]
+    fn rejects_invalid_geometry_before_admitting_a_valid_text_edit() {
+        let mut bytes = request();
+        let text_record_offset = bytes.len();
+        let text_record_size = crate::abi_contract::ENGINE_TEXT_MUTATION_RECORD_SIZE as usize;
+        bytes.resize(text_record_offset + text_record_size, 0);
+        let text_record = text_record_offset;
+        bytes[text_record + crate::abi_contract::ENGINE_TEXT_MUTATION_OPCODE] =
+            TEXT_MUTATION_REPLACE_UTF16;
+        bytes[text_record + crate::abi_contract::ENGINE_TEXT_MUTATION_ENCODING] =
+            TEXT_ENCODING_UTF16_LE;
+        write_u32(
+            &mut bytes,
+            text_record + crate::abi_contract::ENGINE_TEXT_MUTATION_PARAGRAPH_ID,
+            1,
+        );
+        write_u32(
+            &mut bytes,
+            text_record + crate::abi_contract::ENGINE_TEXT_MUTATION_INSERT_COUNT,
+            1,
+        );
+        let text_payload_offset = bytes.len();
+        write_u32(
+            &mut bytes,
+            text_record + crate::abi_contract::ENGINE_TEXT_MUTATION_INSERT_OFFSET,
+            u32::try_from(text_payload_offset).unwrap(),
+        );
+        bytes.extend_from_slice(&[b'a', 0]);
+
+        let constraint_offset = (bytes.len() + 3) & !3;
+        bytes.resize(
+            constraint_offset + crate::abi_contract::ENGINE_CONSTRAINT_RECORD_SIZE as usize,
+            0,
+        );
+        write_u32(
+            &mut bytes,
+            crate::abi_contract::ENGINE_UPDATE_TEXT_MUTATION_COUNT,
+            1,
+        );
+        write_u32(
+            &mut bytes,
+            crate::abi_contract::ENGINE_UPDATE_TEXT_MUTATIONS_OFFSET,
+            u32::try_from(text_record_offset).unwrap(),
+        );
+        write_u32(&mut bytes, ENGINE_UPDATE_CONSTRAINT_COUNT, 1);
+        write_u32(
+            &mut bytes,
+            ENGINE_UPDATE_CONSTRAINTS_OFFSET,
+            u32::try_from(constraint_offset).unwrap(),
+        );
+        let region_count = constraint_offset + crate::abi_contract::ENGINE_CONSTRAINT_REGION_COUNT;
+        bytes[region_count..region_count + 2].copy_from_slice(&1_u16.to_le_bytes());
+        let byte_length = u32::try_from(bytes.len()).unwrap();
+        write_u32(&mut bytes, ENGINE_UPDATE_BYTE_LENGTH, byte_length);
+
+        assert_eq!(parse_update_request(&bytes, 4), Err(STATUS_INVALID_REQUEST));
     }
 
     pub(super) fn request() -> Vec<u8> {

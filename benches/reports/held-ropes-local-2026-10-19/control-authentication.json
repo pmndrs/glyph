@@ -1,0 +1,403 @@
+{
+  "format": "glyph-held-rerun-control-authentication-v1",
+  "createdUtc": "2026-10-19",
+  "scope": "Authenticated preserved package controls; no build, install, benchmark, browser, or process inspection performed.",
+  "controls": [
+    {
+      "name": "main-4e25a96a",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-preserved-20261018-combined-final/inputs/main-baseline/pmndrs-glyph-0.1.0.tgz",
+      "destination": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+      "expectedSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "sourceSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "destinationSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "hashMatchesExpected": true,
+      "copyMatchesSource": true,
+      "archiveBytes": 3120073,
+      "memberCount": 1222,
+      "provenance": "4e25a96a57462fef5ad0d19065a822695b480f60",
+      "selectedMembers": [
+        {
+          "path": "package/dist/font-baker/index.js",
+          "bytes": 5545,
+          "sha256": "dfe9b84e540a128584290f4f91bbe898049a85a1dd7c19cdedaf0697e150ac29"
+        },
+        {
+          "path": "package/dist/index.js",
+          "bytes": 998,
+          "sha256": "d7f592e93dec399d374bc5cd5f2b73bc4fab03c913c4939c40a1deb5d4366b97"
+        },
+        {
+          "path": "package/dist/react/index.js",
+          "bytes": 300,
+          "sha256": "d616b67a674dd3db9ab73bf140e9597b23e2cd94773826736a9aa75eae42d7b0"
+        },
+        {
+          "path": "package/dist/shaders/tsl/index.js",
+          "bytes": 280,
+          "sha256": "643428395a3f11bd26680c7a29905fb2e9ac15a5592e9281985f4685f871a879"
+        },
+        {
+          "path": "package/dist/shaders/tsl/slug/index.js",
+          "bytes": 617,
+          "sha256": "2b564c842854720235cd3ebebf189db28111ddf4b06fa869c415a9a8ec237e79"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/index.js",
+          "bytes": 2363,
+          "sha256": "ac293861234958ee1c6dc1744f96d14a06124fb50072e8efbbf622cb5eacabd4"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/slug/core/index.js",
+          "bytes": 999,
+          "sha256": "d372d3457b025b1e787ba4290d8f9f5382cd0fb44f6ba6b95f136cbad6801132"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/slug/index.js",
+          "bytes": 1756,
+          "sha256": "5be75774d3012be01dabfe7ddd7ee2613acb3d2c520a0bf819cdbcf6bd330e75"
+        },
+        {
+          "path": "package/dist/font-baker/index.d.ts.map",
+          "bytes": 4330,
+          "sha256": "2fce173a1172f590c3c36c18d1b2d7edc2ffb5300bb8bd2f3c02b3718d1fbee6"
+        },
+        {
+          "path": "package/dist/index.d.ts.map",
+          "bytes": 4617,
+          "sha256": "152dc771f45177dd512f4539452da704d3fc1956aab53431f4dc968bc620397e"
+        },
+        {
+          "path": "package/dist/react/index.d.ts.map",
+          "bytes": 297,
+          "sha256": "a59fbbabfb52d209e9ee1e53eeaf38385aa97380cd92e72cfc5e49a0bdcb1d62"
+        },
+        {
+          "path": "package/dist/shaders/tsl/index.d.ts.map",
+          "bytes": 542,
+          "sha256": "96fd772745d900e9e403fd6c39211ce6c87eb89c7101499e7767ab2cd92844a0"
+        },
+        {
+          "path": "package/dist/shaders/tsl/slug/index.d.ts.map",
+          "bytes": 442,
+          "sha256": "673982323d7d052a924d2d377514dff04c100c5425d51035c9142992b61ee832"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/index.d.ts.map",
+          "bytes": 939,
+          "sha256": "664435a0a771a6b570e1c09e2b7f2b1a015b58793da086d57b3d729d1466b57c"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/slug/core/index.d.ts.map",
+          "bytes": 486,
+          "sha256": "fa30e1ba9b536e823a1a779b3d0c3cc9ac465cde926a872ba83e8b50e938e45a"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/slug/index.d.ts.map",
+          "bytes": 714,
+          "sha256": "1484a94f1cddf27bda1bf0cf601aeded6a3d56966a25d3cf7bbe475f76f43354"
+        },
+        {
+          "path": "package/dist/font-baker/index.js.map",
+          "bytes": 22605,
+          "sha256": "860e624142dd131f6a42cef6d7e41e3842499044473dfec4c751aac74847c541"
+        },
+        {
+          "path": "package/dist/font-baker/index.d.ts",
+          "bytes": 4480,
+          "sha256": "84e4974e9a2cae6bb48e9d9e461d58b64ee7ffa25aa9ebfc2f7191d0400cb1cf"
+        },
+        {
+          "path": "package/dist/index.d.ts",
+          "bytes": 6882,
+          "sha256": "b9579b14e667f0173e64ba5b8e4f74198bacf125a6688b8204a59e45b8c3ffbe"
+        },
+        {
+          "path": "package/dist/react/index.d.ts",
+          "bytes": 271,
+          "sha256": "ef72562c1e6bc7f3d4fa0ad42957231b52d72fe1e80395374be5dace93fdd6ab"
+        },
+        {
+          "path": "package/dist/shaders/tsl/index.d.ts",
+          "bytes": 826,
+          "sha256": "7d27a6b1e9a87f0344c54aa20bf6b382af127a24136f43414978ccc4e8480f86"
+        },
+        {
+          "path": "package/dist/shaders/tsl/slug/index.d.ts",
+          "bytes": 592,
+          "sha256": "cc425115b9cbe080424c5088d739043b4d6059ddc55b99d16e7e95035ffb19cc"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/index.d.ts",
+          "bytes": 1695,
+          "sha256": "2aa239684fb3705a8d3cd69e859a1ad19c1caccd33c52ad90a72f3b96b578959"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/slug/core/index.d.ts",
+          "bytes": 930,
+          "sha256": "ec390c691cb93cc3b6c7a1e3600b83a2ceb78abd061bf681a2e7166379d4170c"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/slug/index.d.ts",
+          "bytes": 967,
+          "sha256": "1a884a06b9315197fcb5df31f7ddbda952160a9bfbfd9650afe2e216abb48b81"
+        },
+        {
+          "path": "package/dist/text-shaper.wasm",
+          "bytes": 1462005,
+          "sha256": "059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4"
+        }
+      ]
+    },
+    {
+      "name": "published-0.1.0",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-preserved-20261018-combined-final/inputs/published010/pmndrs-glyph-published-0.1.0.tgz",
+      "destination": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+      "expectedSha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+      "sourceSha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+      "destinationSha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+      "hashMatchesExpected": true,
+      "copyMatchesSource": true,
+      "archiveBytes": 2271693,
+      "memberCount": 764,
+      "provenance": "npm published 0.1.0",
+      "selectedMembers": [
+        {
+          "path": "package/dist/font-baker/index.js",
+          "bytes": 5576,
+          "sha256": "8a203f95f6985b4abd50e1d1f5739bf756f55c300e38ea5cb03ec40e6489b855"
+        },
+        {
+          "path": "package/dist/index.js",
+          "bytes": 998,
+          "sha256": "d7f592e93dec399d374bc5cd5f2b73bc4fab03c913c4939c40a1deb5d4366b97"
+        },
+        {
+          "path": "package/dist/react/index.js",
+          "bytes": 300,
+          "sha256": "d616b67a674dd3db9ab73bf140e9597b23e2cd94773826736a9aa75eae42d7b0"
+        },
+        {
+          "path": "package/dist/shaders/tsl/index.js",
+          "bytes": 280,
+          "sha256": "643428395a3f11bd26680c7a29905fb2e9ac15a5592e9281985f4685f871a879"
+        },
+        {
+          "path": "package/dist/shaders/tsl/slug/index.js",
+          "bytes": 617,
+          "sha256": "2b564c842854720235cd3ebebf189db28111ddf4b06fa869c415a9a8ec237e79"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/index.js",
+          "bytes": 2363,
+          "sha256": "ac293861234958ee1c6dc1744f96d14a06124fb50072e8efbbf622cb5eacabd4"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/slug/core/index.js",
+          "bytes": 999,
+          "sha256": "d372d3457b025b1e787ba4290d8f9f5382cd0fb44f6ba6b95f136cbad6801132"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/slug/index.js",
+          "bytes": 1756,
+          "sha256": "5be75774d3012be01dabfe7ddd7ee2613acb3d2c520a0bf819cdbcf6bd330e75"
+        },
+        {
+          "path": "package/dist/font-baker/index.d.ts",
+          "bytes": 4087,
+          "sha256": "cbc673d7f53169ce70607aafcd7cb12c6c3a921b18cc4307155dcdc82fef9154"
+        },
+        {
+          "path": "package/dist/index.d.ts",
+          "bytes": 6691,
+          "sha256": "6e322d6926a92ff868a9d9678064401daa915faa57190ecc40aee5e0f8fb73d0"
+        },
+        {
+          "path": "package/dist/react/index.d.ts",
+          "bytes": 271,
+          "sha256": "ef72562c1e6bc7f3d4fa0ad42957231b52d72fe1e80395374be5dace93fdd6ab"
+        },
+        {
+          "path": "package/dist/shaders/tsl/index.d.ts",
+          "bytes": 826,
+          "sha256": "7d27a6b1e9a87f0344c54aa20bf6b382af127a24136f43414978ccc4e8480f86"
+        },
+        {
+          "path": "package/dist/shaders/tsl/slug/index.d.ts",
+          "bytes": 592,
+          "sha256": "cc425115b9cbe080424c5088d739043b4d6059ddc55b99d16e7e95035ffb19cc"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/index.d.ts",
+          "bytes": 1695,
+          "sha256": "2aa239684fb3705a8d3cd69e859a1ad19c1caccd33c52ad90a72f3b96b578959"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/slug/core/index.d.ts",
+          "bytes": 930,
+          "sha256": "ec390c691cb93cc3b6c7a1e3600b83a2ceb78abd061bf681a2e7166379d4170c"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/slug/index.d.ts",
+          "bytes": 967,
+          "sha256": "1a884a06b9315197fcb5df31f7ddbda952160a9bfbfd9650afe2e216abb48b81"
+        },
+        {
+          "path": "package/dist/text-shaper.wasm",
+          "bytes": 1362353,
+          "sha256": "addb8144f474c9f5a005bdda084bcf15c05170004b34c7a65ab592db4962c893"
+        }
+      ]
+    },
+    {
+      "name": "prior328",
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-preserved-20261018-dense-root-main-baseline/dense-root-main-baseline/pmndrs-glyph-0.1.0.tgz",
+      "destination": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/prior328.tgz",
+      "expectedSha256": "e453db3ed8e32bbdf8f8a46f2a7a1bfab6dba02c484933062b30ea842cd57dcd",
+      "sourceSha256": "e453db3ed8e32bbdf8f8a46f2a7a1bfab6dba02c484933062b30ea842cd57dcd",
+      "destinationSha256": "e453db3ed8e32bbdf8f8a46f2a7a1bfab6dba02c484933062b30ea842cd57dcd",
+      "hashMatchesExpected": true,
+      "copyMatchesSource": true,
+      "archiveBytes": 3193397,
+      "memberCount": 1222,
+      "provenance": "328aedb833e30ea1c9ae62bda7a026e93fdc7db1",
+      "selectedMembers": [
+        {
+          "path": "package/dist/font-baker/index.js",
+          "bytes": 5545,
+          "sha256": "dfe9b84e540a128584290f4f91bbe898049a85a1dd7c19cdedaf0697e150ac29"
+        },
+        {
+          "path": "package/dist/index.js",
+          "bytes": 998,
+          "sha256": "d7f592e93dec399d374bc5cd5f2b73bc4fab03c913c4939c40a1deb5d4366b97"
+        },
+        {
+          "path": "package/dist/react/index.js",
+          "bytes": 300,
+          "sha256": "d616b67a674dd3db9ab73bf140e9597b23e2cd94773826736a9aa75eae42d7b0"
+        },
+        {
+          "path": "package/dist/shaders/tsl/index.js",
+          "bytes": 280,
+          "sha256": "643428395a3f11bd26680c7a29905fb2e9ac15a5592e9281985f4685f871a879"
+        },
+        {
+          "path": "package/dist/shaders/tsl/slug/index.js",
+          "bytes": 617,
+          "sha256": "2b564c842854720235cd3ebebf189db28111ddf4b06fa869c415a9a8ec237e79"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/index.js",
+          "bytes": 2363,
+          "sha256": "ac293861234958ee1c6dc1744f96d14a06124fb50072e8efbbf622cb5eacabd4"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/slug/core/index.js",
+          "bytes": 999,
+          "sha256": "d372d3457b025b1e787ba4290d8f9f5382cd0fb44f6ba6b95f136cbad6801132"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/slug/index.js",
+          "bytes": 1756,
+          "sha256": "5be75774d3012be01dabfe7ddd7ee2613acb3d2c520a0bf819cdbcf6bd330e75"
+        },
+        {
+          "path": "package/dist/font-baker/index.d.ts.map",
+          "bytes": 4330,
+          "sha256": "2fce173a1172f590c3c36c18d1b2d7edc2ffb5300bb8bd2f3c02b3718d1fbee6"
+        },
+        {
+          "path": "package/dist/index.d.ts.map",
+          "bytes": 4617,
+          "sha256": "152dc771f45177dd512f4539452da704d3fc1956aab53431f4dc968bc620397e"
+        },
+        {
+          "path": "package/dist/react/index.d.ts.map",
+          "bytes": 297,
+          "sha256": "a59fbbabfb52d209e9ee1e53eeaf38385aa97380cd92e72cfc5e49a0bdcb1d62"
+        },
+        {
+          "path": "package/dist/shaders/tsl/index.d.ts.map",
+          "bytes": 542,
+          "sha256": "96fd772745d900e9e403fd6c39211ce6c87eb89c7101499e7767ab2cd92844a0"
+        },
+        {
+          "path": "package/dist/shaders/tsl/slug/index.d.ts.map",
+          "bytes": 442,
+          "sha256": "673982323d7d052a924d2d377514dff04c100c5425d51035c9142992b61ee832"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/index.d.ts.map",
+          "bytes": 939,
+          "sha256": "664435a0a771a6b570e1c09e2b7f2b1a015b58793da086d57b3d729d1466b57c"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/slug/core/index.d.ts.map",
+          "bytes": 486,
+          "sha256": "fa30e1ba9b536e823a1a779b3d0c3cc9ac465cde926a872ba83e8b50e938e45a"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/slug/index.d.ts.map",
+          "bytes": 714,
+          "sha256": "1484a94f1cddf27bda1bf0cf601aeded6a3d56966a25d3cf7bbe475f76f43354"
+        },
+        {
+          "path": "package/dist/font-baker/index.js.map",
+          "bytes": 22605,
+          "sha256": "860e624142dd131f6a42cef6d7e41e3842499044473dfec4c751aac74847c541"
+        },
+        {
+          "path": "package/dist/font-baker/index.d.ts",
+          "bytes": 4480,
+          "sha256": "84e4974e9a2cae6bb48e9d9e461d58b64ee7ffa25aa9ebfc2f7191d0400cb1cf"
+        },
+        {
+          "path": "package/dist/index.d.ts",
+          "bytes": 6882,
+          "sha256": "b9579b14e667f0173e64ba5b8e4f74198bacf125a6688b8204a59e45b8c3ffbe"
+        },
+        {
+          "path": "package/dist/react/index.d.ts",
+          "bytes": 271,
+          "sha256": "ef72562c1e6bc7f3d4fa0ad42957231b52d72fe1e80395374be5dace93fdd6ab"
+        },
+        {
+          "path": "package/dist/shaders/tsl/index.d.ts",
+          "bytes": 826,
+          "sha256": "7d27a6b1e9a87f0344c54aa20bf6b382af127a24136f43414978ccc4e8480f86"
+        },
+        {
+          "path": "package/dist/shaders/tsl/slug/index.d.ts",
+          "bytes": 592,
+          "sha256": "cc425115b9cbe080424c5088d739043b4d6059ddc55b99d16e7e95035ffb19cc"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/index.d.ts",
+          "bytes": 1695,
+          "sha256": "2aa239684fb3705a8d3cd69e859a1ad19c1caccd33c52ad90a72f3b96b578959"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/slug/core/index.d.ts",
+          "bytes": 930,
+          "sha256": "ec390c691cb93cc3b6c7a1e3600b83a2ceb78abd061bf681a2e7166379d4170c"
+        },
+        {
+          "path": "package/dist/shaders/typegpu/slug/index.d.ts",
+          "bytes": 967,
+          "sha256": "1a884a06b9315197fcb5df31f7ddbda952160a9bfbfd9650afe2e216abb48b81"
+        },
+        {
+          "path": "package/dist/text-shaper.wasm",
+          "bytes": 1600609,
+          "sha256": "4ee7d0532a5f2b2a42f843b9f9d866bffb00fb4e6f70bb96adba952651944ffa"
+        }
+      ]
+    }
+  ],
+  "provenanceManifests": {
+    "main": "/Volumes/Depot/Developer/glyph/.cache/held-preserved-20261018-combined-final/inputs/main-baseline/receipt.json",
+    "published": "/Volumes/Depot/Developer/glyph/.cache/held-preserved-20261018-combined-final/inputs/published010/published010-archive-receipt.json",
+    "prior328": "/Volumes/Depot/Developer/glyph/.cache/held-preserved-20261018-dense-root-main-baseline/dense-root-main-baseline/receipt.json"
+  },
+  "timingStatus": "No new timed measurements have been taken. Older timing data was not used or reconstructed."
+}

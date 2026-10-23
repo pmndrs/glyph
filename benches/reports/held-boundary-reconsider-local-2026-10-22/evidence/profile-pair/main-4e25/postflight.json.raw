@@ -1,0 +1,61 @@
+{
+  "arm": "main-4e25",
+  "checkedUtc": "2026-10-23T00:18:16.758413+00:00",
+  "checks": {
+    "archiveFileAndManifest": true,
+    "namedFileAndManifest": true,
+    "namedExecutableMatchesShipping": true,
+    "archiveShippingMatches": true,
+    "exactCallback": true,
+    "operations": true,
+    "topology": true,
+    "n80": true,
+    "p90Saved": true
+  },
+  "pass": true,
+  "archiveSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+  "namedSha256": "7b06007ee648bdf1ebd723ab398fd8928531901b03c56017edcb2d40e8cebe4c",
+  "shippingSha256": "059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4",
+  "profileSha256": "caca34958cbcedd2704d16728af6e62b684aba95b1983b821a532a895ae6ef0e",
+  "summarySha256": "909952407c696275153bb38689c47cb38573f1b7e3a017ed95e7ebde978ddcfe",
+  "manifestSha256": "0a687b06bfe888faabeb6c33d6333ca148d6a44b42c92e1393f2b1eff0fe5e04",
+  "harnessInputDigestSha256": "e788ebad6b5b526c8cf98e496d9f65f85b35508fcdebf61a67c64a865c40a292",
+  "summaryElapsedMs": {
+    "mean": 83.14680307500001,
+    "p50": 20.64891699999953,
+    "p90": 186.8291250000002,
+    "p95": 293.01891700000033
+  },
+  "operations": {
+    "perIteration": {
+      "sets": 1024,
+      "reads": 0,
+      "publications": 1
+    },
+    "timed": {
+      "sets": 81920,
+      "reads": 0,
+      "publications": 80
+    },
+    "warmup": {
+      "sets": 10240,
+      "reads": 0,
+      "publications": 10
+    },
+    "postTimedCorrectness": {
+      "measurementReads": 1024,
+      "commitStateReads": 1025,
+      "glyphReads": 1025
+    }
+  },
+  "drawTopology": {
+    "initial": {
+      "draws": 1,
+      "glyphs": 9216
+    },
+    "final": {
+      "draws": 1,
+      "glyphs": 9216
+    }
+  }
+}

@@ -1,0 +1,29 @@
+vite v8.1.5 building client environment for production...
+[2Ktransforming...✓ 195 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                         0.73 kB │ gzip:   0.38 kB
+dist/assets/runtime-bake-worker-D3vS-9ip.js             5.25 kB
+dist/font-notices.txt                                  11.88 kB │ gzip:   3.06 kB
+dist/assets/font-awesome-world.font-DcqTioeg.glb      184.50 kB
+dist/assets/text-shaper-1XpyJLNP.wasm               1,601.55 kB │ gzip: 603.06 kB
+dist/assets/inter-latin.font-Dwo6UnRJ.glb           2,355.62 kB
+dist/assets/index-7ROQuu8e.css                          1.11 kB │ gzip:   0.52 kB
+dist/assets/slug-CwpyUIxt.js                            0.48 kB │ gzip:   0.37 kB
+dist/assets/msdf-Cb7zOaTY.js                            0.52 kB │ gzip:   0.40 kB
+dist/assets/bitmap-BSvhFpI1.js                          0.55 kB │ gzip:   0.42 kB
+dist/assets/raster-coverage-artifact-BNTMVlDe.js        0.86 kB │ gzip:   0.45 kB
+dist/assets/runtime-bake-DJI7pfda.js                    1.16 kB │ gzip:   0.66 kB
+dist/assets/raster-format-registry-Cfgctoi4.js          1.21 kB │ gzip:   0.49 kB
+dist/assets/font-face-transfer-runtime-CdCj5z73.js      1.64 kB │ gzip:   0.65 kB
+dist/assets/content-digest-DtuQcDL1.js                  2.18 kB │ gzip:   1.01 kB
+dist/assets/bitmap-decoder-Dos7K-ww.js                  2.32 kB │ gzip:   1.05 kB
+dist/assets/raster-bake-worker-host-LHh-f5Lw.js         2.36 kB │ gzip:   1.06 kB
+dist/assets/bake-progress-protocol-Bwd89xof.js          2.62 kB │ gzip:   1.08 kB
+dist/assets/msdf-decoder-CrvxrFfL.js                    2.69 kB │ gzip:   1.27 kB
+dist/assets/raster-records-RODB0z-D.js                  3.23 kB │ gzip:   1.51 kB
+dist/assets/slug-decoder-sAjX-_PE.js                    4.73 kB │ gzip:   1.91 kB
+dist/assets/raster-atlas-CDF9X7_A.js                    5.30 kB │ gzip:   2.05 kB
+dist/assets/index-CcjVcRio.js                       2,006.71 kB │ gzip: 560.02 kB
+
+✓ built in 293ms

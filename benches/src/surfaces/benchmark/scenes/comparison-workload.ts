@@ -65,6 +65,7 @@ import {
   type RetainedFontFixtureController,
 } from '../../../renderer/retained-font-fixture';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../three-root';
+import { editorialSceneProof } from './editorial-scene-proof';
 
 type WorkloadEntry = ComparisonWorkloadEntry;
 
@@ -1087,6 +1088,38 @@ async function createComparisonWorkloadRuntime(
     };
     animationEpoch = performance.now();
 
+    const editorialProofListener: EventListener | undefined =
+      new URLSearchParams(location.search).get('editorialProof') === '1'
+        ? (event) => {
+            const request = (
+              event as CustomEvent<{
+                readonly nonce: string;
+                readonly respond: (result: unknown) => void;
+              }>
+            ).detail;
+            if (typeof request?.nonce !== 'string' || typeof request.respond !== 'function') return;
+            try {
+              if (closing || disposed) throw new Error('Editorial scene proof runtime is closing');
+              request.respond({
+                nonce: request.nonce,
+                status: 'ok',
+                receipt: editorialSceneProof(
+                  configuration,
+                  rendererViewport.pixelRatio,
+                  revision,
+                  [width, height],
+                  camera,
+                  entries,
+                ),
+              });
+            } catch (error) {
+              request.respond({ nonce: request.nonce, status: 'error', message: String(error) });
+            }
+          }
+        : undefined;
+    if (editorialProofListener !== undefined)
+      window.addEventListener('glyph-editorial-proof-request', editorialProofListener);
+
     return {
       resize(nextViewport) {
         if (closing || disposed) return;
@@ -1159,6 +1192,8 @@ async function createComparisonWorkloadRuntime(
       },
       dispose() {
         if (disposal !== undefined) return disposal;
+        if (editorialProofListener !== undefined)
+          window.removeEventListener('glyph-editorial-proof-request', editorialProofListener);
         closing = true;
         revision += 1;
         const disposalReason = new DOMException('The comparison workload scene is disposed', 'AbortError');

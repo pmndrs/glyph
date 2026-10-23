@@ -1,0 +1,2288 @@
+{
+  "format": "glyph-held-preparation-receipt-cleanup-v1",
+  "generatedAt": "2026-10-16T20:54:00.208515+00:00",
+  "status": "Retained as a smaller proven work removal under revised user priority; dense regressions remain unresolved; no isolated cleanup latency claim.",
+  "scope": "Private transport and its direct planner consumer; no public API, ABI, Rust instruction, optimizer policy, semantic executor or storage-format change.",
+  "admission": "User explicitly accepts improvements below previous materiality floor. Retain safe allocation/bookkeeping reduction with correctness and delivery evidence; favorable noisy latency alone is not proof.",
+  "source": {
+    "baseCommit": "7347b549aeadf963744e77ce873e0ecc470bfc42",
+    "runtimeFiles": {
+      "packages/glyph/src/internal/handle-state.ts": {
+        "sha256": "deb43f9ad12046c0ebed409de888cc67340a3367b2cc74ef88de66e44000e83f",
+        "bytes": 69333
+      },
+      "packages/glyph/src/internal/render-planner.ts": {
+        "sha256": "e77a8f1e4e863d9c48bd18ede1e45290f0a3ed7386bca67784996bcaa1cf7365",
+        "bytes": 96522
+      }
+    }
+  },
+  "workRemoved": {
+    "perNoViewPreparation": [
+      "one Uint8Array view construction",
+      "one full PlanPublication object construction",
+      "one WeakMap lease insertion",
+      "eleven unused result-header field reads"
+    ],
+    "kept": [
+      "one synchronous Rust preparation",
+      "status/fault/root-invalidated handling",
+      "publication extent checks",
+      "request/result capacity adoption",
+      "epoch and memory growth invalidation",
+      "full decode for demanded measurement/publication/copy"
+    ],
+    "queryTradeoff": "Demanded measurement is consumed synchronously through a callback; the callback is created only for that path. No runtime allocation reduction claim for query-bearing setters.",
+    "complexity": "Removes constant per-call JS work; request encoding and Rust preparation complexity unchanged. Dense positioning/output lower bounds remain."
+  },
+  "gates": {
+    "buildExit": 0,
+    "packExit": 0,
+    "staticExit": 0,
+    "nodeTests": {
+      "exit": 0,
+      "passed": 1048,
+      "failed": 0,
+      "evidence": "gates/node-tests-candidate.log",
+      "excludedPreliminaryRun": "gates/node-tests-before-publication.log started before staged build publication; not candidate evidence"
+    },
+    "preparedOperationGenerators": {
+      "exit": 0,
+      "cases": 30
+    },
+    "minimumPeers": {
+      "exit": 0,
+      "tests": 55
+    },
+    "nativeTests": "473 from preceding same-machine checkpoint remain applicable: this wave changes no Rust source.",
+    "independentReview": "Fresh scoped native Sol High review found no reachable ownership/correctness defect; no tests were run by reviewer.",
+    "browserConformance": {
+      "exit": 0,
+      "cases": 16
+    },
+    "deliverySize": {
+      "initialExit": 1,
+      "initialReason": "Production example app dist prerequisites absent; built R3F and Tres, then successful workflow exit0",
+      "finalExit": 0
+    },
+    "animatedLayout": {
+      "exit": 0,
+      "cells": [
+        {
+          "backend": "webgpu",
+          "workloads": 1,
+          "rendererCount": 1,
+          "shaders": "tsl",
+          "technique": "bitmap"
+        },
+        {
+          "backend": "webgpu",
+          "workloads": 1,
+          "rendererCount": 1,
+          "shaders": "tsl",
+          "technique": "mtsdf"
+        },
+        {
+          "backend": "webgpu",
+          "workloads": 1,
+          "rendererCount": 1,
+          "shaders": "tsl",
+          "technique": "slug"
+        },
+        {
+          "backend": "webgl2",
+          "workloads": 1,
+          "rendererCount": 1,
+          "shaders": "tsl",
+          "technique": "bitmap"
+        },
+        {
+          "backend": "webgl2",
+          "workloads": 1,
+          "rendererCount": 1,
+          "shaders": "tsl",
+          "technique": "mtsdf"
+        },
+        {
+          "backend": "webgl2",
+          "workloads": 1,
+          "rendererCount": 1,
+          "shaders": "tsl",
+          "technique": "slug"
+        }
+      ],
+      "correctnessOnly": true,
+      "inspectedScreenshots": ["webgpu-bitmap-dynamic-layout.png", "webgl2-slug-dynamic-layout.png"],
+      "images": {
+        "webgl2-bitmap-dynamic-layout.png": {
+          "sha256": "9918daf6aa45bd8bc7af745ea56a61cd604dc3c0c6df6937e2f3cec3dc778609",
+          "bytes": 201152
+        },
+        "webgl2-mtsdf-dynamic-layout.png": {
+          "sha256": "1a928590d21d45d00953bb7b78957decf0d124b92e8c33d2bde75dd781ef3729",
+          "bytes": 162972
+        },
+        "webgl2-slug-dynamic-layout.png": {
+          "sha256": "53fb5e43b8099d4b35bd462c76b16212c49fbfc963a3532687d9cd4b58d38d24",
+          "bytes": 161912
+        },
+        "webgpu-bitmap-dynamic-layout.png": {
+          "sha256": "e62ccf14f12a9c1b0435c9c9ff5caca2a9a3579a7428d7e34c74d68e74ef5e8c",
+          "bytes": 201653
+        },
+        "webgpu-mtsdf-dynamic-layout.png": {
+          "sha256": "32759d914cb768867e5eed13cb4f3c9bf6946ac00c856e3a19fcda2841a06faf",
+          "bytes": 162739
+        },
+        "webgpu-slug-dynamic-layout.png": {
+          "sha256": "c6ce76ee54f18cdf949540b421b90a09832e1e72d03e2594bb25cca3bda4a3d6",
+          "bytes": 161018
+        }
+      },
+      "portlessVersion": "0.15.8",
+      "proxyPort": 41355,
+      "serverPort": 4014,
+      "serverStopped": true,
+      "ownedProxyStopped": true
+    },
+    "benchmarkStaticExit": 0
+  },
+  "namedArtifact": {
+    "artifact": {
+      "file": "/private/tmp/glyph-held-20261016/.cache/held-local-20261016/prepare-receipt/package/pmndrs-glyph-0.1.0.tgz",
+      "sha256": "2a7f0317a49319203aac935a8d7387eafcc9f78443ff6de31c699c4605412627"
+    },
+    "releaseSha256": "6f7afa1c596dc7c08d2138a67c4ae955d8aff5824602452cb6d12f30f2df3bbd",
+    "namedSha256": "16e471b3a3e81175dce738c486ce5ad30d030d674f1735128c68607642f6cb73",
+    "executableSha256": "6f7afa1c596dc7c08d2138a67c4ae955d8aff5824602452cb6d12f30f2df3bbd",
+    "sourceRoot": "/private/tmp/glyph-held-20261016",
+    "sourceRevision": "7347b549aeadf963744e77ce873e0ecc470bfc42",
+    "sourceDirty": "M .agents/docs/planning/publication-frontier.md\n M .agents/docs/reports/final-performance-architecture-plan.md\n M packages/glyph/src/internal/handle-state.ts\n M packages/glyph/src/internal/render-planner.ts",
+    "tools": {
+      "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+      "wasmOpt": "wasm-opt version 129 (version_129)"
+    },
+    "simd": true,
+    "oneCallerInlineMaxFunctionSize": "0",
+    "optimization": [
+      "--enable-bulk-memory",
+      "--enable-nontrapping-float-to-int",
+      "--enable-simd",
+      "--one-caller-inline-max-function-size=0",
+      "--merge-similar-functions",
+      "-Oz",
+      "--merge-similar-functions",
+      "-Oz"
+    ]
+  },
+  "wasmSectionComparison": {
+    "beforeSha256": "c4fcd84c34bd3accac9454ffd2ae635285323480dff1426ab9ab80f7ba97a67a",
+    "candidateSha256": "6f7afa1c596dc7c08d2138a67c4ae955d8aff5824602452cb6d12f30f2df3bbd",
+    "sectionCountsEqual": true,
+    "sections": [
+      {
+        "id": 1,
+        "bytesBefore": 809,
+        "bytesAfter": 809,
+        "equal": true,
+        "beforeSha256": "564566680227f5c706082fd17b226d6c03f1dbe2833b502c117eb6b93b54249b",
+        "afterSha256": "564566680227f5c706082fd17b226d6c03f1dbe2833b502c117eb6b93b54249b"
+      },
+      {
+        "id": 3,
+        "bytesBefore": 1578,
+        "bytesAfter": 1578,
+        "equal": true,
+        "beforeSha256": "af7ce8f0b2d890141c72d0d62c72d8ba86b59c5111f1c1ca22e2cb449c5b74b9",
+        "afterSha256": "af7ce8f0b2d890141c72d0d62c72d8ba86b59c5111f1c1ca22e2cb449c5b74b9"
+      },
+      {
+        "id": 4,
+        "bytesBefore": 7,
+        "bytesAfter": 7,
+        "equal": true,
+        "beforeSha256": "fa6d5b41c4bd0d977ff72eace9d886d52104eea044e40e7a631dcb63dd21980e",
+        "afterSha256": "fa6d5b41c4bd0d977ff72eace9d886d52104eea044e40e7a631dcb63dd21980e"
+      },
+      {
+        "id": 5,
+        "bytesBefore": 5,
+        "bytesAfter": 5,
+        "equal": true,
+        "beforeSha256": "33e2aeac0e17d17abf54b183d1d4bf64ea2fee2be72bd174c5bd63e86bca9df9",
+        "afterSha256": "33e2aeac0e17d17abf54b183d1d4bf64ea2fee2be72bd174c5bd63e86bca9df9"
+      },
+      {
+        "id": 6,
+        "bytesBefore": 11,
+        "bytesAfter": 11,
+        "equal": true,
+        "beforeSha256": "9f3cfe5176ae52746cd84164515877d028e9591e51c615e41f3a33b6c52e9608",
+        "afterSha256": "9f3cfe5176ae52746cd84164515877d028e9591e51c615e41f3a33b6c52e9608"
+      },
+      {
+        "id": 7,
+        "bytesBefore": 1437,
+        "bytesAfter": 1437,
+        "equal": true,
+        "beforeSha256": "9047ecfb0ac6d288e409b29d64571ac2a8e8c71840cc7cd7a5c3b8e5ffa71319",
+        "afterSha256": "9047ecfb0ac6d288e409b29d64571ac2a8e8c71840cc7cd7a5c3b8e5ffa71319"
+      },
+      {
+        "id": 9,
+        "bytesBefore": 261,
+        "bytesAfter": 261,
+        "equal": true,
+        "beforeSha256": "82f81ec44ccad9ad35f0f98705ed5a46d5283a1d4e0bea9aae656d016c4a7a4e",
+        "afterSha256": "82f81ec44ccad9ad35f0f98705ed5a46d5283a1d4e0bea9aae656d016c4a7a4e"
+      },
+      {
+        "id": 12,
+        "bytesBefore": 4,
+        "bytesAfter": 4,
+        "equal": true,
+        "beforeSha256": "7a682b1c694cd58ec5682bca6c748572a293e162f1b4fdcf0e278dfe6ed3bfb4",
+        "afterSha256": "7a682b1c694cd58ec5682bca6c748572a293e162f1b4fdcf0e278dfe6ed3bfb4"
+      },
+      {
+        "id": 10,
+        "bytesBefore": 1288526,
+        "bytesAfter": 1288526,
+        "equal": true,
+        "beforeSha256": "3e13981969025799976201d90ad76b35f9ac82e30126038020036cc40f393a45",
+        "afterSha256": "3e13981969025799976201d90ad76b35f9ac82e30126038020036cc40f393a45"
+      },
+      {
+        "id": 11,
+        "bytesBefore": 293343,
+        "bytesAfter": 293343,
+        "equal": false,
+        "beforeSha256": "3f9fd61cf0579d9c54a53b28f20eb529a1c41703a96377ca0e34be9d0deda9ca",
+        "afterSha256": "410de657ac42159ca21c87867cffd7d5f91044b3ac20928c56a94b07724d0564"
+      }
+    ]
+  },
+  "delivery": {
+    "method": "Exact archive members; gzip level9 mtime0; JS sorted concatenation; no cross-method comparison",
+    "before": {
+      "artifactSha256": "bec6c1735542bba49ab480d2337c787255950d09383c2f5720794a4d68fc5265",
+      "archiveBytes": 3166898,
+      "members": 1217,
+      "wasm": {
+        "sha256": "c4fcd84c34bd3accac9454ffd2ae635285323480dff1426ab9ab80f7ba97a67a",
+        "raw": 1585989,
+        "gzip9": 584730
+      },
+      "js": {
+        "raw": 866455,
+        "gzip9": 231237
+      },
+      "peers": {
+        "@react-three/fiber": ">=9.7.0 <10 || >=10.0.0-alpha.4 <11",
+        "@tresjs/core": ">=5.8.3 <6",
+        "@typegpu/gl": ">=0.12.4 <0.13",
+        "@typegpu/three": ">=0.12.1 <0.13",
+        "react": ">=19.0.0 <19.3",
+        "three": ">=0.185.0",
+        "typegpu": ">=0.12.5 <0.13",
+        "vue": ">=3.5 <4"
+      },
+      "exportsSha256": "171a615047034e17ae794215d619a2dad2764c984c47ff99c4483457eb7aaef4"
+    },
+    "candidate": {
+      "artifactSha256": "2a7f0317a49319203aac935a8d7387eafcc9f78443ff6de31c699c4605412627",
+      "archiveBytes": 3167180,
+      "members": 1217,
+      "wasm": {
+        "sha256": "6f7afa1c596dc7c08d2138a67c4ae955d8aff5824602452cb6d12f30f2df3bbd",
+        "raw": 1585989,
+        "gzip9": 584738
+      },
+      "js": {
+        "raw": 866545,
+        "gzip9": 231270
+      },
+      "peers": {
+        "@react-three/fiber": ">=9.7.0 <10 || >=10.0.0-alpha.4 <11",
+        "@tresjs/core": ">=5.8.3 <6",
+        "@typegpu/gl": ">=0.12.4 <0.13",
+        "@typegpu/three": ">=0.12.1 <0.13",
+        "react": ">=19.0.0 <19.3",
+        "three": ">=0.185.0",
+        "typegpu": ">=0.12.5 <0.13",
+        "vue": ">=3.5 <4"
+      },
+      "exportsSha256": "171a615047034e17ae794215d619a2dad2764c984c47ff99c4483457eb7aaef4"
+    },
+    "main": {
+      "artifactSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "archiveBytes": 3120073,
+      "members": 1222,
+      "wasm": {
+        "sha256": "059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4",
+        "raw": 1462005,
+        "gzip9": 536536
+      },
+      "js": {
+        "raw": 864307,
+        "gzip9": 230932
+      },
+      "peers": {
+        "@react-three/fiber": ">=9.7.0 <10 || >=10.0.0-alpha.4 <11",
+        "@tresjs/core": ">=5.8.3 <6",
+        "@typegpu/gl": ">=0.12.4 <0.13",
+        "@typegpu/three": ">=0.12.1 <0.13",
+        "react": ">=19.0.0 <19.3",
+        "three": ">=0.185.0",
+        "typegpu": ">=0.12.5 <0.13",
+        "vue": ">=3.5 <4"
+      },
+      "exportsSha256": "171a615047034e17ae794215d619a2dad2764c984c47ff99c4483457eb7aaef4"
+    },
+    "changedDeclarations": [],
+    "packageManifestEqual": true,
+    "otherWasmEqual": true
+  },
+  "published010Archive": {
+    "file": ".cache/held-local-20261016/prepare-receipt/package/pmndrs-glyph-published-0.1.0.tgz",
+    "sha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+    "integrity": "sha512-mqmSXlnvkE67p39/c0SJf/Qf8VGj54BIs416+HVzCvp+XSMvEjY+XOvXizLzawonwB16Jfhe1iSnbxWTUXktyw==",
+    "matchesInstalledBaselineLock": true,
+    "archiveBytes": 2271693,
+    "members": 764,
+    "wasm": {
+      "sha256": "addb8144f474c9f5a005bdda084bcf15c05170004b34c7a65ab592db4962c893",
+      "raw": 1362353,
+      "gzip9": 497229
+    },
+    "js": {
+      "raw": 837596,
+      "gzip9": 222030
+    }
+  },
+  "memory": {
+    "source": {
+      "revision": "7347b549aeadf963744e77ce873e0ecc470bfc42",
+      "dirty": "M .agents/docs/planning/publication-frontier.md\n M .agents/docs/reports/final-performance-architecture-plan.md\n M packages/glyph/src/internal/handle-state.ts\n M packages/glyph/src/internal/render-planner.ts",
+      "rustSourceSha256": "5af0747202c14fc24e95d1419ef91d2056730a3da9f5f0843735eda02b36722e"
+    },
+    "artifact": {
+      "path": "/private/tmp/glyph-held-20261016/.cache/held-local-20261016/prepare-receipt/package/pmndrs-glyph-0.1.0.tgz",
+      "sha256": "2a7f0317a49319203aac935a8d7387eafcc9f78443ff6de31c699c4605412627",
+      "shippedWasmSha256": "6f7afa1c596dc7c08d2138a67c4ae955d8aff5824602452cb6d12f30f2df3bbd"
+    },
+    "diagnostic": {
+      "manifest": "/private/tmp/glyph-held-20261016/packages/glyph/.cache/prepare-receipt-memory-candidate/manifest.json",
+      "manifestSha256": "ff67db1dfe40910a39602ae542abb2d0ad9153566674bf0516420ea0481601fc",
+      "controlSha256": "6f7afa1c596dc7c08d2138a67c4ae955d8aff5824602452cb6d12f30f2df3bbd",
+      "diagnosticSha256": "9a573940b8a6d24f771dc8d5e0224e366ed33a619dbd98c1db9a323323273ab8",
+      "featureOffEqualsShipped": true
+    },
+    "capture": {
+      "command": "mise exec -- pnpm scripts run benchmark:shaper-live-memory -- --artifact <candidate.tgz> --manifest <candidate manifest.json> --output candidate-memory.json",
+      "exit": 0,
+      "report": "/private/tmp/glyph-held-20261016/.cache/held-local-20261016/prepare-receipt/candidate-memory.json",
+      "reportSha256": "fd1289422784d9a60132ec25a13b188dfdcf11057d7274ad060b7b15f91083c1",
+      "verifiedUnchangedAfterCapture": true,
+      "cycles": 8,
+      "phaseCount": 71,
+      "scope": "captured engine Wasm instance only",
+      "exclusions": ["JS tokens", "GPU", "font decoder instances"],
+      "requestedPeakSemantics": "completed allocator-call high water; excludes Talc fragmentation and transient internal realloc peak",
+      "cumulativeRequestedSemantics": "full new size of successful realloc, not net growth",
+      "wasmPagesSemantics": "capacity, reported separately from requested live bytes"
+    },
+    "measured": {
+      "maxRequestedLiveBytes": 40345423,
+      "maxRequestedLivePhase": "dense-edit-publish-1024",
+      "maxRequestedLiveCycle": 1,
+      "maxRequestedPeakBytes": 40553931,
+      "maxRequestedPeakPhase": "dense-edit-publish-1024",
+      "maxRequestedPeakCycle": 0,
+      "maxWasmPages": 727,
+      "maxWasmPagesPhase": "sparse-equal-length-ascii-replace-publish",
+      "retainedBaseline": {
+        "requestedLive": 7641016,
+        "requestedPeak": 7641016,
+        "allocations": 0,
+        "reallocations": 0,
+        "deallocations": 0,
+        "cumulativeRequested": 0,
+        "wasmPages": 727
+      }
+    },
+    "logs": {
+      "artifactBuild": {
+        "path": "/private/tmp/glyph-held-20261016/.cache/held-local-20261016/prepare-receipt/gates/shaper-memory-artifact-candidate.log",
+        "sha256": "95a3c304ec7f175aed858bfd8bf1a75b683e87f02e762be00dfc17080ee22c28"
+      },
+      "memoryCapture": {
+        "path": "/private/tmp/glyph-held-20261016/.cache/held-local-20261016/prepare-receipt/gates/benchmark-shaper-live-memory-candidate.log",
+        "sha256": "b3ef4ba1a27884cd6239b6377b812f57e5fde055ad58737fb2b1a87c81ab22dc"
+      }
+    },
+    "scopeNote": "No CPU timing or server workload was run. Requested-byte accounting excludes Talc fragmentation and transient physical realloc peak; Wasm pages are capacity reported separately."
+  },
+  "reproducibleDistAfterPeerBuild": {
+    "archiveSha256": "2a7f0317a49319203aac935a8d7387eafcc9f78443ff6de31c699c4605412627",
+    "afterPeerBuild": true,
+    "distMembers": 943,
+    "mismatches": []
+  },
+  "comparisons": {
+    "main": {
+      "manifest": {
+        "generatedAt": "2026-10-16T20:31:20.555Z",
+        "labsVersion": "0.9.0",
+        "harnessDigest": "db9aad3b2b160bce3a7ddac83974f601ecf9fd2fd5b69e66294808160905d1f2",
+        "blocks": 4,
+        "suite": "full",
+        "baseline": {
+          "requested": "/private/tmp/glyph-held-20261016/.cache/held-local-20261016/main-baseline/pmndrs-glyph-0.1.0.tgz",
+          "version": "0.1.0",
+          "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20"
+        },
+        "candidate": {
+          "requested": "/private/tmp/glyph-held-20261016/.cache/held-local-20261016/prepare-receipt/package/pmndrs-glyph-0.1.0.tgz",
+          "version": "0.1.0",
+          "sha256": "2a7f0317a49319203aac935a8d7387eafcc9f78443ff6de31c699c4605412627"
+        },
+        "comparison": "comparison.txt",
+        "notComparable": {
+          "baselineCheckFailures": [],
+          "timingModeMismatches": [
+            "common.bench.ts / measure 100 unchanged labels / measure 100 unchanged labels: baseline single-call, candidate batched",
+            "layout.bench.ts / cached per-glyph inspection / cached per-glyph inspection: baseline batched, candidate single-call",
+            "prepared-operations.bench.ts / 1000 labels first set+measure / 1000 labels first set+measure: baseline single-call, candidate batched",
+            "request-arena.bench.ts / write 1000 paragraph-order mutations / write 1000 paragraph-order mutations: baseline batched, candidate single-call"
+          ]
+        }
+      },
+      "summaryCounts": {
+        "faster": 54,
+        "slower": 28,
+        "neutral": 47,
+        "skipped": 16
+      },
+      "summaryExclusions": [
+        {
+          "reason": "unresolved workload identity",
+          "name": "100 labels separated balanced grow-\u2026"
+        },
+        {
+          "reason": "unresolved workload identity",
+          "name": "100 labels separated balanced grow-\u2026"
+        },
+        {
+          "reason": "clock-confounded: slower\u2192neutral \u00b7 3.81\u21923.53",
+          "name": "normalize 1000 equivalent retained label updates"
+        },
+        {
+          "reason": "clock-confounded: neutral\u2192faster \u00b7 3.78\u21923.49",
+          "name": "mutate one trailing span across 1000 formatted labels"
+        },
+        {
+          "reason": "clock-confounded: slower\u2192neutral \u00b7 3.73\u21923.46",
+          "name": "edit and measure one of 100 retained labels"
+        },
+        {
+          "reason": "clock-confounded: slower\u2192neutral \u00b7 3.78\u21923.59",
+          "name": "10 labels first length-changing scene publication"
+        },
+        {
+          "reason": "clock-confounded: slower\u2192neutral \u00b7 3.76\u21923.58",
+          "name": "10 labels first same-length engine publication"
+        },
+        {
+          "reason": "clock-confounded: neutral\u2192faster \u00b7 3.75\u21923.52",
+          "name": "100 labels first length-changing scene publication"
+        },
+        {
+          "reason": "clock-confounded: neutral\u2192faster \u00b7 3.63\u21923.51",
+          "name": "1000 labels separated balanced grow-shrink-space scene publication"
+        },
+        {
+          "reason": "clock-confounded: slower\u2192neutral \u00b7 3.77\u21923.60",
+          "name": "1000 labels first same-value-set"
+        },
+        {
+          "reason": "clock-confounded: slower\u2192neutral \u00b7 3.76\u21923.66",
+          "name": "write 22k UTF16 text into owned array control"
+        },
+        {
+          "reason": "clock-confounded: neutral\u2192slower \u00b7 3.51\u21923.62",
+          "name": "publish 1024 retained Text instances"
+        },
+        {
+          "reason": "timing-mode mismatch",
+          "name": "measure 100 unchanged labels"
+        },
+        {
+          "reason": "timing-mode mismatch",
+          "name": "cached per-glyph inspection"
+        },
+        {
+          "reason": "timing-mode mismatch",
+          "name": "1000 labels first set+measure"
+        },
+        {
+          "reason": "timing-mode mismatch",
+          "name": "write 1000 paragraph-order mutations"
+        }
+      ],
+      "missingBaseline": []
+    },
+    "published010": {
+      "manifest": {
+        "generatedAt": "2026-10-16T20:45:02.851Z",
+        "labsVersion": "0.9.0",
+        "harnessDigest": "db9aad3b2b160bce3a7ddac83974f601ecf9fd2fd5b69e66294808160905d1f2",
+        "blocks": 4,
+        "suite": "full",
+        "baseline": {
+          "requested": "@pmndrs/glyph@0.1.0",
+          "version": "0.1.0"
+        },
+        "candidate": {
+          "requested": "/private/tmp/glyph-held-20261016/.cache/held-local-20261016/prepare-receipt/package/pmndrs-glyph-0.1.0.tgz",
+          "version": "0.1.0",
+          "sha256": "2a7f0317a49319203aac935a8d7387eafcc9f78443ff6de31c699c4605412627"
+        },
+        "savedCandidate": "/private/tmp/glyph-held-20261016/.cache/held-local-20261016/prepare-receipt/labs-main",
+        "comparison": "comparison.txt",
+        "notComparable": {
+          "baselineCheckFailures": [],
+          "timingModeMismatches": [
+            "common.bench.ts / measure 100 unchanged labels / measure 100 unchanged labels: baseline single-call, candidate batched",
+            "prepared-operations.bench.ts / 1000 labels first set+measure / 1000 labels first set+measure: baseline single-call, candidate batched"
+          ]
+        }
+      },
+      "summaryCounts": {
+        "faster": 76,
+        "slower": 11,
+        "neutral": 46,
+        "skipped": 10
+      },
+      "summaryExclusions": [
+        {
+          "reason": "unresolved workload identity",
+          "name": "100 labels separated balanced grow-\u2026"
+        },
+        {
+          "reason": "unresolved workload identity",
+          "name": "100 labels separated balanced grow-\u2026"
+        },
+        {
+          "reason": "clock-confounded: neutral\u2192faster \u00b7 3.68\u21923.49",
+          "name": "100 labels first same-length engine publication"
+        },
+        {
+          "reason": "clock-confounded: faster\u2192neutral \u00b7 3.67\u21923.54",
+          "name": "1000 labels 100 edits batched edit-read publication"
+        },
+        {
+          "reason": "clock-confounded: slower\u2192neutral \u00b7 3.67\u21923.48",
+          "name": "100 labels separated unbalanced grow-shrink-space engine publication"
+        },
+        {
+          "reason": "clock-confounded: neutral\u2192faster \u00b7 3.70\u21923.51",
+          "name": "1000 labels separated balanced grow-shrink-space scene publication"
+        },
+        {
+          "reason": "clock-confounded: faster\u2192neutral \u00b7 3.23\u21923.75",
+          "name": "publish after color change"
+        },
+        {
+          "reason": "clock-confounded: faster\u2192neutral \u00b7 3.51\u21923.75",
+          "name": "measurement then publication after width change"
+        },
+        {
+          "reason": "timing-mode mismatch",
+          "name": "measure 100 unchanged labels"
+        },
+        {
+          "reason": "timing-mode mismatch",
+          "name": "1000 labels first set+measure"
+        }
+      ],
+      "missingBaseline": [
+        [
+          "outlines.bench.ts",
+          "copy per-glyph metrics with outlines after text change",
+          "copy per-glyph metrics with outlines after text change"
+        ],
+        ["outlines.bench.ts", "read every outline from an unchanged copy", "read every outline from an unchanged copy"]
+      ]
+    }
+  },
+  "clock": {
+    "main": {
+      "calibrationDriftPercent": 6.0261081149609685,
+      "perFile": [
+        {
+          "file": "adapter-publication.bench.ts",
+          "runFreq": 3.8832092812908177,
+          "postFreq": 3.973241491386128
+        },
+        {
+          "file": "batching.bench.ts",
+          "runFreq": 3.9497980292949273,
+          "postFreq": 3.993978960423885
+        },
+        {
+          "file": "cold.bench.ts",
+          "runFreq": 3.9776232182256814,
+          "postFreq": 3.9262355368358093
+        },
+        {
+          "file": "common.bench.ts",
+          "runFreq": 3.9477508523138147,
+          "postFreq": 3.9194537509900886
+        },
+        {
+          "file": "edit.bench.ts",
+          "runFreq": 3.9883828193921653,
+          "postFreq": 3.9756016169314585
+        },
+        {
+          "file": "framework-publication.bench.ts",
+          "runFreq": 3.969341232334202,
+          "postFreq": 3.986531828970203
+        },
+        {
+          "file": "inspection.bench.ts",
+          "runFreq": 3.98257194972119,
+          "postFreq": 3.966361713404297
+        },
+        {
+          "file": "layout.bench.ts",
+          "runFreq": 3.881044422713418,
+          "postFreq": 3.9808650224086457
+        },
+        {
+          "file": "outlines.bench.ts",
+          "runFreq": 3.866960016145999,
+          "postFreq": 3.9947450173228796
+        },
+        {
+          "file": "prepared-operations.bench.ts",
+          "runFreq": 3.8777064569975073,
+          "postFreq": 3.946761201718904
+        },
+        {
+          "file": "request-arena.bench.ts",
+          "runFreq": 3.974229046668127,
+          "postFreq": 3.9869830235177415
+        },
+        {
+          "file": "sparse-assignment.bench.ts",
+          "runFreq": 3.9672889355138388,
+          "postFreq": 3.9120599432639
+        },
+        {
+          "file": "stress.bench.ts",
+          "runFreq": 3.7610584657848882,
+          "postFreq": 3.918219479910022
+        },
+        {
+          "file": "typegpu-publication.bench.ts",
+          "runFreq": 3.7816031251653364,
+          "postFreq": 3.8586851509712066
+        },
+        {
+          "file": "unsafe-line-breaks.bench.ts",
+          "runFreq": 3.871726656957312,
+          "postFreq": 3.8479535940928864
+        }
+      ],
+      "hardware": {
+        "cpu": "Apple M4",
+        "arch": "arm64-darwin",
+        "runtime": "node",
+        "freq": 3.8832092812908177
+      },
+      "context": {
+        "version": "24.18.0",
+        "noop": {
+          "fn": {
+            "avg": 0.06446639402877916
+          },
+          "iter": {
+            "avg": 14.998998535452207
+          },
+          "fn_gc": {
+            "avg": 0.5177878307244038
+          }
+        }
+      }
+    },
+    "candidate": {
+      "calibrationDriftPercent": 8.485410422840472,
+      "perFile": [
+        {
+          "file": "adapter-publication.bench.ts",
+          "runFreq": 3.862471752951841,
+          "postFreq": 3.7643824929765706
+        },
+        {
+          "file": "batching.bench.ts",
+          "runFreq": 3.8904160254498192,
+          "postFreq": 3.819155347679976
+        },
+        {
+          "file": "cold.bench.ts",
+          "runFreq": 3.8530852389943426,
+          "postFreq": 3.8730360693897126
+        },
+        {
+          "file": "common.bench.ts",
+          "runFreq": 3.80921945866343,
+          "postFreq": 3.9556586934389277
+        },
+        {
+          "file": "edit.bench.ts",
+          "runFreq": 3.981993378128423,
+          "postFreq": 3.9994039744306726
+        },
+        {
+          "file": "framework-publication.bench.ts",
+          "runFreq": 3.9766672805806715,
+          "postFreq": 3.7686350956160037
+        },
+        {
+          "file": "inspection.bench.ts",
+          "runFreq": 3.957287930920853,
+          "postFreq": 3.8529345498566854
+        },
+        {
+          "file": "layout.bench.ts",
+          "runFreq": 3.9667401580265036,
+          "postFreq": 3.7520327776922575
+        },
+        {
+          "file": "outlines.bench.ts",
+          "runFreq": 3.6738504107452807,
+          "postFreq": 3.9019241789893395
+        },
+        {
+          "file": "prepared-operations.bench.ts",
+          "runFreq": 3.857300117637358,
+          "postFreq": 3.8836667051743925
+        },
+        {
+          "file": "request-arena.bench.ts",
+          "runFreq": 3.807220045989837,
+          "postFreq": 3.8625930496472387
+        },
+        {
+          "file": "sparse-assignment.bench.ts",
+          "runFreq": 3.7883225855758322,
+          "postFreq": 3.904241069790641
+        },
+        {
+          "file": "stress.bench.ts",
+          "runFreq": 3.8876253257643536,
+          "postFreq": 3.916913811559675
+        },
+        {
+          "file": "typegpu-publication.bench.ts",
+          "runFreq": 3.8819160783272575,
+          "postFreq": 3.911431707965146
+        },
+        {
+          "file": "unsafe-line-breaks.bench.ts",
+          "runFreq": 3.890808772956399,
+          "postFreq": 3.931120992330105
+        }
+      ],
+      "hardware": {
+        "cpu": "Apple M4",
+        "arch": "arm64-darwin",
+        "runtime": "node",
+        "freq": 3.862471752951841
+      },
+      "context": {
+        "version": "24.18.0",
+        "noop": {
+          "fn": {
+            "avg": 0.06408998331136986
+          },
+          "iter": {
+            "avg": 14.957963964773343
+          },
+          "fn_gc": {
+            "avg": 0.543012901384067
+          }
+        }
+      }
+    },
+    "published010": {
+      "calibrationDriftPercent": 33.07036209657315,
+      "perFile": [
+        {
+          "file": "adapter-publication.bench.ts",
+          "runFreq": 3.9156717764979323,
+          "postFreq": 3.9328193275985615
+        },
+        {
+          "file": "batching.bench.ts",
+          "runFreq": 3.9168579599780364,
+          "postFreq": 3.634916288861136
+        },
+        {
+          "file": "cold.bench.ts",
+          "runFreq": 3.8972026470798236,
+          "postFreq": 3.886077250407766
+        },
+        {
+          "file": "common.bench.ts",
+          "runFreq": 3.880895978076644,
+          "postFreq": 3.853505154387198
+        },
+        {
+          "file": "edit.bench.ts",
+          "runFreq": 3.8637626751104532,
+          "postFreq": 3.830127197106308
+        },
+        {
+          "file": "framework-publication.bench.ts",
+          "runFreq": 3.764082171312806,
+          "postFreq": 3.4598168208498223
+        },
+        {
+          "file": "inspection.bench.ts",
+          "runFreq": 3.327848253357276,
+          "postFreq": 3.8517785283079733
+        },
+        {
+          "file": "layout.bench.ts",
+          "runFreq": 3.7882206955666504,
+          "postFreq": 3.918900447623263
+        },
+        {
+          "file": "outlines.bench.ts",
+          "runFreq": 3.4453279624915556,
+          "postFreq": 3.900578851849196
+        },
+        {
+          "file": "prepared-operations.bench.ts",
+          "runFreq": 3.88565967703546,
+          "postFreq": 3.3114333682051504
+        },
+        {
+          "file": "request-arena.bench.ts",
+          "runFreq": 3.1789788792447937,
+          "postFreq": 2.819980159325342
+        },
+        {
+          "file": "sparse-assignment.bench.ts",
+          "runFreq": 3.1177511783783767,
+          "postFreq": 3.403793934516582
+        },
+        {
+          "file": "stress.bench.ts",
+          "runFreq": 3.543347518159085,
+          "postFreq": 3.937310384746344
+        },
+        {
+          "file": "typegpu-publication.bench.ts",
+          "runFreq": 3.9126830100876946,
+          "postFreq": 3.562590786362427
+        },
+        {
+          "file": "unsafe-line-breaks.bench.ts",
+          "runFreq": 3.9267650199364224,
+          "postFreq": 3.9018924149481253
+        }
+      ],
+      "hardware": {
+        "cpu": "Apple M4",
+        "arch": "arm64-darwin",
+        "runtime": "node",
+        "freq": 3.9156717764979323
+      },
+      "context": {
+        "version": "24.18.0",
+        "noop": {
+          "fn": {
+            "avg": 0.06414209276509306
+          },
+          "iter": {
+            "avg": 14.855623040656749
+          },
+          "fn_gc": {
+            "avg": 0.8962468571428571
+          }
+        }
+      }
+    }
+  },
+  "distributionMethod": {
+    "arrays": [
+      "p50 milliseconds: median of block medians",
+      "p95 milliseconds: pooled retained sample at floor(.95*(N-1))",
+      "retained sample count after Labs native trimming",
+      "batched timing mode boolean"
+    ],
+    "blocks": 4,
+    "candidateTimedOnce": true,
+    "candidateResultsByteIdenticalAcrossComparisons": true,
+    "noAnalystTrimmingOrFavorableRetries": true,
+    "limits": [
+      "Whole held branch versus each baseline; not a paired attribution of only this cleanup",
+      "Serial baseline/candidate order and separate-run machine variability",
+      "Clock calibration is a software estimate; large drift prevents unqualified latency/FPS or release-acceptance claims",
+      "Maintained summary excludes clock confounds, timing-mode mismatches and unresolved truncated identities; published baseline also lacks two outline workloads",
+      "GC/heap observations are not Rust allocator live/peak or whole-application peak memory"
+    ]
+  },
+  "selectedRows": [
+    {
+      "file": "batching.bench.ts",
+      "name": "rewrite 512 labels in one group",
+      "candidate": [10.9745, 23.085125, 80, false],
+      "main": [7.073667, 8.482958, 112, false],
+      "published010": [8.2661665, 9.17829100000006, 88, false],
+      "observations": {
+        "candidate": {
+          "gcNs": {
+            "min": 0,
+            "max": 17398167,
+            "p50": 237083.5
+          },
+          "heapBytes": {
+            "min": 0,
+            "max": 9874888,
+            "p50": 4306552
+          },
+          "blockCalibrationGHz": [3.482878957570445, 3.5661667635535217, 3.632934670896332, 3.0976700620931945]
+        },
+        "main": {
+          "gcNs": {
+            "min": 0,
+            "max": 9309667,
+            "p50": 0
+          },
+          "heapBytes": {
+            "min": 1375024,
+            "max": 7608496,
+            "p50": 4292428
+          },
+          "blockCalibrationGHz": [3.7875844593483436, 3.6067840205021415, 3.7599095193126235, 3.7770439489253045]
+        },
+        "published010": {
+          "gcNs": {
+            "min": 0,
+            "max": 7901041,
+            "p50": 0
+          },
+          "heapBytes": {
+            "min": 3241336,
+            "max": 7945736,
+            "p50": 4586160
+          },
+          "blockCalibrationGHz": [3.437737737749855, 3.7775026744471507, 3.6070114183259134, 3.6519848572693436]
+        }
+      }
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels 100 edits interleaved edit-read publication",
+      "candidate": [50.577896, 56.928667, 64, false],
+      "main": [138.9524795, 172.059625, 64, false],
+      "published010": [181.6574795, 196.825125, 64, false],
+      "observations": {
+        "candidate": {
+          "gcNs": {
+            "min": 0,
+            "max": 4822792,
+            "p50": 1155499.5
+          },
+          "heapBytes": {
+            "min": 161846216,
+            "max": 162782648,
+            "p50": 162401000
+          },
+          "blockCalibrationGHz": [3.2743857147796733, 3.547209485310663, 3.5487500429930727, 3.5452118981684637]
+        },
+        "main": {
+          "gcNs": {
+            "min": 254625,
+            "max": 6415918,
+            "p50": 1298187
+          },
+          "heapBytes": {
+            "min": 200514828,
+            "max": 206166188,
+            "p50": 202866528
+          },
+          "blockCalibrationGHz": [3.5645438444855757, 3.7320693478840874, 3.7805270149093366, 3.5148820087369668]
+        },
+        "published010": {
+          "gcNs": {
+            "min": 0,
+            "max": 8968875,
+            "p50": 565042
+          },
+          "heapBytes": {
+            "min": 182630693,
+            "max": 188650334,
+            "p50": 184878183
+          },
+          "blockCalibrationGHz": [3.7563984665858836, 3.748342654684797, 3.7587283277923476, 3.5378693249778457]
+        }
+      }
+    },
+    {
+      "file": "layout.bench.ts",
+      "name": "inspection then publication after width change",
+      "candidate": [4.7903545, 5.695, 164, false],
+      "main": [8.6732085, 9.352458, 132, false],
+      "published010": [10.3709585, 11.057584, 100, false],
+      "observations": {
+        "candidate": {
+          "gcNs": {
+            "min": 0,
+            "max": 2139584,
+            "p50": 0
+          },
+          "heapBytes": {
+            "min": 2557816,
+            "max": 8717616,
+            "p50": 5977024
+          },
+          "blockCalibrationGHz": [2.768509164462532, 3.761643864164255, 3.677786153078487, 3.5873730327809765]
+        },
+        "main": {
+          "gcNs": {
+            "min": 0,
+            "max": 2750584,
+            "p50": 168187.5
+          },
+          "heapBytes": {
+            "min": 1307104,
+            "max": 11516344,
+            "p50": 7400132
+          },
+          "blockCalibrationGHz": [3.78496318441134, 3.777042038936135, 3.7893643127328254, 3.774026681628754]
+        },
+        "published010": {
+          "gcNs": {
+            "min": 0,
+            "max": 4778792,
+            "p50": 229271
+          },
+          "heapBytes": {
+            "min": 2808384,
+            "max": 10270432,
+            "p50": 5168972
+          },
+          "blockCalibrationGHz": [3.6080329928957213, 3.548918393330373, 3.4752972061882104, 3.5526496271849615]
+        }
+      }
+    },
+    {
+      "file": "stress.bench.ts",
+      "name": "publish 1024 retained Text instances",
+      "candidate": [20.1546045, 21.868875, 64, false],
+      "main": [17.6045205, 21.1925, 64, false],
+      "published010": [16.7593755, 18.922792, 64, false],
+      "observations": {
+        "candidate": {
+          "gcNs": {
+            "min": 0,
+            "max": 10049417,
+            "p50": 0
+          },
+          "heapBytes": {
+            "min": 6741048,
+            "max": 10605168,
+            "p50": 7607944
+          },
+          "blockCalibrationGHz": [3.6355049999682922, 3.5562253043782315, 3.721060901982681, 3.606389247975979]
+        },
+        "main": {
+          "gcNs": {
+            "min": 0,
+            "max": 4957624,
+            "p50": 547521
+          },
+          "heapBytes": {
+            "min": 6375256,
+            "max": 13485208,
+            "p50": 8686440
+          },
+          "blockCalibrationGHz": [3.5160796873210014, 3.4939228945970293, 3.470143868378531, 3.5603711199306582]
+        },
+        "published010": {
+          "gcNs": {
+            "min": 0,
+            "max": 4807167,
+            "p50": 0
+          },
+          "heapBytes": {
+            "min": 8407728,
+            "max": 13020368,
+            "p50": 8986632
+          },
+          "blockCalibrationGHz": [3.3013831015171036, 3.573966343236299, 3.6698711912999804, 3.5809196542012423]
+        }
+      }
+    }
+  ],
+  "absoluteRows": [
+    {
+      "file": "adapter-publication.bench.ts",
+      "name": "normalize 1000 equivalent retained label updates",
+      "candidate": [2.4677080000000595, 3.454916, 128, false],
+      "main": [2.3297290000001194, 2.684417, 152, false],
+      "published010": [34.4130205, 47.485917, 64, false]
+    },
+    {
+      "file": "adapter-publication.bench.ts",
+      "name": "mutate one trailing span across 1000 formatted labels",
+      "candidate": [39.887104, 44.699709, 64, false],
+      "main": [42.1081665, 45.110667, 64, false],
+      "published010": [63.363292, 87.195958, 64, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "edit and measure one of 100 retained labels",
+      "candidate": [0.2109795, 0.471875, 236, false],
+      "main": [0.1804585, 0.275041, 296, false],
+      "published010": [0.191958, 0.293625, 232, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "rewrite 64 labels in one group",
+      "candidate": [1.804354, 2.8705, 200, false],
+      "main": [1.1411249999999702, 1.858875, 228, false],
+      "published010": [1.417625, 2.121167, 192, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "rewrite 128 labels in one group",
+      "candidate": [2.9480625, 4.44375, 164, false],
+      "main": [1.901375, 2.6145, 224, false],
+      "published010": [2.4011870000000597, 3.115667, 148, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "rewrite 256 labels in one group",
+      "candidate": [5.117729, 7.1351670000000595, 136, false],
+      "main": [3.5650625, 4.344083, 172, false],
+      "published010": [4.251687, 5.937167, 100, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "rewrite 512 labels in one group",
+      "candidate": [10.9745, 23.085125, 80, false],
+      "main": [7.073667, 8.482958, 112, false],
+      "published010": [8.2661665, 9.17829100000006, 88, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels no-op scene traversal",
+      "candidate": [0.00453190625, 0.01185415625, 216, true],
+      "main": [0.003893234375, 0.0068984375, 328, true],
+      "published010": [0.0037743055555555555, 0.0068125, 264, true]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels first same-length scene publication",
+      "candidate": [0.604125, 1.092667, 232, false],
+      "main": [0.3491250000000596, 0.549458, 288, false],
+      "published010": [0.5336875, 0.917166, 204, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels first length-changing scene publication",
+      "candidate": [0.7802085, 1.176625, 200, false],
+      "main": [0.5163955, 0.762166, 248, false],
+      "published010": [0.5637915, 0.80575, 228, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels first color-only scene publication",
+      "candidate": [0.4020625, 0.776166, 260, false],
+      "main": [0.324896, 0.7985, 284, false],
+      "published010": [0.545604, 0.846333, 224, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels first same-length engine publication",
+      "candidate": [0.532542, 0.881958, 264, false],
+      "main": [0.3663545, 0.535833, 292, false],
+      "published010": [0.467896, 0.674875, 248, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels first length-changing engine publication",
+      "candidate": [0.6577914999999702, 1.116792, 268, false],
+      "main": [0.551375, 0.742125, 288, false],
+      "published010": [0.53675, 0.779333, 224, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels first color-only engine publication",
+      "candidate": [0.3652505, 0.676875, 260, false],
+      "main": [0.319729, 0.62575, 252, false],
+      "published010": [0.5104165000000298, 0.827, 244, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels last same-length scene publication",
+      "candidate": [0.5305205, 1.23375, 256, false],
+      "main": [0.39675, 0.815666, 292, false],
+      "published010": [0.5847705, 0.924167, 108, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels last length-changing scene publication",
+      "candidate": [0.7108125, 1.244709, 228, false],
+      "main": [0.5969790000000597, 1.291708, 288, false],
+      "published010": [0.588625, 0.865625, 252, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels last color-only scene publication",
+      "candidate": [0.412604, 0.723417, 272, false],
+      "main": [0.3278125, 0.6865, 304, false],
+      "published010": [0.5465, 0.931334, 224, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels last same-length engine publication",
+      "candidate": [0.5196665, 1.297375, 264, false],
+      "main": [0.3420620000000298, 0.740333, 296, false],
+      "published010": [0.5285415, 1.058625, 244, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels last length-changing engine publication",
+      "candidate": [0.6630835, 1.013875, 272, false],
+      "main": [0.494458, 0.989291, 288, false],
+      "published010": [0.5873755, 0.899584, 228, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "10 labels last color-only engine publication",
+      "candidate": [0.352396, 0.64375, 292, false],
+      "main": [0.2871874999999702, 0.667375, 296, false],
+      "published010": [0.5134165, 0.818208, 248, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels no-op scene traversal",
+      "candidate": [0.0831875, 0.165125, 244, false],
+      "main": [0.06945850000005961, 0.125917, 264, false],
+      "published010": [0.0691665, 0.118333, 240, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels first same-length scene publication",
+      "candidate": [0.7026665, 1.219125, 256, false],
+      "main": [0.5652915, 0.9714590000001192, 280, false],
+      "published010": [0.770896, 1.168166, 180, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels first length-changing scene publication",
+      "candidate": [0.889563, 1.417666, 228, false],
+      "main": [0.917333, 1.284584, 244, false],
+      "published010": [0.9398125, 1.28475, 216, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels first color-only scene publication",
+      "candidate": [0.4392085, 1.115917, 256, false],
+      "main": [0.441604, 0.867208, 256, false],
+      "published010": [0.7571665, 1.129417, 208, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels first same-length engine publication",
+      "candidate": [0.602417, 1.241125, 260, false],
+      "main": [0.500791, 0.86525, 268, false],
+      "published010": [0.6380415, 1.000083, 212, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels first length-changing engine publication",
+      "candidate": [0.861667, 1.698375, 220, false],
+      "main": [0.8499165, 1.246375, 272, false],
+      "published010": [0.9178335, 1.270625, 200, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels first color-only engine publication",
+      "candidate": [0.3974374999999702, 1.582209, 280, false],
+      "main": [0.368604, 0.687167, 260, false],
+      "published010": [0.6503335, 1.046459, 216, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels last same-length scene publication",
+      "candidate": [0.6577295, 1.064, 236, false],
+      "main": [0.5410625, 0.958042, 272, false],
+      "published010": [0.7471875, 1.057167, 208, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels last length-changing scene publication",
+      "candidate": [0.805354, 1.275125, 240, false],
+      "main": [0.698417, 1.072041, 276, false],
+      "published010": [0.778521, 1.050916, 212, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels last color-only scene publication",
+      "candidate": [0.511729, 0.909833, 224, false],
+      "main": [0.5201249999999702, 0.952875, 200, false],
+      "published010": [0.7284164999999702, 1.125583, 212, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels last same-length engine publication",
+      "candidate": [0.644021, 1.133292, 232, false],
+      "main": [0.535167, 0.859458, 240, false],
+      "published010": [0.6780205, 0.910083, 236, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels last length-changing engine publication",
+      "candidate": [0.763708, 1.527625, 224, false],
+      "main": [0.6483335, 1.120209, 272, false],
+      "published010": [0.71375, 1.03075, 208, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels last color-only engine publication",
+      "candidate": [0.4741459999999404, 0.928834, 200, false],
+      "main": [0.3997295, 0.828875, 264, false],
+      "published010": [0.6960205, 1.105708, 212, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels no-op scene traversal",
+      "candidate": [0.5305625000000596, 1.192375, 148, false],
+      "main": [0.5248545, 1.182125, 120, false],
+      "published010": [0.4497285000000596, 0.7224580000000596, 136, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels first same-length scene publication",
+      "candidate": [1.9091665, 3.175, 136, false],
+      "main": [3.195021, 4.445958, 92, false],
+      "published010": [3.3949585, 4.057917, 116, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels first length-changing scene publication",
+      "candidate": [2.7572915, 3.863583, 132, false],
+      "main": [5.5384585, 8.064334000000239, 64, false],
+      "published010": [5.124375, 6.405666, 104, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels first color-only scene publication",
+      "candidate": [1.2161665, 2.069, 152, false],
+      "main": [2.3874375, 3.574791, 124, false],
+      "published010": [3.607625, 5.741625, 112, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels first same-length engine publication",
+      "candidate": [1.9866875, 3.10325, 136, false],
+      "main": [2.643792, 4.892333, 88, false],
+      "published010": [3.1806875, 6.073625, 120, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels first length-changing engine publication",
+      "candidate": [2.6024585, 3.647083, 136, false],
+      "main": [4.7183955, 5.735584, 100, false],
+      "published010": [4.8659375, 6.040167, 88, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels first color-only engine publication",
+      "candidate": [0.7441455, 1.329166, 144, false],
+      "main": [1.969083, 2.836208, 128, false],
+      "published010": [3.161146, 5.952625, 120, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels last same-length scene publication",
+      "candidate": [1.9889375, 2.847959, 140, false],
+      "main": [2.922562, 4.056625, 116, false],
+      "published010": [3.487583, 4.360209, 112, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels last length-changing scene publication",
+      "candidate": [2.2903125, 3.597958, 132, false],
+      "main": [3.3923955, 4.937209, 96, false],
+      "published010": [3.4637915, 4.012667, 116, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels last color-only scene publication",
+      "candidate": [1.0291455, 2.259, 152, false],
+      "main": [2.36375, 3.117125, 132, false],
+      "published010": [3.5819585, 4.514959, 92, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels last same-length engine publication",
+      "candidate": [1.649042, 2.512416, 156, false],
+      "main": [2.69175, 3.463166, 124, false],
+      "published010": [3.2787705, 3.951625, 104, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels last length-changing engine publication",
+      "candidate": [2.009062, 2.718292, 140, false],
+      "main": [3.158979, 4.035834, 124, false],
+      "published010": [3.2545835, 8.409041, 64, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels last color-only engine publication",
+      "candidate": [0.7124374999999404, 1.307958, 160, false],
+      "main": [1.9860005, 2.746792, 116, false],
+      "published010": [3.182125, 4.154167, 104, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels 100 edits immediate measurements without publication",
+      "candidate": [2.3017079999999703, 3.177875, 196, false],
+      "main": [3.003354, 3.841167, 184, false],
+      "published010": [2.9814585, 3.579708, 176, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels 100 edits immediate measurements with publication",
+      "candidate": [7.72425, 9.3555, 116, false],
+      "main": [12.4008335, 14.705917, 80, false],
+      "published010": [21.3829165, 22.97575000000006, 64, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels batched edit-read publication",
+      "candidate": [5.2776455, 6.412958, 136, false],
+      "main": [5.6251455, 6.878584, 132, false],
+      "published010": [6.2252705, 7.243916, 136, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels interleaved edit-read publication",
+      "candidate": [12.671667, 14.521208, 76, false],
+      "main": [18.6952915, 20.899167, 64, false],
+      "published010": [27.198457999999942, 30.595458, 64, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels 100 edits immediate measurements without publication",
+      "candidate": [2.6329585, 3.3905, 128, false],
+      "main": [3.9826665, 4.819292, 120, false],
+      "published010": [3.9107915, 4.687333, 128, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels 100 edits immediate measurements with publication",
+      "candidate": [20.7631245, 25.532708, 64, false],
+      "main": [95.193917, 109.180958, 64, false],
+      "published010": [152.136271, 166.077, 64, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels 100 edits batched edit-read publication",
+      "candidate": [8.028291999999881, 9.250417, 80, false],
+      "main": [9.470354, 10.983916, 64, false],
+      "published010": [9.952229, 11.608375, 80, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels 100 edits interleaved edit-read publication",
+      "candidate": [50.577896, 56.928667, 64, false],
+      "main": [138.9524795, 172.059625, 64, false],
+      "published010": [181.6574795, 196.825125, 64, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels separated balanced grow-shrink-space engine publication",
+      "candidate": [1.018625, 3.457958, 196, false],
+      "main": [0.9396455, 1.238583, 208, false],
+      "published010": [0.7987915, 1.008209, 268, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels separated balanced grow-shrink-space scene publication",
+      "candidate": [1.0198755, 1.990083, 188, false],
+      "main": [0.98525, 1.263375, 212, false],
+      "published010": [0.8884585000000298, 1.181625, 228, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels separated unbalanced grow-shrink-space engine publication",
+      "candidate": [0.993354, 1.6985, 200, false],
+      "main": [0.916354, 1.217291, 204, false],
+      "published010": [0.8705, 1.195125, 244, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "100 labels separated unbalanced grow-shrink-space scene publication",
+      "candidate": [0.973604, 1.405959, 192, false],
+      "main": [0.976542, 1.335583, 204, false],
+      "published010": [0.9764795, 2.11325, 144, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels separated balanced grow-shrink-space engine publication",
+      "candidate": [3.1228335, 4.571083, 80, false],
+      "main": [4.978646, 5.826125, 88, false],
+      "published010": [4.697583, 5.291792, 116, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels separated balanced grow-shrink-space scene publication",
+      "candidate": [3.8014165, 7.625417, 64, false],
+      "main": [5.302896, 6.31225, 88, false],
+      "published010": [5.061167, 5.590542, 104, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels separated unbalanced grow-shrink-space engine publication",
+      "candidate": [3.3117915, 4.307791, 104, false],
+      "main": [4.967729, 6.303625, 88, false],
+      "published010": [4.698438, 7.094042, 112, false]
+    },
+    {
+      "file": "batching.bench.ts",
+      "name": "1000 labels separated unbalanced grow-shrink-space scene publication",
+      "candidate": [3.5120415, 4.650042, 104, false],
+      "main": [5.0705205, 5.598083, 84, false],
+      "published010": [4.950021, 12.78725, 112, false]
+    },
+    {
+      "file": "cold.bench.ts",
+      "name": "mount and publish a 22k-glyph paragraph",
+      "candidate": [21.3445625, 23.355875, 64, false],
+      "main": [17.7993545, 19.4375, 64, false],
+      "published010": [19.5215, 20.684, 64, false]
+    },
+    {
+      "file": "cold.bench.ts",
+      "name": "mount a label and publish its first edit",
+      "candidate": [2.8286875, 4.24675, 176, false],
+      "main": [2.4022915, 3.521417, 204, false],
+      "published010": [3.0394375, 3.879084, 148, false]
+    },
+    {
+      "file": "cold.bench.ts",
+      "name": "mount 100 labels and borrow glyphs from each once",
+      "candidate": [13.399021, 15.907417, 64, false],
+      "main": [10.3708335, 12.231875, 84, false],
+      "published010": [12.804875, 15.870042, 84, false]
+    },
+    {
+      "file": "common.bench.ts",
+      "name": "measure after text change",
+      "candidate": [1.7131460000000298, 2.349917, 172, false],
+      "main": [1.158917, 1.365958, 280, false],
+      "published010": [2.803625, 4.906709, 192, false]
+    },
+    {
+      "file": "common.bench.ts",
+      "name": "publish after text change",
+      "candidate": [2.1585, 3.457417, 180, false],
+      "main": [1.9565205000000596, 2.29275, 228, false],
+      "published010": [2.3543335, 5.254833, 188, false]
+    },
+    {
+      "file": "common.bench.ts",
+      "name": "reflow after width change",
+      "candidate": [0.4691255, 0.9015, 216, false],
+      "main": [0.4581455, 0.74125, 272, false],
+      "published010": [0.7606455, 1.735625, 232, false]
+    },
+    {
+      "file": "common.bench.ts",
+      "name": "publish after color change",
+      "candidate": [1.5042705, 1.909833, 264, false],
+      "main": [1.281292, 1.59575, 260, false],
+      "published010": [1.7616035, 3.799875, 232, false]
+    },
+    {
+      "file": "common.bench.ts",
+      "name": "relayout after font-size change",
+      "candidate": [2.163125, 2.681334, 208, false],
+      "main": [1.8892085, 2.331333, 228, false],
+      "published010": [2.3301875, 5.998334, 196, false]
+    },
+    {
+      "file": "common.bench.ts",
+      "name": "measure 100 unchanged labels",
+      "candidate": [0.005607965909090909, 0.008025568181820892, 348, true],
+      "main": [0.0195625, 0.034458, 312, false],
+      "published010": [0.026228999999970196, 0.073875, 240, false]
+    },
+    {
+      "file": "edit.bench.ts",
+      "name": "type one character into a long paragraph and measure",
+      "candidate": [1.8127705, 2.193666, 256, false],
+      "main": [0.4603755, 2.517458, 240, false],
+      "published010": [2.1921045, 2.652125, 212, false]
+    },
+    {
+      "file": "edit.bench.ts",
+      "name": "type one character into a long Fredoka paragraph and measure",
+      "candidate": [2.2147705, 2.532, 212, false],
+      "main": [0.5054375, 1.824459, 288, false],
+      "published010": [1.7518545, 2.071542, 244, false]
+    },
+    {
+      "file": "edit.bench.ts",
+      "name": "type one character into a long paragraph and publish a frame",
+      "candidate": [2.95635450000003, 3.514083, 196, false],
+      "main": [3.337792, 3.775667, 204, false],
+      "published010": [3.542521, 4.091791, 176, false]
+    },
+    {
+      "file": "framework-publication.bench.ts",
+      "name": "reuse 1000 unchanged Vue property snapshots",
+      "candidate": [0.1908545, 0.384084, 356, false],
+      "main": [0.187604, 0.196458, 308, false],
+      "published010": [0.4670205, 1.270416, 252, false]
+    },
+    {
+      "file": "framework-publication.bench.ts",
+      "name": "normalize 1000 equivalent formatted flow updates",
+      "candidate": [4.763437, 5.19625, 108, false],
+      "main": [5.378667, 5.975625, 108, false],
+      "published010": [52.1828955, 93.41608300000048, 64, false]
+    },
+    {
+      "file": "framework-publication.bench.ts",
+      "name": "bind and normalize 1000 framework-shaped formatted flow updates",
+      "candidate": [4.8720005, 5.485083, 108, false],
+      "main": [6.022625, 6.76075, 100, false],
+      "published010": [48.9091875, 87.440333, 64, false]
+    },
+    {
+      "file": "inspection.bench.ts",
+      "name": "copy per-glyph metrics after text change",
+      "candidate": [3.1410205, 5.0725, 204, false],
+      "main": [3.692583, 4.079458, 204, false],
+      "published010": [6.531479, 11.909875, 100, false]
+    },
+    {
+      "file": "inspection.bench.ts",
+      "name": "copy per-glyph metrics from 100 unchanged labels",
+      "candidate": [0.1797085, 0.50075, 316, false],
+      "main": [0.1465, 0.38225, 120, false],
+      "published010": [0.152229, 0.358125, 176, false]
+    },
+    {
+      "file": "inspection.bench.ts",
+      "name": "edit and independently copy one label among 1 labels",
+      "candidate": [0.925063, 2.408375, 292, false],
+      "main": [1.075396, 1.415417, 268, false],
+      "published010": [2.1506455, 4.614666, 76, false]
+    },
+    {
+      "file": "inspection.bench.ts",
+      "name": "edit and independently copy one label among 100 labels",
+      "candidate": [1.018271, 1.425791, 252, false],
+      "main": [1.1866875, 1.557916, 232, false],
+      "published010": [2.290104, 3.428583, 160, false]
+    },
+    {
+      "file": "inspection.bench.ts",
+      "name": "edit and independently copy one label among 1000 labels",
+      "candidate": [1.9317085, 2.347333, 144, false],
+      "main": [2.7620625, 3.610291, 156, false],
+      "published010": [7.8073334999998805, 11.713792, 72, false]
+    },
+    {
+      "file": "inspection.bench.ts",
+      "name": "borrow per-glyph metrics from 100 promoted labels",
+      "candidate": [0.236854, 0.324833, 168, false],
+      "main": [0.2214585, 0.251042, 304, false],
+      "published010": [0.3179165, 0.745791, 188, false]
+    },
+    {
+      "file": "layout.bench.ts",
+      "name": "cached measurement",
+      "candidate": [2.9298859934853418e-5, 5.683387622149837e-5, 348, true],
+      "main": [3.5092839805825246e-5, 6.03252427184466e-5, 396, true],
+      "published010": [6.822916666666666e-5, 0.000184375, 172, true]
+    },
+    {
+      "file": "layout.bench.ts",
+      "name": "measurement after width change",
+      "candidate": [1.3495205, 1.654958, 276, false],
+      "main": [0.8798335, 1.059375, 288, false],
+      "published010": [1.022458, 1.562125, 224, false]
+    },
+    {
+      "file": "layout.bench.ts",
+      "name": "measurement then publication after width change",
+      "candidate": [1.664083, 2.032958, 260, false],
+      "main": [1.9400205, 2.305875, 244, false],
+      "published010": [1.8575, 2.515917, 188, false]
+    },
+    {
+      "file": "layout.bench.ts",
+      "name": "cached per-glyph inspection",
+      "candidate": [0.075375, 0.113041, 328, false],
+      "main": [0.0438138125, 0.04893225, 388, true],
+      "published010": [0.078146, 0.132709, 256, false]
+    },
+    {
+      "file": "layout.bench.ts",
+      "name": "per-glyph inspection after width change",
+      "candidate": [4.56, 5.777749999999941, 168, false],
+      "main": [7.247542, 9.942833, 140, false],
+      "published010": [9.552, 11.129458, 104, false]
+    },
+    {
+      "file": "layout.bench.ts",
+      "name": "inspection then publication after width change",
+      "candidate": [4.7903545, 5.695, 164, false],
+      "main": [8.6732085, 9.352458, 132, false],
+      "published010": [10.3709585, 11.057584, 100, false]
+    },
+    {
+      "file": "layout.bench.ts",
+      "name": "publication after font-size change",
+      "candidate": [7.58125, 8.138833, 132, false],
+      "main": [6.4015, 6.744958, 140, false],
+      "published010": [7.064208, 9.233125, 128, false]
+    },
+    {
+      "file": "layout.bench.ts",
+      "name": "publication after width change",
+      "candidate": [0.723625, 1.085125, 300, false],
+      "main": [1.147979, 1.407166, 248, false],
+      "published010": [1.4615625, 1.871166, 196, false]
+    },
+    {
+      "file": "layout.bench.ts",
+      "name": "publication after text change",
+      "candidate": [7.143125, 8.105291, 136, false],
+      "main": [6.513479, 6.9695, 148, false],
+      "published010": [7.2635835, 7.942041, 116, false]
+    },
+    {
+      "file": "outlines.bench.ts",
+      "name": "copy per-glyph metrics with outlines after text change",
+      "candidate": [3.4318335, 4.502542, 104, false],
+      "main": [3.7925835, 4.110291, 168, false],
+      "published010": null
+    },
+    {
+      "file": "outlines.bench.ts",
+      "name": "read every outline from an unchanged copy",
+      "candidate": [0.9065, 1.27825, 216, false],
+      "main": [0.874542, 1.063958, 236, false],
+      "published010": null
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "1 labels first set",
+      "candidate": [0.019510406249999068, 0.03326821875, 284, true],
+      "main": [0.0011797420212769126, 0.0015367925531914893, 316, true],
+      "published010": [0.0011805555555555556, 0.0031104166666666667, 248, true]
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "1 labels first set+measure",
+      "candidate": [0.1861665, 0.351708, 264, false],
+      "main": [0.190271, 0.397125, 180, false],
+      "published010": [0.2427915, 0.566792, 268, false]
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "1 labels first set+measure+scene-publication",
+      "candidate": [0.510042, 0.820125, 244, false],
+      "main": [0.4530830000000298, 0.660792, 288, false],
+      "published010": [0.756542, 1.511833, 228, false]
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "1 labels first same-value-set",
+      "candidate": [7.129024064171122e-5, 9.622326203208555e-5, 308, true],
+      "main": [6.808766909469304e-5, 7.787018730489074e-5, 328, true],
+      "published010": [7.057057522123894e-5, 0.00018853252212392018, 276, true]
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "1 labels first overwrite-before-scene-publication",
+      "candidate": [0.545063, 0.866, 248, false],
+      "main": [0.270646, 0.365375, 292, false],
+      "published010": [0.593813, 1.190291, 172, false]
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "100 labels first set",
+      "candidate": [0.020561203125, 0.03578384375, 252, true],
+      "main": [0.0013458831967213113, 0.002526467213114754, 300, true],
+      "published010": [0.0014442459016393442, 0.0039620901639344265, 208, true]
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "100 labels first set+measure",
+      "candidate": [0.2122295, 0.379666, 268, false],
+      "main": [0.1423955, 0.194916, 260, false],
+      "published010": [0.2289375, 0.558084, 256, false]
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "100 labels first set+measure+scene-publication",
+      "candidate": [0.6491665, 1.056083, 244, false],
+      "main": [0.6225, 0.871166, 272, false],
+      "published010": [1.058083, 2.435958, 196, false]
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "100 labels first same-value-set",
+      "candidate": [7.098269980506822e-5, 0.00012677680311890837, 272, true],
+      "main": [6.766280021834061e-5, 7.681713973799127e-5, 308, true],
+      "published010": [6.936673448626653e-5, 0.0001636678535096643, 252, true]
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "100 labels first overwrite-before-scene-publication",
+      "candidate": [0.655625, 1.133333, 224, false],
+      "main": [0.347854, 0.54425, 244, false],
+      "published010": [0.468771, 1.801084, 208, false]
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "1000 labels first set",
+      "candidate": [0.018977427083333335, 0.05329600000000248, 132, true],
+      "main": [0.0014481907894736842, 0.0020325307017543858, 212, true],
+      "published010": [0.0014314413265306123, 0.0042855, 156, true]
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "1000 labels first set+measure",
+      "candidate": [0.02442139772727273, 0.03440436363636364, 144, true],
+      "main": [0.195604, 0.293542, 188, false],
+      "published010": [0.327146, 0.753125, 148, false]
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "1000 labels first set+measure+scene-publication",
+      "candidate": [2.0430625, 3.066708, 120, false],
+      "main": [2.9479165, 3.883792, 120, false],
+      "published010": [3.966792, 7.817625, 108, false]
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "1000 labels first same-value-set",
+      "candidate": [7.237155090390105e-5, 9.393815413891532e-5, 148, true],
+      "main": [6.802425578831312e-5, 7.926791620727674e-5, 204, true],
+      "published010": [7.04788902291918e-5, 0.0001767189384800965, 164, true]
+    },
+    {
+      "file": "prepared-operations.bench.ts",
+      "name": "1000 labels first overwrite-before-scene-publication",
+      "candidate": [1.8655205, 2.441334, 132, false],
+      "main": [1.510354, 1.980875, 156, false],
+      "published010": [2.3846875, 4.480334, 132, false]
+    },
+    {
+      "file": "request-arena.bench.ts",
+      "name": "write one paragraph and text mutation",
+      "candidate": [0.0006675101351351352, 0.0014808581081081082, 508, true],
+      "main": [0.0009364959677419355, 0.001701951612903226, 552, true],
+      "published010": [0.0019743557692307695, 0.006638634615384615, 312, true]
+    },
+    {
+      "file": "request-arena.bench.ts",
+      "name": "write 1000 paragraph-order mutations",
+      "candidate": [0.0172085, 0.04475, 480, false],
+      "main": [0.006733520833333333, 0.008746541666666666, 644, true],
+      "published010": [0.03575, 0.096959, 388, false]
+    },
+    {
+      "file": "request-arena.bench.ts",
+      "name": "write 1000 paragraph and text mutations",
+      "candidate": [0.0803335, 0.190167, 452, false],
+      "main": [0.0855415, 0.186958, 480, false],
+      "published010": [0.1332715, 0.314834, 368, false]
+    },
+    {
+      "file": "request-arena.bench.ts",
+      "name": "write 22k UTF16 text into Wasm request arena",
+      "candidate": [0.042792, 0.111416, 516, false],
+      "main": [0.041146, 0.067417, 448, false],
+      "published010": [0.0997085, 0.225208, 304, false]
+    },
+    {
+      "file": "request-arena.bench.ts",
+      "name": "write 22k UTF16 text into owned array control",
+      "candidate": [0.0426875, 0.066459, 512, false],
+      "main": [0.040271, 0.056625, 568, false],
+      "published010": [0.1053125, 0.283667, 280, false]
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "unchanged setter preparation in one large paragraph with 8192 paint spans",
+      "candidate": [2.9280205, 4.444583, 108, false],
+      "main": [4.936896, 6.687709, 140, false],
+      "published010": [54.539875, 67.793792, 64, false]
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "unchanged end-to-end setter and publication with 8192 paint spans",
+      "candidate": [2.987812, 3.5212920000001193, 148, false],
+      "main": [5.3715835, 14.443084, 64, false],
+      "published010": [50.559521, 79.996792, 64, false]
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "scattered setter preparation in one large paragraph with 8192 paint spans",
+      "candidate": [14.5896245, 15.986167, 64, false],
+      "main": [35.8659995, 39.8415, 64, false],
+      "published010": [54.3666045, 79.365708, 64, false]
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "scattered end-to-end setter and publication with 8192 paint spans",
+      "candidate": [16.789729, 35.274208, 64, false],
+      "main": [22.218417, 23.726, 64, false],
+      "published010": [64.49035399999988, 95.876167, 64, false]
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "broad setter preparation in one large paragraph with 8192 paint spans",
+      "candidate": [16.0278545, 35.581084, 64, false],
+      "main": [35.7715835, 40.376917, 64, false],
+      "published010": [55.915417, 72.732666, 64, false]
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "broad end-to-end setter and publication with 8192 paint spans",
+      "candidate": [17.2772085, 52.694583, 64, false],
+      "main": [22.39147949999994, 23.918541, 64, false],
+      "published010": [65.8537085, 79.347417, 64, false]
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "monospaced unchanged setter preparation in one large paragraph with 8192 paint spans",
+      "candidate": [2.886792, 4.171375, 140, false],
+      "main": [5.0319375, 6.748958, 128, false],
+      "published010": [42.74318749999994, 56.489042, 64, false]
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "monospaced unchanged end-to-end setter and publication with 8192 paint spans",
+      "candidate": [3.0022705, 4.588958, 160, false],
+      "main": [4.922667, 6.260291, 132, false],
+      "published010": [47.1513955, 67.502792, 64, false]
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "monospaced scattered setter preparation in one large paragraph with 8192 paint spans",
+      "candidate": [11.5873545, 14.719625, 76, false],
+      "main": [34.965479000000116, 38.49225, 64, false],
+      "published010": [51.924167, 76.479292, 64, false]
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "monospaced scattered end-to-end setter and publication with 8192 paint spans",
+      "candidate": [13.019021, 16.596792, 72, false],
+      "main": [19.810646, 22.5775, 64, false],
+      "published010": [56.13314550000006, 80.270458, 64, false]
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "monospaced broad setter preparation in one large paragraph with 8192 paint spans",
+      "candidate": [14.40254150000006, 17.132582999999762, 72, false],
+      "main": [47.3160625, 158.4758340000001, 64, false],
+      "published010": [51.470458, 79.69666700000023, 64, false]
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "monospaced broad end-to-end setter and publication with 8192 paint spans",
+      "candidate": [18.3608965, 19.473458, 64, false],
+      "main": [144.2527715, 173.792959, 64, false],
+      "published010": [64.1684375, 95.813959, 64, false]
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "shared-material scattered setter preparation in one large paragraph with 8192 paint spans",
+      "candidate": [15.2255205, 16.054708, 64, false],
+      "main": [45.383833000000116, 50.084292, 64, false],
+      "published010": [78.300291, 103.963084, 64, false]
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "shared-material scattered end-to-end setter and publication with 8192 paint spans",
+      "candidate": [16.677937, 17.4555, 64, false],
+      "main": [30.6065415, 35.816458, 64, false],
+      "published010": [78.7889375, 108.969, 64, false]
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "split move and merge paint boundaries preparation only",
+      "candidate": [4.9379585, 5.400041, 148, false],
+      "main": [6.754291, 7.541834, 160, false],
+      "published010": [9.192125, 12.702833, 92, false]
+    },
+    {
+      "file": "sparse-assignment.bench.ts",
+      "name": "split move and merge paint boundaries publication",
+      "candidate": [6.4784795, 7.131916, 128, false],
+      "main": [9.7478745, 12.98675, 104, false],
+      "published010": [16.07216649999994, 24.076292, 64, false]
+    },
+    {
+      "file": "stress.bench.ts",
+      "name": "toggle one group containing 1000 retained labels",
+      "candidate": [0.5117915, 0.677584, 124, false],
+      "main": [0.5997500000001192, 1.829584, 136, false],
+      "published010": [0.648542, 1.550084, 88, false]
+    },
+    {
+      "file": "stress.bench.ts",
+      "name": "reorder 1000 unchanged retained labels",
+      "candidate": [2.542146, 3.176042, 128, false],
+      "main": [3.246979, 4.345917, 108, false],
+      "published010": [3.42425, 5.730209, 76, false]
+    },
+    {
+      "file": "stress.bench.ts",
+      "name": "reorder then edit one of 1000 retained labels",
+      "candidate": [6.4930625, 7.99225, 96, false],
+      "main": [7.608271, 11.604833, 80, false],
+      "published010": [8.08735399999994, 12.3765, 64, false]
+    },
+    {
+      "file": "stress.bench.ts",
+      "name": "measure 1000 unchanged retained labels",
+      "candidate": [0.311146, 0.429875, 136, false],
+      "main": [0.3501875, 0.684792, 144, false],
+      "published010": [0.2982915, 0.705041, 96, false]
+    },
+    {
+      "file": "stress.bench.ts",
+      "name": "borrow glyphs from 1000 steadily promoted retained labels",
+      "candidate": [1.996917, 2.460292, 112, false],
+      "main": [1.586938, 4.642625, 120, false],
+      "published010": [1.2181250000000596, 2.592083, 108, false]
+    },
+    {
+      "file": "stress.bench.ts",
+      "name": "edit and measure one of 1000 retained labels",
+      "candidate": [0.200604, 0.304167, 152, false],
+      "main": [0.294687, 0.660125, 160, false],
+      "published010": [0.2791875, 0.621167, 100, false]
+    },
+    {
+      "file": "stress.bench.ts",
+      "name": "edit and sparsely borrow one of 1000 retained labels",
+      "candidate": [0.2282915, 0.303, 156, false],
+      "main": [0.3518335, 0.725167, 64, false],
+      "published010": [0.3104585, 0.6583340000002385, 112, false]
+    },
+    {
+      "file": "stress.bench.ts",
+      "name": "publish 1024 retained Text instances",
+      "candidate": [20.1546045, 21.868875, 64, false],
+      "main": [17.6045205, 21.1925, 64, false],
+      "published010": [16.7593755, 18.922792, 64, false]
+    },
+    {
+      "file": "typegpu-publication.bench.ts",
+      "name": "move 1000 retained TypeGPU labels",
+      "candidate": [0.3206875, 0.412625, 144, false],
+      "main": [0.3480625, 0.698416, 152, false],
+      "published010": [3.7790415, 6.357083, 108, false]
+    },
+    {
+      "file": "unsafe-line-breaks.bench.ts",
+      "name": "common-safe word-wrap reflow",
+      "candidate": [0.267542, 0.507834, 264, false],
+      "main": [0.2868745, 0.537833, 284, false],
+      "published010": [0.3053329999999702, 0.66175, 284, false]
+    },
+    {
+      "file": "unsafe-line-breaks.bench.ts",
+      "name": "issue 216 reporter workaround",
+      "candidate": [0.260375, 0.564792, 252, false],
+      "main": [0.291375, 0.568875, 292, false],
+      "published010": [0.3153334999998808, 0.773625, 288, false]
+    },
+    {
+      "file": "unsafe-line-breaks.bench.ts",
+      "name": "issue 216 unsafe-boundary word-wrap reflow",
+      "candidate": [0.2641665, 0.433333, 264, false],
+      "main": [0.284188, 0.585917, 288, false],
+      "published010": [0.397959, 1.034375, 260, false]
+    },
+    {
+      "file": "unsafe-line-breaks.bench.ts",
+      "name": "long reporter workaround paragraph reflow",
+      "candidate": [0.7314374999999702, 0.9955, 228, false],
+      "main": [0.5651250000000299, 0.942, 236, false],
+      "published010": [0.7007505, 1.712959, 264, false]
+    },
+    {
+      "file": "unsafe-line-breaks.bench.ts",
+      "name": "long unsafe-boundary paragraph reflow",
+      "candidate": [0.7963335, 1.092667, 252, false],
+      "main": [0.473479, 0.81975, 272, false],
+      "published010": [0.593625, 1.173709, 248, false]
+    },
+    {
+      "file": "unsafe-line-breaks.bench.ts",
+      "name": "long unsafe-boundary paragraph text edit",
+      "candidate": [1.9862085, 2.523792, 196, false],
+      "main": [1.8219579999999702, 2.334167, 232, false],
+      "published010": [1.8159375, 5.174792, 188, false]
+    }
+  ],
+  "openGates": [
+    "Material dense512/1024 correction",
+    "Final full browser/hero A/B: previous ignored ASCII hero source not retrieved/authenticated in this checkout; historical result not reused",
+    "Advanced-main integration and revalidation before readiness",
+    "Final seven-family acceptance remains held",
+    "Cumulative whole-stack API/ABI review; this wave preserves declarations, manifest and Wasm instructions/interfaces"
+  ],
+  "evidence": {
+    ".cache/held-local-20261016/prepare-receipt/build.log": {
+      "sha256": "c58bb8dcdca356b3e06971bb04d5bb1e9cd6ebdf32615f1a6d8043f043d45ac4",
+      "bytes": 7838
+    },
+    ".cache/held-local-20261016/prepare-receipt/pack.log": {
+      "sha256": "3c457173a9d452a8fc3bd2238c77aab3ef1162885d6b63934c5e01554a5633ed",
+      "bytes": 42800
+    },
+    ".cache/held-local-20261016/prepare-receipt/gates/static.log": {
+      "sha256": "3109d54b530f71fd15f9057b217b5da1c6b7b808a42ac8389f9dced93a7d70ae",
+      "bytes": 970
+    },
+    ".cache/held-local-20261016/prepare-receipt/gates/node-tests-candidate.log": {
+      "sha256": "6ccb7ad733832ec5e2df237e66bbfab39cedccabecc8de7a5ce8e49281e13a89",
+      "bytes": 103556
+    },
+    ".cache/held-local-20261016/prepare-receipt/gates/prepared-operations.log": {
+      "sha256": "c4be549f6ec82cf68992b71864adae2f359de3287462b44fe1a4547e52a19cde",
+      "bytes": 191
+    },
+    ".cache/held-local-20261016/prepare-receipt/gates/peer-check.log": {
+      "sha256": "0ad0196f71a3d478ac8edbe47d3fef9610ddcc42a6f613ca8afc264d71bf34e4",
+      "bytes": 23009
+    },
+    ".cache/held-local-20261016/prepare-receipt/browser-conformance.json": {
+      "sha256": "9549ac788c750fc5c51c03b2e225eeb8c6ec101877f1cd805fadb825531a3fc4",
+      "bytes": 328012
+    },
+    ".cache/held-local-20261016/prepare-receipt/delivery-sizes.json": {
+      "sha256": "6195a946ace29ca0ea7b9ed6bedb58501b4434c0c4228281a80c77ccab372da4",
+      "bytes": 10926
+    },
+    ".cache/held-local-20261016/prepare-receipt/candidate-memory.json": {
+      "sha256": "fd1289422784d9a60132ec25a13b188dfdcf11057d7274ad060b7b15f91083c1",
+      "bytes": 77160
+    },
+    ".cache/held-local-20261016/prepare-receipt/gates/shaper-memory-artifact.log": {
+      "sha256": "86a73cfd014f1925383db7858d53ce4b94df73475ed3b8065676cc3d06c4c4db",
+      "bytes": 2509
+    },
+    ".cache/held-local-20261016/prepare-receipt/gates/shaper-memory-artifact-candidate.log": {
+      "sha256": "95a3c304ec7f175aed858bfd8bf1a75b683e87f02e762be00dfc17080ee22c28",
+      "bytes": 1662
+    },
+    ".cache/held-local-20261016/prepare-receipt/labs-main/manifest.json": {
+      "sha256": "2918e0970a09e9941642b6314b54d2af5f5795502e537afbf04067a5a451a913",
+      "bytes": 1368
+    },
+    ".cache/held-local-20261016/prepare-receipt/labs-main/baseline.json": {
+      "sha256": "f3cf6aaaa9d5db6cf6ac4917d3486db3a0b0a964d727b6b9f5107fa16791e746",
+      "bytes": 1108515
+    },
+    ".cache/held-local-20261016/prepare-receipt/labs-main/candidate.json": {
+      "sha256": "fe1d9a85d1bc6a191ad6a8b4c530cb4b83950e70b9bc7b46c9d68c6faf174e15",
+      "bytes": 1064820
+    },
+    ".cache/held-local-20261016/prepare-receipt/labs-main/comparison.txt": {
+      "sha256": "7157fd5a80da9cd047849767d82473b67fdf9682ac5ee46f4b2a0468762c1812",
+      "bytes": 56257
+    },
+    ".cache/held-local-20261016/prepare-receipt/labs-main/summary.md": {
+      "sha256": "abefaf1ac832ef8966616230942a9cb7746c82a6f0ab03fba20234c5d1f3b259",
+      "bytes": 45639
+    },
+    ".cache/held-local-20261016/prepare-receipt/labs-main/baseline-pnpm-lock.yaml": {
+      "sha256": "bf232d627c9f8647052919aa48c8aa113ac55f77722373bb6e5767c6f85f50c5",
+      "bytes": 22394
+    },
+    ".cache/held-local-20261016/prepare-receipt/labs-main/candidate-pnpm-lock.yaml": {
+      "sha256": "64cd5070a9f748ff12b26825f599e8a6b15e9ab14f6552d955eeb332a18de25b",
+      "bytes": 22226
+    },
+    ".cache/held-local-20261016/prepare-receipt/labs-published010/manifest.json": {
+      "sha256": "8621b1b9e880609e68393e8f95dd03eb8cf90b2425bceba3d6671b9439fa7539",
+      "bytes": 1041
+    },
+    ".cache/held-local-20261016/prepare-receipt/labs-published010/baseline.json": {
+      "sha256": "7a57e9e7d2d39fc9ee8ce9b98f74c2d2198d7376d7705cbb97dae434afe2e45f",
+      "bytes": 930105
+    },
+    ".cache/held-local-20261016/prepare-receipt/labs-published010/candidate.json": {
+      "sha256": "fe1d9a85d1bc6a191ad6a8b4c530cb4b83950e70b9bc7b46c9d68c6faf174e15",
+      "bytes": 1064820
+    },
+    ".cache/held-local-20261016/prepare-receipt/labs-published010/comparison.txt": {
+      "sha256": "31908eefca031093a5b6278b760e2967cc387145a43131435642ace677d2e1de",
+      "bytes": 56887
+    },
+    ".cache/held-local-20261016/prepare-receipt/labs-published010/summary.md": {
+      "sha256": "428fd8afca131d2268b6a4c7ff306405e7e74a1d1121cb0d6887587cc15eaca1",
+      "bytes": 46369
+    },
+    ".cache/held-local-20261016/prepare-receipt/labs-published010/baseline-pnpm-lock.yaml": {
+      "sha256": "66712401c04eb96618e58f2e3d9f5c0d090f1d8424b42baeb94fb4a7b5fbfa03",
+      "bytes": 22022
+    },
+    ".cache/held-local-20261016/prepare-receipt/labs-published010/candidate-pnpm-lock.yaml": {
+      "sha256": "64cd5070a9f748ff12b26825f599e8a6b15e9ab14f6552d955eeb332a18de25b",
+      "bytes": 22226
+    },
+    ".cache/held-local-20261016/prepare-receipt/gates/browser-presentation.log": {
+      "sha256": "59d380875a0eb2e559404802e07b4930c55aeda27485ba577dd9252ed8d85a80",
+      "bytes": 2925
+    },
+    ".cache/held-local-20261016/prepare-receipt/gates/delivery-sizes-final.log": {
+      "sha256": "5c7abfeda4bc34659faf963c250a6987e29a844f96b97ac7b095aacf1ec29379",
+      "bytes": 12532
+    },
+    ".cache/held-local-20261016/prepare-receipt/gates/browser-conformance.log": {
+      "sha256": "b905fc14d094dc9afc7ca39d4013fcc70b5bd8cafc1cf93b8187865303f0ce58",
+      "bytes": 4259
+    },
+    ".cache/held-local-20261016/prepare-receipt/gates/presentation-server.log": {
+      "sha256": "e75f49ae2598cf9c769f92d21ff2fe59fcf7ec21889db6be0272d2c4cc6c393d",
+      "bytes": 431
+    },
+    ".cache/held-local-20261016/prepare-receipt/gates/benchmark-static-final.log": {
+      "sha256": "78c0dbc89b00675fd1d0679a728fac67e583380206e3f410c07ae9f6ce154957",
+      "bytes": 182
+    },
+    ".cache/held-local-20261016/prepare-receipt/server-cleanup.json": {
+      "sha256": "94bd9110179f97f1665f21968afb686b7fee366b8a1acd087aef7e3050bad01f",
+      "bytes": 134
+    }
+  },
+  "memoryAuthenticationFailure": {
+    "originalArchiveAttempt": "Feature-off control from detached60d did not reproduce originalc4; no memory capture was accepted. Preserved failed log. Current-root candidate attempt authenticated feature-off byte equality6f and passed.",
+    "oldArchiveNoPairedMemoryResult": true
+  }
+}

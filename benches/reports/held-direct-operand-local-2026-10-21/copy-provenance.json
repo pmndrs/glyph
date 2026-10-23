@@ -1,0 +1,634 @@
+{
+  "schema": "portable-e5-packet-copy-provenance-v1",
+  "createdUtc": "2026-10-21T03:08:16.391538+00:00",
+  "packetRoot": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging",
+  "copyPolicy": "Copied files were byte-for-byte copies of existing evidence; no source, raw measurement, review, or copied report was rewritten. packet-index.md is the sole authored explanatory file.",
+  "copiedFiles": [
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-all-workloads.md",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/all-workloads.md",
+      "bytes": 37695,
+      "sha256": "b28a3d78aac365834083767f3124d21ff0cae92f08eb079dca8e289a94c0dfd2",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-all-workloads.csv",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/all-workloads.csv",
+      "bytes": 29952,
+      "sha256": "fbd4309feaf96059f113fc57094bf71219b8ab883e322838a1d499acfb1e8818",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-three-arm-absolute-quantiles.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/three-arm-absolute-quantiles.json",
+      "bytes": 741270,
+      "sha256": "6f536c5ebe9accadb2392c3857b346fe12987af9f1365e3cf98ebc8c7ffa47ce",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/extract-e5-matrix-absolute-quantiles.py",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/extract-e5-matrix-absolute-quantiles.py",
+      "bytes": 9848,
+      "sha256": "569df898a2452c01e3159588a5c577593313ce0665181a904d8fd127ca36a338",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/render-e5-matrix-all-workloads.py",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/render-e5-matrix-all-workloads.py",
+      "bytes": 8319,
+      "sha256": "f263954ec3e2de31ea1dd76e54146eb39d04ae651045626beb1283cf587a267f",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-profile-factual-handoff.md",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/factual-handoff.md",
+      "bytes": 10297,
+      "sha256": "07afedd2691c7314ec1bb2311d721416ea1b778f9628ba25707da92e875b7575",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-profile-factual-handoff.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/factual-handoff.json",
+      "bytes": 395666,
+      "sha256": "1667463f9a497fae2e4dbba67d2c1f64394a1e5c699ff303e16550ce35e5e10a",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/root-matrix-release.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/root-matrix-release.json",
+      "bytes": 89356,
+      "sha256": "14d2fc3fc75b5e79c80ff75eec2fdefa34f2f2b7d07e04b73be936f67e49904b",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-main-terminal-identity-check.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/arm-checks/main.json",
+      "bytes": 3395,
+      "sha256": "223bab33de0f0df120493d36466a58ba1fa8ae7eed00f1d8e78c8bbf7ac10f45",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-published-terminal-identity-check.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/arm-checks/published.json",
+      "bytes": 4695,
+      "sha256": "a904e0fdddf349d900ef96297ad44c7f92b68496d4c68a93e8b50dddd519a8f1",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-prior-e2-terminal-identity-check.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/arm-checks/prior-e2.json",
+      "bytes": 3921,
+      "sha256": "ad296a02291893c4037fb8f47c2114728b1c259d934834167a38222147453885",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/current1024-profile-preflight-high.md",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/profile/high-preflight.md",
+      "bytes": 10799,
+      "sha256": "eafc692fab4cf64f56f085b894034a67de6d0ee81f78c27d9c2e4f1362d8ce66",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/current1024-profile-prelaunch-check.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/profile/prelaunch-identity-check.json",
+      "bytes": 3497,
+      "sha256": "4dda2fd472a9f85902e0ae03573e7f52fc8adb2df98e5ec21aa9c83f7e885af5",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/current1024-profile-01/start.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/profile/capture-start.json",
+      "bytes": 956,
+      "sha256": "4ec521967280095fa2d68bc579a60f7f8f70986a58918c8d74ec0f4dea5b023e",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/current1024-profile-01/result.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/profile/capture-result.json",
+      "bytes": 1209,
+      "sha256": "3ad63f7a19879cdbd3aa581ad2c56049767db9e815683416cfc4c7b56324f58a",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/current1024-profile-summary-01/start.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/profile/summary-start.json",
+      "bytes": 1051,
+      "sha256": "a5d0675e98f977c557da4d00f9bd7a67fa06aa5aa2c598132d249424a33ef216",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/current1024-profile-summary-01/result.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/profile/summary-result.json",
+      "bytes": 1304,
+      "sha256": "e3446346ac340e466bf8a2d19266a54f8aa402f97e63c7ead0d393abdabbb374",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/current1024-profile-candidate/summary.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/profile/summary.json",
+      "bytes": 8739,
+      "sha256": "da66eef5982e3ca168ef5dc7d2dc2fe6ab50e36e92f7adc7213c5bf4be8d0331",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/current1024-profile-candidate/manifest.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/profile/manifest.json",
+      "bytes": 283875,
+      "sha256": "467a3e1d2996716c2cd527f1bb5162d2c8d5c504b65693ef435ee35738880292",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/current1024-profile-candidate/ancestry.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/profile/ancestry.json",
+      "bytes": 110,
+      "sha256": "599381c58fef63a0db3c39e90f1f0e425753e221403ad598a1e84b0759fdfb41",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/current1024-profile-candidate/anchor-validation.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/profile/anchor-validation.json",
+      "bytes": 3163,
+      "sha256": "9af548631f56868502ab14df883285321205c6656aa29345c87bbe5c8b8f5def",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/current1024-profile-candidate/cpu-ancestry.md",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/profile/cpu-ancestry.md",
+      "bytes": 129042,
+      "sha256": "2779dd1756bafce7d564f90fd655438b65997fba8e11ab011463c7a3bf09a651",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/package-gate-summary.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/package-gate-summary.json",
+      "bytes": 8163,
+      "sha256": "37e6812e9adc273d4f99744b3406d98f7aad18cab7e14ec3238d9d1d943e152f",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/package-artifact-gate.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/package-artifact-gate.json",
+      "bytes": 146480,
+      "sha256": "19143d4e57b82bf1a9a4c57a6470124663e79580ef2ab8682af7962bc7e7c6a2",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/artifact-gates-final-summary-02.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/final-artifact-gates-summary.json",
+      "bytes": 8120,
+      "sha256": "f097c3d2e14280dbb86ff38f977c71b7aea9c2d7986795ba4fb13785fad96d66",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/package-gate-release.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/package-gate-release.json",
+      "bytes": 2316,
+      "sha256": "722428b74251ceb25e50ae49e2baaf1effd1cfe15409b3f1d9815e3d9efd7a05",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/peer-check-result-summary.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/peer-check-summary.json",
+      "bytes": 3324,
+      "sha256": "724292b8f4f366643813367da25b4f43fb269eb44dd7f2be97c581a636fa9f04",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/package-member-contract-comparison.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/package-member-contract-comparison.json",
+      "bytes": 305146,
+      "sha256": "4f5dff2b0084df8c42d8e915d03f434e13746d2e3e7929c0b102031ba8d695a4",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/shaper-size-accounting-final/report.md",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/size-accounting-report.md",
+      "bytes": 6197,
+      "sha256": "e7bd4368046dcae6c4656cd7d399b212a645026b87d9c9134f8b25072596e63b",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/wasm-abi-structural-summary.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/wasm-abi-structural-summary.json",
+      "bytes": 5479,
+      "sha256": "bc3640ccaf05e479f794db0f451c9638068f46ef602deea082fb073c416d3794",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/wasm-simd-decoded-witness.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/wasm-simd-decoded-witness.json",
+      "bytes": 1954,
+      "sha256": "eef6e2332bfb3f34bd51d00d40b763c2bb9d92207342b2e5739713ad320f9edb",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/root-live-memory-summary.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/live-memory-summary.json",
+      "bytes": 1637,
+      "sha256": "83a196ed1c0cd6b8f1cb96b85b492b5cbf45b7a01fc87ffae53d6b6460c074c0",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/root-live-memory-vs-e4.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/live-memory-vs-e4.json",
+      "bytes": 1396,
+      "sha256": "6542f316981e7c066352f99faf9e7a2d77fa1f431eb7fb296ba1bb4bee1880f8",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/shaper-live-memory-final.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/live-memory-full-report.json",
+      "bytes": 77738,
+      "sha256": "80182196ab912d2a227ae09388ac748f638529a6a88a824aab31fdd32847c3e7",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/shaper-memory-final/manifest.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/memory-artifact-manifest.json",
+      "bytes": 4400,
+      "sha256": "3ba78d30afe029bbe31ef69b6a71687dd94669b7e1b78e788c727609c7592d6d",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/renderer-recovery-final-01/result.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/renderer-recovery-wrapper-result.json",
+      "bytes": 892,
+      "sha256": "c413aa1fb47c56171144003af702022a230311016f10221b05636ec02cc02e26",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/renderer-recovery-run-01/result.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/renderer-recovery-result.json",
+      "bytes": 75040,
+      "sha256": "674db37ef61c4d901335b47d507f0aededf5703685cfcaffb2cfc9e70f11a58e",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/renderer-recovery-artifact-bridge-before.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/renderer-recovery-bridge-before.json",
+      "bytes": 106798,
+      "sha256": "d682043fdefdea148450b4d6be15d5c45467f7a7be2c34f7c4435faab3bc44fc",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/renderer-recovery-artifact-bridge-after.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/renderer-recovery-bridge-after.json",
+      "bytes": 108445,
+      "sha256": "2f171f8e163f0c5127b3960d3523033a1c2dedc6c260cc74bc383b68767866fe",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/root-bitmap-direct-success-observation.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/native/root-bitmap-direct-success-observation.json",
+      "bytes": 2037,
+      "sha256": "e0cb988930faad60554550aa0c1666e5d8e97e4c9136c553ca5c32368a10f53e",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/bitmap-native-ledger-direct-counters/identity.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/native/direct-ledger-identity.json",
+      "bytes": 2096,
+      "sha256": "1c475d1c50f28b7d42bf36b97626164689680cb523ab512f66385df54d5d3175",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/bitmap-native-ledger-direct-counters/native-work-ledger.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/native/direct-native-work-ledger.json",
+      "bytes": 29125,
+      "sha256": "2f81a490873dbe91b3494ad95031072d4f4c5fc9dd3c787c9011b3d61e20f00b",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/corrected-product.patch",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/source/corrected-product.patch",
+      "bytes": 122199,
+      "sha256": "d428cb137f5b6e4ce340d117bc3b527cd48b6312135960a7c5c7db1514ec902c",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/corrected-product-patch-preservation.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/source/corrected-product-patch-preservation.json",
+      "bytes": 1296,
+      "sha256": "e70389b752a4bca653fc62076043d97aaa259735df49f1fe10de297cb14f5045",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/corrected-product-preservation.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/source/corrected-product-preservation.json",
+      "bytes": 598,
+      "sha256": "b24f5086c840b59dfca541ae048da6302946571f16f51dd1898abd80456ff995",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/root-review-correction-freeze.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/source/root-review-correction-freeze.json",
+      "bytes": 2653,
+      "sha256": "9e4feac607cd4151e8473848d0b3eac670af44bdc3f499fb3d126db2f1073a90",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/direct-hybrid-high-correction-review.md",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/reviews/direct-hybrid-high-correction-review.md",
+      "bytes": 4907,
+      "sha256": "6c918100f9505656a533b23f1eec3b8b3bc9bb1f15edecc33861d815eb294ca3",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/direct-hybrid-wave-admission-high.md",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/reviews/direct-hybrid-wave-admission-high.md",
+      "bytes": 20772,
+      "sha256": "8fe000dc28e5879e4be820ac83d73debd180a664a33d825d4f26e7729211374f",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/fresh-sol-high-zoomout-20261020.md",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/reviews/fresh-sol-high-zoomout-20261020.md",
+      "bytes": 18383,
+      "sha256": "30472c8f876face8aecee3c7777a9949b108a1412da8d9a22abc12a757e0e973",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/renderer-recovery-gate-high-final-review.md",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/reviews/renderer-recovery-gate-high-final-review.md",
+      "bytes": 2538,
+      "sha256": "7c316285f7c39a2b13f789f33e6ff9bd56fd20af23316c4ce2a014162b2a1d06",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-main-data/manifest.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/arms/main/manifest.json",
+      "bytes": 1230,
+      "sha256": "d5fd7f2e18af1653301bcd0724456a64a46ccb86c7dd368df8f451a6b348f23a",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-main-data/summary.md",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/arms/main/summary.md",
+      "bytes": 46371,
+      "sha256": "8c4b7f65cc2ae664672b54bb2544b0776da55d2ce9dcd6639e0782c6f263791d",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-main-data/comparison.txt",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/arms/main/comparison.txt",
+      "bytes": 54510,
+      "sha256": "c83cd061b1a48acf587f03cc77183e99ec87b9f6894923cd165ef6c22be026bf",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-main-01/start.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/arms/main/wrapper-start.json",
+      "bytes": 820,
+      "sha256": "a601612321e9844f2d816c60453d2729c337bdd00cb21366e82222f27317e035",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-main-01/result.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/arms/main/wrapper-result.json",
+      "bytes": 1073,
+      "sha256": "4bda560c86315bb407d80b8afde9ad4faeb15be031d95675af10ed6a4f45895b",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-published-data/manifest.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/arms/published/manifest.json",
+      "bytes": 1628,
+      "sha256": "fecf23566641971a7859e3f7419f87fb0edfa45137542fa2e3267ccbd6447fa5",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-published-data/summary.md",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/arms/published/summary.md",
+      "bytes": 45511,
+      "sha256": "1d3dc8a7526a08c6b84e08bf34e06164c57c091da7c4f8c12b3def28cff09950",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-published-data/comparison.txt",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/arms/published/comparison.txt",
+      "bytes": 53366,
+      "sha256": "35cb5a812c6884acd75a8c799725599a8752a2adc928f06dca71e9fbe4c68c0f",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-published-data/saved-candidate-manifest.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/arms/published/saved-candidate-manifest.json",
+      "bytes": 1230,
+      "sha256": "d5fd7f2e18af1653301bcd0724456a64a46ccb86c7dd368df8f451a6b348f23a",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-published-01/start.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/arms/published/wrapper-start.json",
+      "bytes": 953,
+      "sha256": "750ce8cb22098e0a7875d34321606bb0a7167c54890bb85bf5fc64025a3a7d81",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-published-01/result.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/arms/published/wrapper-result.json",
+      "bytes": 1206,
+      "sha256": "c0de3462b4f747cd2385c1f13f13d8363f0de2c92ba6242885b8de4aa10cd464",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-prior-e2-data/manifest.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/arms/prior-e2/manifest.json",
+      "bytes": 939,
+      "sha256": "cb042fb47fb0aa3082a4cd0705db440d23204b23820945c4d7948d12c71c1e7d",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-prior-e2-data/summary.md",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/arms/prior-e2/summary.md",
+      "bytes": 46694,
+      "sha256": "6b2996cec359c1d893a67912e758a63bb711851b3f3367841eee08b2fcd3ceb5",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-prior-e2-data/comparison.txt",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/arms/prior-e2/comparison.txt",
+      "bytes": 53561,
+      "sha256": "a6eb9a3037dbd80c042e8cf956c3cc70bbb9523910f91638f08b54861e8b65ad",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-prior-e2-data/saved-candidate-manifest.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/arms/prior-e2/saved-candidate-manifest.json",
+      "bytes": 1230,
+      "sha256": "d5fd7f2e18af1653301bcd0724456a64a46ccb86c7dd368df8f451a6b348f23a",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-prior-e2-01/start.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/arms/prior-e2/wrapper-start.json",
+      "bytes": 956,
+      "sha256": "e4fe87834509c0c8b5f4cf821f813b961eccc98491c8cb6515283018b8588901",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-prior-e2-01/result.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/matrix/arms/prior-e2/wrapper-result.json",
+      "bytes": 1209,
+      "sha256": "1dd62f9b5d8ad6d3dc1ee33a45444d404550e89c5f65e4a1acfde5fa5fba0ce8",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/package-check-final-01/start.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/receipts/package-check-start.json",
+      "bytes": 261,
+      "sha256": "25e8e7afd639ed73910ad0a40cdb21032f62503b717c81a4496533eb78dd96a0",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/package-check-final-01/result.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/receipts/package-check-result.json",
+      "bytes": 514,
+      "sha256": "d7a1f702e16c88f53e4351f3708ca1b289fa04b62a7c442a9ce87923f2e69975",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/pack-final-01/start.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/receipts/pack-start.json",
+      "bytes": 358,
+      "sha256": "2c106742595cd2a02eea0a3968b2a2a414a8dcc2df316e5375d0186d27bb3494",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/pack-final-01/result.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/receipts/pack-result.json",
+      "bytes": 611,
+      "sha256": "1d009df407bea399c3e5d79a9c7890971760e0b1587e2eeba2dfc1ee3b62df50",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/named-artifact-final-01/start.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/receipts/named-artifact-start.json",
+      "bytes": 635,
+      "sha256": "313d8956312c8d49cb1df40fd70106cf407fc2c1d07b9e249ad202c821a2ebcf",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/named-artifact-final-01/result.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/receipts/named-artifact-result.json",
+      "bytes": 888,
+      "sha256": "e5fb49cd71c07ad23f560d5a5ac4c179febf74aad2f9fd16880c2640269c9022",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/peer-check-final-01/start.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/receipts/peer-check-start.json",
+      "bytes": 261,
+      "sha256": "5edb86b382174e85a81a8641e6165d54b8466ea61c28d29ccc51ff3ba437284e",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/peer-check-final-01/result.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/artifact/receipts/peer-check-result.json",
+      "bytes": 514,
+      "sha256": "80b0f17a67d7b8824d64cad1ab35655b788e57171a0f9718ee3fcc42df1ef569",
+      "copyVerifiedByteExact": true
+    },
+    {
+      "originalPath": null,
+      "sourceKind": "packet index authored from completed E5 evidence",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/portable-packet-staging/packet-index.md",
+      "bytes": 2802,
+      "sha256": "de55609fb2d9bf7c8750b72f550a12f0d294ddc0644359e4abfd42124595370f",
+      "copyVerifiedByteExact": null
+    }
+  ],
+  "excludedRawEvidence": [
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+      "kind": "baseline package archive",
+      "reason": "Raw archive omitted; archive SHA and package facts are retained in copied manifests and gate summaries.",
+      "bytes": 3120073,
+      "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+      "kind": "baseline package archive",
+      "reason": "Raw archive omitted; archive SHA and package facts are retained in copied manifests and gate summaries.",
+      "bytes": 2271693,
+      "sha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "kind": "baseline package archive",
+      "reason": "Raw archive omitted; archive SHA and package facts are retained in copied manifests and gate summaries.",
+      "bytes": 3196121,
+      "sha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "kind": "current candidate package archive",
+      "reason": "Raw archive omitted; archive SHA and package facts are retained in copied manifests and gate summaries.",
+      "bytes": 3203463,
+      "sha256": "83949860ae65b99fe6d7471b9782398234852668b54412870fafa81878c366a3"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-main-data/baseline.json",
+      "kind": "raw matrix sample JSON",
+      "reason": "Raw stored-sample arrays omitted; all-row quantiles and original comparisons are retained.",
+      "bytes": 2111829,
+      "sha256": "ff754b3e16e58bd1790f4c39184f0cdd103c0c4a3c4f2202bef24c276d177b2c"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-main-data/candidate.json",
+      "kind": "raw matrix sample JSON",
+      "reason": "Raw stored-sample arrays omitted; all-row quantiles and original comparisons are retained.",
+      "bytes": 2189385,
+      "sha256": "700944329123880bcb040be199f39bd938af964247a34581c5e13811981b04bd"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-published-data/baseline.json",
+      "kind": "raw matrix sample JSON",
+      "reason": "Raw stored-sample arrays omitted; all-row quantiles and original comparisons are retained.",
+      "bytes": 2055082,
+      "sha256": "aaaa9b731375d21357c77d72ecaa7c0a77a6402238676aad6708ee941bfb74ef"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-published-data/candidate.json",
+      "kind": "raw matrix sample JSON",
+      "reason": "Raw stored-sample arrays omitted; all-row quantiles and original comparisons are retained.",
+      "bytes": 2189385,
+      "sha256": "700944329123880bcb040be199f39bd938af964247a34581c5e13811981b04bd"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-prior-e2-data/baseline.json",
+      "kind": "raw matrix sample JSON",
+      "reason": "Raw stored-sample arrays omitted; all-row quantiles and original comparisons are retained.",
+      "bytes": 2193323,
+      "sha256": "1bf0083a18ad7f44e4bc1f34a87653aefca379000a5bce00efeaf9bee6c9f8b4"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/matrix-prior-e2-data/candidate.json",
+      "kind": "raw matrix sample JSON",
+      "reason": "Raw stored-sample arrays omitted; all-row quantiles and original comparisons are retained.",
+      "bytes": 2189385,
+      "sha256": "700944329123880bcb040be199f39bd938af964247a34581c5e13811981b04bd"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/current1024-profile-candidate/cpu-profile.json",
+      "kind": "raw V8 CPU profile",
+      "reason": "Raw profile omitted; summary, exact ancestry anchors, and maintained ancestry report are retained.",
+      "bytes": 175359,
+      "sha256": "466ae43041374579c732b3869dfe04c09a71c0c525648487115a7d266eecce6e"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/shaper-profile/text-shaper.named.wasm",
+      "kind": "named Wasm binary",
+      "reason": "Raw binary omitted; manifest, executable identity, ABI/SIMD facts, and profile summary are retained.",
+      "bytes": 1806646,
+      "sha256": "fb54c6442677f8cf6a8adbc220b86ed2031a68322669f79413a9ca1e6a2ea449"
+    }
+  ],
+  "pendingNotCopied": [
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/architecture-speed-zoomout-sol-high.md",
+      "reason": "Explicitly excluded because the architecture implementation brief/report is still being written."
+    }
+  ],
+  "provenanceManifestSelfHashNote": "This manifest cannot contain its own final hash without recursion; its actual size and SHA-256 are recorded in portable-packet-authentication.json outside the packet root."
+}

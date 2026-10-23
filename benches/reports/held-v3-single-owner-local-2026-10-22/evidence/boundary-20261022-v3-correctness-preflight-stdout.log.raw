@@ -1,0 +1,35 @@
+Thu Oct 22 20:34:50 UTC 2026
+Processes: 713 total, 2 running, 711 sleeping, 5914 threads 
+2026/10/22 16:34:51
+Load Avg: 2.39, 2.87, 3.64 
+CPU usage: 5.92% user, 23.71% sys, 70.36% idle 
+SharedLibs: 388M resident, 138M data, 90M linkedit.
+MemRegions: 600574 total, 5112M resident, 185M private, 1545M shared.
+PhysMem: 15G used (3440M wired, 4027M compressor), 276M unused.
+VM: 331T vsize, 6144M framework vsize, 2340041(0) swapins, 3606251(0) swapouts.
+Networks: packets: 68127564/81G in, 52234324/69G out.
+Disks: 669168690/6997G read, 27284643/2089G written.
+
+
+Processes: 713 total, 3 running, 710 sleeping, 5911 threads 
+2026/10/22 16:34:52
+Load Avg: 2.39, 2.87, 3.64 
+CPU usage: 4.99% user, 14.31% sys, 80.69% idle 
+SharedLibs: 388M resident, 138M data, 90M linkedit.
+MemRegions: 0 total, 0B resident, 185M private, 1545M shared.
+PhysMem: 15G used (3469M wired, 4027M compressor), 277M unused.
+VM: 331T vsize, 6144M framework vsize, 2340041(0) swapins, 3606251(0) swapouts.
+Networks: packets: 68127621/81G in, 52234388/69G out.
+Disks: 669168690/6997G read, 27284643/2089G written.
+
+
+  PID  PPID  %CPU COMMAND
+42659 42601 128.0 node /Volumes/Depot/Developer/text/apps/pixi3d-hello-world/node_modules/.bin/../../../../node_modules/.pnpm/vite@8.1.5_@types+node@24.13.3_esbuild@0.28.2_jiti@2.7.0_tsx@4.23.13/node_modules/vite/bin/vite.js --port 5173 --host 127.0.0.1 --strictPort --force
+  618     1  16.2 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+  610     1   2.4 /usr/sbin/bluetoothd
+ 1222     1   2.2 /System/Library/CoreServices/UniversalControl.app/Contents/MacOS/UniversalControl
+ 1054     1   1.9 /usr/libexec/sharingd
+  633     1   1.8 /usr/sbin/coreaudiod
+  738     1   1.5 /System/Library/DriverExtensions/com.apple.DriverKit-AppleBCMWLAN.dext/com.apple.DriverKit-AppleBCMWLAN com.apple.bcmwlan 0x100000f43 com.apple.DriverKit-AppleBCMWLAN
+ 1019     1   1.0 /usr/libexec/rapportd
+27383     1   0.7 /System/Volumes/Preboot/Cryptexes/App/System/Library/StagedFrameworks/Safari/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebKit.WebContent

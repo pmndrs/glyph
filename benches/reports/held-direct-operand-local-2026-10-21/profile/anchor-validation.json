@@ -1,0 +1,95 @@
+{
+  "observedUtc": "2026-10-21T02:48:51.253327+00:00",
+  "profileSha256": "466ae43041374579c732b3869dfe04c09a71c0c525648487115a7d266eecce6e",
+  "summarySha256": "da66eef5982e3ca168ef5dc7d2dc2fe6ab50e36e92f7adc7213c5bf4be8d0331",
+  "manifestSha256": "467a3e1d2996716c2cd527f1bb5162d2c8d5c504b65693ef435ee35738880292",
+  "wrapperResultSha256": "3ad63f7a19879cdbd3aa581ad2c56049767db9e815683416cfc4c7b56324f58a",
+  "wrapperExit": 0,
+  "workload": {
+    "boundary": "publication",
+    "count": 1024,
+    "iterations": 80,
+    "position": "first",
+    "profileCase": "bulk-write",
+    "warmups": 10,
+    "reads": "none",
+    "publicationPath": "scene"
+  },
+  "operations": {
+    "perIteration": {
+      "sets": 1024,
+      "reads": 0,
+      "publications": 1
+    },
+    "timed": {
+      "sets": 81920,
+      "reads": 0,
+      "publications": 80
+    },
+    "warmup": {
+      "sets": 10240,
+      "reads": 0,
+      "publications": 10
+    },
+    "postTimedCorrectness": {
+      "measurementReads": 1024,
+      "commitStateReads": 1025,
+      "glyphReads": 1025
+    }
+  },
+  "drawTopology": {
+    "initial": {
+      "draws": 1,
+      "glyphs": 9216
+    },
+    "final": {
+      "draws": 1,
+      "glyphs": 9216
+    }
+  },
+  "summaryHasExplicitErrorField": false,
+  "artifactSha256": "83949860ae65b99fe6d7471b9782398234852668b54412870fafa81878c366a3",
+  "namedWasmSha256": "fb54c6442677f8cf6a8adbc220b86ed2031a68322669f79413a9ca1e6a2ea449",
+  "namedWasmReleaseSha256": "8b594e2b123c35c0789a1e38ee15761e9a6a2245fdce6da1181efacbc0ab366a",
+  "namedWasmExecutableSha256": "8b594e2b123c35c0789a1e38ee15761e9a6a2245fdce6da1181efacbc0ab366a",
+  "wasmUrls": [
+    "wasm://wasm/006e44da"
+  ],
+  "updateBulkId": 6,
+  "updateBulkUrl": "file:///Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/edit-sized-publication.profile.mts",
+  "anchorRoots": {
+    "preparation": {
+      "nodeId": 7,
+      "functionName": "set text",
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-jwu9te/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-direc_38276a17988e6dffeac3495b1bd5bc11/node_modules/@pmndrs/glyph/dist/three/text.js",
+      "directParentId": 6,
+      "subtreeNodeCount": 247,
+      "sampleCount": 527,
+      "sampleTimeDeltasTotal": 790207
+    },
+    "publication": {
+      "nodeId": 44,
+      "functionName": "updateMatrixWorld",
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-jwu9te/node_modules/.pnpm/three@0.185.1/node_modules/three/build/three.core.js",
+      "directParentId": 6,
+      "subtreeNodeCount": 220,
+      "sampleCount": 306,
+      "sampleTimeDeltasTotal": 454502
+    }
+  },
+  "commonDirectParent": 6,
+  "subtreesDisjoint": true,
+  "positiveSamplesBoth": true,
+  "ancestryFile": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/current1024-profile-candidate/ancestry.json",
+  "anchors": [
+    {
+      "label": "preparation",
+      "nodeId": 7
+    },
+    {
+      "label": "publication",
+      "nodeId": 44
+    }
+  ],
+  "valid": true
+}

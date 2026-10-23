@@ -1,0 +1,57 @@
+$ node ./scripts/check.mts
+    Finished `release` profile [optimized] target(s) in 0.05s
+    Finished `release` profile [optimized] target(s) in 0.03s
+    Finished `release` profile [optimized] target(s) in 0.03s
+   Compiling pmndrs-glyph-shaper v0.0.0 (/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/rust/shaper)
+    Finished `release` profile [optimized] target(s) in 11.75s
+    Finished `release` profile [optimized] target(s) in 0.04s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (rust/bitmap-baker/target/debug/deps/pmndrs_glyph_bitmap_baker-2a94623bf109faac)
+     Running unittests src/bin/generate-bitmap-abi.rs (rust/bitmap-baker/target/debug/deps/generate_bitmap_abi-75d531010cc84496)
+     Running tests/fuzz_smoke.rs (rust/bitmap-baker/target/debug/deps/fuzz_smoke-e5bb8b7135b78973)
+   Doc-tests pmndrs_glyph_bitmap_baker
+   Compiling pmndrs-glyph-font-baker v0.0.0 (/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/rust/font-baker)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.60s
+     Running unittests src/lib.rs (rust/font-baker/target/debug/deps/pmndrs_glyph_font_baker-7a76a9edc8748f41)
+     Running unittests src/bin/generate-abi.rs (rust/font-baker/target/debug/deps/generate_abi-b5541f30301c0c43)
+     Running tests/fuzz_smoke.rs (rust/font-baker/target/debug/deps/fuzz_smoke-b307ab04c897dd2c)
+     Running tests/public_api.rs (rust/font-baker/target/debug/deps/public_api-0fc9b01b8a20664e)
+   Doc-tests pmndrs_glyph_font_baker
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (rust/shaper/target/debug/deps/pmndrs_glyph_shaper-411c98d278b4d570)
+     Running unittests src/bin/generate-shaper-abi.rs (rust/shaper/target/debug/deps/generate_shaper_abi-0bb177e22f3975c1)
+     Running tests/diagnostic_live_memory.rs (rust/shaper/target/debug/deps/diagnostic_live_memory-55d87f592007b4c1)
+     Running tests/outline_oracle.rs (rust/shaper/target/debug/deps/outline_oracle-0540da93e41a8b3c)
+     Running tests/unicode_bidi_conformance.rs (rust/shaper/target/debug/deps/unicode_bidi_conformance-2bc9d24a5d1cf999)
+     Running tests/unicode_grapheme_conformance.rs (rust/shaper/target/debug/deps/unicode_grapheme_conformance-d6ac0c962494b6ff)
+     Running tests/unicode_line_break_conformance.rs (rust/shaper/target/debug/deps/unicode_line_break_conformance-7012f2440c5d6d84)
+   Doc-tests pmndrs_glyph_shaper
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (rust/slug-baker/target/debug/deps/pmndrs_glyph_slug_baker-fd870d680999cc3c)
+     Running unittests src/bin/generate-slug-abi.rs (rust/slug-baker/target/debug/deps/generate_slug_abi-d14f62748025b76d)
+   Doc-tests pmndrs_glyph_slug_baker
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running unittests src/lib.rs (rust/raster-artifact/target/debug/deps/pmndrs_glyph_raster_artifact-53761708524fbc28)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (rust/mtsdf-core/target/debug/deps/pmndrs_glyph_mtsdf_core-546c5b1dec6a2d91)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (rust/mtsdf-baker/target/debug/deps/pmndrs_glyph_mtsdf_baker-3c764bcf3e715e4c)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running unittests src/lib.rs (rust/mtsdf-admission/target/debug/deps/pmndrs_glyph_mtsdf_admission-6819b096e6a1d973)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running unittests src/lib.rs (rust/slug-core/target/debug/deps/pmndrs_glyph_slug_core-64f86b89f1c01cb3)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running unittests src/lib.rs (rust/slug-fontations/target/debug/deps/pmndrs_glyph_slug_fontations-acb00bdaddb97db7)
+    Finished `release` profile [optimized] target(s) in 0.01s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.06s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.06s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.06s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.04s
+    Checking pmndrs-glyph-shaper v0.0.0 (/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/rust/shaper)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.26s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.06s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s

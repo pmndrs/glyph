@@ -1,0 +1,7 @@
+$ node benches/scripts/workflows.mts run benchmark:presentation -- --workload dynamic-layout --typegpu
+[chromium] 149.0.7827.55 via Playwright-managed executable
+[chromium] 149.0.7827.55 via Playwright-managed executable
+[chromium] 149.0.7827.55 via Playwright-managed executable
+[chromium] 149.0.7827.55 via Playwright-managed executable
+[chromium] 149.0.7827.55 via Playwright-managed executable
+[chromium] 149.0.7827.55 via Playwright-managed executable

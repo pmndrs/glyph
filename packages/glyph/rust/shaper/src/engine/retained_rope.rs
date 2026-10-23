@@ -110,12 +110,38 @@ impl<T: RopeRecord> Default for RetainedRope<T> {
 }
 
 impl<T: RopeRecord> RetainedRope<T> {
+    /// Constructs a packed, balanced root from exactly `count` records in storage order.
+    /// A failed producer or summary leaves no published root.
+    pub(crate) fn try_from_exact<E>(
+        count: usize,
+        mut produce: impl FnMut(usize) -> Result<T, E>,
+    ) -> Result<Self, RopeEditError<E>> {
+        if count == 0 {
+            return Ok(Self::default());
+        }
+        let leaf_count = count / LEAF_CAPACITY + usize::from(!count.is_multiple_of(LEAF_CAPACITY));
+        let root = build_exact_node(count, 0..leaf_count, &mut produce)?;
+        Ok(Self { root: Some(root) })
+    }
+
     pub(crate) fn len(&self) -> usize {
         self.summary().records
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        self.root.is_none()
+        self.len() == 0
+    }
+
+    /// Whether this root has the exact leaf partitions and midpoint tree of `try_from_exact`.
+    pub(crate) fn is_exact_shape(&self) -> bool {
+        let count = self.len();
+        if count == 0 {
+            return true;
+        }
+        let leaves = count / LEAF_CAPACITY + usize::from(!count.is_multiple_of(LEAF_CAPACITY));
+        self.root
+            .as_deref()
+            .is_some_and(|root| exact_shape(root, count, 0..leaves))
     }
 
     pub(crate) fn summary(&self) -> RopeSummary {
@@ -123,6 +149,12 @@ impl<T: RopeRecord> RetainedRope<T> {
     }
 
     pub(crate) fn clear(&mut self) {
+        // A unique root leaf can serve as empty scratch without exposing records.
+        if let Some(Node::Leaf { items, summary }) = self.root.as_mut().and_then(Arc::get_mut) {
+            items.clear();
+            *summary = RopeSummary::default();
+            return;
+        }
         self.root = None;
     }
 
@@ -196,7 +228,7 @@ impl<T: RopeRecord> RetainedRope<T> {
             );
         }
         let mut items = Vec::new();
-        items.try_reserve(LEAF_CAPACITY).map_err(|_| ())?;
+        items.try_reserve(1).map_err(|_| ())?;
         items.push(item);
         let leaf = leaf_from_items(items)?;
         let root = join(self.root.clone(), Some(leaf))?;
@@ -320,6 +352,9 @@ impl<T: RopeRecord> RetainedRope<T> {
         ranges: impl Iterator<Item = Result<Range<usize>, E>>,
         mut update: impl FnMut(usize, &T) -> Result<RopeUpdate<T>, E>,
     ) -> Result<bool, RopeEditError<E>> {
+        if self.is_empty() {
+            return Ok(false);
+        }
         let Some(root) = self.root.as_ref() else {
             return Ok(false);
         };
@@ -417,6 +452,52 @@ impl<T: RopeRecord> RetainedRope<T> {
             }
         }
         self.root.as_deref().map(capacity).unwrap_or(0)
+    }
+}
+
+fn build_exact_node<T: RopeRecord, E>(
+    count: usize,
+    leaves: Range<usize>,
+    produce: &mut impl FnMut(usize) -> Result<T, E>,
+) -> Result<Arc<Node<T>>, RopeEditError<E>> {
+    if leaves.end - leaves.start == 1 {
+        let start = leaves
+            .start
+            .checked_mul(LEAF_CAPACITY)
+            .ok_or(RopeEditError::Storage)?;
+        let end = start
+            .checked_add(LEAF_CAPACITY)
+            .map_or(count, |end| end.min(count));
+        let mut items = Vec::new();
+        items
+            .try_reserve_exact(end - start)
+            .map_err(|_| RopeEditError::Storage)?;
+        for index in start..end {
+            items.push(produce(index).map_err(RopeEditError::Callback)?);
+        }
+        return leaf_from_items(items).map_err(|_| RopeEditError::Storage);
+    }
+    let middle = leaves.start + (leaves.end - leaves.start) / 2;
+    let left = build_exact_node(count, leaves.start..middle, produce)?;
+    let right = build_exact_node(count, middle..leaves.end, produce)?;
+    branch(left, right).map_err(|_| RopeEditError::Storage)
+}
+
+fn exact_shape<T: RopeRecord>(node: &Node<T>, count: usize, leaves: Range<usize>) -> bool {
+    #[cfg(test)]
+    super::work_attribution::record(|work| work.ordered_shape_nodes += 1);
+    if leaves.end - leaves.start == 1 {
+        let start = leaves.start * LEAF_CAPACITY;
+        let expected = (count - start).min(LEAF_CAPACITY);
+        return matches!(node, Node::Leaf { items, .. } if items.len() == expected);
+    }
+    let middle = leaves.start + (leaves.end - leaves.start) / 2;
+    match node {
+        Node::Branch { left, right, .. } => {
+            exact_shape(left, count, leaves.start..middle)
+                && exact_shape(right, count, middle..leaves.end)
+        }
+        Node::Leaf { .. } => false,
     }
 }
 
@@ -535,6 +616,48 @@ impl<'a, T: RopeRecord> RopeRange<'a, T> {
 pub(crate) type RopeRangeIter<'a, T> = RopeIter<'a, T>;
 
 pub(crate) struct RopeIter<'a, T: RopeRecord> {
+    state: RopeIterState<'a, T>,
+}
+
+#[expect(
+    clippy::large_enum_variant,
+    reason = "tree iteration keeps its stacks inline without an allocation"
+)]
+enum RopeIterState<'a, T: RopeRecord> {
+    Leaf(core::slice::Iter<'a, T>),
+    Tree(TreeRopeIter<'a, T>),
+}
+
+impl<'a, T: RopeRecord> RopeIter<'a, T> {
+    fn new(root: Option<&'a Node<T>>, range: Range<usize>) -> Self {
+        #[cfg(test)]
+        super::work_attribution::record(|work| work.rope_iterator_starts += 1);
+        match root {
+            Some(Node::Leaf { items, .. }) if !range.is_empty() => Self {
+                state: RopeIterState::Leaf(items[range].iter()),
+            },
+            Some(root @ Node::Branch { .. }) if !range.is_empty() => Self {
+                state: RopeIterState::Tree(TreeRopeIter::new(root, range)),
+            },
+            _ => Self {
+                state: RopeIterState::Leaf([].iter()),
+            },
+        }
+    }
+
+    fn skip_front(&mut self, count: usize) {
+        match &mut self.state {
+            RopeIterState::Leaf(leaf) => {
+                if count > 0 {
+                    leaf.nth(count - 1);
+                }
+            }
+            RopeIterState::Tree(tree) => tree.skip_front(count),
+        }
+    }
+}
+
+struct TreeRopeIter<'a, T: RopeRecord> {
     front_stack: [Option<&'a Node<T>>; MAX_HEIGHT],
     front_depth: usize,
     front_leaf: Option<core::slice::Iter<'a, T>>,
@@ -545,10 +668,8 @@ pub(crate) struct RopeIter<'a, T: RopeRecord> {
     remaining: usize,
 }
 
-impl<'a, T: RopeRecord> RopeIter<'a, T> {
-    fn new(root: Option<&'a Node<T>>, range: Range<usize>) -> Self {
-        #[cfg(test)]
-        super::work_attribution::record(|work| work.rope_iterator_starts += 1);
+impl<'a, T: RopeRecord> TreeRopeIter<'a, T> {
+    fn new(root: &'a Node<T>, range: Range<usize>) -> Self {
         let mut this = Self {
             front_stack: [None; MAX_HEIGHT],
             front_depth: 0,
@@ -559,12 +680,8 @@ impl<'a, T: RopeRecord> RopeIter<'a, T> {
             back_leaf: None,
             remaining: range.len(),
         };
-        if let Some(root) = root
-            && !range.is_empty()
-        {
-            this.descend_front_at(root, range.start);
-            this.descend_back_at(root, range.end);
-        }
+        this.descend_front_at(root, range.start);
+        this.descend_back_at(root, range.end);
         this
     }
 
@@ -724,6 +841,38 @@ impl<'a, T: RopeRecord> Iterator for RopeIter<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
+        match &mut self.state {
+            RopeIterState::Leaf(leaf) => {
+                let item = leaf.next()?;
+                record_iteration_visit();
+                Some(item)
+            }
+            RopeIterState::Tree(tree) => tree.next(),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = match &self.state {
+            RopeIterState::Leaf(leaf) => leaf.len(),
+            RopeIterState::Tree(tree) => tree.remaining,
+        };
+        (remaining, Some(remaining))
+    }
+}
+
+impl<T: RopeRecord> DoubleEndedIterator for RopeIter<'_, T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        match &mut self.state {
+            RopeIterState::Leaf(leaf) => leaf.next_back(),
+            RopeIterState::Tree(tree) => tree.next_back(),
+        }
+    }
+}
+
+impl<'a, T: RopeRecord> Iterator for TreeRopeIter<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
         if self.remaining == 0 {
             return None;
         }
@@ -731,13 +880,9 @@ impl<'a, T: RopeRecord> Iterator for RopeIter<'a, T> {
         self.remaining -= 1;
         Some(item)
     }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.remaining, Some(self.remaining))
-    }
 }
 
-impl<T: RopeRecord> DoubleEndedIterator for RopeIter<'_, T> {
+impl<T: RopeRecord> DoubleEndedIterator for TreeRopeIter<'_, T> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.remaining == 0 {
             return None;
@@ -758,6 +903,20 @@ pub(crate) struct RopeCursor<'a, T: RopeRecord> {
 }
 
 impl<'a, T: RopeRecord> RopeCursor<'a, T> {
+    /// Borrow the current record from the cursor's leaf without starting another rope walk.
+    pub(crate) fn peek_record(&mut self) -> Option<&'a T> {
+        if self.iter.len() == 0 {
+            return None;
+        }
+        match &mut self.iter.state {
+            RopeIterState::Leaf(leaf) => leaf.as_slice().first(),
+            RopeIterState::Tree(tree) => {
+                tree.ensure_front_leaf()?;
+                tree.front_leaf.as_ref()?.as_slice().first()
+            }
+        }
+    }
+
     pub(crate) fn peek(&mut self, count: usize) -> Option<RopeCursorRange<'a, T>> {
         if count > self.iter.len() {
             return None;
@@ -765,17 +924,28 @@ impl<'a, T: RopeRecord> RopeCursor<'a, T> {
         let range = if count == 0 {
             RopeRange::new(None, 0..0)
         } else {
-            self.iter.ensure_front_leaf()?;
-            let leaf = self.iter.front_leaf.as_ref()?.as_slice();
-            if count <= leaf.len() {
-                let node = self.iter.front_node?;
-                let start = node.summary().records - leaf.len();
-                RopeRange::new(Some(node), start..start + count)
-            } else {
-                RopeRange::new(self.root, self.index..self.index + count)
+            match &mut self.iter.state {
+                RopeIterState::Leaf(_) => RopeRange::new(self.root, self.index..self.index + count),
+                RopeIterState::Tree(tree) => {
+                    tree.ensure_front_leaf()?;
+                    let leaf = tree.front_leaf.as_ref()?.as_slice();
+                    if count <= leaf.len() {
+                        let node = tree.front_node?;
+                        let start = node.summary().records - leaf.len();
+                        RopeRange::new(Some(node), start..start + count)
+                    } else {
+                        RopeRange::new(self.root, self.index..self.index + count)
+                    }
+                }
             }
         };
         Some(range)
+    }
+
+    pub(crate) fn next_record(&mut self) -> Option<&'a T> {
+        let record = self.iter.next()?;
+        self.index += 1;
+        Some(record)
     }
 
     pub(crate) fn advance(&mut self, count: usize) -> Option<()> {
@@ -862,6 +1032,9 @@ fn join<T: RopeRecord>(
     left: Option<Arc<Node<T>>>,
     right: Option<Arc<Node<T>>>,
 ) -> Result<Option<Arc<Node<T>>>, ()> {
+    // Empty root leaves are scratch only; they must never become branch children.
+    let left = left.filter(|node| node.summary().records != 0);
+    let right = right.filter(|node| node.summary().records != 0);
     Ok(match (left, right) {
         (None, right) => right,
         (left, None) => left,
@@ -1208,7 +1381,7 @@ fn update_ordered_node<T: RopeRecord, E>(
     match node.as_ref() {
         Node::Leaf { items, .. } => {
             record_ordered_leaf_visit();
-            let mut replacement = None;
+            let mut replacement: Option<Vec<T>> = None;
             let mut item_index = 0;
             while item_index < items.len() {
                 let global_index = record_start + item_index;
@@ -1229,7 +1402,15 @@ fn update_ordered_node<T: RopeRecord, E>(
                 let candidate = match update(global_index, &items[visited_index])
                     .map_err(RopeEditError::Callback)?
                 {
-                    RopeUpdate::Keep => continue,
+                    RopeUpdate::Keep => {
+                        if let Some(replacement) = replacement.as_mut() {
+                            let copied = visited_index + 1 - replacement.len();
+                            record_copies(copied);
+                            replacement
+                                .extend_from_slice(&items[replacement.len()..=visited_index]);
+                        }
+                        continue;
+                    }
                     RopeUpdate::Replace(candidate) => candidate,
                     RopeUpdate::Stop => {
                         *stopped = true;
@@ -1237,18 +1418,24 @@ fn update_ordered_node<T: RopeRecord, E>(
                     }
                 };
                 if replacement.is_none() {
-                    record_copies(items.len());
-                    replacement = Some(copy_items(items).map_err(|()| RopeEditError::Storage)?);
+                    let mut next = Vec::new();
+                    next.try_reserve_exact(items.len())
+                        .map_err(|_| RopeEditError::Storage)?;
+                    record_copies(visited_index);
+                    next.extend_from_slice(&items[..visited_index]);
+                    replacement = Some(next);
                 }
-                replacement
-                    .as_mut()
-                    .and_then(|items| items.get_mut(visited_index))
-                    .map(|item| *item = candidate)
-                    .ok_or(RopeEditError::Storage)?;
+                let next = replacement.as_mut().ok_or(RopeEditError::Storage)?;
+                let copied = visited_index - next.len();
+                record_copies(copied);
+                next.extend_from_slice(&items[next.len()..visited_index]);
+                next.push(candidate);
             }
-            let Some(replacement) = replacement else {
+            let Some(mut replacement) = replacement else {
                 return Ok(None);
             };
+            record_copies(items.len() - replacement.len());
+            replacement.extend_from_slice(&items[replacement.len()..]);
             leaf_from_items(replacement)
                 .map(Some)
                 .map_err(|()| RopeEditError::Storage)
@@ -1540,6 +1727,10 @@ mod tests {
             values.iter().rev().copied().collect::<Vec<_>>()
         );
         match rope.root.as_deref() {
+            Some(Node::Leaf { items, summary }) if items.is_empty() => {
+                assert!(values.is_empty());
+                assert_eq!(*summary, RopeSummary::default());
+            }
             Some(root) => {
                 let (_, summary) = assert_node_invariants(root);
                 assert_eq!(summary, rope.summary());
@@ -1642,6 +1833,98 @@ mod tests {
     }
 
     #[test]
+    fn exact_producer_builds_packed_balanced_roots_with_flat_navigation() {
+        fn leaf_lengths(node: &Node<Record>, lengths: &mut Vec<usize>) {
+            match node {
+                Node::Leaf { items, .. } => lengths.push(items.len()),
+                Node::Branch { left, right, .. } => {
+                    leaf_lengths(left, lengths);
+                    leaf_lengths(right, lengths);
+                }
+            }
+        }
+
+        for count in [0, 1, 31, 32, 33, 65, 257, 1025] {
+            let values = records(count);
+            let mut produced = 0;
+            let rope = RetainedRope::try_from_exact(count, |index| {
+                assert_eq!(index, produced);
+                produced += 1;
+                Ok::<_, u8>(values[index])
+            })
+            .unwrap();
+            assert_eq!(produced, count);
+            assert_matches_flat(&rope, &values);
+            for (index, expected) in values.iter().enumerate() {
+                assert_eq!(rope.get(index), Some(expected));
+                assert_eq!(
+                    rope.cursor_from(index).unwrap().next_record(),
+                    Some(expected)
+                );
+                assert_eq!(
+                    rope.prefix_summary(index),
+                    Some(flat_summary(&values[..index]))
+                );
+            }
+            assert_eq!(rope.prefix_summary(count), Some(flat_summary(&values)));
+            let mut lengths = Vec::new();
+            if let Some(root) = rope.root.as_deref() {
+                leaf_lengths(root, &mut lengths);
+            }
+            assert!(
+                lengths
+                    .iter()
+                    .take(lengths.len().saturating_sub(1))
+                    .all(|&len| len == LEAF_CAPACITY)
+            );
+            assert_eq!(lengths.iter().sum::<usize>(), count);
+            let snapshot = rope.clone();
+            let mut changed = rope;
+            if count != 0 {
+                changed.update(0, |record| record.fragments += 1).unwrap();
+                let mut changed_values = values.clone();
+                changed_values[0].fragments += 1;
+                assert_matches_flat(&changed, &changed_values);
+                assert_matches_flat(&snapshot, &values);
+            }
+        }
+    }
+
+    #[test]
+    fn exact_producer_failure_discards_partial_tree_and_preserves_snapshot() {
+        let values = records(65);
+        let snapshot = RetainedRope::from(values.clone());
+        let mut calls = 0;
+        assert!(matches!(
+            RetainedRope::try_from_exact(65, |index| {
+                calls += 1;
+                if index == 40 {
+                    Err(7u8)
+                } else {
+                    Ok(values[index])
+                }
+            }),
+            Err(RopeEditError::Callback(7))
+        ));
+        assert_eq!(calls, 41);
+        let overflow = [
+            Record {
+                fragments: usize::MAX,
+                ..values[0]
+            },
+            Record {
+                fragments: 1,
+                ..values[1]
+            },
+        ];
+        assert!(matches!(
+            RetainedRope::try_from_exact(2, |index| Ok::<_, u8>(overflow[index])),
+            Err(RopeEditError::Storage)
+        ));
+        assert_matches_flat(&snapshot, &values);
+    }
+
+    #[test]
     fn summary_composition_is_associative_with_an_identity() {
         let values = records(3);
         let a = values[0].rope_summary();
@@ -1736,8 +2019,17 @@ mod tests {
 
         reset_work_counters();
         let mut singles = RetainedRope::default();
-        for value in &values {
+        for (index, value) in values.iter().enumerate() {
             singles.push(*value).unwrap();
+            if index == 0 {
+                assert!(singles.retained_capacity() < LEAF_CAPACITY);
+            } else if index == LEAF_CAPACITY - 1 {
+                assert_eq!(LEAF_ALLOCATIONS.with(core::cell::Cell::get), 1);
+                assert_matches_flat(&singles, &values[..LEAF_CAPACITY]);
+            } else if index == LEAF_CAPACITY {
+                assert_eq!(LEAF_ALLOCATIONS.with(core::cell::Cell::get), 2);
+                assert_matches_flat(&singles, &values[..LEAF_CAPACITY + 1]);
+            }
         }
         let single_allocations = LEAF_ALLOCATIONS.with(core::cell::Cell::get);
         let single_copies = work_counters().0;
@@ -1844,11 +2136,24 @@ mod tests {
         assert!(cursor.is_empty());
         assert_eq!(index_lookups(), 0);
 
+        let mut cursor = rope.cursor_from(29).unwrap();
+        for offset in 29..102 {
+            assert_eq!(cursor.peek_record(), values.get(offset));
+            assert_eq!(cursor.peek(1).unwrap().first(), values.get(offset));
+            assert_eq!(cursor.next_record(), values.get(offset));
+        }
+        assert_eq!(cursor.take(33).unwrap().to_vec(), values[102..135]);
+        cursor.advance(122).unwrap();
+        assert!(cursor.is_empty());
+        assert_eq!(cursor.next_record(), None);
+        assert_eq!(cursor.peek(0).unwrap().len(), 0);
+
         for width in [1, 2, 31, 32, 33, 73, 257] {
             let mut cursor = rope.cursor_from(0).unwrap();
             let mut offset = 0;
             while offset < values.len() {
                 let count = width.min(values.len() - offset);
+                assert_eq!(cursor.peek_record(), values.get(offset));
                 assert!(cursor.take(values.len() + 1).is_none());
                 assert!(cursor.take(0).unwrap().is_empty());
                 let peek = cursor.peek(count).unwrap();
@@ -1862,7 +2167,100 @@ mod tests {
                 offset += count;
             }
             assert!(cursor.is_empty());
+            assert_eq!(cursor.peek_record(), None);
         }
+    }
+
+    #[test]
+    fn bounded_iteration_and_cursor_match_flat_slices_across_leaf_boundaries() {
+        for size in [0, 1, 31, 32, 33, 65] {
+            let values = records(size);
+            let rope = RetainedRope::from(values.clone());
+            for start in 0..=size {
+                for end in start..=size {
+                    let range = rope.range(start..end).unwrap();
+                    let expected = &values[start..end];
+                    assert_eq!(range.first(), expected.first());
+                    assert_eq!(range.last(), expected.last());
+                    let mut iter = range.iter();
+                    let (mut front, mut back) = (0, expected.len());
+                    let mut from_front = true;
+                    while front < back {
+                        assert_eq!(iter.len(), back - front);
+                        assert_eq!(iter.size_hint(), (back - front, Some(back - front)));
+                        if from_front {
+                            assert_eq!(iter.next(), expected.get(front));
+                            front += 1;
+                        } else {
+                            back -= 1;
+                            assert_eq!(iter.next_back(), expected.get(back));
+                        }
+                        from_front = !from_front;
+                    }
+                    assert_eq!(iter.next(), None);
+                    assert_eq!(iter.next_back(), None);
+                    assert_eq!(iter.next(), None);
+                    assert_eq!(iter.len(), 0);
+
+                    for skip in [0, expected.len() / 2, expected.len(), expected.len() + 1] {
+                        let mut iter = range.iter();
+                        assert_eq!(iter.nth(skip), expected.get(skip));
+                        assert_eq!(iter.len(), expected.len().saturating_sub(skip + 1));
+                    }
+                    if expected.len() > 1 {
+                        assert_eq!(
+                            range.range(1..expected.len()).unwrap().to_vec(),
+                            expected[1..]
+                        );
+                    }
+                }
+
+                let mut cursor = rope.cursor_from(start).unwrap();
+                assert_eq!(cursor.peek_record(), values.get(start));
+                for count in [0, 1.min(size - start), size - start] {
+                    assert_eq!(
+                        cursor.peek(count).unwrap().to_vec(),
+                        values[start..start + count]
+                    );
+                }
+                assert!(cursor.peek(size - start + 1).is_none());
+                reset_work_counters();
+                let count = (size - start).min(2);
+                assert_eq!(
+                    cursor.take(count).unwrap().to_vec(),
+                    values[start..start + count]
+                );
+                assert_eq!(ITERATION_RECORD_VISITS.with(core::cell::Cell::get), count);
+                let remaining = size - start - count;
+                assert_eq!(cursor.advance(remaining), Some(()));
+                assert_eq!(ITERATION_RECORD_VISITS.with(core::cell::Cell::get), count);
+                assert!(cursor.is_empty());
+                assert_eq!(cursor.peek_record(), None);
+            }
+        }
+    }
+
+    #[test]
+    fn single_leaf_cursor_keeps_bounded_slice_and_index_in_sync() {
+        let values = records(20);
+        let rope = RetainedRope::from(values.clone());
+        let mut cursor = rope.cursor_from(3).unwrap();
+
+        assert_eq!(cursor.peek(4).unwrap().to_vec(), values[3..7]);
+        assert_eq!(cursor.next_record(), values.get(3));
+        assert_eq!(cursor.advance(2), Some(()));
+        assert_eq!(cursor.peek_record(), values.get(6));
+        assert_eq!(cursor.take(3).unwrap().to_vec(), values[6..9]);
+        assert_eq!(cursor.next_record(), values.get(9));
+        assert_eq!(cursor.advance(1), Some(()));
+        assert_eq!(cursor.peek(2).unwrap().to_vec(), values[11..13]);
+        assert_eq!(cursor.take(2).unwrap().to_vec(), values[11..13]);
+        assert_eq!(cursor.peek_record(), values.get(13));
+        for expected in &values[13..] {
+            assert_eq!(cursor.next_record(), Some(expected));
+        }
+        assert!(cursor.is_empty());
+        assert_eq!(cursor.next_record(), None);
     }
 
     #[test]
@@ -1963,7 +2361,7 @@ mod tests {
             })
             .unwrap();
         assert_eq!(ordered_work_counters(), (1, 4, 32));
-        assert_eq!(work_counters().0, 128);
+        assert_eq!(work_counters().0, 96);
         let mut expected = original.clone();
         for (index, record) in expected.iter_mut().enumerate() {
             if index % 8 < 2 {
@@ -1972,6 +2370,64 @@ mod tests {
         }
         assert_matches_flat(&pending, &expected);
         assert_matches_flat(&snapshot, &original);
+    }
+
+    #[test]
+    fn exact_shape_checks_midpoint_partition_even_with_full_leaves() {
+        let original = records(96);
+        let exact = RetainedRope::try_from_exact(96, |index| Ok::<_, ()>(original[index])).unwrap();
+        assert!(exact.is_exact_shape());
+        let first = leaf_from_items(original[..32].to_vec()).unwrap();
+        let second = leaf_from_items(original[32..64].to_vec()).unwrap();
+        let third = leaf_from_items(original[64..].to_vec()).unwrap();
+        let skewed = RetainedRope {
+            root: Some(branch(branch(first, second).unwrap(), third).unwrap()),
+        };
+        assert_matches_flat(&skewed, &original);
+        assert!(!skewed.is_exact_shape());
+        let mut updated = skewed.clone();
+        updated
+            .update_ordered(0..96, |_, previous| {
+                Ok::<_, ()>(RopeUpdate::Replace(*previous))
+            })
+            .unwrap();
+        assert!(!updated.is_exact_shape());
+        let partial =
+            RetainedRope::try_from_exact(65, |index| Ok::<_, ()>(original[index])).unwrap();
+        assert!(partial.is_exact_shape());
+    }
+
+    #[test]
+    fn ordered_stop_preserves_prefix_and_copies_only_unchanged_old_rows() {
+        let original = records(70);
+        for stop_at in [0, 15, 32, 47, 69] {
+            let mut pending = RetainedRope::from(original.clone());
+            let accepted = pending.clone();
+            reset_work_counters();
+            pending
+                .update_ordered(0..original.len(), |index, previous| {
+                    Ok::<_, ()>(if index == stop_at {
+                        RopeUpdate::Stop
+                    } else if index % 3 == 0 {
+                        RopeUpdate::Replace(Record {
+                            fragments: previous.fragments + 1,
+                            ..*previous
+                        })
+                    } else {
+                        RopeUpdate::Keep
+                    })
+                })
+                .unwrap();
+            let mut expected = original.clone();
+            for (index, row) in expected.iter_mut().enumerate().take(stop_at) {
+                if index % 3 == 0 {
+                    row.fragments += 1;
+                }
+            }
+            assert_matches_flat(&pending, &expected);
+            assert_matches_flat(&accepted, &original);
+            assert!(work_counters().0 <= original.len());
+        }
     }
 
     #[test]
@@ -2208,5 +2664,69 @@ mod tests {
         for (snapshot, expected) in snapshots {
             assert_matches_flat(&snapshot, &expected);
         }
+    }
+
+    #[test]
+    fn clear_reuses_unique_leaf_and_preserves_shared_snapshots() {
+        let values = records(LEAF_CAPACITY + 1);
+        let mut one = RetainedRope::from(values[..1].to_vec());
+        let one_capacity = one.retained_capacity();
+        reset_work_counters();
+        one.clear();
+        assert!(one.is_empty());
+        assert_eq!(one.retained_capacity(), one_capacity);
+        assert_matches_flat(&one, &[]);
+        assert_eq!(one.range(0..0).unwrap().first(), None);
+        assert_eq!(one.cursor_from(0).unwrap().peek(0).unwrap().last(), None);
+        assert_eq!(one.find_source(0, |_, _| true), None);
+        assert_eq!(
+            one.update_ordered_ranges(core::iter::once(Err::<Range<usize>, ()>(())), |_, _| {
+                Ok(RopeUpdate::Keep)
+            }),
+            Ok(false)
+        );
+        one.push(values[0]).unwrap();
+        assert_eq!(LEAF_ALLOCATIONS.with(core::cell::Cell::get), 0);
+        assert_matches_flat(&one, &values[..1]);
+
+        let mut packed = RetainedRope::default();
+        packed.append_records(&values[..LEAF_CAPACITY]).unwrap();
+        let packed_capacity = packed.retained_capacity();
+        reset_work_counters();
+        packed.clear();
+        assert_eq!(packed.retained_capacity(), packed_capacity);
+        assert_matches_flat(&packed, &[]);
+        packed.append_records(&values[..LEAF_CAPACITY]).unwrap();
+        assert_eq!(LEAF_ALLOCATIONS.with(core::cell::Cell::get), 0);
+        assert_matches_flat(&packed, &values[..LEAF_CAPACITY]);
+        packed.push(values[LEAF_CAPACITY]).unwrap();
+        assert_eq!(LEAF_ALLOCATIONS.with(core::cell::Cell::get), 1);
+        assert_matches_flat(&packed, &values);
+
+        let mut unique_tree = RetainedRope::from(values.clone());
+        unique_tree.clear();
+        assert!(unique_tree.root.is_none());
+        assert_matches_flat(&unique_tree, &[]);
+        let mut shared_tree = packed.clone();
+        shared_tree.clear();
+        assert!(shared_tree.root.is_none());
+        assert_matches_flat(&shared_tree, &[]);
+        assert_matches_flat(&packed, &values);
+
+        let snapshot = one.clone();
+        one.clear();
+        assert!(one.root.is_none());
+        assert_matches_flat(&one, &[]);
+        one.push(values[1]).unwrap();
+        assert_matches_flat(&one, &values[1..2]);
+        assert_matches_flat(&snapshot, &values[..1]);
+
+        one.clear();
+        assert!(one.append_shared_range(&packed, 0..packed.len()).unwrap());
+        assert_matches_flat(&one, &values);
+        let mut empty = RetainedRope::from(values[..1].to_vec());
+        empty.clear();
+        assert!(empty.replace_range(0..0, &packed).unwrap());
+        assert_matches_flat(&empty, &values);
     }
 }

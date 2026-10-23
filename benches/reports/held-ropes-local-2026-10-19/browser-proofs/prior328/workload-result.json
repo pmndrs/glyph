@@ -1,0 +1,293 @@
+{
+  "schemaVersion": 1,
+  "sourceOutput": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/application-memory-browser-prior328",
+  "archive": {
+    "basename": "prior328.tgz",
+    "sha256": "e453db3ed8e32bbdf8f8a46f2a7a1bfab6dba02c484933062b30ea842cd57dcd"
+  },
+  "usage": "stream",
+  "workload": {
+    "model": "one retained Text inside one TextGroup",
+    "initialColorSpans": 240,
+    "initialGlyphs": 2880,
+    "idleFrames": 30
+  },
+  "delivery": {
+    "status": "completed",
+    "installedShaper": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch/glyph-application-memory-f3T8HQ/node_modules/.pnpm/@pmndrs+glyph@file+..+..+evidence+controls+prior328.tgz_@oxc-project+types@0.150.0_reac_5d4893b03049eb73fb2316a42df9b904/node_modules/@pmndrs/glyph/dist/text-shaper.wasm",
+      "bytes": 1600609,
+      "sha256": "4ee7d0532a5f2b2a42f843b9f9d866bffb00fb4e6f70bb96adba952651944ffa"
+    },
+    "backends": [
+      {
+        "backend": "webgpu",
+        "shaperMatchesInstalled": true,
+        "installedEntriesSeen": {
+          "index": true,
+          "three": true
+        },
+        "responses": 126,
+        "failedRequests": [],
+        "errors": []
+      },
+      {
+        "backend": "webgl2",
+        "shaperMatchesInstalled": true,
+        "installedEntriesSeen": {
+          "index": true,
+          "three": true
+        },
+        "responses": 126,
+        "failedRequests": [],
+        "errors": []
+      }
+    ]
+  },
+  "native": {
+    "maximumObservedNonAtomicSweepSumBytes": 1527622176,
+    "cleanupProven": true,
+    "remainingIdentities": [],
+    "uncertainIdentities": 0
+  },
+  "harnessUnchanged": true,
+  "results": [
+    {
+      "backend": "webgpu",
+      "phases": [
+        {
+          "phase": "initial",
+          "pixelHash": "edd436be",
+          "litPixels": 48898,
+          "draws": 1,
+          "instances": 2880
+        },
+        {
+          "phase": "changedContents",
+          "pixelHash": "acb4311e",
+          "litPixels": 48917,
+          "draws": 1,
+          "instances": 2880
+        },
+        {
+          "phase": "changedCount",
+          "pixelHash": "08501d70",
+          "litPixels": 24491,
+          "draws": 1,
+          "instances": 1440
+        },
+        {
+          "phase": "resized",
+          "pixelHash": "4854a547",
+          "litPixels": 50569,
+          "draws": 1,
+          "instances": 5760
+        },
+        {
+          "phase": "drawReplacement",
+          "pixelHash": "bc1fd119",
+          "litPixels": 63301,
+          "draws": 2,
+          "instances": 5880
+        },
+        {
+          "phase": "transform",
+          "pixelHash": "a92799b9",
+          "litPixels": 63301,
+          "draws": 2,
+          "instances": 5880
+        }
+      ],
+      "idleFrames": 30,
+      "versionsUnchanged": true,
+      "usage": "stream",
+      "storage": {
+        "attributes": 14,
+        "bytes": 528512,
+        "usage": [35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040, 35040],
+        "versions": [2, 2, 2, 2, 2, 2, 2, 2, 2, 6, 2, 2, 2, 2]
+      },
+      "phaseUploads": {
+        "initial": {
+          "attributeCreateBytes": 254080,
+          "attributeCreateCalls": 10,
+          "attributeUpdateBytes": 0,
+          "attributeUpdateCalls": 0,
+          "pboTextureCreateBytes": 0,
+          "pboTextureCreateCalls": 0,
+          "pboTextureUpdateBytes": 0,
+          "pboTextureUpdateCalls": 0
+        },
+        "changedContents": {
+          "attributeCreateBytes": 0,
+          "attributeCreateCalls": 0,
+          "attributeUpdateBytes": 157728,
+          "attributeUpdateCalls": 8,
+          "pboTextureCreateBytes": 0,
+          "pboTextureCreateCalls": 0,
+          "pboTextureUpdateBytes": 0,
+          "pboTextureUpdateCalls": 0
+        },
+        "changedCount": {
+          "attributeCreateBytes": 0,
+          "attributeCreateCalls": 0,
+          "attributeUpdateBytes": 77296,
+          "attributeUpdateCalls": 8,
+          "pboTextureCreateBytes": 0,
+          "pboTextureCreateCalls": 0,
+          "pboTextureUpdateBytes": 0,
+          "pboTextureUpdateCalls": 0
+        },
+        "resized": {
+          "attributeCreateBytes": 507904,
+          "attributeCreateCalls": 9,
+          "attributeUpdateBytes": 64,
+          "attributeUpdateCalls": 1,
+          "pboTextureCreateBytes": 0,
+          "pboTextureCreateCalls": 0,
+          "pboTextureUpdateBytes": 0,
+          "pboTextureUpdateCalls": 0
+        },
+        "drawReplacement": {
+          "attributeCreateBytes": 3584,
+          "attributeCreateCalls": 3,
+          "attributeUpdateBytes": 64,
+          "attributeUpdateCalls": 1,
+          "pboTextureCreateBytes": 0,
+          "pboTextureCreateCalls": 0,
+          "pboTextureUpdateBytes": 0,
+          "pboTextureUpdateCalls": 0
+        },
+        "transform": {
+          "attributeCreateBytes": 0,
+          "attributeCreateCalls": 0,
+          "attributeUpdateBytes": 64,
+          "attributeUpdateCalls": 1,
+          "pboTextureCreateBytes": 0,
+          "pboTextureCreateCalls": 0,
+          "pboTextureUpdateBytes": 0,
+          "pboTextureUpdateCalls": 0
+        }
+      }
+    },
+    {
+      "backend": "webgl2",
+      "phases": [
+        {
+          "phase": "initial",
+          "pixelHash": "04fac2ee",
+          "litPixels": 48898,
+          "draws": 1,
+          "instances": 2880
+        },
+        {
+          "phase": "changedContents",
+          "pixelHash": "de29bf5e",
+          "litPixels": 48917,
+          "draws": 1,
+          "instances": 2880
+        },
+        {
+          "phase": "changedCount",
+          "pixelHash": "b27298a8",
+          "litPixels": 24491,
+          "draws": 1,
+          "instances": 1440
+        },
+        {
+          "phase": "resized",
+          "pixelHash": "a166a52b",
+          "litPixels": 50569,
+          "draws": 1,
+          "instances": 5760
+        },
+        {
+          "phase": "drawReplacement",
+          "pixelHash": "e9b75465",
+          "litPixels": 63301,
+          "draws": 2,
+          "instances": 5880
+        },
+        {
+          "phase": "transform",
+          "pixelHash": "ad4d2245",
+          "litPixels": 63301,
+          "draws": 2,
+          "instances": 5880
+        }
+      ],
+      "idleFrames": 30,
+      "versionsUnchanged": true,
+      "usage": "stream",
+      "storage": {
+        "attributes": 14,
+        "bytes": 528512,
+        "usage": [35044, 35044, 35044, 35044, 35044, 35044, 35040, 35044, 35044, 35044, 35044, 35044, 35040, 35044],
+        "versions": [2, 2, 2, 2, 2, 2, 2, 2, 2, 6, 2, 2, 2, 2]
+      },
+      "phaseUploads": {
+        "initial": {
+          "attributeCreateBytes": 0,
+          "attributeCreateCalls": 0,
+          "attributeUpdateBytes": 0,
+          "attributeUpdateCalls": 0,
+          "pboTextureCreateBytes": 254080,
+          "pboTextureCreateCalls": 10,
+          "pboTextureUpdateBytes": 0,
+          "pboTextureUpdateCalls": 0
+        },
+        "changedContents": {
+          "attributeCreateBytes": 0,
+          "attributeCreateCalls": 0,
+          "attributeUpdateBytes": 0,
+          "attributeUpdateCalls": 0,
+          "pboTextureCreateBytes": 0,
+          "pboTextureCreateCalls": 0,
+          "pboTextureUpdateBytes": 221312,
+          "pboTextureUpdateCalls": 8
+        },
+        "changedCount": {
+          "attributeCreateBytes": 0,
+          "attributeCreateCalls": 0,
+          "attributeUpdateBytes": 0,
+          "attributeUpdateCalls": 0,
+          "pboTextureCreateBytes": 0,
+          "pboTextureCreateCalls": 0,
+          "pboTextureUpdateBytes": 221312,
+          "pboTextureUpdateCalls": 8
+        },
+        "resized": {
+          "attributeCreateBytes": 0,
+          "attributeCreateCalls": 0,
+          "attributeUpdateBytes": 0,
+          "attributeUpdateCalls": 0,
+          "pboTextureCreateBytes": 507904,
+          "pboTextureCreateCalls": 9,
+          "pboTextureUpdateBytes": 128,
+          "pboTextureUpdateCalls": 1
+        },
+        "drawReplacement": {
+          "attributeCreateBytes": 0,
+          "attributeCreateCalls": 0,
+          "attributeUpdateBytes": 0,
+          "attributeUpdateCalls": 0,
+          "pboTextureCreateBytes": 3584,
+          "pboTextureCreateCalls": 3,
+          "pboTextureUpdateBytes": 128,
+          "pboTextureUpdateCalls": 1
+        },
+        "transform": {
+          "attributeCreateBytes": 0,
+          "attributeCreateCalls": 0,
+          "attributeUpdateBytes": 0,
+          "attributeUpdateCalls": 0,
+          "pboTextureCreateBytes": 0,
+          "pboTextureCreateCalls": 0,
+          "pboTextureUpdateBytes": 128,
+          "pboTextureUpdateCalls": 1
+        }
+      }
+    }
+  ],
+  "oracleComparison": "all six phases per backend match frozen main pixelHash/litPixels/draws/instances"
+}

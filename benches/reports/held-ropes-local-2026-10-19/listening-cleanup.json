@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-19T16:36:45.856036+00:00",
+  "ports": {
+    "4054": {
+      "exit": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    "1356": {
+      "exit": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    "1355": {
+      "exit": 0,
+      "stdout": "COMMAND   PID USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME\nnode    34322 mini   15u  IPv6 0xb70901055f843aa2      0t0  TCP [::1]:1355 (LISTEN)\nnode    34322 mini   16u  IPv4 0x729cff200d69e6a7      0t0  TCP 127.0.0.1:1355 (LISTEN)\n",
+      "stderr": ""
+    }
+  },
+  "ownedRoutes": []
+}

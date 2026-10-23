@@ -1,0 +1,134 @@
+{
+  "tool": "wasm-dis version 129 (version_129)",
+  "input": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/candidate/shaper-profile/text-shaper.named.wasm",
+  "inputSha256": "cfb3213f4b7acc111ef057621081b102e25f64fdd2df8e0c5e6c09b0e2ee36b3",
+  "wat": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/astra-shaper.named.wat",
+  "watSha256": "e65cde745c6f63bfc364c36a73f77364ca8ee5bb8eab75f2132421872b7a290c",
+  "method": "Parse decoded instruction text within named function boundaries; static opcode occurrences, not runtime execution counts or machine-code throughput. No raw 0xfd byte counting.",
+  "targets": [
+    {
+      "symbol": "$_RNvNtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine5codec15execute_program",
+      "line": 313253,
+      "opcodes": {
+        "v128.store": 19,
+        "v128.load": 25,
+        "f32x4.extract_lane": 4,
+        "f32x4.convert_i32x4_u": 1,
+        "v128.bitselect": 1,
+        "i32x4.ne": 1,
+        "v128.const": 2,
+        "v128.and": 1,
+        "f32x4.lt": 1,
+        "f32x4.mul": 1,
+        "f32x4.sub": 1,
+        "f32x4.add": 1,
+        "v128.load32_splat": 2,
+        "v128.store16_lane": 4,
+        "v128.store32_lane": 4,
+        "i8x16.shuffle": 10
+      },
+      "simdExamples": [
+        {
+          "line": 313887,
+          "text": "(v128.store"
+        },
+        {
+          "line": 313895,
+          "text": "(v128.load align=4"
+        },
+        {
+          "line": 314383,
+          "text": "(v128.store"
+        },
+        {
+          "line": 314394,
+          "text": "(v128.load"
+        }
+      ]
+    }
+  ],
+  "inlinedAndCallerEvidence": [
+    {
+      "symbol": "$_RNvNtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine11positioning24justification_adjustment",
+      "line": 24210,
+      "opcodes": {
+        "v128.store": 7,
+        "v128.const": 15,
+        "i8x16.bitmask": 4,
+        "i8x16.ne": 4,
+        "v128.and": 4,
+        "v128.load": 4
+      },
+      "examples": [
+        {
+          "line": 24461,
+          "text": "(i8x16.bitmask"
+        },
+        {
+          "line": 24462,
+          "text": "(i8x16.ne"
+        },
+        {
+          "line": 24477,
+          "text": "(i8x16.bitmask"
+        },
+        {
+          "line": 24478,
+          "text": "(i8x16.ne"
+        },
+        {
+          "line": 24488,
+          "text": "(i8x16.bitmask"
+        }
+      ]
+    },
+    {
+      "symbol": "$_RINvMs1_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine11positioningNtB6_20PositionedGlyphArena28position_layout_run_fragmentNCNvMs7_NtB8_5stateNtB26_14ParagraphState18prepare_positioneds1_0NCB20_s2_0EBa_",
+      "line": 25720,
+      "opcodes": {
+        "v128.store": 17,
+        "v128.load": 17,
+        "f32x4.extract_lane": 2
+      },
+      "examples": []
+    },
+    {
+      "symbol": "$_RNvNtCscGJfW8CR417_19pmndrs_glyph_shaper4bidi12analyze_into",
+      "line": 453515,
+      "opcodes": {
+        "v128.store": 4,
+        "v128.load8_splat": 2,
+        "v128.load": 3,
+        "i8x16.splat": 1,
+        "i8x16.bitmask": 1,
+        "i8x16.ne": 1
+      },
+      "examples": [
+        {
+          "line": 463322,
+          "text": "(i8x16.bitmask"
+        },
+        {
+          "line": 463323,
+          "text": "(i8x16.ne"
+        }
+      ]
+    },
+    {
+      "symbol": "$_RNvNtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine5state23validate_planner_inputs",
+      "line": 500596,
+      "opcodes": {
+        "v128.store": 3,
+        "v128.load": 3
+      },
+      "examples": []
+    }
+  ],
+  "finiteCheck": {
+    "source": "packages/glyph/rust/shaper/src/engine/codec.rs:1429",
+    "watStartLine": 314484,
+    "watEndLine": 314546,
+    "excerpt": "                      (br_if $block36\n                       (i32.or\n                        (i32.or\n                         (i32.gt_u\n                          (i32.and\n                           (i32.reinterpret_f32\n                            (f32x4.extract_lane 0\n                             (local.tee $45\n                              (v128.load\n                               (i32.add\n                                (local.get $9)\n                                (i32.shl\n                                 (local.get $10)\n                                 (i32.const 4)\n                                )\n                               )\n                              )\n                             )\n                            )\n                           )\n                           (i32.const 2147483647)\n                          )\n                          (i32.const 2139095039)\n                         )\n                         (i32.gt_u\n                          (i32.and\n                           (i32.reinterpret_f32\n                            (f32x4.extract_lane 1\n                             (local.get $45)\n                            )\n                           )\n                           (i32.const 2147483647)\n                          )\n                          (i32.const 2139095039)\n                         )\n                        )\n                        (i32.or\n                         (i32.gt_u\n                          (i32.and\n                           (i32.reinterpret_f32\n                            (f32x4.extract_lane 2\n                             (local.get $45)\n                            )\n                           )\n                           (i32.const 2147483647)\n                          )\n                          (i32.const 2139095039)\n                         )\n                         (i32.ge_u\n                          (i32.and\n                           (i32.reinterpret_f32\n                            (f32x4.extract_lane 3\n                             (local.get $45)\n                            )\n                           )\n                           (i32.const 2147483647)\n                          )\n                          (i32.const 2139095040)\n                         )\n                        )\n                       )\n                      )\n                      (if",
+    "status": "Four lane extracts and scalar absolute-bit finite tests remain in authenticated optimized executable; proposed vector reduction is not implemented or measured."
+  }
+}

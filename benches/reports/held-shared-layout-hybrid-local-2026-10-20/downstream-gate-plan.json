@@ -1,0 +1,494 @@
+{
+  "schema": "hybrid-downstream-gate-plan-v1",
+  "recordedAtMethod": "Factual preflight assembled from E3 consolidated-gate-plan.json, E2 memory-presentation-summary.json, downstream-final-verification.json, and E2 per-gate start.json/result.json receipts; no workloads, servers, builds, tests, profiles, network, or source changes were run for this plan.",
+  "worktree": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "sourceFreeze": "All downstream runs require E3 final candidate/source freeze and exact archive SHA; pack and named artifact generation remain active separately. Do not begin this sequence until the active candidate owner records completion and identity.",
+  "controls": {
+    "main": {
+      "archive": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+      "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20"
+    },
+    "publishedRelease": {
+      "archive": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+      "sha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b"
+    },
+    "priorCurrent28fd": {
+      "archive": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "sha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb"
+    },
+    "candidate": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz"
+  },
+  "allocator": {
+    "scope": "Captured candidate engine Wasm instance; retain requested-live, completed allocation-call high-water, and page capacity as distinct metrics. Existing E2 evidence excludes JS tokens, GPU, decoder instances, Talc fragmentation, and transient internal realloc peak; successful realloc reports full new size.",
+    "commands": [
+      {
+        "name": "allocator-artifact",
+        "argv": [
+          "/usr/bin/env",
+          "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch",
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "glyph:shaper-memory-artifact",
+          "--",
+          "--artifact",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "--output",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/shaper-memory"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "receiptReference": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/shaper-memory-artifact/start.json"
+      },
+      {
+        "name": "allocator-live-and-call-peak",
+        "argv": [
+          "/usr/bin/env",
+          "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch",
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "benchmark:shaper-live-memory",
+          "--",
+          "--artifact",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "--manifest",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/shaper-memory/manifest.json",
+          "--output",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/shaper-live-memory.json"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "receiptReference": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/shaper-live-memory/start.json",
+        "recordedE2Result": {
+          "maxRequestedLiveBytes": 40471115,
+          "maxCompletedAllocationCallPeakBytes": 40671431,
+          "maxWasmPages": 728,
+          "phaseCount": 71,
+          "cycles": 8
+        }
+      }
+    ]
+  },
+  "applicationMemory": {
+    "method": "Four arms, each Node and browser: main, published release, E2 prior-current 28fd archive, E3 candidate. Whole-command Node physical footprint is the largest complete non-atomic 25 ms process-family sweep across fixture bootstrap, 1,024 cold oracles, and teardown. Preserve all incomplete sweeps and caveats; do not claim atomic or edit-only peak. Browser run uses same retained-uploads six phases and reports memory plus output/delivery. This is a separate four-archive ASCII-rich retained-Text scene comparison, not the dynamic-layout presentation matrix.",
+    "arms": [
+      {
+        "name": "main",
+        "artifact": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+        "nodeArgv": [
+          "/usr/bin/env",
+          "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch",
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "benchmark:application-memory-observe",
+          "--",
+          "--artifact",
+          "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+          "--output",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-node-main",
+          "--mode",
+          "node"
+        ],
+        "browserArgv": [
+          "/usr/bin/env",
+          "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch",
+          "PORTLESS_STATE_DIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/portless-state",
+          "PORTLESS_PORT=1358",
+          "PORTLESS_HTTPS=0",
+          "PORTLESS_SYNC_HOSTS=0",
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "benchmark:application-memory-observe",
+          "--",
+          "--artifact",
+          "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+          "--output",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-browser-main",
+          "--mode",
+          "browser",
+          "--",
+          "/Users/mini/.local/share/mise/installs/node/24.18.0/bin/node",
+          "/Users/mini/.npm/_npx/6a98873df99949c7/node_modules/portless/dist/cli.js",
+          "held-e3-hero-main",
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "--dir",
+          "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+          "scripts",
+          "run",
+          "benchmark:retained-uploads"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "nodeReceiptReference": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/application-memory-node-main/start.json",
+        "browserReceiptReference": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/application-memory-browser-main/start.json"
+      },
+      {
+        "name": "candidate",
+        "artifact": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+        "nodeArgv": [
+          "/usr/bin/env",
+          "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch",
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "benchmark:application-memory-observe",
+          "--",
+          "--artifact",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "--output",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-node-candidate",
+          "--mode",
+          "node"
+        ],
+        "browserArgv": [
+          "/usr/bin/env",
+          "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch",
+          "PORTLESS_STATE_DIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/portless-state",
+          "PORTLESS_PORT=1358",
+          "PORTLESS_HTTPS=0",
+          "PORTLESS_SYNC_HOSTS=0",
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "benchmark:application-memory-observe",
+          "--",
+          "--artifact",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "--output",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-browser-candidate",
+          "--mode",
+          "browser",
+          "--",
+          "/Users/mini/.local/share/mise/installs/node/24.18.0/bin/node",
+          "/Users/mini/.npm/_npx/6a98873df99949c7/node_modules/portless/dist/cli.js",
+          "held-e3-hero-candidate",
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "--dir",
+          "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+          "scripts",
+          "run",
+          "benchmark:retained-uploads"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "nodeReceiptReference": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/application-memory-node-candidate/start.json",
+        "browserReceiptReference": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/application-memory-browser-candidate/start.json"
+      },
+      {
+        "name": "published010",
+        "artifact": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+        "nodeArgv": [
+          "/usr/bin/env",
+          "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch",
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "benchmark:application-memory-observe",
+          "--",
+          "--artifact",
+          "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+          "--output",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-node-published010",
+          "--mode",
+          "node"
+        ],
+        "browserArgv": [
+          "/usr/bin/env",
+          "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch",
+          "PORTLESS_STATE_DIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/portless-state",
+          "PORTLESS_PORT=1358",
+          "PORTLESS_HTTPS=0",
+          "PORTLESS_SYNC_HOSTS=0",
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "benchmark:application-memory-observe",
+          "--",
+          "--artifact",
+          "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+          "--output",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-browser-published010",
+          "--mode",
+          "browser",
+          "--",
+          "/Users/mini/.local/share/mise/installs/node/24.18.0/bin/node",
+          "/Users/mini/.npm/_npx/6a98873df99949c7/node_modules/portless/dist/cli.js",
+          "held-e3-hero-published010",
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "--dir",
+          "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+          "scripts",
+          "run",
+          "benchmark:retained-uploads",
+          "--",
+          "--usage=dynamic"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "nodeReceiptReference": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/application-memory-node-published010/start.json",
+        "browserReceiptReference": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/application-memory-browser-published010/start.json"
+      },
+      {
+        "name": "prior28fd",
+        "artifact": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+        "nodeArgv": [
+          "/usr/bin/env",
+          "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch",
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "benchmark:application-memory-observe",
+          "--",
+          "--artifact",
+          "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "--output",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-node-prior28fd",
+          "--mode",
+          "node"
+        ],
+        "browserArgv": [
+          "/usr/bin/env",
+          "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch",
+          "PORTLESS_STATE_DIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/portless-state",
+          "PORTLESS_PORT=1358",
+          "PORTLESS_HTTPS=0",
+          "PORTLESS_SYNC_HOSTS=0",
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "benchmark:application-memory-observe",
+          "--",
+          "--artifact",
+          "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "--output",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/application-memory-browser-prior28fd",
+          "--mode",
+          "browser",
+          "--",
+          "/Users/mini/.local/share/mise/installs/node/24.18.0/bin/node",
+          "/Users/mini/.npm/_npx/6a98873df99949c7/node_modules/portless/dist/cli.js",
+          "held-e3-hero-prior28fd",
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "--dir",
+          "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+          "scripts",
+          "run",
+          "benchmark:retained-uploads"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "nodeReceiptReference": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/application-memory-node-prior340/start.json",
+        "browserReceiptReference": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/application-memory-browser-prior340/start.json"
+      }
+    ],
+    "coldOutputComparison": {
+      "argv": [
+        "/opt/homebrew/bin/python3",
+        "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/compare-browser.py"
+      ],
+      "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+      "receiptReference": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/browser-output-comparison/start.json",
+      "inputs": "Four E3 browser arm command.stdout.log, browser-delivery.json, report.json outputs. Compare each candidate/control signature (pixelHash, litPixels, draws, instances) for initial, changedContents, changedCount, resized, drawReplacement, transform against fresh main on both WebGPU and WebGL2. These signatures belong to the ASCII retained-upload scene; they are distinct from the 12 dynamic-layout presentation cells. The historic E2 README prose conflates the scopes; this plan does not claim a missing hero scene was recovered. The E2 helper has no CLI flags and reads sibling arm directories; preserve its logic and adjust only E3 evidence root."
+    }
+  },
+  "presentation": {
+    "scope": "12 dynamic-layout cells: 3 raster techniques (bitmap, mtsdf, slug) \u00d7 2 backends (webgpu, webgl2) \u00d7 2 shader implementations (TSL, TypeGPU). This exact 12-cell shape is the E2 recorded workflow.",
+    "commands": [
+      {
+        "name": "TSL six cells",
+        "argv": [
+          "/usr/bin/env",
+          "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch",
+          "PRESENTATION_BASE_URL=http://held-e3-presentation.localhost:1358",
+          "PRESENTATION_SHAPER_ARTIFACT=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/shaper-profile/candidate.wasm",
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "benchmark:presentation",
+          "--",
+          "--workload",
+          "dynamic-layout"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "receiptReference": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/presentation-tsl-dynamic-layout/start.json"
+      },
+      {
+        "name": "TypeGPU six cells",
+        "argv": [
+          "/usr/bin/env",
+          "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch",
+          "PRESENTATION_BASE_URL=http://held-e3-presentation.localhost:1358",
+          "PRESENTATION_SHAPER_ARTIFACT=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/shaper-profile/candidate.wasm",
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "benchmark:presentation",
+          "--",
+          "--workload",
+          "dynamic-layout",
+          "--typegpu"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "receiptReference": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/presentation-typegpu-dynamic-layout/start.json"
+      }
+    ],
+    "server": "Only if a listening server is needed, use task-owned Portless state/root route at port 1358 and verify ownership. Start no server for non-listening commands. Stop only E3-owned route/process tree at completion; preserve unrelated ports 1355 and 34322. Do not assume any process exists.",
+    "heroScopeClarification": "The E2 presentation receipt records dynamic-layout cells. The separate browser memory/cold-output workflow named benchmark:retained-uploads exercises the committed ASCII-rich retained-Text scene. No registered benchmark:presentation workload named hero is present."
+  },
+  "downstreamPeerAbiLifetime": {
+    "commands": [
+      {
+        "name": "minimum peer/API and lifecycle checks",
+        "argv": [
+          "/usr/bin/env",
+          "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch",
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "glyph:peer-check"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "receiptReference": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/downstream-peer-check/start.json",
+        "scope": "Isolated published-package consumer checks for the eight E2 peer floors: @react-three/fiber, @tresjs/core, @typegpu/gl, @typegpu/three, react, three, typegpu, vue. E2 ran 55/55 tests."
+      },
+      {
+        "name": "archive public API/member inventory",
+        "argv": [
+          "/opt/homebrew/bin/python3",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/inspect-artifacts.py"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "receiptReference": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/artifact-api-inventory/start.json",
+        "scope": "Compare published package declarations, exports, shader entrypoints, and wasm members across main, published, prior-current 28fd, and the exact E3 candidate. E2 helper had no CLI flags and read fixed archive paths."
+      },
+      {
+        "name": "member size and byte identity comparison",
+        "argv": [
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "node",
+          "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/size-comparison.mjs"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "receiptReference": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/member-size-comparison/start.json",
+        "scope": "Reuse API/ABI/lifetime conclusions only for members proven byte-identical between E2 and E3 archives. Wait for actual E3 member inventory; the shaper Wasm is expected to be the only changed member, not an assumption."
+      },
+      {
+        "name": "downstream production builds",
+        "argvs": [
+          [
+            "/usr/bin/env",
+            "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch",
+            "/Users/mini/.local/bin/mise",
+            "exec",
+            "--",
+            "pnpm",
+            "--filter",
+            "@pmndrs/glyph-examples",
+            "build"
+          ],
+          [
+            "/usr/bin/env",
+            "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch",
+            "/Users/mini/.local/bin/mise",
+            "exec",
+            "--",
+            "pnpm",
+            "--filter",
+            "@pmndrs/glyph-tres-playground",
+            "build"
+          ]
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "receiptReferences": [
+          "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/downstream-r3f-production-build/start.json",
+          "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/downstream-tres-production-build/start.json"
+        ],
+        "scope": "Only if current source/API differs from byte-identical E2 evidence; build outputs are independent downstream compatibility gates."
+      }
+    ],
+    "reuseRule": "No reuse by commit label or presumed sameness. Reuse an E2 result only after E3 packed member inventory verifies byte-identical relevant artifact inputs and matching environment/peer versions; keep E3 candidate archive identity recorded."
+  },
+  "sizeAccounting": {
+    "method": "Use the E2 Node method: gzipSync(each packed dist member, {level:9, mtime:0}); report raw and gzip member sums by suffix group and text-shaper.wasm separately. No concatenated bundle or Brotli claim.",
+    "reference": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/size-comparison.mjs",
+    "waitFor": "Actual E3 package member inventory and byte hashes; only shaper Wasm is expected to differ until verified."
+  },
+  "releaseExceptionsAndLimits": {
+    "releaseWebGPUIdleUploadBytes": 15244800,
+    "releaseWebGPUIdleUploadCalls": 600,
+    "otherArmsIdleUploadBytesAndCalls": 0,
+    "atomicOSPeakClaim": false,
+    "nativeCustomThresholdBytes": 10240,
+    "actualBitmapBytes": 9216,
+    "notes": [
+      "Preserve the release WebGPU idle upload exception exactly: 15,244,800 bytes over 600 calls; other arms 0.",
+      "Node OS peak sums are non-atomic process-family samples and include bootstrap, all cold oracles, and teardown; no GC-rate or reclaimability claim.",
+      "Native custom size threshold 10,240 bytes differs from actual Bitmap 9,216 bytes; retain both exact values.",
+      "Do not infer final wasm/member size before E3 archive inventory."
+    ]
+  },
+  "wrapperAndCleanup": {
+    "receiptFormat": "E2 durable wrapper receipts are named <gate>/start.json and <gate>/result.json; rg --files found no literal wrapperstart.json. Each E3 gate should use E3/run.py with unique gate name, E3/scratch TMPDIR, numeric exit and raw stdout/stderr retention, modeled on E2/evidence/run.py.",
+    "cleanup": "Record cleanup for every task-owned browser command, child process family, Portless route and listening server. Verify the owned route/process is stopped. Preserve unrelated ports 1355 and 34322; do not assume either any process is present or absent. Portless is reserved for commands that need a listening server.",
+    "constraints": [
+      "No dependency additions.",
+      "Do not execute build, test, memory, browser, size, profile, performance, CI, network, server, Git, docs, or index operations as part of this preflight."
+    ]
+  },
+  "evidenceReferences": {
+    "E3ConsolidatedPlan": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/consolidated-gate-plan.json",
+    "E2MemoryPresentationSummary": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/memory-presentation-summary.json",
+    "E2DownstreamFinalVerification": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/downstream-final-verification.json",
+    "E2WrapperInventory": "rg --files E2/evidence -g *.json | rg \"/(start|result)\\.json$\"; relevant per-gate receipt paths referenced above."
+  }
+}

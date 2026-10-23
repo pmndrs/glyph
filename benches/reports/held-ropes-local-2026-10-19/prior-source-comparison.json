@@ -1,0 +1,8 @@
+{
+  "created": "2026-10-19T15:59:37.047656+00:00",
+  "prior": "328aedb833e30ea1c9ae62bda7a026e93fdc7db1",
+  "candidate": "6987418cc49495c60097801e0d675dec7ae84f77",
+  "diffSha256": "3265f9b0669a2131d1b326868b1a895a207f485f5bab0f171458de0640c7a802",
+  "sourceObservation": "Production differences include the guarded complete-sole-run ShapeArena ownership transfer and direct complete cluster build in state.rs; other Rust differences are cfg(test) counters and tests. JavaScript/declarations and compiler-policy source are unchanged. Do not describe the state.rs diff as test-only.",
+  "artifactLimit": "All five delivered Wasm members differ between authenticated prior/current archives, despite production source changes confined to shaper state.rs. The comparison is whole-package; this rerun does not establish why the other rebuilt Wasm bytes differ or isolate causality for timing changes."
+}

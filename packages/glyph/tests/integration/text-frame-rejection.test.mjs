@@ -36,6 +36,26 @@ test('raw offset spans are rejected where the caller writes them', { timeout }, 
   }
 });
 
+test('Three rejects a later invalid range before processing an earlier span style', { timeout }, async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await fonts.load('inter');
+
+  assert.throws(
+    () =>
+      three.createText({
+        font,
+        text: {
+          text: 'abcd',
+          spans: [
+            { start: 0, end: 2, style: { fontSize: 0 } },
+            { start: 3, end: 5 },
+          ],
+        },
+      }),
+    (error) => error instanceof RangeError && error.message === 'span 1 covers [3, 5) outside text of length 4',
+  );
+});
+
 test('structural spans derive valid nested and disjoint ranges without an offset API', { timeout }, async () => {
   const font = await fonts.load('inter');
   const red = span({ color: '#ff2f00' });
@@ -48,6 +68,194 @@ test('structural spans derive valid nested and disjoint ranges without an offset
     assert.equal(mounted.nodes[0].error, undefined);
   } finally {
     unmount(mounted);
+  }
+});
+
+test(
+  'span validation preserves canonical order, duplicate selection, and overlap precedence',
+  { timeout },
+  async (t) => {
+    const three = await createThreeTestHandle(t);
+    const font = await fonts.load('inter');
+    const node = three.createText({ font, text: 'stable' });
+    const text = 'abcdefgh';
+    const cases = [
+      {
+        name: 'canonical',
+        ranges: [
+          [0, 2],
+          [3, 6],
+        ],
+      },
+      {
+        name: 'reversed',
+        ranges: [
+          [3, 6],
+          [0, 2],
+        ],
+      },
+      {
+        name: 'nested',
+        ranges: [
+          [0, 6],
+          [1, 4],
+          [2, 3],
+        ],
+      },
+      {
+        name: 'zero-length',
+        ranges: [
+          [0, 0],
+          [0, 2],
+          [2, 2],
+        ],
+      },
+      {
+        name: 'multiple duplicate groups select the earliest second input',
+        ranges: [
+          [4, 6],
+          [0, 2],
+          [4, 6],
+          [0, 2],
+        ],
+        error: 'span 2 duplicates span 0 over [4:6)',
+      },
+      {
+        name: 'crossing beats an earlier duplicate pair',
+        ranges: [
+          [0, 3],
+          [2, 4],
+          [0, 3],
+        ],
+        error: 'span 1 [2, 4) partially overlaps span 2; spans must nest or be disjoint',
+      },
+    ];
+    let acceptedText = 'stable';
+    try {
+      for (const { name, ranges, error } of cases) {
+        const spans = ranges.map(([start, end]) => ({ start, end }));
+        const originalRecords = spans.slice();
+        const originalOrder = spans.map(({ start, end }) => [start, end]);
+        const input = { text, spans };
+        if (error === undefined) {
+          node.set({ text: input });
+          acceptedText = text;
+        } else {
+          assert.throws(
+            () => node.set({ text: input }),
+            (cause) => cause instanceof RangeError && cause.message === error,
+            name,
+          );
+          assert.equal(node.text, acceptedText, `${name} leaves the accepted text unchanged`);
+        }
+        assert.deepEqual(
+          spans.map(({ start, end }) => [start, end]),
+          originalOrder,
+          `${name} leaves caller span order unchanged`,
+        );
+        assert.equal(input.spans, spans, `${name} retains the caller array identity`);
+        assert.ok(
+          spans.every((entry, index) => entry === originalRecords[index]),
+          `${name} retains span identities`,
+        );
+      }
+    } finally {
+      node.dispose();
+    }
+  },
+);
+
+test('bounded span permutations agree with pairwise range validity', { timeout }, async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await fonts.load('inter');
+  const node = three.createText({ font, text: 'stable' });
+  let acceptedText = 'stable';
+  let seed = 0x63d4a91b;
+  const next = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed;
+  };
+  const pairwiseValid = (spans) => {
+    for (let leftIndex = 0; leftIndex < spans.length; leftIndex++) {
+      const left = spans[leftIndex];
+      for (let rightIndex = leftIndex + 1; rightIndex < spans.length; rightIndex++) {
+        const right = spans[rightIndex];
+        const duplicate = left.start === right.start && left.end === right.end;
+        const overlap = left.start < right.end && right.start < left.end;
+        const nested =
+          (left.start <= right.start && right.end <= left.end) || (right.start <= left.start && left.end <= right.end);
+        if (duplicate || (overlap && !nested)) return false;
+      }
+    }
+    return true;
+  };
+
+  try {
+    for (let caseIndex = 0; caseIndex < 32; caseIndex++) {
+      const count = 2 + (next() % 4);
+      const ranges = Array.from({ length: count }, () => {
+        const start = next() % 7;
+        return [start, start + 1 + (next() % (8 - start))];
+      });
+      for (let permutation = 0; permutation < 3; permutation++) {
+        const orderedRanges = ranges.slice();
+        for (let index = orderedRanges.length - 1; index > 0; index--) {
+          const other = next() % (index + 1);
+          [orderedRanges[index], orderedRanges[other]] = [orderedRanges[other], orderedRanges[index]];
+        }
+        const spans = orderedRanges.map(([start, end]) => ({ start, end }));
+        const originalRecords = spans.slice();
+        const originalOrder = spans.map(({ start, end }) => [start, end]);
+        const text = `permutation-${caseIndex}-${permutation}`;
+        const input = { text, spans };
+        if (pairwiseValid(spans)) {
+          node.set({ text: input });
+          acceptedText = text;
+          assert.equal(node.text, text);
+        } else {
+          assert.throws(() => node.set({ text: input }), RangeError);
+          assert.equal(node.text, acceptedText, 'invalid range sets leave the last accepted text unchanged');
+        }
+        assert.deepEqual(
+          spans.map(({ start, end }) => [start, end]),
+          originalOrder,
+          'validation leaves caller span order unchanged',
+        );
+        assert.equal(input.spans, spans, 'validation retains the caller array identity');
+        assert.ok(
+          spans.every((entry, index) => entry === originalRecords[index]),
+          'validation retains span identities',
+        );
+      }
+    }
+  } finally {
+    node.dispose();
+  }
+});
+
+test('Rust aligns authored inline ranges to the pinned grapheme grid', { timeout }, async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await fonts.load('inter');
+  const base = span({ fontSize: 12 });
+  const combiningMark = span({ fontSize: 6 });
+  const splitCluster = txt`${base`a`}${combiningMark`\u0301`}`;
+  const baseStyledCluster = txt`${base`a\u0301`}`;
+  assert.deepEqual(
+    splitCluster.spans.map(({ start, end }) => [start, end]),
+    [
+      [0, 1],
+      [1, 2],
+    ],
+    'template composition preserves authored UTF-16 ranges for the engine to resolve',
+  );
+
+  const split = three.createText({ font, text: splitCluster });
+  const whole = three.createText({ font, text: baseStyledCluster });
+  try {
+    assert.deepEqual(split.measure(), whole.measure(), 'the grapheme base owns its attached combining mark');
+  } finally {
+    split.dispose();
+    whole.dispose();
   }
 });
 

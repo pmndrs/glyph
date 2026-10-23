@@ -1,0 +1,208 @@
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +21
++++++++++++++++++++++
+Progress: resolved 63, reused 27, downloaded 0, added 21, done
+
+dependencies:
++ @pmndrs/glyph 0.1.0
++ react 19.2.8 (19.3.1 is available)
++ three 0.185.1 (0.186.1 is available)
++ typegpu 0.12.5
+
+Done in 446ms using pnpm v11.15.1
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +21
++++++++++++++++++++++
+Progress: resolved 63, reused 26, downloaded 1, added 21, done
+
+dependencies:
++ @pmndrs/glyph 0.1.0
++ react 19.2.8 (19.3.1 is available)
++ three 0.185.1 (0.186.1 is available)
++ typegpu 0.12.5
+
+Done in 518ms using pnpm v11.15.1
+[36mlabs[0m
+
+[34m▶ batching.bench.ts[0m
+clk: ~3.86 GHz
+cpu: Apple M4
+runtime: node 24.18.0 (arm64-darwin)
+
+benchmark                                      avg (min … max) p75 / p99    (min … top 1%)
+-------------------------------------------------------------- -------------------------------
+• batched text operations
+-------------------------------------------------------------- -------------------------------
+rewrite 512 labels in one group                   8.37 ms/iter   8.58 ms        █▃▃▂▃         
+                                           (7.64 ms … 9.44 ms)   9.20 ms ▂▁▂▅▅█████████▆▃▃▄▃▁▂
+                                     gc(  0.00 ps …   7.98 ms) 100.94 µs
+                                   heap(  1.38 mb …   6.50 mb)   3.24 mb/iter
+
+• edit-sized root publication
+-------------------------------------------------------------- -------------------------------
+1000 labels first same-length scene publication   1.69 ms/iter   1.78 ms   ▂ █▃▆▅█▇▆ ▃▂▂      
+                                           (1.44 ms … 2.45 ms)   1.99 ms ▃▃█▆███████████▆▆▃▂▃▂
+                                     gc(  0.00 ps …   9.09 ms)   0.00 ps
+                                   heap(416.72 kb …   3.93 mb)   1.60 mb/iter
+
+[34m▶ prepared-operations.bench.ts[0m
+clk: ~3.94 GHz
+cpu: Apple M4
+runtime: node 24.18.0 (arm64-darwin)
+
+benchmark                   avg (min … max) p75 / p99    (min … top 1%)
+------------------------------------------- -------------------------------
+• prepared label operations
+------------------------------------------- -------------------------------
+1 labels first set           122.99 µs/iter 133.71 µs     ▆▃▆▅█▄           
+                     (83.63 µs … 255.00 µs) 186.21 µs ▂▅█████████▇▅▅▄▃▄▃▂▂▂
+                  gc(  0.00 ps …   2.04 ms)   0.00 ps
+                heap(  0.00  b … 245.35 kb)  10.83 kb/iter
+
+[34m▶ stress.bench.ts[0m
+clk: ~3.94 GHz
+cpu: Apple M4
+runtime: node 24.18.0 (arm64-darwin)
+
+benchmark                           avg (min … max) p75 / p99    (min … top 1%)
+--------------------------------------------------- -------------------------------
+• 1,000-label stress
+--------------------------------------------------- -------------------------------
+publish 1024 retained Text instances  17.23 ms/iter  17.63 ms         ▂▆█▆ ▅ ▂▂    
+                              (16.13 ms … 18.35 ms)  18.16 ms ▄▄▃▆▆▆▆█████▆████▆▆▆▆
+                          gc(  0.00 ps …   2.91 ms)   0.00 ps
+                        heap(  4.02 mb …   7.37 mb)   6.03 mb/iter
+
+┌ [1mreport[0m ──────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                                      │
+│  [32m✔[0m Saved "baseline-0.1.0-06fe22b7" [2mexperiments/held-v3-single-owner-20261022@8f62b70[0m (3 files)                       │
+│                                                                                                                      │
+│  [32m✔ Stable clock:[0m [2mReadings ranged 3.86–3.95 GHz.[0m                                                                      │
+│                                                                                                                      │
+│  [32m✔ Consistent runs:[0m [2mMedian timings remained stable across fresh runs.[0m                                                │
+│    [2mMedian spread: ±1.5% across 8 fresh runs.[0m                                                                         │
+│    [2mComparison resolution: ~±2.0%.[0m                                                                                    │
+│    [2mClock estimate explains ~0% of run-to-run spread.[0m                                                                 │
+│    [2mAffected benchmarks (1):[0m                                                                                          │
+│      [33m⚠[0m [2m1 labels first set[0m  [33m±3.9%[0m                                                                                     │
+│                                                                                                                      │
+│  [33m⚠ Noisy samples:[0m [2mTimings varied widely within a process suggesting non-deterministic work or runtime interference.[0m  │
+│    [2mAffected benchmarks (1):[0m                                                                                          │
+│      [33m⚠[0m [2m1 labels first set[0m  [33m±17.0%[0m                                                                                    │
+│                                                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+[36mlabs[0m
+
+[34m▶ batching.bench.ts[0m
+clk: ~3.94 GHz
+cpu: Apple M4
+runtime: node 24.18.0 (arm64-darwin)
+
+benchmark                                      avg (min … max) p75 / p99    (min … top 1%)
+-------------------------------------------------------------- -------------------------------
+• batched text operations
+-------------------------------------------------------------- -------------------------------
+rewrite 512 labels in one group                   8.38 ms/iter   8.57 ms    ▇▂▂█▆▆█▆          
+                                           (7.75 ms … 9.36 ms)   9.30 ms ▅▇██████████▇█▅▆▃▃▁▄▃
+                                     gc(  0.00 ps …   8.43 ms)   0.00 ps
+                                   heap(114.45 kb …   5.58 mb)   3.24 mb/iter
+
+• edit-sized root publication
+-------------------------------------------------------------- -------------------------------
+1000 labels first same-length scene publication   2.11 ms/iter   1.86 ms █▂                   
+                                          (1.47 ms … 18.84 ms)  11.61 ms ██▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+                                     gc(  0.00 ps … 106.65 ms)   0.00 ps
+                                   heap(548.62 kb …   3.92 mb)   1.61 mb/iter
+
+[34m▶ prepared-operations.bench.ts[0m
+clk: ~3.94 GHz
+cpu: Apple M4
+runtime: node 24.18.0 (arm64-darwin)
+
+benchmark                   avg (min … max) p75 / p99    (min … top 1%)
+------------------------------------------- -------------------------------
+• prepared label operations
+------------------------------------------- -------------------------------
+1 labels first set           130.52 µs/iter 140.38 µs   ▂▅█▇█▃             
+                     (84.21 µs … 313.00 µs) 253.75 µs ▂▅██████▆▄▃▁▂▂▁▁▁▁▁▁▁
+                  gc(  0.00 ps …   2.99 ms)   0.00 ps
+                heap(  0.00  b …  90.88 kb)  10.83 kb/iter
+
+[34m▶ stress.bench.ts[0m
+clk: ~3.94 GHz
+cpu: Apple M4
+runtime: node 24.18.0 (arm64-darwin)
+
+benchmark                           avg (min … max) p75 / p99    (min … top 1%)
+--------------------------------------------------- -------------------------------
+• 1,000-label stress
+--------------------------------------------------- -------------------------------
+publish 1024 retained Text instances  17.20 ms/iter  17.54 ms        ▄█ ▂▅▂▂       
+                              (16.23 ms … 18.70 ms)  18.22 ms ▄▂█▇▇█▆██▆████▄█▅▄▆▄▃
+                          gc(  0.00 ps …   3.16 ms)   0.00 ps
+                        heap(  4.48 mb …   7.31 mb)   6.03 mb/iter
+
+┌ [1mreport[0m ──────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                                      │
+│  [32m✔[0m Saved "candidate-0.1.0-383fcbdd" [2mexperiments/held-v3-single-owner-20261022@8f62b70[0m (3 files)                      │
+│                                                                                                                      │
+│  [32m✔ Stable clock:[0m [2mReadings ranged 3.92–3.95 GHz.[0m                                                                      │
+│                                                                                                                      │
+│  [32m✔ Consistent runs:[0m [2mMedian timings remained stable across fresh runs.[0m                                                │
+│    [2mMedian spread: ±1.2% across 8 fresh runs.[0m                                                                         │
+│    [2mComparison resolution: ~±1.7%.[0m                                                                                    │
+│    [2mClock estimate explains ~0% of run-to-run spread.[0m                                                                 │
+│    [2mAffected benchmarks (1):[0m                                                                                          │
+│      [33m⚠[0m [2m1 labels first set[0m  [33m±5.3%[0m                                                                                     │
+│                                                                                                                      │
+│  [33m⚠ Noisy samples:[0m [2mTimings varied widely within a process suggesting non-deterministic work or runtime interference.[0m  │
+│    [2mAffected benchmarks (1):[0m                                                                                          │
+│      [33m⚠[0m [2m1 labels first set[0m  [33m±16.6%[0m                                                                                    │
+│                                                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+[32m✔[0m Baseline set to "baseline-0.1.0-06fe22b7"
+
+[1m[36m━━ compare[0m [2mbaseline-0.1.0-06fe22b7 (experiments/held-v3-single-owner-20261022@8f62b70) -> candidate-0.1.0-383fcbdd (experiments/held-v3-single-owner-20261022@8f62b70)[0m
+[2mApple M4[0m
+[2mMann-Whitney U on block medians  α=0.05  minΔ=5%[0m
+
+[1m[36mbatching.bench.ts[0m
+[38;5;248m  bench                                    baseline  candidate    Δp50    Δp99     p       Δ 95% CI[0m
+[38;5;248m---------------------------------------------------------------------------------------------------[0m
+  • batched text operations
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [38;5;248m■[0m [37mrewrite 512 labels in one group     [0m [38;5;248m    8.27ms[0m [38;5;248m    8.34ms[0m [2m  +0.8%[0m [2m  +1.1%[0m [2m .442[0m [2m   -0.8..+2.2%[0m
+                                         [36m▁▂▄█▇▅▄▂▂▁[0m [35m▁▄▆▇█▇▄▃▁▂[0m
+
+  • edit-sized root publication
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [38;5;248m■[0m [37m1000 labels first same-length scene…[0m [38;5;248m    1.68ms[0m [38;5;248m    1.68ms[0m [2m  +0.0%[0m [2m+482.4%[0m [2m .878[0m [2m   -1.8..+3.0%[0m
+                                         [36m█▁▁▁▁▁▁▁▁▁[0m [35m█▂▁▁▁▁▁▁▁▁[0m
+
+
+[1m[36mprepared-operations.bench.ts[0m
+[38;5;248m  bench                                    baseline  candidate    Δp50    Δp99     p       Δ 95% CI[0m
+[38;5;248m---------------------------------------------------------------------------------------------------[0m
+  • prepared label operations
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [38;5;248m■[0m [37m1 labels first set                  [0m [38;5;248m  120.85µs[0m [38;5;248m  126.56µs[0m [2m  +4.7%[0m [2m +36.3%[0m [2m .195[0m [2m   -1.5..+9.5%[0m
+                                         [36m▂▆█▄▂▂▁▁▁▁[0m [35m▂▅█▇▃▂▁▁▁▁[0m                       [33m        ⚠ ~±7%[0m
+
+
+[1m[36mstress.bench.ts[0m
+[38;5;248m  bench                                    baseline  candidate    Δp50    Δp99     p       Δ 95% CI[0m
+[38;5;248m---------------------------------------------------------------------------------------------------[0m
+  • 1,000-label stress
+  [90m-------------------------------------------------------------------------------------------------[0m
+  [38;5;248m■[0m [37mpublish 1024 retained Text instances[0m [38;5;248m   17.12ms[0m [38;5;248m   17.13ms[0m [2m  +0.0%[0m [2m  +0.4%[0m [2m .878[0m [2m   -1.1..+1.2%[0m
+                                         [36m▂▃▃▅█▆▆▅▃▂[0m [35m▁▄▅▆██▆▅▄▂[0m
+
+[33m⚠ Limited resolution:[0m [2mNeutral results are inconclusive at the shown resolution.[0m
+
+
+[1msummary[0m  [2m4 neutral[0m
+[2mcompared: 4  matched: 4[0m
+
+Labs artifacts: /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/v3-combined/frontier-comparison

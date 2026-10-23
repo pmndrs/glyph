@@ -1,0 +1,48 @@
+# Whole V3 plus single-owner preparation — 22 October 2026
+
+Status: complete, correct experiment **not admitted to the next product wave**. The single predeclared comparison showed no credible improvement in both dense operations. The whole variant is preserved at `8f62b707f69896848154cfe4463c4f69a557b37e` on `experiments/held-v3-single-owner-20261022`; product remains the submitted `83ccb823` checkpoint. The [fresh admission review](evidence/v3-frontier-admission-review.md.raw) records the decision. No selective rerun or full acceptance sequence is selected for V3. This is not a tail-only rejection or a 5% admission floor.
+
+## Source and cost
+
+This combines the complete preserved V3 four-file variant with product `dec7509b`, retaining the full-replacement preparation and publication acknowledgement changes. The original V3 ref remains `experiments/held-dense-frontier-v3-native-gated-20261021` at `aac036f938fbeff63c4b2dfe74dd781205c2b14f`.
+
+The current rope already applies ordered ranges in one tree traversal. V3 admits a single full-source range when the dirty frontier covers every active owner in order, old source and record ranges are contiguous, source counts agree, decorations are empty, and unpublished intervals cover the full owner. Failed admission uses the existing owner-range path; count changes, callback failure and source-root restoration keep their existing fallback. The shared callback still visits source rows and owners, resolves bindings and executes Codec work. The temporary old source root has the same transaction lifetime. No new cache, duplicate semantic storage, public API or executor is introduced.
+
+The deletion is owner-range dispatch and boundary validation. Each of N admission checks binary-searches P paragraph records, costing O(N log P). The old owner-range iterator also performs an owner-lookup pass, so V3 does not demonstrate a net lookup deletion. Both retain O(N log P + G) owner/source-row work before shared rope and Codec costs. There is no millisecond or parity-sized saving claim. [The source-cost correction](evidence/next-wave-selection-cost-correction.md.raw) preserves this distinction.
+
+## Correctness and selection
+
+The [implementation handoff](evidence/v3-combination-implementation.md.raw) maps producer, consumer and oracle paths. Native tests compare accepted physical order, active Codec buffer bytes and placement bytes against a separately built cold scene. The combined dense test also inspects a prepared revision, creates an independent glyph copy, overwrites the owner twice and publishes, checking that the detached bytes survive. Native full-frontier counters describe that fixture only; they are not measured Wasm callback counts. Existing source-root rollback, count-change stop, scattered fallback, seeded abort/retry, split lifetime and renderer recovery tests remain.
+
+The [fresh scoped source review](evidence/v3-combination-source-review.md.raw) identifies one precise coverage limit: failed renderer delivery plus the exact new dense overwrite/copy sequence is covered by separate tests, not one combined test. It found no reachable source defect from that separation. The full package gate has passed on this source.
+
+The [predeclared protocol](evidence/v3-combination-protocol.json.raw) selects exactly four unchanged complete callbacks via `@frontier`: rewrite 512 labels; publish 1024 labels; sparse first-label publication among 1000; and repeated first-label setter in a one-label scene. The archive comparison uses eight blocks, single-call samples and fixed-20 warmup for both arms. Both dense operations must show a credible block-supported gain, with no credible guard regression. There is no 5% admission floor, tail-only veto or favorable rerun. Every raw distribution, exclusion and calibration warning stays visible. An inconclusive correct whole variant remains preserved under its experimental ref.
+
+This focused comparison is selection evidence, not seven-family parity. Only a selected variant proceeds to the full main/published evaluation and candidate-specific API/ABI, size, owned-memory, browser and hero checks. Whole-process or RSS totals are excluded. Stop optimization once parity or better is verified across the full scope. The draft stack stays held and unmerged.
+
+## Authenticated package
+
+The combined archive is `383fcbdd1cc12e59a4e563e55527aaa1f3f31e442b8ebfaaf26802063b4990bd`, 3,198,611 bytes. Its shipping shaper SHA is `055549d52d1fa7233687863e609a939bc00d080fc0e9e9adeba30de5160b8d35`; matching named Wasm is `8236d1b69ec14c6da2663f1e314f70fca0a70eab7c3392a010722b68ea8952bb`, 1,791,056 bytes. The named workflow verifies exact executable bytes with SIMD enabled and the unchanged optimizer policy. [Its full manifest](evidence/named-wasm-manifest.json.raw) records the build checkout at base `83ccb823` with the then-uncommitted experiment. [The complete ten-file source/harness diff](evidence/source.diff.raw), SHA `ae89f75b564e0638b2560a31cddfdf3ad9e0e4735d5fdf2aaaff459fc7993e80`, preserves those inputs. The [pre-timing freeze](evidence/v3-combined-freeze.json.raw) identifies clean commit `8f62b707`, 713 Glyph source files, 444 maintained harness inputs, supplementary hashes for all ten changed files, and the exact same built diff. Its SHA is `8f8064c54593392509c667bdf6e73759ef810e67c8d365f3ba5126f934c86d12`. The maintained harness digest is `c9f312d3b57cde2ed49b526955cf9f7eb6646e4f757dd5281a2d49005b4c0169`; all identities and input hashes still matched after timing.
+
+The independent reference remains the unchanged single-owner archive `06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be`. It is not a main or published baseline; this experiment asks whether V3 improves that exact candidate. The previous main/published matrix remains separate.
+
+## Complete-operation result
+
+One command compared all four callbacks, eight blocks each, with single-call timing and 21 untimed warmup calls per block. All four identities matched, with no baseline-check failure, timing-mode mismatch or skipped comparison. Percentiles are nearest rank over the saved retained samples, in milliseconds. Baseline here means the frozen single-owner candidate, not main or published 0.1.0.
+
+| Complete callback                                    | Frozen candidate n; p50 / p90 / p95 ms |   Candidate + V3 n; p50 / p90 / p95 ms |
+| ---------------------------------------------------- | -------------------------------------: | -------------------------------------: |
+| Rewrite 512 labels                                   |    184; 8.325208 / 8.803042 / 8.944167 |    200; 8.337834 / 8.868584 / 9.068291 |
+| Publish 1024 labels                                  | 128; 17.213917 / 17.940000 / 18.062334 | 128; 17.176875 / 17.954166 / 18.107958 |
+| First-label same-length scene publication among 1000 |    272; 1.675208 / 1.846500 / 1.895375 |    288; 1.697625 / 2.118250 / 4.633417 |
+| Repeated first-label setter in a one-label scene     |    584; 0.120833 / 0.153709 / 0.165208 |    600; 0.126541 / 0.160625 / 0.183666 |
+
+Both dense distributions overlap across blocks. V3 is lower in four and higher in four corresponding block positions for each dense callback; these are sequential arms, not paired simultaneous measurements. The block confidence intervals include zero: dense512 −0.8% to +2.2%, dense1024 −1.1% to +1.2%. The ordinary data do not establish the required dense gain, regardless of Labs' separate 5% neutral classification. Preserve the correct complete variant for possible future combinations; do not keep tuning its iterator here.
+
+The sparse guard retains one elevated V3 block median of 2.911834 ms and a maximum raw sample of 18.835542 ms. Its other seven medians are 1.637917–1.691834 ms. The one-label setter is noisy and software-calibration affected in both arms. Neither is used alone as a regression verdict or an explanation of cause. All eight block medians and absolute distributions are in [the export](evidence/frontier-absolute-results.json.raw); [reference raw](evidence/frontier-baseline.json.raw) and [V3 raw](evidence/frontier-candidate.json.raw) retain every saved sample and tail.
+
+Labs reports median between-block spread of ±1.5% for the reference and ±1.2% for V3, with comparison resolution ±2.0% and ±1.7%. The setter is separately calibration-affected (±3.9% / ±5.3%) and noisy (±17.0% / ±16.6%). These are software-loop diagnostics, not measured hardware frequency. Preflight idle observations were 71.6% and 79.9%, postflight 70.63–75.75%; the unrelated text-repository Vite process remained running and untouched. No owned heavy job overlapped timing. No load observation establishes core placement or rules out contention.
+
+All 238 JavaScript members are byte-identical between packages: 876,353 raw bytes and 299,207 bytes summed across independently Node-gzipped level-9 members. Shipping shaper grows from 1,610,555 / 599,761 raw/gzip bytes to 1,611,109 / 601,177, a cost of 554 raw / 1,416 gzip bytes. The first size export accidentally matched zero JS names; its failed-method receipt remains beside the corrected export and does not supply the JS values above. No process or RSS memory result is used. This unselected experiment did not advance to candidate-specific owned-memory, browser or hero acceptance, and therefore has no such new result.
+
+A [separate source audit](evidence/cursor-reuse-source-audit.md.raw) identifies possible reuse of existing call-local program metadata across owners. It is not part of this variant, has no measured latency gain and does not justify automatically starting another helper experiment. Its exact lookup opportunity and limits remain available for the next source-backed decision.

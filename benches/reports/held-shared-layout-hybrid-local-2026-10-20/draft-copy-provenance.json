@@ -1,0 +1,313 @@
+{
+  "status": "EVIDENCE PACKET: final measured E3 three-arm capture; E3 live-path preservation/restoration and source commit remain pending at source stage",
+  "copiedUtc": "2026-10-20T20:31:39.188289+00:00",
+  "rawExclusions": "No packages, profiles, raw timed samples, WAT, build outputs, scratch installs, or raw command logs copied. Source paths in receipts identify this capture and are not portable prerequisites.",
+  "copies": [
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/absolute-distributions.json",
+      "copy": "absolute-distributions.json",
+      "sourceSha256": "61dfed13939d8f78538f7b81f1d63cea3afa0d91f33f330277e0905aaf7d53a3",
+      "sourceBytes": 493799,
+      "targetSha256": "61dfed13939d8f78538f7b81f1d63cea3afa0d91f33f330277e0905aaf7d53a3",
+      "targetBytes": 493799
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/allocator-work-comparison.json",
+      "copy": "allocator-work-comparison.json",
+      "sourceSha256": "5ac705f2869a4190f08743d6c97354dae3aa7f408daa92faba16f177c7c4f3b1",
+      "sourceBytes": 14250,
+      "targetSha256": "5ac705f2869a4190f08743d6c97354dae3aa7f408daa92faba16f177c7c4f3b1",
+      "targetBytes": 14250
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/artifact-member-inventory-pre-named.json",
+      "copy": "artifact-member-inventory-pre-named.json",
+      "sourceSha256": "7049df5f2644457fd03c0ae4f4528678df12e01bedc0e60e3aed3e6f992d06ba",
+      "sourceBytes": 415732,
+      "targetSha256": "7049df5f2644457fd03c0ae4f4528678df12e01bedc0e60e3aed3e6f992d06ba",
+      "targetBytes": 415732
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/ascii-browser-fixture-scope.json",
+      "copy": "ascii-browser-fixture-scope.json",
+      "sourceSha256": "631edd18c8fed164da9d51726c79049076508069d327a85eff7b63624021e05f",
+      "sourceBytes": 3831,
+      "targetSha256": "631edd18c8fed164da9d51726c79049076508069d327a85eff7b63624021e05f",
+      "targetBytes": 3831
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/browser-oracle-comparison.json",
+      "copy": "browser-oracle-comparison.json",
+      "sourceSha256": "a71c5ab755146acb0e3016837692452f3838461a99d3373d3f7ea640fe497fe4",
+      "sourceBytes": 14116,
+      "targetSha256": "a71c5ab755146acb0e3016837692452f3838461a99d3373d3f7ea640fe497fe4",
+      "targetBytes": 14116
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate-source-freeze.json",
+      "copy": "candidate-source-freeze.json",
+      "sourceSha256": "45129f1d80292a19e38bd4c3434ac7373dddf92825d51910413e6555b0efaff7",
+      "sourceBytes": 133506,
+      "targetSha256": "45129f1d80292a19e38bd4c3434ac7373dddf92825d51910413e6555b0efaff7",
+      "targetBytes": 133506
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/cleanup.json",
+      "copy": "cleanup.json",
+      "sourceSha256": "6ba9db7d81296e3b326f3813fc8447446d7cd7539692c6c7c7c9ab27fa45d875",
+      "sourceBytes": 4481,
+      "targetSha256": "6ba9db7d81296e3b326f3813fc8447446d7cd7539692c6c7c7c9ab27fa45d875",
+      "targetBytes": 4481
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/comparisons-all.json",
+      "copy": "comparisons-all.json",
+      "sourceSha256": "c9c816dd1e7709ee840869a05f4c2959c25ff44e3cf3ebdabc8a283e068986de",
+      "sourceBytes": 811889,
+      "targetSha256": "c9c816dd1e7709ee840869a05f4c2959c25ff44e3cf3ebdabc8a283e068986de",
+      "targetBytes": 811889
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/comparisons-all.md",
+      "copy": "comparisons-all.md",
+      "sourceSha256": "18eb170accc53170aa6c15299f6682c091130a6b14413263773a04ea95efb520",
+      "sourceBytes": 246193,
+      "targetSha256": "18eb170accc53170aa6c15299f6682c091130a6b14413263773a04ea95efb520",
+      "targetBytes": 246193
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/consolidated-gate-plan.json",
+      "copy": "consolidated-gate-plan.json",
+      "sourceSha256": "8f2e35cbfe344b99d0f9cc6653679d8cc5203b33228021bbb2ca9f1e4e1bc092",
+      "sourceBytes": 20398,
+      "targetSha256": "8f2e35cbfe344b99d0f9cc6653679d8cc5203b33228021bbb2ca9f1e4e1bc092",
+      "targetBytes": 20398
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/downstream-gate-plan.json",
+      "copy": "downstream-gate-plan.json",
+      "sourceSha256": "d456d81235af72107d6e82c8e56995001fbad7ad16956cf4f08622da4e5f34e7",
+      "sourceBytes": 25225,
+      "targetSha256": "d456d81235af72107d6e82c8e56995001fbad7ad16956cf4f08622da4e5f34e7",
+      "targetBytes": 25225
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/final-downstream-identity-verification.json",
+      "copy": "final-downstream-identity-verification.json",
+      "sourceSha256": "bc48bcae86e7546f50c47058747c20eb48e845d7a3261407746d190815049aab",
+      "sourceBytes": 2922,
+      "targetSha256": "bc48bcae86e7546f50c47058747c20eb48e845d7a3261407746d190815049aab",
+      "targetBytes": 2922
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/hero-gate-factual-inventory.md",
+      "copy": "hero-gate-factual-inventory.md",
+      "sourceSha256": "9462e6569a4a78c5afc1890dbfa340ea78f396050fb516064087a852448de761",
+      "sourceBytes": 9908,
+      "targetSha256": "9462e6569a4a78c5afc1890dbfa340ea78f396050fb516064087a852448de761",
+      "targetBytes": 9908
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/implementation-brief.md",
+      "copy": "implementation-brief.md",
+      "sourceSha256": "6dd3deed83e4405610f7b86f799ceb542911ee735fe0023eae90dfa2a891ea8e",
+      "sourceBytes": 8475,
+      "targetSha256": "6dd3deed83e4405610f7b86f799ceb542911ee735fe0023eae90dfa2a891ea8e",
+      "targetBytes": 8475
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/independent-architecture-reset.md",
+      "copy": "independent-architecture-reset.md",
+      "sourceSha256": "037e6b6011d832fc79e4c2f707059971d0ecd437572b6d13d954cb0d4d4fa23f",
+      "sourceBytes": 32426,
+      "targetSha256": "15033d3e3a4fe756e058310f26455a1d44bc596aeac43807a0a20be02d46e70b",
+      "targetBytes": 32404,
+      "transformation": {
+        "kind": "one exact Markdown link substitution",
+        "old": "../../held-rerun-20261019/repo/.agents/docs/planning/decisions/retained-prepare-publish.md",
+        "new": "../../../.agents/docs/planning/decisions/retained-prepare-publish.md"
+      }
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/independent-ingress-audit.md",
+      "copy": "independent-ingress-audit.md",
+      "sourceSha256": "ea17f1d994dc409c7f127812acb438f027d219c9220a404d98cf669f3b138536",
+      "sourceBytes": 8541,
+      "targetSha256": "ea17f1d994dc409c7f127812acb438f027d219c9220a404d98cf669f3b138536",
+      "targetBytes": 8541
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/matrix-all-arms-integrity.json",
+      "copy": "matrix-all-arms-integrity.json",
+      "sourceSha256": "49ed90e5ad4be538f2dcf12500252e39691407179ea10cf0788cdae1e594c7a7",
+      "sourceBytes": 314618,
+      "targetSha256": "49ed90e5ad4be538f2dcf12500252e39691407179ea10cf0788cdae1e594c7a7",
+      "targetBytes": 314618
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/memory-presentation-summary.json",
+      "copy": "memory-presentation-summary.json",
+      "sourceSha256": "f6f681c4ffd388c296e059e0d0a0c4e11d8b14e19a8442931f934d8388c22729",
+      "sourceBytes": 28124,
+      "targetSha256": "f6f681c4ffd388c296e059e0d0a0c4e11d8b14e19a8442931f934d8388c22729",
+      "targetBytes": 28124
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/node-memory-summary.json",
+      "copy": "node-memory-summary.json",
+      "sourceSha256": "1190ea93e4d51b301fa00d3a76ba7d1052d13d7cdc61d7e819a27f090a0c80fc",
+      "sourceBytes": 3060,
+      "targetSha256": "1190ea93e4d51b301fa00d3a76ba7d1052d13d7cdc61d7e819a27f090a0c80fc",
+      "targetBytes": 3060
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/package-artifact-summary.json",
+      "copy": "package-artifact-summary.json",
+      "sourceSha256": "a2f78b9420a131fd0f46d8b08b8875e4d64fffb5c31cee58dd04a517d9fe17e7",
+      "sourceBytes": 29072,
+      "targetSha256": "a2f78b9420a131fd0f46d8b08b8875e4d64fffb5c31cee58dd04a517d9fe17e7",
+      "targetBytes": 29072
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/post-named-authentication.json",
+      "copy": "post-named-authentication.json",
+      "sourceSha256": "23644800557fb654fe23b1355c24febafb73e3e2e22a26bd64e1685fe2b467e3",
+      "sourceBytes": 1643,
+      "targetSha256": "23644800557fb654fe23b1355c24febafb73e3e2e22a26bd64e1685fe2b467e3",
+      "targetBytes": 1643
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/ci-a829-status3/stdout.log",
+      "copy": "preceding-a829-ci-terminal.json",
+      "sourceSha256": "b61ca3c047f8422038d36e3a5a43aa9a42477fd11184f588ef782cfa8ea9eb48",
+      "sourceBytes": 15134,
+      "targetSha256": "b61ca3c047f8422038d36e3a5a43aa9a42477fd11184f588ef782cfa8ea9eb48",
+      "targetBytes": 15134
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/procedural-unwrapped-allocator-artifact.json",
+      "copy": "procedural-unwrapped-allocator-artifact.json",
+      "sourceSha256": "d774beb4ab2e331107376a39db901f883406b1129669dc13331f265f594511db",
+      "sourceBytes": 1611,
+      "targetSha256": "d774beb4ab2e331107376a39db901f883406b1129669dc13331f265f594511db",
+      "targetBytes": 1611
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/procedural-wrapper-collision.json",
+      "copy": "procedural-wrapper-collision.json",
+      "sourceSha256": "d32b456ea3054de44235dc5346a66e4ceb9a4ecf427f7a9c9ea1c3cd332b70ea",
+      "sourceBytes": 424,
+      "targetSha256": "d32b456ea3054de44235dc5346a66e4ceb9a4ecf427f7a9c9ea1c3cd332b70ea",
+      "targetBytes": 424
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/production-package-size.json",
+      "copy": "production-package-size.json",
+      "sourceSha256": "20729369c54fe2a7611a476a2c7d67d84dda22804e3b6a9b12eb0755bc12b977",
+      "sourceBytes": 10928,
+      "targetSha256": "20729369c54fe2a7611a476a2c7d67d84dda22804e3b6a9b12eb0755bc12b977",
+      "targetBytes": 10928
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/remote-refs-before-matrix.json",
+      "copy": "remote-refs-before-matrix.json",
+      "sourceSha256": "59367c2bd01c3fe18e5e3201663fe15244f44b99e51f927211f18c27e2c7ab9b",
+      "sourceBytes": 549,
+      "targetSha256": "59367c2bd01c3fe18e5e3201663fe15244f44b99e51f927211f18c27e2c7ab9b",
+      "targetBytes": 549
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scoped-review-before-physical-oracle.md",
+      "copy": "scoped-review-before-physical-oracle.md",
+      "sourceSha256": "b98d63ca2751824c36ad40108283a49386c5e39e84ae349c2bdcff7159dbaf2d",
+      "sourceBytes": 5275,
+      "targetSha256": "b98d63ca2751824c36ad40108283a49386c5e39e84ae349c2bdcff7159dbaf2d",
+      "targetBytes": 5275
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scoped-review.md",
+      "copy": "scoped-review.md",
+      "sourceSha256": "aebe3b846340a1047163cb62ffea25d582c1f195f23a42722a5c9c8ab541db88",
+      "sourceBytes": 5078,
+      "targetSha256": "aebe3b846340a1047163cb62ffea25d582c1f195f23a42722a5c9c8ab541db88",
+      "targetBytes": 5078
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/size-and-binary-abi-summary.json",
+      "copy": "size-and-binary-abi-summary.json",
+      "sourceSha256": "d313c789e28b3330b9f7060ea395bc20e2032301acf2eb3c143c3af7ceb24e21",
+      "sourceBytes": 8552,
+      "targetSha256": "d313c789e28b3330b9f7060ea395bc20e2032301acf2eb3c143c3af7ceb24e21",
+      "targetBytes": 8552
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/size-comparison.json",
+      "copy": "size-comparison.json",
+      "sourceSha256": "4b70fc87e0a10186e8402445ade7dccab01b1c8d3eb742f93009b6fff6fb6f42",
+      "sourceBytes": 2914,
+      "targetSha256": "4b70fc87e0a10186e8402445ade7dccab01b1c8d3eb742f93009b6fff6fb6f42",
+      "targetBytes": 2914
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/size-helper-provenance.json",
+      "copy": "size-helper-provenance.json",
+      "sourceSha256": "784847f12c1f88257867b7759cede2d34ac07c701ba096065ef8ed7ecc9e8b52",
+      "sourceBytes": 574,
+      "targetSha256": "784847f12c1f88257867b7759cede2d34ac07c701ba096065ef8ed7ecc9e8b52",
+      "targetBytes": 574
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/static-native-final-summary.json",
+      "copy": "static-native-final-summary.json",
+      "sourceSha256": "46fc2a69dad366de80ca90c422334232f2cc55a20f6ee9f63d1e3c0408236feb",
+      "sourceBytes": 3743,
+      "targetSha256": "46fc2a69dad366de80ca90c422334232f2cc55a20f6ee9f63d1e3c0408236feb",
+      "targetBytes": 3743
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/static-native-gate-summary.json",
+      "copy": "static-native-gate-summary.json",
+      "sourceSha256": "6767a2a0d46930feffc7e4f5dc9892a4f9c01ddd6320aa455acd3a86c836e6cd",
+      "sourceBytes": 2556,
+      "targetSha256": "6767a2a0d46930feffc7e4f5dc9892a4f9c01ddd6320aa455acd3a86c836e6cd",
+      "targetBytes": 2556
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/visual-inspection.json",
+      "copy": "visual-inspection.json",
+      "sourceSha256": "d70c78bcfd1842703c0d6c5eab47dbda7579f8ca821013abfb10fe5700b9b03d",
+      "sourceBytes": 1478,
+      "targetSha256": "d70c78bcfd1842703c0d6c5eab47dbda7579f8ca821013abfb10fe5700b9b03d",
+      "targetBytes": 1478
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/wasm-abi-and-section-evidence.json",
+      "copy": "wasm-abi-and-section-evidence.json",
+      "sourceSha256": "ee0c1d82866826f3e523164afe89cf9600d217d3e59dcfdff11c19913911e2b6",
+      "sourceBytes": 71257,
+      "targetSha256": "ee0c1d82866826f3e523164afe89cf9600d217d3e59dcfdff11c19913911e2b6",
+      "targetBytes": 71257
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/workspace-dist-comparison.json",
+      "copy": "workspace-dist-comparison.json",
+      "sourceSha256": "4470beb512a929ccb30af1faad633e04c4f642fdacd702523f93971846bbc780",
+      "sourceBytes": 284094,
+      "targetSha256": "4470beb512a929ccb30af1faad633e04c4f642fdacd702523f93971846bbc780",
+      "targetBytes": 284094
+    }
+  ],
+  "authoredPacketOverview": {
+    "path": "README.md",
+    "sha256": "b6f9c9b4f38f959a0a018454ddd570a58392005fd10699daf83f3c822c5c57a2",
+    "bytes": 11392,
+    "source": "original draft authored from the copied final evidence; no byte-identical source document"
+  },
+  "relocatedDecisionLinkCheck": {
+    "targetPath": "../../../.agents/docs/planning/decisions/retained-prepare-publish.md",
+    "scope": "valid after copying this folder to WORK/benches/reports/held-shared-layout-hybrid-local-2026-10-20/",
+    "targetExistsInHeldWorktree": true
+  },
+  "packetDestination": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/reports/held-shared-layout-hybrid-local-2026-10-20",
+  "copyMethod": "File bytes copied directly from authenticated draft; JSON/Markdown receipts were not formatted or rewritten during final placement."
+}

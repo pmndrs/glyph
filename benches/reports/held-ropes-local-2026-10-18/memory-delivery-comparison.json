@@ -1,0 +1,270 @@
+{
+  "format": "glyph-physical-byte-elision-final-static-comparison-v2",
+  "deliveryPipelineComparison": {
+    "source": "existing package-size workflow outputs on Darwin arm64",
+    "beforeReport": "/private/tmp/glyph-held-20261016/.cache/held-local-20261016/prepare-receipt/delivery-sizes.json",
+    "candidateReport": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/delivery-sizes.json",
+    "candidateCommand": "mise exec -- pnpm scripts run benchmark:package-size -- --output=/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/delivery-sizes.json",
+    "workflowScriptSha256": "f16bbebc0e289497d2c641858b0ae5e4e736136b172798558b4775db631d4e8b",
+    "workflowRunnerSha256": "215bf5e3335677484157b2a29798c8850ede22199bc53c38a52add4393bd1400",
+    "compressionInWorkflow": "Node zlib gzipSync(level 9) and Brotli quality 11 per benches/scripts/measure-package-sizes.mts; separate from archive direct gzip9 calculations",
+    "legacySevenRows": [
+      {
+        "id": "browser-core",
+        "before": {
+          "rawBytes": 361294,
+          "minifiedBytes": 357461,
+          "gzipBytes": 87922,
+          "brotliBytes": 73029
+        },
+        "candidate": {
+          "rawBytes": 361294,
+          "minifiedBytes": 357461,
+          "gzipBytes": 87922,
+          "brotliBytes": 73029
+        },
+        "delta": {
+          "rawBytes": 0,
+          "minifiedBytes": 0,
+          "gzipBytes": 0,
+          "brotliBytes": 0
+        },
+        "beforeSha256": "a8f3209978e9e33deb39c618d321bed3ef517d6fc4938f63fdfa3c7fef377726",
+        "candidateSha256": "a8f3209978e9e33deb39c618d321bed3ef517d6fc4938f63fdfa3c7fef377726"
+      },
+      {
+        "id": "text-shaper-wasm",
+        "before": {
+          "rawBytes": 1585989,
+          "minifiedBytes": 1585989,
+          "gzipBytes": 590255,
+          "brotliBytes": 459365
+        },
+        "candidate": {
+          "rawBytes": 1586976,
+          "minifiedBytes": 1586976,
+          "gzipBytes": 590781,
+          "brotliBytes": 459484
+        },
+        "delta": {
+          "rawBytes": 987,
+          "minifiedBytes": 987,
+          "gzipBytes": 526,
+          "brotliBytes": 119
+        },
+        "beforeSha256": "6f7afa1c596dc7c08d2138a67c4ae955d8aff5824602452cb6d12f30f2df3bbd",
+        "candidateSha256": "52e6c93589926675c52bccf0d880b2005f9544d9322f4273af364ca47a7c2adb"
+      },
+      {
+        "id": "three-runtime-js",
+        "before": {
+          "rawBytes": 565624,
+          "minifiedBytes": 557917,
+          "gzipBytes": 138635,
+          "brotliBytes": 113736
+        },
+        "candidate": {
+          "rawBytes": 565624,
+          "minifiedBytes": 557917,
+          "gzipBytes": 138635,
+          "brotliBytes": 113736
+        },
+        "delta": {
+          "rawBytes": 0,
+          "minifiedBytes": 0,
+          "gzipBytes": 0,
+          "brotliBytes": 0
+        },
+        "beforeSha256": "f4bacc8f373656729203c50dd2e146ba6a2d29ab6037090d97be0ab2ba043987",
+        "candidateSha256": "f4bacc8f373656729203c50dd2e146ba6a2d29ab6037090d97be0ab2ba043987"
+      },
+      {
+        "id": "react-runtime-js",
+        "before": {
+          "rawBytes": 567273,
+          "minifiedBytes": 558700,
+          "gzipBytes": 138571,
+          "brotliBytes": 114074
+        },
+        "candidate": {
+          "rawBytes": 567273,
+          "minifiedBytes": 558700,
+          "gzipBytes": 138571,
+          "brotliBytes": 114074
+        },
+        "delta": {
+          "rawBytes": 0,
+          "minifiedBytes": 0,
+          "gzipBytes": 0,
+          "brotliBytes": 0
+        },
+        "beforeSha256": "a19a9b30da2bfa59110023578464c2a956a8e8534164baa021101667f18257b1",
+        "candidateSha256": "a19a9b30da2bfa59110023578464c2a956a8e8534164baa021101667f18257b1"
+      },
+      {
+        "id": "vue-runtime-js",
+        "before": {
+          "rawBytes": 566257,
+          "minifiedBytes": 558377,
+          "gzipBytes": 138411,
+          "brotliBytes": 114073
+        },
+        "candidate": {
+          "rawBytes": 566257,
+          "minifiedBytes": 558377,
+          "gzipBytes": 138411,
+          "brotliBytes": 114073
+        },
+        "delta": {
+          "rawBytes": 0,
+          "minifiedBytes": 0,
+          "gzipBytes": 0,
+          "brotliBytes": 0
+        },
+        "beforeSha256": "ae200ca75a4913185237022baa03b78a245cac9bf6e4e700a6ee924034c01574",
+        "candidateSha256": "ae200ca75a4913185237022baa03b78a245cac9bf6e4e700a6ee924034c01574"
+      },
+      {
+        "id": "r3f-hello-world-production-js",
+        "before": {
+          "rawBytes": 2640471,
+          "minifiedBytes": 2640471,
+          "gzipBytes": 743530,
+          "brotliBytes": 565768
+        },
+        "candidate": {
+          "rawBytes": 2640471,
+          "minifiedBytes": 2640471,
+          "gzipBytes": 743531,
+          "brotliBytes": 565870
+        },
+        "delta": {
+          "rawBytes": 0,
+          "minifiedBytes": 0,
+          "gzipBytes": 1,
+          "brotliBytes": 102
+        },
+        "beforeSha256": "f332b21c7996d038eec24e4c88f86cf5e1e6a2ed6beff4b073edef3918e749da",
+        "candidateSha256": "207bafb8344db64aafd1cb5fc5e22c3faf9453a45a3be2c4669948ccefe360fd"
+      },
+      {
+        "id": "tres-playground-production-js",
+        "before": {
+          "rawBytes": 2036442,
+          "minifiedBytes": 2036442,
+          "gzipBytes": 567816,
+          "brotliBytes": 454744
+        },
+        "candidate": {
+          "rawBytes": 2036442,
+          "minifiedBytes": 2036442,
+          "gzipBytes": 567819,
+          "brotliBytes": 454784
+        },
+        "delta": {
+          "rawBytes": 0,
+          "minifiedBytes": 0,
+          "gzipBytes": 3,
+          "brotliBytes": 40
+        },
+        "beforeSha256": "a14ea04aa700a25e8d4ccf300fabac596aa6c9afd3f4c5e67991b96b39f7fbd7",
+        "candidateSha256": "2e6ac279d57ff3b5051a3dc210a910119b69583c6fc4f52ebfb7032d89f9c95a"
+      }
+    ]
+  },
+  "memoryPairAudit": {
+    "sameWorkloadEvidence": {
+      "phaseNameCycleSequenceEqual": true,
+      "phaseCountBefore": 71,
+      "phaseCountCandidate": 71,
+      "methodEqual": true,
+      "captureWorkflowSha256Before": "2844ffacdc476a4a954572c53ba94e9d8de4d734b4f0ef65f7250d5167032c16",
+      "captureWorkflowSha256Candidate": "2844ffacdc476a4a954572c53ba94e9d8de4d734b4f0ef65f7250d5167032c16",
+      "fixtureSourcesEqual": true,
+      "runtimeJsCountBefore": 236,
+      "runtimeJsCountCandidate": 236,
+      "runtimeJsHashesEqual": true,
+      "toolchainEqual": true,
+      "consumerPeersEqual": true,
+      "machine": {
+        "platform": "darwin",
+        "architecture": "arm64"
+      },
+      "consumerLockSha256Before": "542af33fa60ce1b43406c55e65e0cbb303efebf7d422842f519b2f90dcc6d46b",
+      "consumerLockSha256Candidate": "95e4c2c6f01e5c9d2bbe31cdf2637a7a4db4fc15aed5316f783d2b60736457f9",
+      "packageSha256Before": "2a7f0317a49319203aac935a8d7387eafcc9f78443ff6de31c699c4605412627",
+      "packageSha256Candidate": "880255c15c9822ded79cc934dba755070348faf729bc96af9cd6f450a57cb332",
+      "shippingWasmSha256Before": "6f7afa1c596dc7c08d2138a67c4ae955d8aff5824602452cb6d12f30f2df3bbd",
+      "shippingWasmSha256Candidate": "52e6c93589926675c52bccf0d880b2005f9544d9322f4273af364ca47a7c2adb",
+      "scope": "same workload/harness/runtime-JS/fixtures/toolchain/peer versions and host; package Wasm artifact differs; lock hash differs, so paired values are reported with that caveat",
+      "installedJsArchiveMatch": {
+        "oldCaptureArchiveSha256": "2a7f0317a49319203aac935a8d7387eafcc9f78443ff6de31c699c4605412627",
+        "oldCaptureArchivePath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261016/prepare-receipt/package/pmndrs-glyph-0.1.0.tgz",
+        "candidateArchiveSha256": "880255c15c9822ded79cc934dba755070348faf729bc96af9cd6f450a57cb332",
+        "candidateArchivePath": "/private/tmp/glyph-held-20261016/.cache/held-local-20261018/physical-byte-elision/package/pmndrs-glyph-0.1.0.tgz",
+        "oldManifestCaptureJsonSha256": "fd1289422784d9a60132ec25a13b188dfdcf11057d7274ad060b7b15f91083c1",
+        "candidateManifestCaptureJsonSha256": "0692784bbedc55d45923964d285ccf70564a4f17321ea26c2cd9674fc70da50d",
+        "oldCaptureInstalledJsCount": 236,
+        "candidateCaptureInstalledJsCount": 236,
+        "oldInstalledJsMatchesOldArchive": true,
+        "candidateInstalledJsMatchesCandidateArchive": true,
+        "oldAndCandidateInstalledJsMapsEqual": true,
+        "exactPathAndShaMatchesEach": 236,
+        "mismatchesEach": 0,
+        "meaning": "The two JS paths changed against the separate preOptimization bec6 archive; none changed between previous2a7 and candidate."
+      }
+    },
+    "before": {
+      "maxRequestedLiveAtPhaseEnd": 40345423,
+      "maxRequestedPeakAtPhaseEnd": 40553931,
+      "maxWasmPages": 727,
+      "retainedBaseline": {
+        "requestedLive": 7641016,
+        "requestedPeak": 7641016,
+        "allocations": 0,
+        "reallocations": 0,
+        "deallocations": 0,
+        "cumulativeRequested": 0,
+        "wasmPages": 727
+      },
+      "finalAfterTeardown": {
+        "requestedLive": 7641016,
+        "requestedPeak": 7641016,
+        "allocations": 0,
+        "reallocations": 0,
+        "deallocations": 0,
+        "cumulativeRequested": 0,
+        "wasmPages": 727
+      }
+    },
+    "candidate": {
+      "maxRequestedLiveAtPhaseEnd": 39737871,
+      "maxRequestedPeakAtPhaseEnd": 39946379,
+      "maxWasmPages": 721,
+      "retainedBaseline": {
+        "requestedLive": 7641016,
+        "requestedPeak": 7641016,
+        "allocations": 0,
+        "reallocations": 0,
+        "deallocations": 0,
+        "cumulativeRequested": 0,
+        "wasmPages": 721
+      },
+      "finalAfterTeardown": {
+        "requestedLive": 7641016,
+        "requestedPeak": 7641016,
+        "allocations": 0,
+        "reallocations": 0,
+        "deallocations": 0,
+        "cumulativeRequested": 0,
+        "wasmPages": 721
+      }
+    },
+    "deltaCandidateMinusBefore": {
+      "maxRequestedLiveAtPhaseEnd": -607552,
+      "maxRequestedPeakAtPhaseEnd": -607552,
+      "maxWasmPages": -6
+    }
+  },
+  "archiveComparatorCorrection": "The earlier beforeHeld key was actually the bec6 preOptimization archive; canonical key is now preOptimization. A separate previous2a7 comparator is included from existing authenticated receipts, with unavailable same-method gzip fields explicitly null."
+}

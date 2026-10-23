@@ -1,0 +1,3 @@
+$ node benches/scripts/workflows.mts run benchmark:bitmap-native-work-replay -- --trace /Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-replay-auth/full-05/events.jsonl --output /Volumes/Depot/Developer/glyph/.cache/held-short-shape-boundary-20261021/evidence-final2
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/pmndrs_glyph_shaper-411c98d278b4d570)

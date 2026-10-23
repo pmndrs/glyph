@@ -1,0 +1,19 @@
+# Editorial paused-flow source review
+
+**Decision: scoped source clearance.** The paused editorial branch now returns only when its target width is exactly unchanged and the two committed flow regions match a projection from the current scene transforms. This addresses the width-only early return identified in `editorial-first-difference-review.md`: the first paused layout may move the body text plane, and the next frame now republishes the resulting projection. A stable later frame returns without another reflow. Camera and scene pan transforms also enter the same projection comparison.
+
+The comparison covers ordered region keys, rectangle kind and all four f32-normalized bounds, absent clips, optional exclusion presence/count, polygon kind and every normalized vertex, exclusion key, wrap side, and margins. `Text.flow` reads the desired state normalized by `Text.set`; `projectTextFlowBounds` returns normalized f32 polygon coordinates and margins. Exact numeric equality is therefore appropriate for the authored polygon. There is no cache, mask, or tolerance. The authored region bounds must be f32-rounded before comparison, as implemented. The length and kind checks match this workload's fixed two-rectangle producer; changed or missing fields cause publication.
+
+The scene proof listener is requested after the scene-only PNG is captured. It reprojects using the current camera, text plane, obstacle, and region bounds and throws if the committed flow is stale; glyph inspection occurs only after this check. The regression test uses real Three transforms and `projectTextFlowBounds` through the workload animator, with a small text set/measure host. It exercises animated-to-paused reflow, stability on a later paused frame, camera movement, and scene-level pan (the production `panBy` path). Its equality assertion reuses the production comparator, so the authenticated browser proof remains the stronger independent outcome check; the test still asserts a mismatch after the first paused layout and exact reflow counts thereafter.
+
+A followup static narrowing correction stores the committed polygon vertices in a local after the kind guard, so TypeScript retains the polygon type inside the `.every` callback. This does not change the compared values or the flow decision.
+
+The final test change types `onReflow` as `vi.fn<() => void>()`; its call-count assertions are unchanged. Oxfmt also collapsed the existing vertex equality callback to one line in `scene.ts`. Neither change alters the flow algorithm or proof.
+
+**Limits.** This was source review only. I did not run tests, build, browser capture, or pixel comparison. Source clearance does not imply the exact-zero RGBA gate passes; the previously observed lede float residual remains to be evaluated after fresh captures.
+
+## Reviewed file identity (SHA-256)
+
+- `benches/src/workloads/editorial/scene.ts`: `9d74a3f6787100e14404f07f2491a3f6c5cdc89fdfd0bfbcec4f61cd69d0c329`
+- `benches/src/workloads/editorial/scene.test.ts`: `d8b80bb9845aa24609b242cd05cec755047b08ea8e33e950fdea67ce5feb3bad`
+- `benches/src/surfaces/benchmark/scenes/editorial-scene-proof.ts`: `3df177a1757f91dfe6df703005f3a8aa22bfd5cb0f4435abddf70ec543df4f4d`

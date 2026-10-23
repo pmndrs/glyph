@@ -1,0 +1,64 @@
+{
+  "schema": "e3-final-downstream-identity-v1",
+  "worktree": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "sourceFreeze": {
+    "baseHead": "a829b86bfefcd0e39b6d947cb7a2571776cd06a0",
+    "frozenInputCount": 1059,
+    "mismatchCount": 0,
+    "mismatches": {},
+    "allMatch": true
+  },
+  "archives": {
+    "candidate": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "expectedSha256": "37c1e0882acfb16bc6ebc9e2538340b4a12eeff6d8006e0055e86423db3572e6",
+      "actualSha256": "37c1e0882acfb16bc6ebc9e2538340b4a12eeff6d8006e0055e86423db3572e6",
+      "matches": true,
+      "bytes": 3196557
+    },
+    "prior28fd": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "expectedSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+      "actualSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+      "matches": true,
+      "bytes": 3196121
+    },
+    "main": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+      "expectedSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "actualSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "matches": true,
+      "bytes": 3120073
+    },
+    "published010": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+      "expectedSha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+      "actualSha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+      "matches": true,
+      "bytes": 2271693
+    }
+  },
+  "candidateShaper": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/shaper-profile/candidate.wasm",
+    "sha256": "81153a6202caef528f235ae69d34ff0c8b2515c8c711af84b92db57b1f700aa6",
+    "manifestPath": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/candidate/shaper-profile/manifest.json",
+    "manifestSha256": "7182b44428cc13b6dd37f6ebc531f49e372711c655df9ec195e07ddf189ef67e",
+    "releaseSha256": "81153a6202caef528f235ae69d34ff0c8b2515c8c711af84b92db57b1f700aa6",
+    "archiveShippingSha256": "81153a6202caef528f235ae69d34ff0c8b2515c8c711af84b92db57b1f700aa6",
+    "matchesArchiveShipping": true
+  },
+  "packedDistWorkspaceComparison": {
+    "archiveDistMemberCount": 947,
+    "workspacePresentCompared": 947,
+    "mismatchCount": 0,
+    "mismatches": {},
+    "workspaceExtraDistFiles": [
+      ".tsbuildinfo",
+      "internal/raster-baker-profile.d.ts.map",
+      "internal/raster-baker-profile.js.map",
+      "internal/raster-baker-profile.d.ts",
+      "internal/raster-baker-profile.js"
+    ],
+    "allPackedMembersByteIdentical": true
+  }
+}

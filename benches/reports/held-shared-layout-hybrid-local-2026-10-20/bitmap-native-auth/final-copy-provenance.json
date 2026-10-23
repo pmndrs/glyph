@@ -1,0 +1,46 @@
+{
+  "recordedUtc": "2026-10-20T21:28:45.373353+00:00",
+  "copies": [
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-replay-auth/final-authentication-integrity.json",
+      "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-auth/final-authentication-integrity.json",
+      "bytes": 2210,
+      "sha256": "3f6546e86d43000b92a13e59100a8fff94409550b2ada786e12bc6105f33e4ed"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-replay-auth/shipping-rebuild-member-compare.json",
+      "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-auth/shipping-rebuild-member-compare.json",
+      "bytes": 635,
+      "sha256": "929f2c938a362be5cbbd9200053203063b920b0a4f08ac6bb4a22d8f42368092"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-auth-package-check/result.json",
+      "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-auth/package-check-result.json.raw",
+      "bytes": 624,
+      "sha256": "52b8f862562980689e2b7a8a3c13e294c6e3af0f4a86063b4885d78ee6e600f3",
+      "storage": "Raw JSON receipt retained verbatim under .json.raw so repository formatting cannot rewrite authenticated bytes."
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-auth-shipping-rebuild/result.json",
+      "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-auth/shipping-rebuild-result.json.raw",
+      "bytes": 491,
+      "sha256": "465671d2108c833689e5dcb5171d0fd778f079ad8a1e41e6a0300afc4ca25e56",
+      "storage": "Raw JSON receipt retained verbatim under .json.raw so repository formatting cannot rewrite authenticated bytes."
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-auth-shipping-full-05/result.json",
+      "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-auth/final-replay-result.json.raw",
+      "bytes": 799,
+      "sha256": "8d63952333d79ed9bde46e33fcc89000e820430ddebe4b60de3c046feea2ca14",
+      "storage": "Raw JSON receipt retained verbatim under .json.raw so repository formatting cannot rewrite authenticated bytes."
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-replay-auth/shipping-section-comparison.json",
+      "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/bitmap-native-auth/shipping-section-comparison.json.raw",
+      "bytes": 2265,
+      "sha256": "0ef65e1457cfa9a1aad5e9c01ad34f9f7ef31e1f624ef5159d4e4f9f1e114a02",
+      "storage": "Raw JSON receipt retained verbatim under .json.raw so repository formatting cannot rewrite authenticated bytes."
+    }
+  ],
+  "scope": "Byte-identical compact final receipts; raw trace/blob data remains local."
+}

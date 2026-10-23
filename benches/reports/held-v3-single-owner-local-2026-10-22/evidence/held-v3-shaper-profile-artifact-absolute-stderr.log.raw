@@ -1,0 +1,74 @@
+$ node benches/scripts/workflows.mts run glyph:shaper-profile-artifact -- --artifact /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/v3-combined/candidate/pmndrs-glyph-0.1.0.tgz --source-root /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo --output /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/v3-combined/candidate/shaper-profile-authenticated --simd 1 --one-caller-inline-max-function-size 0
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.24
+   Compiling zmij v1.0.23
+   Compiling libm v0.2.16
+   Compiling serde_core v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+warning: failed to connect to jobserver from environment variable `CARGO_MAKEFLAGS="-j --jobserver-fds=3,5 --jobserver-auth=3,5"`: cannot open file descriptor 3 from the jobserver environment variable value: Bad file descriptor (os error 9)
+  |
+  = note: the build environment is likely misconfigured
+
+warning: `unicode-ident` (lib) generated 1 warning (1 duplicate)
+warning: `itoa` (lib) generated 1 warning (1 duplicate)
+   Compiling once_cell v1.21.4
+warning: `memchr` (lib) generated 1 warning (1 duplicate)
+   Compiling scopeguard v1.2.0
+warning: `scopeguard` (lib) generated 1 warning (1 duplicate)
+   Compiling lock_api v0.4.14
+warning: `once_cell` (lib) generated 1 warning (1 duplicate)
+warning: `libm` (build script) generated 1 warning (1 duplicate)
+warning: `serde_core` (build script) generated 1 warning (1 duplicate)
+warning: `zmij` (build script) generated 1 warning (1 duplicate)
+warning: `serde_core` (build script) generated 1 warning (1 duplicate)
+warning: `serde_json` (build script) generated 1 warning (1 duplicate)
+warning: `proc-macro2` (build script) generated 1 warning (1 duplicate)
+warning: `serde_json` (build script) generated 1 warning (1 duplicate)
+warning: `quote` (build script) generated 1 warning
+warning: `lock_api` (lib) generated 1 warning (1 duplicate)
+   Compiling smallvec v1.15.2
+   Compiling bitflags v2.13.1
+warning: `itoa` (lib) generated 1 warning (1 duplicate)
+   Compiling allocator-api2 v0.4.0
+warning: `smallvec` (lib) generated 1 warning (1 duplicate)
+   Compiling unicode-bidi v0.3.18
+warning: `zmij` (lib) generated 1 warning (1 duplicate)
+   Compiling unicode-segmentation v1.13.3
+warning: `bitflags` (lib) generated 1 warning (1 duplicate)
+warning: `zmij` (lib) generated 1 warning (1 duplicate)
+   Compiling talc v5.0.4
+warning: `allocator-api2` (lib) generated 1 warning (1 duplicate)
+warning: `memchr` (lib) generated 1 warning (1 duplicate)
+warning: `talc` (lib) generated 1 warning (1 duplicate)
+warning: `proc-macro2` (lib) generated 1 warning (1 duplicate)
+warning: `unicode-segmentation` (lib) generated 1 warning (1 duplicate)
+   Compiling syn v2.0.119
+warning: `quote` (lib) generated 1 warning (1 duplicate)
+   Compiling core_maths v0.1.1
+   Compiling pmndrs-glyph-slug-core v0.0.0 (/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/rust/slug-core)
+warning: `core_maths` (lib) generated 1 warning (1 duplicate)
+warning: `unicode-bidi` (lib) generated 1 warning (1 duplicate)
+warning: `libm` (lib) generated 1 warning (1 duplicate)
+warning: `pmndrs-glyph-slug-core` (lib) generated 1 warning (1 duplicate)
+warning: `serde_core` (lib) generated 1 warning (1 duplicate)
+warning: `serde_core` (lib) generated 1 warning (1 duplicate)
+warning: `syn` (lib) generated 1 warning (1 duplicate)
+   Compiling bytemuck_derive v1.11.0
+warning: `serde_json` (lib) generated 1 warning (1 duplicate)
+   Compiling pmndrs-glyph-shaper v0.0.0 (/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/rust/shaper)
+warning: `pmndrs-glyph-shaper` (build script) generated 1 warning (1 duplicate)
+warning: `bytemuck_derive` (lib) generated 1 warning (1 duplicate)
+   Compiling bytemuck v1.25.2
+   Compiling font-types v0.12.2
+warning: `bytemuck` (lib) generated 1 warning (1 duplicate)
+   Compiling read-fonts v0.41.0
+warning: `font-types` (lib) generated 1 warning (1 duplicate)
+warning: `serde_json` (lib) generated 1 warning (1 duplicate)
+   Compiling harfrust v0.12.0
+warning: `read-fonts` (lib) generated 1 warning (1 duplicate)
+warning: `harfrust` (lib) generated 1 warning (1 duplicate)
+warning: `pmndrs-glyph-shaper` (lib) generated 1 warning (1 duplicate)
+    Finished `release` profile [optimized] target(s) in 21.58s

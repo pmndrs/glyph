@@ -1,0 +1,410 @@
+{
+  "kind": "bounded factual record of one sequential three-arm phase-observer profile run",
+  "generatedFromExistingReceiptsOnly": true,
+  "captureOrder": [
+    "main",
+    "published",
+    "held-e2"
+  ],
+  "captureMode": "one capture per arm, bulk-write/publication, count=1024, warmups=10, iterations=80, reads=none, publicationPath=scene, phaseObserver=old-new-1024; no --wasm override",
+  "repositoryHeadAtPreflight": "8061d7918006f6f15714c2bc37ac9515a2720fce",
+  "sourceHashesAtPreflight": {
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/profile-edit-sized-publication.mts": "efbad689f0e5c1fd9098a859db690b039efc4bfe7910d669b9d5b6f8a5a8d195",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/edit-sized-publication.profile.mts": "a58bc03aa617daca3ca48a71014978d0869eb16263ef3083730788be5044411b",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/fixture.ts": "34b97032e1f035d6b15ae385f4a6aa4e6cc0b78d9239dc14e8253a1a6644dfe3",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/support/package-labs-dependencies.mts": "4d1e1f5aeb982f985dc850d88cde1235c51960fd6e5ef25ceb3b75328fc555da",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/src/benchmark/cpu-profile-stage.mts": "1392af3692ed873abe18840d91fcfbfbc5ecfe68c5b42e2b242e2cbf2f2bb09d",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/inter-bitmap-16.font.glb": "acdca408ed169c7aa1c2791dbbc2982afa1939c56fbc59ef43cc38f7ff366c14",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/dot-gothic-16-bitmap-16-32.font.glb": "f1895ea3bf8b69ee7430940a2ccf5d398c7a5f8c469635845c4b4b3b457b112b",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/fredoka-issue-216-bitmap-16.font.glb": "2be09acf3c5ebd2d08859eb8d5282cf9018d70f8e84b4bda9eb80c410ff532c0"
+  },
+  "sourceHashesAfterAll": {
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/profile-edit-sized-publication.mts": "efbad689f0e5c1fd9098a859db690b039efc4bfe7910d669b9d5b6f8a5a8d195",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/edit-sized-publication.profile.mts": "a58bc03aa617daca3ca48a71014978d0869eb16263ef3083730788be5044411b",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/fixture.ts": "34b97032e1f035d6b15ae385f4a6aa4e6cc0b78d9239dc14e8253a1a6644dfe3",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/support/package-labs-dependencies.mts": "4d1e1f5aeb982f985dc850d88cde1235c51960fd6e5ef25ceb3b75328fc555da",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/src/benchmark/cpu-profile-stage.mts": "1392af3692ed873abe18840d91fcfbfbc5ecfe68c5b42e2b242e2cbf2f2bb09d",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/inter-bitmap-16.font.glb": "acdca408ed169c7aa1c2791dbbc2982afa1939c56fbc59ef43cc38f7ff366c14",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/dot-gothic-16-bitmap-16-32.font.glb": "f1895ea3bf8b69ee7430940a2ccf5d398c7a5f8c469635845c4b4b3b457b112b",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/fredoka-issue-216-bitmap-16.font.glb": "2be09acf3c5ebd2d08859eb8d5282cf9018d70f8e84b4bda9eb80c410ff532c0"
+  },
+  "sourceHashesUnchangedFromPreflight": true,
+  "hostBeforeHeldE2": {
+    "utc": "2026-10-20T22:04:53Z",
+    "loadavg": [
+      1.8330078125,
+      1.83837890625,
+      1.99462890625
+    ],
+    "pmset_therm": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded\n",
+    "archive": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "archive_sha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+    "sources": {
+      "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/profile-edit-sized-publication.mts": "efbad689f0e5c1fd9098a859db690b039efc4bfe7910d669b9d5b6f8a5a8d195",
+      "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/edit-sized-publication.profile.mts": "a58bc03aa617daca3ca48a71014978d0869eb16263ef3083730788be5044411b",
+      "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/fixture.ts": "34b97032e1f035d6b15ae385f4a6aa4e6cc0b78d9239dc14e8253a1a6644dfe3",
+      "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/support/package-labs-dependencies.mts": "4d1e1f5aeb982f985dc850d88cde1235c51960fd6e5ef25ceb3b75328fc555da",
+      "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/src/benchmark/cpu-profile-stage.mts": "1392af3692ed873abe18840d91fcfbfbc5ecfe68c5b42e2b242e2cbf2f2bb09d",
+      "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/inter-bitmap-16.font.glb": "acdca408ed169c7aa1c2791dbbc2982afa1939c56fbc59ef43cc38f7ff366c14",
+      "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/dot-gothic-16-bitmap-16-32.font.glb": "f1895ea3bf8b69ee7430940a2ccf5d398c7a5f8c469635845c4b4b3b457b112b",
+      "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/fredoka-issue-216-bitmap-16.font.glb": "2be09acf3c5ebd2d08859eb8d5282cf9018d70f8e84b4bda9eb80c410ff532c0"
+    }
+  },
+  "arms": [
+    {
+      "arm": "main",
+      "exit": 0,
+      "started": "2026-10-20T22:03:26.040901+00:00",
+      "finished": "2026-10-20T22:03:29.504474+00:00",
+      "captureOutput": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-main-01",
+      "wrapperReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-main-capture-01/result.json",
+      "stdoutSha256": "c0d03fa0c9152651935979bc0db11350d7f0b017950e06b00164a6a52f212dde",
+      "stderrSha256": "40f80e958909fe49cab429ff63a3e9a3c395c20c69093e835868c7866ad2a666",
+      "filesSha256": {
+        "cpu-profile.json": "3a0ec1d57ff96bf78e21e1c4dc043fa27e13f64b846bdec3f608f0ec2f8336dd",
+        "manifest.json": "b7ea1716e4f8a64af3dd8031936a7ec23565ad07d0e5578eda57b11c7e815b3f",
+        "preflight-identity.json": "55cdaf2caef664a006830b9fc43239c213272c31b59141f1dce83335a80b09e8",
+        "summary.json": "ec0faa916d4f41f66f103fbac13a2f57c022e47baa2e6677d2602fe601b69abf"
+      },
+      "archive": {
+        "file": "main-4e25a96a.tgz",
+        "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20"
+      },
+      "shippingWasmSha256": "059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4",
+      "archiveMemberHashes": {
+        "dist/three/text.js": "3237e487a4ee07b2d19512548347b3ff96a4247a626ea09250c681449879486b",
+        "dist/internal/render-planner.js": "f4dacc110069759f9b2af22c836f114a6207c6652aaadb02524814956942e1d0",
+        "dist/text-shaper.wasm": "059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4"
+      },
+      "installedMembersBefore": {
+        "dist/three/text.js": "3237e487a4ee07b2d19512548347b3ff96a4247a626ea09250c681449879486b",
+        "dist/internal/render-planner.js": "f4dacc110069759f9b2af22c836f114a6207c6652aaadb02524814956942e1d0",
+        "dist/text-shaper.wasm": "059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4"
+      },
+      "installedMembersAfter": {
+        "dist/three/text.js": "3237e487a4ee07b2d19512548347b3ff96a4247a626ea09250c681449879486b",
+        "dist/internal/render-planner.js": "f4dacc110069759f9b2af22c836f114a6207c6652aaadb02524814956942e1d0",
+        "dist/text-shaper.wasm": "059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4"
+      },
+      "sourceHashesBefore": {
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/profile-edit-sized-publication.mts": "efbad689f0e5c1fd9098a859db690b039efc4bfe7910d669b9d5b6f8a5a8d195",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/edit-sized-publication.profile.mts": "a58bc03aa617daca3ca48a71014978d0869eb16263ef3083730788be5044411b",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/fixture.ts": "34b97032e1f035d6b15ae385f4a6aa4e6cc0b78d9239dc14e8253a1a6644dfe3",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/support/package-labs-dependencies.mts": "4d1e1f5aeb982f985dc850d88cde1235c51960fd6e5ef25ceb3b75328fc555da",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/src/benchmark/cpu-profile-stage.mts": "1392af3692ed873abe18840d91fcfbfbc5ecfe68c5b42e2b242e2cbf2f2bb09d",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/inter-bitmap-16.font.glb": "acdca408ed169c7aa1c2791dbbc2982afa1939c56fbc59ef43cc38f7ff366c14",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/dot-gothic-16-bitmap-16-32.font.glb": "f1895ea3bf8b69ee7430940a2ccf5d398c7a5f8c469635845c4b4b3b457b112b",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/fredoka-issue-216-bitmap-16.font.glb": "2be09acf3c5ebd2d08859eb8d5282cf9018d70f8e84b4bda9eb80c410ff532c0"
+      },
+      "sourceHashesAfter": {
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/profile-edit-sized-publication.mts": "efbad689f0e5c1fd9098a859db690b039efc4bfe7910d669b9d5b6f8a5a8d195",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/edit-sized-publication.profile.mts": "a58bc03aa617daca3ca48a71014978d0869eb16263ef3083730788be5044411b",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/fixture.ts": "34b97032e1f035d6b15ae385f4a6aa4e6cc0b78d9239dc14e8253a1a6644dfe3",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/support/package-labs-dependencies.mts": "4d1e1f5aeb982f985dc850d88cde1235c51960fd6e5ef25ceb3b75328fc555da",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/src/benchmark/cpu-profile-stage.mts": "1392af3692ed873abe18840d91fcfbfbc5ecfe68c5b42e2b242e2cbf2f2bb09d",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/inter-bitmap-16.font.glb": "acdca408ed169c7aa1c2791dbbc2982afa1939c56fbc59ef43cc38f7ff366c14",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/dot-gothic-16-bitmap-16-32.font.glb": "f1895ea3bf8b69ee7430940a2ccf5d398c7a5f8c469635845c4b4b3b457b112b",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/fredoka-issue-216-bitmap-16.font.glb": "2be09acf3c5ebd2d08859eb8d5282cf9018d70f8e84b4bda9eb80c410ff532c0"
+      },
+      "workload": {
+        "boundary": "publication",
+        "count": 1024,
+        "iterations": 80,
+        "position": "first",
+        "profileCase": "bulk-write",
+        "warmups": 10,
+        "reads": "none",
+        "publicationPath": "scene"
+      },
+      "operations": {
+        "perIteration": {
+          "sets": 1024,
+          "reads": 0,
+          "publications": 1
+        },
+        "timed": {
+          "sets": 81920,
+          "reads": 0,
+          "publications": 80
+        },
+        "warmup": {
+          "sets": 10240,
+          "reads": 0,
+          "publications": 10
+        },
+        "postTimedCorrectness": {
+          "measurementReads": 1024,
+          "commitStateReads": 1025,
+          "glyphReads": 1025
+        }
+      },
+      "drawTopology": {
+        "initial": {
+          "draws": 1,
+          "glyphs": 9216
+        },
+        "final": {
+          "draws": 1,
+          "glyphs": 9216
+        }
+      },
+      "p50p95Ms": {
+        "whole": [
+          12.577041000000008,
+          35.044415999999956
+        ],
+        "setter": [
+          1.280917000000045,
+          4.916707999999971
+        ],
+        "publication": [
+          11.258582999999817,
+          31.79362500000002
+        ],
+        "residual": [
+          0.0036239999999452266,
+          0.01125000000001819
+        ]
+      }
+    },
+    {
+      "arm": "published",
+      "exit": 0,
+      "started": "2026-10-20T22:04:09.488514+00:00",
+      "finished": "2026-10-20T22:04:12.421824+00:00",
+      "captureOutput": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-published-01",
+      "wrapperReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-published-capture-01/result.json",
+      "stdoutSha256": "12f92df1b6a0629b1ce75aec0f751621151a46d3d6dea7f6bbbfd0344fc94da8",
+      "stderrSha256": "da3bc9d656f1d048677681567083de8854fdbbd709c4c9e72a31dabed6cc7ec1",
+      "filesSha256": {
+        "cpu-profile.json": "ce4f7e3d04568f449ec0f598acf5711540cd1bb3e905809d9ccff1cca704165b",
+        "manifest.json": "183ede932843044336a32eaaf6ab1096bb5a237c38624511bd1d74c5ae5a1360",
+        "preflight-identity.json": "0e21a518c1e99f8b1d31d19f9a022703c5dc6f46d4f8b98611b0d0f6dd1ffd63",
+        "summary.json": "b5b6a0403f251b138a0c6425d33bb21c4e797416b8ffca2b27ab165564645121"
+      },
+      "archive": {
+        "file": "published-0.1.0.tgz",
+        "sha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b"
+      },
+      "shippingWasmSha256": "addb8144f474c9f5a005bdda084bcf15c05170004b34c7a65ab592db4962c893",
+      "archiveMemberHashes": {
+        "dist/three/text.js": "12863763f389c1da98da405fdd19fd4c2ef8f5ab0923b97febc44e8a6e0616c4",
+        "dist/internal/render-planner.js": "f51c679c3971e224ee17a7af0ab7c1a667f1a4b93aae3dc7b4d8e18eac40d371",
+        "dist/text-shaper.wasm": "addb8144f474c9f5a005bdda084bcf15c05170004b34c7a65ab592db4962c893"
+      },
+      "installedMembersBefore": {
+        "dist/three/text.js": "12863763f389c1da98da405fdd19fd4c2ef8f5ab0923b97febc44e8a6e0616c4",
+        "dist/internal/render-planner.js": "f51c679c3971e224ee17a7af0ab7c1a667f1a4b93aae3dc7b4d8e18eac40d371",
+        "dist/text-shaper.wasm": "addb8144f474c9f5a005bdda084bcf15c05170004b34c7a65ab592db4962c893"
+      },
+      "installedMembersAfter": {
+        "dist/three/text.js": "12863763f389c1da98da405fdd19fd4c2ef8f5ab0923b97febc44e8a6e0616c4",
+        "dist/internal/render-planner.js": "f51c679c3971e224ee17a7af0ab7c1a667f1a4b93aae3dc7b4d8e18eac40d371",
+        "dist/text-shaper.wasm": "addb8144f474c9f5a005bdda084bcf15c05170004b34c7a65ab592db4962c893"
+      },
+      "sourceHashesBefore": {
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/profile-edit-sized-publication.mts": "efbad689f0e5c1fd9098a859db690b039efc4bfe7910d669b9d5b6f8a5a8d195",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/edit-sized-publication.profile.mts": "a58bc03aa617daca3ca48a71014978d0869eb16263ef3083730788be5044411b",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/fixture.ts": "34b97032e1f035d6b15ae385f4a6aa4e6cc0b78d9239dc14e8253a1a6644dfe3",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/support/package-labs-dependencies.mts": "4d1e1f5aeb982f985dc850d88cde1235c51960fd6e5ef25ceb3b75328fc555da",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/src/benchmark/cpu-profile-stage.mts": "1392af3692ed873abe18840d91fcfbfbc5ecfe68c5b42e2b242e2cbf2f2bb09d",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/inter-bitmap-16.font.glb": "acdca408ed169c7aa1c2791dbbc2982afa1939c56fbc59ef43cc38f7ff366c14",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/dot-gothic-16-bitmap-16-32.font.glb": "f1895ea3bf8b69ee7430940a2ccf5d398c7a5f8c469635845c4b4b3b457b112b",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/fredoka-issue-216-bitmap-16.font.glb": "2be09acf3c5ebd2d08859eb8d5282cf9018d70f8e84b4bda9eb80c410ff532c0"
+      },
+      "sourceHashesAfter": {
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/profile-edit-sized-publication.mts": "efbad689f0e5c1fd9098a859db690b039efc4bfe7910d669b9d5b6f8a5a8d195",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/edit-sized-publication.profile.mts": "a58bc03aa617daca3ca48a71014978d0869eb16263ef3083730788be5044411b",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/fixture.ts": "34b97032e1f035d6b15ae385f4a6aa4e6cc0b78d9239dc14e8253a1a6644dfe3",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/support/package-labs-dependencies.mts": "4d1e1f5aeb982f985dc850d88cde1235c51960fd6e5ef25ceb3b75328fc555da",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/src/benchmark/cpu-profile-stage.mts": "1392af3692ed873abe18840d91fcfbfbc5ecfe68c5b42e2b242e2cbf2f2bb09d",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/inter-bitmap-16.font.glb": "acdca408ed169c7aa1c2791dbbc2982afa1939c56fbc59ef43cc38f7ff366c14",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/dot-gothic-16-bitmap-16-32.font.glb": "f1895ea3bf8b69ee7430940a2ccf5d398c7a5f8c469635845c4b4b3b457b112b",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/fredoka-issue-216-bitmap-16.font.glb": "2be09acf3c5ebd2d08859eb8d5282cf9018d70f8e84b4bda9eb80c410ff532c0"
+      },
+      "workload": {
+        "boundary": "publication",
+        "count": 1024,
+        "iterations": 80,
+        "position": "first",
+        "profileCase": "bulk-write",
+        "warmups": 10,
+        "reads": "none",
+        "publicationPath": "scene"
+      },
+      "operations": {
+        "perIteration": {
+          "sets": 1024,
+          "reads": 0,
+          "publications": 1
+        },
+        "timed": {
+          "sets": 81920,
+          "reads": 0,
+          "publications": 80
+        },
+        "warmup": {
+          "sets": 10240,
+          "reads": 0,
+          "publications": 10
+        },
+        "postTimedCorrectness": {
+          "measurementReads": 1024,
+          "commitStateReads": 1025,
+          "glyphReads": 1025
+        }
+      },
+      "drawTopology": {
+        "initial": {
+          "draws": 1,
+          "glyphs": 9216
+        },
+        "final": {
+          "draws": 1,
+          "glyphs": 9216
+        }
+      },
+      "p50p95Ms": {
+        "whole": [
+          11.399792000000048,
+          13.401042000000075
+        ],
+        "setter": [
+          1.0432090000000471,
+          1.6664159999999129
+        ],
+        "publication": [
+          10.234750000000076,
+          12.240833000000066
+        ],
+        "residual": [
+          0.0024160000001529625,
+          0.004748999999833359
+        ]
+      }
+    },
+    {
+      "arm": "held-e2",
+      "exit": 0,
+      "started": "2026-10-20T22:04:58.883453+00:00",
+      "finished": "2026-10-20T22:05:01.845299+00:00",
+      "captureOutput": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-held-e2-01",
+      "wrapperReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-held-e2-capture-01/result.json",
+      "stdoutSha256": "94212392219227dc486c1041a90d4866ec6f8fb9f407655d7c5e08fa08b2fecc",
+      "stderrSha256": "111aeec648797740345c9cd3787f12b3cadfaeb57ed0eb317a3acfaf1d9c63b8",
+      "filesSha256": {
+        "cpu-profile.json": "9d2c597138a1419a16cd23e7ae40181c27b18e9cc660b2cfa9792bbb24026d6c",
+        "manifest.json": "8157b9c7db0c357990cc0ee489da7121205ea7ad19728f9390a9385469af901a",
+        "preflight-identity.json": "8a853545c748d3c1b35436ac826154af91f3bce021db8dd2687658b3ae30ed0b",
+        "summary.json": "953e81bebb11f14334da7d43ff54eb0b57ce71aa8990d1ffa83e27c97749e365"
+      },
+      "archive": {
+        "file": "pmndrs-glyph-0.1.0.tgz",
+        "sha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb"
+      },
+      "shippingWasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+      "archiveMemberHashes": {
+        "dist/three/text.js": "5d482b40cacd1b8d44e8586ec0256e5c43ba546d9b6931370fe2f83293837006",
+        "dist/internal/render-planner.js": "c010fe35c5da2fa94f3965bf481d0ce10c1b9fb2044e2367abe53022f966514e",
+        "dist/text-shaper.wasm": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd"
+      },
+      "installedMembersBefore": {
+        "dist/three/text.js": "5d482b40cacd1b8d44e8586ec0256e5c43ba546d9b6931370fe2f83293837006",
+        "dist/internal/render-planner.js": "c010fe35c5da2fa94f3965bf481d0ce10c1b9fb2044e2367abe53022f966514e",
+        "dist/text-shaper.wasm": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd"
+      },
+      "installedMembersAfter": {
+        "dist/three/text.js": "5d482b40cacd1b8d44e8586ec0256e5c43ba546d9b6931370fe2f83293837006",
+        "dist/internal/render-planner.js": "c010fe35c5da2fa94f3965bf481d0ce10c1b9fb2044e2367abe53022f966514e",
+        "dist/text-shaper.wasm": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd"
+      },
+      "sourceHashesBefore": {
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/profile-edit-sized-publication.mts": "efbad689f0e5c1fd9098a859db690b039efc4bfe7910d669b9d5b6f8a5a8d195",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/edit-sized-publication.profile.mts": "a58bc03aa617daca3ca48a71014978d0869eb16263ef3083730788be5044411b",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/fixture.ts": "34b97032e1f035d6b15ae385f4a6aa4e6cc0b78d9239dc14e8253a1a6644dfe3",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/support/package-labs-dependencies.mts": "4d1e1f5aeb982f985dc850d88cde1235c51960fd6e5ef25ceb3b75328fc555da",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/src/benchmark/cpu-profile-stage.mts": "1392af3692ed873abe18840d91fcfbfbc5ecfe68c5b42e2b242e2cbf2f2bb09d",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/inter-bitmap-16.font.glb": "acdca408ed169c7aa1c2791dbbc2982afa1939c56fbc59ef43cc38f7ff366c14",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/dot-gothic-16-bitmap-16-32.font.glb": "f1895ea3bf8b69ee7430940a2ccf5d398c7a5f8c469635845c4b4b3b457b112b",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/fredoka-issue-216-bitmap-16.font.glb": "2be09acf3c5ebd2d08859eb8d5282cf9018d70f8e84b4bda9eb80c410ff532c0"
+      },
+      "sourceHashesAfter": {
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/profile-edit-sized-publication.mts": "efbad689f0e5c1fd9098a859db690b039efc4bfe7910d669b9d5b6f8a5a8d195",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/edit-sized-publication.profile.mts": "a58bc03aa617daca3ca48a71014978d0869eb16263ef3083730788be5044411b",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/fixture.ts": "34b97032e1f035d6b15ae385f4a6aa4e6cc0b78d9239dc14e8253a1a6644dfe3",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/support/package-labs-dependencies.mts": "4d1e1f5aeb982f985dc850d88cde1235c51960fd6e5ef25ceb3b75328fc555da",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/src/benchmark/cpu-profile-stage.mts": "1392af3692ed873abe18840d91fcfbfbc5ecfe68c5b42e2b242e2cbf2f2bb09d",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/inter-bitmap-16.font.glb": "acdca408ed169c7aa1c2791dbbc2982afa1939c56fbc59ef43cc38f7ff366c14",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/dot-gothic-16-bitmap-16-32.font.glb": "f1895ea3bf8b69ee7430940a2ccf5d398c7a5f8c469635845c4b4b3b457b112b",
+        "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/fredoka-issue-216-bitmap-16.font.glb": "2be09acf3c5ebd2d08859eb8d5282cf9018d70f8e84b4bda9eb80c410ff532c0"
+      },
+      "workload": {
+        "boundary": "publication",
+        "count": 1024,
+        "iterations": 80,
+        "position": "first",
+        "profileCase": "bulk-write",
+        "warmups": 10,
+        "reads": "none",
+        "publicationPath": "scene"
+      },
+      "operations": {
+        "perIteration": {
+          "sets": 1024,
+          "reads": 0,
+          "publications": 1
+        },
+        "timed": {
+          "sets": 81920,
+          "reads": 0,
+          "publications": 80
+        },
+        "warmup": {
+          "sets": 10240,
+          "reads": 0,
+          "publications": 10
+        },
+        "postTimedCorrectness": {
+          "measurementReads": 1024,
+          "commitStateReads": 1025,
+          "glyphReads": 1025
+        }
+      },
+      "drawTopology": {
+        "initial": {
+          "draws": 1,
+          "glyphs": 9216
+        },
+        "final": {
+          "draws": 1,
+          "glyphs": 9216
+        }
+      },
+      "p50p95Ms": {
+        "whole": [
+          13.188749999999914,
+          15.12079099999994
+        ],
+        "setter": [
+          9.39079199999992,
+          10.616957999999954
+        ],
+        "publication": [
+          3.7315419999999904,
+          4.692749999999933
+        ],
+        "residual": [
+          0.0027090000000953296,
+          0.005125000000134605
+        ]
+      }
+    }
+  ],
+  "interpretationLimits": [
+    "Directional profile evidence only; capture order was sequential, not interleaved.",
+    "CPU profile JSON is preserved for fresh High-review interpretation; this summary does not assign meaning to profile hot roots.",
+    "Residual is observer/callback overhead and is not independent proof of conservation.",
+    "Aggregate topology and authored-text correctness assertions are the workflow\u2019s stated oracle; this does not independently establish exact layout parity.",
+    "No product or algorithm decision is made here."
+  ]
+}

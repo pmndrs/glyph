@@ -13,6 +13,8 @@ export const PACKAGE_LABS_SUITES = [
   'edit',
   'assignment',
   'edit-sized',
+  'multi-owner',
+  'bulk-1024-profile',
   'full',
 ] as const;
 

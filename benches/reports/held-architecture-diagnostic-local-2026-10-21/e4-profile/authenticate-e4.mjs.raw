@@ -1,0 +1,58 @@
+import { execFileSync } from 'node:child_process';
+import { readFile, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { resolve } from 'node:path';
+import { deriveNamedShaper, sha256, wasmSections } from '/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/scripts/support/named-shaper.mjs';
+
+const evidence = '/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence';
+const archivePath = `${evidence}/candidate/pmndrs-glyph-0.1.0.tgz`;
+const namedPath = `${evidence}/candidate/shaper-profile/text-shaper.named.wasm`;
+const manifestPath = `${evidence}/candidate/shaper-profile/manifest.json`;
+const expectedPath = `${evidence}/candidate/package-dist-comparison.json`;
+const archive = await readFile(archivePath);
+const named = await readFile(namedPath);
+const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+const expected = JSON.parse(await readFile(expectedPath, 'utf8'));
+const listing = execFileSync('tar', ['-tzf', archivePath], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).trim().split('\n');
+const packageMembers = listing.filter((name) => name.startsWith('package/dist/'));
+const memberHashes = {};
+for (const name of packageMembers) {
+  memberHashes[name.slice('package/dist/'.length)] = sha256(execFileSync('tar', ['-xzOf', archivePath, name], { maxBuffer: 64 * 1024 * 1024 }));
+}
+const release = execFileSync('tar', ['-xzOf', archivePath, 'package/dist/text-shaper.wasm'], { maxBuffer: 64 * 1024 * 1024 });
+const { bytes: derived, proof } = deriveNamedShaper(release, named);
+const sections = (buffer) => wasmSections(buffer).map(({ id, name, bytes }) => ({ id, name: name ?? null, sha256: sha256(bytes), bytes: bytes.length }));
+const isExactNamedEncoding = derived.equals(named);
+const archiveHash = sha256(archive);
+const result = {
+  schema: 'held-e4-artifact-attribution-v1',
+  checkedAt: new Date().toISOString(),
+  archive: {
+    path: archivePath, sha256: archiveHash, bytes: archive.length,
+    expectedSha256: expected.archiveSha256, exactExpectedArchiveHash: archiveHash === expected.archiveSha256,
+    distMemberCount: packageMembers.length, expectedDistMemberCount: expected.archivedDistMembers,
+    exactDistMemberNameSet: packageMembers.length === expected.archivedDistMembers && Object.keys(memberHashes).length === expected.archivedDistMembers && Object.keys(expected.memberHashes).every((name) => Object.hasOwn(memberHashes, name)),
+    mismatchedDistMemberHashes: Object.fromEntries(Object.entries(expected.memberHashes).filter(([name, hash]) => memberHashes[name] !== hash).map(([name, hash]) => [name, { expected: hash, actual: memberHashes[name] ?? null }])),
+    shippingWasmSha256: sha256(release), shippingWasmBytes: release.length,
+    expectedShippingWasmSha256: expected.shippingWasmSha256,
+  },
+  namedArtifact: {
+    path: namedPath, sha256: sha256(named), expectedSha256: manifest.namedSha256,
+    exactManifestHash: sha256(named) === manifest.namedSha256,
+    manifestSourceRevision: manifest.sourceRevision, manifestSourceDirty: manifest.sourceDirty,
+    manifestArtifactSha256: manifest.artifact.sha256, exactArchiveBinding: manifest.artifact.sha256 === archiveHash,
+    executableSha256FromInstalledRepositoryHelper: proof.executableSha256,
+    expectedExecutableSha256: manifest.executableSha256,
+    executableMatchesShipping: proof.executableSha256 === manifest.executableSha256 && proof.executableSha256 === sha256(Buffer.concat([Buffer.from([0,97,115,109,1,0,0,0]), ...wasmSections(release).filter((s) => s.id !== 0).map((s) => s.bytes)])),
+    installedHelper: 'packages/glyph/scripts/support/named-shaper.mjs deriveNamedShaper()',
+    exactDerivedNamedEncoding: isExactNamedEncoding,
+    shippingSections: sections(release), namedSections: sections(named),
+    functionNameCount: proof.functions.length,
+  },
+  conclusion: 'Archive and named artifact are byte-authenticated; standard executable sections match via installed repository helper. Source provenance is separately evaluated in source-provenance.json.',
+};
+if (!result.archive.exactExpectedArchiveHash || !result.archive.exactDistMemberNameSet || Object.keys(result.archive.mismatchedDistMemberHashes).length || !result.namedArtifact.exactManifestHash || !result.namedArtifact.exactArchiveBinding || !result.namedArtifact.executableMatchesShipping || !result.namedArtifact.exactDerivedNamedEncoding) {
+  throw new Error(`E4 artifact authentication failed: ${JSON.stringify({ archive: result.archive, namedArtifact: result.namedArtifact })}`);
+}
+await writeFile('/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/artifact-authentication.json', `${JSON.stringify(result, null, 2)}\n`);
+process.stdout.write(JSON.stringify({ archiveSha256: archiveHash, distMemberCount: packageMembers.length, namedSha256: sha256(named), executableSha256: proof.executableSha256, functionNameCount: proof.functions.length, exactDerivedNamedEncoding: isExactNamedEncoding }));

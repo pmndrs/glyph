@@ -1,0 +1,23 @@
+{
+  "argv": [
+    "/usr/bin/env",
+    "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch",
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "benchmark:package-size",
+    "--",
+    "--output=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/candidate/production-package-size.json"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-19T16:28:26.267754+00:00",
+  "finished": "2026-10-19T16:29:27.456639+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "c624cc147caf4c584a08cf7bb16d4e964ccdbf62495e91ce68527d0ba8ce66e6",
+    "stderr.log": "b5bcaa5c22d344292a6f4c8dcb70237800ad610670b30102814caad349aaa150"
+  }
+}

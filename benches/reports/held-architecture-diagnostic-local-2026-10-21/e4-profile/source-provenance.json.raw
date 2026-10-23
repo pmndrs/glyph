@@ -1,0 +1,56 @@
+{
+  "schema": "held-e4-source-provenance-v1",
+  "checkedAt": "2026-10-21T06:15:55.835232+00:00",
+  "sourceRoot": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "e4FreezeHead": "b81756a5ce4541b4e9b23d7ad04c9105345e7cff",
+  "currentHead": "16bd60e747a1323536e02f547841325ca96c43ff",
+  "e4FreezeTree": "0b626625d9599c5c0c3579e87a446e5a11e55ff3",
+  "e4FreezeCandidateSourceSha256": "e8c21cb9c7dddb99c9211bdadfd372bdc236d7a385c3f4868bac9ece36c33f7b",
+  "e4FreezeTrackedInputCount": 666,
+  "currentWorkingTreeStatus": [],
+  "currentWorkingTreeClean": true,
+  "trackedInputMismatches": [
+    {
+      "path": "benches/scripts/support/labs-result.mts",
+      "expected": "0d6e3a8de0871bc9ee15c8f50a85085c9ab199fad3787b4b38b2f3f4403376e0",
+      "actual": "7299ef7c78c3db4e38093ea463c95cd96ccf8bd0b65581f72d9fe4c5325efc02",
+      "exists": true
+    },
+    {
+      "path": "benches/scripts/support/saved-package-labs.mts",
+      "expected": "b986ab507259c7e81a5ef7294b2ced848edd7f76bf61ac2a45fcd568fd6e03a9",
+      "actual": "12742cf68755a09c9b30fe3dc9a3973b680f9e0ad0bd445e0c653891596a19cf",
+      "exists": true
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "expected": "d0d64f1bad9537f2cec0d6142ab94833bd09c5ed0021eb8ad66cc4f2da01cb3c",
+      "actual": "d8c2d8b5ee201fdf1a9e5270eda79d64cf7a79a2061937df49a54f5adf626e9a",
+      "exists": true
+    },
+    {
+      "path": "pnpm-workspace.yaml",
+      "expected": "867c5bbbba8becd6e43141e4419e74182fdbc22317c943cac7e9c3e06c9e814f",
+      "actual": "900bb0bc5ea9f2a1c19120ef404950a81dd36b271dc6ac110d1fa86fe8483469",
+      "exists": true
+    }
+  ],
+  "trackedInputMismatchCount": 4,
+  "productSourceMismatchCount": 0,
+  "productSourceMismatches": [],
+  "untrackedInputsPresent": false,
+  "classification": {
+    "packagesGlyphProductSource": "packages/glyph/src/**, packages/glyph/rust/**, packages/glyph/scripts/**, packages/glyph/package.json, packages/glyph/tsconfig.json",
+    "mismatchesOutsideProductSource": [
+      "benches/scripts/support/labs-result.mts",
+      "benches/scripts/support/saved-package-labs.mts",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml"
+    ]
+  },
+  "notes": [
+    "Current checkout is clean at HEAD; differences from E4 freeze are tracked committed changes.",
+    "Current ignored dist was not used as evidence for archive or source identity.",
+    "E4 named artifact manifest reports sourceRevision b81756a5ce4541b4e9b23d7ad04c9105345e7cff and sourceDirty M packages/glyph/rust/shaper/src/engine/codec_gather.rs; the frozen codec source hash is checked among tracked inputs."
+  ]
+}

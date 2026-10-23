@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type * as ThreeTypes from 'three/webgpu';
+import type { TextLiteral } from '@pmndrs/glyph';
 
 const packageRoot = process.env.GLYPH_LABS_PACKAGE_ROOT;
 if (packageRoot === undefined) {
@@ -28,9 +29,10 @@ const { bitmapSchema } = (await import(pathToFileURL(resolve(packageRoot, 'dist/
 
 // Adapt older installed canaries once, outside every timed workload.
 const { bitmap, glyph } = glyphPackage;
-const { defineThreeConfig } = threePackage;
+const { defineThreeConfig, defineTextMaterial } = threePackage;
 export { font, glyph };
 export const { span, txt } = glyphPackage;
+export const sharedTextMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
 const textPrototype: {
   readGlyphs?: (typeof threePackage.Text.prototype)['readGlyphs'];
   withGlyphs?: (typeof threePackage.Text.prototype)['readGlyphs'];
@@ -44,20 +46,20 @@ if (textPrototype.readGlyphs === undefined && textPrototype.withGlyphs !== undef
   textPrototype.readGlyphs = textPrototype.withGlyphs;
 }
 
-const fontBytes = await readFile(new URL('../../fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url));
-
 await glyph.init();
-const font = glyph.fontFace(new Blob([new Uint8Array(fontBytes)], { type: 'model/gltf-binary' }), {
-  format: bitmap({ strikes: [16] }),
-});
-await font.load();
-const fredokaBytes = await readFile(
-  new URL('../../fixtures/rendering/fredoka-issue-216-bitmap-16.font.glb', import.meta.url),
-);
-export const fredokaFont = glyph.fontFace(new Blob([new Uint8Array(fredokaBytes)], { type: 'model/gltf-binary' }), {
-  format: bitmap({ strikes: [16] }),
-});
-await fredokaFont.load();
+
+async function loadBitmapFixture(filename: string, strikes: readonly [number, ...number[]] = [16]) {
+  const bytes = await readFile(new URL(`../../fixtures/rendering/${filename}`, import.meta.url));
+  const face = glyph.fontFace(new Blob([new Uint8Array(bytes)], { type: 'model/gltf-binary' }), {
+    format: bitmap({ strikes }),
+  });
+  await face.load();
+  return face;
+}
+
+const font = await loadBitmapFixture('inter-bitmap-16.font.glb');
+export const monoFont = await loadBitmapFixture('dot-gothic-16-bitmap-16-32.font.glb', [16, 32]);
+export const fredokaFont = await loadBitmapFixture('fredoka-issue-216-bitmap-16.font.glb');
 
 /**
  * Inter baked with outlines by the package under test, or `undefined` when that package predates `outlineAt()`, so a
@@ -109,7 +111,15 @@ export function paragraphTextForGlyphs(target: number): string {
   return Array.from({ length: copies }, () => paragraphSource).join('\n');
 }
 
-export function createParagraph(text = paragraphText, width = 600, fontFace = font) {
+/** Matches the Fredoka typing corpus to the ordinary paragraph workload's text length. */
+export function fredokaTextForGlyphs(target: number): string {
+  const sentence = 'Reveals one grapheme at a time over a duration. Layout stays put and a trigger fires at the end. ';
+  return sentence.repeat(Math.ceil(paragraphTextForGlyphs(target).length / sentence.length));
+}
+
+type PaintInput = TextLiteral<never>;
+
+function mountParagraph(text: string | PaintInput, width: number, fontFace: typeof font) {
   const root = glyph.handle(
     `labs:package:${String(nextHandle++)}`,
     defineThreeConfig({ capacity: { size: 8192, policy: 'grow' } }),
@@ -130,6 +140,15 @@ export function createParagraph(text = paragraphText, width = 600, fontFace = fo
     throw new Error('paragraph fixture did not publish rendered glyphs');
   }
   return { paragraph, root, scene, textGroup };
+}
+
+export function createParagraph(text = paragraphText, width = 600, fontFace = font) {
+  return mountParagraph(text, width, fontFace);
+}
+
+/** Creates a fresh paragraph with authored paint spans present before its first preparation. */
+export function createParagraphWithPaint(text: PaintInput, width = 600, fontFace = font) {
+  return mountParagraph(text, width, fontFace);
 }
 
 /** Parents a text group to a scene, so a scene traversal publishes its texts. */
@@ -175,6 +194,43 @@ export function createLabels(count = 100) {
   scene.updateMatrixWorld(true);
   if (textGroup.error !== undefined) throw textGroup.error;
   return { labels, root, scene, textGroup };
+}
+
+export function multiOwnerTexts(balanced: boolean) {
+  return balanced
+    ? ([
+        ['aa', 'aaaa', 'aaa'],
+        ['aaaa', 'aa', 'a a'],
+      ] as const)
+    : ([
+        ['aa', 'bb', 'aaa'],
+        ['aaaa', 'cc', 'a a'],
+      ] as const);
+}
+
+export function createMultiOwnerPublication(count: number, balanced: boolean, engineOnly: boolean) {
+  const texts = multiOwnerTexts(balanced);
+  const created = createLabels(count);
+  const indices = [1, Math.floor(count / 2), count - 2];
+  const edited = indices.map((index) => created.labels[index]!);
+  let selected = 0;
+  return {
+    created,
+    edited,
+    indices,
+    texts,
+    get selected() {
+      return selected;
+    },
+    publish: () => {
+      selected = selected === 0 ? 1 : 0;
+      for (const [index, label] of edited.entries()) label.text = texts[selected]![index]!;
+      if (engineOnly) glyph.shape();
+      else created.scene.updateMatrixWorld(true);
+      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      return created.textGroup.textCount;
+    },
+  };
 }
 
 export function disposeLabels(created: ReturnType<typeof createLabels>): void {

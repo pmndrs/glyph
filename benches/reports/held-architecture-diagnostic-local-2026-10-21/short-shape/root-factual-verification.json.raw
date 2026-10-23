@@ -1,0 +1,12 @@
+{
+  "verifiedAt": "2026-10-21T06:07:55.089038+00:00",
+  "head": "16bd60e747a1323536e02f547841325ca96c43ff",
+  "result": "all-file-source-receipt-stream-hashes-and2048rows-pass",
+  "handoffSha256": "5f8407eb46fd05df95f1eaa118ffbe943ed56602d43ea3da650a588a197f5918",
+  "rows": 2048,
+  "phases": {
+    "forward": 1024,
+    "reverse": 1024
+  },
+  "scope": "root factual validation only; fresh High source/semantic review pending; no latency/parity claim"
+}

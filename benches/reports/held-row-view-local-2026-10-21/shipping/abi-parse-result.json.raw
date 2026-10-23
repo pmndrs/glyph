@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "/usr/bin/env",
+    "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/scratch",
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "python3",
+    "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/inspect_wasm_abi_e6.py"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-21T03:27:20.977338+00:00",
+  "finished": "2026-10-21T03:27:21.272638+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "ffdb97ef7557b049e3de597533c5c2b7644979749f15406c4c9ca3c2ef008795",
+    "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

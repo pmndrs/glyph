@@ -1,0 +1,21 @@
+{
+  "argv": [
+    "mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "glyph:shaper-tests",
+    "--",
+    "unpublished_frontier_deduplicates_owners_and_retires_removed_identity"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-22T20:36:24.922406+00:00",
+  "finished": "2026-10-22T20:36:25.399036+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "73ffa280d266c77daff52fdc06de57b34b50ea3446a6090b59cdcf6fd175af5a",
+    "stderr.log": "3d98d29895d372ee38f07877d89d1b0a4a5c7680c6727d84a83cf7a45f0afb71"
+  }
+}

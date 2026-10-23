@@ -1,0 +1,25 @@
+{
+  "generatedAt": "2026-10-22T20:51:52.490Z",
+  "labsVersion": "0.9.0",
+  "harnessDigest": "c9f312d3b57cde2ed49b526955cf9f7eb6646e4f757dd5281a2d49005b4c0169",
+  "blocks": 8,
+  "suite": "frontier",
+  "samplingPolicy": "single-call",
+  "warmupPolicy": "fixed-20",
+  "baselineAvailability": "complete",
+  "baseline": {
+    "requested": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/pmndrs-glyph-0.1.0.tgz",
+    "version": "0.1.0",
+    "sha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be"
+  },
+  "candidate": {
+    "requested": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/v3-combined/candidate/pmndrs-glyph-0.1.0.tgz",
+    "version": "0.1.0",
+    "sha256": "383fcbdd1cc12e59a4e563e55527aaa1f3f31e442b8ebfaaf26802063b4990bd"
+  },
+  "comparison": "comparison.txt",
+  "notComparable": {
+    "baselineCheckFailures": [],
+    "timingModeMismatches": []
+  }
+}

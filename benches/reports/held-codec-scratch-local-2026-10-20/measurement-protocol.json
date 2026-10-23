@@ -1,0 +1,55 @@
+{
+  "recordedAt": "2026-10-20T15:50:09.834796+00:00",
+  "status": "Frozen authenticated candidate; full package/repository/peer/production checks passed. Memory/browser/presentation gates running. No candidate timing result yet.",
+  "scope": "fixed seven-family full suite; dense512/1024 priority; protect inspection/sparse and all visible regressions",
+  "candidate": {
+    "archive": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "archiveSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+    "shippingWasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+    "namedWasmSha256": "6fa7083f44eb1b652e0bf7d772f6c7b5e8f0136a75f8a883257fd52550e2a909",
+    "sourceFreeze": "candidate-source-freeze.json",
+    "compiledProof": "codec-codegen/receipt.json"
+  },
+  "controls": {
+    "main": {
+      "source": "4e25a96a57462fef5ad0d19065a822695b480f60",
+      "archive": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+      "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20"
+    },
+    "published": {
+      "archive": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+      "sha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b"
+    },
+    "priorCurrent": {
+      "source": "291fb51ce5e61ca6903b67459872923ccab4ceee",
+      "runtimeSource": "273d7ae053f223f74d3df0e192c002012cbe3fec",
+      "archive": "/Volumes/Depot/Developer/glyph/.cache/held-wave1-20261020/evidence/combined-candidate/pmndrs-glyph-0.1.0.tgz",
+      "sha256": "340cbe186620e51f7d0ec460e473d72332c1c112d6c07dfd7dab4e63f74f6804"
+    }
+  },
+  "order": [
+    "fresh main baseline and candidate once",
+    "fresh published baseline with saved candidate",
+    "fresh prior340 baseline with saved candidate"
+  ],
+  "suite": "full",
+  "blocks": 8,
+  "commandTemplate": "mise exec -- pnpm scripts run benchmark:labs-package -- --candidate ABS --baseline ABS --suite full --blocks 8 --output ABS [--saved-candidate FIRST_OUTPUT]",
+  "p50": "median of eight block medians",
+  "p95": "pooled retained samples sorted; floor(.95*(N-1))",
+  "sourcePolicy": "Coherent codec invocation-local scratch reuse plus publication request allocation deletion. Preserve current finite predicate, program lookup and one executor. Final source/test review before freeze; inspect final optimized loops/frame rather than claiming source-level deletion is compiled savings. No additional current1024 CPU profile selected.",
+  "noisePolicy": "Preserve raw samples, absolute times, per-row sample counts/modes, statistical intervals and calibration drift/exclusions, host-load incidents. No favorable retries. Software calibration is not hardware GHz. Do not infer parity from neutral classification, aggregate wins or exclusions. No old-day absolute timing reused as a new paired result.",
+  "disposition": "Retain validated small work removals or preserve correct inconclusive variants under descriptive refs and archives for combination; keep actual correctness failures and demonstrated regressions distinct. Hold stack unmerged.",
+  "requiredGates": [
+    "fresh scoped review and integrating source review",
+    "native cold-output/adversarial/rollback and work counters",
+    "pinned shipping build and full Glyph/package/consumer checks",
+    "source/lock/package/named executable authentication",
+    "full seven-family timings and prior regression identities",
+    "same-method JS/Wasm/DTS/package sizes",
+    "scoped allocator and application live/peak memory, fragmented-root costs explicit",
+    "peer/API/ABI/lifetime and real installed browser delivery/output with idle uploads",
+    "docs/frontier/attestation and coherent realghstack submission"
+  ],
+  "candidateAuthenticationRecordedUtc": "2026-10-20T16:13:08.490088+00:00"
+}

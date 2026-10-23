@@ -1,0 +1,14 @@
+ M .agents/docs/packages/benchmarks.md
+ M .agents/docs/planning/publication-frontier.md
+ M benches/labs/package/batching.bench.ts
+ M benches/labs/package/prepared-operations.bench.ts
+ M benches/labs/package/stress.bench.ts
+ M benches/scripts/run-package-labs.mts
+ M benches/scripts/support/package-labs-suite.mts
+ M benches/scripts/workflows.test.mts
+ M packages/glyph/rust/shaper/src/engine/transport.rs
+ M packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs
+ M packages/glyph/rust/shaper/src/wasm.rs
+ M packages/glyph/tests/integration/shaper-registration.test.mjs
+?? .agents/docs/log/2026-10-22-held-empty-query-stage-experiment.md
+?? benches/reports/held-empty-query-stage-local-2026-10-22/

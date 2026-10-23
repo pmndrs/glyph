@@ -1,0 +1,215 @@
+{
+  "workload": {
+    "boundary": "publication",
+    "count": 1024,
+    "iterations": 80,
+    "position": "first",
+    "profileCase": "bulk-write",
+    "warmups": 10,
+    "reads": "none",
+    "publicationPath": "scene"
+  },
+  "operations": {
+    "perIteration": {
+      "sets": 1024,
+      "reads": 0,
+      "publications": 1
+    },
+    "timed": {
+      "sets": 81920,
+      "reads": 0,
+      "publications": 80
+    },
+    "warmup": {
+      "sets": 10240,
+      "reads": 0,
+      "publications": 10
+    },
+    "postTimedCorrectness": {
+      "measurementReads": 1024,
+      "commitStateReads": 1025,
+      "glyphReads": 1025
+    }
+  },
+  "drawTopology": {
+    "initial": {
+      "draws": 1,
+      "glyphs": 9216
+    },
+    "final": {
+      "draws": 1,
+      "glyphs": 9216
+    }
+  },
+  "elapsedMs": {
+    "mean": 18.70599059999999,
+    "p50": 16.815041000000065,
+    "p95": 23.243124999999964
+  },
+  "sampledMs": {
+    "total": 1537.792,
+    "stages": {
+      "other-wasm": 613.7189999999995,
+      "javascript": 403.916,
+      "shaping": 258.11599999999993,
+      "gather": 111.001,
+      "host-runtime": 59.375,
+      "render-plan": 37.624,
+      "benchmark-harness": 22.749000000000002,
+      "external-javascript": 17.166,
+      "allocation": 14.126
+    }
+  },
+  "cpuHotspots": [
+    {
+      "functionName": "_RNvNtNtCsbx9tMmkA0qL_8harfrust2hb9ot_layout13apply_forward",
+      "sampledMs": 62.37400000000001,
+      "url": "wasm://wasm/006d3d82"
+    },
+    {
+      "functionName": "_RNvNtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine5state23validate_planner_inputs",
+      "sampledMs": 42.50200000000001,
+      "url": "wasm://wasm/006d3d82"
+    },
+    {
+      "functionName": "post",
+      "sampledMs": 41.792,
+      "url": "node:inspector"
+    },
+    {
+      "functionName": "_RINvMs1_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine11positioningNtB6_20PositionedGlyphArena28position_layout_run_fragmentNCNvMs7_NtB8_5stateNtB26_14ParagraphState18prepare_positioneds1_0NCB20_s2_0EBa_",
+      "sampledMs": 39.336000000000006,
+      "url": "wasm://wasm/006d3d82"
+    },
+    {
+      "functionName": "_RINvNtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine13retained_rope19update_ordered_nodeNtNtB4_12codec_gather12GatherSourceNtB1o_11GatherErrorINtB1o_11OwnerRangesINtNtNtNtCsdkdt1aaAg1T_4core4iter8adapters3map3MapINtNtNtB2H_5slice4iter4IterTymEENCNvNtB4_5state21planner_gather_owners0EENCNCINvMs6_B1o_NtB1o_20CodecGatherWorkspace22append_retained_streamB2y_NCNvB3W_21append_planner_gather0E00EB6_",
+      "sampledMs": 35.001000000000005,
+      "url": "wasm://wasm/006d3d82"
+    },
+    {
+      "functionName": "_RNvMs6_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine12codec_gatherNtB5_20CodecGatherWorkspace13update_fields",
+      "sampledMs": 33.917,
+      "url": "wasm://wasm/006d3d82"
+    },
+    {
+      "functionName": "_RNvMs7_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine5stateNtB5_14ParagraphState18prepare_positioned",
+      "sampledMs": 33.126000000000005,
+      "url": "wasm://wasm/006d3d82"
+    },
+    {
+      "functionName": "_updateText",
+      "sampledMs": 28.416000000000007,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-Jiw0sL/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-gathe_961c106d0871e39cc62d2685f09c7686/node_modules/@pmndrs/glyph/dist/internal/render-planner.js"
+    },
+    {
+      "functionName": "_RNvMs7_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine5stateNtB5_14ParagraphState16prepare_clusters",
+      "sampledMs": 25.751999999999995,
+      "url": "wasm://wasm/006d3d82"
+    },
+    {
+      "functionName": "_RNvXs_NtNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot4gpos4pairNtNtNtCsaDOWveanduf_10read_fonts6tables4gpos14PairPosFormat2NtNtBa_18ot_layout_gsubgpos5Apply25apply_with_external_cache",
+      "sampledMs": 25.582000000000004,
+      "url": "wasm://wasm/006d3d82"
+    },
+    {
+      "functionName": "_RNvMs7_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine5stateNtB5_14ParagraphState10commit_all",
+      "sampledMs": 24.541000000000007,
+      "url": "wasm://wasm/006d3d82"
+    },
+    {
+      "functionName": "_RNvMs4_NtNtCsbx9tMmkA0qL_8harfrust2hb4faceNtB5_9hb_font_t15shape_with_plan",
+      "sampledMs": 22.954999999999995,
+      "url": "wasm://wasm/006d3d82"
+    },
+    {
+      "functionName": "#f",
+      "sampledMs": 22.585,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-Jiw0sL/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-gathe_961c106d0871e39cc62d2685f09c7686/node_modules/@pmndrs/glyph/dist/three/text.js"
+    },
+    {
+      "functionName": "_RNvMs_NtNtCsbx9tMmkA0qL_8harfrust2hb8ot_shapeNtB4_14OtShapeContext14substitute_pre",
+      "sampledMs": 22.124000000000002,
+      "url": "wasm://wasm/006d3d82"
+    },
+    {
+      "functionName": "_RNvNtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine5codec15execute_program",
+      "sampledMs": 21.455000000000002,
+      "url": "wasm://wasm/006d3d82"
+    },
+    {
+      "functionName": "#P",
+      "sampledMs": 20.75,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-Jiw0sL/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-gathe_961c106d0871e39cc62d2685f09c7686/node_modules/@pmndrs/glyph/dist/three/command-buffer-renderer.js"
+    },
+    {
+      "functionName": "ye",
+      "sampledMs": 20.748000000000005,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-Jiw0sL/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-gathe_961c106d0871e39cc62d2685f09c7686/node_modules/@pmndrs/glyph/dist/internal/render-planner.js"
+    },
+    {
+      "functionName": "#R",
+      "sampledMs": 20.294999999999995,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-Jiw0sL/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-gathe_961c106d0871e39cc62d2685f09c7686/node_modules/@pmndrs/glyph/dist/internal/render-planner.js"
+    },
+    {
+      "functionName": "_RNvMs1_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine13cluster_stateNtB5_12ClusterArena5clear",
+      "sampledMs": 19.208000000000002,
+      "url": "wasm://wasm/006d3d82"
+    },
+    {
+      "functionName": "_RNvMs5_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine5stateNtB5_12PlannerState23prepare_placement_slots",
+      "sampledMs": 18.291,
+      "url": "wasm://wasm/006d3d82"
+    },
+    {
+      "functionName": "c",
+      "sampledMs": 17.291,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-Jiw0sL/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-gathe_961c106d0871e39cc62d2685f09c7686/node_modules/@pmndrs/glyph/dist/internal/frame-wire.js"
+    },
+    {
+      "functionName": "_RNvXNtNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot4gpos4pairNtNtNtCsaDOWveanduf_10read_fonts6tables4gpos14PairPosFormat1NtNtB8_18ot_layout_gsubgpos5Apply25apply_with_external_cache",
+      "sampledMs": 16.374000000000002,
+      "url": "wasm://wasm/006d3d82"
+    },
+    {
+      "functionName": "d",
+      "sampledMs": 14.915000000000001,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-Jiw0sL/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-gathe_961c106d0871e39cc62d2685f09c7686/node_modules/@pmndrs/glyph/dist/internal/frame-wire.js"
+    },
+    {
+      "functionName": "#X",
+      "sampledMs": 14.708,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-Jiw0sL/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-gathe_961c106d0871e39cc62d2685f09c7686/node_modules/@pmndrs/glyph/dist/internal/render-planner.js"
+    },
+    {
+      "functionName": "_RNvMs7_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine5stateNtB5_14ParagraphState19prepare_flow_layout",
+      "sampledMs": 13.751,
+      "url": "wasm://wasm/006d3d82"
+    },
+    {
+      "functionName": "_RNvXs3_NtNtNtNtCsbx9tMmkA0qL_8harfrust2hb2ot4gsub8ligatureNtNtNtCsaDOWveanduf_10read_fonts6tables4gsub20LigatureSubstFormat1NtNtBb_18ot_layout_gsubgpos5Apply25apply_with_external_cache",
+      "sampledMs": 13.625,
+      "url": "wasm://wasm/006d3d82"
+    },
+    {
+      "functionName": "me",
+      "sampledMs": 13.625,
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-Jiw0sL/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-gathe_961c106d0871e39cc62d2685f09c7686/node_modules/@pmndrs/glyph/dist/three/text.js"
+    },
+    {
+      "functionName": "_RINvNtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine13cluster_state24append_run_local_clusterNCNvMs7_NtB4_5stateNtB1z_14ParagraphState26finish_cluster_preparation0EB6_",
+      "sampledMs": 13.542000000000002,
+      "url": "wasm://wasm/006d3d82"
+    },
+    {
+      "functionName": "_RNvMs_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine9run_localNtB4_14RunLocalWriter14finish_cluster",
+      "sampledMs": 13.542,
+      "url": "wasm://wasm/006d3d82"
+    },
+    {
+      "functionName": "_RNvMs3_NtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine16flow_compositionNtB5_15FlowLayoutArena5clear",
+      "sampledMs": 13.459,
+      "url": "wasm://wasm/006d3d82"
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "argv": [
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "benchmark:labs-package",
+    "--",
+    "--candidate",
+    "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "--baseline",
+    "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "--suite",
+    "full",
+    "--blocks",
+    "8",
+    "--sampling",
+    "single-call",
+    "--saved-candidate",
+    "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data",
+    "--output",
+    "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-prior-e2-fixed-data"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-21T05:10:40.015537+00:00",
+  "finished": "2026-10-21T05:30:06.502178+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "2de7bec1570a7a033f76cf6c4ca85ae5d47693fd27fc40750c7b1d758ea8b59c",
+    "stderr.log": "bfcec0f28c33a51313e67c01c63d1b3df769d1ca99ad7b83a894859e4f60a250"
+  }
+}

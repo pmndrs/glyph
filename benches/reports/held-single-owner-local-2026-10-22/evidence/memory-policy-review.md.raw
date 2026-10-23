@@ -1,0 +1,9 @@
+# Memory artifact optimization policy review
+
+**Finding: no actionable defect in the reviewed script diff.** The change to `packages/glyph/scripts/build-shaper-memory-artifact.mjs` adds `--one-caller-inline-max-function-size 0|default` with `0` as the default, matching the profile artifact script. `0` preserves the helper's existing `--one-caller-inline-max-function-size=0`; `default` removes only that argument. The selected `optimization` array is passed to `wasm-opt` in the shared `build` function for both the feature-off control and the diagnostic build, and the manifest records both the selected value and arguments.
+
+The frozen-main shaper command in `main-memory-overlay/source/packages/glyph/scripts/build.mjs` omits this flag. The candidate memory artifact manifest records `--one-caller-inline-max-function-size=0`. The prior identity review records the failed full-byte comparison as frozen archive shaper `059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4` versus rebuilt feature-off shaper `33ae932b03468553f3040d28d170b78872362db55f3bd55c9f1d4da270e5f3b3`. That failure is not resolved by this source review alone.
+
+The option parser rejects missing values, repeated options, and values other than `0` or `default`. The change leaves `control.bytes.equals(release)` intact before the diagnostic build and does not alter `verifyRealAllocator`, the default optimizer behavior, runtime product code, or the frozen archive. The script modification itself is a source-freeze diff and must be disclosed with the rerun evidence.
+
+This was a read-only review of the script diff and cited source/manifest evidence. I ran no Cargo or Binaryen command, test, build, byte-identity gate, allocator probe, or benchmark. The sole executor still needs to select `default` for the frozen-main overlay, retain the exact byte-identity gate, and establish its result before making any allocator comparison.

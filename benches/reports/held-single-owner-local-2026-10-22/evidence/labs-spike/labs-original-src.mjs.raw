@@ -1,0 +1,1241 @@
+import { _ as serialize, n as isAssertionError, o as COLOR_NAMES, r as formatNs, t as renderMitata, y as toSnapshot } from "./render-9ZEXq8F8.mjs";
+//#region src/bench/lib/runtime.ts
+/**
+* Async/generator function constructors obtained from runtime instances.
+* Used for `instanceof` checks in {@link kind} and for codegen in the
+* benchmark loops ({@link benchFn}, {@link benchIter}).
+*/
+const AsyncFunction = (async () => {}).constructor;
+const GeneratorFunction = function* () {}.constructor;
+const AsyncGeneratorFunction = async function* () {}.constructor;
+const _sink = {
+	_: null,
+	__() {
+		_print(_sink._);
+	}
+};
+/**
+* Stores `v` in a side-effecting sink so the engine cannot dead-code-eliminate
+* the computation that produced it.
+*/
+function do_not_optimize(v) {
+	_sink._ = v;
+}
+/** Resolved `console.log` (or runtime-specific equivalent). */
+const _print = (() => {
+	if (globalThis.console?.log) return globalThis.console.log;
+	if (globalThis.print && !globalThis.document) return globalThis.print;
+	return () => {
+		throw new Error("no print function available");
+	};
+})();
+/**
+* Best-effort garbage-collection trigger for the current JS runtime.
+* Falls back to a large allocation on Graal or V8 without `--expose-gc`.
+* `gc.fallback` is `true` when no native GC hook was found.
+*/
+const gc = (() => {
+	const g = globalThis;
+	try {
+		return g.Bun.gc(true), () => g.Bun.gc(true);
+	} catch {}
+	try {
+		return g.gc(), () => g.gc();
+	} catch {}
+	try {
+		return g.__gc(), () => g.__gc();
+	} catch {}
+	try {
+		return g.std.gc(), () => g.std.gc();
+	} catch {}
+	try {
+		return g.$262.gc(), () => g.$262.gc();
+	} catch {}
+	try {
+		return g.tjs.engine.gc.run(), () => g.tjs.engine.gc.run();
+	} catch {}
+	return Object.assign(g.Graal ? () => new Uint8Array(2 ** 29) : () => new Uint8Array(2 ** 30), { fallback: true });
+})();
+/**
+* High-resolution nanosecond timer for the current JS runtime.
+* Resolves Bun, test262 agent, `performance.now`, or `Date.now` (last resort).
+*/
+const now = (() => {
+	const g = globalThis;
+	try {
+		g.Bun.nanoseconds();
+		return g.Bun.nanoseconds;
+	} catch {}
+	try {
+		_sink.agent.monotonicNow();
+		return () => 1e6 * _sink.agent.monotonicNow();
+	} catch {}
+	try {
+		g.$262.agent.monotonicNow();
+		return () => 1e6 * g.$262.agent.monotonicNow();
+	} catch {}
+	try {
+		const _now = performance.now.bind(performance);
+		_now();
+		return () => 1e6 * _now();
+	} catch {
+		return () => 1e6 * Date.now();
+	}
+})();
+/**
+* Classifies a callable as `'fn'` (zero-arg), `'iter'` (takes an iterator
+* context), or `'yield'` (generator/async-generator).  Returns `undefined`
+* for non-functions.
+*
+* @param fn - The value to classify.
+* @param _ - When `true`, skip the zero-arg check (allows parameterised fns).
+*/
+function kind(fn, _ = false) {
+	if (!(fn instanceof Function || fn instanceof AsyncFunction || fn instanceof GeneratorFunction || fn instanceof AsyncGeneratorFunction)) return;
+	if (fn instanceof GeneratorFunction || fn instanceof AsyncGeneratorFunction) return "yield";
+	if ((_ ? true : 0 === fn.length) && (fn instanceof Function || fn instanceof AsyncFunction)) return "fn";
+	if (0 !== fn.length && (fn instanceof Function || fn instanceof AsyncFunction)) return "iter";
+}
+//#endregion
+//#region src/bench/lib/constants.ts
+/** Tuning constants for the benchmark engine. */
+const tuning = {
+	/** Default concurrency (sequential). */
+	concurrency: 1,
+	/** Minimum samples before a run may stop. */
+	min_samples: 12,
+	/** Unroll factor inside batched loops. */
+	batch_unroll: 4,
+	/** Hard ceiling on sample count. */
+	max_samples: 1e9,
+	/** Warm-up iterations before timing begins. */
+	warmup_samples: 2,
+	/** Target duration (ns) of one batched sample. Batch size is derived from it. */
+	batch_duration: 1e6,
+	/** Upper bound on iterations per batched sample. */
+	batch_max: 1 << 20,
+	/** Sample count above which outlier trimming kicks in. */
+	samples_threshold: 12,
+	/** Single-iteration ns threshold below which batching activates. */
+	batch_threshold: 65536,
+	/** Time budget (ns) a run must reach before it may stop. */
+	min_cpu_time: 5e8,
+	/** Single-iteration ns threshold below which warm-up is skipped. */
+	warmup_threshold: 5e5
+};
+/**
+* Fills missing fields on a benchmark options bag with sensible defaults
+* derived from {@link tuning} and the detected runtime's
+* {@link gc} / {@link now} implementations.
+*/
+function defaults$1(opts) {
+	opts.gc ??= gc;
+	opts.now ??= now;
+	opts.heap ??= null;
+	opts.params ??= {};
+	opts.manual ??= false;
+	opts.sample_gc ??= false;
+	opts.$counters ??= false;
+	opts.concurrency ??= tuning.concurrency;
+	opts.min_samples ??= tuning.min_samples;
+	opts.max_samples ??= tuning.max_samples;
+	opts.min_cpu_time ??= tuning.min_cpu_time;
+	opts.batch_unroll ??= tuning.batch_unroll;
+	opts.batch_duration ??= tuning.batch_duration;
+	opts.batch_max ??= tuning.batch_max;
+	opts.warmup_samples ??= tuning.warmup_samples;
+	opts.batch_threshold ??= tuning.batch_threshold;
+	opts.warmup_threshold ??= tuning.warmup_threshold;
+	opts.samples_threshold ??= tuning.samples_threshold;
+}
+/**
+* Iterations per batched sample so one sample lasts about `batch_duration`,
+* rounded to whole unrolled groups. A pilot decides this once and later
+* blocks replay it through `batch_samples`.
+*/
+function batchSize(opts, singleIterationNs) {
+	const groups = Math.ceil(opts.batch_duration / Math.max(singleIterationNs, 1) / opts.batch_unroll);
+	return Math.max(1, Math.min(groups, opts.batch_max / opts.batch_unroll)) * opts.batch_unroll;
+}
+//#endregion
+//#region src/bench/lib/measure.ts
+/** Range and median of the first `count` per-sample values. */
+function summarize(values, count) {
+	const sorted = values.slice(0, count).sort((a, b) => a - b);
+	return {
+		min: sorted[0],
+		max: sorted[sorted.length - 1],
+		p50: sorted[.5 * (sorted.length - 1) | 0]
+	};
+}
+async function measure(f, opts = {}) {
+	return await {
+		fn: benchFn,
+		iter: benchIter,
+		yield: benchGenerator,
+		[void 0]() {
+			throw new TypeError("expected iterator, generator or one-shot function");
+		}
+	}[kind(f)](f, opts);
+}
+/**
+* Benchmark adapter for generator functions.
+*
+* The generator yields a benchmarkable function or options object. After
+* measurement it receives the first untimed result. The snapshot comes from
+* the yielded object's `snapshot` hook or the generator's return value.
+*/
+async function benchGenerator(gen, opts = {}) {
+	const g = gen({ get(name) {
+		return opts.args?.[name];
+	} });
+	const n = await g.next();
+	let $fn = n.value;
+	if (!n.value?.heap && null != n.value?.heap) opts.heap = false;
+	opts.concurrency ??= n.value?.concurrency ?? opts.args?.concurrency;
+	if (!n.value?.counters && null != n.value?.counters) opts.$counters = false;
+	if (n.value?.after) opts.after = n.value.after;
+	const hook = n.value?.snapshot;
+	if (hook !== void 0 && "function" !== typeof hook) throw new TypeError("expected snapshot to be a function");
+	let first;
+	let snapshot;
+	opts.$first = async (value) => {
+		first = value;
+		if (!hook) return;
+		const output = await hook();
+		if (output === void 0) throw new TypeError("expected a value to snapshot, got undefined");
+		snapshot = toSnapshot(output);
+	};
+	if (n.done || "fn" !== kind($fn)) {
+		$fn = n.value?.bench || n.value?.manual;
+		if ("fn" !== kind($fn, true)) throw new TypeError("expected benchmarkable yield from generator");
+		opts.params ??= {};
+		const params = $fn.length;
+		opts.manual = !n.value.manual ? false : "manual" !== n.value.budget ? "real" : "manual";
+		for (let o = 0; o < params; o++) {
+			opts.params[o] = n.value[o];
+			if ("fn" !== kind(n.value[o])) throw new TypeError("expected function for benchmark parameter");
+		}
+	}
+	const stats = await benchFn($fn, opts);
+	const end = await g.next(first);
+	if (!end.done) throw new TypeError("expected generator to yield once");
+	if (end.value !== void 0) {
+		if (snapshot !== void 0) throw new TypeError("expected one snapshot source, not both a hook and a generator return");
+		snapshot = toSnapshot(end.value);
+	}
+	return {
+		...stats,
+		kind: "yield",
+		...snapshot !== void 0 ? { snapshot } : {}
+	};
+}
+/**
+* Core benchmark engine for zero-arg and parameterised functions.
+*
+* Generates an {@link AsyncFunction} loop at runtime that handles warm-up,
+* batching, parameter injection, heap tracking, inner GC, and hardware
+* counters. Sampling stops once both `min_samples` and `min_cpu_time` are
+* met. The generated source is attached as `debug` on the returned stats.
+*/
+async function benchFn(fn, opts = {}) {
+	defaults$1(opts);
+	const consume = opts.$consume ?? do_not_optimize;
+	let async = false;
+	let batch = false;
+	let single = 0;
+	const params = Object.keys(opts.params);
+	{
+		const $p = Array.from({ length: params.length }, () => 0);
+		for (let o = 0; o < params.length; o++) $p[o] = await opts.params[o]();
+		const t0 = now();
+		const r = fn(...$p);
+		let t1;
+		let first;
+		if (async = r instanceof Promise) {
+			first = await r;
+			if (!opts.manual && first !== void 0) consume(first);
+			t1 = now();
+		} else {
+			first = r;
+			if (!opts.manual && r !== void 0) consume(r);
+			t1 = now();
+		}
+		if (!opts.manual && opts.$first) await opts.$first(first);
+		if (opts.after) await opts.after();
+		single = t1 - t0;
+		if (single <= opts.warmup_threshold) for (let o = 0; o < opts.warmup_samples; o++) {
+			for (let oo = 0; oo < params.length; oo++) $p[oo] = await opts.params[oo]();
+			const t0 = now();
+			const value = await fn(...$p);
+			if (!opts.manual && value !== void 0) consume(value);
+			const t1 = now();
+			if (opts.after) await opts.after();
+			single = t1 - t0;
+			if (batch = single <= opts.batch_threshold) break;
+		}
+	}
+	if (opts.batch !== void 0) batch = !!opts.batch;
+	if (opts.manual) {
+		batch = false;
+		opts.concurrency = 1;
+	}
+	let batchSamples = opts.batch_samples ?? (batch ? batchSize(opts, single) : 0);
+	if (opts.batch_samples === void 0 && batch && !params.length && !opts.manual) {
+		const t0 = now();
+		for (let o = 0; o < batchSamples; o++) {
+			const value = async ? await fn() : fn();
+			if (value !== void 0) consume(value);
+		}
+		batchSamples = batchSize(opts, (now() - t0) / batchSamples);
+		if (opts.after) await opts.after();
+	}
+	const call = (concurrency, unroll) => {
+		if (!params.length) return "$fn()";
+		return `$fn(${params.map((_, parameter) => {
+			if (unroll === void 0) return `param_${parameter}_${concurrency}`;
+			return `param_${parameter}_${concurrency}[${unroll === 0 ? "" : `${unroll} + `}param_offset]`;
+		}).join(", ")})`;
+	};
+	const calls = (unroll) => {
+		if (opts.manual) return `t2 += ${async ? "await " : ""}${call(0, unroll)};`;
+		if (async && opts.concurrency > 1) return `
+        {
+          const _result = await Promise.all([
+            ${Array.from({ length: opts.concurrency }, (_, concurrency) => `${call(concurrency, unroll)},`).join("\n")}
+          ]);
+          $consume(_result);
+        }
+      `;
+		return Array.from({ length: opts.concurrency }, (_, concurrency) => `
+        {
+          const _result = ${async ? "await " : ""}${call(concurrency, unroll)};
+          if (void 0 !== _result) $consume(_result);
+        }
+      `).join("\n");
+	};
+	const loop = new AsyncFunction("$fn", "$gc", "$now", "$heap", "$params", "$counters", "$consume", "$after", "$summary", `
+    ${!opts.$counters ? "" : "let _hc = false;"}
+    ${!opts.$counters ? "" : "try { $counters.init(); _hc = true; } catch {}"}
+
+    let _ = 0; let t = 0;
+    let samples = new Array(2 ** 20);
+    ${!opts.heap ? "" : "let heap = new Array(2 ** 20);"}
+    ${!(opts.gc && opts.sample_gc && !opts.gc.fallback) ? "" : "let gc = new Array(2 ** 20);"}
+
+    ${!params.length ? "" : Array.from({ length: params.length }, (_, o) => `
+      ${Array.from({ length: opts.concurrency }, (_, c) => `
+        let param_${o}_${c} = ${!batch ? "null" : `new Array(${batchSamples})`};
+      `.trim()).join(" ")}
+    `.trim()).join("\n")}
+
+    ${!opts.gc ? "" : `$gc();`}
+
+    ${!(opts.gc && opts.sample_gc && !opts.gc.fallback) ? "" : `
+      // A forced collection has a fixed cost that depends on the live heap,
+      // not on the bench. Take the cheapest of a few as the floor so per
+      // sample gc reports only what the bench adds.
+      let _gfloor = Infinity;
+      for (let _i = 0; _i < 5; _i++) {
+        const t0 = $now(); $gc();
+        _gfloor = Math.min(_gfloor, $now() - t0);
+      }
+    `}
+
+    ${!opts.heap ? "" : `
+      // Reading the heap and the clock allocates. Time an empty sample window
+      // and subtract its smallest delta as the measurement's own floor.
+      let _hself = Infinity;
+      for (let _i = 0; _i < 10; _i++) {
+        const _c1 = $heap();
+        const _t0 = $now();
+        const _t1 = $now();
+        const _d = $heap() - _c1;
+        if (0 <= _d && _d < _hself) _hself = _d;
+      }
+      if (!Number.isFinite(_hself)) _hself = 0;
+    `}
+
+    for (; _ < ${opts.max_samples}; _++) {
+      if (_ >= ${opts.min_samples} && t >= ${opts.min_cpu_time}) break;
+
+      ${!params.length ? "" : `
+        ${!batch ? `
+          ${Array.from({ length: params.length }, (_, o) => `
+            ${Array.from({ length: opts.concurrency }, (_, c) => `
+              if ((param_${o}_${c} = $params[${o}]()) instanceof Promise) param_${o}_${c} = await param_${o}_${c};
+            `.trim()).join(" ")}
+          `.trim()).join("\n")}
+        ` : `
+          for (let o = 0; o < ${batchSamples}; o++) {
+            ${Array.from({ length: params.length }, (_, o) => `
+              ${Array.from({ length: opts.concurrency }, (_, c) => `
+                if ((param_${o}_${c}[o] = $params[${o}]()) instanceof Promise) param_${o}_${c}[o] = await param_${o}_${c}[o];
+              `.trim()).join(" ")}
+            `.trim()).join("\n")}
+          }
+        `}
+      `}
+
+      ${!(opts.gc && opts.sample_gc) ? "" : `
+        igc: {
+          const t0 = $now();
+          $gc(); t += $now() - t0;
+        }
+      `}
+
+      ${!opts.manual ? "" : "let t2 = 0;"}
+      ${!opts.heap ? "" : "const h0 = $heap();"}
+      ${!opts.$counters ? "" : "if (_hc) try { $counters.before(); } catch {};"} const t0 = $now();
+
+      ${!batch ? `
+        ${calls()}
+      ` : `
+        for (let o = 0; o < ${batchSamples / opts.batch_unroll | 0}; o++) {
+          ${!params.length ? "" : `const param_offset = o * ${opts.batch_unroll};`}
+
+          ${Array.from({ length: opts.batch_unroll }, (_, unroll) => calls(unroll)).join("\n")}
+        }
+      `}
+
+      const t1 = $now();
+      ${!opts.$counters ? "" : "if (_hc) try { $counters.after(); } catch {};"}
+
+      ${!opts.heap ? "" : `
+        heap: {
+          const t0 = $now();
+          heap[_] = Math.max(0, ($heap() - h0 - _hself) ${!batch ? "" : `/ ${batchSamples}`}); t += $now() - t0;
+        }
+      `}
+
+      ${!(opts.gc && opts.sample_gc && !opts.gc.fallback) ? "" : `
+        igc: {
+          const t0 = $now();
+          $gc(); const t1 = $now() - t0;
+
+          t += t1;
+          gc[_] = Math.max(0, t1 - _gfloor);
+        }
+      `};
+
+      const diff = ${opts.manual ? "t2" : "t1 - t0"};
+      t += ${"manual" === opts.manual ? "t2" : "t1 - t0"};
+      samples[_] = diff ${!batch ? "" : `/ ${batchSamples}`};
+      ${!opts.after ? "" : "await $after();"}
+    }
+
+    samples.length = _;
+    samples.sort((a, b) => a - b);
+    if (samples.length > ${opts.samples_threshold}) samples = samples.slice(2, -2);
+
+    return {
+      samples,
+      min: samples[0],
+      max: samples[samples.length - 1],
+      p25: samples[(.25 * (samples.length - 1)) | 0],
+      p50: samples[(.50 * (samples.length - 1)) | 0],
+      p75: samples[(.75 * (samples.length - 1)) | 0],
+      p99: samples[(.99 * (samples.length - 1)) | 0],
+      p999: samples[(.999 * (samples.length - 1)) | 0],
+      avg: samples.reduce((a, v) => a + v, 0) / samples.length,
+      ticks: samples.length ${!batch ? "" : `* ${batchSamples}`},
+      plan: { batch: ${batch}, batch_samples: ${batchSamples}, batch_unroll: ${opts.batch_unroll}, samples: _ },
+      ${!opts.heap ? "" : "heap: $summary(heap, _),"}
+      ${!(opts.gc && opts.sample_gc && !opts.gc.fallback) ? "" : "gc: $summary(gc, _),"}
+      ${!opts.$counters ? "" : `...(!_hc ? {} : { counters: $counters.translate(${!batch ? 1 : batchSamples}, _) }),`}
+    };
+
+    ${!opts.$counters ? "" : "if (_hc) try { $counters.deinit(); } catch {};"}
+  `);
+	return {
+		kind: "fn",
+		debug: loop.toString(),
+		...await loop(fn, opts.gc, opts.now, opts.heap, opts.params, opts.$counters, consume, opts.after, summarize)
+	};
+}
+/**
+* Benchmark engine for iterator-style benchmarks.
+*
+* The caller receives an iterable context. Each `for..of` / `for await..of`
+* iteration is one timed sample.  Internally a {@link GeneratorFunction} loop
+* is code-generated with the same stopping and batching logic as
+* {@link benchFn}.
+*/
+async function benchIter(iter, opts = {}) {
+	const _ = {};
+	defaults$1(opts);
+	let batchSamples = 0;
+	let samples = Array.from({ length: 2 ** 20 }, () => 0);
+	const _i = { next() {
+		return _.next();
+	} };
+	const ctx = {
+		[Symbol.iterator]() {
+			return _i;
+		},
+		[Symbol.asyncIterator]() {
+			return _i;
+		},
+		get(name) {
+			return opts.args?.[name];
+		}
+	};
+	const gen = (function* () {
+		let batch = false;
+		let single = 0;
+		{
+			const t0 = now();
+			yield void 0;
+			single = now() - t0;
+			if (single <= opts.warmup_threshold) for (let o = 0; o < opts.warmup_samples; o++) {
+				const t0 = now();
+				yield void 0;
+				single = now() - t0;
+				if (batch = single <= opts.batch_threshold) break;
+			}
+		}
+		if (opts.batch !== void 0) batch = !!opts.batch;
+		batchSamples = opts.batch_samples ?? (batch ? batchSize(opts, single) : 0);
+		const loop = new GeneratorFunction("$gc", "$now", "$samples", "$state", "$summary", _.debug = `
+      let _ = 0; let t = 0;
+      ${!(opts.gc && opts.sample_gc && !opts.gc.fallback) ? "" : "let gc = new Array(2 ** 20);"}
+
+      ${!opts.gc ? "" : `$gc();`}
+
+      ${!(opts.gc && opts.sample_gc && !opts.gc.fallback) ? "" : `
+        let _gfloor = Infinity;
+        for (let _i = 0; _i < 5; _i++) {
+          const t0 = $now(); $gc();
+          _gfloor = Math.min(_gfloor, $now() - t0);
+        }
+      `}
+
+      for (; _ < ${opts.max_samples}; _++) {
+        if (_ >= ${opts.min_samples} && t >= ${opts.min_cpu_time}) break;
+
+        ${!(opts.gc && opts.sample_gc) ? "" : `
+          let sample_gc_cost = 0;
+
+          igc: {
+            const t0 = $now(); $gc();
+            sample_gc_cost = $now() - t0;
+            ${opts.gc.fallback ? "" : "gc[_] = Math.max(0, sample_gc_cost - _gfloor);"}
+          }
+        `}
+
+        const t0 = $now();
+        
+        ${!batch ? "yield void 0;" : `
+          for (let o = 0; o < ${batchSamples / opts.batch_unroll | 0}; o++) {
+            ${Array.from({ length: opts.batch_unroll }, () => "yield void 0;").join(" ")}
+          }
+        `}
+
+        const t1 = $now();
+        const diff = t1 - t0;
+
+        $samples[_] = diff ${!batch ? "" : `/ ${batchSamples}`};
+        t += diff ${!(opts.gc && opts.sample_gc) ? "" : "+ sample_gc_cost"};
+      }
+
+      $samples.length = _;
+      ${!(opts.gc && opts.sample_gc && !opts.gc.fallback) ? "" : "$state.gc = $summary(gc, _);"}
+    `)(opts.gc, opts.now, samples, _, summarize);
+		_.batch = batch;
+		_.next = loop.next.bind(loop);
+		yield void 0;
+	})();
+	await iter((_.next = gen.next.bind(gen), ctx));
+	if (samples.length < opts.min_samples) throw new TypeError(`expected at least ${opts.min_samples} samples from iterator`);
+	samples.sort((a, b) => a - b);
+	const rawCount = samples.length;
+	if (samples.length > opts.samples_threshold) samples = samples.slice(2, -2);
+	return {
+		samples,
+		kind: "iter",
+		plan: {
+			batch: !!_.batch,
+			batch_samples: batchSamples,
+			batch_unroll: opts.batch_unroll,
+			samples: rawCount
+		},
+		debug: _.debug,
+		min: samples[0],
+		max: samples[samples.length - 1],
+		p25: samples[.25 * (samples.length - 1) | 0],
+		p50: samples[.5 * (samples.length - 1) | 0],
+		p75: samples[.75 * (samples.length - 1) | 0],
+		p99: samples[.99 * (samples.length - 1) | 0],
+		p999: samples[.999 * (samples.length - 1) | 0],
+		avg: samples.reduce((a, v) => a + v, 0) / samples.length,
+		ticks: samples.length * (!_.batch ? 1 : batchSamples),
+		..._.gc ? { gc: _.gc } : {}
+	};
+}
+//#endregion
+//#region src/bench/env.ts
+/**
+* Higher-level environment detection for runtime name, version, CPU model,
+* architecture, and color support.  All functions probe `globalThis` and
+* dynamic imports. None depend on benchmark state.
+*/
+/** Whether the terminal supports ANSI colors (`FORCE_COLOR` / `NO_COLOR`). */
+function colors() {
+	return globalThis.tjs?.env?.FORCE_COLOR || globalThis.process?.env?.FORCE_COLOR || !globalThis.Deno?.noColor && !globalThis.tjs?.env?.NO_COLOR && !globalThis.process?.env?.NO_COLOR && !globalThis.process?.env?.NODE_DISABLE_COLORS;
+}
+/** Detect the CPU model string via `os.cpus()` or equivalent. */
+async function cpu() {
+	if (globalThis.process?.versions?.webcontainer) return null;
+	try {
+		let n;
+		if (n = globalThis.require("os")?.cpus?.()?.[0]?.model) return n;
+	} catch {}
+	try {
+		let n;
+		if (n = globalThis.require("node:os")?.cpus?.()?.[0]?.model) return n;
+	} catch {}
+	try {
+		let n;
+		if (n = globalThis.tjs?.system?.cpus?.[0]?.model) return n;
+	} catch {}
+	try {
+		let n;
+		if (n = (await import("node:os"))?.cpus?.()?.[0]?.model) return n;
+	} catch {}
+	return null;
+}
+/** Return the version string for the detected {@link runtime}. */
+function version() {
+	return {
+		v8: () => globalThis.version?.(),
+		bun: () => globalThis.Bun?.version,
+		"txiki.js": () => globalThis.tjs?.version,
+		deno: () => globalThis.Deno?.version?.deno,
+		llrt: () => globalThis.process?.versions?.llrt,
+		node: () => globalThis.process?.versions?.node,
+		graaljs: () => globalThis.Graal?.versionGraalVM,
+		webcontainer: () => globalThis.process?.versions?.webcontainer,
+		"quickjs-ng": () => globalThis.navigator?.userAgent?.split?.("/")[1],
+		hermes: () => globalThis.HermesInternal?.getRuntimeProperties?.()?.["OSS Release Version"]
+	}[runtime()]?.() || null;
+}
+/** Identify the current JS runtime by probing well-known globals. */
+function runtime() {
+	if (globalThis.d8) return "v8";
+	if (globalThis.tjs) return "txiki.js";
+	if (globalThis.Graal) return "graaljs";
+	if (globalThis.process?.versions?.llrt) return "llrt";
+	if (globalThis.process?.versions?.webcontainer) return "webcontainer";
+	if (globalThis.inIon && globalThis.performance?.mozMemory) return "spidermonkey";
+	if (globalThis.window && globalThis.netscape && globalThis.InternalError) return "firefox";
+	if (globalThis.window && globalThis.navigator && Error.prepareStackTrace) return "chromium";
+	if (globalThis.navigator?.userAgent?.toLowerCase?.()?.includes?.("quickjs-ng")) return "quickjs-ng";
+	if (globalThis.$262 && globalThis.lockdown && globalThis.AsyncDisposableStack) return "XS Moddable";
+	if (globalThis.$ && "IsHTMLDDA" in globalThis.$ && (/* @__PURE__ */ new Error()).stack?.includes("runtime@")) return "jsc";
+	if (globalThis.window && globalThis.navigator && (/* @__PURE__ */ new Error()).stack?.includes("runtime@")) return "webkit";
+	if (globalThis.os && globalThis.std) return "quickjs";
+	if (globalThis.Bun) return "bun";
+	if (globalThis.Deno) return "deno";
+	if (globalThis.HermesInternal) return "hermes";
+	if (globalThis.window && globalThis.navigator) return "browser";
+	if (globalThis.process) return "node";
+	else return null;
+}
+/** Detect the CPU architecture / platform (e.g. `arm64-darwin`). */
+async function arch() {
+	if (runtime() === "webcontainer") return "js + wasm";
+	try {
+		let n;
+		if (n = globalThis.Deno?.build?.target) return n;
+	} catch {}
+	try {
+		const os = await import("node:os");
+		return `${os.arch()}-${os.platform()}`;
+	} catch {}
+	if (globalThis.process?.arch && globalThis.process?.platform) return `${globalThis.process.arch}-${globalThis.process.platform}`;
+	if (runtime() === "txiki.js") return `${globalThis.tjs.system?.arch}-${globalThis.tjs.system?.platform}`;
+	if (runtime() === "spidermonkey") {
+		try {
+			const build = globalThis.getBuildConfiguration();
+			const platforms = [
+				"osx",
+				"linux",
+				"android",
+				"windows"
+			];
+			const arch = [
+				"arm",
+				"x64",
+				"x86",
+				"wasi",
+				"arm64",
+				"mips32",
+				"mips64",
+				"loong64",
+				"riscv64"
+			].find((k) => build[k]);
+			const platform = platforms.find((k) => build[k]);
+			if (arch) return !platform ? arch : `${arch}-${platform}`;
+		} catch {}
+		try {
+			if (globalThis.isAvxPresent()) return "x86_64";
+		} catch {}
+	}
+	return null;
+}
+//#endregion
+//#region src/bench/main.ts
+let FLAGS = 0;
+let $counters = null;
+let COLLECTIONS = [{
+	id: 0,
+	name: null,
+	types: [],
+	trials: []
+}];
+const flags = {
+	compact: 1,
+	baseline: 2
+};
+/**
+* Tune overrides that replay a pilot block's plan exactly: the batching
+* decision is forced and the sample count is fixed with no time floor, so
+* every block does identical work regardless of environment speed.
+*/
+function planOverrides(plan) {
+	if (!plan) return {};
+	return {
+		batch: plan.batch,
+		batch_samples: plan.batch_samples,
+		batch_unroll: plan.batch_unroll,
+		min_samples: plan.samples,
+		max_samples: plan.samples,
+		min_cpu_time: 0
+	};
+}
+var B = class {
+	f = null;
+	_args = {};
+	_name = "";
+	_group = 0;
+	_gc = true;
+	flags = FLAGS;
+	_highlight = false;
+	constructor(name, f) {
+		this.f = f;
+		this.name(name);
+		if (!kind(f)) throw new TypeError("expected iterator, generator or one-shot function");
+	}
+	name(name, color = false) {
+		return this._name = name, this.highlight(color), this;
+	}
+	gc(gc = true) {
+		if ("boolean" !== typeof gc) throw new TypeError("expected gc to be a boolean");
+		return this._gc = gc, this;
+	}
+	highlight(color = false) {
+		if (!color) return this._highlight = false, this;
+		if (!COLOR_NAMES.includes(color)) throw new TypeError("invalid highlight color");
+		return this._highlight = color, this;
+	}
+	compact(bool = true) {
+		if (bool) return this.flags |= flags.compact, this;
+		if (!bool) return this.flags &= ~flags.compact, this;
+		return this;
+	}
+	baseline(bool = true) {
+		if (bool) return this.flags |= flags.baseline, this;
+		if (!bool) return this.flags &= ~flags.baseline, this;
+		return this;
+	}
+	range(name, s, e, m = 8) {
+		const arr = [];
+		for (let o = s; o <= e; o *= m) arr.push(Math.min(o, e));
+		if (!arr.includes(e)) arr.push(e);
+		return this.args(name, arr);
+	}
+	dense_range(name, s, e, a = 1) {
+		const arr = [];
+		for (let o = s; o <= e; o += a) arr.push(o);
+		if (!arr.includes(e)) arr.push(e);
+		return this.args(name, arr);
+	}
+	args(name, args) {
+		if (name === null) return delete this._args.x, this;
+		if (Array.isArray(name)) return this._args.x = name, this;
+		if (null === args && "string" === typeof name) return delete this._args[name], this;
+		if (Array.isArray(args) && "string" === typeof name) return this._args[name] = args, this;
+		if (null !== name && "object" === typeof name) {
+			for (const key in name) {
+				const v = name[key];
+				if (v == null) delete this._args[key];
+				else if (Array.isArray(v)) this._args[key] = v;
+				else throw new TypeError("invalid arguments map value");
+			}
+			return this;
+		}
+		throw new TypeError("invalid arguments");
+	}
+	*_names() {
+		const args = Object.keys(this._args);
+		if ((0 === args.length ? "static" : 1 === args.length ? "args" : "multi-args") === "static") yield this._name;
+		else {
+			const offsets = Array.from({ length: args.length }).fill(0);
+			const runs = args.reduce((len, name) => len * this._args[name].length, 1);
+			for (let o = 0; o < runs; o++) {
+				{
+					const _args = {};
+					let _name = this._name;
+					for (let oo = 0; oo < args.length; oo++) _args[args[oo]] = this._args[args[oo]][offsets[oo]];
+					for (let oo = 0; oo < args.length; oo++) _name = _name.replaceAll(`\$${args[oo]}`, _args[args[oo]]);
+					yield _name;
+				}
+				let offset = 0;
+				do
+					offsets[offset] = (1 + offsets[offset]) % this._args[args[offset]].length;
+				while (0 === offsets[offset++] && offset < args.length);
+			}
+		}
+	}
+	async run(thrw = false, _tune = {}, plans) {
+		const args = Object.keys(this._args);
+		const kind = 0 === args.length ? "static" : 1 === args.length ? "args" : "multi-args";
+		const tune = {
+			$counters,
+			..._tune,
+			sample_gc: this._gc,
+			gc: "function" === typeof _tune.gc ? _tune.gc : void 0,
+			heap: await (async () => {
+				if (globalThis.Bun) {
+					const { memoryUsage } = await import("bun:jsc");
+					return () => {
+						return memoryUsage().current;
+					};
+				}
+				try {
+					const { getHeapStatistics } = await import("node:v8");
+					getHeapStatistics();
+					return () => {
+						const m = getHeapStatistics();
+						return m.used_heap_size + m.malloced_memory + m.external_memory;
+					};
+				} catch {}
+			})()
+		};
+		if (kind === "static") {
+			let stats, error;
+			try {
+				stats = await measure(this.f, {
+					...tune,
+					...planOverrides(plans?.[0])
+				});
+			} catch (err) {
+				error = err;
+				if (thrw) throw err;
+			}
+			return {
+				kind,
+				args: this._args,
+				alias: this._name,
+				group: this._group,
+				gcMode: this._gc,
+				baseline: !!(this.flags & flags.baseline),
+				runs: [{
+					stats,
+					error,
+					args: {},
+					name: this._name
+				}],
+				style: {
+					highlight: this._highlight,
+					compact: !!(this.flags & flags.compact)
+				}
+			};
+		} else {
+			const offsets = Array.from({ length: args.length }, () => 0);
+			const runCount = args.reduce((len, name) => len * this._args[name].length, 1);
+			const runs = Array.from({ length: runCount });
+			for (let o = 0; o < runs.length; o++) {
+				{
+					let stats, error;
+					const _args = {};
+					let _name = this._name;
+					for (let oo = 0; oo < args.length; oo++) _args[args[oo]] = this._args[args[oo]][offsets[oo]];
+					for (let oo = 0; oo < args.length; oo++) _name = _name.replaceAll(`\$${args[oo]}`, _args[args[oo]]);
+					try {
+						stats = await measure(this.f, {
+							...tune,
+							args: _args,
+							...planOverrides(plans?.[o])
+						});
+					} catch (err) {
+						error = err;
+						if (thrw) throw err;
+					}
+					runs[o] = {
+						stats,
+						error,
+						args: _args,
+						name: _name
+					};
+				}
+				let offset = 0;
+				do
+					offsets[offset] = (1 + offsets[offset]) % this._args[args[offset]].length;
+				while (0 === offsets[offset++] && offset < args.length);
+			}
+			return {
+				runs,
+				kind,
+				args: this._args,
+				alias: this._name,
+				group: this._group,
+				gcMode: this._gc,
+				baseline: !!(this.flags & flags.baseline),
+				style: {
+					highlight: this._highlight,
+					compact: !!(this.flags & flags.compact)
+				}
+			};
+		}
+	}
+};
+function group$1(name, f) {
+	if (typeof name === "function") {
+		f = name;
+		name = null;
+	}
+	return _c(f, "g", name);
+}
+function bench$1(n, fn) {
+	if (typeof n === "function") {
+		fn = n;
+		n = fn.name || "anonymous";
+	}
+	const collection = COLLECTIONS[COLLECTIONS.length - 1];
+	const b = new B(n, fn);
+	b._group = collection.id;
+	return collection.trials.push(b), b;
+}
+const _c = (f, t, name = null) => {
+	const last = COLLECTIONS[COLLECTIONS.length - 1];
+	COLLECTIONS.push({
+		trials: [],
+		name: name ?? last.name,
+		id: COLLECTIONS.length,
+		types: [t, ...last.types]
+	});
+	const r = f();
+	const n = {
+		trials: [],
+		name: last.name,
+		types: last.types,
+		id: COLLECTIONS.length
+	};
+	if (!(r instanceof Promise)) COLLECTIONS.push(n);
+	else return r.then(() => (COLLECTIONS.push(n), void 0));
+};
+function defaults(opts) {
+	opts.print ??= _print;
+	opts.throw ??= false;
+	opts.filter ??= /.*/;
+	opts.format ??= "mitata";
+	opts.colors ??= colors();
+	opts.tune ??= {};
+	opts.observe ??= (trial) => trial;
+	opts.run_trial ??= (trial, _index) => trial.run(opts.throw, opts.tune);
+}
+/** Initialize process-local hardware counters when supported. */
+async function initCounters(arch, runtime) {
+	if ($counters || ![
+		"bun",
+		"node",
+		"deno"
+	].includes(runtime)) return;
+	if (arch?.includes?.("darwin")) try {
+		$counters = await import("@mitata/counters");
+		if (0 !== globalThis.process.getuid()) throw $counters = false, 1;
+	} catch {}
+	if (!$counters && arch?.includes?.("linux")) try {
+		$counters = await import("@mitata/counters");
+	} catch (err) {
+		if (err?.message?.includes?.("PermissionDenied")) $counters = false;
+	}
+}
+/** Run one registered trial by its global registration index. */
+async function runTrialAt(index, tune = {}, plans) {
+	const trials = COLLECTIONS.flatMap((c) => c.trials);
+	const trial = trials[index];
+	if (!trial) throw new RangeError(`no bench registered at index ${index} (${trials.length} registered)`);
+	await initCounters(await arch(), runtime());
+	return await trial.run(false, tune, plans);
+}
+async function run(opts = {}) {
+	defaults(opts);
+	const t = Date.now();
+	const benchmarks = [];
+	const cal = opts.calibrate ?? {};
+	const noop = await measure(() => {}, cal);
+	const _cpu = await measure(() => {}, {
+		...cal,
+		batch_unroll: 1
+	});
+	const noop_sample_gc = await measure(() => {}, {
+		...cal,
+		sample_gc: true
+	});
+	const noop_iter = await measure((state) => {
+		for (const _ of state);
+	}, cal);
+	const context = {
+		now: t,
+		arch: await arch(),
+		version: version(),
+		runtime: runtime(),
+		cpu: {
+			name: await cpu(),
+			freq: 1 / _cpu.avg
+		},
+		noop: {
+			fn: noop,
+			iter: noop_iter,
+			fn_gc: noop_sample_gc
+		}
+	};
+	await initCounters(context.arch, context.runtime);
+	if (opts.execute) {
+		const jobs = [];
+		let index = 0;
+		for (const collection of COLLECTIONS) for (const trial of collection.trials) {
+			const i = index++;
+			if (opts.filter.test(trial._name)) jobs.push({
+				trial,
+				index: i
+			});
+		}
+		const executed = await opts.execute(jobs);
+		opts.run_trial = (_trial, i) => executed.get(i);
+	}
+	const layout = COLLECTIONS.map((c) => ({
+		name: c.name,
+		types: c.types
+	}));
+	const format = "string" === typeof opts.format ? opts.format : Object.keys(opts.format)[0];
+	await formats[format](context, {
+		...opts,
+		format: opts.format[format]
+	}, benchmarks, layout);
+	return COLLECTIONS = [{
+		name: 0,
+		types: [],
+		trials: []
+	}], {
+		layout,
+		context,
+		benchmarks
+	};
+}
+const formats = {
+	async quiet(_, opts, benchmarks) {
+		let index = 0;
+		for (const collection of COLLECTIONS) for (const trial of collection.trials) {
+			const i = index++;
+			if (opts.filter.test(trial._name)) benchmarks.push(opts.observe(await opts.run_trial(trial, i)));
+		}
+	},
+	async json(ctx, opts, benchmarks, layout) {
+		const print = opts.print;
+		const debug = opts.format?.debug ?? true;
+		const samples = opts.format?.samples ?? true;
+		let index = 0;
+		for (const collection of COLLECTIONS) for (const trial of collection.trials) {
+			const i = index++;
+			if (opts.filter.test(trial._name)) benchmarks.push(opts.observe(await opts.run_trial(trial, i)));
+		}
+		print(JSON.stringify({
+			layout,
+			benchmarks,
+			context: ctx
+		}, (k, v) => {
+			if (!debug && k === "debug") return "";
+			if (!samples && k === "samples") return null;
+			if (!(v instanceof Error)) return v;
+			return {
+				name: v.name,
+				message: String(v.message),
+				stack: v.stack
+			};
+		}, 0));
+	},
+	async markdown(ctx, opts, benchmarks) {
+		let first = true;
+		const print = opts.print;
+		print(`clk: ~${ctx.cpu.freq.toFixed(2)} GHz`);
+		print(`cpu: ${ctx.cpu.name}`);
+		print(`runtime: ${ctx.runtime}${!ctx.version ? "" : ` ${ctx.version}`} (${ctx.arch})`);
+		print("");
+		let index = 0;
+		for (const collection of COLLECTIONS) {
+			const trials = [];
+			if (!collection.trials.length) continue;
+			for (const trial of collection.trials) {
+				const i = index++;
+				if (opts.filter.test(trial._name)) {
+					let bench = await opts.run_trial(trial, i);
+					bench = opts.observe(bench);
+					trials.push(bench);
+					benchmarks.push(bench);
+				}
+			}
+			if (!trials.length) continue;
+			if (!first) print("");
+			const name_len = trials.reduce((a, b) => Math.max(a, b.runs.reduce((a, b) => Math.max(a, b.name.length), 0)), 0);
+			print(`| ${(collection.name ? `• ${collection.name}` : !first ? "" : "benchmark").padEnd(name_len)} | ${"avg".padStart(16)} | ${"min".padStart(11)} | ${"p75".padStart(11)} | ${"p99".padStart(11)} | ${"max".padStart(11)} |`);
+			print(`| ${"-".repeat(name_len)} | ${"-".repeat(16)} | ${"-".repeat(11)} | ${"-".repeat(11)} | ${"-".repeat(11)} | ${"-".repeat(11)} |`);
+			first = false;
+			for (const trial of trials) for (const run of trial.runs) if (run.error) print(`| ${run.name.padEnd(name_len)} | ${isAssertionError(run.error) ? "failed" : "error"}: ${run.error.message ?? run.error} |`);
+			else print(`| ${run.name.padEnd(name_len)} | \`${`${formatNs(run.stats.avg)}/iter`.padStart(14)}\` | \`${formatNs(run.stats.min).padStart(9)}\` | \`${formatNs(run.stats.p75).padStart(9)}\` | \`${formatNs(run.stats.p99).padStart(9)}\` | \`${formatNs(run.stats.max).padStart(9)}\` |`);
+		}
+	},
+	async mitata(ctx, opts, benchmarks) {
+		const renderedCollections = [];
+		let index = 0;
+		for (const collection of COLLECTIONS) {
+			const renderedTrials = [];
+			for (const trial of collection.trials) {
+				const i = index++;
+				if (!opts.filter.test(trial._name)) continue;
+				let bench = await opts.run_trial(trial, i);
+				bench = opts.observe(bench);
+				benchmarks.push(bench);
+				renderedTrials.push({
+					highlight: -1 === COLOR_NAMES.indexOf(trial._highlight) ? null : trial._highlight,
+					compact: !!(trial.flags & flags.compact),
+					gcMode: trial._gc,
+					bench
+				});
+			}
+			if (renderedTrials.length > 0) renderedCollections.push({
+				name: collection.name,
+				types: collection.types,
+				trials: renderedTrials
+			});
+		}
+		renderMitata(ctx, {
+			print: opts.print,
+			colors: opts.colors,
+			format: opts.format,
+			countersAvailable: $counters
+		}, renderedCollections);
+	}
+};
+//#endregion
+//#region src/assert.ts
+/** Error type used for failed benchmark checks. */
+var AssertionError = class extends Error {
+	actual;
+	expected;
+	constructor(message, actual, expected) {
+		super(message);
+		this.name = "AssertionError";
+		this.actual = actual;
+		this.expected = expected;
+	}
+};
+function preview(value) {
+	let text;
+	try {
+		text = serialize(value);
+	} catch {
+		text = String(value);
+	}
+	return text.length > 60 ? `${text.slice(0, 59)}…` : text;
+}
+function assertCondition(condition, message = "assertion failed") {
+	if (!condition) throw new AssertionError(message);
+}
+function equal(actual, expected, message) {
+	if (serialize(actual) === serialize(expected)) return;
+	throw new AssertionError(message ?? `expected ${preview(expected)} but got ${preview(actual)}`, actual, expected);
+}
+const assert = Object.assign(assertCondition, { equal });
+//#endregion
+//#region src/config.ts
+function defineConfig(config) {
+	if (config.samplingPolicy !== void 0 && config.samplingPolicy !== "adaptive" && config.samplingPolicy !== "single-call") throw new TypeError(`Invalid Labs samplingPolicy: ${String(config.samplingPolicy)}`);
+	return {
+		benchMatch: "**/*.bench.ts",
+		nodeFlags: ["--allow-natives-syntax", "--expose-gc"],
+		resultsDir: ".labs",
+		blockTime: .5,
+		minSamples: 20,
+		samplingPolicy: "adaptive",
+		alpha: .05,
+		minDelta: .05,
+		snapshotTolerance: 1e-9,
+		blocks: 8,
+		...config
+	};
+}
+//#endregion
+//#region src/index.ts
+const tagStack = [];
+const groupNameStack = [];
+const grepTags = process.env.LABS_GREP_TAGS?.split(",").filter(Boolean) ?? [];
+const benchRegistry = [];
+function getBenchRegistry() {
+	return benchRegistry;
+}
+function parseTags(name) {
+	const tags = [];
+	return {
+		cleanName: name.replace(/@\S+/g, (m) => {
+			tags.push(m);
+			return "";
+		}).trim(),
+		tags
+	};
+}
+function effectiveTags(ownTags) {
+	return [...tagStack.flat(), ...ownTags];
+}
+function matchesGrep(tags) {
+	if (grepTags.length === 0) return true;
+	if (tags.length === 0) return false;
+	return grepTags.some((t) => tags.includes(t));
+}
+const NOOP_B = new Proxy({}, { get: (_, prop) => prop === "run" ? () => Promise.resolve({}) : () => NOOP_B });
+function bench(nameOrFn, fn) {
+	if (typeof nameOrFn === "function") {
+		if (!matchesGrep(effectiveTags([]))) return NOOP_B;
+		benchRegistry.push({
+			groupName: groupNameStack.at(-1) ?? "",
+			alias: "anonymous"
+		});
+		return bench$1(nameOrFn);
+	}
+	const { cleanName, tags } = parseTags(nameOrFn);
+	if (!matchesGrep(effectiveTags(tags))) return NOOP_B;
+	benchRegistry.push({
+		groupName: groupNameStack.at(-1) ?? "",
+		alias: cleanName || "anonymous"
+	});
+	return bench$1(cleanName, fn);
+}
+function group(nameOrFn, fn) {
+	if (typeof nameOrFn === "function") return group$1(nameOrFn);
+	const { cleanName, tags } = parseTags(nameOrFn);
+	tagStack.push(tags);
+	groupNameStack.push(cleanName);
+	const result = group$1(cleanName, fn);
+	const maybePromise = result;
+	if (typeof maybePromise?.finally === "function") return maybePromise.finally(() => {
+		tagStack.pop();
+		groupNameStack.pop();
+	});
+	tagStack.pop();
+	groupNameStack.pop();
+	return result;
+}
+//#endregion
+export { AssertionError as a, runTrialAt as c, defineConfig as i, measure as l, getBenchRegistry as n, assert as o, group as r, run as s, bench as t };

@@ -1,7 +1,7 @@
 //! Planner-scoped identity reconciles retained placement occurrences by logical key.
 //! Dense slots use generations and remain quarantined until renderer acknowledgement.
 
-use super::retained_rope::{RetainedRope, RopeRecord, RopeSummary};
+use super::retained_rope::{LEAF_CAPACITY, RetainedRope, RopeRecord, RopeSummary};
 use alloc::vec::Vec;
 use core::{num::NonZeroU32, ops::Range};
 
@@ -470,6 +470,8 @@ where
                 .and_then(|edit| edit.removed.map(|slot| (edit.key, slot)))
         };
         let mut retained_start = 0;
+        let mut pending_slots = [PlacementSlot(0); LEAF_CAPACITY];
+        let mut pending_len = 0;
         while old.is_some() || desired_cursor < self.index_edits.len() {
             #[cfg(test)]
             super::work_attribution::record(|work| work.placement_reconciled_key_groups += 1);
@@ -536,21 +538,35 @@ where
                 if existing.map(|entry| entry.1) != removed {
                     return Err(PlacementSlotError::DuplicateLogicalKey);
                 }
-                self.pending_index
-                    .append_shared_range(&self.committed_index, retained_start..low)
-                    .map_err(|_| PlacementSlotError::AllocationFailed)?;
+                if retained_start < low {
+                    flush_placement_slots(
+                        &mut self.pending_index,
+                        &pending_slots,
+                        &mut pending_len,
+                    )?;
+                    self.pending_index
+                        .append_shared_range(&self.committed_index, retained_start..low)
+                        .map_err(|_| PlacementSlotError::AllocationFailed)?;
+                }
                 retained_start = low + usize::from(existing.is_some());
             }
             if let Some(input) = ordinal {
                 let handle = self.assign_placement(&key, removed)?;
-                self.pending_index
-                    .push(handle.slot)
-                    .map_err(|_| PlacementSlotError::AllocationFailed)?;
+                pending_slots[pending_len] = handle.slot;
+                pending_len += 1;
+                if pending_len == LEAF_CAPACITY {
+                    flush_placement_slots(
+                        &mut self.pending_index,
+                        &pending_slots,
+                        &mut pending_len,
+                    )?;
+                }
                 self.assignments[input] = handle;
             } else if let Some(slot) = removed {
                 self.retire_slot(slot)?;
             }
         }
+        flush_placement_slots(&mut self.pending_index, &pending_slots, &mut pending_len)?;
         if !complete {
             self.pending_index
                 .append_shared_range(
@@ -562,9 +578,12 @@ where
         self.pending_order = self.committed_order.clone();
         for (range, inputs) in &self.occurrence_edits {
             let mut replacement = RetainedRope::default();
-            for handle in &self.assignments[inputs.clone()] {
+            for handles in self.assignments[inputs.clone()].chunks(LEAF_CAPACITY) {
+                for (slot, handle) in pending_slots.iter_mut().zip(handles) {
+                    *slot = handle.slot;
+                }
                 replacement
-                    .push(handle.slot)
+                    .append_records(&pending_slots[..handles.len()])
                     .map_err(|_| PlacementSlotError::AllocationFailed)?;
             }
             if !self
@@ -794,6 +813,19 @@ fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), PlacementSlo
         .map_err(|_| PlacementSlotError::AllocationFailed)
 }
 
+fn flush_placement_slots(
+    rope: &mut RetainedRope<PlacementSlot>,
+    slots: &[PlacementSlot; LEAF_CAPACITY],
+    len: &mut usize,
+) -> Result<(), PlacementSlotError> {
+    if *len != 0 {
+        rope.append_records(&slots[..*len])
+            .map_err(|_| PlacementSlotError::AllocationFailed)?;
+        *len = 0;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -844,6 +876,83 @@ mod tests {
         assert!(arena.retirements.is_empty());
         arena.commit();
         arena.commit();
+    }
+
+    #[test]
+    fn packed_placement_builders_preserve_leaf_boundaries_and_shared_gaps() {
+        for count in [0_usize, 1, 31, 32, 33, 65] {
+            let desired: Vec<_> = (0..count).rev().map(|index| index as u64 * 10).collect();
+            let mut arena = PlacementSlotArena::default();
+            arena.prepare(&desired, 1).unwrap();
+            let prepared = handles(&arena);
+            assert_eq!(prepared.len(), count);
+            arena.commit();
+            assert_index_matches_desired(&arena, &desired);
+            let order: Vec<_> = arena
+                .committed_order
+                .iter()
+                .map(|slot| arena.slots[slot.get() as usize].occupant.unwrap())
+                .collect();
+            assert_eq!(order, desired);
+            for (handle, key) in prepared.into_iter().zip(desired) {
+                assert_eq!(committed_key(&arena, handle), Some(key));
+            }
+        }
+
+        let original: Vec<_> = (0..70).map(|index| index as u64 * 10).collect();
+        let mut arena = PlacementSlotArena::default();
+        arena.prepare(&original, 1).unwrap();
+        let old_handles = handles(&arena);
+        arena.commit();
+
+        let mut expected = original.clone();
+        for (index, key) in (1_u64..=33).enumerate() {
+            expected[index] = key;
+        }
+        expected[40] = 405;
+        let changed: Vec<_> = expected[..33]
+            .iter()
+            .copied()
+            .chain(core::iter::once(expected[40]))
+            .collect();
+        assert!(
+            arena
+                .prepare_retained_subset(&changed, [Some(0..33), Some(40..41)].into_iter(), 2)
+                .unwrap()
+        );
+        let changed_handles = handles(&arena);
+        assert_eq!(changed_handles.len(), 34);
+        arena.commit();
+        assert_index_matches_desired(&arena, &expected);
+        for (handle, key) in changed_handles.into_iter().zip(changed) {
+            assert_eq!(committed_key(&arena, handle), Some(key));
+        }
+        let order: Vec<_> = arena
+            .committed_order
+            .iter()
+            .map(|slot| arena.slots[slot.get() as usize].occupant.unwrap())
+            .collect();
+        assert_eq!(order, expected);
+        for (index, handle) in old_handles.iter().enumerate().skip(33) {
+            if index != 40 {
+                assert_eq!(arena.committed_order.get(index), Some(&handle.slot()));
+            }
+        }
+        for (ordinal, key) in expected.iter().copied().enumerate() {
+            if [10, 20, 30].contains(&key) {
+                let original_handle = old_handles[(key / 10) as usize];
+                assert_eq!(
+                    arena.committed_order.get(ordinal),
+                    Some(&original_handle.slot())
+                );
+                assert_eq!(committed_key(&arena, original_handle), Some(key));
+            }
+        }
+        for index in (0..33).chain(core::iter::once(40)) {
+            let original_key = original[index];
+            let expected_key = expected.contains(&original_key).then_some(original_key);
+            assert_eq!(committed_key(&arena, old_handles[index]), expected_key);
+        }
     }
 
     #[test]

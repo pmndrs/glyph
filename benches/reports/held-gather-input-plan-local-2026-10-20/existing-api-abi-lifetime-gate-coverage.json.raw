@@ -1,0 +1,64 @@
+{
+  "schema": "held-input-plan-existing-gate-coverage-v1",
+  "recordedUtc": "2026-10-20T23:01:33.363954+00:00",
+  "sourceHead": "b81756a5ce4541b4e9b23d7ad04c9105345e7cff",
+  "gatherSourceSha256": "e8c21cb9c7dddb99c9211bdadfd372bdc236d7a385c3f4868bac9ece36c33f7b",
+  "commandReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/package-check-01/result.json",
+  "stdout": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/package-check-01/stdout.log",
+  "stdoutSha256": "517b1cbb0ec15ede9b9fc331dfc2fc316a315e2ba4ed21d220799e3886894bad",
+  "passedAssertions": [
+    {
+      "test": "prepared frame writes exact bytes into a nonzero-offset request arena",
+      "line": 822,
+      "text": "\u2714 prepared frame writes exact bytes into a nonzero-offset request arena (2.484208ms)"
+    },
+    {
+      "test": "publishes retained frame transactions through one aligned borrowed Wasm result",
+      "line": 1208,
+      "text": "\u2714 publishes retained frame transactions through one aligned borrowed Wasm result (22.405541ms)"
+    },
+    {
+      "test": "ships a zero-import optimized shaper module whose published ABI is generated",
+      "line": 1227,
+      "text": "\u2714 ships a zero-import optimized shaper module whose published ABI is generated (9.027833ms)"
+    },
+    {
+      "test": "bound edits prepare once and reads plus renderer publication reuse that revision",
+      "line": 1508,
+      "text": "\u2714 bound edits prepare once and reads plus renderer publication reuse that revision (35.4185ms)"
+    },
+    {
+      "test": "seeded retained formatted batches match a cold full publication after sparse edits",
+      "line": 1516,
+      "text": "\u2714 seeded retained formatted batches match a cold full publication after sparse edits (10.002542ms)"
+    },
+    {
+      "test": "deterministic retained renderer mutations match cold checkpoints in indexed and direct modes",
+      "line": 1578,
+      "text": "\u2714 deterministic retained renderer mutations match cold checkpoints in indexed and direct modes (276.274417ms)"
+    },
+    {
+      "test": "Text.readGlyphs demand-reads scalar records only inside one synchronous borrow",
+      "line": 1666,
+      "text": "\u2714 Text.readGlyphs demand-reads scalar records only inside one synchronous borrow (6.099541ms)"
+    },
+    {
+      "test": "fixed-seed codec and frame mutations fail safely, deterministically, and recoverably",
+      "line": 2082,
+      "text": "\u2714 fixed-seed codec and frame mutations fail safely, deterministically, and recoverably (77.566959ms)"
+    },
+    {
+      "test": "the published and generated TypeScript ABI contracts are identical",
+      "line": 2106,
+      "text": "\u2714 the published and generated TypeScript ABI contracts are identical (1.625417ms)"
+    }
+  ],
+  "inspectedSources": {
+    "packages/glyph/scripts/check.mts": "30f73ae41d7e0f7feb615674d185e1c275085f3fbb238aff2e56191674e4a34e",
+    "packages/glyph/scripts/test.mts": "aa5ed6866bc60827eae2c1cda4c614d93e94f2956ec9de76926786cf2de99724",
+    "packages/glyph/tests/fuzz/engine-wire-fuzz-smoke.test.mjs": "95831a5ebbfdfd2073ffeeb32e7daa0c14aa8a63804904918ebb5e9002f845c9",
+    "packages/glyph/tests/integration/render-plan-frame-abi.test.mjs": "f2ccc5289f552310b171e90659a0f3b510667810c3f4b9f9edd381be8e098da0"
+  },
+  "scope": "Coverage mapping of already completed current-source package check, not a new test run or browser/GPU/peer-floor proof. Fuzz source compiles dist/text-shaper.wasm and runs 64 deterministic codec/frame cases twice on new instances with recovery transactions. Frame ABI source instantiates compiled Wasm and asserts generated layout/export/result properties. Full tests total and artifact identities are in consolidated gate receipts; this file does not replace them.",
+  "remaining": "Rendered browser/hero, runtime peer floors, downstream application physical-memory/delivery and performance matrix remain separate."
+}

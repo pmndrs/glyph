@@ -1,0 +1,682 @@
+diff --git a/benches/labs.config.ts b/benches/labs.config.ts
+index bd4cf85d..d79f8434 100644
+--- a/benches/labs.config.ts
++++ b/benches/labs.config.ts
+@@ -2,6 +2,10 @@ import { defineConfig } from '@pmndrs/labs';
+ 
+ const cpuProfileOutput = process.env.GLYPH_LABS_CPU_PROFILE_OUTPUT;
+ const samplingPolicy = process.env.GLYPH_LABS_SAMPLING_POLICY;
++const warmupPolicy = process.env.GLYPH_LABS_WARMUP_POLICY;
++if (warmupPolicy !== undefined && warmupPolicy !== 'conditional' && warmupPolicy !== 'fixed-20') {
++  throw new Error(`Invalid GLYPH_LABS_WARMUP_POLICY: ${warmupPolicy}`);
++}
+ if (samplingPolicy !== undefined && samplingPolicy !== 'adaptive' && samplingPolicy !== 'single-call') {
+   throw new Error(`Invalid GLYPH_LABS_SAMPLING_POLICY: ${samplingPolicy}`);
+ }
+@@ -13,6 +17,7 @@ export default defineConfig({
+   blockTime: 0.5,
+   minSamples: 20,
+   samplingPolicy: samplingPolicy ?? 'adaptive',
++  warmupPolicy: warmupPolicy ?? 'conditional',
+   alpha: 0.05,
+   minDelta: 0.05,
+   ...(cpuProfileOutput === undefined
+diff --git a/benches/scripts/check-labs-sampling-protocol.mts b/benches/scripts/check-labs-sampling-protocol.mts
+index 9888c029..ee27e1fd 100644
+--- a/benches/scripts/check-labs-sampling-protocol.mts
++++ b/benches/scripts/check-labs-sampling-protocol.mts
+@@ -1,6 +1,6 @@
+ /* @workflow {
+   "name": "benchmark:labs-sampling-protocol-check",
+-  "summary": "Prove the pinned Labs single-call policy reaches an isolated worker and rejects invalid policies.",
++  "summary": "Prove pinned Labs single-call and fixed untimed warmup reach an isolated worker and reject invalid policies.",
+   "requirements": "The pinned @pmndrs/labs 0.9.0 pnpm patch must be installed. Runs only a tiny generated Labs fixture; no Glyph benchmark or package build.",
+   "writes": "Temporary fixture results are removed. Optional --output <path> saves a protocol-only JSON receipt."
+ } */
+@@ -12,7 +12,11 @@ import { tmpdir } from 'node:os';
+ import { dirname, resolve } from 'node:path';
+ import { fileURLToPath, pathToFileURL } from 'node:url';
+ 
+-import { assertLabsResultHasNoErrors, assertLabsSamplingPolicy } from './support/labs-result.mts';
++import {
++  assertLabsResultHasNoErrors,
++  assertLabsSamplingPolicy,
++  assertLabsWarmupPolicy,
++} from './support/labs-result.mts';
+ 
+ const benchesRoot = fileURLToPath(new URL('..', import.meta.url));
+ const labsRoot = realpathSync(resolve(benchesRoot, 'node_modules/@pmndrs/labs/dist'));
+@@ -38,6 +42,127 @@ const fixedControl = await measure(() => 0, { ...tune, batch: false });
+ assert.equal(adaptiveControl.plan.batch, true);
+ assert.equal(fixedControl.plan.batch, false);
+ 
++// The fixed policy runs 20 extra untimed calls even when the ordinary warmup threshold excludes them.
++const fixedWarmupTune = {
++  ...tune,
++  warmup_threshold: -Infinity,
++  warmup_samples: 2,
++  batch: false,
++  fixed_warmup_calls: 20,
++  min_cpu_time: 0,
++  min_samples: 1,
++  heap: null,
++  gc: false,
++};
++let callbackCalls = 0;
++let callsBeforeFirstTimedSample: number | undefined;
++let paramCalls = 0;
++let consumed = 0;
++let afterCalls = 0;
++let firstResult: number | undefined;
++const fixedWarmupFn = await measure(
++  async (...values: number[]) => {
++    callbackCalls++;
++    return values[0];
++  },
++  {
++    ...fixedWarmupTune,
++    now: () => {
++      callsBeforeFirstTimedSample ??= callbackCalls;
++      return 0;
++    },
++    params: { 0: () => ++paramCalls },
++    $consume: () => consumed++,
++    $first: (value: number) => {
++      firstResult = value;
++    },
++    after: () => {
++      afterCalls++;
++    },
++  },
++);
++const expectedCalls = 21 + fixedWarmupFn.plan.samples;
++assert.equal(firstResult, 1);
++assert.equal(callsBeforeFirstTimedSample, 21);
++assert.equal(callbackCalls, expectedCalls);
++assert.equal(paramCalls, expectedCalls);
++assert.equal(consumed, expectedCalls);
++assert.equal(afterCalls, expectedCalls);
++assert.equal(fixedWarmupFn.plan.batch, false);
++assert.equal(fixedWarmupFn.plan.warmup_calls, 21);
++let iteratorCalls = 0;
++let iteratorCallsBeforeFirstTimedSample: number | undefined;
++const fixedWarmupIter = await measure(
++  (context: Iterable<void>) => {
++    for (const _ of context) iteratorCalls++;
++  },
++  {
++    ...fixedWarmupTune,
++    now: () => {
++      iteratorCallsBeforeFirstTimedSample ??= iteratorCalls;
++      return 0;
++    },
++  },
++);
++assert.equal(iteratorCallsBeforeFirstTimedSample, 21);
++assert.equal(iteratorCalls, 21 + fixedWarmupIter.plan.samples);
++assert.equal(fixedWarmupIter.plan.batch, false);
++assert.equal(fixedWarmupIter.plan.warmup_calls, 21);
++let generatorCalls = 0;
++let generatorFirst: number | undefined;
++let generatorCallsBeforeFirstTimedSample: number | undefined;
++const fixedWarmupGenerator = await measure(
++  function* (): Generator<() => number, { first: number }, number> {
++    const first = yield () => ++generatorCalls;
++    generatorFirst = first;
++    return { first };
++  },
++  {
++    ...fixedWarmupTune,
++    now: () => {
++      generatorCallsBeforeFirstTimedSample ??= generatorCalls;
++      return 0;
++    },
++  },
++);
++assert.equal(generatorCallsBeforeFirstTimedSample, 21);
++assert.equal(generatorFirst, 1);
++assert.equal(generatorCalls, 21 + fixedWarmupGenerator.plan.samples);
++assert.equal(fixedWarmupGenerator.plan.warmup_calls, 21);
++let conditionalCalls = 0;
++let conditionalCallsBeforeFirstTimedSample: number | undefined;
++const conditional = await measure(() => ++conditionalCalls, {
++  ...fixedWarmupTune,
++  fixed_warmup_calls: undefined,
++  warmup_threshold: Infinity,
++  now: () => {
++    conditionalCallsBeforeFirstTimedSample ??= conditionalCalls;
++    return 0;
++  },
++});
++assert.equal(conditionalCallsBeforeFirstTimedSample, 2);
++assert.equal(conditional.plan.warmup_calls, 2);
++assert.equal(conditionalCalls, 2 + conditional.plan.samples);
++let conditionalIterCalls = 0;
++let conditionalIterCallsBeforeFirstTimedSample: number | undefined;
++const conditionalIter = await measure(
++  (context: Iterable<void>) => {
++    for (const _ of context) conditionalIterCalls++;
++  },
++  {
++    ...fixedWarmupTune,
++    fixed_warmup_calls: undefined,
++    warmup_threshold: Infinity,
++    now: () => {
++      conditionalIterCallsBeforeFirstTimedSample ??= conditionalIterCalls;
++      return 0;
++    },
++  },
++);
++assert.equal(conditionalIterCallsBeforeFirstTimedSample, 3);
++assert.equal(conditionalIter.plan.warmup_calls, 3);
++assert.equal(conditionalIterCalls, 3 + conditionalIter.plan.samples);
++
+ const fixtureRoot = await mkdtemp(resolve(tmpdir(), 'glyph-labs-policy-proof-'));
+ try {
+   await mkdir(resolve(fixtureRoot, 'bench'), { recursive: true });
+@@ -51,7 +176,7 @@ try {
+   );
+   await writeFile(
+     resolve(fixtureRoot, 'labs.config.ts'),
+-    `import { defineConfig } from '${labsImport}';\nexport default defineConfig({ benchDir: './bench', resultsDir: './results', blocks: 8, blockTime: 0.001, minSamples: 1, samplingPolicy: 'single-call' });\n`,
++    `import { defineConfig } from '${labsImport}';\nexport default defineConfig({ benchDir: './bench', resultsDir: './results', blocks: 8, blockTime: 0.001, minSamples: 1, samplingPolicy: 'single-call', warmupPolicy: 'fixed-20' });\n`,
+   );
+   execFileSync(process.execPath, [cli, 'run', 'protocol', '--name', 'policy-proof', '--blocks', '8', '--force'], {
+     cwd: fixtureRoot,
+@@ -62,6 +187,7 @@ try {
+   ) as unknown;
+   assertLabsResultHasNoErrors(result);
+   assertLabsSamplingPolicy(result, 'single-call', 8);
++  assertLabsWarmupPolicy(result, 'fixed-20', 8);
+ 
+   await writeFile(
+     resolve(fixtureRoot, 'labs.config.ts'),
+@@ -71,6 +197,14 @@ try {
+   assert.notEqual(invalidConfig.status, 0);
+   assert.match(`${invalidConfig.stdout}${invalidConfig.stderr}`, /Invalid Labs samplingPolicy: invalid/u);
+ 
++  await writeFile(
++    resolve(fixtureRoot, 'labs.config.ts'),
++    `import { defineConfig } from '${labsImport}';\nexport default defineConfig({ benchDir: './bench', samplingPolicy: 'adaptive', warmupPolicy: 'fixed-20' });\n`,
++  );
++  const incompatibleConfig = spawnSync(process.execPath, [cli, 'list'], { cwd: fixtureRoot, encoding: 'utf8' });
++  assert.notEqual(incompatibleConfig.status, 0);
++  assert.match(`${incompatibleConfig.stdout}${incompatibleConfig.stderr}`, /fixed-20 warmup requires single-call/u);
++
+   const invalidRunner = spawnSync(
+     process.execPath,
+     [resolve(benchesRoot, 'scripts/run-package-labs.mts'), '--sampling', 'invalid'],
+@@ -81,12 +215,22 @@ try {
+   );
+   assert.notEqual(invalidRunner.status, 0);
+   assert.match(`${invalidRunner.stdout}${invalidRunner.stderr}`, /--sampling must be adaptive or single-call/u);
++  const incompatibleRunner = spawnSync(
++    process.execPath,
++    [resolve(benchesRoot, 'scripts/run-package-labs.mts'), '--warmup', 'fixed-20'],
++    { cwd: benchesRoot, encoding: 'utf8' },
++  );
++  assert.notEqual(incompatibleRunner.status, 0);
++  assert.match(`${incompatibleRunner.stdout}${incompatibleRunner.stderr}`, /requires --sampling single-call/u);
+ 
+   const receipt = {
+     labsVersion: '0.9.0',
+     adaptiveControlBatched: adaptiveControl.plan.batch,
+     fixedControlBatched: fixedControl.plan.batch,
+     workerSingleCallPlanValidated: true,
++    fixedUntimedWarmupCalls: 20,
++    functionIteratorAndGeneratorWarmupValidated: true,
++    historicalConditionalWarmupValidated: true,
+     workerBlocks: 8,
+     invalidConfigRejected: true,
+     invalidRunnerOptionRejected: true,
+diff --git a/benches/scripts/release-labs-comparison.test.mts b/benches/scripts/release-labs-comparison.test.mts
+index ef90b8a0..1a50800d 100644
+--- a/benches/scripts/release-labs-comparison.test.mts
++++ b/benches/scripts/release-labs-comparison.test.mts
+@@ -47,6 +47,7 @@ function savedFixture() {
+     suite: 'full',
+     blocks: 8,
+     samplingPolicy: 'adaptive' as const,
++    warmupPolicy: 'conditional' as const,
+   };
+   const manifest = {
+     ...expected,
+@@ -106,6 +107,11 @@ test('accepts saved timings only for the exact package and matching benchmark en
+     () => validateSavedPackageLabs({ ...manifest, samplingPolicy: undefined }, result, expected),
+     /does not match/u,
+   );
++  assert.doesNotThrow(() => validateSavedPackageLabs({ ...manifest, warmupPolicy: undefined }, result, expected));
++  assert.throws(
++    () => validateSavedPackageLabs({ ...manifest, warmupPolicy: 'fixed-20' }, result, expected),
++    /does not match/u,
++  );
+   assert.throws(
+     () => validateSavedPackageLabs({ ...manifest, profiling: { profileTag: '@target' } }, result, expected),
+     /Diagnostic profiling results cannot be reused/u,
+@@ -124,12 +130,52 @@ test('fixed-policy saved reuse requires its digest even when an untracked depend
+       {
+         file: 'fixture.bench.ts',
+         benchmarks: [
+-          { runs: [{ name: 'fixture', stats: { plan: { batch: false }, blocks: { medians: Array(8).fill(100) } } }] },
++          {
++            runs: [
++              {
++                name: 'fixture',
++                stats: {
++                  plan: { batch: false, warmup_calls: 21 },
++                  blocks: { medians: Array(8).fill(100), warmupCalls: Array(8).fill(21) },
++                },
++              },
++            ],
++          },
+         ],
+       },
+     ],
+   };
+   assert.doesNotThrow(() => validateSavedPackageLabs(fixedManifest, fixedResult, fixedExpected));
++  const warmedExpected = { ...fixedExpected, warmupPolicy: 'fixed-20' as const };
++  const warmedManifest = { ...fixedManifest, warmupPolicy: 'fixed-20' as const };
++  assert.throws(() => validateSavedPackageLabs(fixedManifest, fixedResult, warmedExpected), /does not match/u);
++  assert.throws(() => validateSavedPackageLabs(warmedManifest, fixedResult, fixedExpected), /does not match/u);
++  assert.doesNotThrow(() => validateSavedPackageLabs(warmedManifest, fixedResult, warmedExpected));
++  const incompleteWarmup = {
++    ...fixedResult,
++    files: [
++      {
++        file: 'fixture.bench.ts',
++        benchmarks: [
++          {
++            runs: [
++              {
++                name: 'fixture',
++                stats: {
++                  plan: { batch: false, warmup_calls: 21 },
++                  blocks: { medians: Array(8).fill(100), warmupCalls: [21, 21, 21, 21, 21, 21, 20, 21] },
++                },
++              },
++            ],
++          },
++        ],
++      },
++    ],
++  };
++  assert.throws(
++    () => validateSavedPackageLabs(warmedManifest, incompleteWarmup, warmedExpected),
++    /was not applied in every block/u,
++  );
+   const previousDirectory = process.cwd();
+   const directory = mkdtempSync(join(tmpdir(), 'glyph-labs-fixed-reuse-'));
+   try {
+diff --git a/benches/scripts/run-package-labs.mts b/benches/scripts/run-package-labs.mts
+index 3914c43a..2aeabfbe 100644
+--- a/benches/scripts/run-package-labs.mts
++++ b/benches/scripts/run-package-labs.mts
+@@ -1,7 +1,7 @@
+ /* @workflow {
+   "name": "benchmark:labs-package",
+   "summary": "Benchmark common installed-package workflows by default, select a focused/full pmndrs/labs suite, or capture a tagged diagnostic CPU profile.",
+-  "requirements": "Network access for registry specs, or one or two packed @pmndrs/glyph .tgz artifacts. Never builds workspace source. --saved-candidate <report-directory> reuses an exact artifact's saved candidate instead of timing it again, with matching environment and sampling checks. Accepts --suite smoke|layout|measure|glyphs|publication|spans|batch|style|reflow|stress|cold|edit|assignment|edit-sized|multi-owner|bulk-1024-profile|full. --sampling adaptive|single-call defaults to adaptive; use single-call for every arm of a fixed-policy comparison. Full baselines require all 145 candidate identities unless --baseline-availability published-no-outlines explicitly permits the two documented outline omissions. Optional candidate-only diagnostic profiling requires both --profile-tag <@tag> and --cpu-profile-output <directory>; it selects that Labs tag and cannot be combined with --baseline or --saved-candidate. Profiled timings are diagnostic and are not a normal performance comparison.",
++  "requirements": "Network access for registry specs, or one or two packed @pmndrs/glyph .tgz artifacts. Never builds workspace source. --saved-candidate <report-directory> reuses an exact artifact's saved candidate instead of timing it again, with matching environment and sampling checks. Accepts --suite smoke|layout|measure|glyphs|publication|spans|batch|style|reflow|stress|cold|edit|assignment|edit-sized|multi-owner|bulk-1024-profile|full. --sampling adaptive|single-call defaults to adaptive; --warmup conditional|fixed-20 defaults to conditional. Use --sampling single-call --warmup fixed-20 uniformly for a fixed-warmup comparison. Full baselines require all 145 candidate identities unless --baseline-availability published-no-outlines explicitly permits the two documented outline omissions. Optional candidate-only diagnostic profiling requires both --profile-tag <@tag> and --cpu-profile-output <directory>; it selects that Labs tag and cannot be combined with --baseline or --saved-candidate. Profiled timings are diagnostic and are not a normal performance comparison.",
+   "writes": "Ignored Labs results, an artifact manifest, and a Markdown summary.md (also appended to $GITHUB_STEP_SUMMARY when set) under --output (default .cache/labs-package); optional V8 CPU profiles are written under --cpu-profile-output."
+ } */
+ import { createHash } from 'node:crypto';
+@@ -15,11 +15,13 @@ import {
+   acceptLabsResult,
+   assertFullLabsCoverage,
+   assertLabsSamplingPolicy,
++  assertLabsWarmupPolicy,
+   labsRunNames,
+   labsRunMedianTimes,
+   type LabsResultRole,
+   type LabsBaselineAvailability,
+   type LabsSamplingPolicy,
++  type LabsWarmupPolicy,
+   readLabsResult,
+   timingModeDifferences,
+   timingModeMismatches,
+@@ -39,6 +41,7 @@ interface Options {
+   readonly suite: PackageLabsSuite;
+   readonly savedCandidate?: string;
+   readonly samplingPolicy: LabsSamplingPolicy;
++  readonly warmupPolicy: LabsWarmupPolicy;
+   readonly baselineAvailability: LabsBaselineAvailability;
+ }
+ 
+@@ -82,6 +85,7 @@ try {
+       suite: options.suite,
+       blocks: options.blocks,
+       samplingPolicy: options.samplingPolicy,
++      warmupPolicy: options.warmupPolicy,
+     });
+     await mkdir(labsResults, { recursive: true });
+     await copyFile(resolve(savedCandidate, 'candidate.json'), resolve(labsResults, `${candidateRunName}.json`));
+@@ -114,6 +118,7 @@ try {
+     );
+   }
+   assertLabsSamplingPolicy(candidateRun.result, options.samplingPolicy, options.blocks);
++  assertLabsWarmupPolicy(candidateRun.result, options.warmupPolicy, options.blocks);
+   if (options.suite === 'full') {
+     assertFullLabsCoverage(candidateRun.result, baselineRun?.result, options.baselineAvailability);
+   }
+@@ -150,6 +155,7 @@ try {
+         blocks: options.blocks,
+         suite: options.suite,
+         samplingPolicy: options.samplingPolicy,
++        warmupPolicy: options.warmupPolicy,
+         baselineAvailability: options.baselineAvailability,
+         baseline: baseline === undefined ? undefined : artifactIdentity(baseline),
+         candidate: artifactIdentity(candidate),
+@@ -232,6 +238,13 @@ async function parseOptions(argv: readonly string[]): Promise<Options> {
+   if (samplingPolicy !== 'adaptive' && samplingPolicy !== 'single-call') {
+     throw new Error('--sampling must be adaptive or single-call');
+   }
++  const warmupPolicy = values.get('warmup') ?? 'conditional';
++  if (warmupPolicy !== 'conditional' && warmupPolicy !== 'fixed-20') {
++    throw new Error('--warmup must be conditional or fixed-20');
++  }
++  if (warmupPolicy === 'fixed-20' && samplingPolicy !== 'single-call') {
++    throw new Error('--warmup fixed-20 requires --sampling single-call');
++  }
+   const baselineAvailability = values.get('baseline-availability') ?? 'complete';
+   if (baselineAvailability !== 'complete' && baselineAvailability !== 'published-no-outlines') {
+     throw new Error('--baseline-availability must be complete or published-no-outlines');
+@@ -267,6 +280,7 @@ async function parseOptions(argv: readonly string[]): Promise<Options> {
+     output: values.get('output') ?? '.cache/labs-package',
+     suite,
+     samplingPolicy,
++    warmupPolicy,
+     baselineAvailability,
+     ...(profileTag === undefined ? {} : { profileTag }),
+     ...(cpuProfileOutput === undefined ? {} : { cpuProfileOutput }),
+@@ -370,6 +384,7 @@ async function runLabs(
+         GLYPH_LABS_ARTIFACT_ROLE: role,
+         GLYPH_LABS_CPU_PROFILE_OUTPUT: cpuProfileOutput,
+         GLYPH_LABS_SAMPLING_POLICY: options.samplingPolicy,
++        GLYPH_LABS_WARMUP_POLICY: options.warmupPolicy,
+       },
+     );
+   } catch (error) {
+@@ -377,6 +392,7 @@ async function runLabs(
+   }
+   const result = await readLabsResult(resultPath);
+   assertLabsSamplingPolicy(result, options.samplingPolicy, blocks);
++  assertLabsWarmupPolicy(result, options.warmupPolicy, blocks);
+   return { notComparable: acceptLabsResult(result, role), result };
+ }
+ 
+diff --git a/benches/scripts/support/labs-result.mts b/benches/scripts/support/labs-result.mts
+index b091eed9..8d15c54d 100644
+--- a/benches/scripts/support/labs-result.mts
++++ b/benches/scripts/support/labs-result.mts
+@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
+ /** Which side of a comparison produced a Labs result: the published base, or the package under review. */
+ export type LabsResultRole = 'baseline' | 'candidate';
+ export type LabsSamplingPolicy = 'adaptive' | 'single-call';
++export type LabsWarmupPolicy = 'conditional' | 'fixed-20';
+ export type LabsBaselineAvailability = 'complete' | 'published-no-outlines';
+ 
+ const publishedUnavailableOutlines = [
+@@ -80,6 +81,27 @@ function labsIdentitySet(result: unknown): Set<string> {
+   return identities;
+ }
+ 
++/** A fixed warmup result must prove that every fresh worker ran the promised untimed calls. */
++export function assertLabsWarmupPolicy(result: unknown, policy: LabsWarmupPolicy, blocks: number): void {
++  if (policy === 'conditional') return;
++  const runs = labeledRuns(result);
++  if (runs.length === 0) throw new Error('Labs result did not contain any benchmark runs');
++  for (const { label, run } of runs) {
++    if (run.error !== undefined) continue;
++    if (
++      !isRecord(run.stats) ||
++      !isRecord(run.stats.plan) ||
++      run.stats.plan.warmup_calls !== 21 ||
++      !isRecord(run.stats.blocks) ||
++      !Array.isArray(run.stats.blocks.warmupCalls) ||
++      run.stats.blocks.warmupCalls.length !== blocks ||
++      !run.stats.blocks.warmupCalls.every((count: unknown) => count === 21)
++    ) {
++      throw new Error(`Labs fixed-20 warmup policy was not applied in every block: ${label}`);
++    }
++  }
++}
++
+ /** Validate the complete saved worker output when fixed sampling was requested. */
+ export function assertLabsSamplingPolicy(result: unknown, policy: LabsSamplingPolicy, blocks: number): void {
+   if (policy === 'adaptive') return;
+diff --git a/benches/scripts/support/saved-package-labs.mts b/benches/scripts/support/saved-package-labs.mts
+index d2019aa4..9803d927 100644
+--- a/benches/scripts/support/saved-package-labs.mts
++++ b/benches/scripts/support/saved-package-labs.mts
+@@ -4,7 +4,13 @@ import { createHash } from 'node:crypto';
+ import { closeSync, openSync, readSync } from 'node:fs';
+ import { resolve } from 'node:path';
+ 
+-import { assertLabsResultHasNoErrors, assertLabsSamplingPolicy, type LabsSamplingPolicy } from './labs-result.mts';
++import {
++  assertLabsResultHasNoErrors,
++  assertLabsSamplingPolicy,
++  assertLabsWarmupPolicy,
++  type LabsSamplingPolicy,
++  type LabsWarmupPolicy,
++} from './labs-result.mts';
+ 
+ const harnessPaths = [
+   ':(top)benches/labs',
+@@ -70,6 +76,7 @@ export function validateSavedPackageLabs(
+     readonly suite: string;
+     readonly blocks: number;
+     readonly samplingPolicy: LabsSamplingPolicy;
++    readonly warmupPolicy: LabsWarmupPolicy;
+   },
+ ): void {
+   if (!isRecord(manifest) || !isRecord(manifest.candidate) || !isRecord(result)) {
+@@ -83,12 +90,16 @@ export function validateSavedPackageLabs(
+     manifest.suite !== expected.suite ||
+     manifest.blocks !== expected.blocks ||
+     manifest.samplingPolicy !== expected.samplingPolicy ||
++    (manifest.warmupPolicy ?? 'conditional') !== expected.warmupPolicy ||
++    (manifest.warmupPolicy !== undefined &&
++      manifest.warmupPolicy !== 'conditional' &&
++      manifest.warmupPolicy !== 'fixed-20') ||
+     result.blocks !== expected.blocks ||
+     manifest.candidate.version !== expected.version ||
+     expected.sha256 === undefined ||
+     manifest.candidate.sha256 !== expected.sha256
+   ) {
+-    throw new Error('Saved candidate artifact, suite, blocks or Labs version does not match');
++    throw new Error('Saved candidate artifact, suite, blocks, sampling/warmup policy or Labs version does not match');
+   }
+   if (
+     !isRecord(result.hardware) ||
+@@ -102,6 +113,7 @@ export function validateSavedPackageLabs(
+   }
+   assertLabsResultHasNoErrors(result);
+   assertLabsSamplingPolicy(result, expected.samplingPolicy, expected.blocks);
++  assertLabsWarmupPolicy(result, expected.warmupPolicy, expected.blocks);
+   if (expected.samplingPolicy === 'single-call' && !Object.hasOwn(manifest, 'harnessDigest')) {
+     throw new Error('Fixed-policy saved candidate requires a matching benchmark harness digest');
+   }
+diff --git a/patches/@pmndrs__labs@0.9.0.patch b/patches/@pmndrs__labs@0.9.0.patch
+index 70a150f6..cd2b7118 100644
+--- a/patches/@pmndrs__labs@0.9.0.patch
++++ b/patches/@pmndrs__labs@0.9.0.patch
+@@ -1,45 +1,128 @@
+ diff --git a/dist/cli/cli.mjs b/dist/cli/cli.mjs
+-index ef292d6ca7dd2238611f982705b12cf8f2120b44..a0ffed2f2ef0ed19dbff4955f5ca66dcb9729127 100755
+ --- a/dist/cli/cli.mjs
+ +++ b/dist/cli/cli.mjs
+-@@ -1238,6 +1238,7 @@ function runBench(file, nodeFlags, label, tune, tagFilter, resultFile) {
++@@ -1238,6 +1238,8 @@
+  			LABS_BLOCKS: String(tune.blocks ?? 8),
+  			...tune.blockTime !== void 0 ? { LABS_BLOCK_TIME: String(tune.blockTime * 1e9) } : {},
+  			...tune.minSamples !== void 0 ? { LABS_MIN_SAMPLES: String(tune.minSamples) } : {},
+ +			LABS_SAMPLING_POLICY: tune.samplingPolicy,
+++			LABS_WARMUP_POLICY: tune.warmupPolicy,
+  			...tagFilter ? { LABS_GREP_TAGS: tagFilter } : {},
+  			...resultFile ? { LABS_RESULT_FILE: resultFile } : {}
+  		}
+-@@ -1392,6 +1393,7 @@ async function runCLI(args) {
++@@ -1392,6 +1394,8 @@
+  	const benchTune = {
+  		blockTime: config.blockTime,
+  		minSamples: config.minSamples,
+ +		samplingPolicy: config.samplingPolicy,
+++		warmupPolicy: config.warmupPolicy,
+  		blocks
+  	};
+  	const git = captureGitInfo(dirname(configPath));
+ diff --git a/dist/index.d.ts b/dist/index.d.ts
+-index 3256fe9e73a908be929b0976787c9c6ea201e647..ee364657e55e481e91e75090fc4c6f959c05e1f2 100644
+ --- a/dist/index.d.ts
+ +++ b/dist/index.d.ts
+-@@ -130,6 +130,8 @@ interface LabsConfig {
++@@ -130,6 +130,10 @@
+    blockTime?: number;
+    /** Minimum samples per block. @default 20 */
+    minSamples?: number;
+ +  /** Sampling mode for every benchmark call. @default "adaptive" */
+ +  samplingPolicy?: "adaptive" | "single-call";
+++  /** Untimed warmup after the first-result callback. fixed-20 requires single-call sampling. @default "conditional" */
+++  warmupPolicy?: "conditional" | "fixed-20";
+    /** Mann-Whitney U significance level. @default 0.05 */
+    alpha: number;
+    /** Minimum |Hodges-Lehmann delta| required to flag a verdict. Filters environmental noise on identical code. @default 0.05 */
+ diff --git a/dist/src-DNyOXr2d.mjs b/dist/src-DNyOXr2d.mjs
+-index ae2209d4ec8ef176de4d8b2a5c17733b69de00f0..bc0b7313409b0318ebc1f0692a67098e6aad77d5 100644
+ --- a/dist/src-DNyOXr2d.mjs
+ +++ b/dist/src-DNyOXr2d.mjs
+-@@ -1162,12 +1162,14 @@ const assert = Object.assign(assertCondition, { equal });
++@@ -244,6 +244,7 @@
++ 	let async = false;
++ 	let batch = false;
++ 	let single = 0;
+++	let untimedCalls = 1;
++ 	const params = Object.keys(opts.params);
++ 	{
++ 		const $p = Array.from({ length: params.length }, () => 0);
++@@ -264,15 +265,17 @@
++ 		if (!opts.manual && opts.$first) await opts.$first(first);
++ 		if (opts.after) await opts.after();
++ 		single = t1 - t0;
++-		if (single <= opts.warmup_threshold) for (let o = 0; o < opts.warmup_samples; o++) {
+++		const warmupCalls = opts.fixed_warmup_calls ?? (single <= opts.warmup_threshold ? opts.warmup_samples : 0);
+++		for (let o = 0; o < warmupCalls; o++) {
++ 			for (let oo = 0; oo < params.length; oo++) $p[oo] = await opts.params[oo]();
++ 			const t0 = now();
++ 			const value = await fn(...$p);
+++			untimedCalls++;
++ 			if (!opts.manual && value !== void 0) consume(value);
++ 			const t1 = now();
++ 			if (opts.after) await opts.after();
++ 			single = t1 - t0;
++-			if (batch = single <= opts.batch_threshold) break;
+++			if (opts.fixed_warmup_calls === void 0 && (batch = single <= opts.batch_threshold)) break;
++ 		}
++ 	}
++ 	if (opts.batch !== void 0) batch = !!opts.batch;
++@@ -439,7 +442,7 @@
++       p999: samples[(.999 * (samples.length - 1)) | 0],
++       avg: samples.reduce((a, v) => a + v, 0) / samples.length,
++       ticks: samples.length ${!batch ? "" : `* ${batchSamples}`},
++-      plan: { batch: ${batch}, batch_samples: ${batchSamples}, batch_unroll: ${opts.batch_unroll}, samples: _ },
+++      plan: { batch: ${batch}, batch_samples: ${batchSamples}, batch_unroll: ${opts.batch_unroll}, samples: _, warmup_calls: ${untimedCalls} },
++       ${!opts.heap ? "" : "heap: $summary(heap, _),"}
++       ${!(opts.gc && opts.sample_gc && !opts.gc.fallback) ? "" : "gc: $summary(gc, _),"}
++       ${!opts.$counters ? "" : `...(!_hc ? {} : { counters: $counters.translate(${!batch ? 1 : batchSamples}, _) }),`}
++@@ -465,6 +468,7 @@
++ 	const _ = {};
++ 	defaults$1(opts);
++ 	let batchSamples = 0;
+++	let untimedCalls = 1;
++ 	let samples = Array.from({ length: 2 ** 20 }, () => 0);
++ 	const _i = { next() {
++ 		return _.next();
++@@ -487,11 +491,14 @@
++ 			const t0 = now();
++ 			yield void 0;
++ 			single = now() - t0;
++-			if (single <= opts.warmup_threshold) for (let o = 0; o < opts.warmup_samples; o++) {
+++			// The iterator handoff below itself invokes the callback once outside the timed loop.
+++			const warmupCalls = opts.fixed_warmup_calls === void 0 ? (single <= opts.warmup_threshold ? opts.warmup_samples : 0) : Math.max(0, opts.fixed_warmup_calls - 1);
+++			for (let o = 0; o < warmupCalls; o++) {
++ 				const t0 = now();
++ 				yield void 0;
+++				untimedCalls++;
++ 				single = now() - t0;
++-				if (batch = single <= opts.batch_threshold) break;
+++				if (opts.fixed_warmup_calls === void 0 && (batch = single <= opts.batch_threshold)) break;
++ 			}
++ 		}
++ 		if (opts.batch !== void 0) batch = !!opts.batch;
++@@ -543,6 +550,7 @@
++     `)(opts.gc, opts.now, samples, _, summarize);
++ 		_.batch = batch;
++ 		_.next = loop.next.bind(loop);
+++		untimedCalls++;
++ 		yield void 0;
++ 	})();
++ 	await iter((_.next = gen.next.bind(gen), ctx));
++@@ -557,7 +565,8 @@
++ 			batch: !!_.batch,
++ 			batch_samples: batchSamples,
++ 			batch_unroll: opts.batch_unroll,
++-			samples: rawCount
+++			samples: rawCount,
+++			warmup_calls: untimedCalls
++ 		},
++ 		debug: _.debug,
++ 		min: samples[0],
++@@ -1162,12 +1171,17 @@
+  //#endregion
+  //#region src/config.ts
+  function defineConfig(config) {
+ +	if (config.samplingPolicy !== void 0 && config.samplingPolicy !== "adaptive" && config.samplingPolicy !== "single-call") throw new TypeError(`Invalid Labs samplingPolicy: ${String(config.samplingPolicy)}`);
+++	if (config.warmupPolicy !== void 0 && config.warmupPolicy !== "conditional" && config.warmupPolicy !== "fixed-20") throw new TypeError(`Invalid Labs warmupPolicy: ${String(config.warmupPolicy)}`);
+++	if (config.warmupPolicy === "fixed-20" && config.samplingPolicy !== "single-call") throw new TypeError("Labs fixed-20 warmup requires single-call sampling");
+  	return {
+  		benchMatch: "**/*.bench.ts",
+  		nodeFlags: ["--allow-natives-syntax", "--expose-gc"],
+@@ -47,14 +130,14 @@ index ae2209d4ec8ef176de4d8b2a5c17733b69de00f0..bc0b7313409b0318ebc1f0692a67098e
+  		blockTime: .5,
+  		minSamples: 20,
+ +		samplingPolicy: "adaptive",
+++		warmupPolicy: "conditional",
+  		alpha: .05,
+  		minDelta: .05,
+  		snapshotTolerance: 1e-9,
+ diff --git a/dist/worker.mjs b/dist/worker.mjs
+-index c31b0fe017c36e93aea53484b6475f91f6ba21fe..6e3a603c79252e813f51e71facb7468ac90f4d43 100644
+ --- a/dist/worker.mjs
+ +++ b/dist/worker.mjs
+-@@ -5,13 +5,16 @@ import { readFileSync, rmSync, writeFileSync } from "node:fs";
++@@ -5,13 +5,20 @@
+  import { join } from "node:path";
+  import { tmpdir } from "node:os";
+  //#region src/bench/worker.ts
+@@ -64,12 +147,24 @@ index c31b0fe017c36e93aea53484b6475f91f6ba21fe..6e3a603c79252e813f51e71facb7468a
+  	const blockTime = Number(process.env.LABS_BLOCK_TIME);
+  	const minSamples = Number(process.env.LABS_MIN_SAMPLES);
+ +	const samplingPolicy = process.env.LABS_SAMPLING_POLICY ?? "adaptive";
+++	const warmupPolicy = process.env.LABS_WARMUP_POLICY ?? "conditional";
+ +	if (samplingPolicy !== "adaptive" && samplingPolicy !== "single-call") throw new TypeError(`Invalid Labs samplingPolicy: ${samplingPolicy}`);
+++	if (warmupPolicy !== "conditional" && warmupPolicy !== "fixed-20") throw new TypeError(`Invalid Labs warmupPolicy: ${warmupPolicy}`);
+++	if (warmupPolicy === "fixed-20" && samplingPolicy !== "single-call") throw new TypeError("Labs fixed-20 warmup requires single-call sampling");
+  	return {
+  		...Number.isFinite(blockTime) && blockTime > 0 ? { min_cpu_time: blockTime } : {},
+ -		...Number.isFinite(minSamples) && minSamples > 0 ? { min_samples: minSamples } : {}
+ +		...Number.isFinite(minSamples) && minSamples > 0 ? { min_samples: minSamples } : {},
+-+		...samplingPolicy === "single-call" ? { batch: false } : {}
+++		...samplingPolicy === "single-call" ? { batch: false } : {},
+++		...warmupPolicy === "fixed-20" ? { fixed_warmup_calls: 20 } : {}
+  	};
+  }
+  const file = process.env.LABS_BENCH_FILE;
++@@ -131,6 +138,7 @@
++ 		...heaps.length === list.length ? { heap: mergeRange(heaps) } : {},
++ 		...gcs.length === list.length ? { gc: mergeRange(gcs) } : {},
++ 		blocks: {
+++			warmupCalls: list.map((s) => s.plan.warmup_calls),
++ 			medians,
++ 			freqs: calibrationRates,
++ 			spreads: list.map((s) => relativeSpread(s.samples))

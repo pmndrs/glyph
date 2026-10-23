@@ -1,0 +1,9 @@
+{
+  "schema": "root-prior-e2-all145-facts-verification-v1",
+  "exactPairs": 145,
+  "armCells": 290,
+  "printedRows": 145,
+  "printedFieldsPerRow": 6,
+  "provenanceSha256": "147ff0b914be20de4384b11e9c0043cc5353e39885d0881245376519745ae0a9",
+  "scope": "Independentrawquantile/count/median/planandprintedfield/outputhashchecks; no admission."
+}

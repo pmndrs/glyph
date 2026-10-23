@@ -290,12 +290,19 @@ impl RenderPlanCompiler {
     }
 
     pub fn commit(&mut self) -> Result<(), RenderPlanCompilerError> {
-        match self.prepared_strategy {
-            PreparedStrategy::None => return Err(RenderPlanCompilerError::NotPrepared),
-            PreparedStrategy::Empty => {}
-            PreparedStrategy::Ordered => self.ordered.commit()?,
+        if self.prepared_strategy == PreparedStrategy::None {
+            return Err(RenderPlanCompilerError::NotPrepared);
         }
-        self.session.commit();
+        if self.session.is_prepared() {
+            self.session.preflight_commit()?;
+        }
+        if self.prepared_strategy == PreparedStrategy::Ordered {
+            self.ordered.preflight_commit()?;
+        }
+        if self.prepared_strategy == PreparedStrategy::Ordered {
+            self.ordered.commit_preflighted();
+        }
+        self.session.commit_preflighted();
         self.canonical_owner_revision = None;
         self.prepared_strategy = PreparedStrategy::None;
         Ok(())
@@ -317,6 +324,11 @@ impl RenderPlanCompiler {
     }
 
     #[cfg(test)]
+    pub(crate) fn block_stats(&self) -> (usize, usize, usize, usize) {
+        self.ordered.block_stats()
+    }
+
+    #[cfg(test)]
     pub(crate) fn retained_binding_compilation_skips(&self) -> u32 {
         self.ordered.retained_binding_compilation_skips()
     }
@@ -327,6 +339,7 @@ mod tests {
     use alloc::vec;
 
     use super::*;
+    use crate::abi_contract::{PATCH_PAYLOAD_OFFSET, PATCH_RECORD_SIZE};
     use crate::engine::{
         codec::{
             BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BATCH_TECHNIQUE, BUFFER_USAGE_COPY_DST,
@@ -335,7 +348,9 @@ mod tests {
             ScalarType, TechniqueId,
         },
         plan_input::PlanGlyph,
-        render_plan::BUFFER_ORDERED_DIRECT,
+        render_plan::{BUFFER_ORDERED_DIRECT, PATCH_WRITE, SESSION_PLACEMENT_BUFFER_ID},
+        render_plan_wire::{encode_publication, plan_layout},
+        session_placement::SessionPlacementRow,
     };
 
     const CAPABILITY: CapabilitySetId = CapabilitySetId(1);
@@ -358,14 +373,221 @@ mod tests {
     }
 
     #[test]
+    fn compacted_primary_payload_rebases_real_session_write_in_wire() {
+        let codec = codec();
+        let first = glyph(1, ORDERED, 0);
+        let mut second = glyph(2, ORDERED, 0);
+        second.resource_id += 1;
+        second.resource_reference += 1;
+        let initial = [first, second];
+        let old_rows = [SessionPlacementRow {
+            slot: 0,
+            inline: 0.0,
+            block: 0.0,
+        }];
+        let next_rows = [SessionPlacementRow {
+            slot: 0,
+            inline: 3.0,
+            block: 0.0,
+        }];
+        let mut compiler = RenderPlanCompiler::default();
+        compiler
+            .prepare_session(
+                SessionPlacementInput {
+                    placement_rows: &old_rows,
+                    placement_capacity: 1,
+                },
+                &capability(),
+                1,
+                true,
+            )
+            .unwrap();
+        prepare(&mut compiler, &codec, &initial, &[1.0, 2.0], true, 1, 0);
+        compiler.commit().unwrap();
+
+        let mut changed = initial;
+        changed[0].content_revision += 1;
+        changed[1].content_revision += 1;
+        compiler
+            .prepare_session(
+                SessionPlacementInput {
+                    placement_rows: &next_rows,
+                    placement_capacity: 1,
+                },
+                &capability(),
+                2,
+                false,
+            )
+            .unwrap();
+        prepare(&mut compiler, &codec, &changed, &[1.0, 9.0], false, 2, 1);
+        let plan = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+        assert_eq!(
+            plan.patches.len(),
+            1,
+            "equal first physical batch is omitted"
+        );
+        assert_eq!(plan.patches[0].opcode, PATCH_WRITE);
+        assert_eq!(plan.payload, 9.0_f32.to_le_bytes());
+        assert!(!plan.session_payload.is_empty());
+        let session_write = plan
+            .session_patches
+            .iter()
+            .position(|patch| patch.opcode == PATCH_WRITE)
+            .unwrap();
+        let layout = plan_layout(plan).unwrap();
+        let mut encoded = vec![0; layout.byte_length as usize];
+        encode_publication(plan, &[], layout, &mut encoded).unwrap();
+        let primary_start = layout.payload_offset as usize;
+        assert_eq!(&encoded[primary_start..primary_start + 4], plan.payload);
+        assert_eq!(
+            &encoded[primary_start + 4..primary_start + 4 + plan.session_payload.len()],
+            plan.session_payload
+        );
+        let session_record = layout.patches.offset as usize
+            + (plan.patches.len() + session_write) * PATCH_RECORD_SIZE as usize;
+        let wire_offset = u32::from_le_bytes(
+            encoded
+                [session_record + PATCH_PAYLOAD_OFFSET..session_record + PATCH_PAYLOAD_OFFSET + 4]
+                .try_into()
+                .unwrap(),
+        );
+        assert_eq!(
+            wire_offset,
+            layout.payload_offset
+                + plan.payload.len() as u32
+                + plan.session_patches[session_write].payload_start
+        );
+        let expected_session_write = &plan.session_payload[plan.session_patches[session_write]
+            .payload_start as usize
+            ..(plan.session_patches[session_write].payload_start
+                + plan.session_patches[session_write].byte_length) as usize];
+        assert_eq!(
+            &encoded[wire_offset as usize..wire_offset as usize + expected_session_write.len()],
+            expected_session_write
+        );
+        let ids = plan
+            .buffers
+            .iter()
+            .map(|buffer| buffer.id)
+            .collect::<alloc::vec::Vec<_>>();
+        compiler.commit().unwrap();
+
+        let mut cold = RenderPlanCompiler::default();
+        cold.prepare_session(
+            SessionPlacementInput {
+                placement_rows: &next_rows,
+                placement_capacity: 1,
+            },
+            &capability(),
+            2,
+            true,
+        )
+        .unwrap();
+        prepare(&mut cold, &codec, &changed, &[1.0, 9.0], true, 2, 1);
+        cold.commit().unwrap();
+        for id in ids
+            .into_iter()
+            .chain(core::iter::once(SESSION_PLACEMENT_BUFFER_ID))
+        {
+            assert_eq!(compiler.buffer_bytes(id), cold.buffer_bytes(id));
+        }
+    }
+
+    #[test]
+    fn session_generation_mismatch_does_not_commit_ordered_or_placement_output() {
+        use crate::engine::render_plan::SESSION_PLACEMENT_BUFFER_ID;
+        use crate::engine::session_placement::SessionPlacementRow;
+
+        let codec = codec();
+        let glyphs = [glyph(1, ORDERED, 0)];
+        let x = [1.0];
+        let old_rows = [SessionPlacementRow {
+            slot: 0,
+            inline: 0.0,
+            block: 0.0,
+        }];
+        let next_rows = [SessionPlacementRow {
+            slot: 0,
+            inline: 4.0,
+            block: 0.0,
+        }];
+        let mut compiler = RenderPlanCompiler::default();
+        compiler
+            .prepare_session(
+                SessionPlacementInput {
+                    placement_rows: &old_rows,
+                    placement_capacity: 1,
+                },
+                &capability(),
+                1,
+                true,
+            )
+            .unwrap();
+        prepare(&mut compiler, &codec, &glyphs, &x, true, 1, 0);
+        let accepted_plan = compiler
+            .plan_view(7, CAPABILITY, codec.fingerprint())
+            .unwrap();
+        let accepted_ids: alloc::vec::Vec<_> = accepted_plan
+            .buffers
+            .iter()
+            .map(|buffer| buffer.id)
+            .collect();
+        compiler.commit_owned(1).unwrap();
+        let accepted_buffers: alloc::vec::Vec<_> = accepted_ids
+            .iter()
+            .map(|&id| (id, compiler.buffer_bytes(id).unwrap().to_vec()))
+            .collect();
+        let accepted_placement = compiler
+            .buffer_bytes(SESSION_PLACEMENT_BUFFER_ID)
+            .unwrap()
+            .to_vec();
+
+        let changed_x = [9.0];
+        compiler
+            .prepare_session(
+                SessionPlacementInput {
+                    placement_rows: &next_rows,
+                    placement_capacity: 1,
+                },
+                &capability(),
+                2,
+                false,
+            )
+            .unwrap();
+        prepare(&mut compiler, &codec, &glyphs, &changed_x, true, 2, 1);
+        compiler.ordered.preflight_commit().unwrap();
+        compiler
+            .session
+            .invalidate_first_write_generation_for_test();
+
+        assert!(compiler.commit_owned(2).is_err());
+        assert_eq!(compiler.canonical_owner_revision, Some(1));
+        assert_eq!(
+            compiler.buffer_bytes(SESSION_PLACEMENT_BUFFER_ID),
+            Some(accepted_placement.as_slice())
+        );
+        for (id, bytes) in accepted_buffers {
+            assert_eq!(compiler.buffer_bytes(id), Some(bytes.as_slice()));
+        }
+    }
+
+    #[test]
     fn accepted_session_translation_proves_bounds_dirt_after_abort() {
         use crate::engine::render_plan::SESSION_PLACEMENT_BUFFER_ID;
         use crate::engine::session_placement::SessionPlacementRow;
         let codec = codec();
-        let original = [glyph(1, ORDERED, 0)];
+        let original = [glyph(1, ORDERED, 0), {
+            let mut second = glyph(2, ORDERED, 0);
+            second.transform_id = 2;
+            second
+        }];
         let mut shifted = original;
-        shifted[0].inline_start -= 3.0;
-        shifted[0].block_start += 11.0;
+        for glyph in &mut shifted {
+            glyph.inline_start -= 3.0;
+            glyph.block_start += 11.0;
+        }
         let old_rows = [SessionPlacementRow {
             slot: 0,
             inline: 0.0,
@@ -379,9 +601,9 @@ mod tests {
         fn input(glyphs: &[PlanGlyph]) -> PlanInput<'_> {
             PlanInput {
                 glyphs,
-                placement_slots: &[0],
-                semantic_change_masks: &[0],
-                f32_fields: &[&[1.0]],
+                placement_slots: &[0; 2],
+                semantic_change_masks: &[0; 2],
+                f32_fields: &[&[1.0, 2.0]],
                 u32_fields: &[],
                 order_independent: false,
             }
@@ -431,7 +653,10 @@ mod tests {
         let expected = cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap();
         let expected_primitives = expected.primitives.to_vec();
         let expected_draws = expected.draws.to_vec();
+        assert_eq!(expected_primitives.len(), 2);
         cold.commit_owned(2).unwrap();
+        // Both translated glyph summaries need the same complete output certificate.
+        let changed_scope = core::iter::once(0..2).collect::<alloc::vec::Vec<_>>();
         for reject in [true, false] {
             compiler
                 .prepare_session(
@@ -455,7 +680,7 @@ mod tests {
                     Some(OwnedOutputScope {
                         previous_revision: 1,
                         scope: super::super::ordered_plan::RetainedOutputScope::ChangedIntervals(
-                            &[],
+                            &changed_scope,
                         ),
                     }),
                     false,
@@ -466,6 +691,8 @@ mod tests {
                 .unwrap();
             assert_eq!(plan.primitives, expected_primitives);
             assert_eq!(plan.draws, expected_draws);
+            assert_eq!(plan.primitives[1].inline_start, shifted[1].inline_start);
+            assert_eq!(plan.primitives[1].block_start, shifted[1].block_start);
             assert!(plan.patches.is_empty());
             assert!(plan.payload.is_empty());
             assert!(!plan.session_patches.is_empty());
@@ -634,6 +861,11 @@ mod tests {
             u32_fields: &[],
             order_independent: false,
         };
+        let correspondence = [super::super::codec_gather::GatherCorrespondence {
+            old: super::super::codec_gather::GatherRange::records_for_test(4..6),
+            next: super::super::codec_gather::GatherRange::records_for_test(4..6),
+            owner: Some(1),
+        }];
         super::super::work_attribution::reset();
         compiler
             .prepare_owned(
@@ -645,9 +877,9 @@ mod tests {
                 2,
                 Some(OwnedOutputScope {
                     previous_revision: 2,
-                    scope: super::super::ordered_plan::RetainedOutputScope::ReplaceTail {
-                        unchanged_prefix: 4,
-                    },
+                    scope: super::super::ordered_plan::RetainedOutputScope::Replacement(
+                        &correspondence,
+                    ),
                 }),
                 false,
             )

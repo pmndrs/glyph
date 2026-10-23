@@ -1,0 +1,54 @@
+{
+  "schema": "e6-active-source-restore-receipt-v1",
+  "recordedUtc": "2026-10-21T05:41:41.984975+00:00",
+  "head": "59933674684f7b3aaebfa2fc2ce96d8ec3a8629a",
+  "preservationReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/e6-active-source-choice-preservation.json",
+  "snapshot": "6bc123abb9fdf07183988dcea12ccc1d1876d1ba",
+  "exactRecoverablePatchSha256": "3e0614f0647d4827f08e93a3b526105aa449bfe45126514aedf4003a607912b6",
+  "action": "Scopedgitrestore--source=HEADof10knownownedfilesafterexactnamedref/patchverification; nootherfilesmodified.",
+  "checks": [
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/codec.rs",
+      "headRestoredSha256": "fa7424b54666dae57e0d273d543b70b53c873d404c42565d83c265db13406d9d"
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/codec_gather.rs",
+      "headRestoredSha256": "e8c21cb9c7dddb99c9211bdadfd372bdc236d7a385c3f4868bac9ece36c33f7b"
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/ordered_plan.rs",
+      "headRestoredSha256": "6939f99cef36665afe20ddae49a836aef1847979b345dcb32aa15d2aa8a77c72"
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/plan_error.rs",
+      "headRestoredSha256": "2b9c27026a39e0185d63f8cdfeab730e5d407a7416c8820d37a771a9ff155edd"
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/plan_packing.rs",
+      "headRestoredSha256": "b11e4b9032b8948555c945054c7dfdf6421c0e9c1bdae49c672b50810fae3853"
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/render_plan_compiler.rs",
+      "headRestoredSha256": "6763b4bff1679f7db654a87264a557672ad195f2002deb6b21d8cc5931288f2c"
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/session_placement.rs",
+      "headRestoredSha256": "4b029ff969e2d3e9b6eba96e0626357eff74fbe4f366384c38431590be9a4994"
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/state.rs",
+      "headRestoredSha256": "f6d8a77b0d483de1fb4fedb2b15a99c26eb3e2c5b11f5356f8efd2ec20fe9786"
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs",
+      "headRestoredSha256": "b8219980b281f1fe7ce1259ad1791cee050c6ef0236dd74772f803c26c7acab0"
+    },
+    {
+      "path": "packages/glyph/rust/shaper/src/engine/work_attribution.rs",
+      "headRestoredSha256": "2c530238afc3d4492744f46e4ec225404ee4d5e8ce112c07f9345c4d03819a55"
+    }
+  ],
+  "gitStatusAfter": "clean",
+  "activePolicy": "E4packedgatherinput-planandretainedsparse;synchronoussemanticexecutorunchanged",
+  "artifactScope": "ExistingE6archive/namedWAsm/statsremainE6notactiveE4. No E4fixedseriesparityclaim; no rebuild/timingrunperformed."
+}

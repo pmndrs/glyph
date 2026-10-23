@@ -1,0 +1,335 @@
+{
+  "recordedUtc": "2026-10-21T00:01:15.175174+00:00",
+  "policy": "Exact copies; .json.raw avoids formatting authenticated bytes. Raw timing sample JSON, profiles, archives, build outputs and native blobs remain local ignored artifacts, with hashes in copied receipts.",
+  "files": [
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/design.md",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/design.md",
+      "bytes": 15624,
+      "sourceSha256": "7be8694cec433eda613de4e28734f73f4668d6f6f7c61091b93805f68f45e3c1",
+      "targetSha256": "7be8694cec433eda613de4e28734f73f4668d6f6f7c61091b93805f68f45e3c1"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/input-plan-high-review.md",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/input-plan-high-review.md",
+      "bytes": 4995,
+      "sourceSha256": "6bc2c6d224d7004381ca4cb1be0d69dd7ce0a4975f9f7ee101bfa06469877bf9",
+      "targetSha256": "6bc2c6d224d7004381ca4cb1be0d69dd7ce0a4975f9f7ee101bfa06469877bf9"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/input-plan-performance-admission-review.md",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/input-plan-performance-admission-review.md",
+      "bytes": 14118,
+      "sourceSha256": "85d5725342128445a1d59d898b20e0201a48a97fa924704a83409d8d666df6fc",
+      "targetSha256": "85d5725342128445a1d59d898b20e0201a48a97fa924704a83409d8d666df6fc"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/fresh-causal-hybrid-20261020.md",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/fresh-causal-hybrid-20261020.md",
+      "bytes": 14920,
+      "sourceSha256": "ef0e6f6540d617f7a1c50b574a94e322d43356424a194d9831ea2a945653aef1",
+      "targetSha256": "ef0e6f6540d617f7a1c50b574a94e322d43356424a194d9831ea2a945653aef1"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/direct-operand-hybrid-design.md",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/direct-operand-hybrid-design.md",
+      "bytes": 18658,
+      "sourceSha256": "3560a989db73dcf003b632c6069118fd30c6bb4878988b06f5c8b07a39e76417",
+      "targetSha256": "3560a989db73dcf003b632c6069118fd30c6bb4878988b06f5c8b07a39e76417"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/direct-operand-error-equivalence-addendum.md",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/direct-operand-error-equivalence-addendum.md",
+      "bytes": 7557,
+      "sourceSha256": "00cb5c064a892900b96da9020068b40de75ed84b11153320a4344815d518ea94",
+      "targetSha256": "00cb5c064a892900b96da9020068b40de75ed84b11153320a4344815d518ea94"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/direct-operand-preserved-reset-combination.md",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/direct-operand-preserved-reset-combination.md",
+      "bytes": 12768,
+      "sourceSha256": "cd5bc4836424247f12cde7d470c4175cc8ac103a29288dc3c05ac44cdacb9ec1",
+      "targetSha256": "cd5bc4836424247f12cde7d470c4175cc8ac103a29288dc3c05ac44cdacb9ec1"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/direct-retained-single-pass-proof.md",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/direct-retained-single-pass-proof.md",
+      "bytes": 11206,
+      "sourceSha256": "198ec4af2d492655be183887db4a8e611fb6b80bea34b024778c6cfc23eb2aea",
+      "targetSha256": "198ec4af2d492655be183887db4a8e611fb6b80bea34b024778c6cfc23eb2aea"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/root-implementation-integrity.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/root-implementation-integrity.json.raw",
+      "bytes": 3163,
+      "sourceSha256": "432e0d45612c585e60fea305d972efd03b73b899cf025e5df25f9c20c0e9f0c4",
+      "targetSha256": "432e0d45612c585e60fea305d972efd03b73b899cf025e5df25f9c20c0e9f0c4"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/native-work-identity.json.raw",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/native-work-identity.json.raw",
+      "bytes": 2096,
+      "sourceSha256": "eef85890efd03c7ef65220392d8428a603b821d3135f755caacd56f10c4e12c8",
+      "targetSha256": "eef85890efd03c7ef65220392d8428a603b821d3135f755caacd56f10c4e12c8"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/native-work-ledger.json.raw",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/native-work-ledger.json.raw",
+      "bytes": 26799,
+      "sourceSha256": "dbd09e5a767dc851a5f638d311c191c3ed712a733532191a8e48b769aac139f1",
+      "targetSha256": "dbd09e5a767dc851a5f638d311c191c3ed712a733532191a8e48b769aac139f1"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/consolidated-candidate-gate-summary.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/consolidated-candidate-gate-summary.json.raw",
+      "bytes": 8439,
+      "sourceSha256": "e65da08f85b1b689e2f656de90ce07fbb43989275a3771562cff6b1f73c090e6",
+      "targetSha256": "e65da08f85b1b689e2f656de90ce07fbb43989275a3771562cff6b1f73c090e6"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/consolidated-candidate-bounded-gates-summary.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/consolidated-candidate-bounded-gates-summary.json.raw",
+      "bytes": 119886,
+      "sourceSha256": "9d3d8f7c9093d376fd8d7b5e6286db17a971db5c49b00be3500a2fa3f6e3eaa2",
+      "targetSha256": "9d3d8f7c9093d376fd8d7b5e6286db17a971db5c49b00be3500a2fa3f6e3eaa2"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/consolidated-source-freeze.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/consolidated-source-freeze.json.raw",
+      "bytes": 84228,
+      "sourceSha256": "0422392b503c74005dcd27c70f0db97cef8dbfdeef2974fe3002e031a93c04b2",
+      "targetSha256": "0422392b503c74005dcd27c70f0db97cef8dbfdeef2974fe3002e031a93c04b2"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/main-absolute-quantiles.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/main-absolute-quantiles.json.raw",
+      "bytes": 207672,
+      "sourceSha256": "540478458389b83cc024a5d6cdbaf7a7fee6ebe0e9a3bba353295b1ca78bc74e",
+      "targetSha256": "540478458389b83cc024a5d6cdbaf7a7fee6ebe0e9a3bba353295b1ca78bc74e"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/published-absolute-quantiles.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/published-absolute-quantiles.json.raw",
+      "bytes": 203767,
+      "sourceSha256": "ea5202fecfac104fcd3c31106dbf14b45a0fe93a42a810620c1a37c32ece961f",
+      "targetSha256": "ea5202fecfac104fcd3c31106dbf14b45a0fe93a42a810620c1a37c32ece961f"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-consolidated-factual-handoff.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/matrix-consolidated-factual-handoff.json.raw",
+      "bytes": 13116,
+      "sourceSha256": "bc783dba862c4b703d025e361f2e20f9ea9f0e3661e337de6805e6f9f9187511",
+      "targetSha256": "bc783dba862c4b703d025e361f2e20f9ea9f0e3661e337de6805e6f9f9187511"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-published-01.direct-session.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/matrix-published-01.direct-session.json.raw",
+      "bytes": 71784,
+      "sourceSha256": "34448f2177a911ec289311d8bbe003c4bd589202ce94faad0795503b74c747ae",
+      "targetSha256": "34448f2177a911ec289311d8bbe003c4bd589202ce94faad0795503b74c747ae"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-published-01.manual.stdout.log",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/matrix-published-01.manual.stdout.log",
+      "bytes": 749,
+      "sourceSha256": "ba4bf5cea0db547caca991ee80370afc3c8a69b18fc2b166525f545d5f29b5a7",
+      "targetSha256": "ba4bf5cea0db547caca991ee80370afc3c8a69b18fc2b166525f545d5f29b5a7"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/wasm-abi-and-section-evidence.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/wasm-abi-and-section-evidence.json.raw",
+      "bytes": 26365,
+      "sourceSha256": "3a45a8e577ff1867d9782cf6249b314ecd516795344c1094c3d2f78621fd05cc",
+      "targetSha256": "3a45a8e577ff1867d9782cf6249b314ecd516795344c1094c3d2f78621fd05cc"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/packed-contract-comparison.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/packed-contract-comparison.json.raw",
+      "bytes": 31150,
+      "sourceSha256": "f6ef1646500718ecfdcd8f6346df3ac92b0283574c1d534991f6119df6b88af8",
+      "targetSha256": "f6ef1646500718ecfdcd8f6346df3ac92b0283574c1d534991f6119df6b88af8"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/existing-api-abi-lifetime-gate-coverage.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/existing-api-abi-lifetime-gate-coverage.json.raw",
+      "bytes": 3982,
+      "sourceSha256": "2b7bbadb5d47c13ecdb30123cf0cd9609b241902d89b964d87d171ed120acfd5",
+      "targetSha256": "2b7bbadb5d47c13ecdb30123cf0cd9609b241902d89b964d87d171ed120acfd5"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/current-stack-lineage-observation.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/current-stack-lineage-observation.json.raw",
+      "bytes": 2560,
+      "sourceSha256": "ecb2ac58b594231f6304a4cf9f4f7d2be47895bafe9a78f92be936ae8cddb6f6",
+      "targetSha256": "ecb2ac58b594231f6304a4cf9f4f7d2be47895bafe9a78f92be936ae8cddb6f6"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/source-pre-gate.patch",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/source-pre-gate.patch",
+      "bytes": 11510,
+      "sourceSha256": "8c97fe745e323dded14c7ec55a830aef9b0244073329ee2450edfc0985f04097",
+      "targetSha256": "8c97fe745e323dded14c7ec55a830aef9b0244073329ee2450edfc0985f04097"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/package-check-01/result.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/package-check-01/result.json.raw",
+      "bytes": 514,
+      "sourceSha256": "928a7f5e371c5967c2fbdfdc05dcfcaddbcd05d11558531a3a7a3429ae36d0e4",
+      "targetSha256": "928a7f5e371c5967c2fbdfdc05dcfcaddbcd05d11558531a3a7a3429ae36d0e4"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/pack-package-01/result.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/pack-package-01/result.json.raw",
+      "bytes": 613,
+      "sourceSha256": "3dfa7b8186e869d8a5f85d3ffc426693b910fc96a7122a90376193a97023c4dd",
+      "targetSha256": "3dfa7b8186e869d8a5f85d3ffc426693b910fc96a7122a90376193a97023c4dd"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/named-artifact-01/result.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/named-artifact-01/result.json.raw",
+      "bytes": 892,
+      "sourceSha256": "20d12941bf7e0a6107e075dba5d3088919161deb7832b4beb3b0d9bb63b70533",
+      "targetSha256": "20d12941bf7e0a6107e075dba5d3088919161deb7832b4beb3b0d9bb63b70533"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/shaper-size-accounting-01/result.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/shaper-size-accounting-01/result.json.raw",
+      "bytes": 1065,
+      "sourceSha256": "54856a7c43770aee58789f238faa44494be99df94559c17ebeeb75b53ef94798",
+      "targetSha256": "54856a7c43770aee58789f238faa44494be99df94559c17ebeeb75b53ef94798"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/memory-artifact-01/result.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/memory-artifact-01/result.json.raw",
+      "bytes": 890,
+      "sourceSha256": "b44431ae88762ac12a75938da94d1e77ed984db73a3efa73c28a46e756b3cfd1",
+      "targetSha256": "b44431ae88762ac12a75938da94d1e77ed984db73a3efa73c28a46e756b3cfd1"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/live-memory-01/result.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/live-memory-01/result.json.raw",
+      "bytes": 1072,
+      "sourceSha256": "db649d9b5f4ea83a2255d5d5d2ea312feb8bb618c8d0374881140a5a001ee961",
+      "targetSha256": "db649d9b5f4ea83a2255d5d5d2ea312feb8bb618c8d0374881140a5a001ee961"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/root-live-memory-summary.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/candidate/root-live-memory-summary.json.raw",
+      "bytes": 1011,
+      "sourceSha256": "e2e70b14228b1a87260b5bc0057035f3b25f8ad2c716534cf18f1541515baaad",
+      "targetSha256": "e2e70b14228b1a87260b5bc0057035f3b25f8ad2c716534cf18f1541515baaad"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/wasm-simd-decoded-witness.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/candidate/wasm-simd-decoded-witness.json.raw",
+      "bytes": 2402,
+      "sourceSha256": "1f66fa7e7fa88f911b693e3af2ba906aa8cc38d9106dc13973a3e250b52b47ff",
+      "targetSha256": "1f66fa7e7fa88f911b693e3af2ba906aa8cc38d9106dc13973a3e250b52b47ff"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-main-data/manifest.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/matrix-main-data/manifest.json.raw",
+      "bytes": 1232,
+      "sourceSha256": "2ddffd0a4d6ed3224ab491c89764650987bad8f445385f331c5beece4bff4988",
+      "targetSha256": "2ddffd0a4d6ed3224ab491c89764650987bad8f445385f331c5beece4bff4988"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-main-data/summary.md",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/matrix-main-data/summary.md",
+      "bytes": 46212,
+      "sourceSha256": "d462f2d7bb70decff0a3ac1823f0c72fad39ab25e99aa4fabbd0182c90760d16",
+      "targetSha256": "d462f2d7bb70decff0a3ac1823f0c72fad39ab25e99aa4fabbd0182c90760d16"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-main-data/comparison.txt",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/matrix-main-data/comparison.txt",
+      "bytes": 54366,
+      "sourceSha256": "a497c2b55260733a37e2ecd5376aecadb875b16a9191c87c2f825d3cf985513e",
+      "targetSha256": "a497c2b55260733a37e2ecd5376aecadb875b16a9191c87c2f825d3cf985513e"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-published-data/manifest.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/matrix-published-data/manifest.json.raw",
+      "bytes": 1227,
+      "sourceSha256": "44ae7371b2e4843f18f7e5b8aacad3722c33444a6cddd1ee26be6c78332e865f",
+      "targetSha256": "44ae7371b2e4843f18f7e5b8aacad3722c33444a6cddd1ee26be6c78332e865f"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-published-data/summary.md",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/matrix-published-data/summary.md",
+      "bytes": 46089,
+      "sourceSha256": "98e22f0e229b3e6e362a6d8f24c41b974cd916b1aedba23b213adeedd37c1659",
+      "targetSha256": "98e22f0e229b3e6e362a6d8f24c41b974cd916b1aedba23b213adeedd37c1659"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-published-data/comparison.txt",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/matrix-published-data/comparison.txt",
+      "bytes": 53059,
+      "sourceSha256": "81ded37966eb1aa793683c3c5368004fe79d43881540dd990af4b0cc021f596c",
+      "targetSha256": "81ded37966eb1aa793683c3c5368004fe79d43881540dd990af4b0cc021f596c"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-prior-e2-data/manifest.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/matrix-prior-e2-data/manifest.json.raw",
+      "bytes": 943,
+      "sourceSha256": "7af480e730b9334534e58cde5f51ec63a96675871ecf1f20cf882f7807fe7481",
+      "targetSha256": "7af480e730b9334534e58cde5f51ec63a96675871ecf1f20cf882f7807fe7481"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-prior-e2-data/summary.md",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/matrix-prior-e2-data/summary.md",
+      "bytes": 46167,
+      "sourceSha256": "7f8e28bb2446b84b7d5c83845e3fed7114952da81780bf36be52e68043ebc2d0",
+      "targetSha256": "7f8e28bb2446b84b7d5c83845e3fed7114952da81780bf36be52e68043ebc2d0"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-prior-e2-data/comparison.txt",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/matrix-prior-e2-data/comparison.txt",
+      "bytes": 54140,
+      "sourceSha256": "79fdb3ed7bfb7d9b2942dffa6e30c2d23804efc266d5e8dc6a4c2d748f7c9c4e",
+      "targetSha256": "79fdb3ed7bfb7d9b2942dffa6e30c2d23804efc266d5e8dc6a4c2d748f7c9c4e"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-main-01/result.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/matrix-main-01/result.json.raw",
+      "bytes": 1079,
+      "sourceSha256": "974cb0476c2d2130ee6b14d53ffe6efcaf54aa86863656a004d6655d385f4a7b",
+      "targetSha256": "974cb0476c2d2130ee6b14d53ffe6efcaf54aa86863656a004d6655d385f4a7b"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/matrix-prior-e2-01/result.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/matrix-prior-e2-01/result.json.raw",
+      "bytes": 1217,
+      "sourceSha256": "4479a27d8768ad8e2b1726a5af11f98e951fcfeb1303cd2ad4396c32ff8e2a2e",
+      "targetSha256": "4479a27d8768ad8e2b1726a5af11f98e951fcfeb1303cd2ad4396c32ff8e2a2e"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/prior-e2-absolute-quantiles.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/prior-e2-absolute-quantiles.json.raw",
+      "bytes": 207925,
+      "sourceSha256": "a059101eb36a458407f54df42a53ed15da8d603b38203f09fda75a2da4bab135",
+      "targetSha256": "a059101eb36a458407f54df42a53ed15da8d603b38203f09fda75a2da4bab135"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/prior-e2-quantile-validation.json",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/prior-e2-quantile-validation.json.raw",
+      "bytes": 414,
+      "sourceSha256": "1a2c221656f73839053d9eb2e38d935babfd05ecc3320fb57142d6da3acfebb4",
+      "targetSha256": "1a2c221656f73839053d9eb2e38d935babfd05ecc3320fb57142d6da3acfebb4"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/extract-absolute-quantiles.py",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/extract-absolute-quantiles.py",
+      "bytes": 10570,
+      "sourceSha256": "f545e24a5f61d3189c4b7f4f5d64b15a1376716dd3dbd634a16b577e9cc54072",
+      "targetSha256": "f545e24a5f61d3189c4b7f4f5d64b15a1376716dd3dbd634a16b577e9cc54072"
+    },
+    {
+      "source": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/direct-retained-single-pass-high-review.md",
+      "target": "benches/reports/held-gather-input-plan-local-2026-10-20/direct-retained-single-pass-high-review.md",
+      "bytes": 9053,
+      "sourceSha256": "46d290d97da5214027daa059669c4bea61667879588af12c8d16e32e95f8f585",
+      "targetSha256": "46d290d97da5214027daa059669c4bea61667879588af12c8d16e32e95f8f585"
+    }
+  ]
+}

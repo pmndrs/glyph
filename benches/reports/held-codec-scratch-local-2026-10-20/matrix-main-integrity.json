@@ -1,0 +1,76 @@
+{
+  "schema": "wave2-matrix-main-integrity-v1",
+  "recordedUtc": "2026-10-20T17:05:52.291405+00:00",
+  "head": "291fb51ce5e61ca6903b67459872923ccab4ceee",
+  "frozenTrackedInputs": {
+    "count": 1039,
+    "mismatches": {},
+    "allMatch": true
+  },
+  "additionalLabsSources": {
+    "count": 20,
+    "mismatches": {},
+    "allMatch": true
+  },
+  "archives": {
+    "candidateSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+    "expectedCandidateSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+    "mainSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+    "expectedMainSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20"
+  },
+  "matrixMain": {
+    "manifest": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/matrix-main-data/manifest.json",
+    "harnessDigest": "67d7e692d5b43266d3e3b5a2a8923cb004e5bcd2d24f565767b61cc435523a92",
+    "labsVersion": "0.9.0",
+    "blocks": 8,
+    "suite": "full",
+    "baselineSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+    "candidateSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+    "candidateJsonSha256": "07379e474976e9b84a2a552989031f09bdd8645ae0a0d2940f8bed396bcfb8b7",
+    "baselineJsonSha256": "6e04b52792a47808bedc9e95b9e5c26e17c9c383259a56b4827ba94f3cbc6e63",
+    "candidateJsonBytes": 2006562,
+    "baselineJsonBytes": 1961778,
+    "notComparable": {
+      "baselineCheckFailures": [],
+      "timingModeMismatches": [
+        "common.bench.ts / measure 100 unchanged labels / measure 100 unchanged labels: baseline single-call, candidate batched",
+        "layout.bench.ts / cached per-glyph inspection / cached per-glyph inspection: baseline batched, candidate single-call",
+        "prepared-operations.bench.ts / 100 labels first set+measure / 100 labels first set+measure: baseline single-call, candidate batched",
+        "prepared-operations.bench.ts / 1000 labels first set+measure / 1000 labels first set+measure: baseline single-call, candidate batched"
+      ]
+    }
+  },
+  "wrapperResult": {
+    "argv": [
+      "/usr/bin/env",
+      "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/scratch",
+      "/Users/mini/.local/bin/mise",
+      "exec",
+      "--",
+      "pnpm",
+      "scripts",
+      "run",
+      "benchmark:labs-package",
+      "--",
+      "--candidate",
+      "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "--baseline",
+      "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+      "--suite",
+      "full",
+      "--blocks",
+      "8",
+      "--output",
+      "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/matrix-main-data"
+    ],
+    "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+    "started": "2026-10-20T16:23:40.693674+00:00",
+    "finished": "2026-10-20T17:05:30.896732+00:00",
+    "exit": 0,
+    "sha256": {
+      "stdout.log": "7bd91f82c666723f59a9596ec4c145c22ee7ab378355936abbce9a2f6fc69fbb",
+      "stderr.log": "24994d218769e3df604ee24f2a87893b16e7d062760385ab5d3e36541560605d"
+    }
+  },
+  "ownedRunnerProcessesRemaining": []
+}

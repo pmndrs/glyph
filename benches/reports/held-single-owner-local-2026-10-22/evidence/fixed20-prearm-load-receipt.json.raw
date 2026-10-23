@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "/bin/zsh",
+    "-lc",
+    "date -u +%Y-%m-%dT%H:%M:%SZ; sysctl -n hw.logicalcpu hw.perflevel0.physicalcpu hw.perflevel1.physicalcpu; top -l 2 -s 1 -n 0 -stats cpu; ps -Ao pid,%cpu,etime,command | sort -nrk2 | head -12; ps -p 71035 -o pid=,stat=,command="
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-22T18:59:21.017164+00:00",
+  "finished": "2026-10-22T18:59:22.545795+00:00",
+  "exit": 1,
+  "sha256": {
+    "stdout.log": "00637abee7ca974cb007adc8c412574923e3c63bbfa9dc8fe191a952a05726d9",
+    "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

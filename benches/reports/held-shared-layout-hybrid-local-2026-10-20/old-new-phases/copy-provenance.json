@@ -1,0 +1,128 @@
+[
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-observer-captures-summary.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/old-new-phases/captures-summary.json.raw",
+    "sourceSha256": "0512e70488c942e75e758a5ff7a4c0964483684fab1858f3fb701c014bea8494",
+    "mode": "verbatim",
+    "targetSha256": "0512e70488c942e75e758a5ff7a4c0964483684fab1858f3fb701c014bea8494"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-root-integrity.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/old-new-phases/root-integrity.json.raw",
+    "sourceSha256": "7f2d818fa657ce74a6b8eaad720b2ad8c48cac287ae058cc89a07923bc173dc2",
+    "mode": "verbatim",
+    "targetSha256": "7f2d818fa657ce74a6b8eaad720b2ad8c48cac287ae058cc89a07923bc173dc2"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-root-ancestry-integrity.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/old-new-phases/ancestry-integrity.json.raw",
+    "sourceSha256": "ae6842915f8d2673a326b7b43956fac82b7859886f1a17cf678e5a7825462b22",
+    "mode": "verbatim",
+    "targetSha256": "ae6842915f8d2673a326b7b43956fac82b7859886f1a17cf678e5a7825462b22"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-main-01/summary.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/old-new-phases/main-summary.json.raw",
+    "sourceSha256": "ec0faa916d4f41f66f103fbac13a2f57c022e47baa2e6677d2602fe601b69abf",
+    "mode": "verbatim",
+    "targetSha256": "ec0faa916d4f41f66f103fbac13a2f57c022e47baa2e6677d2602fe601b69abf"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-main-01/manifest.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/old-new-phases/main-manifest.json.raw",
+    "sourceSha256": "b7ea1716e4f8a64af3dd8031936a7ec23565ad07d0e5578eda57b11c7e815b3f",
+    "mode": "verbatim",
+    "targetSha256": "b7ea1716e4f8a64af3dd8031936a7ec23565ad07d0e5578eda57b11c7e815b3f"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-main-01/preflight-identity.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/old-new-phases/main-preflight-identity.json.raw",
+    "sourceSha256": "55cdaf2caef664a006830b9fc43239c213272c31b59141f1dce83335a80b09e8",
+    "mode": "verbatim",
+    "targetSha256": "55cdaf2caef664a006830b9fc43239c213272c31b59141f1dce83335a80b09e8"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-main-capture-01/result.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/old-new-phases/main-result.json.raw",
+    "sourceSha256": "2ec64436cd6e8667f495edee78a936e59c16e76b610442724adb703c7dc9d3a1",
+    "mode": "verbatim",
+    "targetSha256": "2ec64436cd6e8667f495edee78a936e59c16e76b610442724adb703c7dc9d3a1"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-published-01/summary.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/old-new-phases/published-summary.json.raw",
+    "sourceSha256": "b5b6a0403f251b138a0c6425d33bb21c4e797416b8ffca2b27ab165564645121",
+    "mode": "verbatim",
+    "targetSha256": "b5b6a0403f251b138a0c6425d33bb21c4e797416b8ffca2b27ab165564645121"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-published-01/manifest.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/old-new-phases/published-manifest.json.raw",
+    "sourceSha256": "183ede932843044336a32eaaf6ab1096bb5a237c38624511bd1d74c5ae5a1360",
+    "mode": "verbatim",
+    "targetSha256": "183ede932843044336a32eaaf6ab1096bb5a237c38624511bd1d74c5ae5a1360"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-published-01/preflight-identity.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/old-new-phases/published-preflight-identity.json.raw",
+    "sourceSha256": "0e21a518c1e99f8b1d31d19f9a022703c5dc6f46d4f8b98611b0d0f6dd1ffd63",
+    "mode": "verbatim",
+    "targetSha256": "0e21a518c1e99f8b1d31d19f9a022703c5dc6f46d4f8b98611b0d0f6dd1ffd63"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-published-capture-01/result.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/old-new-phases/published-result.json.raw",
+    "sourceSha256": "dd597eaf78784126f00bf0a014b5e399aec1974555ff6c2d8dcfce6c43d4eff8",
+    "mode": "verbatim",
+    "targetSha256": "dd597eaf78784126f00bf0a014b5e399aec1974555ff6c2d8dcfce6c43d4eff8"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-held-e2-01/summary.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/old-new-phases/held-e2-summary.json.raw",
+    "sourceSha256": "953e81bebb11f14334da7d43ff54eb0b57ce71aa8990d1ffa83e27c97749e365",
+    "mode": "verbatim",
+    "targetSha256": "953e81bebb11f14334da7d43ff54eb0b57ce71aa8990d1ffa83e27c97749e365"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-held-e2-01/manifest.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/old-new-phases/held-e2-manifest.json.raw",
+    "sourceSha256": "8157b9c7db0c357990cc0ee489da7121205ea7ad19728f9390a9385469af901a",
+    "mode": "verbatim",
+    "targetSha256": "8157b9c7db0c357990cc0ee489da7121205ea7ad19728f9390a9385469af901a"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-held-e2-01/preflight-identity.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/old-new-phases/held-e2-preflight-identity.json.raw",
+    "sourceSha256": "8a853545c748d3c1b35436ac826154af91f3bce021db8dd2687658b3ae30ed0b",
+    "mode": "verbatim",
+    "targetSha256": "8a853545c748d3c1b35436ac826154af91f3bce021db8dd2687658b3ae30ed0b"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-held-e2-capture-01/result.json",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/old-new-phases/held-e2-result.json.raw",
+    "sourceSha256": "3507f14921b88829874a45599fb04665a97efda07d6a2d0814c7ac61f169672b",
+    "mode": "verbatim",
+    "targetSha256": "3507f14921b88829874a45599fb04665a97efda07d6a2d0814c7ac61f169672b"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-observer-high-review.md",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/phase-observer-high-review.md",
+    "sourceSha256": "2f424f108eebb4156b24cccec20c527afd60ec6dfe407c238d38b1ec6fa3c960",
+    "mode": "repository formatting of reviewer prose only",
+    "targetSha256": "2f424f108eebb4156b24cccec20c527afd60ec6dfe407c238d38b1ec6fa3c960"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/phase-observer-correction-review.md",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/phase-observer-correction-review.md",
+    "sourceSha256": "79789c2e60b68177031d3cf65384cd5c06f55e0295e035a1bac75c663853f8dd",
+    "mode": "repository formatting of reviewer prose only",
+    "targetSha256": "79789c2e60b68177031d3cf65384cd5c06f55e0295e035a1bac75c663853f8dd"
+  },
+  {
+    "source": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/paired-phase-architecture-decision.md",
+    "target": "benches/reports/held-shared-layout-hybrid-local-2026-10-20/paired-phase-architecture-decision.md",
+    "sourceSha256": "43b68126e93eb0ad45c3939a1136c32530fdd235def78a96d6e136b42c7616c9",
+    "mode": "repository formatting of reviewer prose only",
+    "targetSha256": "a9f8faf71ed786ca1b01df23dc066b8eb7886bdbea85d26c04fc5f456935da12"
+  }
+]

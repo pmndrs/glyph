@@ -1,0 +1,285 @@
+{
+  "createdUtc": "2026-10-23T00:18:16.760935+00:00",
+  "method": "Nearest rank uses sorted samples at ceil(n*q)-1; chronological blocks are eight equal groups of ten; preserve workflow floor(n*q) percentiles as separately labelled. No marginal phase medians summed.",
+  "arms": {
+    "held-06fe": {
+      "n": 80,
+      "p50NearestRank": 13.952499999999986,
+      "p90NearestRank": 14.959375000000023,
+      "p95NearestRank": 15.24249999999995,
+      "rawMax": 18.019042000000013,
+      "harnessP50": 13.957832999999937,
+      "harnessP90": 14.984291999999868,
+      "harnessP95": 15.443374999999833,
+      "harnessPercentilePolicy": "existing helper uses floor(n*q) index (one-based 41st/73rd/77th for n=80); values reported separately",
+      "blocks": [
+        {
+          "block": 1,
+          "iterations": [
+            1,
+            10
+          ],
+          "medianMs": 14.737062500000036,
+          "minMs": 13.944124999999985,
+          "maxMs": 18.019042000000013
+        },
+        {
+          "block": 2,
+          "iterations": [
+            11,
+            20
+          ],
+          "medianMs": 14.494958499999939,
+          "minMs": 13.727709000000004,
+          "maxMs": 15.18220800000006
+        },
+        {
+          "block": 3,
+          "iterations": [
+            21,
+            30
+          ],
+          "medianMs": 14.01779149999993,
+          "minMs": 13.40537500000005,
+          "maxMs": 14.959375000000023
+        },
+        {
+          "block": 4,
+          "iterations": [
+            31,
+            40
+          ],
+          "medianMs": 13.548437499999977,
+          "minMs": 13.104749999999967,
+          "maxMs": 15.443374999999833
+        },
+        {
+          "block": 5,
+          "iterations": [
+            41,
+            50
+          ],
+          "medianMs": 14.162645500000053,
+          "minMs": 13.21958399999994,
+          "maxMs": 14.984291999999868
+        },
+        {
+          "block": 6,
+          "iterations": [
+            51,
+            60
+          ],
+          "medianMs": 13.38770850000003,
+          "minMs": 12.782708000000184,
+          "maxMs": 14.698957999999948
+        },
+        {
+          "block": 7,
+          "iterations": [
+            61,
+            70
+          ],
+          "medianMs": 13.227228999999966,
+          "minMs": 12.928417000000081,
+          "maxMs": 14.338666999999987
+        },
+        {
+          "block": 8,
+          "iterations": [
+            71,
+            80
+          ],
+          "medianMs": 13.693770999999856,
+          "minMs": 12.922832999999855,
+          "maxMs": 14.582666999999901
+        }
+      ],
+      "cpuProfileSampleCount": 796,
+      "cpuProfileTimeDeltaCount": 796,
+      "cpuProfileMaxTimeDeltaMs": 37.125,
+      "cpuProfileTimeDeltaUnits": "microseconds (V8 CPU profile)",
+      "cpuProfileTimeDeltasOver5msCount": 1,
+      "cpuProfileTimeDeltasOver5msValuesMs": [
+        37.125
+      ]
+    },
+    "main-4e25": {
+      "n": 80,
+      "p50NearestRank": 20.496125000000575,
+      "p90NearestRank": 181.89658299999974,
+      "p95NearestRank": 280.25916600000005,
+      "rawMax": 547.7995000000001,
+      "harnessP50": 20.64891699999953,
+      "harnessP90": 186.8291250000002,
+      "harnessP95": 293.01891700000033,
+      "harnessPercentilePolicy": "existing helper uses floor(n*q) index (one-based 41st/73rd/77th for n=80); values reported separately",
+      "blocks": [
+        {
+          "block": 1,
+          "iterations": [
+            1,
+            10
+          ],
+          "medianMs": 15.076812000000018,
+          "minMs": 14.135707999999909,
+          "maxMs": 21.963458999999943
+        },
+        {
+          "block": 2,
+          "iterations": [
+            11,
+            20
+          ],
+          "medianMs": 94.25177150000002,
+          "minMs": 40.286500000000046,
+          "maxMs": 280.25916600000005
+        },
+        {
+          "block": 3,
+          "iterations": [
+            21,
+            30
+          ],
+          "medianMs": 203.13156249999997,
+          "minMs": 98.37687499999993,
+          "maxMs": 547.7995000000001
+        },
+        {
+          "block": 4,
+          "iterations": [
+            31,
+            40
+          ],
+          "medianMs": 104.50816699999996,
+          "minMs": 25.509208999999828,
+          "maxMs": 155.59037499999977
+        },
+        {
+          "block": 5,
+          "iterations": [
+            41,
+            50
+          ],
+          "medianMs": 15.266208500000175,
+          "minMs": 13.060042000000067,
+          "maxMs": 20.64891699999953
+        },
+        {
+          "block": 6,
+          "iterations": [
+            51,
+            60
+          ],
+          "medianMs": 14.801792000000205,
+          "minMs": 13.711500000000342,
+          "maxMs": 19.008499999999913
+        },
+        {
+          "block": 7,
+          "iterations": [
+            61,
+            70
+          ],
+          "medianMs": 16.409458500000255,
+          "minMs": 13.75183300000026,
+          "maxMs": 20.496125000000575
+        },
+        {
+          "block": 8,
+          "iterations": [
+            71,
+            80
+          ],
+          "medianMs": 141.6798960000001,
+          "minMs": 13.798333000000639,
+          "maxMs": 181.89658299999974
+        }
+      ],
+      "cpuProfileSampleCount": 3750,
+      "cpuProfileTimeDeltaCount": 3750,
+      "cpuProfileMaxTimeDeltaMs": 44.125,
+      "cpuProfileTimeDeltaUnits": "microseconds (V8 CPU profile)",
+      "cpuProfileTimeDeltasOver5msCount": 77,
+      "cpuProfileTimeDeltasOver5msValuesMs": [
+        28.125,
+        10.0,
+        35.042,
+        7.125,
+        18.792,
+        9.084,
+        5.958,
+        10.875,
+        5.5,
+        5.875,
+        6.5,
+        5.75,
+        6.25,
+        9.209,
+        7.083,
+        8.625,
+        5.042,
+        16.0,
+        6.0,
+        5.875,
+        7.0,
+        8.75,
+        7.834,
+        5.958,
+        6.833,
+        7.958,
+        5.042,
+        19.75,
+        5.083,
+        5.5,
+        5.042,
+        6.291,
+        5.25,
+        5.75,
+        6.666,
+        5.25,
+        5.625,
+        5.209,
+        5.834,
+        5.333,
+        5.75,
+        6.083,
+        12.167,
+        5.584,
+        10.125,
+        32.375,
+        5.25,
+        9.0,
+        7.042,
+        6.459,
+        6.792,
+        44.125,
+        9.917,
+        10.084,
+        12.708,
+        5.167,
+        7.166,
+        5.125,
+        7.209,
+        15.208,
+        5.958,
+        15.5,
+        13.75,
+        10.417,
+        15.333,
+        5.542,
+        13.041,
+        13.5,
+        5.208,
+        6.458,
+        17.167,
+        7.583,
+        14.292,
+        13.208,
+        6.584,
+        12.791,
+        13.5
+      ]
+    }
+  },
+  "timeDeltaCorrection": "Corrected from initial analysis: V8 CPU profile timeDeltas are microseconds; threshold is strictly >5000 microseconds and report values converted to milliseconds. ancestry-preflight.json is the source of the corrected retained values."
+}

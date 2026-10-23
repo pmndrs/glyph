@@ -1,0 +1,1040 @@
+diff --git a/benches/labs/package/batching.bench.ts b/benches/labs/package/batching.bench.ts
+index 8bc7eb52..d4d319f4 100644
+--- a/benches/labs/package/batching.bench.ts
++++ b/benches/labs/package/batching.bench.ts
+@@ -32,7 +32,8 @@ function editSizedTextPublication(
+ ): void {
+   const tag = kind === 'same-length' ? '@same-length' : '@length-change';
+   const boundary = engineOnly ? 'engine' : 'scene';
+-  bench(`${String(count)} labels ${position} ${kind} ${boundary} publication ${tag}`, function* () {
++  const frontier = count === 1000 && position === 'first' && kind === 'same-length' && !engineOnly ? ' @frontier' : '';
++  bench(`${String(count)} labels ${position} ${kind} ${boundary} publication ${tag}${frontier}`, function* () {
+     const created = createLabels(count);
+     const target = created.labels[targetIndex]!;
+     let alternate = false;
+@@ -101,7 +102,8 @@ group('batched text operations @batch @publication', () => {
+   });
+ 
+   for (const count of [64, 128, 256, 512]) {
+-    bench(`rewrite ${String(count)} labels in one group @batch @publication`, function* () {
++    const frontier = count === 512 ? ' @frontier' : '';
++    bench(`rewrite ${String(count)} labels in one group @batch @publication${frontier}`, function* () {
+       const created = createGroupedLabels(count);
+       const initial = inspectDraws(created.scene);
+       assert.equal(initial.draws, 1);
+diff --git a/benches/labs/package/prepared-operations.bench.ts b/benches/labs/package/prepared-operations.bench.ts
+index 5a0bfec3..207baf15 100644
+--- a/benches/labs/package/prepared-operations.bench.ts
++++ b/benches/labs/package/prepared-operations.bench.ts
+@@ -144,7 +144,8 @@ export function* preparedOperation(
+ group('prepared label operations @prepared @operation', () => {
+   for (const count of preparedOperationCounts) {
+     for (const operation of preparedOperations) {
+-      bench(`${String(count)} labels first ${operation} @prepared @operation`, function* () {
++      const frontier = count === 1 && operation === 'set' ? ' @frontier' : '';
++      bench(`${String(count)} labels first ${operation} @prepared @operation${frontier}`, function* () {
+         return yield* preparedOperation(count, operation);
+       });
+     }
+diff --git a/benches/labs/package/stress.bench.ts b/benches/labs/package/stress.bench.ts
+index 01095521..47de4e45 100644
+--- a/benches/labs/package/stress.bench.ts
++++ b/benches/labs/package/stress.bench.ts
+@@ -120,7 +120,7 @@ group('1,000-label stress @stress', () => {
+     disposeLabels(created);
+   });
+ 
+-  bench('publish 1024 retained Text instances @batch @publication @bulk-1024-profile', function* () {
++  bench('publish 1024 retained Text instances @batch @publication @bulk-1024-profile @frontier', function* () {
+     const created = createTextBatch(1_024);
+     let alternate = false;
+     const textCount = yield () => {
+diff --git a/benches/scripts/run-package-labs.mts b/benches/scripts/run-package-labs.mts
+index 2aeabfbe..e0b0a255 100644
+--- a/benches/scripts/run-package-labs.mts
++++ b/benches/scripts/run-package-labs.mts
+@@ -1,7 +1,7 @@
+ /* @workflow {
+   "name": "benchmark:labs-package",
+   "summary": "Benchmark common installed-package workflows by default, select a focused/full pmndrs/labs suite, or capture a tagged diagnostic CPU profile.",
+-  "requirements": "Network access for registry specs, or one or two packed @pmndrs/glyph .tgz artifacts. Never builds workspace source. --saved-candidate <report-directory> reuses an exact artifact's saved candidate instead of timing it again, with matching environment and sampling checks. Accepts --suite smoke|layout|measure|glyphs|publication|spans|batch|style|reflow|stress|cold|edit|assignment|edit-sized|multi-owner|bulk-1024-profile|full. --sampling adaptive|single-call defaults to adaptive; --warmup conditional|fixed-20 defaults to conditional. Use --sampling single-call --warmup fixed-20 uniformly for a fixed-warmup comparison. Full baselines require all 145 candidate identities unless --baseline-availability published-no-outlines explicitly permits the two documented outline omissions. Optional candidate-only diagnostic profiling requires both --profile-tag <@tag> and --cpu-profile-output <directory>; it selects that Labs tag and cannot be combined with --baseline or --saved-candidate. Profiled timings are diagnostic and are not a normal performance comparison.",
++  "requirements": "Network access for registry specs, or one or two packed @pmndrs/glyph .tgz artifacts. Never builds workspace source. --saved-candidate <report-directory> reuses an exact artifact's saved candidate instead of timing it again, with matching environment and sampling checks. Accepts --suite smoke|layout|measure|glyphs|publication|spans|batch|style|reflow|stress|cold|edit|assignment|edit-sized|multi-owner|bulk-1024-profile|frontier|full. --sampling adaptive|single-call defaults to adaptive; --warmup conditional|fixed-20 defaults to conditional. Use --sampling single-call --warmup fixed-20 uniformly for a fixed-warmup comparison. Full baselines require all 145 candidate identities unless --baseline-availability published-no-outlines explicitly permits the two documented outline omissions. Optional candidate-only diagnostic profiling requires both --profile-tag <@tag> and --cpu-profile-output <directory>; it selects that Labs tag and cannot be combined with --baseline or --saved-candidate. Profiled timings are diagnostic and are not a normal performance comparison.",
+   "writes": "Ignored Labs results, an artifact manifest, and a Markdown summary.md (also appended to $GITHUB_STEP_SUMMARY when set) under --output (default .cache/labs-package); optional V8 CPU profiles are written under --cpu-profile-output."
+ } */
+ import { createHash } from 'node:crypto';
+diff --git a/benches/scripts/support/package-labs-suite.mts b/benches/scripts/support/package-labs-suite.mts
+index bfa6c426..068d2f4d 100644
+--- a/benches/scripts/support/package-labs-suite.mts
++++ b/benches/scripts/support/package-labs-suite.mts
+@@ -15,6 +15,7 @@ export const PACKAGE_LABS_SUITES = [
+   'edit-sized',
+   'multi-owner',
+   'bulk-1024-profile',
++  'frontier',
+   'full',
+ ] as const;
+ 
+diff --git a/benches/scripts/workflows.test.mts b/benches/scripts/workflows.test.mts
+index ab88992e..5beea8b0 100644
+--- a/benches/scripts/workflows.test.mts
++++ b/benches/scripts/workflows.test.mts
+@@ -165,6 +165,7 @@ test('routes package Labs by event and one explicit pull-request label', () => {
+   assert.equal(selectPackageLabsSuite({ eventName: 'pull_request', labels: ['benchmark:spans'] }), 'spans');
+   assert.equal(selectPackageLabsSuite({ eventName: 'pull_request', labels: ['benchmark:edit-sized'] }), 'edit-sized');
+   assert.equal(selectPackageLabsSuite({ eventName: 'pull_request', labels: ['benchmark:multi-owner'] }), 'multi-owner');
++  assert.equal(selectPackageLabsSuite({ eventName: 'pull_request', labels: ['benchmark:frontier'] }), 'frontier');
+   assert.equal(
+     selectPackageLabsSuite({
+       eventName: 'pull_request',
+diff --git a/packages/glyph/rust/shaper/src/engine/codec_gather.rs b/packages/glyph/rust/shaper/src/engine/codec_gather.rs
+index 8cff5b6f..83d80f6c 100644
+--- a/packages/glyph/rust/shaper/src/engine/codec_gather.rs
++++ b/packages/glyph/rust/shaper/src/engine/codec_gather.rs
+@@ -184,6 +184,21 @@ impl GatherRange {
+         self.end.source - self.start.source
+     }
+ 
++    pub(crate) fn follows(self, previous: Option<Self>) -> bool {
++        self.start
++            == previous.map_or(
++                GatherPosition {
++                    source: 0,
++                    record: 0,
++                },
++                |range| range.end,
++            )
++    }
++
++    pub(crate) fn source_end(self) -> usize {
++        self.end.source
++    }
++
+     pub(crate) fn shifted_after(self, old: Self, next: Self) -> Result<Self, GatherError> {
+         Ok(Self {
+             start: self.start.shifted_after(old.end, next.end)?,
+@@ -412,12 +427,35 @@ struct OwnerRanges<'a, I> {
+     interval: usize,
+ }
+ 
++struct RetainedRanges<'a, I> {
++    full: Option<Option<Range<usize>>>,
++    owners: OwnerRanges<'a, I>,
++}
++
++impl<'a, I: Iterator<Item = Result<RetainedGatherOwner<'a>, GatherError>>> Iterator
++    for RetainedRanges<'a, I>
++{
++    type Item = Result<Range<usize>, GatherError>;
++
++    fn next(&mut self) -> Option<Self::Item> {
++        if let Some(range) = &mut self.full {
++            #[cfg(test)]
++            super::work_attribution::record(|work| work.gather_full_range_next_calls += 1);
++            range.take().map(Ok)
++        } else {
++            self.owners.next()
++        }
++    }
++}
++
+ impl<'a, I: Iterator<Item = Result<RetainedGatherOwner<'a>, GatherError>>> Iterator
+     for OwnerRanges<'a, I>
+ {
+     type Item = Result<Range<usize>, GatherError>;
+ 
+     fn next(&mut self) -> Option<Self::Item> {
++        #[cfg(test)]
++        super::work_attribution::record(|work| work.gather_owner_range_next_calls += 1);
+         loop {
+             if let Some(owner) = &self.current {
+                 let range = match owner.intervals {
+@@ -652,20 +690,56 @@ impl CodecGatherWorkspace {
+     }
+ 
+     pub(crate) fn append_retained_stream<'owner, 'binding>(
++        &mut self,
++        codec: &ValidatedCodec,
++        capability_set: CapabilitySetId,
++        owners: impl Iterator<Item = Result<RetainedGatherOwner<'owner>, GatherError>> + Clone,
++        binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
++    ) -> Result<Option<RetainedGatherStop>, GatherError> {
++        self.append_retained_stream_in_range(codec, capability_set, owners, None, binding_for_font)
++    }
++
++    pub(crate) fn append_retained_full_frontier_stream<'owner, 'binding>(
++        &mut self,
++        codec: &ValidatedCodec,
++        capability_set: CapabilitySetId,
++        owners: impl Iterator<Item = Result<RetainedGatherOwner<'owner>, GatherError>> + Clone,
++        source_range: Range<usize>,
++        binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
++    ) -> Result<Option<RetainedGatherStop>, GatherError> {
++        self.append_retained_stream_in_range(
++            codec,
++            capability_set,
++            owners,
++            Some(source_range),
++            binding_for_font,
++        )
++    }
++
++    fn append_retained_stream_in_range<'owner, 'binding>(
+         &mut self,
+         codec: &ValidatedCodec,
+         capability_set: CapabilitySetId,
+         mut owners: impl Iterator<Item = Result<RetainedGatherOwner<'owner>, GatherError>> + Clone,
++        full_frontier: Option<Range<usize>>,
+         mut binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
+     ) -> Result<Option<RetainedGatherStop>, GatherError> {
+         let mut sources = core::mem::take(&mut self.sources);
+-        // One immutable snapshot supplies selected-row prefix counts for gaps. It shares
+-        // the same source tree and exists only while the transactional executor stages its replacement.
++        // The shared callback still needs the prior root for owner end offsets and
++        // sparse gap prefix counts. This Arc clone retains old leaves only while the
++        // transactional executor stages its replacement, including the full-range mode.
+         let previous_sources = sources.clone();
+-        let ranges = OwnerRanges {
+-            owners: owners.clone(),
+-            current: None,
+-            interval: 0,
++        #[cfg(test)]
++        if full_frontier.is_some() {
++            super::work_attribution::record(|work| work.gather_full_frontier_modes += 1);
++        }
++        let ranges = RetainedRanges {
++            full: full_frontier.map(Some),
++            owners: OwnerRanges {
++                owners: owners.clone(),
++                current: None,
++                interval: 0,
++            },
+         };
+         let result = (|| {
+             let mut current = None;
+@@ -4162,169 +4236,264 @@ mod tests {
+     }
+ 
+     #[test]
+-    fn streamed_stop_names_the_owner_and_resumes_existing_suffix_gather() {
++    fn full_frontier_of_1024_owners_matches_independent_cold_gather() {
+         let codec = codec();
+         let binding = binding();
+-        let mut glyphs = (0..30)
+-            .map(|index| layout_glyph(index + 1, 0))
++        let mut glyphs = (0..1024)
++            .map(|index| layout_glyph(index + 1, if index % 9 == 0 { 2 } else { 0 }))
+             .collect::<Vec<_>>();
+-        let mut workspace = CodecGatherWorkspace::default();
+-        workspace.begin(&codec, glyphs.len()).unwrap();
++        let mut warm = CodecGatherWorkspace::default();
+         let mut ranges = Vec::new();
+-        for (owner, chunk) in glyphs.chunks(10).enumerate() {
+-            let start = workspace.position();
+-            workspace
+-                .append(
+-                    &codec,
+-                    CAPABILITY,
+-                    LayoutPlanInput {
+-                        transform_id: owner as u32 + 1,
+-                        ..wide_range_input(chunk, &[])
+-                    },
+-                    |_| Some(&binding),
+-                )
+-                .unwrap();
+-            ranges.push(workspace.range_since(start));
++        warm.begin(&codec, glyphs.len()).unwrap();
++        for (owner, glyph) in glyphs.iter().enumerate() {
++            let start = warm.position();
++            warm.append(
++                &codec,
++                CAPABILITY,
++                LayoutPlanInput {
++                    transform_id: owner as u32 + 1,
++                    ..wide_range_input(core::slice::from_ref(glyph), &[])
++                },
++                |_| Some(&binding),
++            )
++            .unwrap();
++            ranges.push(warm.range_since(start));
+         }
+         for glyph in &mut glyphs {
+-            glyph.stable_id += 30;
++            glyph.stable_id += 1024;
+         }
+-        glyphs[14].glyph_id = 2;
+-        glyphs[14].semantic_glyph_index = 2;
+-        let masks = vec![ALL_SEMANTIC_CHANGES; glyphs.len()];
+-        let scopes = ranges.iter().enumerate().map(|(owner, &range)| {
++        let masks = [ALL_SEMANTIC_CHANGES];
++        let owners = ranges.iter().enumerate().map(|(owner, &range)| {
+             Ok(RetainedGatherOwner {
+                 range,
+                 input: LayoutPlanInput {
+                     transform_id: owner as u32 + 1,
+-                    ..wide_range_input(
+-                        &glyphs[owner * 10..owner * 10 + 10],
+-                        &masks[owner * 10..owner * 10 + 10],
+-                    )
++                    ..wide_range_input(&glyphs[owner..owner + 1], &masks)
+                 },
+                 intervals: None,
+                 tables: None,
+             })
+         });
+-        assert!(workspace.begin_retained(&codec, glyphs.len()).unwrap());
+-        let stop = workspace
+-            .append_retained_stream(&codec, CAPABILITY, scopes, |_| Some(&binding))
++        assert!(warm.begin_retained(&codec, glyphs.len()).unwrap());
++        assert!(
++            warm.append_retained_full_frontier_stream(
++                &codec,
++                CAPABILITY,
++                owners,
++                0..glyphs.len(),
++                |_| Some(&binding),
++            )
+             .unwrap()
+-            .unwrap();
+-        assert_eq!(stop.source_index, 4);
+-        workspace.truncate_to_retained_prefix().unwrap();
+-        for owner in 1..3 {
+-            workspace
+-                .append_from(
+-                    &codec,
+-                    CAPABILITY,
+-                    LayoutPlanInput {
+-                        transform_id: owner as u32 + 1,
+-                        ..wide_range_input(
+-                            &glyphs[owner * 10..owner * 10 + 10],
+-                            &masks[owner * 10..owner * 10 + 10],
+-                        )
+-                    },
+-                    if owner == 1 { 4 } else { 0 },
+-                    |_| Some(&binding),
+-                )
+-                .unwrap();
+-        }
++            .is_none()
++        );
++        assert!(warm.finish_retained());
++
+         let mut cold = CodecGatherWorkspace::default();
+         cold.begin(&codec, glyphs.len()).unwrap();
+-        for (owner, chunk) in glyphs.chunks(10).enumerate() {
++        for (owner, glyph) in glyphs.iter().enumerate() {
+             cold.append(
+                 &codec,
+                 CAPABILITY,
+                 LayoutPlanInput {
+                     transform_id: owner as u32 + 1,
+-                    ..wide_range_input(chunk, &masks[owner * 10..owner * 10 + 10])
++                    ..wide_range_input(core::slice::from_ref(glyph), &masks)
+                 },
+                 |_| Some(&binding),
+             )
+             .unwrap();
+         }
+-        assert_range_gather_equal(&workspace, &cold);
+-        assert_eq!(workspace.sources, cold.sources);
++        assert_range_gather_equal(&warm, &cold);
++        assert_eq!(warm.sources, cold.sources);
+     }
+ 
+     #[test]
+-    fn streamed_callback_failure_restores_source_owner_and_count_change_stops() {
+-        let codec = codec();
+-        let binding = binding();
+-        let before = [layout_glyph(1, 0), layout_glyph(2, 0)];
+-        let after = [layout_glyph(3, 0), layout_glyph(4, 0), layout_glyph(5, 0)];
+-        let masks = [ALL_SEMANTIC_CHANGES; 3];
+-        let mut workspace = CodecGatherWorkspace::default();
+-        workspace
+-            .gather(&codec, CAPABILITY, wide_range_input(&before, &[]), |_| {
+-                Some(&binding)
+-            })
++    fn streamed_stop_names_the_owner_and_resumes_existing_suffix_gather() {
++        for full_frontier in [false, true] {
++            let codec = codec();
++            let binding = binding();
++            let mut glyphs = (0..30)
++                .map(|index| layout_glyph(index + 1, 0))
++                .collect::<Vec<_>>();
++            let mut workspace = CodecGatherWorkspace::default();
++            workspace.begin(&codec, glyphs.len()).unwrap();
++            let mut ranges = Vec::new();
++            for (owner, chunk) in glyphs.chunks(10).enumerate() {
++                let start = workspace.position();
++                workspace
++                    .append(
++                        &codec,
++                        CAPABILITY,
++                        LayoutPlanInput {
++                            transform_id: owner as u32 + 1,
++                            ..wide_range_input(chunk, &[])
++                        },
++                        |_| Some(&binding),
++                    )
++                    .unwrap();
++                ranges.push(workspace.range_since(start));
++            }
++            for glyph in &mut glyphs {
++                glyph.stable_id += 30;
++            }
++            glyphs[14].glyph_id = 2;
++            glyphs[14].semantic_glyph_index = 2;
++            let masks = vec![ALL_SEMANTIC_CHANGES; glyphs.len()];
++            let scopes = ranges.iter().enumerate().map(|(owner, &range)| {
++                Ok(RetainedGatherOwner {
++                    range,
++                    input: LayoutPlanInput {
++                        transform_id: owner as u32 + 1,
++                        ..wide_range_input(
++                            &glyphs[owner * 10..owner * 10 + 10],
++                            &masks[owner * 10..owner * 10 + 10],
++                        )
++                    },
++                    intervals: None,
++                    tables: None,
++                })
++            });
++            assert!(workspace.begin_retained(&codec, glyphs.len()).unwrap());
++            let stop = if full_frontier {
++                workspace.append_retained_full_frontier_stream(
++                    &codec,
++                    CAPABILITY,
++                    scopes,
++                    0..glyphs.len(),
++                    |_| Some(&binding),
++                )
++            } else {
++                workspace.append_retained_stream(&codec, CAPABILITY, scopes, |_| Some(&binding))
++            }
++            .unwrap()
+             .unwrap();
+-        let snapshot = workspace.sources.clone();
+-        workspace.begin_retained(&codec, 3).unwrap();
+-        let owners = (0..2).map(|index| {
+-            Ok(RetainedGatherOwner {
+-                range: GatherRange {
+-                    start: GatherPosition {
+-                        source: index,
+-                        record: index,
++            assert_eq!(stop.source_index, 4);
++            workspace.truncate_to_retained_prefix().unwrap();
++            for owner in 1..3 {
++                workspace
++                    .append_from(
++                        &codec,
++                        CAPABILITY,
++                        LayoutPlanInput {
++                            transform_id: owner as u32 + 1,
++                            ..wide_range_input(
++                                &glyphs[owner * 10..owner * 10 + 10],
++                                &masks[owner * 10..owner * 10 + 10],
++                            )
++                        },
++                        if owner == 1 { 4 } else { 0 },
++                        |_| Some(&binding),
++                    )
++                    .unwrap();
++            }
++            let mut cold = CodecGatherWorkspace::default();
++            cold.begin(&codec, glyphs.len()).unwrap();
++            for (owner, chunk) in glyphs.chunks(10).enumerate() {
++                cold.append(
++                    &codec,
++                    CAPABILITY,
++                    LayoutPlanInput {
++                        transform_id: owner as u32 + 1,
++                        ..wide_range_input(chunk, &masks[owner * 10..owner * 10 + 10])
+                     },
+-                    end: GatherPosition {
+-                        source: index + 1,
+-                        record: index + 1,
++                    |_| Some(&binding),
++                )
++                .unwrap();
++            }
++            assert_range_gather_equal(&workspace, &cold);
++            assert_eq!(workspace.sources, cold.sources);
++        }
++    }
++
++    #[test]
++    fn streamed_callback_failure_restores_source_owner_and_count_change_stops() {
++        for full_frontier in [false, true] {
++            let codec = codec();
++            let binding = binding();
++            let before = [layout_glyph(1, 0), layout_glyph(2, 0)];
++            let after = [layout_glyph(3, 0), layout_glyph(4, 0), layout_glyph(5, 0)];
++            let masks = [ALL_SEMANTIC_CHANGES; 3];
++            let mut workspace = CodecGatherWorkspace::default();
++            workspace
++                .gather(&codec, CAPABILITY, wide_range_input(&before, &[]), |_| {
++                    Some(&binding)
++                })
++                .unwrap();
++            let snapshot = workspace.sources.clone();
++            workspace.begin_retained(&codec, 3).unwrap();
++            let owners = (0..2).map(|index| {
++                Ok(RetainedGatherOwner {
++                    range: GatherRange {
++                        start: GatherPosition {
++                            source: index,
++                            record: index,
++                        },
++                        end: GatherPosition {
++                            source: index + 1,
++                            record: index + 1,
++                        },
+                     },
+-                },
+-                input: wide_range_input(&after[index..index + 1], &masks[index..index + 1]),
+-                intervals: None,
+-                tables: None,
+-            })
+-        });
+-        let mut binding_reads = 0;
+-        assert!(matches!(
+-            workspace.append_retained_stream(&codec, CAPABILITY, owners, |_| {
+-                binding_reads += 1;
+-                (binding_reads == 1).then_some(&binding)
+-            }),
+-            Err(GatherError::FontBindingMissing)
+-        ));
+-        assert_eq!(binding_reads, 2);
+-        assert_eq!(workspace.glyphs[0].stable_id, 3);
+-        assert_eq!(workspace.sources, snapshot);
+-        workspace
+-            .gather(&codec, CAPABILITY, wide_range_input(&before, &[]), |_| {
+-                Some(&binding)
+-            })
+-            .unwrap();
+-        workspace.begin_retained(&codec, 3).unwrap();
+-        assert_eq!(
++                    input: wide_range_input(&after[index..index + 1], &masks[index..index + 1]),
++                    intervals: None,
++                    tables: None,
++                })
++            });
++            let mut binding_reads = 0;
++            let outcome = if full_frontier {
++                workspace.append_retained_full_frontier_stream(
++                    &codec,
++                    CAPABILITY,
++                    owners,
++                    0..2,
++                    |_| {
++                        binding_reads += 1;
++                        (binding_reads == 1).then_some(&binding)
++                    },
++                )
++            } else {
++                workspace.append_retained_stream(&codec, CAPABILITY, owners, |_| {
++                    binding_reads += 1;
++                    (binding_reads == 1).then_some(&binding)
++                })
++            };
++            assert!(matches!(outcome, Err(GatherError::FontBindingMissing)));
++            assert_eq!(binding_reads, 2);
++            assert_eq!(workspace.glyphs[0].stable_id, 3);
++            assert_eq!(workspace.sources, snapshot);
+             workspace
+-                .append_retained_scoped(
++                .gather(&codec, CAPABILITY, wide_range_input(&before, &[]), |_| {
++                    Some(&binding)
++                })
++                .unwrap();
++            workspace.begin_retained(&codec, 3).unwrap();
++            assert_eq!(
++                workspace
++                    .append_retained_scoped(
++                        &codec,
++                        CAPABILITY,
++                        wide_range_input(&after, &masks),
++                        None,
++                        |_| Some(&binding)
++                    )
++                    .unwrap(),
++                RetainedGather::RebuildFrom(2)
++            );
++            workspace.truncate_to_retained_prefix().unwrap();
++            workspace
++                .append_from(
+                     &codec,
+                     CAPABILITY,
+                     wide_range_input(&after, &masks),
+-                    None,
+-                    |_| Some(&binding)
++                    2,
++                    |_| Some(&binding),
+                 )
+-                .unwrap(),
+-            RetainedGather::RebuildFrom(2)
+-        );
+-        workspace.truncate_to_retained_prefix().unwrap();
+-        workspace
+-            .append_from(
+-                &codec,
+-                CAPABILITY,
+-                wide_range_input(&after, &masks),
+-                2,
+-                |_| Some(&binding),
+-            )
++                .unwrap();
++            let mut cold = CodecGatherWorkspace::default();
++            cold.gather(&codec, CAPABILITY, wide_range_input(&after, &masks), |_| {
++                Some(&binding)
++            })
+             .unwrap();
+-        let mut cold = CodecGatherWorkspace::default();
+-        cold.gather(&codec, CAPABILITY, wide_range_input(&after, &masks), |_| {
+-            Some(&binding)
+-        })
+-        .unwrap();
+-        assert_range_gather_equal(&workspace, &cold);
++            assert_range_gather_equal(&workspace, &cold);
++        }
+     }
+ 
+     #[test]
+diff --git a/packages/glyph/rust/shaper/src/engine/state.rs b/packages/glyph/rust/shaper/src/engine/state.rs
+index 72fb23d9..e55e2336 100644
+--- a/packages/glyph/rust/shaper/src/engine/state.rs
++++ b/packages/glyph/rust/shaper/src/engine/state.rs
+@@ -2550,15 +2550,25 @@ fn append_planner_gather(
+     let mut retaining = retained;
+     let mut order_index = 0;
+     if retaining && sparse {
++        let full_frontier = planner_full_frontier_source_range(planner);
+         let owners = planner_gather_owners(planner);
+-        let stop = gather
+-            .append_retained_stream(codec, capability_set, owners, |handle| {
+-                font_bindings
+-                    .iter()
+-                    .find(|binding| binding.handle == handle)
+-                    .map(|binding| &binding.binding)
+-            })
+-            .map_err(gather_error)?;
++        let binding_for_font = |handle| {
++            font_bindings
++                .iter()
++                .find(|binding| binding.handle == handle)
++                .map(|binding| &binding.binding)
++        };
++        let stop = match full_frontier {
++            Some(range) => gather.append_retained_full_frontier_stream(
++                codec,
++                capability_set,
++                owners,
++                range,
++                binding_for_font,
++            ),
++            None => gather.append_retained_stream(codec, capability_set, owners, binding_for_font),
++        }
++        .map_err(gather_error)?;
+         if stop.is_some() {
+             return replace_planner_gather(gather, planner, codec, capability_set, font_bindings);
+         } else {
+@@ -2708,6 +2718,51 @@ fn append_planner_gather(
+     Ok(())
+ }
+ 
++/// Admit one rope range only when the already validated dirty frontier owns every
++/// source row and no positioned owner retains a clean source interval.
++fn planner_full_frontier_source_range(planner: &PlannerState) -> Option<core::ops::Range<usize>> {
++    let order = planner.active_order();
++    if planner.lifecycle_changed
++        || order.is_empty()
++        || planner.order_sort_scratch.len() != order.len()
++    {
++        return None;
++    }
++    let mut previous = None;
++    for (index, &(order_index, id)) in planner.order_sort_scratch.iter().enumerate() {
++        if usize::try_from(order_index).ok()? != index || order[index].id != id {
++            return None;
++        }
++        let paragraph = planner.paragraph(id)?;
++        let range = paragraph.gather_range?;
++        let positioned = paragraph.state.positioned.active();
++        let source_count = positioned.glyphs().len();
++        if !range.follows(previous)
++            || range.source_count() != source_count
++            || !positioned.decorations().is_empty()
++            || !paragraph
++                .state
++                .positioned
++                .committed()
++                .decorations()
++                .is_empty()
++            || positioned
++                .unpublished_source_intervals()
++                .is_some_and(|intervals| {
++                    !(source_count == 0 && intervals.is_empty()
++                        || intervals.len() == 1
++                            && intervals[0].start == 0
++                            && intervals[0].end == source_count)
++                })
++        {
++            return None;
++        }
++        previous = Some(range);
++    }
++    let end = previous?.source_end();
++    (end > 0 && Some(end) == planner.gathered_source_count).then_some(0..end)
++}
++
+ fn planner_gather_owners(
+     planner: &PlannerState,
+ ) -> impl Iterator<Item = Result<RetainedGatherOwner<'_>, GatherError>> + Clone {
+@@ -12937,6 +12992,92 @@ mod tests {
+             .map(|index| utf16(&alloc::format!("bravo {index:04}")))
+             .collect();
+         assert!(alpha.iter().chain(&bravo).all(|text| text.len() == 10));
++        // Compare accepted draw/binding order while allowing revision-owned primitive IDs
++        // and incremental resource actions to differ from a cold checkpoint.
++        let physical_order = |plan: super::super::render_plan::RenderPlanView<'_>| {
++            let primitives = plan
++                .primitives
++                .iter()
++                .map(|primitive| {
++                    (
++                        (
++                            primitive.kind,
++                            primitive.technique_id,
++                            primitive.resource_id,
++                            primitive.program_id,
++                            primitive.program_variant,
++                            primitive.record_count,
++                            primitive.buffer_id,
++                            primitive.record_index,
++                        ),
++                        (
++                            primitive.logical_order,
++                            primitive.clip_id,
++                            primitive.inline_start.to_bits(),
++                            primitive.block_start.to_bits(),
++                            primitive.inline_extent.to_bits(),
++                            primitive.block_extent.to_bits(),
++                        ),
++                    )
++                })
++                .collect::<Vec<_>>();
++            let draws = plan
++                .draws
++                .iter()
++                .map(|draw| {
++                    (
++                        (
++                            draw.program_id,
++                            draw.program_variant,
++                            draw.material_id,
++                            draw.clip_id,
++                            draw.depth_key,
++                            draw.transform_id,
++                            draw.primitive_start,
++                        ),
++                        (
++                            draw.primitive_count,
++                            draw.buffer_start,
++                            draw.buffer_count,
++                            draw.resource_start,
++                            draw.resource_count,
++                            draw.order_token,
++                        ),
++                    )
++                })
++                .collect::<Vec<_>>();
++            let buffers = plan
++                .buffers
++                .iter()
++                .map(|buffer| {
++                    (
++                        buffer.id,
++                        buffer.program_id,
++                        buffer.codec_buffer_id,
++                        buffer.live_records,
++                    )
++                })
++                .collect::<Vec<_>>();
++            let resources = plan
++                .resources
++                .iter()
++                .map(|resource| {
++                    (
++                        resource.id,
++                        resource.generation,
++                        resource.technique_id,
++                        resource.resource_kind,
++                        resource.flags,
++                        resource.reference_id,
++                        resource.lower_bound,
++                        resource.upper_bound,
++                        resource.auxiliary0,
++                        resource.auxiliary1,
++                    )
++                })
++                .collect::<Vec<_>>();
++            (primitives, draws, buffers, resources)
++        };
+         let style = root_style_bytes_for_text(7, 10);
+         let mut template = root_geometry_bytes();
+         let constraint = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+@@ -13067,7 +13208,60 @@ mod tests {
+             assert_eq!(preparation.harfrust_utf16_units, OWNERS as usize * 10);
+             assert_eq!(preparation.query_serialized_records, 0);
+             assert_eq!(preparation.query_serialized_bytes, 0);
++            // Read one newly accepted full replacement, detach its draw plan, then
++            // overwrite that owner twice before the single scene publication. The
++            // independent copy must keep the first pending revision's bytes.
++            let copied = if cycle == 0 {
++                let mut inspection = update(revision, revision, revision);
++                inspection.limits = limits;
++                inspection.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_MEASUREMENT
++                    | super::super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION;
++                let measured = engine
++                    .measure_paragraph_with_shaper(&mut shaper, inspection, 1)
++                    .unwrap();
++                assert!(!engine.measured_semantic_views(measured).unwrap().is_empty());
++                engine.commit_measure(measured).unwrap();
++                let stable_ids: Vec<_> = engine
++                    .planners
++                    .get(&4)
++                    .unwrap()
++                    .paragraph(1)
++                    .unwrap()
++                    .state
++                    .positioned
++                    .committed()
++                    .glyphs()
++                    .iter()
++                    .map(|glyph| glyph.stable_id)
++                    .collect();
++                let copy = engine.copy_glyphs(4, 1, 9, 1, &stable_ids).unwrap();
++                let fingerprint = engine.codec(9).unwrap().fingerprint();
++                let detached = copy.plan_view(9, CapabilitySetId(1), fingerprint).unwrap();
++                assert!(!detached.payload.is_empty() || !detached.session_payload.is_empty());
++                let bytes = (detached.payload.to_vec(), detached.session_payload.to_vec());
++                for replacement in [alpha[0].as_slice(), target[0].as_slice()] {
++                    let edit_bytes = paragraph_text_mutation_bytes(&[(1, 0, 10, replacement)]);
++                    let mut edit = update(revision, revision, revision);
++                    edit.limits = limits;
++                    edit.text_mutations =
++                        parse_text_mutations(&edit_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
++                            .unwrap();
++                    let measured = engine
++                        .measure_paragraph_with_shaper(&mut shaper, edit, 1)
++                        .unwrap();
++                    engine.commit_measure(measured).unwrap();
++                }
++                let detached = copy.plan_view(9, CapabilitySetId(1), fingerprint).unwrap();
++                assert_eq!(
++                    (detached.payload, detached.session_payload),
++                    (bytes.0.as_slice(), bytes.1.as_slice()),
++                );
++                Some((copy, fingerprint, bytes))
++            } else {
++                None
++            };
+             super::super::work_attribution::reset();
++            super::super::retained_rope::reset_work_counters();
+             let mut publication = update(revision, revision, revision);
+             publication.limits = limits;
+             assert_eq!(publication.text_mutations.len(), 0);
+@@ -13076,8 +13270,42 @@ mod tests {
+             let prepared = engine
+                 .prepare_update_with_shaper(&mut shaper, publication, revision + 1)
+                 .unwrap();
++            let (warm_primitives, warm_draws, warm_buffers, warm_resources) =
++                physical_order(engine.prepared_plan(prepared).unwrap());
+             engine.commit_update(prepared).unwrap();
++            if let Some((copy, fingerprint, bytes)) = copied {
++                let detached = copy.plan_view(9, CapabilitySetId(1), fingerprint).unwrap();
++                assert_eq!(
++                    (detached.payload, detached.session_payload),
++                    (bytes.0.as_slice(), bytes.1.as_slice()),
++                );
++            }
+             let published = super::super::work_attribution::snapshot();
++            let rope_work = super::super::retained_rope::work_counters();
++            let ordered_rope_work = super::super::retained_rope::ordered_work_counters();
++            std::eprintln!(
++                "dense Inter full frontier cycle{cycle}: owners={}, full_range_calls={}, owner_range_calls={}, source_visits={}, selected_rows={}, recordless_rows={}, gap_rows={}, f32_reads={}, u32_reads={}, f32_writes={}, u32_writes={}, rope_copied_records={}, rope_source_visits={}, rope_ordered_traversals={}, rope_ordered_leaves={}, rope_ordered_records={}, emitted_bytes={}",
++                published.gather_paragraph_visits,
++                published.gather_full_range_next_calls,
++                published.gather_owner_range_next_calls,
++                published.gather_glyph_visits,
++                published.retained_selected_rows,
++                published.retained_recordless_rows,
++                published.gather_retained_gap_rows,
++                published.gather_f32_reads,
++                published.gather_u32_reads,
++                published.gather_f32_slots_written,
++                published.gather_u32_slots_written,
++                rope_work.0,
++                rope_work.1,
++                ordered_rope_work.0,
++                ordered_rope_work.1,
++                ordered_rope_work.2,
++                published.ordered_emitted_write_bytes,
++            );
++            assert_eq!(published.gather_full_frontier_modes, 1);
++            assert_eq!(published.gather_owner_range_next_calls, 0);
++            assert!(published.gather_full_range_next_calls >= 1);
+             assert_eq!(published.harfrust_calls, 0);
+             assert_eq!(published.recomposed_flow_lines, 0);
+             assert_eq!(published.newly_positioned_glyphs, 0);
+@@ -13275,6 +13503,95 @@ mod tests {
+                 );
+             }
+             assert_gather_matches_full(&mut engine);
++
++            // Rebuild the whole final scene independently. Retained and cold publications
++            // may emit different patch ranges, but their accepted physical buffers and
++            // renderer order must describe the same active scene.
++            let cold_first = alloc::string::String::from_utf16(&target[0]).unwrap();
++            let (mut cold, mut cold_shaper) = shaped_engine_with_font_styles_geometry_and_extents(
++                &cold_first,
++                INTER,
++                2_937,
++                &style,
++                1,
++                Some((&template, 0)),
++                true,
++            );
++            let cold_text_records: Vec<_> = (2..=OWNERS)
++                .map(|id| (id, 0, 0, target[(id - 1) as usize].as_slice()))
++                .collect();
++            let cold_texts = paragraph_text_mutation_bytes(&cold_text_records);
++            let mut cold_initial = update(1, 1, 1);
++            cold_initial.limits = limits;
++            cold_initial.paragraph_mutations = parse_paragraph_mutations(
++                &lifecycle,
++                ENGINE_UPDATE_REQUEST_HEADER_SIZE,
++                OWNERS - 1,
++            )
++            .unwrap();
++            cold_initial.text_mutations =
++                parse_text_mutations(&cold_texts, ENGINE_UPDATE_REQUEST_HEADER_SIZE, OWNERS - 1)
++                    .unwrap();
++            cold_initial.style_mutations =
++                parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, OWNERS - 1)
++                    .unwrap();
++            cold_initial.geometry = parse_geometry(
++                &geometry,
++                ENGINE_UPDATE_REQUEST_HEADER_SIZE,
++                OWNERS,
++                region_offset as u32,
++                1,
++                0,
++                0,
++                0,
++                0,
++                limits,
++            )
++            .unwrap();
++            let cold_prepared = cold
++                .prepare_update_with_shaper(&mut cold_shaper, cold_initial, 2)
++                .unwrap();
++            let (cold_primitives, cold_draws, cold_buffers, cold_resources) =
++                physical_order(cold.prepared_plan(cold_prepared).unwrap());
++            assert_eq!(warm_primitives, cold_primitives, "cold primitive order");
++            assert_eq!(warm_draws, cold_draws, "cold draw/binding order");
++            assert_eq!(warm_buffers, cold_buffers, "cold active buffer descriptors");
++            assert_eq!(warm_resources, cold_resources, "cold active resources");
++            assert_eq!(engine.font_bindings.len(), cold.font_bindings.len());
++            for (warm_binding, cold_binding) in engine.font_bindings.iter().zip(&cold.font_bindings)
++            {
++                assert_eq!(warm_binding.handle, cold_binding.handle);
++                assert_eq!(warm_binding.shaping_handle, cold_binding.shaping_handle);
++                assert_eq!(warm_binding.binding, cold_binding.binding);
++            }
++            cold.commit_update(cold_prepared).unwrap();
++            let warm_compiler = &engine.planners.get(&4).unwrap().plan;
++            let cold_compiler = &cold.planners.get(&4).unwrap().plan;
++            for (id, _, _, _) in warm_buffers {
++                assert_eq!(
++                    warm_compiler.buffer_bytes(id),
++                    cold_compiler.buffer_bytes(id),
++                    "cold applied Codec buffer {id}"
++                );
++            }
++            let warm_slots = engine.gather.view().plan_input().placement_slots.to_vec();
++            let cold_slots = cold.gather.view().plan_input().placement_slots.to_vec();
++            assert_eq!(warm_slots.len(), cold_slots.len());
++            let warm_placements = warm_compiler
++                .buffer_bytes(super::super::render_plan::SESSION_PLACEMENT_BUFFER_ID)
++                .unwrap();
++            let cold_placements = cold_compiler
++                .buffer_bytes(super::super::render_plan::SESSION_PLACEMENT_BUFFER_ID)
++                .unwrap();
++            for (warm_slot, cold_slot) in warm_slots.iter().zip(&cold_slots) {
++                let warm_offset = *warm_slot as usize * 8;
++                let cold_offset = *cold_slot as usize * 8;
++                assert_eq!(
++                    &warm_placements[warm_offset..warm_offset + 8],
++                    &cold_placements[cold_offset..cold_offset + 8],
++                    "cold active placement bytes"
++                );
++            }
+         }
+     }
+ 
+@@ -14548,6 +14865,8 @@ mod tests {
+                 if kind == "scattered" {
+                     assert!(publication.gather_glyph_visits > 0);
+                     assert!(publication.gather_glyph_visits < original_units.len());
++                    assert_eq!(publication.gather_full_frontier_modes, 0);
++                    assert!(publication.gather_owner_range_next_calls > 0);
+                 }
+                 assert_gather_matches_full(&mut warm_engine);
+                 warm_engine.commit_update(candidate).unwrap();
+diff --git a/packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs b/packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs
+index e55426cb..a2ed11c8 100644
+--- a/packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs
++++ b/packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs
+@@ -119,6 +119,9 @@ fn add_work(total: &mut Work, next: Work) {
+         gather_glyph_visits,
+         gather_paragraph_visits,
+         gather_range_skips,
++        gather_full_frontier_modes,
++        gather_full_range_next_calls,
++        gather_owner_range_next_calls,
+         gather_retained_gap_rows,
+         gather_envelope_splices,
+         gather_suffix_copy_bytes,
+@@ -257,6 +260,9 @@ fn work_json(work: Work, count: usize, wire: WireTotals, phase: &str, kind: &str
+         "gather": {"visitedSourceRows": work.gather_glyph_visits,
+             "paragraphVisits": work.gather_paragraph_visits,
+             "retainedRangeSkips": work.gather_range_skips,
++            "fullFrontierModes": work.gather_full_frontier_modes,
++            "fullRangeNextCalls": work.gather_full_range_next_calls,
++            "ownerRangeNextCalls": work.gather_owner_range_next_calls,
+             "retainedGapRows": work.gather_retained_gap_rows,
+             "envelopeSplices": work.gather_envelope_splices,
+             "suffixCopyBytes": work.gather_suffix_copy_bytes,
+diff --git a/packages/glyph/rust/shaper/src/engine/work_attribution.rs b/packages/glyph/rust/shaper/src/engine/work_attribution.rs
+index f2d5f189..13341b65 100644
+--- a/packages/glyph/rust/shaper/src/engine/work_attribution.rs
++++ b/packages/glyph/rust/shaper/src/engine/work_attribution.rs
+@@ -57,6 +57,9 @@ pub(crate) struct Work {
+     pub positioned_mask_bit_counts: [usize; 16],
+     pub gather_paragraph_visits: usize,
+     pub gather_range_skips: usize,
++    pub gather_full_frontier_modes: usize,
++    pub gather_full_range_next_calls: usize,
++    pub gather_owner_range_next_calls: usize,
+     pub gather_glyph_visits: usize,
+     pub fresh_selected_rows: usize,
+     pub fresh_recordless_rows: usize,
+@@ -193,6 +196,9 @@ std::thread_local! {
+         positioned_mask_bit_counts: [0; 16],
+         gather_paragraph_visits: 0,
+         gather_range_skips: 0,
++        gather_full_frontier_modes: 0,
++        gather_full_range_next_calls: 0,
++        gather_owner_range_next_calls: 0,
+         gather_glyph_visits: 0,
+         fresh_selected_rows: 0,
+         fresh_recordless_rows: 0,

@@ -1,0 +1,34 @@
+{
+  "scope": "Read-only historical identity projection and final focused High correction gates; no E6 timing",
+  "harnessDigest": "badf82b0d84dbced158f4bb44ee50b7adac7169323f295d108909c2b93413627",
+  "sourceSha256": {
+    "benches/scripts/run-package-labs.mts": "bd32e2b307d8c3105fb44996cb6f318114a266eae7c73363aa407c759ee85589",
+    "benches/scripts/support/labs-result.mts": "7299ef7c78c3db4e38093ea463c95cd96ccf8bd0b65581f72d9fe4c5325efc02",
+    "benches/scripts/support/saved-package-labs.mts": "12742cf68755a09c9b30fe3dc9a3973b680f9e0ad0bd445e0c653891596a19cf",
+    "benches/scripts/release-labs-comparison.test.mts": "59f73efd2fa39627ce921395bf5e4da6dfbba7dd07c778bb5cc6f2ec36993342",
+    "patches/@pmndrs__labs@0.9.0.patch": "1475111a563f675ba8de804b57a4a7500acad4f500771713dad8ad33b5be3002"
+  },
+  "historicalE5Projection": {
+    "main": {
+      "mode": "complete",
+      "accepted": true,
+      "identities": 145
+    },
+    "published": {
+      "mode": "published-no-outlines",
+      "accepted": true,
+      "identities": 143
+    },
+    "prior-e2": {
+      "mode": "complete",
+      "accepted": true,
+      "identities": 145
+    }
+  },
+  "checks": {
+    "benchmark:static-check": "passed",
+    "benchmark:release-comparison-check": "11 passed, 0 failed",
+    "git diff --check": "passed"
+  },
+  "unchangedWorkerProof": "protocol-proof.json SHA-256 f6270b39bcb2b7a45fd90885342e75c0b075a1ec8c2fa1c7af65cfdaac6fd7b0"
+}

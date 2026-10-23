@@ -1,0 +1,385 @@
+{
+  "schema": "portable-e6-shipping-packet-copy-provenance-v1",
+  "copiedFiles": [
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/row-view-implementation-handoff.md",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/native/row-view-implementation-handoff.md",
+      "bytes": 5292,
+      "sha256": "4ab8de000ed0eb4d6b85517433ae376be84c0ff9c56f1b8773b837fce8c800bb"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/bitmap-native-replay/identity.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/native/bitmap-native-replay-identity.json",
+      "bytes": 2096,
+      "sha256": "3df3e9db9092253b3f136a23aad1a2fca04f6c42151fd2dc8ab980cd8961297a"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/bitmap-native-replay/native-work-ledger.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/native/bitmap-native-work-ledger.json",
+      "bytes": 29279,
+      "sha256": "e69193c205135c1b1d1c5c39d0e04ffa0b041347350df4af37edfc4902984520"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/bitmap-native-replay.stdout",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/native/bitmap-native-replay.stdout",
+      "bytes": 342,
+      "sha256": "5319c62fedfec9bdbd5d2343fab9c1d60bad511f5c93c643f1b6680b7b43f475"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/bitmap-native-replay.stderr",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/native/bitmap-native-replay.stderr",
+      "bytes": 599,
+      "sha256": "63d11bc9b1627e4c427d42ac4403083862d42ef00c3188cef89b0f532af011fa"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/bitmap-native-replay.exit",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/native/bitmap-native-replay.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/focused-native.stdout",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/native/focused-native.stdout",
+      "bytes": 881,
+      "sha256": "1d25d1485ff870ecf748d854338a27e9a441f131e522c0f5abb86a1ff74ad0ca"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/focused-native.stderr",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/native/focused-native.stderr",
+      "bytes": 1150,
+      "sha256": "7b61b7d5efbfe5d16391e89115361a6cf41c630e9118821a2debd60fac083f36"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/focused-native.exit",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/native/focused-native.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/shaper-tests.stdout",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/native/shaper-tests.stdout",
+      "bytes": 51021,
+      "sha256": "e128d9ee7ea4522b9db2ac0feea3976ee7757141efb77a7a223fa3f9bec79dfd"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/shaper-tests.stderr",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/native/shaper-tests.stderr",
+      "bytes": 993,
+      "sha256": "b421c6c44595f57bf949cce19aaf62ca43359de9b67d2f7d1bfc128dcb0b1a6c"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/shaper-tests.exit",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/native/shaper-tests.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/native-gated-whole-variant-preservation.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/native/native-gated-whole-variant-preservation.json",
+      "bytes": 1656,
+      "sha256": "ac2fc1db7e6e676bfd584cf56294bab7c6a266c68fbdd7599f2227abb9097fdb"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/whole-product.patch",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/source/whole-product.patch",
+      "bytes": 123539,
+      "sha256": "3e0614f0647d4827f08e93a3b526105aa449bfe45126514aedf4003a607912b6"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/row-view-only.patch",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/source/row-view-only.patch",
+      "bytes": 11059,
+      "sha256": "e6400a37a0e6a8a385e288c281ed1245a51ff1b57ce71a2c5e4b591156cff530"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/corrected-product.patch",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/source/corrected-product.patch",
+      "bytes": 122199,
+      "sha256": "d428cb137f5b6e4ce340d117bc3b527cd48b6312135960a7c5c7db1514ec902c"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/corrected-product-preservation.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/source/corrected-product-preservation.json",
+      "bytes": 598,
+      "sha256": "b24f5086c840b59dfca541ae048da6302946571f16f51dd1898abd80456ff995"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/corrected-product-patch-preservation.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/source/corrected-product-patch-preservation.json",
+      "bytes": 1296,
+      "sha256": "e70389b752a4bca653fc62076043d97aaa259735df49f1fe10de297cb14f5045"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/row-view-high-review.md",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/reviews/row-view-high-review.md",
+      "bytes": 6092,
+      "sha256": "3eec345c4e70a4fac287ad23185c67c5cccf5e785f8c75a606f2638431f3c13e"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/held-api-lifetime-high-audit.md",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/reviews/held-api-lifetime-high-audit.md",
+      "bytes": 11977,
+      "sha256": "146d96d34213a366b9a5a2434b0fe97aced635f60a4a6819560a0cd52eafcad1"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/held-api-lifetime-high-peer-addendum.md",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/reviews/held-api-lifetime-high-peer-addendum.md",
+      "bytes": 3808,
+      "sha256": "bfc8085654ee6edca4213d55e6299d477b2c0ec4bf4a725e4d8e25b24bbf6cb3"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/root-package-gate-release.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/root-package-gate-release.json",
+      "bytes": 112434,
+      "sha256": "b5fb904dc85252ecdef9e71d72ffbe1499f616878b997445ac1bec35cf5cfdb5"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/package-gate-final-summary.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/package-gate-final-summary.json",
+      "bytes": 6789,
+      "sha256": "6c9259df68f6e42d42c800be0d6b5369fbd4f1f99f92edaf4ec1c788822f115e"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/package-check-postflight.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/package-check-postflight.json",
+      "bytes": 143749,
+      "sha256": "397b4938b19c072bb37c8f1222d5414b3fe80335ed4acf1ac82b46504138d735"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/post-peer-bridge-summary.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/post-peer-bridge-summary.json",
+      "bytes": 1309,
+      "sha256": "79a9a08370eb08f7735b1741961366889ffea68bee340bf542f4c0545e4b8706"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/post-peer-unfiltered-list-check-superseded.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/post-peer-unfiltered-list-check-superseded.json",
+      "bytes": 345261,
+      "sha256": "af99d9cd74604c6e2366106f2f2c4bf1c1c93993a0c7a11ad244d6af58938c07"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/root-input-freeze-independent-verification.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/root-input-freeze-independent-verification.json",
+      "bytes": 134,
+      "sha256": "14130813d9ec8ad8fe9c6a0ea3998a209630ae0818d2ff58b86a7dac48b783ae"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/root-named-executable-independent-verification.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/root-named-executable-independent-verification.json",
+      "bytes": 308,
+      "sha256": "396b8d5e4cc8373415b10c738ebce4ea5e98a9b8768c9b25f36905f04b5ac04b"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/root-node-result-counts.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/root-node-result-counts.json",
+      "bytes": 643,
+      "sha256": "2cf4e2752943008a0ca0436608e1cdc8aca278ec249a69a2accb2158ddb2e9b7"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/wasm-abi-and-section-evidence.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/wasm-abi-and-section-evidence.json",
+      "bytes": 206818,
+      "sha256": "e0752661db6acac43bc320363818566928c41d7e455ded3a3c5e2dda30108916"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/package-identity.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/package-identity.json",
+      "bytes": 142873,
+      "sha256": "9f69b2bbf10bc242f53d1eeecb8936bb2149673303d89a18b441743739ac21cd"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/package-member-contract-comparison.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/package-member-contract-comparison.json",
+      "bytes": 177804,
+      "sha256": "c975421356805224035f01b8fe3eabe6bcb8144fdbcdaff34c8421739e6bbe03"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/wasm-simd-decoded-witness.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/wasm-simd-decoded-witness.json",
+      "bytes": 1303,
+      "sha256": "3c65ed8f16d8143beb9227e47d9df55e628273a081fad150e3ffe9c8dd544f85"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/shaper-profile/manifest.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/shaper-profile-manifest.json",
+      "bytes": 271306,
+      "sha256": "1ebae1549bb1476a3234dbde88ab20e21d82ce76e52e7ea27c758323bdd24373"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/shaper-size/report.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/shaper-size-report.json",
+      "bytes": 777936,
+      "sha256": "e3415067587a18ae3a655b4d9a4ed161380d6b362747511df5e58b928eadb3f1"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/shaper-memory/manifest.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/memory-artifact-manifest.json",
+      "bytes": 4319,
+      "sha256": "aba0b40d90d9893801e427d533b03c8b5762befe5488ca96606ad949d7f75900"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/live-memory-summary.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/live-memory-summary.json",
+      "bytes": 1268,
+      "sha256": "4548e9ac1d9b5a6c94706ed95b128b69f68462608c1f6fc4d4b2b1ba29d71ecd"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/shaper-live-memory.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/shaper-live-memory.json",
+      "bytes": 77718,
+      "sha256": "fbf8c1c608e4c9e6cb1b873dfbbab5ec642f454ade647ec50bde48d06667994c"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/renderer-recovery-summary.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/renderer-recovery-summary.json",
+      "bytes": 633,
+      "sha256": "e65326b4e652a15d6455102f96a2752774af3175c103f72e92881f871d6bb531"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/package-check-final-01/result.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/package-check-result.json",
+      "bytes": 626,
+      "sha256": "08a57591a88228d527e781148e7f41de9b7a12fcdd771d2eb2ee7483a01d1063"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/pack-final-01/result.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/package-pack-result.json",
+      "bytes": 716,
+      "sha256": "b2e31d29968836885a6b60bdc7822b5e5ccea08c0bfabb77a50d9463e72e2cec"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/named-artifact-final-01/result.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/named-artifact-result.json",
+      "bytes": 986,
+      "sha256": "38fccf878a3944b2fe3376bb51bd9ec8aacb34a4857666a70a4ce862b058d251"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/shaper-size-accounting-final-01/result.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/size-accounting-result.json",
+      "bytes": 1150,
+      "sha256": "9f951b22b95395d0bceacdfd3dc46164e0b4e6dc820465b31480ecf9553e67d8"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/abi-parse-final-01/result.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/abi-parse-result.json",
+      "bytes": 679,
+      "sha256": "6fb24c35c4b19003f88769382cb50ed77dbe421905ae816edc4a5a215094f706"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/memory-artifact-final-01/result.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/memory-artifact-result.json",
+      "bytes": 984,
+      "sha256": "fac3c67db64b86e7ceb8d6dd63160d2c9e0b48bf2e48619c615d8f125abf65d0"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/live-memory-final-01/result.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/live-memory-result.json",
+      "bytes": 1036,
+      "sha256": "52058e9dc252f6a7a9e8b4f8a899bde8e7ba3289a8265456d5d1c05ae9a05aa2"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/renderer-recovery-final-01/result.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/renderer-recovery-result.json",
+      "bytes": 1000,
+      "sha256": "ec0c1ab7b494fa4ea9f90196d494293e09e4b18d286edb52a85a59b6e4a36529"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/peer-check-final-01/result.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/peer-check-result.json",
+      "bytes": 626,
+      "sha256": "84bcc301afc797dc2fac50e1e642342c9238aa324b80e1113b218d55a1d140d3"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/peer-check-final-01/stdout.log",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/peer-check-stdout.log",
+      "bytes": 23221,
+      "sha256": "62f53d31dcc81a22be84396bd63571c53e28c12048631a0beeac5c5fcf11e0b7"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/peer-check-final-01/stderr.log",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/peer-check-stderr.log",
+      "bytes": 436,
+      "sha256": "0d466dea38110d6f26950ea91c4290fecb28f937586a0eaac23aeaf1f9b7e954"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/peer-check-artifact-bridge-before.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/peer-check-artifact-bridge-before.json",
+      "bytes": 206312,
+      "sha256": "190179049335700d1c51d09ad9ff5f9992c1b2b813c9e4764146a78aea49cf8e"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/peer-check-artifact-bridge-after.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/peer-check-artifact-bridge-after.json",
+      "bytes": 205050,
+      "sha256": "651f6592ae7ed0639596fddb24513acf2e34d48443eb59c53a3f3afde9daca37"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/peer-check-result-summary.json",
+      "destinationPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/portable-shipping-packet-staging/shipping/peer-check-result-summary.json",
+      "bytes": 3324,
+      "sha256": "724292b8f4f366643813367da25b4f43fb269eb44dd7f2be97c581a636fa9f04"
+    }
+  ],
+  "excludedRawArtifacts": [
+    {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "bytes": 3205032,
+      "sha256": "d2f7a01ffb47aeaf87499979310286f1c980b88389e20bd1fc0f39794a0fc18c",
+      "reason": "large package archive; retained separately, excluded from compact packet"
+    },
+    {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/shaper-profile/text-shaper.named.wasm",
+      "bytes": 1810545,
+      "sha256": "94d12b02cf7a5cc331196fe8e24844ff89db23d72eaa0654c28af8fc4fa14f47",
+      "reason": "named Wasm binary; hash retained, binary excluded"
+    },
+    {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/shaper-profile/candidate.wasm",
+      "bytes": 1629518,
+      "sha256": "a1cc22c755d72f5d745ed09d42f7ee3cd6e7120c2f89b8dfed3a1c3ace16ef33",
+      "reason": "candidate Wasm binary; hash retained, binary excluded"
+    },
+    {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/shaper-profile/input.wasm",
+      "bytes": 1782725,
+      "sha256": "10178efbf0b0435623d381e768b19e3a2cbc0adcc4706685e87c96fc6c4892d0",
+      "reason": "input Wasm binary; hash retained, binary excluded"
+    },
+    {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/shaper-memory/text-shaper.diagnostic.wasm",
+      "bytes": 1728997,
+      "sha256": "bb770c81b8b3249cd395f8c74f8cbca744cd94bbca59c54639a6232de9d3579d",
+      "reason": "diagnostic Wasm binary; hash retained, binary excluded"
+    },
+    {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/shaper-memory/text-shaper.control.wasm",
+      "bytes": 1629518,
+      "sha256": "a1cc22c755d72f5d745ed09d42f7ee3cd6e7120c2f89b8dfed3a1c3ace16ef33",
+      "reason": "control Wasm binary; hash retained, binary excluded"
+    },
+    {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/shaper-profile/target-simd128/wasm32-unknown-unknown/release/pmndrs_glyph_shaper.wasm",
+      "bytes": 2759705,
+      "sha256": "0327b24c3ff6b64311405db6f623ef265719271cb3c6373a1dd34b9ce9bc4768",
+      "reason": "compiled intermediate Wasm binary; excluded"
+    },
+    {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/shaper-memory/target-simd128/wasm32-unknown-unknown/release/pmndrs_glyph_shaper.wasm",
+      "bytes": 1897678,
+      "sha256": "d2060b037578873c9e438bb0287bfdcd449b628c1a2c938f968d53705cf530e9",
+      "reason": "compiled intermediate Wasm binary; excluded"
+    },
+    {
+      "path": "(raw replay trace; path not present in searched E6/E5/E2 evidence roots)",
+      "bytes": null,
+      "sha256": "51667f42fd2f4bde967dffab2b18048cf38a35174142952f09999815186d0fa6",
+      "reason": "raw native trace excluded/not found in searched evidence roots; frozen trace hash recorded in copied replay identity and handoff"
+    },
+    {
+      "path": "E6 CPU profile",
+      "bytes": null,
+      "sha256": null,
+      "reason": "no E6 CPU profile exists; E5 profile deliberately not substituted"
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "argv": [
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "env",
+    "PORTLESS_STATE_DIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/portless-dense-browser-candidate",
+    "PORTLESS_PORT=1357",
+    "PORTLESS_HTTPS=0",
+    "PORTLESS_SYNC_HOSTS=0",
+    "GLYPH_RETAINED_UPLOAD_PACKAGE_ROOT=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/presentation-consumers/candidate/node_modules/@pmndrs/glyph",
+    "PRESENTATION_ARCHIVE_ARTIFACT=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/pmndrs-glyph-0.1.0.tgz",
+    "PRESENTATION_ARCHIVE_SHA256=06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+    "PRESENTATION_DELIVERY_OUTPUT_DIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final2/candidate/delivery",
+    "PRESENTATION_EDITORIAL_PIXEL_DIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/editorial-scene-proof-final2/candidate/pixels",
+    "PRESENTATION_EDITORIAL_PIXEL_ROLE=candidate",
+    "/Users/mini/.npm/_npx/6a98873df99949c7/node_modules/portless/dist/cli.js",
+    "glyph-editorial-candidate-webgpu-final2-20261022",
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "benchmark:presentation",
+    "--",
+    "--workload",
+    "editorial",
+    "--technique",
+    "bitmap",
+    "--backend",
+    "webgpu"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-22T18:17:38.324626+00:00",
+  "finished": "2026-10-22T18:17:50.991821+00:00",
+  "exit": 1,
+  "sha256": {
+    "stdout.log": "c49c60125ad96cf98df828d4075eee887f5af9a21403fd891364e40ff7c4e67d",
+    "stderr.log": "1258e34cc7c60fc449d9d33a6fd7761b6f073225a486b3b47ac17f7394c1152a"
+  }
+}

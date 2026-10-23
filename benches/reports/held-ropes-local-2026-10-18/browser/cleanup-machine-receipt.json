@@ -1,0 +1,40 @@
+{
+  "cleanup": {
+    "taskStateDirectory": "/private/tmp/glyph-physical-byte-portless-20261018",
+    "portlessVersion": "0.15.7",
+    "proxyPort": 38641,
+    "routeNames": ["glyph-pbyte-conf-20261018", "glyph-pbyte-pres-20261018", "glyph-pbyte-ret-20261018"],
+    "routeStateAfterCleanup": [],
+    "chosenPorts": [38641, 38642, 38643, 38644],
+    "listenersRemainingOnChosenPorts": [],
+    "portlessListAfterCleanup": "No active routes",
+    "portlessDoctorAfterCleanup": {
+      "failures": 0,
+      "warnings": ["Proxy is not running on port 38641"],
+      "routes": "none"
+    },
+    "ownedStopActions": [
+      {
+        "component": "presentation dev-built app",
+        "sessionId": 11551,
+        "action": "Ctrl-C after all browser workflows completed",
+        "returnedExitCode": 130
+      },
+      {
+        "component": "Portless HTTP proxy",
+        "sessionId": 35834,
+        "action": "Ctrl-C after all routes/apps stopped",
+        "returnedExitCode": 0
+      }
+    ],
+    "conformanceAppRouteAutoRemoved": true,
+    "retainedAppRouteAutoRemoved": true,
+    "presentationAppRouteRemoved": true
+  },
+  "routeListDiscrepancy": "During the active conformance route, portless list printed no active routes while portless get, routes.json, the workflow PORTLESS_URL, and HTTP 200 through X-Portless all confirmed the named route; final task state is empty and all inspected ports are free.",
+  "numericWorkflowExits": {
+    "benchmark:conformance": null,
+    "benchmark:presentation": 0,
+    "benchmark:retained-uploads": 0
+  }
+}

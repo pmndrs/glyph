@@ -1,0 +1,41 @@
+
+running 6 tests
+test engine::codec_gather::tests::streamed_dirty_islands_borrow_clean_decorated_owner_between_them ... ok
+test engine::codec_gather::tests::streamed_owner_offsets_preserve_clean_decoration_rows ... ok
+test engine::codec_gather::tests::streamed_callback_failure_restores_source_owner_and_count_change_stops ... ok
+test engine::codec_gather::tests::streamed_owner_count_changes_stop_before_later_selected_owner ... ok
+test engine::codec_gather::tests::streamed_stop_names_the_owner_and_resumes_existing_suffix_gather ... ok
+test engine::codec_gather::tests::streamed_dirty_owners_match_cold_bytes_and_copy_sources_once_per_leaf ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 482 filtered out; finished in 0.03s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+

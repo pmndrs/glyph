@@ -1,0 +1,242 @@
+{
+  "gate": "consolidated candidate build, package, and named-artifact authentication only",
+  "packageCheck": {
+    "command": [
+      "/Users/mini/.local/bin/mise",
+      "exec",
+      "--",
+      "pnpm",
+      "--filter",
+      "@pmndrs/glyph",
+      "check"
+    ],
+    "exit": 0,
+    "wrapper": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/package-check-01/result.json",
+    "stdoutSha256": "517b1cbb0ec15ede9b9fc331dfc2fc316a315e2ba4ed21d220799e3886894bad",
+    "stderrSha256": "7a72baba4b2b0c4cfafebac0145937eec9ea1d6db31d2835ce18a843930eaaf1",
+    "nodeTestSummaryCount": 7,
+    "nodeTests": {
+      "passed": 1142,
+      "failed": 0,
+      "skipped": 0
+    },
+    "rustTestResultSummaryCount": 26,
+    "rustTests": {
+      "passed": 588,
+      "failed": 0,
+      "ignored": 2
+    },
+    "ignoredRustFacts": [
+      "engine::transport::bitmap_replay_auth::authenticate is ignored pending an authenticated shipping-package trace; this package check did not execute the separate frozen native full-05 replay.",
+      "One full Inter generation fixture is ignored."
+    ],
+    "note": "Native full-05 replay remains separate evidence; package check does not substitute for it."
+  },
+  "sourceFreeze": {
+    "file": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/consolidated-source-freeze.json",
+    "head": "b81756a5ce4541b4e9b23d7ad04c9105345e7cff",
+    "tree": "0b626625d9599c5c0c3579e87a446e5a11e55ff3",
+    "branch": "feat/rust-text-input-wire",
+    "remoteOriginMain": "4e25a96a57462fef5ad0d19065a822695b480f60",
+    "candidateSourceSha256Before": "e8c21cb9c7dddb99c9211bdadfd372bdc236d7a385c3f4868bac9ece36c33f7b",
+    "candidateSourceSha256After": "e8c21cb9c7dddb99c9211bdadfd372bdc236d7a385c3f4868bac9ece36c33f7b",
+    "gateInputCount": 666,
+    "allFrozenGateInputHashesUnchanged": true,
+    "gitStatusAfter": "M packages/glyph/rust/shaper/src/engine/codec_gather.rs"
+  },
+  "pack": {
+    "command": [
+      "/Users/mini/.local/bin/mise",
+      "exec",
+      "--",
+      "pnpm",
+      "pack",
+      "--pack-destination",
+      "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate"
+    ],
+    "exit": 0,
+    "wrapper": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/pack-package-01/result.json",
+    "distComparison": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/package-dist-comparison.json",
+    "archiveSha256": "9b1ad97a03f5af8eaa0613e5bdaab601edf7fccf69fdeacc6059759191b1fb18",
+    "archiveBytes": 3196682,
+    "archivedDistMembers": 947,
+    "allArchivedDistMembersMatchFreshLocalDist": true,
+    "localDistMembersNotShipped": [
+      ".tsbuildinfo",
+      "internal/raster-baker-profile.d.ts",
+      "internal/raster-baker-profile.d.ts.map",
+      "internal/raster-baker-profile.js",
+      "internal/raster-baker-profile.js.map"
+    ],
+    "shippingWasmSha256": "d14d1fc68071da0127addec4dcb044998a7da4b16b32fa9c3a84eb7c70cc1018",
+    "shippingWasmBytes": 1610289
+  },
+  "namedArtifactAuthentication": {
+    "workflow": "glyph:shaper-profile-artifact",
+    "wrapper": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/named-artifact-01/result.json",
+    "exit": 0,
+    "manifest": "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/shaper-profile/manifest.json",
+    "artifactSha256": "9b1ad97a03f5af8eaa0613e5bdaab601edf7fccf69fdeacc6059759191b1fb18",
+    "releaseSha256": "d14d1fc68071da0127addec4dcb044998a7da4b16b32fa9c3a84eb7c70cc1018",
+    "executableSha256": "d14d1fc68071da0127addec4dcb044998a7da4b16b32fa9c3a84eb7c70cc1018",
+    "namedSha256": "806066af37452bbf5781955c8bb6f2083997cc68fd0e5eae485612ea5b608826",
+    "simd": true,
+    "oneCallerInlineMaxFunctionSize": "0",
+    "optimization": [
+      "--enable-bulk-memory",
+      "--enable-nontrapping-float-to-int",
+      "--enable-simd",
+      "--one-caller-inline-max-function-size=0",
+      "--merge-similar-functions",
+      "-Oz",
+      "--merge-similar-functions",
+      "-Oz"
+    ],
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+    "wasmOpt": "wasm-opt version 129 (version_129)",
+    "functionCount": 1593,
+    "functionMapSha256": "6b73c1e4fe79bcd77296bb60bbb333b2faadbe9f6b957135d1c73764d68a4619",
+    "namedWasmSha256": "806066af37452bbf5781955c8bb6f2083997cc68fd0e5eae485612ea5b608826",
+    "namedWasmBytes": 1789792,
+    "standardSectionsByteIdenticalToShippingArtifact": true,
+    "releaseStandardSections": [
+      {
+        "id": 1,
+        "name": null,
+        "sha256": "6c552f867ecfd24790a01c1e629d25c33a268099673b5557fc4a69e6f8bbbeeb",
+        "bytes": 799
+      },
+      {
+        "id": 3,
+        "name": null,
+        "sha256": "f89e7ef339983681553c36b2e6cf8931b0873f4bea8d2230fa230ff3548959af",
+        "bytes": 1598
+      },
+      {
+        "id": 4,
+        "name": null,
+        "sha256": "fa6d5b41c4bd0d977ff72eace9d886d52104eea044e40e7a631dcb63dd21980e",
+        "bytes": 7
+      },
+      {
+        "id": 5,
+        "name": null,
+        "sha256": "33e2aeac0e17d17abf54b183d1d4bf64ea2fee2be72bd174c5bd63e86bca9df9",
+        "bytes": 5
+      },
+      {
+        "id": 6,
+        "name": null,
+        "sha256": "9f3cfe5176ae52746cd84164515877d028e9591e51c615e41f3a33b6c52e9608",
+        "bytes": 11
+      },
+      {
+        "id": 7,
+        "name": null,
+        "sha256": "5964e3f8fbfbc64ad2cef6b61961844694ff0344e7661b7ae56e3b021c581f99",
+        "bytes": 1472
+      },
+      {
+        "id": 9,
+        "name": null,
+        "sha256": "c9a7ece5fd1beff4aab594678d03b293db5f86c1b9e3cd07945e4f4f877b44ac",
+        "bytes": 261
+      },
+      {
+        "id": 12,
+        "name": null,
+        "sha256": "7a682b1c694cd58ec5682bca6c748572a293e162f1b4fdcf0e278dfe6ed3bfb4",
+        "bytes": 4
+      },
+      {
+        "id": 10,
+        "name": null,
+        "sha256": "c488392f9adff027c31ba4862ee2ab2f69e422f02b10df8a2e9dc57c451546e7",
+        "bytes": 1312621
+      },
+      {
+        "id": 11,
+        "name": null,
+        "sha256": "75ffe3ec5731a385ba10e0037b154ada1c0e0ce98b8df95ec01fd06cd443e802",
+        "bytes": 293503
+      }
+    ],
+    "namedStandardSections": [
+      {
+        "id": 1,
+        "name": null,
+        "sha256": "6c552f867ecfd24790a01c1e629d25c33a268099673b5557fc4a69e6f8bbbeeb",
+        "bytes": 799
+      },
+      {
+        "id": 3,
+        "name": null,
+        "sha256": "f89e7ef339983681553c36b2e6cf8931b0873f4bea8d2230fa230ff3548959af",
+        "bytes": 1598
+      },
+      {
+        "id": 4,
+        "name": null,
+        "sha256": "fa6d5b41c4bd0d977ff72eace9d886d52104eea044e40e7a631dcb63dd21980e",
+        "bytes": 7
+      },
+      {
+        "id": 5,
+        "name": null,
+        "sha256": "33e2aeac0e17d17abf54b183d1d4bf64ea2fee2be72bd174c5bd63e86bca9df9",
+        "bytes": 5
+      },
+      {
+        "id": 6,
+        "name": null,
+        "sha256": "9f3cfe5176ae52746cd84164515877d028e9591e51c615e41f3a33b6c52e9608",
+        "bytes": 11
+      },
+      {
+        "id": 7,
+        "name": null,
+        "sha256": "5964e3f8fbfbc64ad2cef6b61961844694ff0344e7661b7ae56e3b021c581f99",
+        "bytes": 1472
+      },
+      {
+        "id": 9,
+        "name": null,
+        "sha256": "c9a7ece5fd1beff4aab594678d03b293db5f86c1b9e3cd07945e4f4f877b44ac",
+        "bytes": 261
+      },
+      {
+        "id": 12,
+        "name": null,
+        "sha256": "7a682b1c694cd58ec5682bca6c748572a293e162f1b4fdcf0e278dfe6ed3bfb4",
+        "bytes": 4
+      },
+      {
+        "id": 10,
+        "name": null,
+        "sha256": "c488392f9adff027c31ba4862ee2ab2f69e422f02b10df8a2e9dc57c451546e7",
+        "bytes": 1312621
+      },
+      {
+        "id": 11,
+        "name": null,
+        "sha256": "75ffe3ec5731a385ba10e0037b154ada1c0e0ce98b8df95ec01fd06cd443e802",
+        "bytes": 293503
+      }
+    ],
+    "namedCustomSections": [
+      ""
+    ],
+    "rawFiles": [
+      "text-shaper.named.wasm",
+      "candidate.wasm",
+      "input.wasm",
+      "functions.map",
+      "manifest.json"
+    ]
+  },
+  "status": "stable candidate authentication handoff; no timing/profile/full matrix run was started",
+  "limitations": [
+    "This gate supports exact package build and Wasm authentication only; no performance or selection conclusion.",
+    "No product source was edited by the gate; only the pre-existing reviewed codec_gather.rs change remains in Git status."
+  ]
+}

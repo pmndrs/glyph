@@ -1,0 +1,11 @@
+{
+  "argv": [
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "node",
+    "/Volumes/Depot/Developer/glyph/.cache/held-e4-attribution-20261021/evidence/authenticate-e4.mjs"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-21T06:16:03.138300+00:00"
+}

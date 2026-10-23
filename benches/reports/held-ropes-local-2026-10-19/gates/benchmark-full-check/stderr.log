@@ -1,0 +1,21 @@
+$ node ./scripts/check.mts --runtime-packages-ready
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/tooling/harfbuzz-bundle.test.ts > HarfBuzz vendor bundle > authenticates both checked bundles for the current supported platform
+AssertionError: promise rejected "Error: HarfBuzz bundle size mismatch for …" instead of resolving
+ ❯ src/tooling/harfbuzz-bundle.test.ts:54:66
+     52|     const bundleRoot = fileURLToPath(new URL('../../vendor/harfbuzz', …
+     53|     for (const version of ['13.0.0', '14.2.0'] as const) {
+     54|       await expect(verifyHarfBuzzBundle({ bundleRoot, version })).reso…
+       |                                                                  ^
+     55|         manifest: { harfBuzzVersion: version },
+     56|       });
+
+Caused by: Error: HarfBuzz bundle size mismatch for bin/hb-shape: expected 1196776, received 132
+ ❯ verifyHarfBuzzBundle src/tooling/harfbuzz-bundle.ts:99:13
+ ❯ src/tooling/harfbuzz-bundle.test.ts:54:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+/Users/mini/.local/share/mise/installs/node/24.18.0/bin/node exited with 1

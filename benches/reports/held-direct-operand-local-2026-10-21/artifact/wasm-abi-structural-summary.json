@@ -1,0 +1,209 @@
+{
+  "schema": "glyph-wasm-abi-public-boundary-summary-v1",
+  "recordedUtc": "2026-10-21T01:11:41.693305+00:00",
+  "candidateArchive": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "sha256": "83949860ae65b99fe6d7471b9782398234852668b54412870fafa81878c366a3",
+    "bytes": 3203463,
+    "memberSha256": "8b594e2b123c35c0789a1e38ee15761e9a6a2245fdce6da1181efacbc0ab366a",
+    "memberBytes": 1625526
+  },
+  "comparisons": {
+    "priorE2": {
+      "candidateImportCount": 0,
+      "comparisonImportCount": 0,
+      "importsExact": true,
+      "candidateExportCount": 39,
+      "comparisonExportCount": 39,
+      "exportsExactByNameKindSignatureOrResourceType": true,
+      "changedPublicExports": [],
+      "candidateExportResourceTypes": [
+        {
+          "name": "memory",
+          "kind": "memory",
+          "type": {
+            "flags": 0,
+            "minimum": 21
+          }
+        }
+      ],
+      "comparisonExportResourceTypes": [
+        {
+          "name": "memory",
+          "kind": "memory",
+          "type": {
+            "flags": 0,
+            "minimum": 21
+          }
+        }
+      ],
+      "rawChangedEntryCountIncludesIndexShifts": 76
+    },
+    "main": {
+      "candidateImportCount": 0,
+      "comparisonImportCount": 0,
+      "importsExact": true,
+      "candidateExportCount": 39,
+      "comparisonExportCount": 38,
+      "exportsExactByNameKindSignatureOrResourceType": false,
+      "changedPublicExports": [
+        {
+          "name": "pmndrs_glyph_engine_borrow_paragraph_glyph",
+          "candidate": null,
+          "comparison": [
+            "function",
+            {
+              "params": [
+                "0x7f",
+                "0x7f",
+                "0x7f",
+                "0x7f"
+              ],
+              "results": [
+                "0x7f"
+              ]
+            },
+            null
+          ]
+        },
+        {
+          "name": "pmndrs_glyph_engine_borrow_paragraph_glyphs",
+          "candidate": [
+            "function",
+            {
+              "params": [
+                "0x7f",
+                "0x7f",
+                "0x7f",
+                "0x7f",
+                "0x7f"
+              ],
+              "results": [
+                "0x7f"
+              ]
+            },
+            null
+          ],
+          "comparison": null
+        },
+        {
+          "name": "pmndrs_glyph_engine_reset_root",
+          "candidate": [
+            "function",
+            {
+              "params": [
+                "0x7f"
+              ],
+              "results": [
+                "0x7f"
+              ]
+            },
+            null
+          ],
+          "comparison": null
+        }
+      ],
+      "candidateExportResourceTypes": [
+        {
+          "name": "memory",
+          "kind": "memory",
+          "type": {
+            "flags": 0,
+            "minimum": 21
+          }
+        }
+      ],
+      "comparisonExportResourceTypes": [
+        {
+          "name": "memory",
+          "kind": "memory",
+          "type": {
+            "flags": 0,
+            "minimum": 21
+          }
+        }
+      ],
+      "rawChangedEntryCountIncludesIndexShifts": 75
+    }
+  },
+  "namedVsShippingStandardSections": {
+    "namedStandardSectionOrder": [
+      1,
+      3,
+      4,
+      5,
+      6,
+      7,
+      9,
+      12,
+      10,
+      11
+    ],
+    "shippingStandardSectionOrder": [
+      1,
+      3,
+      4,
+      5,
+      6,
+      7,
+      9,
+      12,
+      10,
+      11
+    ],
+    "sameStandardSectionOrder": true,
+    "sectionsByteIdentical": {
+      "1": true,
+      "3": true,
+      "4": true,
+      "5": true,
+      "6": true,
+      "7": true,
+      "9": true,
+      "12": true,
+      "10": true,
+      "11": true
+    },
+    "allStandardSectionsByteIdentical": true,
+    "namedCustomSections": [
+      {
+        "name": "name",
+        "sha256": "91bac6b336c508605645ef22f4d4d6529c10023cd1b845106c427a69adba8bd9",
+        "bytes": 181120
+      }
+    ],
+    "shippingCustomSections": []
+  },
+  "otherFourWasmIdentityBridge": [
+    {
+      "member": "package/dist/bitmap-baker.wasm",
+      "sha256": "af4892531eeab1b5d7e40844e2ab261628f51456345fb4c515fae248ae8449bc",
+      "bytes": 614383,
+      "byteIdenticalCandidateToPrior28fd": true,
+      "priorBinaryInventoryAvailable": true
+    },
+    {
+      "member": "package/dist/font-baker.wasm",
+      "sha256": "10b15d3d9359fdc76629a52d8ff68158e0396f2fd0a4581be5b83b194eecd793",
+      "bytes": 1080865,
+      "byteIdenticalCandidateToPrior28fd": true,
+      "priorBinaryInventoryAvailable": true
+    },
+    {
+      "member": "package/dist/mtsdf-baker.wasm",
+      "sha256": "27a205b72a77fa81016c90e4be2cbfdda7a0ba587f0c9d18169a8399ff557728",
+      "bytes": 548605,
+      "byteIdenticalCandidateToPrior28fd": true,
+      "priorBinaryInventoryAvailable": true
+    },
+    {
+      "member": "package/dist/slug-baker.wasm",
+      "sha256": "418c895d6b5460e4a6ed1e3c35e37bc8e2fad31695e874cea5f33e144f71bee4",
+      "bytes": 454348,
+      "byteIdenticalCandidateToPrior28fd": true,
+      "priorBinaryInventoryAvailable": true
+    }
+  ],
+  "rawParserReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/wasm-abi-and-section-evidence.json",
+  "interpretation": "Exports are compared by name, kind, function signature or memory/table/global type. Function indices are implementation details and excluded from public-boundary equality."
+}

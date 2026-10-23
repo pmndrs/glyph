@@ -1,0 +1,30 @@
+{
+  "main": {
+    "allNoncustomSectionsByteIdentical": true,
+    "executableSha256": "059ab502908510109c0f66b1a5558e42b79ba843bff36b18c309ec7be8a189e4"
+  },
+  "e4": {
+    "allNoncustomSectionsByteIdentical": true,
+    "executableSha256": "d14d1fc68071da0127addec4dcb044998a7da4b16b32fa9c3a84eb7c70cc1018"
+  },
+  "v3": {
+    "allNoncustomSectionsByteIdentical": true,
+    "executableSha256": "fc265f73b3bafb382b2310db1da306ac99a6ef5ab7bf70b4d23f161ba3a94ec6"
+  },
+  "e2": {
+    "allNoncustomSectionsByteIdentical": true,
+    "executableSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd"
+  },
+  "e3": {
+    "allNoncustomSectionsByteIdentical": true,
+    "executableSha256": "81153a6202caef528f235ae69d34ff0c8b2515c8c711af84b92db57b1f700aa6"
+  },
+  "e5": {
+    "allNoncustomSectionsByteIdentical": true,
+    "executableSha256": "8b594e2b123c35c0789a1e38ee15761e9a6a2245fdce6da1181efacbc0ab366a"
+  },
+  "e6": {
+    "allNoncustomSectionsByteIdentical": true,
+    "executableSha256": "a1cc22c755d72f5d745ed09d42f7ee3cd6e7120c2f89b8dfed3a1c3ace16ef33"
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "recordedUtc": "2026-10-21T05:20:31.029539+00:00",
+  "run": {
+    "id": 39541932980,
+    "head_sha": "59933674684f7b3aaebfa2fc2ce96d8ec3a8629a",
+    "status": "completed",
+    "conclusion": "success",
+    "html_url": "https://github.com/pmndrs/glyph/actions/runs/39541932980",
+    "run_started_at": "2026-10-21T04:03:28Z",
+    "updated_at": "2026-10-21T05:18:33Z"
+  },
+  "jobs": [
+    {
+      "id": 119031729421,
+      "name": "Package size report",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/pmndrs/glyph/actions/runs/39541932980/job/119031729421",
+      "started_at": "2026-10-21T04:04:39Z",
+      "completed_at": "2026-10-21T04:18:23Z"
+    },
+    {
+      "id": 119031729648,
+      "name": "Static checks",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/pmndrs/glyph/actions/runs/39541932980/job/119031729648",
+      "started_at": "2026-10-21T04:04:39Z",
+      "completed_at": "2026-10-21T04:05:20Z"
+    },
+    {
+      "id": 119031729804,
+      "name": "Docs report",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/pmndrs/glyph/actions/runs/39541932980/job/119031729804",
+      "started_at": "2026-10-21T04:04:39Z",
+      "completed_at": "2026-10-21T04:05:07Z"
+    },
+    {
+      "id": 119031934764,
+      "name": "Check",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/pmndrs/glyph/actions/runs/39541932980/job/119031934764",
+      "started_at": "2026-10-21T04:05:23Z",
+      "completed_at": "2026-10-21T04:21:42Z"
+    },
+    {
+      "id": 119036692799,
+      "name": "Package performance report",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/pmndrs/glyph/actions/runs/39541932980/job/119036692799",
+      "started_at": "2026-10-21T04:21:45Z",
+      "completed_at": "2026-10-21T05:18:32Z"
+    }
+  ],
+  "scope": "SubmittedHEAD59933674committedruntimeE4andfixedprotocolONLY;notuncommittedE6Rust. PassingCIperformance-reportjobisnotlocalparityacceptance."
+}

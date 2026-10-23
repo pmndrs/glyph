@@ -1,0 +1,48 @@
+--- /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/labs-original-src.mjs	2026-10-22 13:31:05
++++ /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/labs-spike-diagnostic-final/labs-trace-src.mjs	2026-10-22 13:31:05
+@@ -191,6 +191,7 @@
+ 	} });
+ 	const n = await g.next();
+ 	let $fn = n.value;
++	if (globalThis.__labsSpike) $fn = globalThis.__labsSpike.wrap($fn);
+ 	if (!n.value?.heap && null != n.value?.heap) opts.heap = false;
+ 	opts.concurrency ??= n.value?.concurrency ?? opts.args?.concurrency;
+ 	if (!n.value?.counters && null != n.value?.counters) opts.$counters = false;
+@@ -275,6 +276,7 @@
+ 			if (batch = single <= opts.batch_threshold) break;
+ 		}
+ 	}
++	if (globalThis.__labsSpike?.arm === "warmed" && globalThis.__labsSpike?.active) for (let o = 0; o < 20; o++) { const value = await fn(); if (!opts.manual && value !== void 0) consume(value); if (opts.after) await opts.after(); }
+ 	if (opts.batch !== void 0) batch = !!opts.batch;
+ 	if (opts.manual) {
+ 		batch = false;
+@@ -379,8 +381,10 @@
+ 
+       ${!(opts.gc && opts.sample_gc) ? "" : `
+         igc: {
++          if (globalThis.__labsSpike?.active) globalThis.__labsSpike.gcMarker(_,  "before", "start");
+           const t0 = $now();
+           $gc(); t += $now() - t0;
++          if (globalThis.__labsSpike?.active) globalThis.__labsSpike.gcMarker(_,  "before", "end");
+         }
+       `}
+ 
+@@ -410,8 +414,10 @@
+ 
+       ${!(opts.gc && opts.sample_gc && !opts.gc.fallback) ? "" : `
+         igc: {
++          if (globalThis.__labsSpike?.active) globalThis.__labsSpike.gcMarker(_,  "after", "start");
+           const t0 = $now();
+           $gc(); const t1 = $now() - t0;
++          if (globalThis.__labsSpike?.active) globalThis.__labsSpike.gcMarker(_,  "after", "end");
+ 
+           t += t1;
+           gc[_] = Math.max(0, t1 - _gfloor);
+@@ -421,6 +427,7 @@
+       const diff = ${opts.manual ? "t2" : "t1 - t0"};
+       t += ${"manual" === opts.manual ? "t2" : "t1 - t0"};
+       samples[_] = diff ${!batch ? "" : `/ ${batchSamples}`};
++      if (globalThis.__labsSpike?.active) globalThis.__labsSpike.sample(_, t0, t1, diff);
+       ${!opts.after ? "" : "await $after();"}
+     }
+ 

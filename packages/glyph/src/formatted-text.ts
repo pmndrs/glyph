@@ -1,10 +1,3 @@
-import {
-  areOwnedRangesClusterAligned,
-  type ClusterAlignableRange,
-  inheritClusterAlignedRanges,
-  ownClusterAlignedRanges,
-  resolveRangesToClusters,
-} from './internal/graphemes.js';
 import { statedProperties } from './internal/span-cascade.js';
 import { isImmutableFontSelection, type FontSelection } from './loaded-font.js';
 import { assertTextStyleFeatureRanges, type TextStyle } from './text-properties.js';
@@ -13,7 +6,7 @@ import type { RasterFormatMetadata } from './config/raster-format.js';
 
 declare const textLiteralFormat: unique symbol;
 declare const textSpanFragmentFormat: unique symbol;
-type StyledRange = ClusterAlignableRange & { readonly style?: TextStyle };
+type StyledRange = Readonly<{ start: number; end: number; style?: TextStyle }>;
 
 export interface ParagraphSpan<Format extends RasterFormatMetadata> {
   readonly start: number;
@@ -39,11 +32,8 @@ export interface TextSpanFragment<
   readonly properties: Properties;
 }
 
-/** Internal adapter handoff: owns validated style snapshots and resolves package-produced span boundaries. */
-export function ownClusterAlignedSpans<Span extends StyledRange>(
-  text: string,
-  spans: readonly Span[],
-): readonly Span[] {
+/** Own caller data while leaving authored UTF-16 ranges for the Rust text engine to resolve. */
+export function ownTextSpans<Span extends StyledRange>(spans: readonly Span[]): readonly Span[] {
   let snapshot: Span[] | undefined;
   for (let index = 0; index < spans.length; index++) {
     const span = spans[index]!;
@@ -53,40 +43,17 @@ export function ownClusterAlignedSpans<Span extends StyledRange>(
       continue;
     }
     const ownedStyle = reuseOrCreateTextStyleSnapshot(undefined, style, 'span style');
+    assertTextStyleFeatureRanges(ownedStyle, span.start, span.end, 'span style');
     if (ownedStyle !== style) snapshot ??= spans.slice(0, index);
     snapshot?.push(ownedStyle === style ? span : { ...span, style: ownedStyle });
   }
-  return ownClusterAlignedRanges(text, snapshot ?? spans, assertAlignedSpanFeatureRanges, spans);
+  if (snapshot !== undefined) return Object.freeze(snapshot);
+  return Object.isFrozen(spans) ? spans : Object.freeze([...spans]);
 }
 
-function assertAlignedSpanFeatureRanges(spans: readonly StyledRange[]): void {
-  for (const span of spans) {
-    const style = span.style;
-    if (style !== undefined) assertTextStyleFeatureRanges(style, span.start, span.end, 'span style');
-  }
-}
-
-/** Internal adapter handoff: font/material mapping preserves the owned style and scope; other changes revalidate. */
-export function inheritClusterAlignedSpans<Span extends StyledRange>(
-  text: string,
-  source: readonly StyledRange[],
-  spans: readonly Span[],
-): readonly Span[] {
-  const aligned = inheritClusterAlignedRanges(text, source, spans);
-  return areOwnedSpansClusterAligned(text, aligned) ? aligned : ownClusterAlignedSpans(text, aligned);
-}
-
-/** Internal adapter check for the package-owned handoff above. Arbitrary caller arrays deliberately return false. */
-export function areOwnedSpansClusterAligned(text: string, spans: readonly ClusterAlignableRange[]): boolean {
-  return areOwnedRangesClusterAligned(text, spans, true);
-}
-
-/** Resolves span boundaries onto the grapheme-cluster grid before the engine sees them — it rejects any frame whose styles split a cluster (`cluster_state.rs::build`). Malformed UTF-16 has no grid; spans pass through untouched for the engine to reject. */
-export function alignSpansToClusters<Span extends ClusterAlignableRange>(
-  text: string,
-  spans: readonly Span[],
-): readonly Span[] {
-  return resolveRangesToClusters(text, spans);
+/** Preserve style snapshots while a renderer adapter replaces font/material bindings. */
+export function inheritTextSpans<Span extends StyledRange>(spans: readonly Span[]): readonly Span[] {
+  return ownTextSpans(spans);
 }
 
 export type FormattedText<Format extends RasterFormatMetadata> = TextLiteral<Format> | TextLiteral<never>;
@@ -129,7 +96,7 @@ export function createSpanTag<Format extends RasterFormatMetadata, Properties ex
     const composed = compose(strings, values);
     return Object.freeze({
       text: composed.text,
-      spans: ownClusterAlignedSpans(composed.text, composed.spans),
+      spans: ownTextSpans(composed.spans),
       properties: frozen,
     }) as TextSpanFragment<Format, Properties>;
   }) as SpanTag<Format>;
@@ -142,7 +109,7 @@ export function txt<Format extends RasterFormatMetadata = never>(
   const composed = compose(strings, values);
   return Object.freeze({
     text: composed.text,
-    spans: ownClusterAlignedSpans(composed.text, composed.spans),
+    spans: ownTextSpans(composed.spans),
   }) as TextLiteral<Format>;
 }
 
@@ -159,7 +126,7 @@ export function span<Format extends RasterFormatMetadata>(
   return createSpanTag<Format, typeof properties>(properties) as SpanTag<Format> | UnboundSpanTag;
 }
 
-/** Compiles a fragment tree into `(text, spans)`; boundaries are concatenation joins (`start`/`end` = length before/after append) that may land mid-cluster. The caller settles the complete tree through the shared cluster-alignment rule, where a fused cluster takes its earlier base's style. */
+/** Compiles a fragment tree into `(text, spans)` while preserving authored UTF-16 join offsets for Rust to resolve. */
 function compose<Format extends RasterFormatMetadata>(
   strings: TemplateStringsArray,
   values: readonly TextTemplateValue<Format>[],

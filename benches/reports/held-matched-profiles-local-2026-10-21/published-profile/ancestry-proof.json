@@ -1,0 +1,20 @@
+{
+  "profileSha256": "5414afd3ba759ff0246c492f77aaddc67022f9642e0fea990aed08126be400fa",
+  "bulkNodeId": 6,
+  "children": [
+    {
+      "nodeId": 7,
+      "name": "set text",
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-jCRx39/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_2bac986bec3962742a289ca13213491d/node_modules/@pmndrs/glyph/dist/three/text.js"
+    },
+    {
+      "nodeId": 12,
+      "name": "updateMatrixWorld",
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-jCRx39/node_modules/.pnpm/three@0.185.1/node_modules/three/build/three.core.js"
+    }
+  ],
+  "wasmUrls": [
+    "wasm://wasm/005326c6",
+    "wasm://wasm/00aa4bda"
+  ]
+}

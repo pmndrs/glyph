@@ -1,0 +1,271 @@
+{
+  "schema": "prior-e2-fixed-facts-provenance-v1",
+  "method": "Read-only extraction of saved JSON/text and existing software calibration records; no timing, build, test, source, Git, or inference work.",
+  "inputs": {
+    "receipt": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-prior-e2-fixed-01/result.json",
+      "sha256": "65a8524ee4e162079303ce7d02c6f1e87ca249674c31558ef18eed4ed43fbf0f"
+    },
+    "manifest": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-prior-e2-fixed-data/manifest.json",
+      "sha256": "db609c2a0c4700f651072b78c3f622d2fa2866638f82f587f05f5e343a02cbde"
+    },
+    "baseline": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-prior-e2-fixed-data/baseline.json",
+      "sha256": "162e0942303f4b01dbd54d54f829106a54be6cd83db94a919a0cdf941a899524"
+    },
+    "candidate": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-prior-e2-fixed-data/candidate.json",
+      "sha256": "69c6b80d2059ebe32909aa0a098e1e3a6c2a1e5e442d645c7f959b129c8db3d8"
+    },
+    "summary": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-prior-e2-fixed-data/summary.md",
+      "sha256": "3dfeedde2b5f946bb63f2bb3411b0aca4aea326ff379afc49a7ab21dd50e08e7"
+    },
+    "comparison": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-prior-e2-fixed-data/comparison.txt",
+      "sha256": "56b945bf8a23f56427cb25e6674446b6fc90a32d7a6548158f3501851aee39aa"
+    },
+    "mainCandidate": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data/candidate.json",
+      "sha256": "69c6b80d2059ebe32909aa0a098e1e3a6c2a1e5e442d645c7f959b129c8db3d8"
+    },
+    "formulaSource": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@pmndrs+labs@0.9.0_patch_hash=1475111a563f675ba8de804b57a4a7500acad4f500771713dad8ad33b5be3002/node_modules/@pmndrs/labs/dist/cli/cli.mjs",
+      "sha256": "6385fc4a9511b3d68d9e9cf1f9eb1e897125bfdfd0bdb4d6c6e1177efb8fffd4"
+    },
+    "medianSource": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@pmndrs+labs@0.9.0_patch_hash=1475111a563f675ba8de804b57a4a7500acad4f500771713dad8ad33b5be3002/node_modules/@pmndrs/labs/dist/stats-DyCSLnVh.mjs",
+      "sha256": "ddab0c388cd7e24851c504cbc8788e9e244f03adf6b3915ea8f4615f5bde2668"
+    },
+    "baselineArchive": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "exists": true,
+      "sha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb"
+    },
+    "candidateArchive": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "exists": true,
+      "sha256": "d2f7a01ffb47aeaf87499979310286f1c980b88389e20bd1fc0f39794a0fc18c"
+    }
+  },
+  "identityCounts": {
+    "baselineRuns": 145,
+    "candidateRuns": 145,
+    "exactPairs": 145,
+    "printedRowsVerified": 145,
+    "faster": 5,
+    "slower": 4,
+    "neutral": 136,
+    "skipped": 0
+  },
+  "clockDiagnostics": {
+    "formula": "freqDrift(freqs): flatten all runFreq/postFreq values, then (max-min)/((max+min)/2), multiplied by 100 for percent.",
+    "formulaSource": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@pmndrs+labs@0.9.0_patch_hash=1475111a563f675ba8de804b57a4a7500acad4f500771713dad8ad33b5be3002/node_modules/@pmndrs/labs/dist/cli/cli.mjs",
+      "sha256": "6385fc4a9511b3d68d9e9cf1f9eb1e897125bfdfd0bdb4d6c6e1177efb8fffd4",
+      "symbol": "freqDrift"
+    },
+    "medianHelperSource": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@pmndrs+labs@0.9.0_patch_hash=1475111a563f675ba8de804b57a4a7500acad4f500771713dad8ad33b5be3002/node_modules/@pmndrs/labs/dist/stats-DyCSLnVh.mjs",
+      "sha256": "ddab0c388cd7e24851c504cbc8788e9e244f03adf6b3915ea8f4615f5bde2668",
+      "symbol": "median"
+    },
+    "baseline": {
+      "sourceInput": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-prior-e2-fixed-data/baseline.json",
+      "sourceInputSha256": "162e0942303f4b01dbd54d54f829106a54be6cd83db94a919a0cdf941a899524",
+      "recordCount": 15,
+      "readingCount": 30,
+      "rawCalibrationRecords": [
+        {
+          "file": "adapter-publication.bench.ts",
+          "runFreq": 4.000063355467809,
+          "postFreq": 4.004562086575521
+        },
+        {
+          "file": "batching.bench.ts",
+          "runFreq": 3.998110343289659,
+          "postFreq": 3.9473603543042137
+        },
+        {
+          "file": "cold.bench.ts",
+          "runFreq": 3.972183306247165,
+          "postFreq": 4.00949297961828
+        },
+        {
+          "file": "common.bench.ts",
+          "runFreq": 3.9978671844669136,
+          "postFreq": 3.9769180273846723
+        },
+        {
+          "file": "edit.bench.ts",
+          "runFreq": 3.9370460020105047,
+          "postFreq": 3.9975255733320236
+        },
+        {
+          "file": "framework-publication.bench.ts",
+          "runFreq": 3.995524522865377,
+          "postFreq": 3.9860751227251043
+        },
+        {
+          "file": "inspection.bench.ts",
+          "runFreq": 3.7074333660582925,
+          "postFreq": 3.98653455028705
+        },
+        {
+          "file": "layout.bench.ts",
+          "runFreq": 3.9596013029999657,
+          "postFreq": 3.986122632770215
+        },
+        {
+          "file": "outlines.bench.ts",
+          "runFreq": 4.006467588529683,
+          "postFreq": 3.9969989172407385
+        },
+        {
+          "file": "prepared-operations.bench.ts",
+          "runFreq": 4.000828269578549,
+          "postFreq": 3.998686815168405
+        },
+        {
+          "file": "request-arena.bench.ts",
+          "runFreq": 3.9855649716267565,
+          "postFreq": 3.948876901327062
+        },
+        {
+          "file": "sparse-assignment.bench.ts",
+          "runFreq": 3.998023783855844,
+          "postFreq": 3.9951077954972924
+        },
+        {
+          "file": "stress.bench.ts",
+          "runFreq": 3.9873311387161388,
+          "postFreq": 4.011480319532102
+        },
+        {
+          "file": "typegpu-publication.bench.ts",
+          "runFreq": 3.998320402665187,
+          "postFreq": 4.009028589406329
+        },
+        {
+          "file": "unsafe-line-breaks.bench.ts",
+          "runFreq": 3.999372728076768,
+          "postFreq": 4.003077351125106
+        }
+      ],
+      "minGHz": 3.7074333660582925,
+      "maxGHz": 4.011480319532102,
+      "driftPercent": 7.87797262304932,
+      "medianGHz": 3.997262245286381
+    },
+    "candidate": {
+      "sourceInput": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-prior-e2-fixed-data/candidate.json",
+      "sourceInputSha256": "69c6b80d2059ebe32909aa0a098e1e3a6c2a1e5e442d645c7f959b129c8db3d8",
+      "recordCount": 15,
+      "readingCount": 30,
+      "rawCalibrationRecords": [
+        {
+          "file": "adapter-publication.bench.ts",
+          "runFreq": 3.992391962998275,
+          "postFreq": 4.002759930900502
+        },
+        {
+          "file": "batching.bench.ts",
+          "runFreq": 3.9949464604034506,
+          "postFreq": 4.010505886755314
+        },
+        {
+          "file": "cold.bench.ts",
+          "runFreq": 3.996503575667072,
+          "postFreq": 4.011404148685074
+        },
+        {
+          "file": "common.bench.ts",
+          "runFreq": 3.997220218885298,
+          "postFreq": 4.000110045263744
+        },
+        {
+          "file": "edit.bench.ts",
+          "runFreq": 3.8535089043173993,
+          "postFreq": 4.0075581791533805
+        },
+        {
+          "file": "framework-publication.bench.ts",
+          "runFreq": 4.000567021779938,
+          "postFreq": 4.009382788516351
+        },
+        {
+          "file": "inspection.bench.ts",
+          "runFreq": 3.9949151031308854,
+          "postFreq": 4.00456511468349
+        },
+        {
+          "file": "layout.bench.ts",
+          "runFreq": 3.9938061757371037,
+          "postFreq": 4.000195579466999
+        },
+        {
+          "file": "outlines.bench.ts",
+          "runFreq": 4.011709569898063,
+          "postFreq": 4.0046582996539835
+        },
+        {
+          "file": "prepared-operations.bench.ts",
+          "runFreq": 3.9920466100441856,
+          "postFreq": 3.9977249505164307
+        },
+        {
+          "file": "request-arena.bench.ts",
+          "runFreq": 3.9914400372129126,
+          "postFreq": 3.9887115952091494
+        },
+        {
+          "file": "sparse-assignment.bench.ts",
+          "runFreq": 3.9940674171037407,
+          "postFreq": 4.008541800507364
+        },
+        {
+          "file": "stress.bench.ts",
+          "runFreq": 3.9966912729789974,
+          "postFreq": 4.003395982740481
+        },
+        {
+          "file": "typegpu-publication.bench.ts",
+          "runFreq": 3.997960133470942,
+          "postFreq": 4.010724048689414
+        },
+        {
+          "file": "unsafe-line-breaks.bench.ts",
+          "runFreq": 3.9999989547714114,
+          "postFreq": 4.00269042403418
+        }
+      ],
+      "minGHz": 3.8535089043173993,
+      "maxGHz": 4.011709569898063,
+      "driftPercent": 4.022791384607878,
+      "medianGHz": 4.000054500017578
+    },
+    "printedClockWarnings": [
+      "⚠ baseline CPU clock drifted 7.9% during its run"
+    ],
+    "baselineCheckFailures": [],
+    "timingModeMismatches": [],
+    "clockWarningAbsenceMeansZeroDrift": false,
+    "crossRunMedianFrequencyDifferencePercent": 0.0698297896688048
+  },
+  "outputs": {
+    "all145-quantiles.json": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/prior-e2-fixed-facts/all145-quantiles.json",
+      "sha256": "e321ec216edcdac8ff31586af527ec8c645e377e8281e98dc45b26b023ea6245"
+    },
+    "all145-quantiles.csv": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/prior-e2-fixed-facts/all145-quantiles.csv",
+      "sha256": "6f692f7e4e6a7b8d53edb4561c1b75aa88edb2b72fd2372db8d476c21fab0328"
+    },
+    "factual-prior-e2-handoff.md": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/prior-e2-fixed-facts/factual-prior-e2-handoff.md",
+      "sha256": "b0cf170816cf0069671702dcf02226b71187e6f1f3663a57e58431b4d18b4702"
+    }
+  },
+  "selfHash": "omitted; record externally after writing"
+}

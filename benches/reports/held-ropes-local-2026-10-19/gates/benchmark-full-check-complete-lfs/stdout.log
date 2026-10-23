@@ -1,0 +1,1627 @@
+
+portless
+
+-- Proxy is running
+-- held-final-check.localhost (auto-resolves to 127.0.0.1)
+-- Using port 4945
+
+  -> http://held-final-check.localhost:1356
+
+Running: PORT=4945 HOST=127.0.0.1 PORTLESS_URL=http://held-final-check.localhost:1356 /Users/mini/.local/bin/mise exec -- pnpm --dir /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo --filter @pmndrs/glyph-benchmarks check --runtime-packages-ready
+
+Checking formatting...
+
+All matched files use the correct format.
+Finished in 947ms on 439 files using 10 threads.
+
+ RUN  v4.1.11 /Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches
+
+
+ Test Files  39 passed (39)
+      Tests  166 passed (166)
+   Start at  12:26:24
+   Duration  2.95s (transform 7.33s, setup 0ms, import 11.75s, tests 2.51s, environment 3ms)
+
+✔ pins manual release comparisons while preserving push and PR baselines (0.611417ms)
+✔ retains the timing guard for benchmark inputs while allowing standalone inspector edits (0.135417ms)
+✔ accepts saved timings only for the exact package and matching benchmark environment (730.160208ms)
+✔ saved timing digests track actual edited, added, removed and fixture bytes (504.17875ms)
+✔ rejects saved candidate benchmark failures (335.879ms)
+✔ excludes incompatible timing modes from counts and plots while preserving comparable rows (1.83475ms)
+✔ resolves truncated workload collisions from candidate timings instead of assigning a skipped sibling (0.364208ms)
+✔ reports absolute changes and workload medians without hiding large neutral workloads (0.283208ms)
+✔ handles zero and second-scale medians without manufacturing timings for unsupported values (0.175875ms)
+✔ indexes current specialized workflows from source metadata (216.699459ms)
+✔ describes requirements, writes, and source for one workflow (220.351625ms)
+✔ limits bulk profile reads option to measure or none (574.837333ms)
+✔ treats Vitexec browser and injected-module errors as workflow failures (0.41425ms)
+✔ rejects benchmark-body errors even when Labs exits successfully (0.421666ms)
+✔ lets a baseline fail checks for behavior it predates, but never the candidate (0.690792ms)
+✔ reports workloads whose baseline and candidate were timed in different modes (0.318875ms)
+✔ routes package Labs by event and one explicit pull-request label (0.194208ms)
+✔ measures a main push alone instead of against the canary released for that push (0.062791ms)
+✔ forwards runner options in the position each runner parses (0.104792ms)
+✔ installs the archive emitted by pnpm pack regardless of package version (0.06175ms)
+✔ pins the transitive React peer to the frozen workspace installation for offline core consumers (0.085958ms)
+✔ installs the optional peers exercised by installed-package Labs (0.040833ms)
+✔ selects and releases an available loopback port for private Vite servers (5.075042ms)
+✔ restores full names and statuses from a real Labs comparison (3.072917ms)
+✔ renders a forest plot, slower-first table, and details from mixed results (0.966667ms)
+✔ plots neutral-only results and carries Labs sparklines (1.421541ms)
+✔ hoists a shared name prefix, shortens long names in the middle, and caps the axis (0.289625ms)
+✔ appends to the Actions job summary only when it is configured (3.087958ms)
+ℹ tests 28
+ℹ suites 0
+ℹ pass 28
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1660.563666
+12:26:30 PM [vite] (client) Re-optimizing dependencies because vite config has changed
+[
+  {
+    "schemaVersion": 0,
+    "executionId": "run:1",
+    "targetId": "synthetic",
+    "scenarioId": "overview",
+    "status": "passed",
+    "controls": {
+      "dpr": 1,
+      "samples": 3,
+      "warmup": 1
+    },
+    "validation": "3/3 deterministic outputs",
+    "measurements": [
+      {
+        "sample": 0,
+        "durationMs": 0.07500000111758709,
+        "outputBytes": 4096,
+        "hash": "d9384dc5"
+      },
+      {
+        "sample": 1,
+        "durationMs": 0.06499999947845936,
+        "outputBytes": 4096,
+        "hash": "d9384dc5"
+      },
+      {
+        "sample": 2,
+        "durationMs": 0.06000000052154064,
+        "outputBytes": 4096,
+        "hash": "d9384dc5"
+      }
+    ],
+    "medianMs": 0.06499999947845936,
+    "p95Ms": 0.07500000111758709,
+    "minMs": 0.06000000052154064,
+    "maxMs": 0.07500000111758709,
+    "outputBytes": 4096,
+    "completedAt": "2026-10-19T16:26:33.451Z",
+    "environment": {
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+      "hardwareConcurrency": 10,
+      "webgpu": true,
+      "crossOriginIsolated": true,
+      "browserVersion": "149.0.7827.55"
+    }
+  },
+  {
+    "schemaVersion": 0,
+    "executionId": "run:1",
+    "targetId": "tsl-webgl2-baseline",
+    "scenarioId": "tsl-shader-baseline",
+    "status": "passed",
+    "controls": {
+      "dpr": 1,
+      "samples": 3,
+      "warmup": 1
+    },
+    "validation": "3/3 exact TSL shader readbacks",
+    "measurements": [
+      {
+        "sample": 0,
+        "durationMs": 12.820000000298023,
+        "outputBytes": 64,
+        "hash": "fec0f57de0b19bc7dacb5b0fc3de7b56fc68dfdbeeebc8f9f4c506bf6e821c77",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "pixelCount": 16,
+          "exactRedPixels": 16,
+          "renderTargetGpuBytes": 64
+        }
+      },
+      {
+        "sample": 1,
+        "durationMs": 18.425000000745058,
+        "outputBytes": 64,
+        "hash": "fec0f57de0b19bc7dacb5b0fc3de7b56fc68dfdbeeebc8f9f4c506bf6e821c77",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "pixelCount": 16,
+          "exactRedPixels": 16,
+          "renderTargetGpuBytes": 64
+        }
+      },
+      {
+        "sample": 2,
+        "durationMs": 8.769999999552965,
+        "outputBytes": 64,
+        "hash": "fec0f57de0b19bc7dacb5b0fc3de7b56fc68dfdbeeebc8f9f4c506bf6e821c77",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "pixelCount": 16,
+          "exactRedPixels": 16,
+          "renderTargetGpuBytes": 64
+        }
+      }
+    ],
+    "medianMs": 12.820000000298023,
+    "p95Ms": 18.425000000745058,
+    "minMs": 8.769999999552965,
+    "maxMs": 18.425000000745058,
+    "outputBytes": 64,
+    "completedAt": "2026-10-19T16:26:34.819Z",
+    "environment": {
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+      "hardwareConcurrency": 10,
+      "webgpu": true,
+      "crossOriginIsolated": true,
+      "browserVersion": "149.0.7827.55"
+    }
+  },
+  {
+    "schemaVersion": 0,
+    "executionId": "run:1",
+    "targetId": "bitmap-text-webgl2",
+    "scenarioId": "bitmap-text-frame",
+    "status": "passed",
+    "controls": {
+      "dpr": 1,
+      "samples": 3,
+      "warmup": 1
+    },
+    "validation": "3/3 exact public Text frames with resize + clipping",
+    "measurements": [
+      {
+        "sample": 0,
+        "durationMs": 22.90000000037253,
+        "outputBytes": 196608,
+        "hash": "a47930d3cfc16894a9cc9330fdf31becd57131adc7aa6cf8ed190da16315e893",
+        "metrics": {
+          "fixtureIsInter": 1,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "glyphCount": 120,
+          "missingGlyphCount": 0,
+          "drawCount": 1,
+          "strikePpem": 16,
+          "cssFontSize": 16,
+          "renderedPpem": 16,
+          "scaleRatio": 1,
+          "atlasGpuBytes": 695296,
+          "renderTargetGpuBytes": 196608,
+          "totalGpuBytes": 891904,
+          "litPixels": 5930,
+          "inkPixels": 3473,
+          "inkMinX": 68,
+          "inkMinY": 18,
+          "inkMaxX": 313,
+          "inkMaxY": 112,
+          "renderMs": 0.3449999988079071,
+          "clippedRenderMs": 0.35999999940395355,
+          "clippedInkPixels": 1859,
+          "clippedTouchesBoundary": 1,
+          "resizedWidth": 192,
+          "resizedHeight": 64,
+          "firstDrawMs": 16.58999999985099,
+          "referenceMismatchBytes": 0,
+          "unsnappedOriginFraction": 0.25
+        }
+      },
+      {
+        "sample": 1,
+        "durationMs": 31.404999999329448,
+        "outputBytes": 196608,
+        "hash": "a47930d3cfc16894a9cc9330fdf31becd57131adc7aa6cf8ed190da16315e893",
+        "metrics": {
+          "fixtureIsInter": 1,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "glyphCount": 120,
+          "missingGlyphCount": 0,
+          "drawCount": 1,
+          "strikePpem": 16,
+          "cssFontSize": 16,
+          "renderedPpem": 16,
+          "scaleRatio": 1,
+          "atlasGpuBytes": 695296,
+          "renderTargetGpuBytes": 196608,
+          "totalGpuBytes": 891904,
+          "litPixels": 5930,
+          "inkPixels": 3473,
+          "inkMinX": 68,
+          "inkMinY": 18,
+          "inkMaxX": 313,
+          "inkMaxY": 112,
+          "renderMs": 0.24499999918043613,
+          "clippedRenderMs": 0.22000000067055225,
+          "clippedInkPixels": 1859,
+          "clippedTouchesBoundary": 1,
+          "resizedWidth": 192,
+          "resizedHeight": 64,
+          "firstDrawMs": 16.58999999985099,
+          "referenceMismatchBytes": 0,
+          "unsnappedOriginFraction": 0.25
+        }
+      },
+      {
+        "sample": 2,
+        "durationMs": 32.875,
+        "outputBytes": 196608,
+        "hash": "a47930d3cfc16894a9cc9330fdf31becd57131adc7aa6cf8ed190da16315e893",
+        "metrics": {
+          "fixtureIsInter": 1,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "glyphCount": 120,
+          "missingGlyphCount": 0,
+          "drawCount": 1,
+          "strikePpem": 16,
+          "cssFontSize": 16,
+          "renderedPpem": 16,
+          "scaleRatio": 1,
+          "atlasGpuBytes": 695296,
+          "renderTargetGpuBytes": 196608,
+          "totalGpuBytes": 891904,
+          "litPixels": 5930,
+          "inkPixels": 3473,
+          "inkMinX": 68,
+          "inkMinY": 18,
+          "inkMaxX": 313,
+          "inkMaxY": 112,
+          "renderMs": 0.24000000022351742,
+          "clippedRenderMs": 0.24499999918043613,
+          "clippedInkPixels": 1859,
+          "clippedTouchesBoundary": 1,
+          "resizedWidth": 192,
+          "resizedHeight": 64,
+          "firstDrawMs": 16.58999999985099,
+          "referenceMismatchBytes": 0,
+          "unsnappedOriginFraction": 0.25
+        }
+      }
+    ],
+    "medianMs": 31.404999999329448,
+    "p95Ms": 32.875,
+    "minMs": 22.90000000037253,
+    "maxMs": 32.875,
+    "outputBytes": 196608,
+    "completedAt": "2026-10-19T16:26:35.619Z",
+    "environment": {
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+      "hardwareConcurrency": 10,
+      "webgpu": true,
+      "crossOriginIsolated": true,
+      "browserVersion": "149.0.7827.55"
+    }
+  },
+  {
+    "schemaVersion": 0,
+    "executionId": "run:1",
+    "targetId": "mtsdf-text-webgl2",
+    "scenarioId": "mtsdf-text-scenes",
+    "status": "passed",
+    "controls": {
+      "dpr": 1,
+      "samples": 3,
+      "warmup": 1
+    },
+    "validation": "3/3 deterministic MTSDF resize + base-level + transform + effects frames",
+    "measurements": [
+      {
+        "sample": 0,
+        "durationMs": 13.880000000819564,
+        "outputBytes": 655360,
+        "hash": "0158ab1e805d8a9cb6336ba4c74896a3f9c7e00ea9e6643a2169bf2531238465",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "sceneCount": 4,
+          "textObjectCount": 4,
+          "glyphCount": 205,
+          "drawCount": 1,
+          "changedPixels": 14032,
+          "distinctRgbColors": 2279,
+          "artifactBytes": 39347528,
+          "compressedArtifactBytes": 8167587,
+          "renderTargetGpuBytes": 655360,
+          "fontLoadMs": 130.94499999843538,
+          "firstDrawMs": 33.99500000104308,
+          "renderMs": 0.3399999998509884
+        }
+      },
+      {
+        "sample": 1,
+        "durationMs": 16.5,
+        "outputBytes": 655360,
+        "hash": "0158ab1e805d8a9cb6336ba4c74896a3f9c7e00ea9e6643a2169bf2531238465",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "sceneCount": 4,
+          "textObjectCount": 4,
+          "glyphCount": 205,
+          "drawCount": 1,
+          "changedPixels": 14032,
+          "distinctRgbColors": 2279,
+          "artifactBytes": 39347528,
+          "compressedArtifactBytes": 8167587,
+          "renderTargetGpuBytes": 655360,
+          "fontLoadMs": 130.94499999843538,
+          "firstDrawMs": 33.99500000104308,
+          "renderMs": 0.2549999989569187
+        }
+      },
+      {
+        "sample": 2,
+        "durationMs": 16.49500000104308,
+        "outputBytes": 655360,
+        "hash": "0158ab1e805d8a9cb6336ba4c74896a3f9c7e00ea9e6643a2169bf2531238465",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "sceneCount": 4,
+          "textObjectCount": 4,
+          "glyphCount": 205,
+          "drawCount": 1,
+          "changedPixels": 14032,
+          "distinctRgbColors": 2279,
+          "artifactBytes": 39347528,
+          "compressedArtifactBytes": 8167587,
+          "renderTargetGpuBytes": 655360,
+          "fontLoadMs": 130.94499999843538,
+          "firstDrawMs": 33.99500000104308,
+          "renderMs": 0.2850000001490116
+        }
+      }
+    ],
+    "medianMs": 16.49500000104308,
+    "p95Ms": 16.5,
+    "minMs": 13.880000000819564,
+    "maxMs": 16.5,
+    "outputBytes": 655360,
+    "completedAt": "2026-10-19T16:26:36.467Z",
+    "environment": {
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+      "hardwareConcurrency": 10,
+      "webgpu": true,
+      "crossOriginIsolated": true,
+      "browserVersion": "149.0.7827.55"
+    }
+  },
+  {
+    "schemaVersion": 0,
+    "executionId": "run:1",
+    "targetId": "mtsdf-conformance-webgl2",
+    "scenarioId": "mtsdf-sampling-conformance",
+    "status": "passed",
+    "controls": {
+      "dpr": 1,
+      "samples": 3,
+      "warmup": 1
+    },
+    "validation": "3/3 deterministic GPU frames with CPU MTSDF comparison",
+    "measurements": [
+      {
+        "sample": 0,
+        "durationMs": 17.549999998882413,
+        "outputBytes": 1048576,
+        "hash": "476e3fdd28b8225c6f6aac71c67758569f3f902d9b549b8b0e09956245108d3c",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "fixtureIsInter": 1,
+          "pixelCount": 262144,
+          "glyphCount": 84,
+          "meanAbsoluteError": 0.0938720703125,
+          "maximumError": 9,
+          "errorPixels": 3182,
+          "renderMs": 0.5249999985098839
+        }
+      },
+      {
+        "sample": 1,
+        "durationMs": 17.62999999895692,
+        "outputBytes": 1048576,
+        "hash": "476e3fdd28b8225c6f6aac71c67758569f3f902d9b549b8b0e09956245108d3c",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "fixtureIsInter": 1,
+          "pixelCount": 262144,
+          "glyphCount": 84,
+          "meanAbsoluteError": 0.0938720703125,
+          "maximumError": 9,
+          "errorPixels": 3182,
+          "renderMs": 0.3349999990314245
+        }
+      },
+      {
+        "sample": 2,
+        "durationMs": 26.009999999776483,
+        "outputBytes": 1048576,
+        "hash": "476e3fdd28b8225c6f6aac71c67758569f3f902d9b549b8b0e09956245108d3c",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "fixtureIsInter": 1,
+          "pixelCount": 262144,
+          "glyphCount": 84,
+          "meanAbsoluteError": 0.0938720703125,
+          "maximumError": 9,
+          "errorPixels": 3182,
+          "renderMs": 0.2949999999254942
+        }
+      }
+    ],
+    "medianMs": 17.62999999895692,
+    "p95Ms": 26.009999999776483,
+    "minMs": 17.549999998882413,
+    "maxMs": 26.009999999776483,
+    "outputBytes": 1048576,
+    "completedAt": "2026-10-19T16:26:37.530Z",
+    "environment": {
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+      "hardwareConcurrency": 10,
+      "webgpu": true,
+      "crossOriginIsolated": true,
+      "browserVersion": "149.0.7827.55"
+    }
+  },
+  {
+    "schemaVersion": 0,
+    "executionId": "run:1",
+    "targetId": "slug-text-webgl2",
+    "scenarioId": "slug-text-scenes",
+    "status": "passed",
+    "controls": {
+      "dpr": 1,
+      "samples": 3,
+      "warmup": 1
+    },
+    "validation": "3/3 deterministic Slug resize + transform frames",
+    "measurements": [
+      {
+        "sample": 0,
+        "durationMs": 9.304999999701977,
+        "outputBytes": 655360,
+        "hash": "ea422bd4ca615d5f57382c55a817cedead402c9adbc84a274bce1ed29ef543e2",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "sceneCount": 4,
+          "textObjectCount": 4,
+          "glyphCount": 201,
+          "drawCount": 1,
+          "changedPixels": 10201,
+          "distinctRgbColors": 1495,
+          "artifactBytes": 3444732,
+          "compressedArtifactBytes": 618310,
+          "slugPageCount": 1,
+          "slugCurveBytes": 2097152,
+          "slugHeaderBytes": 376832,
+          "slugReferenceBytes": 688128,
+          "slugResourceBytes": 3162112,
+          "slugGpuBytes": 3193856,
+          "renderTargetGpuBytes": 655360,
+          "fontLoadMs": 42.01500000059605,
+          "firstDrawMs": 38.019999999552965,
+          "renderMs": 0.3349999990314245
+        }
+      },
+      {
+        "sample": 1,
+        "durationMs": 11.505000000819564,
+        "outputBytes": 655360,
+        "hash": "ea422bd4ca615d5f57382c55a817cedead402c9adbc84a274bce1ed29ef543e2",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "sceneCount": 4,
+          "textObjectCount": 4,
+          "glyphCount": 201,
+          "drawCount": 1,
+          "changedPixels": 10201,
+          "distinctRgbColors": 1495,
+          "artifactBytes": 3444732,
+          "compressedArtifactBytes": 618310,
+          "slugPageCount": 1,
+          "slugCurveBytes": 2097152,
+          "slugHeaderBytes": 376832,
+          "slugReferenceBytes": 688128,
+          "slugResourceBytes": 3162112,
+          "slugGpuBytes": 3193856,
+          "renderTargetGpuBytes": 655360,
+          "fontLoadMs": 42.01500000059605,
+          "firstDrawMs": 38.019999999552965,
+          "renderMs": 0.27500000037252903
+        }
+      },
+      {
+        "sample": 2,
+        "durationMs": 10.745000001043081,
+        "outputBytes": 655360,
+        "hash": "ea422bd4ca615d5f57382c55a817cedead402c9adbc84a274bce1ed29ef543e2",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "sceneCount": 4,
+          "textObjectCount": 4,
+          "glyphCount": 201,
+          "drawCount": 1,
+          "changedPixels": 10201,
+          "distinctRgbColors": 1495,
+          "artifactBytes": 3444732,
+          "compressedArtifactBytes": 618310,
+          "slugPageCount": 1,
+          "slugCurveBytes": 2097152,
+          "slugHeaderBytes": 376832,
+          "slugReferenceBytes": 688128,
+          "slugResourceBytes": 3162112,
+          "slugGpuBytes": 3193856,
+          "renderTargetGpuBytes": 655360,
+          "fontLoadMs": 42.01500000059605,
+          "firstDrawMs": 38.019999999552965,
+          "renderMs": 0.3300000000745058
+        }
+      }
+    ],
+    "medianMs": 10.745000001043081,
+    "p95Ms": 11.505000000819564,
+    "minMs": 9.304999999701977,
+    "maxMs": 11.505000000819564,
+    "outputBytes": 655360,
+    "completedAt": "2026-10-19T16:26:38.402Z",
+    "environment": {
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+      "hardwareConcurrency": 10,
+      "webgpu": true,
+      "crossOriginIsolated": true,
+      "browserVersion": "149.0.7827.55"
+    }
+  },
+  {
+    "schemaVersion": 0,
+    "executionId": "run:1",
+    "targetId": "slug-conformance-webgl2",
+    "scenarioId": "slug-sampling-conformance",
+    "status": "passed",
+    "controls": {
+      "dpr": 1,
+      "samples": 3,
+      "warmup": 1
+    },
+    "validation": "3/3 deterministic GPU frames with CPU Slug comparison",
+    "measurements": [
+      {
+        "sample": 0,
+        "durationMs": 52.744999999180436,
+        "outputBytes": 1048576,
+        "hash": "cebef9dc98befb6d7ed7a6d653ec9d2f8768b5cbe105d3374d6bf453114eeb52",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "fixtureIsInter": 1,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 262144,
+          "glyphCount": 84,
+          "evaluatedCurves": 470202,
+          "meanAbsoluteError": 0.096649169921875,
+          "maximumError": 85,
+          "errorPixels": 3495,
+          "severeErrorPixels": 0,
+          "renderMs": 0.4450000002980232
+        }
+      },
+      {
+        "sample": 1,
+        "durationMs": 58.794999999925494,
+        "outputBytes": 1048576,
+        "hash": "cebef9dc98befb6d7ed7a6d653ec9d2f8768b5cbe105d3374d6bf453114eeb52",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "fixtureIsInter": 1,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 262144,
+          "glyphCount": 84,
+          "evaluatedCurves": 470202,
+          "meanAbsoluteError": 0.096649169921875,
+          "maximumError": 85,
+          "errorPixels": 3495,
+          "severeErrorPixels": 0,
+          "renderMs": 0.3200000002980232
+        }
+      },
+      {
+        "sample": 2,
+        "durationMs": 56.58999999985099,
+        "outputBytes": 1048576,
+        "hash": "cebef9dc98befb6d7ed7a6d653ec9d2f8768b5cbe105d3374d6bf453114eeb52",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "fixtureIsInter": 1,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 262144,
+          "glyphCount": 84,
+          "evaluatedCurves": 470202,
+          "meanAbsoluteError": 0.096649169921875,
+          "maximumError": 85,
+          "errorPixels": 3495,
+          "severeErrorPixels": 0,
+          "renderMs": 0.31000000052154064
+        }
+      }
+    ],
+    "medianMs": 56.58999999985099,
+    "p95Ms": 58.794999999925494,
+    "minMs": 52.744999999180436,
+    "maxMs": 58.794999999925494,
+    "outputBytes": 1048576,
+    "completedAt": "2026-10-19T16:26:39.423Z",
+    "environment": {
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+      "hardwareConcurrency": 10,
+      "webgpu": true,
+      "crossOriginIsolated": true,
+      "browserVersion": "149.0.7827.55"
+    }
+  },
+  {
+    "schemaVersion": 0,
+    "executionId": "run:1",
+    "targetId": "source-outline-bitmap-webgl2",
+    "scenarioId": "source-outline-fidelity",
+    "status": "passed",
+    "controls": {
+      "dpr": 1,
+      "samples": 3,
+      "warmup": 1
+    },
+    "validation": "3/3 deterministic source-outline comparisons within reviewed envelopes",
+    "measurements": [
+      {
+        "sample": 0,
+        "durationMs": 164.77999999932945,
+        "outputBytes": 196608,
+        "hash": "a47930d3cfc16894a9cc9330fdf31becd57131adc7aa6cf8ed190da16315e893",
+        "metrics": {
+          "techniqueBitmap": 1,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 0,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "pixelCount": 49152,
+          "physicalPpem": 16,
+          "meanAbsoluteError": 7.406514485677083,
+          "maximumError": 255,
+          "errorPixels": 5853,
+          "renderMs": 0.27999999932944775
+        }
+      },
+      {
+        "sample": 1,
+        "durationMs": 159.46000000089407,
+        "outputBytes": 196608,
+        "hash": "a47930d3cfc16894a9cc9330fdf31becd57131adc7aa6cf8ed190da16315e893",
+        "metrics": {
+          "techniqueBitmap": 1,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 0,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "pixelCount": 49152,
+          "physicalPpem": 16,
+          "meanAbsoluteError": 7.406514485677083,
+          "maximumError": 255,
+          "errorPixels": 5853,
+          "renderMs": 0.2149999998509884
+        }
+      },
+      {
+        "sample": 2,
+        "durationMs": 166.16500000096858,
+        "outputBytes": 196608,
+        "hash": "a47930d3cfc16894a9cc9330fdf31becd57131adc7aa6cf8ed190da16315e893",
+        "metrics": {
+          "techniqueBitmap": 1,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 0,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "pixelCount": 49152,
+          "physicalPpem": 16,
+          "meanAbsoluteError": 7.406514485677083,
+          "maximumError": 255,
+          "errorPixels": 5853,
+          "renderMs": 0.2149999998509884
+        }
+      }
+    ],
+    "medianMs": 164.77999999932945,
+    "p95Ms": 166.16500000096858,
+    "minMs": 159.46000000089407,
+    "maxMs": 166.16500000096858,
+    "outputBytes": 196608,
+    "completedAt": "2026-10-19T16:26:40.594Z",
+    "environment": {
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+      "hardwareConcurrency": 10,
+      "webgpu": true,
+      "crossOriginIsolated": true,
+      "browserVersion": "149.0.7827.55"
+    }
+  },
+  {
+    "schemaVersion": 0,
+    "executionId": "run:1",
+    "targetId": "source-outline-mtsdf-webgl2",
+    "scenarioId": "source-outline-fidelity",
+    "status": "passed",
+    "controls": {
+      "dpr": 1,
+      "samples": 3,
+      "warmup": 1
+    },
+    "validation": "3/3 deterministic source-outline comparisons within reviewed envelopes",
+    "measurements": [
+      {
+        "sample": 0,
+        "durationMs": 347.1849999986589,
+        "outputBytes": 1048576,
+        "hash": "476e3fdd28b8225c6f6aac71c67758569f3f902d9b549b8b0e09956245108d3c",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 1,
+          "techniqueSlug": 0,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "pixelCount": 262144,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 6.716541290283203,
+          "maximumError": 255,
+          "errorPixels": 19268,
+          "renderMs": 26.574999999254942
+        }
+      },
+      {
+        "sample": 1,
+        "durationMs": 380.31000000052154,
+        "outputBytes": 1048576,
+        "hash": "476e3fdd28b8225c6f6aac71c67758569f3f902d9b549b8b0e09956245108d3c",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 1,
+          "techniqueSlug": 0,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "pixelCount": 262144,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 6.716541290283203,
+          "maximumError": 255,
+          "errorPixels": 19268,
+          "renderMs": 23
+        }
+      },
+      {
+        "sample": 2,
+        "durationMs": 346.98499999940395,
+        "outputBytes": 1048576,
+        "hash": "476e3fdd28b8225c6f6aac71c67758569f3f902d9b549b8b0e09956245108d3c",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 1,
+          "techniqueSlug": 0,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "pixelCount": 262144,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 6.716541290283203,
+          "maximumError": 255,
+          "errorPixels": 19268,
+          "renderMs": 24.694999998435378
+        }
+      }
+    ],
+    "medianMs": 347.1849999986589,
+    "p95Ms": 380.31000000052154,
+    "minMs": 346.98499999940395,
+    "maxMs": 380.31000000052154,
+    "outputBytes": 1048576,
+    "completedAt": "2026-10-19T16:26:42.498Z",
+    "environment": {
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+      "hardwareConcurrency": 10,
+      "webgpu": true,
+      "crossOriginIsolated": true,
+      "browserVersion": "149.0.7827.55"
+    }
+  },
+  {
+    "schemaVersion": 0,
+    "executionId": "run:1",
+    "targetId": "source-outline-slug-webgl2",
+    "scenarioId": "source-outline-fidelity",
+    "status": "passed",
+    "controls": {
+      "dpr": 1,
+      "samples": 3,
+      "warmup": 1
+    },
+    "validation": "3/3 deterministic source-outline comparisons within reviewed envelopes",
+    "measurements": [
+      {
+        "sample": 0,
+        "durationMs": 352.7599999997765,
+        "outputBytes": 1048576,
+        "hash": "cebef9dc98befb6d7ed7a6d653ec9d2f8768b5cbe105d3374d6bf453114eeb52",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "pixelCount": 262144,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 6.712863922119141,
+          "maximumError": 255,
+          "errorPixels": 18570,
+          "renderMs": 29.259999999776483
+        }
+      },
+      {
+        "sample": 1,
+        "durationMs": 366.0300000011921,
+        "outputBytes": 1048576,
+        "hash": "cebef9dc98befb6d7ed7a6d653ec9d2f8768b5cbe105d3374d6bf453114eeb52",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "pixelCount": 262144,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 6.712863922119141,
+          "maximumError": 255,
+          "errorPixels": 18570,
+          "renderMs": 34.32000000029802
+        }
+      },
+      {
+        "sample": 2,
+        "durationMs": 357.070000000298,
+        "outputBytes": 1048576,
+        "hash": "cebef9dc98befb6d7ed7a6d653ec9d2f8768b5cbe105d3374d6bf453114eeb52",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "pixelCount": 262144,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 6.712863922119141,
+          "maximumError": 255,
+          "errorPixels": 18570,
+          "renderMs": 27.070000000298023
+        }
+      }
+    ],
+    "medianMs": 357.070000000298,
+    "p95Ms": 366.0300000011921,
+    "minMs": 352.7599999997765,
+    "maxMs": 366.0300000011921,
+    "outputBytes": 1048576,
+    "completedAt": "2026-10-19T16:26:44.391Z",
+    "environment": {
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+      "hardwareConcurrency": 10,
+      "webgpu": true,
+      "crossOriginIsolated": true,
+      "browserVersion": "149.0.7827.55"
+    }
+  },
+  {
+    "schemaVersion": 0,
+    "executionId": "run:1",
+    "targetId": "react-text-reconciliation",
+    "scenarioId": "react-text-reconciliation",
+    "status": "passed",
+    "controls": {
+      "dpr": 1,
+      "samples": 3,
+      "warmup": 1
+    },
+    "validation": "3/3 exact React Text reconciliations + R3F frames",
+    "measurements": [
+      {
+        "sample": 0,
+        "durationMs": 2.5549999997019768,
+        "outputBytes": 110,
+        "hash": "bb15bbcc",
+        "metrics": {
+          "coreObjectRetained": 1,
+          "nestedSpanCount": 1,
+          "glyphCount": 55,
+          "drawCount": 1,
+          "paintCount": 2,
+          "widthReflowed": 1,
+          "layoutRestored": 1,
+          "oracleNaturalMatched": 1,
+          "oracleNarrowMatched": 1,
+          "r3fDrawCalls": 3
+        }
+      },
+      {
+        "sample": 1,
+        "durationMs": 2.4399999994784594,
+        "outputBytes": 110,
+        "hash": "bb15bbcc",
+        "metrics": {
+          "coreObjectRetained": 1,
+          "nestedSpanCount": 1,
+          "glyphCount": 55,
+          "drawCount": 1,
+          "paintCount": 2,
+          "widthReflowed": 1,
+          "layoutRestored": 1,
+          "oracleNaturalMatched": 1,
+          "oracleNarrowMatched": 1,
+          "r3fDrawCalls": 3
+        }
+      },
+      {
+        "sample": 2,
+        "durationMs": 2.2650000005960464,
+        "outputBytes": 110,
+        "hash": "bb15bbcc",
+        "metrics": {
+          "coreObjectRetained": 1,
+          "nestedSpanCount": 1,
+          "glyphCount": 55,
+          "drawCount": 1,
+          "paintCount": 2,
+          "widthReflowed": 1,
+          "layoutRestored": 1,
+          "oracleNaturalMatched": 1,
+          "oracleNarrowMatched": 1,
+          "r3fDrawCalls": 3
+        }
+      }
+    ],
+    "medianMs": 2.4399999994784594,
+    "p95Ms": 2.5549999997019768,
+    "minMs": 2.2650000005960464,
+    "maxMs": 2.5549999997019768,
+    "outputBytes": 110,
+    "completedAt": "2026-10-19T16:26:45.153Z",
+    "environment": {
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+      "hardwareConcurrency": 10,
+      "webgpu": true,
+      "crossOriginIsolated": true,
+      "browserVersion": "149.0.7827.55"
+    }
+  },
+  {
+    "schemaVersion": 0,
+    "executionId": "run:1",
+    "targetId": "font-baker",
+    "scenarioId": "cold-load-payload",
+    "status": "passed",
+    "controls": {
+      "dpr": 1,
+      "samples": 3,
+      "warmup": 1
+    },
+    "validation": "3/3 deterministic outputs",
+    "measurements": [
+      {
+        "sample": 0,
+        "durationMs": 1.2900000009685755,
+        "outputBytes": 172108,
+        "hash": "b11a5f7f7f0818018ed68809fdb94374"
+      },
+      {
+        "sample": 1,
+        "durationMs": 1.1650000009685755,
+        "outputBytes": 172108,
+        "hash": "b11a5f7f7f0818018ed68809fdb94374"
+      },
+      {
+        "sample": 2,
+        "durationMs": 1.1600000001490116,
+        "outputBytes": 172108,
+        "hash": "b11a5f7f7f0818018ed68809fdb94374"
+      }
+    ],
+    "medianMs": 1.1650000009685755,
+    "p95Ms": 1.2900000009685755,
+    "minMs": 1.1600000001490116,
+    "maxMs": 1.2900000009685755,
+    "outputBytes": 172108,
+    "completedAt": "2026-10-19T16:26:45.774Z",
+    "environment": {
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+      "hardwareConcurrency": 10,
+      "webgpu": true,
+      "crossOriginIsolated": true,
+      "browserVersion": "149.0.7827.55"
+    }
+  },
+  {
+    "schemaVersion": 0,
+    "executionId": "run:1",
+    "targetId": "font-loader-worker",
+    "scenarioId": "worker-fallback",
+    "status": "passed",
+    "controls": {
+      "dpr": 1,
+      "samples": 3,
+      "warmup": 1
+    },
+    "validation": "3/3 deterministic outputs",
+    "measurements": [
+      {
+        "sample": 0,
+        "durationMs": 54.309999998658895,
+        "outputBytes": 172108,
+        "hash": "0c522d6ea0db73ba74bcc389dc50263b"
+      },
+      {
+        "sample": 1,
+        "durationMs": 55.84999999962747,
+        "outputBytes": 172108,
+        "hash": "0c522d6ea0db73ba74bcc389dc50263b"
+      },
+      {
+        "sample": 2,
+        "durationMs": 57.06000000052154,
+        "outputBytes": 172108,
+        "hash": "0c522d6ea0db73ba74bcc389dc50263b"
+      }
+    ],
+    "medianMs": 55.84999999962747,
+    "p95Ms": 57.06000000052154,
+    "minMs": 54.309999998658895,
+    "maxMs": 57.06000000052154,
+    "outputBytes": 172108,
+    "completedAt": "2026-10-19T16:26:46.619Z",
+    "environment": {
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+      "hardwareConcurrency": 10,
+      "webgpu": true,
+      "crossOriginIsolated": true,
+      "browserVersion": "149.0.7827.55"
+    }
+  },
+  {
+    "schemaVersion": 0,
+    "executionId": "run:1",
+    "targetId": "paragraph-contracts",
+    "scenarioId": "paragraph-contracts",
+    "status": "passed",
+    "controls": {
+      "dpr": 1,
+      "samples": 3,
+      "warmup": 1
+    },
+    "validation": "3/3 exact bidi, policy, uikit, and CJK contract matrices",
+    "measurements": [
+      {
+        "sample": 0,
+        "durationMs": 11.049999998882413,
+        "outputBytes": 16698,
+        "hash": "74dc0773:f0b4fb7b:78a2da69:3573ee13:b1654ad7:d9e47668:78a2da69:98b101c5:4dcfa982:4dcfa982:027d8c8e:d728c4ff:7e6ba2f5:371bee16:9cbe8c35:f6223c0a:7141860d:a2381814:fbb2c37c:79d99205:34efafd6:7b5a2905:291e6ced:5a192fe4",
+        "metrics": {
+          "bidiLayoutCount": 2,
+          "policyLayoutCount": 9,
+          "cjkLayoutCount": 12,
+          "uikitMeasurementCount": 24,
+          "uikitLayoutCount": 1
+        }
+      },
+      {
+        "sample": 1,
+        "durationMs": 9.294999999925494,
+        "outputBytes": 16698,
+        "hash": "74dc0773:f0b4fb7b:78a2da69:3573ee13:b1654ad7:d9e47668:78a2da69:98b101c5:4dcfa982:4dcfa982:027d8c8e:d728c4ff:7e6ba2f5:371bee16:9cbe8c35:f6223c0a:7141860d:a2381814:fbb2c37c:79d99205:34efafd6:7b5a2905:291e6ced:5a192fe4",
+        "metrics": {
+          "bidiLayoutCount": 2,
+          "policyLayoutCount": 9,
+          "cjkLayoutCount": 12,
+          "uikitMeasurementCount": 24,
+          "uikitLayoutCount": 1
+        }
+      },
+      {
+        "sample": 2,
+        "durationMs": 7.825000001117587,
+        "outputBytes": 16698,
+        "hash": "74dc0773:f0b4fb7b:78a2da69:3573ee13:b1654ad7:d9e47668:78a2da69:98b101c5:4dcfa982:4dcfa982:027d8c8e:d728c4ff:7e6ba2f5:371bee16:9cbe8c35:f6223c0a:7141860d:a2381814:fbb2c37c:79d99205:34efafd6:7b5a2905:291e6ced:5a192fe4",
+        "metrics": {
+          "bidiLayoutCount": 2,
+          "policyLayoutCount": 9,
+          "cjkLayoutCount": 12,
+          "uikitMeasurementCount": 24,
+          "uikitLayoutCount": 1
+        }
+      }
+    ],
+    "medianMs": 9.294999999925494,
+    "p95Ms": 11.049999998882413,
+    "minMs": 7.825000001117587,
+    "maxMs": 11.049999998882413,
+    "outputBytes": 16698,
+    "completedAt": "2026-10-19T16:26:47.307Z",
+    "environment": {
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+      "hardwareConcurrency": 10,
+      "webgpu": true,
+      "crossOriginIsolated": true,
+      "browserVersion": "149.0.7827.55"
+    }
+  },
+  {
+    "schemaVersion": 0,
+    "executionId": "run:1",
+    "targetId": "advanced-shaping-conformance",
+    "scenarioId": "advanced-shaping-conformance",
+    "status": "passed",
+    "controls": {
+      "dpr": 1,
+      "samples": 3,
+      "warmup": 1
+    },
+    "validation": "3/3 exact advanced-shaping timelines · 68 frames/sample",
+    "measurements": [
+      {
+        "sample": 0,
+        "durationMs": 16.609999999403954,
+        "outputBytes": 17362,
+        "hash": "f718256d",
+        "metrics": {
+          "caseCount": 5,
+          "frameCount": 68,
+          "finalFrameCount": 5,
+          "layoutBytes": 17362,
+          "glyphCount": 709,
+          "missingGlyphCount": 0,
+          "renderedGlyphCount": 625,
+          "drawCount": 63,
+          "coldReadyObservationCount": 5,
+          "warmLifecyclePublicationCount": 63,
+          "warmReadyWaitCount": 0
+        }
+      },
+      {
+        "sample": 1,
+        "durationMs": 15.209999999031425,
+        "outputBytes": 17362,
+        "hash": "f718256d",
+        "metrics": {
+          "caseCount": 5,
+          "frameCount": 68,
+          "finalFrameCount": 5,
+          "layoutBytes": 17362,
+          "glyphCount": 709,
+          "missingGlyphCount": 0,
+          "renderedGlyphCount": 625,
+          "drawCount": 63,
+          "coldReadyObservationCount": 5,
+          "warmLifecyclePublicationCount": 63,
+          "warmReadyWaitCount": 0
+        }
+      },
+      {
+        "sample": 2,
+        "durationMs": 14.365000000223517,
+        "outputBytes": 17362,
+        "hash": "f718256d",
+        "metrics": {
+          "caseCount": 5,
+          "frameCount": 68,
+          "finalFrameCount": 5,
+          "layoutBytes": 17362,
+          "glyphCount": 709,
+          "missingGlyphCount": 0,
+          "renderedGlyphCount": 625,
+          "drawCount": 63,
+          "coldReadyObservationCount": 5,
+          "warmLifecyclePublicationCount": 63,
+          "warmReadyWaitCount": 0
+        }
+      }
+    ],
+    "medianMs": 15.209999999031425,
+    "p95Ms": 16.609999999403954,
+    "minMs": 14.365000000223517,
+    "maxMs": 16.609999999403954,
+    "outputBytes": 17362,
+    "completedAt": "2026-10-19T16:26:47.912Z",
+    "environment": {
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+      "hardwareConcurrency": 10,
+      "webgpu": true,
+      "crossOriginIsolated": true,
+      "browserVersion": "149.0.7827.55"
+    }
+  },
+  {
+    "schemaVersion": 0,
+    "executionId": "run:1",
+    "targetId": "rich-text-spans-conformance",
+    "scenarioId": "rich-text-spans-conformance",
+    "status": "passed",
+    "controls": {
+      "dpr": 1,
+      "samples": 3,
+      "warmup": 1
+    },
+    "validation": "3/3 exact composed-span paragraphs · 7 controls · nested paint inherits",
+    "measurements": [
+      {
+        "sample": 0,
+        "durationMs": 12.125,
+        "outputBytes": 700,
+        "hash": "d666d3ac",
+        "metrics": {
+          "caseCount": 7,
+          "spanCount": 8,
+          "glyphCount": 175,
+          "missingGlyphCount": 0,
+          "renderedGlyphCount": 149,
+          "drawCount": 3,
+          "fontHandleCount": 3,
+          "distinctFontSizeCount": 4,
+          "lineCount": 3,
+          "smallCapsChangedGlyphs": 5,
+          "smallCapsChangedGlyphsOutside": 0,
+          "trackingChangedGlyphs": 0,
+          "trackingMovedOrigins": 12,
+          "emphasisChangedGlyphs": 0,
+          "emphasisMovedOrigins": 101,
+          "emphasisLineCount": 3,
+          "bodySizeEmphasisLineCount": 2,
+          "emphasisFirstLineTextEnd": 74,
+          "bodySizeEmphasisFirstLineTextEnd": 87,
+          "faceSpanSlotGlyphs": 6,
+          "faceSpanSlotGlyphsWithoutSpan": 0,
+          "fallbackSpanSlotGlyphs": 8,
+          "fallbackMissingGlyphsWithoutSpan": 8,
+          "fallbackFontHandleCountWithoutSpan": 2,
+          "accentPaintGlyphs": 32,
+          "tintPaintGlyphs": 3,
+          "paragraphPaintGlyphs": 114,
+          "nestedGlyphCount": 9,
+          "nestedPaintDelta": 0,
+          "accentSpanGlyphCount": 35,
+          "tintSpanGlyphCount": 3,
+          "underlineCount": 1,
+          "lineThroughCount": 2
+        }
+      },
+      {
+        "sample": 1,
+        "durationMs": 10.174999998882413,
+        "outputBytes": 700,
+        "hash": "d666d3ac",
+        "metrics": {
+          "caseCount": 7,
+          "spanCount": 8,
+          "glyphCount": 175,
+          "missingGlyphCount": 0,
+          "renderedGlyphCount": 149,
+          "drawCount": 3,
+          "fontHandleCount": 3,
+          "distinctFontSizeCount": 4,
+          "lineCount": 3,
+          "smallCapsChangedGlyphs": 5,
+          "smallCapsChangedGlyphsOutside": 0,
+          "trackingChangedGlyphs": 0,
+          "trackingMovedOrigins": 12,
+          "emphasisChangedGlyphs": 0,
+          "emphasisMovedOrigins": 101,
+          "emphasisLineCount": 3,
+          "bodySizeEmphasisLineCount": 2,
+          "emphasisFirstLineTextEnd": 74,
+          "bodySizeEmphasisFirstLineTextEnd": 87,
+          "faceSpanSlotGlyphs": 6,
+          "faceSpanSlotGlyphsWithoutSpan": 0,
+          "fallbackSpanSlotGlyphs": 8,
+          "fallbackMissingGlyphsWithoutSpan": 8,
+          "fallbackFontHandleCountWithoutSpan": 2,
+          "accentPaintGlyphs": 32,
+          "tintPaintGlyphs": 3,
+          "paragraphPaintGlyphs": 114,
+          "nestedGlyphCount": 9,
+          "nestedPaintDelta": 0,
+          "accentSpanGlyphCount": 35,
+          "tintSpanGlyphCount": 3,
+          "underlineCount": 1,
+          "lineThroughCount": 2
+        }
+      },
+      {
+        "sample": 2,
+        "durationMs": 9.099999999627471,
+        "outputBytes": 700,
+        "hash": "d666d3ac",
+        "metrics": {
+          "caseCount": 7,
+          "spanCount": 8,
+          "glyphCount": 175,
+          "missingGlyphCount": 0,
+          "renderedGlyphCount": 149,
+          "drawCount": 3,
+          "fontHandleCount": 3,
+          "distinctFontSizeCount": 4,
+          "lineCount": 3,
+          "smallCapsChangedGlyphs": 5,
+          "smallCapsChangedGlyphsOutside": 0,
+          "trackingChangedGlyphs": 0,
+          "trackingMovedOrigins": 12,
+          "emphasisChangedGlyphs": 0,
+          "emphasisMovedOrigins": 101,
+          "emphasisLineCount": 3,
+          "bodySizeEmphasisLineCount": 2,
+          "emphasisFirstLineTextEnd": 74,
+          "bodySizeEmphasisFirstLineTextEnd": 87,
+          "faceSpanSlotGlyphs": 6,
+          "faceSpanSlotGlyphsWithoutSpan": 0,
+          "fallbackSpanSlotGlyphs": 8,
+          "fallbackMissingGlyphsWithoutSpan": 8,
+          "fallbackFontHandleCountWithoutSpan": 2,
+          "accentPaintGlyphs": 32,
+          "tintPaintGlyphs": 3,
+          "paragraphPaintGlyphs": 114,
+          "nestedGlyphCount": 9,
+          "nestedPaintDelta": 0,
+          "accentSpanGlyphCount": 35,
+          "tintSpanGlyphCount": 3,
+          "underlineCount": 1,
+          "lineThroughCount": 2
+        }
+      }
+    ],
+    "medianMs": 10.174999998882413,
+    "p95Ms": 12.125,
+    "minMs": 9.099999999627471,
+    "maxMs": 12.125,
+    "outputBytes": 700,
+    "completedAt": "2026-10-19T16:26:48.431Z",
+    "environment": {
+      "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+      "hardwareConcurrency": 10,
+      "webgpu": true,
+      "crossOriginIsolated": true,
+      "browserVersion": "149.0.7827.55"
+    }
+  }
+]
+{"hash":"b1a2496cd19ac7bb262887e08bf0c83497f210be989f6fab327336a6612a1637","bytes":172108}
+vite v8.1.5 building client environment for production...
+[2Ktransforming...✓ 2654 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                                          1.91 kB │ gzip:   0.64 kB
+dist/assets/runtime-bake-worker-D3vS-9ip.js                              5.25 kB
+dist/assets/geist-cyrillic-ext-wght-normal-DjL33-gN.woff2                7.42 kB
+dist/assets/geist-vietnamese-wght-normal-6IgcOCM7.woff2                  8.00 kB
+dist/assets/geist-cyrillic-wght-normal-BEAKL7Jp.woff2                   15.08 kB
+dist/assets/geist-latin-ext-wght-normal-DC-KSUi6.woff2                  16.51 kB
+dist/assets/geist-latin-wght-normal-BgDaEnEv.woff2                      29.40 kB
+dist/font-notices.txt                                                   31.11 kB │ gzip:   3.03 kB
+dist/assets/NotoSansCJKjp-Showcase-mqkOdQun.otf                         38.09 kB
+dist/assets/noto-sans-cjk-showcase-bitmap-16.font-CwTj1Ush.glb          65.81 kB
+dist/assets/DancingScript-Regular-B2kbM-tj.otf                         110.39 kB
+dist/assets/noto-sans-cjk-showcase-slug.font.glb-C2cbplsh.gz           139.45 kB
+dist/assets/NotoSansDevanagari-0gZCnibb.ttf                            229.33 kB
+dist/assets/noto-sans-cjk-showcase-bitmap-16-32.font-Bh7AHvTx.glb      238.93 kB
+dist/assets/SourceSerif4-Regular-IpLKW43r.ttf                          261.86 kB
+dist/assets/dancing-script-bitmap-16.font-CuCe8ONn.glb                 291.37 kB
+dist/assets/noto-sans-devanagari-slug.font.glb-CV6T23Bp.gz             296.57 kB
+dist/assets/noto-sans-devanagari-bitmap-16.font-BC3WRGMJ.glb           312.06 kB
+dist/assets/source-serif-4-slug.font.glb-BylxcHzq.gz                   407.50 kB
+dist/assets/Inter-Regular-BOoJxjxf.ttf                                 411.64 kB
+dist/assets/fa-solid-900-CaDyLN1r.ttf                                  426.11 kB
+dist/assets/Amiri-Regular-DuMToiWY.ttf                                 431.11 kB
+dist/assets/dancing-script-slug.font.glb-Dvd9lN1h.gz                   464.65 kB
+dist/assets/source-serif-4-bitmap-16.font-CQU1eAHv.glb                 468.60 kB
+dist/assets/font-awesome-free-6.7.2-bitmap-16.font-C1mlM3Pe.glb        596.39 kB
+dist/assets/inter-slug.font.glb-Nnw7TNOt.gz                            618.31 kB
+dist/assets/font-awesome-free-6.7.2-slug.font.glb-CJZgytKM.gz          657.92 kB
+dist/assets/inter-bitmap-16.font-BHIiMkqu.glb                          926.98 kB
+dist/assets/dancing-script-bitmap-16-32.font-CaUpKXQa.glb            1,008.91 kB
+dist/assets/noto-sans-devanagari-bitmap-16-32.font-DuZevIav.glb      1,062.82 kB
+dist/assets/font-baker-DUGOwDeJ.wasm                                 1,080.86 kB │ gzip: 394.92 kB
+dist/assets/noto-sans-cjk-showcase-mtsdf.font.glb-BUArh-Wc.gz        1,293.27 kB
+dist/assets/source-serif-4-bitmap-16-32.font-hfwOjiTm.glb            1,418.99 kB
+dist/assets/text-shaper-1XpyJLNP.wasm                                1,601.55 kB │ gzip: 603.06 kB
+dist/assets/amiri-slug.font.glb-Dpo95ts7.gz                          1,955.01 kB
+dist/assets/amiri-bitmap-16.font-BCVnDLAJ.glb                        1,987.66 kB
+dist/assets/DotGothic16-Regular-CH-V-U_I.ttf                         2,069.23 kB
+dist/assets/font-awesome-free-6.7.2-bitmap-16-32.font-C2r1hrGs.glb   2,381.54 kB
+dist/assets/dancing-script-mtsdf.font.glb-CPG0pl-k.gz                2,604.84 kB
+dist/assets/noto-sans-cjk-contract-bitmap-16.font-BimRMxqz.glb       2,897.02 kB
+dist/assets/inter-bitmap-16-32.font-h6G0KMhC.glb                     3,149.46 kB
+dist/assets/dot-gothic-16-bitmap-16.font-DaJDENnj.glb                3,294.20 kB
+dist/assets/dot-gothic-16-slug.font.glb-iCnDtRzq.gz                  3,639.70 kB
+dist/assets/noto-sans-devanagari-mtsdf.font.glb-BPL0kFB4.gz          3,721.08 kB
+dist/assets/source-serif-4-mtsdf.font.glb-CLqOfrLb.gz                4,665.45 kB
+dist/assets/amiri-bitmap-16-32.font-DBLyFnzz.glb                     7,232.80 kB
+dist/assets/inter-mtsdf.font.glb-CsxGxxbL.gz                         8,167.58 kB
+dist/assets/font-awesome-free-6.7.2-mtsdf.font.glb-Dnz-Z2xI.gz       8,760.10 kB
+dist/assets/dot-gothic-16-bitmap-16-32.font-DYSrkv8-.glb            13,057.00 kB
+dist/assets/amiri-mtsdf.font.glb-BEezYhQc.gz                        16,818.15 kB
+dist/assets/dot-gothic-16-mtsdf.font.glb-BoTMgY8d.gz                58,845.61 kB
+dist/assets/index-B4iXIMH0.css                                          73.65 kB │ gzip:  13.51 kB
+dist/assets/contract-C7j7oOoI.js                                         0.04 kB │ gzip:   0.05 kB
+dist/assets/Inter-Regular-CoEY0_M-.js                                    0.05 kB │ gzip:   0.07 kB
+dist/assets/font-baker-BAdR11dY.js                                       0.06 kB │ gzip:   0.08 kB
+dist/assets/text-shaper-CDM9QDH1.js                                      0.06 kB │ gzip:   0.08 kB
+dist/assets/amiri-bitmap-16.font-Q6AeVc4t.js                             0.06 kB │ gzip:   0.08 kB
+dist/assets/inter-bitmap-16.font-BMjogW4V.js                             0.06 kB │ gzip:   0.08 kB
+dist/assets/source-serif-4-bitmap-16.font-DHrRsPD2.js                    0.07 kB │ gzip:   0.09 kB
+dist/assets/metadata-CUwqPU9g.js                                         0.07 kB │ gzip:   0.08 kB
+dist/assets/noto-sans-devanagari-bitmap-16.font-OiyX8H3f.js              0.08 kB │ gzip:   0.10 kB
+dist/assets/noto-sans-cjk-showcase-bitmap-16.font-CQk9XiCR.js            0.08 kB │ gzip:   0.10 kB
+dist/assets/text-shaper-module-D2MZYolS.js                               0.09 kB │ gzip:   0.10 kB
+dist/assets/slug-DfYMJ8GA.js                                             0.09 kB │ gzip:   0.09 kB
+dist/assets/mtsdf-BIRzdBM8.js                                            0.10 kB │ gzip:   0.09 kB
+dist/assets/bitmap-C7qGRfqM.js                                           0.10 kB │ gzip:   0.09 kB
+dist/assets/font-assets-Cz3heOXy.js                                      0.11 kB │ gzip:   0.10 kB
+dist/assets/bitmap-capture-DXmqP0cC.js                                   0.13 kB │ gzip:   0.12 kB
+dist/assets/mtsdf-capture-Dy7s49n5.js                                    0.17 kB │ gzip:   0.14 kB
+dist/assets/glyph-origin-presentation-w9qzd2n-.js                        0.19 kB │ gzip:   0.16 kB
+dist/assets/glyph-error-Beo7vOr-.js                                      0.20 kB │ gzip:   0.15 kB
+dist/assets/three-policy-buffer-evidence-vAB7dxvW.js                     0.21 kB │ gzip:   0.17 kB
+dist/assets/font-baker-DazWCD_e2.js                                      0.25 kB │ gzip:   0.18 kB
+dist/assets/metadata-CFocDehB.js                                         0.27 kB │ gzip:   0.20 kB
+dist/assets/slug-capture-CrPN_5z7.js                                     0.33 kB │ gzip:   0.21 kB
+dist/assets/rgba-readback-C-WMBPqw.js                                    0.36 kB │ gzip:   0.28 kB
+dist/assets/metadata-9sQljVo6.js                                         0.41 kB │ gzip:   0.23 kB
+dist/assets/runtime-baker-BcMODz5O.js                                    0.45 kB │ gzip:   0.28 kB
+dist/assets/slug-mjPMd-iP.js                                             0.49 kB │ gzip:   0.37 kB
+dist/assets/msdf-trIlkplL.js                                             0.52 kB │ gzip:   0.40 kB
+dist/assets/slug-contract-3I9Z26dW.js                                    0.54 kB │ gzip:   0.32 kB
+dist/assets/bitmap-bzxlrEY_.js                                           0.56 kB │ gzip:   0.43 kB
+dist/assets/text-style-B5Nujbs7.js                                       0.59 kB │ gzip:   0.32 kB
+dist/assets/font-face-transfer-X2Vp9pNB.js                               0.59 kB │ gzip:   0.30 kB
+dist/assets/shared-DLLbCc5f.js                                           0.62 kB │ gzip:   0.39 kB
+dist/assets/renderer-state-transaction-BfXJDJjK.js                       0.63 kB │ gzip:   0.31 kB
+dist/assets/rolldown-runtime-QTnfLwEv.js                                 0.69 kB │ gzip:   0.42 kB
+dist/assets/library-X7nMV5W5.js                                          0.71 kB │ gzip:   0.46 kB
+dist/assets/bitmap-capture-B_Ypl-rw.js                                   0.82 kB │ gzip:   0.44 kB
+dist/assets/raster-coverage-artifact-CVpkgj8k.js                         0.90 kB │ gzip:   0.47 kB
+dist/assets/bitmap-text-DLRA5DJt.js                                      0.95 kB │ gzip:   0.57 kB
+dist/assets/runtime-bake-CASCPkJ5.js                                     0.99 kB │ gzip:   0.55 kB
+dist/assets/paragraph-layout-digest-oo4hW5nn.js                          1.12 kB │ gzip:   0.51 kB
+dist/assets/preload-helper-Czpn1I53.js                                   1.19 kB │ gzip:   0.67 kB
+dist/assets/raster-format-registry-Cfgctoi4.js                           1.21 kB │ gzip:   0.49 kB
+dist/assets/bitmap-contract-B2YFsTva.js                                  1.24 kB │ gzip:   0.62 kB
+dist/assets/runtime-bake-protocol-CflV4T1u.js                            1.44 kB │ gzip:   0.73 kB
+dist/assets/font-baker-BMsDC3n7.js                                       1.59 kB │ gzip:   0.85 kB
+dist/assets/font-face-transfer-runtime-CSMIWLcD.js                       1.69 kB │ gzip:   0.68 kB
+dist/assets/slug-sdG0Tx2G.js                                             1.69 kB │ gzip:   0.79 kB
+dist/assets/raster-identity-CvRkl0De.js                                  1.71 kB │ gzip:   0.81 kB
+dist/assets/formatted-text-erFJyG9g.js                                   1.76 kB │ gzip:   0.80 kB
+dist/assets/mtsdf-D77MiLIs.js                                            1.84 kB │ gzip:   0.88 kB
+dist/assets/scene-DUknd91c.js                                            1.87 kB │ gzip:   1.14 kB
+dist/assets/content-digest-Bq-u9Bui.js                                   1.98 kB │ gzip:   0.91 kB
+dist/assets/runtime-p2rLhZZm.js                                          2.07 kB │ gzip:   1.04 kB
+dist/assets/msdf-contract-CM17ULFb.js                                    2.34 kB │ gzip:   0.86 kB
+dist/assets/bitmap-decoder-CzUL1Nkb.js                                   2.37 kB │ gzip:   1.05 kB
+dist/assets/raster-bake-worker-host-C1xhLVBf.js                          2.40 kB │ gzip:   1.07 kB
+dist/assets/webgpu-renderer-CMzbjuxm.js                                  2.45 kB │ gzip:   1.12 kB
+dist/assets/three-root-BL1TkPvn.js                                       2.55 kB │ gzip:   1.32 kB
+dist/assets/bake-progress-protocol-Bwd89xof.js                           2.62 kB │ gzip:   1.08 kB
+dist/assets/msdf-decoder-CA5je2ap.js                                     2.75 kB │ gzip:   1.29 kB
+dist/assets/font-fixtures-C-mCJLGN.js                                    2.82 kB │ gzip:   1.28 kB
+dist/assets/tsl-baseline-C6qM8cN8.js                                     2.87 kB │ gzip:   1.44 kB
+dist/assets/raster-coverage-C2C7GQr1.js                                  2.88 kB │ gzip:   0.95 kB
+dist/assets/font-assets-CLRyQ_44.js                                      2.98 kB │ gzip:   0.98 kB
+dist/assets/runtime-fallback-Bh9xXFq5.js                                 3.14 kB │ gzip:   1.46 kB
+dist/assets/raster-records-CO6rml7s.js                                   3.23 kB │ gzip:   1.51 kB
+dist/assets/artifact-XMOeWXDn.js                                         3.26 kB │ gzip:   1.49 kB
+dist/assets/retained-font-fixture-BaVPDwFY.js                            3.47 kB │ gzip:   1.53 kB
+dist/assets/scheduler-DjDK5o4-.js                                        3.56 kB │ gzip:   1.57 kB
+dist/assets/advanced-shaping-DSN1rdR0.js                                 3.57 kB │ gzip:   1.78 kB
+dist/assets/showcase-slug-fixtures-v0-CfUTeass.js                        3.94 kB │ gzip:   1.30 kB
+dist/assets/showcase-bitmap-density-fixtures-v0-e9NCiHPU.js              4.41 kB │ gzip:   1.25 kB
+dist/assets/mtsdf-capture-BZ_OTbSe.js                                    4.50 kB │ gzip:   1.87 kB
+dist/assets/mtsdf-text-CI-gEidb.js                                       4.72 kB │ gzip:   2.23 kB
+dist/assets/slug-decoder-BF2vAy1m.js                                     4.78 kB │ gzip:   1.93 kB
+dist/assets/bitmap-Dq794cvB.js                                           5.00 kB │ gzip:   1.88 kB
+dist/assets/slug-text-DPDaGGjd.js                                        5.12 kB │ gzip:   2.34 kB
+dist/assets/raster-atlas-DOe2_SnJ.js                                     5.30 kB │ gzip:   2.05 kB
+dist/assets/product-TpY8k83b.js                                          5.42 kB │ gzip:   2.10 kB
+dist/assets/catalog-BdM_E5WB.js                                          6.10 kB │ gzip:   1.81 kB
+dist/assets/compiled-data-ziYRYS08.js                                    6.26 kB │ gzip:   2.16 kB
+dist/assets/scene-6GC5p4ZF.js                                            6.27 kB │ gzip:   2.69 kB
+dist/assets/text-shaper-module-DAxRl7LU.js                               6.28 kB │ gzip:   2.43 kB
+dist/assets/font-baker-Bnn3b-11.js                                       6.65 kB │ gzip:   2.28 kB
+dist/assets/source-outline-reference-YdKUZx2G.js                         6.79 kB │ gzip:   2.89 kB
+dist/assets/persistent-scene-CVds3o6s.js                                 7.45 kB │ gzip:   3.01 kB
+dist/assets/rich-text-spans-DGAqI_Kc.js                                  7.71 kB │ gzip:   3.31 kB
+dist/assets/persistent-scene-BmkX9JS4.js                                 7.73 kB │ gzip:   2.90 kB
+dist/assets/persistent-scene-y9LeKDhI.js                                 7.80 kB │ gzip:   2.92 kB
+dist/assets/bitmap-finite-scene-BNhlXUyN.js                              9.03 kB │ gzip:   3.85 kB
+dist/assets/raster-format-comparison-CQAfy1dT.js                         9.11 kB │ gzip:   3.40 kB
+dist/assets/with-selector-DYCetcVG.js                                    9.63 kB │ gzip:   3.54 kB
+dist/assets/three-ZmtDuvOm.js                                           10.10 kB │ gzip:   3.69 kB
+dist/assets/showcase-mtsdf-fixtures-v0-IIHMRd_A.js                      12.00 kB │ gzip:   2.64 kB
+dist/assets/text-shaper-abi-nkKr1wFj.js                                 13.47 kB │ gzip:   4.78 kB
+dist/assets/scene-r8jSPU41.js                                           14.97 kB │ gzip:   6.98 kB
+dist/assets/persistent-render-host-CV5uvw0L.js                          15.36 kB │ gzip:   5.34 kB
+dist/assets/three.tsl-B4Vm1Fnd.js                                       17.07 kB │ gzip:   6.70 kB
+dist/assets/three.tsl-lylwy4en.js                                       17.75 kB │ gzip:   7.37 kB
+dist/assets/external-raster-proof-DfiA2eFw.js                           18.10 kB │ gzip:   6.34 kB
+dist/assets/slug-capture-W27GI1hK.js                                    20.55 kB │ gzip:   7.02 kB
+dist/assets/font-notices-dialog-DOZHAFFP.js                             32.83 kB │ gzip:   3.99 kB
+dist/assets/loader-C6KcDCV6.js                                          49.41 kB │ gzip:  14.52 kB
+dist/assets/conformance-59SsqJHd.js                                     60.84 kB │ gzip:  14.68 kB
+dist/assets/typegpu-CcsaB1qw.js                                         74.20 kB │ gzip:  15.09 kB
+dist/assets/slug-BXyyep6D.js                                            86.63 kB │ gzip:  23.07 kB
+dist/assets/comparison-workload-C4Sbg86u.js                            122.10 kB │ gzip:  35.55 kB
+dist/assets/Inspector-lJmuqcGW.js                                      155.88 kB │ gzip:  35.72 kB
+dist/assets/ui-D8MW5QCX.js                                             163.11 kB │ gzip:  55.45 kB
+dist/assets/three-fThTQdd_.js                                          195.74 kB │ gzip:  55.58 kB
+dist/assets/define-config-BhvvoWIp.js                                  265.76 kB │ gzip:  74.52 kB
+dist/assets/index-zgGQTd6N.js                                          522.79 kB │ gzip: 159.60 kB
+dist/assets/react-text-CJCbudXU.js                                     728.26 kB │ gzip: 206.74 kB
+dist/assets/three.webgpu-DIWojy3U.js                                 1,034.53 kB │ gzip: 284.32 kB
+
+✓ built in 3.35s

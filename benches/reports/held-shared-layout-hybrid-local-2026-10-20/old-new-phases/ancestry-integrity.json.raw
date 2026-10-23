@@ -1,0 +1,104 @@
+[
+  {
+    "arm": "main",
+    "profileSha256": "3a0ec1d57ff96bf78e21e1c4dc043fa27e13f64b846bdec3f608f0ec2f8336dd",
+    "parent": 6,
+    "setterRoot": {
+      "functionName": "set text",
+      "scriptId": "249",
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-p8iuAv/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_ce09509db3bd9e196286bece8d2da14e/node_modules/@pmndrs/glyph/dist/three/text.js",
+      "lineNumber": 0,
+      "columnNumber": 9845
+    },
+    "publicationRoot": {
+      "functionName": "updateMatrixWorld",
+      "scriptId": "155",
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-p8iuAv/node_modules/.pnpm/three@0.185.1/node_modules/three/build/three.core.js",
+      "lineNumber": 12899,
+      "columnNumber": 18
+    },
+    "rootIds": [
+      7,
+      13
+    ],
+    "exclusiveSampledUs": [
+      120459,
+      1102751,
+      88331
+    ],
+    "samples": [
+      75,
+      679,
+      37
+    ],
+    "descendantsDisjoint": true
+  },
+  {
+    "arm": "published",
+    "profileSha256": "ce4f7e3d04568f449ec0f598acf5711540cd1bb3e905809d9ccff1cca704165b",
+    "parent": 6,
+    "setterRoot": {
+      "functionName": "set text",
+      "scriptId": "243",
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-W9hp8A/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-rerun_2bac986bec3962742a289ca13213491d/node_modules/@pmndrs/glyph/dist/three/text.js",
+      "lineNumber": 0,
+      "columnNumber": 8285
+    },
+    "publicationRoot": {
+      "functionName": "updateMatrixWorld",
+      "scriptId": "155",
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-W9hp8A/node_modules/.pnpm/three@0.185.1/node_modules/three/build/three.core.js",
+      "lineNumber": 12899,
+      "columnNumber": 18
+    },
+    "rootIds": [
+      44,
+      7
+    ],
+    "exclusiveSampledUs": [
+      71499,
+      818793,
+      73374
+    ],
+    "samples": [
+      49,
+      551,
+      31
+    ],
+    "descendantsDisjoint": true
+  },
+  {
+    "arm": "held-e2",
+    "profileSha256": "9d2c597138a1419a16cd23e7ae40181c27b18e9cc660b2cfa9792bbb24026d6c",
+    "parent": 6,
+    "setterRoot": {
+      "functionName": "set text",
+      "scriptId": "245",
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-JBwOvs/node_modules/.pnpm/@pmndrs+glyph@file+..+..+..+..+..+..+..+Volumes+Depot+Developer+glyph+.cache+held-wave2_28f31d826bbb03abfa0d6066daee2b06/node_modules/@pmndrs/glyph/dist/three/text.js",
+      "lineNumber": 0,
+      "columnNumber": 10180
+    },
+    "publicationRoot": {
+      "functionName": "updateMatrixWorld",
+      "scriptId": "155",
+      "url": "file:///private/var/folders/6p/79mr8_4n34d9_2m75n54r1qc0000gn/T/glyph-edit-publication-profile-JBwOvs/node_modules/.pnpm/three@0.185.1/node_modules/three/build/three.core.js",
+      "lineNumber": 12899,
+      "columnNumber": 18
+    },
+    "rootIds": [
+      7,
+      35
+    ],
+    "exclusiveSampledUs": [
+      737794,
+      295497,
+      66709
+    ],
+    "samples": [
+      492,
+      198,
+      26
+    ],
+    "descendantsDisjoint": true
+  }
+]

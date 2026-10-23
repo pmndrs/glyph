@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { glyph, msdf } from '@pmndrs/glyph';
+import { bitmap, glyph, msdf } from '@pmndrs/glyph';
 import { defineTypeGpuConfig } from '@pmndrs/glyph/typegpu';
-import { resourceLease, id, msdfSchema, slugSchema } from '@pmndrs/glyph/core';
+import { resourceLease, id, bitmapSchema, msdfSchema, slugSchema } from '@pmndrs/glyph/core';
 import { codecDescriptor, TYPEGPU_PLACEMENT_SLOT_BUFFER_ID } from '../../dist/typegpu/internal/codec.js';
 
 const fontBytes = await readFile(
@@ -32,11 +32,13 @@ test('TypeGPU Slug packs placement into its existing eighth-buffer program', () 
 });
 
 // A recording host at the public config seam. The real engine authors all commands and bytes.
-function recordingHost() {
+function recordingHost(rasterSchema = msdfSchema) {
   const allocations = new Set();
   const recorded = [];
   const uploads = [];
   const projectedBuffers = [];
+  const uniforms = [];
+  const codecIdByGpu = new WeakMap();
   const stats = { allocations: 0, preparations: 0, publications: 0, uniformWrites: 0, reject: false };
   function buffer(size, usage = 0) {
     const value = {
@@ -54,14 +56,23 @@ function recordingHost() {
   const root = {
     createUniform() {
       const allocation = buffer(8);
-      return {
+      const uniform = {
         buffer: allocation,
         value: [0, 0],
+        failNextWrite: false,
+        writes: 0,
         write(value) {
           stats.uniformWrites++;
+          this.writes++;
+          if (this.failNextWrite) {
+            this.failNextWrite = false;
+            throw new Error('Injected uniform write failure');
+          }
           this.value = [...value];
         },
       };
+      uniforms.push(uniform);
+      return uniform;
     },
     device: {
       createBuffer({ size, usage }) {
@@ -70,7 +81,13 @@ function recordingHost() {
       },
       queue: {
         writeBuffer(target, offset, bytes) {
-          uploads.push({ offset, length: bytes.byteLength, capacity: target.bytes.byteLength, usage: target.usage });
+          uploads.push({
+            codecId: codecIdByGpu.get(target),
+            offset,
+            length: bytes.byteLength,
+            capacity: target.bytes.byteLength,
+            usage: target.usage,
+          });
           target.bytes.set(bytes, offset);
         },
       },
@@ -103,6 +120,7 @@ function recordingHost() {
         {
           prepare(buffers, placementTable, viewport, position, start, count) {
             stats.preparations++;
+            for (const [codecId, gpu] of buffers) codecIdByGpu.set(gpu, codecId);
             return {
               draw() {
                 const placementSlots = buffers
@@ -121,7 +139,7 @@ function recordingHost() {
                 );
                 recorded.push({
                   // Compare raster inputs, not lifecycle-specific stable glyph identities.
-                  buffers: Object.values(msdfSchema.buffers).map((declaration) => {
+                  buffers: Object.values(rasterSchema.buffers).map((declaration) => {
                     const stride = declaration.lanes.length * 4;
                     return buffers.get(declaration.id).bytes.slice(start * stride, (start + count) * stride);
                   }),
@@ -181,7 +199,7 @@ function recordingHost() {
       },
     },
   };
-  return { config, allocations, recorded, uploads, projectedBuffers, stats };
+  return { config, allocations, recorded, uploads, projectedBuffers, uniforms, stats };
 }
 
 function renderedState(draws) {
@@ -328,21 +346,101 @@ test('localized TypeGPU edits retain GPU buffers and discard leaves accepted byt
     text.update({ text: 'e' });
     glyph.shape();
     const recoveredResize = host.projectedBuffers.at(-1);
-    for (const accepted of rejectedResize.retirements) {
-      assert.equal(
-        recoveredResize.retirements.filter((buffer) => buffer === accepted).length,
-        1,
-        'retry retires each previous accepted binding exactly once',
-      );
-    }
     assert.ok(
       rejectedResize.updates.every((buffer) => !recoveredResize.retirements.includes(buffer)),
       'rejected candidate bindings never enter accepted retirement ownership',
     );
     assert.deepEqual(renderedState(snapshot()), renderedState(after));
+    assert.equal(
+      host.allocations.size,
+      retainedAllocations,
+      'accepted checkpoint recovery replaces buffers without leaking the rejected generation',
+    );
     host.uploads.length = 0;
     glyph.shape();
     assert.equal(host.uploads.length, 0, 'idle shaping uploads nothing');
+  } finally {
+    handle.dispose();
+    font.dispose();
+  }
+  assert.equal(host.allocations.size, 0);
+});
+
+test('TypeGPU Bitmap omits equal retained color and page uploads but writes paint and checkpoints', async () => {
+  const host = recordingHost(bitmapSchema);
+  const handle = glyph.handle('typegpu:bitmap-equal-writes', host.config);
+  const baked = await readFile(
+    new URL('../../../../benches/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url),
+  );
+  const font = glyph.fontFace(new Blob([baked]), { format: bitmap({ strikes: [16] }) });
+  const colorId = bitmapSchema.buffers.color.id;
+  const pageId = bitmapSchema.buffers.page.id;
+  const originId = bitmapSchema.buffers.origin.id;
+  const snapshot = () => {
+    handle.draw({}, { width: 640, height: 240 });
+    return host.recorded.splice(0);
+  };
+  try {
+    await font.load();
+    const text = handle.createText({ font, text: '54,321' });
+    glyph.shape();
+    const before = snapshot();
+    const allocations = host.stats.allocations;
+    host.uploads.length = 0;
+    text.update({ text: '12,345' });
+    glyph.shape();
+    const edited = snapshot();
+    assert.equal(host.stats.allocations, allocations, 'retained digit replacement keeps GPU buffers');
+    assert.notDeepEqual(edited[0].buffers[0], before[0].buffers[0], 'origin bytes change');
+    assert.deepEqual(edited[0].buffers[4], before[0].buffers[4], 'color mirror remains equal');
+    assert.deepEqual(edited[0].buffers[5], before[0].buffers[5], 'page mirror remains equal');
+    assert.ok(
+      host.uploads.some((upload) => upload.codecId === originId),
+      'changed origin uploads',
+    );
+    assert.ok(host.uploads.every((upload) => upload.codecId !== colorId && upload.codecId !== pageId));
+
+    host.uploads.length = 0;
+    text.update({ style: { color: '#00ff00' } });
+    glyph.shape();
+    const painted = snapshot();
+    assert.notDeepEqual(painted[0].buffers[4], edited[0].buffers[4], 'paint changes color mirror');
+    assert.ok(
+      host.uploads.some((upload) => upload.codecId === colorId),
+      'changed paint uploads color',
+    );
+
+    host.uploads.length = 0;
+    text.update({ text: '98,765' });
+    host.stats.reject = true;
+    assert.throws(() => glyph.shape(), /Injected renderer rejection/);
+    assert.equal(host.uploads.length, 0, 'discard submits no writes');
+    assert.deepEqual(snapshot(), painted, 'rejected content leaves the accepted GPU mirror');
+    host.stats.reject = false;
+    text.update({ text: '12,345' });
+    glyph.shape();
+    const recovered = snapshot();
+    assert.ok(
+      host.uploads.some((upload) => upload.codecId === colorId),
+      'checkpoint retransmits equal color',
+    );
+    assert.ok(
+      host.uploads.some((upload) => upload.codecId === pageId),
+      'checkpoint retransmits equal page',
+    );
+    const cold = handle('bitmap-cold');
+    cold.createText({ font, text: '12,345', style: { color: '#00ff00' } });
+    glyph.shape();
+    cold.draw({}, { width: 640, height: 240 });
+    const oracle = host.recorded.splice(0);
+    assert.deepEqual(
+      recovered.map((draw) => draw.buffers),
+      oracle.map((draw) => draw.buffers),
+    );
+    assert.deepEqual(
+      recovered.map((draw) => draw.resolvedPlacement),
+      oracle.map((draw) => draw.resolvedPlacement),
+    );
   } finally {
     handle.dispose();
     font.dispose();
@@ -660,6 +758,146 @@ test('TypeGPU holds the accepted anchor across pending and rejected semantic upd
       'anchor edit explicitly retries failed semantic output',
     );
     text.dispose();
+  } finally {
+    handle.dispose();
+    font.dispose();
+  }
+  assert.equal(host.allocations.size, 0);
+});
+
+test('TypeGPU keeps accepted placement when a reused mutable paint and anchor change is rejected', async () => {
+  const host = recordingHost();
+  const handle = glyph.handle('typegpu:paint-anchor-rejection', host.config);
+  const font = glyph.fontFace(new Blob([fontBytes]), { format: msdf });
+  const snapshot = () => {
+    handle.draw({}, { width: 640, height: 240 });
+    return host.recorded.splice(0);
+  };
+  try {
+    await font.load();
+    const sharedStyle = { color: '#ff0000' };
+    const text = handle.createText({
+      font,
+      text: 'Same metrics',
+      style: sharedStyle,
+      position: [100, 80],
+      constraints: { anchor: { x: 'center', y: 'first-baseline' } },
+    });
+    glyph.shape();
+    const before = snapshot();
+    const measured = text.measure();
+    sharedStyle.color = '#00ff00';
+    text.update({ style: sharedStyle, constraints: { anchor: { x: 'right', y: 'bottom' } } });
+    const desired = text.measure();
+    assert.equal(desired.width, measured.width);
+    assert.equal(desired.height, measured.height);
+    assert.notDeepEqual([100 + desired.anchorOffset.x, 80 + desired.anchorOffset.y], before[0].position);
+    assert.deepEqual(snapshot(), before, 'paint update cannot move accepted glyphs before publication');
+    host.stats.reject = true;
+    assert.throws(() => glyph.shape(), /Injected renderer rejection/);
+    assert.deepEqual(snapshot(), before, 'rejected paint keeps the accepted host origin');
+    host.stats.reject = false;
+    text.update({ style: { color: '#0000ff' } }); // Explicitly retry the rejected publication.
+    glyph.shape();
+    assert.deepEqual(snapshot()[0].position, [100 + desired.anchorOffset.x, 80 + desired.anchorOffset.y]);
+  } finally {
+    handle.dispose();
+    font.dispose();
+  }
+  assert.equal(host.allocations.size, 0);
+});
+
+test('TypeGPU keeps accepted placement when reused mutable layout and constraints change', async () => {
+  const host = recordingHost();
+  const handle = glyph.handle('typegpu:layout-anchor-rejection', host.config);
+  const font = glyph.fontFace(new Blob([fontBytes]), { format: msdf });
+  const snapshot = () => {
+    handle.draw({}, { width: 640, height: 240 });
+    return host.recorded.splice(0);
+  };
+  try {
+    await font.load();
+    const sharedLayout = { align: 'start' };
+    const sharedConstraints = {
+      width: { mode: 'exact', size: 240 },
+      anchor: { x: 'center', y: 'first-baseline' },
+    };
+    const text = handle.createText({
+      font,
+      text: 'Layout',
+      layout: sharedLayout,
+      constraints: sharedConstraints,
+      position: [100, 80],
+    });
+    glyph.shape();
+    const before = snapshot();
+    const measured = text.measure();
+    sharedLayout.align = 'end';
+    sharedConstraints.anchor = { x: 'right', y: 'bottom' };
+    text.update({ layout: sharedLayout, constraints: sharedConstraints });
+    const desired = text.measure();
+    assert.equal(desired.width, measured.width);
+    assert.equal(desired.height, measured.height);
+    assert.deepEqual(snapshot(), before, 'layout change cannot move accepted glyphs before publication');
+    host.stats.reject = true;
+    assert.throws(() => glyph.shape(), /Injected renderer rejection/);
+    assert.deepEqual(snapshot(), before, 'rejected layout keeps the accepted host origin');
+  } finally {
+    handle.dispose();
+    font.dispose();
+  }
+  assert.equal(host.allocations.size, 0);
+});
+
+test('TypeGPU retries accepted host placement after one uniform write fails', async () => {
+  const host = recordingHost();
+  const handle = glyph.handle('typegpu:anchor-write-recovery', host.config);
+  const font = glyph.fontFace(new Blob([fontBytes]), { format: msdf });
+  const snapshot = () => {
+    handle.draw({}, { width: 640, height: 240 });
+    return host.recorded.splice(0);
+  };
+  try {
+    await font.load();
+    const first = handle.createText({
+      font,
+      text: 'First',
+      position: [100, 80],
+      constraints: { anchor: { x: 'center', y: 'first-baseline' } },
+    });
+    const firstUniform = host.uniforms.at(-1);
+    const second = handle.createText({
+      font,
+      text: 'Second',
+      position: [200, 80],
+      constraints: { anchor: { x: 'center', y: 'first-baseline' } },
+    });
+    const secondUniform = host.uniforms.at(-1);
+    const removed = handle.createText({ font, text: 'Removed' });
+    const retiredBuffer = host.uniforms.at(-1).buffer;
+    glyph.shape();
+    const before = snapshot();
+    assert.equal(before.length, 3);
+
+    first.update({ text: 'A much longer first paragraph', constraints: { anchor: { x: 'right', y: 'bottom' } } });
+    second.update({ text: 'A much longer second paragraph', constraints: { anchor: { x: 'right', y: 'bottom' } } });
+    const firstAnchor = first.measure().anchorOffset;
+    const secondAnchor = second.measure().anchorOffset;
+    removed.dispose();
+    firstUniform.failNextWrite = true;
+    assert.throws(() => glyph.shape(), /Injected uniform write failure/);
+    const partiallySettled = snapshot();
+    assert.equal(partiallySettled.length, 2, 'renderer accepted the new text and the removal');
+    assert.deepEqual(partiallySettled[0].position, before[0].position, 'failed placement keeps the old host origin');
+    assert.deepEqual(partiallySettled[1].position, [200 + secondAnchor.x, 80 + secondAnchor.y]);
+    assert.equal(retiredBuffer.destroyed, true, 'retired transform is released despite another text failing');
+    const secondWrites = secondUniform.writes;
+
+    glyph.shape();
+    const recovered = snapshot();
+    assert.deepEqual(recovered[0].position, [100 + firstAnchor.x, 80 + firstAnchor.y]);
+    assert.deepEqual(recovered[1].position, partiallySettled[1].position);
+    assert.equal(secondUniform.writes, secondWrites, 'settled text is not rewritten on the recovery shape');
   } finally {
     handle.dispose();
     font.dispose();

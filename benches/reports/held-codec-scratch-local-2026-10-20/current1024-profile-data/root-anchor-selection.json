@@ -1,0 +1,16 @@
+{
+  "profileSha256": "c6f4da22dbb9e2048f0ba1db19a3b7fee856044ee5c69aea24fa56cf773f33ff",
+  "freshAnchors": [
+    {
+      "label": "preparation",
+      "nodeId": 7
+    },
+    {
+      "label": "publication",
+      "nodeId": 53
+    }
+  ],
+  "sameParent": 6,
+  "wasmUrl": "wasm://wasm/006d2d36",
+  "method": "Selected from this authenticated capture by exact recorded frame identities and common updateBulk parent. No historical node ID reused by assumption."
+}

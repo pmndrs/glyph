@@ -120,7 +120,7 @@ group('1,000-label stress @stress', () => {
     disposeLabels(created);
   });
 
-  bench('publish 1024 retained Text instances @batch @publication', function* () {
+  bench('publish 1024 retained Text instances @batch @publication @bulk-1024-profile', function* () {
     const created = createTextBatch(1_024);
     let alternate = false;
     const textCount = yield () => {

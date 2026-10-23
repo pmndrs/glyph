@@ -1,0 +1,9 @@
+{
+  "snapshot": "be6c7960dd7eda8917bc43422edadca1970c1278",
+  "ref": "refs/heads/experiments/held-direct-operand-corrected-package-gate-20261021",
+  "stashName": "held-direct-operand-corrected-package-gate-20261021: frozen 839498 package native and High corrected candidate, latency pending",
+  "headUnchanged": "277417596afbe2a8cd87454317d05607dc9ba51b",
+  "workingTreeAndIndexUnchanged": true,
+  "scope": "Tracked ten Rust product files only; untracked benchmark gate separately preserved under tooling-corrected. No performance admission.",
+  "recordedUtc": "2026-10-21T01:17:33.046193+00:00"
+}

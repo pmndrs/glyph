@@ -1,0 +1,12 @@
+{
+  "schema": "procedural-execution-note-v1",
+  "recordedUtc": "2026-10-20T16:18:01.923240+00:00",
+  "requestedReadOnlyInspection": "Read workflow registered command metadata and presentation help; no second deliberate presentation gate was intended.",
+  "shellInvocation": "/Users/mini/.local/bin/mise exec -- pnpm scripts run benchmark:presentation --help; /Users/mini/.local/bin/mise exec -- pnpm scripts run benchmark:dev-built --help",
+  "execution": "The first command treated --help as workflow run arguments, launching the presentation workload matrix. Captured output showed `presentation-probe-case sequential workloads / tsl: webgpu / bitmap` and `presentation-workload-settled editorial draws=3 glyphs=694`. No durable wrapper/raw stdout or numeric exit was retained because the nested session identifier was not preserved.",
+  "observedOwnedProcessesBeforeCleanup": [4458, 4461, 4481, 4485, 4486, 4487, 4488, 4489, 4492],
+  "observedAccidentalLocalListener": "127.0.0.1:49357, node PID 4486; this was the probe-owned Vite server created because PRESENTATION_BASE_URL was absent.",
+  "cleanup": "Sent SIGTERM to the accidental shell/workflow process group 4458 and Playwright browser process group 4487. Follow-up process listing found no members of those groups; follow-up netstat no longer showed listener 49357. The planned Portless presentation server (PID 4611, route held-wave2-presentation on 4312) and Portless proxy PID 89392 on 1358 remained alive.",
+  "numericExit": "unavailable; do not infer from captured settled line",
+  "limitations": "No raw log was reconstructed. Because process tree was found still active, the accidental matrix was terminated after its first visible settled cell; no subsequent cells were allowed to continue. The later benchmark:dev-built --help command did not appear in the process tree before cleanup."
+}

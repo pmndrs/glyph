@@ -19,7 +19,7 @@ import { findLineBreaks } from '../support/unicode-line-breaks.mjs';
 
 // The package-pinned preflight segmentation. `Intl.Segmenter` follows host ICU and can disagree on
 // degenerate sequences, so it cannot be the oracle for the span compiler's deterministic behavior.
-import { findGraphemeBoundaries } from '../../dist/internal/graphemes.js';
+import { findGraphemeBoundaries } from '../support/graphemes.mjs';
 
 const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 

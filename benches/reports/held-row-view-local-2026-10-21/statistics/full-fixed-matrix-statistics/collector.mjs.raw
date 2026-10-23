@@ -1,0 +1,87 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { n as classify, i as median } from './source/stats-DyCSLnVh.mjs';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const E = '/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence';
+const spec = {
+  main: { dir: 'matrix-main-fixed-data', receipt: 'matrix-main-fixed-01/result.json', facts: 'main-fixed-facts/all145-quantiles.json', expected: 145 },
+  published: { dir: 'matrix-published-fixed-data', receipt: 'matrix-published-fixed-01/result.json', facts: 'published-fixed-facts/all145-quantiles.json', expected: 143 },
+  priorE2: { dir: 'matrix-prior-e2-fixed-data', receipt: 'matrix-prior-e2-fixed-01/result.json', facts: 'prior-e2-fixed-facts/all145-quantiles.json', expected: 145 },
+};
+const sha = p => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+const canonical = x => Array.isArray(x) ? `[${x.map(canonical).join(',')}]` : x && typeof x==='object' ? `{${Object.keys(x).sort().map(k=>`${JSON.stringify(k)}:${canonical(x[k])}`).join(',')}}` : JSON.stringify(x);
+const key = x => canonical([x.file,x.group,x.groupName,x.name,x.args ?? {}]);
+const rawRuns = p => {
+  const x=JSON.parse(fs.readFileSync(p)); const m=new Map();
+  for(const f of x.files) for(const b of f.benchmarks) for(const r of b.runs) {
+    const rec={file:f.file,group:b.group,groupName:b.groupName,name:r.name,args:r.args??{},alias:b.alias,gcMode:b.gcMode,benchmarkKind:b.kind,stats:r.stats};
+    const k=key(rec); if(m.has(k)) throw Error(`duplicate raw identity ${k}`); m.set(k,rec);
+  }
+  return {x,m};
+};
+const reportMap = (summary, rawMap) => {
+  const out=new Map();
+  for(const line of fs.readFileSync(summary,'utf8').split(/\r?\n/)) {
+    if(!line.startsWith('|')) continue;
+    const cells=line.split('|').slice(1,-1).map(s=>s.trim());
+    if(cells.length!==8 || /^(?:---|:?-+:?)$/.test(cells[0])) continue;
+    const sm=cells[0].match(/\b(faster|slower|neutral|skipped)\b/i); if(!sm) continue;
+    const name=cells[1];
+    const matches=[...rawMap.values()].filter(r=>r.name===name);
+    if(matches.length!==1) throw Error(`printed report name is not a unique exact raw identity: ${name} (${matches.length})`);
+    const r=matches[0]; out.set(key(r), {status:sm[1].toLowerCase(),printedBaseline:cells[2],printedCandidate:cells[3],printedDeltaTime:cells[4],printedDeltaPercent:cells[5],printedP:cells[6],printedDelta95CI:cells[7],sourceLine:line});
+  }
+  return out;
+};
+
+const qMs=(samples,q)=>{const a=[...samples].sort((a,b)=>a-b);return a[Math.floor(q*(a.length-1))]/1e6;};
+const armData={};
+for(const [arm,s] of Object.entries(spec)){
+  const d=path.join(E,s.dir), bp=path.join(d,'baseline.json'), cp=path.join(d,'candidate.json');
+  const {x:base,m:bm}=rawRuns(bp), {x:cand,m:cm}=rawRuns(cp);
+  const report=reportMap(path.join(d,'summary.md'),bm);
+  if(bm.size!==s.expected || cm.size!==145) throw Error(`${arm} raw counts ${bm.size}/${cm.size}`);
+  armData[arm]={d,bp,cp,base,cand,bm,cm,report,receipt:path.join(E,s.receipt)};
+}
+const mainClockFacts=JSON.parse(fs.readFileSync(path.join(E,spec.main.facts))).rows;
+const mainByKey=new Map(mainClockFacts.map(r=>[key(r.identity),r.printedLabsReport]));
+const arms={};
+for(const [arm,a] of Object.entries(armData)){
+  const rows=[];
+  for(const [k,b] of a.bm){
+    const c=a.cm.get(k); if(!c) throw Error(`${arm} candidate missing paired identity ${k}`);
+    const ps=a.report.get(k) ?? (arm==='main'?mainByKey.get(k):undefined);
+    if(!ps) throw Error(`${arm} report row missing exact identity ${k}`);
+    const bs=b.stats, cs=c.stats;
+    const bm=bs.blocks?.medians??[], cm=cs.blocks?.medians??[];
+    if(bm.length!==8||cm.length!==8) throw Error(`bad block median count ${k}`);
+    const nominal=classify(bm,cm);
+    const ci=nominal.ciLow<=0&&nominal.ciHigh>=0;
+    rows.push({identity:{file:b.file,group:b.group,groupName:b.groupName,name:b.name,args:b.args},
+      baseline:{sampleCount:bs.samples?.length??0,pooledP50Ms:qMs(bs.samples,.5),pooledP95Ms:qMs(bs.samples,.95),blockMediansMs:bm.map(n=>n/1e6),plan:bs.plan,gcMode:b.gcMode,benchmarkKind:b.benchmarkKind,statsKind:bs.kind},
+      candidate:{sampleCount:cs.samples?.length??0,pooledP50Ms:qMs(cs.samples,.5),pooledP95Ms:qMs(cs.samples,.95),blockMediansMs:cm.map(n=>n/1e6),plan:cs.plan,gcMode:c.gcMode,benchmarkKind:c.benchmarkKind,statsKind:cs.kind},
+      rawNominal:{verdict:nominal.verdict,p:nominal.p,hlDelta:nominal.hl,ciLow:nominal.ciLow,ciHigh:nominal.ciHigh,cliffsDelta:nominal.d,minDelta:nominal.minDelta,baselineMedianMs:median(bm)/1e6,candidateMedianMs:median(cm)/1e6,relativeMedianDeltaPercent:(median(cm)/median(bm)-1)*100,ciCrossesOrTouchesZero:ci,diagnosticOnly:arm==='main'&&ps.status==='skipped'},
+      printedLabsReport:ps,
+      actualStatus:ps.status==='skipped'?'skipped':ps.status,
+      checksAndFailures:{baselineCheckFailures:a.base.environment?.checkFailures??[],candidateCheckFailures:a.cand.environment?.checkFailures??[],modeMismatch:b.gcMode!==c.gcMode||b.benchmarkKind!==c.benchmarkKind}
+    });
+  }
+  if(arm==='published'){
+    const paired=new Set(rows.map(r=>key(r.identity)));
+    for(const [k,c] of a.cm) if(!paired.has(k)) rows.push({identity:{file:c.file,group:c.group,groupName:c.groupName,name:c.name,args:c.args},comparisonStatus:'unsupported',reason:'No exact identity exists in this published baseline. Unsupported is neither pass nor fail.',candidate:{sampleCount:c.stats.samples?.length??0,pooledP50Ms:qMs(c.stats.samples,.5),pooledP95Ms:qMs(c.stats.samples,.95),blockMediansMs:c.stats.blocks.medians.map(n=>n/1e6),plan:c.stats.plan,gcMode:c.gcMode,benchmarkKind:c.benchmarkKind,statsKind:c.stats.kind}});
+  }
+  arms[arm]=rows;
+}
+const readCounts=rows=>{const paired=rows.filter(r=>r.rawNominal);const statuses={};for(const r of rows)statuses[r.actualStatus??r.comparisonStatus]=(statuses[r.actualStatus??r.comparisonStatus]??0)+1;const ci={below:0,above:0,crossesOrTouchesZero:0,exactZeroWidth:0};for(const r of paired){const {ciLow:l,ciHigh:h}=r.rawNominal;if(h<0)ci.below++;else if(l>0)ci.above++;else ci.crossesOrTouchesZero++;if(l===0&&h===0)ci.exactZeroWidth++;}return {rows:rows.length,paired:paired.length,statuses,nominalCi:ci};};
+const frequencies=x=>x.environment?.freqs??[];
+const drift=x=>{const f=frequencies(x), vals=f.flatMap(v=>[v.runFreq,v.postFreq]);if(!vals.length)return {recordCount:0,readingCount:0,driftPercent:null,minGHz:null,maxGHz:null,raw:[]};const min=Math.min(...vals),max=Math.max(...vals);return {recordCount:f.length,readingCount:vals.length,driftPercent:(max-min)/((max+min)/2)*100,minGHz:min,maxGHz:max,raw:f};};
+const output={schema:'full-fixed-matrix-statistics-v1',generatedBy:'collector.mjs',method:'Descriptive factual extraction only. For each exact identity and arm, invoke installed Labs 0.9.0 classify/median exports on saved eight block medians; raw samples are pooled for quantiles. No custom inference, threshold override, bootstrap, retry, or admission decision.',statisticalSource:{path:'source/stats-DyCSLnVh.mjs',sha256:sha(path.join(here,'source/stats-DyCSLnVh.mjs')),installedPinnedSha256:'ddab0c388cd7e24851c504cbc8788e9e244f03adf6b3915ea8f4615f5bde2668',exports:{classify:'n',median:'i'},defaults:'stock defaults: alpha=.05, minDelta=.05; no overrides'},arms,armCounts:Object.fromEntries(Object.entries(arms).map(([k,v])=>[k,readCounts(v)])),clockDrift:Object.fromEntries(Object.entries(armData).map(([k,a])=>[k,{baseline:drift(a.base),candidate:drift(a.cand)}]))};
+fs.writeFileSync(path.join(here,'all-identities.json'),JSON.stringify(output,null,2)+'\n');
+const csvq=x=>'"'+String(x??'').replaceAll('"','""')+'"';
+const cols=['arm','file','group','groupName','name','args','comparisonStatus','sampleCountBaseline','pooledP50BaselineMs','pooledP95BaselineMs','blockMediansBaselineMs','planBaseline','sampleCountCandidate','pooledP50CandidateMs','pooledP95CandidateMs','blockMediansCandidateMs','planCandidate','rawVerdict','rawP','rawHLDelta','rawCILow','rawCIHigh','medianBaselineMs','medianCandidateMs','relativeMedianDeltaPercent','ciCrossesOrTouchesZero','actualPrintedStatus','printedDeltaPercent','actualPrintedP','printedDelta95CI','sourceLine'];
+const lines=[cols.join(',')];
+for(const [arm,rows] of Object.entries(arms))for(const r of rows){const id=r.identity,b=r.baseline??{},c=r.candidate??{},n=r.rawNominal??{},p=r.printedLabsReport??{};lines.push([arm,id.file,id.group,id.groupName,id.name,JSON.stringify(id.args),r.comparisonStatus??r.actualStatus,b.sampleCount,b.pooledP50Ms,b.pooledP95Ms,JSON.stringify(b.blockMediansMs),JSON.stringify(b.plan),c.sampleCount,c.pooledP50Ms,c.pooledP95Ms,JSON.stringify(c.blockMediansMs),JSON.stringify(c.plan),n.verdict,n.p,n.hlDelta,n.ciLow,n.ciHigh,n.baselineMedianMs,n.candidateMedianMs,n.relativeMedianDeltaPercent,n.ciCrossesOrTouchesZero,p.status,p.printedDeltaPercent,p.printedP,p.printedDelta95CI,p.sourceLine].map(csvq).join(','));}
+fs.writeFileSync(path.join(here,'all-identities.csv'),lines.join('\n')+'\n');

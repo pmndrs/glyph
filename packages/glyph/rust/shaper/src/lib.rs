@@ -63,6 +63,8 @@ pub const STATUS_REGISTRATION_IN_USE: u32 = 20;
 const MAX_CACHED_PLANS_PER_FONT: usize = 64;
 const DEFAULT_SHAPE_BUFFER_CAPACITY: usize = 32_768;
 const DEFAULT_SHAPE_FEATURE_CAPACITY: usize = 128;
+// HarfRust 0.12.0's buffer stores at most five pre- or post-context codepoints.
+const HARFRUST_CONTEXT_LIMIT: usize = 5;
 
 pub struct ShaperRegistry {
     /// Registered fonts in ascending handle order as dense parallel arrays. The
@@ -194,9 +196,7 @@ impl ShaperRegistry {
             return Err(STATUS_RESULT_TOO_LARGE);
         }
         self.context_codepoints
-            .try_reserve_exact(
-                DEFAULT_SHAPE_BUFFER_CAPACITY.saturating_sub(self.context_codepoints.len()),
-            )
+            .try_reserve_exact(HARFRUST_CONTEXT_LIMIT.saturating_sub(self.context_codepoints.len()))
             .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
         self.shape_features
             .try_reserve_exact(DEFAULT_SHAPE_FEATURE_CAPACITY)
@@ -458,6 +458,11 @@ fn shape_segment(
         records: &font.extents,
         availability: &font.availability,
     };
+    #[cfg(test)]
+    engine::work_attribution::record(|work| {
+        work.harfrust_calls += 1;
+        work.harfrust_utf16_units += range.item_end.saturating_sub(range.item_start) as usize;
+    });
     Ok(shaper.shape(
         buffer,
         ShapeOptions::new()
@@ -527,17 +532,23 @@ fn shape_segment_inner(
     buffer.clear();
     add_utf16_range(buffer, text, range.item_start, range.item_end)?;
     if range.context_start < range.item_start {
-        decode_utf16_range_into(
+        decode_context_range_into(
             text,
             range.context_start,
             range.item_start,
+            ContextDirection::Before,
             context_codepoints,
         )?;
-        context_codepoints.reverse();
         buffer.set_pre_context_codepoints(context_codepoints);
     }
     if range.item_end < range.context_end {
-        decode_utf16_range_into(text, range.item_end, range.context_end, context_codepoints)?;
+        decode_context_range_into(
+            text,
+            range.item_end,
+            range.context_end,
+            ContextDirection::After,
+            context_codepoints,
+        )?;
         buffer.set_post_context_codepoints(context_codepoints);
     }
     buffer.set_direction(direction);
@@ -666,17 +677,17 @@ fn add_utf16_range(
     Ok(())
 }
 
-#[cfg(test)]
-fn decode_utf16_range(text: &[u16], start: u32, end: u32) -> Result<Vec<u32>, u32> {
-    let mut decoded = Vec::new();
-    decode_utf16_range_into(text, start, end, &mut decoded)?;
-    Ok(decoded)
+#[derive(Clone, Copy, Debug)]
+enum ContextDirection {
+    Before,
+    After,
 }
 
-fn decode_utf16_range_into(
+fn decode_context_range_into(
     text: &[u16],
     start: u32,
     end: u32,
+    direction: ContextDirection,
     decoded: &mut Vec<u32>,
 ) -> Result<(), u32> {
     let start = usize::try_from(start).map_err(|_| STATUS_INVALID_REQUEST)?;
@@ -684,13 +695,37 @@ fn decode_utf16_range_into(
     let units = text.get(start..end).ok_or(STATUS_INVALID_REQUEST)?;
     decoded.clear();
     decoded
-        .try_reserve(units.len())
+        .try_reserve_exact(HARFRUST_CONTEXT_LIMIT.min(units.len()))
         .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
-    let mut local = 0;
-    while local < units.len() {
+
+    let selected_start = match direction {
+        ContextDirection::Before => {
+            let mut selected_start = units.len();
+            let mut selected_count = 0;
+            while selected_start > 0 && selected_count < HARFRUST_CONTEXT_LIMIT {
+                let last = selected_start - 1;
+                selected_start -= if (0xdc00..=0xdfff).contains(&units[last])
+                    && last > 0
+                    && (0xd800..=0xdbff).contains(&units[last - 1])
+                {
+                    2
+                } else {
+                    1
+                };
+                selected_count += 1;
+            }
+            selected_start
+        }
+        ContextDirection::After => 0,
+    };
+    let mut local = selected_start;
+    while local < units.len() && decoded.len() < HARFRUST_CONTEXT_LIMIT {
         let (character, consumed) = decode_scalar(units, local);
         decoded.push(character as u32);
         local += consumed;
+    }
+    if matches!(direction, ContextDirection::Before) {
+        decoded.reverse();
     }
     Ok(())
 }
@@ -919,14 +954,91 @@ mod tests {
     }
 
     #[test]
-    fn utf16_decoder_preserves_absolute_clusters_and_replaces_unpaired_surrogates() {
+    fn utf16_item_shaping_replaces_unpaired_surrogates() {
         let text = [b'A' as u16, 0xd83d, 0xde00, 0xd800, b'B' as u16];
         let mut buffer = UnicodeBuffer::new();
         add_utf16_range(&mut buffer, &text, 1, 5).unwrap();
         assert_eq!(buffer.len(), 3);
+        let mut decoded = Vec::new();
+        decode_context_range_into(&text, 1, 5, ContextDirection::After, &mut decoded).unwrap();
+        assert_eq!(decoded, [0x1f600, 0xfffd, 0x42]);
+    }
+
+    #[test]
+    fn context_decoder_matches_utf16_and_caps_both_directions_at_five_scalars() {
+        fn assert_contexts_match(text: &[u16]) {
+            for start in 0..=text.len() {
+                for end in start..=text.len() {
+                    let units = &text[start..end];
+                    let expected = core::char::decode_utf16(units.iter().copied())
+                        .map(|decoded| decoded.unwrap_or(char::REPLACEMENT_CHARACTER) as u32)
+                        .collect::<Vec<_>>();
+                    for direction in [ContextDirection::Before, ContextDirection::After] {
+                        let mut expected = expected.clone();
+                        match direction {
+                            ContextDirection::Before => expected.reverse(),
+                            ContextDirection::After => {}
+                        }
+                        expected.truncate(HARFRUST_CONTEXT_LIMIT);
+                        let mut decoded = Vec::new();
+                        decode_context_range_into(
+                            text,
+                            u32::try_from(start).unwrap(),
+                            u32::try_from(end).unwrap(),
+                            direction,
+                            &mut decoded,
+                        )
+                        .unwrap();
+                        assert_eq!(
+                            decoded, expected,
+                            "text={text:?}, range={start}..{end}, direction={direction:?}"
+                        );
+                    }
+                }
+            }
+        }
+
+        let alphabet = [0x0041, 0xd83d, 0xde00];
+        for length in 0usize..=6 {
+            for encoded in 0..alphabet.len().pow(length as u32) {
+                let mut value = encoded;
+                let mut text = Vec::with_capacity(length);
+                for _ in 0..length {
+                    text.push(alphabet[value % alphabet.len()]);
+                    value /= alphabet.len();
+                }
+                assert_contexts_match(&text);
+            }
+        }
+
+        let mut long = alloc::vec![0x0041; 128];
+        long.extend([0xd83d, 0xde00]);
+        let mut decoded = Vec::new();
+        decode_context_range_into(
+            &long,
+            0,
+            u32::try_from(long.len()).unwrap(),
+            ContextDirection::Before,
+            &mut decoded,
+        )
+        .unwrap();
+        assert_eq!(decoded, [0x1f600, 0x41, 0x41, 0x41, 0x41]);
+        assert_eq!(decoded.len(), HARFRUST_CONTEXT_LIMIT);
+
+        decode_context_range_into(
+            &long,
+            0,
+            u32::try_from(long.len()).unwrap(),
+            ContextDirection::After,
+            &mut decoded,
+        )
+        .unwrap();
+        assert_eq!(decoded, [0x41_u32; HARFRUST_CONTEXT_LIMIT]);
+        assert_eq!(decoded.len(), HARFRUST_CONTEXT_LIMIT);
+
         assert_eq!(
-            decode_utf16_range(&text, 1, 5).unwrap(),
-            [0x1f600, 0xfffd, 0x42]
+            decode_context_range_into(&long, 0, u32::MAX, ContextDirection::After, &mut decoded),
+            Err(STATUS_INVALID_REQUEST)
         );
     }
 

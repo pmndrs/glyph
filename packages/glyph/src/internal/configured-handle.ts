@@ -45,12 +45,14 @@ import type {
   RetainedTextOptions,
   RetainedTextUpdate,
   StagedRenderPlanner,
+  OwnedTextInspectionView,
 } from './render-planner.js';
-import { observeRenderPlannerDirty, stageRenderPlanner } from './render-planner.js';
+import { observeRenderPlannerDirty, ownedTextInspection, stageRenderPlanner } from './render-planner.js';
 import { reuseOrCreateTextPropertySnapshot } from '../config/text-property.js';
-import { areOwnedSpansClusterAligned, inheritClusterAlignedSpans } from '../formatted-text.js';
+import { mapTextSpanBindings, ownTextSpanRecords } from '../config/text-span-owner.js';
 import type { BorrowedGlyphLayout } from '../layout.js';
 import { normalizeTextFlow, type TextFlow, type TextFlowBounds, type TextFlowShape } from '../text-properties.js';
+import { PostCommitError } from '../glyph-error.js';
 
 const DEFAULT_LIMITS: GlyphCommandLimits = Object.freeze({
   maxParagraphs: 4_096,
@@ -603,12 +605,22 @@ class ConfiguredRootServices<
     state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>,
   ): BoundTextState {
     const leases: Array<{ dispose(): void }> = [];
+    const materials = new Map<Bindings['materialInput'], HandleMaterialBinding>();
+    const retainMaterial = (input: Bindings['materialInput']): HandleMaterialBinding => {
+      let binding = materials.get(input);
+      if (binding === undefined) {
+        binding = this.#bindMaterial(input, leases);
+        materials.set(input, binding);
+      }
+      return binding;
+    };
     try {
       const font = this.#bindFontSelection(state.font);
       leases.push(font);
       const transform = this.#bindTransform(state.transform, leases);
-      const material = state.material === undefined ? undefined : this.#bindMaterial(state.material, leases);
-      const text = typeof state.text === 'string' ? state.text : this.#bindFormattedText(state.text, leases);
+      const material = state.material === undefined ? undefined : retainMaterial(state.material);
+      const text =
+        typeof state.text === 'string' ? state.text : this.#bindFormattedText(state.text, leases, retainMaterial);
       const flow = state.flow === undefined ? undefined : bindTextFlow(state.flow, transform);
       return {
         options: Object.freeze({
@@ -684,22 +696,21 @@ class ConfiguredRootServices<
   #bindFormattedText<Format extends RasterFormatMetadata>(
     input: GlyphFormattedText<Format, Bindings['materialInput']>,
     leases: Array<{ dispose(): void }>,
+    retainMaterial: (input: Bindings['materialInput']) => HandleMaterialBinding,
   ): RetainedFormattedText {
-    const mappedSpans = input.spans.map((span) => {
-      const font = span.font === undefined ? undefined : this.#bindFontSelection(span.font);
-      if (font !== undefined) leases.push(font);
-      const material = span.material === undefined ? undefined : this.#bindMaterial(span.material, leases);
-      return Object.freeze({
-        start: span.start,
-        end: span.end,
-        ...(font === undefined ? {} : { font }),
-        ...(material === undefined ? {} : { material }),
-        ...(span.style === undefined ? {} : { style: span.style }),
-      });
+    const mappedSpans = mapTextSpanBindings(input.spans, {
+      font: (selection) => {
+        const font = this.#bindFontSelection(selection);
+        leases.push(font);
+        return font;
+      },
+      material: retainMaterial,
     });
-    const spans = areOwnedSpansClusterAligned(input.text, input.spans)
-      ? inheritClusterAlignedSpans(input.text, input.spans, mappedSpans)
-      : Object.freeze(mappedSpans);
+    const spans = ownTextSpanRecords(undefined, mappedSpans, {
+      kind: 'core',
+      textLength: input.text.length,
+      featureScopeLabel: 'span style',
+    });
     return Object.freeze({
       text: input.text,
       spans,
@@ -887,12 +898,20 @@ class ConfiguredTextController<
     const snapshot = withOwnedTextPropertySnapshots(this.#state, this.#acceptedPropertyInputs, state);
     const reusableUpdate = reusablePlainTextUpdate(this.#state, snapshot);
     if (reusableUpdate !== undefined) {
-      this.#text.update(reusableUpdate);
+      let failure: PostCommitError | undefined;
+      try {
+        this.#text.update(reusableUpdate);
+      } catch (error) {
+        if (!(error instanceof PostCommitError)) throw error;
+        failure = error;
+      }
       this.#state = snapshot;
       acceptTextPropertyInputs(this.#acceptedPropertyInputs, state);
+      if (failure !== undefined) throw failure;
       return;
     }
     const next = this.#services.bind(snapshot);
+    let failure: PostCommitError | undefined;
     try {
       this.#text.update({
         ...next.options,
@@ -905,14 +924,23 @@ class ConfiguredTextController<
         flow: next.options.flow,
       });
     } catch (error) {
-      this.#disposeLeases(next.leases);
-      throw error;
+      if (error instanceof PostCommitError) failure = error;
+      else {
+        this.#disposeLeases(next.leases);
+        throw error;
+      }
     }
     const previous = this.#bound;
     this.#bound = next;
     this.#state = snapshot;
     acceptTextPropertyInputs(this.#acceptedPropertyInputs, state);
-    this.#disposeLeases(previous.leases);
+    try {
+      this.#disposeLeases(previous.leases);
+    } catch (error) {
+      if (failure === undefined)
+        failure = new PostCommitError('text update was accepted, but lease cleanup failed', error);
+    }
+    if (failure !== undefined) throw failure;
   }
 
   updateParagraphOrder(order: number, scope: object | undefined, rank: number): void {
@@ -946,6 +974,12 @@ class ConfiguredTextController<
     return this.#text.readGlyphs(read);
   }
 
+  /** @internal Reuses the retained planner's owned columns for an integration query. */
+  ownedInspection(): OwnedTextInspectionView {
+    this.#assertActive();
+    return ownedTextInspection(this.#text);
+  }
+
   belongsTo(services: object): boolean {
     return !this.#disposed && services === this.#services;
   }
@@ -975,6 +1009,14 @@ class ConfiguredTextController<
   #assertActive(): void {
     if (this.#disposed) throw new Error('Glyph Text controller has been disposed');
   }
+}
+
+/** @internal Reads a configured text's planner-owned canonical inspection for Three's private placement path. */
+export function configuredTextInspection(text: object): OwnedTextInspectionView {
+  if (!(text instanceof ConfiguredTextController)) {
+    throw new TypeError('text inspection source must be a live configured Text controller');
+  }
+  return text.ownedInspection();
 }
 
 function withOwnedTextPropertySnapshots<Format extends RasterFormatMetadata, MaterialInput, TransformInput>(

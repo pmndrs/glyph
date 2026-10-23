@@ -1,0 +1,21 @@
+{
+  "argv": [
+    "/usr/bin/env",
+    "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch",
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "--filter",
+    "@pmndrs/glyph-examples",
+    "build"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-19T16:27:44.565624+00:00",
+  "finished": "2026-10-19T16:27:46.051439+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "3dabd14738e322ce2857de4fdcbb7115c140f37539227688eb49e79ae5fda55b",
+    "stderr.log": "71c384b4a1fc1546eb87bba07c964be608de350d69432bec5e901de1eb81699c"
+  }
+}

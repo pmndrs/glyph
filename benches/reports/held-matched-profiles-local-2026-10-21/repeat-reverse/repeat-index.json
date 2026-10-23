@@ -1,0 +1,314 @@
+{
+  "atUtc": "2026-10-22T00:50:49.067073+00:00",
+  "order": [
+    "e6",
+    "v3",
+    "e4",
+    "main"
+  ],
+  "method": "same frozen archives and named Wasm, one capture per arm, reverse order; same 1024 first bulk writes, scene publication, 10 warmups, 80 iterations, no reads",
+  "sourceAndFixtureHashesUnchanged": true,
+  "sourceStatusUnchanged": true,
+  "armResults": {
+    "e6": {
+      "capture": {
+        "argv": [
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "benchmark:edit-sized-publication-profile",
+          "--",
+          "--case",
+          "bulk-write",
+          "--boundary",
+          "publication",
+          "--count",
+          "1024",
+          "--position",
+          "first",
+          "--warmups",
+          "10",
+          "--iterations",
+          "80",
+          "--reads",
+          "none",
+          "--publication-path",
+          "scene",
+          "--artifact",
+          "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "--wasm",
+          "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/shaper-profile/text-shaper.named.wasm",
+          "--output",
+          "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/e6-profile"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-22T00:49:27.212203+00:00",
+        "finished": "2026-10-22T00:49:33.158487+00:00",
+        "exit": 0,
+        "sha256": {
+          "stdout.log": "f626e80bafe2c4412a2ed24b5e2849fbf572f73958d21a8be601812c385525e8",
+          "stderr.log": "5917d83fce1aa552e446b3173fa57fd7196e3c8393128d8b15c415653e4b0038"
+        }
+      },
+      "archiveSha256": "d2f7a01ffb47aeaf87499979310286f1c980b88389e20bd1fc0f39794a0fc18c",
+      "namedWasmSha256": "94d12b02cf7a5cc331196fe8e24844ff89db23d72eaa0654c28af8fc4fa14f47",
+      "profileSha256": "94e49c4948c02f5d147a85b1a2476be6435529665fc6c4ed8e0f2e48f3a9bc3f",
+      "manifestSha256": "da4d30bb00953c2aaf6477fe4608d3e352eb434f18de0772c304aaecf0404ebf",
+      "summarySha256": "f71393813876527498b85881708a7ed323f94a9ed887812c15b9f82422fb1d9c",
+      "ancestry": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/e6-profile/ancestry.json",
+      "cpuSummary": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/e6-profile/cpu-summary.md",
+      "beforeProcess": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/e6-before-process.json",
+      "afterProcess": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/e6-after-process.json",
+      "timeDeltaMicroseconds": {
+        "samples": 997,
+        "p99": 2917,
+        "max": 210833,
+        "countOver5ms": 5,
+        "countOver10ms": 3,
+        "countOver50ms": 1
+      },
+      "original": {
+        "callbackP50Ms": 14.737124999999992,
+        "callbackP95Ms": 16.791166999999973,
+        "setterSelfMs": 764.548,
+        "publicationSelfMs": 379.993,
+        "publicationGatherSelfMs": 23.749
+      },
+      "repeat": {
+        "callbackP50Ms": 15.839582999999948,
+        "callbackP95Ms": 25.116499999999633,
+        "setterSelfMs": 971.919,
+        "publicationSelfMs": 473.583,
+        "publicationGatherSelfMs": 21.291
+      }
+    },
+    "v3": {
+      "capture": {
+        "argv": [
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "benchmark:edit-sized-publication-profile",
+          "--",
+          "--case",
+          "bulk-write",
+          "--boundary",
+          "publication",
+          "--count",
+          "1024",
+          "--position",
+          "first",
+          "--warmups",
+          "10",
+          "--iterations",
+          "80",
+          "--reads",
+          "none",
+          "--publication-path",
+          "scene",
+          "--artifact",
+          "/Volumes/Depot/Developer/glyph/.cache/held-dense-frontier-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "--wasm",
+          "/Volumes/Depot/Developer/glyph/.cache/held-dense-frontier-20261021/evidence/candidate/shaper-profile/text-shaper.named.wasm",
+          "--output",
+          "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/v3-profile"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-22T00:49:33.239928+00:00",
+        "finished": "2026-10-22T00:49:36.817262+00:00",
+        "exit": 0,
+        "sha256": {
+          "stdout.log": "4d4294d8231062b0fa66de088face8d8529c976e8d0fb8f9801adc2a823548f8",
+          "stderr.log": "fdb9830ff01bd1a812a27525dd1ed8a6fe1a43ce71773caf7ec41bf8ec0ba525"
+        }
+      },
+      "archiveSha256": "104be64f889f04989ee2660f8b9fc1c4fca22e5ea83539b2ace4d9075a9adacd",
+      "namedWasmSha256": "2ba09b4ab6c0170c879cdd59d53cd9aec55fde7dc9aa01ca3b6330e6f15ac9a5",
+      "profileSha256": "b0cc35db76cdc386b2e69ffbce2a9c2616e9b9a1763fe996755628d027561278",
+      "manifestSha256": "059adc560f824cfd1258ce43c8136bb2f11f7e4631352f28bb6cea1b0930594c",
+      "summarySha256": "b6fb3812f2d1378441849f8a900b8c7cbf3f2a008e5a627f7cfeab37908612c3",
+      "ancestry": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/v3-profile/ancestry.json",
+      "cpuSummary": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/v3-profile/cpu-summary.md",
+      "beforeProcess": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/v3-before-process.json",
+      "afterProcess": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/v3-after-process.json",
+      "timeDeltaMicroseconds": {
+        "samples": 960,
+        "p99": 4584,
+        "max": 35375,
+        "countOver5ms": 8,
+        "countOver10ms": 5,
+        "countOver50ms": 0
+      },
+      "original": {
+        "callbackP50Ms": 20.1284169999999,
+        "callbackP95Ms": 148.51183400000036,
+        "setterSelfMs": 2023.206,
+        "publicationSelfMs": 1024.13,
+        "publicationGatherSelfMs": 199.958
+      },
+      "repeat": {
+        "callbackP50Ms": 15.885499999999979,
+        "callbackP95Ms": 45.3771670000001,
+        "setterSelfMs": 1027.254,
+        "publicationSelfMs": 434.664,
+        "publicationGatherSelfMs": 99.29
+      }
+    },
+    "e4": {
+      "capture": {
+        "argv": [
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "benchmark:edit-sized-publication-profile",
+          "--",
+          "--case",
+          "bulk-write",
+          "--boundary",
+          "publication",
+          "--count",
+          "1024",
+          "--position",
+          "first",
+          "--warmups",
+          "10",
+          "--iterations",
+          "80",
+          "--reads",
+          "none",
+          "--publication-path",
+          "scene",
+          "--artifact",
+          "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+          "--wasm",
+          "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/shaper-profile/text-shaper.named.wasm",
+          "--output",
+          "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/e4-profile"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-22T00:49:36.892370+00:00",
+        "finished": "2026-10-22T00:49:41.468271+00:00",
+        "exit": 0,
+        "sha256": {
+          "stdout.log": "dee8263c5cc641dae67efe50a0223bc522bb6800f79461a3eff3b4f2e3c74958",
+          "stderr.log": "014c2c754f9ed040f284439d7f85d89b1585f4b076323f9ed1c7b0b9f7ab7736"
+        }
+      },
+      "archiveSha256": "9b1ad97a03f5af8eaa0613e5bdaab601edf7fccf69fdeacc6059759191b1fb18",
+      "namedWasmSha256": "806066af37452bbf5781955c8bb6f2083997cc68fd0e5eae485612ea5b608826",
+      "profileSha256": "ccfe818dd0bb3af7481a266633f733f6fb5ef1c8279e326d75b97a70c75d3021",
+      "manifestSha256": "9c7adabd8232c5b88e6a8d3e2d1c574a82b000c478d0f7592a455b11f7d18e14",
+      "summarySha256": "8ff91c13a396beb21c4e22cf93997682654f362b6817683e319a590e632f7480",
+      "ancestry": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/e4-profile/ancestry.json",
+      "cpuSummary": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/e4-profile/cpu-summary.md",
+      "beforeProcess": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/e4-before-process.json",
+      "afterProcess": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/e4-after-process.json",
+      "timeDeltaMicroseconds": {
+        "samples": 1488,
+        "p99": 9875,
+        "max": 55625,
+        "countOver5ms": 43,
+        "countOver10ms": 15,
+        "countOver50ms": 1
+      },
+      "original": {
+        "callbackP50Ms": 16.815041000000065,
+        "callbackP95Ms": 23.243124999999964,
+        "setterSelfMs": 953.551,
+        "publicationSelfMs": 457.411,
+        "publicationGatherSelfMs": 104.044
+      },
+      "repeat": {
+        "callbackP50Ms": 15.446249999999964,
+        "callbackP95Ms": 150.91891699999996,
+        "setterSelfMs": 1611.539,
+        "publicationSelfMs": 1059.796,
+        "publicationGatherSelfMs": 369.416
+      }
+    },
+    "main": {
+      "capture": {
+        "argv": [
+          "/Users/mini/.local/bin/mise",
+          "exec",
+          "--",
+          "pnpm",
+          "scripts",
+          "run",
+          "benchmark:edit-sized-publication-profile",
+          "--",
+          "--case",
+          "bulk-write",
+          "--boundary",
+          "publication",
+          "--count",
+          "1024",
+          "--position",
+          "first",
+          "--warmups",
+          "10",
+          "--iterations",
+          "80",
+          "--reads",
+          "none",
+          "--publication-path",
+          "scene",
+          "--artifact",
+          "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+          "--wasm",
+          "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/main-named-artifact/text-shaper.named.wasm",
+          "--output",
+          "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/main-profile"
+        ],
+        "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+        "started": "2026-10-22T00:49:41.546702+00:00",
+        "finished": "2026-10-22T00:49:44.581236+00:00",
+        "exit": 0,
+        "sha256": {
+          "stdout.log": "731af459e03704804c095e9d126b12186123e127c109042e0e930f2f6a09bb31",
+          "stderr.log": "e693bf6612db679387c97d811773f1b0810a3abfce16d1eade829c4750057dfa"
+        }
+      },
+      "archiveSha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20",
+      "namedWasmSha256": "8068ac682653e22f185d419ca0623e28d2e8db70adc0a31451a670423808b8ea",
+      "profileSha256": "08b90a13400490c9cd3136cce05f6d84ec6f884f1ef22e6e992f90d445d7b623",
+      "manifestSha256": "b4e3d2b55a283973ba4bf4b7bf05d40874eccfa81f23580cd8a93386b8d10891",
+      "summarySha256": "7ca7ae27b29e5289a18db401b5009cdf19dd8562fe82ef77643f0f5506c77ea9",
+      "ancestry": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/main-profile/ancestry.json",
+      "cpuSummary": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/main-profile/cpu-summary.md",
+      "beforeProcess": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/main-before-process.json",
+      "afterProcess": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/repeat-reverse/main-after-process.json",
+      "timeDeltaMicroseconds": {
+        "samples": 717,
+        "p99": 1542,
+        "max": 32625,
+        "countOver5ms": 1,
+        "countOver10ms": 1,
+        "countOver50ms": 0
+      },
+      "original": {
+        "callbackP50Ms": 14.797041000000036,
+        "callbackP95Ms": 17.171875,
+        "setterSelfMs": 110.876,
+        "publicationSelfMs": 1019.374,
+        "publicationGatherSelfMs": 74.874
+      },
+      "repeat": {
+        "callbackP50Ms": 12.74558300000001,
+        "callbackP95Ms": 15.094707999999855,
+        "setterSelfMs": 89.338,
+        "publicationSelfMs": 906.288,
+        "publicationGatherSelfMs": 71.667
+      }
+    }
+  }
+}

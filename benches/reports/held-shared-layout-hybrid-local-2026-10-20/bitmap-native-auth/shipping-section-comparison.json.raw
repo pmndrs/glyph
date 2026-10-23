@@ -1,0 +1,92 @@
+{
+  "recordedUtc": "2026-10-20T21:24:29.159947+00:00",
+  "archiveSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+  "archivedDistMemberCount": 947,
+  "shippedMemberMismatches": [
+    "text-shaper.wasm"
+  ],
+  "extraUnshippedBuildOutputs": [
+    ".tsbuildinfo",
+    "internal/raster-baker-profile.d.ts",
+    "internal/raster-baker-profile.d.ts.map",
+    "internal/raster-baker-profile.js",
+    "internal/raster-baker-profile.js.map"
+  ],
+  "oldWasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd",
+  "newWasmSha256": "1471ced51c0b01e3ba1970821eaa3158bc6bec5e156f8a8347181ba3c091185d",
+  "oldWasmBytes": 1609247,
+  "newWasmBytes": 1609247,
+  "sections": [
+    {
+      "sectionId": 1,
+      "oldBytes": 796,
+      "newBytes": 796,
+      "equal": true,
+      "sameOffsetByteDifferences": 0
+    },
+    {
+      "sectionId": 3,
+      "oldBytes": 1595,
+      "newBytes": 1595,
+      "equal": true,
+      "sameOffsetByteDifferences": 0
+    },
+    {
+      "sectionId": 4,
+      "oldBytes": 5,
+      "newBytes": 5,
+      "equal": true,
+      "sameOffsetByteDifferences": 0
+    },
+    {
+      "sectionId": 5,
+      "oldBytes": 3,
+      "newBytes": 3,
+      "equal": true,
+      "sameOffsetByteDifferences": 0
+    },
+    {
+      "sectionId": 6,
+      "oldBytes": 9,
+      "newBytes": 9,
+      "equal": true,
+      "sameOffsetByteDifferences": 0
+    },
+    {
+      "sectionId": 7,
+      "oldBytes": 1469,
+      "newBytes": 1469,
+      "equal": true,
+      "sameOffsetByteDifferences": 0
+    },
+    {
+      "sectionId": 9,
+      "oldBytes": 258,
+      "newBytes": 258,
+      "equal": true,
+      "sameOffsetByteDifferences": 0
+    },
+    {
+      "sectionId": 12,
+      "oldBytes": 2,
+      "newBytes": 2,
+      "equal": true,
+      "sameOffsetByteDifferences": 0
+    },
+    {
+      "sectionId": 10,
+      "oldBytes": 1311607,
+      "newBytes": 1311607,
+      "equal": true,
+      "sameOffsetByteDifferences": 0
+    },
+    {
+      "sectionId": 11,
+      "oldBytes": 293467,
+      "newBytes": 293467,
+      "equal": false,
+      "sameOffsetByteDifferences": 1
+    }
+  ],
+  "scope": "Section identity only; source-location cause and shipping correction independently reviewed next. Extras are not archived member mismatches."
+}

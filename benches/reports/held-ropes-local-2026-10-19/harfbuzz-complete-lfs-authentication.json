@@ -1,0 +1,356 @@
+{
+  "purpose": "Authenticate complete current-platform Darwin arm64 HarfBuzz bundles before exact LFS hydration and rerun.",
+  "createdUtc": "2026-10-19T16:25:32.981356+00:00",
+  "head": "6987418cc49495c60097801e0d675dec7ae84f77",
+  "previousNarrowReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/harfbuzz-lfs-authentication.json",
+  "initial187LfsScope": "Earlier 187-object receipt covered Glyph package fixtures; it did not cover these HarfBuzz vendor bundles.",
+  "bundles": [
+    {
+      "version": "13.0.0",
+      "manifestPath": "benches/vendor/harfbuzz/13.0.0/darwin-arm64/manifest.json",
+      "manifestSha256": "84ce44e41e01511c2788c541211ab8b645444b925fd7d46ebd2754a19669c651",
+      "entries": [
+        {
+          "path": "benches/vendor/harfbuzz/13.0.0/darwin-arm64/bin/hb-shape",
+          "manifest": {
+            "executable": true,
+            "path": "bin/hb-shape",
+            "sha256": "3c8f65a39e8335f9cd7cc633b31012ad04920570133011fbf83b75034cb60873",
+            "size": 1196776
+          },
+          "gitIndex": {
+            "mode": "100755",
+            "blob": "7b6011319fcc92215f20e6c5bf18438d10a03779"
+          },
+          "workingTree": {
+            "size": 1196776,
+            "mode": "0o755",
+            "sha256": "3c8f65a39e8335f9cd7cc633b31012ad04920570133011fbf83b75034cb60873",
+            "isLfsPointer": false,
+            "pointerOID": null,
+            "pointerSize": null
+          }
+        },
+        {
+          "path": "benches/vendor/harfbuzz/13.0.0/darwin-arm64/bin/hb-subset",
+          "manifest": {
+            "executable": true,
+            "path": "bin/hb-subset",
+            "sha256": "2fccb67c5b698c9df4358f17d60f6b8f84588954d415a02be69dc78148e09716",
+            "size": 1802472
+          },
+          "gitIndex": {
+            "mode": "100755",
+            "blob": "80905452519d883485ec6d1f44a9c2f23f0121d7"
+          },
+          "workingTree": {
+            "size": 132,
+            "mode": "0o755",
+            "sha256": "3d0a7a78ac4fad498af929f3193dd3b32e754711dc6800cc274acd3caa8a3adf",
+            "isLfsPointer": true,
+            "pointerOID": "sha256:2fccb67c5b698c9df4358f17d60f6b8f84588954d415a02be69dc78148e09716",
+            "pointerSize": 1802472
+          }
+        },
+        {
+          "path": "benches/vendor/harfbuzz/13.0.0/darwin-arm64/bin/hb-info",
+          "manifest": {
+            "executable": true,
+            "path": "bin/hb-info",
+            "sha256": "da88ecd257e33c593ca51ac00e3a9f38a2e2c22522a61b3f6398adef7825ae26",
+            "size": 693608
+          },
+          "gitIndex": {
+            "mode": "100755",
+            "blob": "7584e10d1daaa8364ae8cfe91cc1985c416300da"
+          },
+          "workingTree": {
+            "size": 131,
+            "mode": "0o755",
+            "sha256": "0331526008be7d8562cc5711c0fdc94d15b5742fb8fab277aa312626af6f2c71",
+            "isLfsPointer": true,
+            "pointerOID": "sha256:da88ecd257e33c593ca51ac00e3a9f38a2e2c22522a61b3f6398adef7825ae26",
+            "pointerSize": 693608
+          }
+        },
+        {
+          "path": "benches/vendor/harfbuzz/13.0.0/darwin-arm64/licenses/HarfBuzz-COPYING.txt",
+          "manifest": {
+            "executable": false,
+            "path": "licenses/HarfBuzz-COPYING.txt",
+            "sha256": "ba8f810f2455c2f08e2d56bb49b72f37fcf68f1f4fade38977cfd7372050ad64",
+            "size": 1971
+          },
+          "gitIndex": {
+            "mode": "100644",
+            "blob": "1dd917e9f2e72167de69e3b5dadbc4e7db417da1"
+          },
+          "workingTree": {
+            "size": 1971,
+            "mode": "0o644",
+            "sha256": "ba8f810f2455c2f08e2d56bb49b72f37fcf68f1f4fade38977cfd7372050ad64",
+            "isLfsPointer": false,
+            "pointerOID": null,
+            "pointerSize": null
+          }
+        },
+        {
+          "path": "benches/vendor/harfbuzz/13.0.0/darwin-arm64/licenses/THIRD-PARTY-NOTICES.md",
+          "manifest": {
+            "executable": false,
+            "path": "licenses/THIRD-PARTY-NOTICES.md",
+            "sha256": "1c9845cf508983530b0b53f4911280de93ffe59228efed6670dfea1929315e7b",
+            "size": 322
+          },
+          "gitIndex": {
+            "mode": "100644",
+            "blob": "d7a8d672e6ef783e4f1482f2c8e3f7b5a5a71df0"
+          },
+          "workingTree": {
+            "size": 322,
+            "mode": "0o644",
+            "sha256": "1c9845cf508983530b0b53f4911280de93ffe59228efed6670dfea1929315e7b",
+            "isLfsPointer": false,
+            "pointerOID": null,
+            "pointerSize": null
+          }
+        }
+      ]
+    },
+    {
+      "version": "14.2.0",
+      "manifestPath": "benches/vendor/harfbuzz/14.2.0/darwin-arm64/manifest.json",
+      "manifestSha256": "ff1d0a15ce573ebce8533c71f969df9bff6b435806d4b8ed2c9556603a3aedb4",
+      "entries": [
+        {
+          "path": "benches/vendor/harfbuzz/14.2.0/darwin-arm64/bin/hb-shape",
+          "manifest": {
+            "executable": true,
+            "path": "bin/hb-shape",
+            "sha256": "4de7971a5e6c8c5de18d3397d8fa46bbd1dfbf840ceedcd76d4f501d5e747b4f",
+            "size": 1223096
+          },
+          "gitIndex": {
+            "mode": "100755",
+            "blob": "277050745b0f8507a19a2f37f24e35c37d6f20ba"
+          },
+          "workingTree": {
+            "size": 1223096,
+            "mode": "0o755",
+            "sha256": "4de7971a5e6c8c5de18d3397d8fa46bbd1dfbf840ceedcd76d4f501d5e747b4f",
+            "isLfsPointer": false,
+            "pointerOID": null,
+            "pointerSize": null
+          }
+        },
+        {
+          "path": "benches/vendor/harfbuzz/14.2.0/darwin-arm64/bin/hb-subset",
+          "manifest": {
+            "executable": true,
+            "path": "bin/hb-subset",
+            "sha256": "5df842a3bc79e3b9381e619fe4a76064b92a041aca6a7871fb66dc244b4b701e",
+            "size": 1813096
+          },
+          "gitIndex": {
+            "mode": "100755",
+            "blob": "e6dcfc55e33607daa2230c78352231a444ce3673"
+          },
+          "workingTree": {
+            "size": 132,
+            "mode": "0o755",
+            "sha256": "ac078a9eb7fba1ab04487c926f13573ed8ed1215252bc6cc2047239410a08677",
+            "isLfsPointer": true,
+            "pointerOID": "sha256:5df842a3bc79e3b9381e619fe4a76064b92a041aca6a7871fb66dc244b4b701e",
+            "pointerSize": 1813096
+          }
+        },
+        {
+          "path": "benches/vendor/harfbuzz/14.2.0/darwin-arm64/bin/hb-info",
+          "manifest": {
+            "executable": true,
+            "path": "bin/hb-info",
+            "sha256": "22edcb5747e4ae46b0a190286f6bfb3fbcb5d1792bd29a94e1dded47b4814c37",
+            "size": 696904
+          },
+          "gitIndex": {
+            "mode": "100755",
+            "blob": "f13253be0cc2bf90a8acf98459589483189f1eca"
+          },
+          "workingTree": {
+            "size": 131,
+            "mode": "0o755",
+            "sha256": "813bf21aed2be8edb335c5a65e6bfaffe14818a7e0722f87f0c8269a4653b11f",
+            "isLfsPointer": true,
+            "pointerOID": "sha256:22edcb5747e4ae46b0a190286f6bfb3fbcb5d1792bd29a94e1dded47b4814c37",
+            "pointerSize": 696904
+          }
+        },
+        {
+          "path": "benches/vendor/harfbuzz/14.2.0/darwin-arm64/licenses/HarfBuzz-COPYING.txt",
+          "manifest": {
+            "executable": false,
+            "path": "licenses/HarfBuzz-COPYING.txt",
+            "sha256": "ba8f810f2455c2f08e2d56bb49b72f37fcf68f1f4fade38977cfd7372050ad64",
+            "size": 1971
+          },
+          "gitIndex": {
+            "mode": "100644",
+            "blob": "1dd917e9f2e72167de69e3b5dadbc4e7db417da1"
+          },
+          "workingTree": {
+            "size": 1971,
+            "mode": "0o644",
+            "sha256": "ba8f810f2455c2f08e2d56bb49b72f37fcf68f1f4fade38977cfd7372050ad64",
+            "isLfsPointer": false,
+            "pointerOID": null,
+            "pointerSize": null
+          }
+        },
+        {
+          "path": "benches/vendor/harfbuzz/14.2.0/darwin-arm64/licenses/THIRD-PARTY-NOTICES.md",
+          "manifest": {
+            "executable": false,
+            "path": "licenses/THIRD-PARTY-NOTICES.md",
+            "sha256": "534f4e241bfe1cf9056fa58367527b36e1e0efb5cb586aa61c20161416215e76",
+            "size": 322
+          },
+          "gitIndex": {
+            "mode": "100644",
+            "blob": "7a637357a1a05d22e387f302d0a9d927ace65e14"
+          },
+          "workingTree": {
+            "size": 322,
+            "mode": "0o644",
+            "sha256": "534f4e241bfe1cf9056fa58367527b36e1e0efb5cb586aa61c20161416215e76",
+            "isLfsPointer": false,
+            "pointerOID": null,
+            "pointerSize": null
+          }
+        }
+      ]
+    }
+  ],
+  "trackedLfsInventory": {
+    "trackedPaths": 202,
+    "hydrated": 202,
+    "remainingPointerPaths": 0,
+    "missingPaths": 0,
+    "remainingPointerPathList": []
+  },
+  "hydration": {
+    "wrapperResult": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/harfbuzz-complete-lfs-hydration/result.json",
+    "verifiedUtc": "2026-10-19T16:26:09.474178+00:00",
+    "completeManifestValidation": [
+      {
+        "version": "13.0.0",
+        "manifestSha256": "84ce44e41e01511c2788c541211ab8b645444b925fd7d46ebd2754a19669c651",
+        "entries": [
+          {
+            "path": "benches/vendor/harfbuzz/13.0.0/darwin-arm64/bin/hb-shape",
+            "sha256": "3c8f65a39e8335f9cd7cc633b31012ad04920570133011fbf83b75034cb60873",
+            "size": 1196776,
+            "mode": "0o755",
+            "executable": true,
+            "headPointer": true
+          },
+          {
+            "path": "benches/vendor/harfbuzz/13.0.0/darwin-arm64/bin/hb-subset",
+            "sha256": "2fccb67c5b698c9df4358f17d60f6b8f84588954d415a02be69dc78148e09716",
+            "size": 1802472,
+            "mode": "0o755",
+            "executable": true,
+            "headPointer": true
+          },
+          {
+            "path": "benches/vendor/harfbuzz/13.0.0/darwin-arm64/bin/hb-info",
+            "sha256": "da88ecd257e33c593ca51ac00e3a9f38a2e2c22522a61b3f6398adef7825ae26",
+            "size": 693608,
+            "mode": "0o755",
+            "executable": true,
+            "headPointer": true
+          },
+          {
+            "path": "benches/vendor/harfbuzz/13.0.0/darwin-arm64/licenses/HarfBuzz-COPYING.txt",
+            "sha256": "ba8f810f2455c2f08e2d56bb49b72f37fcf68f1f4fade38977cfd7372050ad64",
+            "size": 1971,
+            "mode": "0o644",
+            "executable": false,
+            "headPointer": false
+          },
+          {
+            "path": "benches/vendor/harfbuzz/13.0.0/darwin-arm64/licenses/THIRD-PARTY-NOTICES.md",
+            "sha256": "1c9845cf508983530b0b53f4911280de93ffe59228efed6670dfea1929315e7b",
+            "size": 322,
+            "mode": "0o644",
+            "executable": false,
+            "headPointer": false
+          }
+        ]
+      },
+      {
+        "version": "14.2.0",
+        "manifestSha256": "ff1d0a15ce573ebce8533c71f969df9bff6b435806d4b8ed2c9556603a3aedb4",
+        "entries": [
+          {
+            "path": "benches/vendor/harfbuzz/14.2.0/darwin-arm64/bin/hb-shape",
+            "sha256": "4de7971a5e6c8c5de18d3397d8fa46bbd1dfbf840ceedcd76d4f501d5e747b4f",
+            "size": 1223096,
+            "mode": "0o755",
+            "executable": true,
+            "headPointer": true
+          },
+          {
+            "path": "benches/vendor/harfbuzz/14.2.0/darwin-arm64/bin/hb-subset",
+            "sha256": "5df842a3bc79e3b9381e619fe4a76064b92a041aca6a7871fb66dc244b4b701e",
+            "size": 1813096,
+            "mode": "0o755",
+            "executable": true,
+            "headPointer": true
+          },
+          {
+            "path": "benches/vendor/harfbuzz/14.2.0/darwin-arm64/bin/hb-info",
+            "sha256": "22edcb5747e4ae46b0a190286f6bfb3fbcb5d1792bd29a94e1dded47b4814c37",
+            "size": 696904,
+            "mode": "0o755",
+            "executable": true,
+            "headPointer": true
+          },
+          {
+            "path": "benches/vendor/harfbuzz/14.2.0/darwin-arm64/licenses/HarfBuzz-COPYING.txt",
+            "sha256": "ba8f810f2455c2f08e2d56bb49b72f37fcf68f1f4fade38977cfd7372050ad64",
+            "size": 1971,
+            "mode": "0o644",
+            "executable": false,
+            "headPointer": false
+          },
+          {
+            "path": "benches/vendor/harfbuzz/14.2.0/darwin-arm64/licenses/THIRD-PARTY-NOTICES.md",
+            "sha256": "534f4e241bfe1cf9056fa58367527b36e1e0efb5cb586aa61c20161416215e76",
+            "size": 322,
+            "mode": "0o644",
+            "executable": false,
+            "headPointer": false
+          }
+        ]
+      }
+    ],
+    "scopedGitStatusAfterHydration": "",
+    "trackedLfsInventoryAfterHydration": {
+      "trackedPaths": 202,
+      "remainingPointerPaths": [
+        ".agents/docs/assets/benchmark-harness-wireframe.png",
+        ".github/assets/package-size/decrease.svg",
+        ".github/assets/package-size/increase.svg",
+        "benches/vendor/harfbuzz/13.0.0/linux-x64/bin/hb-info",
+        "benches/vendor/harfbuzz/13.0.0/linux-x64/bin/hb-shape",
+        "benches/vendor/harfbuzz/13.0.0/linux-x64/bin/hb-subset",
+        "benches/vendor/harfbuzz/14.2.0/linux-x64/bin/hb-info",
+        "benches/vendor/harfbuzz/14.2.0/linux-x64/bin/hb-shape",
+        "benches/vendor/harfbuzz/14.2.0/linux-x64/bin/hb-subset"
+      ],
+      "missingPaths": [],
+      "remainingPointerScopeNote": "The only remaining pointers are optional repository artwork and Linux x64 HarfBuzz bundles, outside the current Darwin arm64 test scope."
+    },
+    "validation": "Every manifest-listed file in both Darwin arm64 bundles matches committed manifest SHA-256 and size; executable mode agrees with manifest; every HEAD LFS pointer OID/size matches manifest; all six Darwin arm64 LFS binaries hydrated; license files checked against manifest and HEAD bytes."
+  }
+}

@@ -1,0 +1,177 @@
+{
+  "schema": "main-fixed-facts-provenance-v2",
+  "correctionNote": "Corrected the summary parser: v1 stored Δp50 percent in a field called p. v2 now parses all 8 markdown table columns and separately records printedDeltaPercent, printedP, and printedDelta95CI. Verified each of 144 non-skipped rows against its exact sourceLine. Also corrected the cold workload label, named paint-boundary rows accurately, added the actual independent-copy benchmark, and removed the incorrect Hedges g claim. Raw quantiles and source inputs were not recomputed or changed.",
+  "supersededV1": {
+    "directory": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/main-fixed-facts/v1-superseded",
+    "files": {
+      "all145-quantiles.json": "ffabc39de707c49854834b20c2b3678024c0f662a46ba7d3eadb3e912426d0ac",
+      "all145-quantiles.csv": "73321df2b76b014af8e8c3aa1685be2a5b225311960cc814934b283326706cb3",
+      "factual-main-handoff.md": "bb925fea6e0582e5dff03f4acfa261f8c8c5a452b619ee9995c374ea0c06558e",
+      "provenance.json": "385801b51313eab046b486bade85b27c1519b03355c31e35f7ec39bd2072c9cf"
+    },
+    "manifestPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/main-fixed-facts/v1-superseded/v1-superseded-manifest.json",
+    "manifestSha256": "b4817e5e31e565ee39304bba0429a3bbb659a3ae0c1af506498008ef2b9a1193"
+  },
+  "worktree": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "sourceFreeze": {
+    "file": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/root-matrix-fixed-release.json",
+    "sha256": "b776a9f0a3f1475b5385917e21c89e12f5c59f77b796da5f58ae1103cd776020",
+    "priorInputCount": 759,
+    "currentInputUnionCount": 788
+  },
+  "inputs": {
+    "receipt": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-01/result.json",
+      "sha256": "ce794465e78ebb1953f64e38214f546282c388454792892872772546466d4a57"
+    },
+    "manifest": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data/manifest.json",
+      "sha256": "df99790bdfe7cb0083216d250715da8ec2cd4a916fbae31ffc24b85f051219dd"
+    },
+    "baseline": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data/baseline.json",
+      "sha256": "dddfd51f1aabe9b9830a8fe2a5188725bdc856f2fdacc3345d8282059ea7c1ea"
+    },
+    "candidate": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data/candidate.json",
+      "sha256": "69c6b80d2059ebe32909aa0a098e1e3a6c2a1e5e442d645c7f959b129c8db3d8"
+    },
+    "comparison": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data/comparison.txt",
+      "sha256": "60ac8b9042c3eca1636db8445308a565a9f1f681f4eb87052956b8b37115d4be"
+    },
+    "summary": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data/summary.md",
+      "sha256": "dfaca8992d2d266e15a5502db28549b848812b557bb0602b32a3197d3969f104"
+    },
+    "releaseFreeze": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/root-matrix-fixed-release.json",
+      "sha256": "b776a9f0a3f1475b5385917e21c89e12f5c59f77b796da5f58ae1103cd776020"
+    },
+    "denseDescriptive": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/root-main-fixed-dense-descriptive.json",
+      "sha256": "3ba7ec4cc0e9291a345188eeaf0c93dca87aff78ea0fe725cc006666fc794ad4"
+    },
+    "candidateArchive": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+      "exists": true,
+      "sha256": "d2f7a01ffb47aeaf87499979310286f1c980b88389e20bd1fc0f39794a0fc18c"
+    },
+    "baselineArchive": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+      "exists": true,
+      "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20"
+    }
+  },
+  "inputHashesUnchangedFromV1": true,
+  "printedReportValidation": {
+    "matchedNonSkippedRows": 144,
+    "sourceLineColumnsValidated": 144,
+    "fields": [
+      "status",
+      "workloadAlias",
+      "baseline",
+      "candidate",
+      "deltaTime",
+      "deltaPercent",
+      "p",
+      "95%CI"
+    ],
+    "printedCounts": {
+      "faster": 92,
+      "skipped": 1,
+      "slower": 30,
+      "neutral": 22
+    }
+  },
+  "identityCounts": {
+    "baselineRawRuns": 145,
+    "candidateRawRuns": 145,
+    "exactPairedIdentities": 145,
+    "bothArmsStatsKindYield": 145,
+    "bothArmsHaveSamples": 145,
+    "bothArmsHaveEightBlockMedians": 145,
+    "manifestBaselineCheckFailures": [],
+    "manifestTimingModeMismatches": []
+  },
+  "representativeRows": {
+    "cold": {
+      "file": "cold.bench.ts",
+      "name": "mount and publish a 22k-glyph paragraph"
+    },
+    "preparedFirstSet": {
+      "file": "prepared-operations.bench.ts",
+      "name": "1000 labels first set"
+    },
+    "independentCopy": {
+      "file": "inspection.bench.ts",
+      "name": "edit and independently copy one label among 1000 labels"
+    },
+    "paintBoundaryPreparation": {
+      "file": "sparse-assignment.bench.ts",
+      "name": "split move and merge paint boundaries preparation only"
+    },
+    "paintBoundaryPublication": {
+      "file": "sparse-assignment.bench.ts",
+      "name": "split move and merge paint boundaries publication"
+    },
+    "textSplitLifetime": "No separately named Text.split or selected-copy lifetime workload appears in these 145 identities."
+  },
+  "denseCrossCheckAgainstRootSavedRows": [
+    {
+      "arm": "baseline",
+      "file": "batching.bench.ts",
+      "name": "rewrite 512 labels in one group",
+      "sampleCountMatches": true,
+      "p50Matches": true,
+      "p95Matches": true,
+      "blockMediansMatch": true,
+      "planMatches": true
+    },
+    {
+      "arm": "candidate",
+      "file": "batching.bench.ts",
+      "name": "rewrite 512 labels in one group",
+      "sampleCountMatches": true,
+      "p50Matches": true,
+      "p95Matches": true,
+      "blockMediansMatch": true,
+      "planMatches": true
+    },
+    {
+      "arm": "baseline",
+      "file": "stress.bench.ts",
+      "name": "publish 1024 retained Text instances",
+      "sampleCountMatches": true,
+      "p50Matches": true,
+      "p95Matches": true,
+      "blockMediansMatch": true,
+      "planMatches": true
+    },
+    {
+      "arm": "candidate",
+      "file": "stress.bench.ts",
+      "name": "publish 1024 retained Text instances",
+      "sampleCountMatches": true,
+      "p50Matches": true,
+      "p95Matches": true,
+      "blockMediansMatch": true,
+      "planMatches": true
+    }
+  ],
+  "outputs": {
+    "all145-quantiles.json": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/main-fixed-facts/all145-quantiles.json",
+      "sha256": "633c9fc730e0e6549214b9ff506cbbfd0179d7c07fad40a57a236ac51603a8e4"
+    },
+    "all145-quantiles.csv": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/main-fixed-facts/all145-quantiles.csv",
+      "sha256": "287f30a61e8b4bc4688ebbe7f24d923c3bd11e94ccb69b3b9f73ec23bdd467c3"
+    },
+    "factual-main-handoff.md": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/main-fixed-facts/factual-main-handoff.md",
+      "sha256": "d0662e13c2849b569b6c472d0a33e6bf12ccb692f9536b1588c71ee70346d9d9"
+    }
+  },
+  "selfHash": "omitted; digest should be recorded externally after this file is written"
+}

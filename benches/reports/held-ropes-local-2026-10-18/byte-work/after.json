@@ -1,0 +1,263 @@
+{
+  "packageSha256": "880255c15c9822ded79cc934dba755070348faf729bc96af9cd6f450a57cb332",
+  "sourceHead": "ad6327d9199cedf88217f1098db3aeb439ec3e66",
+  "rustSourceSha256": "bf7c65322c9f3e24b1f345b892c54592a18df197946be345dcc23645b3657840",
+  "matchingPackedMembers": {
+    "src": 226,
+    "dist": 943
+  },
+  "cases": {
+    "digit": {
+      "publication": "digit-edit",
+      "liveRecordsBeforeAndAfter": 6,
+      "bufferCapacityRecords": {
+        "origin": 8,
+        "size": 8,
+        "uvOrigin": 8,
+        "uvSize": 8,
+        "color": 8,
+        "page": 8
+      },
+      "coldHostOracleEqual": true,
+      "fields": {
+        "origin": {
+          "patchCount": 1,
+          "patchBytes": 48,
+          "wholeEqualCount": 0,
+          "wholeEqualBytes": 0
+        },
+        "size": {
+          "patchCount": 1,
+          "patchBytes": 48,
+          "wholeEqualCount": 0,
+          "wholeEqualBytes": 0
+        },
+        "uvOrigin": {
+          "patchCount": 1,
+          "patchBytes": 48,
+          "wholeEqualCount": 0,
+          "wholeEqualBytes": 0
+        },
+        "uvSize": {
+          "patchCount": 1,
+          "patchBytes": 48,
+          "wholeEqualCount": 0,
+          "wholeEqualBytes": 0
+        },
+        "color": {
+          "patchCount": 0,
+          "patchBytes": 0,
+          "wholeEqualCount": 0,
+          "wholeEqualBytes": 0
+        },
+        "page": {
+          "patchCount": 0,
+          "patchBytes": 0,
+          "wholeEqualCount": 0,
+          "wholeEqualBytes": 0
+        }
+      },
+      "actualThreeHostDirtyRanges": {
+        "origin": [
+          {
+            "start": 0,
+            "count": 12
+          }
+        ],
+        "page": [],
+        "uvOrigin": [
+          {
+            "start": 0,
+            "count": 12
+          }
+        ],
+        "color": [],
+        "size": [
+          {
+            "start": 0,
+            "count": 12
+          }
+        ],
+        "uvSize": [
+          {
+            "start": 0,
+            "count": 12
+          }
+        ]
+      },
+      "previousEligibleEqualBytes": {
+        "origin": 0,
+        "size": 0,
+        "uvOrigin": 0,
+        "uvSize": 0,
+        "color": 96,
+        "page": 24
+      },
+      "previouslyEligibleNowAbsent": ["color", "page"],
+      "totalPatchBytes": 192
+    },
+    "paint": {
+      "publication": "paint-edit",
+      "liveRecordsBeforeAndAfter": 6,
+      "bufferCapacityRecords": {
+        "origin": 8,
+        "size": 8,
+        "uvOrigin": 8,
+        "uvSize": 8,
+        "color": 8,
+        "page": 8
+      },
+      "coldHostOracleEqual": true,
+      "fields": {
+        "origin": {
+          "patchCount": 0,
+          "patchBytes": 0,
+          "wholeEqualCount": 0,
+          "wholeEqualBytes": 0
+        },
+        "size": {
+          "patchCount": 0,
+          "patchBytes": 0,
+          "wholeEqualCount": 0,
+          "wholeEqualBytes": 0
+        },
+        "uvOrigin": {
+          "patchCount": 0,
+          "patchBytes": 0,
+          "wholeEqualCount": 0,
+          "wholeEqualBytes": 0
+        },
+        "uvSize": {
+          "patchCount": 0,
+          "patchBytes": 0,
+          "wholeEqualCount": 0,
+          "wholeEqualBytes": 0
+        },
+        "color": {
+          "patchCount": 1,
+          "patchBytes": 96,
+          "wholeEqualCount": 0,
+          "wholeEqualBytes": 0
+        },
+        "page": {
+          "patchCount": 0,
+          "patchBytes": 0,
+          "wholeEqualCount": 0,
+          "wholeEqualBytes": 0
+        }
+      },
+      "actualThreeHostDirtyRanges": {
+        "origin": [],
+        "page": [],
+        "uvOrigin": [],
+        "color": [
+          {
+            "start": 0,
+            "count": 24
+          }
+        ],
+        "size": [],
+        "uvSize": []
+      },
+      "previousEligibleEqualBytes": {
+        "origin": 0,
+        "size": 0,
+        "uvOrigin": 0,
+        "uvSize": 0,
+        "color": 0,
+        "page": 0
+      },
+      "previouslyEligibleNowAbsent": [],
+      "totalPatchBytes": 96
+    },
+    "dense": {
+      "publication": "dense-bulk-edit",
+      "liveRecordsBeforeAndAfter": 4120,
+      "bufferCapacityRecords": {
+        "origin": 8192,
+        "size": 8192,
+        "uvOrigin": 8192,
+        "uvSize": 8192,
+        "color": 8192,
+        "page": 8192
+      },
+      "coldHostOracleEqual": true,
+      "fields": {
+        "origin": {
+          "patchCount": 1,
+          "patchBytes": 32960,
+          "wholeEqualCount": 0,
+          "wholeEqualBytes": 0
+        },
+        "size": {
+          "patchCount": 1,
+          "patchBytes": 32960,
+          "wholeEqualCount": 0,
+          "wholeEqualBytes": 0
+        },
+        "uvOrigin": {
+          "patchCount": 1,
+          "patchBytes": 32960,
+          "wholeEqualCount": 0,
+          "wholeEqualBytes": 0
+        },
+        "uvSize": {
+          "patchCount": 1,
+          "patchBytes": 32960,
+          "wholeEqualCount": 0,
+          "wholeEqualBytes": 0
+        },
+        "color": {
+          "patchCount": 0,
+          "patchBytes": 0,
+          "wholeEqualCount": 0,
+          "wholeEqualBytes": 0
+        },
+        "page": {
+          "patchCount": 0,
+          "patchBytes": 0,
+          "wholeEqualCount": 0,
+          "wholeEqualBytes": 0
+        }
+      },
+      "actualThreeHostDirtyRanges": {
+        "origin": [
+          {
+            "start": 0,
+            "count": 8240
+          }
+        ],
+        "page": [],
+        "uvOrigin": [
+          {
+            "start": 0,
+            "count": 8240
+          }
+        ],
+        "color": [],
+        "size": [
+          {
+            "start": 0,
+            "count": 8240
+          }
+        ],
+        "uvSize": [
+          {
+            "start": 0,
+            "count": 8240
+          }
+        ]
+      },
+      "previousEligibleEqualBytes": {
+        "origin": 0,
+        "size": 0,
+        "uvOrigin": 0,
+        "uvSize": 0,
+        "color": 65920,
+        "page": 16480
+      },
+      "previouslyEligibleNowAbsent": ["color", "page"],
+      "totalPatchBytes": 131840
+    }
+  }
+}

@@ -6,7 +6,15 @@ export async function runBenchmarkTest(options: { readonly runtimePackagesReady?
   await runNodeScript('scripts/generate-paragraph-bidi-contract.mts', ['--check']);
   await runNodeScript('scripts/generate-paragraph-cjk-contract.mts', ['--check']);
   await runNodeScript('node_modules/vitest/vitest.mjs', ['run']);
-  await run(process.execPath, ['--test', 'scripts/workflows.test.mts', 'scripts/release-labs-comparison.test.mts']);
+  await run(process.execPath, [
+    '--test',
+    'scripts/workflows.test.mts',
+    'scripts/release-labs-comparison.test.mts',
+    'scripts/archive-dist-proof.test.mts',
+    'scripts/archive-benchmark-loader.test.mts',
+    'scripts/editorial-capture-identity.test.mts',
+    'scripts/editorial-pixel-proof.test.mts',
+  ]);
   await runNodeScript('scripts/run-headless.mts', [
     '--suite',
     'conformance',

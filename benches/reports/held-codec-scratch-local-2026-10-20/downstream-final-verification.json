@@ -1,0 +1,93 @@
+{
+  "schema": "wave2-downstream-final-verification-v1",
+  "recordedUtc": "2026-10-20T16:11:27.111856+00:00",
+  "head": "291fb51ce5e61ca6903b67459872923ccab4ceee",
+  "expectedHead": "291fb51ce5e61ca6903b67459872923ccab4ceee",
+  "packageFreeze": {
+    "ownedSourceFileCount": 6,
+    "trackedInputFileCount": 1039,
+    "uniqueFrozenFileCount": 1039,
+    "mismatchCount": 0,
+    "mismatches": [],
+    "allFrozenInputsMatch": true
+  },
+  "candidateArchive": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "sha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+    "expectedSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+    "matchesExpected": true,
+    "profileManifestArchiveSha256": "28fd04139e792aa37fd963bf6100c091a4acdbd24417e2435f1a71d898ab37bb",
+    "releaseWasmSha256": "01001ff67186294925137a0fc2deadb94eea294d13182f72ca59e7c164f667cd"
+  },
+  "packedDistWorkspaceComparison": {
+    "archiveDistMemberCount": 947,
+    "missingWorkspaceMembers": [],
+    "byteMismatches": [],
+    "allPackedDistMembersMatchCurrentWorkspace": true
+  },
+  "rootCheck": {
+    "invocation": "PORTLESS route held-wave2-check -> /Users/mini/.local/bin/mise exec -- pnpm check",
+    "numericExit": 0,
+    "durableWrapper": "not used; direct command stream only in tool results",
+    "capturedOutputLimit": "Tool output chunking truncated very large stream; do not treat missing tail as retained raw output. Captured results explicitly showed root benchmark suite 166/166, repository workflow suite 28/28, and all 16 headless Chromium targets passed.",
+    "rawLogFiles": null,
+    "portlessRoute": "held-wave2-check.localhost:1358 -> service port 4644"
+  },
+  "peerCheck": {
+    "receipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/downstream-peer-check/result.json",
+    "exit": 0,
+    "peerFloorCount": 8,
+    "peerNames": [
+      "@react-three/fiber",
+      "@tresjs/core",
+      "@typegpu/gl",
+      "@typegpu/three",
+      "react",
+      "three",
+      "typegpu",
+      "vue"
+    ],
+    "isolatedConsumerTests": 55,
+    "passed": 55,
+    "failed": 0,
+    "stderrSha256": "ea5870dea7c371072c46a3eccb86642c57d9ae4e95e5dfefdc41c3676d672511",
+    "observedVersions": {
+      "@react-three/fiber": "9.7.0",
+      "@tresjs/core": "5.8.3",
+      "@typegpu/gl": "0.12.4",
+      "@typegpu/three": "0.12.1",
+      "react": "19.0.0",
+      "three": "0.185.0",
+      "typegpu": "0.12.5",
+      "vue": "3.5"
+    }
+  },
+  "productionBuilds": {
+    "downstream-r3f-production-build": {
+      "receipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/downstream-r3f-production-build/result.json",
+      "exit": 0,
+      "stdoutSha256": "23d5e944f7bc23107e925155025e7405d147afe4b1e20d870ffffacef4dd436f"
+    },
+    "downstream-tres-production-build": {
+      "receipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/downstream-tres-production-build/result.json",
+      "exit": 0,
+      "stdoutSha256": "3c44ba06b3ec3624ee9a9341d4a3fbe6117d92bba491254388ab3fbfafb52bc7"
+    }
+  },
+  "packageSize": {
+    "receipt": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/downstream-production-package-size/result.json",
+    "exit": 0,
+    "entries": 32,
+    "allMeasured": true,
+    "output": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/combined-candidate/production-package-size.json"
+  },
+  "portlessProxy": {
+    "command": "/Users/mini/.local/bin/mise exec -- node <cached Portless CLI> proxy start --foreground --port 1358 --no-tls --skip-trust",
+    "pid": 89392,
+    "stateDir": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/portless-state",
+    "routesAtCompletion": [],
+    "listeningVerifiedByNodeBindProbe": true,
+    "port1355Untouched": true,
+    "keptRunningForNextStage": true
+  }
+}

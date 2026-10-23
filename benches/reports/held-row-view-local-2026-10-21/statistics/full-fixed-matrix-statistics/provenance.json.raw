@@ -1,0 +1,186 @@
+{
+  "schema": "full-fixed-matrix-statistics-provenance-v1",
+  "method": "Descriptive factual extraction only. For each exact identity and arm, invoke installed Labs 0.9.0 classify/median exports on saved eight block medians; raw samples are pooled for quantiles. No custom inference, threshold override, bootstrap, retry, or admission decision.",
+  "inputs": {
+    "main": {
+      "manifest.json": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data/manifest.json",
+        "sha256": "df99790bdfe7cb0083216d250715da8ec2cd4a916fbae31ffc24b85f051219dd"
+      },
+      "baseline.json": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data/baseline.json",
+        "sha256": "dddfd51f1aabe9b9830a8fe2a5188725bdc856f2fdacc3345d8282059ea7c1ea"
+      },
+      "candidate.json": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data/candidate.json",
+        "sha256": "69c6b80d2059ebe32909aa0a098e1e3a6c2a1e5e442d645c7f959b129c8db3d8"
+      },
+      "summary.md": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data/summary.md",
+        "sha256": "dfaca8992d2d266e15a5502db28549b848812b557bb0602b32a3197d3969f104"
+      },
+      "comparison.txt": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-data/comparison.txt",
+        "sha256": "60ac8b9042c3eca1636db8445308a565a9f1f681f4eb87052956b8b37115d4be"
+      },
+      "receipt": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-main-fixed-01/result.json",
+        "sha256": "ce794465e78ebb1953f64e38214f546282c388454792892872772546466d4a57"
+      }
+    },
+    "published": {
+      "manifest.json": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-published-fixed-data/manifest.json",
+        "sha256": "8ed48b7ce866dab6bf248d9c4ee1250031a47e69902d0f251f4c8634275eef0f"
+      },
+      "baseline.json": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-published-fixed-data/baseline.json",
+        "sha256": "9f585d52508dee7414978f2c3276272d42ff6c4b9d83a1557116b42def72372d"
+      },
+      "candidate.json": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-published-fixed-data/candidate.json",
+        "sha256": "69c6b80d2059ebe32909aa0a098e1e3a6c2a1e5e442d645c7f959b129c8db3d8"
+      },
+      "summary.md": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-published-fixed-data/summary.md",
+        "sha256": "1449cf1013e8a39e3110db36feeb1ffcb8f86e6d7c04df4006449044b8b7b3ec"
+      },
+      "comparison.txt": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-published-fixed-data/comparison.txt",
+        "sha256": "4022343af42b7c9ee8f1a11f4e7cad817daeff32c02984c4a9654659d55364cd"
+      },
+      "receipt": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-published-fixed-01/result.json",
+        "sha256": "46a64f9c7e4c1a34694afeb6bd332968c0f8e7f40169f72816d567e0fb27370d"
+      }
+    },
+    "priorE2": {
+      "manifest.json": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-prior-e2-fixed-data/manifest.json",
+        "sha256": "db609c2a0c4700f651072b78c3f622d2fa2866638f82f587f05f5e343a02cbde"
+      },
+      "baseline.json": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-prior-e2-fixed-data/baseline.json",
+        "sha256": "162e0942303f4b01dbd54d54f829106a54be6cd83db94a919a0cdf941a899524"
+      },
+      "candidate.json": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-prior-e2-fixed-data/candidate.json",
+        "sha256": "69c6b80d2059ebe32909aa0a098e1e3a6c2a1e5e442d645c7f959b129c8db3d8"
+      },
+      "summary.md": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-prior-e2-fixed-data/summary.md",
+        "sha256": "3dfeedde2b5f946bb63f2bb3411b0aca4aea326ff379afc49a7ab21dd50e08e7"
+      },
+      "comparison.txt": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-prior-e2-fixed-data/comparison.txt",
+        "sha256": "56b945bf8a23f56427cb25e6674446b6fc90a32d7a6548158f3501851aee39aa"
+      },
+      "receipt": {
+        "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/matrix-prior-e2-fixed-01/result.json",
+        "sha256": "65a8524ee4e162079303ce7d02c6f1e87ca249674c31558ef18eed4ed43fbf0f"
+      }
+    },
+    "main-fixed-facts/all145-quantiles.json": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/main-fixed-facts/all145-quantiles.json",
+      "sha256": "633c9fc730e0e6549214b9ff506cbbfd0179d7c07fad40a57a236ac51603a8e4"
+    },
+    "root-main-fixed-dense-descriptive.json": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/root-main-fixed-dense-descriptive.json",
+      "sha256": "3ba7ec4cc0e9291a345188eeaf0c93dca87aff78ea0fe725cc006666fc794ad4"
+    },
+    "root-published-fixed-dense-descriptive.json": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/root-published-fixed-dense-descriptive.json",
+      "sha256": "211241e8c857ea2eb2c62a21a12cf367dd36339ea06a0ae1d967ee786e1feb3e"
+    }
+  },
+  "software": {
+    "labsVersion": "0.9.0",
+    "statsModule": {
+      "installedPath": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@pmndrs+labs@0.9.0_patch_hash=1475111a563f675ba8de804b57a4a7500acad4f500771713dad8ad33b5be3002/node_modules/@pmndrs/labs/dist/stats-DyCSLnVh.mjs",
+      "sha256": "ddab0c388cd7e24851c504cbc8788e9e244f03adf6b3915ea8f4615f5bde2668",
+      "copiedPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/full-fixed-matrix-statistics/source/stats-DyCSLnVh.mjs",
+      "copiedSha256": "ddab0c388cd7e24851c504cbc8788e9e244f03adf6b3915ea8f4615f5bde2668",
+      "exports": {
+        "classify": "n",
+        "median": "i"
+      }
+    },
+    "formulaModule": {
+      "installedPath": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@pmndrs+labs@0.9.0_patch_hash=1475111a563f675ba8de804b57a4a7500acad4f500771713dad8ad33b5be3002/node_modules/@pmndrs/labs/dist/cli/cli.mjs",
+      "sha256": "6385fc4a9511b3d68d9e9cf1f9eb1e897125bfdfd0bdb4d6c6e1177efb8fffd4",
+      "copiedPath": "/Volumes/Depot/Developer/glyph/.cache/held-row-view-20261021/evidence/full-fixed-matrix-statistics/source/cli.mjs",
+      "copiedSha256": "6385fc4a9511b3d68d9e9cf1f9eb1e897125bfdfd0bdb4d6c6e1177efb8fffd4",
+      "driftFormula": "(max(runFreq,postFreq)-min(runFreq,postFreq))/((max+min)/2)"
+    }
+  },
+  "identityCounts": {
+    "main": {
+      "baseline": 145,
+      "candidate": 145,
+      "exactPairs": 145,
+      "printedVerifiedEligible": 144,
+      "clockExcluded": 1
+    },
+    "published": {
+      "baseline": 143,
+      "candidate": 145,
+      "exactPairs": 143,
+      "candidateOnlyUnsupported": 2,
+      "baselineOnly": 0,
+      "printedVerified": 143
+    },
+    "priorE2": {
+      "baseline": 145,
+      "candidate": 145,
+      "exactPairs": 145,
+      "printedVerified": 145
+    },
+    "allExactIdentityKeysCollisionFree": true
+  },
+  "printedVerification": {
+    "eligibleMain": 144,
+    "eligiblePublished": 143,
+    "eligiblePriorE2": 145,
+    "mismatches": 0,
+    "fields": [
+      "verdict",
+      "actual printed p",
+      "actual printed relative CI"
+    ],
+    "mainClockExcludedSeparately": true
+  },
+  "scope": {
+    "noBuildTestBenchmarkProfileServerGitOrSourceMutation": true,
+    "noBootstrapOrNewInferenceAlgorithm": true,
+    "nominalRawClassificationsUseStockDefaultsOnly": true,
+    "clockConfoundedMainRowDiagnosticOnly": true,
+    "unsupportedPublishedOutlinesNotPassOrFail": true,
+    "noAdmissionOrCausalProof": true
+  },
+  "outputs": {
+    "all-identities.json": {
+      "sha256": "4ad803203b9fe1ba0b372393f1e545a72e9960c822d9b463a03b8fdc2b0c21f5",
+      "bytes": 1151146
+    },
+    "all-identities.csv": {
+      "sha256": "329473eeea7d138d97cfa6237d427cbfccc2dfc0e23d1210cd80ed953341f4bf",
+      "bytes": 353168
+    },
+    "factual-three-arm-handoff.md": {
+      "sha256": "ca25969bcbd6750bb66394cb4b8934b7d6d77770982ddc4f9a6dac50f52fb821",
+      "bytes": 5324
+    },
+    "collector.mjs": {
+      "sha256": "10fd51e7a68dd64bfb9bb196e2b0041cbbe5151e6aa08f59668367489ef504ef",
+      "bytes": 9067
+    },
+    "source/stats-DyCSLnVh.mjs": {
+      "sha256": "ddab0c388cd7e24851c504cbc8788e9e244f03adf6b3915ea8f4615f5bde2668",
+      "bytes": 10294
+    },
+    "source/cli.mjs": {
+      "sha256": "6385fc4a9511b3d68d9e9cf1f9eb1e897125bfdfd0bdb4d6c6e1177efb8fffd4",
+      "bytes": 56842
+    }
+  }
+}

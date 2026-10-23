@@ -489,6 +489,8 @@ impl ClusterArena {
         self.rebuild_layout_runs_for_shaping(runs)?;
         self.apply_break_flags(unicode)?;
         self.refresh_layout_units()?;
+        #[cfg(test)]
+        super::work_attribution::record(|work| work.cluster_full_builds += 1);
         Ok(())
     }
 
@@ -560,7 +562,7 @@ impl ClusterArena {
         {
             return Ok(None);
         }
-        self.copy_from(previous)?;
+        self.copy_from(previous, false)?;
         self.ltr = all_ltr(runs);
         for cluster in cluster_start..cluster_end {
             let start = self.starts[cluster];
@@ -612,6 +614,10 @@ impl ClusterArena {
                 )
                 .ok_or(EngineError::InvalidRequest)?;
             for glyph in glyph_start..glyph_end {
+                #[cfg(test)]
+                super::work_attribution::record(|work| {
+                    work.cluster_retained_glyph_loop_visits += 1
+                });
                 let cluster = self.cluster_at(shape.clusters[glyph])?;
                 if cluster < cluster_start || cluster >= cluster_end {
                     return Err(EngineError::InvalidRequest);
@@ -674,6 +680,10 @@ impl ClusterArena {
                 )
                 .ok_or(EngineError::InvalidRequest)?;
             for glyph in glyph_start..glyph_end {
+                #[cfg(test)]
+                super::work_attribution::record(|work| {
+                    work.cluster_retained_glyph_loop_visits += 1
+                });
                 let cluster = self.cluster_at(shape.clusters[glyph])?;
                 let ordinal = usize::try_from(self.glyph_counts[cluster])
                     .map_err(|_| EngineError::InvalidRequest)?;
@@ -979,7 +989,7 @@ impl ClusterArena {
         }
     }
 
-    fn copy_from(&mut self, source: &Self) -> Result<(), EngineError> {
+    fn copy_from(&mut self, source: &Self, preserve_layout: bool) -> Result<(), EngineError> {
         self.clear();
         self.reserve(source.starts.len())?;
         reserve(&mut self.glyph_ids, source.glyph_ids.len())?;
@@ -1018,37 +1028,73 @@ impl ClusterArena {
         copy_lane!(shaped);
         copy_lane!(unsafe_before);
         copy_lane!(break_corrections);
+        if preserve_layout {
+            copy_lane!(advance_units);
+            reserve(
+                &mut self.chunk_advance_sums,
+                source.chunk_advance_sums.len(),
+            )?;
+            reserve(
+                &mut self.chunk_auxiliary_sums,
+                source.chunk_auxiliary_sums.len(),
+            )?;
+            reserve(&mut self.chunk_flags_or, source.chunk_flags_or.len())?;
+            reserve(&mut self.word_breaks, source.word_breaks.len())?;
+            copy_lane!(chunk_advance_sums);
+            copy_lane!(chunk_auxiliary_sums);
+            copy_lane!(chunk_flags_or);
+            copy_lane!(word_breaks);
+            copy_lane!(placement_segment_anchors);
+            self.word_sidecar_mode = source.word_sidecar_mode;
+            let source_islands = source
+                .islands
+                .try_borrow()
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let islands = self.islands.get_mut();
+            for (target, previous) in [
+                (&mut islands.shape, &source_islands.shape),
+                (&mut islands.once, &source_islands.once),
+            ] {
+                for index in 0..previous.runs.len() {
+                    target.append_from(previous, index)?;
+                }
+            }
+            reserve(&mut islands.slots, source_islands.slots.len())?;
+            islands.slots.extend_from_slice(&source_islands.slots);
+        }
         self.ltr = source.ltr;
         self.layout_runs.reserve(source.layout_runs.runs.len())?;
         self.layout_runs
             .runs
             .extend_from_slice(&source.layout_runs.runs);
+        #[cfg(test)]
+        super::work_attribution::record(|work| work.cluster_copied_old_rows += source.starts.len());
         Ok(())
     }
 
-    /// Metric-only restyle over a retained shape: copies the previous arena and
-    /// re-derives the advance lanes from the adjacency stream under the CURRENT
-    /// styles — no topology walk, no scatter, no registry resolution, and the
-    /// stable glyph identities carry over verbatim. The aggregation replays the
-    /// full build exactly: same accumulation order (adjacency order preserves
-    /// per-cluster shaping order), same expressions, so the result is
-    /// bit-identical to a cold build under the new styles. Returns `Ok(None)`
-    /// when the previous arena cannot prove the styles still align, and the
-    /// caller falls back to the full build.
-    pub(crate) fn refresh_scales_from_stream(
+    /// Remaps retained clusters to current styles. Metric dirt also re-derives
+    /// advances in shaping order; mapping-only dirt preserves line corrections.
+    /// Uncovered clusters fall back to the existing full build.
+    pub(crate) fn refresh_styles_from_stream(
         &mut self,
         previous: &Self,
         styles: &[StyleSegment],
+        metrics_changed: bool,
     ) -> Result<Option<()>, EngineError> {
-        self.copy_from(previous)?;
+        self.copy_from(previous, !metrics_changed)?;
         let stream_len = self.glyph_ids.len();
         if self.glyph_x_advances.len() != stream_len {
             self.clear();
             return Ok(None);
         }
+        let mut style_index = 0;
         for cluster in 0..self.starts.len() {
-            let style_index = usize::try_from(self.style_indexes[cluster])
-                .map_err(|_| EngineError::InvalidRequest)?;
+            while styles
+                .get(style_index)
+                .is_some_and(|segment| segment.text_end <= self.starts[cluster])
+            {
+                style_index += 1;
+            }
             let Some(segment) = styles.get(style_index) else {
                 self.clear();
                 return Ok(None);
@@ -1056,6 +1102,11 @@ impl ClusterArena {
             if segment.text_start > self.starts[cluster] || segment.text_end < self.ends[cluster] {
                 self.clear();
                 return Ok(None);
+            }
+            self.style_indexes[cluster] =
+                u32::try_from(style_index).map_err(|_| EngineError::ResultTooLarge)?;
+            if !metrics_changed {
+                continue;
             }
             let flags = self.flags[cluster];
             let word_spacing = if flags & CLUSTER_SPACE != 0 {
@@ -1093,8 +1144,10 @@ impl ClusterArena {
             }
             self.advances[cluster] = advance;
         }
-        self.reset_break_corrections(0, self.starts.len());
-        self.refresh_layout_units()?;
+        if metrics_changed {
+            self.reset_break_corrections(0, self.starts.len());
+            self.refresh_layout_units()?;
+        }
         Ok(Some(()))
     }
 
@@ -1365,15 +1418,6 @@ impl ClusterArena {
         if run_end <= cluster {
             return Err(EngineError::InvalidRequest);
         }
-        let mut segment_end = cluster + 1;
-        while segment_end < run_end
-            && self.placement_segment_anchors[segment_end] == placement.segment_anchor
-            && (!stop_after_space || self.flags[segment_end - 1] & CLUSTER_SPACE == 0)
-        {
-            #[cfg(test)]
-            super::work_attribution::record(|work| work.placement_segment_validation_visits += 1);
-            segment_end += 1;
-        }
         let run_start =
             usize::try_from(run.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
         let block_lane_start = usize::try_from(run.numeric_blocks.cluster_start)
@@ -1387,7 +1431,9 @@ impl ClusterArena {
             .get(block_lane)
             .ok_or(EngineError::InvalidRequest)?;
         let mut block_end = cluster + 1;
-        while block_end < segment_end
+        while block_end < run_end
+            && self.placement_segment_anchors[block_end] == placement.segment_anchor
+            && (!stop_after_space || self.flags[block_end - 1] & CLUSTER_SPACE == 0)
             && self
                 .run_local
                 .cluster_blocks()
@@ -1648,6 +1694,8 @@ impl ClusterArena {
                 )
                 .ok_or(EngineError::InvalidRequest)?;
             for glyph in start..end {
+                #[cfg(test)]
+                super::work_attribution::record(|work| work.cluster_full_glyph_visits += 1);
                 let cluster = *shape
                     .clusters
                     .get(glyph)
@@ -1939,6 +1987,8 @@ fn append_run_local_cluster(
         .ok_or(EngineError::InvalidRequest)?;
     writer.begin_cluster().map_err(run_local_error)?;
     for glyph in start..end {
+        #[cfg(test)]
+        super::work_attribution::record(|work| work.run_local_glyph_visits += 1);
         let glyph_id = u32::from(clusters.glyph_ids[glyph]);
         writer
             .push_glyph(RunLocalGlyphInput {
@@ -3694,7 +3744,7 @@ mod tests {
             slot.set(Some(marker));
         }
         let mut copy = ClusterArena::default();
-        copy.copy_from(&previous).unwrap();
+        copy.copy_from(&previous, false).unwrap();
         assert!(
             copy.break_corrections
                 .iter()
@@ -3725,7 +3775,7 @@ mod tests {
 
         let mut restyled = ClusterArena::default();
         restyled
-            .refresh_scales_from_stream(&previous, &styles)
+            .refresh_styles_from_stream(&previous, &styles, true)
             .unwrap()
             .unwrap();
         assert!(
@@ -4002,10 +4052,10 @@ mod tests {
             arena
         };
         let previous = build(old_style);
-        let cold = build(new_style);
+        let mut cold = build(new_style);
         let mut refreshed = ClusterArena::default();
         refreshed
-            .refresh_scales_from_stream(&previous, &segment(new_style))
+            .refresh_styles_from_stream(&previous, &segment(new_style), true)
             .unwrap()
             .unwrap();
         macro_rules! assert_lane {
@@ -4040,17 +4090,47 @@ mod tests {
         assert_lane!(index_at);
         assert_lane!(shaped);
         assert_lane!(unsafe_before);
+        for arena in [&mut cold, &mut refreshed] {
+            arena.ensure_word_breaks().unwrap();
+            arena.ensure_placement_segment_anchors().unwrap();
+            arena
+                .rebuild_run_local_geometry(&run(new_style), &segment(new_style), |_, _| None)
+                .unwrap();
+        }
+        for (cold_run, refreshed_run) in cold.layout_runs().iter().zip(refreshed.layout_runs()) {
+            for cluster in cold_run.cluster_start as usize..cold_run.cluster_end as usize {
+                for stop_after_space in [false, true] {
+                    assert_eq!(
+                        refreshed.placement_segment_monotone(
+                            *refreshed_run,
+                            0,
+                            cluster,
+                            stop_after_space,
+                            text.len(),
+                        ),
+                        cold.placement_segment_monotone(
+                            *cold_run,
+                            0,
+                            cluster,
+                            stop_after_space,
+                            text.len(),
+                        ),
+                    );
+                }
+            }
+        }
         // The refresh must refuse styles that no longer cover the clusters.
         let mut misaligned = ClusterArena::default();
         assert!(
             misaligned
-                .refresh_scales_from_stream(
+                .refresh_styles_from_stream(
                     &previous,
                     &[StyleSegment {
                         text_start: 0,
                         text_end: 2,
                         style: new_style,
                     }],
+                    true,
                 )
                 .unwrap()
                 .is_none()
@@ -4235,6 +4315,79 @@ mod tests {
         assert_eq!(dense.word_breaks.capacity(), 0);
         assert_eq!(dense.word_sidecar_mode, WordSidecarMode::Dense);
         assert!(dense.chunk_flags_or[0] & CHUNK_NEGATIVE_ADVANCE != 0);
+    }
+
+    #[test]
+    fn placement_segments_stop_at_the_first_boundary_with_linear_work() {
+        let count = LAYOUT_CHUNK * 64;
+        let text = vec![b'a' as u16; count];
+        let stable_ids = (1..=u32::try_from(count).unwrap()).collect::<Vec<_>>();
+        let mut fixture = canonical_fixture(
+            &text,
+            &stable_ids,
+            &vec![0; count],
+            ResolvedStyle::test_typography(10.0, 0.0, 0.0),
+        );
+        fixture
+            .arena
+            .flags
+            .fill(CLUSTER_ALLOWED_BREAK | CLUSTER_SAFE_BEFORE);
+        fixture.arena.refresh_layout_units().unwrap();
+        fixture.arena.ensure_word_breaks().unwrap();
+        fixture.arena.ensure_placement_segment_anchors().unwrap();
+        fixture
+            .arena
+            .rebuild_run_local_geometry(&fixture.shaping_runs, &fixture.styles, |_, _| None)
+            .unwrap();
+        let run = fixture.arena.layout_runs()[0];
+        assert_eq!(run.numeric_blocks.count as usize, count / LAYOUT_CHUNK);
+        super::super::work_attribution::reset();
+        for start in (0..count).step_by(LAYOUT_CHUNK) {
+            let (_, end) = fixture
+                .arena
+                .placement_segment_monotone(run, 0, start, false, count)
+                .unwrap();
+            assert_eq!(end, start + LAYOUT_CHUNK);
+        }
+        assert!(
+            super::super::work_attribution::snapshot().placement_segment_validation_visits <= count,
+            "numeric blocks must not rescan the remaining dense run",
+        );
+        fixture.arena.flags[7] |= CLUSTER_SPACE;
+        fixture.arena.placement_segment_anchors[12..].fill(13);
+        for (start, stop_after_space, limit, expected_end) in [
+            (0, false, count, 12),
+            (0, true, count, 8),
+            (0, false, 6, 6),
+            (12, false, count, LAYOUT_CHUNK),
+            (LAYOUT_CHUNK, false, count, LAYOUT_CHUNK * 2),
+        ] {
+            assert_eq!(
+                fixture
+                    .arena
+                    .placement_segment_monotone(run, 0, start, stop_after_space, limit)
+                    .unwrap()
+                    .1,
+                expected_end,
+            );
+        }
+        assert_eq!(
+            fixture
+                .arena
+                .placement_segment_monotone(run, 1, 12, false, count)
+                .unwrap()
+                .1,
+            13,
+        );
+        fixture.arena.flags[12] |= CLUSTER_HARD_BREAK;
+        assert_eq!(
+            fixture
+                .arena
+                .placement_segment_monotone(run, 0, 12, false, count)
+                .unwrap()
+                .1,
+            13,
+        );
     }
 
     #[test]

@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "mise",
+    "exec",
+    "--",
+    "./benches/node_modules/.bin/tsx",
+    "-e",
+    "import { packageLabsHarnessDigest } from './benches/scripts/support/saved-package-labs.mts'; console.log(packageLabsHarnessDigest());"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-22T20:53:38.849557+00:00",
+  "finished": "2026-10-22T20:53:39.240394+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "caf13a3d35a1ca07f201651ff240dcbbe580cbade1b18a69d23842edc5af1f42",
+    "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

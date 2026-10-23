@@ -9,6 +9,8 @@
 use super::EngineError;
 use alloc::vec::Vec;
 
+const PERMUTATION_VISITED: u32 = 1 << 31;
+
 /// The one keyed-sort instantiation: `(key, source index)` pairs in ascending order.
 /// The index tiebreak makes the result independent of the sort algorithm.
 pub(crate) fn sort_pairs(pairs: &mut [(u64, u32)]) {
@@ -54,7 +56,8 @@ pub(crate) fn sort_f64_total(values: &mut [f64]) {
 
 /// Clears `pairs` and reserves capacity for `len` entries, rejecting oversize requests.
 pub(crate) fn prepare_pairs(pairs: &mut Vec<(u64, u32)>, len: usize) -> Result<(), EngineError> {
-    if u32::try_from(len).is_err() {
+    // Count 2^31 is valid: its greatest source index is 2^31 - 1.
+    if len > PERMUTATION_VISITED as usize {
         return Err(EngineError::ResultTooLarge);
     }
     pairs.clear();
@@ -71,15 +74,14 @@ pub(crate) fn prepare_pairs(pairs: &mut Vec<(u64, u32)>, len: usize) -> Result<(
 /// records, which `debug_assert` re-checks.
 pub(crate) fn apply_pair_order<T>(records: &mut [T], pairs: &mut [(u64, u32)]) {
     debug_assert_eq!(records.len(), pairs.len());
-    const VISITED: u32 = 1 << 31;
     for start in 0..pairs.len() {
-        if pairs[start].1 & VISITED != 0 {
+        if pairs[start].1 & PERMUTATION_VISITED != 0 {
             continue;
         }
         let mut destination = start;
         loop {
             let source = pairs[destination].1 as usize;
-            pairs[destination].1 |= VISITED;
+            pairs[destination].1 |= PERMUTATION_VISITED;
             if source == start {
                 break;
             }
@@ -88,7 +90,7 @@ pub(crate) fn apply_pair_order<T>(records: &mut [T], pairs: &mut [(u64, u32)]) {
         }
     }
     for pair in pairs.iter_mut() {
-        pair.1 &= !VISITED;
+        pair.1 &= !PERMUTATION_VISITED;
     }
 }
 
@@ -149,5 +151,15 @@ mod tests {
             pairs.iter().map(|pair| pair.1).collect::<Vec<_>>(),
             vec![1, 3, 2, 0]
         );
+    }
+
+    #[test]
+    fn prepare_pairs_rejects_visited_bit_index_without_clearing_scratch() {
+        let mut pairs = vec![(7, 3)];
+        assert!(matches!(
+            prepare_pairs(&mut pairs, (1usize << 31) + 1),
+            Err(EngineError::ResultTooLarge)
+        ));
+        assert_eq!(pairs, [(7, 3)]);
     }
 }

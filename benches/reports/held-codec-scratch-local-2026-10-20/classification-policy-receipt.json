@@ -1,0 +1,24 @@
+{
+  "recordedUtc": "2026-10-20T17:49:02.257766+00:00",
+  "policy": "Installed Labs0.9.0 classify uses exact Mann-Whitney U on independent block medians: p<=alpha(.05) and abs(Hodges-Lehmann delta)>=minDelta(.05). Both retained comparison headers confirm alpha=.05/minDelta=5%.",
+  "p50Distinction": "Reported p50 delta is a median ratio, not the Hodges-Lehmann estimator, so a 4.6% p50 row can still classify slower. Preserve actual p/CI/status and absolute values; do not force p50 into a 5% gate.",
+  "userPolicy": "The user imposes no former1ms/5% admission floor. Full-row values and uncertainty remain visible, including Labs-neutral values; neutral does not establish parity or zero effect. No capture or library/harness policy changed.",
+  "inputs": {
+    "installedStats": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@pmndrs+labs@0.9.0/node_modules/@pmndrs/labs/dist/stats-DyCSLnVh.mjs",
+      "sha256": "ddab0c388cd7e24851c504cbc8788e9e244f03adf6b3915ea8f4615f5bde2668"
+    },
+    "installedCli": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/node_modules/.pnpm/@pmndrs+labs@0.9.0/node_modules/@pmndrs/labs/dist/cli/cli.mjs",
+      "sha256": "a0d903a53acdcd3cc25614e4d1b3f3afce672becbe74c07555b5f1c2a144d995"
+    },
+    "mainComparison": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/matrix-main-data/comparison.txt",
+      "sha256": "3472dd488377f5dbb32d062927cee08bf6afd83d5736efed931faaaf696ffef2"
+    },
+    "publishedComparison": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/matrix-published-data/comparison.txt",
+      "sha256": "4dd013832a3fc6b12179e1505114d434f36b2e6b5b4967d5224ffaa2b08a2efd"
+    }
+  }
+}

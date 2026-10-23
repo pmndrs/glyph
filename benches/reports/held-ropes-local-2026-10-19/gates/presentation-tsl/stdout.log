@@ -1,0 +1,30 @@
+presentation-probe-case sequential workloads / tsl: webgpu / bitmap
+presentation-shaper-artifact 244078b186e9de0414331ff9de2632c8a57c4ec20f19b6e0a41ce964f8e1b30a
+presentation-workload-settled dynamic-layout draws=1 glyphs=387
+presentation-workload-visible dynamic-layout 28913 draws=1 glyphs=387
+presentation-workloads-ready {"backend":"webgpu","workloads":1,"rendererCount":1,"shaders":"tsl","technique":"bitmap"}
+presentation-probe-case sequential workloads / tsl: webgpu / mtsdf
+presentation-shaper-artifact 244078b186e9de0414331ff9de2632c8a57c4ec20f19b6e0a41ce964f8e1b30a
+presentation-workload-settled dynamic-layout draws=1 glyphs=387
+presentation-workload-visible dynamic-layout 28840 draws=1 glyphs=387
+presentation-workloads-ready {"backend":"webgpu","workloads":1,"rendererCount":1,"shaders":"tsl","technique":"mtsdf"}
+presentation-probe-case sequential workloads / tsl: webgpu / slug
+presentation-shaper-artifact 244078b186e9de0414331ff9de2632c8a57c4ec20f19b6e0a41ce964f8e1b30a
+presentation-workload-settled dynamic-layout draws=1 glyphs=387
+presentation-workload-visible dynamic-layout 28771 draws=1 glyphs=387
+presentation-workloads-ready {"backend":"webgpu","workloads":1,"rendererCount":1,"shaders":"tsl","technique":"slug"}
+presentation-probe-case sequential workloads / tsl: webgl2 / bitmap
+presentation-shaper-artifact 244078b186e9de0414331ff9de2632c8a57c4ec20f19b6e0a41ce964f8e1b30a
+presentation-workload-settled dynamic-layout draws=1 glyphs=387
+presentation-workload-visible dynamic-layout 28913 draws=1 glyphs=387
+presentation-workloads-ready {"backend":"webgl2","workloads":1,"rendererCount":1,"shaders":"tsl","technique":"bitmap"}
+presentation-probe-case sequential workloads / tsl: webgl2 / mtsdf
+presentation-shaper-artifact 244078b186e9de0414331ff9de2632c8a57c4ec20f19b6e0a41ce964f8e1b30a
+presentation-workload-settled dynamic-layout draws=1 glyphs=387
+presentation-workload-visible dynamic-layout 28823 draws=1 glyphs=387
+presentation-workloads-ready {"backend":"webgl2","workloads":1,"rendererCount":1,"shaders":"tsl","technique":"mtsdf"}
+presentation-probe-case sequential workloads / tsl: webgl2 / slug
+presentation-shaper-artifact 244078b186e9de0414331ff9de2632c8a57c4ec20f19b6e0a41ce964f8e1b30a
+presentation-workload-settled dynamic-layout draws=1 glyphs=387
+presentation-workload-visible dynamic-layout 28752 draws=1 glyphs=387
+presentation-workloads-ready {"backend":"webgl2","workloads":1,"rendererCount":1,"shaders":"tsl","technique":"slug"}

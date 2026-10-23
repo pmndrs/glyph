@@ -1,0 +1,54 @@
+{
+  "e6": {
+    "rawSha256": "94e49c4948c02f5d147a85b1a2476be6435529665fc6c4ed8e0f2e48f3a9bc3f",
+    "exclusiveMicroseconds": {
+      "setter_preparation": 971919,
+      "publication": 473583
+    },
+    "elapsedMs": {
+      "mean": 18.710585974999987,
+      "p50": 15.839582999999948,
+      "p95": 25.116499999999633
+    },
+    "intervalsOver5ms": 5
+  },
+  "v3": {
+    "rawSha256": "b0cc35db76cdc386b2e69ffbce2a9c2616e9b9a1763fe996755628d027561278",
+    "exclusiveMicroseconds": {
+      "setter_preparation": 1027254,
+      "publication": 434664
+    },
+    "elapsedMs": {
+      "mean": 19.040966200000014,
+      "p50": 15.885499999999979,
+      "p95": 45.3771670000001
+    },
+    "intervalsOver5ms": 8
+  },
+  "e4": {
+    "rawSha256": "ccfe818dd0bb3af7481a266633f733f6fb5ef1c8279e326d75b97a70c75d3021",
+    "exclusiveMicroseconds": {
+      "setter_preparation": 1611539,
+      "publication": 1059796
+    },
+    "elapsedMs": {
+      "mean": 34.51502806250001,
+      "p50": 15.446249999999964,
+      "p95": 150.91891699999996
+    },
+    "intervalsOver5ms": 43
+  },
+  "main": {
+    "rawSha256": "08b90a13400490c9cd3136cce05f6d84ec6f884f1ef22e6e992f90d445d7b623",
+    "exclusiveMicroseconds": {
+      "setter_preparation": 89338,
+      "publication": 906288
+    },
+    "elapsedMs": {
+      "mean": 13.124660287499989,
+      "p50": 12.74558300000001,
+      "p95": 15.094707999999855
+    },
+    "intervalsOver5ms": 1
+  }
+}

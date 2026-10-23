@@ -1,0 +1,14 @@
+{
+  "result": "renderer-recovery-pass",
+  "identityScope": "authenticated archive SHA-256; installed dist JavaScript and Wasm members only",
+  "count": 1024,
+  "initialDecodeCount": 1,
+  "rejectedDecodeCount": 2,
+  "finalDecodeCount": 3,
+  "preparedGlyphCount": 10,
+  "acceptedHostSha256": "5ac654bca4d133c2775edf95642267f6b1c700bed66f9270a7465e114ef4c323",
+  "recoveredHostSha256": "787799dff98de97b1ec794b29681fcf2752821d9f030be3a5ad928608508988e",
+  "archiveSha256": "d2f7a01ffb47aeaf87499979310286f1c980b88389e20bd1fc0f39794a0fc18c",
+  "installedDistMemberCount": 242,
+  "allInstalledDistMembersWereArchiveAuthenticated": true
+}

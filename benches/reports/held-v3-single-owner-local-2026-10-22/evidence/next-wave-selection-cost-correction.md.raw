@@ -1,0 +1,7 @@
+# Source-cost correction to the bounded V3 selection
+
+The archived selection report correctly limits V3 to owner-range bookkeeping, but its O(N + G) shorthand omits owner lookup cost. At frozen product dec7509b, `PlannerState::paragraph` in engine/state.rs:2946 uses `binary_search_by_key` over P paragraph records. `planner_gather_owners` at line 2711 calls it once per yielded owner. The existing retained stream clones that iterator for `OwnerRanges` while the callback retains another owner iterator.
+
+The archived V3 admission helper also calls `paragraph(id)` once for each of N dirty owners. Its N-iteration admission pass is therefore O(N log P), not O(N) total time. V3 removes the range iterator's owner lookup/dispatch pass but adds the admission lookup/check pass; it does not establish a net N-lookup deletion. Both variants retain O(N log P + G) owner/source-row work before their shared rope traversal, binding and Codec costs. The experiment measures whether the deleted range machinery exceeds the added admission work; there is still no latency or parity-sized promise.
+
+This is a read-only source correction, not a new algorithm or permission to alter the whole-V3 counterfactual. Preserve the original selection report unchanged. The four complete callbacks and selection rules remain as recorded there.

@@ -73,10 +73,32 @@ sources:
     title: Text-shaper ABI descriptor owner
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-10T14:08:06.896Z'
+  at: '2026-10-13T21:17:14Z'
 ---
 
 # Retained Rust preparation for text assignment
+
+## Authoritative preparation/publication contract — 12 October 2026
+
+The accepted [retained preparation/publication decision](decisions/retained-prepare-publish.md) governs this plan.
+Bound `set()` prepares changed layout once in Rust; queries read that prepared revision; `split()` independently
+materializes it; publication consumes accumulated dirty owners/ranges and performs renderer work. Publication does
+not repeat semantic preparation. Preserve the public API, batching, synchronous reads, and immutable in-flight data.
+The [compact tracker](publication-frontier.md) is the task list. Dated diagnostic sections below retain historical
+evidence; any earlier requirement for speculative query transactions, rollback, or repeat layout is superseded.
+
+## Synchronous state and frame ownership
+
+The renderer/backend owns immutable storage for any frame still in flight. Synchronous shaping has one active Rust state;
+it can reuse prior text and rope data in place when that avoids work. Async preparation is out of scope and will require
+an explicit copy-on-send or immutable ownership boundary.
+
+Validate the complete caller-authored mutation batch before its first Rust state write, then make accepted-state and
+publication commits infallible. If an unexpected internal failure remains possible after writes begin, throw at that
+synchronous call and invalidate the derived Rust state; the next explicit operation must rebuild from TypeScript's
+accepted authored state through the same executor. Do not restore through undo journals, retry implicitly, or submit
+stale output as fallback. The Wasm/TypeScript invalidation and same-executor rebuild path is implemented and has focused
+real-font recovery coverage; the complete post-write failure audit and current exact-artifact Labs gate remain open.
 
 ## Settled public contract
 
@@ -89,8 +111,10 @@ optimization flags and dependencies for control and candidate. Record raw and gz
 JavaScript bundle bytes, and the relevant package-size report; package archives alone are not a binary-size oracle.
 Compare each slice with its immediate control and the cumulative candidate with main and the release baseline.
 
-The target is no cumulative binary growth, preferably a reduction. Any increase remains an unresolved gate until its
-cause is attributed and either removed or explicitly accepted with measured benefit. Tests and documentation are
+The target is Rust program shrinkage through simpler shared systems, not more orchestration around retained parts.
+Treat any production source or Wasm growth as a structural smell: inspect duplicate state, cross-boundary glue, repeated
+work and monomorphic/codegen expansion. Any increase remains an unresolved gate until its cause is attributed and
+either removed or explicitly accepted with measured benefit. Tests and documentation are
 reported separately from production line additions/deletions. A smaller source diff does not prove a smaller binary.
 Inspect codegen or retained symbols when an unexpected binary increase persists; do not introduce size-analysis
 instrumentation into the shipped artifact or remove validation merely to shrink it.
@@ -100,9 +124,22 @@ byte deltas, benchmark absolute deltas, correctness/review results and remaining
 vectors, caches, compatibility branches and executors in the same coherent change when their replacement is proven.
 No permanent duplicate implementation is an acceptable shortcut to the size target.
 
-Current evidence checkpoint: the control is frozen; spike source and tests await execution and final review.
-There is no candidate binary-size or performance verdict yet. The parent owns validation/build/Labs and this plan;
-the implementation agent owns spike source; the reviewer owns read-only correctness review. Serialize heavy work.
+After correctness/performance stabilization, the [compact tracker](publication-frontier.md) requires at least six fresh
+native Sol High reduction runs, each with a bounded subsystem and deletion/consolidation goal, followed by cumulative
+validation. Parent review precedes acceptance; no stale advisor reuse or cosmetic churn counts as a reduction pass.
+
+Current slice: TypeScript span alignment and its identity-provenance path are retired; Rust resolves retained authored
+ranges from the same grapheme grid used for shaping. The change removes 514 lines and adds 389 across source, tests, and
+docs. The full Rust shaper suite passed (402 tests), the full Node suite passed (1,010 tests), focused regression tests,
+static checks, package and app builds passed, and the OKF bundle and frozen lockfile validate.
+
+The focused packed-package `spans` comparison found one workload faster: mutating a trailing span across 1,000 formatted
+labels fell from 73.41 ms to 61.61 ms (-11.80 ms, -16.1%, p < .001, 95% CI -16.5% to -14.1%). Each side used eight fresh
+runs; clock readings were stable, with median spread below 1%. This is one adapter workload, not a full Labs verdict or
+frame-time result. The current package-size snapshot records 1,577,970 raw / 589,891 gzip / 460,392 Brotli bytes for the
+shaper Wasm, 351,117 raw / 85,584 gzip bytes for core JS, and 555,114 raw / 136,050 gzip bytes for Three JS. An exact
+immediate-control Wasm-size delta remains unverified: the LFS checkout could not be built in this environment because
+`git-lfs` is unavailable. Treat that binary-size comparison as an open gate before accepting the cumulative stack.
 
 `Text.set()` and property assignment remain the authoring API. When a `Text` already has a runtime binding, assignment
 synchronously validates, encodes, shapes, and lays out the new desired value in Rust before the assignment returns.
@@ -111,10 +148,10 @@ and never initiate a second semantic preparation. A later `glyph.shape()` publis
 same prepared revision.
 
 There is no public edit table, `prepare()` method, result union, nullable pending answer, or frame wait. Every boundary
-answers or throws where it is written. A setter rejection leaves both the JavaScript desired value and the last valid
-Rust preparation unchanged. A renderer rejection leaves the last accepted renderer objects unchanged while the valid
-Rust preparation remains readable and retryable. Input/preparation revision is separate from renderer-plan revision,
-publication generation, and renderer acknowledgement.
+answers or throws where it is written. A failed candidate does not become live; the error is reported at its originating
+call, with no restore-and-retry or stale-frame fallback. The currently rendering frame remains immutable until its
+normal lifetime ends. Input/preparation revision is separate from renderer-plan revision, publication generation, and
+renderer acknowledgement.
 
 After a root stages a renderer publication, that encoded request owns its retained transport arena until adopt or
 discard consumes it. A setter, order change, creation, or disposal attempted from a later root's synchronous preparation
@@ -145,11 +182,12 @@ This is the required lifetime contract, traced against source at `d144f1bf`. It 
 implements every transition: the failed gates below show that it does not. Use the existing owners and transactions to
 enforce these transitions; do not add a second lifetime coordinator alongside them.
 
-Paragraph membership, semantic preparation revision, and renderer acceptance are independent facts. A new assignment
-can advance preparation while the renderer still owns the previous accepted frame. A renderer rejection does not roll
-valid preparation back. `#commitDesiredState()` currently runs in `adopt()`, before the renderer answers in `consume()`;
-its `committed` field therefore must not be treated as proof of renderer acceptance. Acceptance is recorded later by
-`settle()`/`#accept()`.
+Paragraph membership, semantic preparation revision, and renderer ownership are independent facts. A new assignment can
+advance preparation while a draw still uses the previous frame. That frame's backing memory cannot be mutated by
+preparation. A failed next-frame candidate throws; it is not restored, retried, or rendered as a fallback.
+`#commitDesiredState()` currently runs in `adopt()`, before the renderer answers in `consume()`; its `committed` field
+therefore must not be treated as proof that a candidate is ready for rendering. Ownership transfers only after complete
+preparation reaches its publication boundary.
 
 ### Paragraph membership and removal
 
@@ -159,7 +197,7 @@ stateDiagram-v2
     Constructing --> Active: bindings acquired and preparation succeeds
     Constructing --> Retired: creation fails and acquired owners are released
     Active --> Active: successful setter replaces preparation
-    Active --> Active: failed setter preserves preparation
+    Active --> Active: candidate fails; throw before changing current state
     Active --> RemovalPending: disposal passes staged-owner preflight
     RemovalPending --> Retired: every referencing owner releases its claim
     Retired --> [*]
@@ -176,32 +214,32 @@ measurement occurs. Removing one label must not require rebuilding unrelated par
 stateDiagram-v2
     [*] --> Prepared
     Prepared --> Prepared: successful setter replaces preparation
-    Prepared --> Prepared: failed setter preserves preparation
+    Prepared --> Prepared: candidate fails before ownership transfer; throw, no restore
     Prepared --> Staged: encode publication from prepared revision
     Staged --> Prepared: discard before adoption
     Staged --> Adopted: Rust compilation succeeds
-    Staged --> Prepared: compilation fails and preserves preparation
+    Staged --> Prepared: candidate fails; throw, staged candidate is discarded
     Adopted --> Offering: borrow candidate during synchronous accept call
     Offering --> Accepted: renderer accepts and settlement records its fence
-    Offering --> Prepared: rejection or throw preserves previous renderer frame
+    Offering --> Prepared: renderer rejects; throw, do not submit stale output
     Accepted --> Prepared: candidate borrow expires; preparation remains reusable
 ```
 
-This diagram describes the transaction, not a single paragraph's semantic revision. On rejection, retry derives commands
-from the still-current preparation and previous accepted renderer fence. It must neither replay shaping nor retire
-resources needed by that frame. Acceptance also does not prove GPU command completion: submitted GPU resources retain
-their existing renderer/backend lifetime rules.
+This diagram describes the ownership boundary, not a single paragraph's semantic revision. Candidate storage is separate
+from the immutable frame in flight and may reuse/share prior retained data. A failed candidate is surfaced, not retried;
+the in-flight frame's resources retire under their existing renderer/backend lifetime rules and are not an undo target.
+Successful publication transfers the complete candidate into the next render lifetime.
 
 ### Owners and release conditions
 
-| Owner                                          | What its claim protects                                    | Release condition                                                                          |
-| ---------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Public Font/FontFace and configured controller | Registrations and bindings acquired through construction   | That owner's disposal; internal claims can keep registrations alive                        |
-| Desired/prepared paragraph                     | Bindings and semantic storage used by current preparation  | Successful replacement/removal or root teardown, after Rust references are gone            |
-| Rust compiled plan                             | References and storage used by its compiled generation     | Replacement/retirement under the plan acknowledgement contract or root teardown            |
-| Renderer accepted frame                        | Objects, bindings and buffers drawing the accepted frame   | Accepted replacement/removal or renderer teardown; rejection preserves this claim          |
-| Staged transport                               | Encoded request bytes and exclusive root mutation interval | Adopt or discard; mutation preflight precedes resource acquisition                         |
-| Borrowed candidate or glyph view               | Synchronous arena/result access                            | Callback exit on every path; escaped views expire and mutation is blocked during borrowing |
+| Owner                                          | What its claim protects                                    | Release condition                                                                           |
+| ---------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Public Font/FontFace and configured controller | Registrations and bindings acquired through construction   | That owner's disposal; internal claims can keep registrations alive                         |
+| Desired/prepared paragraph                     | Bindings and semantic storage used by current preparation  | Successful replacement/removal or root teardown, after Rust references are gone             |
+| Rust compiled plan                             | References and storage used by its compiled generation     | Replacement/retirement under the plan acknowledgement contract or root teardown             |
+| In-flight render frame                         | Objects, bindings and buffers used by the active draw      | Its renderer/backend lifetime ends; candidate preparation cannot mutate its backing storage |
+| Staged transport                               | Encoded request bytes and exclusive root mutation interval | Adopt or discard; mutation preflight precedes resource acquisition                          |
+| Borrowed candidate or glyph view               | Synchronous arena/result access                            | Callback exit on every path; escaped views expire and mutation is blocked during borrowing  |
 
 These are ownership claims, not a requirement to allocate a lease object per row. Existing leases can cover multiple
 claims when their last-release condition is explicit. Registration disposal is legal only after every referencing claim
@@ -243,13 +281,13 @@ flowchart LR
   A[Text.set or property assignment] --> B[cheap host normalization and handle translation]
   B --> C[encode prior UTF-16 length plus complete new assignment]
   C --> D[Rust packed discovery and transactional preparation]
-  D -->|reject| E[throw; retain prior desired and preparation]
+  D -->|reject| E[throw at the originating call]
   D -->|commit| F[prepared revision]
   F --> G[measure cache]
   F --> H[borrowed or owned glyph demand]
   F --> I[glyph.shape publication gather and plan compile]
   I -->|renderer accepts| J[advance renderer acknowledgement]
-  I -->|renderer rejects| K[preserve accepted renderer state; retain F for retry]
+  I -->|renderer rejects| K[throw at the originating call; do not retry or submit stale output]
 ```
 
 Rust owns changed-range discovery and the semantic transaction: text, exact pinned Unicode analysis, bidi, fallback,
@@ -261,19 +299,19 @@ on first read and again on publication.
 
 ## API and ABI touchpoints
 
-| Surface                                                          | Current responsibility                                                                                             | Settled responsibility in the cutover                                                                                                                                                                                                                                                                                                                                     |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `three/text.ts` Text/root/group boundaries                       | Normalize desired state and stage an update only when a binding exists.                                            | Preserve authoring syntax and raw throws; preflight staged ownership before normalization that can allocate or bind, before root Text font selection/acquisition, and—after its equality no-op—before a changed `TextGroup.batching` value is stored. Return from a bound `stageUpdate` only after Rust preparation commits. Unbound authoring stays cheap until binding. |
-| `internal/configured-handle.ts` controller/root/handle lifecycle | Translate host values, own root registrations, and tear down configured resources.                                 | Expose the existing planner/transport owner as a nonmutating service preflight. Check before controller snapshots/bindings and before root or all-root handle terminal transitions; retain one registration authority and ordinary best-effort teardown after the preflight succeeds.                                                                                     |
-| `formatted-text.ts` and `internal/graphemes.ts`                  | Freeze spans and align authored boundaries with a host Unicode segmentation path.                                  | Temporary compatibility debt, not a second authority. Exact alignment moves to the pinned Rust pipeline in a reviewed breaking slice described below.                                                                                                                                                                                                                     |
-| `internal/render-planner.ts` `RetainedTextImpl.update`           | Replace JS desired state, invalidate caches, and defer Rust work to a read or publication.                         | Prepare transactionally before adopting JS desired state; cache fixed-size measurement; unchanged reads reuse the prepared revision.                                                                                                                                                                                                                                      |
-| `internal/render-planner.ts` metric/glyph reads                  | On a miss, rebuild a semantic frame and invoke paragraph measurement; rendering later rebuilds it again.           | Metrics read the setter-produced cache. Borrowed glyph reads use the existing demand descriptor. Owned glyph inspection copies columns from that prepared borrow only when requested.                                                                                                                                                                                     |
-| `internal/render-planner.ts` publication stage                   | Recompile text/style/geometry mutations and commit desired semantic state while adopting render output.            | Send renderer fences/order plus publication demand; Rust gather/plan compile consumes its committed preparation. JS renderer-binding commit remains acceptance-gated.                                                                                                                                                                                                     |
-| `internal/handle-state.ts` `PlanTransport`                       | `measureParagraph` both prepares and returns a semantic query; `borrowParagraphLayout` first repeats that request. | The existing paragraph executor commits preparation; the borrowed-layout call consumes current prepared state without re-encoding input. One staged-request ownership gate prevents paragraph preparation or planner lifecycle mutation from overwriting a renderer frame before adopt/discard. Exact internal names may change after the contract settles.               |
-| Rust `engine/state.rs` speculative transaction                   | Retain query work until a frame either adopts it or drops it.                                                      | Commit successful preparation independently, with atomic rollback on failure; track prepared-versus-last-compiled state so publication gathers exactly when needed.                                                                                                                                                                                                       |
-| Rust semantic wire                                               | Carry ordered paragraph/text/style/geometry mutation batches and optional semantic views.                          | Remains the one input encoding. A changed public assignment uses one existing `replaceUtf16` record with start zero, the prior UTF-16 length, and the complete next input. Rust converts that candidate into retained edit evidence. No public or JS-authored edit table is added.                                                                                        |
-| Rust `abi_contract.rs`                                           | Own all descriptor constants and export names used by generated `src/generated/text-shaper-abi.ts`.                | No layout change is required by slice 1: it reuses the existing request, result, and borrowed-layout descriptors. Any later field/export change must update `abi_contract.rs` and regenerate the TypeScript artifact together; generated offsets are never hand-edited.                                                                                                   |
-| `glyph-engine.ts` batch coordinator                              | Batch dirty root publication and settle renderer acceptance/rejection.                                             | Continues to own publication only. Setter preparation is synchronous per bound root and is not disguised as a render publication. Tagged outcomes preserve every raw rejection value; single-root failure rethrows it directly and aggregation requires multiple failed roots.                                                                                            |
+| Surface                                                          | Current responsibility                                                                                             | Settled responsibility in the cutover                                                                                                                                                                                                                                                                                                                                                                |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `three/text.ts` Text/root/group boundaries                       | Normalize desired state and stage an update only when a binding exists.                                            | Preserve authoring syntax and raw throws; preflight staged ownership before normalization that can allocate or bind, before root Text font selection/acquisition, and—after its equality no-op—before a changed `TextGroup.batching` value is stored. Return from a bound `stageUpdate` only after Rust preparation commits. Unbound authoring stays cheap until binding.                            |
+| `internal/configured-handle.ts` controller/root/handle lifecycle | Translate host values, own root registrations, and tear down configured resources.                                 | Expose the existing planner/transport owner as a nonmutating service preflight. Check before controller snapshots/bindings and before root or all-root handle terminal transitions; retain one registration authority and ordinary best-effort teardown after the preflight succeeds.                                                                                                                |
+| `formatted-text.ts` and Rust `engine/style_state.rs`             | Freeze spans, resolve authored boundaries in JavaScript, then preserve aligned ranges for Rust.                    | Implemented first range-authority cutover: TypeScript snapshots authored UTF-16 offsets; Rust validates and resolves them on its pinned grapheme grid, retaining authored offsets for later text edits. The public authoring syntax is unchanged, while observable span ranges now remain authored and require a release note.                                                                       |
+| `internal/render-planner.ts` `RetainedTextImpl.update`           | Replace JS desired state, invalidate caches, and defer Rust work to a read or publication.                         | Prepare transactionally before adopting JS desired state; cache fixed-size measurement; unchanged reads reuse the prepared revision.                                                                                                                                                                                                                                                                 |
+| `internal/render-planner.ts` metric/glyph reads                  | On a miss, rebuild a semantic frame and invoke paragraph measurement; rendering later rebuilds it again.           | Metrics read the setter-produced cache. Borrowed glyph reads use the existing demand descriptor. Owned glyph inspection copies columns from that prepared borrow only when requested.                                                                                                                                                                                                                |
+| `internal/render-planner.ts` publication stage                   | Recompile text/style/geometry mutations and commit desired semantic state while adopting render output.            | Send renderer fences/order plus publication demand; Rust gather/plan compile consumes its committed preparation. JS renderer-binding commit remains acceptance-gated.                                                                                                                                                                                                                                |
+| `internal/handle-state.ts` `PlanTransport`                       | `measureParagraph` both prepares and returns a semantic query; `borrowParagraphLayout` first repeats that request. | The existing paragraph executor commits preparation; the borrowed-layout call consumes current prepared state without re-encoding input. One staged-request ownership gate prevents paragraph preparation or planner lifecycle mutation from overwriting a renderer frame before adopt/discard. Exact internal names may change after the contract settles.                                          |
+| Rust `engine/state.rs` synchronous preparation                   | Retain one active shaping state and reuse prior rope/text data to discover and apply only the required edits.      | Preflight complete caller-authored batches before state writes, keep renderer-owned in-flight storage immutable, and make the state/publication commit infallible. Unexpected post-write faults throw and invalidate derived state; an explicit later operation rebuilds from accepted TypeScript-authored input through the same executor. No undo restore, hidden retry, or stale-output fallback. |
+| Rust semantic wire                                               | Carry ordered paragraph/text/style/geometry mutation batches and optional semantic views.                          | Remains the one input encoding. A changed public assignment uses one existing `replaceUtf16` record with start zero, the prior UTF-16 length, and the complete next input. Rust converts that candidate into retained edit evidence. No public or JS-authored edit table is added.                                                                                                                   |
+| Rust `abi_contract.rs`                                           | Own all descriptor constants and export names used by generated `src/generated/text-shaper-abi.ts`.                | No layout change is required by slice 1: it reuses the existing request, result, and borrowed-layout descriptors. Any later field/export change must update `abi_contract.rs` and regenerate the TypeScript artifact together; generated offsets are never hand-edited.                                                                                                                              |
+| `glyph-engine.ts` batch coordinator                              | Batch dirty root publication and settle renderer acceptance/rejection.                                             | Continues to own publication only. Setter preparation is synchronous per bound root and is not disguised as a render publication. Tagged outcomes preserve every raw rejection value; single-root failure rethrows it directly and aggregation requires multiple failed roots.                                                                                                                       |
 
 Copy and split remain renderer-publication operations, not preparation reads. They require an accepted renderer state and
 the real font/material/resource bindings of that state. Preparation does not manufacture a query-only renderer or let a
@@ -425,7 +463,7 @@ drops nodes once their last owner releases. No per-record ownership objects are 
 
 Actual Wasm payload/header bytes, allocation/refcount counts per representative edit, and drop-time attribution have
 not been measured yet. Hand-derived Rust layout sizes are not authoritative for an unspecified representation. Audit
-these before accepting further ownership/storage changes; retain cold/vector oracles and fallible transaction rollback.
+these before accepting further ownership/storage changes; retain cold/vector oracles and the accepted preflight/invalidation failure contract.
 [Talc's repository](https://github.com/SFBdragon/talc) and [Wasm allocator benchmarks](https://github.com/SFBdragon/talc/blob/master/BENCHMARKS_WASM.md)
 provide allocator research, while the [Rust Performance Book's allocation guidance](https://nnethercote.github.io/perf-book/heap-allocations.html)
 provides general allocation analysis. Neither predicts end-to-end Glyph performance or eliminates pointer chasing and
@@ -439,7 +477,7 @@ The reviewed cleanup based on `6b3efa73` removes 175 net Rust lines (18 inserted
 `positioned_matches_flow` measurement fallback, and its sole `visible_glyph_counts` implementation and imports.
 Production query/update wrappers always supply a shaper and complete positioning; no-shaper fixtures remain under
 `cfg(test)`. Geometry-equivalence reuse still aborts both speculative flow/positioned lanes and retains their committed
-pair. Intrinsic clipping scratch is positioned before inspection. Failure rollback and publication placement ownership
+pair. Intrinsic clipping scratch is positioned before inspection. The accepted failure contract and publication placement ownership
 are unchanged. This cleanup removes obsolete compatibility logic; it does not complete edit-sized publication.
 
 Validation of this exact source diff is terminal: `glyph:shaper-tests -- engine::` passes 330 engine tests (17 other
@@ -812,6 +850,14 @@ identify the path it retires, preserve cold/full oracles and synchronous reads, 
 
 ### Slice 2 — canonical input encoding and span cutover
 
+- [x] First range-authority cutover: `txt`/`span` retain authored UTF-16 offsets; the retained Rust style arena resolves
+      them with pinned grapheme boundaries and re-resolves retained ranges after text changes. React, Vue, Three, and the
+      planner no longer run or transfer JS alignment provenance. Collapsed styles are inactive for the current text but
+      retain authored offsets for later edits. The public `TextLiteral.spans` observation changes to authored offsets and
+      must be called out as breaking in the release migration notes.
+- [ ] Continue the Rust-owned input path: reduce TS per-update style/span construction and full-input copying without
+      changing `txt`/`span` authoring syntax or adding a second executor. The retained-state cutover alone does not eliminate
+      TypeScript object composition or ABI serialization.
 - Move repeated span comparison, style preparation, and Unicode alignment out of JS and into retained Rust input/state.
 - Keep only cheap public structural checks and host-object-to-handle translation in adapters. Preserve Rust ownership of
   changed-range discovery while investigating chunked/shared encoding that reduces full-input copying without exposing
@@ -1150,7 +1196,7 @@ All correctness tests are deterministic and compare incremental output with a fr
   frame wait;
 - many unchanged metric and glyph reads, with counters proving one preparation and zero renderer publications;
 - width changes, insertions, removals, combining marks, emoji/ZWJ/regional indicators, bidi, ligatures, and fallback;
-- invalid public input and Rust-domain rejection proving synchronous timing, raw error identity, and atomic rollback to
+- invalid public input and Rust-domain rejection proving synchronous timing, raw error identity, and rejection before adopting
   the prior preparation;
 - accepted publication, renderer rejection, retry, and interleaved edits/reads proving reads follow preparation while
   renderer state follows acknowledgement;
@@ -1187,6 +1233,52 @@ normalization, encoding, Rust preparation, measurement demand, and renderer publ
 named phases. Report setter/preparation/encoding cost separately. A cached `measure()` number is not an end-to-end
 speedup when the setter paid the work. Compare exact revisions with identical warmup and environment; report absolute
 times, percentages, uncertainty, and skips. Async wrapping is not an acceptance path.
+
+## Span ownership consolidation — current bounded sequence
+
+The authenticated 2a86 hero profile attributes 156/153 ms inclusive to planner input normalization
+and 72/56 ms self to Three span reuse in six-second flat/depth captures. These overlapping samples
+are attribution, not latency. Artifact 5735 improves snapshot-key work but leaves duplicate span
+ownership walks. This sequence targets that remaining duplication without changing the public API
+or the Rust preparation/publication design.
+
+1. Replace the Three and planner record/style snapshot loops with one private, typed span-record
+   owner. Keep Three's complete range/nesting/surrogate preflight before style work; keep the core
+   boundary's safe-integer TypeError and bounds RangeError policy. The owner copies binding values
+   verbatim: it does not prove that a binding is genuine, live or owned by the current handle.
+   Preserve prior equal-record/array identity and detach mutable caller records and styles.
+   Core keeps per-record range/style error order; do not replace it with an all-ranges preflight.
+   Use one typed input loop with the existing runtime checks and one canonical record-copy shape, not
+   per-record reader/completion objects. Binding types describe the declared input contract;
+   current handle-state retention guards remain the authority for genuine/live ownership.
+2. Keep the owner in `config/text-span-owner.ts`, beside the existing style snapshot owner; Three
+   must not import engine implementation internals. Add one private exact-array provenance registry
+   with explicit states: owned styles, owned basic ranges at a text length with optional feature
+   scope proof, and owned empty records. Issue proof only for frozen canonical records/arrays with
+   deeply owned styles. A caller-frozen object, visible symbol or equal numeric binding handles
+   grants no proof. Basic core bounds depend on text length; Three's stricter Unicode/nesting policy
+   stays at its existing authoring preflight and is never inferred from this weaker proof. Changed
+   lengths require new bounds validation; changed span ranges require new feature-scope validation.
+3. Integrate Three material mapping and configured font/material mapping with that owner. Remove
+   configured re-snapshotting and planner normalization of already-owned input. A typed binding
+   projection constructs the same canonical records, replacing only font/material fields and
+   transferring existing data proof. For unowned input it transfers no proof. Configured binding
+   acquires all leases first, then uses the shared owner for missing bounds/style/feature scope facts.
+   Planner adoption requires proved basic bounds for the current text length. Three still preserves
+   prior equal span identities; its stricter preflight remains before styles. Continue acquiring and
+   checking current binding leases; transfer data proof, never lifetime authority. Keep original
+   acquisition and cleanup order, including partial failure and accepted PostCommitError. Preserve
+   the controller lifecycle rather than adding another authored mirror just to carry proof.
+4. Review the final deletion inventory before measuring. Shared execution must replace the old
+   algorithms, not sit beside them. Verify mutable caller isolation, forged frozen inputs, changed
+   text lengths, feature scopes, range error precedence, disposed/foreign bindings and exact owned
+   adoption. Run static/build, focused/full Node gates, frozen assignment/cold/style comparisons,
+   package/Wasm/declaration identity and an authenticated hero check in one heavy lane.
+
+The first slice is deliberately not a performance verdict. No per-slice benchmark while the data
+provenance cutover is incomplete. Rust/ABI and exported signatures remain unchanged; reject needless
+global caches or equality-result memoization. Measure source and compressed runtime size at final
+freeze, and preserve the accepted 5735 artifact as the baseline.
 
 ## Removal inventory
 

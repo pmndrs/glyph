@@ -1,0 +1,57 @@
+{
+  "sourceSnapshotHead": "797b41859b6d22cf01bd760cc5f330bb258f59cd",
+  "inputs": [
+    {
+      "path": "benches/scripts/profile-edit-sized-publication.mts",
+      "sha256": "efbad689f0e5c1fd9098a859db690b039efc4bfe7910d669b9d5b6f8a5a8d195",
+      "bytes": 20506
+    },
+    {
+      "path": "benches/labs/package/edit-sized-publication.profile.mts",
+      "sha256": "41cf54097ab82bb33368d7153d15608ec0ff4fb460302b4c183631e78201843a",
+      "bytes": 26255
+    },
+    {
+      "path": "benches/labs/package/fixture.ts",
+      "sha256": "34b97032e1f035d6b15ae385f4a6aa4e6cc0b78d9239dc14e8253a1a6644dfe3",
+      "bytes": 14245
+    },
+    {
+      "path": "benches/scripts/support/package-labs-dependencies.mts",
+      "sha256": "4d1e1f5aeb982f985dc850d88cde1235c51960fd6e5ef25ceb3b75328fc555da",
+      "bytes": 516
+    },
+    {
+      "path": "benches/src/benchmark/cpu-profile-stage.mts",
+      "sha256": "1392af3692ed873abe18840d91fcfbfbc5ecfe68c5b42e2b242e2cbf2f2bb09d",
+      "bytes": 1943
+    },
+    {
+      "path": "benches/fixtures/rendering/inter-bitmap-16.font.glb",
+      "sha256": "acdca408ed169c7aa1c2791dbbc2982afa1939c56fbc59ef43cc38f7ff366c14",
+      "bytes": 926984
+    },
+    {
+      "path": "benches/fixtures/rendering/dot-gothic-16-bitmap-16-32.font.glb",
+      "sha256": "f1895ea3bf8b69ee7430940a2ccf5d398c7a5f8c469635845c4b4b3b457b112b",
+      "bytes": 13057004
+    },
+    {
+      "path": "benches/fixtures/rendering/fredoka-issue-216-bitmap-16.font.glb",
+      "sha256": "2be09acf3c5ebd2d08859eb8d5282cf9018d70f8e84b4bda9eb80c410ff532c0",
+      "bytes": 44280
+    },
+    {
+      "path": "benches/scripts/summarize-cpu-profile.mts",
+      "sha256": "d31c69beba94ae192ed280c8b847c72e8a001ef497265fd40d7427dc25e980ff",
+      "bytes": 2918
+    },
+    {
+      "path": "benches/scripts/support/cpu-profile-summary.mts",
+      "sha256": "744248c420576f87dd7f7dde5aafd58ddf5c296d0d0994afe274572aa2db8745",
+      "bytes": 26606
+    }
+  ],
+  "inputDigestSha256": "e788ebad6b5b526c8cf98e496d9f65f85b35508fcdebf61a67c64a865c40a292",
+  "note": "Deterministic read-only hash of maintained profiler, callback harness, fixture/dependencies, classifier, and profile summary inputs; does not bind runtime archive, named Wasm, or machine/environment."
+}

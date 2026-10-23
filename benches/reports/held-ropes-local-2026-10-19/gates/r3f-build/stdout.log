@@ -1,0 +1,45 @@
+vite v8.1.5 building client environment for production...
+[2Ktransforming...✓ 211 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                         0.56 kB │ gzip:   0.34 kB
+dist/assets/runtime-bake-worker-D3vS-9ip.js             5.25 kB
+dist/font-notices.txt                                  11.88 kB │ gzip:   3.06 kB
+dist/assets/font-awesome-world.font-DcqTioeg.glb      184.50 kB
+dist/assets/text-shaper-1XpyJLNP.wasm               1,601.55 kB │ gzip: 603.06 kB
+dist/assets/inter-latin.font-Dwo6UnRJ.glb           2,355.62 kB
+dist/assets/index-BsVmRpO0.css                          0.80 kB │ gzip:   0.43 kB
+dist/assets/text-shaper-module-BJPUIcq-.js              0.09 kB │ gzip:   0.10 kB
+dist/assets/slug-B3mvIl86.js                            0.49 kB │ gzip:   0.38 kB
+dist/assets/msdf-BgqC6Gu4.js                            0.52 kB │ gzip:   0.40 kB
+dist/assets/slug-contract-3I9Z26dW.js                   0.54 kB │ gzip:   0.32 kB
+dist/assets/bitmap-DFcP0aYt.js                          0.56 kB │ gzip:   0.43 kB
+dist/assets/raster-coverage-artifact-DT8P2lGf.js        0.90 kB │ gzip:   0.47 kB
+dist/assets/runtime-bake-Czz0ARJ9.js                    1.18 kB │ gzip:   0.65 kB
+dist/assets/preload-helper-Czpn1I53.js                  1.19 kB │ gzip:   0.67 kB
+dist/assets/raster-format-registry-Cfgctoi4.js          1.21 kB │ gzip:   0.49 kB
+dist/assets/bitmap-contract-CLKc9zHA.js                 1.24 kB │ gzip:   0.62 kB
+dist/assets/three-example-G36s79is.js                   1.37 kB │ gzip:   0.76 kB
+dist/assets/runtime-bake-protocol-DK9Rj8s6.js           1.44 kB │ gzip:   0.74 kB
+dist/assets/font-face-transfer-runtime-CgxrhIJh.js      1.65 kB │ gzip:   0.66 kB
+dist/assets/raster-identity-BF2bkr1A.js                 1.71 kB │ gzip:   0.81 kB
+dist/assets/content-digest-DtuQcDL1.js                  2.18 kB │ gzip:   1.01 kB
+dist/assets/msdf-contract-BBTETF_3.js                   2.34 kB │ gzip:   0.87 kB
+dist/assets/raster-bake-worker-host-LHh-f5Lw.js         2.36 kB │ gzip:   1.06 kB
+dist/assets/bitmap-decoder-B9soxMUo.js                  2.37 kB │ gzip:   1.05 kB
+dist/assets/index-DbfzUJQc.js                           2.61 kB │ gzip:   1.24 kB
+dist/assets/bake-progress-protocol-Bwd89xof.js          2.62 kB │ gzip:   1.08 kB
+dist/assets/msdf-decoder-Dqxw9HMJ.js                    2.75 kB │ gzip:   1.29 kB
+dist/assets/raster-coverage-C2C7GQr1.js                 2.88 kB │ gzip:   0.95 kB
+dist/assets/raster-records-RODB0z-D.js                  3.23 kB │ gzip:   1.51 kB
+dist/assets/slug-decoder-CT2CJ1VC.js                    4.78 kB │ gzip:   1.93 kB
+dist/assets/raster-atlas-CDF9X7_A.js                    5.30 kB │ gzip:   2.05 kB
+dist/assets/three.tsl-BD5gQZv6.js                      17.75 kB │ gzip:   7.37 kB
+dist/assets/text-shaper-module-CHYiNndq.js             19.70 kB │ gzip:   7.13 kB
+dist/assets/font-face-transfer-LiZpR-vl.js             49.50 kB │ gzip:  14.53 kB
+dist/assets/Inspector-Bu7BVpqb.js                     155.86 kB │ gzip:  35.74 kB
+dist/assets/inter-latin.font-D71Psuf7.js              357.07 kB │ gzip:  99.27 kB
+dist/assets/r3f-example-CXH1SY7V.js                   942.67 kB │ gzip: 274.67 kB
+dist/assets/three.tsl-CctXdPak.js                   1,052.45 kB │ gzip: 291.66 kB
+
+✓ built in 892ms

@@ -1,0 +1,28 @@
+{
+  "argv": [
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "glyph:shaper-size-accounting",
+    "--",
+    "--artifact",
+    "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "--named",
+    "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/shaper-profile/text-shaper.named.wasm",
+    "--baseline",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+    "--output",
+    "/Volumes/Depot/Developer/glyph/.cache/held-gather-input-plan-20261020/evidence/candidate/shaper-size"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-20T22:30:57.574220+00:00",
+  "finished": "2026-10-20T22:30:58.179937+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "172e46cc554f8f40c0fd11065a1f4e9d3f0d14f20549bddd64131c10042eed71",
+    "stderr.log": "afe1a7b96a7be840652f7e1f40deb81890495ee9332e735a3be348c1ff99fc8f"
+  }
+}

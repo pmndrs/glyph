@@ -1,0 +1,21 @@
+{
+  "argv": [
+    "/usr/bin/env",
+    "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/scratch",
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "--filter",
+    "@pmndrs/glyph",
+    "check"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-20T21:19:14.177824+00:00",
+  "finished": "2026-10-20T21:21:58.126860+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "fc211728caf9371ec042fd2f2f4545fd63efb274e993520e2c58844a09bcb532",
+    "stderr.log": "dd4b50023acfc6f18ba4a8f315b62402a78b44159e94e0b7e8dd3cf37e3c90db"
+  }
+}

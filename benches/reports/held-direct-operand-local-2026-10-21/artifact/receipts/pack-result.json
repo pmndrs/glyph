@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "pack",
+    "--pack-destination",
+    "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph",
+  "started": "2026-10-21T00:57:39.973253+00:00",
+  "finished": "2026-10-21T00:57:40.770287+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "8b40b2edcc78311e7ddbddf4b75238a9d2f0432cf8596d483367de5692b5d6fe",
+    "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

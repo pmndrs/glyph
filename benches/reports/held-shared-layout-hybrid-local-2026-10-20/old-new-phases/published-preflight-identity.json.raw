@@ -1,0 +1,24 @@
+{
+  "arm": "published",
+  "archiveSha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b",
+  "archiveMemberHashes": {
+    "dist/three/text.js": "12863763f389c1da98da405fdd19fd4c2ef8f5ab0923b97febc44e8a6e0616c4",
+    "dist/internal/render-planner.js": "f51c679c3971e224ee17a7af0ab7c1a667f1a4b93aae3dc7b4d8e18eac40d371",
+    "dist/text-shaper.wasm": "addb8144f474c9f5a005bdda084bcf15c05170004b34c7a65ab592db4962c893"
+  },
+  "installedMembersBefore": {
+    "dist/three/text.js": "12863763f389c1da98da405fdd19fd4c2ef8f5ab0923b97febc44e8a6e0616c4",
+    "dist/internal/render-planner.js": "f51c679c3971e224ee17a7af0ab7c1a667f1a4b93aae3dc7b4d8e18eac40d371",
+    "dist/text-shaper.wasm": "addb8144f474c9f5a005bdda084bcf15c05170004b34c7a65ab592db4962c893"
+  },
+  "sourceHashesBefore": {
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/profile-edit-sized-publication.mts": "efbad689f0e5c1fd9098a859db690b039efc4bfe7910d669b9d5b6f8a5a8d195",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/edit-sized-publication.profile.mts": "a58bc03aa617daca3ca48a71014978d0869eb16263ef3083730788be5044411b",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/labs/package/fixture.ts": "34b97032e1f035d6b15ae385f4a6aa4e6cc0b78d9239dc14e8253a1a6644dfe3",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/scripts/support/package-labs-dependencies.mts": "4d1e1f5aeb982f985dc850d88cde1235c51960fd6e5ef25ceb3b75328fc555da",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/src/benchmark/cpu-profile-stage.mts": "1392af3692ed873abe18840d91fcfbfbc5ecfe68c5b42e2b242e2cbf2f2bb09d",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/inter-bitmap-16.font.glb": "acdca408ed169c7aa1c2791dbbc2982afa1939c56fbc59ef43cc38f7ff366c14",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/dot-gothic-16-bitmap-16-32.font.glb": "f1895ea3bf8b69ee7430940a2ccf5d398c7a5f8c469635845c4b4b3b457b112b",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/benches/fixtures/rendering/fredoka-issue-216-bitmap-16.font.glb": "2be09acf3c5ebd2d08859eb8d5282cf9018d70f8e84b4bda9eb80c410ff532c0"
+  }
+}

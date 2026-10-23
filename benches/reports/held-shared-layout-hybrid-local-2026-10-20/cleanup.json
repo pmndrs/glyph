@@ -1,0 +1,110 @@
+{
+  "schema": "e3-memory-presentation-cleanup-v1",
+  "recordedAtMethod": "Captured after controlled shutdown and independent lsof/ps/state reads.",
+  "ownedPresentationRoute": {
+    "route": "held-e3-presentation.localhost",
+    "servicePort": 4462,
+    "ownedPidsBeforeShutdown": [66601, 66602, 66603, 66624, 66625],
+    "signal": "SIGTERM to recorded owned Portless route PID 66602",
+    "signalWrapper": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/presentation-route-shutdown/result.json",
+    "signalWrapperExit": 0,
+    "serverWrapper": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/presentation-dev-server/result.json",
+    "serverWrapperExit": 143,
+    "serverWrapperSha256": {
+      "stdout.log": "d90df38a11a133a75ded7b767992a6eccee2f7d7f9be26b958cfc4c33e20b1ff",
+      "stderr.log": "4fa7797247bbbf10047dbedf7e80c3857b7e1e3020b0a4a815e4ec9ca096bf51"
+    },
+    "routeStateAfter": [],
+    "routeListenerAfter": "",
+    "routeListenerGone": true,
+    "ownedProcessCheckAfter": "",
+    "ownedProcessesGone": true
+  },
+  "ownedProxy": {
+    "pid": 64501,
+    "wrapperPid": 64500,
+    "port": 1358,
+    "signal": "SIGTERM to recorded owned Portless proxy PID 64501",
+    "signalWrapper": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/portless-proxy-shutdown/result.json",
+    "signalWrapperExit": 0,
+    "proxyWrapper": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/portless-owned-proxy/result.json",
+    "proxyWrapperExit": 0,
+    "listenerAfter": "",
+    "listenerGone": true,
+    "routeStateAfter": []
+  },
+  "observerProcessCleanup": {
+    "application-memory-node-main": {
+      "cleanupProven": true,
+      "survivingProcesses": 0,
+      "uncertainIdentities": 0,
+      "remainingIdentities": [],
+      "terminalIdentityCheckComplete": true
+    },
+    "application-memory-node-published010": {
+      "cleanupProven": true,
+      "survivingProcesses": 0,
+      "uncertainIdentities": 0,
+      "remainingIdentities": [],
+      "terminalIdentityCheckComplete": true
+    },
+    "application-memory-node-prior28fd": {
+      "cleanupProven": true,
+      "survivingProcesses": 0,
+      "uncertainIdentities": 0,
+      "remainingIdentities": [],
+      "terminalIdentityCheckComplete": true
+    },
+    "application-memory-node-candidate": {
+      "cleanupProven": true,
+      "survivingProcesses": 0,
+      "uncertainIdentities": 0,
+      "remainingIdentities": [],
+      "terminalIdentityCheckComplete": true
+    },
+    "application-memory-browser-main": {
+      "cleanupProven": true,
+      "survivingProcesses": 0,
+      "uncertainIdentities": 0,
+      "remainingIdentities": [],
+      "terminalIdentityCheckComplete": true
+    },
+    "application-memory-browser-published010": {
+      "cleanupProven": true,
+      "survivingProcesses": 0,
+      "uncertainIdentities": 0,
+      "remainingIdentities": [],
+      "terminalIdentityCheckComplete": true
+    },
+    "application-memory-browser-prior28fd": {
+      "cleanupProven": true,
+      "survivingProcesses": 0,
+      "uncertainIdentities": 0,
+      "remainingIdentities": [],
+      "terminalIdentityCheckComplete": true
+    },
+    "application-memory-browser-candidate": {
+      "cleanupProven": true,
+      "survivingProcesses": 0,
+      "uncertainIdentities": 0,
+      "remainingIdentities": [],
+      "terminalIdentityCheckComplete": true
+    }
+  },
+  "unrelatedPreserved": {
+    "port1355ListenerSnapshot": "COMMAND   PID USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME\nnode    34322 mini   15u  IPv6 0xb70901055f843aa2      0t0  TCP [::1]:1355 (LISTEN)\nnode    34322 mini   16u  IPv4 0x729cff200d69e6a7      0t0  TCP 127.0.0.1:1355 (LISTEN)\n",
+    "process34322StillListeningOn1355": true,
+    "tcpPort34322ListenerSnapshot": "",
+    "port34322HasListener": false
+  },
+  "taskOwnedListenersGone": true,
+  "allTaskOwnedProcessesGone": true,
+  "unwrappedAllocatorArtifact": {
+    "receipt": "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/procedural-unwrapped-allocator-artifact.json",
+    "session": 99409,
+    "exit": 0,
+    "completeRawStdoutStderrAvailable": false
+  },
+  "allProductCommandsDurablyWrapped": false,
+  "unwrappedProductCommandException": "Allocator diagnostic artifact generation command alone was invoked directly; see procedural-unwrapped-allocator-artifact.json. Its complete stdout/stderr could not be recovered, and it was not rerun."
+}

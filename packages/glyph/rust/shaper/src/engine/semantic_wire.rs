@@ -242,35 +242,6 @@ impl GeometryBatch<'_> {
         self.constraints.is_empty() && self.inline_objects.is_empty()
     }
 
-    pub(crate) fn take_paragraph(
-        self,
-        paragraph_id: u32,
-        constraint_cursor: &mut usize,
-        inline_object_cursor: &mut usize,
-    ) -> Result<Self, u32> {
-        let constraints = take_records(
-            self.constraints,
-            abi::ENGINE_CONSTRAINT_RECORD_SIZE,
-            abi::ENGINE_CONSTRAINT_PARAGRAPH_ID,
-            paragraph_id,
-            constraint_cursor,
-        )?;
-        let inline_objects = take_records(
-            self.inline_objects,
-            abi::ENGINE_INLINE_OBJECT_RECORD_SIZE,
-            abi::ENGINE_INLINE_OBJECT_PARAGRAPH_ID,
-            paragraph_id,
-            inline_object_cursor,
-        )?;
-        Ok(Self {
-            request: self.request,
-            constraints,
-            regions: self.regions,
-            exclusions: self.exclusions,
-            inline_objects,
-        })
-    }
-
     pub(crate) fn spans(
         self,
         constraints: RecordSpan,
@@ -422,92 +393,6 @@ impl GeometryBatch<'_> {
             block: read_f32(record, abi::ENGINE_FLOW_VERTEX_BLOCK).ok()?,
         })
     }
-
-    pub(crate) fn fingerprint(self) -> u64 {
-        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-        for record in self
-            .constraints
-            .chunks_exact(abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize)
-        {
-            mix_record_without_u32(
-                &mut hash,
-                record,
-                abi::ENGINE_CONSTRAINT_DROP_CAP_VERTICES_OFFSET,
-            );
-            mix_vertex_records(
-                &mut hash,
-                self.request,
-                record,
-                abi::ENGINE_CONSTRAINT_DROP_CAP_VERTICES_OFFSET,
-                abi::ENGINE_CONSTRAINT_DROP_CAP_VERTEX_COUNT,
-            );
-        }
-        mix_bytes(&mut hash, self.inline_objects);
-        for constraint_index in 0..self.constraint_count() {
-            let Some(constraint) = self.constraint(constraint_index) else {
-                continue;
-            };
-            let Ok(region_start) = usize::try_from(constraint.region_start) else {
-                continue;
-            };
-            let Some(region_end) = region_start.checked_add(usize::from(constraint.region_count))
-            else {
-                continue;
-            };
-            for region_index in region_start..region_end {
-                let Some(record) =
-                    record_at(self.regions, abi::ENGINE_REGION_RECORD_SIZE, region_index)
-                else {
-                    continue;
-                };
-                mix_record_without_u32(&mut hash, record, abi::ENGINE_REGION_VERTICES_OFFSET);
-                mix_vertex_payload(
-                    &mut hash,
-                    self.request,
-                    record,
-                    abi::ENGINE_REGION_SHAPE,
-                    abi::ENGINE_REGION_VERTICES_OFFSET,
-                    abi::ENGINE_REGION_VERTEX_COUNT,
-                );
-                let Ok(exclusion_start) =
-                    read_u16(record, abi::ENGINE_REGION_EXCLUSION_START).map(usize::from)
-                else {
-                    continue;
-                };
-                let Ok(exclusion_count) = read_u16(record, abi::ENGINE_REGION_EXCLUSION_COUNT)
-                else {
-                    continue;
-                };
-                let Some(exclusion_end) = exclusion_start.checked_add(usize::from(exclusion_count))
-                else {
-                    continue;
-                };
-                for exclusion_index in exclusion_start..exclusion_end {
-                    let Some(exclusion) = record_at(
-                        self.exclusions,
-                        abi::ENGINE_EXCLUSION_RECORD_SIZE,
-                        exclusion_index,
-                    ) else {
-                        continue;
-                    };
-                    mix_record_without_u32(
-                        &mut hash,
-                        exclusion,
-                        abi::ENGINE_EXCLUSION_VERTICES_OFFSET,
-                    );
-                    mix_vertex_payload(
-                        &mut hash,
-                        self.request,
-                        exclusion,
-                        abi::ENGINE_EXCLUSION_SHAPE,
-                        abi::ENGINE_EXCLUSION_VERTICES_OFFSET,
-                        abi::ENGINE_EXCLUSION_VERTEX_COUNT,
-                    );
-                }
-            }
-        }
-        hash
-    }
 }
 
 impl<'a> ParagraphMutationBatch<'a> {
@@ -603,53 +488,11 @@ impl<'a> TextMutationBatch<'a> {
         read_u32(record, ENGINE_TEXT_MUTATION_PARAGRAPH_ID).ok()
     }
 
-    pub(crate) fn take_paragraph(self, paragraph_id: u32, cursor: &mut usize) -> Result<Self, u32> {
-        Ok(Self {
-            request: self.request,
-            records: take_records(
-                self.records,
-                ENGINE_TEXT_MUTATION_RECORD_SIZE,
-                ENGINE_TEXT_MUTATION_PARAGRAPH_ID,
-                paragraph_id,
-                cursor,
-            )?,
-        })
-    }
-
     pub(crate) fn span(self, span: RecordSpan) -> Result<Self, u32> {
         Ok(Self {
             request: self.request,
             records: records_span(self.records, ENGINE_TEXT_MUTATION_RECORD_SIZE, span)?,
         })
-    }
-
-    /// Identity of the speculative text input: 0 when no mutations ride the request,
-    /// otherwise a content hash over each mutation's target range and insert payload
-    /// (request-buffer offsets do not participate, so equal edits fingerprint equally
-    /// regardless of request layout). The mutation count and every insertion length
-    /// are mixed as explicit delimiters: concatenated FNV streams alias otherwise —
-    /// one replace whose payload bytes spell a second mutation's fields hashes
-    /// identically to that two-mutation batch.
-    pub(crate) fn fingerprint(self) -> u64 {
-        if self.records.is_empty() {
-            return 0;
-        }
-        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-        mix_bytes(&mut hash, &(self.len() as u64).to_le_bytes());
-        for index in 0..self.len() {
-            let Some(mutation) = self.get(index) else {
-                continue;
-            };
-            mix_bytes(&mut hash, &mutation.paragraph_id.to_le_bytes());
-            mix_bytes(&mut hash, &mutation.text_start.to_le_bytes());
-            mix_bytes(&mut hash, &mutation.delete_count.to_le_bytes());
-            mix_bytes(
-                &mut hash,
-                &(mutation.insert_utf16_le.len() as u64).to_le_bytes(),
-            );
-            mix_bytes(&mut hash, mutation.insert_utf16_le);
-        }
-        hash
     }
 }
 
@@ -748,43 +591,11 @@ impl<'a> StyleMutationBatch<'a> {
         read_u32(record, abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID).ok()
     }
 
-    pub(crate) fn take_paragraph(self, paragraph_id: u32, cursor: &mut usize) -> Result<Self, u32> {
-        Ok(Self {
-            request: self.request,
-            records: take_records(
-                self.records,
-                abi::ENGINE_STYLE_MUTATION_RECORD_SIZE,
-                abi::ENGINE_STYLE_MUTATION_PARAGRAPH_ID,
-                paragraph_id,
-                cursor,
-            )?,
-        })
-    }
-
     pub(crate) fn span(self, span: RecordSpan) -> Result<Self, u32> {
         Ok(Self {
             request: self.request,
             records: records_span(self.records, abi::ENGINE_STYLE_MUTATION_RECORD_SIZE, span)?,
         })
-    }
-
-    /// Identity of the speculative style input: 0 when no mutations ride the request,
-    /// otherwise a hash over the mutation records plus each upsert's language and
-    /// feature payloads. Record bytes include request-buffer payload offsets, so this
-    /// is layout-sensitive: equal content at different offsets rebuilds conservatively.
-    pub(crate) fn fingerprint(self) -> u64 {
-        if self.records.is_empty() {
-            return 0;
-        }
-        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-        mix_bytes(&mut hash, self.records);
-        for index in 0..self.len() {
-            if let Some(StyleMutation::Upsert(value)) = self.get(index) {
-                mix_bytes(&mut hash, value.language);
-                mix_bytes(&mut hash, value.features);
-            }
-        }
-        hash
     }
 
     pub(crate) fn feature(value: StyleValue<'_>, index: usize) -> Option<FeatureRecord> {
@@ -1007,6 +818,7 @@ pub(crate) fn parse_geometry(
         abi::ENGINE_INLINE_OBJECT_RECORD_SIZE,
         abi::ENGINE_INLINE_OBJECT_RECORD_ALIGNMENT,
     )?;
+    validate_geometry_ranges(constraints, regions, exclusions)?;
     validate_constraints(request, constraints, limits)?;
     validate_regions(request, regions)?;
     validate_exclusions(request, exclusions)?;
@@ -1018,6 +830,36 @@ pub(crate) fn parse_geometry(
         exclusions,
         inline_objects,
     })
+}
+
+fn validate_geometry_ranges(
+    constraints: &[u8],
+    regions: &[u8],
+    exclusions: &[u8],
+) -> Result<(), u32> {
+    let region_limit = regions.len() / abi::ENGINE_REGION_RECORD_SIZE as usize;
+    for constraint in constraints.chunks_exact(abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize) {
+        let start = usize::try_from(read_u32(constraint, abi::ENGINE_CONSTRAINT_REGION_START)?)
+            .map_err(|_| STATUS_INVALID_REQUEST)?;
+        let count = usize::from(read_u16(constraint, abi::ENGINE_CONSTRAINT_REGION_COUNT)?);
+        validate_geometry_range(start, count, region_limit)?;
+    }
+
+    let exclusion_limit = exclusions.len() / abi::ENGINE_EXCLUSION_RECORD_SIZE as usize;
+    for region in regions.chunks_exact(abi::ENGINE_REGION_RECORD_SIZE as usize) {
+        let start = usize::from(read_u16(region, abi::ENGINE_REGION_EXCLUSION_START)?);
+        let count = usize::from(read_u16(region, abi::ENGINE_REGION_EXCLUSION_COUNT)?);
+        validate_geometry_range(start, count, exclusion_limit)?;
+    }
+    Ok(())
+}
+
+fn validate_geometry_range(start: usize, count: usize, limit: usize) -> Result<(), u32> {
+    let end = start.checked_add(count).ok_or(STATUS_INVALID_REQUEST)?;
+    if end > limit {
+        return Err(STATUS_INVALID_REQUEST);
+    }
+    Ok(())
 }
 
 fn record_table(
@@ -1044,36 +886,6 @@ fn record_at(records: &[u8], stride: u32, index: usize) -> Option<&[u8]> {
     let stride = usize::try_from(stride).ok()?;
     let start = index.checked_mul(stride)?;
     records.get(start..start.checked_add(stride)?)
-}
-
-fn take_records<'a>(
-    records: &'a [u8],
-    stride: u32,
-    paragraph_field: usize,
-    paragraph_id: u32,
-    cursor: &mut usize,
-) -> Result<&'a [u8], u32> {
-    let stride = usize::try_from(stride).map_err(|_| STATUS_INVALID_REQUEST)?;
-    let count = records.len() / stride;
-    if *cursor > count {
-        return Err(STATUS_INVALID_REQUEST);
-    }
-    let start = *cursor;
-    while *cursor < count {
-        let record = record_at(
-            records,
-            u32::try_from(stride).map_err(|_| STATUS_INVALID_REQUEST)?,
-            *cursor,
-        )
-        .ok_or(STATUS_INVALID_REQUEST)?;
-        if read_u32(record, paragraph_field)? != paragraph_id {
-            break;
-        }
-        *cursor += 1;
-    }
-    records
-        .get(start * stride..*cursor * stride)
-        .ok_or(STATUS_INVALID_REQUEST)
 }
 
 fn records_span(records: &[u8], stride: u32, span: RecordSpan) -> Result<&[u8], u32> {
@@ -1413,56 +1225,6 @@ fn byte(record: &[u8], offset: usize) -> Result<u8, u32> {
     record.get(offset).copied().ok_or(STATUS_INVALID_REQUEST)
 }
 
-fn mix_bytes(hash: &mut u64, bytes: &[u8]) {
-    for byte in bytes {
-        *hash ^= u64::from(*byte);
-        *hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-}
-
-fn mix_record_without_u32(hash: &mut u64, record: &[u8], offset: usize) {
-    mix_bytes(hash, &record[..offset]);
-    mix_bytes(hash, &record[offset + 4..]);
-}
-
-fn mix_vertex_payload(
-    hash: &mut u64,
-    request: &[u8],
-    record: &[u8],
-    shape: usize,
-    offset: usize,
-    count: usize,
-) {
-    if byte(record, shape).ok() != Some(SHAPE_POLYGON) {
-        return;
-    }
-    if let (Ok(offset), Ok(count)) = (read_u32(record, offset), read_u16(record, count))
-        && let Ok(vertices) = array(
-            request,
-            offset,
-            u32::from(count),
-            abi::ENGINE_FLOW_VERTEX_RECORD_SIZE,
-            abi::ENGINE_FLOW_VERTEX_RECORD_ALIGNMENT,
-        )
-    {
-        mix_bytes(hash, vertices);
-    }
-}
-
-fn mix_vertex_records(hash: &mut u64, request: &[u8], record: &[u8], offset: usize, count: usize) {
-    if let (Ok(offset), Ok(count)) = (read_u32(record, offset), read_u16(record, count))
-        && let Ok(vertices) = array(
-            request,
-            offset,
-            u32::from(count),
-            abi::ENGINE_FLOW_VERTEX_RECORD_SIZE,
-            abi::ENGINE_FLOW_VERTEX_RECORD_ALIGNMENT,
-        )
-    {
-        mix_bytes(hash, vertices);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1661,7 +1423,7 @@ mod tests {
     }
 
     #[test]
-    fn consumes_contiguous_paragraph_spans_without_copying_records() {
+    fn selects_borrowed_paragraph_spans_without_copying_records() {
         let offset = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
         let stride = ENGINE_TEXT_MUTATION_RECORD_SIZE as usize;
         let mut bytes = vec![0; offset + 3 * stride];
@@ -1676,51 +1438,71 @@ mod tests {
             );
         }
         let batch = parse_text_mutations(&bytes, offset as u32, 3).unwrap();
-        let mut cursor = 0;
-        let first = batch.take_paragraph(7, &mut cursor).unwrap();
+        let first = batch.span(RecordSpan { start: 0, end: 2 }).unwrap();
         assert_eq!(first.len(), 2);
-        assert_eq!(cursor, 2);
-        let empty = batch.take_paragraph(8, &mut cursor).unwrap();
+        assert_eq!(first.records.as_ptr(), batch.records.as_ptr());
+        let empty = batch.span(RecordSpan { start: 2, end: 2 }).unwrap();
         assert_eq!(empty.len(), 0);
-        assert_eq!(cursor, 2);
-        let last = batch.take_paragraph(9, &mut cursor).unwrap();
+        assert_eq!(
+            empty.records.as_ptr(),
+            batch.records.as_ptr().wrapping_add(2 * stride)
+        );
+        let last = batch.span(RecordSpan { start: 2, end: 3 }).unwrap();
         assert_eq!(last.len(), 1);
-        assert_eq!(cursor, 3);
+        assert_eq!(
+            last.records.as_ptr(),
+            batch.records.as_ptr().wrapping_add(2 * stride)
+        );
+        assert!(batch.span(RecordSpan { start: 2, end: 4 }).is_err());
 
         let style_bytes = valid_style_bytes();
         let styles = parse_style_mutations(&style_bytes, STYLE_OFFSET as u32, 1).unwrap();
-        let mut style_cursor = 0;
+        let style = styles.span(RecordSpan { start: 0, end: 1 }).unwrap();
+        assert_eq!(style.len(), 1);
+        assert_eq!(style.records.as_ptr(), styles.records.as_ptr());
         assert_eq!(
-            styles.take_paragraph(2, &mut style_cursor).unwrap().len(),
+            styles.span(RecordSpan { start: 1, end: 1 }).unwrap().len(),
             0
         );
-        assert_eq!(
-            styles.take_paragraph(1, &mut style_cursor).unwrap().len(),
-            1
-        );
-        assert_eq!(style_cursor, 1);
+        assert!(styles.span(RecordSpan { start: 0, end: 2 }).is_err());
 
         let geometry_bytes = valid_geometry_bytes();
         let geometry = parse_valid_geometry(&geometry_bytes).unwrap();
-        let (mut constraint_cursor, mut inline_cursor) = (0, 0);
-        let absent = geometry
-            .take_paragraph(2, &mut constraint_cursor, &mut inline_cursor)
-            .unwrap();
-        assert_eq!(absent.constraint_count(), 0);
-        assert_eq!(absent.inline_object_count(), 0);
         let present = geometry
-            .take_paragraph(1, &mut constraint_cursor, &mut inline_cursor)
+            .spans(
+                RecordSpan { start: 0, end: 1 },
+                RecordSpan { start: 0, end: 1 },
+            )
             .unwrap();
         assert_eq!(present.constraint_count(), 1);
         assert_eq!(present.inline_object_count(), 1);
-        assert_eq!((constraint_cursor, inline_cursor), (1, 1));
+        assert_eq!(present.constraints.as_ptr(), geometry.constraints.as_ptr());
+        assert_eq!(
+            present.inline_objects.as_ptr(),
+            geometry.inline_objects.as_ptr()
+        );
+        assert!(
+            geometry
+                .spans(
+                    RecordSpan { start: 0, end: 2 },
+                    RecordSpan { start: 0, end: 1 }
+                )
+                .is_err()
+        );
+        assert!(
+            geometry
+                .spans(
+                    RecordSpan { start: 0, end: 1 },
+                    RecordSpan { start: 1, end: 2 }
+                )
+                .is_err()
+        );
     }
 
     #[test]
     fn validates_one_call_rectangle_flow_and_text_anchored_objects() {
         let bytes = valid_geometry_bytes();
         let geometry = parse_valid_geometry(&bytes).unwrap();
-        assert_ne!(geometry.fingerprint(), 0);
         assert_eq!(geometry.constraint_count(), 1);
         assert_eq!(geometry.constraint(0).unwrap().flow_thread_id, 1);
         assert_eq!(geometry.region(0).unwrap().inline_end, 100.0);
@@ -1755,7 +1537,6 @@ mod tests {
             write_f32(&mut polygon, offset + abi::ENGINE_FLOW_VERTEX_BLOCK, block);
         }
         let polygon_geometry = parse_valid_geometry(&polygon).unwrap();
-        assert_ne!(polygon_geometry.fingerprint(), geometry.fingerprint());
         let mut retained = FlowGeometryArena::default();
         retained.build(polygon_geometry).unwrap();
         assert_eq!(retained.constraints.len(), 1);
@@ -1807,12 +1588,17 @@ mod tests {
             REGION_OFFSET + abi::ENGINE_REGION_VERTICES_OFFSET,
             (GEOMETRY_LENGTH + 8) as u32,
         );
-        assert_eq!(
-            parse_valid_geometry(&relocated_polygon)
-                .unwrap()
-                .fingerprint(),
-            polygon_geometry.fingerprint(),
-            "request placement is not semantic geometry",
+        let mut relocated = FlowGeometryArena::default();
+        relocated
+            .build(parse_valid_geometry(&relocated_polygon).unwrap())
+            .unwrap();
+        let mut original = FlowGeometryArena::default();
+        original.build(polygon_geometry).unwrap();
+        // The retained region still carries the borrowed wire address alongside its decoded vertex_start.
+        relocated.regions[0].record.vertices_offset = original.regions[0].record.vertices_offset;
+        assert!(
+            relocated == original,
+            "request placement is not semantic geometry"
         );
 
         let mut zero_width = valid_geometry_bytes();
@@ -1955,16 +1741,16 @@ mod tests {
             CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_DROP_CAP_VERTICES_OFFSET,
             (contour_offset + 8) as u32,
         );
-        assert_eq!(
-            parse_valid_geometry(&relocated_contour)
-                .unwrap()
-                .fingerprint(),
-            geometry.fingerprint(),
-            "request placement is not semantic drop-cap geometry",
-        );
-
         let mut retained = FlowGeometryArena::default();
         retained.build(geometry).unwrap();
+        let mut relocated = FlowGeometryArena::default();
+        relocated
+            .build(parse_valid_geometry(&relocated_contour).unwrap())
+            .unwrap();
+        assert!(
+            relocated == retained,
+            "request placement is not semantic drop-cap geometry"
+        );
         assert_eq!(retained.constraints[0].drop_cap_vertices_offset, 0);
         assert_eq!(
             retained.vertices[..3],
@@ -2067,19 +1853,25 @@ mod tests {
     }
 
     #[test]
-    fn retained_geometry_rejects_a_span_beyond_the_borrowed_exclusion_table() {
+    fn geometry_preflight_rejects_a_region_span_beyond_the_exclusion_table() {
         let mut bytes = valid_geometry_bytes();
         write_u16(
             &mut bytes,
             REGION_OFFSET + abi::ENGINE_REGION_EXCLUSION_COUNT,
             2,
         );
-        let geometry = parse_valid_geometry(&bytes).unwrap();
-        let mut retained = FlowGeometryArena::default();
-        assert!(matches!(
-            retained.build(geometry),
-            Err(crate::engine::EngineError::InvalidRequest)
-        ));
+        assert!(parse_valid_geometry(&bytes).is_err());
+    }
+
+    #[test]
+    fn geometry_preflight_rejects_a_constraint_span_beyond_the_region_table() {
+        let mut bytes = valid_geometry_bytes();
+        write_u16(
+            &mut bytes,
+            CONSTRAINT_OFFSET + abi::ENGINE_CONSTRAINT_REGION_COUNT,
+            2,
+        );
+        assert!(parse_valid_geometry(&bytes).is_err());
     }
 
     const CONSTRAINT_OFFSET: usize = abi::ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;

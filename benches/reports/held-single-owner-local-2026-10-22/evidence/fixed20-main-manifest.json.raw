@@ -1,0 +1,26 @@
+{
+  "generatedAt": "2026-10-22T19:47:49.212Z",
+  "labsVersion": "0.9.0",
+  "harnessDigest": "2ac59f1c44447be4d5061003f3df32a66c87952ca297e4a804544f16c09b1f5e",
+  "blocks": 8,
+  "suite": "full",
+  "samplingPolicy": "single-call",
+  "warmupPolicy": "fixed-20",
+  "baselineAvailability": "complete",
+  "baseline": {
+    "requested": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+    "version": "0.1.0",
+    "sha256": "bbb3375c08fb3db8186ec10e4b766b7170632f7601eb1ec0e90be0197f22eb20"
+  },
+  "candidate": {
+    "requested": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/pmndrs-glyph-0.1.0.tgz",
+    "version": "0.1.0",
+    "sha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be"
+  },
+  "savedCandidate": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/matrix-fixed20-candidate",
+  "comparison": "comparison.txt",
+  "notComparable": {
+    "baselineCheckFailures": [],
+    "timingModeMismatches": []
+  }
+}

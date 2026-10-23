@@ -1,0 +1,199 @@
+{
+  "recordedUtc": "2026-10-21T00:59:12.837790+00:00",
+  "scope": "Exact source-frozen package-check \u2192 pack \u2192 named artifact gates; no timing or performance acceptance.",
+  "identity": {
+    "head": "277417596afbe2a8cd87454317d05607dc9ba51b",
+    "branch": "feat/rust-text-input-wire",
+    "tree": "d88b1a010ad925cee0e73bf702a2a44405a616b3",
+    "status": "M packages/glyph/rust/shaper/src/engine/codec.rs\n M packages/glyph/rust/shaper/src/engine/codec_gather.rs\n M packages/glyph/rust/shaper/src/engine/ordered_plan.rs\n M packages/glyph/rust/shaper/src/engine/plan_error.rs\n M packages/glyph/rust/shaper/src/engine/plan_packing.rs\n M packages/glyph/rust/shaper/src/engine/render_plan_compiler.rs\n M packages/glyph/rust/shaper/src/engine/session_placement.rs\n M packages/glyph/rust/shaper/src/engine/state.rs\n M packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs\n M packages/glyph/rust/shaper/src/engine/work_attribution.rs",
+    "validatedInputCount": 672,
+    "inputMismatchesAfterAllGates": [],
+    "reviewedTenSourceFilesMatchCorrectionFreeze": true
+  },
+  "packageCheck": {
+    "exit": 0,
+    "started": "2026-10-21T00:54:41.429523+00:00",
+    "finished": "2026-10-21T00:57:19.909169+00:00",
+    "stdoutSha256": "c2ba82ea3daf4a3220df5c772adf076697c95bdb431faec2d00db0eb30599349",
+    "stderrSha256": "794e8d223f47536746fa60d4a20de8750f118c4032bfa2ac4743b86293d00c7c",
+    "rustSummaries": [
+      {
+        "stream": "stdout",
+        "summaryCount": 26,
+        "passed": 593,
+        "failed": 0,
+        "ignored": 2
+      },
+      {
+        "stream": "stderr",
+        "summaryCount": 0,
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "nodeTAPBlocks": [
+      {
+        "stream": "stdout",
+        "tests": 3,
+        "passed": 3,
+        "failed": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "stream": "stdout",
+        "tests": 3,
+        "passed": 3,
+        "failed": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "stream": "stdout",
+        "tests": 1107,
+        "passed": 1107,
+        "failed": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "stream": "stdout",
+        "tests": 3,
+        "passed": 3,
+        "failed": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "stream": "stdout",
+        "tests": 22,
+        "passed": 22,
+        "failed": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "stream": "stdout",
+        "tests": 1,
+        "passed": 1,
+        "failed": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      {
+        "stream": "stdout",
+        "tests": 3,
+        "passed": 3,
+        "failed": 0,
+        "cancelled": 0,
+        "skipped": 0
+      }
+    ],
+    "nodePassTotal": 1142,
+    "ignoredTestsRemainDistinct": true
+  },
+  "pack": {
+    "exit": 0,
+    "stdoutSha256": "8b40b2edcc78311e7ddbddf4b75238a9d2f0432cf8596d483367de5692b5d6fe",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archiveSha256": "83949860ae65b99fe6d7471b9782398234852668b54412870fafa81878c366a3",
+    "archiveSizeBytes": 3203463,
+    "archivedMemberCount": 1222,
+    "archivedDistCount": 947,
+    "localDistCount": 952,
+    "missingFromLocal": [],
+    "hashMismatches": [],
+    "unshippedLocalDistExtras": [
+      "dist/.tsbuildinfo",
+      "dist/internal/raster-baker-profile.d.ts",
+      "dist/internal/raster-baker-profile.d.ts.map",
+      "dist/internal/raster-baker-profile.js",
+      "dist/internal/raster-baker-profile.js.map"
+    ],
+    "shippingWasm": {
+      "dist/bitmap-baker.wasm": {
+        "sha256": "af4892531eeab1b5d7e40844e2ab261628f51456345fb4c515fae248ae8449bc",
+        "sizeBytes": 614383
+      },
+      "dist/font-baker.wasm": {
+        "sha256": "10b15d3d9359fdc76629a52d8ff68158e0396f2fd0a4581be5b83b194eecd793",
+        "sizeBytes": 1080865
+      },
+      "dist/mtsdf-baker.wasm": {
+        "sha256": "27a205b72a77fa81016c90e4be2cbfdda7a0ba587f0c9d18169a8399ff557728",
+        "sizeBytes": 548605
+      },
+      "dist/slug-baker.wasm": {
+        "sha256": "418c895d6b5460e4a6ed1e3c35e37bc8e2fad31695e874cea5f33e144f71bee4",
+        "sizeBytes": 454348
+      },
+      "dist/text-shaper.wasm": {
+        "sha256": "8b594e2b123c35c0789a1e38ee15761e9a6a2245fdce6da1181efacbc0ab366a",
+        "sizeBytes": 1625526
+      }
+    }
+  },
+  "namedArtifact": {
+    "exit": 0,
+    "stdoutSha256": "c72329cedcd3795970c006ef1eb0551f1aeccf92a72a444e0145a7ef718f6fd2",
+    "stderrSha256": "edcb64dc2fad2c8516b1f2b2b38272133eef408044bf08f06abbcbcc368c3797",
+    "manifestSha256": "356cdbfc9af89a49825017c04e485239b0b9389f9838a61a5789229d49fa4a7f",
+    "manifest": {
+      "artifact": {
+        "file": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+        "sha256": "83949860ae65b99fe6d7471b9782398234852668b54412870fafa81878c366a3"
+      },
+      "releaseSha256": "8b594e2b123c35c0789a1e38ee15761e9a6a2245fdce6da1181efacbc0ab366a",
+      "namedSha256": "fb54c6442677f8cf6a8adbc220b86ed2031a68322669f79413a9ca1e6a2ea449",
+      "executableSha256": "8b594e2b123c35c0789a1e38ee15761e9a6a2245fdce6da1181efacbc0ab366a",
+      "sourceRoot": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+      "sourceRevision": "277417596afbe2a8cd87454317d05607dc9ba51b",
+      "sourceDirty": "M packages/glyph/rust/shaper/src/engine/codec.rs\n M packages/glyph/rust/shaper/src/engine/codec_gather.rs\n M packages/glyph/rust/shaper/src/engine/ordered_plan.rs\n M packages/glyph/rust/shaper/src/engine/plan_error.rs\n M packages/glyph/rust/shaper/src/engine/plan_packing.rs\n M packages/glyph/rust/shaper/src/engine/render_plan_compiler.rs\n M packages/glyph/rust/shaper/src/engine/session_placement.rs\n M packages/glyph/rust/shaper/src/engine/state.rs\n M packages/glyph/rust/shaper/src/engine/transport/bitmap_replay_auth.rs\n M packages/glyph/rust/shaper/src/engine/work_attribution.rs",
+      "tools": {
+        "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+        "wasmOpt": "wasm-opt version 129 (version_129)"
+      },
+      "simd": true,
+      "oneCallerInlineMaxFunctionSize": "0",
+      "optimization": [
+        "--enable-bulk-memory",
+        "--enable-nontrapping-float-to-int",
+        "--enable-simd",
+        "--one-caller-inline-max-function-size=0",
+        "--merge-similar-functions",
+        "-Oz",
+        "--merge-similar-functions",
+        "-Oz"
+      ],
+      "functionCount": 1608
+    },
+    "functionsMapSha256": "1fbc40ce3f499553ec496f9f5ea03efa8d312c5edeb9560d18f16dd39ee6947e",
+    "namedWasmSha256": "fb54c6442677f8cf6a8adbc220b86ed2031a68322669f79413a9ca1e6a2ea449",
+    "profileWasmIdentity": "manifest executableSha256 equals releaseSha256; manifest releaseSha256 also equals archive dist/text-shaper.wasm hash"
+  },
+  "receipts": {
+    "package-check-final-01": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/package-check-final-01",
+      "resultSha256": "d7a1f702e16c88f53e4351f3708ca1b289fa04b62a7c442a9ce87923f2e69975"
+    },
+    "pack-final-01": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/pack-final-01",
+      "resultSha256": "1d009df407bea399c3e5d79a9c7890971760e0b1587e2eeba2dfc1ee3b62df50"
+    },
+    "named-artifact-final-01": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/named-artifact-final-01",
+      "resultSha256": "e5fb49cd71c07ad23f560d5a5ac4c179febf74aad2f9fd16880c2640269c9022"
+    }
+  },
+  "evidenceFiles": {
+    "preflight": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/package-gate-correction-preflight.json",
+      "sha256": "cf93241b6ed05f408d7579d37505aff6f084328fd55e0537c5487746bf2fa966"
+    },
+    "archiveComparison": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/package-artifact-gate.json",
+      "sha256": "19143d4e57b82bf1a9a4c57a6470124663e79580ef2ab8682af7962bc7e7c6a2"
+    }
+  }
+}

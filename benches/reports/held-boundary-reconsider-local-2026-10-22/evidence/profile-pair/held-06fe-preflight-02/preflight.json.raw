@@ -1,0 +1,35 @@
+{
+  "arm": "held-06fe",
+  "capturedUtc": "2026-10-23T00:16:41.608095+00:00",
+  "artifacts": {
+    "archive": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/pmndrs-glyph-0.1.0.tgz",
+      "sha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+      "expectedSha256": "06fe22b7f05dceb27f59b2e82d33fab541c8cee04c37b1a1ccdf078f6ecdc9be",
+      "matches": true,
+      "bytes": 3197306
+    },
+    "namedWasm": {
+      "path": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/candidate/shaper-profile/text-shaper.named.wasm",
+      "sha256": "c94120f523f9022eaac87733822df4cf1836ad73fc4ad0228f5fdebb03ed4f36",
+      "expectedSha256": "c94120f523f9022eaac87733822df4cf1836ad73fc4ad0228f5fdebb03ed4f36",
+      "matches": true,
+      "bytes": 1790181
+    },
+    "shippingWasm": {
+      "sha256": "66e6c46357030d8457a8568af303d8552b16a68f0c3815877d01d634996bbffb",
+      "expectedSha256": "66e6c46357030d8457a8568af303d8552b16a68f0c3815877d01d634996bbffb",
+      "matches": true
+    }
+  },
+  "harnessInputDigestSha256": "e788ebad6b5b526c8cf98e496d9f65f85b35508fcdebf61a67c64a865c40a292",
+  "sourcePatchSha256": "52ebbd2f3c0538dd17aa164b8e9b18bf049fa254b184fb01ab087f174cd80e09",
+  "sourcePatchBytes": 873,
+  "idlePercentsFrom2SampleReadout": [
+    51.15,
+    67.16
+  ],
+  "loadProcessFile": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-reconsider-20261022/profile-pair/held-06fe-preflight-02/load-process.txt",
+  "loadProcessSha256": "a0fdf1c722b9a571fc11903d6e67a4ae0b95d66fa1e2d8d0670cbc08baa97466",
+  "knownUnrelatedViteLeftUntouched": true
+}

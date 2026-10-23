@@ -1,0 +1,22 @@
+{
+  "schema": "root-published-all143-facts-verification-v1",
+  "pairedIdentities": 143,
+  "armCells": 286,
+  "printedRows": 143,
+  "printedFieldsPerRow": 6,
+  "candidateOnlyUnsupportedCount": 2,
+  "sourceFormulaSha256": "6385fc4a9511b3d68d9e9cf1f9eb1e897125bfdfd0bdb4d6c6e1177efb8fffd4",
+  "provenanceSha256": "8dfb95cea0b999716fc5a49ee59a5181d001fd79725319b8b4462f91c3251215",
+  "softwareCalibrationDriftPercent": {
+    "mainDiagnostic": {
+      "baseline": 10.984501851373114,
+      "candidate": 4.022791384607878
+    },
+    "published": {
+      "baseline": 1.9839450736591022,
+      "candidate": 4.022791384607878
+    }
+  },
+  "scope": "Independentrawquantile/count/median/planandprintedfield/hashchecks; actualfreqDriftsourceinspectedand4armpairvaluesrecomputed. No admission.",
+  "operationalCorrection": "Firstread-onlyverifierassumedmainkey;actualprovenancekeymainDiagnostic. Correctedverifiernowcomplete; no package/source/timingchanges."
+}

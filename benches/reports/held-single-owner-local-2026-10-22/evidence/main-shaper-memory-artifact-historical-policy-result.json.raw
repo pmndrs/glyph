@@ -1,0 +1,30 @@
+{
+  "argv": [
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "glyph:shaper-memory-artifact",
+    "--",
+    "--artifact",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/main-4e25a96a.tgz",
+    "--source-root",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/main-memory-overlay/source",
+    "--output",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/boundary-wave-20261022/main-memory-overlay/artifact-historical-policy",
+    "--simd",
+    "1",
+    "--one-caller-inline-max-function-size",
+    "default"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-22T17:53:29.963413+00:00",
+  "finished": "2026-10-22T17:54:10.299970+00:00",
+  "exit": 1,
+  "sha256": {
+    "stdout.log": "70691ee46df8bffd84dd117eb9297af7108f7fc0b6be5f63d6cb30aef0d605b5",
+    "stderr.log": "3c1d3a3cc85911c04dd79ccf4f9b1ed17d8805ea6468d9027f8e134d18b8cefc"
+  }
+}

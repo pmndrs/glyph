@@ -1,0 +1,7 @@
+{
+  "recorded": "2026-10-20T13:33:15.182349+00:00",
+  "argv": ["/opt/homebrew/bin/git", "ls-remote", "origin", "refs/heads/main"],
+  "exit": 0,
+  "stdout": "4e25a96a57462fef5ad0d19065a822695b480f60\trefs/heads/main\n",
+  "stderr": ""
+}

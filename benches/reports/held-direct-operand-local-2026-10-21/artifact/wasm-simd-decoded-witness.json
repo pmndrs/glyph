@@ -1,0 +1,38 @@
+{
+  "schema": "glyph-named-wasm-simd-static-witness-v1",
+  "recordedUtc": "2026-10-21T01:11:02.956933+00:00",
+  "namedWasm": {
+    "path": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/shaper-profile/text-shaper.named.wasm",
+    "sha256": "fb54c6442677f8cf6a8adbc220b86ed2031a68322669f79413a9ca1e6a2ea449",
+    "watPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/candidate/shaper-profile/text-shaper.named.wat",
+    "watSha256": "8a7bedae9fc6de4dda85fc9d3537d217c181bf0721f48b502267337a2bc59a20",
+    "watBytes": 27859535
+  },
+  "binaryenDisassemblyReceipt": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/wasm-dis-named-final-01/result.json",
+  "featureFlags": [
+    "--enable-simd",
+    "--enable-bulk-memory",
+    "--enable-nontrapping-float-to-int"
+  ],
+  "executeProgram": {
+    "symbol": "_RNvNtNtCscGJfW8CR417_19pmndrs_glyph_shaper6engine5codec15execute_program",
+    "startLine": 326541,
+    "endLine": 332316,
+    "bodyBytesUtf8": 212052,
+    "explicitVectorOperatorCounts": {
+      "v128.load": 29,
+      "i8x16.shuffle": 10,
+      "i32x4.ne": 1,
+      "f32x4.add": 1,
+      "v128.store": 27
+    },
+    "directRowContextU32Calls": 5,
+    "directRowContextF32Calls": 5
+  },
+  "packingOwner": {
+    "symbol": "plan_packing::execute_run_with_source",
+    "sourceLocation": "packages/glyph/rust/crates/pmndrs-glyph-shaper/src/engine/plan_packing.rs",
+    "note": "Shipping function name is execute_run_with_source; plain execute_run is cfg(test). Source routes to codec.execute_direct_buffers when direct_source is present, otherwise execute_buffers. The emitted function references execute_program twice."
+  },
+  "interpretationLimit": "Static emitted-code evidence only: SIMD and direct-row helper calls exist in this function body. This does not demonstrate that a runtime path invokes those instructions for any specific workload."
+}

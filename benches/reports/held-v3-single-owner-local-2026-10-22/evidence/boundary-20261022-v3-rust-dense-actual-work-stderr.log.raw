@@ -1,0 +1,10 @@
+$ node benches/scripts/workflows.mts run glyph:shaper-tests -- dense_inter_setter_publication_attributes_actual_work
+   Compiling pmndrs-glyph-shaper v0.0.0 (/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo/packages/glyph/rust/shaper)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.34s
+     Running unittests src/lib.rs (rust/shaper/target/debug/deps/pmndrs_glyph_shaper-411c98d278b4d570)
+     Running unittests src/bin/generate-shaper-abi.rs (rust/shaper/target/debug/deps/generate_shaper_abi-0bb177e22f3975c1)
+     Running tests/diagnostic_live_memory.rs (rust/shaper/target/debug/deps/diagnostic_live_memory-55d87f592007b4c1)
+     Running tests/outline_oracle.rs (rust/shaper/target/debug/deps/outline_oracle-0540da93e41a8b3c)
+     Running tests/unicode_bidi_conformance.rs (rust/shaper/target/debug/deps/unicode_bidi_conformance-2bc9d24a5d1cf999)
+     Running tests/unicode_grapheme_conformance.rs (rust/shaper/target/debug/deps/unicode_grapheme_conformance-d6ac0c962494b6ff)
+     Running tests/unicode_line_break_conformance.rs (rust/shaper/target/debug/deps/unicode_line_break_conformance-7012f2440c5d6d84)

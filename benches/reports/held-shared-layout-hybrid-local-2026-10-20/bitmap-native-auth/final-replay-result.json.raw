@@ -1,0 +1,26 @@
+{
+  "argv": [
+    "mise",
+    "exec",
+    "--",
+    "pnpm",
+    "scripts",
+    "run",
+    "benchmark:bitmap-native-replay-capture",
+    "--",
+    "--artifact",
+    "/Volumes/Depot/Developer/glyph/.cache/held-wave2-20261020/evidence/candidate/pmndrs-glyph-0.1.0.tgz",
+    "--output",
+    "/Volumes/Depot/Developer/glyph/.cache/held-hybrid-20261020/evidence/bitmap-native-replay-auth/full-05",
+    "--mode",
+    "full"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-20T21:27:17.867965+00:00",
+  "finished": "2026-10-20T21:27:24.097192+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "94efaa0386f58403602c22e914d5ad044204b4dbb913c2902ef316166c3b78c3",
+    "stderr.log": "e1cd52cf34a9e9d0802e5b183e7e541f2e4d9cf3a6709163dfeaf5c57ba8803d"
+  }
+}

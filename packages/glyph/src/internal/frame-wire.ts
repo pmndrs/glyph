@@ -222,6 +222,7 @@ export interface PlannerFrameUpdate {
 /** @internal One validated frame encoding that can write directly into a retained request arena. */
 export interface PreparedPlannerFrameUpdate {
   readonly byteLength: number;
+  readonly singleTextMutation: boolean;
   readonly frame: PlannerFrameUpdate;
   readonly paragraphMutations: readonly PlannerParagraphMutation[];
   readonly paragraphOrderMutations: readonly PlannerParagraphOrderMutation[];
@@ -241,8 +242,42 @@ export interface PreparedPlannerFrameUpdate {
   readonly dropCapVertexOffsets: readonly number[];
 }
 
+/** @internal One transport's reusable offset storage; prepared frames must be written before its next prepare. */
+export interface PlannerFrameScratch {
+  readonly textPayloads: number[];
+  readonly languageBytes: Uint8Array[];
+  readonly languageOffsets: number[];
+  readonly featureOffsets: number[];
+  readonly regionVertexOffsets: number[];
+  readonly exclusionVertexOffsets: number[];
+  readonly dropCapVertexOffsets: number[];
+}
+
+const EMPTY_BYTES = new Uint8Array();
+
+/** @internal Create offset storage for one synchronous frame write. */
+export function createPlannerFrameScratch(): PlannerFrameScratch {
+  return {
+    textPayloads: [],
+    languageBytes: [],
+    languageOffsets: [],
+    featureOffsets: [],
+    regionVertexOffsets: [],
+    exclusionVertexOffsets: [],
+    dropCapVertexOffsets: [],
+  };
+}
+
+/** @internal Release encoded language payloads after writing, including on a failed write. */
+export function clearPlannerFrameScratch(scratch: PlannerFrameScratch): void {
+  scratch.languageBytes.length = 0;
+}
+
 /** @internal Prepare one package-owned frame without allocating its final wire buffer. */
-export function preparePlannerFrameUpdate(frame: PlannerFrameUpdate): PreparedPlannerFrameUpdate {
+export function preparePlannerFrameUpdate(
+  frame: PlannerFrameUpdate,
+  scratch: PlannerFrameScratch = createPlannerFrameScratch(),
+): PreparedPlannerFrameUpdate {
   const abi = textShaperAbi;
   const request = abi.layouts.engineUpdateRequest;
   const paragraphMutations = frame.paragraphMutations ?? [];
@@ -253,6 +288,15 @@ export function preparePlannerFrameUpdate(frame: PlannerFrameUpdate): PreparedPl
   const regions = frame.regions ?? [];
   const exclusions = frame.exclusions ?? [];
   const inlineObjects = frame.inlineObjects ?? [];
+  const singleTextMutation =
+    textMutations.length === 1 &&
+    paragraphMutations.length === 0 &&
+    paragraphOrderMutations.length === 0 &&
+    styleMutations.length === 0 &&
+    constraints.length === 0 &&
+    regions.length === 0 &&
+    exclusions.length === 0 &&
+    inlineObjects.length === 0;
   let cursor: number = request.size;
   const allocate = (count: number, stride: number, alignment: number, label: string): number => {
     if (count === 0) return 0;
@@ -260,56 +304,109 @@ export function preparePlannerFrameUpdate(frame: PlannerFrameUpdate): PreparedPl
     cursor = checkedAdd(offset, checkedProduct(count, stride, label), label);
     return offset;
   };
-  const paragraphOffset = allocate(
-    paragraphMutations.length,
-    abi.layouts.engineParagraphMutation.size,
-    abi.layouts.engineParagraphMutation.alignment,
-    'paragraph mutations',
-  );
-  const paragraphOrderOffset = allocate(
-    paragraphOrderMutations.length,
-    abi.layouts.engineParagraphOrderMutation.size,
-    abi.layouts.engineParagraphOrderMutation.alignment,
-    'paragraph order mutations',
-  );
+  let paragraphOffset = 0;
+  let paragraphOrderOffset = 0;
+  if (!singleTextMutation) {
+    paragraphOffset = allocate(
+      paragraphMutations.length,
+      abi.layouts.engineParagraphMutation.size,
+      abi.layouts.engineParagraphMutation.alignment,
+      'paragraph mutations',
+    );
+    paragraphOrderOffset = allocate(
+      paragraphOrderMutations.length,
+      abi.layouts.engineParagraphOrderMutation.size,
+      abi.layouts.engineParagraphOrderMutation.alignment,
+      'paragraph order mutations',
+    );
+  }
   const textOffset = allocate(textMutations.length, abi.layouts.engineTextMutation.size, 4, 'text mutations');
-  const styleOffset = allocate(styleMutations.length, abi.layouts.engineStyleMutation.size, 4, 'style mutations');
-  const constraintOffset = allocate(constraints.length, abi.layouts.engineConstraint.size, 4, 'constraints');
-  const regionOffset = allocate(regions.length, abi.layouts.engineRegion.size, 4, 'regions');
-  const exclusionOffset = allocate(exclusions.length, abi.layouts.engineExclusion.size, 4, 'exclusions');
-  const inlineObjectOffset = allocate(inlineObjects.length, abi.layouts.engineInlineObject.size, 4, 'inline objects');
-  const textPayloads = textMutations.map((mutation) => allocate(mutation.insert.length, 2, 2, 'text mutation payload'));
-  const languageBytes = styleMutations.map((mutation) =>
-    mutation.opcode === 'upsert' && mutation.value.language !== undefined
-      ? encoder.encode(mutation.value.language)
-      : new Uint8Array(),
-  );
-  // Keep each record's payloads together in the monotonic allocation stream; producer tests prove disjoint ranges,
-  // while the runtime parser checks each borrowed slice.
-  const languageOffsets: number[] = [];
-  const featureOffsets: number[] = [];
-  for (const [index, mutation] of styleMutations.entries()) {
-    languageOffsets.push(allocate(languageBytes[index]!.length, 1, 1, 'style language'));
-    featureOffsets.push(
-      allocate(
+  let styleOffset = 0;
+  let constraintOffset = 0;
+  let regionOffset = 0;
+  let exclusionOffset = 0;
+  let inlineObjectOffset = 0;
+  if (!singleTextMutation) {
+    styleOffset = allocate(styleMutations.length, abi.layouts.engineStyleMutation.size, 4, 'style mutations');
+    constraintOffset = allocate(constraints.length, abi.layouts.engineConstraint.size, 4, 'constraints');
+    regionOffset = allocate(regions.length, abi.layouts.engineRegion.size, 4, 'regions');
+    exclusionOffset = allocate(exclusions.length, abi.layouts.engineExclusion.size, 4, 'exclusions');
+    inlineObjectOffset = allocate(inlineObjects.length, abi.layouts.engineInlineObject.size, 4, 'inline objects');
+  }
+  const {
+    textPayloads,
+    languageBytes,
+    languageOffsets,
+    featureOffsets,
+    regionVertexOffsets,
+    exclusionVertexOffsets,
+    dropCapVertexOffsets,
+  } = scratch;
+  textPayloads.length = textMutations.length;
+  for (let index = 0; index < textMutations.length; index++) {
+    textPayloads[index] = allocate(textMutations[index]!.insert.length, 2, 2, 'text mutation payload');
+  }
+  if (singleTextMutation) {
+    languageBytes.length = 0;
+    languageOffsets.length = 0;
+    featureOffsets.length = 0;
+    regionVertexOffsets.length = 0;
+    exclusionVertexOffsets.length = 0;
+    dropCapVertexOffsets.length = 0;
+  } else {
+    languageBytes.length = styleMutations.length;
+    for (let index = 0; index < styleMutations.length; index++) {
+      const mutation = styleMutations[index]!;
+      languageBytes[index] =
+        mutation.opcode === 'upsert' && mutation.value.language !== undefined
+          ? encoder.encode(mutation.value.language)
+          : EMPTY_BYTES;
+    }
+    // Keep each record's payloads together in the monotonic allocation stream; producer tests prove disjoint ranges,
+    // while the runtime parser checks each borrowed slice.
+    languageOffsets.length = styleMutations.length;
+    featureOffsets.length = styleMutations.length;
+    for (let index = 0; index < styleMutations.length; index++) {
+      const mutation = styleMutations[index]!;
+      languageOffsets[index] = allocate(languageBytes[index]!.length, 1, 1, 'style language');
+      featureOffsets[index] = allocate(
         mutation.opcode === 'upsert' ? (mutation.value.features?.length ?? 0) : 0,
         abi.layouts.feature.size,
         abi.layouts.feature.alignment,
         'style features',
-      ),
-    );
+      );
+    }
+    regionVertexOffsets.length = regions.length;
+    for (let index = 0; index < regions.length; index++) {
+      regionVertexOffsets[index] = allocate(
+        regions[index]!.vertices?.length ?? 0,
+        abi.layouts.engineFlowVertex.size,
+        4,
+        'region vertices',
+      );
+    }
+    exclusionVertexOffsets.length = exclusions.length;
+    for (let index = 0; index < exclusions.length; index++) {
+      exclusionVertexOffsets[index] = allocate(
+        exclusions[index]!.vertices?.length ?? 0,
+        abi.layouts.engineFlowVertex.size,
+        4,
+        'exclusion vertices',
+      );
+    }
+    dropCapVertexOffsets.length = constraints.length;
+    for (let index = 0; index < constraints.length; index++) {
+      dropCapVertexOffsets[index] = allocate(
+        constraints[index]!.dropCap?.contour?.length ?? 0,
+        abi.layouts.engineFlowVertex.size,
+        4,
+        'drop cap vertices',
+      );
+    }
   }
-  const regionVertexOffsets = regions.map((region) =>
-    allocate(region.vertices?.length ?? 0, abi.layouts.engineFlowVertex.size, 4, 'region vertices'),
-  );
-  const exclusionVertexOffsets = exclusions.map((exclusion) =>
-    allocate(exclusion.vertices?.length ?? 0, abi.layouts.engineFlowVertex.size, 4, 'exclusion vertices'),
-  );
-  const dropCapVertexOffsets = constraints.map((constraint) =>
-    allocate(constraint.dropCap?.contour?.length ?? 0, abi.layouts.engineFlowVertex.size, 4, 'drop cap vertices'),
-  );
   return {
     byteLength: cursor,
+    singleTextMutation,
     frame,
     paragraphMutations,
     paragraphOrderMutations,
@@ -340,13 +437,21 @@ export function preparePlannerFrameUpdate(frame: PlannerFrameUpdate): PreparedPl
 }
 
 /** @internal Write one prepared frame into an exact retained request-arena slice. */
-export function writePreparedPlannerFrameUpdate(prepared: PreparedPlannerFrameUpdate, bytes: Uint8Array): void {
+export function writePreparedPlannerFrameUpdate(
+  prepared: PreparedPlannerFrameUpdate,
+  bytes: Uint8Array,
+  boundView?: DataView,
+): void {
   if (!(bytes instanceof Uint8Array) || bytes.byteLength !== prepared.byteLength) {
     throw new RangeError(`planner frame target must contain exactly ${prepared.byteLength} bytes`);
   }
+  const view = boundView ?? new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   bytes.fill(0);
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   writeHeader(view, prepared.frame, bytes.length, prepared.offsets);
+  if (prepared.singleTextMutation) {
+    writeTextMutations(view, prepared.offsets.textOffset, prepared.textMutations, prepared.textPayloads);
+    return;
+  }
   writeParagraphMutations(view, prepared.offsets.paragraphOffset, prepared.paragraphMutations);
   writeParagraphOrderMutations(view, prepared.offsets.paragraphOrderOffset, prepared.paragraphOrderMutations);
   writeTextMutations(view, prepared.offsets.textOffset, prepared.textMutations, prepared.textPayloads);
@@ -392,48 +497,64 @@ function writeHeader(view: DataView, frame: PlannerFrameUpdate, byteLength: numb
     frame.compositingIndependent === true ? textShaperAbi.engine.frameFlags.compositingIndependent : 0,
     true,
   );
-  for (const [field, value] of [
-    ['abiVersion', textShaperAbi.version],
-    ['byteLength', byteLength],
-    ['rootId', frame.rootId],
-    ['expectedEngineRevision', frame.expectedEngineRevision],
-    ['consumedRevision', frame.consumedRevision],
-    ['acknowledgedPublicationGeneration', frame.acknowledgedPublicationGeneration],
-    ['codecHandle', frame.codecHandle],
-    [
-      'capabilitySet',
+  view.setUint32(layout.abiVersion, u32(textShaperAbi.version, 'abiVersion'), true);
+  view.setUint32(layout.byteLength, u32(byteLength, 'byteLength'), true);
+  view.setUint32(layout.rootId, u32(frame.rootId, 'rootId'), true);
+  view.setUint32(layout.expectedEngineRevision, u32(frame.expectedEngineRevision, 'expectedEngineRevision'), true);
+  view.setUint32(layout.consumedRevision, u32(frame.consumedRevision, 'consumedRevision'), true);
+  view.setUint32(
+    layout.acknowledgedPublicationGeneration,
+    u32(frame.acknowledgedPublicationGeneration, 'acknowledgedPublicationGeneration'),
+    true,
+  );
+  view.setUint32(layout.codecHandle, u32(frame.codecHandle, 'codecHandle'), true);
+  view.setUint32(
+    layout.capabilitySet,
+    u32(
       frame.capabilitySet === undefined ? 1 : codecCapabilitySetSelectionId(frame.capabilitySet, frame.codecHandle),
-    ],
-    ['semanticViewMask', frame.semanticViewMask ?? 0],
-    ['maxParagraphs', limits.maxParagraphs],
-    ['maxClusters', limits.maxClusters],
-    ['maxLines', limits.maxLines],
-    ['maxRegions', limits.maxRegions],
-    ['maxExclusions', limits.maxExclusions],
-    ['maxInlineObjects', limits.maxInlineObjects],
-    ['maxSlotsPerBand', limits.maxSlotsPerBand],
-    ['maxOutputBytes', limits.maxOutputBytes],
-    ['paragraphMutationsOffset', offsets.paragraphOffset],
-    ['paragraphMutationCount', frame.paragraphMutations?.length ?? 0],
-    ['paragraphOrderMutationsOffset', offsets.paragraphOrderOffset],
-    ['paragraphOrderMutationCount', frame.paragraphOrderMutations?.length ?? 0],
-    ['textMutationsOffset', offsets.textOffset],
-    ['textMutationCount', frame.textMutations?.length ?? 0],
-    ['styleMutationsOffset', offsets.styleOffset],
-    ['styleMutationCount', frame.styleMutations?.length ?? 0],
-    ['constraintsOffset', offsets.constraintOffset],
-    ['constraintCount', frame.constraints?.length ?? 0],
-    ['regionsOffset', offsets.regionOffset],
-    ['regionCount', frame.regions?.length ?? 0],
-    ['exclusionsOffset', offsets.exclusionOffset],
-    ['exclusionCount', frame.exclusions?.length ?? 0],
-    ['inlineObjectsOffset', offsets.inlineObjectOffset],
-    ['inlineObjectCount', frame.inlineObjects?.length ?? 0],
-    ['codecParametersOffset', 0],
-    ['codecParametersLength', 0],
-  ] as const) {
-    view.setUint32(layout[field], u32(value, field), true);
-  }
+      'capabilitySet',
+    ),
+    true,
+  );
+  view.setUint32(layout.semanticViewMask, u32(frame.semanticViewMask ?? 0, 'semanticViewMask'), true);
+  view.setUint32(layout.maxParagraphs, u32(limits.maxParagraphs, 'maxParagraphs'), true);
+  view.setUint32(layout.maxClusters, u32(limits.maxClusters, 'maxClusters'), true);
+  view.setUint32(layout.maxLines, u32(limits.maxLines, 'maxLines'), true);
+  view.setUint32(layout.maxRegions, u32(limits.maxRegions, 'maxRegions'), true);
+  view.setUint32(layout.maxExclusions, u32(limits.maxExclusions, 'maxExclusions'), true);
+  view.setUint32(layout.maxInlineObjects, u32(limits.maxInlineObjects, 'maxInlineObjects'), true);
+  view.setUint32(layout.maxSlotsPerBand, u32(limits.maxSlotsPerBand, 'maxSlotsPerBand'), true);
+  view.setUint32(layout.maxOutputBytes, u32(limits.maxOutputBytes, 'maxOutputBytes'), true);
+  view.setUint32(layout.paragraphMutationsOffset, u32(offsets.paragraphOffset, 'paragraphMutationsOffset'), true);
+  view.setUint32(
+    layout.paragraphMutationCount,
+    u32(frame.paragraphMutations?.length ?? 0, 'paragraphMutationCount'),
+    true,
+  );
+  view.setUint32(
+    layout.paragraphOrderMutationsOffset,
+    u32(offsets.paragraphOrderOffset, 'paragraphOrderMutationsOffset'),
+    true,
+  );
+  view.setUint32(
+    layout.paragraphOrderMutationCount,
+    u32(frame.paragraphOrderMutations?.length ?? 0, 'paragraphOrderMutationCount'),
+    true,
+  );
+  view.setUint32(layout.textMutationsOffset, u32(offsets.textOffset, 'textMutationsOffset'), true);
+  view.setUint32(layout.textMutationCount, u32(frame.textMutations?.length ?? 0, 'textMutationCount'), true);
+  view.setUint32(layout.styleMutationsOffset, u32(offsets.styleOffset, 'styleMutationsOffset'), true);
+  view.setUint32(layout.styleMutationCount, u32(frame.styleMutations?.length ?? 0, 'styleMutationCount'), true);
+  view.setUint32(layout.constraintsOffset, u32(offsets.constraintOffset, 'constraintsOffset'), true);
+  view.setUint32(layout.constraintCount, u32(frame.constraints?.length ?? 0, 'constraintCount'), true);
+  view.setUint32(layout.regionsOffset, u32(offsets.regionOffset, 'regionsOffset'), true);
+  view.setUint32(layout.regionCount, u32(frame.regions?.length ?? 0, 'regionCount'), true);
+  view.setUint32(layout.exclusionsOffset, u32(offsets.exclusionOffset, 'exclusionsOffset'), true);
+  view.setUint32(layout.exclusionCount, u32(frame.exclusions?.length ?? 0, 'exclusionCount'), true);
+  view.setUint32(layout.inlineObjectsOffset, u32(offsets.inlineObjectOffset, 'inlineObjectsOffset'), true);
+  view.setUint32(layout.inlineObjectCount, u32(frame.inlineObjects?.length ?? 0, 'inlineObjectCount'), true);
+  view.setUint32(layout.codecParametersOffset, u32(0, 'codecParametersOffset'), true);
+  view.setUint32(layout.codecParametersLength, u32(0, 'codecParametersLength'), true);
 }
 
 function writeParagraphMutations(

@@ -1,0 +1,17 @@
+{
+  "scope": "Completed independent architecture reports added after original packet staging; original packet-index pending note is historical and superseded by README.",
+  "copies": [
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/architecture-speed-zoomout-sol-high.md",
+      "destination": "benches/reports/held-direct-operand-local-2026-10-21/reviews/architecture-speed-zoomout-sol-high.md",
+      "bytes": 22815,
+      "sha256": "709d21651c6f61c6c20a5247e26ace698270f26bf344ced13af6c5440a49470d"
+    },
+    {
+      "originalPath": "/Volumes/Depot/Developer/glyph/.cache/held-direct-retained-20261021/evidence/architecture-speed-zoomout-implementation-brief.md",
+      "destination": "benches/reports/held-direct-operand-local-2026-10-21/reviews/architecture-speed-zoomout-implementation-brief.md",
+      "bytes": 15353,
+      "sha256": "85fce86156e4bcd3bd56e3a87a046357fe547e5abab20984aa5b73fe2b98ca51"
+    }
+  ]
+}

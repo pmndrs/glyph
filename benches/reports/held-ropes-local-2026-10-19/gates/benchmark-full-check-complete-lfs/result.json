@@ -1,0 +1,31 @@
+{
+  "argv": [
+    "/usr/bin/env",
+    "TMPDIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/scratch",
+    "PORTLESS_STATE_DIR=/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/portless-state",
+    "PORTLESS_PORT=1356",
+    "PORTLESS_HTTPS=0",
+    "PORTLESS_SYNC_HOSTS=0",
+    "/Users/mini/.local/share/mise/installs/node/24.18.0/bin/node",
+    "/Users/mini/.npm/_npx/6a98873df99949c7/node_modules/portless/dist/cli.js",
+    "held-final-check",
+    "/Users/mini/.local/bin/mise",
+    "exec",
+    "--",
+    "pnpm",
+    "--dir",
+    "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+    "--filter",
+    "@pmndrs/glyph-benchmarks",
+    "check",
+    "--runtime-packages-ready"
+  ],
+  "cwd": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/repo",
+  "started": "2026-10-19T16:26:17.164868+00:00",
+  "finished": "2026-10-19T16:26:56.964669+00:00",
+  "exit": 0,
+  "sha256": {
+    "stdout.log": "4c1fd550a0be952571a706b1a14623899ec1d0c35c5c0740219ce968d2005b14",
+    "stderr.log": "a515b7925bb924964aef1c4ef698765859a4361ddbf41b2cce51540df3609941"
+  }
+}

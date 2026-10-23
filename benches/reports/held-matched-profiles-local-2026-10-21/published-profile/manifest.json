@@ -1,0 +1,19 @@
+{
+  "artifact": {
+    "file": "published-0.1.0.tgz",
+    "sha256": "6e2bf7bdef50ec528a4e4799b8f067e81335388265fbb4950cbbcf08f840581b"
+  },
+  "generatedAt": "2026-10-22T00:43:26.082Z",
+  "options": {
+    "artifact": "/Volumes/Depot/Developer/glyph/.cache/held-rerun-20261019/evidence/controls/published-0.1.0.tgz",
+    "boundary": "publication",
+    "count": 1024,
+    "iterations": 80,
+    "output": "/Volumes/Depot/Developer/glyph/.cache/held-matched-profiles-20261021/evidence/published-profile",
+    "position": "first",
+    "profileCase": "bulk-write",
+    "warmups": 10,
+    "reads": "none",
+    "publicationPath": "scene"
+  }
+}
