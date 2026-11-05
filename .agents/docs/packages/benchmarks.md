@@ -73,6 +73,12 @@ sources:
   - id: v1-bitmap-proof
     resource: ../../../benches/src/v1-bitmap-proof.ts
     title: Target-v1 retained Bitmap browser proof
+  - id: batch-culling-proof
+    resource: ../../../benches/src/batch-culling-proof.ts
+    title: Supplied-bound native Three culling experiment
+  - id: batch-culling-report
+    resource: ../reports/three-batch-culling-experiment.md
+    title: Culling experiment evidence and limitations
   - id: v1-mtsdf-proof
     resource: ../../../benches/src/v1-mtsdf-proof.ts
     title: Target-v1 retained MTSDF browser proof
@@ -261,7 +267,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-6
-  at: '2026-10-13T18:42:06Z'
+  at: '2026-11-05T02:13:42Z'
 ---
 
 # Package reference: `@pmndrs/glyph-benchmarks`
@@ -280,6 +286,13 @@ build, and typecheck therefore consume current TypeScript sources without requir
 Node workflows continue to exercise built package exports.
 
 ## Approved performance lanes
+
+`benchmark:batch-culling` is an opt-in compatibility experiment for #236, using application-supplied conservative
+envelopes on existing publication boundaries and Three's normal culling traversal. It compares exact pixels with
+culling disabled on both backends and transform modes, tests an unknown/displaced material opt-out and wrong-bound
+negative control, and records bounds, native frustum tests, CPU submission and GPU timestamps separately for static
+and moving/editing workloads. The [experiment report](../reports/three-batch-culling-experiment.md) records the scoped
+result and remaining gates. It changes no production culling policy and makes no general speedup claim.
 
 | Lane                  | Runner                         | Owns                                                                                            | Selection                                                                                                                   |
 | --------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
