@@ -151,6 +151,8 @@ generated:
 
 ## Active held refactor: preparation before publication
 
+The current WIP ASCII-anchor experiment adds an optional bounded shaping item for screened single-font Latn/LTR printable-ASCII length edits. Actual registered-font lifetime, authoritative prepared text facts and immutable anchors authorize this route; unsupported cases retain the existing producer. The packed raw arena is reconstructed and downstream layout/query/publication stages retain their ownership and work. It changes no public call contract and has no verified complete-operation speed or full-suite parity result. See the [HELD rope ASCII-anchor WIP checkpoint](../log/2026-11-20-held-rope-ascii-anchor-wip.md) in the append-only log.
+
 The accepted [preparation/publication decision](../planning/decisions/retained-prepare-publish.md) is the contract for
 current ropes work. Setter preparation, prepared queries/copies, and renderer publication share one Rust layout
 pipeline. Publication consumes dirty ranges; it does not repeat layout. Old speculative/rollback descriptions below

@@ -23,7 +23,7 @@ use super::{
     },
     semantic_wire::FlowConstraint,
     shaping_state::ShapingRun,
-    style_state::StyleSegment,
+    style_state::{ResolvedStyle, StyleSegment},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -201,10 +201,10 @@ impl LineTypography {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-struct LineExtents {
-    above: f64,
-    below: f64,
-    typography: LineTypography,
+pub(crate) struct LineExtents {
+    pub above: f64,
+    pub below: f64,
+    pub typography: LineTypography,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -215,7 +215,7 @@ struct ClusterLineMetrics {
 }
 
 impl LineExtents {
-    fn height(self) -> f64 {
+    pub(crate) fn height(self) -> f64 {
         self.above + self.below
     }
 
@@ -1982,7 +1982,7 @@ fn indent_for_flow_thread(
 
 /// The breaker's shrink fraction: only a justified thread with a declared
 /// minimum word-space ratio may compress spaces to admit one more word.
-fn constraint_word_space_shrink(constraint: &FlowConstraint) -> f64 {
+pub(crate) fn constraint_word_space_shrink(constraint: &FlowConstraint) -> f64 {
     if constraint.align == ALIGN_JUSTIFY && constraint.justify_min_word_space_ratio > 0.0 {
         1.0 - f64::from(constraint.justify_min_word_space_ratio)
     } else {
@@ -2169,6 +2169,33 @@ fn line_metrics_for_cluster(
         .get(style_index)
         .ok_or(EngineError::InvalidRequest)?
         .style;
+    line_metrics_for_style(style, metrics_for, first_font_for_stack)
+}
+
+/// The same authored-stack strut formula serves General's cluster walk and the one-run leaf.
+pub(crate) fn inline_line_extents(
+    style: ResolvedStyle,
+    metrics_for: impl Fn(u32) -> Option<FontMetrics>,
+    first_font_for_stack: impl Fn(u32) -> Option<u32>,
+) -> Result<LineExtents, EngineError> {
+    let natural = line_metrics_for_style(style, metrics_for, first_font_for_stack)?.extents;
+    let estimate = positive_extents_for_style(natural, style)?;
+    // compose_band seeds its measurement from the positive estimate, then includes the
+    // actual range extents. A single-style leaf has this same range on both attempts.
+    let mut measured = estimate;
+    measured.include(natural);
+    Ok(if measured.height() > estimate.height() {
+        measured
+    } else {
+        estimate
+    })
+}
+
+fn line_metrics_for_style(
+    style: ResolvedStyle,
+    metrics_for: impl Fn(u32) -> Option<FontMetrics>,
+    first_font_for_stack: impl Fn(u32) -> Option<u32>,
+) -> Result<ClusterLineMetrics, EngineError> {
     // Line boxes belong to the authored stack, not whichever fallback face happened to draw one
     // cluster. Using the primary face removes mixed-script leading jitter.
     let font_handle =
@@ -2261,13 +2288,21 @@ fn positive_extents(
             .ok_or(EngineError::InvalidRequest)?,
     )
     .map_err(|_| EngineError::InvalidRequest)?;
-    let fallback = f64::from(
-        styles
-            .get(style_index)
-            .ok_or(EngineError::InvalidRequest)?
-            .style
-            .font_size,
-    );
+    let style = styles
+        .get(style_index)
+        .ok_or(EngineError::InvalidRequest)?
+        .style;
+    positive_extents_for_style(extents, style)
+}
+
+fn positive_extents_for_style(
+    extents: LineExtents,
+    style: ResolvedStyle,
+) -> Result<LineExtents, EngineError> {
+    if extents.height().is_finite() && extents.height() > 0.0 {
+        return Ok(extents);
+    }
+    let fallback = f64::from(style.font_size);
     if !fallback.is_finite() || fallback <= 0.0 {
         return Err(EngineError::InvalidRequest);
     }

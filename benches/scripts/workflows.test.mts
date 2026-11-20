@@ -165,6 +165,7 @@ test('routes package Labs by event and one explicit pull-request label', () => {
   assert.equal(selectPackageLabsSuite({ eventName: 'pull_request', labels: ['benchmark:spans'] }), 'spans');
   assert.equal(selectPackageLabsSuite({ eventName: 'pull_request', labels: ['benchmark:edit-sized'] }), 'edit-sized');
   assert.equal(selectPackageLabsSuite({ eventName: 'pull_request', labels: ['benchmark:multi-owner'] }), 'multi-owner');
+  assert.equal(selectPackageLabsSuite({ eventName: 'pull_request', labels: ['benchmark:frontier'] }), 'frontier');
   assert.equal(
     selectPackageLabsSuite({
       eventName: 'pull_request',

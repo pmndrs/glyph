@@ -26,9 +26,45 @@ pub struct ScriptItem {
     pub script: u32,
 }
 
+/// Derived while the accepted paragraph is decoded; the mask may conservatively
+/// retain characters from prior same-length reuse, but never omit current ones.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct PrintableAsciiFacts {
+    printable: bool,
+    used: [u8; 12],
+}
+
+impl Default for PrintableAsciiFacts {
+    fn default() -> Self {
+        Self {
+            printable: true,
+            used: [0; 12],
+        }
+    }
+}
+
+impl PrintableAsciiFacts {
+    pub(crate) fn printable(self) -> bool {
+        self.printable
+    }
+    pub(crate) fn used(self) -> [u8; 12] {
+        self.used
+    }
+
+    pub(crate) fn include_unit(&mut self, unit: u16) {
+        if !(0x20..=0x7e).contains(&unit) {
+            self.printable = false;
+            return;
+        }
+        let index = usize::from(unit - 0x20);
+        self.used[index / 8] |= 1 << (index % 8);
+    }
+}
+
 #[derive(Default)]
 pub struct UnicodeAnalysis {
     utf8: String,
+    printable_ascii: PrintableAsciiFacts,
     line_breaks: LineBreakAnalysis,
     grapheme_boundaries: Vec<u32>,
     grapheme_scripts: Vec<u32>,
@@ -66,7 +102,7 @@ impl UnicodeAnalysis {
         }
         self.clear();
         self.reserve(text.len())?;
-        encode_utf16(text, &mut self.utf8)?;
+        encode_utf16(text, &mut self.utf8, &mut self.printable_ascii)?;
         self.line_breaks.analyze(text)?;
         self.segment_graphemes()?;
         self.resolve_grapheme_scripts(text)?;
@@ -83,6 +119,14 @@ impl UnicodeAnalysis {
         &self.script_items
     }
 
+    pub(crate) fn printable_ascii_facts(&self) -> PrintableAsciiFacts {
+        self.printable_ascii
+    }
+
+    pub(crate) fn accept_reused_ascii_facts(&mut self, facts: PrintableAsciiFacts) {
+        self.printable_ascii = facts;
+    }
+
     #[cfg(test)]
     pub(crate) fn analysis_count(&self) -> usize {
         self.analysis_count
@@ -92,6 +136,7 @@ impl UnicodeAnalysis {
         self.line_breaks.breaks()
     }
 
+    #[cfg(test)]
     pub(crate) fn reusable_for_ascii_letter_edit(
         &self,
         previous: &[u16],
@@ -100,23 +145,50 @@ impl UnicodeAnalysis {
         previous_end: usize,
         next_end: usize,
     ) -> bool {
-        previous.len() == next.len()
-            && previous_end.saturating_sub(start) == next_end.saturating_sub(start)
-            && previous_end <= previous.len()
-            && next_end <= next.len()
-            && previous
-                .get(start..previous_end)
-                .zip(next.get(start..next_end))
-                .is_some_and(|(previous, next)| {
-                    !previous.is_empty()
-                        && previous.iter().zip(next).all(|(previous, next)| {
-                            is_ascii_letter(*previous) && is_ascii_letter(*next)
-                        })
-                })
+        self.reusable_ascii_facts_for_letter_edit(
+            previous,
+            next,
+            start,
+            previous_end,
+            next_end,
+            self.printable_ascii,
+        )
+        .is_some()
+    }
+
+    /// Preflight's existing changed-unit validation also accumulates the
+    /// candidate mask, so reused Unicode storage needs no second edit walk.
+    pub(crate) fn reusable_ascii_facts_for_letter_edit(
+        &self,
+        previous: &[u16],
+        next: &[u16],
+        start: usize,
+        previous_end: usize,
+        next_end: usize,
+        mut facts: PrintableAsciiFacts,
+    ) -> Option<PrintableAsciiFacts> {
+        if previous.len() != next.len()
+            || previous_end.saturating_sub(start) != next_end.saturating_sub(start)
+        {
+            return None;
+        }
+        let previous = previous.get(start..previous_end)?;
+        let next = next.get(start..next_end)?;
+        if previous.is_empty() {
+            return None;
+        }
+        for (&before, &after) in previous.iter().zip(next) {
+            if !is_ascii_letter(before) || !is_ascii_letter(after) {
+                return None;
+            }
+            facts.include_unit(after);
+        }
+        Some(facts)
     }
 
     pub(crate) fn clear(&mut self) {
         self.utf8.clear();
+        self.printable_ascii = PrintableAsciiFacts::default();
         self.line_breaks.clear();
         self.grapheme_boundaries.clear();
         self.grapheme_scripts.clear();
@@ -302,11 +374,20 @@ fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), UnicodeError> 
     Ok(())
 }
 
-fn encode_utf16(text: &[u16], output: &mut String) -> Result<(), UnicodeError> {
+fn encode_utf16(
+    text: &[u16],
+    output: &mut String,
+    printable_ascii: &mut PrintableAsciiFacts,
+) -> Result<(), UnicodeError> {
     let mut index = 0;
     while index < text.len() {
         let (character, consumed) = decode_scalar(text, index)?;
         output.push(character);
+        if consumed == 1 {
+            printable_ascii.include_unit(text[index]);
+        } else {
+            printable_ascii.printable = false;
+        }
         index += consumed;
     }
     Ok(())
@@ -444,5 +525,29 @@ mod tests {
         assert!(!analysis.reusable_for_ascii_letter_edit(&previous, &digit, 2, 3, 3));
         assert!(!analysis.reusable_for_ascii_letter_edit(&previous, &letters, 2, 4, 3));
         assert!(!analysis.reusable_for_ascii_letter_edit(&previous, &letters, 6, 7, 7));
+    }
+
+    #[test]
+    fn printable_ascii_fact_is_whole_paragraph_and_reused_mask_is_conservative() {
+        let mut analysis = UnicodeAnalysis::default();
+        analysis
+            .analyze(&"Alpha 0!".encode_utf16().collect::<Vec<_>>())
+            .unwrap();
+        let old = analysis.printable_ascii_facts();
+        assert!(old.printable());
+        let mut changed = old;
+        changed.include_unit('z' as u16);
+        assert_ne!(old.used(), changed.used());
+        analysis.accept_reused_ascii_facts(changed);
+        assert_eq!(analysis.printable_ascii_facts(), changed);
+        analysis
+            .analyze(&"Alpha λ".encode_utf16().collect::<Vec<_>>())
+            .unwrap();
+        assert!(!analysis.printable_ascii_facts().printable());
+        analysis
+            .analyze(&"Bravo 1".encode_utf16().collect::<Vec<_>>())
+            .unwrap();
+        assert!(analysis.printable_ascii_facts().printable());
+        assert_ne!(analysis.printable_ascii_facts().used(), changed.used());
     }
 }

@@ -4,20 +4,20 @@ use core::{cell::RefCell, num::NonZeroU32};
 use crate::{
     STATUS_RESULT_TOO_LARGE, ShapeRangeRef, ShapeRunRef, ShaperRegistry,
     bidi::{BidiAnalysis, BidiError, DIRECTION_AUTO, analyze_into as analyze_bidi_into},
-    unicode::{UnicodeAnalysis, UnicodeError},
+    unicode::{PrintableAsciiFacts, UnicodeAnalysis, UnicodeError},
     valid_utf16_boundary,
 };
 
 use super::{
     cluster_state::{
-        CLUSTER_ALLOWED_BREAK, CLUSTER_BREAK_CORRECTION, CLUSTER_SPACE, ClusterArena,
-        ClusterBuildInput, LayoutDirtyRanges, LayoutRunSourceKind, RunCanonicalInput,
+        CLUSTER_ALLOWED_BREAK, CLUSTER_BREAK_CORRECTION, CLUSTER_SPACE, CanonicalClusterView,
+        ClusterArena, ClusterBuildInput, LayoutDirtyRanges, LayoutRunSourceKind, RunCanonicalInput,
         SHAPING_CONTEXT,
     },
     codec::{CapabilitySetId, ValidatedCodec},
     codec_gather::{
-        CodecGatherWorkspace, DEFAULT_GATHER_RECORD_CAPACITY, GatherError, LayoutPlanInput,
-        RetainedGather, RetainedGatherOwner,
+        CodecGatherWorkspace, DEFAULT_GATHER_RECORD_CAPACITY, GatherError, InlinePlanInput,
+        ProjectedPlanInput, RetainedGather, RetainedGatherOwner,
     },
     flow_composition::{EllipsisReplacement, FlowFragment, FlowLayoutArena, NO_BOUNDARY},
     flow_geometry::{FlowGeometryArena, LocalizedGeometryChange},
@@ -27,10 +27,11 @@ use super::{
         PreparedUpdate, RootRevision, UpdateRequest, WRAP_WORD,
     },
     identity_index::IdentityIndex,
+    inline_leaf::{InlineLeaf, PreparedLayout},
     line_composition::{BreakCorrections, Correction},
     placement_slot_arena::{PlacementSlotArena, PlacementSlotError},
     placement_state::{GlyphSource, LayoutRunOwner, PlacementIdentity, PlacementSegment},
-    positioning::{PositionedGlyphArena, SEMANTIC_F32_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT},
+    positioning::{PositionedGlyphArena, PositionedSourceContext},
     render_plan::RenderPlanView,
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
     retained_rope::RopeEditError,
@@ -188,6 +189,14 @@ struct FallbackSpan {
     font_handle: u32,
 }
 
+enum InlineAttempt {
+    Skipped,
+    Prepared,
+    Unchanged,
+    /// The same captured HarfRust result has been staged as General's shape input.
+    GeneralShape,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct ClusterRecord {
     source_run: u32,
@@ -323,6 +332,7 @@ struct PreflightTextCandidate {
     paragraph_id: u32,
     buffers: CandidateBuffers,
     unicode_state: CandidateUnicode,
+    reused_ascii_facts: Option<PrintableAsciiFacts>,
     edit_start: usize,
     edit_end: usize,
     text: Vec<u16>,
@@ -373,6 +383,8 @@ struct RetainedParagraph {
     positioned_changed: bool,
     preparation_changed_since_publication: bool,
     gather_range: Option<super::codec_gather::GatherRange>,
+    /// Owner kind at the last renderer publication, including after measure-only adoption.
+    published_owner_inline: Option<bool>,
     /// Renderer-order index adopted with lifecycle order, never authored preparation order.
     renderer_order_index: usize,
     placement_range: RecordSpan,
@@ -409,6 +421,7 @@ struct ParagraphOrder {
     id: u32,
 }
 
+#[derive(Clone, Copy)]
 enum RetainedOrderPurpose {
     Gather,
     ReplacementGather,
@@ -538,6 +551,12 @@ struct ClippedLayoutInspection {
 #[derive(Default)]
 struct ParagraphState {
     #[cfg(test)]
+    disable_inline: bool,
+    #[cfg(test)]
+    disable_ascii_anchor: bool,
+    #[cfg(test)]
+    fail_after_shape_once: bool,
+    #[cfg(test)]
     preparation_count: usize,
     #[cfg(test)]
     text_mutation_apply_count: usize,
@@ -549,9 +568,15 @@ struct ParagraphState {
     styles: Staged<StyleStage>,
     unicode: Staged<UnicodeAnalysis>,
     unicode_reused_for_text_edit: bool,
+    pending_reused_ascii_facts: Option<PrintableAsciiFacts>,
     bidi: Staged<BidiAnalysis>,
     shaping_runs: Staged<ShapingRunArena>,
+    prepared_layout: Staged<PreparedLayout>,
     shape: Staged<ShapeArena>,
+    /// Zero-free private registry serial for the accepted sole General raw run.
+    /// Exhaustion disables only this acceleration, never font registration.
+    accepted_shape_font_instance: Option<u64>,
+    pending_shape_font_instance: Option<u64>,
     shape_window_scratch: Vec<ShapeWindow>,
     layout_dirty: LayoutDirtyRanges,
     incremental_shape_source_run: Option<u32>,
@@ -569,7 +594,6 @@ struct ParagraphState {
     intrinsic_flow_slot_scratch: super::flow_geometry::InlineSlotArena,
     clipped_inspection: Staged<ClippedLayoutInspection>,
     intrinsic_boundary_shape: BoundaryShapeArena,
-    intrinsic_identity_scratch: IdentityIndex,
     boundary_shape: BoundaryShapeArena,
     /// The committed boundary glyphs' stable ids, indexed for the flow being prepared.
     previous_edge_ids: Vec<EdgeId>,
@@ -990,8 +1014,11 @@ impl TextEngine {
         let paragraph = planner
             .paragraph(paragraph_id)
             .ok_or(EngineError::InvalidRequest)?;
+        if let Some(leaf) = paragraph.state.active_inline() {
+            return Ok(leaf.semantic_count());
+        }
         let positioned = paragraph.state.inspection_positioned();
-        Ok(positioned.semantic_glyphs().len())
+        Ok(positioned.occurrence_count())
     }
 
     pub(crate) fn borrowed_paragraph_glyphs(
@@ -1008,13 +1035,35 @@ impl TextEngine {
         let paragraph = planner
             .paragraph(paragraph_id)
             .ok_or(EngineError::InvalidRequest)?;
+        if let Some(leaf) = paragraph.state.active_inline() {
+            start
+                .checked_add(output.len())
+                .filter(|end| *end <= leaf.semantic_count())
+                .ok_or(EngineError::InvalidRequest)?;
+            for (offset, record) in output.iter_mut().enumerate() {
+                let row = leaf
+                    .row(u32::try_from(start + offset).map_err(|_| EngineError::ResultTooLarge)?)
+                    .ok_or(EngineError::InvalidRequest)?
+                    .semantic;
+                let translation = *leaf
+                    .placement_translations()
+                    .get(row.placement_segment as usize)
+                    .ok_or(EngineError::InvalidRequest)?;
+                *record = row.placed(translation)?;
+            }
+            return Ok(());
+        }
         let positioned = paragraph.state.inspection_positioned();
-        let end = start
+        let boundary = paragraph.state.inspection_boundary_shape();
+        let clusters = paragraph.state.clusters.active();
+        start
             .checked_add(output.len())
-            .filter(|&end| end <= positioned.semantic_glyphs().len())
+            .filter(|&end| end <= positioned.occurrence_count())
             .ok_or(EngineError::InvalidRequest)?;
-        for (record, index) in output.iter_mut().zip(start..end) {
-            *record = positioned.placed_semantic_glyph(index)?;
+        let mut cursor = positioned.occurrence_cursor(start, clusters, boundary)?;
+        for record in output {
+            let row = cursor.next_row()?.ok_or(EngineError::InvalidRequest)?;
+            *record = positioned.placed_occurrence(row.semantic)?;
         }
         Ok(())
     }
@@ -1152,56 +1201,121 @@ impl TextEngine {
         let paragraph = planner
             .paragraph(paragraph_id)
             .ok_or(EngineError::InvalidRequest)?;
+        if let Some(leaf) = paragraph.state.committed_inline() {
+            let mut selected_sources = Vec::new();
+            let mut selected_placement_slots = Vec::new();
+            selected_sources
+                .try_reserve(requested.len())
+                .map_err(|_| EngineError::ResultTooLarge)?;
+            selected_placement_slots
+                .try_reserve(requested.len())
+                .map_err(|_| EngineError::ResultTooLarge)?;
+            for source in leaf.outlined_sources() {
+                let row = leaf
+                    .row(source)
+                    .ok_or(EngineError::InvalidRequest)?
+                    .semantic;
+                if requested.binary_search(&row.stable_id).is_ok() {
+                    selected_sources.push(source);
+                    selected_placement_slots.push(row.placement_segment);
+                }
+            }
+            if selected_sources.len() != requested.len() {
+                return Err(EngineError::InvalidRequest);
+            }
+            selected_placement_slots.sort_unstable();
+            selected_placement_slots.dedup();
+            let mut placement_rows = Vec::new();
+            placement_rows
+                .try_reserve(selected_placement_slots.len())
+                .map_err(|_| EngineError::ResultTooLarge)?;
+            for (slot, source_slot) in selected_placement_slots.iter().copied().enumerate() {
+                let translation = leaf
+                    .placement_translations()
+                    .get(source_slot as usize)
+                    .ok_or(EngineError::InvalidRequest)?;
+                placement_rows.push(SessionPlacementRow {
+                    slot: u32::try_from(slot).map_err(|_| EngineError::ResultTooLarge)?,
+                    inline: translation.translation_inline as f32,
+                    block: translation.translation_block as f32,
+                });
+            }
+            gather
+                .append_from_source(
+                    codec,
+                    capability_set,
+                    InlinePlanInput {
+                        transform_id: paragraph_id,
+                        leaf,
+                        styles: paragraph.state.styles.committed().resolved.segments(),
+                        selection: Some(&selected_sources),
+                        copied_placement_segments: Some(&selected_placement_slots),
+                    }
+                    .into(),
+                    0,
+                    |handle| {
+                        self.font_bindings
+                            .iter()
+                            .find(|registered| registered.handle == handle)
+                            .map(|registered| &registered.binding)
+                    },
+                )
+                .map_err(gather_error)?;
+            let mut compiler = RenderPlanCompiler::default();
+            compiler
+                .prepare(
+                    codec,
+                    capability_set,
+                    gather.view().plan_input(),
+                    true,
+                    1,
+                    0,
+                )
+                .map_err(plan_error)?;
+            compiler
+                .prepare_session(
+                    SessionPlacementInput {
+                        placement_rows: &placement_rows,
+                        placement_capacity: u32::try_from(selected_placement_slots.len())
+                            .map_err(|_| EngineError::ResultTooLarge)?,
+                    },
+                    codec
+                        .capability_set(capability_set)
+                        .ok_or(EngineError::InvalidRequest)?,
+                    1,
+                    true,
+                )
+                .map_err(plan_error)?;
+            return Ok(compiler);
+        }
         let positioned = paragraph.state.positioned.committed();
-        let source_glyphs = positioned.glyphs();
-        let source_semantic = positioned.semantic_glyphs();
-        let source_f32 = positioned.semantic_f32();
-        let source_u32 = positioned.semantic_u32();
-        let mut glyphs = Vec::new();
-        let mut semantic_glyphs = Vec::new();
-        let mut semantic_f32: [Vec<f32>; SEMANTIC_F32_FIELD_COUNT] =
-            core::array::from_fn(|_| Vec::new());
-        let mut semantic_u32: [Vec<u32>; SEMANTIC_U32_FIELD_COUNT] =
-            core::array::from_fn(|_| Vec::new());
+        let source_context = PositionedSourceContext {
+            styles: paragraph.state.styles.committed().resolved.segments(),
+            clusters: paragraph.state.clusters.committed(),
+        };
+        let mut selected_marks = Vec::new();
         let mut selected_placement_slots = Vec::new();
-        let mut found = 0usize;
-        for (glyph_index, source) in source_glyphs.iter().enumerate() {
-            if requested.binary_search(&source.stable_id).is_err() {
+        selected_marks
+            .try_reserve(requested.len())
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        selected_placement_slots
+            .try_reserve(requested.len())
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        let mut outlined =
+            positioned.outlined_cursor(source_context.clusters, &paragraph.state.boundary_shape);
+        while let Some(mark) = outlined.next_mark()? {
+            let stable_id = positioned.outlined_mark_stable_id(
+                mark,
+                source_context.clusters,
+                &paragraph.state.boundary_shape,
+            )?;
+            if requested.binary_search(&stable_id).is_err() {
                 continue;
             }
-            let mut glyph = *source;
-            // Detached decoration plans use 0/2 for CSS under/over passes. Keep copied glyphs in
-            // the middle so renderers can restore the original paint order across both objects.
-            glyph.depth_key = super::codec_gather::PAINT_LAYER_GLYPH;
-            let semantic_index = usize::try_from(source.semantic_glyph_index)
-                .map_err(|_| EngineError::InvalidRequest)?;
-            let semantic = source_semantic
-                .get(semantic_index)
-                .ok_or(EngineError::InvalidRequest)?;
-            glyph.semantic_glyph_index = semantic_glyphs
-                .len()
-                .try_into()
-                .map_err(|_| EngineError::ResultTooLarge)?;
-            semantic_glyphs.push(*semantic);
-            // Copies own their placement slots; segment indices are valid before root publication too.
-            glyph.placement_slot = semantic.placement_segment;
-            glyphs.push(glyph);
-            selected_placement_slots.push(semantic.placement_segment);
-            for (destination, values) in semantic_f32.iter_mut().zip(source_f32.iter()) {
-                if values.is_empty() {
-                    continue;
-                }
-                destination.push(*values.get(glyph_index).ok_or(EngineError::InvalidRequest)?);
-            }
-            for (destination, values) in semantic_u32.iter_mut().zip(source_u32.iter()) {
-                if values.is_empty() {
-                    continue;
-                }
-                destination.push(*values.get(glyph_index).ok_or(EngineError::InvalidRequest)?);
-            }
-            found += 1;
+            selected_marks.push(mark);
+            selected_placement_slots.push(positioned.outlined_mark_segment(mark)?);
         }
-        if found != requested.len() {
+        if selected_marks.len() != requested.len() {
             return Err(EngineError::InvalidRequest);
         }
         selected_placement_slots.sort_unstable();
@@ -1221,29 +1335,20 @@ impl TextEngine {
                 block: translation.translation_block as f32,
             });
         }
-        for glyph in &mut glyphs {
-            glyph.placement_slot = u32::try_from(
-                selected_placement_slots
-                    .binary_search(&glyph.placement_slot)
-                    .map_err(|_| EngineError::InvalidRequest)?,
-            )
-            .map_err(|_| EngineError::ResultTooLarge)?;
-        }
-        let semantic_f32_refs: Vec<&[f32]> = semantic_f32.iter().map(Vec::as_slice).collect();
-        let semantic_u32_refs: Vec<&[u32]> = semantic_u32.iter().map(Vec::as_slice).collect();
         gather
-            .append(
+            .append_from_source(
                 codec,
                 capability_set,
-                LayoutPlanInput {
+                ProjectedPlanInput {
                     transform_id: paragraph_id,
-                    glyphs: &glyphs,
-                    semantic_glyphs: &semantic_glyphs,
-                    placement_translations: positioned.placement_translations(),
-                    semantic_change_masks: &[],
-                    semantic_f32: &semantic_f32_refs,
-                    semantic_u32: &semantic_u32_refs,
-                },
+                    positioned,
+                    context: source_context,
+                    boundary: &paragraph.state.boundary_shape,
+                    selection: Some(&selected_marks),
+                    copied_placement_segments: Some(&selected_placement_slots),
+                }
+                .into(),
+                0,
                 |handle| {
                     self.font_bindings
                         .iter()
@@ -1476,10 +1581,7 @@ impl TextEngine {
             .measure_generation
             .checked_add(1)
             .ok_or(EngineError::RevisionExhausted)?;
-        let (mut next_glyph_id, mut next_content_revision) = (
-            planner.next_glyph_id.max(1),
-            planner.next_content_revision.max(1),
-        );
+        let mut next_glyph_id = planner.next_glyph_id.max(1);
         let preparation: Result<(), EngineError> = (|| {
             planner.semantic_records.clear();
             planner.prepare_lifecycle(
@@ -1515,7 +1617,6 @@ impl TextEngine {
                     geometry,
                     request.limits,
                     &mut next_glyph_id,
-                    &mut next_content_revision,
                     preflight_candidate,
                     &preflight_edit_scratch,
                 )
@@ -1563,7 +1664,6 @@ impl TextEngine {
         planner.preflight_edit_scratch = preflight_edit_scratch;
         // Reserve identities when they become observable, even if result encoding later fails.
         planner.next_glyph_id = planner.next_glyph_id.max(next_glyph_id);
-        planner.next_content_revision = planner.next_content_revision.max(next_content_revision);
         planner.measure_generation = next_measure_generation;
         Ok(MeasuredParagraph {
             root_id: request.root_id,
@@ -1690,6 +1790,7 @@ impl TextEngine {
             planner.next_glyph_id.max(1),
             planner.next_content_revision.max(1),
         );
+        gather.set_projected_revision_cursor(next_content_revision);
         let mut gather_output_matches_next = false;
         let preparation = (|| {
             planner.semantic_records.clear();
@@ -1720,7 +1821,7 @@ impl TextEngine {
                                     .paragraph(ordered.id)
                                     .ok_or(EngineError::InvalidRequest)?;
                                 total
-                                    .checked_add(paragraph.state.positioned.active().glyphs().len())
+                                    .checked_add(paragraph.state.active_outlined_count())
                                     .ok_or(EngineError::ResultTooLarge)
                             })?;
                     stable_ids
@@ -1730,7 +1831,54 @@ impl TextEngine {
                         let paragraph = planner
                             .paragraph(ordered.id)
                             .ok_or(EngineError::InvalidRequest)?;
-                        for glyph in paragraph.state.positioned.active().glyphs() {
+                        if let Some(leaf) = paragraph.state.active_inline() {
+                            for source in leaf.outlined_sources() {
+                                let row = leaf.projected_source_row(
+                                    source,
+                                    source,
+                                    0,
+                                    paragraph.state.styles.active().resolved.segments(),
+                                )?;
+                                let glyph = row.glyph;
+                                let binding = font_bindings
+                                    .iter()
+                                    .find(|binding| binding.handle == glyph.binding_handle)
+                                    .ok_or_else(|| gather_error(GatherError::FontBindingMissing))?;
+                                if binding
+                                    .binding
+                                    .select(
+                                        glyph.glyph_id,
+                                        glyph.font_size,
+                                        glyph.raster_pixel_ratio,
+                                    )
+                                    .is_none()
+                                {
+                                    continue;
+                                }
+                                if glyph.stable_id == 0 {
+                                    return Err(EngineError::InvalidRequest);
+                                }
+                                stable_ids.push(glyph.stable_id);
+                            }
+                            continue;
+                        }
+                        let positioned = paragraph.state.positioned.active();
+                        let context = PositionedSourceContext {
+                            styles: paragraph.state.styles.active().resolved.segments(),
+                            clusters: paragraph.state.clusters.active(),
+                        };
+                        let boundary = paragraph.state.visible_boundary_shape();
+                        let mut outlined = positioned.outlined_cursor(context.clusters, boundary);
+                        while let Some(mark) = outlined.next_mark()? {
+                            let occurrence = outlined.project(mark)?;
+                            let glyph = positioned
+                                .projected_occurrence_row(
+                                    occurrence,
+                                    mark.semantic_index,
+                                    0,
+                                    context,
+                                )?
+                                .glyph;
                             let binding = font_bindings
                                 .iter()
                                 .find(|binding| binding.handle == glyph.binding_handle)
@@ -1821,7 +1969,6 @@ impl TextEngine {
                         geometry,
                         request.limits,
                         &mut next_glyph_id,
-                        &mut next_content_revision,
                         preflight_candidate,
                         &preflight_edit_scratch,
                     )
@@ -1845,7 +1992,6 @@ impl TextEngine {
                     publication_generation,
                     preparation_changed,
                     checkpoint,
-                    &mut next_content_revision,
                 )?;
             } else {
                 planner
@@ -1888,7 +2034,7 @@ impl TextEngine {
                                 .paragraph(ordered.id)
                                 .ok_or(EngineError::InvalidRequest)?;
                             total
-                                .checked_add(paragraph.state.positioned.active().glyphs().len())
+                                .checked_add(paragraph.state.active_outlined_count())
                                 .ok_or(EngineError::ResultTooLarge)
                         })?
                 };
@@ -1899,8 +2045,15 @@ impl TextEngine {
                 // any decorated paragraph must rebuild from a reset workspace; entering the
                 // retained path and falling back mid-append would stack fresh rows onto the
                 // previous update's buffers.
-                let ranges_reusable =
-                    sparse || replacement.is_some() || !planner_has_decorations(planner);
+                let owner_kind_changed = planner.active_order().iter().any(|ordered| {
+                    planner.paragraph(ordered.id).is_some_and(|paragraph| {
+                        paragraph.gather_range.is_some()
+                            && paragraph.published_owner_inline
+                                != Some(paragraph.state.active_inline().is_some())
+                    })
+                });
+                let ranges_reusable = !owner_kind_changed
+                    && (sparse || replacement.is_some() || !planner_has_decorations(planner));
                 let attempted_retained =
                     cached_gather == Some(current_gather_key) && ranges_reusable;
                 let retained = attempted_retained
@@ -2060,10 +2213,21 @@ impl TextEngine {
             planner.pending_compositing_independent = request.compositing_independent;
             Ok(())
         })();
+        next_content_revision = next_content_revision.max(gather.projected_revision_cursor());
         if let Err(error) = preparation {
+            // A failed staged gather may already have minted selected-record revisions.
+            // Burn those values before invalidation snapshots the root high water.
+            planner.pending_next_content_revision = planner
+                .pending_next_content_revision
+                .max(next_content_revision);
             self.invalidate_root(request.root_id)?;
             return Err(error);
         }
+        // The closure recorded the pre-gather value. Publication may have minted
+        // additional selected-record revisions; commit must adopt that high water.
+        planner.pending_next_content_revision = planner
+            .pending_next_content_revision
+            .max(next_content_revision);
         clear_preflight_text_candidates(&mut preflight_text_candidates);
         planner.preflight_text_candidates = preflight_text_candidates;
         preflight_edit_scratch.clear();
@@ -2262,13 +2426,7 @@ impl TextEngine {
                 let id = planner.ordered_paragraphs[index].id;
                 if let Some(paragraph) = planner.paragraph_mut(id) {
                     // Full preparation already proved the aggregate occurrence count fits usize.
-                    let end = start
-                        + paragraph
-                            .state
-                            .positioned
-                            .committed()
-                            .placement_segments()
-                            .len();
+                    let end = start + paragraph.state.active_placement_segments().len();
                     paragraph.placement_range = RecordSpan { start, end };
                     start = end;
                 }
@@ -2400,6 +2558,39 @@ fn append_paragraph_measurement(
     include_layout_inspection: bool,
     include_borrowed_layout: bool,
 ) -> Result<(), EngineError> {
+    if let Some(leaf) = state.active_inline() {
+        let line = leaf.line.as_ref().ok_or(EngineError::InvalidRequest)?;
+        let fragment = leaf.fragment.as_ref().ok_or(EngineError::InvalidRequest)?;
+        let count =
+            u32::try_from(leaf.semantic_count()).map_err(|_| EngineError::ResultTooLarge)?;
+        let mut source = 0u32;
+        return super::layout_query::append_measurement_from_inline_occurrences(
+            records,
+            paragraph_id,
+            state.text.active().units.len(),
+            leaf.clusters.len(),
+            state.geometry.active(),
+            line,
+            fragment,
+            leaf.inline_extent,
+            leaf.semantic_count(),
+            || {
+                let row = leaf
+                    .row(source)
+                    .ok_or(EngineError::InvalidRequest)?
+                    .semantic;
+                source = source.checked_add(1).ok_or(EngineError::ResultTooLarge)?;
+                Ok(row)
+            },
+            leaf.placement_translations(),
+            &[0],
+            &[count],
+            None,
+            leaf.intrinsics,
+            include_layout_inspection || include_borrowed_layout,
+            include_layout_inspection,
+        );
+    }
     let visible_extents = {
         let clusters = state.clusters.active();
         let geometry = state.geometry.active();
@@ -2492,24 +2683,29 @@ fn append_paragraph_measurement(
     } else {
         None
     };
+    let boundary = if inspect_full_clipped_layout {
+        &state.intrinsic_boundary_shape
+    } else if state.flow_layout.is_prepared() {
+        &state.pending_boundary_shape
+    } else {
+        &state.boundary_shape
+    };
     let (line_glyph_starts, line_glyph_counts) = positioned.semantic_line_glyph_spans();
-    let visible_glyphs = (
-        positioned.semantic_glyphs().len(),
-        positioned
-            .semantic_glyphs()
-            .iter()
-            .filter(|glyph| glyph.glyph_id == 0)
-            .count(),
-    );
-    super::layout_query::append_measurement_with_glyph_spans(
+    let mut cursor = positioned.occurrence_cursor(0, clusters, boundary)?;
+    super::layout_query::append_measurement_from_occurrences(
         records,
         paragraph_id,
         text.len(),
         clusters.starts.len(),
-        visible_glyphs,
         geometry,
         flow,
-        positioned.semantic_glyphs(),
+        positioned.occurrence_count(),
+        || {
+            cursor
+                .next_row()?
+                .map(|row| row.semantic)
+                .ok_or(EngineError::InvalidRequest)
+        },
         positioned.placement_translations(),
         line_glyph_starts,
         line_glyph_counts,
@@ -2617,25 +2813,70 @@ fn append_planner_gather(
             continue;
         }
         let start = gather.position();
+        if let Some(leaf) = paragraph.state.active_inline() {
+            let input = InlinePlanInput {
+                transform_id: ordered.id,
+                leaf,
+                styles: paragraph.state.styles.active().resolved.segments(),
+                selection: None,
+                copied_placement_segments: None,
+            };
+            let binding_for_font = |handle| {
+                font_bindings
+                    .iter()
+                    .find(|binding| binding.handle == handle)
+                    .map(|binding| &binding.binding)
+            };
+            if retaining {
+                let intervals = paragraph
+                    .gather_range
+                    .filter(|range| range.source_count() == leaf.outlined_count())
+                    .and_then(|_| leaf.unpublished_source_intervals());
+                match gather
+                    .append_retained_scoped(
+                        codec,
+                        capability_set,
+                        input,
+                        intervals,
+                        binding_for_font,
+                    )
+                    .map_err(gather_error)?
+                {
+                    RetainedGather::Complete => {}
+                    RetainedGather::RebuildFrom(source_start) => {
+                        gather.truncate_to_retained_prefix().map_err(gather_error)?;
+                        gather
+                            .append_from_source(
+                                codec,
+                                capability_set,
+                                input.into(),
+                                source_start,
+                                binding_for_font,
+                            )
+                            .map_err(gather_error)?;
+                        retaining = false;
+                    }
+                }
+            } else {
+                gather
+                    .append_from_source(codec, capability_set, input.into(), 0, binding_for_font)
+                    .map_err(gather_error)?;
+            }
+            planner.paragraphs[paragraph_index].gather_range = Some(gather.range_since(start));
+            order_index += 1;
+            continue;
+        }
         let positioned = paragraph.state.positioned.active();
-        let semantic_f32 = positioned.semantic_f32();
-        let semantic_u32 = positioned.semantic_u32();
-        let semantic_change_masks = if retaining
-            && !paragraph.positioned_changed
-            && !paragraph.preparation_changed_since_publication
-        {
-            &[][..]
-        } else {
-            positioned.semantic_change_masks()
-        };
-        let input = LayoutPlanInput {
+        let input = ProjectedPlanInput {
             transform_id: ordered.id,
-            glyphs: positioned.glyphs(),
-            semantic_glyphs: positioned.semantic_glyphs(),
-            placement_translations: positioned.placement_translations(),
-            semantic_change_masks,
-            semantic_f32: &semantic_f32,
-            semantic_u32: &semantic_u32,
+            positioned,
+            context: PositionedSourceContext {
+                styles: paragraph.state.styles.active().resolved.segments(),
+                clusters: paragraph.state.clusters.active(),
+            },
+            boundary: paragraph.state.visible_boundary_shape(),
+            selection: None,
+            copied_placement_segments: None,
         };
         let binding_for_font = |handle| {
             font_bindings
@@ -2665,7 +2906,7 @@ fn append_planner_gather(
                             sparse
                                 && (paragraph.positioned_changed
                                     || paragraph.preparation_changed_since_publication)
-                                && range.source_count() == input.glyphs.len()
+                                && range.source_count() == positioned.outlined_count()
                         })
                         .and_then(|_| positioned.unpublished_source_intervals()),
                     binding_for_font,
@@ -2676,7 +2917,13 @@ fn append_planner_gather(
                 RetainedGather::RebuildFrom(source_start) => {
                     gather.truncate_to_retained_prefix().map_err(gather_error)?;
                     gather
-                        .append_from(codec, capability_set, input, source_start, binding_for_font)
+                        .append_from_source(
+                            codec,
+                            capability_set,
+                            input.into(),
+                            source_start,
+                            binding_for_font,
+                        )
                         .map_err(gather_error)?;
                     retaining = false;
                 }
@@ -2685,7 +2932,7 @@ fn append_planner_gather(
             #[cfg(test)]
             super::work_attribution::record(|work| work.gather_paragraph_visits += 1);
             gather
-                .append_from(codec, capability_set, input, 0, binding_for_font)
+                .append_from_source(codec, capability_set, input.into(), 0, binding_for_font)
                 .map_err(gather_error)?;
         }
         gather
@@ -2719,17 +2966,26 @@ fn planner_gather_owners(
         let range = paragraph
             .gather_range
             .ok_or(GatherError::InvalidSemanticShape)?;
-        let masks =
-            if !paragraph.positioned_changed && !paragraph.preparation_changed_since_publication {
-                &[][..]
-            } else {
-                positioned.semantic_change_masks()
-            };
+        if let Some(leaf) = paragraph.state.active_inline() {
+            return Ok(RetainedGatherOwner::inline(
+                range,
+                entry.1,
+                leaf,
+                paragraph.state.styles.active().resolved.segments(),
+                (paragraph.positioned_changed || paragraph.preparation_changed_since_publication)
+                    .then(|| leaf.unpublished_source_intervals())
+                    .flatten(),
+            ));
+        }
         Ok(RetainedGatherOwner::positioned(
             range,
             entry.1,
             positioned,
-            masks,
+            PositionedSourceContext {
+                styles: paragraph.state.styles.active().resolved.segments(),
+                clusters: paragraph.state.clusters.active(),
+            },
+            paragraph.state.visible_boundary_shape(),
             (paragraph.positioned_changed || paragraph.preparation_changed_since_publication)
                 .then(|| positioned.unpublished_source_intervals())
                 .flatten(),
@@ -2808,7 +3064,7 @@ impl PlannerState {
         for entry in &self.order_sort_scratch {
             let paragraph = self.paragraph(entry.1).ok_or(EngineError::InvalidRequest)?;
             let range = paragraph.gather_range.ok_or(EngineError::InvalidRequest)?;
-            let next_count = paragraph.state.positioned.active().glyphs().len();
+            let next_count = paragraph.state.active_outlined_count();
             changed_count |= range.source_count() != next_count;
             count = count
                 .checked_sub(range.source_count())
@@ -2848,20 +3104,30 @@ impl PlannerState {
             .chain(&self.unpublished_preparation_ids)
         {
             let paragraph = self.paragraph(*id).ok_or(EngineError::InvalidRequest)?;
+            if !matches!(purpose, RetainedOrderPurpose::Placement)
+                && paragraph.gather_range.is_some()
+                && paragraph.published_owner_inline
+                    != Some(paragraph.state.active_inline().is_some())
+            {
+                return Ok(false);
+            }
             let positioned = paragraph.state.positioned.active();
             let reusable = match purpose {
                 RetainedOrderPurpose::Gather => {
-                    positioned.decorations().is_empty()
-                        && paragraph
-                            .gather_range
-                            .is_some_and(|range| range.source_count() == positioned.glyphs().len())
+                    (paragraph.state.active_inline().is_some()
+                        || positioned.decorations().is_empty())
+                        && paragraph.gather_range.is_some_and(|range| {
+                            range.source_count() == paragraph.state.active_outlined_count()
+                        })
                 }
                 RetainedOrderPurpose::ReplacementGather => {
-                    positioned.decorations().is_empty() && paragraph.gather_range.is_some()
+                    (paragraph.state.active_inline().is_some()
+                        || positioned.decorations().is_empty())
+                        && paragraph.gather_range.is_some()
                 }
                 RetainedOrderPurpose::Placement => {
                     paragraph.placement_range.end - paragraph.placement_range.start
-                        == positioned.placement_segments().len()
+                        == paragraph.state.active_placement_segments().len()
                 }
             };
             if !reusable
@@ -3201,6 +3467,7 @@ impl PlannerState {
                 CandidateBuffers::Owned => candidate.text.as_slice(),
             };
             candidate.unicode_state = CandidateUnicode::ReuseCommitted;
+            candidate.reused_ascii_facts = None;
             let edit_start = preflight_edit_scratch.len();
             let reconciliation = text_reconciliation(text_mutations, committed_text.len());
             if let Some(reconciliation) = reconciliation {
@@ -3222,27 +3489,29 @@ impl PlannerState {
                 candidate_text != committed_text
             };
             if text_changed {
-                let unicode_reusable = paragraph_index
+                let reused_ascii_facts = paragraph_index
                     .and_then(|index| paragraphs.get(index))
-                    .is_some_and(|paragraph| {
-                        !paragraph.created
-                            && !candidate_edits.is_empty()
-                            && candidate_edits.iter().copied().all(|edit| {
-                                paragraph
-                                    .state
-                                    .unicode
-                                    .committed()
-                                    .reusable_for_ascii_letter_edit(
-                                        committed_text,
-                                        candidate_text,
-                                        edit.old_start,
-                                        edit.old_end,
-                                        edit.new_end,
-                                    )
-                            })
+                    .and_then(|paragraph| {
+                        if paragraph.created || candidate_edits.is_empty() {
+                            return None;
+                        }
+                        let unicode = paragraph.state.unicode.committed();
+                        let mut facts = unicode.printable_ascii_facts();
+                        for edit in candidate_edits.iter().copied() {
+                            facts = unicode.reusable_ascii_facts_for_letter_edit(
+                                committed_text,
+                                candidate_text,
+                                edit.old_start,
+                                edit.old_end,
+                                edit.new_end,
+                                facts,
+                            )?;
+                        }
+                        Some(facts)
                     });
-                if unicode_reusable {
+                if let Some(facts) = reused_ascii_facts {
                     candidate.unicode_state = CandidateUnicode::ReuseCommitted;
+                    candidate.reused_ascii_facts = Some(facts);
                 } else {
                     match candidate.buffers {
                         CandidateBuffers::ExistingPending { .. } => {
@@ -3554,6 +3823,7 @@ impl PlannerState {
                         positioned_changed: false,
                         preparation_changed_since_publication: false,
                         gather_range: None,
+                        published_owner_inline: None,
                         renderer_order_index: usize::MAX,
                         placement_range: RecordSpan::default(),
                         state,
@@ -3594,7 +3864,6 @@ impl PlannerState {
         publication_generation: u32,
         preparation_changed: bool,
         checkpoint: bool,
-        next_content_revision: &mut u32,
     ) -> Result<(), EngineError> {
         let mut sparse =
             !checkpoint && self.prepare_retained_order(RetainedOrderPurpose::Placement)?;
@@ -3614,14 +3883,7 @@ impl PlannerState {
                     let id = self.placement_work_id(index, sparse);
                     let paragraph = self.paragraph(id).ok_or(EngineError::InvalidRequest)?;
                     total
-                        .checked_add(
-                            paragraph
-                                .state
-                                .positioned
-                                .active()
-                                .placement_segments()
-                                .len(),
-                        )
+                        .checked_add(paragraph.state.active_placement_segments().len())
                         .ok_or(EngineError::ResultTooLarge)
                 })?;
                 desired
@@ -3636,18 +3898,25 @@ impl PlannerState {
                     #[cfg(test)]
                     super::work_attribution::record(|work| work.placement_key_owner_visits += 1);
                     let positioned = paragraph.state.positioned.active();
-                    for segment in positioned.placement_segments() {
+                    for segment in paragraph.state.active_placement_segments() {
                         let run_index = usize::try_from(segment.layout_run_index)
                             .map_err(|_| EngineError::InvalidRequest)?;
                         let run_source = match segment.layout_run_owner {
-                            LayoutRunOwner::Paragraph => paragraph
-                                .state
-                                .clusters
-                                .active()
-                                .layout_runs()
-                                .get(run_index),
+                            LayoutRunOwner::Paragraph => {
+                                if let Some(leaf) = paragraph.state.active_inline() {
+                                    (run_index == 0).then_some(leaf.layout_run).flatten()
+                                } else {
+                                    paragraph
+                                        .state
+                                        .clusters
+                                        .active()
+                                        .layout_runs()
+                                        .get(run_index)
+                                        .copied()
+                                }
+                            }
                             LayoutRunOwner::Replacement => {
-                                positioned.replacement_runs().get(run_index)
+                                positioned.replacement_runs().get(run_index).copied()
                             }
                         }
                         .map(|run| run.source_kind)
@@ -3722,21 +3991,14 @@ impl PlannerState {
                 let paragraph = &mut paragraphs[paragraph_index];
                 #[cfg(test)]
                 super::work_attribution::record(|work| work.placement_binding_owner_visits += 1);
-                let segment_count = paragraph
-                    .state
-                    .positioned
-                    .active()
-                    .placement_segments()
-                    .len();
+                let segment_count = paragraph.state.active_placement_segments().len();
                 let assignment_end = assignment_start
                     .checked_add(segment_count)
                     .ok_or(EngineError::ResultTooLarge)?;
                 for relative in 0..segment_count {
                     let translation = paragraph
                         .state
-                        .positioned
-                        .active()
-                        .placement_translations()
+                        .active_placement_translations()
                         .get(relative)
                         .copied()
                         .ok_or(EngineError::InvalidRequest)?;
@@ -3746,18 +4008,34 @@ impl PlannerState {
                         block: translation.translation_block as f32,
                     });
                 }
-                if paragraph.state.positioned.is_prepared() {
+                if paragraph.state.active_inline().is_some() {
+                    let assigned = &assignments[assignment_start..assignment_end];
+                    let needs_binding = (0..segment_count).any(|relative| {
+                        paragraph.state.active_placement_handle(relative)
+                            != Some(assigned[relative])
+                    });
+                    if needs_binding {
+                        admit_preparation_owner(
+                            &mut self.pending_preparation_ids,
+                            &mut self.unpublished_preparation_ids,
+                            id,
+                        )?;
+                        paragraph.state.bind_inline_placement_handles(assigned)?;
+                        paragraph.positioned_changed = true;
+                    } else if paragraph.state.active_placement_instance_count()?
+                        != paragraph.state.active_outlined_count()
+                    {
+                        return Err(EngineError::InvalidRequest);
+                    }
+                } else if paragraph.state.positioned.is_prepared() {
                     admit_preparation_owner(
                         &mut self.pending_preparation_ids,
                         &mut self.unpublished_preparation_ids,
                         id,
                     )?;
-                    let (pending, committed) = paragraph.state.positioned.derive_mut();
-                    pending.bind_placement_handles(
-                        &assignments[assignment_start..assignment_end],
-                        Some(committed),
-                        next_content_revision,
-                    )?;
+                    let (pending, _) = paragraph.state.positioned.derive_mut();
+                    pending
+                        .bind_placement_handles(&assignments[assignment_start..assignment_end])?;
                 } else if preparation_changed {
                     let assigned = &assignments[assignment_start..assignment_end];
                     let requires_binding = {
@@ -3773,18 +4051,17 @@ impl PlannerState {
                             id,
                         )?;
                         let state = &mut paragraph.state;
-                        state.positioned.active_mut().bind_placement_handles(
-                            assigned,
-                            None,
-                            next_content_revision,
-                        )?;
+                        state
+                            .positioned
+                            .active_mut()
+                            .bind_placement_handles(assigned)?;
                         paragraph.positioned_changed = true;
                     } else if paragraph
                         .state
                         .positioned
                         .committed()
                         .placement_instance_count()?
-                        != paragraph.state.positioned.committed().glyphs().len()
+                        != paragraph.state.positioned.committed().outlined_count()
                     {
                         return Err(EngineError::InvalidRequest);
                     }
@@ -3797,7 +4074,7 @@ impl PlannerState {
                             return Err(EngineError::InvalidRequest);
                         }
                     }
-                    if positioned.placement_instance_count()? != positioned.glyphs().len() {
+                    if positioned.placement_instance_count()? != positioned.outlined_count() {
                         return Err(EngineError::InvalidRequest);
                     }
                 }
@@ -3813,14 +4090,14 @@ impl PlannerState {
                     let paragraph_index = paragraphs
                         .binary_search_by_key(&entry.id, |paragraph| paragraph.id)
                         .map_err(|_| EngineError::InvalidRequest)?;
-                    let positioned = paragraphs[paragraph_index].state.positioned.active();
-                    rows.try_reserve(positioned.placement_segments().len())
+                    let state = &paragraphs[paragraph_index].state;
+                    rows.try_reserve(state.active_placement_segments().len())
                         .map_err(|_| EngineError::ResultTooLarge)?;
                     for (relative, translation) in
-                        positioned.placement_translations().iter().enumerate()
+                        state.active_placement_translations().iter().enumerate()
                     {
-                        let handle = positioned
-                            .placement_handle(relative)
+                        let handle = state
+                            .active_placement_handle(relative)
                             .ok_or(EngineError::InvalidRequest)?;
                         rows.push(SessionPlacementRow {
                             slot: handle.slot().get(),
@@ -3976,9 +4253,14 @@ fn admit_preparation_owner(
 impl RetainedParagraph {
     fn acknowledge_committed_preparation(&mut self) {
         if self.preparation_changed_since_publication {
-            self.state.positioned.active_mut().mark_published();
+            if let PreparedLayout::Inline(leaf) = self.state.prepared_layout.active_mut() {
+                leaf.mark_published();
+            } else {
+                self.state.positioned.active_mut().mark_published();
+            }
             self.preparation_changed_since_publication = false;
         }
+        self.published_owner_inline = Some(self.state.active_inline().is_some());
     }
 
     fn commit_preparation(&mut self, publishing: bool) {
@@ -3990,20 +4272,365 @@ impl RetainedParagraph {
             self.preparation_changed_since_publication = true;
         }
         self.state.commit_all();
+        if publishing {
+            self.published_owner_inline = Some(self.state.active_inline().is_some());
+        }
         if published_changes {
-            self.state.positioned.active_mut().mark_published();
+            if let PreparedLayout::Inline(leaf) = self.state.prepared_layout.active_mut() {
+                leaf.mark_published();
+            } else {
+                self.state.positioned.active_mut().mark_published();
+            }
         }
         self.positioned_changed = false;
     }
 }
 
 impl ParagraphState {
+    fn active_inline(&self) -> Option<&InlineLeaf> {
+        match self.prepared_layout.active() {
+            PreparedLayout::Inline(leaf) => Some(leaf),
+            PreparedLayout::General => None,
+        }
+    }
+
+    fn active_outlined_count(&self) -> usize {
+        self.active_inline().map_or_else(
+            || self.positioned.active().outlined_count(),
+            InlineLeaf::outlined_count,
+        )
+    }
+
+    fn active_placement_segments(&self) -> &[PlacementSegment] {
+        if let Some(leaf) = self.active_inline() {
+            leaf.placement.segment_rows()
+        } else {
+            self.positioned.active().placement_segments()
+        }
+    }
+
+    fn active_placement_translations(&self) -> &[super::placement_state::SegmentTranslation] {
+        if let Some(leaf) = self.active_inline() {
+            leaf.placement_translations()
+        } else {
+            self.positioned.active().placement_translations()
+        }
+    }
+
+    fn active_placement_handle(
+        &self,
+        index: usize,
+    ) -> Option<super::placement_slot_arena::PlacementHandle> {
+        if let Some(leaf) = self.active_inline() {
+            leaf.placement_handle(index)
+        } else {
+            self.positioned.active().placement_handle(index)
+        }
+    }
+
+    fn active_placement_instance_count(&self) -> Result<usize, EngineError> {
+        if let Some(leaf) = self.active_inline() {
+            leaf.placement.instance_count()
+        } else {
+            self.positioned.active().placement_instance_count()
+        }
+    }
+
+    fn bind_inline_placement_handles(
+        &mut self,
+        handles: &[super::placement_slot_arena::PlacementHandle],
+    ) -> Result<(), EngineError> {
+        let PreparedLayout::Inline(leaf) = self.prepared_layout.active_mut() else {
+            return Err(EngineError::InvalidRequest);
+        };
+        if handles.len() != leaf.placement.segment_rows().len()
+            || leaf.placement.instance_count()? != leaf.outlined_count()
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        for (index, handle) in handles.iter().copied().enumerate() {
+            leaf.placement.set_placement_handle(index, Some(handle));
+        }
+        Ok(())
+    }
+
+    /// A single source run and font can write the final local rows directly. A failed
+    /// one-line fit transfers that same raw shape to General instead of shaping twice.
+    fn try_prepare_inline(
+        &mut self,
+        shaper: &mut ShaperRegistry,
+        font_stacks: &[RegisteredFontStack],
+        font_bindings: &[RegisteredFontBinding],
+        geometry: super::semantic_wire::GeometryBatch<'_>,
+        limits: super::frame::UpdateLimits,
+        next_glyph_id: &mut u32,
+    ) -> Result<InlineAttempt, EngineError> {
+        #[cfg(test)]
+        if self.disable_inline {
+            return Ok(InlineAttempt::Skipped);
+        }
+        if geometry.is_empty()
+            && self.committed_inline().is_some()
+            && !self.text.is_prepared()
+            && !self.unicode.is_prepared()
+            && !self.bidi.is_prepared()
+            && !self.shaping_runs.is_prepared()
+            && !self.geometry.is_prepared()
+            && !self.style_invalidation.bidi
+            && !self.style_invalidation.shaping
+            && !self.style_invalidation.metrics
+            && !self.style_invalidation.cluster_mapping
+            && !self.style_invalidation.positioning
+        {
+            return Ok(InlineAttempt::Unchanged);
+        }
+        let text = self.text.active().units.as_slice();
+        let runs = self.shaping_runs.active().runs();
+        if text.is_empty()
+            || text.len() > super::cluster_state::LAYOUT_CHUNK
+            || runs.len() != 1
+            || runs[0].text_start != 0
+            || usize::try_from(runs[0].text_end).ok() != Some(text.len())
+            || runs[0].direction != 0
+            || runs[0].bidi_level != 0
+            || (self.committed_inline().is_none() && !self.clusters.committed().starts.is_empty())
+        {
+            self.stage_general_owner_after_inline();
+            return Ok(InlineAttempt::Skipped);
+        }
+        let run = runs[0];
+        let stack = find_font_stack(font_stacks, run.style.font_stack_handle)?;
+        if stack.fonts.len() != 1 {
+            self.stage_general_owner_after_inline();
+            return Ok(InlineAttempt::Skipped);
+        }
+        let reuse_shape = self.committed_inline().is_some()
+            && !self.text.is_prepared()
+            && !self.style_invalidation.shaping
+            && !self.bidi.is_prepared()
+            && (!self.shaping_runs.is_prepared()
+                || shaping_run_topology_stable(self.shaping_runs.committed().runs(), runs));
+        let (binding_handle, font_handle) = if reuse_shape {
+            let old = self
+                .committed_inline()
+                .and_then(|leaf| leaf.shape.run())
+                .ok_or(EngineError::InvalidRequest)?;
+            (old.binding_handle, old.font_handle)
+        } else {
+            let binding_handle = stack.fonts[0];
+            (
+                binding_handle,
+                find_font_binding(font_bindings, binding_handle)?.shaping_handle,
+            )
+        };
+        let old_inline = self.committed_inline().is_some();
+        self.shape.pending_mut().clear();
+        self.shape_window_scratch.clear();
+        self.pending_fallback_spans.clear();
+        self.fallback_span_scratch.clear();
+        self.fallback_cluster_scratch.clear();
+        self.incremental_shape_source_run = None;
+        self.shape.discard_candidate();
+        let (candidate, previous_layout) = self.prepared_layout.derive_mut();
+        if !matches!(candidate, PreparedLayout::Inline(_)) {
+            *candidate = PreparedLayout::Inline(InlineLeaf::default());
+        }
+        let PreparedLayout::Inline(leaf) = candidate else {
+            unreachable!()
+        };
+        leaf.clear();
+        let captured = if reuse_shape {
+            let PreparedLayout::Inline(old) = previous_layout else {
+                return Err(EngineError::InvalidRequest);
+            };
+            leaf.shape.copy_from(&old.shape)?;
+            true
+        } else {
+            let styles = &self.styles.active().arena;
+            shaper
+                .with_shaped_run(
+                    font_handle,
+                    text,
+                    ShapeRunRef {
+                        text_start: run.text_start,
+                        text_end: run.text_end,
+                        script: run.script,
+                        language: styles.resolved_language(run.style),
+                        features: styles.resolved_features(run.style),
+                        direction: run.direction,
+                        cluster_level: 0,
+                        flags: 0x40,
+                    },
+                    |shaped| {
+                        if leaf.shape.capture_into(
+                            0,
+                            binding_handle,
+                            font_handle,
+                            run.text_start,
+                            run.text_end,
+                            shaped,
+                        )? {
+                            Ok(true)
+                        } else {
+                            self.shape.pending_mut().append(
+                                0,
+                                font_handle,
+                                binding_handle,
+                                run.text_start,
+                                run.text_end,
+                                shaped,
+                            )?;
+                            Ok(false)
+                        }
+                    },
+                )
+                .map_err(shaper_error)?
+        };
+        if !captured {
+            push_fallback_span(
+                &mut self.pending_fallback_spans,
+                FallbackSpan {
+                    source_run: 0,
+                    text_start: run.text_start,
+                    text_end: run.text_end,
+                    font_index: 0,
+                    binding_handle,
+                    font_handle,
+                },
+            )?;
+            self.shape.mark_prepared();
+            *candidate = PreparedLayout::General;
+            if old_inline {
+                self.prepared_layout.mark_prepared();
+            }
+            return Ok(InlineAttempt::GeneralShape);
+        }
+        let styles = self.styles.active().resolved.segments();
+        let eligible = leaf.build_clusters(
+            text,
+            &self.text.active().unit_ids,
+            self.unicode.active(),
+            styles,
+            |handle| shaper.font_metrics(handle),
+        )?;
+        if eligible {
+            let mut candidate_next_glyph_id = *next_glyph_id;
+            let ids = match previous_layout {
+                PreparedLayout::Inline(old) => leaf.assign_glyph_ids(
+                    old,
+                    &mut self.glyph_identity_index,
+                    &mut candidate_next_glyph_id,
+                )?,
+                PreparedLayout::General => leaf.assign_glyph_ids(
+                    self.clusters.committed(),
+                    &mut self.glyph_identity_index,
+                    &mut candidate_next_glyph_id,
+                )?,
+            };
+            leaf.build_numeric_rows(&ids, styles, run.bidi_level, |handle, glyph| {
+                shaper.font_glyph_extents(handle, glyph)
+            })?;
+            let current = RunCanonicalInput {
+                text,
+                text_unit_ids: &self.text.active().unit_ids,
+                style_arena: &self.styles.active().arena,
+                styles,
+                shaping_runs: runs,
+            };
+            let committed = RunCanonicalInput {
+                text: &self.text.committed().units,
+                text_unit_ids: &self.text.committed().unit_ids,
+                style_arena: &self.styles.committed().arena,
+                styles: self.styles.committed().resolved.segments(),
+                shaping_runs: self.shaping_runs.committed().runs(),
+            };
+            let mut revision = self.next_run_canonical_revision;
+            match previous_layout {
+                PreparedLayout::Inline(old) => leaf.finalize_revision(
+                    old,
+                    current,
+                    committed,
+                    &mut self.layout_run_identity_index,
+                    &mut revision,
+                )?,
+                PreparedLayout::General => leaf.finalize_revision(
+                    self.clusters.committed(),
+                    current,
+                    committed,
+                    &mut self.layout_run_identity_index,
+                    &mut revision,
+                )?,
+            }
+            Self::prepare_geometry_stage(&mut self.geometry, geometry)?;
+            let fit = leaf.build_one_line_flow(
+                self.geometry.active(),
+                styles,
+                &mut self.flow_slot_scratch,
+                limits,
+                |handle| shaper.font_metrics(handle),
+                |handle| {
+                    find_font_stack(font_stacks, handle)
+                        .ok()
+                        .and_then(|stack| stack.fonts.first().copied())
+                        .and_then(|binding| find_font_binding(font_bindings, binding).ok())
+                        .map(|binding| binding.shaping_handle)
+                },
+            );
+            if matches!(fit, Ok(true))
+                && leaf
+                    .build_one_line_placement(self.geometry.active())
+                    .is_ok()
+            {
+                *next_glyph_id = candidate_next_glyph_id;
+                self.pending_source_run_canonical_revision = revision;
+                self.pending_next_run_canonical_revision = revision;
+                self.prepared_layout.mark_prepared();
+                self.intrinsic_widths_cache = None;
+                return Ok(InlineAttempt::Prepared);
+            }
+        }
+        // Fit errors from the speculative leaf are attributed by General's normal pipeline.
+        leaf.shape.materialize_general(self.shape.pending_mut())?;
+        push_fallback_span(
+            &mut self.pending_fallback_spans,
+            FallbackSpan {
+                source_run: 0,
+                text_start: run.text_start,
+                text_end: run.text_end,
+                font_index: 0,
+                binding_handle,
+                font_handle,
+            },
+        )?;
+        self.shape.mark_prepared();
+        *candidate = PreparedLayout::General;
+        if old_inline {
+            self.prepared_layout.mark_prepared();
+        }
+        Ok(InlineAttempt::GeneralShape)
+    }
+
+    fn committed_inline(&self) -> Option<&InlineLeaf> {
+        match self.prepared_layout.committed() {
+            PreparedLayout::Inline(leaf) => Some(leaf),
+            PreparedLayout::General => None,
+        }
+    }
+
+    fn stage_general_owner_after_inline(&mut self) {
+        if self.committed_inline().is_some() {
+            *self.prepared_layout.pending_mut() = PreparedLayout::General;
+            self.prepared_layout.mark_prepared();
+        }
+    }
+
     fn has_pending_preparation(&self) -> bool {
         self.text.is_prepared()
             || self.styles.is_prepared()
             || self.unicode.is_prepared()
             || self.bidi.is_prepared()
             || self.shaping_runs.is_prepared()
+            || self.prepared_layout.is_prepared()
             || self.shape.is_prepared()
             || self.clusters.is_prepared()
             || self.geometry.is_prepared()
@@ -4057,6 +4684,7 @@ impl ParagraphState {
         }
         self.unicode.discard_candidate();
         self.unicode_reused_for_text_edit = false;
+        self.pending_reused_ascii_facts = None;
         {
             let (committed, pending) = self.bidi.pair_mut();
             committed.clear();
@@ -4069,12 +4697,21 @@ impl ParagraphState {
             pending.clear();
         }
         self.shaping_runs.discard_candidate();
+        let (committed_layout, pending_layout) = self.prepared_layout.pair_mut();
+        for layout in [committed_layout, pending_layout] {
+            if let PreparedLayout::Inline(leaf) = layout {
+                leaf.clear();
+            }
+        }
+        self.prepared_layout.discard_candidate();
         {
             let (committed, pending) = self.shape.pair_mut();
             committed.clear();
             pending.clear();
         }
         self.shape.discard_candidate();
+        self.accepted_shape_font_instance = None;
+        self.pending_shape_font_instance = None;
         self.shape_window_scratch.clear();
         self.incremental_shape_source_run = None;
         {
@@ -4143,7 +4780,6 @@ impl ParagraphState {
         geometry: super::semantic_wire::GeometryBatch<'_>,
         limits: super::frame::UpdateLimits,
         next_glyph_id: &mut u32,
-        next_content_revision: &mut u32,
         mut preflight_candidate: Option<&mut PreflightTextCandidate>,
         preflight_edits: &[TextEdit],
     ) -> Result<bool, EngineError> {
@@ -4166,7 +4802,23 @@ impl ParagraphState {
         self.prepare_shaping_runs()?;
         let mut cluster_geometry_changed = self.clusters.is_prepared();
         if let Some(shaper) = shaper.as_deref_mut() {
-            self.prepare_shape(shaper, font_stacks, font_bindings)?;
+            match self.try_prepare_inline(
+                shaper,
+                font_stacks,
+                font_bindings,
+                geometry,
+                limits,
+                next_glyph_id,
+            )? {
+                InlineAttempt::Prepared => return Ok(true),
+                InlineAttempt::Unchanged => return Ok(false),
+                InlineAttempt::GeneralShape => {}
+                InlineAttempt::Skipped => self.prepare_shape(shaper, font_stacks, font_bindings)?,
+            }
+            #[cfg(test)]
+            if core::mem::take(&mut self.fail_after_shape_once) {
+                return Err(EngineError::InvalidRequest);
+            }
             cluster_geometry_changed = self.prepare_clusters(shaper, next_glyph_id)?;
         }
         let positioned_changed = self.prepare_geometry_and_layout(
@@ -4176,7 +4828,6 @@ impl ParagraphState {
             geometry,
             limits,
             next_glyph_id,
-            next_content_revision,
             cluster_geometry_changed,
         )?;
         if cluster_geometry_changed {
@@ -4195,7 +4846,6 @@ impl ParagraphState {
         geometry: super::semantic_wire::GeometryBatch<'_>,
         limits: super::frame::UpdateLimits,
         next_glyph_id: &mut u32,
-        next_content_revision: &mut u32,
         cluster_geometry_changed: bool,
     ) -> Result<bool, EngineError> {
         self.prepare_geometry(geometry)?;
@@ -4252,7 +4902,7 @@ impl ParagraphState {
                 }
             }
             if positioned_changed {
-                self.prepare_positioned(shaper, next_content_revision)?;
+                self.prepare_positioned(shaper)?;
             }
         }
         Ok(positioned_changed)
@@ -4269,6 +4919,15 @@ impl ParagraphState {
         self.commit_geometry();
         self.commit_flow_layout();
         self.commit_positioned();
+        self.prepared_layout.commit();
+        if let PreparedLayout::Inline(_) = self.prepared_layout.committed() {
+            self.shape.pair_mut().0.clear();
+            self.accepted_shape_font_instance = None;
+            self.clusters.pair_mut().0.clear();
+            self.flow_layout.pair_mut().0.clear();
+            self.positioned.pair_mut().0.clear();
+            self.fallback_spans.clear();
+        }
         self.clipped_inspection.commit();
     }
 
@@ -4594,6 +5253,7 @@ impl ParagraphState {
         };
         if preflight_candidate.unicode_state == CandidateUnicode::ReuseCommitted {
             self.unicode_reused_for_text_edit = true;
+            self.pending_reused_ascii_facts = preflight_candidate.reused_ascii_facts;
             return Ok(());
         }
         if preflight_candidate.uses_pending_buffers() {
@@ -4609,11 +5269,16 @@ impl ParagraphState {
     fn discard_unicode_candidate(&mut self) {
         self.unicode.discard_candidate();
         self.unicode_reused_for_text_edit = false;
+        self.pending_reused_ascii_facts = None;
     }
 
     fn commit_unicode(&mut self) {
         if self.unicode.is_prepared() {
             self.unicode.commit();
+        } else if let Some(facts) = self.pending_reused_ascii_facts.take() {
+            // Only the accepted transaction reaches this point. The arrays
+            // were reused; their derived small fact is committed in place.
+            self.unicode.active_mut().accept_reused_ascii_facts(facts);
         }
         self.discard_unicode_candidate();
     }
@@ -4705,6 +5370,7 @@ impl ParagraphState {
         if !self.text.is_prepared()
             && !self.style_invalidation.shaping
             && !self.bidi.is_prepared()
+            && self.committed_inline().is_none()
             && (!self.shaping_runs.is_prepared()
                 || shaping_run_topology_stable(
                     self.shaping_runs.committed().runs(),
@@ -4713,7 +5379,9 @@ impl ParagraphState {
         {
             return Ok(());
         }
-        if self.try_prepare_incremental_shape(shaper)? {
+        if self.committed_inline().is_none()
+            && self.try_prepare_incremental_shape(shaper, font_stacks, font_bindings)?
+        {
             self.shape.mark_prepared();
             return Ok(());
         }
@@ -4749,6 +5417,12 @@ impl ParagraphState {
                     usize::try_from(span.source_run).map_err(|_| EngineError::InvalidRequest)?;
                 let run = *runs.get(source_index).ok_or(EngineError::InvalidRequest)?;
                 let output = self.shape.pending_mut();
+                #[cfg(test)]
+                super::work_attribution::record(|work| {
+                    work.main_full_run_shape_calls += 1;
+                    work.main_full_run_shape_utf16_units +=
+                        span.text_end.saturating_sub(span.text_start) as usize;
+                });
                 shaper
                     .with_shaped_run(
                         span.font_handle,
@@ -4869,6 +5543,21 @@ impl ParagraphState {
                 }
             }
             if !changed {
+                // The raw owner about to be accepted was produced with this
+                // registry's exact current font instance. A later dispose and
+                // same-handle registration cannot reuse this serial.
+                self.pending_shape_font_instance = if runs.len() == 1
+                    && self.shape.pending().runs.len() == 1
+                    && self.pending_fallback_spans.len() == 1
+                    && self.pending_fallback_spans[0].source_run == 0
+                    && self.pending_fallback_spans[0].text_start == 0
+                    && self.pending_fallback_spans[0].text_end == runs[0].text_end
+                    && self.pending_fallback_spans[0].font_index == 0
+                {
+                    shaper.font_instance(self.pending_fallback_spans[0].font_handle)
+                } else {
+                    None
+                };
                 self.shape.mark_prepared();
                 return Ok(());
             }
@@ -4883,6 +5572,8 @@ impl ParagraphState {
     fn try_prepare_incremental_shape(
         &mut self,
         shaper: &mut ShaperRegistry,
+        font_stacks: &[RegisteredFontStack],
+        font_bindings: &[RegisteredFontBinding],
     ) -> Result<bool, EngineError> {
         let Some(edit) = bounding_text_edit(&self.text_edits) else {
             return Ok(false);
@@ -4952,6 +5643,31 @@ impl ParagraphState {
             &mut self.shape_window_scratch,
         )?;
         if !sparse_scope {
+            // The ordinary length-changing route would shape the complete run.
+            // Keep same-length sparse edits above on their existing path.
+            if self.try_prepare_ascii_anchor_shape(
+                shaper,
+                font_stacks,
+                font_bindings,
+                edit,
+                old_run,
+                new_run,
+                affected_shape_index,
+                fallback,
+            )? {
+                push_fallback_span(
+                    &mut self.pending_fallback_spans,
+                    FallbackSpan {
+                        text_end: new_run.text_end,
+                        ..fallback
+                    },
+                )?;
+                self.boundary_shape_scratch.clear();
+                // None selects the full cluster/RunLocal/layout preparation;
+                // this first candidate credits only full-run HarfRust work.
+                self.incremental_shape_source_run = None;
+                return Ok(true);
+            }
             set_whole_shape_window(
                 &mut self.shape_window_scratch,
                 affected_shape,
@@ -5001,6 +5717,241 @@ impl ParagraphState {
         }
         self.boundary_shape_scratch.clear();
         self.incremental_shape_source_run = Some(affected_source_run);
+        // The existing sparse/whole-window producer remains authoritative but
+        // does not mint this optional registration certificate.
+        self.pending_shape_font_instance = None;
+        Ok(true)
+    }
+
+    /// Optional producer replacement. Any uncertainty or tentative error
+    /// restores the ordinary whole-run path's authority and error precedence.
+    #[allow(clippy::too_many_arguments)]
+    fn try_prepare_ascii_anchor_shape(
+        &mut self,
+        shaper: &mut ShaperRegistry,
+        font_stacks: &[RegisteredFontStack],
+        font_bindings: &[RegisteredFontBinding],
+        edit: TextEdit,
+        old_run: ShapingRun,
+        new_run: ShapingRun,
+        old_shape_index: usize,
+        fallback: FallbackSpan,
+    ) -> Result<bool, EngineError> {
+        use crate::ascii_anchor_policy::{self as policy, AsciiUse};
+        #[cfg(test)]
+        if self.disable_ascii_anchor {
+            return Ok(false);
+        }
+        if self.text_edits.len() != 1
+            || edit.old_end - edit.old_start == edit.new_end - edit.new_start
+            || old_shape_index != 0
+            || self.shape.committed().runs.len() != 1
+            || self.shaping_runs.committed().runs().len() != 1
+            || self.shaping_runs.active().runs().len() != 1
+            || old_run.text_start != 0
+            || new_run.text_start != 0
+            || usize::try_from(old_run.text_end).ok() != Some(self.text.committed().units.len())
+            || usize::try_from(new_run.text_end).ok() != Some(self.text.active().units.len())
+            || old_run.script != u32::from_be_bytes(*b"Latn")
+            || new_run.script != old_run.script
+            || old_run.direction != 0
+            || new_run.direction != 0
+            || fallback.source_run != 0
+            || fallback.font_index != 0
+            || fallback.text_start != 0
+            || fallback.text_end != old_run.text_end
+            || self.shape.committed().runs[0].glyph_start != 0
+            || usize::try_from(self.shape.committed().runs[0].glyph_count).ok()
+                != Some(self.shape.committed().glyph_ids.len())
+            || self.accepted_shape_font_instance.is_none()
+            || self.accepted_shape_font_instance != shaper.font_instance(fallback.font_handle)
+        {
+            return Ok(false);
+        }
+        // This optional route never changes error precedence: an unavailable
+        // stack/binding simply falls through to the existing full producer.
+        let Some(stack) = find_font_stack(font_stacks, new_run.style.font_stack_handle).ok() else {
+            return Ok(false);
+        };
+        if stack.fonts.as_slice() != [fallback.binding_handle]
+            || find_font_binding(font_bindings, fallback.binding_handle)
+                .ok()
+                .is_none_or(|binding| binding.shaping_handle != fallback.font_handle)
+        {
+            return Ok(false);
+        }
+        let old_styles = &self.styles.committed().arena;
+        let new_styles = &self.styles.active().arena;
+        if old_styles.resolved_language(old_run.style).is_some()
+            || new_styles.resolved_language(new_run.style).is_some()
+            || !old_styles.resolved_features(old_run.style).is_empty()
+            || !new_styles.resolved_features(new_run.style).is_empty()
+        {
+            return Ok(false);
+        }
+        let old_use = AsciiUse::from_analysis(self.unicode.committed().printable_ascii_facts());
+        let current_facts = self
+            .pending_reused_ascii_facts
+            .unwrap_or_else(|| self.unicode.active().printable_ascii_facts());
+        let new_use = AsciiUse::from_analysis(current_facts);
+        let (Some(old_use), Some(new_use)) = (old_use, new_use) else {
+            return Ok(false);
+        };
+        if self.text.committed().units.len() > policy::WHOLE_UNITS_MAX
+            || self.text.active().units.len() > policy::WHOLE_UNITS_MAX
+        {
+            return Ok(false);
+        }
+        let window = {
+            let Ok(screen) = shaper.ascii_anchor_screen(fallback.font_handle) else {
+                return Ok(false);
+            };
+            let Ok(window) = policy::fixed_window(
+                screen,
+                &self.text.committed().units,
+                &self.text.active().units,
+                edit.old_start,
+                edit.old_end,
+                edit.new_end,
+                &old_use,
+                &new_use,
+            ) else {
+                return Ok(false);
+            };
+            window
+        };
+        self.boundary_shape_scratch.clear();
+        let styles = &self.styles.active().arena;
+        let new_text = self.text.active().units.as_slice();
+        let outer_start =
+            u32::try_from(window.new_outer_left).map_err(|_| EngineError::ResultTooLarge)?;
+        let outer_end =
+            u32::try_from(window.new_outer_end).map_err(|_| EngineError::ResultTooLarge)?;
+        #[cfg(test)]
+        let before_item = super::work_attribution::snapshot();
+        let shaped = shaper.with_shaped_range(
+            fallback.font_handle,
+            new_text,
+            ShapeRunRef {
+                text_start: 0,
+                text_end: new_run.text_end,
+                script: new_run.script,
+                language: styles.resolved_language(new_run.style),
+                features: styles.resolved_features(new_run.style),
+                direction: 0,
+                cluster_level: 0,
+                flags: 0x40,
+            },
+            ShapeRangeRef {
+                item_start: outer_start,
+                item_end: outer_end,
+                context_start: 0,
+                context_end: new_run.text_end,
+                flags: 0x40,
+            },
+            |glyphs| {
+                self.boundary_shape_scratch.append(
+                    0,
+                    fallback.font_handle,
+                    fallback.binding_handle,
+                    outer_start,
+                    outer_end,
+                    glyphs,
+                )
+            },
+        );
+        #[cfg(test)]
+        super::work_attribution::record(|work| {
+            work.ascii_anchor_item_calls += work
+                .harfrust_calls
+                .saturating_sub(before_item.harfrust_calls);
+            work.ascii_anchor_item_utf16_units += work
+                .harfrust_utf16_units
+                .saturating_sub(before_item.harfrust_utf16_units);
+        });
+        if shaped.is_err() || self.boundary_shape_scratch.glyph_ids.contains(&0) {
+            self.boundary_shape_scratch.clear();
+            return Ok(false);
+        }
+        let old = self.shape.committed();
+        let fresh = &self.boundary_shape_scratch;
+        let old_left = old.clusters.partition_point(|&cluster| {
+            usize::try_from(cluster)
+                .ok()
+                .is_some_and(|cluster| cluster < window.old_inner_left)
+        });
+        let old_right = old.clusters.partition_point(|&cluster| {
+            usize::try_from(cluster)
+                .ok()
+                .is_some_and(|cluster| cluster <= window.old_inner_right)
+        });
+        let new_left = fresh.clusters.partition_point(|&cluster| {
+            usize::try_from(cluster)
+                .ok()
+                .is_some_and(|cluster| cluster < window.new_inner_left)
+        });
+        let new_right = fresh.clusters.partition_point(|&cluster| {
+            usize::try_from(cluster)
+                .ok()
+                .is_some_and(|cluster| cluster <= window.new_inner_right)
+        });
+        if old.clusters.get(old_left).copied() != u32::try_from(window.old_inner_left).ok()
+            || old_right
+                .checked_sub(1)
+                .and_then(|index| old.clusters.get(index).copied())
+                != u32::try_from(window.old_inner_right).ok()
+            || fresh.clusters.get(new_left).copied() != u32::try_from(window.new_inner_left).ok()
+            || new_right
+                .checked_sub(1)
+                .and_then(|index| fresh.clusters.get(index).copied())
+                != u32::try_from(window.new_inner_right).ok()
+        {
+            self.boundary_shape_scratch.clear();
+            return Ok(false);
+        }
+        self.shape.pending_mut().clear();
+        let old_left_unit =
+            u32::try_from(window.old_inner_left).map_err(|_| EngineError::ResultTooLarge)?;
+        let old_after_right =
+            u32::try_from(window.old_inner_right + 1).map_err(|_| EngineError::ResultTooLarge)?;
+        let new_left_unit =
+            u32::try_from(window.new_inner_left).map_err(|_| EngineError::ResultTooLarge)?;
+        let new_after_right =
+            u32::try_from(window.new_inner_right + 1).map_err(|_| EngineError::ResultTooLarge)?;
+        let delta = i64::from(new_run.text_end) - i64::from(old_run.text_end);
+        let assembled = (|| -> Result<(), EngineError> {
+            let (pending, committed) = self.shape.derive_mut();
+            pending.append_glyph_range_from(committed, 0, 0, 0, old_left_unit, 0, old_left, 0)?;
+            pending.append_glyph_range_from(
+                fresh,
+                0,
+                0,
+                new_left_unit,
+                new_after_right,
+                new_left,
+                new_right,
+                0,
+            )?;
+            pending.append_glyph_range_from(
+                committed,
+                0,
+                0,
+                old_after_right,
+                old_run.text_end,
+                old_right,
+                committed.glyph_ids.len(),
+                delta,
+            )?;
+            pending.collapse_appended_runs(0, 0, new_run.text_end)
+        })();
+        if assembled.is_err() {
+            self.shape.pending_mut().clear();
+            self.boundary_shape_scratch.clear();
+            return Ok(false);
+        }
+        #[cfg(test)]
+        super::work_attribution::record(|work| work.ascii_anchor_splice_successes += 1);
+        self.pending_shape_font_instance = shaper.font_instance(fallback.font_handle);
         Ok(true)
     }
 
@@ -5083,39 +6034,49 @@ impl ParagraphState {
                 self.boundary_shape_scratch.clear();
                 let scratch = &mut self.boundary_shape_scratch;
                 let styles = &self.styles.active().arena;
-                shaper
-                    .with_shaped_range(
-                        fallback.font_handle,
-                        &self.text.pending().units,
-                        ShapeRunRef {
-                            text_start: new_run.text_start,
-                            text_end: new_run.text_end,
-                            script: new_run.script,
-                            language: styles.resolved_language(new_run.style),
-                            features: styles.resolved_features(new_run.style),
-                            direction: new_run.direction,
-                            cluster_level: 0,
-                            flags: 0x40,
-                        },
-                        ShapeRangeRef {
-                            item_start: window.new_start,
-                            item_end: window.probe_end,
-                            context_start: new_run.text_start,
-                            context_end: new_run.text_end,
-                            flags: 0x40,
-                        },
-                        |shaped| {
-                            scratch.append(
-                                source_run_index,
-                                fallback.font_handle,
-                                fallback.binding_handle,
-                                window.new_start,
-                                window.probe_end,
-                                shaped,
-                            )
-                        },
-                    )
-                    .map_err(shaper_error)?;
+                #[cfg(test)]
+                let before_window = super::work_attribution::snapshot();
+                let shaped = shaper.with_shaped_range(
+                    fallback.font_handle,
+                    &self.text.pending().units,
+                    ShapeRunRef {
+                        text_start: new_run.text_start,
+                        text_end: new_run.text_end,
+                        script: new_run.script,
+                        language: styles.resolved_language(new_run.style),
+                        features: styles.resolved_features(new_run.style),
+                        direction: new_run.direction,
+                        cluster_level: 0,
+                        flags: 0x40,
+                    },
+                    ShapeRangeRef {
+                        item_start: window.new_start,
+                        item_end: window.probe_end,
+                        context_start: new_run.text_start,
+                        context_end: new_run.text_end,
+                        flags: 0x40,
+                    },
+                    |shaped| {
+                        scratch.append(
+                            source_run_index,
+                            fallback.font_handle,
+                            fallback.binding_handle,
+                            window.new_start,
+                            window.probe_end,
+                            shaped,
+                        )
+                    },
+                );
+                #[cfg(test)]
+                super::work_attribution::record(|work| {
+                    work.incremental_window_shape_calls += work
+                        .harfrust_calls
+                        .saturating_sub(before_window.harfrust_calls);
+                    work.incremental_window_shape_utf16_units += work
+                        .harfrust_utf16_units
+                        .saturating_sub(before_window.harfrust_utf16_units);
+                });
+                shaped.map_err(shaper_error)?;
                 if self.boundary_shape_scratch.glyph_ids.contains(&0) {
                     self.shape.pending_mut().clear();
                     self.boundary_shape_scratch.clear();
@@ -5217,6 +6178,7 @@ impl ParagraphState {
 
     fn discard_shape_candidate(&mut self) {
         self.shape.pending_mut().clear();
+        self.pending_shape_font_instance = None;
         self.shape_window_scratch.clear();
         self.pending_fallback_spans.clear();
         self.fallback_span_scratch.clear();
@@ -5229,6 +6191,7 @@ impl ParagraphState {
         if self.shape.is_prepared() {
             self.shape.commit();
             core::mem::swap(&mut self.fallback_spans, &mut self.pending_fallback_spans);
+            self.accepted_shape_font_instance = self.pending_shape_font_instance.take();
         }
         self.discard_shape_candidate();
     }
@@ -5325,8 +6288,12 @@ impl ParagraphState {
             .pending_mut()
             .build(build_input(), |handle| shaper.font_metrics(handle))?;
         let (pending_clusters, committed_clusters) = self.clusters.derive_mut();
+        let previous: &dyn CanonicalClusterView = match self.prepared_layout.committed() {
+            PreparedLayout::Inline(leaf) => leaf,
+            PreparedLayout::General => committed_clusters,
+        };
         if let Err(error) = pending_clusters.assign_stable_glyph_ids(
-            committed_clusters,
+            previous,
             &mut self.glyph_identity_index,
             next_glyph_id,
         ) {
@@ -5364,7 +6331,11 @@ impl ParagraphState {
         self.layout_dirty.clear();
         let mut next_revision = self.next_run_canonical_revision;
         let result = {
-            let (pending, previous) = self.clusters.derive_mut();
+            let (pending, committed_clusters) = self.clusters.derive_mut();
+            let previous: &dyn CanonicalClusterView = match self.prepared_layout.committed() {
+                PreparedLayout::Inline(leaf) => leaf,
+                PreparedLayout::General => committed_clusters,
+            };
             pending.finalize_layout_run_revisions(
                 previous,
                 current,
@@ -5410,18 +6381,24 @@ impl ParagraphState {
         &mut self,
         geometry: super::semantic_wire::GeometryBatch<'_>,
     ) -> Result<(), EngineError> {
-        self.discard_geometry_candidate();
+        Self::prepare_geometry_stage(&mut self.geometry, geometry)
+    }
+
+    fn prepare_geometry_stage(
+        stage: &mut Staged<FlowGeometryArena>,
+        geometry: super::semantic_wire::GeometryBatch<'_>,
+    ) -> Result<(), EngineError> {
+        stage.pending_mut().clear();
+        stage.discard_candidate();
         if geometry.is_empty() {
             return Ok(());
         }
-        self.geometry.pending_mut().build(geometry)?;
-        if geometry.inline_object_count() == 0
-            && self.geometry.pending() == self.geometry.committed()
-        {
-            self.geometry.pending_mut().clear();
+        stage.pending_mut().build(geometry)?;
+        if geometry.inline_object_count() == 0 && stage.pending() == stage.committed() {
+            stage.pending_mut().clear();
             return Ok(());
         }
-        self.geometry.mark_prepared();
+        stage.mark_prepared();
         Ok(())
     }
 
@@ -5884,6 +6861,22 @@ impl ParagraphState {
         }
     }
 
+    fn inspection_boundary_shape(&self) -> &BoundaryShapeArena {
+        if self.clipped_inspection.active().mode == IntrinsicInspection::Positioned {
+            &self.intrinsic_boundary_shape
+        } else {
+            self.visible_boundary_shape()
+        }
+    }
+
+    fn visible_boundary_shape(&self) -> &BoundaryShapeArena {
+        if self.flow_layout.is_prepared() {
+            &self.pending_boundary_shape
+        } else {
+            &self.boundary_shape
+        }
+    }
+
     fn prepare_intrinsic_positioned(&mut self, shaper: &ShaperRegistry) -> Result<(), EngineError> {
         #[cfg(test)]
         super::work_attribution::record(|work| work.intrinsic_positioning_preparations += 1);
@@ -5893,32 +6886,32 @@ impl ParagraphState {
         let styles = self.styles.active().resolved.segments();
         let bidi = self.bidi.active();
         let previous = self.positioned.active();
-        let mut next_content_revision = 1;
         let mut next_run_canonical_revision = 1;
         let boundary_shape = &self.intrinsic_boundary_shape;
         let geometry = &self.intrinsic_geometry_scratch;
-        self.clipped_inspection.pending_mut().positioned.build(
-            previous,
-            &self.intrinsic_flow_layout_scratch,
-            None,
-            None,
-            text,
-            clusters,
-            clusters,
-            runs,
-            runs,
-            boundary_shape,
-            boundary_shape,
-            styles,
-            bidi,
-            &mut self.intrinsic_identity_scratch,
-            &mut next_content_revision,
-            &mut next_run_canonical_revision,
-            |thread| thread_typography(geometry, thread),
-            |thread| thread_typography(geometry, thread),
-            |handle| shaper.font_metrics(handle),
-            |handle, glyph| shaper.font_glyph_extents(handle, glyph),
-        )
+        self.clipped_inspection
+            .pending_mut()
+            .positioned
+            .build_with_previous(
+                previous,
+                &self.intrinsic_flow_layout_scratch,
+                None,
+                None,
+                text,
+                clusters,
+                clusters,
+                runs,
+                runs,
+                boundary_shape,
+                boundary_shape,
+                styles,
+                bidi,
+                &mut next_run_canonical_revision,
+                |thread| thread_typography(geometry, thread),
+                |thread| thread_typography(geometry, thread),
+                |handle| shaper.font_metrics(handle),
+                |handle, glyph| shaper.font_glyph_extents(handle, glyph),
+            )
     }
 
     fn discard_flow_layout_candidate(&mut self) {
@@ -5937,11 +6930,7 @@ impl ParagraphState {
     }
 
     #[inline(never)]
-    fn prepare_positioned(
-        &mut self,
-        shaper: &ShaperRegistry,
-        next_content_revision: &mut u32,
-    ) -> Result<(), EngineError> {
+    fn prepare_positioned(&mut self, shaper: &ShaperRegistry) -> Result<(), EngineError> {
         self.discard_positioned_candidate();
         let text = self.text.active().units.as_slice();
         let clusters = self.clusters.active();
@@ -5976,7 +6965,7 @@ impl ParagraphState {
                 None
             };
         let (committed_positioned, pending_positioned) = self.positioned.pair_mut();
-        pending_positioned.build(
+        pending_positioned.build_with_previous(
             committed_positioned,
             flow,
             retained_flow,
@@ -5990,8 +6979,6 @@ impl ParagraphState {
             &self.boundary_shape,
             styles,
             bidi,
-            &mut self.glyph_identity_index,
-            next_content_revision,
             &mut self.pending_next_run_canonical_revision,
             |thread| thread_typography(geometry, thread),
             |thread| thread_typography(self.geometry.committed(), thread),
@@ -8359,6 +9346,7 @@ mod unsafe_break_tests;
 
 #[cfg(test)]
 mod tests {
+    use super::super::positioning::{SEMANTIC_F32_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT};
     use super::super::semantic_wire::ParagraphOrderMutationBatch;
     use crate::engine::style_state::ResolvedStyle;
     use read_fonts::TableProvider;
@@ -9231,8 +10219,7 @@ mod tests {
             .unwrap()
             .positioned
             .active()
-            .glyphs()
-            .len();
+            .outlined_count();
         assert_eq!(
             positioned_glyphs, 1,
             "the production pipeline must position the authored glyph"
@@ -9260,6 +10247,228 @@ mod tests {
         assert_eq!(engine.retained_binding_compilation_skips(4), Ok(1));
         engine.commit_update(prepared).unwrap();
         assert_eq!(engine.retained_binding_compilation_skips(4), Ok(1));
+
+        let changed_revision = engine.gather.view().plan_input().glyphs[0].content_revision;
+        let mut reverted = update(2, 2, 2);
+        reverted.compositing_independent = true;
+        reverted.style_mutations =
+            parse_style_mutations(&initial_style_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, reverted, 3)
+            .unwrap();
+        assert!(engine.gather.view().plan_input().glyphs[0].content_revision > changed_revision);
+        assert!(!engine.prepared_plan(prepared).unwrap().patches.is_empty());
+        engine.commit_update(prepared).unwrap();
+
+        // Both setters publish semantic query state immediately, but the net
+        // renderer input returns to the accepted A value before publication.
+        let accepted_revision = engine.gather.view().plan_input().glyphs[0].content_revision;
+        engine.planners.get_mut(&4).unwrap().next_content_revision = u32::MAX;
+        let mut larger_style = initial_style_bytes.clone();
+        write_f32(
+            &mut larger_style,
+            ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize + abi::ENGINE_STYLE_MUTATION_FONT_SIZE,
+            24.0,
+        );
+        let mut first_query = update(3, 3, 3);
+        first_query.compositing_independent = true;
+        first_query.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_MEASUREMENT;
+        first_query.limits.max_output_bytes = 1 << 20;
+        first_query.style_mutations =
+            parse_style_mutations(&larger_style, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let measured = engine
+            .measure_paragraph_with_shaper(&mut shaper, first_query, 1)
+            .unwrap();
+        let larger_measurement = engine.measured_semantic_views(measured).unwrap().to_vec();
+        engine.commit_measure(measured).unwrap();
+
+        let mut second_query = update(3, 3, 3);
+        second_query.compositing_independent = true;
+        second_query.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_MEASUREMENT;
+        second_query.limits.max_output_bytes = 1 << 20;
+        second_query.style_mutations =
+            parse_style_mutations(&initial_style_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
+                .unwrap();
+        let measured = engine
+            .measure_paragraph_with_shaper(&mut shaper, second_query, 1)
+            .unwrap();
+        let restored_measurement = engine.measured_semantic_views(measured).unwrap().to_vec();
+        assert_ne!(larger_measurement, restored_measurement);
+        engine.commit_measure(measured).unwrap();
+
+        super::super::work_attribution::reset();
+        let mut publication = update(3, 3, 3);
+        // A compositing policy change forces the projected gather to compare the
+        // A-valued source, without changing any declared glyph register.
+        publication.compositing_independent = false;
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, publication, 4)
+            .unwrap();
+        let work = super::super::work_attribution::snapshot();
+        assert!(work.gather_projected_register_compares > 0);
+        assert_eq!(work.gather_f32_changed_slots, 0);
+        assert_eq!(
+            engine.gather.view().plan_input().glyphs[0].content_revision,
+            accepted_revision
+        );
+        engine.commit_update(prepared).unwrap();
+        assert_eq!(
+            engine.planners.get(&4).unwrap().next_content_revision,
+            u32::MAX
+        );
+    }
+
+    #[test]
+    fn projected_accepted_instance_dependencies_track_declared_columns() {
+        const GLYPH_COUNT: u32 = 2_937;
+        const INTER: &[u8] =
+            include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
+        let mut shaper = ShaperRegistry::default();
+        let extents = vec![0; GLYPH_COUNT as usize * 8];
+        let mut availability = vec![u8::MAX; (GLYPH_COUNT as usize).div_ceil(8)];
+        *availability.last_mut().unwrap() = (1 << (GLYPH_COUNT % 8)) - 1;
+        assert_eq!(
+            shaper.register_font(42, INTER, &extents, &availability, 0, 0),
+            0
+        );
+
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_paint_and_instance_codec(TechniqueId(1)))
+            .unwrap();
+        engine
+            .register_font_binding(42, 42, GLYPH_COUNT, render_binding(GLYPH_COUNT, 1))
+            .unwrap();
+        engine.register_font_stack(7, &[42]).unwrap();
+        engine.create_root(4).unwrap();
+        let text = text_mutation_bytes(&[(0, 0, &[0x41])]);
+        let initial_style = paragraph_root_style_with_foreground(0xff00_00ff);
+        let geometry = root_geometry_bytes();
+        let mut initial = update(0, 0, 0);
+        initial.compositing_independent = true;
+        initial.text_mutations =
+            parse_text_mutations(&text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        initial.style_mutations =
+            parse_style_mutations(&initial_style, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        initial.geometry = parse_root_geometry(&geometry, initial.limits);
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, initial, 1)
+            .unwrap();
+        engine.commit_update(prepared).unwrap();
+        let initial_revision = engine.gather.view().plan_input().glyphs[0].content_revision;
+
+        let mut style = paragraph_root_style_with_foreground(0x00ff_00ff);
+        let record = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let mask =
+            crate::wire::read_u32(&style, record + abi::ENGINE_STYLE_MUTATION_FIELD_MASK).unwrap();
+        write_u32(
+            &mut style,
+            record + abi::ENGINE_STYLE_MUTATION_FIELD_MASK,
+            mask | STYLE_FIELD_OUTLINE,
+        );
+        write_u32(
+            &mut style,
+            record + abi::ENGINE_STYLE_MUTATION_OUTLINE_RGBA,
+            0x33ff_66ff,
+        );
+        write_f32(
+            &mut style,
+            record + abi::ENGINE_STYLE_MUTATION_OUTLINE_WIDTH,
+            2.0,
+        );
+        let mut paint = update(1, 1, 1);
+        paint.compositing_independent = true;
+        paint.style_mutations =
+            parse_style_mutations(&style, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, paint, 2)
+            .unwrap();
+        let gathered_view = engine.gather.view();
+        let gathered = gathered_view.plan_input();
+        let independent = (1 << 8) | super::super::positioning::SEMANTIC_EFFECTS_CHANGE;
+        assert_eq!(gathered.semantic_change_masks[0], independent);
+        assert!(super::super::positioning::semantic_changes_preserve_plan_bindings(independent));
+        assert_eq!(gathered.f32_fields[0][0].to_bits(), 1.0_f32.to_bits());
+        assert_eq!(gathered.u32_fields[3][0], 0x33ff_66ff);
+        assert!(gathered.glyphs[0].content_revision > initial_revision);
+        assert_eq!(engine.retained_binding_compilation_skips(4), Ok(1));
+        let paint_slot = gathered.placement_slots[0];
+        engine.commit_update(prepared).unwrap();
+
+        let mut moved_geometry = geometry.clone();
+        let constraint = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let region = constraint + abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
+        write_u32(
+            &mut moved_geometry,
+            constraint + abi::ENGINE_CONSTRAINT_FLOW_THREAD_ID,
+            2,
+        );
+        write_u32(&mut moved_geometry, region + abi::ENGINE_REGION_ID, 2);
+        write_u32(
+            &mut moved_geometry,
+            region + abi::ENGINE_REGION_GEOMETRY_REVISION,
+            2,
+        );
+        write_u32(
+            &mut moved_geometry,
+            region + abi::ENGINE_REGION_TRANSFORM_INDEX,
+            2,
+        );
+        let mut moved = update(2, 2, 2);
+        moved.compositing_independent = true;
+        moved.geometry = parse_root_geometry(&moved_geometry, moved.limits);
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, moved, 3)
+            .unwrap();
+        let gathered_view = engine.gather.view();
+        let gathered = gathered_view.plan_input();
+        assert_eq!(gathered.u32_fields[0][0], 2);
+        assert_eq!(gathered.u32_fields[1][0], 2);
+        assert_eq!(gathered.u32_fields[2][0], 2);
+        let instance_bits = (1 << 10) | (1 << 11) | (1 << 12);
+        assert_eq!(
+            gathered.semantic_change_masks[0] & instance_bits,
+            instance_bits
+        );
+        if gathered.placement_slots[0] != paint_slot {
+            assert_ne!(
+                gathered.semantic_change_masks[0]
+                    & super::super::positioning::SEMANTIC_PLACEMENT_SLOT_CHANGE,
+                0
+            );
+            assert!(
+                !super::super::positioning::semantic_changes_preserve_plan_bindings(
+                    gathered.semantic_change_masks[0]
+                )
+            );
+        }
+        engine.commit_update(prepared).unwrap();
+
+        let mut material_style = style.clone();
+        write_u32(
+            &mut material_style,
+            record + abi::ENGINE_STYLE_MUTATION_MATERIAL_ID,
+            2,
+        );
+        let previous_revision = engine.gather.view().plan_input().glyphs[0].content_revision;
+        let prior_binding_skips = engine.retained_binding_compilation_skips(4).unwrap();
+        let mut material = update(3, 3, 3);
+        material.compositing_independent = true;
+        material.style_mutations =
+            parse_style_mutations(&material_style, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, material, 4)
+            .unwrap();
+        let gathered_view = engine.gather.view();
+        let gathered = gathered_view.plan_input();
+        assert_eq!(gathered.glyphs[0].material_id, 2);
+        assert!(gathered.glyphs[0].content_revision > previous_revision);
+        assert_eq!(
+            engine.retained_binding_compilation_skips(4),
+            Ok(prior_binding_skips)
+        );
+        engine.commit_update(prepared).unwrap();
     }
 
     #[test]
@@ -9303,6 +10512,240 @@ mod tests {
                 .acknowledged_publication_generation,
             0
         );
+    }
+
+    #[test]
+    fn projected_revisions_commit_high_water_and_charge_only_changed_publications() {
+        let (mut engine, mut shaper) = shaped_outlined_engine("A");
+        assert_eq!(engine.gather.view().plan_input().glyphs.len(), 1);
+        engine.planners.get_mut(&4).unwrap().next_content_revision = u32::MAX - 1;
+
+        let replacement = utf16("B");
+        let bytes = text_mutation_bytes(&[(0, 1, &replacement)]);
+        let mut changed = update(1, 1, 1);
+        changed.text_mutations =
+            parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, changed, 2)
+            .unwrap();
+        assert_eq!(
+            engine.gather.view().plan_input().glyphs[0].content_revision,
+            u32::MAX - 1
+        );
+        engine.commit_update(prepared).unwrap();
+        assert_eq!(
+            engine.planners.get(&4).unwrap().next_content_revision,
+            u32::MAX
+        );
+
+        // No selected record changes, so the exhausted headroom is irrelevant.
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, update(2, 2, 2), 3)
+            .unwrap();
+        engine.commit_update(prepared).unwrap();
+        assert_eq!(
+            engine.gather.view().plan_input().glyphs[0].content_revision,
+            u32::MAX - 1
+        );
+        assert_eq!(
+            engine.planners.get(&4).unwrap().next_content_revision,
+            u32::MAX
+        );
+
+        let replacement = utf16("C");
+        let bytes = text_mutation_bytes(&[(0, 1, &replacement)]);
+        let mut changed_again = update(3, 3, 3);
+        changed_again.text_mutations =
+            parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        assert_eq!(
+            engine.prepare_update_with_shaper(&mut shaper, changed_again, 4),
+            Err(EngineError::ResultTooLarge)
+        );
+        assert_eq!(engine.root_revision(4), Err(EngineError::RootMissing));
+        assert_eq!(
+            engine
+                .invalidated_roots
+                .get(&4)
+                .unwrap()
+                .next_content_revision,
+            u32::MAX
+        );
+    }
+
+    #[test]
+    fn failed_query_after_staged_column_delta_resets_and_replays() {
+        const GLYPH_COUNT: u32 = 2_937;
+        const INTER: &[u8] =
+            include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
+        let mut shaper = ShaperRegistry::default();
+        let extents = vec![0; GLYPH_COUNT as usize * 8];
+        let mut availability = vec![u8::MAX; (GLYPH_COUNT as usize).div_ceil(8)];
+        *availability.last_mut().unwrap() = (1 << (GLYPH_COUNT % 8)) - 1;
+        assert_eq!(
+            shaper.register_font(42, INTER, &extents, &availability, 0, 0),
+            0
+        );
+
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_paint_codec(TechniqueId(1)))
+            .unwrap();
+        engine
+            .register_font_binding(42, 42, GLYPH_COUNT, render_binding(GLYPH_COUNT, 1))
+            .unwrap();
+        engine.register_font_stack(7, &[42]).unwrap();
+        engine.create_root(4).unwrap();
+        let text_bytes = text_mutation_bytes(&[(0, 0, &[0x41, 0x0a, 0x42])]);
+        let mut initial_style = paragraph_root_style_with_foreground(0xff00_00ff);
+        let style_record = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        write_u32(
+            &mut initial_style,
+            style_record + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+            3,
+        );
+        let mut geometry = root_geometry_bytes();
+        let constraint = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let region = constraint + abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
+        let exclusion = region + abi::ENGINE_REGION_RECORD_SIZE as usize;
+        geometry.resize(exclusion + abi::ENGINE_EXCLUSION_RECORD_SIZE as usize, 0);
+        write_u32(
+            &mut geometry,
+            constraint + abi::ENGINE_CONSTRAINT_MAX_LINES,
+            0,
+        );
+        for field in [
+            abi::ENGINE_CONSTRAINT_HEIGHT,
+            abi::ENGINE_CONSTRAINT_VIEWPORT_BLOCK_END,
+        ] {
+            write_f32(&mut geometry, constraint + field, 20.0);
+        }
+        for field in [
+            abi::ENGINE_REGION_BLOCK_END,
+            abi::ENGINE_REGION_CLIP_BLOCK_END,
+        ] {
+            write_f32(&mut geometry, region + field, 20.0);
+        }
+        geometry[region + abi::ENGINE_REGION_EXCLUSION_COUNT
+            ..region + abi::ENGINE_REGION_EXCLUSION_COUNT + 2]
+            .copy_from_slice(&1_u16.to_le_bytes());
+        write_u32(&mut geometry, exclusion + abi::ENGINE_EXCLUSION_ID, 2);
+        write_u32(
+            &mut geometry,
+            exclusion + abi::ENGINE_EXCLUSION_REGION_ID,
+            1,
+        );
+        write_u32(
+            &mut geometry,
+            exclusion + abi::ENGINE_EXCLUSION_GEOMETRY_REVISION,
+            1,
+        );
+        geometry[exclusion + abi::ENGINE_EXCLUSION_SHAPE] = SHAPE_RECTANGLE;
+        geometry[exclusion + abi::ENGINE_EXCLUSION_WRAP_SIDE] = EXCLUSION_WRAP_BOTH;
+        for (field, value) in [
+            (abi::ENGINE_EXCLUSION_INLINE_START, 20.0),
+            (abi::ENGINE_EXCLUSION_INLINE_END, 60.0),
+            (abi::ENGINE_EXCLUSION_BLOCK_START, 0.0),
+            (abi::ENGINE_EXCLUSION_BLOCK_END, 40.0),
+        ] {
+            write_f32(&mut geometry, exclusion + field, value);
+        }
+        let mut initial = update(0, 0, 0);
+        initial.limits.max_clusters = 3;
+        initial.limits.max_lines = 256;
+        initial.limits.max_slots_per_band = 4;
+        initial.limits.max_output_bytes = 1 << 20;
+        initial.text_mutations =
+            parse_text_mutations(&text_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        initial.style_mutations =
+            parse_style_mutations(&initial_style, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        initial.geometry = parse_root_geometry_with_exclusions(&geometry, 1, initial.limits);
+        let replay_limits = initial.limits;
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, initial, 1)
+            .unwrap();
+        engine.commit_update(prepared).unwrap();
+        let paragraph = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap();
+        let visible_extents = super::super::layout_query::flow_extents(
+            1,
+            paragraph.flow_layout.committed(),
+            paragraph.clusters.committed(),
+            thread_typography(paragraph.geometry.committed(), 1),
+        )
+        .unwrap();
+        assert!(visible_extents.consumed_clusters < paragraph.clusters.committed().starts.len());
+        assert!(paragraph.clipped_inspection.active().mode == IntrinsicInspection::None);
+        assert_eq!(engine.gather.view().plan_input().glyphs.len(), 1);
+        let prior_high_water = engine.planners.get(&4).unwrap().next_content_revision;
+
+        let mut changed_style = paragraph_root_style_with_foreground(0x00ff_00ff);
+        write_u32(
+            &mut changed_style,
+            style_record + abi::ENGINE_STYLE_MUTATION_TEXT_END,
+            3,
+        );
+        let mut changed = update(1, 1, 1);
+        changed.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_MEASUREMENT;
+        changed.limits = replay_limits;
+        // Visible flow is retained; the intrinsic measurement needs both sides of the
+        // exclusion, exceeding this valid one-slot query budget after gather has staged blue.
+        changed.limits.max_slots_per_band = 1;
+        changed.style_mutations =
+            parse_style_mutations(&changed_style, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        super::super::work_attribution::reset();
+        assert_eq!(
+            engine.prepare_update_with_shaper(&mut shaper, changed, 2),
+            Err(EngineError::ResultTooLarge)
+        );
+        let work = super::super::work_attribution::snapshot();
+        assert!(
+            work.gather_f32_changed_slots > 0,
+            "staged-column failure path: work={work:?}, gather_revision_cursor={}, prior_high_water={prior_high_water}, invalidated_high_water={:?}",
+            engine.gather.projected_revision_cursor(),
+            engine
+                .invalidated_roots
+                .get(&4)
+                .map(|root| root.next_content_revision),
+        );
+        assert_eq!(engine.root_revision(4), Err(EngineError::RootMissing));
+        let burned_high_water = engine
+            .invalidated_roots
+            .get(&4)
+            .unwrap()
+            .next_content_revision;
+        assert!(burned_high_water > prior_high_water);
+
+        engine.reset_root(4).unwrap();
+        let mut replay = update(0, 0, 1);
+        replay.limits = replay_limits;
+        replay.text_mutations =
+            parse_text_mutations(&text_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        replay.style_mutations =
+            parse_style_mutations(&changed_style, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        replay.geometry = parse_root_geometry_with_exclusions(&geometry, 1, replay.limits);
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, replay, 3)
+            .unwrap();
+        let gathered_view = engine.gather.view();
+        let gathered = gathered_view.plan_input();
+        assert_eq!(gathered.glyphs.len(), 1);
+        assert!(gathered.glyphs[0].content_revision >= burned_high_water);
+        assert_eq!(gathered.f32_fields[0][0].to_bits(), 1.0_f32.to_bits());
+        engine.commit_update(prepared).unwrap();
+        let packed_paint = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .plan
+            .buffer_bytes(1)
+            .unwrap();
+        // The replay fixture has exactly one selected record in this packed buffer.
+        assert_eq!(&packed_paint[..4], &1.0_f32.to_le_bytes());
+        assert!(engine.planners.get(&4).unwrap().next_content_revision > burned_high_water);
     }
 
     #[test]
@@ -9934,8 +11377,7 @@ mod tests {
             .state
             .positioned
             .active()
-            .semantic_glyphs()
-            .len();
+            .occurrence_count();
         assert!(
             accepted_count > visible_count,
             "clipping must retain full inspection"
@@ -10375,7 +11817,7 @@ mod tests {
             planner.published_preparation_revision,
             planner.preparation_revision
         );
-        assert_visible_shape_equal(
+        assert_visible_shape_equal_across_registries(
             engine
                 .planners
                 .get(&4)
@@ -10388,12 +11830,239 @@ mod tests {
                 .first_paragraph_state()
                 .unwrap(),
             "mask-zero setter followed by ellipsis query and publication",
+            CrossRegistryHandles {
+                warm_font: 101,
+                cold_font: 1,
+                warm_binding: 20,
+                cold_binding: 42,
+            },
         );
         assert_eq!(
             without_glyph_runtime_identity(&borrowed_glyphs(&engine)),
             without_glyph_runtime_identity(&borrowed_glyphs(&cold)),
             "published borrowed glyphs remain cold-equivalent"
         );
+    }
+
+    #[test]
+    fn clipped_intrinsic_boundary_does_not_replace_visible_publication_source() {
+        const FREDOKA: &[u8] = include_bytes!(
+            "../../../../../../benches/fixtures/fonts/fredoka-issue-216/Fredoka-Regular.ttf"
+        );
+        let glyph_count = u32::from(
+            read_fonts::FontRef::new(FREDOKA)
+                .unwrap()
+                .maxp()
+                .unwrap()
+                .num_glyphs(),
+        );
+        const BASE: &str = "Reveals one grapheme at a time over a duration. Layout stays put and a trigger fires at the end.";
+        let text = alloc::format!("{BASE}\n{BASE}");
+        let units = utf16(&text);
+        let mut styles = root_style_bytes_for_text(7, units.len() as u32);
+        write_f32(
+            &mut styles,
+            ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize + abi::ENGINE_STYLE_MUTATION_FONT_SIZE,
+            24.0,
+        );
+        let mut geometry = multiline_root_geometry_bytes();
+        let constraint = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let region = constraint + abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
+        for (offset, value) in [
+            (constraint + abi::ENGINE_CONSTRAINT_WIDTH, 420.0),
+            (region + abi::ENGINE_REGION_INLINE_END, 420.0),
+            (region + abi::ENGINE_REGION_CLIP_INLINE_END, 420.0),
+            (constraint + abi::ENGINE_CONSTRAINT_HEIGHT, 100.0),
+            (
+                constraint + abi::ENGINE_CONSTRAINT_VIEWPORT_BLOCK_END,
+                100.0,
+            ),
+            (region + abi::ENGINE_REGION_BLOCK_END, 100.0),
+            (region + abi::ENGINE_REGION_CLIP_BLOCK_END, 100.0),
+        ] {
+            write_f32(&mut geometry, offset, value);
+        }
+        geometry[constraint + abi::ENGINE_CONSTRAINT_OVERFLOW] = OVERFLOW_CLIP;
+        geometry[constraint + abi::ENGINE_CONSTRAINT_DROP_CAP_LINES] = 3;
+        geometry[constraint + abi::ENGINE_CONSTRAINT_DROP_CAP_ALIGNMENT] = DROP_CAP_ALIGN_BASELINE;
+        geometry[constraint + abi::ENGINE_CONSTRAINT_DROP_CAP_SIDE] = DROP_CAP_SIDE_INLINE_START;
+        write_f32(
+            &mut geometry,
+            constraint + abi::ENGINE_CONSTRAINT_DROP_CAP_MARGIN_INLINE,
+            3.0,
+        );
+
+        let mut extents = vec![0; glyph_count as usize * 8];
+        let mut availability = vec![0; (glyph_count as usize).div_ceil(8)];
+        for glyph in 1..glyph_count as usize {
+            availability[glyph >> 3] |= 1 << (glyph & 7);
+            extents[glyph * 8 + 4..glyph * 8 + 6].copy_from_slice(&500_i16.to_le_bytes());
+            extents[glyph * 8 + 6..glyph * 8 + 8].copy_from_slice(&1_000_i16.to_le_bytes());
+        }
+        let mut shaper = ShaperRegistry::default();
+        assert_eq!(
+            shaper.register_font(1, FREDOKA, &extents, &availability, 0, 0),
+            0
+        );
+        let mut engine = TextEngine::default();
+        engine
+            .register_codec(9, validated_codec(TechniqueId(1)))
+            .unwrap();
+        engine
+            .register_font_binding(42, 1, glyph_count, render_binding(glyph_count, 1))
+            .unwrap();
+        engine.register_font_stack(7, &[42]).unwrap();
+        engine.create_root(4).unwrap();
+        let text_bytes = text_mutation_bytes(&[(0, 0, &units)]);
+        let mut setter = update(0, 0, 0);
+        setter.limits.max_clusters = 256;
+        setter.limits.max_lines = 256;
+        setter.limits.max_output_bytes = 1 << 20;
+        setter.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_MEASUREMENT
+            | super::super::frame::SEMANTIC_VIEW_BORROWED_LAYOUT;
+        setter.text_mutations =
+            parse_text_mutations(&text_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        setter.style_mutations =
+            parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        setter.geometry = parse_root_geometry(&geometry, setter.limits);
+        let measured = engine
+            .measure_paragraph_with_shaper(&mut shaper, setter, 1)
+            .unwrap();
+        engine.commit_measure(measured).unwrap();
+
+        let paragraph = &engine.planners.get(&4).unwrap().paragraph(1).unwrap().state;
+        assert!(matches!(
+            paragraph.clipped_inspection.active().mode,
+            IntrinsicInspection::Positioned
+        ));
+        let visible = paragraph.positioned.active();
+        let visible_count = visible.occurrence_count();
+        assert!(engine.borrowed_paragraph_layout(4, 1).unwrap() > visible_count);
+        assert!(
+            !paragraph.visible_boundary_shape().stable_ids.is_empty(),
+            "visible corrected boundary required: flow_prepared={} visible_fragments={:?} intrinsic_fragments={:?} corrected_breaks={:?} visible_ids={:?} committed_ids={:?} pending_ids={:?} intrinsic_ids={:?} visible_records={} intrinsic_records={}",
+            paragraph.flow_layout.is_prepared(),
+            paragraph
+                .flow_layout
+                .active()
+                .fragments
+                .iter()
+                .map(|fragment| (
+                    fragment.line.text_start,
+                    fragment.line.text_end,
+                    fragment.line.cluster_start,
+                    fragment.line.cluster_end,
+                    fragment.lead_index,
+                    fragment.tail_index,
+                    fragment.boundary_index,
+                ))
+                .collect::<Vec<_>>(),
+            paragraph
+                .intrinsic_flow_layout_scratch
+                .fragments
+                .iter()
+                .map(|fragment| (
+                    fragment.line.text_start,
+                    fragment.line.text_end,
+                    fragment.line.cluster_start,
+                    fragment.line.cluster_end,
+                    fragment.lead_index,
+                    fragment.tail_index,
+                    fragment.boundary_index,
+                ))
+                .collect::<Vec<_>>(),
+            {
+                let clusters = paragraph.clusters.active();
+                let mut advance_prefix = 0.0;
+                clusters
+                    .break_corrections
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, slots)| {
+                        advance_prefix += clusters.advances[index];
+                        slots.iter().any(|slot| slot.get().is_some()).then_some((
+                            index,
+                            clusters.starts[index],
+                            clusters.ends[index],
+                            clusters.flags[index],
+                            clusters.advances[index],
+                            advance_prefix,
+                        ))
+                    })
+                    .collect::<Vec<_>>()
+            },
+            paragraph.visible_boundary_shape().stable_ids,
+            paragraph.boundary_shape.stable_ids,
+            paragraph.pending_boundary_shape.stable_ids,
+            paragraph.intrinsic_boundary_shape.stable_ids,
+            paragraph.visible_boundary_shape().records.len(),
+            paragraph.intrinsic_boundary_shape.records.len(),
+        );
+        assert!(!visible.replacement_runs().is_empty());
+        assert_ne!(
+            paragraph.visible_boundary_shape().stable_ids,
+            paragraph.intrinsic_boundary_shape.stable_ids,
+            "the visible and intrinsic boundary arrays must differ for this fixture"
+        );
+        let mut cursor = visible.outlined_cursor(
+            paragraph.clusters.active(),
+            paragraph.visible_boundary_shape(),
+        );
+        let mut expected_ids = Vec::new();
+        let mut expected_packed = Vec::new();
+        let mut selected_boundary_owner_witness = false;
+        while let Some(mark) = cursor.next_mark().unwrap() {
+            let row = cursor.project(mark).unwrap();
+            if row.span.source == super::super::placement_state::GlyphSource::Boundary {
+                selected_boundary_owner_witness |= match visible.project_outlined_mark(
+                    mark,
+                    paragraph.clusters.active(),
+                    &paragraph.intrinsic_boundary_shape,
+                ) {
+                    Err(_) => true,
+                    Ok(intrinsic) => intrinsic.semantic.stable_id != row.semantic.stable_id,
+                };
+            }
+            expected_ids.push(row.semantic.stable_id);
+            expected_packed.extend_from_slice(&row.semantic.ink_inline_start.to_le_bytes());
+        }
+        assert!(
+            selected_boundary_owner_witness,
+            "a selected visible boundary glyph must differ from the indexed intrinsic owner"
+        );
+        assert!(!expected_ids.is_empty());
+        assert!(
+            expected_ids
+                .iter()
+                .any(|id| paragraph.visible_boundary_shape().stable_ids.contains(id))
+        );
+
+        let mut publication = update(0, 0, 0);
+        publication.limits = setter.limits;
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, publication, 1)
+            .unwrap();
+        let gathered_view = engine.gather.view();
+        let gathered = gathered_view.plan_input();
+        assert_eq!(
+            gathered
+                .glyphs
+                .iter()
+                .map(|glyph| glyph.stable_id)
+                .collect::<Vec<_>>(),
+            expected_ids,
+            "renderer selection must use the visible boundary owner"
+        );
+        engine.commit_update(prepared).unwrap();
+        let packed = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .plan
+            .buffer_bytes(1)
+            .unwrap();
+        assert_eq!(&packed[..expected_packed.len()], expected_packed);
+        assert!(engine.borrowed_paragraph_layout(4, 1).unwrap() > visible_count);
     }
 
     #[test]
@@ -11593,11 +13262,6 @@ mod tests {
         assert_eq!(preparation_work.gather_paragraph_visits, 0);
         assert_eq!(preparation_work.gather_glyph_visits, 0);
         assert_eq!(preparation_work.publication_commit_visits, 0);
-        assert!(preparation_work.newly_positioned_glyphs > 0);
-        assert!(
-            preparation_work.newly_positioned_glyphs + preparation_work.copied_positioned_records
-                <= original.len()
-        );
         super::super::work_attribution::reset();
         let mut publication = update(1, 1, 1);
         publication.limits = edit.limits;
@@ -11616,9 +13280,6 @@ mod tests {
         );
         engine.commit_update(prepared).unwrap();
         let publication_work = super::super::work_attribution::snapshot();
-        assert_eq!(publication_work.newly_positioned_glyphs, 0);
-        assert_eq!(publication_work.copied_positioned_records, 0);
-        assert_eq!(publication_work.copied_positioned_bytes, 0);
         assert_eq!(publication_work.gather_paragraph_visits, 1);
         assert_eq!(publication_work.publication_commit_visits, 1);
         let rendered_count = engine
@@ -11629,8 +13290,7 @@ mod tests {
             .unwrap()
             .positioned
             .committed()
-            .glyphs()
-            .len();
+            .outlined_count();
         assert!(publication_work.gather_glyph_visits >= rendered_count);
         std::eprintln!(
             "sparse wrapped paragraph: preparation={preparation_work:?}, publication={publication_work:?}"
@@ -11680,9 +13340,6 @@ mod tests {
             .unwrap();
         engine.commit_measure(measured).unwrap();
         let geometry_work = super::super::work_attribution::snapshot();
-        assert_eq!(geometry_work.newly_positioned_glyphs, 0);
-        assert_eq!(geometry_work.copied_positioned_records, rendered_count);
-        assert!(geometry_work.copied_positioned_bytes > 0);
         assert_eq!(geometry_work.gather_paragraph_visits, 0);
         assert_eq!(geometry_work.gather_glyph_visits, 0);
         assert_eq!(geometry_work.publication_commit_visits, 0);
@@ -11853,8 +13510,7 @@ mod tests {
                 .state
                 .positioned
                 .committed()
-                .glyphs()
-                .len();
+                .outlined_count();
             assert_eq!(glyphs_per_owner, 10);
             assert_eq!(before.len(), paragraph_count as usize * glyphs_per_owner);
             let bytes = paragraph_text_mutation_bytes(&[(
@@ -11915,8 +13571,7 @@ mod tests {
                 .state
                 .positioned
                 .committed()
-                .glyphs()
-                .len();
+                .outlined_count();
             assert_eq!(changed_glyphs, 10);
             assert_eq!(
                 after.len(),
@@ -12271,8 +13926,7 @@ mod tests {
                         .unwrap()
                         .positioned
                         .committed()
-                        .glyphs()
-                        .len(),
+                        .outlined_count(),
                     10
                 );
                 assert_eq!(
@@ -12281,8 +13935,7 @@ mod tests {
                         .unwrap()
                         .positioned
                         .committed()
-                        .glyphs()
-                        .len(),
+                        .outlined_count(),
                     10
                 );
                 initial.limits.max_clusters = paragraph_count * 10;
@@ -12359,8 +14012,6 @@ mod tests {
                     engine.commit_update(prepared).unwrap();
                     let publication = super::super::work_attribution::snapshot();
                     if step != 0 {
-                        assert_eq!(publication.newly_positioned_glyphs, 0);
-                        assert_eq!(publication.copied_positioned_records, 0);
                         assert_eq!(publication.measurement_ink_glyph_visits, 0);
                         assert_eq!(publication.measurement_intrinsic_cluster_visits, 0);
                         assert_eq!(publication.query_serialized_records, 0);
@@ -12425,9 +14076,10 @@ mod tests {
             let untouched: Vec<_> = (2..=paragraph_count)
                 .map(|id| {
                     let paragraph = engine.planners.get(&4).unwrap().paragraph(id).unwrap();
-                    (id, paragraph.state.positioned.committed().glyphs().to_vec())
+                    (id, committed_semantic_rows(&paragraph.state))
                 })
                 .collect();
+            let accepted_before = engine.gather.view().plan_input().glyphs.to_vec();
 
             let text = text_mutation_bytes(&[(0, 1, &[0x62])]);
             let mut edit = update(2, 2, 2);
@@ -12440,9 +14092,6 @@ mod tests {
                 .unwrap();
             engine.commit_measure(measured).unwrap();
             let preparation = super::super::work_attribution::snapshot();
-            assert_eq!(preparation.newly_positioned_glyphs, 1);
-            assert_eq!(preparation.copied_positioned_records, 0);
-            assert_eq!(preparation.copied_positioned_bytes, 0);
 
             assert_eq!(preparation.gather_paragraph_visits, 0);
             assert_eq!(preparation.gather_glyph_visits, 0);
@@ -12489,10 +14138,18 @@ mod tests {
                 clean_bytes
             );
             let publication = super::super::work_attribution::snapshot();
-            assert_eq!(publication.newly_positioned_glyphs, 0);
-            assert_eq!(publication.copied_positioned_records, 0);
-            assert_eq!(publication.copied_positioned_bytes, 0);
-            assert_eq!(publication.gather_paragraph_visits, 1);
+            let accepted_after = engine.gather.view().plan_input().glyphs.to_vec();
+            assert_eq!(accepted_after.len(), accepted_before.len());
+            assert_ne!(accepted_after[0].stable_id, accepted_before[0].stable_id);
+            assert!(accepted_after[0].content_revision > accepted_before[0].content_revision);
+            for (next, prior) in accepted_after[1..].iter().zip(&accepted_before[1..]) {
+                assert_eq!(next.stable_id, prior.stable_id);
+                assert_eq!(next.content_revision, prior.content_revision);
+            }
+            assert_eq!(
+                publication.gather_paragraph_visits, 1,
+                "{paragraph_count} paragraphs: preparation={preparation:?}, publication={publication:?}"
+            );
             assert_eq!(publication.gather_range_skips, 1);
             assert_eq!(publication.placement_key_owner_visits, 1);
             assert_eq!(publication.placement_binding_owner_visits, 1);
@@ -12517,14 +14174,8 @@ mod tests {
             );
             for (id, glyphs) in &untouched {
                 assert_eq!(
-                    planner
-                        .paragraph(*id)
-                        .unwrap()
-                        .state
-                        .positioned
-                        .committed()
-                        .glyphs(),
-                    glyphs,
+                    committed_semantic_rows(&planner.paragraph(*id).unwrap().state).as_slice(),
+                    glyphs.as_slice(),
                 );
                 assert_eq!(engine.planner_paragraph_preparation_count(4, *id), Ok(1));
             }
@@ -12556,6 +14207,8 @@ mod tests {
             ] {
                 let revision = order_revision;
                 order_revision += 1;
+                let accepted_before_cycle =
+                    sparse_expected.then(|| engine.gather.view().plan_input().glyphs.to_vec());
                 let mut count_changed = false;
                 for id in &ids {
                     let count = engine
@@ -12660,6 +14313,20 @@ mod tests {
                     assert_eq!(work.ordered_instance_comparisons, units.len());
                 }
                 if sparse_expected {
+                    let before = accepted_before_cycle.as_ref().unwrap();
+                    let after = engine.gather.view().plan_input().glyphs.to_vec();
+                    assert_eq!(before.len(), paragraph_count as usize);
+                    assert_eq!(after.len(), before.len());
+                    for (index, (prior, next)) in before.iter().zip(after).enumerate() {
+                        let id = u32::try_from(index).unwrap() + 1;
+                        if ids.contains(&id) {
+                            assert_ne!(next.stable_id, prior.stable_id);
+                            assert!(next.content_revision > prior.content_revision);
+                        } else {
+                            assert_eq!(next.stable_id, prior.stable_id);
+                            assert_eq!(next.content_revision, prior.content_revision);
+                        }
+                    }
                     assert_eq!(work.gather_paragraph_visits, ids.len());
                     assert_eq!(work.placement_key_owner_visits, ids.len());
                     assert_eq!(work.placement_binding_owner_visits, ids.len());
@@ -13080,7 +14747,6 @@ mod tests {
             let published = super::super::work_attribution::snapshot();
             assert_eq!(published.harfrust_calls, 0);
             assert_eq!(published.recomposed_flow_lines, 0);
-            assert_eq!(published.newly_positioned_glyphs, 0);
             assert_eq!(published.query_serialized_records, 0);
             assert_eq!(published.query_serialized_bytes, 0);
             let run_bins: Vec<_> = published
@@ -13365,8 +15031,7 @@ mod tests {
                     .state
                     .positioned
                     .active()
-                    .glyphs()
-                    .len()
+                    .outlined_count()
             })
             .sum();
         let ranges: Vec<_> = planner
@@ -13393,7 +15058,19 @@ mod tests {
         let input = view.plan_input();
         assert_eq!(input.glyphs.len(), glyphs.len());
         for (index, (actual, expected)) in input.glyphs.iter().zip(glyphs).enumerate() {
-            assert_eq!(*actual, expected, "gather glyph at record {index}");
+            assert_ne!(
+                actual.content_revision, 0,
+                "cold revision at record {index}"
+            );
+            assert_ne!(
+                expected.content_revision, 0,
+                "accepted revision at record {index}"
+            );
+            // This new workspace mints its own revisions from 1; only the accepted
+            // root knows the publication history of retained records.
+            let mut comparable = *actual;
+            comparable.content_revision = expected.content_revision;
+            assert_eq!(comparable, expected, "gather glyph at record {index}");
         }
         assert_eq!(input.placement_slots.len(), placements.len());
         for (index, (actual, expected)) in input.placement_slots.iter().zip(placements).enumerate()
@@ -13461,7 +15138,15 @@ mod tests {
             .expect("localized exclusion move must retain a prefix");
         assert!(recomposed[0].start > 0);
         assert_eq!(pending.flow_layout.active().lines[0], accepted_first_line);
-        assert!(!pending.positioned.active().retained_static_geometry());
+        let retained_prefix = pending.positioned.active().occurrence_spans();
+        assert!(
+            retained_prefix.iter().any(|span| {
+                matches!(span.line, super::super::positioning::SourceLine::Body(0))
+            })
+        );
+        assert!(retained_prefix.iter().any(|span| {
+            matches!(span.line, super::super::positioning::SourceLine::DropCap(0))
+        }));
         assert!(!pending.positioned.active().decorations().is_empty());
         let _publication = engine.prepared_plan(prepared).unwrap();
         assert!(
@@ -13491,10 +15176,344 @@ mod tests {
             .first_paragraph_state()
             .unwrap();
         assert_visible_shape_equal(warm, cold, "retained drop cap exclusion move");
+        assert_eq!(projected_fields(warm), projected_fields(cold));
+        let warm_placed = committed_placed_semantic_rows(warm);
+        let cold_placed = committed_placed_semantic_rows(cold);
+        assert_eq!(warm_placed.len(), cold_placed.len());
+        for (mut warm_row, mut cold_row) in warm_placed.into_iter().zip(cold_placed) {
+            warm_row.stable_id = 0;
+            cold_row.stable_id = 0;
+            assert_eq!(
+                warm_row, cold_row,
+                "retained drop cap placed semantic glyph"
+            );
+        }
         assert_eq!(
             warm.positioned.committed().decorations(),
             cold.positioned.committed().decorations()
         );
+    }
+
+    #[test]
+    fn retained_later_line_rebases_nonidentity_placement_segment() {
+        const FONT: &[u8] = include_bytes!(
+            "../../../../../../benches/fixtures/fonts/dot-gothic-16/DotGothic16-Regular.ttf"
+        );
+        let text = alloc::format!("ABCDEFGHIJKLMNO\n{}", "klmnopqrst\n".repeat(12));
+        let styles = root_style_bytes_for_text(7, text.encode_utf16().count() as u32);
+        let mut previous_geometry = drop_cap_exclusion_geometry_bytes(0.0, 1);
+        let mut next_geometry = drop_cap_exclusion_geometry_bytes(0.0, 2);
+        let constraint = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let region = constraint + abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
+        let exclusion = region + abi::ENGINE_REGION_RECORD_SIZE as usize;
+        for geometry in [&mut previous_geometry, &mut next_geometry] {
+            geometry[constraint + abi::ENGINE_CONSTRAINT_DROP_CAP_LINES] = 0;
+            geometry[constraint + abi::ENGINE_CONSTRAINT_DROP_CAP_ALIGNMENT] = 0;
+            geometry[constraint + abi::ENGINE_CONSTRAINT_DROP_CAP_SIDE] = 0;
+            geometry[constraint + abi::ENGINE_CONSTRAINT_WRAP] =
+                super::super::frame::WRAP_CHARACTER;
+            for field in [
+                abi::ENGINE_CONSTRAINT_WIDTH,
+                abi::ENGINE_REGION_INLINE_END,
+                abi::ENGINE_REGION_CLIP_INLINE_END,
+            ] {
+                let base = if field == abi::ENGINE_CONSTRAINT_WIDTH {
+                    constraint
+                } else {
+                    region
+                };
+                write_f32(geometry, base + field, 200.0);
+            }
+            write_f32(
+                geometry,
+                exclusion + abi::ENGINE_EXCLUSION_INLINE_START,
+                80.0,
+            );
+            write_f32(
+                geometry,
+                exclusion + abi::ENGINE_EXCLUSION_INLINE_END,
+                120.0,
+            );
+        }
+        // The accepted cut is outside the region's 0..200 inline interval. Moving that
+        // same exclusion into the first band adds an actual segment while keeping the
+        // dirty block range local, so later lines can converge and be retained.
+        write_f32(
+            &mut previous_geometry,
+            exclusion + abi::ENGINE_EXCLUSION_INLINE_START,
+            220.0,
+        );
+        write_f32(
+            &mut previous_geometry,
+            exclusion + abi::ENGINE_EXCLUSION_INLINE_END,
+            240.0,
+        );
+        let (mut engine, mut shaper) = shaped_engine_with_font_styles_geometry_and_extents(
+            &text,
+            FONT,
+            9_362,
+            &styles,
+            1,
+            Some((&previous_geometry, 1)),
+            true,
+        );
+        let previous_spans = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap()
+            .positioned
+            .committed()
+            .occurrence_spans()
+            .to_vec();
+        let mut moved = update(1, 1, 1);
+        moved.limits.max_clusters = 256;
+        moved.limits.max_lines = 256;
+        moved.limits.max_slots_per_band = 4;
+        moved.limits.max_output_bytes = 1 << 20;
+        moved.geometry = parse_root_geometry_with_exclusions(&next_geometry, 1, moved.limits);
+        let limits = moved.limits;
+        super::super::work_attribution::reset();
+        let measured = engine
+            .measure_paragraph_with_shaper(&mut shaper, moved, 1)
+            .unwrap();
+        let candidate = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap();
+        let recomposed = candidate
+            .flow_layout
+            .active()
+            .recomposed_line_ranges()
+            .expect("the first-band exclusion must leave clean later lines");
+        let positioned = candidate.positioned.active();
+        let intervals = positioned
+            .unpublished_source_intervals()
+            .expect("the visible source retains outlined coordinates");
+        let (old, next) = positioned
+            .occurrence_spans()
+            .iter()
+            .find_map(|next| {
+                let super::super::positioning::SourceLine::Body(line) = next.line else {
+                    return None;
+                };
+                (line >= 4
+                    && next.outlined_count > 0
+                    && !recomposed
+                        .iter()
+                        .any(|range| range.contains(&(line as usize))))
+                .then(|| {
+                    previous_spans.iter().find(|old| {
+                        old.line == next.line
+                            && old.source_glyph_start == next.source_glyph_start
+                            && old.source_glyph_count == next.source_glyph_count
+                            && old.placement_segment != next.placement_segment
+                    })
+                })
+                .flatten()
+                .map(|old| (*old, *next))
+            })
+            .unwrap_or_else(|| {
+                let spans = |spans: &[super::super::positioning::OccurrenceSpan]| {
+                    spans
+                        .iter()
+                        .map(|span| {
+                            (
+                                span.line,
+                                span.source_glyph_start,
+                                span.source_glyph_count,
+                                span.outlined_start,
+                                span.outlined_count,
+                                span.placement_segment,
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                };
+                let flow = |flow: &FlowLayoutArena| {
+                    (
+                        flow.lines
+                            .iter()
+                            .enumerate()
+                            .map(|(index, line)| {
+                                (index, line.fragment_count, line.block_start, line.height)
+                            })
+                            .collect::<Vec<_>>(),
+                        flow.fragments
+                            .iter()
+                            .map(|fragment| {
+                                (
+                                    fragment.line.cluster_start,
+                                    fragment.line.cluster_end,
+                                    fragment.line.text_start,
+                                    fragment.line.text_end,
+                                    fragment.slot_start,
+                                    fragment.slot_end,
+                                )
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                };
+                let placements = positioned
+                    .placement_segments()
+                    .iter()
+                    .zip(positioned.placement_translations())
+                    .enumerate()
+                    .map(|(index, (segment, translation))| {
+                        (
+                            index,
+                            segment.fragment_index,
+                            segment.source_glyph_start,
+                            segment.source_glyph_count,
+                            translation.translation_inline,
+                            translation.translation_block,
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                let work = super::super::work_attribution::snapshot();
+                panic!(
+                    "a clean later line must rebase across the added first-band segment: recomposed={recomposed:?} outlined_intervals={intervals:?} retained_visits={} remap_attempts={} remap_successes={} old_spans={:?} new_spans={:?} old_flow={:?} new_flow={:?} placements={placements:?}",
+                    work.retained_occurrence_span_visits,
+                    work.placement_remap_attempts,
+                    work.placement_remap_successes,
+                    spans(&previous_spans),
+                    spans(positioned.occurrence_spans()),
+                    flow(candidate.flow_layout.committed()),
+                    flow(candidate.flow_layout.active()),
+                )
+            });
+        let outlined_start = next.outlined_start as usize;
+        let outlined_end = outlined_start + next.outlined_count as usize;
+        assert!(
+            intervals
+                .iter()
+                .all(|range| { range.end <= outlined_start || outlined_end <= range.start }),
+            "the chosen line was admitted by retention, not freshly positioned"
+        );
+        assert_ne!(old.placement_segment, next.placement_segment);
+        assert!(super::super::work_attribution::snapshot().retained_occurrence_span_visits > 0);
+        engine.commit_measure(measured).unwrap();
+
+        let mut publication = update(1, 1, 1);
+        publication.limits = limits;
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, publication, 2)
+            .unwrap();
+        engine.commit_update(prepared).unwrap();
+        let (cold_engine, _) = shaped_engine_with_font_styles_geometry_and_extents(
+            &text,
+            FONT,
+            9_362,
+            &styles,
+            1,
+            Some((&next_geometry, 1)),
+            true,
+        );
+        let warm = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap();
+        let cold = cold_engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .first_paragraph_state()
+            .unwrap();
+        assert_visible_shape_equal(warm, cold, "retained nonidentity segment remap");
+        assert_eq!(projected_fields(warm), projected_fields(cold));
+        let actual_placed = committed_placed_semantic_rows(warm);
+        let expected_placed = committed_placed_semantic_rows(cold);
+        assert_eq!(actual_placed.len(), expected_placed.len());
+        for (mut actual, mut expected) in actual_placed.into_iter().zip(expected_placed) {
+            actual.stable_id = 0;
+            actual.font_handle = 0;
+            expected.stable_id = 0;
+            expected.font_handle = 0;
+            assert_eq!(actual, expected);
+        }
+        let segment = next.placement_segment as usize;
+        let positioned = warm.positioned.committed();
+        let handle = positioned.placement_handle(segment).unwrap();
+        let translation = positioned.placement_translations()[segment];
+        let selected = next.outlined_start as usize;
+        assert_eq!(
+            engine.gather.view().plan_input().placement_slots[selected],
+            handle.slot().get()
+        );
+        let bytes = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .plan
+            .buffer_bytes(super::super::render_plan::SESSION_PLACEMENT_BUFFER_ID)
+            .unwrap();
+        let offset = handle.slot().get() as usize * 8;
+        assert_eq!(
+            &bytes[offset..offset + 4],
+            &(translation.translation_inline as f32).to_le_bytes()
+        );
+        assert_eq!(
+            &bytes[offset + 4..offset + 8],
+            &(translation.translation_block as f32).to_le_bytes()
+        );
+        let actual_view = engine.gather.view();
+        let actual = actual_view.plan_input();
+        let expected_view = cold_engine.gather.view();
+        let expected = expected_view.plan_input();
+        assert_eq!(actual.glyphs.len(), expected.glyphs.len());
+        assert_eq!(actual.f32_fields.len(), expected.f32_fields.len());
+        assert_eq!(actual.u32_fields.len(), expected.u32_fields.len());
+        for (mut actual, mut expected) in actual
+            .glyphs
+            .iter()
+            .copied()
+            .zip(expected.glyphs.iter().copied())
+        {
+            actual.stable_id = 0;
+            actual.content_revision = 0;
+            actual.semantic_id = 0;
+            actual.transform_id = 0;
+            expected.stable_id = 0;
+            expected.content_revision = 0;
+            expected.semantic_id = 0;
+            expected.transform_id = 0;
+            assert_eq!(actual, expected);
+        }
+        for (actual, expected) in actual.f32_fields.iter().zip(expected.f32_fields) {
+            assert_eq!(
+                actual
+                    .iter()
+                    .map(|value| value.to_bits())
+                    .collect::<Vec<_>>(),
+                expected
+                    .iter()
+                    .map(|value| value.to_bits())
+                    .collect::<Vec<_>>()
+            );
+        }
+        for (&actual, &expected) in actual.u32_fields.iter().zip(expected.u32_fields.iter()) {
+            assert_eq!(actual, expected);
+        }
+        let byte_count = actual.glyphs.len() * core::mem::size_of::<f32>();
+        let warm_bytes = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .plan
+            .buffer_bytes(1)
+            .unwrap();
+        let cold_bytes = cold_engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .plan
+            .buffer_bytes(1)
+            .unwrap();
+        assert_eq!(&warm_bytes[..byte_count], &cold_bytes[..byte_count]);
     }
 
     #[test]
@@ -14275,8 +16294,20 @@ mod tests {
                 .first_paragraph_state()
                 .unwrap();
             assert!(initial.flow_layout.committed().lines.len() > 100);
-            assert!(initial.positioned.committed().glyphs().len() > original_units.len() / 2);
+            assert!(initial.positioned.committed().outlined_count() > original_units.len() / 2);
             for (step, desired) in [alternate, &original_units].into_iter().enumerate() {
+                let before_run_revisions = warm_engine
+                    .planners
+                    .get(&4)
+                    .unwrap()
+                    .first_paragraph_state()
+                    .unwrap()
+                    .clusters
+                    .committed()
+                    .layout_runs()
+                    .iter()
+                    .map(|run| run.canonical_revision)
+                    .collect::<Vec<_>>();
                 let before_columns = local_columns(
                     warm_engine
                         .planners
@@ -14427,9 +16458,19 @@ mod tests {
                     .recomposed_line_ranges()
                     .map(|ranges| ranges.iter().map(|range| range.len()).sum::<usize>());
                 if kind == "scattered" {
+                    // The edited run changes as a whole, but clean lines within it are
+                    // retained through numeric correspondence and still expand exactly.
+                    assert_ne!(
+                        before_run_revisions,
+                        warm.clusters
+                            .committed()
+                            .layout_runs()
+                            .iter()
+                            .map(|run| run.canonical_revision)
+                            .collect::<Vec<_>>()
+                    );
+                    assert!(preparation.placement_remap_successes > 0);
                     assert!(composed.is_some_and(|count| count < flow.lines.len()));
-                    assert!(preparation.copied_positioned_records > 0);
-                    assert!(preparation.newly_positioned_glyphs < original_units.len());
                     assert!(preparation.flow_dirty_end_blocks < flow.lines.len() / 2);
                     let source_intervals = warm
                         .positioned
@@ -14442,7 +16483,7 @@ mod tests {
                         .sum::<usize>();
                     assert!(
                         source_count > 0
-                            && source_count < warm.positioned.committed().glyphs().len()
+                            && source_count < warm.positioned.committed().outlined_count()
                     );
                 }
                 eprintln!(
@@ -14470,23 +16511,28 @@ mod tests {
                         .unwrap(),
                     kind,
                 );
-                let cold_positioned = cold
-                    .planners
-                    .get(&4)
-                    .unwrap()
-                    .first_paragraph_state()
-                    .unwrap()
-                    .positioned
-                    .committed();
                 assert_eq!(
-                    warm.positioned.committed().semantic_f32(),
-                    cold_positioned.semantic_f32()
+                    projected_fields(warm).0,
+                    projected_fields(
+                        cold.planners
+                            .get(&4)
+                            .unwrap()
+                            .first_paragraph_state()
+                            .unwrap()
+                    )
+                    .0
                 );
                 assert_eq!(
-                    warm.positioned.committed().semantic_u32()
+                    projected_fields(warm).1
                         [super::super::frame::SEMANTIC_U32_FOREGROUND_RGBA as usize],
-                    cold_positioned.semantic_u32()
-                        [super::super::frame::SEMANTIC_U32_FOREGROUND_RGBA as usize],
+                    projected_fields(
+                        cold.planners
+                            .get(&4)
+                            .unwrap()
+                            .first_paragraph_state()
+                            .unwrap()
+                    )
+                    .1[super::super::frame::SEMANTIC_U32_FOREGROUND_RGBA as usize],
                 );
                 if kind == "scattered" {
                     // Multiple synchronous reads must preserve the accumulated source scope.
@@ -14527,8 +16573,15 @@ mod tests {
                             .any(|next| next.start <= old.start && next.end >= old.end)
                     }));
                     assert_eq!(
-                        final_paragraph.positioned.committed().semantic_f32(),
-                        cold_positioned.semantic_f32()
+                        projected_fields(final_paragraph).0,
+                        projected_fields(
+                            cold.planners
+                                .get(&4)
+                                .unwrap()
+                                .first_paragraph_state()
+                                .unwrap()
+                        )
+                        .0
                     );
                 }
                 request.text_mutations = parse_text_mutations(&[], 0, 0).unwrap();
@@ -14625,11 +16678,6 @@ mod tests {
         engine.commit_measure(measured).unwrap();
         let work = super::super::work_attribution::snapshot();
         assert_eq!(work.placement_run_lookup_visits, 0, "{work:?}");
-        assert!(
-            work.copied_positioned_records > desired.len() / 2,
-            "{work:?}"
-        );
-        assert!(work.newly_positioned_glyphs < desired.len() / 2, "{work:?}");
         let text = alloc::string::String::from_utf16(&desired).unwrap();
         let (cold, _) = shaped_engine_with_font_styles_geometry_and_extents(
             &text,
@@ -14677,16 +16725,10 @@ mod tests {
             .first_paragraph_state()
             .unwrap();
         assert!(initial.flow_layout.committed().lines.len() > 100);
-        assert!(initial.positioned.committed().glyphs().len() > original.len() / 2);
+        assert!(initial.positioned.committed().outlined_count() > original.len() / 2);
+        let initial_semantic = committed_semantic_rows(initial);
         for offset in [4, 1_102, 2_200] {
-            assert!(
-                initial
-                    .positioned
-                    .committed()
-                    .semantic_glyphs()
-                    .iter()
-                    .any(|glyph| glyph.cluster == offset)
-            );
+            assert!(initial_semantic.iter().any(|glyph| glyph.cluster == offset));
         }
         let mut desired = utf16(&original);
         for offset in [4, 1_102, 2_200] {
@@ -14709,16 +16751,6 @@ mod tests {
                 .unwrap();
             engine.commit_measure(measured).unwrap();
             let work = super::super::work_attribution::snapshot();
-            assert!(
-                work.newly_positioned_glyphs > 0
-                    && work.newly_positioned_glyphs < desired.len() / 2,
-                "{work:?}"
-            );
-            assert!(
-                work.positioned_revision_visits > 0
-                    && work.positioned_revision_visits < desired.len() / 2,
-                "{work:?}"
-            );
             assert!(
                 work.placement_segment_validation_visits <= desired.len() * 4,
                 "{work:?}"
@@ -14750,30 +16782,19 @@ mod tests {
                 );
             }
         }
-        let pending = engine
+        let pending_paragraph = engine
             .planners
             .get(&4)
             .unwrap()
             .first_paragraph_state()
-            .unwrap()
-            .positioned
-            .committed();
-        // Both measured assignments must remain dirty until publication, including islands
-        // absent from the last preparation's recomposed-line journal.
+            .unwrap();
+        let pending = pending_paragraph.positioned.committed();
+        let pending_semantic = committed_semantic_rows(pending_paragraph);
+        // Every unpublished assignment remains immediately queryable, including islands
+        // absent from the last preparation's recomposed-line journal. Renderer changes
+        // are compared against the accepted gather at publication.
         for offset in [4, 700, 1_102, 2_200] {
-            let index = pending
-                .semantic_glyphs()
-                .iter()
-                .position(|glyph| glyph.cluster == offset)
-                .unwrap();
-            assert_ne!(pending.semantic_change_masks()[index], 0);
-            assert!(
-                pending
-                    .unpublished_source_intervals()
-                    .unwrap()
-                    .iter()
-                    .any(|range| range.contains(&index))
-            );
+            assert!(pending_semantic.iter().any(|glyph| glyph.cluster == offset));
         }
         let paragraph = engine.planners.get(&4).unwrap().paragraph(1).unwrap();
         assert!(!paragraph.positioned_changed);
@@ -14784,7 +16805,7 @@ mod tests {
             .iter()
             .map(core::ops::Range::len)
             .sum::<usize>();
-        assert!(source_visits > 0 && source_visits < pending.glyphs().len() / 2);
+        assert!(source_visits > 0 && source_visits < pending.outlined_count() / 2);
         let mut publication = update(1, 1, 1);
         publication.limits.max_clusters = desired.len() as u32;
         publication.limits.max_lines = desired.len() as u32;
@@ -14890,15 +16911,9 @@ mod tests {
                 .unwrap()
                 .first_paragraph_state()
                 .unwrap();
-            let old_ink = (0..initial.positioned.committed().glyphs().len())
-                .map(|index| {
-                    initial
-                        .positioned
-                        .committed()
-                        .placed_semantic_glyph(index)
-                        .unwrap()
-                        .ink_inline_start
-                })
+            let old_ink = committed_placed_semantic_rows(initial)
+                .iter()
+                .map(|glyph| glyph.ink_inline_start)
                 .collect::<Vec<_>>();
             let old_blocks = initial.clusters.committed().run_local().blocks().to_vec();
             let mut desired = utf16(&original);
@@ -14915,7 +16930,6 @@ mod tests {
                 .measure_paragraph_with_shaper(&mut shaper, request, 1)
                 .unwrap();
             engine.commit_measure(measured).unwrap();
-            let work = super::super::work_attribution::snapshot();
             let warm = engine
                 .planners
                 .get(&4)
@@ -14946,32 +16960,20 @@ mod tests {
                 assert!(ranges[0].end < warm.flow_layout.committed().lines.len());
                 assert_ne!(warm.clusters.committed().run_local().blocks(), old_blocks);
                 let mut moved = 0;
+                let placed = committed_placed_semantic_rows(warm);
                 for (index, old) in old_ink.iter().enumerate() {
-                    if warm
-                        .positioned
-                        .committed()
-                        .placed_semantic_glyph(index)
-                        .unwrap()
-                        .ink_inline_start
-                        .to_bits()
-                        != old.to_bits()
-                    {
+                    if placed[index].ink_inline_start.to_bits() != old.to_bits() {
                         moved += 1;
                     }
                 }
                 assert!(moved > 0);
-                assert_eq!(
-                    warm.positioned.committed().semantic_f32(),
-                    cold.positioned.committed().semantic_f32()
-                );
+                assert_eq!(projected_fields(warm).0, projected_fields(cold).0);
                 assert!(
                     warm.positioned
                         .committed()
                         .retains_recomposed_glyph_ranges()
                 );
             }
-            assert!(work.newly_positioned_glyphs > 0 && work.newly_positioned_glyphs < 2304);
-            assert!(work.positioned_revision_visits > 0 && work.positioned_revision_visits < 2304);
             let mut publication = update(1, 1, 1);
             publication.limits = request.limits;
             let candidate = engine
@@ -15080,7 +17082,6 @@ mod tests {
             assert!(!paragraph.style_invalidation.metrics);
             assert_eq!(paragraph.flow_layout.is_prepared(), mixed);
             engine.commit_measure(measured).unwrap();
-            let work = super::super::work_attribution::snapshot();
             let warm = engine
                 .planners
                 .get(&4)
@@ -15096,25 +17097,20 @@ mod tests {
                 .first_paragraph_state()
                 .unwrap();
             assert_visible_shape_equal(warm, cold, "scattered text with changed paint/effects");
+            let warm_paragraph = warm;
+            let cold_paragraph = cold;
             let warm = warm.positioned.committed();
             let cold = cold.positioned.committed();
             assert!(!warm.retains_recomposed_glyph_ranges());
             assert_eq!(
-                work.newly_positioned_glyphs,
-                warm.glyphs().len(),
-                "{work:?}"
+                projected_fields(warm_paragraph).0,
+                projected_fields(cold_paragraph).0
             );
-            assert_eq!(
-                work.positioned_revision_visits,
-                warm.glyphs().len(),
-                "{work:?}"
-            );
-            assert_eq!(warm.semantic_f32(), cold.semantic_f32());
             // Retained glyph/cluster IDs legitimately differ between warm and cold histories.
-            for (index, (warm_field, cold_field)) in warm
-                .semantic_u32()
+            for (index, (warm_field, cold_field)) in projected_fields(warm_paragraph)
+                .1
                 .into_iter()
-                .zip(cold.semantic_u32())
+                .zip(projected_fields(cold_paragraph).1)
                 .enumerate()
             {
                 if index != usize::from(super::super::frame::SEMANTIC_U32_STABLE_GLYPH_ID)
@@ -15705,7 +17701,7 @@ mod tests {
             assert!(!candidate.shaping_runs.is_prepared());
             assert!(candidate.shape.is_prepared());
             retained_steps += usize::from(
-                super::super::work_attribution::snapshot().copied_positioned_records > 0,
+                super::super::work_attribution::snapshot().placement_remap_successes > 0,
             );
             assert_gather_matches_full(&mut warm_engine);
             warm_engine.commit_update(prepared).unwrap();
@@ -16084,6 +18080,37 @@ mod tests {
         assert_eq!(
             paragraph.unicode.active().grapheme_boundaries(),
             committed_boundaries
+        );
+    }
+
+    #[test]
+    fn reused_ascii_fact_is_visible_only_after_unicode_commit() {
+        let mut paragraph = ParagraphState::default();
+        paragraph
+            .unicode
+            .pair_mut()
+            .0
+            .analyze(&utf16("ab"))
+            .unwrap();
+        let old = paragraph.unicode.committed().printable_ascii_facts();
+        paragraph.text.pending_mut().units = utf16("az");
+        paragraph.text.mark_prepared();
+        let mut changed = old;
+        changed.include_unit('z' as u16);
+        let mut candidate = PreflightTextCandidate {
+            unicode_state: CandidateUnicode::ReuseCommitted,
+            reused_ascii_facts: Some(changed),
+            ..PreflightTextCandidate::default()
+        };
+        paragraph.prepare_unicode(Some(&mut candidate)).unwrap();
+        assert_eq!(paragraph.unicode.committed().printable_ascii_facts(), old);
+        paragraph.discard_unicode_candidate();
+        assert_eq!(paragraph.unicode.committed().printable_ascii_facts(), old);
+        paragraph.prepare_unicode(Some(&mut candidate)).unwrap();
+        paragraph.commit_unicode();
+        assert_eq!(
+            paragraph.unicode.committed().printable_ascii_facts(),
+            changed
         );
     }
 
@@ -17056,6 +19083,171 @@ mod tests {
             recycled.text.committed().units.capacity(),
             spare_text_capacity,
             "paragraph recycling must retain its reserved text allocation"
+        );
+    }
+
+    #[test]
+    fn outlined_order_only_publication_reorders_stable_ids_without_regathering() {
+        let (mut engine, mut shaper) = shaped_outlined_engine_with_draw_transform("AB", false);
+        let template = root_geometry_bytes();
+        let header = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let stride = abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
+        let region_offset = header + 2 * stride;
+        let mut geometry = vec![0; region_offset + abi::ENGINE_REGION_RECORD_SIZE as usize];
+        for id in 1..=2_u32 {
+            let offset = header + (id as usize - 1) * stride;
+            geometry[offset..offset + stride].copy_from_slice(&template[header..header + stride]);
+            write_u32(
+                &mut geometry,
+                offset + abi::ENGINE_CONSTRAINT_PARAGRAPH_ID,
+                id,
+            );
+        }
+        geometry[region_offset..].copy_from_slice(&template[header + stride..]);
+        let lifecycle = paragraph_mutation_bytes(&[(PARAGRAPH_MUTATION_UPSERT, 2, 1)]);
+        let text = paragraph_text_mutation_bytes(&[(2, 0, 0, &[0x43])]);
+        let mut style = paragraph_root_style_bytes(&[(2, 0)]);
+        write_u32(&mut style, header + abi::ENGINE_STYLE_MUTATION_TEXT_END, 1);
+        let mut added = update(1, 1, 1);
+        added.limits.max_paragraphs = 2;
+        added.limits.max_regions = 2;
+        added.limits.max_clusters = 256;
+        added.limits.max_lines = 256;
+        added.limits.max_output_bytes = 1 << 20;
+        added.paragraph_mutations =
+            parse_paragraph_mutations(&lifecycle, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        added.text_mutations =
+            parse_text_mutations(&text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        added.style_mutations =
+            parse_style_mutations(&style, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        added.geometry = parse_geometry(
+            &geometry,
+            ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+            2,
+            region_offset as u32,
+            1,
+            0,
+            0,
+            0,
+            0,
+            added.limits,
+        )
+        .unwrap();
+        let limits = added.limits;
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, added, 2)
+            .unwrap();
+        engine.commit_update(prepared).unwrap();
+        let accepted = engine.gather.view();
+        let accepted = accepted.plan_input();
+        let before = accepted.glyphs.to_vec();
+        let accepted_slots = accepted.placement_slots.to_vec();
+        assert_eq!(accepted.f32_fields.len(), 1);
+        assert!(accepted.u32_fields.is_empty());
+        let accepted_ink = accepted.f32_fields[0].to_vec();
+        assert_eq!(before.len(), 3);
+        assert_ne!(before[0].stable_id, before[1].stable_id);
+        assert_ne!(before[1].stable_id, before[2].stable_id);
+        assert_ne!(accepted_ink[0].to_bits(), accepted_ink[1].to_bits());
+        assert!(before.iter().all(|glyph| glyph.content_revision != 0));
+        let reordered_indices = [2_usize, 0, 1];
+        let reordered_glyphs = reordered_indices.map(|index| before[index]);
+        let reordered_slots = reordered_indices.map(|index| accepted_slots[index]);
+        let reordered_ink = reordered_indices.map(|index| accepted_ink[index]);
+        let original_packed = engine
+            .planners
+            .get(&4)
+            .unwrap()
+            .plan
+            .buffer_bytes(1)
+            .unwrap()
+            .to_vec();
+        assert_eq!(
+            original_packed[..3 * 4],
+            accepted_ink
+                .iter()
+                .flat_map(|value| value.to_le_bytes())
+                .collect::<Vec<_>>()
+        );
+        let content_high_water = engine.planners.get(&4).unwrap().next_content_revision;
+
+        let reorder = paragraph_order_mutation_bytes(&[(1, 7, 1.0), (2, 7, 0.0)]);
+        let mut request = update(2, 2, 2);
+        request.limits = limits;
+        request.paragraph_order_mutations =
+            parse_paragraph_order_mutations(&reorder, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2)
+                .unwrap();
+        super::super::work_attribution::reset();
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, request, 3)
+            .unwrap();
+        let work = super::super::work_attribution::snapshot();
+        assert_eq!(work.gather_projected_register_compares, 0);
+        assert_eq!(work.gather_glyph_visits, 0);
+        let planner = engine.planners.get(&4).unwrap();
+        assert_eq!(
+            planner.reorder_stable_ids,
+            reordered_glyphs.map(|glyph| glyph.stable_id)
+        );
+        assert_eq!(
+            planner
+                .active_order()
+                .iter()
+                .map(|entry| entry.id)
+                .collect::<Vec<_>>(),
+            [2, 1]
+        );
+        assert_eq!(engine.gather.view().plan_input().glyphs, before.as_slice());
+        let publication = engine.prepared_plan(prepared).unwrap();
+        assert!(
+            !publication.patches.is_empty()
+                || !publication.primitives.is_empty()
+                || !publication.draws.is_empty()
+        );
+        engine.commit_update(prepared).unwrap();
+        let planner = engine.planners.get(&4).unwrap();
+        assert_eq!(
+            planner.reorder_stable_ids,
+            reordered_glyphs.map(|glyph| glyph.stable_id)
+        );
+        assert_eq!(planner.next_content_revision, content_high_water);
+        let still_accepted = engine.gather.view();
+        let still_accepted = still_accepted.plan_input();
+        assert_eq!(still_accepted.glyphs, before.as_slice());
+        assert_eq!(still_accepted.f32_fields[0], accepted_ink.as_slice());
+        let packed = planner.plan.buffer_bytes(1).unwrap();
+        let host_bytes: Vec<u8> = reordered_ink
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        assert_eq!(&packed[..host_bytes.len()], host_bytes.as_slice());
+        assert_ne!(
+            &packed[..host_bytes.len()],
+            &original_packed[..host_bytes.len()]
+        );
+
+        let mut cold = super::super::ordered_plan::OrderedPlanCompiler::default();
+        let cold_f32 = [reordered_ink.as_slice()];
+        let cold_masks = [u16::MAX; 3];
+        cold.prepare(
+            engine.codecs.get(&9).unwrap(),
+            CapabilitySetId(1),
+            super::super::plan_input::PlanInput {
+                glyphs: &reordered_glyphs,
+                placement_slots: &reordered_slots,
+                semantic_change_masks: &cold_masks,
+                f32_fields: &cold_f32,
+                u32_fields: &[],
+                order_independent: false,
+            },
+            true,
+            4,
+        )
+        .unwrap();
+        cold.commit().unwrap();
+        assert_eq!(
+            &packed[..host_bytes.len()],
+            &cold.buffer_bytes(1).unwrap()[..host_bytes.len()]
         );
     }
 
@@ -18244,11 +20436,91 @@ mod tests {
             .unwrap();
     }
 
+    fn projected_fields(
+        paragraph: &ParagraphState,
+    ) -> (
+        [Vec<f32>; SEMANTIC_F32_FIELD_COUNT],
+        [Vec<u32>; SEMANTIC_U32_FIELD_COUNT],
+    ) {
+        let positioned = paragraph.positioned.committed();
+        let context = PositionedSourceContext {
+            styles: paragraph.styles.committed().resolved.segments(),
+            clusters: paragraph.clusters.committed(),
+        };
+        let mut cursor =
+            positioned.outlined_cursor(paragraph.clusters.committed(), &paragraph.boundary_shape);
+        let mut f32_fields: [Vec<f32>; SEMANTIC_F32_FIELD_COUNT] =
+            core::array::from_fn(|_| Vec::new());
+        let mut u32_fields: [Vec<u32>; SEMANTIC_U32_FIELD_COUNT] =
+            core::array::from_fn(|_| Vec::new());
+        while let Some(mark) = cursor.next_mark().unwrap() {
+            let occurrence = cursor.project(mark).unwrap();
+            let projected = positioned
+                .projected_occurrence_row(occurrence, mark.semantic_index, 0, context)
+                .unwrap();
+            for (field, values) in f32_fields.iter_mut().enumerate() {
+                values.push(projected.f32(field).unwrap());
+            }
+            for (field, values) in u32_fields.iter_mut().enumerate() {
+                values.push(projected.u32(field).unwrap());
+            }
+        }
+        (f32_fields, u32_fields)
+    }
+
+    fn committed_semantic_rows(
+        paragraph: &ParagraphState,
+    ) -> Vec<super::super::positioning::PositionedSemanticGlyph> {
+        let positioned = paragraph.positioned.committed();
+        let mut cursor = positioned
+            .occurrence_cursor(0, paragraph.clusters.committed(), &paragraph.boundary_shape)
+            .unwrap();
+        (0..positioned.occurrence_count())
+            .map(|_| cursor.next_row().unwrap().unwrap().semantic)
+            .collect()
+    }
+
+    fn committed_placed_semantic_rows(
+        paragraph: &ParagraphState,
+    ) -> Vec<super::super::positioning::SemanticGlyph> {
+        let positioned = paragraph.positioned.committed();
+        committed_semantic_rows(paragraph)
+            .into_iter()
+            .map(|row| positioned.placed_occurrence(row).unwrap())
+            .collect()
+    }
+
     fn utf16(value: &str) -> Vec<u16> {
         value.encode_utf16().collect()
     }
 
+    #[derive(Clone, Copy)]
+    struct CrossRegistryHandles {
+        warm_font: u32,
+        cold_font: u32,
+        warm_binding: u32,
+        cold_binding: u32,
+    }
+
     fn assert_visible_shape_equal(warm: &ParagraphState, cold: &ParagraphState, context: &str) {
+        assert_visible_shape_equal_with_registry_handles(warm, cold, context, None);
+    }
+
+    fn assert_visible_shape_equal_across_registries(
+        warm: &ParagraphState,
+        cold: &ParagraphState,
+        context: &str,
+        handles: CrossRegistryHandles,
+    ) {
+        assert_visible_shape_equal_with_registry_handles(warm, cold, context, Some(handles));
+    }
+
+    fn assert_visible_shape_equal_with_registry_handles(
+        warm: &ParagraphState,
+        cold: &ParagraphState,
+        context: &str,
+        registry_handles: Option<CrossRegistryHandles>,
+    ) {
         let (warm_shape, cold_shape) = (warm.shape.committed(), cold.shape.committed());
         assert_eq!(
             warm_shape.glyph_ids, cold_shape.glyph_ids,
@@ -18322,22 +20594,114 @@ mod tests {
             warm_flow.drop_caps, cold_flow.drop_caps,
             "{context}: flow drop caps"
         );
-        let warm_glyphs = warm.positioned.committed().glyphs();
-        let cold_glyphs = cold.positioned.committed().glyphs();
+        let warm_glyphs = committed_semantic_rows(warm);
+        let cold_glyphs = committed_semantic_rows(cold);
         assert_eq!(
             warm_glyphs.len(),
             cold_glyphs.len(),
-            "{context}: glyph count"
+            "{context}: semantic glyph count"
         );
-        for (warm_glyph, cold_glyph) in warm_glyphs.iter().zip(cold_glyphs) {
+        for (warm_glyph, cold_glyph) in warm_glyphs.iter().zip(&cold_glyphs) {
             let (mut warm_glyph, mut cold_glyph) = (*warm_glyph, *cold_glyph);
+            if let Some(handles) = registry_handles {
+                assert_eq!(
+                    warm_glyph.font_handle, handles.warm_font,
+                    "{context}: warm shaping font"
+                );
+                assert_eq!(
+                    cold_glyph.font_handle, handles.cold_font,
+                    "{context}: cold shaping font"
+                );
+                warm_glyph.font_handle = 0;
+                cold_glyph.font_handle = 0;
+            }
+            warm_glyph.stable_id = 0;
+            warm_glyph.placement_segment = 0;
+            cold_glyph.stable_id = 0;
+            cold_glyph.placement_segment = 0;
+            assert_eq!(
+                warm_glyph, cold_glyph,
+                "{context}: positioned semantic source"
+            );
+        }
+        let warm_context = PositionedSourceContext {
+            styles: warm.styles.committed().resolved.segments(),
+            clusters: warm_clusters,
+        };
+        let cold_context = PositionedSourceContext {
+            styles: cold.styles.committed().resolved.segments(),
+            clusters: cold_clusters,
+        };
+        let mut warm_cursor = warm
+            .positioned
+            .committed()
+            .outlined_cursor(warm_clusters, &warm.boundary_shape);
+        let mut cold_cursor = cold
+            .positioned
+            .committed()
+            .outlined_cursor(cold_clusters, &cold.boundary_shape);
+        loop {
+            let Some(warm_mark) = warm_cursor.next_mark().unwrap() else {
+                assert!(
+                    cold_cursor.next_mark().unwrap().is_none(),
+                    "{context}: outlined count"
+                );
+                break;
+            };
+            let cold_mark = cold_cursor.next_mark().unwrap().expect("cold outlined row");
+            let mut warm_glyph = warm
+                .positioned
+                .committed()
+                .projected_occurrence_row(
+                    warm_cursor.project(warm_mark).unwrap(),
+                    warm_mark.semantic_index,
+                    0,
+                    warm_context,
+                )
+                .unwrap()
+                .glyph;
+            let mut cold_glyph = cold
+                .positioned
+                .committed()
+                .projected_occurrence_row(
+                    cold_cursor.project(cold_mark).unwrap(),
+                    cold_mark.semantic_index,
+                    0,
+                    cold_context,
+                )
+                .unwrap()
+                .glyph;
+            if let Some(handles) = registry_handles {
+                assert_eq!(
+                    warm_glyph.font_handle, handles.warm_font,
+                    "{context}: warm render font"
+                );
+                assert_eq!(
+                    cold_glyph.font_handle, handles.cold_font,
+                    "{context}: cold render font"
+                );
+                assert_eq!(
+                    warm_glyph.binding_handle, handles.warm_binding,
+                    "{context}: warm render binding"
+                );
+                assert_eq!(
+                    cold_glyph.binding_handle, handles.cold_binding,
+                    "{context}: cold render binding"
+                );
+                warm_glyph.font_handle = 0;
+                cold_glyph.font_handle = 0;
+                warm_glyph.binding_handle = 0;
+                cold_glyph.binding_handle = 0;
+            }
             warm_glyph.stable_id = 0;
             warm_glyph.content_revision = 0;
             warm_glyph.placement_slot = 0;
+            warm_glyph.semantic_glyph_index = 0;
             cold_glyph.stable_id = 0;
             cold_glyph.content_revision = 0;
             cold_glyph.placement_slot = 0;
-            assert_eq!(warm_glyph, cold_glyph, "{context}: positioned glyph");
+            cold_glyph.semantic_glyph_index = 0;
+            assert_eq!(warm_glyph, cold_glyph, "{context}: projected render glyph");
         }
     }
 
@@ -18639,6 +21003,17 @@ mod tests {
         engine
             .reserve_root_text(4, u32::try_from(text.encode_utf16().count()).unwrap())
             .unwrap();
+        // Legacy shaped_engine fixtures inspect General's private Cluster/Flow/Positioned
+        // arenas directly. Keep that fixture an explicit General oracle; the Inline tests
+        // below build their own production-admitted owner and compare public output.
+        engine
+            .planners
+            .get_mut(&4)
+            .unwrap()
+            .spare_paragraph
+            .as_mut()
+            .unwrap()
+            .disable_inline = true;
 
         let units = utf16(text);
         let text_bytes = text_mutation_bytes(&[(0, 0, &units)]);
@@ -18675,6 +21050,55 @@ mod tests {
     fn validated_paint_codec(technique: TechniqueId) -> ValidatedCodec {
         // The paint fixture changes blue while preserving red and green.
         validated_codec_with_input(technique, super::super::frame::SEMANTIC_F32_FOREGROUND_BLUE)
+    }
+
+    fn validated_paint_and_instance_codec(technique: TechniqueId) -> ValidatedCodec {
+        let base = validated_paint_codec(technique);
+        let mut capability_sets = base.capability_sets().to_vec();
+        for capability in &mut capability_sets {
+            capability.max_buffers_per_draw = 2;
+        }
+        let mut programs = base.programs().to_vec();
+        let program = &mut programs[0];
+        program.storage_key_mask |= crate::engine::codec::BATCH_MATERIAL;
+        program.draw_key_mask &= !crate::engine::codec::BATCH_TRANSFORM;
+        program.u32_input_count = 4;
+        program.inputs.extend([
+            crate::engine::codec::InputSource::semantic(
+                super::super::frame::SEMANTIC_U32_REGION_ID,
+            ),
+            crate::engine::codec::InputSource::semantic(
+                super::super::frame::SEMANTIC_U32_FLOW_THREAD_ID,
+            ),
+            crate::engine::codec::InputSource::semantic(
+                super::super::frame::SEMANTIC_U32_TRANSFORM_INDEX,
+            ),
+            crate::engine::codec::InputSource::semantic(
+                super::super::frame::SEMANTIC_U32_OUTLINE_RGBA,
+            ),
+        ]);
+        program.buffers.push(BufferSchema::packed(
+            BufferId(2),
+            ScalarType::U32,
+            4,
+            BUFFER_USAGE_STORAGE | BUFFER_USAGE_COPY_DST,
+            1,
+        ));
+        for field in 0..4 {
+            program
+                .operations
+                .push(Operation::LoadU32 { target: 1, field });
+            program.operations.push(Operation::StoreU32 {
+                source: 1,
+                buffer: BufferId(2),
+                lane: field,
+            });
+        }
+        ValidatedCodec::new(CodecDescriptor {
+            capability_sets,
+            programs,
+        })
+        .unwrap()
     }
 
     fn validated_codec_with_input(technique: TechniqueId, semantic_field: u8) -> ValidatedCodec {
@@ -19413,4 +21837,521 @@ mod tests {
         }
         bytes
     }
+
+    const INLINE_F32_WIRE_FIELDS: usize =
+        super::super::frame::SEMANTIC_F32_SHADOW_OFFSET_Y_EM as usize + 1;
+    const INLINE_U32_WIRE_FIELDS: usize =
+        super::super::frame::SEMANTIC_U32_PLACEMENT_SLOT as usize + 1;
+
+    fn inline_complete_codec() -> ValidatedCodec {
+        let base = validated_codec(TechniqueId(1));
+        let mut capability_sets = base.capability_sets().to_vec();
+        for set in &mut capability_sets {
+            set.max_buffer_bytes = 1 << 20;
+        }
+        let mut programs = base.programs().to_vec();
+        let program = &mut programs[0];
+        program.f32_input_count = u8::try_from(INLINE_F32_WIRE_FIELDS).unwrap();
+        program.u32_input_count = u8::try_from(INLINE_U32_WIRE_FIELDS).unwrap();
+        program.inputs = (0..INLINE_F32_WIRE_FIELDS)
+            .chain(0..INLINE_U32_WIRE_FIELDS)
+            .map(|field| crate::engine::codec::InputSource::semantic(u8::try_from(field).unwrap()))
+            .collect();
+        // The original LoadF32/StoreF32 program remains the generic physical executor.
+        // Declaring every field also makes the gather materialize IR-unused effect columns.
+        ValidatedCodec::new(CodecDescriptor {
+            capability_sets,
+            programs,
+        })
+        .unwrap()
+    }
+
+    fn inline_or_general_inter(
+        text: &str,
+        force_general: bool,
+        width: f32,
+        effect: bool,
+    ) -> (TextEngine, ShaperRegistry, Vec<u8>) {
+        const INTER: &[u8] =
+            include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
+        const GLYPHS: u32 = 2_937;
+        let mut shaper = ShaperRegistry::default();
+        let mut extents = vec![0; GLYPHS as usize * 8];
+        let mut availability = vec![0; (GLYPHS as usize).div_ceil(8)];
+        for glyph in 1..GLYPHS as usize {
+            availability[glyph >> 3] |= 1 << (glyph & 7);
+            extents[glyph * 8 + 4..glyph * 8 + 6].copy_from_slice(&500_i16.to_le_bytes());
+            extents[glyph * 8 + 6..glyph * 8 + 8].copy_from_slice(&1_000_i16.to_le_bytes());
+        }
+        let space_glyph = read_fonts::FontRef::new(INTER)
+            .unwrap()
+            .cmap()
+            .unwrap()
+            .map_codepoint(u32::from(' '))
+            .unwrap()
+            .to_u32() as usize;
+        assert!(space_glyph > 0 && space_glyph < GLYPHS as usize);
+        availability[space_glyph >> 3] &= !(1 << (space_glyph & 7));
+        extents[space_glyph * 8..space_glyph * 8 + 8].fill(0);
+        assert_eq!(
+            shaper.register_font(1, INTER, &extents, &availability, 0, 0),
+            0
+        );
+        let mut engine = TextEngine::default();
+        engine.register_codec(9, inline_complete_codec()).unwrap();
+        engine
+            .register_font_binding(42, 1, GLYPHS, render_binding(GLYPHS, 1))
+            .unwrap();
+        engine.register_font_stack(7, &[42]).unwrap();
+        engine.create_root(4).unwrap();
+        engine.reserve_root_text(4, 64).unwrap();
+        // The implicit first paragraph is installed from this spare during the first update.
+        engine
+            .planners
+            .get_mut(&4)
+            .unwrap()
+            .spare_paragraph
+            .as_mut()
+            .unwrap()
+            .disable_inline = force_general;
+
+        let mut style = root_style_bytes_for_text(7, text.encode_utf16().count() as u32);
+        if effect {
+            let record = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+            let mask = u32::from_le_bytes(
+                style[record + abi::ENGINE_STYLE_MUTATION_FIELD_MASK
+                    ..record + abi::ENGINE_STYLE_MUTATION_FIELD_MASK + 4]
+                    .try_into()
+                    .unwrap(),
+            );
+            write_u32(
+                &mut style,
+                record + abi::ENGINE_STYLE_MUTATION_FIELD_MASK,
+                mask | STYLE_FIELD_OUTLINE,
+            );
+            write_u32(
+                &mut style,
+                record + abi::ENGINE_STYLE_MUTATION_OUTLINE_RGBA,
+                0xff22_3344,
+            );
+            write_f32(
+                &mut style,
+                record + abi::ENGINE_STYLE_MUTATION_OUTLINE_WIDTH,
+                1.25,
+            );
+        }
+        let mut geometry = root_geometry_bytes();
+        let constraint = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let region = constraint + abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
+        write_f32(
+            &mut geometry,
+            constraint + abi::ENGINE_CONSTRAINT_WIDTH,
+            width,
+        );
+        geometry[constraint + abi::ENGINE_CONSTRAINT_OVERFLOW] =
+            super::super::frame::OVERFLOW_VISIBLE;
+        for field in [
+            abi::ENGINE_REGION_INLINE_END,
+            abi::ENGINE_REGION_CLIP_INLINE_END,
+        ] {
+            write_f32(&mut geometry, region + field, width);
+        }
+        let units = utf16(text);
+        let bytes = text_mutation_bytes(&[(0, 0, &units)]);
+        let mut initial = update(0, 0, 0);
+        initial.limits.max_clusters = 256;
+        initial.limits.max_lines = 256;
+        initial.limits.max_output_bytes = 1 << 20;
+        initial.text_mutations =
+            parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        initial.style_mutations =
+            parse_style_mutations(&style, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        initial.geometry = parse_root_geometry(&geometry, initial.limits);
+        let prepared = engine
+            .prepare_update_with_shaper(&mut shaper, initial, 1)
+            .unwrap();
+        engine.commit_update(prepared).unwrap();
+        (engine, shaper, geometry)
+    }
+
+    fn assert_inline_owner(engine: &TextEngine, inline: bool) {
+        let state = &engine.planners.get(&4).unwrap().paragraph(1).unwrap().state;
+        assert_eq!(
+            matches!(state.prepared_layout.committed(), PreparedLayout::Inline(_)),
+            inline
+        );
+    }
+
+    fn inline_measurement_and_glyphs(
+        engine: &mut TextEngine,
+        shaper: &mut ShaperRegistry,
+    ) -> (
+        Vec<super::super::semantic_view::SemanticRecord>,
+        Vec<super::super::positioning::SemanticGlyph>,
+    ) {
+        let revision = engine.root_revision(4).unwrap().engine;
+        let mut query = update(revision, revision, revision);
+        query.limits.max_clusters = 256;
+        query.limits.max_lines = 256;
+        query.limits.max_output_bytes = 1 << 20;
+        query.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_MEASUREMENT;
+        let measured = engine
+            .measure_paragraph_with_shaper(shaper, query, 1)
+            .unwrap();
+        let records = engine.measured_semantic_views(measured).unwrap().to_vec();
+        engine.commit_measure(measured).unwrap();
+        let count = engine.borrowed_paragraph_layout(4, 1).unwrap();
+        let mut glyphs = vec![super::super::positioning::SemanticGlyph::default(); count];
+        engine
+            .borrowed_paragraph_glyphs(4, 1, 0, &mut glyphs)
+            .unwrap();
+        (records, glyphs)
+    }
+
+    fn assert_inline_matches_general(
+        inline: &mut TextEngine,
+        inline_shaper: &mut ShaperRegistry,
+        general: &mut TextEngine,
+        general_shaper: &mut ShaperRegistry,
+    ) {
+        assert_inline_owner(inline, true);
+        assert_inline_owner(general, false);
+        let (inline_measurement, inline_glyphs) =
+            inline_measurement_and_glyphs(inline, inline_shaper);
+        let (general_measurement, general_glyphs) =
+            inline_measurement_and_glyphs(general, general_shaper);
+        assert_eq!(
+            inline_measurement, general_measurement,
+            "immediate measurement records"
+        );
+        assert_eq!(
+            inline_glyphs, general_glyphs,
+            "all 52-byte placed glyph records"
+        );
+        for (left, right) in inline_glyphs.iter().zip(&general_glyphs) {
+            assert_eq!(
+                [
+                    left.font_size.to_bits(),
+                    left.inline_origin.to_bits(),
+                    left.block_origin.to_bits(),
+                    left.inline_advance.to_bits(),
+                    left.ink_inline_start.to_bits(),
+                    left.ink_block_start.to_bits(),
+                    left.ink_inline_extent.to_bits(),
+                    left.ink_block_extent.to_bits()
+                ],
+                [
+                    right.font_size.to_bits(),
+                    right.inline_origin.to_bits(),
+                    right.block_origin.to_bits(),
+                    right.inline_advance.to_bits(),
+                    right.ink_inline_start.to_bits(),
+                    right.ink_block_start.to_bits(),
+                    right.ink_inline_extent.to_bits(),
+                    right.ink_block_extent.to_bits()
+                ],
+                "placed glyph float bits"
+            );
+        }
+
+        // The registered Inter space has no outline. Keep it in the semantic source stream
+        // and copy two outlined records on opposite sides of an interior space.
+        let leaf = match inline
+            .planners
+            .get(&4)
+            .unwrap()
+            .paragraph(1)
+            .unwrap()
+            .state
+            .prepared_layout
+            .committed()
+        {
+            PreparedLayout::Inline(leaf) => leaf,
+            PreparedLayout::General => unreachable!(),
+        };
+        assert!(
+            leaf.semantic_count() > leaf.outlined_count(),
+            "a real space must be semantic-only"
+        );
+        let units = inline.root_text(4).unwrap();
+        let outlined = |index: usize| leaf.row(index as u32).unwrap().has_outline;
+        let gap = (0..inline_glyphs.len())
+            .find(|&index| {
+                units.get(inline_glyphs[index].cluster as usize) == Some(&0x20)
+                    && (0..index).any(&outlined)
+                    && (index + 1..inline_glyphs.len()).any(&outlined)
+            })
+            .expect("an interior semantic-only space");
+        assert!(!outlined(gap));
+        let left = (0..gap).find(|&index| outlined(index)).unwrap();
+        let right = (gap + 1..inline_glyphs.len())
+            .find(|&index| outlined(index))
+            .unwrap();
+        let selected = [
+            inline_glyphs[left].stable_id,
+            inline_glyphs[right].stable_id,
+        ];
+        assert_ne!(selected[0], selected[1]);
+        assert!(matches!(
+            inline.copy_glyphs(4, 1, 9, 1, &[inline_glyphs[gap].stable_id]),
+            Err(EngineError::InvalidRequest)
+        ));
+        assert!(matches!(
+            general.copy_glyphs(4, 1, 9, 1, &[general_glyphs[gap].stable_id]),
+            Err(EngineError::InvalidRequest)
+        ));
+        let a = inline.copy_glyphs(4, 1, 9, 1, &selected).unwrap();
+        let b = general.copy_glyphs(4, 1, 9, 1, &selected).unwrap();
+        let codec = inline.codecs.get(&9).unwrap();
+        let av = a
+            .plan_view(9, CapabilitySetId(1), codec.fingerprint())
+            .unwrap();
+        let bv = b
+            .plan_view(9, CapabilitySetId(1), codec.fingerprint())
+            .unwrap();
+        assert_eq!(
+            av.payload, bv.payload,
+            "independent copy across semantic-only space"
+        );
+        assert_eq!(
+            av.session_payload, bv.session_payload,
+            "independent placement payload"
+        );
+
+        let mut publication_views = Vec::new();
+        for (engine, shaper) in [
+            (&mut *inline, &mut *inline_shaper),
+            (&mut *general, &mut *general_shaper),
+        ] {
+            let revision = engine.root_revision(4).unwrap().engine;
+            let mut publication = update(revision, revision, revision);
+            publication.limits.max_clusters = 256;
+            publication.limits.max_lines = 256;
+            publication.limits.max_output_bytes = 1 << 20;
+            let prepared = engine
+                .prepare_update_with_shaper(shaper, publication, revision + 1)
+                .unwrap();
+            let codec = engine.codecs.get(&9).unwrap();
+            let view = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .plan
+                .plan_view(9, CapabilitySetId(1), codec.fingerprint())
+                .unwrap();
+            publication_views.push((
+                view.buffers.to_vec(),
+                view.payload.to_vec(),
+                view.session_payload.to_vec(),
+            ));
+            engine.commit_update(prepared).unwrap();
+        }
+
+        // Compare declared register columns and the physical committed draw buffer.
+        let a = inline.gather.view();
+        let b = general.gather.view();
+        let a = a.plan_input();
+        let b = b.plan_input();
+        assert_eq!(a.glyphs, b.glyphs, "published declared glyphs");
+        assert_eq!(a.f32_fields.len(), INLINE_F32_WIRE_FIELDS);
+        assert_eq!(a.u32_fields.len(), INLINE_U32_WIRE_FIELDS);
+        assert_eq!(a.f32_fields.len(), b.f32_fields.len());
+        assert_eq!(a.u32_fields.len(), b.u32_fields.len());
+        for (left, right) in a.f32_fields.iter().zip(b.f32_fields.iter()) {
+            assert_eq!(
+                left.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                right.iter().map(|v| v.to_bits()).collect::<Vec<_>>()
+            );
+        }
+        for (left, right) in a.u32_fields.iter().zip(b.u32_fields.iter()) {
+            assert_eq!(left, right);
+        }
+        let inline_plan = &inline.planners.get(&4).unwrap().plan;
+        let general_plan = &general.planners.get(&4).unwrap().plan;
+        let (inline_buffers, inline_payload, inline_session_payload) = &publication_views[0];
+        let (general_buffers, general_payload, general_session_payload) = &publication_views[1];
+        assert_eq!(
+            inline_buffers, general_buffers,
+            "published physical buffer records"
+        );
+        assert_eq!(
+            inline_payload, general_payload,
+            "published physical payload"
+        );
+        assert_eq!(
+            inline_session_payload, general_session_payload,
+            "published session payload"
+        );
+        for buffer in inline_buffers {
+            assert_eq!(
+                inline_plan.buffer_bytes(buffer.id),
+                general_plan.buffer_bytes(buffer.id),
+                "committed physical buffer {}",
+                buffer.id
+            );
+        }
+    }
+
+    #[test]
+    fn inline_spaced_inter_labels_admit_and_match_cold_general() {
+        for (text, effects) in [
+            ("alpha 0", false),
+            ("alpha 0000", false),
+            (" bravo 0000", false),
+            ("alpha 0000  ", false),
+            ("alpha  0000", false),
+            ("alpha 0000", true),
+        ] {
+            let (mut inline, mut inline_shaper, _) =
+                inline_or_general_inter(text, false, 160.0, effects);
+            let (mut general, mut general_shaper, _) =
+                inline_or_general_inter(text, true, 160.0, effects);
+            assert_inline_matches_general(
+                &mut inline,
+                &mut inline_shaper,
+                &mut general,
+                &mut general_shaper,
+            );
+            if effects {
+                let view = inline.gather.view();
+                let declared = view.plan_input();
+                assert!(
+                    declared.f32_fields
+                        [usize::from(super::super::frame::SEMANTIC_F32_OUTLINE_WIDTH_EM)]
+                    .iter()
+                    .any(|value| *value > 0.0)
+                );
+                assert!(
+                    declared.u32_fields
+                        [usize::from(super::super::frame::SEMANTIC_U32_OUTLINE_RGBA)]
+                    .contains(&0xff22_3344)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn inline_partial_label_edits_keep_one_shaping_call_and_general_parity() {
+        let (mut inline, mut inline_shaper, _) =
+            inline_or_general_inter("alpha 0000", false, 160.0, false);
+        let (mut general, mut general_shaper, _) =
+            inline_or_general_inter("alpha 0000", true, 160.0, false);
+        for (prefix, digit, next) in [
+            ("bravo", None, "bravo 0000"),
+            ("alpha", Some("1"), "alpha 0001"),
+        ] {
+            let before_count = inline.borrowed_paragraph_layout(4, 1).unwrap();
+            let mut before =
+                vec![super::super::positioning::SemanticGlyph::default(); before_count];
+            inline
+                .borrowed_paragraph_glyphs(4, 1, 0, &mut before)
+                .unwrap();
+            let prefix_units = utf16(prefix);
+            let digit_units = digit.map(utf16);
+            let mut mutations = vec![(0, 5, prefix_units.as_slice())];
+            if let Some(ref units) = digit_units {
+                mutations.push((9, 1, units.as_slice()));
+            }
+            let bytes = text_mutation_bytes(&mutations);
+            for (engine, shaper) in [
+                (&mut inline, &mut inline_shaper),
+                (&mut general, &mut general_shaper),
+            ] {
+                let revision = engine.root_revision(4).unwrap().engine;
+                let mut edit = update(revision, revision, revision);
+                edit.limits.max_clusters = 256;
+                edit.limits.max_lines = 256;
+                edit.limits.max_output_bytes = 1 << 20;
+                edit.text_mutations =
+                    parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+                super::super::work_attribution::reset();
+                let measured = engine
+                    .measure_paragraph_with_shaper(shaper, edit, 1)
+                    .unwrap();
+                let work = super::super::work_attribution::snapshot();
+                assert_eq!(work.harfrust_calls, 1, "one HarfRust call for {next}");
+                engine.commit_measure(measured).unwrap();
+            }
+            let after_count = inline.borrowed_paragraph_layout(4, 1).unwrap();
+            let mut after = vec![super::super::positioning::SemanticGlyph::default(); after_count];
+            inline
+                .borrowed_paragraph_glyphs(4, 1, 0, &mut after)
+                .unwrap();
+            assert_eq!(after.len(), before.len(), "equal-length partial edit");
+            for index in 5..9 {
+                assert_eq!(
+                    after[index].stable_id, before[index].stable_id,
+                    "unchanged suffix glyph ID for {next} at {index}"
+                );
+            }
+            assert_inline_matches_general(
+                &mut inline,
+                &mut inline_shaper,
+                &mut general,
+                &mut general_shaper,
+            );
+        }
+    }
+
+    #[test]
+    fn inline_width_failure_promotes_from_raw_shape_without_reshaping() {
+        let (mut engine, mut shaper, mut geometry) =
+            inline_or_general_inter("alpha 0000", false, 160.0, false);
+        assert_inline_owner(&engine, true);
+        let constraint = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
+        let region = constraint + abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
+        write_f32(
+            &mut geometry,
+            constraint + abi::ENGINE_CONSTRAINT_WIDTH,
+            24.0,
+        );
+        for field in [
+            abi::ENGINE_REGION_INLINE_END,
+            abi::ENGINE_REGION_CLIP_INLINE_END,
+        ] {
+            write_f32(&mut geometry, region + field, 24.0);
+        }
+        let mut request = update(1, 1, 1);
+        request.limits.max_clusters = 256;
+        request.limits.max_lines = 256;
+        request.limits.max_output_bytes = 1 << 20;
+        request.geometry = parse_root_geometry(&geometry, request.limits);
+        super::super::work_attribution::reset();
+        let measured = engine
+            .measure_paragraph_with_shaper(&mut shaper, request, 1)
+            .unwrap();
+        assert_eq!(super::super::work_attribution::snapshot().harfrust_calls, 0);
+        engine.commit_measure(measured).unwrap();
+        assert_inline_owner(&engine, false);
+    }
+
+    #[test]
+    fn invalid_preflight_edit_preserves_committed_inline_owner_and_glyphs() {
+        let (mut engine, mut shaper, _) =
+            inline_or_general_inter("alpha 0000", false, 160.0, false);
+        assert_inline_owner(&engine, true);
+        let before_revision = engine.root_revision(4).unwrap();
+        let before_text = engine.root_text(4).unwrap().to_vec();
+        let (_, before_glyphs) = inline_measurement_and_glyphs(&mut engine, &mut shaper);
+        let bytes = text_mutation_bytes(&[(99, 0, &[0x7a])]);
+        let mut invalid = update(1, 1, 1);
+        invalid.limits.max_clusters = 256;
+        invalid.limits.max_lines = 256;
+        invalid.limits.max_output_bytes = 1 << 20;
+        invalid.text_mutations =
+            parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        assert_eq!(
+            engine.measure_paragraph_with_shaper(&mut shaper, invalid, 1),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(engine.root_revision(4).unwrap(), before_revision);
+        assert_eq!(engine.root_text(4).unwrap(), before_text);
+        assert_inline_owner(&engine, true);
+        let (_, after_glyphs) = inline_measurement_and_glyphs(&mut engine, &mut shaper);
+        assert_eq!(after_glyphs, before_glyphs);
+    }
+    include!("state_ascii_anchor_runtime_oracle.rs");
+    include!("state_ascii_anchor_acceptance_tests.rs");
+    include!("state_ascii_anchor_policy_tests.rs");
+    include!("state_ascii_anchor_adversarial.rs");
 }

@@ -3,11 +3,39 @@ use super::{
     cluster_state::{
         CHUNK_NEGATIVE_ADVANCE, CLUSTER_ALLOWED_BREAK, CLUSTER_BREAK_CORRECTION,
         CLUSTER_HARD_BREAK, CLUSTER_REQUIRED_BREAK, CLUSTER_SAFE_BEFORE, CLUSTER_SPACE,
-        ClusterArena,
+        ClusterArena, WordBreakRecord,
     },
     frame::{WRAP_CHARACTER, WRAP_NONE, WRAP_WORD},
     layout_units::{apply_ratio, scaled_from_layout_units},
 };
+
+/// The integer fitter's exact input lanes. General borrows its ClusterArena; Inline borrows its
+/// bounded cluster facts. No copied General arena or second line-break algorithm is required.
+pub(crate) struct ClusterLineFacts<'a> {
+    pub starts: &'a [u32],
+    pub ends: &'a [u32],
+    pub advance_units: &'a [i64],
+    pub flags: &'a [u8],
+    pub chunk_advance_sums: &'a [i64],
+    pub chunk_auxiliary_sums: &'a [i64],
+    pub chunk_flags_or: &'a [u8],
+    pub word_breaks: &'a [WordBreakRecord],
+}
+
+impl<'a> From<&'a ClusterArena> for ClusterLineFacts<'a> {
+    fn from(clusters: &'a ClusterArena) -> Self {
+        Self {
+            starts: &clusters.starts,
+            ends: &clusters.ends,
+            advance_units: &clusters.advance_units,
+            flags: &clusters.flags,
+            chunk_advance_sums: &clusters.chunk_advance_sums,
+            chunk_auxiliary_sums: &clusters.chunk_auxiliary_sums,
+            chunk_flags_or: &clusters.chunk_flags_or,
+            word_breaks: &clusters.word_breaks,
+        }
+    }
+}
 
 /// What breaking a line at a shaping-unsafe legal boundary changes about that line (#216),
 /// in layout units: its advance, its shrinkable space sum, and its hung terminating run.
@@ -156,7 +184,7 @@ fn add(sum: i64, term: i32) -> i64 {
 }
 
 /// A boundary the fitter may break at only by charging its correction.
-fn is_corrected(clusters: &ClusterArena, word_wrap: bool, boundary: usize) -> bool {
+fn is_corrected(clusters: &ClusterLineFacts<'_>, word_wrap: bool, boundary: usize) -> bool {
     const CORRECTED: u8 = CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION;
     word_wrap && boundary > 0 && clusters.flags[boundary - 1] & CORRECTED == CORRECTED
 }
@@ -164,7 +192,7 @@ fn is_corrected(clusters: &ClusterArena, word_wrap: bool, boundary: usize) -> bo
 /// The charge for a line `[start, end)` ending at a corrected boundary: its whole-line total
 /// when the head and tail islands overlap, else `L(end)`; none when the font refuses the break.
 fn end_charge(
-    clusters: &ClusterArena,
+    clusters: &ClusterLineFacts<'_>,
     word_wrap: bool,
     corrections: &mut impl BreakCorrections,
     start: usize,
@@ -186,7 +214,7 @@ fn end_charge(
 /// in how they accumulate base sums. Corrections (#216) enter at the seed (rule 1), the
 /// first overflow (rule 2), and the settled end (rule 3); without any, it fits as on main.
 struct LineFit<'a, C> {
-    clusters: &'a ClusterArena,
+    clusters: &'a ClusterLineFacts<'a>,
     corrections: &'a mut C,
     line_start: usize,
     /// `R(line_start)`: a constant offset added at every test, never folded into the sums.
@@ -597,6 +625,24 @@ pub(crate) fn layout_next_line_integer(
     word_space_shrink: f64,
     corrections: &mut impl BreakCorrections,
 ) -> Result<Option<ComposedLine>, EngineError> {
+    layout_next_line_integer_facts(
+        &ClusterLineFacts::from(clusters),
+        cursor,
+        max_width_units,
+        wrap,
+        word_space_shrink,
+        corrections,
+    )
+}
+
+pub(crate) fn layout_next_line_integer_facts(
+    clusters: &ClusterLineFacts<'_>,
+    cursor: &mut LineCursor,
+    max_width_units: Option<i64>,
+    wrap: u8,
+    word_space_shrink: f64,
+    corrections: &mut impl BreakCorrections,
+) -> Result<Option<ComposedLine>, EngineError> {
     if max_width_units.is_some_and(|units| units < 0)
         || !(0.0..1.0).contains(&word_space_shrink)
         || !matches!(wrap, WRAP_NONE | WRAP_WORD | WRAP_CHARACTER)
@@ -967,7 +1013,7 @@ fn layout_next_word_line_indexed<C: BreakCorrections>(
     fit.compose(cursor, selected_end, base.advance, EndCharge::NONE)
 }
 
-fn trailing_space_units(clusters: &ClusterArena, start: usize, mut end: usize) -> i64 {
+fn trailing_space_units(clusters: &ClusterLineFacts<'_>, start: usize, mut end: usize) -> i64 {
     if end > start && clusters.flags[end - 1] & CLUSTER_HARD_BREAK != 0 {
         end -= 1;
     }
@@ -982,7 +1028,7 @@ fn trailing_space_units(clusters: &ClusterArena, start: usize, mut end: usize) -
 /// Returns the exact trailing-space run after a chunk; incoming space carries only through an all-space chunk.
 /// No-space chunks clear without reading per-cluster lanes, while other chunks read only their trailing suffix.
 fn trailing_space_units_after_chunk(
-    clusters: &ClusterArena,
+    clusters: &ClusterLineFacts<'_>,
     start: usize,
     mut end: usize,
     incoming: i64,
@@ -1007,7 +1053,7 @@ fn trailing_space_units_after_chunk(
 /// recorded there. Allowed breaks break after their cluster; safe breaks break
 /// before theirs, so their prefix excludes the flagged cluster.
 fn resolve_last_flagged(
-    clusters: &ClusterArena,
+    clusters: &ClusterLineFacts<'_>,
     chunk: usize,
     mut base: Base,
     flag: u8,
@@ -1043,6 +1089,55 @@ mod tests {
     use super::super::cluster_state::WordBreakRecord;
     use super::*;
     use alloc::vec;
+
+    #[test]
+    fn borrowed_leaf_facts_match_general_integer_fit_with_optional_indexes_absent() {
+        let mut advances = vec![7.25; 64];
+        let mut flags = vec![CLUSTER_SAFE_BEFORE; 64];
+        for index in [5, 13, 26, 42, 58] {
+            advances[index] = 3.5;
+            flags[index] = CLUSTER_SPACE | CLUSTER_ALLOWED_BREAK;
+        }
+        let clusters = make_quantized_clusters(&advances, &flags);
+        let facts = ClusterLineFacts {
+            starts: &clusters.starts,
+            ends: &clusters.ends,
+            advance_units: &clusters.advance_units,
+            flags: &clusters.flags,
+            chunk_advance_sums: &[],
+            chunk_auxiliary_sums: &[],
+            chunk_flags_or: &[],
+            word_breaks: &[],
+        };
+        for width in [0, 1, 7 << 16, 20 << 16, 63 << 16, 100 << 16] {
+            let mut general = LineCursor::default();
+            let mut leaf = LineCursor::default();
+            loop {
+                let expected = layout_next_line_integer(
+                    &clusters,
+                    &mut general,
+                    Some(width),
+                    WRAP_WORD,
+                    0.25,
+                    &mut NoCorrections,
+                )
+                .unwrap();
+                let actual = layout_next_line_integer_facts(
+                    &facts,
+                    &mut leaf,
+                    Some(width),
+                    WRAP_WORD,
+                    0.25,
+                    &mut NoCorrections,
+                )
+                .unwrap();
+                assert_eq!(actual, expected);
+                if expected.is_none() {
+                    break;
+                }
+            }
+        }
+    }
 
     fn make_clusters(advances: &[f64], flags: &[u8]) -> ClusterArena {
         let count = advances.len();
@@ -1423,7 +1518,12 @@ mod tests {
         let clusters = make_clusters(&advances, &flags);
 
         assert_eq!(
-            trailing_space_units_after_chunk(&clusters, 0, LAYOUT_CHUNK, -2 * 65_536),
+            trailing_space_units_after_chunk(
+                &ClusterLineFacts::from(&clusters),
+                0,
+                LAYOUT_CHUNK,
+                -2 * 65_536,
+            ),
             -65_536,
         );
     }

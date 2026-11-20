@@ -144,7 +144,8 @@ export function* preparedOperation(
 group('prepared label operations @prepared @operation', () => {
   for (const count of preparedOperationCounts) {
     for (const operation of preparedOperations) {
-      bench(`${String(count)} labels first ${operation} @prepared @operation`, function* () {
+      const frontier = count === 1 && operation === 'set' ? ' @frontier' : '';
+      bench(`${String(count)} labels first ${operation} @prepared @operation${frontier}`, function* () {
         return yield* preparedOperation(count, operation);
       });
     }

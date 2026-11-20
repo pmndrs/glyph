@@ -32,7 +32,8 @@ function editSizedTextPublication(
 ): void {
   const tag = kind === 'same-length' ? '@same-length' : '@length-change';
   const boundary = engineOnly ? 'engine' : 'scene';
-  bench(`${String(count)} labels ${position} ${kind} ${boundary} publication ${tag}`, function* () {
+  const frontier = count === 1000 && position === 'first' && kind === 'same-length' && !engineOnly ? ' @frontier' : '';
+  bench(`${String(count)} labels ${position} ${kind} ${boundary} publication ${tag}${frontier}`, function* () {
     const created = createLabels(count);
     const target = created.labels[targetIndex]!;
     let alternate = false;
@@ -101,7 +102,8 @@ group('batched text operations @batch @publication', () => {
   });
 
   for (const count of [64, 128, 256, 512]) {
-    bench(`rewrite ${String(count)} labels in one group @batch @publication`, function* () {
+    const frontier = count === 512 ? ' @frontier' : '';
+    bench(`rewrite ${String(count)} labels in one group @batch @publication${frontier}`, function* () {
       const created = createGroupedLabels(count);
       const initial = inspectDraws(created.scene);
       assert.equal(initial.draws, 1);

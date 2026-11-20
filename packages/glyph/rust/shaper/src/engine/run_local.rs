@@ -1,4 +1,5 @@
 //! Break-independent numeric blocks and retained run-local glyph geometry.
+//!
 
 use alloc::vec::Vec;
 
@@ -76,6 +77,8 @@ pub(crate) struct RunLocalArena {
     blocks: Vec<NumericBlock>,
     rows: Vec<RunLocalGlyph>,
     source_rows: Vec<u32>,
+    source_words: Vec<SourceWord>,
+    source_prefix: Vec<SourceWordPrefix>,
     cluster_blocks: Vec<u32>,
     cluster_prefixes: Vec<f64>,
     pending_block_rows: Vec<PendingGlyph>,
@@ -83,11 +86,25 @@ pub(crate) struct RunLocalArena {
     pending_block_clusters: Vec<PendingCluster>,
 }
 
+#[derive(Clone, Copy, Default)]
+struct SourceWord {
+    covered: u64,
+    outlined: u64,
+}
+
+#[derive(Clone, Copy, Default)]
+struct SourceWordPrefix {
+    covered: u32,
+    outlined: u32,
+}
+
 impl RunLocalArena {
     pub(crate) fn clear(&mut self) {
         self.blocks.clear();
         self.rows.clear();
         self.source_rows.clear();
+        self.source_words.clear();
+        self.source_prefix.clear();
         self.cluster_blocks.clear();
         self.cluster_prefixes.clear();
         self.pending_block_rows.clear();
@@ -110,6 +127,155 @@ impl RunLocalArena {
         self.rows.get(usize::try_from(row).ok()?)
     }
 
+    /// Finds the next outlined source glyph in a proven covered interval. The
+    /// caller advances monotonically, so every empty word is visited at most once.
+    pub(crate) fn next_outlined_source(&self, start: u32, end: u32) -> Option<u32> {
+        let mut cursor = start;
+        while cursor < end {
+            let word_index = usize::try_from(cursor / 64).ok()?;
+            let word = self.source_words.get(word_index)?.outlined;
+            let remaining = word & (u64::MAX << (cursor % 64));
+            if remaining != 0 {
+                let source = u32::try_from(word_index)
+                    .ok()?
+                    .checked_mul(64)?
+                    .checked_add(remaining.trailing_zeros())?;
+                if source < end {
+                    return Some(source);
+                }
+                return None;
+            }
+            cursor = u32::try_from(word_index)
+                .ok()?
+                .checked_add(1)?
+                .checked_mul(64)?;
+        }
+        None
+    }
+
+    /// Selects one outlined source position within a covered interval. Used only
+    /// at an actual retained-range seek, never for sequential outlined records.
+    pub(crate) fn select_outlined_source(&self, start: u32, end: u32, ordinal: u32) -> Option<u32> {
+        let mut low = start;
+        let mut high = end;
+        while low < high {
+            let middle = low + (high - low) / 2;
+            let count = self
+                .source_range_counts(start, middle.checked_add(1)? - start)?
+                .1;
+            if count <= ordinal {
+                low = middle.checked_add(1)?;
+            } else {
+                high = middle;
+            }
+        }
+        (low < end).then_some(low)
+    }
+
+    /// Counts covered and outlined source glyphs without revisiting their local rows.
+    /// The producer finalizes the prefix after all runs, including reverse-order runs.
+    pub(crate) fn source_range_counts(&self, start: u32, count: u32) -> Option<(u32, u32)> {
+        let end = start.checked_add(count)?;
+        let before = self.source_rank(start)?;
+        let after = self.source_rank(end)?;
+        Some((
+            after.0.checked_sub(before.0)?,
+            after.1.checked_sub(before.1)?,
+        ))
+    }
+
+    /// Compares outline admission in source order, including ranges with different
+    /// absolute starts. One word comparison covers up to 64 glyphs.
+    pub(crate) fn same_outline_pattern(
+        &self,
+        start: u32,
+        other: &Self,
+        other_start: u32,
+        count: u32,
+    ) -> Option<bool> {
+        let self_end = start.checked_add(count)?;
+        let other_end = other_start.checked_add(count)?;
+        if self.source_range_counts(start, count)?.0 != count
+            || other.source_range_counts(other_start, count)?.0 != count
+            || self_end > u32::try_from(self.source_rows.len()).ok()?
+            || other_end > u32::try_from(other.source_rows.len()).ok()?
+        {
+            return Some(false);
+        }
+        let mut visited = 0_u32;
+        while visited < count {
+            #[cfg(test)]
+            super::work_attribution::record(|work| work.retained_outline_word_comparisons += 1);
+            let width = (count - visited).min(64);
+            if self.outline_bits(start + visited, width)?
+                != other.outline_bits(other_start + visited, width)?
+            {
+                return Some(false);
+            }
+            visited += width;
+        }
+        Some(true)
+    }
+
+    fn outline_bits(&self, start: u32, width: u32) -> Option<u64> {
+        let word = usize::try_from(start / 64).ok()?;
+        let offset = start % 64;
+        let low = self.source_words.get(word)?.outlined >> offset;
+        let bits = if offset + width > 64 {
+            low | (self.source_words.get(word + 1)?.outlined << (64 - offset))
+        } else {
+            low
+        };
+        Some(if width == 64 {
+            bits
+        } else {
+            bits & ((1_u64 << width) - 1)
+        })
+    }
+
+    fn source_rank(&self, end: u32) -> Option<(u32, u32)> {
+        let word = usize::try_from(end / 64).ok()?;
+        let prefix = self.source_prefix.get(word)?;
+        let bits = end % 64;
+        if bits == 0 {
+            return Some((prefix.covered, prefix.outlined));
+        }
+        let source = self.source_words.get(word)?;
+        let mask = (1_u64 << bits) - 1;
+        Some((
+            prefix
+                .covered
+                .checked_add((source.covered & mask).count_ones())?,
+            prefix
+                .outlined
+                .checked_add((source.outlined & mask).count_ones())?,
+        ))
+    }
+
+    pub(crate) fn finalize_source_ranks(&mut self) -> Result<(), RunLocalBuildError> {
+        self.source_prefix.clear();
+        let prefix_count = self
+            .source_words
+            .len()
+            .checked_add(1)
+            .ok_or(RunLocalBuildError::AllocationFailed)?;
+        reserve(&mut self.source_prefix, prefix_count)?;
+        let mut total = SourceWordPrefix::default();
+        self.source_prefix.push(total);
+        for word in &self.source_words {
+            total.covered = total
+                .covered
+                .checked_add(word.covered.count_ones())
+                .ok_or(RunLocalBuildError::AllocationFailed)?;
+            total.outlined = total
+                .outlined
+                .checked_add(word.outlined.count_ones())
+                .ok_or(RunLocalBuildError::AllocationFailed)?;
+            self.source_prefix.push(total);
+        }
+        Ok(())
+    }
+
     #[cfg(test)]
     pub(crate) fn row_for_source_order_glyph(&self, source_glyph: u32) -> Option<&RunLocalGlyph> {
         let index = usize::try_from(source_glyph).ok()?;
@@ -128,45 +294,159 @@ impl RunLocalArena {
         &self.cluster_prefixes
     }
 
-    pub(crate) fn begin_run(&mut self) -> RunLocalWriter<'_> {
-        self.pending_block_rows.clear();
-        self.pending_cluster_rows.clear();
-        self.pending_block_clusters.clear();
-        let first_block = self.blocks.len();
-        let first_cluster = self.cluster_blocks.len();
-        RunLocalWriter {
-            arena: self,
-            first_block,
-            first_cluster,
-            block_cursor: 0.0,
-            block_envelope: None,
-            cluster_open: false,
+    pub(crate) fn begin_run(&mut self) -> RunLocalBlockWriter<GeneralSink<'_>> {
+        RunLocalBlockWriter::new(GeneralSink(self))
+    }
+}
+
+/// Storage-only operations for the exact shared numeric block writer.
+pub(crate) trait RunLocalBlockSink {
+    fn block_len(&self) -> usize;
+    fn cluster_len(&self) -> usize;
+    fn row_len(&self) -> usize;
+    fn take_pending(&mut self) -> (Vec<PendingGlyph>, Vec<RawGlyph>, Vec<PendingCluster>);
+    fn recycle_pending(
+        &mut self,
+        rows: Vec<PendingGlyph>,
+        raw: Vec<RawGlyph>,
+        clusters: Vec<PendingCluster>,
+    );
+    fn detached_cluster(&mut self) -> Result<(), RunLocalBuildError>;
+    fn block(
+        &mut self,
+        rows: &mut Vec<PendingGlyph>,
+        clusters: &mut Vec<PendingCluster>,
+        envelope: Envelope,
+    ) -> Result<(), RunLocalBuildError>;
+}
+
+pub(crate) struct GeneralSink<'a>(&'a mut RunLocalArena);
+
+/// The bounded producer stores final local rows at source indices. It carries no
+/// General row-order map, source bitsets, or rank prefix.
+pub(crate) struct RunLocalCompact<T> {
+    blocks: Vec<NumericBlock>,
+    rows: Vec<Option<T>>,
+    cluster_blocks: Vec<u32>,
+    cluster_prefixes: Vec<f64>,
+    row_count: u32,
+    pending_block_rows: Vec<PendingGlyph>,
+    pending_cluster_rows: Vec<RawGlyph>,
+    pending_block_clusters: Vec<PendingCluster>,
+}
+
+impl<T> Default for RunLocalCompact<T> {
+    fn default() -> Self {
+        Self {
+            blocks: Vec::new(),
+            rows: Vec::new(),
+            cluster_blocks: Vec::new(),
+            cluster_prefixes: Vec::new(),
+            row_count: 0,
+            pending_block_rows: Vec::new(),
+            pending_cluster_rows: Vec::new(),
+            pending_block_clusters: Vec::new(),
         }
     }
 }
 
-pub(crate) struct RunLocalWriter<'a> {
-    arena: &'a mut RunLocalArena,
+impl<T> RunLocalCompact<T> {
+    pub(crate) fn clear(&mut self) {
+        self.blocks.clear();
+        self.rows.clear();
+        self.cluster_blocks.clear();
+        self.cluster_prefixes.clear();
+        self.row_count = 0;
+        self.pending_block_rows.clear();
+        self.pending_cluster_rows.clear();
+        self.pending_block_clusters.clear();
+    }
+
+    /// The mapper writes the final leaf row at numeric block closure. The compact store itself
+    /// is that row owner; production must not make a RunLocalGlyph array and copy it afterward.
+    pub(crate) fn begin_run<F>(&mut self, map: F) -> RunLocalBlockWriter<CompactSink<'_, T, F>>
+    where
+        F: FnMut(u32, u32, RunLocalGlyph) -> Result<T, RunLocalBuildError>,
+    {
+        RunLocalBlockWriter::new(CompactSink { compact: self, map })
+    }
+
+    pub(crate) fn blocks(&self) -> &[NumericBlock] {
+        &self.blocks
+    }
+
+    pub(crate) fn cluster_blocks(&self) -> &[u32] {
+        &self.cluster_blocks
+    }
+
+    pub(crate) fn cluster_prefixes(&self) -> &[f64] {
+        &self.cluster_prefixes
+    }
+
+    pub(crate) fn row_for_source_glyph(&self, source_glyph: u32) -> Option<&T> {
+        self.rows.get(usize::try_from(source_glyph).ok()?)?.as_ref()
+    }
+
+    pub(crate) fn row_for_source_glyph_mut(&mut self, source_glyph: u32) -> Option<&mut T> {
+        self.rows
+            .get_mut(usize::try_from(source_glyph).ok()?)?
+            .as_mut()
+    }
+
+    pub(crate) fn source_rows(&self) -> &[Option<T>] {
+        &self.rows
+    }
+}
+
+pub(crate) struct CompactSink<'a, T, F> {
+    compact: &'a mut RunLocalCompact<T>,
+    map: F,
+}
+
+pub(crate) type RunLocalWriter<'a> = RunLocalBlockWriter<GeneralSink<'a>>;
+
+pub(crate) struct RunLocalBlockWriter<S: RunLocalBlockSink> {
+    sink: S,
     first_block: usize,
     first_cluster: usize,
+    pending_block_rows: Vec<PendingGlyph>,
+    pending_cluster_rows: Vec<RawGlyph>,
+    pending_block_clusters: Vec<PendingCluster>,
     block_cursor: f64,
     block_envelope: Option<Envelope>,
     cluster_open: bool,
 }
 
-impl RunLocalWriter<'_> {
+impl<S: RunLocalBlockSink> RunLocalBlockWriter<S> {
+    fn new(mut sink: S) -> Self {
+        let first_block = sink.block_len();
+        let first_cluster = sink.cluster_len();
+        let (pending_block_rows, pending_cluster_rows, pending_block_clusters) =
+            sink.take_pending();
+        Self {
+            sink,
+            first_block,
+            first_cluster,
+            pending_block_rows,
+            pending_cluster_rows,
+            pending_block_clusters,
+            block_cursor: 0.0,
+            block_envelope: None,
+            cluster_open: false,
+        }
+    }
+
     pub(crate) fn begin_cluster(&mut self) -> Result<(), RunLocalBuildError> {
-        if !self.arena.pending_cluster_rows.is_empty() || self.cluster_open {
+        if !self.pending_cluster_rows.is_empty() || self.cluster_open {
             return Err(RunLocalBuildError::InvalidSource);
         }
         // Source-relative chunk boundaries are identical for cold and retained builds.
         // Envelope precision splits remain free to subdivide each chunk.
         let ordinal = self
-            .arena
-            .cluster_blocks
-            .len()
+            .sink
+            .cluster_len()
             .checked_sub(self.first_cluster)
-            .and_then(|count| count.checked_add(self.arena.pending_block_clusters.len()))
+            .and_then(|count| count.checked_add(self.pending_block_clusters.len()))
             .ok_or(RunLocalBuildError::AllocationFailed)?;
         if ordinal != 0 && ordinal % LAYOUT_CHUNK == 0 {
             self.finalize_block()?;
@@ -176,15 +456,11 @@ impl RunLocalWriter<'_> {
     }
 
     pub(crate) fn push_detached_cluster(&mut self) -> Result<(), RunLocalBuildError> {
-        if self.cluster_open || !self.arena.pending_cluster_rows.is_empty() {
+        if self.cluster_open || !self.pending_cluster_rows.is_empty() {
             return Err(RunLocalBuildError::InvalidSource);
         }
         self.finalize_block()?;
-        reserve(&mut self.arena.cluster_blocks, 1)?;
-        reserve(&mut self.arena.cluster_prefixes, 1)?;
-        self.arena.cluster_blocks.push(u32::MAX);
-        self.arena.cluster_prefixes.push(0.0);
-        Ok(())
+        self.sink.detached_cluster()
     }
 
     pub(crate) fn push_glyph(
@@ -208,8 +484,8 @@ impl RunLocalWriter<'_> {
                 ),
                 None => (0.0, block_origin, 0.0, 0.0),
             };
-        reserve(&mut self.arena.pending_cluster_rows, 1)?;
-        self.arena.pending_cluster_rows.push(RawGlyph {
+        reserve(&mut self.pending_cluster_rows, 1)?;
+        self.pending_cluster_rows.push(RawGlyph {
             source_glyph: input.source_glyph,
             raw_advance: advance,
             x_offset,
@@ -235,16 +511,16 @@ impl RunLocalWriter<'_> {
         let combined = self
             .block_envelope
             .map_or(shifted, |current| current.union(shifted));
-        if self.arena.pending_cluster_rows.is_empty() {
+        if self.pending_cluster_rows.is_empty() {
             if combined.admitted() {
                 self.block_envelope = Some(combined);
-                reserve(&mut self.arena.pending_block_clusters, 1)?;
-                self.arena.pending_block_clusters.push(PendingCluster {
+                reserve(&mut self.pending_block_clusters, 1)?;
+                self.pending_block_clusters.push(PendingCluster {
                     block_local_prefix: self.block_cursor,
                 });
                 self.block_cursor =
                     replay_finish_cursor(self.block_cursor, self.block_cursor, finish)?;
-            } else if self.arena.pending_block_rows.is_empty() {
+            } else if self.pending_block_rows.is_empty() {
                 self.block_envelope = None;
                 self.block_cursor = 0.0;
                 self.push_detached_cluster()?;
@@ -265,20 +541,18 @@ impl RunLocalWriter<'_> {
         } else {
             self.block_envelope = Some(combined);
         }
-        reserve(&mut self.arena.pending_block_clusters, 1)?;
-        self.arena.pending_block_clusters.push(PendingCluster {
+        reserve(&mut self.pending_block_clusters, 1)?;
+        self.pending_block_clusters.push(PendingCluster {
             block_local_prefix: self.block_cursor,
         });
         reserve(
-            &mut self.arena.pending_block_rows,
-            self.arena.pending_cluster_rows.len(),
+            &mut self.pending_block_rows,
+            self.pending_cluster_rows.len(),
         )?;
         let cluster_root = self.block_cursor;
         let mut replay_cursor = cluster_root;
-        for row in self.arena.pending_cluster_rows.drain(..) {
-            self.arena
-                .pending_block_rows
-                .push(row.place(&mut replay_cursor)?);
+        for row in self.pending_cluster_rows.drain(..) {
+            self.pending_block_rows.push(row.place(&mut replay_cursor)?);
         }
         self.block_cursor = replay_finish_cursor(cluster_root, replay_cursor, finish)?;
         if !self.block_cursor.is_finite() {
@@ -294,7 +568,7 @@ impl RunLocalWriter<'_> {
     ) -> Result<Envelope, RunLocalBuildError> {
         let mut cursor = root;
         let mut envelope = Envelope::point(root);
-        for row in &self.arena.pending_cluster_rows {
+        for row in &self.pending_cluster_rows {
             let origin = cursor + row.x_offset;
             let ink_start = origin + row.ink_inline_offset;
             envelope.include_inline(cursor)?;
@@ -312,14 +586,13 @@ impl RunLocalWriter<'_> {
     }
 
     pub(crate) fn finish(mut self) -> Result<NumericBlockSpan, RunLocalBuildError> {
-        if !self.arena.pending_cluster_rows.is_empty() || self.cluster_open {
+        if !self.pending_cluster_rows.is_empty() || self.cluster_open {
             return Err(RunLocalBuildError::InvalidSource);
         }
         self.finalize_block()?;
         let count = self
-            .arena
-            .blocks
-            .len()
+            .sink
+            .block_len()
             .checked_sub(self.first_block)
             .ok_or(RunLocalBuildError::InvalidSource)?;
         Ok(NumericBlockSpan {
@@ -329,9 +602,8 @@ impl RunLocalWriter<'_> {
             cluster_start: u32::try_from(self.first_cluster)
                 .map_err(|_| RunLocalBuildError::AllocationFailed)?,
             cluster_count: u32::try_from(
-                self.arena
-                    .cluster_blocks
-                    .len()
+                self.sink
+                    .cluster_len()
                     .checked_sub(self.first_cluster)
                     .ok_or(RunLocalBuildError::InvalidSource)?,
             )
@@ -343,12 +615,9 @@ impl RunLocalWriter<'_> {
         let Some(envelope) = self.block_envelope.take() else {
             return Ok(());
         };
-        if self.arena.pending_block_rows.is_empty() {
-            for _ in self.arena.pending_block_clusters.drain(..) {
-                reserve(&mut self.arena.cluster_blocks, 1)?;
-                reserve(&mut self.arena.cluster_prefixes, 1)?;
-                self.arena.cluster_blocks.push(u32::MAX);
-                self.arena.cluster_prefixes.push(0.0);
+        if self.pending_block_rows.is_empty() {
+            for _ in self.pending_block_clusters.drain(..) {
+                self.sink.detached_cluster()?;
             }
             self.block_cursor = 0.0;
             return Ok(());
@@ -356,57 +625,131 @@ impl RunLocalWriter<'_> {
         if !envelope.admitted() {
             return Err(RunLocalBuildError::LocalGeometryOutOfRange);
         }
+        self.sink.block(
+            &mut self.pending_block_rows,
+            &mut self.pending_block_clusters,
+            envelope,
+        )?;
+        self.block_cursor = 0.0;
+        Ok(())
+    }
+}
+
+impl<S: RunLocalBlockSink> Drop for RunLocalBlockWriter<S> {
+    fn drop(&mut self) {
+        self.sink.recycle_pending(
+            core::mem::take(&mut self.pending_block_rows),
+            core::mem::take(&mut self.pending_cluster_rows),
+            core::mem::take(&mut self.pending_block_clusters),
+        );
+    }
+}
+
+impl RunLocalBlockSink for GeneralSink<'_> {
+    fn block_len(&self) -> usize {
+        self.0.blocks.len()
+    }
+    fn cluster_len(&self) -> usize {
+        self.0.cluster_blocks.len()
+    }
+    fn row_len(&self) -> usize {
+        self.0.rows.len()
+    }
+
+    fn take_pending(&mut self) -> (Vec<PendingGlyph>, Vec<RawGlyph>, Vec<PendingCluster>) {
+        (
+            core::mem::take(&mut self.0.pending_block_rows),
+            core::mem::take(&mut self.0.pending_cluster_rows),
+            core::mem::take(&mut self.0.pending_block_clusters),
+        )
+    }
+
+    fn recycle_pending(
+        &mut self,
+        mut rows: Vec<PendingGlyph>,
+        mut raw: Vec<RawGlyph>,
+        mut clusters: Vec<PendingCluster>,
+    ) {
+        rows.clear();
+        raw.clear();
+        clusters.clear();
+        self.0.pending_block_rows = rows;
+        self.0.pending_cluster_rows = raw;
+        self.0.pending_block_clusters = clusters;
+    }
+
+    fn detached_cluster(&mut self) -> Result<(), RunLocalBuildError> {
+        reserve(&mut self.0.cluster_blocks, 1)?;
+        reserve(&mut self.0.cluster_prefixes, 1)?;
+        self.0.cluster_blocks.push(u32::MAX);
+        self.0.cluster_prefixes.push(0.0);
+        Ok(())
+    }
+
+    fn block(
+        &mut self,
+        rows: &mut Vec<PendingGlyph>,
+        clusters: &mut Vec<PendingCluster>,
+        envelope: Envelope,
+    ) -> Result<(), RunLocalBuildError> {
         let anchor_inline = envelope.midpoint_inline()?;
         let anchor_block = envelope.midpoint_block()?;
-        let block_index = u32::try_from(self.arena.blocks.len())
-            .map_err(|_| RunLocalBuildError::AllocationFailed)?;
-        let row_start = u32::try_from(self.arena.rows.len())
-            .map_err(|_| RunLocalBuildError::AllocationFailed)?;
-        reserve(&mut self.arena.rows, self.arena.pending_block_rows.len())?;
+        let block_index =
+            u32::try_from(self.block_len()).map_err(|_| RunLocalBuildError::AllocationFailed)?;
+        let row_start =
+            u32::try_from(self.row_len()).map_err(|_| RunLocalBuildError::AllocationFailed)?;
+        reserve(&mut self.0.rows, rows.len())?;
         let mut source_glyph_start = u32::MAX;
         let mut source_glyph_end = 0_u32;
-        for row in self.arena.pending_block_rows.drain(..) {
+        for row in rows.drain(..) {
             source_glyph_start = source_glyph_start.min(row.source_glyph);
             source_glyph_end = source_glyph_end.max(
                 row.source_glyph
                     .checked_add(1)
                     .ok_or(RunLocalBuildError::AllocationFailed)?,
             );
-            let source_glyph = usize::try_from(row.source_glyph)
+            let source_index = usize::try_from(row.source_glyph)
                 .map_err(|_| RunLocalBuildError::AllocationFailed)?;
-            if self.arena.source_rows.len() <= source_glyph {
-                let additional = source_glyph + 1 - self.arena.source_rows.len();
-                reserve(&mut self.arena.source_rows, additional)?;
-                self.arena.source_rows.resize(source_glyph + 1, u32::MAX);
+            if self.0.source_rows.len() <= source_index {
+                let additional = source_index + 1 - self.0.source_rows.len();
+                reserve(&mut self.0.source_rows, additional)?;
+                self.0.source_rows.resize(source_index + 1, u32::MAX);
             }
-            if self.arena.source_rows[source_glyph] != u32::MAX {
+            if self.0.source_rows[source_index] != u32::MAX {
                 return Err(RunLocalBuildError::InvalidSource);
             }
-            let row_index = u32::try_from(self.arena.rows.len())
+            let word_index = source_index / 64;
+            if self.0.source_words.len() <= word_index {
+                let additional = word_index + 1 - self.0.source_words.len();
+                reserve(&mut self.0.source_words, additional)?;
+                self.0
+                    .source_words
+                    .resize(word_index + 1, SourceWord::default());
+            }
+            let row_index = u32::try_from(self.0.rows.len())
                 .map_err(|_| RunLocalBuildError::AllocationFailed)?;
-            self.arena.source_rows[source_glyph] = row_index;
-            self.arena
-                .rows
-                .push(row.finish(block_index, anchor_inline, anchor_block)?);
+            let source_bit = 1_u64 << (row.source_glyph % 64);
+            let local = row.finish(block_index, anchor_inline, anchor_block)?;
+            let word = &mut self.0.source_words[word_index];
+            word.covered |= source_bit;
+            if local.has_outline {
+                word.outlined |= source_bit;
+            }
+            self.0.source_rows[source_index] = row_index;
+            self.0.rows.push(local);
         }
-        let row_count = u32::try_from(self.arena.rows.len())
+        let row_count = u32::try_from(self.0.rows.len())
             .map_err(|_| RunLocalBuildError::AllocationFailed)?
             .checked_sub(row_start)
             .ok_or(RunLocalBuildError::InvalidSource)?;
-        reserve(
-            &mut self.arena.cluster_blocks,
-            self.arena.pending_block_clusters.len(),
-        )?;
-        reserve(
-            &mut self.arena.cluster_prefixes,
-            self.arena.pending_block_clusters.len(),
-        )?;
-        for cluster in self.arena.pending_block_clusters.drain(..) {
-            self.arena.cluster_blocks.push(block_index);
-            self.arena.cluster_prefixes.push(cluster.block_local_prefix);
+        reserve(&mut self.0.cluster_blocks, clusters.len())?;
+        reserve(&mut self.0.cluster_prefixes, clusters.len())?;
+        for cluster in clusters.drain(..) {
+            self.0.cluster_blocks.push(block_index);
+            self.0.cluster_prefixes.push(cluster.block_local_prefix);
         }
-        reserve(&mut self.arena.blocks, 1)?;
-        self.arena.blocks.push(NumericBlock {
+        reserve(&mut self.0.blocks, 1)?;
+        self.0.blocks.push(NumericBlock {
             source_glyph_start,
             source_glyph_count: source_glyph_end
                 .checked_sub(source_glyph_start)
@@ -416,13 +759,134 @@ impl RunLocalWriter<'_> {
             anchor_inline,
             anchor_block,
         });
-        self.block_cursor = 0.0;
+        Ok(())
+    }
+}
+
+impl<T, F> RunLocalBlockSink for CompactSink<'_, T, F>
+where
+    F: FnMut(u32, u32, RunLocalGlyph) -> Result<T, RunLocalBuildError>,
+{
+    fn block_len(&self) -> usize {
+        self.compact.blocks.len()
+    }
+    fn cluster_len(&self) -> usize {
+        self.compact.cluster_blocks.len()
+    }
+    fn row_len(&self) -> usize {
+        self.compact.row_count as usize
+    }
+
+    fn take_pending(&mut self) -> (Vec<PendingGlyph>, Vec<RawGlyph>, Vec<PendingCluster>) {
+        (
+            core::mem::take(&mut self.compact.pending_block_rows),
+            core::mem::take(&mut self.compact.pending_cluster_rows),
+            core::mem::take(&mut self.compact.pending_block_clusters),
+        )
+    }
+
+    fn recycle_pending(
+        &mut self,
+        mut rows: Vec<PendingGlyph>,
+        mut raw: Vec<RawGlyph>,
+        mut clusters: Vec<PendingCluster>,
+    ) {
+        rows.clear();
+        raw.clear();
+        clusters.clear();
+        self.compact.pending_block_rows = rows;
+        self.compact.pending_cluster_rows = raw;
+        self.compact.pending_block_clusters = clusters;
+    }
+
+    fn detached_cluster(&mut self) -> Result<(), RunLocalBuildError> {
+        if self.cluster_len() >= LAYOUT_CHUNK {
+            return Err(RunLocalBuildError::InvalidSource);
+        }
+        reserve(&mut self.compact.cluster_blocks, 1)?;
+        reserve(&mut self.compact.cluster_prefixes, 1)?;
+        self.compact.cluster_blocks.push(u32::MAX);
+        self.compact.cluster_prefixes.push(0.0);
+        Ok(())
+    }
+
+    fn block(
+        &mut self,
+        rows: &mut Vec<PendingGlyph>,
+        clusters: &mut Vec<PendingCluster>,
+        envelope: Envelope,
+    ) -> Result<(), RunLocalBuildError> {
+        let anchor_inline = envelope.midpoint_inline()?;
+        let anchor_block = envelope.midpoint_block()?;
+        let block_index =
+            u32::try_from(self.block_len()).map_err(|_| RunLocalBuildError::AllocationFailed)?;
+        let row_start = self.compact.row_count;
+        let row_count =
+            u32::try_from(rows.len()).map_err(|_| RunLocalBuildError::AllocationFailed)?;
+        let end_count = row_start
+            .checked_add(row_count)
+            .ok_or(RunLocalBuildError::AllocationFailed)?;
+        if end_count > LAYOUT_CHUNK as u32
+            || self
+                .cluster_len()
+                .checked_add(clusters.len())
+                .ok_or(RunLocalBuildError::AllocationFailed)?
+                > LAYOUT_CHUNK
+        {
+            return Err(RunLocalBuildError::InvalidSource);
+        }
+        let mut source_glyph_start = u32::MAX;
+        let mut source_glyph_end = 0_u32;
+        for row in rows.drain(..) {
+            source_glyph_start = source_glyph_start.min(row.source_glyph);
+            source_glyph_end = source_glyph_end.max(
+                row.source_glyph
+                    .checked_add(1)
+                    .ok_or(RunLocalBuildError::AllocationFailed)?,
+            );
+            let source_index = usize::try_from(row.source_glyph)
+                .map_err(|_| RunLocalBuildError::AllocationFailed)?;
+            if source_index >= LAYOUT_CHUNK {
+                return Err(RunLocalBuildError::InvalidSource);
+            }
+            if self.compact.rows.len() <= source_index {
+                let additional = source_index + 1 - self.compact.rows.len();
+                reserve(&mut self.compact.rows, additional)?;
+                self.compact.rows.resize_with(source_index + 1, || None);
+            }
+            if self.compact.rows[source_index].is_some() {
+                return Err(RunLocalBuildError::InvalidSource);
+            }
+            let local = row.finish(block_index, anchor_inline, anchor_block)?;
+            self.compact.rows[source_index] =
+                Some((self.map)(row.source_glyph, block_index, local)?);
+        }
+        reserve(&mut self.compact.cluster_blocks, clusters.len())?;
+        reserve(&mut self.compact.cluster_prefixes, clusters.len())?;
+        for cluster in clusters.drain(..) {
+            self.compact.cluster_blocks.push(block_index);
+            self.compact
+                .cluster_prefixes
+                .push(cluster.block_local_prefix);
+        }
+        reserve(&mut self.compact.blocks, 1)?;
+        self.compact.blocks.push(NumericBlock {
+            source_glyph_start,
+            source_glyph_count: source_glyph_end
+                .checked_sub(source_glyph_start)
+                .ok_or(RunLocalBuildError::InvalidSource)?,
+            row_start,
+            row_count,
+            anchor_inline,
+            anchor_block,
+        });
+        self.compact.row_count = end_count;
         Ok(())
     }
 }
 
 #[derive(Clone, Copy)]
-struct RawGlyph {
+pub(crate) struct RawGlyph {
     source_glyph: u32,
     raw_advance: f64,
     x_offset: f64,
@@ -435,7 +899,7 @@ struct RawGlyph {
 }
 
 #[derive(Clone, Copy)]
-struct PendingGlyph {
+pub(crate) struct PendingGlyph {
     source_glyph: u32,
     #[cfg(any(test, feature = "kernel-lab"))]
     pen_inline: f64,
@@ -450,7 +914,7 @@ struct PendingGlyph {
 }
 
 #[derive(Clone, Copy)]
-struct PendingCluster {
+pub(crate) struct PendingCluster {
     block_local_prefix: f64,
 }
 
@@ -535,7 +999,7 @@ fn replay_finish_cursor(
 }
 
 #[derive(Clone, Copy)]
-struct Envelope {
+pub(crate) struct Envelope {
     min_inline: f64,
     max_inline: f64,
     block: Option<(f64, f64)>,
@@ -635,6 +1099,91 @@ fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), RunLocalBuil
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn compact_sink_matches_general_bits_through_precision_split_and_source_reorder() {
+        fn feed<S: RunLocalBlockSink>(mut writer: RunLocalBlockWriter<S>) -> NumericBlockSpan {
+            for (ordinal, source) in [2, 0, 3, 1].into_iter().enumerate() {
+                writer.begin_cluster().unwrap();
+                let mut input = glyph(source, if ordinal == 0 { 8_000 } else { 1_000 });
+                if ordinal == 1 {
+                    input.x_offset = -1_000;
+                }
+                if ordinal == 2 {
+                    input.baseline_shift = -0.5;
+                    input.y_offset = -3;
+                    input.scale = 0.25;
+                    input.outline = None;
+                }
+                if ordinal == 3 {
+                    input.x_offset = 1;
+                    input.scale = 0.5;
+                }
+                writer.push_glyph(input).unwrap();
+                writer
+                    .finish_cluster(ClusterFinish::Resync(if ordinal == 0 {
+                        -8_000.0
+                    } else {
+                        1_000.0
+                    }))
+                    .unwrap();
+            }
+            writer.finish().unwrap()
+        }
+
+        let mut general = RunLocalArena::default();
+        let mut compact = RunLocalCompact::<RunLocalGlyph>::default();
+        assert_eq!(
+            feed(general.begin_run()),
+            feed(compact.begin_run(|_, _, local| Ok(local)))
+        );
+        assert_eq!(general.blocks().len(), 2);
+        assert_eq!(general.blocks().len(), compact.blocks().len());
+        for (left, right) in general.blocks().iter().zip(compact.blocks()) {
+            assert_eq!(left.source_glyph_start, right.source_glyph_start);
+            assert_eq!(left.source_glyph_count, right.source_glyph_count);
+            assert_eq!(left.row_start, right.row_start);
+            assert_eq!(left.row_count, right.row_count);
+            assert_eq!(left.anchor_inline.to_bits(), right.anchor_inline.to_bits());
+            assert_eq!(left.anchor_block.to_bits(), right.anchor_block.to_bits());
+        }
+        assert_eq!(general.cluster_blocks(), compact.cluster_blocks());
+        for (left, right) in general
+            .cluster_prefixes()
+            .iter()
+            .zip(compact.cluster_prefixes())
+        {
+            assert_eq!(left.to_bits(), right.to_bits());
+        }
+        for source in 0..4 {
+            let left = general.row_for_source_glyph(source).unwrap();
+            let right = compact.row_for_source_glyph(source).unwrap();
+            assert_eq!(left.inline_origin.to_bits(), right.inline_origin.to_bits());
+            assert_eq!(left.block_origin.to_bits(), right.block_origin.to_bits());
+            assert_eq!(
+                left.inline_advance.to_bits(),
+                right.inline_advance.to_bits()
+            );
+            assert_eq!(
+                left.ink_inline_start.to_bits(),
+                right.ink_inline_start.to_bits()
+            );
+            assert_eq!(
+                left.ink_block_start.to_bits(),
+                right.ink_block_start.to_bits()
+            );
+            assert_eq!(
+                left.ink_inline_extent.to_bits(),
+                right.ink_inline_extent.to_bits()
+            );
+            assert_eq!(
+                left.ink_block_extent.to_bits(),
+                right.ink_block_extent.to_bits()
+            );
+            assert_eq!(left.has_outline, right.has_outline);
+        }
+        assert!(compact.row_for_source_glyph(4).is_none());
+    }
 
     fn glyph(source_glyph: u32, advance: i32) -> RunLocalGlyphInput {
         RunLocalGlyphInput {
@@ -967,16 +1516,56 @@ mod tests {
         let mut source_order = arena.begin_run();
         for source_glyph in [2, 3] {
             source_order.begin_cluster().unwrap();
-            source_order.push_glyph(glyph(source_glyph, 1)).unwrap();
+            let mut row = glyph(source_glyph, 1);
+            if source_glyph == 2 {
+                row.outline = None;
+            }
+            source_order.push_glyph(row).unwrap();
             source_order
                 .finish_cluster(ClusterFinish::Resync(1.0))
                 .unwrap();
         }
         source_order.finish().unwrap();
+        arena.finalize_source_ranks().unwrap();
 
         assert_eq!(arena.row_for_source_glyph(0).unwrap().source_glyph, 0);
         assert_eq!(arena.row_for_source_glyph(1).unwrap().source_glyph, 1);
         assert_eq!(arena.row_for_source_order_glyph(2).unwrap().source_glyph, 2);
         assert_eq!(arena.row_for_source_order_glyph(3).unwrap().source_glyph, 3);
+        assert_eq!(arena.source_range_counts(0, 2), Some((2, 2)));
+        assert_eq!(arena.source_range_counts(1, 3), Some((3, 2)));
+        assert_eq!(arena.source_range_counts(2, 1), Some((1, 0)));
+        assert_eq!(arena.source_range_counts(4, 1), Some((0, 0)));
+        assert_eq!(arena.same_outline_pattern(0, &arena, 0, 4), Some(true));
+        assert_eq!(arena.same_outline_pattern(0, &arena, 1, 3), Some(false));
+    }
+
+    #[test]
+    fn source_rank_covers_sparse_out_of_order_rows_across_word_edges() {
+        let build = |order: [u32; 3], absent: u32| {
+            let mut arena = RunLocalArena::default();
+            let mut writer = arena.begin_run();
+            for source_glyph in order {
+                writer.begin_cluster().unwrap();
+                let mut row = glyph(source_glyph, 1);
+                if source_glyph == absent {
+                    row.outline = None;
+                }
+                writer.push_glyph(row).unwrap();
+                writer.finish_cluster(ClusterFinish::Resync(1.0)).unwrap();
+            }
+            writer.finish().unwrap();
+            arena.finalize_source_ranks().unwrap();
+            arena
+        };
+        let old = build([65, 63, 64], 64);
+        let shifted = build([66, 64, 65], 65);
+        let changed = build([66, 64, 65], 66);
+        assert_eq!(old.source_range_counts(0, 63), Some((0, 0)));
+        assert_eq!(old.source_range_counts(63, 3), Some((3, 2)));
+        assert_eq!(old.source_range_counts(62, 3), Some((2, 1)));
+        assert_eq!(old.source_range_counts(64, 3), Some((2, 1)));
+        assert_eq!(old.same_outline_pattern(63, &shifted, 64, 3), Some(true));
+        assert_eq!(old.same_outline_pattern(63, &changed, 64, 3), Some(false));
     }
 }

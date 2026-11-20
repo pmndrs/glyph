@@ -916,7 +916,7 @@ fn propagate_dependencies(
     Ok(())
 }
 
-fn f32_input_dependency(source: InputSource) -> u16 {
+pub(crate) fn f32_input_dependency(source: InputSource) -> u16 {
     if source.scope != InputScope::Semantic {
         return 0;
     }
@@ -929,7 +929,7 @@ fn f32_input_dependency(source: InputSource) -> u16 {
     }
 }
 
-fn u32_input_dependency(source: InputSource) -> u16 {
+pub(crate) fn u32_input_dependency(source: InputSource) -> u16 {
     if source.scope != InputScope::Semantic {
         return 0;
     }

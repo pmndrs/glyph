@@ -286,19 +286,6 @@ impl PlacementState {
         self.segments.len()
     }
 
-    #[cfg(test)]
-    pub(crate) fn glyph_translation(&self, glyph_index: usize) -> Option<SegmentTranslation> {
-        let mut instance_start = 0usize;
-        for (segment, &count) in self.segment_instance_counts.iter().enumerate() {
-            let instance_end = instance_start.checked_add(usize::try_from(count).ok()?)?;
-            if glyph_index < instance_end {
-                return self.translations.get(segment).copied();
-            }
-            instance_start = instance_end;
-        }
-        None
-    }
-
     pub(crate) fn finish_line(&mut self, start: usize) -> Result<(), EngineError> {
         let segments = span_record(start, self.segments.len())?;
         self.reserve_line_record()?;
@@ -458,6 +445,7 @@ impl PlacementState {
         Ok(())
     }
 
+    #[cfg(test)]
     pub(crate) fn append_retained_line(
         &mut self,
         previous: &Self,
@@ -466,14 +454,38 @@ impl PlacementState {
         replacement_runs: &[LayoutRun],
         correspondence: Option<RetainedRunCorrespondence<'_>>,
     ) -> Result<RetainedSegmentRemap, EngineError> {
-        let checkpoint = self.checkpoint();
-        let result = self.append_retained_line_inner(
+        self.append_retained_line_validated(
             previous,
             retained,
             layout_runs,
             replacement_runs,
             correspondence,
-        );
+            |_, _| Ok(()),
+        )
+        .map(|(remap, ())| remap)
+    }
+
+    /// Runs the caller's source proof while the placement append can still roll back.
+    /// A rejected proof recomputes the line before either glyph rows or spans are copied.
+    pub(crate) fn append_retained_line_validated<T>(
+        &mut self,
+        previous: &Self,
+        retained: RetainedLinePlacement,
+        layout_runs: &[LayoutRun],
+        replacement_runs: &[LayoutRun],
+        correspondence: Option<RetainedRunCorrespondence<'_>>,
+        validate: impl FnOnce(&Self, RetainedSegmentRemap) -> Result<T, EngineError>,
+    ) -> Result<(RetainedSegmentRemap, T), EngineError> {
+        let checkpoint = self.checkpoint();
+        let result = self
+            .append_retained_line_inner(
+                previous,
+                retained,
+                layout_runs,
+                replacement_runs,
+                correspondence,
+            )
+            .and_then(|remap| validate(self, remap).map(|value| (remap, value)));
         if result.is_err() {
             self.restore(checkpoint);
         }

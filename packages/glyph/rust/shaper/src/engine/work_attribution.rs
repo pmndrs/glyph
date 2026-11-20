@@ -12,6 +12,17 @@ pub(crate) struct CodecRunCountBin {
 pub(crate) struct Work {
     pub harfrust_calls: usize,
     pub harfrust_utf16_units: usize,
+    /// Separate first-use, fixed-size HarfRust nominal bootstrap; not a timed item.
+    pub ascii_nominal_bootstrap_calls: usize,
+    pub ascii_nominal_bootstrap_utf16_units: usize,
+    /// Producer-specific counts within the inclusive HarfRust meter.
+    pub ascii_anchor_item_calls: usize,
+    pub ascii_anchor_item_utf16_units: usize,
+    pub ascii_anchor_splice_successes: usize,
+    pub main_full_run_shape_calls: usize,
+    pub main_full_run_shape_utf16_units: usize,
+    pub incremental_window_shape_calls: usize,
+    pub incremental_window_shape_utf16_units: usize,
     /// Completed whole scratch-to-pending ShapeArena ownership transfers.
     pub shape_scratch_arena_moves: usize,
     /// Glyph rows transferred with those arenas; no glyph payload is copied.
@@ -25,8 +36,29 @@ pub(crate) struct Work {
     pub cluster_full_glyph_visits: usize,
     pub cluster_retained_glyph_loop_visits: usize,
     pub run_local_glyph_visits: usize,
+    /// Current clusters entered by the positioned occurrence producer (C).
+    pub positioned_cluster_visits: usize,
+    /// Current boundary glyphs entered by the occurrence producer (S boundary).
+    pub positioned_boundary_glyph_visits: usize,
+    /// Span append attempts, before adjacent spans merge (P producer work).
+    pub occurrence_span_append_attempts: usize,
+    /// Accepted prior spans inspected during clean-line copy proof (P retained work).
+    pub retained_occurrence_span_visits: usize,
+    /// Source-outline word comparisons in retained clean-line admission.
+    pub retained_outline_word_comparisons: usize,
+    /// Rows projected by the shared semantic/outlined source kernel (S or selected O).
+    pub occurrence_projection_rows: usize,
+    /// Outlined marks emitted by a cursor, including unselected split marks (O).
+    pub outlined_mark_visits: usize,
+    /// Cluster ranges entered while streaming outlined marks, including a seek's first cluster.
+    pub outlined_cluster_visits: usize,
+    /// Cluster rank probes made while locating a discontinuous outlined seek target.
+    pub outlined_seek_cluster_probes: usize,
     pub recomposed_flow_lines: usize,
-    /// Masks examined by the retained in-place gather decision, excluding rebuilt records.
+    /// Retained selected-record masks: Flat observes supplied masks at the decision;
+    /// Projected observes resulting masks after a successfully staged in-place write.
+    /// Fresh append writes and recordless rows do not contribute; a Flat decision
+    /// that later requests rebuild may contribute. Zero masks add zero bits.
     pub gather_mask_bits: usize,
     pub gather_mask_bit_counts: [usize; 16],
     pub gather_all_masks: usize,
@@ -66,6 +98,8 @@ pub(crate) struct Work {
     pub retained_stable_id_mismatches: usize,
     pub gather_f32_reads: usize,
     pub gather_u32_reads: usize,
+    /// Declared selected-record registers compared with accepted columns (visited R * F).
+    pub gather_projected_register_compares: usize,
     pub gather_f32_default_fills: usize,
     pub gather_u32_default_fills: usize,
     pub gather_f32_slots_written: usize,
@@ -142,6 +176,22 @@ pub(crate) struct Work {
     pub gather_output_selected_rows: usize,
     /// Accepted positioned source count at a successful gather handoff, not rows visited.
     pub prepared_positioned_source_rows: usize,
+    /// Retired eager semantic-row storage diagnostic; no canonical producer writes it.
+    pub positioned_semantic_source_rows: usize,
+    /// Retired eager outlined-locator diagnostic; no canonical producer writes it.
+    pub positioned_outlined_source_rows: usize,
+    /// Semantic occurrences represented by canonical spans, a total rather than a visit count.
+    pub positioned_semantic_occurrences: usize,
+    /// Outlined occurrences represented by canonical spans, a total rather than a visit count.
+    pub positioned_outlined_occurrences: usize,
+    /// Physical canonical span rows retained after adjacent-span merging.
+    pub positioned_occurrence_spans: usize,
+    /// Span payload bytes, excluding Vec spare capacity.
+    pub positioned_occurrence_span_payload_bytes: usize,
+    /// Allocated span-buffer bytes, including reusable spare capacity.
+    pub positioned_occurrence_span_capacity_bytes: usize,
+    /// Eager AoS/SoA render intermediate writes; projected source should leave this at zero.
+    pub eager_render_intermediate_writes: usize,
     pub retained_storage_match_batch_visits: usize,
     pub ordered_instance_rewrites: usize,
     pub ordered_instance_comparisons: usize,
@@ -154,6 +204,15 @@ std::thread_local! {
     static WORK: Cell<Work> = const { Cell::new(Work {
         harfrust_calls: 0,
         harfrust_utf16_units: 0,
+        ascii_nominal_bootstrap_calls: 0,
+        ascii_nominal_bootstrap_utf16_units: 0,
+        ascii_anchor_item_calls: 0,
+        ascii_anchor_item_utf16_units: 0,
+        ascii_anchor_splice_successes: 0,
+        main_full_run_shape_calls: 0,
+        main_full_run_shape_utf16_units: 0,
+        incremental_window_shape_calls: 0,
+        incremental_window_shape_utf16_units: 0,
         shape_scratch_arena_moves: 0,
         shape_scratch_moved_glyphs: 0,
         shape_range_copied_glyphs: 0,
@@ -162,6 +221,15 @@ std::thread_local! {
         cluster_full_glyph_visits: 0,
         cluster_retained_glyph_loop_visits: 0,
         run_local_glyph_visits: 0,
+        positioned_cluster_visits: 0,
+        positioned_boundary_glyph_visits: 0,
+        occurrence_span_append_attempts: 0,
+        retained_occurrence_span_visits: 0,
+        retained_outline_word_comparisons: 0,
+        occurrence_projection_rows: 0,
+        outlined_mark_visits: 0,
+        outlined_cluster_visits: 0,
+        outlined_seek_cluster_probes: 0,
         recomposed_flow_lines: 0,
         gather_mask_bits: 0,
         gather_mask_bit_counts: [0; 16],
@@ -202,6 +270,7 @@ std::thread_local! {
         retained_stable_id_mismatches: 0,
         gather_f32_reads: 0,
         gather_u32_reads: 0,
+        gather_projected_register_compares: 0,
         gather_f32_default_fills: 0,
         gather_u32_default_fills: 0,
         gather_f32_slots_written: 0,
@@ -274,6 +343,14 @@ std::thread_local! {
         gather_output_source_rows: 0,
         gather_output_selected_rows: 0,
         prepared_positioned_source_rows: 0,
+        positioned_semantic_source_rows: 0,
+        positioned_outlined_source_rows: 0,
+        positioned_semantic_occurrences: 0,
+        positioned_outlined_occurrences: 0,
+        positioned_occurrence_spans: 0,
+        positioned_occurrence_span_payload_bytes: 0,
+        positioned_occurrence_span_capacity_bytes: 0,
+        eager_render_intermediate_writes: 0,
         retained_storage_match_batch_visits: 0,
         ordered_instance_rewrites: 0,
         ordered_instance_comparisons: 0,

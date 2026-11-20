@@ -5,7 +5,8 @@ use core::ops::Range;
 
 use super::{
     codec::{
-        CapabilitySetId, InputScope, MAX_REGISTERS, ProgramDescriptor, ValidatedCodec, low_bits,
+        CapabilitySetId, InputScope, MAX_REGISTERS, ProgramDescriptor, ValidatedCodec,
+        f32_input_dependency, low_bits, u32_input_dependency,
     },
     font_binding::{FontRenderBinding, SelectedGlyphBinding},
     frame::{
@@ -16,10 +17,16 @@ use super::{
         SEMANTIC_U32_FOREGROUND_RGBA, SEMANTIC_U32_OUTLINE_RGBA, SEMANTIC_U32_PLACEMENT_SLOT,
         SEMANTIC_U32_SHADOW_RGBA,
     },
+    inline_leaf::{InlineLeaf, InlineOutlinedCursor},
     placement_state::SegmentTranslation,
     plan_input::{PlanGlyph, PlanInput},
-    positioning::{ALL_SEMANTIC_CHANGES, PositionedSemanticGlyph, SEMANTIC_PLACEMENT_SLOT_CHANGE},
+    positioning::{
+        ALL_SEMANTIC_CHANGES, OutlinedOccurrenceCursor, OutlinedOccurrenceMark,
+        PositionedGlyphArena, PositionedSemanticGlyph, PositionedSourceContext, ProjectedSourceRow,
+        SEMANTIC_PLACEMENT_SLOT_CHANGE,
+    },
     retained_rope::{LEAF_CAPACITY, RetainedRope, RopeRecord, RopeSummary, RopeUpdate},
+    shaping_state::BoundaryShapeArena,
 };
 
 const POSITION_ONLY_CHANGES: u16 =
@@ -100,6 +107,344 @@ pub struct LayoutPlanInput<'a> {
     pub semantic_change_masks: &'a [u16],
     pub semantic_f32: &'a [&'a [f32]],
     pub semantic_u32: &'a [&'a [u32]],
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct ProjectedPlanInput<'a> {
+    pub transform_id: u32,
+    pub positioned: &'a PositionedGlyphArena,
+    pub context: PositionedSourceContext<'a>,
+    pub boundary: &'a BoundaryShapeArena,
+    /// Exact selected-only source marks for an independent copy; root gather streams all outlines.
+    pub selection: Option<&'a [OutlinedOccurrenceMark]>,
+    /// Original placement segments kept in sorted order for the copy's private slots.
+    pub copied_placement_segments: Option<&'a [u32]>,
+}
+
+/// Borrows final Inline rows. Selections contain source glyph indices, while retained
+/// intervals and fresh gather offsets count outlined ordinals.
+#[derive(Clone, Copy)]
+pub(crate) struct InlinePlanInput<'a> {
+    pub transform_id: u32,
+    pub leaf: &'a InlineLeaf,
+    pub styles: &'a [super::style_state::StyleSegment],
+    pub selection: Option<&'a [u32]>,
+    pub copied_placement_segments: Option<&'a [u32]>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum GatherInput<'a> {
+    Flat(LayoutPlanInput<'a>),
+    Projected(ProjectedPlanInput<'a>),
+    Inline(InlinePlanInput<'a>),
+}
+
+impl<'a> From<LayoutPlanInput<'a>> for GatherInput<'a> {
+    fn from(input: LayoutPlanInput<'a>) -> Self {
+        Self::Flat(input)
+    }
+}
+
+impl<'a> From<ProjectedPlanInput<'a>> for GatherInput<'a> {
+    fn from(input: ProjectedPlanInput<'a>) -> Self {
+        Self::Projected(input)
+    }
+}
+
+impl<'a> From<InlinePlanInput<'a>> for GatherInput<'a> {
+    fn from(input: InlinePlanInput<'a>) -> Self {
+        Self::Inline(input)
+    }
+}
+
+impl<'a> GatherInput<'a> {
+    fn len(self) -> usize {
+        match self {
+            Self::Flat(input) => input.glyphs.len(),
+            Self::Projected(input) => input.selection.map_or(
+                input.positioned.outlined_count(),
+                <[OutlinedOccurrenceMark]>::len,
+            ),
+            Self::Inline(input) => input
+                .selection
+                .map_or(input.leaf.outlined_count(), <[u32]>::len),
+        }
+    }
+
+    fn transform_id(self) -> u32 {
+        match self {
+            Self::Flat(input) => input.transform_id,
+            Self::Projected(input) => input.transform_id,
+            Self::Inline(input) => input.transform_id,
+        }
+    }
+
+    fn masks(self) -> &'a [u16] {
+        match self {
+            Self::Flat(input) => input.semantic_change_masks,
+            Self::Projected(_) | Self::Inline(_) => &[],
+        }
+    }
+
+    fn semantic_glyph(self, index: usize) -> Option<PositionedSemanticGlyph> {
+        match self {
+            Self::Flat(input) => input.semantic_glyphs.get(index).copied(),
+            Self::Projected(_) | Self::Inline(_) => None,
+        }
+    }
+
+    fn translation(self, index: usize) -> Option<SegmentTranslation> {
+        match self {
+            Self::Flat(input) => input.placement_translations.get(index).copied(),
+            Self::Projected(input) => input
+                .positioned
+                .placement_translations()
+                .get(index)
+                .copied(),
+            Self::Inline(input) => input.leaf.placement_translations().get(index).copied(),
+        }
+    }
+
+    fn row(self, index: usize) -> Result<GatherRow<'a>, GatherError> {
+        match self {
+            Self::Flat(input) => Ok(GatherRow {
+                input: self,
+                index,
+                glyph: *input
+                    .glyphs
+                    .get(index)
+                    .ok_or(GatherError::SourceFieldMissing)?,
+                projected: None,
+            }),
+            // Projected production callers use their own mutable stream cursor.
+            Self::Projected(_) | Self::Inline(_) => Err(GatherError::InvalidSemanticShape),
+        }
+    }
+}
+
+fn projected_gather_row<'a>(
+    source: GatherInput<'a>,
+    input: ProjectedPlanInput<'a>,
+    index: usize,
+    mark: OutlinedOccurrenceMark,
+) -> Result<GatherRow<'a>, GatherError> {
+    let occurrence = input
+        .positioned
+        .project_outlined_mark(mark, input.context.clusters, input.boundary)
+        .map_err(|_| GatherError::InvalidSemanticShape)?;
+    let placement_segment = usize::try_from(occurrence.semantic.placement_segment)
+        .map_err(|_| GatherError::InvalidSemanticShape)?;
+    let slot = if let Some(segments) = input.copied_placement_segments {
+        u32::try_from(
+            segments
+                .binary_search(&occurrence.semantic.placement_segment)
+                .map_err(|_| GatherError::InvalidSemanticShape)?,
+        )
+        .map_err(|_| GatherError::AllocationFailed)?
+    } else {
+        input
+            .positioned
+            .placement_handle(placement_segment)
+            .ok_or(GatherError::InvalidSemanticShape)?
+            .slot()
+            .get()
+    };
+    let mut projected = input
+        .positioned
+        .projected_occurrence_row(occurrence, mark.semantic_index, slot, input.context)
+        .map_err(|_| GatherError::InvalidSemanticShape)?;
+    if input.selection.is_some() {
+        projected.glyph.content_revision = 1;
+    }
+    Ok(GatherRow {
+        input: source,
+        index,
+        glyph: projected.glyph,
+        projected: Some(projected),
+    })
+}
+
+fn inline_gather_row<'a>(
+    source: GatherInput<'a>,
+    input: InlinePlanInput<'a>,
+    index: usize,
+    source_index: u32,
+) -> Result<GatherRow<'a>, GatherError> {
+    let semantic = input
+        .leaf
+        .row(source_index)
+        .filter(|row| row.has_outline)
+        .ok_or(GatherError::InvalidSemanticShape)?
+        .semantic;
+    let placement_segment = usize::try_from(semantic.placement_segment)
+        .map_err(|_| GatherError::InvalidSemanticShape)?;
+    let slot = if let Some(segments) = input.copied_placement_segments {
+        u32::try_from(
+            segments
+                .binary_search(&semantic.placement_segment)
+                .map_err(|_| GatherError::InvalidSemanticShape)?,
+        )
+        .map_err(|_| GatherError::AllocationFailed)?
+    } else {
+        input
+            .leaf
+            .placement_handle(placement_segment)
+            .ok_or(GatherError::InvalidSemanticShape)?
+            .slot()
+            .get()
+    };
+    // Inline admission proves LTR source order equals semantic occurrence order.
+    let mut projected = input
+        .leaf
+        .projected_source_row(source_index, source_index, slot, input.styles)
+        .map_err(|_| GatherError::InvalidSemanticShape)?;
+    if input.selection.is_some() {
+        projected.glyph.content_revision = 1;
+    }
+    Ok(GatherRow {
+        input: source,
+        index,
+        glyph: projected.glyph,
+        projected: Some(projected),
+    })
+}
+
+struct GatherInputCursor<'a> {
+    input: GatherInput<'a>,
+    outlined: Option<OutlinedOccurrenceCursor<'a>>,
+    inline_outlined: Option<InlineOutlinedCursor>,
+    next_index: usize,
+}
+
+impl<'a> GatherInputCursor<'a> {
+    fn new(input: GatherInput<'a>) -> Self {
+        let outlined = match input {
+            GatherInput::Projected(projected) if projected.selection.is_none() => Some(
+                projected
+                    .positioned
+                    .outlined_cursor(projected.context.clusters, projected.boundary),
+            ),
+            _ => None,
+        };
+        let inline_outlined = match input {
+            GatherInput::Inline(inline) if inline.selection.is_none() => {
+                Some(inline.leaf.outlined_sources())
+            }
+            _ => None,
+        };
+        Self {
+            input,
+            outlined,
+            inline_outlined,
+            next_index: 0,
+        }
+    }
+
+    fn inline_source_at(
+        &mut self,
+        index: usize,
+        selection: Option<&[u32]>,
+    ) -> Result<u32, GatherError> {
+        if let Some(selection) = selection {
+            return selection
+                .get(index)
+                .copied()
+                .ok_or(GatherError::SourceFieldMissing);
+        }
+        let outlined = self
+            .inline_outlined
+            .as_mut()
+            .ok_or(GatherError::InvalidSemanticShape)?;
+        if index < self.next_index {
+            return Err(GatherError::InvalidSemanticShape);
+        }
+        while self.next_index < index {
+            outlined.next().ok_or(GatherError::SourceFieldMissing)?;
+            self.next_index += 1;
+        }
+        self.next_index += 1;
+        outlined.next().ok_or(GatherError::SourceFieldMissing)
+    }
+
+    fn row_at(&mut self, index: usize) -> Result<GatherRow<'a>, GatherError> {
+        match self.input {
+            GatherInput::Flat(_) => self.input.row(index),
+            GatherInput::Projected(input) => {
+                let mark = if let Some(selection) = input.selection {
+                    *selection
+                        .get(index)
+                        .ok_or(GatherError::SourceFieldMissing)?
+                } else {
+                    let outlined = self
+                        .outlined
+                        .as_mut()
+                        .ok_or(GatherError::InvalidSemanticShape)?;
+                    if index < self.next_index {
+                        return Err(GatherError::InvalidSemanticShape);
+                    }
+                    if index != self.next_index {
+                        outlined
+                            .seek(index)
+                            .map_err(|_| GatherError::InvalidSemanticShape)?;
+                    }
+                    self.next_index = index + 1;
+                    outlined
+                        .next_mark()
+                        .map_err(|_| GatherError::InvalidSemanticShape)?
+                        .ok_or(GatherError::SourceFieldMissing)?
+                };
+                projected_gather_row(self.input, input, index, mark)
+            }
+            GatherInput::Inline(input) => {
+                let source_index = self.inline_source_at(index, input.selection)?;
+                inline_gather_row(self.input, input, index, source_index)
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct GatherRow<'a> {
+    input: GatherInput<'a>,
+    index: usize,
+    glyph: LayoutGlyph,
+    projected: Option<ProjectedSourceRow<'a>>,
+}
+
+impl GatherRow<'_> {
+    fn semantic_f32(self, field: usize) -> Result<f32, GatherError> {
+        match self.projected {
+            Some(row) => row.f32(field).ok_or(GatherError::SourceFieldMissing),
+            None => match self.input {
+                GatherInput::Flat(input) => input
+                    .semantic_f32
+                    .get(field)
+                    .and_then(|values| values.get(self.index))
+                    .copied()
+                    .ok_or(GatherError::SourceFieldMissing),
+                GatherInput::Projected(_) | GatherInput::Inline(_) => {
+                    Err(GatherError::InvalidSemanticShape)
+                }
+            },
+        }
+    }
+
+    fn semantic_u32(self, field: usize) -> Result<u32, GatherError> {
+        match self.projected {
+            Some(row) => row.u32(field).ok_or(GatherError::SourceFieldMissing),
+            None => match self.input {
+                GatherInput::Flat(input) => input
+                    .semantic_u32
+                    .get(field)
+                    .and_then(|values| values.get(self.index))
+                    .copied()
+                    .ok_or(GatherError::SourceFieldMissing),
+                GatherInput::Projected(_) | GatherInput::Inline(_) => {
+                    Err(GatherError::InvalidSemanticShape)
+                }
+            },
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -234,40 +579,53 @@ struct GatherSource {
     selection: u32,
 }
 
-type RetainedGatherTables<'a> = (
-    [&'a [f32]; super::positioning::SEMANTIC_F32_FIELD_COUNT],
-    [&'a [u32]; super::positioning::SEMANTIC_U32_FIELD_COUNT],
-);
-
 #[derive(Clone)]
 pub(crate) struct RetainedGatherOwner<'a> {
     range: GatherRange,
-    input: LayoutPlanInput<'a>,
+    input: GatherInput<'a>,
     intervals: Option<&'a [Range<usize>]>,
-    tables: Option<RetainedGatherTables<'a>>,
 }
 
 impl<'a> RetainedGatherOwner<'a> {
     pub(crate) fn positioned(
         range: GatherRange,
         transform_id: u32,
-        positioned: &'a super::positioning::PositionedGlyphArena,
-        masks: &'a [u16],
+        positioned: &'a PositionedGlyphArena,
+        context: PositionedSourceContext<'a>,
+        boundary: &'a BoundaryShapeArena,
         intervals: Option<&'a [Range<usize>]>,
     ) -> Self {
         Self {
             range,
-            input: LayoutPlanInput {
+            input: GatherInput::Projected(ProjectedPlanInput {
                 transform_id,
-                glyphs: positioned.glyphs(),
-                semantic_glyphs: positioned.semantic_glyphs(),
-                placement_translations: positioned.placement_translations(),
-                semantic_change_masks: masks,
-                semantic_f32: &[],
-                semantic_u32: &[],
-            },
+                positioned,
+                context,
+                boundary,
+                selection: None,
+                copied_placement_segments: None,
+            }),
             intervals,
-            tables: Some((positioned.semantic_f32(), positioned.semantic_u32())),
+        }
+    }
+
+    pub(crate) fn inline(
+        range: GatherRange,
+        transform_id: u32,
+        leaf: &'a InlineLeaf,
+        styles: &'a [super::style_state::StyleSegment],
+        intervals: Option<&'a [Range<usize>]>,
+    ) -> Self {
+        Self {
+            range,
+            input: GatherInput::Inline(InlinePlanInput {
+                transform_id,
+                leaf,
+                styles,
+                selection: None,
+                copied_placement_segments: None,
+            }),
+            intervals,
         }
     }
 
@@ -275,11 +633,10 @@ impl<'a> RetainedGatherOwner<'a> {
         &self,
         sources: &RetainedRope<GatherSource>,
     ) -> Result<GatherPosition, GatherError> {
-        if self.range.source_count() == self.input.glyphs.len() {
+        if self.range.source_count() == self.input.len() {
             return Ok(self.range.end);
         }
-        let source =
-            self.range.start.source + self.range.source_count().min(self.input.glyphs.len());
+        let source = self.range.start.source + self.range.source_count().min(self.input.len());
         let before = sources
             .prefix_summary(self.range.start.source)
             .ok_or(GatherError::InvalidSemanticShape)?;
@@ -292,15 +649,8 @@ impl<'a> RetainedGatherOwner<'a> {
         })
     }
 
-    fn input(&self) -> LayoutPlanInput<'_> {
-        match &self.tables {
-            Some((f32, u32)) => LayoutPlanInput {
-                semantic_f32: f32,
-                semantic_u32: u32,
-                ..self.input
-            },
-            None => self.input,
-        }
+    fn input(&self) -> GatherInput<'a> {
+        self.input
     }
 }
 
@@ -422,11 +772,11 @@ impl<'a, I: Iterator<Item = Result<RetainedGatherOwner<'a>, GatherError>>> Itera
             if let Some(owner) = &self.current {
                 let range = match owner.intervals {
                     Some(ranges) => ranges.get(self.interval).cloned(),
-                    None => (self.interval == 0).then_some(0..owner.input.glyphs.len()),
+                    None => (self.interval == 0).then_some(0..owner.input.len()),
                 };
                 if let Some(range) = range {
                     self.interval += 1;
-                    if range.start > range.end || range.end > owner.input.glyphs.len() {
+                    if range.start > range.end || range.end > owner.input.len() {
                         return Some(Err(GatherError::InvalidSemanticShape));
                     }
                     let start = range.start.min(owner.range.source_count());
@@ -494,6 +844,7 @@ pub struct CodecGatherWorkspace {
     u32_fields: Vec<AlignedField<u32>>,
     retained_cursor: usize,
     retained_source_cursor: usize,
+    projected_revision_cursor: u32,
 }
 
 #[repr(C, align(16))]
@@ -517,6 +868,24 @@ pub struct GatheredPlanInput<'a> {
 }
 
 impl CodecGatherWorkspace {
+    pub(crate) fn set_projected_revision_cursor(&mut self, next: u32) {
+        self.projected_revision_cursor = next.max(1);
+    }
+
+    pub(crate) fn projected_revision_cursor(&self) -> u32 {
+        self.projected_revision_cursor.max(1)
+    }
+
+    fn mint_projected_revision(&mut self) -> Result<u32, GatherError> {
+        let revision = self.projected_revision_cursor.max(1);
+        self.projected_revision_cursor = revision
+            .checked_add(1)
+            // The existing size/capacity error maps to ResultTooLarge at the
+            // engine boundary. Keep the native GatherError surface stable.
+            .ok_or(GatherError::AllocationFailed)?;
+        Ok(revision)
+    }
+
     pub fn reserve_records(&mut self, record_capacity: usize) -> Result<(), GatherError> {
         reserve(&mut self.glyphs, record_capacity)?;
         self.placement_slots.reserve(record_capacity)?;
@@ -607,18 +976,19 @@ impl CodecGatherWorkspace {
         self.append_retained_scoped(codec, capability_set, input, None, binding_for_font)
     }
 
-    pub(crate) fn append_retained_scoped<'binding>(
+    pub(crate) fn append_retained_scoped<'a, 'binding>(
         &mut self,
         codec: &ValidatedCodec,
         capability_set: CapabilitySetId,
-        input: LayoutPlanInput<'_>,
+        input: impl Into<GatherInput<'a>>,
         source_intervals: Option<&[Range<usize>]>,
         mut binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
     ) -> Result<RetainedGather, GatherError> {
+        let input = input.into();
         let start = self.position();
         let source_end = start
             .source
-            .saturating_add(input.glyphs.len())
+            .saturating_add(input.len())
             .min(self.sources.len());
         let before = self
             .sources
@@ -638,7 +1008,6 @@ impl CodecGatherWorkspace {
             },
             input,
             intervals: source_intervals,
-            tables: None,
         };
         match self.append_retained_stream(
             codec,
@@ -669,6 +1038,7 @@ impl CodecGatherWorkspace {
         };
         let result = (|| {
             let mut current = None;
+            let mut row_cursor: Option<GatherInputCursor<'owner>> = None;
             let mut state = RetainedGatherCursor {
                 source_cursor: self.retained_source_cursor,
                 record_cursor: self.retained_cursor,
@@ -687,7 +1057,7 @@ impl CodecGatherWorkspace {
                         })
                     {
                         if let Some(owner) = current.as_ref()
-                            && owner.range.source_count() != owner.input.glyphs.len()
+                            && owner.range.source_count() != owner.input.len()
                         {
                             let end = owner.retained_end(&previous_sources)?;
                             state.source_cursor = end.source;
@@ -716,7 +1086,7 @@ impl CodecGatherWorkspace {
                                     count.checked_add(range.end.checked_sub(range.start)?)
                                 })
                                 .ok_or(GatherError::InvalidSemanticShape)?,
-                            None => owner.input.glyphs.len(),
+                            None => owner.input.len(),
                         };
                         self.dirty_mask_ranges
                             .try_reserve(reserve)
@@ -727,6 +1097,7 @@ impl CodecGatherWorkspace {
                         state.cached_binding = None;
                         state.cached_program = None;
                         state.input_plan = None;
+                        row_cursor = Some(GatherInputCursor::new(owner.input()));
                         current = Some(owner);
                     }
                     let owner = current.as_ref().ok_or(GatherError::InvalidSemanticShape)?;
@@ -746,7 +1117,9 @@ impl CodecGatherWorkspace {
                     self.update_retained_source(
                         codec,
                         capability_set,
-                        owner.input(),
+                        row_cursor
+                            .as_mut()
+                            .ok_or(GatherError::InvalidSemanticShape)?,
                         glyph_index,
                         previous_source,
                         &mut state,
@@ -782,7 +1155,7 @@ impl CodecGatherWorkspace {
                 let end = owner.retained_end(&previous_sources)?;
                 self.retained_cursor = end.record;
                 self.retained_source_cursor = end.source;
-                if owner.range.source_count() != owner.input.glyphs.len() {
+                if owner.range.source_count() != owner.input.len() {
                     return Ok(Some(RetainedGatherStop {
                         source_index: end.source - owner.range.start.source,
                     }));
@@ -799,7 +1172,7 @@ impl CodecGatherWorkspace {
         &mut self,
         codec: &'codec ValidatedCodec,
         capability_set: CapabilitySetId,
-        input: LayoutPlanInput<'_>,
+        cursor: &mut GatherInputCursor<'_>,
         glyph_index: usize,
         previous_source: &GatherSource,
         state: &mut RetainedGatherCursor<'codec, 'binding>,
@@ -809,8 +1182,21 @@ impl CodecGatherWorkspace {
         // record columns are already written. Adopt that prefix before suffix rebuild.
         #[cfg(test)]
         super::work_attribution::record(|work| work.gather_glyph_visits += 1);
-        let glyph = input.glyphs[glyph_index];
+        let row = cursor.row_at(glyph_index)?;
+        let input = cursor.input;
+        let glyph = row.glyph;
         let previous_source = *previous_source;
+        if matches!(input, GatherInput::Projected(_) | GatherInput::Inline(_)) {
+            return self.update_retained_projected(
+                codec,
+                capability_set,
+                row,
+                glyph_index,
+                previous_source,
+                state,
+                binding_for_font,
+            );
+        }
         #[cfg(test)]
         super::work_attribution::record(|work| {
             work.retained_selected_rows += usize::from(previous_source.selected());
@@ -821,19 +1207,15 @@ impl CodecGatherWorkspace {
                 usize::from(previous_source.stable_id != glyph.stable_id);
         });
         state.source_cursor += 1;
-        let change_mask = input
-            .semantic_change_masks
-            .get(glyph_index)
-            .copied()
-            .unwrap_or(0);
+        let change_mask = input.masks().get(glyph_index).copied().unwrap_or(0);
         if change_mask == 0 {
             // An empty delta is the one branch that consults neither the binding nor the
             // record: it trusts `selected` to say whether this glyph owns the record under
             // the record cursor. That trust is sound for a *retained* identity, whose glyph, size, and
-            // pixel ratio cannot have moved the selection, and only for it. `positioning`
-            // mints every new identity with `ALL_SEMANTIC_CHANGES`, so an empty delta beside a
-            // different identity means the walk is reading another glyph's source row and has
-            // to rebuild -- otherwise a recordless row skipped here silently retires a record
+            // pixel ratio cannot have moved the selection, and only for it. This Flat input's
+            // mask is caller-supplied; an empty delta beside a different identity means the
+            // walk is reading another glyph's source row and must rebuild -- otherwise a
+            // recordless row skipped here silently retires a record
             // that belongs to a glyph nobody edited.
             if previous_source.stable_id != glyph.stable_id {
                 state.source_cursor -= 1;
@@ -847,15 +1229,14 @@ impl CodecGatherWorkspace {
                     return Ok(RopeUpdate::Stop);
                 };
                 if previous.stable_id != glyph.stable_id
-                    || previous.transform_id != input.transform_id
+                    || previous.transform_id != input.transform_id()
                 {
                     state.source_cursor -= 1;
                     state.rebuild = Some(glyph_index);
                     return Ok(RopeUpdate::Stop);
                 }
                 let previous = *previous;
-                let (semantic_id, [inline_start, block_start]) =
-                    plan_glyph_placement(input, glyph_index)?;
+                let (semantic_id, [inline_start, block_start]) = plan_glyph_placement(row)?;
                 self.replace_glyph(
                     state.record_cursor,
                     PlanGlyph {
@@ -872,8 +1253,7 @@ impl CodecGatherWorkspace {
         if self.update_retained_position_only(
             codec,
             capability_set,
-            input,
-            glyph_index,
+            row,
             state.record_cursor,
             previous_source,
             change_mask,
@@ -925,7 +1305,7 @@ impl CodecGatherWorkspace {
                 program
             }
         };
-        let next = plan_glyph(input, glyph_index, glyph, binding, selected)?;
+        let next = plan_glyph(row, binding, selected)?;
         let Some(previous) = self.glyphs.get(state.record_cursor).copied() else {
             state.source_cursor -= 1;
             state.rebuild = Some(glyph_index);
@@ -940,18 +1320,16 @@ impl CodecGatherWorkspace {
             work.gather_all_masks += usize::from(change_mask == ALL_SEMANTIC_CHANGES);
             work.gather_identity_mismatches += usize::from(previous.stable_id != next.stable_id);
         });
-        // The change mask is identity-relative: `assign_content_revision` derives it against
-        // the slot this glyph occupied in the previous frame, wherever that was. The retained
-        // columns are slot-relative. The two conventions agree while a slot keeps its
-        // occupant; when a slot is handed to another identity, a narrow mask names the
-        // registers the *identity* changed while the *slot* changed in every register, so the
-        // skipped registers would keep the displaced occupant's bytes.
+        // Flat input supplies its own change mask, while retained columns are slot-relative.
+        // If an identity moves to a slot occupied by another glyph, a narrow mask cannot
+        // establish that the skipped registers already hold this identity's values: they
+        // would keep the displaced occupant's bytes. Projected input takes a separate path
+        // that compares declared columns against the accepted slot before writing them.
         //
-        // An identity with no previous slot is exempt: `assign_content_revision` gives it
-        // `ALL_SEMANTIC_CHANGES`, `input_masks_for_changes` widens that to every declared
-        // input, and `update_fields` then rewrites the whole record in place -- identical to
-        // what a rebuild would push, without re-gathering the suffix. So only a *retained*
-        // identity landing on another identity's slot has to leave the retained path.
+        // A caller-supplied `ALL_SEMANTIC_CHANGES` mask is safe even at a displaced slot:
+        // `input_masks_for_changes` widens it to every declared input, and `update_fields`
+        // rewrites the whole record in place. A displaced identity with a narrower mask
+        // requires suffix rebuild.
         if (previous.stable_id != next.stable_id && change_mask != ALL_SEMANTIC_CHANGES)
             || !same_storage_topology(previous, next)
         {
@@ -971,8 +1349,7 @@ impl CodecGatherWorkspace {
         };
         self.update_fields(
             state.record_cursor,
-            input,
-            glyph_index,
+            row,
             binding,
             selected,
             program,
@@ -996,12 +1373,137 @@ impl CodecGatherWorkspace {
     }
 
     #[allow(clippy::too_many_arguments)]
+    fn update_retained_projected<'codec, 'binding>(
+        &mut self,
+        codec: &'codec ValidatedCodec,
+        capability_set: CapabilitySetId,
+        row: GatherRow<'_>,
+        glyph_index: usize,
+        previous_source: GatherSource,
+        state: &mut RetainedGatherCursor<'codec, 'binding>,
+        binding_for_font: &mut impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
+    ) -> Result<RopeUpdate<GatherSource>, GatherError> {
+        state.source_cursor += 1;
+        let glyph = row.glyph;
+        let binding = if state.cached_font_handle == Some(glyph.binding_handle) {
+            state
+                .cached_binding
+                .ok_or(GatherError::FontBindingMissing)?
+        } else {
+            let binding =
+                binding_for_font(glyph.binding_handle).ok_or(GatherError::FontBindingMissing)?;
+            state.cached_font_handle = Some(glyph.binding_handle);
+            state.cached_binding = Some(binding);
+            binding
+        };
+        let selected = binding.select(glyph.glyph_id, glyph.font_size, glyph.raster_pixel_ratio);
+        if selected.is_some() != previous_source.selected() {
+            state.source_cursor -= 1;
+            state.rebuild = Some(glyph_index);
+            return Ok(RopeUpdate::Stop);
+        }
+        let Some(selected) = selected else {
+            if previous_source.stable_id == glyph.stable_id {
+                return Ok(RopeUpdate::Keep);
+            }
+            state.source_cursor -= 1;
+            state.rebuild = Some(glyph_index);
+            return Ok(RopeUpdate::Stop);
+        };
+        // The occupied record must still belong to the accepted source row. A new
+        // stable ID may replace it only after this pairing and topology are proved.
+        let previous = match self.glyphs.get(state.record_cursor).copied() {
+            Some(previous) if previous.stable_id == previous_source.stable_id => previous,
+            _ => {
+                state.source_cursor -= 1;
+                state.rebuild = Some(glyph_index);
+                return Ok(RopeUpdate::Stop);
+            }
+        };
+        let technique = binding.technique();
+        let variant = binding.program_variant();
+        let program = match state.cached_program {
+            Some((cached_technique, cached_variant, program))
+                if cached_technique == technique && cached_variant == variant =>
+            {
+                program
+            }
+            _ => {
+                let program = codec
+                    .program(capability_set, technique, variant)
+                    .ok_or(GatherError::ProgramMissing)?;
+                state.cached_program = Some((technique, variant, program));
+                program
+            }
+        };
+        let mut next = plan_glyph(row, binding, selected)?;
+        if !same_storage_topology(previous, next) || !previous_source.same_selection(selected) {
+            state.source_cursor -= 1;
+            state.rebuild = Some(glyph_index);
+            return Ok(RopeUpdate::Stop);
+        }
+        let identity_changed = previous_source.stable_id != glyph.stable_id;
+        let mut changes =
+            self.compare_projected_inputs(state.record_cursor, row, binding, selected, program)?;
+        if previous.inline_start.to_bits() != next.inline_start.to_bits() {
+            changes |= 1 << 6;
+        }
+        if previous.block_start.to_bits() != next.block_start.to_bits() {
+            changes |= 1 << 7;
+        }
+        if self
+            .placement_slots
+            .as_slice()
+            .get(state.record_cursor)
+            .copied()
+            != Some(glyph.placement_slot)
+        {
+            changes |= SEMANTIC_PLACEMENT_SLOT_CHANGE;
+        }
+        if !same_plan_content(previous, next) {
+            changes |= super::positioning::SEMANTIC_EFFECTS_CHANGE;
+        }
+        if identity_changed {
+            // The accepted slot belonged to another identity. Every declared input was
+            // compared above; a new revision and full semantic dirt also retire old
+            // plan bindings when the values happen to be bitwise equal.
+            changes = ALL_SEMANTIC_CHANGES;
+        }
+        if changes == 0 {
+            state.record_cursor += 1;
+            return Ok(RopeUpdate::Keep);
+        }
+        // Column deltas above are staged only. A failed revision mint discards
+        // the whole pending gather and burns prior minted high water.
+        let revision = self.mint_projected_revision()?;
+        next.content_revision = revision;
+        self.placement_slots
+            .set(state.record_cursor, glyph.placement_slot)?;
+        self.replace_glyph(state.record_cursor, next);
+        self.write_change_mask(state.record_cursor, changes);
+        #[cfg(test)]
+        super::work_attribution::record(|work| {
+            work.gather_mask_bits += changes.count_ones() as usize;
+            for bit in 0..16 {
+                work.gather_mask_bit_counts[bit] += usize::from(changes & (1 << bit) != 0);
+            }
+            work.gather_all_masks += usize::from(changes == ALL_SEMANTIC_CHANGES);
+            work.gather_identity_mismatches += usize::from(identity_changed);
+        });
+        state.record_cursor += 1;
+        Ok(if identity_changed {
+            RopeUpdate::Replace(GatherSource::new(glyph.stable_id, Some(selected)))
+        } else {
+            RopeUpdate::Keep
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn update_retained_position_only<'codec, 'binding>(
         &mut self,
         codec: &'codec ValidatedCodec,
         capability_set: CapabilitySetId,
-        input: LayoutPlanInput<'_>,
-        glyph_index: usize,
+        row: GatherRow<'_>,
         output_index: usize,
         previous_source: GatherSource,
         change_mask: u16,
@@ -1010,11 +1512,7 @@ impl CodecGatherWorkspace {
         if change_mask & !POSITION_ONLY_CHANGES != 0 {
             return Ok(false);
         }
-        let glyph = input
-            .glyphs
-            .get(glyph_index)
-            .copied()
-            .ok_or(GatherError::SourceFieldMissing)?;
+        let glyph = row.glyph;
         if previous_source.stable_id != glyph.stable_id {
             return Ok(false);
         }
@@ -1025,7 +1523,7 @@ impl CodecGatherWorkspace {
             return Ok(false);
         };
         if previous.stable_id != glyph.stable_id
-            || previous.transform_id != input.transform_id
+            || previous.transform_id != row.input.transform_id()
             || previous.material_id != glyph.material_id
             || previous.clip_id != glyph.clip_id
             || previous.depth_key != glyph.depth_key
@@ -1073,11 +1571,11 @@ impl CodecGatherWorkspace {
             if source.scope != InputScope::Semantic {
                 return Ok(false);
             }
-            *value = semantic_f32(source.field, input, glyph_index)?;
+            *value = semantic_f32(source.field, row)?;
             #[cfg(test)]
             super::work_attribution::record(|work| work.gather_f32_reads += 1);
         }
-        let (semantic_id, [inline_start, block_start]) = plan_glyph_placement(input, glyph_index)?;
+        let (semantic_id, [inline_start, block_start]) = plan_glyph_placement(row)?;
         for (field, value) in values
             .iter()
             .copied()
@@ -1245,7 +1743,7 @@ impl CodecGatherWorkspace {
             }
             appended_capacity = appended_capacity
                 .checked_add(range.start.record - previous.record)
-                .and_then(|count| count.checked_add(owner.input.glyphs.len()))
+                .and_then(|count| count.checked_add(owner.input.len()))
                 .ok_or(GatherError::AllocationFailed)?;
             previous = range.end;
             owner_count += 1;
@@ -1272,7 +1770,7 @@ impl CodecGatherWorkspace {
                 codec,
                 old.start
                     .record
-                    .checked_add(first.input.glyphs.len())
+                    .checked_add(first.input.len())
                     .ok_or(GatherError::AllocationFailed)?,
             )?;
             self.retained_source_cursor = old.start.source;
@@ -1280,7 +1778,7 @@ impl CodecGatherWorkspace {
             self.truncate_to_retained_prefix()?;
             #[cfg(test)]
             super::work_attribution::record(|work| work.gather_paragraph_visits += 1);
-            self.append_from(
+            self.append_from_source(
                 codec,
                 capability_set,
                 first.input(),
@@ -1291,7 +1789,7 @@ impl CodecGatherWorkspace {
             self.correspondence.push(GatherCorrespondence {
                 old,
                 next,
-                owner: Some(first.input.transform_id),
+                owner: Some(first.input.transform_id()),
             });
             return Ok(next);
         }
@@ -1359,7 +1857,7 @@ impl CodecGatherWorkspace {
             };
             #[cfg(test)]
             super::work_attribution::record(|work| work.gather_paragraph_visits += 1);
-            self.append_from(
+            self.append_from_source(
                 codec,
                 capability_set,
                 owner.input(),
@@ -1376,7 +1874,7 @@ impl CodecGatherWorkspace {
                     start: destination(start)?,
                     end: destination(end)?,
                 },
-                owner: Some(owner.input.transform_id),
+                owner: Some(owner.input.transform_id()),
             });
             previous = owner.range.end;
         }
@@ -1468,16 +1966,33 @@ impl CodecGatherWorkspace {
         capability_set: CapabilitySetId,
         input: LayoutPlanInput<'_>,
         source_start: usize,
+        binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
+    ) -> Result<(), GatherError> {
+        self.append_from_source(
+            codec,
+            capability_set,
+            input.into(),
+            source_start,
+            binding_for_font,
+        )
+    }
+
+    pub(crate) fn append_from_source<'binding>(
+        &mut self,
+        codec: &ValidatedCodec,
+        capability_set: CapabilitySetId,
+        input: GatherInput<'_>,
+        source_start: usize,
         mut binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
     ) -> Result<(), GatherError> {
-        let remaining = input.glyphs.len().saturating_sub(source_start);
-        if source_start > input.glyphs.len() {
+        let remaining = input.len().saturating_sub(source_start);
+        if source_start > input.len() {
             return Err(GatherError::InvalidSemanticShape);
         }
         self.reserve_mask_ranges(
-            input.semantic_change_masks,
+            input.masks(),
             source_start,
-            input.glyphs.len(),
+            input.len(),
             ALL_SEMANTIC_CHANGES,
         )?;
         let required = self.glyphs.len().saturating_add(remaining);
@@ -1500,10 +2015,12 @@ impl CodecGatherWorkspace {
         let mut cached_font_handle = None;
         let mut cached_binding = None;
         let mut cached_program = None;
-        for glyph_index in source_start..input.glyphs.len() {
+        let mut cursor = GatherInputCursor::new(input);
+        for glyph_index in source_start..input.len() {
             #[cfg(test)]
             super::work_attribution::record(|work| work.gather_glyph_visits += 1);
-            let glyph = input.glyphs[glyph_index];
+            let mut row = cursor.row_at(glyph_index)?;
+            let glyph = row.glyph;
             let binding = if cached_font_handle == Some(glyph.binding_handle) {
                 cached_binding.ok_or(GatherError::FontBindingMissing)?
             } else {
@@ -1546,19 +2063,16 @@ impl CodecGatherWorkspace {
                     program
                 }
             };
+            if matches!(input, GatherInput::Projected(projected) if projected.selection.is_none())
+                || matches!(input, GatherInput::Inline(inline) if inline.selection.is_none())
+            {
+                row.glyph.content_revision = self.mint_projected_revision()?;
+            }
             // A pushed row has no prior value to preserve, so a change mask cannot narrow it: the
             // registers it omits would be published as zeros rather than as retained values.
             // `gather_fields` bounds these by the program's declared input counts.
-            self.gather_fields(
-                input,
-                glyph_index,
-                binding,
-                selected,
-                program,
-                u32::MAX,
-                u32::MAX,
-            )?;
-            let planned = plan_glyph(input, glyph_index, glyph, binding, selected)?;
+            self.gather_fields(row, binding, selected, program, u32::MAX, u32::MAX)?;
+            let planned = plan_glyph(row, binding, selected)?;
             self.push_source_chunk(
                 &mut source_chunk,
                 &mut source_chunk_len,
@@ -1569,7 +2083,7 @@ impl CodecGatherWorkspace {
             self.write_change_mask(
                 self.semantic_change_masks.len(),
                 input
-                    .semantic_change_masks
+                    .masks()
                     .get(glyph_index)
                     .copied()
                     .unwrap_or(super::positioning::ALL_SEMANTIC_CHANGES),
@@ -1712,8 +2226,7 @@ impl CodecGatherWorkspace {
     #[allow(clippy::too_many_arguments)]
     fn gather_fields(
         &mut self,
-        input: LayoutPlanInput<'_>,
-        glyph_index: usize,
+        row: GatherRow<'_>,
         binding: &FontRenderBinding,
         selected: SelectedGlyphBinding,
         program: &ProgramDescriptor,
@@ -1725,14 +2238,7 @@ impl CodecGatherWorkspace {
         for field in 0..self.f32_fields.len() {
             let value = if field < f32_count && required_f32 & (1 << field) != 0 {
                 let source = program.inputs[field];
-                source_f32(
-                    source.scope,
-                    source.field,
-                    input,
-                    glyph_index,
-                    binding,
-                    selected,
-                )?
+                source_f32(source.scope, source.field, row, binding, selected)?
             } else {
                 0.0
             };
@@ -1749,14 +2255,7 @@ impl CodecGatherWorkspace {
         for field in 0..self.u32_fields.len() {
             let value = if field < u32_count && required_u32 & (1 << field) != 0 {
                 let source = program.inputs[f32_count + field];
-                source_u32(
-                    source.scope,
-                    source.field,
-                    input,
-                    glyph_index,
-                    binding,
-                    selected,
-                )?
+                source_u32(source.scope, source.field, row, binding, selected)?
             } else {
                 0
             };
@@ -1773,12 +2272,80 @@ impl CodecGatherWorkspace {
         Ok(())
     }
 
+    /// Compare each declared input with its accepted value before writing that
+    /// staged column. A later error invalidates the complete pending gather.
+    fn compare_projected_inputs(
+        &mut self,
+        output_index: usize,
+        row: GatherRow<'_>,
+        binding: &FontRenderBinding,
+        selected: SelectedGlyphBinding,
+        program: &ProgramDescriptor,
+    ) -> Result<u16, GatherError> {
+        let mut changes = 0_u16;
+        let f32_count = usize::from(program.f32_input_count);
+        for field in 0..f32_count {
+            let source = program.inputs[field];
+            let value = source_f32(source.scope, source.field, row, binding, selected)?;
+            let old = self.f32_fields[field]
+                .as_slice()
+                .get(output_index)
+                .ok_or(GatherError::InvalidSemanticShape)?;
+            #[cfg(test)]
+            super::work_attribution::record(|work| {
+                work.gather_f32_reads += 1;
+                work.gather_projected_register_compares += 1;
+            });
+            if old.to_bits() != value.to_bits() {
+                let dependency = f32_input_dependency(source);
+                changes |= if dependency == 0 {
+                    ALL_SEMANTIC_CHANGES
+                } else {
+                    dependency
+                };
+                self.f32_fields[field].set(output_index, value)?;
+                #[cfg(test)]
+                super::work_attribution::record(|work| {
+                    work.gather_f32_changed_slots += 1;
+                    work.gather_f32_slots_written += 1;
+                });
+            }
+        }
+        for field in 0..usize::from(program.u32_input_count) {
+            let source = program.inputs[f32_count + field];
+            let value = source_u32(source.scope, source.field, row, binding, selected)?;
+            let old = self.u32_fields[field]
+                .as_slice()
+                .get(output_index)
+                .ok_or(GatherError::InvalidSemanticShape)?;
+            #[cfg(test)]
+            super::work_attribution::record(|work| {
+                work.gather_u32_reads += 1;
+                work.gather_projected_register_compares += 1;
+            });
+            if *old != value {
+                let dependency = u32_input_dependency(source);
+                changes |= if dependency == 0 {
+                    ALL_SEMANTIC_CHANGES
+                } else {
+                    dependency
+                };
+                self.u32_fields[field].set(output_index, value)?;
+                #[cfg(test)]
+                super::work_attribution::record(|work| {
+                    work.gather_u32_changed_slots += 1;
+                    work.gather_u32_slots_written += 1;
+                });
+            }
+        }
+        Ok(changes)
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn update_fields(
         &mut self,
         output_index: usize,
-        input: LayoutPlanInput<'_>,
-        glyph_index: usize,
+        row: GatherRow<'_>,
         binding: &FontRenderBinding,
         selected: SelectedGlyphBinding,
         program: &ProgramDescriptor,
@@ -1792,14 +2359,7 @@ impl CodecGatherWorkspace {
                 continue;
             }
             let source = program.inputs[field];
-            let value = source_f32(
-                source.scope,
-                source.field,
-                input,
-                glyph_index,
-                binding,
-                selected,
-            )?;
+            let value = source_f32(source.scope, source.field, row, binding, selected)?;
             #[cfg(test)]
             let old = self.f32_fields[field]
                 .blocks
@@ -1818,14 +2378,7 @@ impl CodecGatherWorkspace {
                 continue;
             }
             let source = program.inputs[f32_count + field];
-            let value = source_u32(
-                source.scope,
-                source.field,
-                input,
-                glyph_index,
-                binding,
-                selected,
-            )?;
+            let value = source_u32(source.scope, source.field, row, binding, selected)?;
             #[cfg(test)]
             let old = self.u32_fields[field]
                 .blocks
@@ -2078,9 +2631,7 @@ impl GatheredPlanInput<'_> {
 }
 
 fn plan_glyph(
-    input: LayoutPlanInput<'_>,
-    glyph_index: usize,
-    glyph: LayoutGlyph,
+    row: GatherRow<'_>,
     binding: &FontRenderBinding,
     selected: SelectedGlyphBinding,
 ) -> Result<PlanGlyph, GatherError> {
@@ -2088,7 +2639,8 @@ fn plan_glyph(
         .resources()
         .get(usize::try_from(selected.resource).map_err(|_| GatherError::ResourceBindingMissing)?)
         .ok_or(GatherError::ResourceBindingMissing)?;
-    let (semantic_id, [inline_start, block_start]) = plan_glyph_placement(input, glyph_index)?;
+    let glyph = row.glyph;
+    let (semantic_id, [inline_start, block_start]) = plan_glyph_placement(row)?;
     Ok(PlanGlyph {
         stable_id: glyph.stable_id,
         content_revision: glyph.content_revision,
@@ -2099,7 +2651,7 @@ fn plan_glyph(
         resource_kind: resource.kind,
         resource_reference: resource.reference,
         semantic_id,
-        transform_id: input.transform_id,
+        transform_id: row.input.transform_id(),
         material_id: glyph.material_id,
         clip_id: glyph.clip_id,
         depth_key: glyph.depth_key,
@@ -2110,24 +2662,21 @@ fn plan_glyph(
     })
 }
 
-fn plan_glyph_placement(
-    input: LayoutPlanInput<'_>,
-    glyph_index: usize,
-) -> Result<(u32, [f32; 2]), GatherError> {
-    let glyph = input
-        .glyphs
-        .get(glyph_index)
-        .ok_or(GatherError::SourceFieldMissing)?;
-    let semantic = input
-        .semantic_glyphs
-        .get(
-            usize::try_from(glyph.semantic_glyph_index)
-                .map_err(|_| GatherError::SourceFieldMissing)?,
-        )
-        .ok_or(GatherError::InvalidSemanticShape)?;
-    let translation = input
-        .placement_translations
-        .get(
+fn plan_glyph_placement(row: GatherRow<'_>) -> Result<(u32, [f32; 2]), GatherError> {
+    let glyph = row.glyph;
+    let semantic = if let Some(projected) = row.projected {
+        projected.semantic
+    } else {
+        row.input
+            .semantic_glyph(
+                usize::try_from(glyph.semantic_glyph_index)
+                    .map_err(|_| GatherError::SourceFieldMissing)?,
+            )
+            .ok_or(GatherError::InvalidSemanticShape)?
+    };
+    let translation = row
+        .input
+        .translation(
             usize::try_from(semantic.placement_segment)
                 .map_err(|_| GatherError::SourceFieldMissing)?,
         )
@@ -2158,78 +2707,62 @@ fn same_storage_topology(previous: PlanGlyph, next: PlanGlyph) -> bool {
         && previous.depth_key == next.depth_key
 }
 
+fn same_plan_content(previous: PlanGlyph, next: PlanGlyph) -> bool {
+    same_storage_topology(previous, next)
+        && previous.stable_id == next.stable_id
+        && previous.semantic_id == next.semantic_id
+        && previous.inline_start.to_bits() == next.inline_start.to_bits()
+        && previous.block_start.to_bits() == next.block_start.to_bits()
+        && previous.inline_extent.to_bits() == next.inline_extent.to_bits()
+        && previous.block_extent.to_bits() == next.block_extent.to_bits()
+}
+
 fn source_f32(
     scope: InputScope,
     field: u8,
-    input: LayoutPlanInput<'_>,
-    glyph_index: usize,
+    row: GatherRow<'_>,
     binding: &FontRenderBinding,
     selected: SelectedGlyphBinding,
 ) -> Result<f32, GatherError> {
-    let (table, row) = match scope {
-        InputScope::Semantic => return semantic_f32(field, input, glyph_index),
-        InputScope::Glyph => (
-            binding.glyph_f32(),
-            binding_row(input.glyphs[glyph_index].glyph_id)?,
-        ),
+    let (table, source_row) = match scope {
+        InputScope::Semantic => return semantic_f32(field, row),
+        InputScope::Glyph => (binding.glyph_f32(), binding_row(row.glyph.glyph_id)?),
         InputScope::Strike => (binding.strike_f32(), binding_row(selected.strike_row)?),
         InputScope::Resource => (binding.resource_f32(), binding_row(selected.resource)?),
     };
     table
         .field(field)
-        .and_then(|values| values.get(row))
+        .and_then(|values| values.get(source_row))
         .copied()
         .ok_or(GatherError::SourceFieldMissing)
 }
 
-fn semantic_f32(
-    field: u8,
-    input: LayoutPlanInput<'_>,
-    glyph_index: usize,
-) -> Result<f32, GatherError> {
-    if let Some(value) = derived_semantic_f32(field, input, glyph_index)? {
+fn semantic_f32(field: u8, row: GatherRow<'_>) -> Result<f32, GatherError> {
+    if let Some(value) = derived_semantic_f32(field, row)? {
         return Ok(value);
     }
-    input
-        .semantic_f32
-        .get(usize::from(field))
-        .and_then(|values| values.get(glyph_index))
-        .copied()
-        .ok_or(GatherError::SourceFieldMissing)
+    row.semantic_f32(usize::from(field))
 }
 
-fn derived_semantic_f32(
-    field: u8,
-    input: LayoutPlanInput<'_>,
-    glyph_index: usize,
-) -> Result<Option<f32>, GatherError> {
+fn derived_semantic_f32(field: u8, row: GatherRow<'_>) -> Result<Option<f32>, GatherError> {
     if field == SEMANTIC_F32_INLINE_ORIGIN || field == SEMANTIC_F32_BLOCK_ORIGIN {
-        let glyph = input
-            .glyphs
-            .get(glyph_index)
-            .ok_or(GatherError::SourceFieldMissing)?;
         return Ok(Some(if field == SEMANTIC_F32_INLINE_ORIGIN {
-            glyph.inline_start
+            row.glyph.inline_start
         } else {
-            glyph.block_start
+            row.glyph.block_start
         }));
     }
     if field == SEMANTIC_F32_INVERSE_FONT_SIZE {
-        let font_size = input
-            .glyphs
-            .get(glyph_index)
-            .map(|glyph| glyph.font_size)
-            .ok_or(GatherError::SourceFieldMissing)?;
-        return Ok(Some(1.0 / font_size));
+        return Ok(Some(1.0 / row.glyph.font_size));
     }
     if field == SEMANTIC_F32_OUTLINE_WIDTH_EM {
-        return optional_semantic_f32(input, 6, glyph_index).map(Some);
+        return optional_semantic_f32(row, 6).map(Some);
     }
     if field == SEMANTIC_F32_SHADOW_OFFSET_X_EM {
-        return optional_semantic_f32(input, 7, glyph_index).map(Some);
+        return optional_semantic_f32(row, 7).map(Some);
     }
     if field == SEMANTIC_F32_SHADOW_OFFSET_Y_EM {
-        return optional_semantic_f32(input, 8, glyph_index).map(Some);
+        return optional_semantic_f32(row, 8).map(Some);
     }
     let (shift, srgb) = match field {
         SEMANTIC_F32_FOREGROUND_RED => (0, true),
@@ -2238,12 +2771,7 @@ fn derived_semantic_f32(
         SEMANTIC_F32_FOREGROUND_ALPHA => (24, false),
         _ => return Ok(None),
     };
-    let packed = input
-        .semantic_u32
-        .get(usize::from(SEMANTIC_U32_FOREGROUND_RGBA))
-        .and_then(|values| values.get(glyph_index))
-        .copied()
-        .ok_or(GatherError::SourceFieldMissing)?;
+    let packed = row.semantic_u32(usize::from(SEMANTIC_U32_FOREGROUND_RGBA))?;
     let channel = (packed >> shift) & 0xff;
     Ok(Some(if srgb {
         f32::from_bits(SRGB8_TO_LINEAR_BITS[channel as usize])
@@ -2252,66 +2780,49 @@ fn derived_semantic_f32(
     }))
 }
 
-fn optional_semantic_f32(
-    input: LayoutPlanInput<'_>,
-    field: usize,
-    glyph_index: usize,
-) -> Result<f32, GatherError> {
-    let values = input
-        .semantic_f32
-        .get(field)
-        .ok_or(GatherError::SourceFieldMissing)?;
-    if values.is_empty() {
-        Ok(0.0)
-    } else {
-        values
-            .get(glyph_index)
-            .copied()
-            .ok_or(GatherError::SourceFieldMissing)
+fn optional_semantic_f32(row: GatherRow<'_>, field: usize) -> Result<f32, GatherError> {
+    if let GatherInput::Flat(input) = row.input
+        && input
+            .semantic_f32
+            .get(field)
+            .is_some_and(|values| values.is_empty())
+    {
+        return Ok(0.0);
     }
+    row.semantic_f32(field)
 }
 
 fn source_u32(
     scope: InputScope,
     field: u8,
-    input: LayoutPlanInput<'_>,
-    glyph_index: usize,
+    row: GatherRow<'_>,
     binding: &FontRenderBinding,
     selected: SelectedGlyphBinding,
 ) -> Result<u32, GatherError> {
-    if scope == InputScope::Semantic && field == SEMANTIC_U32_PLACEMENT_SLOT {
-        return input
-            .glyphs
-            .get(glyph_index)
-            .map(|glyph| glyph.placement_slot)
-            .ok_or(GatherError::SourceFieldMissing);
-    }
-    let (table, row) = match scope {
-        InputScope::Semantic => {
-            let values = input
+    if scope == InputScope::Semantic {
+        if field == SEMANTIC_U32_PLACEMENT_SLOT {
+            return Ok(row.glyph.placement_slot);
+        }
+        if let GatherInput::Flat(input) = row.input
+            && input
                 .semantic_u32
                 .get(usize::from(field))
-                .ok_or(GatherError::SourceFieldMissing)?;
-            if values.is_empty()
-                && (field == SEMANTIC_U32_OUTLINE_RGBA || field == SEMANTIC_U32_SHADOW_RGBA)
-            {
-                return Ok(0);
-            }
-            return values
-                .get(glyph_index)
-                .copied()
-                .ok_or(GatherError::SourceFieldMissing);
+                .is_some_and(|values| values.is_empty())
+            && (field == SEMANTIC_U32_OUTLINE_RGBA || field == SEMANTIC_U32_SHADOW_RGBA)
+        {
+            return Ok(0);
         }
-        InputScope::Glyph => (
-            binding.glyph_u32(),
-            binding_row(input.glyphs[glyph_index].glyph_id)?,
-        ),
+        return row.semantic_u32(usize::from(field));
+    }
+    let (table, source_row) = match scope {
+        InputScope::Glyph => (binding.glyph_u32(), binding_row(row.glyph.glyph_id)?),
         InputScope::Strike => (binding.strike_u32(), binding_row(selected.strike_row)?),
         InputScope::Resource => (binding.resource_u32(), binding_row(selected.resource)?),
+        InputScope::Semantic => return Err(GatherError::InvalidSemanticShape),
     };
     table
         .field(field)
-        .and_then(|values| values.get(row))
+        .and_then(|values| values.get(source_row))
         .copied()
         .ok_or(GatherError::SourceFieldMissing)
 }
@@ -2359,6 +2870,51 @@ mod tests {
         render_plan_wire::plan_layout,
     };
     use alloc::vec;
+
+    #[test]
+    fn inline_source_cursor_uses_outlined_ordinals_and_independent_copy_indices() {
+        let leaf = InlineLeaf {
+            outline_mask: (1 << 1) | (1 << 4) | (1 << 9),
+            ..InlineLeaf::default()
+        };
+        let root = GatherInput::Inline(InlinePlanInput {
+            transform_id: 7,
+            leaf: &leaf,
+            styles: &[],
+            selection: None,
+            copied_placement_segments: None,
+        });
+        assert_eq!(root.len(), 3);
+        let mut cursor = GatherInputCursor::new(root);
+        assert_eq!(cursor.inline_source_at(0, None), Ok(1));
+        // Retained source intervals can skip clean outlined ordinals.
+        assert_eq!(cursor.inline_source_at(2, None), Ok(9));
+        assert_eq!(
+            cursor.inline_source_at(1, None),
+            Err(GatherError::InvalidSemanticShape)
+        );
+        assert_eq!(
+            cursor.inline_source_at(3, None),
+            Err(GatherError::SourceFieldMissing)
+        );
+
+        let selected = [1, 9];
+        let copy = GatherInput::Inline(InlinePlanInput {
+            selection: Some(&selected),
+            ..match root {
+                GatherInput::Inline(input) => input,
+                _ => unreachable!(),
+            }
+        });
+        assert_eq!(copy.len(), 2);
+        let mut cursor = GatherInputCursor::new(copy);
+        assert_eq!(cursor.inline_source_at(0, Some(&selected)), Ok(1));
+        assert_eq!(cursor.inline_source_at(1, Some(&selected)), Ok(9));
+        assert_eq!(
+            cursor.inline_source_at(2, Some(&selected)),
+            Err(GatherError::SourceFieldMissing)
+        );
+    }
 
     #[test]
     fn appended_splice_matches_range_composition() {
@@ -2488,53 +3044,79 @@ mod tests {
             semantic_f32: &retained_local_ink,
             semantic_u32: &[&foreground],
         };
-        assert_eq!(plan_glyph_placement(input, 0), Ok((0, [12.0, -17.0])));
+        assert_eq!(
+            plan_glyph_placement(GatherInput::Flat(input).row(0).unwrap()),
+            Ok((0, [12.0, -17.0]))
+        );
         assert_eq!(
             plan_glyph_placement(
-                LayoutPlanInput {
+                GatherInput::Flat(LayoutPlanInput {
                     semantic_glyphs: &[],
                     ..input
-                },
-                0,
+                })
+                .row(0)
+                .unwrap()
             ),
             Err(GatherError::InvalidSemanticShape)
         );
         assert_eq!(
             plan_glyph_placement(
-                LayoutPlanInput {
+                GatherInput::Flat(LayoutPlanInput {
                     placement_translations: &[],
                     ..input
-                },
-                0,
+                })
+                .row(0)
+                .unwrap()
             ),
             Err(GatherError::InvalidSemanticShape)
         );
         assert_eq!(
-            derived_semantic_f32(SEMANTIC_F32_FOREGROUND_RED, input, 0),
+            derived_semantic_f32(
+                SEMANTIC_F32_FOREGROUND_RED,
+                GatherInput::Flat(input).row(0).unwrap()
+            ),
             Ok(Some(f32::from_bits(SRGB8_TO_LINEAR_BITS[128])))
         );
         assert_eq!(
-            derived_semantic_f32(SEMANTIC_F32_FOREGROUND_GREEN, input, 0),
+            derived_semantic_f32(
+                SEMANTIC_F32_FOREGROUND_GREEN,
+                GatherInput::Flat(input).row(0).unwrap()
+            ),
             Ok(Some(f32::from_bits(SRGB8_TO_LINEAR_BITS[64])))
         );
         assert_eq!(
-            derived_semantic_f32(SEMANTIC_F32_FOREGROUND_BLUE, input, 0),
+            derived_semantic_f32(
+                SEMANTIC_F32_FOREGROUND_BLUE,
+                GatherInput::Flat(input).row(0).unwrap()
+            ),
             Ok(Some(f32::from_bits(SRGB8_TO_LINEAR_BITS[32])))
         );
         assert_eq!(
-            derived_semantic_f32(SEMANTIC_F32_FOREGROUND_ALPHA, input, 0),
+            derived_semantic_f32(
+                SEMANTIC_F32_FOREGROUND_ALPHA,
+                GatherInput::Flat(input).row(0).unwrap()
+            ),
             Ok(Some(1.0))
         );
         assert_eq!(
-            derived_semantic_f32(SEMANTIC_F32_INVERSE_FONT_SIZE, input, 0),
+            derived_semantic_f32(
+                SEMANTIC_F32_INVERSE_FONT_SIZE,
+                GatherInput::Flat(input).row(0).unwrap()
+            ),
             Ok(Some(1.0 / 16.0))
         );
         assert_eq!(
-            derived_semantic_f32(SEMANTIC_F32_INLINE_ORIGIN, input, 0),
+            derived_semantic_f32(
+                SEMANTIC_F32_INLINE_ORIGIN,
+                GatherInput::Flat(input).row(0).unwrap()
+            ),
             Ok(Some(101.25))
         );
         assert_eq!(
-            derived_semantic_f32(SEMANTIC_F32_BLOCK_ORIGIN, input, 0),
+            derived_semantic_f32(
+                SEMANTIC_F32_BLOCK_ORIGIN,
+                GatherInput::Flat(input).row(0).unwrap()
+            ),
             Ok(Some(-202.5))
         );
     }
@@ -4116,9 +4698,9 @@ mod tests {
                             &glyphs[owner * 10..owner * 10 + 10],
                             &masks[owner * 10..owner * 10 + 10],
                         )
-                    },
+                    }
+                    .into(),
                     intervals: Some(&intervals),
-                    tables: None,
                 })
             });
             assert!(workspace.begin_retained(&codec, glyphs.len()).unwrap());
@@ -4201,9 +4783,9 @@ mod tests {
                         &glyphs[owner * 10..owner * 10 + 10],
                         &masks[owner * 10..owner * 10 + 10],
                     )
-                },
+                }
+                .into(),
                 intervals: None,
-                tables: None,
             })
         });
         assert!(workspace.begin_retained(&codec, glyphs.len()).unwrap());
@@ -4275,9 +4857,8 @@ mod tests {
                         record: index + 1,
                     },
                 },
-                input: wide_range_input(&after[index..index + 1], &masks[index..index + 1]),
+                input: wide_range_input(&after[index..index + 1], &masks[index..index + 1]).into(),
                 intervals: None,
-                tables: None,
             })
         });
         let mut binding_reads = 0;
@@ -4374,18 +4955,17 @@ mod tests {
             let owners = [
                 RetainedGatherOwner {
                     range: range_a,
-                    input: wide_range_input(&next_a, &masks[..next_count]),
+                    input: wide_range_input(&next_a, &masks[..next_count]).into(),
                     intervals: empty_scope.then_some(&empty_intervals[..]),
-                    tables: None,
                 },
                 RetainedGatherOwner {
                     range: range_b,
                     input: LayoutPlanInput {
                         transform_id: 2,
                         ..wide_range_input(&next_b, &masks[..2])
-                    },
+                    }
+                    .into(),
                     intervals: None,
-                    tables: None,
                 },
             ];
             assert!(
@@ -4535,18 +5115,17 @@ mod tests {
         let owners = [
             RetainedGatherOwner {
                 range: first_range,
-                input: wide_range_input(&next_first, &masks[..1]),
+                input: wide_range_input(&next_first, &masks[..1]).into(),
                 intervals: None,
-                tables: None,
             },
             RetainedGatherOwner {
                 range: last_range,
                 input: LayoutPlanInput {
                     transform_id: 3,
                     ..wide_range_input(&next_last, &masks)
-                },
+                }
+                .into(),
                 intervals: None,
-                tables: None,
             },
         ];
         assert!(workspace.begin_retained(&codec, 5).unwrap());
@@ -4638,9 +5217,9 @@ mod tests {
             input: LayoutPlanInput {
                 transform_id: 2,
                 ..wide_range_input(&after, &masks)
-            },
+            }
+            .into(),
             intervals: None,
-            tables: None,
         };
         assert!(
             workspace
@@ -4731,9 +5310,9 @@ mod tests {
                                 &[ALL_SEMANTIC_CHANGES; 3]
                             },
                         )
-                    },
+                    }
+                    .into(),
                     intervals: None,
-                    tables: None,
                 })
             });
             assert!(
@@ -4985,9 +5564,8 @@ mod tests {
                     CAPABILITY,
                     core::iter::once(Ok(RetainedGatherOwner {
                         range: owner,
-                        input,
+                        input: input.into(),
                         intervals: None,
-                        tables: None,
                     })),
                     |_| Some(&binding),
                 )
@@ -5151,9 +5729,8 @@ mod tests {
                                     CAPABILITY,
                                     core::iter::once(Ok(RetainedGatherOwner {
                                         range: old,
-                                        input,
+                                        input: input.into(),
                                         intervals: None,
-                                        tables: None,
                                     })),
                                     |_| Some(&binding),
                                 )

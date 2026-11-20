@@ -18,6 +18,8 @@ pub(crate) mod frame;
 #[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
 pub(crate) mod frame_wire;
 mod identity_index;
+#[cfg_attr(not(test), allow(dead_code))]
+mod inline_leaf;
 #[cfg(feature = "kernel-lab")]
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) mod kernel_lab;
