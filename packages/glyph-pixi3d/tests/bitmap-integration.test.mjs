@@ -213,8 +213,8 @@ test('formatted spans retain styles, font leases and cluster-aware placement', a
     const glyphs = text.measureGlyphs();
     assert.equal(glyphs.length, 3);
     assert.ok(glyphs[1].advance > glyphs[0].advance * 1.5, 'inline size affects real shaping');
-    assert.equal(text.caretForOffset(3).offset, 3);
-    assert.ok(text.selectionRects(1, 2).length > 0);
+    assert.equal(text.caret({ offset: 3, affinity: 'upstream' }).line, 0);
+    assert.ok(text.rangeRects(1, 2).length > 0);
     const colors = text.children
       .filter((child) => child instanceof Mesh3D)
       .flatMap((mesh) => Array.from(mesh.geometry.getAttribute('aGlyphColor').buffer.data));
@@ -374,8 +374,8 @@ test('anchors place retained draws, local queries and detached copies without ch
     assert.equal(measurements, 0, 'default zero placement does not query metrics on sibling publication');
     const raw = text.glyphs();
     const defaultGlyph = text.measureGlyphs()[0];
-    const defaultCaret = text.caretForOffset(1);
-    const defaultSelection = text.selectionRects(0, 2)[0];
+    const defaultCaret = text.caret({ offset: 1, affinity: 'downstream' });
+    const defaultSelection = text.rangeRects(0, 2)[0];
     const defaultBounds = text.computeBoundingBox();
     assert.deepEqual(raw.anchorOffset, { x: 0, y: 0 });
     assert.equal(mesh.position.x, 0);
@@ -402,10 +402,10 @@ test('anchors place retained draws, local queries and detached copies without ch
     const measuredGlyph = text.measureGlyphs()[0];
     assert.equal(measuredGlyph.x, defaultGlyph.x - 120);
     assert.equal(measuredGlyph.y, defaultGlyph.y - 45);
-    assert.equal(text.caretForOffset(1).rect.x, defaultCaret.rect.x - 120);
-    assert.equal(text.caretForOffset(1).rect.y, defaultCaret.rect.y - 45);
-    assert.equal(text.caretAt(defaultCaret.rect.x - 120, defaultCaret.rect.y - 45).offset, 1);
-    assert.equal(text.selectionRects(0, 2)[0].x, defaultSelection.x - 120);
+    assert.equal(text.caret({ offset: 1, affinity: 'downstream' }).rect.x, defaultCaret.rect.x - 120);
+    assert.equal(text.caret({ offset: 1, affinity: 'downstream' }).rect.y, defaultCaret.rect.y - 45);
+    assert.equal(text.hitTest({ x: defaultCaret.rect.x - 120, y: defaultCaret.rect.y - 45 }).offset, 1);
+    assert.equal(text.rangeRects(0, 2)[0].x, defaultSelection.x - 120);
     assert.equal(text.computeBoundingBox().min.x, defaultBounds.min.x - 120);
     assert.equal(text.computeBoundingBox().max.y, defaultBounds.max.y + 45);
     [copies, decorations] = text.split();

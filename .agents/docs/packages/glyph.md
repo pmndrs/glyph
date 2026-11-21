@@ -1462,12 +1462,15 @@ ledger directly, retiring a second full span walk and its temporary arrays. The 
 and lifetime release; no second owner or rollback representation is introduced.
 
 Integration authors can pass one package-produced `GlyphLayoutInspection`, its source text, and renderer-owned drawn
-origins to `/core`'s `createGlyphPlacements()`. The resulting read-only placement view exposes cluster-aware carets and
-selection geometry without making private modules public or creating a second layout engine. `caretForOffset()` maps a
-UTF-16 selection-collapse offset to the leading edge of its owning shaped cluster: interior surrogate and combining
-offsets pin to the cluster start, and an ambiguous bidi boundary chooses that cluster's leading affinity. A soft-wrap
-boundary starts the following line; offsets in an LF or CRLF gap remain at the preceding line end. Three mirrors the
-same query on `Text`.
+origins to `/core`'s `createGlyphPlacements()`. The resulting read-only placement view addresses the layout as glyphs,
+words and lines. Carets, hit testing, movement, unit boundaries and range rectangles are not derived there: the engine
+answers them (`rust/shaper/src/engine/editing/`) over the prepared layout, one call and one fixed record each, and the
+host reaches them through `GlyphTextController.editing` (`src/text-editing.ts`). Offsets are UTF-16 code units on the
+engine's grapheme boundaries and an invalid one throws `TextOffsetError`; a position carries an affinity that tells the
+end of a wrapped line from the start of the next and the two sides of a bidi boundary. `replace(start, end, insert)`
+validates through the same engine call, states its range to the planner so the engine is told exactly that edit, and
+rebases spans by one rule shared with the engine through `tests/fixtures/span-rebase-vectors.json`. Three `Text` and
+TypeGPU text expose the five queries and `replace`.
 
 A same-build isolation over one 21,805-glyph paragraph measured 0.002 ms for an unchanged publication, 0.174 ms for the
 aggregate measurement sidecar, and 0.582 ms for full glyph inspection. Three requests only aggregate measurement and

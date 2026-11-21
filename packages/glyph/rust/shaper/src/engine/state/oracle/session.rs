@@ -225,6 +225,16 @@ impl Session {
         })
     }
 
+    /// The engine and its font registry, for reads over the layout the last step prepared.
+    pub fn engine(&self) -> (&TextEngine, &ShaperRegistry) {
+        (&self.engine, &self.registry)
+    }
+
+    /// The engine alone, for the one editing call that fills a lazy lane.
+    pub fn engine_mut(&mut self) -> &mut TextEngine {
+        &mut self.engine
+    }
+
     pub fn document(&self) -> Option<&Document> {
         self.document.as_ref()
     }

@@ -305,6 +305,14 @@ export const textShaperAbi = {
     "retainedFontBytes": "pmndrs_glyph_shaper_retained_font_bytes",
     "rootCount": "pmndrs_glyph_engine_root_count",
     "shapePlanCount": "pmndrs_glyph_shaper_shape_plan_count",
+    "textBoundary": "pmndrs_glyph_engine_text_boundary",
+    "textCaret": "pmndrs_glyph_engine_text_caret",
+    "textCheckRange": "pmndrs_glyph_engine_text_check_range",
+    "textHitTest": "pmndrs_glyph_engine_text_hit_test",
+    "textMove": "pmndrs_glyph_engine_text_move",
+    "textQueryPointer": "pmndrs_glyph_engine_text_query_ptr",
+    "textRangeRects": "pmndrs_glyph_engine_text_range_rects",
+    "textRectsPointer": "pmndrs_glyph_engine_text_rects_ptr",
     "textUpdate": "pmndrs_glyph_engine_update",
     "textUpdateBatch": "pmndrs_glyph_engine_update_batch",
     "updateBatchCapacity": "pmndrs_glyph_engine_update_batch_capacity",
@@ -871,6 +879,37 @@ export const textShaperAbi = {
       "ppem": 0,
       "reserved": 4,
       "size": 8
+    },
+    "textQueryResult": {
+      "alignment": 8,
+      "end": 8,
+      "errorAfter": 100,
+      "errorBefore": 96,
+      "errorDetail": 88,
+      "errorOffset": 80,
+      "errorTextLength": 92,
+      "flags": 0,
+      "goalX": 56,
+      "height": 48,
+      "level": 16,
+      "line": 12,
+      "offset": 4,
+      "rectCount": 8,
+      "secondaryHeight": 72,
+      "secondaryX": 56,
+      "secondaryY": 64,
+      "size": 112,
+      "width": 40,
+      "x": 24,
+      "y": 32
+    },
+    "textRect": {
+      "alignment": 8,
+      "height": 24,
+      "size": 32,
+      "width": 16,
+      "x": 0,
+      "y": 8
     }
   },
   "memory": "memory",
@@ -897,9 +936,48 @@ export const textShaperAbi = {
     "styleNestingInvalid": 17,
     "styleRangeInvalid": 15,
     "styleRootInvalid": 18,
-    "styleSplitsCluster": 16
+    "styleSplitsCluster": 16,
+    "textOffsetInvalid": 21,
+    "textQueryInvalid": 22
   },
-  "version": 1,
+  "textQuery": {
+    "affinity": {
+      "downstream": 1,
+      "upstream": 0
+    },
+    "argument": {
+      "end": 2,
+      "offset": 0,
+      "start": 1
+    },
+    "direction": {
+      "backward": 1,
+      "down": 5,
+      "forward": 0,
+      "left": 2,
+      "right": 3,
+      "up": 4
+    },
+    "flags": {
+      "clipped": 2,
+      "downstream": 4,
+      "secondary": 1
+    },
+    "noBoundary": -1,
+    "reason": {
+      "insideGrapheme": 3,
+      "notInteger": 0,
+      "outOfRange": 1,
+      "reversed": 2
+    },
+    "unit": {
+      "grapheme": 0,
+      "line": 3,
+      "sentence": 2,
+      "word": 1
+    }
+  },
+  "version": 2,
   "versions": {
     "fontFormat": 0,
     "harfrust": "0.12.0",

@@ -562,6 +562,8 @@ pub(crate) struct ProjectedOccurrence<'a> {
     pub has_outline: bool,
     pub span: &'a OccurrenceSpan,
     pub owner_cluster: u32,
+    /// Index of the glyph in its source stream: the cluster arena's, or the boundary shape's.
+    pub source_glyph: u32,
 }
 
 impl<'a> OccurrenceCursor<'a> {
@@ -779,6 +781,7 @@ fn project_occurrence_source<'a>(
         has_outline: local.has_outline,
         span,
         owner_cluster,
+        source_glyph,
     })
 }
 

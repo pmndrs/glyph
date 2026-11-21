@@ -19,7 +19,7 @@ test('public initialization rejects incompatible modules before use and matched 
   for (const wasm of [legacy, await WebAssembly.compile(legacy)]) {
     const { glyph: isolatedGlyph } = await import(`../../dist/glyph.js?legacy-${runtimeId++}`);
     const initializing = isolatedGlyph.init({ wasm });
-    await assert.rejects(initializing, /incompatible text shaper Wasm ABI: expected 1/);
+    await assert.rejects(initializing, /incompatible text shaper Wasm ABI: expected 2/);
     assert.equal(isolatedGlyph.initialized, false);
     assert.equal(
       isolatedGlyph.init({ wasm }),
@@ -29,13 +29,13 @@ test('public initialization rejects incompatible modules before use and matched 
   }
   const incompatible = binaryen.parseText(`(module
     (memory (export "memory") 1)
-    (func (export "pmndrs_glyph_shaper_abi_version") (result i32) (i32.const 2))
+    (func (export "pmndrs_glyph_shaper_abi_version") (result i32) (i32.const 3))
     (func (export "pmndrs_glyph_shaper_initialize") (result i32) unreachable))`);
   try {
     const { glyph: isolatedGlyph } = await import('../../dist/glyph.js?future-abi');
     await assert.rejects(
       isolatedGlyph.init({ wasm: incompatible.emitBinary() }),
-      /incompatible text shaper Wasm ABI: expected 1, received 2/,
+      /incompatible text shaper Wasm ABI: expected 2, received 3/,
     );
     assert.equal(isolatedGlyph.initialized, false);
   } finally {

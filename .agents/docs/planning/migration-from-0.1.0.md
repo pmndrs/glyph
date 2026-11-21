@@ -63,11 +63,32 @@ frame retries. An input that always traps is refused alone and reported on that 
 
 ## 3. Renamed and removed application names
 
-| Entry                                      | 0.1.0                                                            | Now                                                       |
-| ------------------------------------------ | ---------------------------------------------------------------- | --------------------------------------------------------- |
-| three, typegpu, core `GlyphTextController` | `withGlyphs(read)`                                               | `readGlyphs(read)`, same signature                        |
-| three                                      | `Text.breakApart()`                                              | `Text.split()`, same return type                          |
-| three                                      | `DetachedGlyph.sourceIndex`, `ThreeGlyphMeasurement.sourceIndex` | Removed. Detached indices are dense over drawable glyphs. |
+| Entry                                      | 0.1.0                                                            | Now                                                                                                     |
+| ------------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| three, typegpu, core `GlyphTextController` | `withGlyphs(read)`                                               | `readGlyphs(read)`, same signature                                                                      |
+| three                                      | `Text.breakApart()`                                              | `Text.split()`, same return type                                                                        |
+| three                                      | `DetachedGlyph.sourceIndex`, `ThreeGlyphMeasurement.sourceIndex` | Removed. Detached indices are dense over drawable glyphs.                                               |
+| three                                      | `Text.caretAt(x, y)`                                             | `text.hitTest({ x, y })`, then `text.caret(position)` for the rectangle                                 |
+| three                                      | `Text.selectionRects(start, end)`                                | `text.rangeRects(start, end)`                                                                           |
+| three, root                                | `GlyphCaret` (`offset`, `line`, `leading`, `rect`)               | `TextPosition` (`offset`, `affinity`) and `TextCaret` (`rect`, `line`, `level`, `secondary`, `clipped`) |
+| core                                       | `GlyphPlacements.caretAt`, `caretForOffset`, `selectionRects`    | Removed. Use `GlyphTextController.editing`.                                                             |
+
+`Text.caretAt` and `Text.selectionRects` existed in 0.1.0; `Text.caretForOffset` was added after it and is replaced
+by `text.caret({ offset, affinity })` before any release. What changes in behaviour, not only in name:
+
+- **Nothing is snapped or clipped.** `selectionRects` swapped a reversed range and clipped one that ran past the
+  text; `caretForOffset` moved an offset inside a cluster to the cluster's start. Every editing method now throws
+  `TextOffsetError` for an offset that is not a whole number, is out of range, ends a reversed range, or is inside
+  a grapheme. The error carries `method`, `argument`, the `offset` as given, `reason`, `textLength`, and the nearest
+  valid boundaries `before` and `after`.
+- **A position has a side.** `GlyphCaret.leading` mixed up two things. `affinity` is `'downstream'` (the caret
+  belongs to the grapheme that starts at the offset) or `'upstream'` (to the one that ends there). They differ at
+  a soft wrap, where `upstream` is the end of the earlier line, and at a bidi boundary, where they are two x on one
+  line and `caret().secondary` is the other one.
+- **Boundaries are graphemes, not shaping clusters, and they are the engine's.** A caret can stand inside a
+  ligature (`f|fi`), placed by the font's ligature carets when it has them. A conjunct, an emoji sequence, a flag
+  and a combining sequence are one unit. `Intl.Segmenter` is not consulted and may disagree.
+- **The methods never return `undefined`.** They prepare the text if a setter left it dirty, as `measure()` does.
 
 ## 4. New application surface
 
@@ -81,7 +102,42 @@ None of these require a change; they replace patterns that no longer work or wer
   TypeGPU text.
 - `frameloop="demand"` (React) and on-demand rendering (Vue) now draw an imperative `ref.current.text = …`.
 - `Constraints.anchor` (`{ x, y }`), `measure().anchorOffset`, `fontMetrics` on measurements and lines, glyph outlines
-  (`outlineAt`), `Text.caretForOffset`, `TextGroup.batching`, and the `msdfAtlas: 'msdf' | 'sdf'` config option.
+  (`outlineAt`), `TextGroup.batching`, and the `msdfAtlas: 'msdf' | 'sdf'` config option.
+- Editing geometry and one exact edit, on Three `Text` and on TypeGPU text. These are what an application needs to
+  build its own editable field; selection state, caret drawing, keyboard, pointer, clipboard and undo stay with the
+  application.
+
+  ```ts
+  text.caret({ offset, affinity }); // { rect, line, level, secondary, clipped }
+  text.hitTest({ x, y }); // { offset, affinity }
+  text.move(position, direction, unit, goalX?); // { position, goalX }
+  text.boundary(position, unit); // { start, end }
+  text.rangeRects(start, end); // LayoutBox[]
+  text.replace(start, end, insert);
+  ```
+
+  Offsets are UTF-16 code units of `text.text`. Coordinates are logical Text-local, +X right and +Y down, anchor
+  included. `direction` is `'forward' | 'backward'` (logical), `'left' | 'right'` (visual across bidi runs) or
+  `'up' | 'down'` (by line; pass the returned `goalX` to the next vertical move). `unit` is
+  `'grapheme' | 'word' | 'sentence' | 'line'`. `replace` edits exactly the range it names, and spans follow it:
+  inserted text takes the style of the grapheme before it.
+
+  An input method needs nothing more. The application tracks its composition as `[start, start + insert.length)`
+  and underlines `rangeRects` of that range:
+
+  ```ts
+  let composition = { start: caretOffset, end: caretOffset };
+  function compose(insert: string) {
+    text.replace(composition.start, composition.end, insert);
+    composition = { start: composition.start, end: composition.start + insert.length };
+    underline(text.rangeRects(composition.start, composition.end));
+  }
+  input.addEventListener('compositionupdate', (event) => compose(event.data));
+  input.addEventListener('compositionend', (event) => {
+    compose(event.data);
+    caretOffset = composition.end;
+  });
+  ```
 
 Results that change without a code change: line breaks after opening quotation marks now follow UAX #14 LB15a, so text
 containing them can wrap differently; `boundingBox`, `measureGlyphs` and `split` include the anchor.
@@ -123,7 +179,10 @@ draws, before the frame that draws them. MSDF quads are trimmed to the ink.
   callbacks; every root is prepared, none is published), `unchanged()` (the root settled without a publication) and
   `invalidated()` (a setter left the root needing a frame). An integration that resolved anchors or read measurements
   inside a setter does it in `prepared()` now.
-- `GlyphTextController` gains `refusal`, `keepMeasured`, `preparedMeasurement()` and `awaitsPreparation`.
+- `GlyphTextController` gains `refusal`, `keepMeasured`, `preparedMeasurement()`, `awaitsPreparation` and
+  `editing`: `caret`, `hitTest`, `move`, `boundary`, `rangeRects` and `beginReplace(start, end, insert)`, which
+  validates a replacement's range and states it to the engine before the integration sets the new text. An
+  integration that wrapped `createGlyphPlacements(...).caretAt` wraps `controller.editing` instead.
   `controller.update()` no longer enters the engine and no longer throws engine status errors.
 - While `layout()` hooks run, `controller.update()` throws `GlyphLayoutPhaseError` for a change to a layout input.
 

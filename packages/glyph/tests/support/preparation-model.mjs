@@ -207,4 +207,66 @@ export function preparationModel(name, mount) {
       if (kept.committed !== undefined) assert.equal(kept.committed(), true);
     },
   );
+  // Editing queries are reads like any other: current after a setter, one answer per call, and the same on
+  // every integration. `object` is the text itself: a Three `Text` or a `TypeGpuText`.
+  const down = (offset) => ({ offset, affinity: 'downstream' });
+
+  scenario('an editing query after a setter answers for the new value', ['short', 'longer text'], async (host) => {
+    const [subject, reference] = host.texts;
+    if (subject.object?.caret === undefined) return;
+    subject.set('longer text');
+    const text = subject.object;
+    assert.deepEqual(text.boundary(down(0), 'line'), { start: 0, end: 11 });
+    assert.deepEqual(text.boundary(down(8), 'word'), { start: 7, end: 11 });
+    const end = text.caret({ offset: 11, affinity: 'upstream' });
+    assert.ok(end.rect.x > text.caret(down(0)).rect.x);
+    assert.equal(end.rect.width, 0);
+    assert.equal(end.rect.x, reference.object.caret({ offset: 11, affinity: 'upstream' }).rect.x);
+    assert.deepEqual(text.hitTest({ x: end.rect.x + 500, y: end.rect.y + 1 }), { offset: 11, affinity: 'upstream' });
+    assert.deepEqual(text.move(down(0), 'forward', 'word').position, down(6));
+    const rects = text.rangeRects(0, 11);
+    assert.equal(rects.length, 1);
+    assert.ok(Math.abs(rects[0].x + rects[0].width - end.rect.x) < 1e-6);
+  });
+
+  scenario('replace edits exactly the range it names', ['abc def', 'abXYZ def'], async (host) => {
+    const [subject, reference] = host.texts;
+    if (subject.object?.replace === undefined) return;
+    await host.frame();
+    subject.object.replace(2, 3, 'XYZ');
+    assert.deepEqual(size(subject.read()), size(reference.read()));
+    assert.deepEqual(subject.object.boundary(down(0), 'word'), { start: 0, end: 5 });
+    await host.frame();
+    assert.deepEqual(size(subject.read()), size(reference.read()));
+    if (subject.committed !== undefined) assert.equal(subject.committed(), true);
+  });
+
+  scenario('an offset inside a grapheme is refused, not snapped', ['e\u0301x'], async (host) => {
+    const [subject] = host.texts;
+    if (subject.object?.caret === undefined) return;
+    const text = subject.object;
+    const before = size(subject.read());
+    for (const [method, call, argument] of [
+      ['caret', () => text.caret(down(1)), 'offset'],
+      ['move', () => text.move(down(1), 'forward', 'grapheme'), 'offset'],
+      ['boundary', () => text.boundary(down(1), 'grapheme'), 'offset'],
+      ['rangeRects', () => text.rangeRects(0, 1), 'end'],
+      ['replace', () => text.replace(1, 2, 'y'), 'start'],
+    ]) {
+      assert.throws(call, (error) => {
+        assert.equal(error.name, 'TextOffsetError');
+        assert.equal(error.code, 'invalid-offset');
+        assert.deepEqual(
+          [error.method, error.argument, error.offset, error.reason, error.textLength, error.before, error.after],
+          [method, argument, 1, 'inside-grapheme', 3, 0, 2],
+        );
+        assert.equal(
+          error.message,
+          `${method}(): ${argument} 1 is inside a grapheme; nearest boundaries are 0 and 2 (UTF-16 code units of the source text)`,
+        );
+        return true;
+      });
+    }
+    assert.deepEqual(size(subject.read()), before, 'a refused replace changes nothing');
+  });
 }

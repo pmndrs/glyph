@@ -13,6 +13,7 @@ export type GlyphErrorCode =
   | 'frame-rejected'
   | 'layout-phase'
   | 'invalid-input'
+  | 'invalid-offset'
   | 'internal';
 
 /** Base class for operational and domain failures produced by Glyph. */

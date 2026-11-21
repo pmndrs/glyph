@@ -79,14 +79,19 @@ test('placement reads query desired layout before first publication and after ed
       assert.ok(measurements !== undefined, 'query must answer before renderer publication');
       const expected = placementsOf(node);
       assert.equal(measurements.length, expected.glyphs.length);
-      assert.deepEqual(node.caretAt(0, 0), expected.caretAt(0, 0));
-      assert.deepEqual(node.caretForOffset(text.length), expected.caretForOffset(text.length));
-      assert.deepEqual(node.selectionRects(0, text.length), expected.selectionRects(0, text.length));
+      const end = { offset: text.length, affinity: 'upstream' };
+      const hit = node.hitTest({ x: 0, y: 0 });
+      const caret = node.caret(end);
+      const rects = node.rangeRects(0, text.length);
+      assert.deepEqual(hit, { offset: 0, affinity: 'downstream' });
+      assert.equal(rects.length, 1);
+      assert.ok(Math.abs(rects[0].x + rects[0].width - caret.rect.x) < 1e-3);
       assert.equal(node.commitState().status, 'pending', 'read-only queries must not publish renderer state');
       scene.updateMatrixWorld(true);
       assert.equal(node.commitState().status, 'committed');
-      assert.deepEqual(node.caretAt(0, 0), expected.caretAt(0, 0));
-      assert.deepEqual(node.selectionRects(0, text.length), expected.selectionRects(0, text.length));
+      assert.deepEqual(node.hitTest({ x: 0, y: 0 }), hit);
+      assert.deepEqual(node.caret(end), caret);
+      assert.deepEqual(node.rangeRects(0, text.length), rects);
     }
   } finally {
     unmount({ group, node });
@@ -153,32 +158,34 @@ test('glyph advances and ink extents agree with independently published paragrap
   }
 });
 
-test('caret and selection helpers resolve clusters without exposing a mutable snapshot', async (t) => {
+const down = (offset) => ({ offset, affinity: 'downstream' });
+const up = (offset) => ({ offset, affinity: 'upstream' });
+
+test('caret, hit and range queries resolve grapheme boundaries without exposing a mutable snapshot', async (t) => {
   const mounted = await mount(t, await loadFont(), 'hi there');
   try {
     const line = mounted.node.glyphs().lines[0];
-    const start = mounted.node.caretAt(-1_000, line.baseline);
-    const end = mounted.node.caretAt(1_000, line.baseline);
-    assert.equal(start?.offset, 0);
-    assert.equal(start?.leading, true);
-    assert.equal(start?.rect.height, line.lineHeight);
-    assert.equal(end?.leading, false);
-    assert.ok((end?.rect.x ?? 0) > (start?.rect.x ?? 0));
+    const start = mounted.node.hitTest({ x: -1_000, y: line.baseline });
+    const end = mounted.node.hitTest({ x: 1_000, y: line.baseline });
+    assert.deepEqual(start, down(0));
+    assert.deepEqual(end, up(mounted.node.text.length), 'no grapheme starts at the end of the text');
+    const startCaret = mounted.node.caret(start);
+    const endCaret = mounted.node.caret(end);
+    assert.equal(startCaret.rect.height, line.lineHeight);
+    assert.ok(endCaret.rect.x > startCaret.rect.x);
 
-    assert.deepEqual(mounted.node.selectionRects(3, 3), []);
-    const whole = mounted.node.selectionRects(0, mounted.node.text.length);
-    assert.equal(whole?.length, 1);
-    assert.equal(whole?.[0].height, line.lineHeight);
+    assert.deepEqual(mounted.node.rangeRects(3, 3), []);
+    const whole = mounted.node.rangeRects(0, mounted.node.text.length);
+    assert.equal(whole.length, 1);
+    assert.equal(whole[0].height, line.lineHeight);
 
-    const atStart = mounted.node.caretForOffset(0);
-    assert.deepEqual(atStart, start, 'the caret before the first cluster matches the caret at the line start');
-    const atEnd = mounted.node.caretForOffset(mounted.node.text.length);
-    assert.deepEqual(atEnd, end, 'the caret after the last cluster matches the caret at the line end');
-    const inside = mounted.node.caretForOffset(3);
-    assert.equal(inside?.offset, 3);
-    assert.equal(inside?.leading, true);
-    assert.equal(inside?.rect.x, mounted.node.caretAt(inside.rect.x, line.baseline)?.rect.x);
-    assert.throws(() => mounted.node.caretForOffset(mounted.node.text.length + 1), RangeError);
+    const inside = mounted.node.caret(down(3));
+    assert.equal(inside.line, 0);
+    assert.deepEqual(mounted.node.hitTest({ x: inside.rect.x, y: line.baseline }), down(3));
+    assert.throws(
+      () => mounted.node.caret(down(mounted.node.text.length + 1)),
+      (error) => error.name === 'TextOffsetError' && error.reason === 'out-of-range',
+    );
   } finally {
     unmount(mounted);
   }
@@ -196,7 +203,12 @@ test('word and caret ranges preserve UTF-16 clusters and bidi direction', async 
   try {
     const astralInspection = astral.node.glyphs();
     assert.equal(astralInspection.clusters.at(-1), 1, 'the astral glyph starts at one UTF-16 cluster boundary');
-    assert.equal(astral.node.selectionRects(2, 3)?.length, 1, 'a range inside an astral cluster selects it');
+    assert.equal(astral.node.rangeRects(1, 3).length, 1, 'the astral cluster is one selectable grapheme');
+    assert.throws(
+      () => astral.node.rangeRects(2, 3),
+      (error) => error.name === 'TextOffsetError' && error.reason === 'inside-grapheme' && error.argument === 'start',
+      'a range that starts inside a surrogate pair is refused, not widened',
+    );
 
     const combiningInspection = combining.node.glyphs();
     assert.deepEqual([...new Set(combiningInspection.clusters)], [0], 'a combining sequence remains one cluster');
@@ -204,12 +216,16 @@ test('word and caret ranges preserve UTF-16 clusters and bidi direction', async 
     const rtlInspection = rtl.node.glyphs();
     const rtlLine = rtlInspection.lines[0];
     assert.ok([...rtlInspection.glyphBidiLevels].every((level) => (level & 1) === 1));
-    const logicalStart = rtl.node.caretAt(1_000, rtlLine.baseline);
-    const logicalEnd = rtl.node.caretAt(-1_000, rtlLine.baseline);
-    assert.equal(logicalStart?.offset, 0, 'RTL logical start is the visually right edge');
-    assert.equal(logicalStart?.leading, true);
-    assert.equal(logicalEnd?.offset, 'אב'.length, 'RTL logical end is the visually left edge');
-    assert.equal(logicalEnd?.leading, false);
+    assert.deepEqual(
+      rtl.node.hitTest({ x: 1_000, y: rtlLine.baseline }),
+      down(0),
+      'RTL logical start is the visually right edge',
+    );
+    assert.deepEqual(
+      rtl.node.hitTest({ x: -1_000, y: rtlLine.baseline }),
+      up('אב'.length),
+      'RTL logical end is the visually left edge',
+    );
   } finally {
     unmount(astral);
     unmount(combining);
@@ -217,7 +233,7 @@ test('word and caret ranges preserve UTF-16 clusters and bidi direction', async 
   }
 });
 
-test('caretForOffset follows logical clusters through RTL and mixed-direction text', async (t) => {
+test('carets follow logical graphemes through RTL and mixed-direction text', async (t) => {
   const [inter, amiri] = await Promise.all([loadFont(), loadFont('amiri')]);
   const rtl = await mount(t, amiri, 'سلام', {
     style: { fontSize: 16, direction: 'rtl', language: 'ar' },
@@ -227,55 +243,53 @@ test('caretForOffset follows logical clusters through RTL and mixed-direction te
     style: { fontSize: 16, direction: 'ltr', language: 'ar' },
   });
   try {
-    const rtlPlacements = placementsOf(rtl.node);
-    const rtlStart = rtlPlacements.caretForOffset(0);
-    const rtlEnd = rtlPlacements.caretForOffset(rtl.node.text.length);
-    assert.equal(rtlStart.offset, 0);
-    assert.equal(rtlStart.leading, true);
-    assert.equal(rtlEnd.offset, rtl.node.text.length);
-    assert.equal(rtlEnd.leading, false);
+    const rtlStart = rtl.node.caret(down(0));
+    const rtlEnd = rtl.node.caret(up(rtl.node.text.length));
     assert.ok(rtlStart.rect.x > rtlEnd.rect.x, 'RTL logical start must draw to the right of its logical end');
+    assert.equal(rtlStart.level, 1);
 
+    const rtlPlacements = placementsOf(rtl.node);
     const rtlClusters = [...new Set(rtlPlacements.glyphs.map((glyph) => glyph.cluster))].sort(
       (left, right) => left - right,
     );
-    const rtlCarets = rtlClusters.map((cluster) => rtlPlacements.caretForOffset(cluster));
-    assert.deepEqual(
-      rtlCarets.map((caret) => caret.offset),
-      rtlClusters,
-      'each logical RTL cluster must resolve independently of visual glyph order',
-    );
+    const rtlCarets = rtlClusters.map((cluster) => rtl.node.caret(down(cluster)));
     assert.equal(
       new Set(rtlCarets.map((caret) => caret.rect.x)).size,
       rtlClusters.length,
       'distinct RTL clusters must not collapse onto one visual caret',
     );
+    for (const [index, cluster] of rtlClusters.entries()) {
+      assert.ok(
+        Math.abs(rtlCarets[index].rect.x - leadingEdgeOf(rtlPlacements, cluster)) < 1e-3,
+        'an RTL caret leads from the right',
+      );
+    }
 
     const mixedPlacements = placementsOf(mixed.node);
     const mixedRtlClusters = [
       ...new Set(mixedPlacements.glyphs.filter((glyph) => (glyph.bidiLevel & 1) !== 0).map((glyph) => glyph.cluster)),
     ].sort((left, right) => left - right);
     assert.ok(mixedRtlClusters.length >= 3, 'the real mixed-font fixture must retain a multi-cluster RTL run');
-    const mixedCarets = mixedRtlClusters.map((cluster) => mixedPlacements.caretForOffset(cluster));
-    assert.deepEqual(
-      mixedCarets.map((caret) => caret.offset),
-      mixedRtlClusters,
-      'logical offsets inside an RTL run must remain distinct in an LTR paragraph',
-    );
+    const mixedCarets = mixedRtlClusters.map((cluster) => mixed.node.caret(down(cluster)));
     assert.equal(new Set(mixedCarets.map((caret) => caret.rect.x)).size, mixedRtlClusters.length);
 
-    const ambiguous = mixedCarets[0];
-    assert.ok(ambiguous);
-    assert.equal(ambiguous.leading, true, 'an ambiguous bidi boundary uses the owning cluster leading affinity');
-    assert.equal(ambiguous.rect.x, leadingEdgeOf(mixedPlacements, ambiguous.offset));
-    assert.deepEqual(mixed.node.caretForOffset(ambiguous.offset), ambiguous, 'Three Text mirrors the core helper');
+    // The start of the RTL run is a bidi boundary: downstream is the run's first letter, at its right edge;
+    // upstream is the end of the space before it. Affinity says which, and each names the other.
+    const boundary = mixedRtlClusters[0];
+    const downstream = mixed.node.caret(down(boundary));
+    const upstream = mixed.node.caret(up(boundary));
+    assert.ok(Math.abs(downstream.rect.x - leadingEdgeOf(mixedPlacements, boundary)) < 1e-3);
+    assert.ok(upstream.rect.x < downstream.rect.x);
+    assert.deepEqual(downstream.secondary, upstream.rect);
+    assert.deepEqual(upstream.secondary, downstream.rect);
+    assert.deepEqual([downstream.level, upstream.level], [1, 0]);
   } finally {
     unmount(rtl);
     unmount(mixed);
   }
 });
 
-test('caretForOffset keeps hard-break gaps on the preceding line and soft wraps on the following line', async (t) => {
+test('a hard break ends its line, and a soft wrap is the end of one line and the start of the next', async (t) => {
   const font = await loadFont();
   const newline = await mount(t, font, 'ab\ncd');
   const crlf = await mount(t, font, 'ab\r\ncd');
@@ -285,39 +299,35 @@ test('caretForOffset keeps hard-break gaps on the preceding line and soft wraps 
     layout: { wrap: 'word' },
   });
   try {
-    const newlinePlacements = placementsOf(newline.node);
-    const newlineEnd = newlinePlacements.caretForOffset(2);
+    const newlineLines = newline.node.glyphs().lines;
+    const newlineEnd = newline.node.caret(down(2));
     assert.equal(newlineEnd.line, 0);
-    assert.equal(newlineEnd.offset, 2);
-    assert.equal(newlineEnd.leading, false);
-    assert.deepEqual(newlineEnd, newlinePlacements.caretAt(1_000, newlinePlacements.lines[0].baseline));
-    assert.equal(newlinePlacements.caretForOffset(3).line, 1, 'the offset after LF starts the following line');
+    assert.deepEqual(newline.node.hitTest({ x: 1_000, y: newlineLines[0].baseline }), up(2));
+    assert.deepEqual(newline.node.caret(up(2)), newlineEnd, 'before a hard break both affinities are one place');
+    assert.equal(newline.node.caret(down(3)).line, 1, 'the offset after LF starts the following line');
 
-    const crlfPlacements = placementsOf(crlf.node);
-    const crlfEnd = crlfPlacements.caretForOffset(2);
-    assert.equal(crlfEnd.line, 0);
-    assert.deepEqual(
-      crlfPlacements.caretForOffset(3),
-      crlfEnd,
-      'both UTF-16 offsets within a CRLF gap pin to the preceding line end',
+    assert.equal(crlf.node.caret(down(2)).line, 0);
+    assert.throws(
+      () => crlf.node.caret(down(3)),
+      (error) => error.name === 'TextOffsetError' && error.before === 2 && error.after === 4,
+      'CRLF is one grapheme: the offset between its two units is refused',
     );
-    assert.equal(crlfPlacements.caretForOffset(4).line, 1, 'the offset after CRLF starts the following line');
+    assert.equal(crlf.node.caret(down(4)).line, 1, 'the offset after CRLF starts the following line');
 
-    const trailingPlacements = placementsOf(trailing.node);
-    assert.equal(trailingPlacements.caretForOffset(2).line, 0, 'the offset before trailing LF ends the text line');
-    const afterTrailingNewline = trailingPlacements.caretForOffset(3);
+    assert.equal(trailing.node.caret(down(2)).line, 0, 'the offset before trailing LF ends the text line');
+    const afterTrailingNewline = trailing.node.caret(down(3));
     assert.equal(afterTrailingNewline.line, 1);
-    assert.equal(afterTrailingNewline.offset, 3);
-    assert.equal(afterTrailingNewline.leading, true);
+    assert.ok(afterTrailingNewline.rect.height > 0, 'the empty last line has a line box');
 
-    const wrappedPlacements = placementsOf(wrapped.node);
-    assert.ok(wrappedPlacements.lines.length > 1, 'the real Inter fixture must wrap');
-    const softBoundary = wrappedPlacements.lines[0].textEnd;
-    assert.equal(softBoundary, wrappedPlacements.lines[1].textStart, 'the fixture boundary must be a soft wrap');
-    const softCaret = wrappedPlacements.caretForOffset(softBoundary);
-    assert.equal(softCaret.line, 1);
-    assert.equal(softCaret.offset, softBoundary);
-    assert.equal(softCaret.leading, true);
+    const wrappedLines = wrapped.node.glyphs().lines;
+    assert.ok(wrappedLines.length > 1, 'the real Inter fixture must wrap');
+    const softBoundary = wrappedLines[0].textEnd;
+    assert.equal(softBoundary, wrappedLines[1].textStart, 'the fixture boundary must be a soft wrap');
+    const nextStart = wrapped.node.caret(down(softBoundary));
+    const lineEnd = wrapped.node.caret(up(softBoundary));
+    assert.deepEqual([lineEnd.line, nextStart.line], [0, 1]);
+    assert.ok(lineEnd.rect.x > nextStart.rect.x && lineEnd.rect.y < nextStart.rect.y);
+    assert.equal(lineEnd.secondary, undefined, 'the other side of a wrap is not a split caret');
   } finally {
     unmount(newline);
     unmount(crlf);
@@ -326,27 +336,37 @@ test('caretForOffset keeps hard-break gaps on the preceding line and soft wraps 
   }
 });
 
-test('caretForOffset pins interior UTF-16 offsets to their owning cluster and rejects invalid ranges', async (t) => {
+test('an offset inside a grapheme is refused with the boundaries around it', async (t) => {
   const font = await loadFont();
   const astral = await mount(t, font, 'A😀b');
   const combining = await mount(t, font, 'e\u0301x');
   try {
-    const astralPlacements = placementsOf(astral.node);
+    const refusal = (call) => {
+      try {
+        call();
+      } catch (error) {
+        return [error.name, error.reason, error.before, error.after];
+      }
+      return undefined;
+    };
     assert.deepEqual(
-      astralPlacements.caretForOffset(2),
-      astralPlacements.caretForOffset(1),
-      'an offset inside a surrogate pair pins to the emoji cluster leading edge',
+      refusal(() => astral.node.caret(down(2))),
+      ['TextOffsetError', 'inside-grapheme', 1, 3],
+      'an offset inside a surrogate pair is not pinned to the emoji',
     );
-
-    const combiningPlacements = placementsOf(combining.node);
     assert.deepEqual(
-      combiningPlacements.caretForOffset(1),
-      combiningPlacements.caretForOffset(0),
-      'an offset inside a combining sequence pins to its owning cluster leading edge',
+      refusal(() => combining.node.caret(down(1))),
+      ['TextOffsetError', 'inside-grapheme', 0, 2],
+      'an offset inside a combining sequence is not pinned to its base',
     );
-
-    for (const offset of [-1, 0.5, astral.node.text.length + 1, Number.NaN, Number.POSITIVE_INFINITY]) {
-      assert.throws(() => astralPlacements.caretForOffset(offset), RangeError);
+    for (const [offset, reason] of [
+      [-1, 'out-of-range'],
+      [0.5, 'not-integer'],
+      [astral.node.text.length + 1, 'out-of-range'],
+      [Number.NaN, 'not-integer'],
+      [Number.POSITIVE_INFINITY, 'not-integer'],
+    ]) {
+      assert.equal(refusal(() => astral.node.caret(down(offset)))?.[1], reason, String(offset));
     }
     const astralLayout = astral.node.glyphs();
     assert.throws(
@@ -653,8 +673,8 @@ test('layout reads answer nothing once the root is disposed', async (t) => {
   try {
     three.dispose();
     assert.equal(node.measureGlyphs(), undefined);
-    assert.equal(node.caretAt(0, 0), undefined);
-    assert.equal(node.selectionRects(0, 1), undefined);
+    assert.throws(() => node.hitTest({ x: 0, y: 0 }));
+    assert.throws(() => node.rangeRects(0, 1));
     assert.throws(() => node.split(), /before a layout is available/);
   } finally {
     node.dispose();

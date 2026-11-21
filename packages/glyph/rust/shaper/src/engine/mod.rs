@@ -39,6 +39,8 @@ pub mod codec;
 pub mod codec_gather;
 #[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
 pub(crate) mod codec_wire;
+/// Editing queries over a prepared paragraph. No wasm export reaches them yet.
+pub mod editing;
 pub mod ordered_plan;
 mod placement_slot_arena;
 mod placement_state;
@@ -67,7 +69,7 @@ pub(crate) mod work_attribution;
 pub(crate) use positioning::SemanticGlyph;
 #[cfg(feature = "oracle")]
 pub use state::oracle;
-pub use state::{EngineError, FrameFault, TextEngine};
+pub use state::{EngineError, FrameFault, ParagraphSource, TextEngine};
 #[cfg(target_arch = "wasm32")]
 pub(crate) use state::{MeasuredParagraphs, PreparationTarget};
 

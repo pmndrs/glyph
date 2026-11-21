@@ -56,9 +56,24 @@ use crate::engine::semantic_view::{
     SEMANTIC_LINE, SEMANTIC_PARAGRAPH_MEASUREMENT, SEMANTIC_RUN, SEMANTIC_SELECTION,
     SemanticRecord,
 };
-use crate::engine::{SemanticGlyph, layout_borrow::BorrowedLayoutDescriptor};
+use crate::engine::{
+    SemanticGlyph,
+    editing::{
+        Rect,
+        wire::{
+            TEXT_AFFINITY_DOWNSTREAM, TEXT_AFFINITY_UPSTREAM, TEXT_ARGUMENT_END,
+            TEXT_ARGUMENT_OFFSET, TEXT_ARGUMENT_START, TEXT_DIRECTION_BACKWARD,
+            TEXT_DIRECTION_DOWN, TEXT_DIRECTION_FORWARD, TEXT_DIRECTION_LEFT, TEXT_DIRECTION_RIGHT,
+            TEXT_DIRECTION_UP, TEXT_NO_BOUNDARY, TEXT_QUERY_CLIPPED, TEXT_QUERY_DOWNSTREAM,
+            TEXT_QUERY_SECONDARY, TEXT_REASON_INSIDE_GRAPHEME, TEXT_REASON_NOT_INTEGER,
+            TEXT_REASON_OUT_OF_RANGE, TEXT_REASON_REVERSED, TEXT_UNIT_GRAPHEME, TEXT_UNIT_LINE,
+            TEXT_UNIT_SENTENCE, TEXT_UNIT_WORD, TextQueryResult,
+        },
+    },
+    layout_borrow::BorrowedLayoutDescriptor,
+};
 
-pub const ABI_VERSION: u32 = 1;
+pub const ABI_VERSION: u32 = 2;
 pub const SHAPER_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const HARFRUST_VERSION: &str = "0.12.0";
 pub const HARFRUST_COMMIT: &str = "60b28ea22b5261710018d69c168a762bcb28794c";
@@ -588,6 +603,12 @@ layout!(
     BORROWED_LAYOUT_DESCRIPTOR_ALIGNMENT,
     BorrowedLayoutDescriptor
 );
+layout!(
+    TEXT_QUERY_RESULT_SIZE,
+    TEXT_QUERY_RESULT_ALIGNMENT,
+    TextQueryResult
+);
+layout!(TEXT_RECT_SIZE, TEXT_RECT_ALIGNMENT, Rect);
 layout!(
     BORROWED_GLYPH_RECORD_SIZE,
     BORROWED_GLYPH_RECORD_ALIGNMENT,
@@ -1873,6 +1894,35 @@ field_offset!(
     BorrowedLayoutDescriptor,
     glyph_count
 );
+field_offset!(TEXT_QUERY_FLAGS, TextQueryResult, flags);
+field_offset!(TEXT_QUERY_OFFSET, TextQueryResult, offset);
+field_offset!(TEXT_QUERY_END, TextQueryResult, end);
+field_offset!(TEXT_QUERY_LINE, TextQueryResult, line);
+field_offset!(TEXT_QUERY_LEVEL, TextQueryResult, level);
+field_offset!(TEXT_QUERY_X, TextQueryResult, x);
+field_offset!(TEXT_QUERY_Y, TextQueryResult, y);
+field_offset!(TEXT_QUERY_WIDTH, TextQueryResult, width);
+field_offset!(TEXT_QUERY_HEIGHT, TextQueryResult, height);
+field_offset!(TEXT_QUERY_SECONDARY_X, TextQueryResult, secondary_x);
+field_offset!(TEXT_QUERY_SECONDARY_Y, TextQueryResult, secondary_y);
+field_offset!(
+    TEXT_QUERY_SECONDARY_HEIGHT,
+    TextQueryResult,
+    secondary_height
+);
+field_offset!(TEXT_QUERY_ERROR_OFFSET, TextQueryResult, error_offset);
+field_offset!(TEXT_QUERY_ERROR_DETAIL, TextQueryResult, error_detail);
+field_offset!(
+    TEXT_QUERY_ERROR_TEXT_LENGTH,
+    TextQueryResult,
+    error_text_length
+);
+field_offset!(TEXT_QUERY_ERROR_BEFORE, TextQueryResult, error_before);
+field_offset!(TEXT_QUERY_ERROR_AFTER, TextQueryResult, error_after);
+field_offset!(TEXT_RECT_X, Rect, x);
+field_offset!(TEXT_RECT_Y, Rect, y);
+field_offset!(TEXT_RECT_WIDTH, Rect, width);
+field_offset!(TEXT_RECT_HEIGHT, Rect, height);
 field_offset!(BORROWED_GLYPH_STABLE_ID, SemanticGlyph, stable_id);
 field_offset!(BORROWED_GLYPH_FONT_HANDLE, SemanticGlyph, font_handle);
 field_offset!(BORROWED_GLYPH_CLUSTER, SemanticGlyph, cluster);
@@ -2052,7 +2102,15 @@ pub fn json() -> String {
             "borrowParagraphLayout": "pmndrs_glyph_engine_borrow_paragraph_layout",
             "borrowParagraphGlyphs": "pmndrs_glyph_engine_borrow_paragraph_glyphs",
             "copyGlyphs": "pmndrs_glyph_engine_copy_glyphs",
-            "copyDecorations": "pmndrs_glyph_engine_copy_decorations"
+            "copyDecorations": "pmndrs_glyph_engine_copy_decorations",
+            "textQueryPointer": "pmndrs_glyph_engine_text_query_ptr",
+            "textRectsPointer": "pmndrs_glyph_engine_text_rects_ptr",
+            "textCaret": "pmndrs_glyph_engine_text_caret",
+            "textHitTest": "pmndrs_glyph_engine_text_hit_test",
+            "textMove": "pmndrs_glyph_engine_text_move",
+            "textBoundary": "pmndrs_glyph_engine_text_boundary",
+            "textRangeRects": "pmndrs_glyph_engine_text_range_rects",
+            "textCheckRange": "pmndrs_glyph_engine_text_check_range"
         },
         "layouts": {
             "codecRequest": {
@@ -2476,6 +2534,37 @@ pub fn json() -> String {
                 "capHeightTop": SEMANTIC_CAP_HEIGHT_TOP,
                 "xHeightTop": SEMANTIC_X_HEIGHT_TOP
             },
+            "textQueryResult": {
+                "size": TEXT_QUERY_RESULT_SIZE,
+                "alignment": TEXT_QUERY_RESULT_ALIGNMENT,
+                "flags": TEXT_QUERY_FLAGS,
+                "offset": TEXT_QUERY_OFFSET,
+                "end": TEXT_QUERY_END,
+                "rectCount": TEXT_QUERY_END,
+                "line": TEXT_QUERY_LINE,
+                "level": TEXT_QUERY_LEVEL,
+                "x": TEXT_QUERY_X,
+                "y": TEXT_QUERY_Y,
+                "width": TEXT_QUERY_WIDTH,
+                "height": TEXT_QUERY_HEIGHT,
+                "secondaryX": TEXT_QUERY_SECONDARY_X,
+                "secondaryY": TEXT_QUERY_SECONDARY_Y,
+                "secondaryHeight": TEXT_QUERY_SECONDARY_HEIGHT,
+                "goalX": TEXT_QUERY_SECONDARY_X,
+                "errorOffset": TEXT_QUERY_ERROR_OFFSET,
+                "errorDetail": TEXT_QUERY_ERROR_DETAIL,
+                "errorTextLength": TEXT_QUERY_ERROR_TEXT_LENGTH,
+                "errorBefore": TEXT_QUERY_ERROR_BEFORE,
+                "errorAfter": TEXT_QUERY_ERROR_AFTER
+            },
+            "textRect": {
+                "size": TEXT_RECT_SIZE,
+                "alignment": TEXT_RECT_ALIGNMENT,
+                "x": TEXT_RECT_X,
+                "y": TEXT_RECT_Y,
+                "width": TEXT_RECT_WIDTH,
+                "height": TEXT_RECT_HEIGHT
+            },
             "borrowedLayoutDescriptor": {
                 "size": BORROWED_LAYOUT_DESCRIPTOR_SIZE,
                 "alignment": BORROWED_LAYOUT_DESCRIPTOR_ALIGNMENT,
@@ -2886,6 +2975,43 @@ pub fn json() -> String {
                 "outputBytes": RETIRE_OUTPUT_BYTES
             }
         },
+        "textQuery": {
+            "flags": {
+                "secondary": TEXT_QUERY_SECONDARY,
+                "clipped": TEXT_QUERY_CLIPPED,
+                "downstream": TEXT_QUERY_DOWNSTREAM
+            },
+            "affinity": {
+                "upstream": TEXT_AFFINITY_UPSTREAM,
+                "downstream": TEXT_AFFINITY_DOWNSTREAM
+            },
+            "unit": {
+                "grapheme": TEXT_UNIT_GRAPHEME,
+                "word": TEXT_UNIT_WORD,
+                "sentence": TEXT_UNIT_SENTENCE,
+                "line": TEXT_UNIT_LINE
+            },
+            "direction": {
+                "forward": TEXT_DIRECTION_FORWARD,
+                "backward": TEXT_DIRECTION_BACKWARD,
+                "left": TEXT_DIRECTION_LEFT,
+                "right": TEXT_DIRECTION_RIGHT,
+                "up": TEXT_DIRECTION_UP,
+                "down": TEXT_DIRECTION_DOWN
+            },
+            "reason": {
+                "notInteger": TEXT_REASON_NOT_INTEGER,
+                "outOfRange": TEXT_REASON_OUT_OF_RANGE,
+                "reversed": TEXT_REASON_REVERSED,
+                "insideGrapheme": TEXT_REASON_INSIDE_GRAPHEME
+            },
+            "argument": {
+                "offset": TEXT_ARGUMENT_OFFSET,
+                "start": TEXT_ARGUMENT_START,
+                "end": TEXT_ARGUMENT_END
+            },
+            "noBoundary": TEXT_NO_BOUNDARY
+        },
         "status": {
             "ok": 0,
             "invalidHandle": 1,
@@ -2907,7 +3033,9 @@ pub fn json() -> String {
             "styleNestingInvalid": 17,
             "styleRootInvalid": 18,
             "fontMetricsMissing": 19,
-            "registrationInUse": 20
+            "registrationInUse": 20,
+            "textOffsetInvalid": 21,
+            "textQueryInvalid": 22
         }
     })
     .to_string()
