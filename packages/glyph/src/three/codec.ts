@@ -128,7 +128,7 @@ export function threeCodecDescriptor(
   const slugOptions = {
     namespace: THREE_PROGRAM_NAMESPACE,
     system: codecSystemBuffers(modes.slug),
-    placementSlotTarget: { buffer: slugSchema.buffers.bandCounts.id, lane: 2 },
+    placementSlotTarget: { buffer: slugSchema.buffers.glyph.id, lane: 1 },
     capabilitySet,
     transformMode: modes.slug,
     ids,

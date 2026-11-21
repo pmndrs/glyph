@@ -58,7 +58,7 @@ test('production first-party bindings and benchmark codecs preserve every proven
     assert.equal(fn.registerCodec(index + 1, pointer, proof.codecBytes.byteLength), abi.status.ok, name);
     fn.deallocate(pointer, proof.codecBytes.byteLength);
     if (name === 'slug') {
-      assert.equal(proof.outputBytesPerGlyph, 112, 'Slug packs placementSlot into bandCounts.z');
+      assert.equal(proof.outputBytesPerGlyph, 40, 'Slug instances carry rect, color and a glyph-table row');
     }
   }
 });

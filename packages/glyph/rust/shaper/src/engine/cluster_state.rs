@@ -17,8 +17,6 @@ use super::{
     style_state::{ResolvedStyle, StyleArena, StyleSegment},
 };
 
-use super::run_local::{ClusterFinish, RunLocalBuildError, RunLocalGlyphInput};
-
 pub(crate) const CLUSTER_SAFE_BEFORE: u8 = 1 << 0;
 pub(crate) const CLUSTER_REQUIRED_BREAK: u8 = 1 << 1;
 pub(crate) const CLUSTER_HARD_BREAK: u8 = 1 << 2;
@@ -1755,46 +1753,18 @@ impl ClusterArena {
         styles: &[StyleSegment],
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
     ) -> Result<(), EngineError> {
-        for run in &mut self.layout_runs.runs {
-            run.numeric_blocks = NumericBlockSpan::default();
-        }
+        // The kernel borrows this arena's lanes while it writes these two.
         let mut run_local = core::mem::take(&mut self.run_local);
-        run_local.clear();
-        let result = (|| {
-            for run_index in 0..self.layout_runs.runs.len() {
-                let run = self.layout_runs.runs[run_index];
-                let direction = usize::try_from(run.source_run)
-                    .ok()
-                    .and_then(|source| runs.get(source))
-                    .map(|run| run.direction)
-                    .or_else(|| (run.glyph_count == 0).then_some(0))
-                    .ok_or(EngineError::InvalidRequest)?;
-                let start =
-                    usize::try_from(run.cluster_start).map_err(|_| EngineError::InvalidRequest)?;
-                let end =
-                    usize::try_from(run.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
-                let mut writer = run_local.begin_run();
-                if direction & 1 == 0 {
-                    for cluster in start..end {
-                        append_run_local_cluster(&mut writer, self, styles, cluster, extents_for)?;
-                    }
-                } else {
-                    for cluster in (start..end).rev() {
-                        append_run_local_cluster(&mut writer, self, styles, cluster, extents_for)?;
-                    }
-                }
-                self.layout_runs.runs[run_index].numeric_blocks =
-                    writer.finish().map_err(run_local_error)?;
-            }
-            run_local.finalize_source_ranks().map_err(run_local_error)?;
-            Ok(())
-        })();
-        if result.is_err() {
-            run_local.clear();
-            for run in &mut self.layout_runs.runs {
-                run.numeric_blocks = NumericBlockSpan::default();
-            }
-        }
+        let mut layout_runs = core::mem::take(&mut self.layout_runs.runs);
+        let result = super::run_local_paragraph::rebuild(
+            &mut run_local,
+            &mut layout_runs,
+            self,
+            runs,
+            styles,
+            extents_for,
+        );
+        self.layout_runs.runs = layout_runs;
         self.run_local = run_local;
         result
     }
@@ -2186,68 +2156,6 @@ impl ClusterArena {
             return Err(EngineError::InvalidRequest);
         }
         Ok(index)
-    }
-}
-
-fn append_run_local_cluster(
-    writer: &mut super::run_local::RunLocalWriter<'_>,
-    clusters: &ClusterArena,
-    styles: &[StyleSegment],
-    cluster: usize,
-    extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
-) -> Result<(), EngineError> {
-    if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
-        return writer.push_detached_cluster().map_err(run_local_error);
-    }
-    let style = styles
-        .get(
-            usize::try_from(clusters.style_indexes[cluster])
-                .map_err(|_| EngineError::InvalidRequest)?,
-        )
-        .ok_or(EngineError::InvalidRequest)?
-        .style;
-    let units_per_em = clusters.units_per_em[cluster];
-    if units_per_em == 0.0 {
-        return Err(EngineError::InvalidRequest);
-    }
-    let font_handle = clusters.font_handles[cluster];
-    let scale = f64::from(style.font_size) / units_per_em;
-    let start =
-        usize::try_from(clusters.glyph_starts[cluster]).map_err(|_| EngineError::InvalidRequest)?;
-    let end = start
-        .checked_add(
-            usize::try_from(clusters.glyph_counts[cluster])
-                .map_err(|_| EngineError::InvalidRequest)?,
-        )
-        .ok_or(EngineError::InvalidRequest)?;
-    writer.begin_cluster().map_err(run_local_error)?;
-    for glyph in start..end {
-        #[cfg(test)]
-        super::work_attribution::record(|work| work.run_local_glyph_visits += 1);
-        let glyph_id = u32::from(clusters.glyph_ids[glyph]);
-        writer
-            .push_glyph(RunLocalGlyphInput {
-                source_glyph: u32::try_from(glyph).map_err(|_| EngineError::ResultTooLarge)?,
-                x_advance: clusters.glyph_x_advances[glyph],
-                x_offset: clusters.glyph_x_offsets[glyph],
-                y_offset: clusters.glyph_y_offsets[glyph],
-                baseline_shift: style.baseline_shift,
-                scale,
-                outline: extents_for(font_handle, glyph_id),
-            })
-            .map_err(run_local_error)?;
-    }
-    writer
-        .finish_cluster(ClusterFinish::Resync(clusters.advances[cluster]))
-        .map_err(run_local_error)
-}
-
-fn run_local_error(error: RunLocalBuildError) -> EngineError {
-    match error {
-        RunLocalBuildError::AllocationFailed => EngineError::ResultTooLarge,
-        RunLocalBuildError::InvalidSource | RunLocalBuildError::LocalGeometryOutOfRange => {
-            EngineError::InvalidRequest
-        }
     }
 }
 

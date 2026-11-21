@@ -37,12 +37,13 @@ export function codecDescriptor(ids: CodecIdFactory): CodecDescriptor {
     capabilitySet,
     transformMode: 'indexed',
   } as const;
-  // Slug keeps one draw per Text: its eight lanes leave no room for a transform index.
+  // Slug keeps one draw per Text until its batching lands; with three technique lanes it has room for its own
+  // transform-index buffer.
   const slugOptions = {
     ...options,
     system: { stableGlyphId: system.stableGlyphId, placementSlot: system.placementSlot },
     transformMode: 'direct',
-    placementSlotTarget: { buffer: slugSchema.buffers.bandCounts.id, lane: 2 },
+    placementSlotTarget: { buffer: slugSchema.buffers.glyph.id, lane: 1 },
   } as const;
   return {
     capabilitySets: [capabilitySet],

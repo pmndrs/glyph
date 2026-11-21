@@ -9,7 +9,7 @@ import tgpu, {
   type TgpuSlot,
   type WithBinding,
 } from 'typegpu';
-import type { CodecBufferId } from '../../index.js';
+import type { CodecBufferId, PortableLeafResource } from '../../index.js';
 import type { TypeGpuConfigOptions, TypeGpuPositionTransform, TypeGpuColorTransform } from '../config.js';
 
 /** One draw recorded per Text: Slug, whose Codec keeps a direct transform. */
@@ -156,4 +156,15 @@ export function recordDraw(
   let bound = pipeline;
   for (const group of bindGroups) bound = bound.with(group);
   bound.with('resourceType' in pass ? root.unwrap(pass) : pass).draw(6, count, 0, start);
+}
+
+/** Uploads a portable constant table as a read-only storage buffer. */
+export function storageTable(root: TgpuRoot, payload: PortableLeafResource): GPUBuffer {
+  if (payload.kind !== 'buffer') throw new Error('Expected a raster constant table');
+  const buffer = root.device.createBuffer({
+    size: Math.max(16, payload.bytes.byteLength),
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  });
+  root.device.queue.writeBuffer(buffer, 0, payload.bytes);
+  return buffer;
 }

@@ -25,6 +25,7 @@ import {
   viewportSize,
   type PipelineOptions,
   type TypeGpuResource,
+  storageTable,
 } from './pipeline.js';
 
 /**
@@ -355,16 +356,6 @@ function bakedAtlas(root: TgpuRoot, token: PortableLeafResource) {
     result.destroy();
     throw error;
   }
-}
-/** Uploads a portable constant table as a read-only storage buffer. */
-function storageTable(root: TgpuRoot, payload: PortableLeafResource): GPUBuffer {
-  if (payload.kind !== 'buffer') throw new Error('Expected a raster constant table');
-  const buffer = root.device.createBuffer({
-    size: Math.max(16, payload.bytes.byteLength),
-    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-  });
-  root.device.queue.writeBuffer(buffer, 0, payload.bytes);
-  return buffer;
 }
 function scalar(payload: PortableLeafResource, index = 0): number {
   if (payload.kind !== 'buffer') throw new Error('Expected a raster constant');

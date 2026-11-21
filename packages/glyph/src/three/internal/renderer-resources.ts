@@ -5,6 +5,7 @@ import type { CodecIdFactory } from '../../config/codec.js';
 import type { PortableResourceGroupPayload, PortableTextureArrayPayload } from '../../config/resources.js';
 import type { TslSlugPageResources } from '../../shaders/tsl/index.js';
 import type { ThreeShaderSet } from './shader-set.js';
+import type { SlugGlyphTable } from './slug-glyph-table.js';
 import type { ThreeCodec } from '../schema.js';
 import type { ThreeTextMaterial } from '../material.js';
 import {
@@ -28,6 +29,8 @@ export interface ThreeRenderResourceLease<Resource extends DisposableThreeRender
 }
 
 export interface RetainedSlugPage extends TslSlugPageResources {
+  /** One row of per-glyph constants per glyph the page draws; instances carry only the row. */
+  readonly glyphTable: SlugGlyphTable;
   readonly byteLength: number;
   dispose(): void;
 }

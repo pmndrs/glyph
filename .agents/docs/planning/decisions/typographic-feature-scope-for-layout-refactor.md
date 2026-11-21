@@ -4,6 +4,9 @@ title: 'Scope missing typographic features for the layout refactor: editing supp
 description: 'Records every missing typographic feature found by the 2026-11 audit with its keep-now, deferred or dropped decision.'
 decision_status: Accepted
 decided: '2026-11-21'
+generated:
+  by: anthropic/claude-fable-5-2
+  at: '2026-11-21T12:00:00Z'
 ---
 
 # Scope missing typographic features for the layout refactor

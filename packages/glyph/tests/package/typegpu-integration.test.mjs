@@ -17,14 +17,15 @@ const fontBytes = await readFile(
 globalThis.GPUBufferUsage ??= { VERTEX: 32, COPY_DST: 8, STORAGE: 128 };
 await glyph.init();
 
-test('TypeGPU Slug packs placement into its existing eighth-buffer program and keeps a direct transform', () => {
+test('TypeGPU Slug packs placement into the glyph lane and keeps a direct transform', () => {
   const descriptor = codecDescriptor(id);
   assert.equal(descriptor.capabilitySets[0].maxBuffersPerDraw, 9);
   const program = descriptor.programs.find((candidate) =>
-    candidate.buffers.some((buffer) => buffer.id === slugSchema.buffers.bandCounts.id),
+    candidate.buffers.some((buffer) => buffer.id === slugSchema.buffers.glyph.id),
   );
   assert.ok(program);
-  assert.equal(program.buffers.length, 8);
+  // rect, color and glyph, plus the stable glyph id every TypeGPU program carries.
+  assert.equal(program.buffers.length, 4);
   assert.equal(
     program.buffers.some((buffer) => buffer.id === TYPEGPU_PLACEMENT_SLOT_BUFFER_ID),
     false,
@@ -44,7 +45,7 @@ test('TypeGPU Slug packs placement into its existing eighth-buffer program and k
   }
   assert.ok(
     program.operations.some(
-      (operation) => operation.immediate0 === slugSchema.buffers.bandCounts.id && operation.operand1 === 2,
+      (operation) => operation.immediate0 === slugSchema.buffers.glyph.id && operation.operand1 === 1,
     ),
   );
 });

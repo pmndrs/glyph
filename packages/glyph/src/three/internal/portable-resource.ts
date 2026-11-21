@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 
 import type {
+  PortableBufferPayload,
   PortableResourceGroupPayload,
   PortableTextureArrayPayload,
   PortableTexturePayload,
@@ -49,6 +50,12 @@ export function textureArrayMember(
   if (payload?.kind !== 'texture-array' || payload.format !== format) {
     throw new TypeError(`${label} resource group needs ${format} texture-array member "${name}"`);
   }
+  return payload;
+}
+
+export function bufferMember(group: PortableResourceGroupPayload, name: string, label: string): PortableBufferPayload {
+  const payload = group.members[name];
+  if (payload?.kind !== 'buffer') throw new TypeError(`${label} resource group needs buffer member "${name}"`);
   return payload;
 }
 

@@ -4,6 +4,9 @@ title: 'Deferred, never-stale preparation supersedes synchronous setter preparat
 description: 'Setters validate and mark dirty; reads prepare on demand; the frame batch-prepares; preparation cannot fail.'
 decision_status: Accepted
 decided: '2026-11-21'
+generated:
+  by: anthropic/claude-fable-5-2
+  at: '2026-11-21T12:00:00Z'
 ---
 
 # Deferred, never-stale preparation supersedes synchronous setter preparation

@@ -312,6 +312,94 @@ test('one handle state rejects colliding resource identities when the second fon
   secondFont.dispose();
 });
 
+function countingPlan(name, compileFont) {
+  const technique = collisionTechnique(name);
+  const resource = defineRasterResourceId(`test.${name}/payload`);
+  const schema = defineTechniqueSchema({
+    technique: technique.id,
+    scope: 'glyph',
+    binding: {},
+    buffers: { origin: { id: COLLISION_ORIGIN_BUFFER_ID, scalar: 'f32', lanes: ['x', 'y'] } },
+    resources: { payload: { kind: 'buffer' } },
+    render: { resource: 'payload', geometry: { kind: 'synthetic-quad' } },
+  });
+  const plan = registerRasterCodec({
+    raster: technique,
+    schema,
+    codecBody() {
+      const program = techniqueProgram(schema);
+      return program.compile({ origin: [program.semantics.inlineOrigin, program.semantics.blockOrigin] });
+    },
+    compileFont: (compiler) => compileFont(compiler, resource),
+  });
+  return { technique, plan };
+}
+
+function installPlan(handleState, plan, namespace) {
+  return handleState.installCodec((ids) => {
+    const capabilitySet = threeCodecCapabilitySet();
+    const options = { namespace, system: threeSystemBuffers, capabilitySet, transformMode: 'indexed', ids };
+    return threeCodecDescriptor(ids, 'indexed', [createRasterCodecProgram(plan, options)]);
+  });
+}
+
+test('a loaded font has compiled its binding, so the first bind on any handle compiles nothing', async () => {
+  let compiles = 0;
+  const { technique, plan } = countingPlan('load-compile', (compiler, resource) => {
+    compiles += 1;
+    compiler.retain('payload', resource, { kind: 'buffer', bytes: new Uint8Array(4), stride: 4 });
+    return compiler.compile({ strikes: [0], resource: () => resource });
+  });
+  const bytes = await readFile(fontUrl);
+  const font = await loadFont({ baked: { bytes } }, technique({ strikes: [16] }));
+  assert.equal(compiles, 1, 'loading compiles the binding once');
+
+  const glyphEngine = await fixtureEngine();
+  const handles = ['first', 'second'].map((name) => {
+    const handleState = createGlyphHandleState(glyphEngine, { integration: `test.load-compile.${name}` });
+    return { handleState, codec: installPlan(handleState, plan, `test.load-compile.${name}`) };
+  });
+  const bindings = handles.map(({ handleState }) => handleState.bindFont(font));
+  assert.equal(compiles, 1, 'binding on each handle reuses the binding compiled at load');
+
+  const again = await loadFont({ baked: { bytes } }, technique({ strikes: [16] }));
+  assert.equal(compiles, 1, 'loading the same variant again reuses its compiled binding');
+  again.dispose();
+
+  for (const binding of bindings) binding.dispose();
+  for (const { handleState, codec } of handles) {
+    codec.dispose();
+    handleState.dispose();
+  }
+  glyphEngine.dispose();
+  font.dispose();
+});
+
+test('a binding that fails to compile at load fails the first bind with the same error', async () => {
+  const failure = new Error('deliberate binding failure');
+  let compiles = 0;
+  const { technique, plan } = countingPlan('load-compile-failure', () => {
+    compiles += 1;
+    throw failure;
+  });
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, technique({ strikes: [16] }));
+  assert.equal(compiles, 1, 'loading attempted the compile and still resolved the font');
+
+  const glyphEngine = await fixtureEngine();
+  const handleState = createGlyphHandleState(glyphEngine, { integration: 'test.load-compile-failure' });
+  const codec = installPlan(handleState, plan, 'test.load-compile-failure');
+  assert.throws(
+    () => handleState.bindFont(font),
+    (error) => error === failure,
+  );
+  assert.equal(compiles, 2, 'a failed compile is not cached, so the bind compiles again');
+
+  codec.dispose();
+  handleState.dispose();
+  glyphEngine.dispose();
+  font.dispose();
+});
+
 test('a glyph-engine-owned handle state binds immutable font stacks and retains their fonts', async () => {
   const font = await fixtureFont();
   const stack = createFontStack(font);

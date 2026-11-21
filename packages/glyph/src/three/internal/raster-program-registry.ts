@@ -126,7 +126,7 @@ function compileProgram<Format extends RasterFormatMetadata, Schema extends Tech
   } as const;
   const slugOptions = {
     ...options,
-    placementSlotTarget: { buffer: slugSchema.buffers.bandCounts.id, lane: 2 },
+    placementSlotTarget: { buffer: slugSchema.buffers.glyph.id, lane: 1 },
   } as const;
   const codec = createHostRasterCodecProgram(
     portable,

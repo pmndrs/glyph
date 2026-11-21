@@ -161,13 +161,11 @@ test('first-party techniques declare where their glyph origin lives', () => {
   assert.equal(slugSchema.glyphOrigin?.buffer, 'rect');
 });
 
-test('Slug table-start lanes name the table each value indexes', () => {
-  assert.deepEqual(slugSchema.buffers.tableStarts.lanes, [
-    'curveBase',
-    'horizontalHeaderBase',
-    'verticalHeaderBase',
-    'referenceBase',
-  ]);
+test('Slug instances carry a glyph-table row; per-glyph constants live in the page table', () => {
+  assert.deepEqual(Object.keys(slugSchema.buffers), ['rect', 'color', 'glyph']);
+  assert.deepEqual(slugSchema.buffers.glyph.lanes, ['glyph', 'unused1']);
+  assert.deepEqual(slugSchema.binding.u32, ['glyph']);
+  assert.deepEqual(slugSchema.resources.page.members.glyphs, { kind: 'buffer' });
 });
 
 test('schemaCodecBuffers derives the wire buffer list from each authoritative schema', () => {
