@@ -62,6 +62,11 @@ pub const STATUS_STYLE_NESTING_INVALID: u32 = 17;
 pub const STATUS_STYLE_ROOT_INVALID: u32 = 18;
 pub const STATUS_FONT_METRICS_MISSING: u32 = 19;
 pub const STATUS_REGISTRATION_IN_USE: u32 = 20;
+/// An editing query was given an offset it cannot use: not a whole number in range, a reversed
+/// range, or inside a grapheme. The query's result record says which, and the nearest boundaries.
+pub const STATUS_TEXT_OFFSET_INVALID: u32 = 21;
+/// An editing query was given a point, goal, unit, direction or affinity it cannot use.
+pub const STATUS_TEXT_QUERY_INVALID: u32 = 22;
 
 const MAX_CACHED_PLANS_PER_FONT: usize = 64;
 const DEFAULT_SHAPE_BUFFER_CAPACITY: usize = 32_768;

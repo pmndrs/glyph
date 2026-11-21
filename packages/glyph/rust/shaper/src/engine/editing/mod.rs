@@ -44,6 +44,7 @@ mod offset;
 mod place;
 #[cfg(test)]
 mod tests;
+pub mod wire;
 
 pub use boundary::Location;
 pub use lig_caret::{MAX_LIGATURE_CARETS, ligature_carets};
@@ -116,6 +117,7 @@ pub enum TextDirection {
 }
 
 /// A rectangle in paragraph-local coordinates, +Y down, unanchored.
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Rect {
     pub x: f64,

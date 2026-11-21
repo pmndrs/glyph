@@ -7,9 +7,14 @@ use crate::{
     STATUS_REGISTRATION_IN_USE, STATUS_RESULT_TOO_LARGE, STATUS_REVISION_CONFLICT,
     STATUS_ROOT_CONFLICT, STATUS_ROOT_MISSING, ShaperRegistry,
     engine::{
-        EngineError, FrameFault, MeasuredParagraphs, PreparationTarget, TextEngine,
+        EngineError, FrameFault, MeasuredParagraphs, ParagraphSource, PreparationTarget,
+        TextEngine,
         codec::CapabilitySetId,
         codec_wire::parse_codec,
+        editing::{
+            Editing, Rect,
+            wire::{TextQueryResult, unit_from_wire},
+        },
         font_binding_wire::parse_font_binding,
         frame::RootRevision,
         frame_wire::parse_update_request,
@@ -20,6 +25,8 @@ use crate::{
     },
     outline::{GlyphOutline, OutlineError},
 };
+
+type TextQueries<'a> = Editing<ParagraphSource<'a>>;
 
 #[cfg(feature = "diagnostic-live-memory")]
 #[path = "diagnostic_live_memory.rs"]
@@ -1302,6 +1309,127 @@ pub extern "C" fn pmndrs_glyph_engine_borrow_paragraph_glyphs(
     })
 }
 
+/// Where every editing query writes its answer: one `TextQueryResult`, at an address that
+/// holds for the life of the instance.
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_glyph_engine_text_query_ptr() -> u32 {
+    with_state(|state| u32::try_from(core::ptr::addr_of!(state.text_query) as usize).unwrap_or(0))
+}
+
+/// The rectangles of the last range query, `TextQueryResult.end` of them. The address holds
+/// until the next range query.
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_glyph_engine_text_rects_ptr() -> u32 {
+    with_state(|state| u32::try_from(state.text_rects.as_ptr() as usize).unwrap_or(0))
+}
+
+/// Runs one editing query over a paragraph's prepared layout and returns its status. A word or
+/// sentence query fills the paragraph's boundary lane first; nothing else writes.
+fn text_query(
+    root_id: u32,
+    paragraph_id: u32,
+    unit: Option<u32>,
+    query: impl FnOnce(&TextQueries<'_>, &mut TextQueryResult, &mut Vec<Rect>) -> u32,
+) -> u32 {
+    with_state(|state| {
+        state.text_query = TextQueryResult::default();
+        if let Some(unit) = unit.and_then(unit_from_wire)
+            && state
+                .engine
+                .prepare_editing_boundaries(root_id, paragraph_id, unit)
+                .is_err()
+        {
+            return STATUS_INVALID_REQUEST;
+        }
+        match state.engine.editing(&state.registry, root_id, paragraph_id) {
+            Ok(queries) => query(&queries, &mut state.text_query, &mut state.text_rects),
+            Err(_) => STATUS_INVALID_REQUEST,
+        }
+    })
+}
+
+/// The caret of `{offset, affinity}`: its rectangle, line, level and flags.
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_glyph_engine_text_caret(
+    root_id: u32,
+    paragraph_id: u32,
+    offset: f64,
+    affinity: u32,
+) -> u32 {
+    text_query(root_id, paragraph_id, None, |queries, result, _| {
+        queries.caret_record(offset, affinity, result)
+    })
+}
+
+/// The caret stop nearest a point, in paragraph-local coordinates.
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_glyph_engine_text_hit_test(
+    root_id: u32,
+    paragraph_id: u32,
+    x: f64,
+    y: f64,
+) -> u32 {
+    text_query(root_id, paragraph_id, None, |queries, result, _| {
+        queries.hit_test_record(x, y, result)
+    })
+}
+
+/// Moves `{offset, affinity}` one `unit` in `direction`. A NaN `goal_x` is no goal.
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_glyph_engine_text_move(
+    root_id: u32,
+    paragraph_id: u32,
+    offset: f64,
+    affinity: u32,
+    direction: u32,
+    unit: u32,
+    goal_x: f64,
+) -> u32 {
+    text_query(root_id, paragraph_id, Some(unit), |queries, result, _| {
+        queries.move_record(offset, affinity, direction, unit, goal_x, result)
+    })
+}
+
+/// The `unit` that contains `{offset, affinity}`.
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_glyph_engine_text_boundary(
+    root_id: u32,
+    paragraph_id: u32,
+    offset: f64,
+    affinity: u32,
+    unit: u32,
+) -> u32 {
+    text_query(root_id, paragraph_id, Some(unit), |queries, result, _| {
+        queries.boundary_record(offset, affinity, unit, result)
+    })
+}
+
+/// The rectangles covering `[start, end)`, read through `pmndrs_glyph_engine_text_rects_ptr`.
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_glyph_engine_text_range_rects(
+    root_id: u32,
+    paragraph_id: u32,
+    start: f64,
+    end: f64,
+) -> u32 {
+    text_query(root_id, paragraph_id, None, |queries, result, rects| {
+        queries.range_rects_record(start, end, rects, result)
+    })
+}
+
+/// Checks the range a replacement names against the paragraph's prepared text.
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_glyph_engine_text_check_range(
+    root_id: u32,
+    paragraph_id: u32,
+    start: f64,
+    end: f64,
+) -> u32 {
+    text_query(root_id, paragraph_id, None, |queries, result, _| {
+        queries.check_range_record(start, end, result)
+    })
+}
+
 /// Decodes one glyph from an outline SFNT in an owned allocation. The encoded words, aligned to 4
 /// bytes, stay readable through the pointer and byte-length exports until the next decode.
 #[unsafe(no_mangle)]
@@ -1354,6 +1482,8 @@ struct WasmState {
     borrow_generation: u32,
     borrowed_layout: BorrowedLayoutDescriptor,
     borrowed_glyphs: Vec<crate::engine::SemanticGlyph>,
+    text_query: TextQueryResult,
+    text_rects: Vec<Rect>,
     outline: GlyphOutline,
     outline_result: Vec<u32>,
 }

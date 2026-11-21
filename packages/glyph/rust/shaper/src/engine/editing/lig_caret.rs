@@ -13,11 +13,9 @@
 //!   adjustments at whole pixel sizes and are ignored; a baked font is a static instance, so a
 //!   variation index has nothing to apply. The coordinate is used.
 
-use read_fonts::{
-    FontRef, TableProvider,
-    tables::{gdef::CaretValue, glyf::Glyph},
-    types::GlyphId,
-};
+#[cfg(feature = "std")]
+use read_fonts::tables::glyf::Glyph;
+use read_fonts::{FontRef, TableProvider, tables::gdef::CaretValue, types::GlyphId};
 
 /// The most interior stops a ligature takes from its font: a ligature of more components
 /// divides evenly.
@@ -55,6 +53,7 @@ pub fn ligature_carets(
 }
 
 /// The x of one contour point of a simple `glyf` glyph.
+#[cfg(feature = "std")]
 fn contour_point_x(font: &FontRef<'_>, glyph: GlyphId, point: u16) -> Option<i32> {
     let glyf = font.glyf().ok()?;
     let outline = font.loca(None).ok()?.get_glyf(glyph, &glyf).ok()??;
@@ -65,4 +64,10 @@ fn contour_point_x(font: &FontRef<'_>, glyph: GlyphId, point: u16) -> Option<i32
             .map(|point| i32::from(point.x)),
         Glyph::Composite(_) => None,
     }
+}
+
+/// The shipped module registers shaping payloads, which have no outlines to read a point from.
+#[cfg(not(feature = "std"))]
+fn contour_point_x(_font: &FontRef<'_>, _glyph: GlyphId, _point: u16) -> Option<i32> {
+    None
 }
