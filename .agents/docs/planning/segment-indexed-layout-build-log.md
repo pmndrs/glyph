@@ -330,3 +330,25 @@ Updated in place; the history of each change is in the log below.
   renderer change yet. None of this is merged. The integration branch is unaffected at `sil-green-4`.
 - **Cause.** Every lane, profile and review ran on the top model. Mechanical work (profiles, font fetching,
   harness building, merges, log upkeep) did not need it.
+
+### 2026-11-21, after the usage reset
+
+- **Decision (owner).** A breaking release is acceptable.
+- **Decision (owner).** An editing session with `replace(start, end, insert)` may be public, on conditions:
+  it must not reintroduce the edge cases that caused API errors before; it throws when misused; and it must be
+  easy to understand, because "start" and "end" mean different things for glyphs and characters. Design rule
+  taken from this: offsets are UTF-16 code units of the source text and nothing else (never glyph or cluster
+  indices); an offset that is out of range, reversed, or not on a grapheme boundary throws a typed error
+  naming the offset and the nearest valid boundaries; nothing is snapped silently.
+- **Decision (owner).** Of the three first-frame options, only **compiling the font binding at font load** is
+  approved. Engine warm-up at `init()` with an embedded font, and replacing the JavaScript font hash with a
+  bake-time digest, are **not approved** and stay held.
+- **Decision (owner).** Stale process guidance may be deleted, with a list of what was removed.
+- **Decision (owner).** Match the model to the work from here on.
+- **Salvaged.** Interrupted work committed as unverified checkpoints: geometry `a20cec258`, Unicode
+  `2f5788bf7`, Slug `0231437a3`. The cluster worktree's files are staged but not committed (its commit hook
+  needs dependencies installed). Preparation and TypeGPU worktrees were clean.
+- **Dispatch, by model.** Top model, resumed with their context: cluster (divergence fixes, then 1c),
+  geometry (1a), Unicode (1d), preparation model (unit 3). Opus, fresh: Slug; pure TypeGPU path; font binding
+  at load. Sonnet: stale-guidance deletion; salvage. Integration (merge, full oracle tier, tests, this log)
+  stays with the coordinator and is kept small.
