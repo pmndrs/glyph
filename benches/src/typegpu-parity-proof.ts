@@ -11,11 +11,14 @@ import {
 import * as THREE from 'three/webgpu';
 import tgpu, { d, std } from 'typegpu';
 
+import dancingFontUrl from '../fixtures/rendering/dancing-script-mtsdf.font.glb.gz?url';
 import devanagariFontUrl from '../fixtures/rendering/noto-sans-devanagari-mtsdf.font.glb.gz?url';
+// A Latin subset bake of Inter, against the full-font bake above it.
+import interLatinFontUrl from '../../apps/typegpu-hello-world/assets/inter-latin.font.glb?url';
 import interBitmapFontUrl from '../fixtures/rendering/inter-bitmap-16-32.font.glb?url';
 import interFontUrl from '../fixtures/rendering/inter-mtsdf.font.glb.gz?url';
 import showcaseManifest from '../fixtures/rendering/showcase-mtsdf-fixtures-v0.json' with { type: 'json' };
-import type { Counters, ParityPerf, ParityProof } from './typegpu-parity-contract';
+import type { Counters, FontCost, ParityPerf, ParityProof } from './typegpu-parity-contract';
 import { fetchAuthenticatedGzipAsset } from './workloads/font-assets/authenticated-gzip';
 
 // A row of 832 RGBA pixels is a multiple of 256 bytes, which a texture-to-buffer copy requires.
@@ -23,7 +26,7 @@ const WIDTH = 832;
 const HEIGHT = 600;
 
 type Style = NonNullable<TypeGpuTextOptions['style']>;
-type FontName = 'inter' | 'devanagari' | 'bitmap';
+type FontName = 'inter' | 'latin' | 'dancing' | 'devanagari' | 'bitmap';
 interface Item {
   readonly font: FontName;
   readonly text: string;
@@ -45,6 +48,13 @@ interface Scene {
    * frames (one shape() halfway) to their positions. Three renders the final positions.
    */
   readonly movedFrom?: readonly [number, number];
+  /**
+   * TypeGPU only: mount every item with its first character, then reveal each text over 6 frames (shape and frame
+   * after each step), so glyphs nothing has drawn arrive frame by frame. Three renders the full texts.
+   */
+  readonly arriving?: boolean;
+  /** Both renderers keep only the true-distance channel of the MSDF atlas (`msdfAtlas: 'sdf'`). */
+  readonly sdf?: boolean;
 }
 const counters = emptyCounters();
 installCounters();
@@ -195,6 +205,35 @@ function mixedLabelScene(): Scene {
   };
 }
 
+/** Every printable ASCII glyph in two fonts at several sizes and effects, revealed over several frames. */
+function arrivingScene(): Scene {
+  const lines = [
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+    'abcdefghijklmnopqrstuvwxyz',
+    '0123456789 !"#$%&\'()*+,-./:;<=>?@[]^_`{|}~',
+  ];
+  const items: Item[] = [];
+  let y = 6;
+  for (const [index, size] of [14, 22, 34, 48].entries()) {
+    for (const text of lines) {
+      items.push({
+        font: index % 2 === 0 ? 'inter' : 'dancing',
+        text,
+        x: 8,
+        y,
+        style: {
+          fontSize: size,
+          color: '#ffffff',
+          ...(index === 2 ? { outline: { color: '#ff3030', width: size / 24 } } : {}),
+          ...(index === 3 ? { shadow: { color: '#3060ff', offset: [size / 20, size / 20] as const } } : {}),
+        },
+      });
+      y += size * 1.2 + 2;
+    }
+  }
+  return { items, arriving: true };
+}
+
 const scenes: Readonly<Record<string, Scene>> = {
   one: { items: [{ font: 'inter', text: 'Hello, TypeGPU!', x: 24, y: 40, style: { fontSize: 72, color: '#ffffff' } }] },
   fx: fxScene(),
@@ -234,6 +273,9 @@ const scenes: Readonly<Record<string, Scene>> = {
   },
   'labels-moving': { ...labelScene(200), movedFrom: [-37, -11] },
   'labels-mixed': mixedLabelScene(),
+  'glyphs-arriving': arrivingScene(),
+  'fx-sdf': { ...fxScene(), sdf: true },
+  'arriving-sdf': { ...arrivingScene(), sdf: true },
   bitmap: {
     items: [
       { font: 'bitmap', text: 'Bitmap strike 16 px: Glyph Ag fj Wy', x: 10, y: 10, style: { fontSize: 16 } },
@@ -265,6 +307,8 @@ async function start(): Promise<ParityProof> {
     });
   const fonts: Record<FontName, FontFace<typeof msdf> | FontFace<ReturnType<typeof bitmap>>> = {
     inter: glyph.fontFace(await gzipFont(interFontUrl, 'inter'), { format: msdf }),
+    latin: glyph.fontFace(interLatinFontUrl, { format: msdf }),
+    dancing: glyph.fontFace(await gzipFont(dancingFontUrl, 'dancing-script'), { format: msdf }),
     devanagari: glyph.fontFace(await gzipFont(devanagariFontUrl, 'noto-sans-devanagari'), { format: msdf }),
     bitmap: glyph.fontFace(interBitmapFontUrl, { format: bitmap({ strikes: [16, 32] }) }),
   };
@@ -273,6 +317,7 @@ async function start(): Promise<ParityProof> {
   const format = 'rgba8unorm';
   const matrix = root.createUniform(d.mat4x4f);
   const flat = glyph.handle('typegpu-parity:flat', defineTypeGpuConfig({ root, format }));
+  const flatSdf = glyph.handle('typegpu-parity:flat-sdf', defineTypeGpuConfig({ root, format, msdfAtlas: 'sdf' }));
   const projected = glyph.handle(
     'typegpu-parity:projected',
     defineTypeGpuConfig({
@@ -342,7 +387,8 @@ async function start(): Promise<ParityProof> {
   threeTarget.texture.colorSpace = THREE.NoColorSpace;
   renderer.setRenderTarget(threeTarget);
   renderer.setClearColor(0x000000, 1);
-  const three = glyph.handle('typegpu-parity:three', defineThreeConfig({}));
+  const threeMsdf = glyph.handle('typegpu-parity:three', defineThreeConfig({}));
+  const threeSdf = glyph.handle('typegpu-parity:three-sdf', defineThreeConfig({ msdfAtlas: 'sdf' }));
 
   const pixelCamera = new THREE.OrthographicCamera(0, WIDTH, 0, -HEIGHT, 0.1, 10);
   pixelCamera.position.z = 1;
@@ -369,7 +415,7 @@ async function start(): Promise<ParityProof> {
     const texts: ThreeText<typeof msdf>[] = [];
     try {
       for (const item of scene.items) {
-        const text = three.createText({
+        const text = (scene.sdf === true ? threeSdf : threeMsdf).createText({
           font: fonts[item.font] as FontFace<typeof msdf>,
           text: item.text,
           style: item.style,
@@ -433,15 +479,15 @@ async function start(): Promise<ParityProof> {
   }
 
   async function captureTypeGpu(scene: Scene): Promise<{ pixels: Uint8Array; gpuMs: number | undefined }> {
-    const handle = scene.perspective === true ? projected : flat;
+    const handle = scene.perspective === true ? projected : scene.sdf === true ? flatSdf : flat;
     const texts = mount(handle, {
-      items: scene.items
-        .slice(0, scene.grownFrom)
-        .map((item) =>
+      items: scene.items.slice(0, scene.grownFrom).map((item) => {
+        const moved =
           scene.movedFrom === undefined
             ? item
-            : { ...item, x: item.x + scene.movedFrom[0], y: item.y + scene.movedFrom[1] },
-        ),
+            : { ...item, x: item.x + scene.movedFrom[0], y: item.y + scene.movedFrom[1] };
+        return scene.arriving === true ? { ...moved, text: item.text.slice(0, 1) } : moved;
+      }),
     });
     try {
       glyph.shape();
@@ -461,6 +507,15 @@ async function start(): Promise<ParityProof> {
             texts[index]!.update({ position: [item.x + dx * remaining, item.y + dy * remaining] });
           }
           if (step === 6) glyph.shape();
+          frame(handle);
+        }
+      }
+      if (scene.arriving === true) {
+        for (let step = 1; step <= 6; step += 1) {
+          for (const [index, item] of scene.items.entries()) {
+            texts[index]!.update({ text: item.text.slice(0, Math.ceil((item.text.length * step) / 6)) });
+          }
+          glyph.shape();
           frame(handle);
         }
       }
@@ -506,9 +561,10 @@ async function start(): Promise<ParityProof> {
     if (errors.length !== 0) throw new Error(`${phase}: ${errors.splice(0).join('\n')}`);
   };
 
-  async function perf(labels: number): Promise<ParityPerf> {
+  async function perf(labels: number, font: 'inter' | 'latin'): Promise<ParityPerf> {
     // One text is the 72 px "one" scene: the fill-bound case, where fragment cost dominates.
-    const scene = labels === 1 ? scenes.one! : labelScene(labels);
+    const base = labels === 1 ? scenes.one! : labelScene(labels);
+    const scene: Scene = { items: base.items.map((item) => ({ ...item, font })) };
     let texts: TypeGpuText[] = [];
     const mountCost = measured(() => {
       texts = mount(flat, scene);
@@ -554,6 +610,23 @@ async function start(): Promise<ParityProof> {
         editSamples.push(edit.ms);
       }
       await settle('same-count edit');
+      // One label, same glyph count, each time with a glyph nothing has drawn yet.
+      const drawn = new Set(scene.items.flatMap((item) => [...item.text]));
+      drawn.add('X');
+      const unseen = [...'ABCDEFGHIJKMNOPQRSTUVWYZcdfghijkmnopqrstuvwxyz'].filter((value) => !drawn.has(value));
+      const newGlyphSamples: number[] = [];
+      for (const value of unseen.slice(0, 30)) {
+        newGlyphSamples.push(
+          measured(() => {
+            subject.update({ text: `${original.slice(0, -1)}${value}` });
+            glyph.shape();
+            frame(flat);
+          }).ms,
+        );
+      }
+      subject.update({ text: original });
+      glyph.shape();
+      await settle('never-drawn glyph edit');
       // One label, a different glyph count.
       const countSamples: number[] = [];
       let editCount = measured(() => undefined);
@@ -592,7 +665,7 @@ async function start(): Promise<ParityProof> {
         const item = scene.items[index]!;
         added.push(
           flat.createText({
-            font: fonts.inter,
+            font: fonts[font],
             text: item.text,
             position: [item.x + 3, item.y + 3],
             style: item.style,
@@ -626,6 +699,11 @@ async function start(): Promise<ParityProof> {
         gpuFrameMs,
         batchFrameMs: median(batchSamples),
         edit: { ...edit, ms: median(editSamples) },
+        editNewGlyph: {
+          medianMs: median([...newGlyphSamples]),
+          maxMs: Math.max(...newGlyphSamples),
+          count: newGlyphSamples.length,
+        },
         editCount: { ...editCount, ms: median(countSamples) },
         move10: { ...move10, ms: median(moveSamples) },
         growth,
@@ -637,8 +715,50 @@ async function start(): Promise<ParityProof> {
     }
   }
 
+  /** Device objects each further MSDF font costs once a first one is drawing: one text per font, all kept. */
+  async function fontCosts(): Promise<FontCost[]> {
+    const costs: FontCost[] = [];
+    const texts: TypeGpuText[] = [];
+    try {
+      for (const [index, name] of (['inter', 'dancing', 'devanagari'] as const).entries()) {
+        const cost = measured(() => {
+          texts.push(
+            flat.createText({
+              font: fonts[name],
+              text: name === 'devanagari' ? DEVANAGARI : SAMPLE,
+              position: [10, 10 + index * 60],
+              style: { fontSize: 32, outline: { color: '#ff3030', width: 1 } },
+              layout: { wrap: 'none' },
+            }),
+          );
+          glyph.shape();
+          frame(flat);
+        });
+        await settle(`font ${name}`);
+        costs.push({
+          font: name,
+          shaderModules: cost.createShaderModule,
+          pipelines: cost.createRenderPipeline,
+          bindGroups: cost.createBindGroup,
+          textureBytes: cost.textureBytes,
+          bufferBytes: cost.bufferBytes,
+        });
+      }
+      return costs;
+    } finally {
+      for (const text of texts) text.dispose();
+      glyph.shape();
+      await device.queue.onSubmittedWorkDone();
+    }
+  }
+
   return {
     scenes: Object.keys(scenes),
+    async fontCosts() {
+      const result = await fontCosts();
+      if (errors.length !== 0) throw new Error(errors.splice(0).join('\n'));
+      return result;
+    },
     async capture(name, withThree) {
       const scene = scenes[name];
       if (scene === undefined) throw new RangeError(`unknown parity scene ${name}`);
@@ -654,8 +774,8 @@ async function start(): Promise<ParityProof> {
         gpuMs: typegpu.gpuMs,
       };
     },
-    async perf(labels) {
-      const result = await perf(labels);
+    async perf(labels, font) {
+      const result = await perf(labels, font);
       if (errors.length !== 0) throw new Error(errors.splice(0).join('\n'));
       return result;
     },

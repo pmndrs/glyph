@@ -42,6 +42,12 @@ export interface TypeGpuConfigOptions {
   /** Optional 'use gpu' function transforming the final fragment color. Fixed for this config's lifetime. */
   readonly transformColor?: TypeGpuColorTransform;
   readonly defaultFontFormat?: 'bitmap' | 'msdf' | 'slug';
+  /**
+   * What the GPU atlas keeps of an MSDF font. `'msdf'` (default) keeps all four channels. `'sdf'` keeps only the
+   * true distance: a quarter of the atlas memory, with corners rounded where the multi-channel field keeps them
+   * sharp (visible at large sizes). Either way only glyphs that have been drawn are resident.
+   */
+  readonly msdfAtlas?: 'msdf' | 'sdf';
 }
 export interface TypeGpuFontFormats {
   readonly bitmap: typeof bitmap;
@@ -77,6 +83,9 @@ function createDraw(renderer: Renderer, bindGroups: readonly TgpuBindGroup[]): T
 
 /** A renderer integration using the shared bitmap, MSDF, and Slug shader functions. */
 export function defineTypeGpuConfig(options: TypeGpuConfigOptions): TypeGpuGlyphConfig {
+  if (options.msdfAtlas !== undefined && options.msdfAtlas !== 'msdf' && options.msdfAtlas !== 'sdf') {
+    throw new TypeError('TypeGPU config msdfAtlas must be "msdf" or "sdf"');
+  }
   return defineGlyphConfig({
     schema,
     fonts: { default: options.defaultFontFormat ?? 'msdf', formats: { bitmap, msdf, slug } },
