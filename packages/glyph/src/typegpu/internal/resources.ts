@@ -1,7 +1,7 @@
 import tgpu, { d, std, type TgpuRoot } from 'typegpu';
 import type { CodecBufferId, PortableResource, PortableLeafResource } from '../../index.js';
 import { bitmapSchema } from '../../raster/bitmap.js';
-import { slugSchema } from '../../raster/slug.js';
+import { SLUG_GLYPH_TABLE_STRIDE, slugSchema } from '../../raster/slug.js';
 import { bitmapFragment, bitmapQuadPosition, bitmapAtlasUv } from '../../shaders/typegpu/bitmap-shader.js';
 import { slugRender, SlugShaderGlyph } from '../../shaders/typegpu/slug/slug-render.js';
 import { slugDilate } from '../../shaders/typegpu/slug/core/dilate.js';
@@ -21,11 +21,10 @@ import {
   corner,
   createSceneGroup,
   placedOrigin,
-  preparedDraw,
   projectText,
-  projectWithScene,
   recordDraw,
   textOffset,
+  viewportSize,
   shaderRoot,
   storageTable,
   target,
@@ -37,12 +36,6 @@ export type { Draw, TypeGpuResource } from './pipeline.js';
 
 /** One row of a Slug page's `glyphs` table: the em quad and band transform, then the table bases and band counts. */
 const SlugGlyphRow = d.struct({ quad: d.vec4f, band: d.vec4f, starts: d.vec4u, counts: d.vec4u });
-const slugScene = tgpu.bindGroupLayout({
-  viewport: { uniform: d.vec2f },
-  position: { uniform: d.vec2f },
-  placements: { storage: d.arrayOf(d.vec2f), access: 'readonly', visibility: ['vertex'] },
-  glyphs: { storage: d.arrayOf(SlugGlyphRow), access: 'readonly', visibility: ['vertex'] },
-});
 const v2 = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
 const v4 = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const u1 = tgpu.vertexLayout(d.disarrayOf(d.uint32), 'instance');
@@ -55,14 +48,6 @@ const uvSizeLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
 const colorLayout = v4;
 const rectLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 
-function projectSlug(position: d.v3f): d.v4f {
-  'use gpu';
-  return projectWithScene(position, slugScene.$.viewport, slugScene.$.position);
-}
-function placedSlugOrigin(origin: d.v2f, placementSlot: number): d.v2f {
-  'use gpu';
-  return origin.add(slugScene.$.placements[placementSlot]!);
-}
 function texture(root: TgpuRoot, payload: PortableLeafResource) {
   if (payload.kind !== 'texture' && payload.kind !== 'texture-array') throw new Error('Expected a raster texture');
   const result = root
@@ -205,9 +190,11 @@ function slugResource(
       starts: d.interpolate('flat', d.vec4u),
       counts: d.interpolate('flat', d.vec2u),
     };
+    const glyphRows = root.createReadonly(d.arrayOf(SlugGlyphRow, glyphs.size / (SLUG_GLYPH_TABLE_STRIDE * 4)), glyphs);
     const vertex = tgpu.vertexFn({
       in: {
         index: d.builtin.vertexIndex,
+        instance: d.builtin.instanceIndex,
         rect: d.vec4f,
         color: d.vec4f,
         glyph: d.vec2u,
@@ -217,17 +204,18 @@ function slugResource(
       'use gpu';
       const unit = corner(input.index);
       // What every drawing of a glyph shares is read once per vertex from the page's glyph table.
-      const row = slugScene.$.glyphs[input.glyph.x]!;
-      const origin = placedSlugOrigin(input.rect.xy, input.glyph.y);
+      const row = glyphRows.$[input.glyph.x]!;
+      const origin = placedOrigin(input.rect.xy, input.instance);
+      const offset = textOffset(input.instance);
       const local = d.vec2f(origin.x + unit.x * input.rect.z, -(origin.y + unit.y * input.rect.w));
       const normal = d.vec2f((unit.x - 0.5) * input.rect.z, -(unit.y - 0.5) * input.rect.w);
       const em = d.vec2f(row.quad.x + unit.x * row.quad.z, row.quad.y - unit.y * row.quad.w);
       // Em units per layout unit: the quad is the em quad scaled by the font size.
       const inverseScale = (row.quad.z + row.quad.w) / std.max(input.rect.z + input.rect.w, 1e-30);
       // Local homogeneous projection derivatives keep Slug's half-pixel expansion in screen space.
-      const clip = projectSlug(d.vec3f(local, 0));
-      const dx = projectSlug(d.vec3f(local.x + 1, local.y, 0)).sub(clip);
-      const dy = projectSlug(d.vec3f(local.x, local.y + 1, 0)).sub(clip);
+      const clip = projectText(d.vec3f(local, 0), offset);
+      const dx = projectText(d.vec3f(local.x + 1, local.y, 0), offset).sub(clip);
+      const dy = projectText(d.vec3f(local.x, local.y + 1, 0), offset).sub(clip);
       const dilated = slugDilate(
         d.vec2f(0),
         normal,
@@ -236,10 +224,10 @@ function slugResource(
         d.vec4f(dx.x, dy.x, 0, clip.x),
         d.vec4f(dx.y, dy.y, 0, clip.y),
         d.vec4f(dx.w, dy.w, 0, clip.w),
-        slugScene.$.viewport,
+        viewportSize(),
       );
       return {
-        position: projectSlug(d.vec3f(local.add(dilated.xy), 0)),
+        position: projectText(d.vec3f(local.add(dilated.xy), 0), offset),
         coordinate: dilated.zw,
         color: input.color,
         band: row.band,
@@ -297,15 +285,32 @@ function slugResource(
         for (const value of textures) value.destroy();
         glyphs.destroy();
       },
-      prepare(buffers, placementTable, viewport, position, start, count) {
-        const group = root.createBindGroup(slugScene, { viewport, position, placements: placementTable, glyphs });
+      bind(lanes) {
+        const lane = (id: CodecBufferId): GPUBuffer => {
+          const buffer = lanes.buffers.get(id);
+          if (buffer === undefined) throw new Error('TypeGPU Slug draw is missing one of its lanes');
+          return buffer;
+        };
         const b = slugSchema.buffers;
-        const draw = pipeline
-          .with(group)
-          .with(rectLayout, buffers.get(b.rect.id)!)
-          .with(colorLayout, buffers.get(b.color.id)!)
-          .with(u2, buffers.get(b.glyph.id)!);
-        return preparedDraw(root, draw, start, count);
+        const bound = pipeline
+          .with(
+            createSceneGroup(
+              root,
+              lanes,
+              lane(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID),
+              lane(TYPEGPU_TRANSFORM_INDEX_BUFFER_ID),
+            ),
+          )
+          .with(rectLayout, lane(b.rect.id))
+          .with(colorLayout, lane(b.color.id))
+          .with(u2, lane(b.glyph.id));
+        return {
+          variantLane: undefined,
+          variant: () => 0,
+          draw(pass, bindGroups, _variant, first, count) {
+            recordDraw(root, bound, pass, bindGroups, first, count);
+          },
+        };
       },
     };
   } catch (error) {

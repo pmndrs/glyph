@@ -17,37 +17,26 @@ const fontBytes = await readFile(
 globalThis.GPUBufferUsage ??= { VERTEX: 32, COPY_DST: 8, STORAGE: 128 };
 await glyph.init();
 
-test('TypeGPU Slug packs placement into the glyph lane and keeps a direct transform', () => {
+test('every first-party TypeGPU program reads its Text offset from the transform table', () => {
   const descriptor = codecDescriptor(id);
   assert.equal(descriptor.capabilitySets[0].maxBuffersPerDraw, 9);
-  const program = descriptor.programs.find((candidate) =>
-    candidate.buffers.some((buffer) => buffer.id === slugSchema.buffers.glyph.id),
-  );
-  assert.ok(program);
-  // rect, color and glyph, plus the stable glyph id every TypeGPU program carries.
-  assert.equal(program.buffers.length, 4);
-  assert.equal(
-    program.buffers.some((buffer) => buffer.id === TYPEGPU_PLACEMENT_SLOT_BUFFER_ID),
-    false,
-  );
-  assert.equal(
-    program.buffers.some((buffer) => buffer.id === TYPEGPU_TRANSFORM_INDEX_BUFFER_ID),
-    false,
-  );
-  for (const schema of [bitmapSchema, msdfSchema]) {
-    const batched = descriptor.programs.find((candidate) =>
+  for (const schema of [bitmapSchema, msdfSchema, slugSchema]) {
+    const program = descriptor.programs.find((candidate) =>
       candidate.buffers.some((buffer) => buffer.id === Object.values(schema.buffers)[0].id),
     );
-    assert.ok(
-      batched.buffers.some((buffer) => buffer.id === TYPEGPU_TRANSFORM_INDEX_BUFFER_ID),
-      `${schema.technique} reads its Text offset from the transform table`,
-    );
+    assert.ok(program, schema.technique);
+    for (const system of [TYPEGPU_PLACEMENT_SLOT_BUFFER_ID, TYPEGPU_TRANSFORM_INDEX_BUFFER_ID]) {
+      assert.ok(
+        program.buffers.some((buffer) => buffer.id === system),
+        `${schema.technique} carries system lane ${system}`,
+      );
+    }
   }
-  assert.ok(
-    program.operations.some(
-      (operation) => operation.immediate0 === slugSchema.buffers.glyph.id && operation.operand1 === 1,
-    ),
+  const slugProgram = descriptor.programs.find((candidate) =>
+    candidate.buffers.some((buffer) => buffer.id === slugSchema.buffers.glyph.id),
   );
+  // rect, color and glyph, plus the stable glyph id, placement slot and transform index.
+  assert.equal(slugProgram.buffers.length, 6);
 });
 
 // A recording host at the public config seam. The real engine authors all commands and bytes.
