@@ -7,7 +7,17 @@ export * from './config/resources.js';
 export * from './config/raster.js';
 export * from './config/raster-format.js';
 export { bitmapSchema, bitmapCodec, selectBitmapStrikePpem } from './raster/bitmap.js';
-export { msdfSchema, msdfCodec, MSDF_EM_SIZE, MSDF_PIXEL_RANGE, MSDF_GLYPH_RECORD_STRIDE } from './raster/msdf.js';
+export {
+  msdfSchema,
+  msdfCodec,
+  msdfBakedPages,
+  MSDF_EM_SIZE,
+  MSDF_PIXEL_RANGE,
+  MSDF_GLYPH_RECORD_STRIDE,
+  MSDF_GLYPH_TABLE_STRIDE,
+  MSDF_GLYPH_TABLE_LAYER_STEP,
+  type MsdfBakedPages,
+} from './raster/msdf.js';
 export {
   slugSchema,
   slugCodec,
