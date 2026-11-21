@@ -165,6 +165,7 @@ interface TextReconciler {
   notifyError(text: Text<RasterFormatMetadata>, error: unknown): void;
   clearError(text: Text<RasterFormatMetadata>): void;
   transformFlushed(text: THREE.Object3D): void;
+  transformSynchronized(text: Text<RasterFormatMetadata>): void;
 }
 
 let reconciler!: TextReconciler;
@@ -789,6 +790,8 @@ export class ThreeRootHost {
     this.#renderObject.updateMatrixWorldWithoutCommit(true);
     this.#binding?.syncTransforms(worldMatricesCurrent);
     this.#clearDirtyTransforms();
+    // Every member was just synchronized from its current world matrix, so its next visit has nothing to report.
+    for (let index = 0; index < texts.length; index += 1) reconciler.transformSynchronized(texts[index]!);
     this.#fullTransformSync = false;
   }
 
@@ -1076,6 +1079,10 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       clearError: (text) => text.#clearError(),
       transformFlushed: (text) => {
         if (#transformQueued in text) text.#transformQueued = false;
+      },
+      transformSynchronized: (text) => {
+        observeMatrix(text.matrixWorld.elements, text.#observedWorld);
+        text.#observedVisible = text.visible;
       },
     };
   }
