@@ -201,22 +201,26 @@ test('an edit next to a surrogate pair never splits it', { timeout }, async (t) 
   }
 });
 
-test('lone surrogates become U+FFFD and are counted, not thrown', { timeout }, async (t) => {
+test('lone surrogates are drawn as U+FFFD and the text reads back as assigned', { timeout }, async (t) => {
   const { add, frame } = await createScene(t);
   const text = add({ text: 'well formed' });
-  assert.equal(text.replacedSurrogates, 0);
-  text.text = 'cut \ud83d here and \udc00 there';
-  assert.equal(text.text, 'cut � here and � there');
-  assert.equal(text.replacedSurrogates, 2);
-  const reference = add({ text: 'cut � here and � there' });
+  const assigned = 'cut \ud83d here and \udc00 there';
+  text.text = assigned;
+  assert.equal(text.text, assigned, 'the getter returns what the setter was given');
+  assert.equal('replacedSurrogates' in text, false, 'the repair has no public surface');
+  const reference = add({ text: 'cut \ufffd here and \ufffd there' });
   assert.deepEqual(layoutOf(text), layoutOf(reference));
   text.style = { fontSize: 20 };
-  assert.equal(text.replacedSurrogates, 2, 'an unrelated setter keeps the count of the text it did not change');
+  assert.equal(text.text, assigned);
   frame();
   assert.equal(text.commitState().status, 'committed');
+  // An edit beside a lone surrogate is derived against the assigned string and still lays out as a cold text.
+  text.text = 'cut \ud83d here, and \udc00 there';
+  reference.set({ text: 'cut \ufffd here, and \ufffd there', style: { fontSize: 20 } });
+  assert.deepEqual(layoutOf(text), layoutOf(reference));
   const created = add({ text: txt`${span({ color: '#ff0000' })`\ud800`} tail` });
-  assert.equal(created.text, '� tail');
-  assert.equal(created.replacedSurrogates, 1);
+  assert.equal(created.text, '\ud800 tail');
+  assert.deepEqual(layoutOf(created), layoutOf(add({ text: txt`${span({ color: '#ff0000' })`\ufffd`} tail` })));
 });
 
 test('a paint-only change is published without changing the layout', { timeout }, async (t) => {

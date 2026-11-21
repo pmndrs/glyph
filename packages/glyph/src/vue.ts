@@ -3,7 +3,9 @@ import {
   defineComponent,
   h,
   inject,
+  onBeforeUnmount,
   onScopeDispose,
+  getCurrentInstance,
   onMounted,
   onUpdated,
   provide,
@@ -17,6 +19,7 @@ import {
   type VNode,
   type VNodeArrayChildren,
 } from 'vue';
+import type { ParagraphLayoutSummary } from './layout.js';
 
 import {
   isFontFaceSelection,
@@ -647,19 +650,78 @@ const textPropDefinitions = {
   pixelSnapping: { type: null as unknown as PropType<boolean>, required: false },
 } as const;
 
+const glyphFrames = new WeakMap<ThreeRoot, { references: number; readonly release: () => void }>();
+
+/**
+ * Joins one Glyph root to one Tres canvas while any Text of that root is mounted: the root learns its Scene
+ * before the first traversal, so every frame is prepared at the front of the Scene, and a setter that leaves
+ * the root needing a frame invalidates an on-demand render loop.
+ */
+function retainGlyphFrame(root: ThreeRoot, scene: unknown, invalidate: () => void): () => void {
+  let frame = glyphFrames.get(root);
+  if (frame === undefined) {
+    const previous = root.onInvalidate;
+    const requestFrame = (): void => {
+      previous?.();
+      invalidate();
+    };
+    root.onInvalidate = requestFrame;
+    try {
+      root.attach(scene as Parameters<ThreeRoot['attach']>[0]);
+    } catch {
+      // A root that already lives in another Scene keeps it; its own traversal reports the conflict.
+    }
+    frame = {
+      references: 0,
+      release: () => {
+        if (root.onInvalidate === requestFrame) root.onInvalidate = previous;
+        glyphFrames.delete(root);
+      },
+    };
+    glyphFrames.set(root, frame);
+  }
+  const retained = frame;
+  retained.references += 1;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    retained.references -= 1;
+    if (retained.references === 0) retained.release();
+  };
+}
+
 /** Vue paragraph component backed by one retained Three text instance. Nested `Text` children are inline runs. */
 export const Text: TextComponent = defineComponent({
   name: 'GlyphText',
   inheritAttrs: false,
   props: textPropDefinitions,
   emits: {
+    /** A publication failure of this text, and any prop that is not valid input (which is also rethrown). */
     error: (_error: unknown) => true,
+    /**
+     * The text and what its `measure()` returns, after it is first prepared and whenever that summary changes,
+     * before the frame that draws it. A handler may move other objects; writing a layout input of any text throws.
+     */
+    layout: (_text: ThreeText<RasterFormatMetadata>, _layout: ParagraphLayoutSummary) => true,
   },
   setup(props, { slots, attrs, emit, expose }) {
     const context = useSelectedGlyphContext();
-    const { invalidate } = useTresContext().renderer;
+    const tres = useTresContext();
+    const { invalidate } = tres.renderer;
     const instance = shallowRef<ThreeText<RasterFormatMetadata> | undefined>();
     const reportError = (error: unknown): void => emit('error', error);
+    const reportLayout = (text: ThreeText<RasterFormatMetadata>, layout: ParagraphLayoutSummary): void =>
+      emit('layout', text, layout);
+    // Only a text someone listens to keeps its summary current and waits for its handler before it is drawn.
+    const component = getCurrentInstance();
+    const observesLayout = (): boolean => component?.vnode.props?.['onLayout'] !== undefined;
+    let releaseFrame: (() => void) | undefined;
+    onMounted(() => {
+      const root = context.value?.root;
+      if (root !== undefined) releaseFrame = retainGlyphFrame(root, tres.scene.value, invalidate);
+    });
+    onBeforeUnmount(() => releaseFrame?.());
     const loads = createFontLoadTracker(reportError);
     const leases = createFontLeases();
     let publication: TextPublication | undefined;
@@ -670,7 +732,17 @@ export const Text: TextComponent = defineComponent({
     const apply = (): void => {
       const object = instance.value;
       if (object === undefined || publication === undefined || desired === undefined) return;
-      if (updateTextFromFramework(object, desiredTextUpdate(desired))) invalidate();
+      object.onLayout = observesLayout() ? reportLayout : undefined;
+      let changed: boolean;
+      try {
+        changed = updateTextFromFramework(object, desiredTextUpdate(desired));
+      } catch (error) {
+        // Vue has no error boundary: the component stays mounted with its previous value, its `error` event
+        // says why, and the rethrow still reaches `onErrorCaptured` and `app.config.errorHandler`.
+        reportError(error);
+        throw error;
+      }
+      if (changed) invalidate();
       leases.prune(desiredSelections);
     };
     onMounted(apply);

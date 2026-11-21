@@ -19,7 +19,7 @@ import type { slug } from '../raster/slug.js';
 import type { Bindings } from './internal/bindings.js';
 import type { TypeGpuTransform } from './internal/renderer.js';
 import { reuseOrCreateTextPropertySnapshot, reuseOrCreateTextStyleSnapshot } from '../config/text-property.js';
-import { PostCommitError } from '../glyph-error.js';
+import { GlyphInputError, glyphInputError, PostCommitError, validatingInput } from '../glyph-error.js';
 import { sameConstraintSizes } from '../text-anchor.js';
 
 export type TypeGpuFontSelection = FontFaceSelection<
@@ -40,15 +40,25 @@ export interface TypeGpuTextOptions<Selection extends TypeGpuFontSelection = Typ
   readonly rasterPixelRatio?: number;
   /** Pixel coordinates relative to the upper-left corner of the viewport. */
   readonly position?: readonly [number, number];
+  /** See {@link TypeGpuText.onLayout}. */
+  readonly onLayout?: TypeGpuLayoutCallback<Selection>;
+  /** See {@link TypeGpuText.onError}. */
+  readonly onError?: (error: unknown) => void;
 }
+
+/** A layout callback: the text and what its `measure()` returns. */
+export type TypeGpuLayoutCallback<Selection extends TypeGpuFontSelection = TypeGpuFontSelection> = (
+  text: TypeGpuText<Selection>,
+  layout: ParagraphLayoutSummary,
+) => void;
 export type TypeGpuTextUpdate<Selection extends TypeGpuFontSelection = TypeGpuFontSelection> = Partial<
-  TypeGpuTextOptions<Selection>
+  Omit<TypeGpuTextOptions<Selection>, 'onLayout' | 'onError'>
 >;
 type TypeGpuSemanticTextOptions<Selection extends TypeGpuFontSelection> = Omit<
   TypeGpuTextOptions<Selection>,
-  'position' | 'style'
+  'position' | 'style' | 'onLayout' | 'onError'
 > & { readonly style?: TextStyle };
-type TypeGpuSemanticTextKey = Exclude<keyof TypeGpuTextOptions, 'position'>;
+type TypeGpuSemanticTextKey = Exclude<keyof TypeGpuTextOptions, 'position' | 'onLayout' | 'onError'>;
 const semanticUpdateKeys = {
   font: 'font',
   text: 'text',
@@ -66,17 +76,23 @@ function ownedSemanticState<Selection extends TypeGpuFontSelection>(
     ...next,
     ...(next.style === undefined
       ? {}
-      : { style: reuseOrCreateTextStyleSnapshot(previous?.style, next.style, 'TypeGPU text style') }),
+      : {
+          style: validatingInput(['style'], () =>
+            reuseOrCreateTextStyleSnapshot(previous?.style, next.style!, 'TypeGPU text style'),
+          ),
+        }),
     ...(next.layout === undefined
       ? {}
-      : { layout: reuseOrCreateTextPropertySnapshot(previous?.layout, next.layout, 'TypeGPU text layout') }),
+      : {
+          layout: validatingInput(['layout'], () =>
+            reuseOrCreateTextPropertySnapshot(previous?.layout, next.layout!, 'TypeGPU text layout'),
+          ),
+        }),
     ...(next.constraints === undefined
       ? {}
       : {
-          constraints: reuseOrCreateTextPropertySnapshot(
-            previous?.constraints,
-            next.constraints,
-            'TypeGPU text constraints',
+          constraints: validatingInput(['constraints'], () =>
+            reuseOrCreateTextPropertySnapshot(previous?.constraints, next.constraints!, 'TypeGPU text constraints'),
           ),
         }),
   });
@@ -85,6 +101,19 @@ function ownedSemanticState<Selection extends TypeGpuFontSelection>(
 /** Retained text. Create with a configured TypeGPU handle's createText(). */
 export interface TypeGpuText<Selection extends TypeGpuFontSelection = TypeGpuFontSelection> {
   readonly disposed: boolean;
+  /**
+   * The error that keeps this text from being drawn, or `undefined`: the engine refused its last preparation.
+   * It clears when the text's input changes. Siblings are unaffected.
+   */
+  readonly error: unknown;
+  /**
+   * Called with this text and what `measure()` returns, after the text is first prepared and whenever that
+   * summary changes, inside `glyph.prepare()` or `glyph.shape()` and before anything is published. It may read
+   * anything and write positions; writing a layout input of any text throws `GlyphLayoutPhaseError`.
+   */
+  onLayout: TypeGpuLayoutCallback<Selection> | undefined;
+  /** Receives this text's refusal once, and any exception its layout callback throws. */
+  onError: ((error: unknown) => void) | undefined;
   update(update: TypeGpuTextUpdate<Selection>): void;
   measure(): ParagraphLayoutSummary;
   glyphs(): GlyphLayoutInspection;
@@ -97,6 +126,8 @@ export interface TypeGpuText<Selection extends TypeGpuFontSelection = TypeGpuFon
 export interface TypeGpuTextPublication<Selection extends TypeGpuFontSelection = TypeGpuFontSelection> {
   readonly text: TypeGpuText<Selection>;
   prepare(): void;
+  /** Runs the layout callback if the summary is new; its exception is reported, never thrown. */
+  layout(): void;
   accepted(): void;
   rejected(): void;
 }
@@ -109,8 +140,19 @@ export function createText<Selection extends TypeGpuFontSelection>(
   options: TypeGpuTextOptions<Selection>,
   onDispose: () => void,
 ): TypeGpuTextPublication<Selection> {
-  if (options.style?.decoration !== undefined) throw new TypeError('TypeGPU text decoration lines are not supported');
-  const { position: _initialPosition, ...initialSemanticState } = options;
+  if (options.style?.decoration !== undefined) {
+    throw new GlyphInputError(['style', 'decoration'], 'TypeGPU text decoration lines are not supported');
+  }
+  const {
+    position: _initialPosition,
+    onLayout: initialOnLayout,
+    onError: initialOnError,
+    ...initialSemanticState
+  } = options;
+  let onLayout = initialOnLayout;
+  let onError = initialOnError;
+  let notifiedLayout: ParagraphLayoutSummary | undefined;
+  let reportedRefusal: unknown;
   validatePosition(options.position);
   let state = ownedSemanticState<Selection>(undefined, initialSemanticState);
   let positionX = options.position?.[0] ?? 0;
@@ -144,6 +186,7 @@ export function createText<Selection extends TypeGpuFontSelection>(
     writePosition(transform, positionValue, positionX, positionY);
     controller = services.createText(coreState(state, font));
     acquiredController = controller;
+    controller.keepMeasured = onLayout !== undefined;
     // An anchor is resolved from the batch preparation, so constructing a text never enters the engine.
     pendingAnchorNeedsMeasure = hasAuthoredAnchor;
   } catch (error) {
@@ -157,92 +200,130 @@ export function createText<Selection extends TypeGpuFontSelection>(
   function assertActive(): void {
     if (disposed) throw new Error('TypeGPU text is disposed');
   }
+  function applyUpdate(update: TypeGpuTextUpdate<Selection>): void {
+    assertActive();
+    const updatesPosition = Object.hasOwn(update, 'position');
+    if (updatesPosition) validatePosition(update.position);
+    const nextPositionX = updatesPosition ? (update.position?.[0] ?? 0) : positionX;
+    const nextPositionY = updatesPosition ? (update.position?.[1] ?? 0) : positionY;
+    if (!hasSemanticUpdate(update)) {
+      if (nextPositionX !== positionX || nextPositionY !== positionY) {
+        writePosition(transform, positionValue, nextPositionX + anchorX, nextPositionY + anchorY);
+        positionX = nextPositionX;
+        positionY = nextPositionY;
+      }
+      return;
+    }
+    const { position: _position, ...semanticUpdate } = update;
+    const previousState = state;
+    const nextInput = { ...previousState, ...semanticUpdate };
+    if (nextInput.style?.decoration !== undefined) {
+      throw new GlyphInputError(['style', 'decoration'], 'TypeGPU text decoration lines are not supported');
+    }
+    const next = ownedSemanticState(previousState, nextInput);
+    const wasPendingSemantic = pendingSemantic;
+    const anchorOnlyChange =
+      previousState.constraints?.anchor !== next.constraints?.anchor &&
+      previousState.font === next.font &&
+      previousState.text === next.text &&
+      previousState.style === next.style &&
+      previousState.layout === next.layout &&
+      Object.is(previousState.rasterPixelRatio, next.rasterPixelRatio) &&
+      sameConstraintSizes(previousState.constraints, next.constraints);
+    // Only a re-anchoring of published text is placed at once; both reads answer from the prepared layout.
+    const placesNow = anchorOnlyChange && !wasPendingSemantic;
+    const previousMeasurement = placesNow ? controller.measure() : undefined;
+    const nextFont = next.font === previousState.font ? font : fonts.acquire(next.font);
+    let failure: PostCommitError | undefined;
+    try {
+      controller.update(coreState(next, nextFont));
+    } catch (error) {
+      if (error instanceof PostCommitError) failure = error;
+      else {
+        if (nextFont !== font) nextFont.dispose();
+        throw error;
+      }
+    }
+    // The controller has adopted this update, including a PostCommitError from its dirt callback.
+    // Transfer the font lease and desired state before any requested query or host write can fail.
+    const previousFont = font;
+    font = nextFont;
+    state = next;
+    hasAuthoredAnchor = next.constraints?.anchor !== undefined;
+    semanticRevision += 1;
+    pendingSemantic = true;
+    pendingAnchorNeedsMeasure = hasAuthoredAnchor;
+    try {
+      const nextMeasurement: ParagraphLayoutSummary | undefined = placesNow ? controller.measure() : undefined;
+      if (nextMeasurement !== undefined || !hasAuthoredAnchor) {
+        pendingAnchorX = nextMeasurement?.anchorOffset.x ?? 0;
+        pendingAnchorY = nextMeasurement?.anchorOffset.y ?? 0;
+        pendingAnchorNeedsMeasure = false;
+      }
+      const placementOnly =
+        failure === undefined &&
+        previousMeasurement !== undefined &&
+        nextMeasurement !== undefined &&
+        previousMeasurement.lines === nextMeasurement.lines &&
+        previousMeasurement.width === nextMeasurement.width &&
+        previousMeasurement.height === nextMeasurement.height;
+      const appliedAnchorX = placementOnly ? pendingAnchorX : anchorX;
+      const appliedAnchorY = placementOnly ? pendingAnchorY : anchorY;
+      if (nextPositionX !== positionX || nextPositionY !== positionY || placementOnly) {
+        writePosition(transform, positionValue, nextPositionX + appliedAnchorX, nextPositionY + appliedAnchorY);
+        positionX = nextPositionX;
+        positionY = nextPositionY;
+      }
+      if (placementOnly) {
+        anchorX = pendingAnchorX;
+        anchorY = pendingAnchorY;
+        pendingSemantic = false;
+      }
+    } finally {
+      if (nextFont !== previousFont) previousFont.dispose();
+    }
+    if (failure !== undefined) throw failure;
+  }
   const text: TypeGpuText<Selection> = {
     get disposed() {
       return disposed;
     },
+    get error() {
+      return disposed ? undefined : controller.refusal;
+    },
+    get onLayout() {
+      return onLayout;
+    },
+    set onLayout(value) {
+      if (value !== undefined && typeof value !== 'function')
+        throw new TypeError('TypeGPU text onLayout must be a function');
+      const began = onLayout === undefined && value !== undefined;
+      onLayout = value;
+      if (began && !disposed) {
+        // A callback installed on text that is already drawn is told its current layout by the next shape().
+        try {
+          services.invalidate();
+        } catch {
+          // Inside a publication or the layout phase the root cannot be invalidated; the next change runs it.
+        }
+      }
+      if (value === undefined) notifiedLayout = undefined;
+      if (!disposed) controller.keepMeasured = value !== undefined;
+    },
+    get onError() {
+      return onError;
+    },
+    set onError(value) {
+      onError = value;
+    },
     update(update) {
-      assertActive();
-      const updatesPosition = Object.hasOwn(update, 'position');
-      if (updatesPosition) validatePosition(update.position);
-      const nextPositionX = updatesPosition ? (update.position?.[0] ?? 0) : positionX;
-      const nextPositionY = updatesPosition ? (update.position?.[1] ?? 0) : positionY;
-      if (!hasSemanticUpdate(update)) {
-        if (nextPositionX !== positionX || nextPositionY !== positionY) {
-          writePosition(transform, positionValue, nextPositionX + anchorX, nextPositionY + anchorY);
-          positionX = nextPositionX;
-          positionY = nextPositionY;
-        }
-        return;
-      }
-      const { position: _position, ...semanticUpdate } = update;
-      const previousState = state;
-      const nextInput = { ...previousState, ...semanticUpdate };
-      if (nextInput.style?.decoration !== undefined)
-        throw new TypeError('TypeGPU text decoration lines are not supported');
-      const next = ownedSemanticState(previousState, nextInput);
-      const wasPendingSemantic = pendingSemantic;
-      const anchorOnlyChange =
-        previousState.constraints?.anchor !== next.constraints?.anchor &&
-        previousState.font === next.font &&
-        previousState.text === next.text &&
-        previousState.style === next.style &&
-        previousState.layout === next.layout &&
-        Object.is(previousState.rasterPixelRatio, next.rasterPixelRatio) &&
-        sameConstraintSizes(previousState.constraints, next.constraints);
-      // Only a re-anchoring of published text is placed at once; both reads answer from the prepared layout.
-      const placesNow = anchorOnlyChange && !wasPendingSemantic;
-      const previousMeasurement = placesNow ? controller.measure() : undefined;
-      const nextFont = next.font === previousState.font ? font : fonts.acquire(next.font);
-      let failure: PostCommitError | undefined;
       try {
-        controller.update(coreState(next, nextFont));
+        applyUpdate(update);
       } catch (error) {
-        if (error instanceof PostCommitError) failure = error;
-        else {
-          if (nextFont !== font) nextFont.dispose();
-          throw error;
-        }
+        // A value the validators did not place names the one property this update wrote.
+        const keys = typeof update === 'object' && update !== null ? Object.keys(update) : [];
+        throw glyphInputError(keys.length === 1 ? keys : [], error);
       }
-      // The controller has adopted this update, including a PostCommitError from its dirt callback.
-      // Transfer the font lease and desired state before any requested query or host write can fail.
-      const previousFont = font;
-      font = nextFont;
-      state = next;
-      hasAuthoredAnchor = next.constraints?.anchor !== undefined;
-      semanticRevision += 1;
-      pendingSemantic = true;
-      pendingAnchorNeedsMeasure = hasAuthoredAnchor;
-      try {
-        const nextMeasurement: ParagraphLayoutSummary | undefined = placesNow ? controller.measure() : undefined;
-        if (nextMeasurement !== undefined || !hasAuthoredAnchor) {
-          pendingAnchorX = nextMeasurement?.anchorOffset.x ?? 0;
-          pendingAnchorY = nextMeasurement?.anchorOffset.y ?? 0;
-          pendingAnchorNeedsMeasure = false;
-        }
-        const placementOnly =
-          failure === undefined &&
-          previousMeasurement !== undefined &&
-          nextMeasurement !== undefined &&
-          previousMeasurement.lines === nextMeasurement.lines &&
-          previousMeasurement.width === nextMeasurement.width &&
-          previousMeasurement.height === nextMeasurement.height;
-        const appliedAnchorX = placementOnly ? pendingAnchorX : anchorX;
-        const appliedAnchorY = placementOnly ? pendingAnchorY : anchorY;
-        if (nextPositionX !== positionX || nextPositionY !== positionY || placementOnly) {
-          writePosition(transform, positionValue, nextPositionX + appliedAnchorX, nextPositionY + appliedAnchorY);
-          positionX = nextPositionX;
-          positionY = nextPositionY;
-        }
-        if (placementOnly) {
-          anchorX = pendingAnchorX;
-          anchorY = pendingAnchorY;
-          pendingSemantic = false;
-        }
-      } finally {
-        if (nextFont !== previousFont) previousFont.dispose();
-      }
-      if (failure !== undefined) throw failure;
     },
     measure() {
       assertActive();
@@ -270,7 +351,23 @@ export function createText<Selection extends TypeGpuFontSelection>(
   };
   return {
     text,
+    layout() {
+      if (disposed || onLayout === undefined || controller.refusal !== undefined) return;
+      const layout = controller.preparedMeasurement();
+      if (layout === undefined || sameLayout(notifiedLayout, layout)) return;
+      notifiedLayout = layout;
+      try {
+        onLayout(text, layout);
+      } catch (error) {
+        reportTextError(onError, error);
+      }
+    },
     prepare() {
+      const refusal = disposed ? undefined : controller.refusal;
+      if (refusal !== reportedRefusal) {
+        reportedRefusal = refusal;
+        if (refusal !== undefined) reportTextError(onError, refusal);
+      }
       // A text the engine refused has no layout to anchor; it draws nothing until its input changes.
       if (pendingAnchorNeedsMeasure && controller.refusal === undefined) {
         const offset = controller.measure().anchorOffset;
@@ -309,9 +406,32 @@ export function createText<Selection extends TypeGpuFontSelection>(
     },
   };
 }
+function sameLayout(previous: ParagraphLayoutSummary | undefined, next: ParagraphLayoutSummary): boolean {
+  return (
+    previous !== undefined &&
+    (previous === next ||
+      (previous.width === next.width &&
+        previous.height === next.height &&
+        previous.lineCount === next.lineCount &&
+        previous.glyphCount === next.glyphCount &&
+        previous.anchorOffset.x === next.anchorOffset.x &&
+        previous.anchorOffset.y === next.anchorOffset.y))
+  );
+}
+
+/** Tells a text's handler, or the host's global error reporting when it has none; never throws. */
+function reportTextError(handler: ((error: unknown) => void) | undefined, error: unknown): void {
+  try {
+    if (handler !== undefined) handler(error);
+    else (globalThis as { reportError?: (error: unknown) => void }).reportError?.(error);
+  } catch {
+    // A handler cannot replace the failure it is told about.
+  }
+}
+
 function validatePosition(position: readonly [number, number] = [0, 0]): void {
   if (position.length !== 2 || !position.every(Number.isFinite))
-    throw new RangeError('TypeGPU text position must contain two finite coordinates');
+    throw new GlyphInputError(['position'], 'TypeGPU text position must contain two finite coordinates');
 }
 
 function writePosition(transform: TypeGpuTransform, value: [number, number], x: number, y: number): void {

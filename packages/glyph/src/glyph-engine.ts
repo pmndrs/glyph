@@ -39,9 +39,14 @@ export interface GlyphShapeParticipant {
    * Reconciles the root and stages its dirty paragraphs for the batch preparation. `measureAll` asks for every
    * prepared paragraph's summary, which an explicit `glyph.prepare()` wants and a frame does not.
    */
-  prepare(measureAll: boolean): StagedPlannerPreparation | undefined;
+  prepare(measureAll: boolean, holdObserved: boolean): StagedPlannerPreparation | undefined;
   /** Runs once this root's paragraphs are all prepared, before anything is staged for publication. */
   prepared(): void;
+  /**
+   * Runs the root's layout callbacks, after every root is prepared and before any is published. While any root's
+   * callbacks run, a write to a layout input of any text throws.
+   */
+  layout?(): void;
   stage(): StagedRenderPlanner | undefined;
   accepted(): void;
   rejected(error: unknown): void;
@@ -156,15 +161,19 @@ export function registerGlyphShapeParticipant(
 }
 
 /** @internal Prepares every dirty paragraph of every dirty root in one engine call, without publishing. */
-export function prepareGlyphEngine(glyphEngine: GlyphEngine): void {
+export function prepareGlyphEngine(glyphEngine: GlyphEngine, measureAll = true): void {
   if (!(glyphEngine instanceof GlyphEngineImpl)) throw new TypeError('glyph engine was not created by this package');
-  glyphEngine._prepare();
+  glyphEngine._prepare(measureAll);
 }
 
-/** @internal Flushes every dirty root registered with one Glyph engine. */
-export function shapeGlyphEngine(glyphEngine: GlyphEngine): void {
+/**
+ * @internal Flushes every dirty root registered with one Glyph engine. `prepared` says the caller already ran
+ * `prepare()` for this frame, so its layout phase is over: what became dirty since is prepared and published,
+ * except a text with a layout callback whose layout changed, which waits for the next frame's phase.
+ */
+export function shapeGlyphEngine(glyphEngine: GlyphEngine, prepared = false): void {
   if (!(glyphEngine instanceof GlyphEngineImpl)) throw new TypeError('glyph engine was not created by this package');
-  glyphEngine._shape();
+  glyphEngine._shape(prepared);
 }
 
 /** @internal Acquire one counted engine-local Wasm shaping registration. */
@@ -214,6 +223,11 @@ class GlyphEngineImpl implements GlyphEngine {
   #borrowedPlanActive = false;
   #shapeSettlementActive = false;
   #shapeActive = false;
+  #layoutPhaseActive = false;
+  /** A layout callback wrote something a root must publish: colour, opacity, material or a transform. */
+  #writtenInLayoutPhase = false;
+  /** Roots whose frame preparation failed: the same frame's publication leaves them for the next frame. */
+  readonly #failedFramePreparations = new Set<GlyphShapeRegistrationImpl>();
   #nextHandleOrdinal = 1;
 
   constructor(fontRegistry: EngineFontRegistry, shaper: RuntimeShaper) {
@@ -241,6 +255,7 @@ class GlyphEngineImpl implements GlyphEngine {
       () => this.#enterBorrowedPlan(),
       `${options.integration}/handle/${ordinal}`,
       () => this.#assertHandleLifecycleMutationAllowed(),
+      () => this.#layoutPhaseActive,
     );
     this.#handleStates.add(state);
     this.#nextHandleOrdinal = nextOrdinal;
@@ -372,6 +387,7 @@ class GlyphEngineImpl implements GlyphEngine {
       throw new Error('Glyph shape participant is not registered with this engine');
     }
     this.#dirtyShapeRegistrations.add(registration);
+    if (this.#layoutPhaseActive) this.#writtenInLayoutPhase = true;
   }
 
   /** @internal */
@@ -388,20 +404,26 @@ class GlyphEngineImpl implements GlyphEngine {
    * @internal Batch-prepares every dirty root and leaves each queued for the next `shape()`. A root whose
    * preparation fails is told so and the failure is thrown after every other root was prepared.
    */
-  _prepare(): void {
+  _prepare(measureAll = true): void {
     this.#assertActive();
     if (this.#shapeActive) throw new Error('glyph.prepare() cannot run inside glyph.shape() or glyph.prepare()');
     if (this.#dirtyShapeRegistrations.size === 0) return;
     this.#shapeActive = true;
-    const registrations = [...this.#dirtyShapeRegistrations];
+    // A frame may prepare more than once before it publishes (a scheduler job, then the scene's own preparation
+    // object). A root that already failed this frame is not prepared again until the frame has published.
+    const failed = this.#failedFramePreparations;
+    const registrations = [...this.#dirtyShapeRegistrations].filter(
+      (registration) => measureAll || !failed.has(registration),
+    );
     const outcomes: ShapeOutcome[] = [];
     const errors = new Set<unknown>();
     try {
-      this.#prepareShapeParticipants(registrations, outcomes, true);
+      this.#prepareShapeParticipants(registrations, outcomes, measureAll, false);
       for (let index = 0; index < registrations.length; index += 1) {
         const outcome = outcomes[index];
         if (!isShapeFailure(outcome)) continue;
         errors.add(outcome.error);
+        if (!measureAll) failed.add(registrations[index]!);
         try {
           registrations[index]!.rejected(outcome.error);
         } catch (error) {
@@ -416,7 +438,7 @@ class GlyphEngineImpl implements GlyphEngine {
   }
 
   /** @internal Prepares whatever is still dirty, then publishes: a paragraph is never laid out twice for one value. */
-  _shape(): void {
+  _shape(prepared = false): void {
     this.#assertActive();
     if (this.#shapeActive) throw new Error('glyph.shape() cannot be reentered');
     if (this.#dirtyShapeRegistrations.size === 0) return;
@@ -431,9 +453,25 @@ class GlyphEngineImpl implements GlyphEngine {
     outcomes.length = 0;
     let failure: ShapeFailure | undefined;
     try {
-      for (const registration of this.#dirtyShapeRegistrations) registrations.push(registration);
-      this.#dirtyShapeRegistrations.clear();
-      this.#prepareShapeParticipants(registrations, outcomes, false);
+      // A root that failed this frame's preparation was already told: it stays dirty, and the next frame
+      // prepares it again. Preparing it twice in one frame would repeat a failure that restarts the engine.
+      const failed = this.#failedFramePreparations;
+      for (const registration of this.#dirtyShapeRegistrations) {
+        if (prepared && failed.has(registration)) continue;
+        registrations.push(registration);
+        this.#dirtyShapeRegistrations.delete(registration);
+      }
+      failed.clear();
+      // A frame whose layout phase already ran still reconciles and prepares what the traversal changed since,
+      // so ordinary text is never a frame late. Only a text with a layout callback is held: it is published at a
+      // revision whose callback has run, which is the next frame's.
+      this.#writtenInLayoutPhase = false;
+      this.#prepareShapeParticipants(registrations, outcomes, false, prepared);
+      // What this call's layout callbacks painted is published by this call, not a frame later.
+      if (this.#writtenInLayoutPhase) {
+        this.#writtenInLayoutPhase = false;
+        this.#prepareShapeParticipants(registrations, outcomes, false, true);
+      }
       this.#stageShapeParticipants(registrations, staged, stagedRegistrationIndices, outcomes);
       if (staged.length !== 0) {
         try {
@@ -470,15 +508,16 @@ class GlyphEngineImpl implements GlyphEngine {
     registrations: readonly GlyphShapeRegistrationImpl[],
     outcomes: ShapeOutcome[],
     measureAll: boolean,
+    holdObserved: boolean,
   ): void {
     const staged: StagedPlannerPreparation[] = [];
     const stagedRegistrationIndices: number[] = [];
     try {
       for (let index = 0; index < registrations.length; index += 1) {
         const registration = registrations[index]!;
-        if (registration.disposed) continue;
+        if (registration.disposed || isShapeFailure(outcomes[index])) continue;
         try {
-          const preparation = registration.prepare(measureAll);
+          const preparation = registration.prepare(measureAll, holdObserved);
           if (preparation === undefined) continue;
           staged.push(preparation);
           stagedRegistrationIndices.push(index);
@@ -504,6 +543,28 @@ class GlyphEngineImpl implements GlyphEngine {
       } catch (error) {
         outcomes[index] = shapeFailure(error);
       }
+    }
+    if (!holdObserved) this.#runLayoutPhase(registrations, outcomes);
+  }
+
+  /**
+   * The layout phase is engine-wide: every root is prepared before any callback runs, so a callback may read any
+   * text, and no callback may write a layout input of any text. It runs once per frame.
+   */
+  #runLayoutPhase(registrations: readonly GlyphShapeRegistrationImpl[], outcomes: ShapeOutcome[]): void {
+    this.#layoutPhaseActive = true;
+    try {
+      for (let index = 0; index < registrations.length; index += 1) {
+        const registration = registrations[index]!;
+        if (registration.disposed || isShapeFailure(outcomes[index])) continue;
+        try {
+          registration.layout();
+        } catch (error) {
+          outcomes[index] = shapeFailure(error);
+        }
+      }
+    } finally {
+      this.#layoutPhaseActive = false;
     }
   }
 
@@ -772,12 +833,16 @@ class GlyphShapeRegistrationImpl implements GlyphShapeRegistration {
     this.#engine._invalidateShapeParticipant(this);
   }
 
-  prepare(measureAll: boolean): StagedPlannerPreparation | undefined {
-    return this.#participant.prepare(measureAll);
+  prepare(measureAll: boolean, holdObserved: boolean): StagedPlannerPreparation | undefined {
+    return this.#participant.prepare(measureAll, holdObserved);
   }
 
   prepared(): void {
     this.#participant.prepared();
+  }
+
+  layout(): void {
+    this.#participant.layout?.();
   }
 
   stage(): StagedRenderPlanner | undefined {

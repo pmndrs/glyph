@@ -16,6 +16,8 @@ await glyph.init();
 preparationModel('React', async (labels) => {
   const font = await adapterFont();
   const objects = [];
+  const layoutListeners = [];
+  const errorListeners = [];
   const renderer = await create(
     createElement(
       Suspense,
@@ -29,6 +31,8 @@ preparationModel('React', async (labels) => {
             ref: (value) => {
               if (value !== null) objects[index] = value;
             },
+            onLayout: (_text, layout) => layoutListeners[index]?.(layout),
+            onError: (error) => errorListeners[index]?.(error),
           },
           text,
         ),
@@ -37,7 +41,7 @@ preparationModel('React', async (labels) => {
     { frameloop: 'never' },
   );
   return {
-    texts: objects.map((object) => ({
+    texts: objects.map((object, index) => ({
       object,
       value: () => object.text,
       set: (text) => {
@@ -48,7 +52,20 @@ preparationModel('React', async (labels) => {
       },
       read: () => object.measure(),
       committed: () => object.commitState().status === 'committed',
+      paint: (color) => {
+        object.style = { ...object.style, color };
+      },
+      move: () => {
+        object.position.x += 10;
+      },
+      onLayout: (listener) => {
+        layoutListeners[index] = listener;
+      },
+      onError: (listener) => {
+        errorListeners[index] = listener;
+      },
     })),
+    prepare: () => glyph.prepare(),
     // The traversal `renderer.render(scene, camera)` performs once per frame.
     frame: () => renderer.scene.instance.updateMatrixWorld(true),
     unmount: async () => {

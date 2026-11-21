@@ -35,7 +35,7 @@ export type AxisConstraint =
 
 /** Horizontal reference of the resolved paragraph box. */
 export type TextAnchorX = 'left' | 'center' | 'right';
-/** Vertical reference; metric tokens are the exact kebab-case names returned by measure(). */
+/** Vertical reference. Each metric token is the kebab-case form of the camelCase field `measure()` returns: `'first-baseline'` anchors at `firstBaseline`. */
 export type TextAnchorY =
   | 'top'
   | 'middle'

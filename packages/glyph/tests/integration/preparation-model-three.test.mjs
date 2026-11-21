@@ -33,8 +33,22 @@ preparationModel('Three', async (labels) => {
       },
       read: () => object.measure(),
       committed: () => object.commitState().status === 'committed',
+      paint: (color) => {
+        object.style = { ...object.style, color };
+      },
+      move: () => {
+        object.position.x += 10;
+      },
+      onLayout: (listener) => {
+        object.onLayout = (_text, layout) => listener(layout);
+      },
+      onError: (listener) => {
+        object.onError = listener;
+      },
+      dispose: () => object.dispose(),
     })),
     frame: () => scene.updateMatrixWorld(true),
+    prepare: () => glyph.prepare(),
     unmount: () => handle.dispose(),
   };
 });

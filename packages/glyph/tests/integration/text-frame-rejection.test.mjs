@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
 
 import * as THREE from 'three/webgpu';
-import { span, txt, bitmap } from '@pmndrs/glyph';
+import { GlyphInputError, span, txt, bitmap } from '@pmndrs/glyph';
 import { defineThreeConfig } from '@pmndrs/glyph/three';
 
 import { createFontCache, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
@@ -52,7 +52,11 @@ test('Three rejects a later invalid range before processing an earlier span styl
           ],
         },
       }),
-    (error) => error instanceof RangeError && error.message === 'span 1 covers [3, 5) outside text of length 4',
+    (error) =>
+      error instanceof GlyphInputError &&
+      error.cause instanceof RangeError &&
+      error.path.join('.') === 'text.spans' &&
+      error.message === 'span 1 covers [3, 5) outside text of length 4',
   );
 });
 
@@ -143,7 +147,7 @@ test(
         } else {
           assert.throws(
             () => node.set({ text: input }),
-            (cause) => cause instanceof RangeError && cause.message === error,
+            (cause) => cause instanceof GlyphInputError && cause.message === error,
             name,
           );
           assert.equal(node.text, acceptedText, `${name} leaves the accepted text unchanged`);
@@ -213,7 +217,7 @@ test('bounded span permutations agree with pairwise range validity', { timeout }
           acceptedText = text;
           assert.equal(node.text, text);
         } else {
-          assert.throws(() => node.set({ text: input }), RangeError);
+          assert.throws(() => node.set({ text: input }), GlyphInputError);
           assert.equal(node.text, acceptedText, 'invalid range sets leave the last accepted text unchanged');
         }
         assert.deepEqual(
@@ -301,15 +305,13 @@ test('invalid authored properties reject atomically while unknown properties are
   }
 });
 
-test('an unpaired surrogate is replaced and counted where the caller wrote it', { timeout }, async (t) => {
+test('an unpaired surrogate is drawn as U+FFFD and reads back as assigned', { timeout }, async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await fonts.load('inter');
   const node = three.createText({ font, constraints, layout, style: [latin, paint], text: 'ab\ud800cd' });
   const repaired = three.createText({ font, constraints, layout, style: [latin, paint], text: 'ab\ufffdcd' });
   try {
-    assert.equal(node.text, 'ab\ufffdcd');
-    assert.equal(node.replacedSurrogates, 1);
-    assert.equal(repaired.replacedSurrogates, 0);
+    assert.equal(node.text, 'ab\ud800cd');
     assert.deepEqual(node.measure(), repaired.measure(), 'the repaired text lays out as U+FFFD does');
   } finally {
     node.dispose();

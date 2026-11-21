@@ -475,6 +475,15 @@ export interface GlyphTextController<Format extends RasterFormatMetadata, Materi
    * draws nothing and its siblings are unaffected until its input changes or it is disposed.
    */
   readonly refusal: unknown;
+  /** Whether every batch preparation returns this text's summary; an adapter sets it for a layout callback. */
+  keepMeasured: boolean;
+  /**
+   * Whether this text's current value is still to be prepared. After a frame's preparation that is a text held
+   * for the next frame's layout phase: its owner neither reads it nor counts it as published.
+   */
+  readonly awaitsPreparation: boolean;
+  /** The current summary if the last preparation returned one, without preparing or entering the engine. */
+  preparedMeasurement(): ParagraphLayoutSummary | undefined;
   measure(): ParagraphLayoutSummary;
   /** Returns aggregate metrics after positioning glyphs so ink bounds are authoritative. */
   measureInk(): ParagraphLayoutSummary;
@@ -493,6 +502,8 @@ export interface GlyphShapeOptions {
 export interface GlyphRootServices<Bindings extends GlyphBindingSet, RendererResult, Boundary = unknown> {
   /** @internal Throws before host state changes when this root owns a staged publication. */
   assertMutationAllowed(): void;
+  /** @internal Whether layout callbacks are running: a host refuses a layout-input write it has not staged yet. */
+  readonly layoutPhaseActive: boolean;
   /** @internal Reject lifecycle mutation while this root belongs to an active engine publication or settlement. */
   _preflightLifecycleMutation(): void;
   /** @internal Whether this root is already queued for the next engine shape transaction. */
@@ -524,6 +535,13 @@ export interface GlyphRootShapeHooks<RendererResult> {
   prepared?(): void;
   /** Runs instead of `accepted` when the renderer already draws this root's desired state. */
   unchanged?(): void;
+  /**
+   * Runs the root's layout callbacks, after every dirty root is prepared and before any is published. The adapter
+   * contains each callback's exception; while callbacks run, a write to a layout input of any text throws.
+   */
+  layout?(): void;
+  /** Runs when a setter leaves this root needing a frame, so a host with an on-demand loop can request one. */
+  invalidated?(): void;
   /** Runs after the renderer accepted this root and the borrowed command buffer expired. */
   accepted?(result: RendererResult): void;
   /** Runs after this root failed without changing its last accepted renderer state. */

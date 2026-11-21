@@ -1,0 +1,139 @@
+---
+type: Migration Guide
+title: 'Migrating from @pmndrs/glyph 0.1.0'
+description: 'Every breaking change between the published 0.1.0 and the next release, for application authors and for renderer integrators, with what to change.'
+documentation_type: how-to
+tags: [migration, api, threejs, react, vue, typegpu, renderer]
+status: draft
+sources:
+  - id: api-summary
+    resource: api-summary-for-review.md
+    title: Public API summary for owner review
+  - id: three-api
+    resource: three-api.md
+    title: Three.js text API
+  - id: core-api
+    resource: core-api.md
+    title: Glyph integration API
+  - id: preparation-decision
+    resource: decisions/deferred-never-stale-preparation.md
+    title: Deferred, never-stale preparation
+generated:
+  by: anthropic/claude-fable-5-2
+  at: '2026-11-21T22:00:00Z'
+---
+
+# Migrating from @pmndrs/glyph 0.1.0
+
+This release is breaking and has no compatibility paths. The `exports` map is unchanged: no entry point was added or
+removed. Sections 1–4 are for application code; section 5 is for code that implements a renderer against
+`@pmndrs/glyph/core` or the shader subpaths. The name-level evidence for each row is in the
+[API summary](api-summary-for-review.md).
+
+## 1. When layout runs
+
+| 0.1.0                                                            | Now                                                                                                  | What to change                                                                                                     |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| A setter laid the text out synchronously.                        | A setter validates, records the value and marks the text dirty. It makes no engine call.             | Nothing, unless you relied on a setter throwing an engine error: see section 2.                                    |
+| A read returned the committed state, which could be a frame old. | A read (`measure`, `glyphs`, `readGlyphs`, `boundingBox`, carets, `split`) prepares that text first. | Remove any `glyph.shape()` or `updateMatrixWorld()` you called only to make a read current.                        |
+| `glyph.shape()` published what setters had prepared.             | `glyph.shape()` batch-prepares every dirty text in one engine call, then publishes.                  | Nothing.                                                                                                           |
+| No batch read.                                                   | `glyph.prepare()` prepares every dirty text in one call and publishes nothing.                       | Call it before reading many texts between frames; a loop of reads without it costs one engine call per dirty text. |
+| Creating a `Text` entered the engine.                            | Creating a `Text` is a setter.                                                                       | Nothing.                                                                                                           |
+| `commitState()` was `pending` between a setter and its frame.    | The same, and `pending` now also covers "not prepared yet" and "held for its layout callback".       | Do not treat `pending` as "laid out but not drawn".                                                                |
+| `measure()` and `glyphs()` refreshed `boundingBox`.              | The box is kept current only after `boundingBox` has been read once. It now includes the anchor.     | Read `text.boundingBox` (or call `computeBoundingBox()`) where you need the box.                                   |
+
+A Three root now keeps a second private object in the Scene, `@pmndrs/glyph-prepare`, as the Scene's first child. Code
+that walks `scene.children` by index or assumes the first child is its own must skip it. `root.attach(scene)` (new)
+names the Scene before the first traversal; React and Vue call it for you.
+
+## 2. Errors
+
+| 0.1.0                                                                          | Now                                                                                                                                         | What to change                                                                                        |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Invalid input threw `TypeError` or `RangeError` from the setter.               | It throws `GlyphInputError` (`code: 'invalid-input'`, `path: (string \| number)[]`, the old error as `cause`). The previous value stays.    | Replace `instanceof TypeError`/`RangeError` checks on setters with `GlyphInputError` or `error.code`. |
+| An engine failure threw from the setter.                                       | It surfaces at the frame: `text.error`, `text.onError`, `commitState().status === 'failed'`. A failure is one text's; its siblings publish. | Move `try`/`catch` around setters to `onError`.                                                       |
+| A lone surrogate threw `RangeError: text offset N is an unpaired … surrogate`. | Lone surrogates no longer throw; they render as the replacement character. `text.text` returns the string as assigned.                      | Remove the guard if you had one.                                                                      |
+| No per-text length limit.                                                      | A text longer than `maxTextUnits` (default 65,536 UTF-16 units) is invalid input.                                                           | Raise it with `defineThreeConfig({ maxTextUnits })` if you hold longer paragraphs.                    |
+| `Glyphs.glyphAt(i)` returned `undefined` out of range.                         | It throws `RangeError`.                                                                                                                     | Check the index against `count` first.                                                                |
+| React: an invalid prop surfaced however the setter did.                        | It throws while React commits and reaches the nearest error boundary; without one inside the canvas, the canvas unmounts.                   | Wrap Text in `<GlyphErrorBoundary fallback={…}>` (new) inside the canvas.                             |
+| Vue: not defined.                                                              | An invalid prop is emitted on `error` and rethrown to Vue's error handling; the component keeps its previous value.                         | Listen to `@error`.                                                                                   |
+
+Engine traps no longer take a root down: the engine instance is replaced, every text restates itself, and the next
+frame retries. An input that always traps is refused alone and reported on that text.
+
+## 3. Renamed and removed application names
+
+| Entry                                      | 0.1.0                                                            | Now                                                       |
+| ------------------------------------------ | ---------------------------------------------------------------- | --------------------------------------------------------- |
+| three, typegpu, core `GlyphTextController` | `withGlyphs(read)`                                               | `readGlyphs(read)`, same signature                        |
+| three                                      | `Text.breakApart()`                                              | `Text.split()`, same return type                          |
+| three                                      | `DetachedGlyph.sourceIndex`, `ThreeGlyphMeasurement.sourceIndex` | Removed. Detached indices are dense over drawable glyphs. |
+
+## 4. New application surface
+
+None of these require a change; they replace patterns that no longer work or were not possible.
+
+- `text.onLayout = (text, layout) => …` on Three `Text`, `<Text onLayout>` in React, `@layout` in Vue, and
+  `onLayout` on TypeGPU text. It receives what `measure()` returns, after the first preparation and whenever that
+  summary changes, before the frame that draws it. Use it where 0.1.0 code read `measure()` after a frame to size
+  something else. Inside it, writing a layout input of any text throws `GlyphLayoutPhaseError`.
+- `root.onError`, `root.onInvalidate`, `root.attach(scene)` on a Three root; `text.error` and `text.onError` on
+  TypeGPU text.
+- `frameloop="demand"` (React) and on-demand rendering (Vue) now draw an imperative `ref.current.text = …`.
+- `Constraints.anchor` (`{ x, y }`), `measure().anchorOffset`, `fontMetrics` on measurements and lines, glyph outlines
+  (`outlineAt`), `Text.caretForOffset`, `TextGroup.batching`, and the `msdfAtlas: 'msdf' | 'sdf'` config option.
+
+Results that change without a code change: line breaks after opening quotation marks now follow UAX #14 LB15a, so text
+containing them can wrap differently; `boundingBox`, `measureGlyphs` and `split` include the anchor.
+
+## 5. Renderer integrators
+
+These affect code written against `@pmndrs/glyph/core`, `@pmndrs/glyph/shaders/tsl` or the TypeGPU shader subpath.
+
+### Instance and glyph data
+
+| Item                        | 0.1.0                                                                                                  | Now                                                                                                                                                 |
+| --------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `msdfSchema` buffers        | `rect`, `uvRect`, `uvBounds`, `color`, `effectColor`, `page` (`x, y, z, page`)                         | `rect`, `color`, `effectColor`, `effect` (`shadowX, shadowY, outlineWidth, glyph`)                                                                  |
+| `msdfSchema` glyph record   | f32 `bearingX … uvMaxY` (10 lanes); u32 `page`                                                         | f32 `bearingX, bearingY, width, height`; u32 `glyph`                                                                                                |
+| MSDF `atlas` resource group | `texture` (`texture-array`, `rgba8unorm`), `pixelRange`, `effectScale`                                 | `pages` (a buffer holding an in-process token; resolve it with `msdfBakedPages`), `pixelRange`, `effectScale`, `glyphs` (a buffer: the glyph table) |
+| `slugSchema` buffers        | `rect`, `color`, `planeRect`, `bandTransform`, `inverseFontSize`, `tableStarts`, `bandCounts`          | `rect`, `color`, `glyph` (u32 lanes `glyph, unused1`)                                                                                               |
+| `slugSchema` glyph record   | f32 8 lanes, u32 6 lanes                                                                               | f32 `bearingX, bearingY, width, height`; u32 `glyph`                                                                                                |
+| Slug `page` group           | `curves` (texture `rgba16float`), `headers` (texture `r32uint`), `references` (texture `r32uint`)      | `headers` (texture `r32uint`), `curves` (buffer), `references` (buffer), `glyphs` (buffer)                                                          |
+| tsl `TslSlugPageResources`  | `headerTexture, headerWidth, curveTexture, curveWidth, referenceTexture, referenceWidth`               | `headerTexture, headerWidth, bandCurveTexture, bandCurveWidth` (one `rgba32uint` texel per band entry)                                              |
+| typegpu shader slots        | `slugCurveTexelSlot`, `slugCurveWidthAccessor`, `slugReferenceTexelSlot`, `slugReferenceWidthAccessor` | `slugBandCurveTexelSlot`, `slugBandCurveWidthAccessor`; the reference pair is removed                                                               |
+| typegpu `SlugShaderPage`    | `loadHeader, headerWidth, loadCurve, curveWidth, loadReference, referenceWidth`                        | `loadHeader, headerWidth, loadBandCurve, bandCurveWidth`                                                                                            |
+
+What to change: an instance no longer carries its atlas rectangle or band tables. It carries a glyph index, and the
+shader reads the per-glyph record from the `glyphs` table (`MSDF_GLYPH_TABLE_STRIDE`, `MSDF_GLYPH_TABLE_LAYER_STEP`,
+`SLUG_GLYPH_TABLE_STRIDE`). The MSDF atlas is no longer one texture the package uploads whole: the `pages` member is a
+token, `msdfBakedPages(pages)` returns the baked pages, and the renderer makes resident only the cells of glyphs it
+draws, before the frame that draws them. MSDF quads are trimmed to the ink.
+
+### New `/core` exports
+
+`msdfBakedPages`, `MsdfBakedPages`, `MSDF_GLYPH_TABLE_STRIDE`, `MSDF_GLYPH_TABLE_LAYER_STEP`,
+`SLUG_GLYPH_TABLE_STRIDE`, `createGlyphPlacements` with the types `GlyphPlacement`, `GlyphPlacements`, `GlyphRun`,
+`GlyphLine` and `GlyphSpace`, `GlyphSchema.preservesHostTopology`, and an optional argument on
+`GlyphRootServices.syncTransforms(updates?)`.
+
+### Root hooks and the text controller
+
+- `GlyphRootShapeHooks` gains `prepared()` (after the batch preparation, before staging), `layout()` (run layout
+  callbacks; every root is prepared, none is published), `unchanged()` (the root settled without a publication) and
+  `invalidated()` (a setter left the root needing a frame). An integration that resolved anchors or read measurements
+  inside a setter does it in `prepared()` now.
+- `GlyphTextController` gains `refusal`, `keepMeasured`, `preparedMeasurement()` and `awaitsPreparation`.
+  `controller.update()` no longer enters the engine and no longer throws engine status errors.
+- While `layout()` hooks run, `controller.update()` throws `GlyphLayoutPhaseError` for a change to a layout input.
+
+### Behaviour a renderer can rely on, or must now handle
+
+- Three materials survive buffer growth: when instance storage outgrows its capacity, the material (node graph,
+  shader modules, pipeline) is kept and pointed at the new buffers. The material factory is not called again, so a
+  factory with side effects per call sees fewer calls.
+- The first frame that shows a new MSDF effect combination (fill, outline, shadow, both) compiles: Three creates one
+  material per combination when a draw first needs it; TypeGPU creates one pipeline per combination, shared by all
+  MSDF fonts of a config.
+- TypeGPU anchored text: `createText` writes the unanchored `position`; the anchored position is written when
+  `glyph.shape()` accepts the text.

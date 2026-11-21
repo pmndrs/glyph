@@ -1,4 +1,4 @@
-import { extend, useStore, useThree, type ThreeElement, type ThreeElements } from '@react-three/fiber';
+import { extend, getScheduler, useStore, useThree, type ThreeElement, type ThreeElements } from '@react-three/fiber';
 import {
   Component,
   Suspense,
@@ -30,7 +30,8 @@ import {
 } from './font-face.js';
 import { inheritTextSpans, ownTextSpans, type FormattedText, type TextInput } from './formatted-text.js';
 import type { Font } from './font.js';
-import { glyph } from './glyph.js';
+import type { ParagraphLayoutSummary } from './layout.js';
+import { glyph, prepareGlyphFrame } from './glyph.js';
 import { GlyphFontError } from './loader.js';
 import { type FontSelection, type FontStack } from './loaded-font.js';
 import { assertPropertyList, mergePropertyList } from './property-list.js';
@@ -119,6 +120,12 @@ export type R3fTextProps<Technique extends RasterFormatMetadata> = Object3DProps
   readonly material?: ThreeTextMaterial;
   readonly pixelSnapping?: boolean;
   readonly onError?: ((error: unknown) => void) | undefined;
+  /**
+   * Called with the Text and what its `measure()` returns, after it is first prepared and whenever that summary
+   * changes, before the frame that draws it. Move other objects from it here, imperatively, and the first frame
+   * is exact; `setState` from here re-renders after that frame. Writing a layout input of any Text throws.
+   */
+  readonly onLayout?: ((text: ThreeText<Technique>, layout: ParagraphLayoutSummary) => void) | undefined;
   readonly ref?: Ref<ThreeText<Technique>>;
 };
 
@@ -496,6 +503,45 @@ class GlyphFontErrorBoundary extends Component<GlyphFontErrorBoundaryProps, Glyp
   }
 }
 
+export interface GlyphErrorBoundaryProps {
+  /** What to render instead of the failed subtree: canvas elements, or `null`. `reset` mounts the children again. */
+  readonly fallback: ReactNode | ((error: unknown, reset: () => void) => ReactNode);
+  readonly onError?: (error: unknown) => void;
+  readonly children?: ReactNode;
+}
+
+/**
+ * An error boundary to place inside a canvas, around Text. A prop that is not valid input throws from the
+ * Text's setter while React commits; without a boundary inside the canvas that error unmounts the whole canvas.
+ * With this one, only the subtree it wraps is replaced by `fallback`.
+ */
+export class GlyphErrorBoundary extends Component<
+  GlyphErrorBoundaryProps,
+  { readonly failure: { error: unknown } | undefined }
+> {
+  override state: { readonly failure: { error: unknown } | undefined } = { failure: undefined };
+
+  readonly #reset = (): void => {
+    this.setState({ failure: undefined });
+  };
+
+  static getDerivedStateFromError(error: unknown): { readonly failure: { error: unknown } } {
+    return { failure: { error } };
+  }
+
+  override componentDidCatch(error: unknown): void {
+    this.props.onError?.(error);
+  }
+
+  override render(): ReactNode {
+    const { failure } = this.state;
+    if (failure === undefined) return this.props.children;
+    return typeof this.props.fallback === 'function'
+      ? this.props.fallback(failure.error, this.#reset)
+      : this.props.fallback;
+  }
+}
+
 function getInitializedDefaultThreeHandle(): ThreeHandle | undefined {
   if (defaultThreeHandleValue?.disposed === true) {
     defaultThreeHandleValue = undefined;
@@ -580,6 +626,7 @@ export const Text = forwardRef(function Text(
     fontFaces,
     object: objectProperties(properties),
     onError: properties.onError,
+    onLayout: properties.onLayout,
     publishObject,
   });
 }) as TextComponent;
@@ -600,6 +647,7 @@ function ResolvedTextObject({
   readonly root: ThreeRoot;
   readonly object: TextElementProps;
   readonly onError: ((error: unknown) => void) | undefined;
+  readonly onLayout: ((text: ThreeText<RasterFormatMetadata>, layout: ParagraphLayoutSummary) => void) | undefined;
   readonly publishObject: (value: ThreeText<RasterFormatMetadata> | null) => void;
 }): ReactElement {
   const loadedFonts = useHandleFontFaces(handle, fontFaces);
@@ -699,12 +747,14 @@ function TextObject({
   root,
   object: objectProps,
   onError,
+  onLayout,
   publishObject: publishCommittedObject,
 }: {
   readonly desired: DesiredR3fTextProperties<RasterFormatMetadata>;
   readonly root: ThreeRoot;
   readonly object: TextElementProps;
   readonly onError: ((error: unknown) => void) | undefined;
+  readonly onLayout: ((text: ThreeText<RasterFormatMetadata>, layout: ParagraphLayoutSummary) => void) | undefined;
   readonly publishObject: (value: ThreeText<RasterFormatMetadata> | null) => void;
 }): ReactElement {
   const [constructorArguments] = useState<
@@ -713,6 +763,8 @@ function TextObject({
   const [store] = useState(() => createObjectStore<ThreeText<RasterFormatMetadata>>());
   const object = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const invalidate = useThree((state) => state.invalidate);
+  const frameStore = useStore();
+  useLayoutEffect(() => retainGlyphFrame(frameStore, root), [frameStore, root]);
   const publishObject = useMemo(
     () => (value: ThreeText<RasterFormatMetadata> | null) => {
       store.publish(value ?? undefined);
@@ -730,8 +782,82 @@ function TextObject({
     ...objectProps,
     args: constructorArguments,
     onError,
+    onLayout,
     ref: publishObject,
   });
+}
+
+interface GlyphFrame {
+  references: number;
+  readonly release: () => void;
+}
+
+const glyphFrames = new WeakMap<R3fRootStore, Map<ThreeRoot, GlyphFrame>>();
+let nextGlyphFrameJob = 1;
+
+/**
+ * Joins one Glyph root to one canvas for as long as any Text of that root is mounted in it:
+ *
+ * - a scheduler job before `render` prepares dirty text and runs layout callbacks, so the frame's layout phase
+ *   is over before the renderer traverses the scene, whatever order the scene's children are in;
+ * - a setter that leaves the root needing a frame invalidates the canvas, so `frameloop="demand"` draws an
+ *   imperative `ref.current.text = …`;
+ * - the root learns its Scene before the first traversal.
+ */
+function retainGlyphFrame(store: R3fRootStore, root: ThreeRoot): () => void {
+  let frames = glyphFrames.get(store);
+  if (frames === undefined) {
+    frames = new Map();
+    glyphFrames.set(store, frames);
+  }
+  let frame = frames.get(root);
+  if (frame === undefined) {
+    const state = store.getState();
+    const previousInvalidate = root.onInvalidate;
+    const invalidate = (): void => {
+      previousInvalidate?.();
+      store.getState().invalidate();
+    };
+    root.onInvalidate = invalidate;
+    try {
+      root.attach(state.scene as unknown as Parameters<ThreeRoot['attach']>[0]);
+    } catch {
+      // A root that already lives in another Scene keeps it; its own traversal reports the conflict.
+    }
+    const canvasRootId = (state as { internal?: { rootId?: string } }).internal?.rootId;
+    const unregister =
+      canvasRootId === undefined
+        ? undefined
+        : getScheduler().register(
+            () => {
+              try {
+                prepareGlyphFrame();
+              } catch {
+                // Every participating root received its attributed error before the global call threw.
+              }
+            },
+            { id: `@pmndrs/glyph:prepare:${String(nextGlyphFrameJob++)}`, rootId: canvasRootId, before: 'render' },
+          );
+    const owned = frames;
+    frame = {
+      references: 0,
+      release: () => {
+        unregister?.();
+        if (root.onInvalidate === invalidate) root.onInvalidate = previousInvalidate;
+        owned.delete(root);
+      },
+    };
+    frames.set(root, frame);
+  }
+  const retained = frame;
+  retained.references += 1;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    retained.references -= 1;
+    if (retained.references === 0) retained.release();
+  };
 }
 
 /** R3F retained batching boundary for descendant Text components. */
@@ -1256,6 +1382,7 @@ function objectProperties<Technique extends RasterFormatMetadata>(
     'material',
     'pixelSnapping',
     'onError',
+    'onLayout',
     'ref',
   ])
     delete object[key];
