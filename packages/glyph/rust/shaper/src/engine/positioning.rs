@@ -32,8 +32,10 @@ use super::{
 #[cfg(test)]
 use super::identity_index::IdentityIndex;
 
+#[path = "positioning_ink.rs"]
+mod ink;
 #[path = "positioning_segments.rs"]
-pub mod segments;
+mod segments;
 
 #[cfg(test)]
 pub(crate) const SEMANTIC_F32_BASE_FIELD_COUNT: usize = 6;
@@ -929,6 +931,10 @@ pub(crate) struct PositionedGlyphArena {
     /// Whether the line's pen steps describe all of it: no edge record, drop cap or decoration.
     line_repositionable: Vec<bool>,
     numeric_translations: Vec<SegmentTranslation>,
+    // Line ink: written in the pass that places the line, read by measurement.
+    line_ink: Vec<LineInk>,
+    line_missing_glyphs: Vec<u32>,
+    line_ink_complete: bool,
 }
 
 /// Two resolved styles share one decoration line when every declared decoration field
@@ -979,6 +985,26 @@ struct PositionedCluster {
     style: ResolvedStyle,
     font_handle: u32,
     cluster_origin: f64,
+}
+
+/// One line's ink in positioned space: what a union of its glyphs' placed ink boxes gives.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct LineInk {
+    pub inline_min: f64,
+    pub block_min: f64,
+    pub inline_max: f64,
+    pub block_max: f64,
+    pub state: LineInkState,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum LineInkState {
+    /// The line placed no glyph.
+    #[default]
+    Empty,
+    Joined,
+    /// Positioning could not answer for the line; measurement walks its glyphs.
+    Unmeasured,
 }
 
 /// One step of a line's pen: clusters positioned from one translation, in visual order.
@@ -1876,6 +1902,8 @@ impl PositionedGlyphArena {
         reserve(&mut self.line_span_starts, flow.lines.len())?;
         reserve(&mut self.line_repositionable, flow.lines.len())?;
         reserve(&mut self.fragment_topology, flow.fragments.len())?;
+        reserve(&mut self.line_ink, flow.lines.len())?;
+        reserve(&mut self.line_missing_glyphs, flow.lines.len())?;
         if recomposed_lines.is_some() {
             reserve(&mut self.recomposed_glyphs, flow.lines.len())?;
         }
@@ -2113,6 +2141,7 @@ impl PositionedGlyphArena {
                 self.semantic_line_glyph_counts.push(0);
                 self.semantic_line_inline_extents.push(0.0);
                 self.push_line_topology((line_span_start, line_step_start), 0, false)?;
+                self.push_line_ink(line_span_start, clusters, boundary_shape);
                 if let Some(placement_line_start) = placement_line_start {
                     self.placement.finish_line(placement_line_start)?;
                 }
@@ -2231,6 +2260,7 @@ impl PositionedGlyphArena {
                 u32::try_from(self.outlined_count().saturating_sub(line_glyph_start))
                     .map_err(|_| EngineError::ResultTooLarge)?,
             );
+            self.push_line_ink(line_span_start, clusters, boundary_shape);
             let line_glyph_end = self.outlined_count();
             if source_coordinates_retained && line_glyph_start != line_glyph_end {
                 if let Some(last) = self.recomposed_glyphs.last_mut()
@@ -2317,6 +2347,19 @@ impl PositionedGlyphArena {
         self.semantic_line_inline_extents.push(
             *previous
                 .semantic_line_inline_extents
+                .get(line_index)
+                .ok_or(EngineError::InvalidRequest)?,
+        );
+        // The retained glyphs keep their rows and their translations, so their ink is the same.
+        let ink = *previous
+            .line_ink
+            .get(line_index)
+            .ok_or(EngineError::InvalidRequest)?;
+        self.line_ink_complete &= ink.state != LineInkState::Unmeasured;
+        self.line_ink.push(ink);
+        self.line_missing_glyphs.push(
+            *previous
+                .line_missing_glyphs
                 .get(line_index)
                 .ok_or(EngineError::InvalidRequest)?,
         );
@@ -2457,6 +2500,9 @@ impl PositionedGlyphArena {
         self.line_span_starts.clear();
         self.line_repositionable.clear();
         self.numeric_translations.clear();
+        self.line_ink.clear();
+        self.line_missing_glyphs.clear();
+        self.line_ink_complete = true;
     }
 
     pub(crate) fn decorations(&self) -> &[DecorationRecord] {
@@ -2812,6 +2858,14 @@ impl PositionedGlyphArena {
 
     pub(crate) fn semantic_line_inline_extents(&self) -> &[f64] {
         &self.semantic_line_inline_extents
+    }
+
+    /// Each line's ink and missing-glyph count, when positioning measured every line.
+    pub(crate) fn line_ink(&self) -> Option<(&[LineInk], &[u32])> {
+        self.line_ink_complete.then_some((
+            self.line_ink.as_slice(),
+            self.line_missing_glyphs.as_slice(),
+        ))
     }
 
     pub(crate) fn mark_published(&mut self) {
