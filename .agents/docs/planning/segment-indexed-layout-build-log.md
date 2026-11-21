@@ -644,3 +644,17 @@ Updated in place; the history of each change is in the log below.
   only on that branch, largely uncommitted, and was built against the old Slug and MSDF schemas and
   synchronous setters, so official integration is a port. Awaiting the owner on whether it is in the ship
   gate and who commits the uncommitted work.
+- **Decision (owner): API summary approved** with the recommended answers, except lone surrogates.
+- **Decision (owner): lone surrogates get no public API.** They render as the replacement character instead
+  of throwing, and that is all: `Text.replacedSurrogates` is removed and no count is added anywhere.
+  `text.text` returns the string as assigned.
+- **Decision (owner): PixiJS 3D support is part of 0.2.0.** The owner's pixi work was committed locally on
+  `feature/pixi3d` (`2ecb36411`; hook bypassed for two unused-symbol warnings in the demo app; not pushed).
+  Left out of that commit and untouched on disk: 52 GB of untracked demo assets and new app files, the
+  vendored private beta tarball, two scratch directories. The renderer package is being ported onto the
+  integration branch against the official public release, proven by a pixel comparison against Three; demos,
+  examples and apps stay behind; the private beta tarball must not enter the public repository.
+- **Building.** Editing support, engine half (`experiments/sil-editing`): offset map, carets, hit testing,
+  movement, selection rectangles, with property tests over the oracle corpus. PixiJS 3D port
+  (`experiments/sil-pixi3d`). Oracle coverage (`experiments/sil-oracle`). Preparation lane: catching up, then
+  frame integration and `onLayout`.

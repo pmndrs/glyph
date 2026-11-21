@@ -49,6 +49,8 @@ Based on `8176a24e0` (tip of `experiments/held-rope-ascii-anchor-wip`).
 | ------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------ | ----------- | -------- |
 | `experiments/sil-prepare` | `glyph-wt-prepare` | Ship gate: paragraph-local failure, trap recovery; publication hold, `onLayout`; API docs and migration note | yes         | building |
 | `experiments/sil-oracle`  | `glyph-wt-oracle`  | Ship gate: oracle coverage for decorations, multi-paragraph, inline objects, multi-region                    | no          | building |
+| `experiments/sil-editing` | `glyph-wt-editing` | Ship gate: editing support, engine half (offset map, carets, hit test, movement, selection rects)            | no          | building |
+| `experiments/sil-pixi3d`  | `glyph-wt-pixi3d`  | Ship gate: PixiJS 3D renderer ported to the official release and the current core                            | no          | building |
 
 ## Not on any branch yet
 
