@@ -22,21 +22,23 @@ Based on `8176a24e0` (tip of `experiments/held-rope-ascii-anchor-wip`).
 | `sil-green-5`       | Existing-engine divergence fixes (seven families); 37 step references re-frozen                                                                                                                                               | `experiments/sil-cluster` (deleted; recreated when unit 1c starts)                     |
 | `sil-green-6`       | Pure TypeGPU path units 1–2: effect-specialized shaders, ink-trimmed quads, real-device parity harness                                                                                                                        | `experiments/sil-typegpu` (kept: lane continues with batching)                         |
 | `sil-green-7`       | Unicode property closure and dense kernel, per-paragraph bidi (unit 1d part 1); font binding compiled at font load                                                                                                            | `experiments/sil-unicode` (kept: lane continues), `experiments/sil-fontload` (deleted) |
+| `sil-green-8`       | Dense run-local geometry (unit 1a)                                                                                                                                                                                            | `experiments/sil-geometry` (kept: lane continues)                                      |
 | after `sil-green-4` | Stale process guidance removed; plan, decisions, build log and this map                                                                                                                                                       | integration branch                                                                     |
 
 ## Open lane branches
 
-| Branch                     | Worktree            | Feature in progress                                                                                                          | On `origin`                                           | State                                        |
-| -------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------- |
-| `experiments/sil-geometry` | `glyph-wt-geometry` | Dense run-local geometry (1a); then metric-change rescale                                                                    | yes (unverified checkpoint)                           | building                                     |
-| `experiments/sil-unicode`  | `glyph-wt-unicode`  | Unit 1d part 2: UAX #14 scalar fix, bidi double classification, resync predicate, word and sentence lanes, table re-encoding | yes                                                   | building (part 1 merged at `sil-green-7`)    |
-| `experiments/sil-prepare`  | `glyph-wt-prepare`  | Preparation and error model (unit 3): batch prepare and the setter flip first                                                | yes (guard tests only)                                | building                                     |
-| `experiments/sil-render`   | `glyph-wt-render`   | Slug: full check, per-font glyph table; then fragment cost                                                                   | yes (unverified checkpoint on top of the merged work) | building                                     |
-| `experiments/sil-typegpu`  | `glyph-wt-typegpu`  | Pure TypeGPU path: batching through indexed transforms, growth bug; then on-demand atlas                                     | yes                                                   | building (units 1–2 merged at `sil-green-6`) |
+| Branch                        | Worktree               | Feature in progress                                                                                                          | On `origin`            | State                                        |
+| ----------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------------------------------- |
+| `experiments/sil-geometry`    | `glyph-wt-geometry`    | Metric-change rescale, line-height class, label regression, gather reading run-local lanes                                   | yes                    | building (1a merged at `sil-green-8`)        |
+| `experiments/sil-positioning` | `glyph-wt-positioning` | Unit 1b: positioning topology/numeric split, per-line ink                                                                    | no                     | building                                     |
+| `experiments/sil-unicode`     | `glyph-wt-unicode`     | Unit 1d part 2: UAX #14 scalar fix, bidi double classification, resync predicate, word and sentence lanes, table re-encoding | yes                    | building (part 1 merged at `sil-green-7`)    |
+| `experiments/sil-prepare`     | `glyph-wt-prepare`     | Preparation and error model (unit 3): batch prepare and the setter flip first                                                | yes (guard tests only) | building                                     |
+| `experiments/sil-render`      | `glyph-wt-render`      | Slug per-font glyph table (tested, resolving a merge conflict); then Slug fragment cost                                      | yes                    | building                                     |
+| `experiments/sil-typegpu`     | `glyph-wt-typegpu`     | Pure TypeGPU path: batching through indexed transforms, growth bug; then on-demand atlas                                     | yes                    | building (units 1–2 merged at `sil-green-6`) |
 
 ## Not on any branch yet
 
-Positioning split (1b); local edits (unit 2); gather by change class (1e part 2); engine mount, cannot-fail
+Dense cluster build (1c); local edits (unit 2); gather by change class (1e part 2); engine mount, cannot-fail
 and trap gateway, Three two-step, `onLayout` (unit 3 stages 3–6); publication (unit 4); many-label and
 paint-only; CPU-memory unit; font loading beyond the binding; editing support; SIMD experiments; final
 comparison.
