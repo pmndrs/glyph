@@ -1,4 +1,7 @@
-import '../support/wasm-crossings.mjs';
+import { crossingsOf } from '../support/wasm-crossings.mjs';
+
+import assert from 'node:assert/strict';
+import test from 'node:test';
 
 import { readFile } from 'node:fs/promises';
 
@@ -36,4 +39,43 @@ preparationModel('TypeGPU', async (labels) => {
       font.dispose();
     },
   };
+});
+
+test('TypeGPU: an anchored text is constructed without entering the engine and drawn anchored on its first frame', async () => {
+  const host = recordingHost();
+  const handle = glyph.handle(`typegpu:preparation-model:${String(nextHandle++)}`, host.config);
+  const font = glyph.fontFace(new Blob([fontBytes]), { format: msdf });
+  await font.load();
+  try {
+    let anchored;
+    assert.deepEqual(
+      crossingsOf(() => {
+        handle.createText({ font, text: 'Anchor', position: [100, 100] });
+        anchored = handle.createText({
+          font,
+          text: 'Anchor',
+          position: [100, 100],
+          constraints: { anchor: { x: 'center', y: 'middle' } },
+        });
+      }),
+      {},
+    );
+    assert.deepEqual(
+      crossingsOf(() => glyph.shape()),
+      { engine_prepare_batch: 1, engine_update_batch: 1 },
+    );
+    handle.draw({}, { width: 640, height: 240 });
+    const offset = anchored.measure().anchorOffset;
+    assert.ok(offset.x < 0 && offset.y < 0);
+    assert.deepEqual(
+      host.recorded.map((draw) => [...draw.position]),
+      [
+        [100, 100],
+        [100 + offset.x, 100 + offset.y],
+      ],
+    );
+  } finally {
+    handle.dispose();
+    font.dispose();
+  }
 });
