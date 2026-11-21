@@ -232,6 +232,29 @@ impl UnicodeAnalysis {
         }
     }
 
+    /// Whether a word or sentence query has filled a lane that is still kept.
+    pub fn has_computed_boundary_lanes(&self) -> bool {
+        self.boundaries
+            .as_ref()
+            .is_some_and(|lanes| lanes.any_kept())
+    }
+
+    /// Takes the boundary lanes out when a query has filled one, to carry them to the analysis
+    /// of an edited text. `None`, and nothing taken, when no lane is computed.
+    pub fn take_computed_boundary_lanes(&mut self) -> Option<Box<BoundaryLanes>> {
+        if self.has_computed_boundary_lanes() {
+            self.boundaries.take()
+        } else {
+            None
+        }
+    }
+
+    /// Installs lanes carried from the analysis of the text before an edit. The caller has told
+    /// them about the edit with `BoundaryLanes::splice`.
+    pub fn adopt_boundary_lanes(&mut self, lanes: Box<BoundaryLanes>) {
+        self.boundaries = Some(lanes);
+    }
+
     /// The paragraph's boundary lanes: to install another `BreakSource`, or to move computed lanes
     /// to the analysis of the edited text before `BoundaryLanes::splice`.
     pub fn boundary_lanes_mut(&mut self) -> &mut BoundaryLanes {

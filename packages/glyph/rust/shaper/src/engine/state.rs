@@ -556,6 +556,10 @@ struct ClippedLayoutInspection {
     positioned: PositionedGlyphArena,
 }
 
+/// Edits a paragraph's word and sentence lanes are carried through without a query reading
+/// them. Past this the lanes are dropped, and the next query computes them whole.
+const BOUNDARY_LANE_IDLE_EDITS: u8 = 32;
+
 #[derive(Default)]
 struct ParagraphState {
     /// Accumulated by every preparation and cleared when a publication consumes this paragraph.
@@ -578,6 +582,8 @@ struct ParagraphState {
     styles: Staged<StyleStage>,
     unicode: Staged<UnicodeAnalysis>,
     unicode_reused_for_text_edit: bool,
+    /// Text edits since a word or sentence query last read the boundary lanes.
+    boundary_lane_idle_edits: u8,
     pending_reused_ascii_facts: Option<PrintableAsciiFacts>,
     bidi: Staged<BidiAnalysis>,
     shaping_runs: Staged<ShapingRunArena>,
@@ -5139,9 +5145,7 @@ impl ParagraphState {
         if preflight_candidate.unicode_state == CandidateUnicode::ReuseCommitted {
             self.unicode_reused_for_text_edit = true;
             self.pending_reused_ascii_facts = preflight_candidate.reused_ascii_facts;
-            // The analysis is kept, so the boundary lanes an editing query filled still describe
-            // the text before the edit, and a sentence boundary depends on a letter's case.
-            self.unicode.active_mut().invalidate_boundary_lanes();
+            self.carry_boundary_lanes(false);
             return Ok(());
         }
         if preflight_candidate.uses_pending_buffers() {
@@ -5151,7 +5155,52 @@ impl ParagraphState {
             core::mem::swap(self.unicode.pending_mut(), &mut preflight_candidate.unicode);
         }
         self.unicode.mark_prepared();
+        self.carry_boundary_lanes(true);
         Ok(())
+    }
+
+    /// Keeps the word and sentence lanes an editing query filled across this text edit: they
+    /// are told what changed and recompute only a window around it when next queried. A
+    /// paragraph nobody asked about has no lane and pays one branch; one that is only typed
+    /// into stops being maintained after `BOUNDARY_LANE_IDLE_EDITS` edits without a query.
+    fn carry_boundary_lanes(&mut self, analysed_anew: bool) {
+        let idle = self.boundary_lane_idle_edits >= BOUNDARY_LANE_IDLE_EDITS;
+        if analysed_anew {
+            let (committed, pending) = self.unicode.pair_mut();
+            let Some(mut lanes) = committed.take_computed_boundary_lanes() else {
+                return;
+            };
+            if idle {
+                return;
+            }
+            for edit in &self.text_edits {
+                lanes.splice(
+                    edit.new_start,
+                    edit.old_end - edit.old_start,
+                    edit.new_end - edit.new_start,
+                );
+            }
+            pending.adopt_boundary_lanes(lanes);
+        } else {
+            // The analysis is kept, and its lanes describe the text before the edit: a
+            // sentence boundary depends on a letter's case.
+            let kept = self.unicode.active_mut();
+            if !kept.has_computed_boundary_lanes() {
+                return;
+            }
+            if idle {
+                kept.invalidate_boundary_lanes();
+                return;
+            }
+            for edit in &self.text_edits {
+                kept.boundary_lanes_mut().splice(
+                    edit.new_start,
+                    edit.old_end - edit.old_start,
+                    edit.new_end - edit.new_start,
+                );
+            }
+        }
+        self.boundary_lane_idle_edits += 1;
     }
 
     fn discard_unicode_candidate(&mut self) {

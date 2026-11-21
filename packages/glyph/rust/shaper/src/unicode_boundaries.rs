@@ -165,7 +165,8 @@ impl BoundaryLanes {
         self.states = [LaneState::Stale; 2];
     }
 
-    fn any_kept(&self) -> bool {
+    /// Whether some word or sentence lane is computed, wholly or outside a dirty window.
+    pub(crate) fn any_kept(&self) -> bool {
         self.states.iter().any(|state| *state != LaneState::Stale)
     }
 

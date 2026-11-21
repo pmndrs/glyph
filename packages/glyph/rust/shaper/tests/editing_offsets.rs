@@ -353,3 +353,56 @@ fn word_and_sentence_units_after_an_edit_equal_a_cold_layout() {
         "\"Go. A ok theN, and more.\": the inserted capital starts the second sentence"
     );
 }
+
+#[test]
+fn boundary_lanes_follow_edits_with_and_without_queries_between() {
+    // Once a word or sentence query has filled a paragraph's lanes they are carried across
+    // edits and recompute a window around each; after 32 edits with no query they are dropped
+    // and the next query computes them whole. Either way the answer is a cold layout's.
+    use pmndrs_glyph_shaper::engine::oracle::{matrix::utf16, model::TextEdit, session::Route};
+    let library = library(&["inter"]);
+    let stack: &[&str] = &["inter"];
+    for queried_every in [1_usize, 5, 40] {
+        let mut model = model("One. two three. Four five, six? seven");
+        let mut warm = session(&library, &[stack], &model);
+        prepare_lanes(&mut warm);
+        for step in 0..80_usize {
+            // Insert, capitalise, delete and split sentences at offsets that move with the text.
+            let length = model.text.len() as u32;
+            let at = (step as u32 * 7 + 3) % length.max(1);
+            let (start, delete, insert) = match step % 4 {
+                0 => (at, 0, ". X"),
+                1 => (at, 1, "q"),
+                2 => (at.min(length - 1), 1, ""),
+                _ => (at, 0, " w"),
+            };
+            let edit = TextEdit {
+                start,
+                delete,
+                insert: utf16(insert),
+            };
+            edit.apply(&mut model.text);
+            warm.step(&model, std::slice::from_ref(&edit), Route::FULL)
+                .expect("edit");
+            if (step + 1) % queried_every != 0 {
+                continue;
+            }
+            prepare_lanes(&mut warm);
+            let mut cold = session(&library, &[stack], &model);
+            prepare_lanes(&mut cold);
+            let (warm_queries, cold_queries) = (editing(&warm), editing(&cold));
+            for unit in [TextUnit::Word, TextUnit::Sentence] {
+                let mut offset = 0;
+                while offset < warm_queries.text_length() {
+                    let range = warm_queries.boundary(down(offset), unit).unwrap();
+                    assert_eq!(
+                        Ok(range),
+                        cold_queries.boundary(down(offset), unit),
+                        "{unit:?} at {offset} after step {step}, queried every {queried_every}"
+                    );
+                    offset = range.end;
+                }
+            }
+        }
+    }
+}

@@ -49,8 +49,12 @@ impl TextEngine {
     }
 
     /// Fills the lazy boundary lane a word or sentence query reads. The only editing call that
-    /// writes, and it writes a derived lane, never layout: the first call after a text change
-    /// computes the lane and later calls return at once. Grapheme and line units need nothing.
+    /// writes, and it writes a derived lane, never layout. Grapheme and line units need nothing.
+    ///
+    /// The first call computes the lane for the whole text. From then on text edits carry the
+    /// lane with them, and a call after an edit recomputes only a window around it. A paragraph
+    /// that is edited 32 times with no call in between stops carrying its lanes, so text that
+    /// is only typed into pays nothing; the next call computes them whole again.
     pub fn prepare_editing_boundaries(
         &mut self,
         root_id: u32,
@@ -71,6 +75,8 @@ impl TextEngine {
             .and_then(|planner| planner.paragraph_mut(paragraph_id))
             .ok_or(EditingError::NotPrepared)?;
         let state = &mut paragraph.state;
+        // A query is what keeps the lanes maintained across edits.
+        state.boundary_lane_idle_edits = 0;
         if state
             .unicode
             .active()
