@@ -29,9 +29,9 @@ import {
 import { updateGeometryInstances } from './internal/geometry.js';
 import { prepareDrawReplacement } from './internal/draw-realizer.js';
 import { visibleBelowRoot } from './internal/scene-tree.js';
+import { GlyphOriginIndex } from './internal/glyph-origin-index.js';
 import type {
   MaterialRealization,
-  OriginRecord,
   OriginSegment,
   PreparationContext,
   PreparedDrawReplacement,
@@ -91,7 +91,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
   #transforms = new Map<number, THREE.Object3D>();
   #transformIdsByObject = new WeakMap<THREE.Object3D, readonly number[]>();
   readonly #requestedTransformIds: number[] = [];
-  readonly #originRecords = new Map<number, OriginRecord>();
+  readonly #origins = new GlyphOriginIndex();
   readonly #transformSynchronizer = new ThreeTransformSynchronizer();
   readonly #anchorTranslation = new THREE.Matrix4();
   readonly #transformState: ThreeTransformState;
@@ -162,39 +162,40 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     if (stableIds.length !== shapedX.length || stableIds.length !== shapedY.length) {
       throw new RangeError('glyph origin snapshot arrays must be parallel');
     }
-    this.#ensureOriginRecords();
+    const origins = this.#origins;
     const drawnX = shapedX.slice();
     const drawnY = shapedY.slice();
     const incomplete: number[] = [];
     for (let index = 0; index < stableIds.length; index += 1) {
-      const record = this.#originRecords.get(stableIds[index]!);
-      if (record === undefined || !(record.buffer.array instanceof Float32Array)) {
+      if (!origins.locate(stableIds[index]!)) {
         incomplete.push(index);
         continue;
       }
-      const offset = record.index * record.buffer.vectorWidth;
-      drawnX[index] = shapedX[index]! + (record.buffer.array[offset]! - record.targetX);
-      drawnY[index] = shapedY[index]! + (record.buffer.array[offset + 1]! - record.targetY);
+      const lane = origins.segment.origins;
+      const offset = origins.record * lane.vectorWidth;
+      const values = lane.array as Float32Array;
+      drawnX[index] = shapedX[index]! + (values[offset]! - origins.rest(0));
+      drawnY[index] = shapedY[index]! + (values[offset + 1]! - origins.rest(1));
     }
     return { drawnX, drawnY, incomplete };
   }
 
   /** Returns retained supplied geometry for requested stable glyph ids. */
   glyphGeometry(stableIds: Uint32Array): ReadonlyMap<number, ThreeGlyphGeometrySource> {
-    this.#ensureOriginRecords();
+    const origins = this.#origins;
     const geometry = new Map<number, ThreeGlyphGeometrySource>();
     for (const stableId of stableIds) {
-      const record = this.#originRecords.get(stableId);
-      if (record?.geometry !== undefined) geometry.set(stableId, record.geometry);
+      if (!origins.locate(stableId)) continue;
+      const source = origins.segment.geometry;
+      if (source !== undefined) geometry.set(stableId, source);
     }
     return geometry;
   }
 
   /** Returns the detached plan's physical record address for one stable glyph id. */
   glyphRecord(stableId: number): Readonly<{ storageKey: string; index: number }> | undefined {
-    this.#ensureOriginRecords();
-    const record = this.#originRecords.get(stableId);
-    return record === undefined ? undefined : { storageKey: record.storageKey, index: record.index };
+    const origins = this.#origins;
+    return origins.locate(stableId) ? { storageKey: origins.segment.storageKey, index: origins.record } : undefined;
   }
 
   /** Material instances owned exclusively by this renderer's current draw branch. */
@@ -204,11 +205,11 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
 
   /** Returns the first realized draw order containing any selected stable glyph. */
   renderOrderBaseForGlyphs(stableIds: Uint32Array): number | undefined {
-    this.#ensureOriginRecords();
+    const origins = this.#origins;
     let base: number | undefined;
     for (const stableId of stableIds) {
-      const drawIndex = this.#originRecords.get(stableId)?.drawIndex;
-      const renderOrder = drawIndex === undefined ? undefined : this.#draws[drawIndex]?.renderOrder;
+      if (!origins.locate(stableId)) continue;
+      const renderOrder = this.#draws[origins.segment.drawIndex]?.renderOrder;
       if (renderOrder === undefined) continue;
       base = base === undefined ? renderOrder : Math.min(base, renderOrder);
     }
@@ -284,8 +285,8 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     this.#activeTransformIndices.clear();
     this.#directDrawsByTransform.clear();
     this.#batchDrawsByScope = new WeakMap();
-    this.#originRecords.clear();
     this.#originSegments = [];
+    this.#origins.reset(this.#originSegments);
   }
 
   #decodeRendererCommit(view: CommandBufferView<ThreeBindings>): PreparedRendererCommit<void> {
@@ -479,7 +480,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
         attempt(() => draw.updateMatrixWorld(false));
       }
     }
-    this.#originRecords.clear();
+    this.#origins.reset(this.#originSegments);
     return failure;
   }
 
@@ -611,27 +612,6 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
         context.bitmapTextures.delete(resource.binding);
         context.msdfAtlases.delete(resource.binding);
         context.slugPages.delete(resource.binding);
-      }
-    }
-  }
-
-  #ensureOriginRecords(): void {
-    if (this.#originRecords.size !== 0) return;
-    for (const segment of this.#originSegments) {
-      if (!(segment.origins.array instanceof Float32Array) || !(segment.stableIds.array instanceof Uint32Array))
-        continue;
-      for (let index = segment.start; index < segment.start + segment.count; index += 1) {
-        const stableId = segment.stableIds.array[index]!;
-        const offset = index * segment.origins.vectorWidth;
-        this.#originRecords.set(stableId, {
-          buffer: segment.origins,
-          storageKey: segment.storageKey,
-          index,
-          geometry: segment.geometry,
-          drawIndex: segment.drawIndex,
-          targetX: segment.origins.array[offset]!,
-          targetY: segment.origins.array[offset + 1]!,
-        });
       }
     }
   }

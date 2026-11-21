@@ -207,35 +207,52 @@ export function copyPreparedLayoutInspection(
   const glyphInkWidths = new Float32Array(glyphCount);
   const glyphInkHeights = new Float32Array(glyphCount);
   const glyphFlags = new Uint16Array(glyphCount);
+  // Records are `repr(C)` with naturally aligned fields, so the scratch range is read as typed lanes.
   const record = textShaperAbi.layouts.borrowedGlyph;
+  const words = record.size >> 2;
+  const halves = record.size >> 1;
   for (let start = 0; start < glyphCount; start += textShaperAbi.engine.borrowedGlyphCapacity) {
     const count = Math.min(textShaperAbi.engine.borrowedGlyphCapacity, glyphCount - start);
     const view = transport.borrowParagraphGlyphs(borrowed, start, count);
+    const u32 = new Uint32Array(view.buffer, view.byteOffset, count * words);
+    const f32 = new Float32Array(view.buffer, view.byteOffset, count * words);
+    const u16 = new Uint16Array(view.buffer, view.byteOffset, count * halves);
+    const u8 = new Uint8Array(view.buffer, view.byteOffset, count * record.size);
+    let previousFontHandle = 0;
+    let previousFontSlot = -1;
     for (let offset = 0; offset < count; offset += 1) {
       const index = start + offset;
-      const base = offset * record.size;
-      const fontHandle = view.getUint32(base + record.fontHandle, true);
-      let fontSlot = fontSlots.get(fontHandle);
-      if (fontSlot === undefined) {
-        fontSlot = fontHandles.length;
-        if (fontSlot > 0xffff) throw new RangeError('prepared layout exceeds the font-slot range');
-        fontSlots.set(fontHandle, fontSlot);
-        fontHandles.push(fontHandle);
+      const word = offset * words;
+      const half = offset * halves;
+      const fontHandle = u32[word + (record.fontHandle >> 2)]!;
+      let fontSlot = previousFontSlot;
+      if (fontHandle !== previousFontHandle || fontSlot === -1) {
+        const known = fontSlots.get(fontHandle);
+        if (known === undefined) {
+          fontSlot = fontHandles.length;
+          if (fontSlot > 0xffff) throw new RangeError('prepared layout exceeds the font-slot range');
+          fontSlots.set(fontHandle, fontSlot);
+          fontHandles.push(fontHandle);
+        } else {
+          fontSlot = known;
+        }
+        previousFontHandle = fontHandle;
+        previousFontSlot = fontSlot;
       }
-      glyphStableIds[index] = view.getUint32(base + record.stableId, true);
+      glyphStableIds[index] = u32[word + (record.stableId >> 2)]!;
       glyphFontSlots[index] = fontSlot;
-      glyphIds[index] = view.getUint16(base + record.glyphId, true);
-      clusters[index] = view.getUint32(base + record.cluster, true);
-      glyphBidiLevels[index] = view.getUint8(base + record.bidiLevel);
-      glyphFontSizes[index] = view.getFloat32(base + record.fontSize, true);
-      x[index] = view.getFloat32(base + record.inlineOrigin, true);
-      y[index] = view.getFloat32(base + record.blockOrigin, true);
-      glyphAdvances[index] = view.getFloat32(base + record.inlineAdvance, true);
-      glyphInkX[index] = view.getFloat32(base + record.inkInlineStart, true);
-      glyphInkY[index] = view.getFloat32(base + record.inkBlockStart, true);
-      glyphInkWidths[index] = view.getFloat32(base + record.inkInlineExtent, true);
-      glyphInkHeights[index] = view.getFloat32(base + record.inkBlockExtent, true);
-      glyphFlags[index] = view.getUint16(base + record.flags, true);
+      glyphIds[index] = u16[half + (record.glyphId >> 1)]!;
+      clusters[index] = u32[word + (record.cluster >> 2)]!;
+      glyphBidiLevels[index] = u8[offset * record.size + record.bidiLevel]!;
+      glyphFontSizes[index] = f32[word + (record.fontSize >> 2)]!;
+      x[index] = f32[word + (record.inlineOrigin >> 2)]!;
+      y[index] = f32[word + (record.blockOrigin >> 2)]!;
+      glyphAdvances[index] = f32[word + (record.inlineAdvance >> 2)]!;
+      glyphInkX[index] = f32[word + (record.inkInlineStart >> 2)]!;
+      glyphInkY[index] = f32[word + (record.inkBlockStart >> 2)]!;
+      glyphInkWidths[index] = f32[word + (record.inkInlineExtent >> 2)]!;
+      glyphInkHeights[index] = f32[word + (record.inkBlockExtent >> 2)]!;
+      glyphFlags[index] = u16[half + (record.flags >> 1)]!;
     }
   }
   const lineTextStarts = new Uint32Array(measurement.lineCount);

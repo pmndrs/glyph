@@ -1170,6 +1170,13 @@ pub extern "C" fn pmndrs_glyph_engine_borrow_paragraph_glyphs(
             return 0;
         }
         let (engine, borrowed_glyphs) = (&state.engine, &mut state.borrowed_glyphs);
+        if borrowed_glyphs.len() < count as usize {
+            let additional = count as usize - borrowed_glyphs.len();
+            if borrowed_glyphs.try_reserve(additional).is_err() {
+                return 0;
+            }
+            borrowed_glyphs.resize(count as usize, crate::engine::SemanticGlyph::default());
+        }
         if engine
             .borrowed_paragraph_glyphs(
                 root_id,
@@ -1236,7 +1243,7 @@ struct WasmState {
     allocations: Vec<Allocation>,
     borrow_generation: u32,
     borrowed_layout: BorrowedLayoutDescriptor,
-    borrowed_glyphs: [crate::engine::SemanticGlyph; BORROWED_GLYPH_CAPACITY],
+    borrowed_glyphs: Vec<crate::engine::SemanticGlyph>,
     outline: GlyphOutline,
     outline_result: Vec<u32>,
 }

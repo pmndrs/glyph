@@ -360,7 +360,10 @@ const noRetainedStyleChanges: readonly RetainedStyleChange[] = Object.freeze([])
 
 interface OwnedTextInspection {
   readonly kind: 'owned';
+  /** The canonical columns with their non-enumerable outline read, as an integration consumes them. */
   readonly columns: GlyphLayoutInspection;
+  /** The same lanes as plain data: copying from an all-enumerable record stays on the engine's fast clone path. */
+  readonly source: GlyphLayoutColumns;
 }
 
 /** @internal Canonical inspection columns for an integration's synchronous derived query. */
@@ -725,10 +728,7 @@ class RenderPlannerImpl {
         measurement = state.measurement === undefined ? undefined : withTextAnchor(state.measurement, anchor);
         inspection =
           state.inspection?.kind === 'owned'
-            ? {
-                ...state.inspection,
-                columns: this.#inspectionColumns(withTextAnchor(state.inspection.columns, anchor)),
-              }
+            ? this.#ownedInspection(withTextAnchor(state.inspection.source, anchor))
             : state.inspection;
       } catch (error) {
         releaseResolvedText(desired);
@@ -841,10 +841,9 @@ class RenderPlannerImpl {
     state.measurement = preparation.measurement;
     if (preparedRevisionChanged) state.inspection = undefined;
     else if (state.inspection?.kind === 'owned') {
-      state.inspection = {
-        kind: 'owned',
-        columns: this.#inspectionColumns(withTextAnchor(state.inspection.columns, desired.source.constraints?.anchor)),
-      };
+      state.inspection = this.#ownedInspection(
+        withTextAnchor(state.inspection.source, desired.source.constraints?.anchor),
+      );
     }
     this.#pendingTexts.add(state);
     if (previousOrder !== nextOrder) {
@@ -921,17 +920,13 @@ class RenderPlannerImpl {
 
   /** @internal */
   _inspectText(state: RetainedTextState): GlyphLayoutInspection {
-    const inspection = this._ownedInspection(state);
-    return copyGlyphLayoutInspection(inspection.columns, inspection.columns.outlineAt);
+    const inspection = this.#currentOwnedInspection(state);
+    return copyGlyphLayoutInspection(inspection.source, inspection.columns.outlineAt);
   }
 
   /** @internal Gives Three the canonical private columns plus the current renderer-readiness fact. */
   _ownedInspection(state: RetainedTextState): OwnedTextInspectionView {
-    this.#assertTextQueryable(state);
-    let inspection = state.inspection?.kind === 'owned' ? state.inspection : undefined;
-    if (inspection === undefined) {
-      inspection = this.#ownInspection(state, this.#transport.borrowParagraphLayout(state.paragraphId));
-    }
+    const inspection = this.#currentOwnedInspection(state);
     return {
       columns: inspection.columns,
       readyToDraw:
@@ -941,7 +936,14 @@ class RenderPlannerImpl {
     };
   }
 
-  #inspectionColumns(layout: GlyphLayoutColumns): GlyphLayoutInspection {
+  #currentOwnedInspection(state: RetainedTextState): OwnedTextInspection {
+    this.#assertTextQueryable(state);
+    return state.inspection?.kind === 'owned'
+      ? state.inspection
+      : this.#ownInspection(state, this.#transport.borrowParagraphLayout(state.paragraphId));
+  }
+
+  #ownedInspection(layout: GlyphLayoutColumns): OwnedTextInspection {
     // Copies share font stores so their outlines outlive the source handle.
     const stores = new Map<number, GlyphOutlineStore | undefined>();
     for (const fontHandle of layout.fontHandles)
@@ -951,22 +953,19 @@ class RenderPlannerImpl {
         requireGlyphOutlineStore(stores.get(fontHandleAt(layout, index))),
         layout.glyphIds[index]!,
       ).slice();
-    const inspection = { ...layout, outlineAt };
-    Object.defineProperty(inspection, 'outlineAt', { enumerable: false });
-    return Object.freeze(inspection);
+    const columns = { ...layout, outlineAt };
+    Object.defineProperty(columns, 'outlineAt', { enumerable: false });
+    return { kind: 'owned', columns: Object.freeze(columns), source: layout };
   }
 
   #ownInspection(state: RetainedTextState, publication: BorrowedLayoutPublication): OwnedTextInspection {
     if (state.inspection?.kind === 'owned') return state.inspection;
-    const inspection: OwnedTextInspection = {
-      kind: 'owned',
-      columns: this.#inspectionColumns(
-        withTextAnchor(
-          copyPreparedLayoutInspection(requirePreparedMeasurement(state), this.#transport, publication),
-          state.desired.source.constraints?.anchor,
-        ),
+    const inspection = this.#ownedInspection(
+      withTextAnchor(
+        copyPreparedLayoutInspection(requirePreparedMeasurement(state), this.#transport, publication),
+        state.desired.source.constraints?.anchor,
       ),
-    };
+    );
     state.inspection = inspection;
     return inspection;
   }
@@ -1218,7 +1217,7 @@ class RenderPlannerImpl {
         if (layout === undefined) continue;
         const anchored = withTextAnchor(layout, state.desired.source.constraints?.anchor);
         state.measurement = measurementFromLayoutInspection(anchored);
-        state.inspection = { kind: 'owned', columns: this.#inspectionColumns(anchored) };
+        state.inspection = this.#ownedInspection(anchored);
       }
       return;
     }
@@ -1233,6 +1232,8 @@ class RenderPlannerImpl {
 
   #prepareTextCandidate(
     state: RetainedTextState,
+    // A summary is produced when asked for or when an anchor needs it; an earlier read does not make every later
+    // setter measure again.
     includeMeasurement = state.measurement !== undefined || state.desired.source.constraints?.anchor !== undefined,
   ): boolean {
     const styles = compileStyles(this.#handleState, state);

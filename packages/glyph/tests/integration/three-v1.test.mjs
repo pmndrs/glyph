@@ -6805,6 +6805,7 @@ function instrumentNextGlyphEngine() {
   const originalInstantiate = WebAssembly.instantiate;
   let crossings = 0;
   let measureCrossings = 0;
+  let arenaQueries = 0;
   let latestRequest;
   let latestMeasurementRequest;
   let latestUpdateFlags = 0;
@@ -6862,6 +6863,13 @@ function instrumentNextGlyphEngine() {
     const requestPointer = exports[abi.functions.requestPointer];
     assert.equal(typeof updateBatch, 'function', 'instrumented shaper must export text_update_batch');
     assert.equal(typeof requestPointer, 'function', 'instrumented shaper must export request_ptr');
+    for (const name of [abi.functions.requestPointer, abi.functions.requestCapacity]) {
+      const query = exports[name];
+      exports[name] = (...arguments_) => {
+        arenaQueries += 1;
+        return query(...arguments_);
+      };
+    }
     exports[abi.functions.textUpdateBatch] = (pointer, count) => {
       crossings += 1;
       latestBatchCount = count;
@@ -6934,6 +6942,9 @@ function instrumentNextGlyphEngine() {
     },
     get measureCrossings() {
       return measureCrossings;
+    },
+    get arenaQueries() {
+      return arenaQueries;
     },
     get latestUpdateFlags() {
       return latestUpdateFlags;
@@ -7047,6 +7058,7 @@ function instrumentNextGlyphEngine() {
     reset() {
       crossings = 0;
       measureCrossings = 0;
+      arenaQueries = 0;
       borrowedGlyphRangeCalls = 0;
       borrowedLayoutCalls = 0;
       borrowedGlyphRangeCounts = [];
@@ -7912,13 +7924,13 @@ test('Text.readGlyphs promotes actual dense demand before the next callback and 
   });
   assert.equal(
     instrumentedGlyph.borrowedGlyphRangeCalls,
-    count,
-    'the first full demand remains sparse until its callback ends',
+    3,
+    'a sequential scan crosses for its first record and then for the rest as one range',
   );
   label.readGlyphs((layout) => {
     assert.equal(
       instrumentedGlyph.borrowedGlyphRangeCalls,
-      count + Math.ceil(count / textShaperAbi.engine.borrowedGlyphCapacity),
+      3 + Math.ceil(count / textShaperAbi.engine.borrowedGlyphCapacity),
       'range promotion completes before the next caller callback',
     );
     records.forEach((record, index) => assert.deepEqual(layout.glyphAt(index + 1), record));
@@ -7926,7 +7938,7 @@ test('Text.readGlyphs promotes actual dense demand before the next callback and 
   });
   assert.equal(
     instrumentedGlyph.borrowedGlyphRangeCalls,
-    count + Math.ceil(count / textShaperAbi.engine.borrowedGlyphCapacity),
+    3 + Math.ceil(count / textShaperAbi.engine.borrowedGlyphCapacity),
     'owned callbacks cross no record ABI',
   );
   assert.throws(() => label.set({ constraints: { width: { mode: 'exact', size: NaN } } }), RangeError);
@@ -8013,6 +8025,105 @@ test('seeded inspection demand remains equal to cold recomputation across edits 
   }
 });
 
+test('a setter crosses into the engine once and reuses its request arena views', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const label = three.createText({ font, text: 'first' });
+  scene.add(label);
+  try {
+    scene.updateMatrixWorld();
+    label.measure();
+    instrumentedGlyph.reset();
+    for (const text of ['a', 'a much longer replacement', 'mid', '']) {
+      label.text = text;
+      assert.equal(label.measure().glyphCount, text.length);
+    }
+    assert.equal(instrumentedGlyph.measureCrossings, 4, 'each setter prepares in one crossing');
+    assert.equal(instrumentedGlyph.arenaQueries, 0, 'a request that fits the arena asks the engine nothing first');
+
+    // A request larger than the arena reserves once, resolves the moved arena once, and then settles again.
+    const long = 'long paragraph '.repeat(6_000);
+    label.text = long;
+    assert.equal(label.measure().glyphCount, long.length);
+    const afterGrowth = instrumentedGlyph.arenaQueries;
+    assert.ok(afterGrowth <= 1, `growing the arena resolves it at most once (${String(afterGrowth)})`);
+    label.text = `${long}!`;
+    label.text = 'short again';
+    assert.equal(label.measure().glyphCount, 11);
+    assert.equal(instrumentedGlyph.arenaQueries, afterGrowth);
+    scene.updateMatrixWorld();
+    assert.equal(label.commitState().status, 'committed');
+  } finally {
+    label.dispose();
+    font.dispose();
+  }
+});
+
+test('borrowed reads fetch one record in isolation and growing ranges in sequence', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const count = 700;
+  const label = three.createText({ font, text: 'x'.repeat(count) });
+  const other = three.createText({ font, text: 'other paragraph' });
+  try {
+    instrumentedGlyph.reset();
+    const scanned = label.readGlyphs((layout) => {
+      const records = [];
+      for (let index = 0; index < layout.glyphCount; index += 1) records.push(layout.glyphAt(index));
+      return records;
+    });
+    assert.deepEqual(
+      instrumentedGlyph.borrowedGlyphRangeCounts,
+      [1, 32, 128, 512, 27],
+      'a full scan crosses a logarithmic number of times',
+    );
+    const owned = label.glyphs();
+    assert.equal(scanned.length, owned.glyphCount);
+    scanned.forEach((record, index) => {
+      assert.equal(record.stableId, owned.glyphStableIds[index]);
+      assert.equal(record.x, owned.x[index]);
+      assert.equal(record.advance, owned.glyphAdvances[index]);
+    });
+
+    label.constraints = { width: { mode: 'exact', size: 300 } };
+    const wrapped = label.glyphs();
+    label.constraints = { width: { mode: 'exact', size: 301 } };
+    instrumentedGlyph.reset();
+    const sparse = label.readGlyphs((layout) => [650, 3, 400, 401, 2].map((index) => layout.glyphAt(index).x));
+    assert.deepEqual(
+      instrumentedGlyph.borrowedGlyphRangeCounts,
+      [1, 1, 1, 32, 1],
+      'isolated reads fetch single records; only a read continuing the previous one widens',
+    );
+    assert.equal(sparse.length, 5);
+    assert.equal(wrapped.glyphCount, count);
+
+    label.constraints = { width: { mode: 'exact', size: 302 } };
+    const expected = label.glyphs();
+    label.constraints = { width: { mode: 'exact', size: 303 } };
+    label.constraints = { width: { mode: 'exact', size: 302 } };
+    label.readGlyphs((layout) => {
+      assert.equal(layout.glyphAt(10).x, expected.x[10]);
+      assert.equal(layout.glyphAt(11).x, expected.x[11]);
+      // No other engine call can run inside a borrow, so nothing can rewrite the fetched range.
+      assert.throws(() => other.readGlyphs((inner) => inner.glyphAt(0)), /cannot be reentered/u);
+      assert.equal(layout.glyphAt(12).x, expected.x[12]);
+      assert.equal(layout.glyphAt(600).x, expected.x[600]);
+    });
+    let escaped;
+    label.readGlyphs((layout) => {
+      layout.glyphAt(0);
+      escaped = layout;
+    });
+    assert.throws(() => escaped.glyphAt(0), /expired/u, 'a fetched range does not outlive its callback');
+  } finally {
+    label.dispose();
+    other.dispose();
+    font.dispose();
+  }
+});
+
 test('owned inspection borrows complete bounded ranges and a final tail', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
@@ -8077,11 +8188,11 @@ test('Text.readGlyphs and owned inspection remain available beyond the publicati
   assert.deepEqual(instrumentedGlyph.borrowedGlyphRangeCounts, [1, 1, 1]);
   const owned = label.glyphs();
   assert.equal(owned.glyphCount, label.measure().glyphCount);
-  assert.ok(owned.glyphCount > textShaperAbi.engine.borrowedGlyphCapacity);
+  assert.ok(owned.glyphCount > 32, 'the paragraph is larger than one sequential window');
   assert.equal(
     instrumentedGlyph.borrowedGlyphRangeCalls,
     3 + Math.ceil(owned.glyphCount / textShaperAbi.engine.borrowedGlyphCapacity),
-    'owned copy uses bounded range exports even when the semantic publication budget is small',
+    'owned copy reads the whole paragraph in one range export even when the semantic publication budget is small',
   );
   assert.equal(instrumentedGlyph.borrowedLayoutCalls, 4, 'three sparse descriptors and one owned descriptor');
   instrumentedGlyph.reset();
