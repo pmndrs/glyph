@@ -28,8 +28,11 @@ use super::{
     corpus::{self, FRAGMENTS, Script},
     fonts::FontLibrary,
     lanes::{Capture, LaneClass, LaneDifference, cache_differences, differences},
-    matrix::Case,
-    model::{Decoration, Document, Model, PARAGRAPH_ID, Span, SpanStyle, TextEdit},
+    matrix::{Case, Extras},
+    model::{
+        Decoration, Document, InlineObject, Model, PARAGRAPH_ID, RegionBox, Regions, Span,
+        SpanStyle, TextEdit,
+    },
     rng::Rng,
     session::{ALL_VIEWS, Route, Session, Split},
 };
@@ -84,10 +87,10 @@ impl Hints {
 struct Planner<'a> {
     script: Script,
     stack_count: usize,
-    /// Whether the case was added after the first reference set was frozen. The operations
-    /// added since draw from the generator only for such a case, so an earlier case plans
-    /// exactly the requests it was frozen with.
-    extended: bool,
+    /// The operations added since the first reference set that this case uses. Each draws
+    /// from the generator only when its case turns it on, so every other case plans exactly
+    /// the requests it was frozen with.
+    extras: Extras,
     hints: &'a Hints,
     rng: &'a mut Rng,
     next: Model,
@@ -128,7 +131,7 @@ fn plan_paragraph(
     let mut planner = Planner {
         script: case.script,
         stack_count: case.stacks.len(),
-        extended: case.extended,
+        extras: case.extras,
         hints,
         rng,
         next: model.clone(),
@@ -161,8 +164,14 @@ impl Planner<'_> {
     }
 
     fn change(&mut self) {
-        if self.extended && self.rng.chance(1, 3) {
+        if self.extras.paint && self.rng.chance(1, 3) {
             return self.paint();
+        }
+        if self.extras.objects && self.rng.chance(1, 3) {
+            return self.inline_object();
+        }
+        if self.extras.regions && self.rng.chance(1, 4) {
+            return self.regions();
         }
         match self.rng.below(20) {
             0..=4 => self.insert(),
@@ -180,6 +189,83 @@ impl Planner<'_> {
 
     fn label(&mut self, text: String) {
         self.labels.push(text);
+    }
+
+    /// Adds, removes or alters one inline object.
+    fn inline_object(&mut self) {
+        let length = self.next.text.len() as u32;
+        let count = self.next.inline_objects.len();
+        let offset = self.rng.below(length as usize + 1) as u32;
+        let object = InlineObject {
+            text_offset: snap(&self.next.text, offset),
+            inline_extent: [8.0, 24.0, 64.0][self.rng.below(3)],
+            block_extent: [8.0, 20.0, 48.0][self.rng.below(3)],
+            baseline_offset: [0.0, -3.0][self.rng.below(2)],
+            baseline_alignment: 1 + self.rng.below(4) as u8,
+            margin_inline: [0.0, 4.0][self.rng.below(2)],
+        };
+        match self.rng.below(3) {
+            0 if count != 0 => {
+                self.next.inline_objects.remove(self.rng.below(count));
+                self.label("remove an inline object".to_string());
+            }
+            1 if count != 0 => {
+                let index = self.rng.below(count);
+                self.next.inline_objects[index] = object;
+                self.label(format!("alter inline object {index}"));
+            }
+            _ if count < 6 => {
+                self.next.inline_objects.push(object);
+                self.label(format!("add an inline object at {}", object.text_offset));
+            }
+            _ => {}
+        }
+    }
+
+    /// Changes the regions the paragraph flows through, or their height.
+    fn regions(&mut self) {
+        let layout = &mut self.next.layout;
+        match self.rng.below(5) {
+            0 => layout.regions = Regions::Single,
+            1 | 2 => {
+                layout.regions = Regions::Columns {
+                    count: 2 + self.rng.below(2) as u8,
+                    gap: [0.0, 12.0, 30.0][self.rng.below(3)],
+                };
+            }
+            3 => {
+                let wide = 200.0 + self.rng.below(300) as f32;
+                layout.regions = Regions::Boxes {
+                    boxes: [
+                        RegionBox {
+                            inline_start: 0.0,
+                            block_start: 0.0,
+                            inline_end: wide,
+                            block_end: 90.0,
+                        },
+                        RegionBox {
+                            inline_start: 20.0,
+                            block_start: 100.0,
+                            inline_end: wide + 80.0,
+                            block_end: 260.0,
+                        },
+                        RegionBox::default(),
+                    ],
+                    count: 2,
+                };
+            }
+            _ => layout.height = [120.0, 200.0, 420.0][self.rng.below(3)],
+        }
+        // Several regions are only reachable when each one can fill.
+        if layout.regions != Regions::Single && layout.height == 0.0 {
+            layout.height = 200.0;
+        }
+        if layout.width == 0.0 {
+            layout.width = 600.0;
+        }
+        let regions = layout.regions;
+        let height = layout.height;
+        self.label(format!("regions {regions:?} height {height}"));
     }
 
     /// Changes one paint field of the root style or of one span.

@@ -71,6 +71,19 @@ pub struct Case {
     /// added since, and the driver uses the operations added since. Cases frozen earlier
     /// leave both out so their files and their seeded requests stay exactly as blessed.
     pub extended: bool,
+    /// The driver operations beyond the first set that this case uses.
+    pub extras: Extras,
+}
+
+/// Driver operations added after the first reference set was frozen. A case turns on the
+/// ones it was frozen with, so adding an operation never changes the requests an existing
+/// case plans.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Extras {
+    pub paint: bool,
+    pub objects: bool,
+    pub regions: bool,
+    pub paragraphs: bool,
 }
 
 impl Case {
@@ -181,6 +194,7 @@ pub fn cases() -> Vec<Case> {
     degenerate(&mut cases);
     super::mechanisms::cases(&mut cases);
     super::effects::cases(&mut cases);
+    super::inline_objects::cases(&mut cases);
     cases
 }
 
@@ -207,6 +221,7 @@ pub(super) fn new_case(name: String, tier: Tier, stack: &[&'static str], script:
         fuzz: false,
         paragraph: false,
         extended: false,
+        extras: Extras::default(),
     }
 }
 

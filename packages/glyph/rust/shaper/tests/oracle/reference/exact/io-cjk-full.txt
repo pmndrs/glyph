@@ -1,0 +1,80 @@
+# glyph layout oracle reference v1
+case io-cjk-full
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 60909b8e35a8f655
+stage text identity 1 0a1d0751ee88798a
+stage unicode value 6 4a106d43a0092eef
+stage bidi value 8 c7822a61a8f51fc4
+stage style value 26 5d99685323fa37b8
+stage shaping_run value 5 eaac046e3e44b5af
+stage shape value 14 c01de73fa52f1128
+stage cluster value 29 479d7b1c91179164
+stage cluster identity 4 02caf21fe339d80c
+stage cluster repr 8 4068c9d1445023fb
+stage run_local repr 16 40bdae4f10ed78fd
+stage flow value 35 b23a2339f6341acb
+stage positioned identity 3 eb77ed9b2b49240f
+stage positioned value 13 e85cd3a8ae6cb09a
+stage positioned repr 17 56f3ea5b6bbfad1e
+stage public value 13 5743e9dfa6911b5a
+stage public identity 1 c476afff52e9de93
+stage view identity 4 5bca353298a2b214
+stage view value 40 4adf0150a69ce067
+stage wire wire 1 a6b792d13d6c3e19
+stage gather identity 7 ad833c993e4d8147
+stage gather value 36 b5a60acd79ba1601
+stage gpu identity 2 c8efa795d1ee8e88
+stage gpu value 3 6701e08efb56adc1
+stage plan value 23 88883c491a72c2b9
+stage plan identity 7 b65a14036160df65
+step 01 add one at the end
+class value 253 d74a9178f7ca4b16
+class identity 29 6732645ab71b1403
+class repr 41 8dd0aa8f31a9700f
+class wire 1 db66a271aca623f5
+step 02 move and grow the middle one
+class value 253 d74a9178f7ca4b16
+class identity 29 6732645ab71b1403
+class repr 41 8dd0aa8f31a9700f
+class wire 1 aeafd962d8a4530f
+step 03 align to the text top with margins
+class value 253 d74a9178f7ca4b16
+class identity 29 6732645ab71b1403
+class repr 41 8dd0aa8f31a9700f
+class wire 1 ee300c859d837f8f
+step 04 edit the text and leave the objects
+class value 253 e9462397268a5215
+class identity 29 dcce0cbc3aa89b45
+class repr 41 df1b1f840ba27b80
+class wire 1 84351e67406c2abd
+step 05 narrow the measure and re-anchor
+class value 253 b145e6e96c17f3a2
+class identity 29 1e7ac325c3953780
+class repr 41 99bcffec3bb3b8c6
+class wire 1 be17e5fc76f13b31
+step 06 remove every object
+class value 253 b145e6e96c17f3a2
+class identity 29 1e7ac325c3953780
+class repr 41 99bcffec3bb3b8c6
+class wire 1 6d59764f56cfad40
+step 07 put two back
+class value 253 b145e6e96c17f3a2
+class identity 29 1e7ac325c3953780
+class repr 41 99bcffec3bb3b8c6
+class wire 1 4c70818240ba097c
+step 08 alter inline object 1
+class value 253 b145e6e96c17f3a2
+class identity 29 1e7ac325c3953780
+class repr 41 99bcffec3bb3b8c6
+class wire 1 b0b78f038617bc9c
+step 09 metrics size 11.5 spacing 0 line 1.2 word 0
+class value 253 1b0f941aaf71cc3a
+class identity 29 adf87726bb2723dd
+class repr 41 cc7061d8437a64bc
+class wire 1 cf3c89e3d6472f4e
+step 10 remove an inline object + insert SpacedWord (3 units) at 27
+class value 253 0c23d8fdc5c55f84
+class identity 29 21efc6144875da19
+class repr 41 34c2166c53079888
+class wire 1 5e60ecd9872d3c7d

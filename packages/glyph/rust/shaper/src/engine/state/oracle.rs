@@ -17,6 +17,7 @@ pub mod corpus;
 mod effects;
 pub mod fonts;
 pub mod fuzz;
+mod inline_objects;
 pub mod lanes;
 pub mod matrix;
 mod mechanisms;

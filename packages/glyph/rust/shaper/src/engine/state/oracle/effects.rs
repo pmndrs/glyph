@@ -16,7 +16,7 @@ use crate::engine::frame::{
 
 use super::{
     corpus::Script,
-    matrix::{Case, Step, Tier, new_case, utf16},
+    matrix::{Case, Extras, Step, Tier, new_case, utf16},
     mechanisms::ROUTES,
     model::{Decoration, Layout, Paint, RootStyle, Span, SpanStyle, TextEdit},
     session::Route,
@@ -308,6 +308,10 @@ pub(super) fn cases(cases: &mut Vec<Case>) {
                 let tier = if quick { Tier::Quick } else { Tier::Full };
                 let mut case = new_case(name, tier, stack, script);
                 case.extended = true;
+                case.extras = Extras {
+                    paint: true,
+                    ..Extras::default()
+                };
                 case.fuzz = route_name == "full";
                 case.model.text = utf16(&unit.repeat(repeats));
                 case.model.layout.width = 420.0;
