@@ -358,28 +358,31 @@ pub struct Unicode17BidiData;
 
 impl BidiDataSource for Unicode17BidiData {
     fn bidi_class(&self, character: char) -> BidiClass {
-        // Deliberate: bigger raw, smaller gzip, faster per call. Do not "optimize" this back
-        // to a range table to save raw bytes.
-        // Two-stage trie, the shape ICU calls UTrie2: stage 1 maps the code point's high bits to a
-        // deduplicated block, and the low bits index inside it. Two reads and no search, against a
-        // binary probe per call before — this runs once per character on every bidi analysis.
-        // `char` is a scalar value, so both indices are in range by construction.
-        const SHIFT: usize = generated::BIDI_CLASS_BLOCK_SHIFT;
-        let code_point = character as usize;
-        let block = usize::from(generated::BIDI_CLASS_STAGE1[code_point >> SHIFT]);
-        let slot = (block << SHIFT) | (code_point & ((1 << SHIFT) - 1));
-        generated::BIDI_CLASS_VALUES[usize::from(generated::BIDI_CLASS_STAGE2[slot])]
+        // Deliberate: a trie, not a range table. Three reads and no search, against a binary
+        // probe per call — this runs once per character on every bidi analysis. Do not
+        // "optimize" this back to a range table to save raw bytes.
+        // `char` is a scalar value, so every index is in range by construction.
+        let index = crate::unicode::trie::lookup(
+            generated::BIDI_CLASS_ROOT,
+            generated::BIDI_CLASS_MIDDLE,
+            generated::BIDI_CLASS_LEAVES,
+            generated::BIDI_CLASS_LEAF_SHIFT,
+            generated::BIDI_CLASS_MIDDLE_SHIFT,
+            character as u32,
+        );
+        generated::BIDI_CLASS_VALUES[usize::from(index)]
     }
 
     fn bidi_matched_opening_bracket(&self, character: char) -> Option<BidiMatchedOpeningBracket> {
-        let code_point = character as u32;
+        // Every paired bracket is in the BMP.
+        let code_point = u16::try_from(character as u32).ok()?;
         generated::BIDI_BRACKETS
             .binary_search_by_key(&code_point, |entry| entry.0)
             .ok()
             .and_then(|index| {
                 let (_, opening, is_open) = generated::BIDI_BRACKETS[index];
                 Some(BidiMatchedOpeningBracket {
-                    opening: char::from_u32(opening)?,
+                    opening: char::from_u32(u32::from(opening))?,
                     is_open,
                 })
             })

@@ -16,6 +16,9 @@ pub mod resync;
 #[path = "unicode_boundaries.rs"]
 pub mod boundaries;
 
+#[path = "unicode_trie.rs"]
+pub(crate) mod trie;
+
 pub use boundaries::{
     BoundaryLanes, BreakSource, GRAPHEME_BOUNDARY, SENTENCE_BOUNDARY, Segmentation,
     Uax29BreakSource, WORD_BOUNDARY,
@@ -105,6 +108,7 @@ pub struct UnicodeAnalysis {
     previous_script: u32,
     previous_script_id: u8,
     /// Grapheme, word and sentence bits for editing, computed on first query, never by `analyze`.
+    /// Boxed on first use, so an analysis nobody queries carries one null pointer.
     boundaries: Option<Box<BoundaryLanes>>,
     #[cfg(test)]
     analysis_count: usize,
@@ -671,46 +675,42 @@ fn same_script_run(scripts: &[u8], start: usize, script: u8) -> usize {
 }
 
 pub fn script(code_point: u32) -> Option<u32> {
-    // Two-stage trie: two reads instead of a binary probe per call. `script` runs per character on
-    // every analysis, and the tables are deliberately larger raw for it. See D-341.
+    // A trie: three reads instead of a binary probe per call. `script` runs per character in the
+    // scalar analysis. See D-341.
+    script_index(code_point).map(|index| generated::SCRIPT_VALUES[index])
+}
+
+fn script_index(code_point: u32) -> Option<usize> {
     if code_point > 0x10_ffff {
         return None;
     }
-    const SHIFT: usize = generated::SCRIPT_BLOCK_SHIFT;
-    let code_point = code_point as usize;
-    let block = usize::from(generated::SCRIPT_STAGE1[code_point >> SHIFT]);
-    let slot = (block << SHIFT) | (code_point & ((1 << SHIFT) - 1));
-    Some(generated::SCRIPT_VALUES[usize::from(generated::SCRIPT_STAGE2[slot])])
+    Some(usize::from(trie::lookup(
+        generated::SCRIPT_ROOT,
+        generated::SCRIPT_MIDDLE,
+        generated::SCRIPT_LEAVES,
+        generated::SCRIPT_LEAF_SHIFT,
+        generated::SCRIPT_MIDDLE_SHIFT,
+        code_point,
+    )))
 }
 
 pub fn script_extensions(code_point: u32) -> Option<&'static [u32]> {
-    let set = usize::try_from(lookup_partition(
-        generated::SCRIPT_EXTENSION_END_VALUES,
+    let index = script_index(code_point)?;
+    let set = usize::from(trie::lookup(
+        generated::SCRIPT_EXTENSION_ROOT,
+        generated::SCRIPT_EXTENSION_MIDDLE,
+        generated::SCRIPT_EXTENSION_LEAVES,
+        generated::SCRIPT_EXTENSION_LEAF_SHIFT,
+        generated::SCRIPT_EXTENSION_MIDDLE_SHIFT,
         code_point,
-    )?)
-    .ok()?;
-    let start = usize::try_from(*generated::SCRIPT_EXTENSION_OFFSETS.get(set)?).ok()?;
-    let end = usize::try_from(*generated::SCRIPT_EXTENSION_OFFSETS.get(set + 1)?).ok()?;
-    generated::SCRIPT_EXTENSION_TAGS.get(start..end)
-}
-
-fn lookup_partition(end_values: &[u32], code_point: u32) -> Option<u32> {
-    if code_point > 0x10_ffff {
-        return None;
+    ));
+    if set == 0 {
+        // The extensions are the code point's own script alone.
+        return Some(core::slice::from_ref(&generated::SCRIPT_VALUES[index]));
     }
-    let mut low = 0;
-    let mut high = end_values.len() / 2;
-    while low < high {
-        let middle = low + (high - low) / 2;
-        let offset = middle * 2;
-        let end = end_values[offset];
-        if code_point >= end {
-            low = middle + 1;
-        } else {
-            high = middle;
-        }
-    }
-    end_values.get(low.checked_mul(2)?.checked_add(1)?).copied()
+    let start = usize::from(generated::SCRIPT_EXTENSION_OFFSETS[set - 1]);
+    let end = usize::from(generated::SCRIPT_EXTENSION_OFFSETS[set]);
+    Some(&generated::SCRIPT_EXTENSION_TAGS[start..end])
 }
 
 fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), UnicodeError> {
