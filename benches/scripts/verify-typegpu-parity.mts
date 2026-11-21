@@ -23,15 +23,6 @@ const withPerf = process.argv.includes('--perf');
  */
 const threeBudget: Readonly<Record<string, number | undefined>> = {
   bitmap: undefined,
-  // The TypeGPU Slug vertex stage takes its dilation derivatives from projected neighbours, Three's from the matrix
-  // rows; a few antialiased edge pixels land on the other side of the tolerance. Measured before Slug was batched
-  // (the batched draw changes one pixel by 1/255): 5, 2 and 4.
-  slug: 5,
-  'slug-labels': 2,
-  'slug-labels-grown': 4,
-  // Large sizes (up to 48 px): identical between arriving over six frames and drawn in one.
-  'slug-arriving': 47,
-  'slug-arrived': 47,
 };
 
 interface Difference {

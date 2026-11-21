@@ -165,6 +165,7 @@ export const textShaperAbi = {
     },
     "resultFlags": {
       "checkpoint": 1,
+      "paragraphRefused": 8,
       "retainedHostTopology": 2,
       "rootInvalidated": 4
     },

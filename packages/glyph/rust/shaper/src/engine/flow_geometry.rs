@@ -73,11 +73,15 @@ impl FlowGeometryArena {
     pub(crate) fn build(&mut self, geometry: GeometryBatch<'_>) -> Result<(), EngineError> {
         self.clear();
         reserve(&mut self.constraints, geometry.constraint_count())?;
-        reserve(&mut self.regions, geometry.region_count())?;
-        let exclusion_capacity = if geometry.exclusion_count() == 0 {
+        // A batch hands each paragraph its own constraints over the whole request's regions and
+        // exclusions, so reserve what these constraints reference, never the request's total:
+        // otherwise every paragraph of a mount reserves room for every other paragraph's regions.
+        let (region_count, own_exclusion_count) = referenced_counts(geometry)?;
+        reserve(&mut self.regions, region_count)?;
+        let exclusion_capacity = if own_exclusion_count == 0 {
             0
         } else {
-            geometry.exclusion_count().max(INITIAL_EXCLUSION_CAPACITY)
+            own_exclusion_count.max(INITIAL_EXCLUSION_CAPACITY)
         };
         reserve(&mut self.exclusions, exclusion_capacity)?;
         for index in 0..geometry.constraint_count() {
@@ -731,6 +735,26 @@ fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), EngineError>
             .map_err(|_| EngineError::ResultTooLarge)?;
     }
     Ok(())
+}
+
+/// How many regions and exclusions the batch's own constraints reference.
+fn referenced_counts(geometry: GeometryBatch<'_>) -> Result<(usize, usize), EngineError> {
+    let (mut regions, mut exclusions) = (0usize, 0usize);
+    for index in 0..geometry.constraint_count() {
+        let constraint = geometry
+            .constraint(index)
+            .ok_or(EngineError::InvalidRequest)?;
+        let start =
+            usize::try_from(constraint.region_start).map_err(|_| EngineError::InvalidRequest)?;
+        for region_index in start..start.saturating_add(usize::from(constraint.region_count)) {
+            let region = geometry
+                .region(region_index)
+                .ok_or(EngineError::InvalidRequest)?;
+            exclusions = exclusions.saturating_add(usize::from(region.exclusion_count));
+        }
+        regions = regions.saturating_add(usize::from(constraint.region_count));
+    }
+    Ok((regions, exclusions))
 }
 
 #[cfg(test)]

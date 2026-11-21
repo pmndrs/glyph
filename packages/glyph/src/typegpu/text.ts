@@ -271,7 +271,8 @@ export function createText<Selection extends TypeGpuFontSelection>(
   return {
     text,
     prepare() {
-      if (pendingAnchorNeedsMeasure) {
+      // A text the engine refused has no layout to anchor; it draws nothing until its input changes.
+      if (pendingAnchorNeedsMeasure && controller.refusal === undefined) {
         const offset = controller.measure().anchorOffset;
         pendingAnchorX = offset.x;
         pendingAnchorY = offset.y;

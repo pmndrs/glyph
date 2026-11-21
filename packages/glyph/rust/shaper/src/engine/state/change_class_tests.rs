@@ -32,7 +32,7 @@ fn a_colour_change_stages_no_layout_and_accumulates_paint_until_publication() {
     request.style_mutations =
         parse_style_mutations(&recoloured, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
     let measured = engine
-        .prepare_paragraphs(Some(&mut shaper), request, PreparationTarget::Dirty)
+        .prepare_paragraphs(Some(&mut shaper), request, PreparationTarget::Dirty(MeasuredParagraphs::All))
         .unwrap();
     let staged = engine
         .planners
@@ -53,7 +53,7 @@ fn a_colour_change_stages_no_layout_and_accumulates_paint_until_publication() {
     ] {
         assert!(!prepared, "a colour change staged the {stage} stage");
     }
-    engine.commit_measure(measured).unwrap();
+    engine.commit_measure(measured.witness).unwrap();
 
     let change = engine.paragraph_change_since_publication(4, 1).unwrap();
     assert_eq!(change.class, ChangeClass::Paint);
@@ -75,7 +75,7 @@ fn a_colour_change_stages_no_layout_and_accumulates_paint_until_publication() {
     let measured = engine
         .prepare_paragraphs(Some(&mut shaper), request, PreparationTarget::One(1))
         .unwrap();
-    engine.commit_measure(measured).unwrap();
+    engine.commit_measure(measured.witness).unwrap();
     let change = engine.paragraph_change_since_publication(4, 1).unwrap();
     assert_eq!(change.class, ChangeClass::Metric);
     assert_eq!(change.units, DirtyInterval::ALL);

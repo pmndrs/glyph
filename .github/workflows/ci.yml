@@ -29,6 +29,7 @@ on:
           - edit-sized
           - multi-owner
           - assignment
+          - prepare-spans
           - full
       baseline_version:
         description: Published Glyph release to compare (for example 0.1.0; blank uses canary)

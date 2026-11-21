@@ -58,11 +58,17 @@ export function runtimeShaperEngineExports(shaper: RuntimeShaper): ShaperExports
   return shaper._engineExports();
 }
 
+/** @internal Lets an engine owner restate its registrations when a trap replaced the engine instance. */
+export function onRuntimeShaperRestart(shaper: RuntimeShaper, listener: () => void): () => void {
+  if (!(shaper instanceof RuntimeShaperImpl)) throw new TypeError('runtime shaper was not created by this package');
+  return shaper._onRestart(listener);
+}
+
 export async function createRuntimeShaper(options: RuntimeShaperOptions = {}): Promise<RuntimeShaper> {
   const source = options.wasm ?? (await compileDefaultWasm());
   const module = source instanceof WebAssembly.Module ? source : await WebAssembly.compile(source);
   const instance = await WebAssembly.instantiate(module, {});
-  const resolved = readModule(instance);
+  const resolved = readModule(instance, module);
   shareShaperModule(module);
   return new RuntimeShaperImpl(options.registry ?? new FontRegistry(), resolved);
 }
@@ -70,6 +76,7 @@ export async function createRuntimeShaper(options: RuntimeShaperOptions = {}): P
 class RuntimeShaperImpl implements RuntimeShaper {
   readonly registry: RuntimeShaperFontRegistry;
   readonly #exports: ShaperExports;
+  readonly #module: ShaperModule;
   readonly #registered = new Map<FontHandle, RegisteredFont | undefined>();
   readonly #unsubscribe: () => void;
   #disposed = false;
@@ -77,7 +84,14 @@ class RuntimeShaperImpl implements RuntimeShaper {
   constructor(registry: RuntimeShaperFontRegistry, module: ShaperModule) {
     this.registry = registry;
     this.#exports = module.exports;
+    this.#module = module;
     this.#unsubscribe = registry._onFontDispose((font) => this.#disposeHandle(font.handle));
+    // Fonts are the first registrations a fresh instance needs; every later owner refers to them by handle.
+    module.onRestart(() => {
+      const fonts = [...this.#registered.values()];
+      this.#registered.clear();
+      for (const font of fonts) if (font !== undefined) this.registerFont(font);
+    });
   }
 
   registerFont(font: RegisteredFont): void {
@@ -177,6 +191,11 @@ class RuntimeShaperImpl implements RuntimeShaper {
   /** @internal */
   _engineExports(): ShaperExports {
     return this.#exports;
+  }
+
+  /** @internal Runs `listener` on a fresh engine instance after a trap, once the fonts are registered again. */
+  _onRestart(listener: () => void): () => void {
+    return this.#module.onRestart(listener);
   }
 
   /** @internal */

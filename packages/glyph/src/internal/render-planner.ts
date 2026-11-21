@@ -1,6 +1,8 @@
 import { sameConstraintSizes, withTextAnchor } from '../text-anchor.js';
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { GlyphError } from '../glyph-error.js';
+import { GlyphEngineStatusError, glyphEngineStatusErrorDetails } from '../engine-error.js';
+import { GlyphEngineRestartError } from './text-shaper-module.js';
 import {
   copyGlyphLayoutInspection,
   type BorrowedGlyphLayout,
@@ -71,6 +73,11 @@ import { ownTextInput } from '../config/text-span-owner.js';
 import { minimalTextReplacement, wellFormedText } from '../text-mutation.js';
 
 const MAX_U32 = 0xffff_ffff;
+/**
+ * A paragraph costs on the order of a kilobyte of engine memory per UTF-16 unit once shaped, laid out and
+ * published. This bound keeps one text under roughly a hundred megabytes on any device.
+ */
+const DEFAULT_MAX_TEXT_UNITS = 65_536;
 const claimedTargets = new WeakSet<object>();
 const EMPTY_REQUEST_ITEMS: readonly never[] = Object.freeze([]);
 
@@ -262,6 +269,8 @@ export type RetainedTextUpdate = {
 /** One planner-owned retained text instance. */
 export interface RetainedText {
   readonly disposed: boolean;
+  /** The error that refused this text's last preparation, until its input changes; `undefined` otherwise. */
+  readonly refusal: unknown;
   update(update: RetainedTextUpdate): void;
   /** Repositions this paragraph without invalidating its semantic or measured state. */
   updateOrder(order: number, orderScope: number, orderRank: number): void;
@@ -305,6 +314,8 @@ export interface RenderPlannerOptions {
   readonly requestCapacity: number;
   readonly resultCapacity: number;
   readonly textCapacity: number;
+  /** The most UTF-16 units one text may hold; a setter beyond it throws. Defaults to 65,536. */
+  readonly maxTextUnits?: number;
 }
 
 /** @internal A planner that can query authored text but cannot publish a render plan. */
@@ -387,7 +398,17 @@ interface RetainedTextState {
    */
   preparedDesired: ResolvedTextOptions | undefined;
   preparedOrder: number;
+  /**
+   * Whether the engine holds this paragraph. The first read of a root creates every paragraph it has not seen
+   * in that one request, so the lifecycle work of a mount is paid once and not once per read.
+   */
+  created: boolean;
   prepared: boolean;
+  /**
+   * The error of a preparation the engine refused for this paragraph alone. The engine emptied the paragraph, so
+   * it is restated from nothing once its input changes; until then it is left out of every batch.
+   */
+  refusal: unknown;
   geometryRevision: number;
   committedFlowRegions: Map<string, CommittedFlowRegion>;
   committedFlowExclusions: Map<string, CommittedFlowExclusion>;
@@ -516,6 +537,21 @@ export function observeRenderPlannerDirty(planner: RenderPlanner, listener: () =
   return planner._observeDirty(listener);
 }
 
+/** @internal Refuses a text longer than one paragraph may be; the same check every setter of every layer applies. */
+export function assertTextUnitLimit(text: string, maxTextUnits: number = DEFAULT_MAX_TEXT_UNITS): void {
+  if (text.length > maxTextUnits) {
+    throw new RangeError(
+      `text holds ${String(text.length)} UTF-16 units; one text accepts at most ${String(maxTextUnits)} (commands.maxTextUnits)`,
+    );
+  }
+}
+
+/** @internal Tells a planner that a trap replaced the engine instance and its root was created again, empty. */
+export function restartRenderPlanner(planner: RenderPlanner): void {
+  if (!(planner instanceof RenderPlannerImpl)) throw new TypeError('render planner was not created by this package');
+  planner._engineRestarted();
+}
+
 /** @internal Stage every dirty paragraph of one root for batch preparation without crossing into Wasm. */
 export function stageRenderPlannerPreparation(
   planner: RenderPlanner,
@@ -545,6 +581,11 @@ class RenderPlannerImpl {
   readonly #targetController = new AbortController();
   readonly #origin: PlanOrigin = Object.freeze(new PlanOriginImpl());
   readonly #limits: RenderPlannerLimits;
+  readonly #maxTextUnits: number;
+  /** Automatic retries spent on a failed frame since the last success; one frame retries, then a change must. */
+  #automaticRetries = 0;
+  /** Set by an engine restart: the next preparation gives each paragraph its own request. */
+  #isolateNextPreparation = false;
   readonly #texts = new Set<RetainedTextState>();
   /** Owners whose renderer publication is behind their desired state. */
   readonly #pendingTexts = new Set<RetainedTextState>();
@@ -587,6 +628,9 @@ class RenderPlannerImpl {
     if (measurementOnly) assertMeasurementPlanOptions(options);
     else assertRenderPlannerOptions(options);
     this.#limits = snapshotLimits(options.limits);
+    const maxTextUnits = (options as RenderPlannerOptions).maxTextUnits ?? DEFAULT_MAX_TEXT_UNITS;
+    positiveU32(maxTextUnits, 'maxTextUnits');
+    this.#maxTextUnits = maxTextUnits;
     const codec = handleState._retainInstalledCodec(options.codec);
     if (measurementOnly) {
       try {
@@ -666,6 +710,12 @@ class RenderPlannerImpl {
     const ordinal = this.#nextTextOrdinal;
     const nextOrdinal = checkedNextOrdinal(ordinal);
     const desired = resolveTextOptions(this.#handleState, options);
+    try {
+      this.#assertTextUnits(desired.text);
+    } catch (error) {
+      releaseResolvedText(desired);
+      throw error;
+    }
     const paragraphId = this.#handleState.id('paragraph', `${this.#handleState.integration}/text/${ordinal}`);
     const state: RetainedTextState = {
       paragraphId,
@@ -675,7 +725,9 @@ class RenderPlannerImpl {
       metrics: retainedTextMetrics(desired, ordinal),
       preparedDesired: undefined,
       preparedOrder: 0,
+      created: false,
       prepared: false,
+      refusal: undefined,
       geometryRevision: 0,
       committedFlowRegions: new Map(),
       committedFlowExclusions: new Map(),
@@ -749,6 +801,7 @@ class RenderPlannerImpl {
     if (!isNonArrayObject(update)) throw new TypeError('text engine text update must be an object');
     const textOnly = textOnlyUpdate(update, state.desired);
     if (textOnly !== undefined && textOnly === state.desired.text) return;
+    if (textOnly !== undefined) this.#assertTextUnits(textOnly);
     const desired =
       textOnly === undefined
         ? resolveTextOptions(
@@ -757,8 +810,17 @@ class RenderPlannerImpl {
             state.desired,
           )
         : forkResolvedTextWithText(state.desired, textOnly, state.metrics.order);
+    if (textOnly === undefined) {
+      try {
+        this.#assertTextUnits(desired.text);
+      } catch (error) {
+        releaseResolvedText(desired);
+        throw error;
+      }
+    }
     // After renderer rejection, even an anchor edit must retry the engine's unaccepted output.
     if (
+      state.refusal === undefined &&
       !this.#isDirty() &&
       !this.#engineNeedsRebuild &&
       state.published &&
@@ -803,6 +865,8 @@ class RenderPlannerImpl {
       this.#unprepared.delete(state);
       state.geometryDirty = false;
     } else {
+      // New input is a new chance: a refused paragraph is restated from nothing by the next preparation.
+      state.refusal = undefined;
       this.#unprepared.add(state);
       state.geometryDirty ||= updateChangesGeometry(update, previousDesired, next);
     }
@@ -834,6 +898,10 @@ class RenderPlannerImpl {
     for (const resolved of released) attempt(() => releaseResolvedText(resolved));
     attempt(() => this.#dirtyListener?.());
     return postCommitFailed ? { error: new PostCommitError(message, postCommitError) } : undefined;
+  }
+
+  #assertTextUnits(text: string): void {
+    assertTextUnitLimit(text, this.#maxTextUnits);
   }
 
   /** Re-anchors an accepted, published paragraph whose layout input is otherwise unchanged; nothing is prepared. */
@@ -1041,7 +1109,7 @@ class RenderPlannerImpl {
     this.#transforms = undefined;
     this.#removeLiveState(state);
     this.#unprepared.delete(state);
-    if (!state.prepared) {
+    if (!state.created) {
       // The engine never saw this paragraph, so there is nothing to remove from it or from the renderer.
       this.#texts.delete(state);
       this.#releasePreparedOrder(state);
@@ -1122,6 +1190,10 @@ class RenderPlannerImpl {
       throw new Error('render planner is already staged');
     }
     if (this.#unprepared.size === 0) return undefined;
+    if (this.#isolateNextPreparation) {
+      this.#prepareIsolated(measureAll);
+      return undefined;
+    }
     // The engine routes records by ascending paragraph identity.
     const states = [...this.#unprepared].sort((left, right) => left.paragraphId - right.paragraphId);
     const upserts: PlannerParagraphMutation[] = [];
@@ -1132,7 +1204,7 @@ class RenderPlannerImpl {
     const exclusions: PlannerExclusion[] = [];
     const inlineObjects: PlannerInlineObject[] = [];
     const paragraphs: ParagraphPreparation[] = [];
-    let includeMeasurement = measureAll;
+    const measured: number[] = [];
     for (const state of states) {
       const preparation = this.#paragraphPreparation(state);
       if (!preparation.changed) {
@@ -1150,8 +1222,9 @@ class RenderPlannerImpl {
         continue;
       }
       paragraphs.push(preparation);
-      includeMeasurement ||= wantsMeasurement(state);
-      if (!state.prepared) {
+      // Only a paragraph whose summary someone will read has it serialized; its siblings stay unmeasured.
+      if (!measureAll && wantsMeasurement(state)) measured.push(state.paragraphId);
+      if (!state.created) {
         upserts.push({ opcode: 'upsert', paragraphId: state.paragraphId, order: state.preparedOrder });
       }
       if (preparation.text !== undefined) textMutations.push(preparation.text);
@@ -1179,17 +1252,21 @@ class RenderPlannerImpl {
       paragraphId: removed.paragraphId,
     }));
     for (const upsert of upserts) paragraphMutations.push(upsert);
-    this.#stagedRequestLength = this.#transport.stageUpdate({
-      ...this.#preparationRequestHeader(includeMeasurement),
-      paragraphMutations,
-      paragraphOrderMutations: EMPTY_REQUEST_ITEMS,
-      textMutations,
-      styleMutations,
-      constraints,
-      regions,
-      exclusions,
-      inlineObjects,
-    });
+    const includeMeasurement = measureAll || measured.length !== 0;
+    this.#stagedRequestLength = this.#transport.stagePreparation(
+      {
+        ...this.#preparationRequestHeader(includeMeasurement),
+        paragraphMutations,
+        paragraphOrderMutations: EMPTY_REQUEST_ITEMS,
+        textMutations,
+        styleMutations,
+        constraints,
+        regions,
+        exclusions,
+        inlineObjects,
+      },
+      measureAll ? 'all' : measured,
+    );
     this.#stagedPreparation = { paragraphs, removals, includeMeasurement };
     return this;
   }
@@ -1201,24 +1278,101 @@ class RenderPlannerImpl {
     this.#stagedRequestLength = 0;
     try {
       let measurements: ReadonlyMap<number, ParagraphLayoutSummary> | undefined;
-      this.#transport.consumeStagedPreparation(
-        resultPointer,
-        memoryBuffer,
-        staged.includeMeasurement
-          ? (publication) => {
-              measurements = readPlannerMeasurements(publication);
-            }
-          : undefined,
-      );
+      try {
+        this.#transport.consumeStagedPreparation(
+          resultPointer,
+          memoryBuffer,
+          staged.includeMeasurement
+            ? (publication) => {
+                measurements = readPlannerMeasurements(publication);
+              }
+            : undefined,
+        );
+      } catch (error) {
+        if (!this.#transport.failureRefusedParagraph || !(error instanceof GlyphEngineStatusError)) throw error;
+        this.#adoptRefusedBatch(staged, glyphEngineStatusErrorDetails(error).fault.paragraphId, error);
+        this.#automaticRetries = 0;
+        return;
+      }
       for (const preparation of staged.paragraphs) {
         this.#adoptParagraphPreparation(preparation, measurements?.get(preparation.state.paragraphId));
       }
       this.#adoptPreparedRemovals(staged.removals);
       this.#transport.acceptPreparedMutation();
+      this.#automaticRetries = 0;
     } catch (error) {
       this.#engineNeedsRebuild =
         this.#transport.invalidateUnadoptedMutation() || this.#transport.failureInvalidatedRoot;
+      this.#retryNextFrame();
       throw error;
+    }
+  }
+
+  /**
+   * Adopts a batch in which the engine refused one paragraph. It prepares in ascending paragraph order and stops
+   * at the refusal, so every paragraph before it is prepared, the refused one is emptied, and the ones after it
+   * were not started; those are prepared here by their own requests. The batch as a whole succeeds.
+   */
+  #adoptRefusedBatch(staged: StagedPreparation, refusedParagraph: number, error: unknown): void {
+    const remaining: RetainedTextState[] = [];
+    for (const preparation of staged.paragraphs) {
+      const { state } = preparation;
+      // The request's lifecycle committed whatever happened to its paragraphs.
+      state.created = true;
+      if (state.paragraphId < refusedParagraph) this.#adoptParagraphPreparation(preparation, undefined);
+      else if (state.paragraphId === refusedParagraph) this.#markRefused(state, error);
+      else remaining.push(state);
+    }
+    this.#adoptPreparedRemovals(staged.removals);
+    this.#transport.acceptPreparedMutation();
+    for (const state of remaining) {
+      try {
+        this.#prepareAlone(state, wantsMeasurement(state));
+      } catch (failure) {
+        // Another refusal is that paragraph's own; anything else is the root's and ends the batch.
+        if (state.refusal === undefined) throw failure;
+      }
+    }
+  }
+
+  /**
+   * Prepares every dirty paragraph by its own request after an engine restart. A paragraph whose request traps
+   * again is the one the engine cannot hold: it is refused, the restart that trap caused forgets the others, and
+   * the pass starts over without it. Each trap removes one paragraph, so the pass ends.
+   */
+  #prepareIsolated(measureAll: boolean): void {
+    const trapping = new Map<RetainedTextState, unknown>();
+    for (;;) {
+      let trapped = false;
+      for (const state of [...this.#unprepared]) {
+        try {
+          this.#prepareAlone(state, measureAll || wantsMeasurement(state));
+        } catch (error) {
+          if (state.refusal !== undefined) continue;
+          if (!(error instanceof GlyphEngineRestartError) || !error.restarted) throw error;
+          trapping.set(state, error);
+          trapped = true;
+          break;
+        }
+      }
+      // The restart a trap caused marked every text unseen again, the earlier culprits included.
+      for (const [state, error] of trapping) {
+        state.refusal = error;
+        this.#unprepared.delete(state);
+      }
+      if (!trapped) break;
+    }
+    this.#isolateNextPreparation = false;
+  }
+
+  /** Queues this root for the next frame once after a failed one, so a transient failure heals without a setter. */
+  #retryNextFrame(): void {
+    if (this.#automaticRetries !== 0) return;
+    this.#automaticRetries = 1;
+    try {
+      this.#dirtyListener?.();
+    } catch {
+      // The failure being reported outranks a listener that could not be told about the retry.
     }
   }
 
@@ -1250,6 +1404,7 @@ class RenderPlannerImpl {
       // leaves this now-adopted engine state intact.
       this.#engineNeedsRebuild =
         this.#transport.invalidateUnadoptedMutation() || this.#transport.failureInvalidatedRoot;
+      this.#retryNextFrame();
       throw error;
     }
   }
@@ -1420,6 +1575,7 @@ class RenderPlannerImpl {
       state.preparedDesired = state.desired;
       if (previous !== undefined) releaseResolvedText(previous);
     }
+    state.created = true;
     state.prepared = true;
     state.geometryDirty = false;
     this.#unprepared.delete(state);
@@ -1435,6 +1591,30 @@ class RenderPlannerImpl {
     state.measurementRead = false;
     state.inspection = undefined;
     this.#markPrepared(state);
+  }
+
+  /**
+   * Records that the engine refused this paragraph and emptied it. The root is intact: siblings stay prepared,
+   * the next publication withdraws what this paragraph drew, and it is restated from nothing once its input
+   * changes or a read asks for it again.
+   */
+  #markRefused(state: RetainedTextState, error: unknown): void {
+    const prepared = state.preparedDesired;
+    state.preparedDesired = undefined;
+    state.refusal = error;
+    state.created = true;
+    state.prepared = false;
+    state.geometryDirty = true;
+    state.committedFlowRegions = new Map();
+    state.committedFlowExclusions = new Map();
+    state.pendingFlowRegions = new Map();
+    state.pendingFlowExclusions = new Map();
+    state.measurement = undefined;
+    state.inspection = undefined;
+    state.dirty = true;
+    this.#pendingTexts.add(state);
+    this.#unprepared.delete(state);
+    if (prepared !== undefined) releaseResolvedText(prepared);
   }
 
   #adoptPreparedRemovals(removals: readonly RetainedTextState[]): void {
@@ -1463,16 +1643,19 @@ class RenderPlannerImpl {
     const geometry = preparation.geometryChanged
       ? compileGeometry(this.#handleState, state, 0, 0, preparation.geometryRevision)
       : undefined;
+    // A read that creates its paragraph creates every sibling the engine has not seen too. The lifecycle is then
+    // settled for the whole root, and the reads that follow carry no lifecycle rows at all.
+    const creations = state.created ? EMPTY_REQUEST_ITEMS : this.#uncreatedTexts();
     const paragraphMutations: readonly PlannerParagraphMutation[] =
-      state.prepared && removals.length === 0
+      state.created && removals.length === 0
         ? EMPTY_REQUEST_ITEMS
         : [
             ...removals.map((removed) => ({ opcode: 'remove' as const, paragraphId: removed.paragraphId })),
-            {
+            ...(state.created ? [state] : creations).map((created) => ({
               opcode: 'upsert' as const,
-              paragraphId: state.paragraphId,
-              order: state.preparedOrder,
-            },
+              paragraphId: created.paragraphId,
+              order: created.preparedOrder,
+            })),
           ];
     const request: PlannerFrameUpdate = {
       ...this.#preparationRequestHeader(includeMeasurement),
@@ -1488,18 +1671,28 @@ class RenderPlannerImpl {
         : EMPTY_REQUEST_ITEMS,
     };
     let measurement: ParagraphLayoutSummary | undefined;
-    this.#transport.prepareParagraph(
-      request,
-      state.paragraphId,
-      includeMeasurement
-        ? (publication) => {
-            measurement = readPlannerMeasurements(publication).get(state.paragraphId);
-          }
-        : undefined,
-    );
+    try {
+      this.#transport.prepareParagraph(
+        request,
+        state.paragraphId,
+        includeMeasurement
+          ? (publication) => {
+              measurement = readPlannerMeasurements(publication).get(state.paragraphId);
+            }
+          : undefined,
+      );
+    } catch (error) {
+      if (!this.#transport.failureRefusedParagraph) throw error;
+      // The engine emptied this paragraph and committed the rest of the request, lifecycle included.
+      for (const created of creations) created.created = true;
+      this.#adoptPreparedRemovals(removals);
+      this.#markRefused(state, error);
+      throw error;
+    }
     if (includeMeasurement && measurement === undefined)
       throw new Error('text engine returned no measurement for prepared text');
     const inspection = state.inspection;
+    for (const created of creations) created.created = true;
     this.#adoptParagraphPreparation(preparation, measurement);
     if (!preparationChanged) state.inspection = inspection;
     this.#adoptPreparedRemovals(removals);
@@ -1827,6 +2020,7 @@ class RenderPlannerImpl {
   }
 
   #accept({ publication, checkpointGeneration }: PendingPublication): void {
+    this.#automaticRetries = 0;
     this.#revision = publication.revision;
     this.#acknowledgedGeneration = publication.publicationGeneration;
     this.#acceptedCheckpointGeneration = checkpointGeneration;
@@ -1847,9 +2041,37 @@ class RenderPlannerImpl {
     this.#ensureEngineRebuilt();
     if (state.disposed) throw new Error('text engine text has been disposed');
     // A read is never stale: it prepares this paragraph, and only this one, when a setter left it dirty.
-    if (this.#unprepared.has(state) || state.measurement === undefined) this.#prepareAlone(state, true);
+    if (this.#unprepared.has(state) || state.measurement === undefined) this.#prepareForRead(state);
     // Every query reads the summary, so the next preparation keeps it current for a caller that alternates.
     state.measurementRead = true;
+  }
+
+  /** Live paragraphs the engine does not hold yet. */
+  #uncreatedTexts(): readonly RetainedTextState[] {
+    const uncreated: RetainedTextState[] = [];
+    for (const state of this.#unprepared) if (!state.created) uncreated.push(state);
+    return uncreated;
+  }
+
+  /**
+   * Prepares the paragraph a read asks about. If the engine traps, it was replaced and knows nothing, so the
+   * read asks once more; a second trap means this paragraph's own input is what the engine cannot hold.
+   */
+  #prepareForRead(state: RetainedTextState): void {
+    try {
+      this.#prepareAlone(state, true);
+    } catch (error) {
+      if (!(error instanceof GlyphEngineRestartError) || !error.restarted) throw error;
+      try {
+        this.#prepareAlone(state, true);
+      } catch (again) {
+        if (again instanceof GlyphEngineRestartError && again.restarted) {
+          state.refusal = again;
+          this.#unprepared.delete(state);
+        }
+        throw again;
+      }
+    }
   }
 
   /** Prepares one paragraph by its own request and adopts the result. */
@@ -1875,6 +2097,28 @@ class RenderPlannerImpl {
   #ensureEngineRebuilt(): void {
     if (!this.#engineNeedsRebuild) return;
     this.#transport.resetDerivedRoot();
+    this.#forgetEngineState();
+  }
+
+  /**
+   * @internal A trap replaced the engine instance and the transport created this root again, empty. Everything
+   * staged is void and the fresh root has acknowledged nothing. The next preparation isolates each paragraph in
+   * its own request, so one whose input makes the engine trap is refused alone instead of trapping every frame.
+   */
+  _engineRestarted(): void {
+    if (this.#disposed) return;
+    this.#stagedBatch = undefined;
+    this.#stagedPreparation = undefined;
+    this.#stagedPublication = undefined;
+    this.#stagedAcceptance = undefined;
+    this.#stagedRequestLength = 0;
+    this.#acknowledgedGeneration = 0;
+    this.#isolateNextPreparation = true;
+    this.#forgetEngineState();
+  }
+
+  /** Marks every live text unseen by the engine and asks the renderer for a complete checkpoint. */
+  #forgetEngineState(): void {
     this.#engineRevision = 0;
     this.#revision = 0;
     this.#checkpointGeneration = checkedNextCheckpointGeneration(this.#checkpointGeneration);
@@ -1883,7 +2127,9 @@ class RenderPlannerImpl {
       if (state.removed || state.disposed) continue;
       const prepared = state.preparedDesired;
       state.preparedDesired = undefined;
+      state.created = false;
       state.prepared = false;
+      state.refusal = undefined;
       state.committedFlowRegions = new Map();
       state.committedFlowExclusions = new Map();
       state.pendingFlowRegions = new Map();
@@ -1928,6 +2174,10 @@ class RetainedTextImpl implements RetainedText {
 
   get disposed(): boolean {
     return this.#state.disposed;
+  }
+
+  get refusal(): unknown {
+    return this.#state.refusal;
   }
 
   update(update: RetainedTextUpdate): void {

@@ -1,11 +1,12 @@
-//! Stage clocks for run-local geometry and the cluster build, runnable inside the optimized
-//! wasm32 build.
+//! Stage clocks for run-local geometry, the cluster build, positioning and measurement,
+//! runnable inside the optimized wasm32 build.
 //!
 //! Evidence tooling, not a benchmark protocol: it times the run-local stage alone on a real
 //! paragraph (the calls the engine makes for a cold build, a metric change and a line-height
 //! change), the cluster stage's self-time inside real edits, and the whole engine step around
-//! them, so a rewrite of a stage can be read against the code it replaces. Behind the
-//! `stage-bench` feature; no shipped artifact carries it.
+//! them, so a rewrite of a stage can be read against the code it replaces. `bench layout` times
+//! whole steps per change class and reads the positioning and measurement self-time out of
+//! [`clock`]. Behind the `stage-bench` feature; no shipped artifact carries it.
 
 use alloc::{
     format,
@@ -13,15 +14,51 @@ use alloc::{
     vec::Vec,
 };
 
-use crate::engine::{cluster_state::LAYOUT_CHUNK, run_local::Inherited};
+use crate::engine::{
+    cluster_state::LAYOUT_CHUNK,
+    frame::{ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START},
+    run_local::Inherited,
+};
 
 use super::{
     super::{ParagraphState, PreparedLayout},
     corpus::{self, Script},
     fonts::FontLibrary,
-    model::{Layout, Model, PARAGRAPH_ID, ROOT_ID, RootStyle, TextEdit},
+    model::{Exclusion, Layout, Model, PARAGRAPH_ID, ROOT_ID, RootStyle, TextEdit},
     session::{Route, Session},
 };
+
+/// Self-time accumulators the timed stages add to. A stage opens a guard at its entry; the
+/// bench drains the total around one engine step.
+pub(crate) mod clock {
+    use core::sync::atomic::{AtomicU64, Ordering};
+
+    pub(crate) struct Stage(AtomicU64);
+
+    pub(crate) static POSITIONING: Stage = Stage(AtomicU64::new(0));
+    pub(crate) static MEASUREMENT: Stage = Stage(AtomicU64::new(0));
+
+    pub(crate) struct Guard(&'static Stage, f64);
+
+    impl Stage {
+        pub(crate) fn guard(&'static self) -> Guard {
+            Guard(self, super::now())
+        }
+
+        /// Milliseconds accumulated since the last drain.
+        pub(crate) fn take(&self) -> f64 {
+            f64::from_bits(self.0.swap(0, Ordering::Relaxed))
+        }
+    }
+
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            let elapsed = super::now() - self.1;
+            let total = f64::from_bits(self.0.0.load(Ordering::Relaxed)) + elapsed;
+            self.0.0.store(total.to_bits(), Ordering::Relaxed);
+        }
+    }
+}
 
 /// Self-time of the cluster stage's entry points since the last `take`, in milliseconds as
 /// f64 bits. The probe is single-threaded; the atomic only makes the static safe to name.
@@ -79,6 +116,7 @@ const ROUTE: Route = Route {
     view_mask: 0,
     measure_first: false,
     measure_after: false,
+    ..Route::FULL
 };
 
 /// Microseconds: (median, minimum).
@@ -147,7 +185,18 @@ pub fn command(library: &FontLibrary, fields: &[&str]) -> Result<String, String>
             number(count)?,
             number(iterations)?,
         ),
-        _ => Err("usage: bench paragraph|labels <font> <script> <size> <iterations>".to_string()),
+        ["layout", fixture, align, graphemes, iterations] => layout(
+            library,
+            fixture,
+            align,
+            number(graphemes)?,
+            number(iterations)?,
+        ),
+        _ => Err(
+            "usage: bench paragraph|labels <font> <script> <size> <iterations> | bench layout \
+             <fixture> <align> <size> <iterations>"
+                .to_string(),
+        ),
     }
 }
 
@@ -400,6 +449,227 @@ fn stage(
     Ok(())
 }
 
+const MEASURED: Route = Route {
+    view_mask: 0,
+    measure_first: false,
+    measure_after: true,
+    ..Route::FULL
+};
+
+/// The fragments' cluster ranges: two layouts with the same list broke at the same places.
+fn breaks(session: &mut Session) -> Result<Vec<(u32, u32)>, String> {
+    let flow = paragraph_state(session)?.flow_layout.committed();
+    let mut cursor = flow.fragments.cursor_from(0).ok_or("no fragment cursor")?;
+    let fragments = cursor
+        .take(flow.fragments.len())
+        .ok_or("fragment cursor is short")?;
+    Ok(fragments
+        .iter()
+        .map(|fragment| (fragment.line.cluster_start, fragment.line.cluster_end))
+        .collect())
+}
+
+/// One change class: the step is timed whole, and the positioning and measurement stages
+/// report their own time inside it.
+struct Timed {
+    op: Vec<f64>,
+    positioning: Vec<f64>,
+    measurement: Vec<f64>,
+}
+
+impl Timed {
+    fn new() -> Self {
+        Self {
+            op: Vec::new(),
+            positioning: Vec::new(),
+            measurement: Vec::new(),
+        }
+    }
+
+    fn step(
+        &mut self,
+        session: &mut Session,
+        next: &Model,
+        edits: &[TextEdit],
+    ) -> Result<(), String> {
+        clock::POSITIONING.take();
+        clock::MEASUREMENT.take();
+        let started = now();
+        session.step(next, edits, MEASURED)?;
+        self.op.push(now() - started);
+        self.positioning.push(clock::POSITIONING.take());
+        self.measurement.push(clock::MEASUREMENT.take());
+        Ok(())
+    }
+
+    fn report(&mut self, report: &mut String, name: &str, glyphs: usize) {
+        row(report, &format!("{name}.op"), &mut self.op, glyphs);
+        row(
+            report,
+            &format!("{name}.positioning"),
+            &mut self.positioning,
+            glyphs,
+        );
+        row(
+            report,
+            &format!("{name}.measurement"),
+            &mut self.measurement,
+            glyphs,
+        );
+    }
+}
+
+/// `bench layout <fixture> <align> <graphemes> <iterations>`: positioning and measurement
+/// self-time per change class, each step a publication followed by a measurement.
+fn layout(
+    library: &FontLibrary,
+    fixture: &str,
+    align: &str,
+    graphemes: usize,
+    iterations: usize,
+) -> Result<String, String> {
+    let (script, stack, shape): (Script, &[&str], fn(&mut Layout)) = match fixture {
+        "inter" => (Script::Latin, &["inter"], |_| {}),
+        "fredoka" => (Script::Latin, &["fredoka"], |_| {}),
+        "amiri" => (Script::Arabic, &["amiri"], |_| {}),
+        "bidi" => (Script::MixedBidi, &["inter", "amiri"], |_| {}),
+        "cjk" => (Script::Cjk, &["cjk-jp"], |_| {}),
+        "dropcap" => (Script::Latin, &["inter"], |layout| {
+            layout.drop_cap_lines = 3
+        }),
+        "exclusion" => (Script::Latin, &["inter"], |layout| {
+            layout.exclusion = Some(Exclusion {
+                inline_start: 220.0,
+                inline_end: 380.0,
+                block_start: 40.0,
+                block_end: 4_000.0,
+                polygon: false,
+            });
+        }),
+        _ => return Err(format!("unknown layout fixture `{fixture}`")),
+    };
+    let (align, other_align) = match align {
+        "start" => (ALIGN_START, ALIGN_CENTER),
+        "center" => (ALIGN_CENTER, ALIGN_END),
+        "end" => (ALIGN_END, ALIGN_START),
+        "justify" => (ALIGN_JUSTIFY, ALIGN_START),
+        _ => return Err(format!("unknown alignment `{align}`")),
+    };
+    let mut base = Model {
+        text: corpus::paragraph(script, 7, graphemes),
+        root: RootStyle {
+            font_size: 24.0,
+            ..RootStyle::default()
+        },
+        layout: Layout {
+            align,
+            ..Layout::default()
+        },
+        ..Model::default()
+    };
+    shape(&mut base.layout);
+    let relaid = |change: &dyn Fn(&mut Layout)| {
+        let mut next = base.clone();
+        change(&mut next.layout);
+        next
+    };
+    let stacks: &[&[&str]] = &[stack];
+    let mut report = String::new();
+
+    let mut cold = Timed::new();
+    for _ in 0..iterations.div_ceil(8).max(3) {
+        let mut session = Session::new(library, stacks)?;
+        cold.step(&mut session, &base, &[])?;
+    }
+    let mut session = Session::new(library, stacks)?;
+    session.step(&base, &[], MEASURED)?;
+    let glyphs = paragraph_state(&mut session)?
+        .clusters
+        .committed()
+        .glyph_ids
+        .len();
+    let base_breaks = breaks(&mut session)?;
+    let (segments, spans) = {
+        let positioned = paragraph_state(&mut session)?.positioned.committed();
+        (
+            positioned.placement_segments().len(),
+            positioned.occurrence_spans().len(),
+        )
+    };
+
+    // The widest step that keeps every break, so the row times a pure origin change.
+    let mut same = None;
+    for delta in [0.5_f32, 0.125, 0.03125, 0.007_812_5] {
+        let candidate = relaid(&|layout| layout.width += delta);
+        session.step(&candidate, &[], MEASURED)?;
+        let kept = breaks(&mut session)? == base_breaks;
+        session.step(&base, &[], MEASURED)?;
+        if kept {
+            same = Some(candidate);
+            break;
+        }
+    }
+    let moved = relaid(&|layout| layout.width -= 40.0);
+    session.step(&moved, &[], MEASURED)?;
+    let moved_breaks = breaks(&mut session)?;
+    session.step(&base, &[], MEASURED)?;
+    let moved_lines = base_breaks
+        .iter()
+        .zip(&moved_breaks)
+        .filter(|(left, right)| left != right)
+        .count()
+        + base_breaks.len().abs_diff(moved_breaks.len());
+    report.push_str(&format!(
+        "shape\tglyphs {glyphs}\tsegments {segments}\tspans {spans}\tfragments {}\tmoved {moved_lines}\tsame-breaks {}\n",
+        base_breaks.len(),
+        same.is_some()
+    ));
+    cold.report(&mut report, "cold", glyphs);
+
+    // A mid-paragraph edit: one grapheme is doubled, then removed again.
+    let boundaries = corpus::grapheme_boundaries(&base.text);
+    let middle = boundaries.len() / 2;
+    let (start, end) = (boundaries[middle], boundaries[middle + 1]);
+    let grapheme = base.text[start as usize..end as usize].to_vec();
+    let insert = TextEdit {
+        start,
+        delete: 0,
+        insert: grapheme.clone(),
+    };
+    let remove = TextEdit {
+        start,
+        delete: end - start,
+        insert: Vec::new(),
+    };
+    let mut edited = base.clone();
+    insert.apply(&mut edited.text);
+    let mut edit = Timed::new();
+    for iteration in 0..iterations & !1 {
+        if iteration % 2 == 0 {
+            edit.step(&mut session, &edited, core::slice::from_ref(&insert))?;
+        } else {
+            edit.step(&mut session, &base, core::slice::from_ref(&remove))?;
+        }
+    }
+    edit.report(&mut report, "edit", glyphs);
+
+    let aligned = relaid(&|layout| layout.align = other_align);
+    for (name, changed) in [
+        ("width.same", same.as_ref()),
+        ("width.moved", Some(&moved)),
+        ("align", Some(&aligned)),
+    ] {
+        let Some(changed) = changed else { continue };
+        let mut timed = Timed::new();
+        for iteration in 0..iterations & !1 {
+            let next = if iteration % 2 == 0 { changed } else { &base };
+            timed.step(&mut session, next, &[])?;
+        }
+        timed.report(&mut report, name, glyphs);
+    }
+    Ok(format!("ok\n{report}"))
+}
+
 fn label_text(script: Script, index: usize) -> Vec<u16> {
     match script {
         Script::Latin => format!("label {index:03}").encode_utf16().collect(),
@@ -530,5 +800,16 @@ mod tests {
         let labels = command(&library, &["labels", "inter", "latin", "8", "2"]).unwrap();
         assert!(labels.contains("inline 8"), "{labels}");
         assert!(labels.contains("stage.run_local.labels"), "{labels}");
+        for align in ["start", "center", "end", "justify"] {
+            let layout = command(&library, &["layout", "inter", align, "300", "2"]).unwrap();
+            for change in ["cold", "edit", "width.same", "width.moved", "align"] {
+                for clock in ["op", "positioning", "measurement"] {
+                    assert!(
+                        layout.contains(&std::format!("{change}.{clock}\t")),
+                        "{layout}"
+                    );
+                }
+            }
+        }
     }
 }

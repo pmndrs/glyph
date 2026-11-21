@@ -24,6 +24,9 @@ function namedVec2(node: Node<'vec2'>, name: string): Node<'vec2'> {
   return node.toVar(name);
 }
 
+/** Pixels the coverage sample sits off the fragment centre, on both axes; mirrored by the TypeGPU core. */
+const SLUG_TIE_OFFSET = -0.0001;
+
 /** Evaluate analytic Slug fill coverage for one fragment. */
 export function slugRender(
   page: SlugShaderPage,
@@ -45,8 +48,13 @@ export function slugRender(
       ? float(1)
       : namedFloat(add(1, mul(options.thicken, max(0, sub(1, div(pixelsPerEm, 24))))), 'slugThickenFactor');
 
-  const horizontal = evaluateBand(page, glyph, renderCoordinate, 'horizontal', pixelsPerEmX, thickenFactor);
-  const vertical = evaluateBand(page, glyph, renderCoordinate, 'vertical', pixelsPerEmY, thickenFactor);
+  // Coverage is evaluated a ten-thousandth of a pixel off the fragment centre, towards lower x and y, which is the
+  // side an exact reference gives a tie. A centre lying exactly on an outline edge (aligned text puts many there) is a
+  // tie for the ray that runs along the edge, and the last bit of the interpolated coordinate decides it; renderers
+  // that round vertex positions differently then disagree at corners by up to half a pixel of coverage.
+  const sample: Node<'vec2'> = namedVec2(add(renderCoordinate, mul(emsPerPixel, SLUG_TIE_OFFSET)), 'slugSample');
+  const horizontal = evaluateBand(page, glyph, sample, 'horizontal', pixelsPerEmX, thickenFactor);
+  const vertical = evaluateBand(page, glyph, sample, 'vertical', pixelsPerEmY, thickenFactor);
 
   return calcCoverage(
     horizontal.coverage,

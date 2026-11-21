@@ -677,16 +677,14 @@ impl<'a> ProjectedRows<'a> {
         limit: usize,
     ) -> Result<Option<SpanWalk<'a>>, GatherError> {
         self.open_span(chunk, ranges, walk.span_index, walk.span)?;
-        let mut last_source = walk.span.source_glyph_start;
         while chunk.len < limit && walk.remaining != 0 {
             let cluster = walk.cluster(self.input.context.clusters)?;
-            let read = self.fill_cluster(chunk, ranges, &mut walk, cluster, limit)?;
-            last_source = read.unwrap_or(last_source);
+            self.fill_cluster(chunk, ranges, &mut walk, cluster, limit)?;
         }
         Ok(if walk.remaining != 0 {
             Some(walk)
         } else {
-            self.following_walk(walk.span_index, last_source)
+            self.following_walk(walk.span_index)
         })
     }
 
@@ -738,30 +736,15 @@ impl<'a> ProjectedRows<'a> {
     }
 
     /// The paragraph-run span after `span_index`, if the walk can continue without the
-    /// cursor. Positioning hands out a span only with a projected occurrence, so the next
-    /// span is asked for through a glyph the walk already read; the answer is used only
-    /// when that span starts exactly where the walk stands. Anything else -- a boundary
-    /// span, the end of the owner, a projection that refuses the glyph -- leaves the
+    /// cursor: the next span with an outlined glyph, used only when it starts exactly where
+    /// the walk stands. Anything else -- a boundary span, the end of the owner -- leaves the
     /// cursor to resume from `next_index`.
-    fn following_walk(&self, span_index: usize, source_glyph: u32) -> Option<SpanWalk<'a>> {
-        let input = self.input;
+    fn following_walk(&self, span_index: usize) -> Option<SpanWalk<'a>> {
+        let spans = self.input.positioned.occurrence_spans();
         let mut span_index = span_index;
         loop {
             span_index += 1;
-            let span = input
-                .positioned
-                .project_outlined_mark(
-                    OutlinedOccurrenceMark {
-                        span_index,
-                        source_glyph,
-                        owner_cluster: 0,
-                        semantic_index: 0,
-                    },
-                    input.context.clusters,
-                    input.boundary,
-                )
-                .ok()?
-                .span;
+            let span = spans.get(span_index)?;
             if span.outlined_count == 0 {
                 continue;
             }
