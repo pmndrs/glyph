@@ -1,3 +1,4 @@
+// Labs selects bench files by the tag text they contain; the three-span rows here carry @prepare-spans.
 import { assert, bench, group } from '@pmndrs/labs';
 
 import {

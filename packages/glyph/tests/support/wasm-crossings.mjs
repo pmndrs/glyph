@@ -19,7 +19,7 @@ const instantiate = WebAssembly.instantiate;
 WebAssembly.instantiate = async (source, imports) => {
   const result = await instantiate(source, imports);
   const instance = result instanceof WebAssembly.Instance ? result : result.instance;
-  if (!(`${PREFIX}engine_measure_paragraph` in instance.exports)) return result;
+  if (!(`${PREFIX}shaper_abi_version` in instance.exports)) return result;
   instances += 1;
   memory = instance.exports.memory;
   const exports = {};
