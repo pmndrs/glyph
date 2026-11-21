@@ -38,32 +38,24 @@ export function minimalTextReplacement(previous: string, next: string): TextRang
   return { start, end: previousEnd, insert: next.slice(start, nextEnd) };
 }
 
-/** A string with every lone surrogate replaced by U+FFFD, and how many were replaced. */
-export interface WellFormedText {
-  readonly text: string;
-  readonly replacedSurrogates: number;
-}
-
-/**
- * Replaces lone surrogates with U+FFFD, as `String.prototype.toWellFormed` does, and counts them.
- * A string sliced at a UTF-16 index or typed mid-composition carries them routinely, so they are
- * data to repair and report, not a caller error.
- */
-export function wellFormedText(text: string): WellFormedText {
-  if (text.isWellFormed()) return { text, replacedSurrogates: 0 };
-  let replacedSurrogates = 0;
-  for (let index = 0; index < text.length; index += 1) {
-    const unit = text.charCodeAt(index);
-    if (isHighSurrogate(unit) && isLowSurrogate(text.charCodeAt(index + 1))) index += 1;
-    else if (isHighSurrogate(unit) || isLowSurrogate(unit)) replacedSurrogates += 1;
-  }
-  return { text: text.toWellFormed(), replacedSurrogates };
-}
-
 function isHighSurrogate(unit: number): boolean {
   return unit >= 0xd800 && unit <= 0xdbff;
 }
 
 function isLowSurrogate(unit: number): boolean {
   return unit >= 0xdc00 && unit <= 0xdfff;
+}
+
+const PAINT_STYLE_KEYS: ReadonlySet<string> = new Set(['color', 'opacity']);
+
+/** @internal What a layout callback is told when it writes a layout input. */
+export const LAYOUT_PHASE_WRITE_MESSAGE =
+  'a layout callback wrote a layout input of a text; inside the layout phase only transforms, visibility, colour, opacity and material may be written';
+
+/** @internal Whether two styles differ in anything but paint. Styles are small frozen records of plain data. */
+export function changesLayoutStyle(previous: object | undefined, next: object | undefined): boolean {
+  if (previous === next) return false;
+  const layoutOnly = (style: object | undefined): string =>
+    JSON.stringify(Object.entries(style ?? {}).filter(([key]) => !PAINT_STYLE_KEYS.has(key)));
+  return layoutOnly(previous) !== layoutOnly(next);
 }

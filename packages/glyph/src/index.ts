@@ -18,7 +18,7 @@ export type {
   SerializedBakeError,
 } from './bake.js';
 export { glyph, type Glyph } from './glyph.js';
-export { GlyphError, type GlyphErrorCode } from './glyph-error.js';
+export { GlyphError, GlyphInputError, GlyphLayoutPhaseError, type GlyphErrorCode } from './glyph-error.js';
 export {
   GlyphEngineStatusError,
   glyphEngineStatusErrorDetails,

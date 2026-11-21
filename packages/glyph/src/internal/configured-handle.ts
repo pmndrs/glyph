@@ -495,14 +495,18 @@ class ConfiguredRootServices<
         ...(commands?.maxTextUnits === undefined ? {} : { maxTextUnits: commands.maxTextUnits }),
       });
       registration = registerGlyphShapeParticipant(this.#engine, {
-        prepare: (measureAll) => this.#prepareShape(measureAll),
+        prepare: (measureAll, holdObserved) => this.#prepareShape(measureAll, holdObserved),
         prepared: () => this.#shapeHooks?.prepared?.(),
+        layout: () => this.#shapeHooks?.layout?.(),
         stage: () => this.#stageShape(),
         accepted: () => this.#acceptShape(),
         rejected: (error) => this.#rejectShape(error),
       });
       const activeRegistration = registration;
-      stopObservingDirty = observeRenderPlannerDirty(planner, () => activeRegistration.invalidate());
+      stopObservingDirty = observeRenderPlannerDirty(planner, () => {
+        activeRegistration.invalidate();
+        this.#shapeHooks?.invalidated?.();
+      });
       this.#planner = planner;
       this.#target = target;
       this.#shapeHooks = options.shape;
@@ -686,6 +690,10 @@ class ConfiguredRootServices<
     this.#requiredPlanner().assertMutationAllowed();
   }
 
+  get layoutPhaseActive(): boolean {
+    return this.#handleState._layoutPhaseActive();
+  }
+
   _preflightLifecycleMutation(): void {
     this.#handleState._assertEngineLifecycleMutationAllowed();
     const planner = this.#planner;
@@ -830,11 +838,11 @@ class ConfiguredRootServices<
     return this.#planner;
   }
 
-  #prepareShape(measureAll: boolean): StagedPlannerPreparation | undefined {
+  #prepareShape(measureAll: boolean, holdObserved: boolean): StagedPlannerPreparation | undefined {
     const planner = this.#requiredPlanner();
     this.#reconciled = this.#shapeHooks?.prepare?.();
     if (this.#reconciled === false) return undefined;
-    return stageRenderPlannerPreparation(planner, measureAll);
+    return stageRenderPlannerPreparation(planner, measureAll, holdObserved);
   }
 
   #stageShape(): StagedRenderPlanner | undefined {
@@ -980,6 +988,22 @@ class ConfiguredTextController<
 
   get refusal(): unknown {
     return this.#text.refusal;
+  }
+
+  get keepMeasured(): boolean {
+    return this.#text.keepMeasured;
+  }
+
+  set keepMeasured(value: boolean) {
+    this.#text.keepMeasured = value;
+  }
+
+  preparedMeasurement() {
+    return this.#text.preparedMeasurement();
+  }
+
+  get awaitsPreparation(): boolean {
+    return this.#text.awaitsPreparation;
   }
 
   measure() {

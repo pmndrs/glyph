@@ -426,7 +426,11 @@ test('owned outlines are data: they read inside a render plan, after it, and aft
   assert.equal(group.error, undefined);
   assert.deepEqual(duringPlan, expected, 'a read inside a material callback makes no engine call');
   assert.deepEqual(layout.outlineAt(0), expected, 'the copy reads after a render pass releases unused fonts');
-  assert.throws(() => probe.set({ constraints: { width: { mode: 'exact', size: NaN } } }), RangeError);
+  assert.throws(() => probe.set({ constraints: { width: { mode: 'exact', size: NaN } } }), {
+    name: 'GlyphInputError',
+    code: 'invalid-input',
+    path: ['constraints'],
+  });
   assert.deepEqual(probe.glyphs().outlineAt(0), expected, 'a rejected setter preserves the cached outline reader');
   probe.font = drawnFont;
   assert.throws(() => probe.glyphs().outlineAt(0), /outlines/iu, 'a successful font change replaces the cached reader');

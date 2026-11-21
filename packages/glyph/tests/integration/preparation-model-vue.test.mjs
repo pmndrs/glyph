@@ -12,6 +12,9 @@ await glyph.init();
 preparationModel('Vue', async (labels) => {
   const font = await adapterFont();
   const components = [];
+  const layoutListeners = [];
+  const errorListeners = [];
+  const capturedListeners = [];
   const host = await mountTres(() =>
     labels.map((text, index) =>
       h(
@@ -22,13 +25,15 @@ preparationModel('Vue', async (labels) => {
           ref: (value) => {
             if (value !== null) components[index] = value;
           },
+          onLayout: (_text, layout) => layoutListeners[index]?.(layout),
+          onError: (error) => errorListeners[index]?.(error),
         },
         () => text,
       ),
     ),
   );
   return {
-    texts: components.map((component) => {
+    texts: components.map((component, index) => {
       const object = component.instance;
       return {
         object,
@@ -41,10 +46,29 @@ preparationModel('Vue', async (labels) => {
         },
         read: () => object.measure(),
         committed: () => object.commitState().status === 'committed',
+        paint: (color) => {
+          object.style = { ...object.style, color };
+        },
+        move: () => {
+          object.position.x += 10;
+        },
+        onLayout: (listener) => {
+          layoutListeners[index] = listener;
+        },
+        // Vue routes an exception thrown by an event handler to `onErrorCaptured`, not to the `error` event,
+        // so this host's listener hears both.
+        onError: (listener) => {
+          errorListeners[index] = listener;
+          capturedListeners.push(listener);
+        },
       };
     }),
     // The traversal the renderer performs once per frame.
-    frame: () => host.scene.updateMatrixWorld(true),
+    frame: () => {
+      host.scene.updateMatrixWorld(true);
+      for (const error of host.errors.splice(0)) for (const listener of capturedListeners) listener(error);
+    },
+    prepare: () => glyph.prepare(),
     unmount: async () => {
       await host.unmount();
       font.dispose();

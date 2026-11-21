@@ -10,5 +10,11 @@ export type {
   TypeGpuHandle,
   TypeGpuRoot,
 } from './typegpu/config.js';
-export type { TypeGpuFontSelection, TypeGpuText, TypeGpuTextOptions, TypeGpuTextUpdate } from './typegpu/text.js';
+export type {
+  TypeGpuFontSelection,
+  TypeGpuLayoutCallback,
+  TypeGpuText,
+  TypeGpuTextOptions,
+  TypeGpuTextUpdate,
+} from './typegpu/text.js';
 export type { BorrowedGlyphLayout } from './layout.js';

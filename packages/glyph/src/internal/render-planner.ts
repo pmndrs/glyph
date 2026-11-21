@@ -1,6 +1,6 @@
 import { sameConstraintSizes, withTextAnchor } from '../text-anchor.js';
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import { GlyphError } from '../glyph-error.js';
+import { GlyphError, GlyphLayoutPhaseError } from '../glyph-error.js';
 import { GlyphEngineStatusError, glyphEngineStatusErrorDetails } from '../engine-error.js';
 import { GlyphEngineRestartError } from './text-shaper-module.js';
 import {
@@ -70,7 +70,7 @@ import { reuseOrCreateTextPropertySnapshot, reuseOrCreateTextStyleSnapshot } fro
 import type { ParagraphId, ResourceHandle, StyleId } from './glyph-id.js';
 import { codecCapabilitySetSelectionId, selectCodecCapabilitySet } from './codec-capability-selection.js';
 import { ownTextInput } from '../config/text-span-owner.js';
-import { minimalTextReplacement, wellFormedText } from '../text-mutation.js';
+import { changesLayoutStyle, LAYOUT_PHASE_WRITE_MESSAGE, minimalTextReplacement } from '../text-mutation.js';
 
 const MAX_U32 = 0xffff_ffff;
 /**
@@ -271,6 +271,14 @@ export interface RetainedText {
   readonly disposed: boolean;
   /** The error that refused this text's last preparation, until its input changes; `undefined` otherwise. */
   readonly refusal: unknown;
+  /**
+   * Whether every batch preparation returns this text's summary. A text with a layout callback sets it, so its
+   * callback reads the new layout without entering the engine again.
+   */
+  keepMeasured: boolean;
+  /** The current summary if the last preparation returned one; never prepares and never enters the engine. */
+  preparedMeasurement(): ParagraphLayoutSummary | undefined;
+  readonly awaitsPreparation: boolean;
   update(update: RetainedTextUpdate): void;
   /** Repositions this paragraph without invalidating its semantic or measured state. */
   updateOrder(order: number, orderScope: number, orderRank: number): void;
@@ -409,6 +417,8 @@ interface RetainedTextState {
    * it is restated from nothing once its input changes; until then it is left out of every batch.
    */
   refusal: unknown;
+  /** Set by an owner that reads every new summary, such as a layout callback. */
+  keepMeasured: boolean;
   geometryRevision: number;
   committedFlowRegions: Map<string, CommittedFlowRegion>;
   committedFlowExclusions: Map<string, CommittedFlowExclusion>;
@@ -556,9 +566,10 @@ export function restartRenderPlanner(planner: RenderPlanner): void {
 export function stageRenderPlannerPreparation(
   planner: RenderPlanner,
   measureAll: boolean,
+  holdObserved = false,
 ): StagedPlannerPreparation | undefined {
   if (!(planner instanceof RenderPlannerImpl)) throw new TypeError('render planner was not created by this package');
-  return planner._stagePreparation(measureAll);
+  return planner._stagePreparation(measureAll, holdObserved);
 }
 
 /** @internal Stage one synchronous root without crossing into Wasm. */
@@ -728,6 +739,7 @@ class RenderPlannerImpl {
       created: false,
       prepared: false,
       refusal: undefined,
+      keepMeasured: false,
       geometryRevision: 0,
       committedFlowRegions: new Map(),
       committedFlowExclusions: new Map(),
@@ -810,13 +822,14 @@ class RenderPlannerImpl {
             state.desired,
           )
         : forkResolvedTextWithText(state.desired, textOnly, state.metrics.order);
-    if (textOnly === undefined) {
-      try {
-        this.#assertTextUnits(desired.text);
-      } catch (error) {
-        releaseResolvedText(desired);
-        throw error;
+    try {
+      if (textOnly === undefined) this.#assertTextUnits(desired.text);
+      if (this.#handleState._layoutPhaseActive() && changesLayoutInput(state.desired, desired)) {
+        throw new GlyphLayoutPhaseError(LAYOUT_PHASE_WRITE_MESSAGE);
       }
+    } catch (error) {
+      releaseResolvedText(desired);
+      throw error;
     }
     // After renderer rejection, even an anchor edit must retry the engine's unaccepted output.
     if (
@@ -961,6 +974,19 @@ class RenderPlannerImpl {
     state.orderDirty = state.orderDirty || scopedOrderChanged;
     this.#pendingTexts.add(state);
     this.#dirtyListener?.();
+  }
+
+  /** @internal The summary the last preparation returned, if this text is prepared and it returned one. */
+  /** @internal */
+  _awaitsPreparation(state: RetainedTextState): boolean {
+    return this.#unprepared.has(state);
+  }
+
+  /** @internal */
+  _preparedMeasurement(state: RetainedTextState): ParagraphLayoutSummary | undefined {
+    if (state.disposed || !state.prepared || this.#unprepared.has(state)) return undefined;
+    // A text whose owner began listening after it was prepared has no summary yet: it is read once, here.
+    return state.measurement ?? this._layoutText(state);
   }
 
   /** @internal */
@@ -1151,10 +1177,9 @@ class RenderPlannerImpl {
     if (this.#stagedBatch !== undefined || this.#stagedPreparation !== undefined) {
       throw new Error('render planner is already staged');
     }
-    if (this.#unprepared.size !== 0) {
-      throw new Error('render planner has unprepared text; glyph.shape() prepares before it publishes');
-    }
-    if (!force && !this.#isDirty()) return undefined;
+    // A paragraph is published only at a revision whose layout phase completed. One that became dirty after
+    // this frame's preparation is held: the renderer keeps what it draws and the next frame prepares it.
+    if (!force && !this.#hasPublishableChange()) return undefined;
     const checkpointGeneration = this.#checkpointGeneration;
     const frame = this.#compileFrame(options, checkpointGeneration);
     this.#stagedRequestLength = this.#transport.stageUpdate(frame);
@@ -1183,7 +1208,7 @@ class RenderPlannerImpl {
    * Returns `undefined` when a read already prepared everything. `measureAll` also returns every prepared
    * paragraph's summary, for a caller about to read them.
    */
-  _stagePreparation(measureAll: boolean): StagedPlannerPreparation | undefined {
+  _stagePreparation(measureAll: boolean, holdObserved = false): StagedPlannerPreparation | undefined {
     this.#assertMutable();
     this.#ensureEngineRebuilt();
     if (this.#stagedBatch !== undefined || this.#stagedPreparation !== undefined) {
@@ -1195,7 +1220,18 @@ class RenderPlannerImpl {
       return undefined;
     }
     // The engine routes records by ascending paragraph identity.
-    const states = [...this.#unprepared].sort((left, right) => left.paragraphId - right.paragraphId);
+    // After a frame's layout phase, a text whose owner reads every new summary waits for the next frame's phase:
+    // it is published only at a layout its callback has seen. Colour and opacity change no layout, and a drawn
+    // text the engine no longer holds has nothing older to keep drawing, so neither is held.
+    const held = (state: RetainedTextState): boolean =>
+      state.keepMeasured &&
+      (state.prepared
+        ? state.preparedDesired === undefined || changesLayoutInput(state.preparedDesired, state.desired)
+        : !state.published);
+    const states = [...this.#unprepared]
+      .filter((state) => !holdObserved || !held(state))
+      .sort((left, right) => left.paragraphId - right.paragraphId);
+    if (states.length === 0) return undefined;
     const upserts: PlannerParagraphMutation[] = [];
     const textMutations: PlannerTextMutation[] = [];
     const styleMutations: PlannerStyleMutation[] = [];
@@ -1710,6 +1746,7 @@ class RenderPlannerImpl {
     }
     let paragraphOrderMutations: PlannerParagraphOrderMutation[] | undefined;
     for (const state of pendingTexts) {
+      if (this.#unprepared.has(state)) continue;
       if (state.lifecycleDirty) {
         (paragraphMutations ??= []).push({
           opcode: 'upsert',
@@ -1822,9 +1859,12 @@ class RenderPlannerImpl {
     this.#removed.clear();
     this.#preparationRemovals.clear();
     for (const state of this.#pendingTexts) {
+      if (this.#unprepared.has(state)) continue;
       if (state.preparedOrder !== state.metrics.order) this.#releasePreparedOrder(state);
     }
     for (const state of this.#pendingTexts) {
+      // Held for the next frame: nothing of its new value reached this publication.
+      if (this.#unprepared.has(state)) continue;
       if (state.committed !== state.desired) {
         retainResolvedText(state.desired);
         if (state.committed !== undefined) releaseResolvedText(state.committed);
@@ -1838,7 +1878,7 @@ class RenderPlannerImpl {
       state.orderDirty = false;
       this.#pendingTexts.delete(state);
     }
-    this.#baseOrderValidationPending = false;
+    this.#baseOrderValidationPending = this.#unprepared.size !== 0;
   }
 
   #candidate(lease: BorrowedPlanLease, resolved = this.#resolvedTransforms()): PlanCandidate {
@@ -2021,6 +2061,8 @@ class RenderPlannerImpl {
 
   #accept({ publication, checkpointGeneration }: PendingPublication): void {
     this.#automaticRetries = 0;
+    // Whatever was held out of this publication still needs a frame.
+    if (this.#unprepared.size !== 0) this.#dirtyListener?.();
     this.#revision = publication.revision;
     this.#acknowledgedGeneration = publication.publicationGeneration;
     this.#acceptedCheckpointGeneration = checkpointGeneration;
@@ -2150,6 +2192,13 @@ class RenderPlannerImpl {
     this.#dirtyListener?.();
   }
 
+  /** Whether a publication now would change anything: a prepared paragraph, a removal or a checkpoint. */
+  #hasPublishableChange(): boolean {
+    if (this.#removed.size !== 0 || this.#checkpointGeneration !== this.#acceptedCheckpointGeneration) return true;
+    for (const state of this.#pendingTexts) if (!this.#unprepared.has(state)) return true;
+    return false;
+  }
+
   #isDirty(): boolean {
     return (
       this.#pendingTexts.size !== 0 ||
@@ -2178,6 +2227,22 @@ class RetainedTextImpl implements RetainedText {
 
   get refusal(): unknown {
     return this.#state.refusal;
+  }
+
+  get keepMeasured(): boolean {
+    return this.#state.keepMeasured;
+  }
+
+  set keepMeasured(value: boolean) {
+    this.#state.keepMeasured = value;
+  }
+
+  preparedMeasurement(): ParagraphLayoutSummary | undefined {
+    return this.#planner._preparedMeasurement(this.#state);
+  }
+
+  get awaitsPreparation(): boolean {
+    return this.#planner._awaitsPreparation(this.#state);
   }
 
   update(update: RetainedTextUpdate): void {
@@ -2321,7 +2386,7 @@ function resolveTextOptions(
   const formattedText =
     ownedText.text === previous?.text || ownedText.text.isWellFormed()
       ? ownedText
-      : Object.freeze({ text: wellFormedText(ownedText.text).text, spans: ownedText.spans });
+      : Object.freeze({ text: ownedText.text.toWellFormed(), spans: ownedText.spans });
   validateInlineObjects(value.inlineObjects, formattedText.text.length);
   const style =
     value.style === undefined ? {} : reuseOrCreateTextStyleSnapshot(previous?.source.style, value.style, 'text style');
@@ -2548,7 +2613,39 @@ function textOnlyUpdate(update: RetainedTextUpdate, previous: ResolvedTextOption
   if (update.text.length !== previous.text.length) {
     assertTextStyleFeatureRanges(previous.source.style ?? {}, 0, update.text.length, 'text style');
   }
-  return update.text.isWellFormed() ? update.text : wellFormedText(update.text).text;
+  return update.text.isWellFormed() ? update.text : update.text.toWellFormed();
+}
+
+/** Style keys that change what a glyph looks like and never where it sits or how large it is. */
+
+/**
+ * Whether `next` differs from `previous` in a layout input: anything other than colour, opacity, material and
+ * the transform. This is the write a layout callback may not make.
+ */
+function changesLayoutInput(previous: ResolvedTextOptions, next: ResolvedTextOptions): boolean {
+  const left = previous.source;
+  const right = next.source;
+  return (
+    previous.text !== next.text ||
+    previous.font.handle !== next.font.handle ||
+    left.layout !== right.layout ||
+    left.flow !== right.flow ||
+    left.inlineObjects !== right.inlineObjects ||
+    left.constraints?.anchor !== right.constraints?.anchor ||
+    !sameConstraintSizes(left.constraints, right.constraints) ||
+    !Object.is(left.rasterPixelRatio ?? 1, right.rasterPixelRatio ?? 1) ||
+    changesLayoutStyle(left.style, right.style) ||
+    previous.spans.length !== next.spans.length ||
+    previous.spans.some((span, index) => {
+      const other = next.spans[index]!;
+      return (
+        span.start !== other.start ||
+        span.end !== other.end ||
+        span.font?.handle !== other.font?.handle ||
+        changesLayoutStyle(span.style, other.style)
+      );
+    })
+  );
 }
 
 /** Whether an update restates the paragraph's constraint, flow or inline-object geometry. */
@@ -2610,7 +2707,9 @@ function sameEngineInput(previous: ResolvedTextOptions, next: ResolvedTextOption
 /** A summary is produced for an anchor that needs it, or for a caller that read the last one. */
 function wantsMeasurement(state: RetainedTextState): boolean {
   return (
-    (state.measurement !== undefined && state.measurementRead) || state.desired.source.constraints?.anchor !== undefined
+    state.keepMeasured ||
+    (state.measurement !== undefined && state.measurementRead) ||
+    state.desired.source.constraints?.anchor !== undefined
   );
 }
 

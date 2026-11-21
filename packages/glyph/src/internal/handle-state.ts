@@ -288,6 +288,7 @@ export class GlyphHandleState {
   >();
   readonly #codecBytes = new Map<CodecHandle, Uint8Array>();
   readonly #stopObservingRestart: () => void;
+  readonly #layoutPhaseActive: (() => boolean) | undefined;
   readonly #installedCodecs = new Set<InstalledCodecRegistration>();
   readonly #retainedFontBindings = new WeakMap<object, RetainedHandleFontBinding>();
   readonly #liveRetainedFontBindings = new Set<RetainedHandleFontBinding>();
@@ -325,6 +326,7 @@ export class GlyphHandleState {
     enterEngineBorrow?: () => () => void,
     identityNamespace?: string,
     assertEngineLifecycleMutationAllowed?: () => void,
+    layoutPhaseActive?: () => boolean,
   ) {
     if (typeof options !== 'object' || options === null || Array.isArray(options)) {
       throw new TypeError('Glyph handle state options must be an object');
@@ -342,6 +344,7 @@ export class GlyphHandleState {
     this.#assertEngineAvailable = assertEngineAvailable;
     this.#enterEngineBorrow = enterEngineBorrow;
     this.#assertEngineLifecycleMutationAllowed = assertEngineLifecycleMutationAllowed;
+    this.#layoutPhaseActive = layoutPhaseActive;
     this.#stopObservingRestart = onRuntimeShaperRestart(shaper, () => this.#restateAfterEngineRestart());
   }
 
@@ -855,6 +858,11 @@ export class GlyphHandleState {
       if (adopted) this.#ids.release(handle, 'planner');
       throw error;
     }
+  }
+
+  /** @internal Whether the engine is running layout callbacks, during which layout inputs are read-only. */
+  _layoutPhaseActive(): boolean {
+    return this.#layoutPhaseActive?.() === true;
   }
 
   /** @internal */

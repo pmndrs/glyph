@@ -1,5 +1,4 @@
 import { sameConstraintSizes } from '../text-anchor.js';
-import { wellFormedText } from '../text-mutation.js';
 import * as THREE from 'three/webgpu';
 
 import { type FormattedText, type ParagraphSpan, type TextInput } from '../formatted-text.js';
@@ -17,7 +16,7 @@ import {
 } from '../layout.js';
 import { immutableFontSelectionFonts, type FontSelection } from '../loaded-font.js';
 import { GlyphFontError } from '../loader.js';
-import { glyph, configuredTextInspection } from '../glyph.js';
+import { configuredTextInspection, prepareGlyphFrame, publishGlyphFrame } from '../glyph.js';
 import type { RasterFormatMetadata } from '../config/raster-format.js';
 import { mergePropertyList } from '../property-list.js';
 import type {
@@ -54,7 +53,14 @@ import type { ThreeRendererResources } from './internal/renderer-resources.js';
 import { measureGlyphLayout, type ThreeGlyphGeometrySource, type ThreeGlyphMeasurement } from './glyph-measurement.js';
 import { createGlyphs, setGlyphDrawOrder, type Glyphs } from './glyphs.js';
 import { createDecorations, decorationDraws, type Decorations } from './decorations.js';
-import { PostCommitError } from '../glyph-error.js';
+import {
+  GlyphInputError,
+  glyphInputError,
+  GlyphLayoutPhaseError,
+  PostCommitError,
+  validatingInput,
+} from '../glyph-error.js';
+import { changesLayoutStyle, LAYOUT_PHASE_WRITE_MESSAGE } from '../text-mutation.js';
 
 /** Package-private construction capability used by the Three handle and R3F adapter. */
 export const threeTextConstructionToken: unique symbol = Symbol('pmndrs.glyph.three.construct');
@@ -122,8 +128,6 @@ export type TextCommitState =
 interface DesiredTextState<Format extends RasterFormatMetadata> {
   readonly font: FontSelection<Format>;
   readonly text: string;
-  /** How many lone surrogates of the authored text were replaced by U+FFFD to make `text`. */
-  readonly replacedSurrogates: number;
   readonly spans: readonly TextSpan<Format>[];
   readonly style: TextStyle;
   readonly layout: ParagraphLayout;
@@ -209,6 +213,29 @@ class ThreePublicationObject extends THREE.Object3D {
   }
 }
 
+/**
+ * The first child of a Scene that holds Glyph text. Three visits it before any other object computes its matrix,
+ * so this is where a frame prepares its dirty text and runs layout callbacks: a callback that moves another
+ * object is seen by that same traversal.
+ */
+class ThreePrepareObject extends THREE.Object3D {
+  readonly #prepare: () => void;
+
+  constructor(prepare: () => void) {
+    super();
+    this.#prepare = prepare;
+    this.name = '@pmndrs/glyph-prepare';
+    this.matrixAutoUpdate = false;
+  }
+
+  override updateMatrixWorld(): void {
+    this.#prepare();
+  }
+}
+
+/** A layout callback: the Text and what its `measure()` returns. */
+export type TextLayoutCallback = (text: Text<RasterFormatMetadata>, layout: ParagraphLayoutSummary) => void;
+
 /** Public terminal root selected from a Three handle. */
 export interface ThreeRoot extends GlyphRoot {
   readonly handle: import('./schema.js').ThreeHandle;
@@ -220,6 +247,18 @@ export interface ThreeRoot extends GlyphRoot {
     properties: Omit<StandaloneTextProperties<FontFaceRasterOf<Selection>>, 'font'> & { readonly font: Selection },
   ): Text<FontFaceRasterOf<Selection>>;
   createTextGroup(options?: TextGroupOptions): TextGroup;
+  /**
+   * Receives each failure this root cannot attribute to one text's input: a publication the renderer rejected, a
+   * fixed capacity exceeded, an engine restart, and an exception thrown by a layout callback.
+   */
+  onError: ((error: unknown) => void) | undefined;
+  /** Runs when a setter leaves this root needing a frame; an on-demand render loop requests one here. */
+  onInvalidate: (() => void) | undefined;
+  /**
+   * Tells the root which Scene its text lives in before the first traversal finds out, so the first frame is
+   * prepared at the front of that Scene like every later one.
+   */
+  attach(scene: THREE.Scene): void;
 }
 
 /** @internal Resolve the package-owned host behind a public root or its lifecycle proxy. */
@@ -258,6 +297,26 @@ class ThreePublicRoot implements ThreeRoot {
 
   dispose(): void {
     this.#host.dispose();
+  }
+
+  get onError(): ((error: unknown) => void) | undefined {
+    return this.#host.onError;
+  }
+
+  set onError(value: ((error: unknown) => void) | undefined) {
+    this.#host.onError = value;
+  }
+
+  get onInvalidate(): (() => void) | undefined {
+    return this.#host.onInvalidate;
+  }
+
+  set onInvalidate(value: (() => void) | undefined) {
+    this.#host.onInvalidate = value;
+  }
+
+  attach(scene: THREE.Scene): void {
+    this.#host.attach(scene);
   }
 
   get textCount(): number {
@@ -302,6 +361,15 @@ export class ThreeRootHost {
   readonly #renderer: ThreeCommandBufferRenderer;
   readonly #texts = new Set<THREE.Object3D>();
   readonly #renderObject: ThreePublicationObject;
+  readonly #prepareObject: ThreePrepareObject;
+  /** A Scene named by `attach()` before any traversal discovered it. */
+  #attachedScene: THREE.Scene | undefined;
+  /** How many `renderer.render` calls are inside one another on this root's Scene; above zero is a nested pass. */
+  #renderDepth = 0;
+  #restoreSceneHooks: (() => void) | undefined;
+  #capacityReported = false;
+  onError: ((error: unknown) => void) | undefined;
+  onInvalidate: (() => void) | undefined;
   readonly #materialRootContext: ThreeRootContext;
   #publicRoot: ThreeRoot | undefined;
   #scene: THREE.Scene | undefined;
@@ -370,6 +438,7 @@ export class ThreeRootHost {
       'Three root capacity',
     );
     this.#renderObject = new ThreePublicationObject(() => this.#commitTraversal(true, true));
+    this.#prepareObject = new ThreePrepareObject(() => this.#prepareTraversal());
     this.#renderObject.name = name === undefined ? '@pmndrs/glyph:anonymous' : `@pmndrs/glyph:${name}`;
     this.#renderObject.matrixAutoUpdate = false;
     this.#renderObject.addEventListener('removed', this.#onTreeChange);
@@ -470,6 +539,9 @@ export class ThreeRootHost {
       this.#renderObject.removeEventListener('removed', this.#onTreeChange);
       this.#untrackAll();
       this.#renderObject.removeFromParent();
+      this.#prepareObject.removeFromParent();
+      this.#restoreSceneHooks?.();
+      this.#restoreSceneHooks = undefined;
       this.#scene = undefined;
     }
   }
@@ -736,6 +808,21 @@ export class ThreeRootHost {
     this.#reconcileDirty = false;
     const prepared = this.#binding?.prepareShape() ?? false;
     if (prepared === false) this.#finishPublicationCycle();
+    const exceeded = this.#binding?.capacityExceeded;
+    if (exceeded === undefined) this.#capacityReported = false;
+    else if (!this.#capacityReported) {
+      // A fixed capacity is a policy the author chose, not a failure of any text: say so once, at the root.
+      this.#capacityReported = true;
+      try {
+        this.onError?.(
+          new RangeError(
+            `Three root capacity is fixed at ${String(exceeded.size)} text units and ${String(exceeded.required)} are needed; nothing new is drawn until it fits`,
+          ),
+        );
+      } catch {
+        // A root handler cannot replace the condition it is told about.
+      }
+    }
     return prepared;
   }
 
@@ -759,6 +846,58 @@ export class ThreeRootHost {
       if (Object.is(this.#refusedTexts.get(text), refusal)) continue;
       this.#refusedTexts.set(text, refusal);
       this.#reportError(refusal, [text]);
+    }
+  }
+
+  /**
+   * @internal Runs each text's `onLayout` whose summary is new, after every root is prepared and before any is
+   * published. One callback's exception is reported and the rest still run, so it can neither stop the frame
+   * nor escape scene traversal.
+   */
+  runLayoutPhase(): void {
+    const binding = this.#binding;
+    if (binding === undefined) return;
+    for (const [text, layout] of binding.layoutsToNotify()) {
+      if (text.disposed) continue;
+      try {
+        text.onLayout?.(text, layout);
+      } catch (error) {
+        this.#reportCallbackError(text, error);
+      }
+    }
+  }
+
+  /** Tells the text's handler and the root's; an exception nobody listens for goes to the global error event. */
+  #reportCallbackError(text: Text<RasterFormatMetadata>, error: unknown): void {
+    const handlers = [text.onError, this.onError].filter((handler) => handler !== undefined);
+    if (handlers.length === 0) {
+      (globalThis as { reportError?: (error: unknown) => void }).reportError?.(error);
+      return;
+    }
+    for (const handler of handlers) {
+      try {
+        handler(error);
+      } catch {
+        // A handler cannot replace the failure it is told about.
+      }
+    }
+  }
+
+  /** @internal Makes the next frame run its layout phase although no text changed. */
+  requestLayoutPhase(): void {
+    try {
+      this.#services.invalidate();
+    } catch {
+      // Inside a publication or the layout phase the root cannot be invalidated; the next change runs the phase.
+    }
+  }
+
+  /** @internal A setter left this root needing a frame. */
+  notifyInvalidated(): void {
+    try {
+      this.onInvalidate?.();
+    } catch {
+      // A frame request that fails must not turn a setter into a throw.
     }
   }
 
@@ -887,9 +1026,18 @@ export class ThreeRootHost {
         return;
       }
     }
+    // A nested shadow or pass render only needs current transforms; the frame was published by the outer one.
+    if (sceneTraversal && this.#renderDepth > 0) {
+      try {
+        this.#flushTransforms(worldMatricesCurrent, texts);
+      } catch (error) {
+        if (!this.#ownsTraversalFailure(error)) this.#reportError(error, texts);
+      }
+      return;
+    }
     this.#traversalPublishing = sceneTraversal;
     try {
-      glyph.shape();
+      publishGlyphFrame();
     } catch {
       // Every participating root received its attributed error before the global call threw.
     } finally {
@@ -918,6 +1066,11 @@ export class ThreeRootHost {
     if (this.#errorAttributionActive) return;
     this.#errorAttributionActive = true;
     try {
+      try {
+        this.onError?.(error);
+      } catch {
+        // A root handler cannot replace the failure it is told about.
+      }
       const participants = [...texts];
       const groups = new Set<TextGroup>();
       for (const text of participants) {
@@ -1003,17 +1156,87 @@ export class ThreeRootHost {
         `Three root ${JSON.stringify(this.name)} spans more than one Scene; select a different handle root for each Scene`,
       );
     }
-    const scene = this.#memberScene;
+    const scene = this.#memberScene ?? this.#attachedScene;
     if (scene === this.#scene && (scene === undefined || this.#renderObject.parent === scene)) return false;
-    // Moving the private publication object is not a member change.
+    // Moving the private publication and preparation objects is not a member change.
     const membersDirty = this.#membersDirty;
     this.#renderObject.removeFromParent();
+    this.#prepareObject.removeFromParent();
+    this.#restoreSceneHooks?.();
+    this.#restoreSceneHooks = undefined;
     this.#scene = scene;
     if (scene !== undefined) {
+      // Both are appended: a traversal may be iterating these children, and appending never moves one of them.
       scene.add(this.#renderObject);
+      scene.add(this.#prepareObject);
+      this.#restoreSceneHooks = this.#countRenders(scene);
     }
     this.#membersDirty = membersDirty;
     return scene !== undefined;
+  }
+
+  /** @internal Names the Scene before a traversal discovers it, so the first frame is prepared at its front. */
+  attach(scene: THREE.Scene): void {
+    this.#assertActive();
+    this.#attachedScene = scene;
+    if (this.#scene === undefined) this.#bindScene();
+    this.#keepPrepareObjectFirst();
+  }
+
+  /**
+   * `Scene.add` appends, and sorting or re-parenting can move a child; the preparation object belongs at index 0.
+   * It moves only outside a traversal or while it is the child being visited, because moving it then shifts no
+   * child the traversal has yet to reach.
+   */
+  #keepPrepareObjectFirst(): boolean {
+    const children = this.#scene?.children;
+    if (children === undefined || children[0] === this.#prepareObject) return false;
+    const index = children.indexOf(this.#prepareObject);
+    if (index === -1) return false;
+    const followedPublication = children.indexOf(this.#renderObject) < index;
+    children.splice(index, 1);
+    children.unshift(this.#prepareObject);
+    return followedPublication;
+  }
+
+  /**
+   * Counts the renders in progress on a Scene. A renderer traverses the Scene before `onBeforeRender` and runs
+   * shadow and pass renders between it and `onAfterRender`, so a traversal seen at depth above zero belongs to
+   * a nested render: it synchronizes transforms and neither prepares nor publishes.
+   */
+  #countRenders(scene: THREE.Scene): () => void {
+    const before = scene.onBeforeRender;
+    const after = scene.onAfterRender;
+    const host = this;
+    const counted = {
+      onBeforeRender(this: THREE.Scene, ...parameters: Parameters<THREE.Scene['onBeforeRender']>): void {
+        host.#renderDepth += 1;
+        before.apply(this, parameters);
+      },
+      onAfterRender(this: THREE.Scene, ...parameters: Parameters<THREE.Scene['onAfterRender']>): void {
+        host.#renderDepth = Math.max(0, host.#renderDepth - 1);
+        after.apply(this, parameters);
+      },
+    };
+    scene.onBeforeRender = counted.onBeforeRender;
+    scene.onAfterRender = counted.onAfterRender;
+    return () => {
+      if (scene.onBeforeRender === counted.onBeforeRender) scene.onBeforeRender = before;
+      if (scene.onAfterRender === counted.onAfterRender) scene.onAfterRender = after;
+      host.#renderDepth = 0;
+    };
+  }
+
+  /** The front of a traversal: prepare every dirty text and run layout callbacks before any matrix is computed. */
+  #prepareTraversal(): void {
+    if (this.#disposed) return;
+    // Visited after the publication object, this traversal has already prepared and published its frame.
+    if (this.#keepPrepareObjectFirst() || this.#renderDepth > 0) return;
+    try {
+      prepareGlyphFrame();
+    } catch {
+      // Every participating root received its attributed error before the global call threw.
+    }
   }
 
   #renderMembers(): readonly Text<RasterFormatMetadata>[] {
@@ -1141,7 +1364,28 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   #observedParent: THREE.Object3D | null = null;
   #observedRenderOrder = 0;
   #transformQueued = false;
+  #onLayout: TextLayoutCallback | undefined;
   onError: ((error: unknown) => void) | undefined;
+
+  /**
+   * Called with this text and what `measure()` returns, after the text is first prepared and whenever that
+   * summary changes, before the frame that draws it: position other objects from it here and the first frame is
+   * exact. It runs in the frame or in `glyph.prepare()`, never from a read, and not for a change of colour or
+   * transform. It may read anything and write transforms, visibility, colour, opacity and material; writing a
+   * layout input of any text throws `GlyphLayoutPhaseError` from that setter.
+   */
+  get onLayout(): TextLayoutCallback | undefined {
+    return this.#onLayout;
+  }
+
+  set onLayout(value: TextLayoutCallback | undefined) {
+    if (value !== undefined && typeof value !== 'function') throw new TypeError('Text onLayout must be a function');
+    const began = this.#onLayout === undefined && value !== undefined;
+    this.#onLayout = value;
+    this.#binding?.observeLayout(this.#root.member(this), value !== undefined);
+    // A callback installed on text that is already drawn is told its current layout by the next frame.
+    if (began && this.#binding !== undefined) this.#root.requestLayoutPhase();
+  }
 
   /** Ordinary applications construct Text through `handle.createText()`. */
   constructor(
@@ -1160,8 +1404,8 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     }
     host.assertMutationAllowed();
     assertNoRawSpans(properties, 'Text properties');
-    const desired = normalizeDesired(properties);
-    host.services.assertTextUnits(desired.text);
+    const desired = validatingInput([], () => normalizeDesired(properties));
+    validatingInput(['text'], () => host.services.assertTextUnits(desired.text));
     this.#ownedFonts = ownedFonts;
     this.#desired = desired;
     this.#pixelSnapping = normalizePixelSnapping(properties.pixelSnapping);
@@ -1201,13 +1445,9 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   set font(value: FontSelection<Format>) {
     this.set({ font: value });
   }
-  /** The text as the engine sees it: what was assigned, with every lone surrogate replaced by U+FFFD. */
+  /** The text exactly as it was assigned. A lone surrogate in it is drawn as U+FFFD. */
   get text(): string {
     return this.#desired.text;
-  }
-  /** How many lone surrogates of the assigned text were replaced by U+FFFD. Zero for well-formed text. */
-  get replacedSurrogates(): number {
-    return this.#desired.replacedSurrogates;
   }
   set text(value: TextInput<Format>) {
     this.set({ text: value } as TextUpdate<Format>);
@@ -1255,7 +1495,17 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     this.#applyUpdate(update, true);
   }
 
+  /** Every value a setter refuses is a `GlyphInputError`; one the validators did not place names the property written. */
   #applyUpdate(update: TextUpdate<Format>, preserveExplicitPublication: boolean): boolean {
+    try {
+      return this.#applyValidUpdate(update, preserveExplicitPublication);
+    } catch (error) {
+      const keys = typeof update === 'object' && update !== null ? Object.keys(update) : [];
+      throw glyphInputError(keys.length === 1 ? keys : [], error);
+    }
+  }
+
+  #applyValidUpdate(update: TextUpdate<Format>, preserveExplicitPublication: boolean): boolean {
     this.#assertActive();
     if (typeof update !== 'object' || update === null || Array.isArray(update)) {
       throw new TypeError('Text update must be an object');
@@ -1277,12 +1527,18 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       updateKeys.length === 1 && updateKeys[0] === 'text' && typeof update.text === 'string'
         ? replaceDesiredString(this.#desired, update.text)
         : normalizeDesired({ ...this.#desired, ...replacedContent(update) } as TextProperties<Format>, this.#desired);
-    if (next.text !== this.#desired.text) this.#root.services.assertTextUnits(next.text);
+    if (next.text !== this.#desired.text) {
+      validatingInput(['text'], () => this.#root.services.assertTextUnits(next.text));
+    }
     if (
       (!preserveExplicitPublication || (!Object.hasOwn(update, 'font') && !Object.hasOwn(update, 'material'))) &&
       sameDesiredTextState(this.#desired, next)
     ) {
       return false;
+    }
+    // Refused before anything is recorded: the text keeps the value its layout callback was told about.
+    if (this.#root.services.layoutPhaseActive && changesDesiredLayout(this.#desired, next)) {
+      throw new GlyphLayoutPhaseError(LAYOUT_PHASE_WRITE_MESSAGE);
     }
     const nextRevision = checkedNextRevision(this.#desiredRevision);
     const staged = this.#binding?.stageUpdate(this.#root.member(this), next, nextRevision);
@@ -1724,6 +1980,8 @@ interface BoundTextEntry {
   stagedDesired: DesiredTextState<RasterFormatMetadata>;
   stagedAnchorOffset: LayoutPoint | undefined;
   committedAnchorOffset: LayoutPoint | undefined;
+  /** The summary last handed to this text's layout callback. */
+  notifiedLayout: ParagraphLayoutSummary | undefined;
 }
 
 interface DetachedQueryEntry {
@@ -1753,6 +2011,8 @@ class ThreeRootPublication {
   #capacityExceeded: { readonly required: number; readonly size: number } | undefined;
   #materialInvalidated = false;
   readonly #pendingMeasurements = new Set<Text<RasterFormatMetadata>>();
+  /** Bound texts that have a layout callback. */
+  readonly #layoutTexts = new Set<Text<RasterFormatMetadata>>();
   /** Entries whose flow regions bring transform objects no Text traversal observes. */
   #flowEntryCount = 0;
   #detachedQuery: Text<RasterFormatMetadata> | undefined;
@@ -2123,16 +2383,55 @@ class ThreeRootPublication {
     return Object.freeze({ semanticViews: 'none' });
   }
 
-  /** Resolves the anchor of every text about to be published, from the layout the batch just prepared. */
+  /**
+   * Settles which texts this publication carries, and resolves the anchor of each from the layout the batch
+   * just prepared.
+   */
   resolvePreparedAnchors(): void {
     this.#assertActive();
     for (const text of this.#pendingMeasurements) {
       const entry = this.#entries.get(text)!;
+      // A text held for the next frame's layout phase is not part of this publication, and reading it here
+      // would prepare it unobserved.
+      if (entry.handle.awaitsPreparation) {
+        entry.preparedRevision = undefined;
+        continue;
+      }
       // A text the engine refused has no layout to anchor; it draws nothing until its input changes.
       if (entry.handle.refusal === undefined && entry.stagedDesired.constraints.anchor !== undefined) {
         entry.stagedAnchorOffset = entry.handle.measure().anchorOffset;
       }
     }
+  }
+
+  /** Keeps the summaries of texts with a layout callback current and remembers which callbacks are due. */
+  observeLayout(text: Text<RasterFormatMetadata>, observed: boolean): void {
+    const entry = this.#entries.get(text);
+    if (entry === undefined) return;
+    entry.handle.keepMeasured = observed;
+    if (observed) this.#layoutTexts.add(text);
+    else {
+      this.#layoutTexts.delete(text);
+      entry.notifiedLayout = undefined;
+    }
+  }
+
+  /**
+   * The texts whose layout callback is due, with the summary to hand it: prepared texts whose summary differs
+   * from the one last handed over. Marks each as handed over.
+   */
+  layoutsToNotify(): readonly (readonly [Text<RasterFormatMetadata>, ParagraphLayoutSummary])[] {
+    const due: (readonly [Text<RasterFormatMetadata>, ParagraphLayoutSummary])[] = [];
+    for (const text of this.#layoutTexts) {
+      const entry = this.#entries.get(text);
+      if (entry === undefined || entry.handle.refusal !== undefined) continue;
+      if (entry.stagedRevision !== reconciler.desiredRevision(text)) continue;
+      const layout = entry.handle.preparedMeasurement();
+      if (layout === undefined || sameLayoutSummary(entry.notifiedLayout, layout)) continue;
+      entry.notifiedLayout = layout;
+      due.push([text, layout]);
+    }
+    return due;
   }
 
   /** The error that refused each retained text's last preparation, for the texts that have one. */
@@ -2284,7 +2583,9 @@ class ThreeRootPublication {
         stagedDesired: desired,
         stagedAnchorOffset: undefined,
         committedAnchorOffset: undefined,
+        notifiedLayout: undefined,
       });
+      if (text.onLayout !== undefined) this.observeLayout(text, true);
       this.#textUnits += desired.text.length;
       this.#flowEntryCount += Number(desired.flow !== undefined);
     } else {
@@ -2441,48 +2742,56 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
   const flowReused = previous !== undefined && properties.flow === previous.flow;
   const style = styleReused
     ? previous.style
-    : reuseOrCreateTextStyleSnapshot(
-        previous?.style,
-        isOwnedTextPropertySnapshot(properties.style)
-          ? (properties.style as TextStyle)
-          : mergePropertyList(properties.style, 'Text style'),
-        'Text style',
+    : validatingInput(['style'], () =>
+        reuseOrCreateTextStyleSnapshot(
+          previous?.style,
+          isOwnedTextPropertySnapshot(properties.style)
+            ? (properties.style as TextStyle)
+            : mergePropertyList(properties.style, 'Text style'),
+          'Text style',
+        ),
       );
   const layout = layoutReused
     ? previous.layout
-    : isOwnedTextPropertySnapshot(properties.layout)
-      ? (properties.layout as ParagraphLayout)
-      : mergePropertyList(properties.layout, 'Text layout');
+    : validatingInput(['layout'], () => {
+        const merged = isOwnedTextPropertySnapshot(properties.layout)
+          ? (properties.layout as ParagraphLayout)
+          : mergePropertyList(properties.layout, 'Text layout');
+        assertParagraphLayout(merged, 'Text layout');
+        return merged;
+      });
   const constraints = constraintsReused
     ? previous.constraints
-    : isOwnedTextPropertySnapshot(properties.constraints)
-      ? (properties.constraints as Constraints)
-      : mergePropertyList(properties.constraints, 'Text constraints');
-  if (!layoutReused) assertParagraphLayout(layout, 'Text layout');
-  if (!constraintsReused) assertConstraints(constraints, 'Text constraints');
+    : validatingInput(['constraints'], () => {
+        const merged = isOwnedTextPropertySnapshot(properties.constraints)
+          ? (properties.constraints as Constraints)
+          : mergePropertyList(properties.constraints, 'Text constraints');
+        assertConstraints(merged, 'Text constraints');
+        return merged;
+      });
   const normalizedFlow = flowReused
     ? previous.flow
     : properties.flow === undefined
       ? undefined
-      : normalizeTextFlow(properties.flow, 'Text flow');
+      : validatingInput(['flow'], () => normalizeTextFlow(properties.flow!, 'Text flow'));
   const flow =
     !flowReused && previous?.flow !== undefined && normalizedFlow !== undefined
       ? equalTextPropertySnapshots(previous.flow, normalizedFlow)
         ? previous.flow
         : normalizedFlow
       : normalizedFlow;
-  if (!layoutReused || !constraintsReused) normalizedColumns(layout, constraints);
+  if (!layoutReused || !constraintsReused) {
+    validatingInput(layoutReused ? ['constraints'] : ['layout'], () => normalizedColumns(layout, constraints));
+  }
   const formatted = typeof properties.text === 'string' ? undefined : properties.text;
-  if (formatted !== undefined && !isFormattedText(formatted)) throw new TypeError('Text content is invalid');
-  const authored = formatted?.text ?? (properties.text as string);
-  if (typeof authored !== 'string') throw new TypeError('Text content must be a string or formatted text');
-  // An unchanged text was already made well formed; its count describes what the author wrote, not this merge.
-  const { text, replacedSurrogates } =
-    previous !== undefined && authored === previous.text
-      ? { text: authored, replacedSurrogates: previous.replacedSurrogates }
-      : wellFormedText(authored);
+  const text = validatingInput(['text'], () => {
+    if (formatted !== undefined && !isFormattedText(formatted)) throw new TypeError('Text content is invalid');
+    const content = formatted?.text ?? (properties.text as string);
+    if (typeof content !== 'string') throw new TypeError('Text content must be a string or formatted text');
+    return content;
+  });
   if (style !== previous?.style || text.length !== previous.text.length) {
-    assertTextStyleFeatureRanges(style, 0, text.length, 'Text style');
+    validatingInput(['style'], () => assertTextStyleFeatureRanges(style, 0, text.length, 'Text style'));
   }
   const stated =
     (formatted?.spans as readonly TextSpan<Format>[] | undefined) ??
@@ -2492,8 +2801,9 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
   if (previous !== undefined && previous.text === text && previous.spans === stated) {
     spans = stated;
   } else {
-    const checked = assertSpanRanges(text, stated);
-    spans = ownTextSpanRecords(previous?.spans, checked, { kind: 'three' });
+    spans = validatingInput(['text', 'spans'], () =>
+      ownTextSpanRecords(previous?.spans, assertSpanRanges(text, stated), { kind: 'three' }),
+    );
   }
   const rootTechniques = immutableFontSelectionFonts(properties.font).map((font) => font.raster);
   const inheritedTechniques = [
@@ -2502,23 +2812,25 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
       span.font === undefined ? [] : immutableFontSelectionFonts(span.font).map((font) => font.raster),
     ),
   ];
-  assertTextEffectsSupported(style, inheritedTechniques, 'Text style');
+  validatingInput(['style'], () => assertTextEffectsSupported(style, inheritedTechniques, 'Text style'));
   for (const [index, span] of spans.entries()) {
-    if (span.style === undefined) continue;
-    assertTextEffectsSupported(
-      span.style,
-      span.font === undefined ? rootTechniques : immutableFontSelectionFonts(span.font).map((font) => font.raster),
-      `Text span ${index} style`,
+    const spanStyle = span.style;
+    if (spanStyle === undefined) continue;
+    validatingInput(['text', 'spans', index, 'style'], () =>
+      assertTextEffectsSupported(
+        spanStyle,
+        span.font === undefined ? rootTechniques : immutableFontSelectionFonts(span.font).map((font) => font.raster),
+        `Text span ${index} style`,
+      ),
     );
   }
   const rasterPixelRatio = properties.rasterPixelRatio;
   if (rasterPixelRatio !== undefined && (!Number.isFinite(rasterPixelRatio) || rasterPixelRatio <= 0)) {
-    throw new RangeError('Text rasterPixelRatio must be positive and finite');
+    throw new GlyphInputError(['rasterPixelRatio'], 'Text rasterPixelRatio must be positive and finite');
   }
   return Object.freeze({
     font: properties.font,
     text,
-    replacedSurrogates,
     spans,
     style,
     layout: layoutReused ? layout : reuseOrCreateTextPropertySnapshot(previous?.layout, layout, 'Text layout'),
@@ -2533,14 +2845,14 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
 
 function replaceDesiredString<Format extends RasterFormatMetadata>(
   previous: DesiredTextState<Format>,
-  authored: string,
+  text: string,
 ): DesiredTextState<Format> {
-  const { text, replacedSurrogates } = wellFormedText(authored);
-  if (text.length !== previous.text.length) assertTextStyleFeatureRanges(previous.style, 0, text.length, 'Text style');
+  if (text.length !== previous.text.length) {
+    validatingInput(['style'], () => assertTextStyleFeatureRanges(previous.style, 0, text.length, 'Text style'));
+  }
   return Object.freeze({
     ...previous,
     text,
-    replacedSurrogates,
     spans: emptyTextSpans,
   });
 }
@@ -2559,6 +2871,37 @@ function sameDesiredTextState<Format extends RasterFormatMetadata>(
     previous.flow === next.flow &&
     Object.is(previous.rasterPixelRatio ?? 1, next.rasterPixelRatio ?? 1) &&
     previous.material === next.material
+  );
+}
+
+/** Whether `next` differs in a layout input: anything but colour, opacity and material. */
+function changesDesiredLayout<Format extends RasterFormatMetadata>(
+  previous: DesiredTextState<Format>,
+  next: DesiredTextState<Format>,
+): boolean {
+  if (
+    previous.font !== next.font ||
+    previous.text !== next.text ||
+    previous.layout !== next.layout ||
+    previous.constraints !== next.constraints ||
+    previous.flow !== next.flow ||
+    !Object.is(previous.rasterPixelRatio ?? 1, next.rasterPixelRatio ?? 1) ||
+    changesLayoutStyle(previous.style, next.style)
+  ) {
+    return true;
+  }
+  if (previous.spans === next.spans) return false;
+  return (
+    previous.spans.length !== next.spans.length ||
+    previous.spans.some((span, index) => {
+      const other = next.spans[index]!;
+      return (
+        span.start !== other.start ||
+        span.end !== other.end ||
+        span.font !== other.font ||
+        changesLayoutStyle(span.style, other.style)
+      );
+    })
   );
 }
 
@@ -2883,6 +3226,20 @@ function validateTextDomains(texts: readonly Text<RasterFormatMetadata>[]): void
     }
     root = candidate;
   }
+}
+
+/** Whether a summary says the same as the one a layout callback last received. */
+function sameLayoutSummary(previous: ParagraphLayoutSummary | undefined, next: ParagraphLayoutSummary): boolean {
+  return (
+    previous !== undefined &&
+    (previous === next ||
+      (previous.width === next.width &&
+        previous.height === next.height &&
+        previous.lineCount === next.lineCount &&
+        previous.glyphCount === next.glyphCount &&
+        previous.anchorOffset.x === next.anchorOffset.x &&
+        previous.anchorOffset.y === next.anchorOffset.y))
+  );
 }
 
 function sameAnchorOffset(left: LayoutPoint | undefined, right: LayoutPoint | undefined): boolean {
