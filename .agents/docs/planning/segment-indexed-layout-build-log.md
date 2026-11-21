@@ -41,7 +41,7 @@ Updated in place; the history of each change is in the log below.
 | Slug per-font glyph table; benchmark MSDF oracle fix; full repository check passing                                                                                                                                           | merged   | tag `sil-green-9`                                   | Instances 112 → 40 B; upload per edit 84.5 → 27.6 kB; steady frame unchanged                       |
 | Slug batching on the pure TypeGPU path                                                                                                                                                                                        | merged   | tag `sil-green-13`                                  |                                                                                                    |
 | Slug fragment cost with band curves resident on demand                                                                                                                                                                        | merged   | tag `sil-green-13`                                  | Steady frame −27%; GPU memory with a full bake 5.80 → 0.94 MiB                                     |
-| Slug on direct TypeGPU matching Three with no pixel budget (ship gate)                                                                                                                                                        | tested   | `experiments/sil-render` (`670cc248a`)              | Merged into the integration branch; proofs re-running before the tag                               |
+| Slug on direct TypeGPU matching Three with no pixel budget (ship gate)                                                                                                                                                        | merged   | tag `sil-green-16`                                  | 0 pixels over tolerance on every Slug scene                                                        |
 | Pure TypeGPU path, units 1–2: effect-specialized shaders, ink-trimmed quads                                                                                                                                                   | merged   | tag `sil-green-6`                                   | Plain-text GPU pass −19%; pixel-identical to Three within 2/255                                    |
 | Pure TypeGPU batching (indexed transforms) and growth fix                                                                                                                                                                     | merged   | tag `sil-green-10`                                  | 1,000 labels: 1,000 → 1 draw, CPU 0.628 → 0.004 ms per frame                                       |
 | Pure TypeGPU: one program per effect variant across fonts, on-demand atlas, single-channel mode                                                                                                                               | merged   | tag `sil-green-12`                                  | Atlas memory with a full-font bake 41.9 MB → 0.26 MB                                               |
@@ -623,3 +623,24 @@ Updated in place; the history of each change is in the log below.
   unchanged; today's `caretForOffset` snaps an offset inside a cluster to its start and `selectionRects`
   swaps and clips ranges silently, which conflicts with the owner's "nothing snapped silently" rule; two doc
   comments are wrong. Editing support is held until the owner answers.
+- **Merged: Slug parity on direct TypeGPU** (tag `sil-green-16`, pushed). Verified on the combined tree after
+  a clean rebuild: glyph package tests, TypeGPU real-device parity, both render proofs on WebGPU and WebGL2,
+  live check. The full repository check was not re-run for this shader-only merge (it passed on the lane's
+  branch and at `sil-green-15`). Ship-gate item closed.
+- **Tested, not merged: error model (unit 3 group A)** (`experiments/sil-prepare`, `8cda3229a`). A failure in
+  one paragraph empties that paragraph only; `maxTextUnits` (default 65,536) throws at the setter; every
+  engine call goes through one gateway that recovers from a trap by replacing the instance and restating
+  fonts and roots; a failed frame is retried once. Capped-memory test now permanent: at 500–4,000 pages only
+  the oversized paragraph is refused and siblings are unaffected; at 300 pages the root's publication no
+  longer fits, reads still work, and shrinking or disposing the victim recovers. No cap leaves a root dead.
+  Also in that lane: mount linear in label count (4,000-label frame 3.4 s → 109 ms) and per-paragraph
+  measurement interest. Settled: the slow colour-only reading was machine load (119 / 124 / 126 µs across
+  three builds); typing is 44% shaping because the whole run is reshaped, and validation is 7.6 µs, so the
+  typing gap belongs to local edits. Not done: publication failures still discard the root; failure
+  inventory and interleaving fuzz; a per-text error surface on TypeGPU-direct. Proven on a base before the
+  cluster-build and positioning merges; the lane is catching up before it merges.
+- **Question from the owner: pixi3d.** The refactor does not run in the pixi3d checkout
+  (`/Volumes/Depot/Developer/text`, `feature/pixi3d`), which is untouched. `packages/glyph-pixi3d` exists
+  only on that branch, largely uncommitted, and was built against the old Slug and MSDF schemas and
+  synchronous setters, so official integration is a port. Awaiting the owner on whether it is in the ship
+  gate and who commits the uncommitted work.
