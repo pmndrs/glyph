@@ -5115,6 +5115,9 @@ impl ParagraphState {
         if preflight_candidate.unicode_state == CandidateUnicode::ReuseCommitted {
             self.unicode_reused_for_text_edit = true;
             self.pending_reused_ascii_facts = preflight_candidate.reused_ascii_facts;
+            // The analysis is kept, so the boundary lanes an editing query filled still describe
+            // the text before the edit, and a sentence boundary depends on a letter's case.
+            self.unicode.active_mut().invalidate_boundary_lanes();
             return Ok(());
         }
         if preflight_candidate.uses_pending_buffers() {
@@ -9240,10 +9243,12 @@ fn gather_error(error: GatherError) -> EngineError {
 pub mod oracle;
 
 mod change_class;
+mod editing_source;
 mod prepare_paragraphs;
 #[cfg(test)]
 use change_class::ChangeClass;
 pub(crate) use change_class::{DirtyInterval, ParagraphChange};
+pub use editing_source::ParagraphSource;
 pub(crate) use prepare_paragraphs::PreparationTarget;
 
 #[cfg(test)]

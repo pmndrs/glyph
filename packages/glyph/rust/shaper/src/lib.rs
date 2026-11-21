@@ -366,6 +366,11 @@ impl ShaperRegistry {
         .raw_extent_for_glyph(usize::try_from(glyph).ok()?)
     }
 
+    /// The shaping SFNT a font was registered with: the tables the baker kept, `GDEF` among them.
+    pub(crate) fn font_sfnt(&self, handle: u32) -> Option<&[u8]> {
+        Some(self.fonts[self.font_index(handle)?].sfnt.as_slice())
+    }
+
     /// The font's ink boxes as one table, for a caller that reads many glyphs of one font.
     pub(crate) fn font_ink_table(&self, handle: u32) -> Option<FontInkTable<'_>> {
         let font = &self.fonts[self.font_index(handle)?];

@@ -264,6 +264,18 @@ impl BoundaryLanes {
         Ok(&self.lane)
     }
 
+    /// The lane as it stands, when it describes a text of `units` units and every kind in
+    /// `kinds` is current. Computes nothing.
+    pub(crate) fn current(&self, units: usize, kinds: u8) -> Option<&[u8]> {
+        let ready = self.lane.len() == units + 1
+            && (kinds & GRAPHEME_BOUNDARY == 0 || self.graphemes_ready)
+            && Segmentation::ALL.into_iter().all(|segmentation| {
+                kinds & segmentation.bit() == 0
+                    || self.states[segmentation.index()] == LaneState::Ready
+            });
+        ready.then_some(self.lane.as_slice())
+    }
+
     /// Recomputes one lane over offsets `[from, to]`, where both are text ends or restart points.
     fn compute(
         &mut self,

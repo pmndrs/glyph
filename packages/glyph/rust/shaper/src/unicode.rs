@@ -217,6 +217,21 @@ impl UnicodeAnalysis {
             .ensure(text, &self.grapheme_boundaries, kinds)
     }
 
+    /// The boundary lane when every kind in `kinds` is already current for the analysed text, for
+    /// a reader that must not compute: `None` until `boundary_lane` has filled those kinds.
+    pub fn prepared_boundary_lane(&self, kinds: u8) -> Option<&[u8]> {
+        let units = self.grapheme_boundaries.last().copied()? as usize;
+        self.boundaries.as_ref()?.current(units, kinds)
+    }
+
+    /// Forgets the boundary lanes, for a caller that keeps this analysis for an edited text
+    /// instead of running `analyze` again. Lanes never queried cost one branch here.
+    pub fn invalidate_boundary_lanes(&mut self) {
+        if let Some(lanes) = &mut self.boundaries {
+            lanes.invalidate();
+        }
+    }
+
     /// The paragraph's boundary lanes: to install another `BreakSource`, or to move computed lanes
     /// to the analysis of the edited text before `BoundaryLanes::splice`.
     pub fn boundary_lanes_mut(&mut self) -> &mut BoundaryLanes {

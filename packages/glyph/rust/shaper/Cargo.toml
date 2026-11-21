@@ -30,6 +30,11 @@ name = "incremental_equals_cold"
 path = "tests/incremental_equals_cold.rs"
 required-features = ["std", "oracle"]
 
+[[test]]
+name = "editing_offsets"
+path = "tests/editing_offsets.rs"
+required-features = ["std", "oracle"]
+
 [features]
 default = ["std"]
 std = ["serde_json/std"]

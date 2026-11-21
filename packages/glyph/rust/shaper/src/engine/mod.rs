@@ -39,6 +39,10 @@ pub mod codec;
 pub mod codec_gather;
 #[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
 pub(crate) mod codec_wire;
+/// Editing queries over a prepared paragraph. No wasm export reaches them yet.
+// The queries of the units that follow read the rest of the line model.
+#[allow(dead_code)]
+pub mod editing;
 pub mod ordered_plan;
 mod placement_slot_arena;
 mod placement_state;
@@ -69,7 +73,7 @@ pub(crate) use positioning::SemanticGlyph;
 pub(crate) use state::PreparationTarget;
 #[cfg(feature = "oracle")]
 pub use state::oracle;
-pub use state::{EngineError, FrameFault, TextEngine};
+pub use state::{EngineError, FrameFault, ParagraphSource, TextEngine};
 
 fn reserve_vec<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineError> {
     if values.capacity() < capacity {
