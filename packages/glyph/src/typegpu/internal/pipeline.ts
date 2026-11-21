@@ -12,28 +12,49 @@ import tgpu, {
 import type { CodecBufferId, PortableLeafResource } from '../../index.js';
 import type { TypeGpuConfigOptions, TypeGpuPositionTransform, TypeGpuColorTransform } from '../config.js';
 
+/** One draw recorded per Text: Slug, whose Codec keeps a direct transform. */
 export interface Draw {
   draw(pass: TgpuRenderPass | GPURenderPassEncoder, bindGroups: readonly TgpuBindGroup[]): void;
-  /**
-   * Called when a frame commits, after the renderer's retained bytes hold it. `written` names the lanes the frame
-   * changed; a draw that derives state from lane contents (the MSDF effect variant) re-reads them here.
-   */
-  refresh?(written: ReadonlySet<Uint8Array>): void;
+}
+/** What a batched (indexed-transform) program binds: the lanes of one buffer set plus the session tables. */
+export interface BatchLanes {
+  readonly buffers: ReadonlyMap<CodecBufferId, GPUBuffer>;
+  /** The renderer's retained copy of each lane; current only from the frame's commit onwards. */
+  readonly bytes: ReadonlyMap<CodecBufferId, Uint8Array>;
+  readonly placementTable: GPUBuffer;
+  /** One `vec2f` text offset per transform record, indexed by the instance's transformIndex lane. */
+  readonly transformTable: GPUBuffer;
+  readonly viewport: TgpuUniform<d.Vec2f>;
+}
+/**
+ * One bind group and vertex-buffer set shared by every draw over the same lanes and tables. Draws are instance
+ * ranges recorded against it; they own nothing.
+ */
+export interface BatchBinding {
+  /** Lane whose contents select the program variant (the MSDF effect colors), or undefined when there is one. */
+  readonly variantLane: Uint8Array | undefined;
+  /** The program variant records `[start, start + count)` need. Reads committed lane bytes. */
+  variant(start: number, count: number): number;
+  draw(
+    pass: TgpuRenderPass | GPURenderPassEncoder,
+    bindGroups: readonly TgpuBindGroup[],
+    variant: number,
+    first: number,
+    count: number,
+  ): void;
 }
 export interface TypeGpuResource {
-  /**
-   * `bytes` holds the renderer's retained copy of each lane. It is current only from the frame's commit onwards:
-   * read it in `Draw.refresh`, never here.
-   */
-  prepare(
+  /** Direct transform mode (Slug): one draw for one Text, positioned by its own uniform. */
+  prepare?(
     buffers: ReadonlyMap<CodecBufferId, GPUBuffer>,
     placementTable: GPUBuffer,
     viewport: TgpuUniform<d.Vec2f>,
     position: TgpuUniform<d.Vec2f>,
     start: number,
     count: number,
-    bytes: ReadonlyMap<CodecBufferId, Uint8Array>,
   ): Draw;
+  /** Indexed transform mode (MSDF, bitmap): bindings that draws of many Texts share. */
+  bind?(lanes: BatchLanes): BatchBinding;
   dispose(): void;
 }
 export type PipelineOptions = TypeGpuConfigOptions;
@@ -65,6 +86,48 @@ export function projectWithScene(position: d.v3f, viewport: d.v2f, offset: d.v2f
   'use gpu';
   const pixel = d.vec2f(position.x, -position.y).add(offset);
   return positionTransform.$(d.vec3f(pixel, position.z), viewport);
+}
+/** Session tables every batched program reads: placements, the per-instance transform index and the offsets. */
+const scene = tgpu.bindGroupLayout({
+  viewport: { uniform: d.vec2f },
+  placementSlots: { storage: d.arrayOf(d.u32), access: 'readonly', visibility: ['vertex'] },
+  placements: { storage: d.arrayOf(d.vec2f), access: 'readonly', visibility: ['vertex'] },
+  transformIndices: { storage: d.arrayOf(d.u32), access: 'readonly', visibility: ['vertex'] },
+  transforms: { storage: d.arrayOf(d.vec2f), access: 'readonly', visibility: ['vertex'] },
+});
+export function createSceneGroup(
+  root: TgpuRoot,
+  lanes: BatchLanes,
+  placementSlots: GPUBuffer,
+  transformIndices: GPUBuffer,
+): TgpuBindGroup {
+  return root.createBindGroup(scene, {
+    viewport: lanes.viewport,
+    placementSlots,
+    placements: lanes.placementTable,
+    transformIndices,
+    transforms: lanes.transformTable,
+  });
+}
+/** An instance's origin moved by its paragraph placement. */
+export function placedOrigin(origin: d.v2f, instance: number): d.v2f {
+  'use gpu';
+  return origin.add(scene.$.placements[scene.$.placementSlots[instance]!]!);
+}
+/** The offset of the Text an instance belongs to (its position and anchor), from the transform table. */
+export function textOffset(instance: number): d.v2f {
+  'use gpu';
+  return d.vec2f(scene.$.transforms[scene.$.transformIndices[instance]!]!);
+}
+/** The logical viewport the current draw() was given. */
+export function viewportSize(): d.v2f {
+  'use gpu';
+  return d.vec2f(scene.$.viewport);
+}
+/** Projects a paragraph-space position (y up) moved by a text offset. */
+export function projectText(position: d.v3f, offset: d.v2f): d.v4f {
+  'use gpu';
+  return projectWithScene(position, scene.$.viewport, offset);
 }
 export function target(options: PipelineOptions): GPUColorTargetState {
   return {

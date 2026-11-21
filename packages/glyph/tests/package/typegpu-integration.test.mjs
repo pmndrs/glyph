@@ -4,7 +4,12 @@ import test from 'node:test';
 import { bitmap, glyph, msdf } from '@pmndrs/glyph';
 import { defineTypeGpuConfig } from '@pmndrs/glyph/typegpu';
 import { resourceLease, id, bitmapSchema, msdfSchema, slugSchema } from '@pmndrs/glyph/core';
-import { codecDescriptor, TYPEGPU_PLACEMENT_SLOT_BUFFER_ID } from '../../dist/typegpu/internal/codec.js';
+import {
+  codecDescriptor,
+  TYPEGPU_PLACEMENT_SLOT_BUFFER_ID,
+  TYPEGPU_TRANSFORM_INDEX_BUFFER_ID,
+} from '../../dist/typegpu/internal/codec.js';
+import { TypeGpuTransform } from '../../dist/typegpu/internal/renderer.js';
 
 const fontBytes = await readFile(
   new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url),
@@ -12,9 +17,9 @@ const fontBytes = await readFile(
 globalThis.GPUBufferUsage ??= { VERTEX: 32, COPY_DST: 8, STORAGE: 128 };
 await glyph.init();
 
-test('TypeGPU Slug packs placement into the glyph lane instead of a buffer of its own', () => {
+test('TypeGPU Slug packs placement into the glyph lane and keeps a direct transform', () => {
   const descriptor = codecDescriptor(id);
-  assert.equal(descriptor.capabilitySets[0].maxBuffersPerDraw, 8);
+  assert.equal(descriptor.capabilitySets[0].maxBuffersPerDraw, 9);
   const program = descriptor.programs.find((candidate) =>
     candidate.buffers.some((buffer) => buffer.id === slugSchema.buffers.glyph.id),
   );
@@ -25,6 +30,19 @@ test('TypeGPU Slug packs placement into the glyph lane instead of a buffer of it
     program.buffers.some((buffer) => buffer.id === TYPEGPU_PLACEMENT_SLOT_BUFFER_ID),
     false,
   );
+  assert.equal(
+    program.buffers.some((buffer) => buffer.id === TYPEGPU_TRANSFORM_INDEX_BUFFER_ID),
+    false,
+  );
+  for (const schema of [bitmapSchema, msdfSchema]) {
+    const batched = descriptor.programs.find((candidate) =>
+      candidate.buffers.some((buffer) => buffer.id === Object.values(schema.buffers)[0].id),
+    );
+    assert.ok(
+      batched.buffers.some((buffer) => buffer.id === TYPEGPU_TRANSFORM_INDEX_BUFFER_ID),
+      `${schema.technique} reads its Text offset from the transform table`,
+    );
+  }
   assert.ok(
     program.operations.some(
       (operation) => operation.immediate0 === slugSchema.buffers.glyph.id && operation.operand1 === 1,
@@ -38,9 +56,9 @@ function recordingHost(rasterSchema = msdfSchema) {
   const recorded = [];
   const uploads = [];
   const projectedBuffers = [];
-  const uniforms = [];
   const codecIdByGpu = new WeakMap();
-  const stats = { allocations: 0, preparations: 0, publications: 0, uniformWrites: 0, reject: false };
+  const transformTables = new WeakSet();
+  const stats = { allocations: 0, preparations: 0, publications: 0, transformWrites: 0, reject: false };
   function buffer(size, usage = 0) {
     const value = {
       bytes: new Uint8Array(size),
@@ -56,24 +74,13 @@ function recordingHost(rasterSchema = msdfSchema) {
   }
   const root = {
     createUniform() {
-      const allocation = buffer(8);
-      const uniform = {
-        buffer: allocation,
+      return {
+        buffer: buffer(8),
         value: [0, 0],
-        failNextWrite: false,
-        writes: 0,
         write(value) {
-          stats.uniformWrites++;
-          this.writes++;
-          if (this.failNextWrite) {
-            this.failNextWrite = false;
-            throw new Error('Injected uniform write failure');
-          }
           this.value = [...value];
         },
       };
-      uniforms.push(uniform);
-      return uniform;
     },
     device: {
       createBuffer({ size, usage }) {
@@ -82,6 +89,7 @@ function recordingHost(rasterSchema = msdfSchema) {
       },
       queue: {
         writeBuffer(target, offset, bytes) {
+          if (transformTables.has(target)) stats.transformWrites++;
           uploads.push({
             codecId: codecIdByGpu.get(target),
             offset,
@@ -89,7 +97,7 @@ function recordingHost(rasterSchema = msdfSchema) {
             capacity: target.bytes.byteLength,
             usage: target.usage,
           });
-          target.bytes.set(bytes, offset);
+          target.bytes.set(new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength), offset);
         },
       },
     },
@@ -119,42 +127,32 @@ function recordingHost(rasterSchema = msdfSchema) {
     resolve: () =>
       resourceLease(
         {
-          prepare(buffers, placementTable, viewport, position, start, count) {
+          // MSDF and bitmap draws are batched: one draw covers consecutive Texts. It is recorded as one entry per
+          // Text (per run of one transform record), with that Text's offset read back from the transform table.
+          bind(lanes) {
             stats.preparations++;
+            const { buffers, placementTable, transformTable, viewport } = lanes;
+            transformTables.add(transformTable);
             for (const [codecId, gpu] of buffers) codecIdByGpu.set(gpu, codecId);
             return {
-              draw() {
-                const placementSlots = buffers
-                  .get(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID)
-                  .bytes.slice(start * 4, (start + count) * 4);
-                const placementTableBytes = placementTable.bytes.slice();
-                const slotView = new DataView(
-                  placementSlots.buffer,
-                  placementSlots.byteOffset,
-                  placementSlots.byteLength,
-                );
-                const tableView = new DataView(
-                  placementTableBytes.buffer,
-                  placementTableBytes.byteOffset,
-                  placementTableBytes.byteLength,
-                );
-                recorded.push({
-                  // Compare raster inputs, not lifecycle-specific stable glyph identities.
-                  buffers: Object.values(rasterSchema.buffers).map((declaration) => {
-                    const stride = declaration.lanes.length * 4;
-                    return buffers.get(declaration.id).bytes.slice(start * stride, (start + count) * stride);
-                  }),
-                  placementSlots,
-                  placementTable: placementTableBytes,
-                  resolvedPlacement: Array.from({ length: count }, (_, index) => {
-                    const slot = slotView.getUint32(index * 4, true);
-                    return [tableView.getFloat32(slot * 8, true), tableView.getFloat32(slot * 8 + 4, true)];
-                  }),
-                  position: [...position.value],
-                  viewport: [...viewport.value],
-                  start,
-                  count,
-                });
+              variantLane: undefined,
+              variant: () => 0,
+              draw(_pass, _bindGroups, _variant, first, count) {
+                const indices = new DataView(buffers.get(TYPEGPU_TRANSFORM_INDEX_BUFFER_ID).bytes.buffer);
+                const table = new DataView(transformTable.bytes.buffer);
+                let start = first;
+                while (start < first + count) {
+                  const record = indices.getUint32(start * 4, true);
+                  let end = start + 1;
+                  while (end < first + count && indices.getUint32(end * 4, true) === record) end++;
+                  recorded.push(
+                    recordedDraw(buffers, placementTable, viewport, start, end - start, [
+                      table.getFloat32(record * 8, true),
+                      table.getFloat32(record * 8 + 4, true),
+                    ]),
+                  );
+                  start = end;
+                }
               },
             };
           },
@@ -166,14 +164,13 @@ function recordingHost(rasterSchema = msdfSchema) {
         const selected = base.root.create(context);
         selected.createCoreText = (selection, options) => {
           const font = context.fonts.acquire(selection);
-          const transform = { position: root.createUniform() };
+          const transform = new TypeGpuTransform(() => {});
           let state = { ...options, font, transform };
           let controller;
           let disposed = false;
           try {
             controller = context.services.createText(state);
           } catch (error) {
-            transform.position.buffer.destroy();
             font.dispose();
             throw error;
           }
@@ -190,7 +187,6 @@ function recordingHost(rasterSchema = msdfSchema) {
               try {
                 controller.dispose();
               } finally {
-                transform.position.buffer.destroy();
                 font.dispose();
               }
             },
@@ -200,7 +196,34 @@ function recordingHost(rasterSchema = msdfSchema) {
       },
     },
   };
-  return { config, allocations, recorded, uploads, projectedBuffers, uniforms, stats };
+  function recordedDraw(buffers, placementTable, viewport, start, count, position) {
+    const placementSlots = buffers.get(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID).bytes.slice(start * 4, (start + count) * 4);
+    const placementTableBytes = placementTable.bytes.slice();
+    const slotView = new DataView(placementSlots.buffer, placementSlots.byteOffset, placementSlots.byteLength);
+    const tableView = new DataView(
+      placementTableBytes.buffer,
+      placementTableBytes.byteOffset,
+      placementTableBytes.byteLength,
+    );
+    return {
+      // Compare raster inputs, not lifecycle-specific stable glyph identities.
+      buffers: Object.values(rasterSchema.buffers).map((declaration) => {
+        const stride = declaration.lanes.length * 4;
+        return buffers.get(declaration.id).bytes.slice(start * stride, (start + count) * stride);
+      }),
+      placementSlots,
+      placementTable: placementTableBytes,
+      resolvedPlacement: Array.from({ length: count }, (_, index) => {
+        const slot = slotView.getUint32(index * 4, true);
+        return [tableView.getFloat32(slot * 8, true), tableView.getFloat32(slot * 8 + 4, true)];
+      }),
+      position,
+      viewport: [...viewport.value],
+      start,
+      count,
+    };
+  }
+  return { config, allocations, recorded, uploads, projectedBuffers, stats };
 }
 
 function renderedState(draws) {
@@ -473,31 +496,27 @@ test('TypeGPU roots consume real engine output, retain idle draws and isolate na
     assert.deepEqual(host.recorded[0].position, [100, 80]);
     host.recorded.length = 0;
     const publicationCount = host.stats.publications;
-    const uniformWriteCount = host.stats.uniformWrites;
+    const transformWriteCount = host.stats.transformWrites;
     host.stats.reject = true;
     text.update({ position: [36, 48] });
-    assert.equal(host.stats.uniformWrites, uniformWriteCount + 1);
     text.update({ position: [36, 48] });
     text.update({});
-    assert.equal(host.stats.uniformWrites, uniformWriteCount + 1, 'unchanged positions do not touch the uniform');
     assert.doesNotThrow(() => glyph.shape(), 'position-only updates must not enter semantic publication');
     assert.equal(host.stats.publications, publicationCount, 'position-only updates leave the semantic root idle');
     handle.draw({}, { width: 640, height: 240 });
+    assert.equal(host.stats.transformWrites, transformWriteCount + 1, 'a move uploads its one table record at draw');
     assert.deepEqual(host.recorded[0].position, [36, 48]);
+    handle.draw({}, { width: 640, height: 240 });
+    assert.equal(host.stats.transformWrites, transformWriteCount + 1, 'an unmoved Text uploads nothing');
+    host.recorded.splice(host.recorded.length / 2);
     const moved = host.recorded.splice(0);
     host.stats.reject = false;
     glyph.shape();
     handle.draw({}, { width: 640, height: 240 });
     assert.deepEqual(host.recorded.splice(0), moved);
-    const writesBeforeRejectedUpdate = host.stats.uniformWrites;
     assert.throws(
       () => text.update({ constraints: { width: { mode: 'at-most', size: NaN } }, position: [72, 96] }),
       /width/i,
-    );
-    assert.equal(
-      host.stats.uniformWrites,
-      writesBeforeRejectedUpdate,
-      'failed semantic updates cannot move accepted text',
     );
     assert.throws(() => text.update({ constraints: { width: { mode: 'at-most', size: NaN } } }), /width/i);
     assert.throws(() => text.update({ position: [NaN, 0] }), /position/);
@@ -852,9 +871,9 @@ test('TypeGPU keeps accepted placement when reused mutable layout and constraint
   assert.equal(host.allocations.size, 0);
 });
 
-test('TypeGPU retries accepted host placement after one uniform write fails', async () => {
+test('TypeGPU settles every accepted anchor and a removal in one shape, rewriting only moved records', async () => {
   const host = recordingHost();
-  const handle = glyph.handle('typegpu:anchor-write-recovery', host.config);
+  const handle = glyph.handle('typegpu:anchor-settlement', host.config);
   const font = glyph.fontFace(new Blob([fontBytes]), { format: msdf });
   const snapshot = () => {
     handle.draw({}, { width: 640, height: 240 });
@@ -868,16 +887,13 @@ test('TypeGPU retries accepted host placement after one uniform write fails', as
       position: [100, 80],
       constraints: { anchor: { x: 'center', y: 'first-baseline' } },
     });
-    const firstUniform = host.uniforms.at(-1);
     const second = handle.createText({
       font,
       text: 'Second',
       position: [200, 80],
       constraints: { anchor: { x: 'center', y: 'first-baseline' } },
     });
-    const secondUniform = host.uniforms.at(-1);
     const removed = handle.createText({ font, text: 'Removed' });
-    const retiredBuffer = host.uniforms.at(-1).buffer;
     glyph.shape();
     const before = snapshot();
     assert.equal(before.length, 3);
@@ -887,20 +903,18 @@ test('TypeGPU retries accepted host placement after one uniform write fails', as
     const firstAnchor = first.measure().anchorOffset;
     const secondAnchor = second.measure().anchorOffset;
     removed.dispose();
-    firstUniform.failNextWrite = true;
-    assert.throws(() => glyph.shape(), /Injected uniform write failure/);
-    const partiallySettled = snapshot();
-    assert.equal(partiallySettled.length, 2, 'renderer accepted the new text and the removal');
-    assert.deepEqual(partiallySettled[0].position, before[0].position, 'failed placement keeps the old host origin');
-    assert.deepEqual(partiallySettled[1].position, [200 + secondAnchor.x, 80 + secondAnchor.y]);
-    assert.equal(retiredBuffer.destroyed, true, 'retired transform is released despite another text failing');
-    const secondWrites = secondUniform.writes;
-
     glyph.shape();
-    const recovered = snapshot();
-    assert.deepEqual(recovered[0].position, [100 + firstAnchor.x, 80 + firstAnchor.y]);
-    assert.deepEqual(recovered[1].position, partiallySettled[1].position);
-    assert.equal(secondUniform.writes, secondWrites, 'settled text is not rewritten on the recovery shape');
+    const settled = snapshot();
+    assert.equal(settled.length, 2, 'the removal leaves two Texts');
+    assert.deepEqual(settled[0].position, [100 + firstAnchor.x, 80 + firstAnchor.y]);
+    assert.deepEqual(settled[1].position, [200 + secondAnchor.x, 80 + secondAnchor.y]);
+
+    const writes = host.stats.transformWrites;
+    second.update({ position: [220, 90] });
+    const moved = snapshot();
+    assert.deepEqual(moved[0].position, settled[0].position);
+    assert.deepEqual(moved[1].position, [220 + secondAnchor.x, 90 + secondAnchor.y]);
+    assert.equal(host.stats.transformWrites, writes + 1, 'only the moved Text record is rewritten');
   } finally {
     handle.dispose();
     font.dispose();
