@@ -22,7 +22,7 @@ use crate::engine::{
 use super::{
     super::{ParagraphState, PlannerState},
     lanes::{Capture, LaneClass},
-    model::{PARAGRAPH_ID, ROOT_ID},
+    model::{Document, PARAGRAPH_ID, ROOT_ID},
     session::{Session, StepOutput},
 };
 
@@ -52,21 +52,51 @@ pub fn capture(session: &Session, output: &StepOutput) -> Result<Capture, String
         .planners
         .get(&ROOT_ID)
         .ok_or("root is missing")?;
-    let paragraph = &planner
-        .paragraph(PARAGRAPH_ID)
-        .ok_or("paragraph is missing")?
-        .state;
-    let inline = paragraph.active_inline();
-    capture.bools("owner.inline", Value, [inline.is_some()]);
-    analysis(&mut capture, paragraph);
-    match inline {
-        Some(leaf) => inline_leaf(&mut capture, leaf),
-        None => general(&mut capture, paragraph)?,
+    let ids = session.document().map(Document::ids).unwrap_or_default();
+    for id in &ids {
+        let paragraph = &planner
+            .paragraph(*id)
+            .ok_or_else(|| format!("paragraph {id} is missing"))?
+            .state;
+        capture.prefix = paragraph_prefix(*id);
+        let inline = paragraph.active_inline();
+        capture.bools("owner.inline", Value, [inline.is_some()]);
+        analysis(&mut capture, paragraph);
+        match inline {
+            Some(leaf) => inline_leaf(&mut capture, leaf),
+            None => general(&mut capture, paragraph)?,
+        }
+        public_glyphs(&mut capture, session, *id)?;
     }
-    public(&mut capture, session, output)?;
+    capture.prefix.clear();
+    views(&mut capture, output);
     gather(&mut capture, session);
     host_buffers(&mut capture, session, planner)?;
+    document(&mut capture, planner);
     Ok(capture)
+}
+
+/// The first paragraph's lanes are unprefixed, as they were when it was the only one.
+pub fn paragraph_prefix(id: u32) -> String {
+    if id == PARAGRAPH_ID {
+        String::new()
+    } else {
+        format!("p{id}:")
+    }
+}
+
+/// The root's paragraphs: which are live, and the order the renderer draws them in.
+fn document(capture: &mut Capture, planner: &PlannerState) {
+    capture.u32s(
+        "doc.paragraph.id",
+        Value,
+        planner.paragraphs.iter().map(|paragraph| paragraph.id),
+    );
+    capture.u32s(
+        "doc.order.id",
+        Value,
+        planner.active_order().iter().map(|ordered| ordered.id),
+    );
 }
 
 /// Text, Unicode facts, bidi levels and resolved styles: computed for both owners.
@@ -903,15 +933,15 @@ fn inline_leaf(capture: &mut Capture, leaf: &InlineLeaf) {
 
 /// What a host can read back: placed glyph records, the semantic records each call returned,
 /// and the encoded publication.
-fn public(capture: &mut Capture, session: &Session, output: &StepOutput) -> Result<(), String> {
+fn public_glyphs(capture: &mut Capture, session: &Session, paragraph: u32) -> Result<(), String> {
     let count = session
         .engine
-        .borrowed_paragraph_layout(ROOT_ID, PARAGRAPH_ID)
+        .borrowed_paragraph_layout(ROOT_ID, paragraph)
         .map_err(debug)?;
     let mut glyphs = alloc::vec![SemanticGlyph::default(); count];
     session
         .engine
-        .borrowed_paragraph_glyphs(ROOT_ID, PARAGRAPH_ID, 0, &mut glyphs)
+        .borrowed_paragraph_glyphs(ROOT_ID, paragraph, 0, &mut glyphs)
         .map_err(debug)?;
     columns!(capture, "public.glyph", Value, glyphs, {
         u32s: [font_handle, cluster];
@@ -927,11 +957,23 @@ fn public(capture: &mut Capture, session: &Session, output: &StepOutput) -> Resu
         Identity,
         glyphs.iter().map(|glyph| glyph.stable_id),
     );
+    Ok(())
+}
+
+/// The semantic records each call returned, and the encoded publication.
+fn views(capture: &mut Capture, output: &StepOutput) {
     semantic_records(capture, "view.published", &output.published_views);
     semantic_records(capture, "view.measured_first", &output.measured_first);
-    semantic_records(capture, "view.measured_after", &output.measured_after);
+    // With no read after the publication the first paragraph still has its (empty) lanes.
+    if output.measured_after.is_empty() {
+        semantic_records(capture, "view.measured_after", &[]);
+    }
+    for (paragraph, records) in &output.measured_after {
+        capture.prefix = paragraph_prefix(*paragraph);
+        semantic_records(capture, "view.measured_after", records);
+    }
+    capture.prefix.clear();
     capture.u8s("wire.publication", Wire, output.publication.iter().copied());
-    Ok(())
 }
 
 /// Line, measurement and glyph records: line and paragraph ink live here.
@@ -1105,7 +1147,7 @@ fn host_buffers(
 /// Stages added after the first reference set was frozen. A case frozen before them leaves
 /// them out of its frozen text, so its file stays byte-identical; the differential compares
 /// them for every case.
-pub const EXTENDED_STAGES: [&str; 1] = ["plan"];
+pub const EXTENDED_STAGES: [&str; 2] = ["plan", "doc"];
 
 /// The draw structure the renderer holds: what each packet binds (material, clip, depth,
 /// transform) and what each primitive span names. A paint change that republishes retained

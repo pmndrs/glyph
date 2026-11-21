@@ -22,7 +22,9 @@ use crate::{
 
 use super::{
     corpus::{self, Script},
-    model::{Exclusion, Layout, Model, RootStyle, Span, SpanStyle, TextEdit},
+    model::{
+        Document, Exclusion, InlineObject, Layout, Model, RootStyle, Span, SpanStyle, TextEdit,
+    },
     session::Route,
 };
 
@@ -40,8 +42,14 @@ pub struct Step {
     pub layout: Option<Layout>,
     pub root: Option<RootStyle>,
     pub spans: Option<Vec<Span>>,
+    pub inline_objects: Option<Vec<InlineObject>>,
     /// How the request reaches the engine; the full route when unset.
     pub route: Option<Route>,
+    /// The paragraph the fields above change; the first when unset.
+    pub paragraph: Option<u32>,
+    /// The whole document after the step, for a step that creates, removes or reorders
+    /// paragraphs. The fields above then apply on top of it.
+    pub document: Option<Document>,
 }
 
 #[derive(Clone, Debug)]
@@ -52,6 +60,8 @@ pub struct Case {
     pub stacks: Vec<Vec<&'static str>>,
     pub script: Script,
     pub model: Model,
+    /// Several paragraphs in one root; when set it replaces `model` as the starting point.
+    pub document: Option<Document>,
     pub steps: Vec<Step>,
     /// Whether the differential driver edits this case.
     pub fuzz: bool,
@@ -64,6 +74,13 @@ pub struct Case {
 }
 
 impl Case {
+    /// The document the case starts from: its paragraphs, or its one implicit paragraph.
+    pub fn start(&self) -> Document {
+        self.document
+            .clone()
+            .unwrap_or_else(|| Document::single(self.model.clone()))
+    }
+
     pub fn font_keys(&self) -> Vec<&'static str> {
         let mut keys: Vec<&'static str> = self.stacks.iter().flatten().copied().collect();
         keys.sort_unstable();
@@ -185,6 +202,7 @@ pub(super) fn new_case(name: String, tier: Tier, stack: &[&'static str], script:
         stacks: vec![stack.to_vec()],
         script,
         model: Model::default(),
+        document: None,
         steps: Vec::new(),
         fuzz: false,
         paragraph: false,

@@ -29,17 +29,18 @@ use super::{
     fonts::FontLibrary,
     lanes::{Capture, LaneClass, LaneDifference, cache_differences, differences},
     matrix::Case,
-    model::{Decoration, Model, Span, SpanStyle, TextEdit},
+    model::{Decoration, Document, Model, PARAGRAPH_ID, Span, SpanStyle, TextEdit},
     rng::Rng,
-    session::{ALL_VIEWS, Route, Session},
+    session::{ALL_VIEWS, Route, Session, Split},
 };
 
-/// One request: the model it produces, the text edits that get there, and the route it takes.
+/// One step: the document it produces, each paragraph's text edits that get there, and the
+/// route it takes.
 #[derive(Clone, Debug)]
 pub struct Planned {
     pub label: String,
-    pub next: Model,
-    pub edits: Vec<TextEdit>,
+    pub next: Document,
+    pub edits: Vec<(u32, Vec<TextEdit>)>,
     pub route: Route,
 }
 
@@ -53,10 +54,12 @@ struct Hints {
 }
 
 impl Hints {
-    fn new(capture: &Capture, text: &[u16]) -> Self {
-        let mut line_edges = capture.u32_rows("flow.fragment.text_start");
-        line_edges.extend(capture.u32_rows("flow.fragment.text_end"));
-        let clusters = capture.u32_rows("cluster.text_start");
+    /// `prefix` selects the paragraph's lanes in `capture`.
+    fn new(capture: &Capture, prefix: &str, text: &[u16]) -> Self {
+        let rows = |lane: &str| capture.u32_rows(&format!("{prefix}{lane}"));
+        let mut line_edges = rows("flow.fragment.text_start");
+        line_edges.extend(rows("flow.fragment.text_end"));
+        let clusters = rows("cluster.text_start");
         // The run-local block cut and the chunk summaries are both every 64 clusters.
         let block_edges = (1..)
             .map(|block| block * 64)
@@ -67,7 +70,7 @@ impl Hints {
         Self {
             line_edges,
             block_edges,
-            script_edges: capture.u32_rows("unicode.script_item.text_start"),
+            script_edges: rows("unicode.script_item.text_start"),
             hard_breaks: text
                 .iter()
                 .enumerate()
@@ -92,8 +95,31 @@ struct Planner<'a> {
     labels: Vec<String>,
 }
 
-/// Plans one request against `model`.
-fn plan(case: &Case, model: &Model, hints: &Hints, rng: &mut Rng) -> Planned {
+/// Plans one step against `document`, finding offsets worth editing in `last`, the capture
+/// after the previous step. With no capture (a sequence planned with no engine in the loop)
+/// offsets are uniform.
+fn plan(case: &Case, document: &Document, last: Option<&Capture>, rng: &mut Rng) -> Planned {
+    let model = document
+        .paragraph(PARAGRAPH_ID)
+        .map(|paragraph| paragraph.model.clone())
+        .unwrap_or_default();
+    let hints = last.map_or_else(Hints::default, |last| Hints::new(last, "", &model.text));
+    let (label, next, edits, route) = plan_paragraph(case, &model, &hints, rng);
+    Planned {
+        label,
+        next: Document::single(next),
+        edits: alloc::vec![(PARAGRAPH_ID, edits)],
+        route,
+    }
+}
+
+/// Plans one request's changes to one paragraph.
+fn plan_paragraph(
+    case: &Case,
+    model: &Model,
+    hints: &Hints,
+    rng: &mut Rng,
+) -> (String, Model, Vec<TextEdit>, Route) {
     let changes = if rng.chance(3, 5) {
         1
     } else {
@@ -113,12 +139,12 @@ fn plan(case: &Case, model: &Model, hints: &Hints, rng: &mut Rng) -> Planned {
         planner.change();
     }
     let route = planner.route();
-    Planned {
-        label: planner.labels.join(" + "),
-        next: planner.next,
-        edits: planner.edits,
+    (
+        planner.labels.join(" + "),
+        planner.next,
+        planner.edits,
         route,
-    }
+    )
 }
 
 impl Planner<'_> {
@@ -130,6 +156,7 @@ impl Planner<'_> {
                 .unwrap_or(&ALL_VIEWS),
             measure_first: self.rng.chance(1, 4),
             measure_after: self.rng.chance(1, 2),
+            split: Split::Batch,
         }
     }
 
@@ -616,9 +643,9 @@ fn check(
     planned: &Planned,
     known: &[&str],
 ) -> Result<Outcome, String> {
-    let warm_result = warm.step(&planned.next, &planned.edits, planned.route);
+    let warm_result = warm.step_document(&planned.next, &planned.edits, planned.route);
     let mut cold = Session::new(library, stacks)?;
-    let cold_result = cold.step(&planned.next, &[], planned.route);
+    let cold_result = cold.step_document(&planned.next, &[], planned.route);
     match (warm_result, cold_result) {
         (Ok(warm_output), Ok(cold_output)) => {
             let warm_capture = capture(warm, &warm_output)?;
@@ -663,10 +690,10 @@ fn outcome_text(error: Option<String>) -> String {
 fn cold_session(
     library: &FontLibrary,
     stacks: &[&[&str]],
-    model: &Model,
+    document: &Document,
 ) -> Result<(Session, Capture), String> {
     let mut session = Session::new(library, stacks)?;
-    let output = session.step(model, &[], Route::FULL)?;
+    let output = session.step_document(document, &[], Route::FULL)?;
     let capture = capture(&session, &output)?;
     Ok((session, capture))
 }
@@ -683,7 +710,7 @@ pub fn fuzz(
     let stacks: Vec<&[&str]> = case.stacks.iter().map(Vec::as_slice).collect();
     // Mixing in the case name gives every case its own sequence under one seed.
     let mut rng = Rng::new(seed ^ super::lanes::digest(case.name.as_bytes()));
-    let (warm, last) = cold_session(library, &stacks, &case.model)?;
+    let (warm, last) = cold_session(library, &stacks, &case.start())?;
     let mut run = Run {
         library,
         stacks: &stacks,
@@ -697,10 +724,9 @@ pub fn fuzz(
         report: FuzzReport::default(),
     };
     for step in 0..steps {
-        let model = run.warm.model().cloned().unwrap_or_default();
-        let hints = Hints::new(&run.last, &model.text);
-        let planned = plan(case, &model, &hints, &mut rng);
-        run.step(step, model, planned)?;
+        let document = run.warm.document().cloned().unwrap_or_default();
+        let planned = plan(case, &document, Some(&run.last), &mut rng);
+        run.step(step, document, planned)?;
     }
     Ok(run.report)
 }
@@ -716,14 +742,14 @@ struct Run<'a> {
     last: Capture,
     /// `models[n]` is the model before `history[n]`; together they replay the run since
     /// `origin`, the step at which the engine was last restarted cold.
-    models: Vec<Model>,
+    models: Vec<Document>,
     history: Vec<Planned>,
     origin: usize,
     report: FuzzReport,
 }
 
 impl Run<'_> {
-    fn step(&mut self, step: usize, model: Model, planned: Planned) -> Result<(), String> {
+    fn step(&mut self, step: usize, model: Document, planned: Planned) -> Result<(), String> {
         self.models.push(model.clone());
         self.history.push(planned.clone());
         self.report.steps = step + 1;
@@ -768,7 +794,7 @@ impl Run<'_> {
     fn failure(
         &self,
         step: usize,
-        model: &Model,
+        model: &Document,
         planned: &Planned,
         mut details: Vec<String>,
     ) -> Failure {
@@ -795,7 +821,13 @@ impl Run<'_> {
             details.push(format!("before: {}", describe(model)));
             details.push(format!("after:  {}", describe(&planned.next)));
             details.push(format!("edits:  {:?}", planned.edits));
-            details.push(format!("text before: {}", escaped(&model.text)));
+            for paragraph in &model.paragraphs {
+                details.push(format!(
+                    "text of {} before: {}",
+                    paragraph.id,
+                    escaped(&paragraph.model.text)
+                ));
+            }
             details.push(format!("route:  {:?}", planned.route));
         }
         Failure {
@@ -808,7 +840,12 @@ impl Run<'_> {
     }
 
     /// Replaces the engine with a cold layout of `model`, or of `fallback` if that fails.
-    fn restart(&mut self, step: usize, model: &Model, fallback: &Model) -> Result<(), String> {
+    fn restart(
+        &mut self,
+        step: usize,
+        model: &Document,
+        fallback: &Document,
+    ) -> Result<(), String> {
         (self.warm, self.last) = match cold_session(self.library, self.stacks, model) {
             Ok(restarted) => restarted,
             Err(_) => cold_session(self.library, self.stacks, fallback)?,
@@ -831,15 +868,27 @@ fn escaped(text: &[u16]) -> String {
     String::from_utf16_lossy(text).escape_unicode().to_string()
 }
 
-/// Everything about a model except its text.
-fn describe(model: &Model) -> String {
-    format!(
-        "{} units, root {:?}, layout {:?}, spans {:?}",
-        model.text.len(),
-        model.root,
-        model.layout,
-        model.spans
-    )
+/// Everything about a document except its text.
+fn describe(document: &Document) -> String {
+    document
+        .paragraphs
+        .iter()
+        .map(|paragraph| {
+            let model = &paragraph.model;
+            format!(
+                "paragraph {} order {} rank {}: {} units, root {:?}, layout {:?}, spans {:?}, inline objects {:?}",
+                paragraph.id,
+                paragraph.order,
+                paragraph.rank,
+                model.text.len(),
+                model.root,
+                model.layout,
+                model.spans,
+                model.inline_objects
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 /// The latest step after which a cold start still reproduces the final step's failure:
@@ -847,7 +896,7 @@ fn describe(model: &Model) -> String {
 fn shortest_replay(
     library: &FontLibrary,
     stacks: &[&[&str]],
-    models: &[Model],
+    models: &[Document],
     history: &[Planned],
     known: &[&str],
 ) -> usize {
@@ -865,7 +914,7 @@ fn shortest_replay(
 fn replay_fails(
     library: &FontLibrary,
     stacks: &[&[&str]],
-    start: &Model,
+    start: &Document,
     steps: &[Planned],
     known: &[&str],
 ) -> bool {
@@ -877,7 +926,7 @@ fn replay_fails(
     };
     for planned in earlier {
         if warm
-            .step(&planned.next, &planned.edits, planned.route)
+            .step_document(&planned.next, &planned.edits, planned.route)
             .is_err()
         {
             return false;
@@ -892,15 +941,14 @@ fn replay_fails(
 /// The first `count` requests `seed` plans against `case`, for freezing an edited sequence.
 /// Each is planned against the model the one before it produced, with no engine in the loop,
 /// so the sequence depends only on the seed and the case.
-pub fn scripted(case: &Case, seed: u64, count: usize) -> Vec<Planned> {
+pub fn scripted(case: &Case, start: &Document, seed: u64, count: usize) -> Vec<Planned> {
     let mut rng = Rng::new(seed);
-    let hints = Hints::default();
-    let mut model = case.model.clone();
+    let mut document = start.clone();
     let mut planned = Vec::with_capacity(count);
     for _ in 0..count {
-        let mut step = plan(case, &model, &hints, &mut rng);
+        let mut step = plan(case, &document, None, &mut rng);
         step.route = Route::FULL;
-        model = step.next.clone();
+        document = step.next.clone();
         planned.push(step);
     }
     planned
