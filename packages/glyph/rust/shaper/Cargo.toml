@@ -25,6 +25,11 @@ name = "layout_oracle"
 path = "tests/layout_oracle.rs"
 required-features = ["std", "oracle"]
 
+[[test]]
+name = "incremental_equals_cold"
+path = "tests/incremental_equals_cold.rs"
+required-features = ["std", "oracle"]
+
 [features]
 default = ["std"]
 std = ["serde_json/std"]
