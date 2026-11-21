@@ -34,15 +34,27 @@ export interface ParityPerf {
   readonly gpuFrameMs: number | undefined;
   readonly batchFrameMs: number;
   readonly edit: Counters & { readonly ms: number };
+  /** Editing one label to a glyph nothing has drawn: the cost of making it resident. */
+  readonly editNewGlyph: { readonly medianMs: number; readonly maxMs: number; readonly count: number };
   readonly editCount: Counters & { readonly ms: number };
   readonly move10: Counters & { readonly ms: number };
   readonly growth: Counters & { readonly labelsAdded: number; readonly error: string | undefined };
 }
 
+export interface FontCost {
+  readonly font: string;
+  readonly shaderModules: number;
+  readonly pipelines: number;
+  readonly bindGroups: number;
+  readonly textureBytes: number;
+  readonly bufferBytes: number;
+}
+
 export interface ParityProof {
   readonly scenes: readonly string[];
   capture(scene: string, three: boolean): Promise<ParityCapture>;
-  perf(labels: number): Promise<ParityPerf>;
+  perf(labels: number, font: 'inter' | 'latin'): Promise<ParityPerf>;
+  fontCosts(): Promise<readonly FontCost[]>;
   /** RGBA rows to a PNG file and back, both base64; the pixels are opaque, so the round trip is exact. */
   toPng(rgba: string, width: number, height: number): Promise<string>;
   fromPng(png: string): Promise<string>;

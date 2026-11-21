@@ -11,11 +11,14 @@ import {
 import * as THREE from 'three/webgpu';
 import tgpu, { d, std } from 'typegpu';
 
+import dancingFontUrl from '../fixtures/rendering/dancing-script-mtsdf.font.glb.gz?url';
 import devanagariFontUrl from '../fixtures/rendering/noto-sans-devanagari-mtsdf.font.glb.gz?url';
+// A Latin subset bake of Inter, against the full-font bake above it.
+import interLatinFontUrl from '../../apps/typegpu-hello-world/assets/inter-latin.font.glb?url';
 import interBitmapFontUrl from '../fixtures/rendering/inter-bitmap-16-32.font.glb?url';
 import interFontUrl from '../fixtures/rendering/inter-mtsdf.font.glb.gz?url';
 import showcaseManifest from '../fixtures/rendering/showcase-mtsdf-fixtures-v0.json' with { type: 'json' };
-import type { Counters, ParityPerf, ParityProof } from './typegpu-parity-contract';
+import type { Counters, FontCost, ParityPerf, ParityProof } from './typegpu-parity-contract';
 import { fetchAuthenticatedGzipAsset } from './workloads/font-assets/authenticated-gzip';
 
 // A row of 832 RGBA pixels is a multiple of 256 bytes, which a texture-to-buffer copy requires.
@@ -23,7 +26,7 @@ const WIDTH = 832;
 const HEIGHT = 600;
 
 type Style = NonNullable<TypeGpuTextOptions['style']>;
-type FontName = 'inter' | 'devanagari' | 'bitmap';
+type FontName = 'inter' | 'latin' | 'dancing' | 'devanagari' | 'bitmap';
 interface Item {
   readonly font: FontName;
   readonly text: string;
@@ -265,6 +268,8 @@ async function start(): Promise<ParityProof> {
     });
   const fonts: Record<FontName, FontFace<typeof msdf> | FontFace<ReturnType<typeof bitmap>>> = {
     inter: glyph.fontFace(await gzipFont(interFontUrl, 'inter'), { format: msdf }),
+    latin: glyph.fontFace(interLatinFontUrl, { format: msdf }),
+    dancing: glyph.fontFace(await gzipFont(dancingFontUrl, 'dancing-script'), { format: msdf }),
     devanagari: glyph.fontFace(await gzipFont(devanagariFontUrl, 'noto-sans-devanagari'), { format: msdf }),
     bitmap: glyph.fontFace(interBitmapFontUrl, { format: bitmap({ strikes: [16, 32] }) }),
   };
@@ -506,9 +511,10 @@ async function start(): Promise<ParityProof> {
     if (errors.length !== 0) throw new Error(`${phase}: ${errors.splice(0).join('\n')}`);
   };
 
-  async function perf(labels: number): Promise<ParityPerf> {
+  async function perf(labels: number, font: 'inter' | 'latin'): Promise<ParityPerf> {
     // One text is the 72 px "one" scene: the fill-bound case, where fragment cost dominates.
-    const scene = labels === 1 ? scenes.one! : labelScene(labels);
+    const base = labels === 1 ? scenes.one! : labelScene(labels);
+    const scene: Scene = { items: base.items.map((item) => ({ ...item, font })) };
     let texts: TypeGpuText[] = [];
     const mountCost = measured(() => {
       texts = mount(flat, scene);
@@ -554,6 +560,23 @@ async function start(): Promise<ParityProof> {
         editSamples.push(edit.ms);
       }
       await settle('same-count edit');
+      // One label, same glyph count, each time with a glyph nothing has drawn yet.
+      const drawn = new Set(scene.items.flatMap((item) => [...item.text]));
+      drawn.add('X');
+      const unseen = [...'ABCDEFGHIJKMNOPQRSTUVWYZcdfghijkmnopqrstuvwxyz'].filter((value) => !drawn.has(value));
+      const newGlyphSamples: number[] = [];
+      for (const value of unseen.slice(0, 30)) {
+        newGlyphSamples.push(
+          measured(() => {
+            subject.update({ text: `${original.slice(0, -1)}${value}` });
+            glyph.shape();
+            frame(flat);
+          }).ms,
+        );
+      }
+      subject.update({ text: original });
+      glyph.shape();
+      await settle('never-drawn glyph edit');
       // One label, a different glyph count.
       const countSamples: number[] = [];
       let editCount = measured(() => undefined);
@@ -592,7 +615,7 @@ async function start(): Promise<ParityProof> {
         const item = scene.items[index]!;
         added.push(
           flat.createText({
-            font: fonts.inter,
+            font: fonts[font],
             text: item.text,
             position: [item.x + 3, item.y + 3],
             style: item.style,
@@ -626,6 +649,11 @@ async function start(): Promise<ParityProof> {
         gpuFrameMs,
         batchFrameMs: median(batchSamples),
         edit: { ...edit, ms: median(editSamples) },
+        editNewGlyph: {
+          medianMs: median([...newGlyphSamples]),
+          maxMs: Math.max(...newGlyphSamples),
+          count: newGlyphSamples.length,
+        },
         editCount: { ...editCount, ms: median(countSamples) },
         move10: { ...move10, ms: median(moveSamples) },
         growth,
@@ -637,8 +665,50 @@ async function start(): Promise<ParityProof> {
     }
   }
 
+  /** Device objects each further MSDF font costs once a first one is drawing: one text per font, all kept. */
+  async function fontCosts(): Promise<FontCost[]> {
+    const costs: FontCost[] = [];
+    const texts: TypeGpuText[] = [];
+    try {
+      for (const [index, name] of (['inter', 'dancing', 'devanagari'] as const).entries()) {
+        const cost = measured(() => {
+          texts.push(
+            flat.createText({
+              font: fonts[name],
+              text: name === 'devanagari' ? DEVANAGARI : SAMPLE,
+              position: [10, 10 + index * 60],
+              style: { fontSize: 32, outline: { color: '#ff3030', width: 1 } },
+              layout: { wrap: 'none' },
+            }),
+          );
+          glyph.shape();
+          frame(flat);
+        });
+        await settle(`font ${name}`);
+        costs.push({
+          font: name,
+          shaderModules: cost.createShaderModule,
+          pipelines: cost.createRenderPipeline,
+          bindGroups: cost.createBindGroup,
+          textureBytes: cost.textureBytes,
+          bufferBytes: cost.bufferBytes,
+        });
+      }
+      return costs;
+    } finally {
+      for (const text of texts) text.dispose();
+      glyph.shape();
+      await device.queue.onSubmittedWorkDone();
+    }
+  }
+
   return {
     scenes: Object.keys(scenes),
+    async fontCosts() {
+      const result = await fontCosts();
+      if (errors.length !== 0) throw new Error(errors.splice(0).join('\n'));
+      return result;
+    },
     async capture(name, withThree) {
       const scene = scenes[name];
       if (scene === undefined) throw new RangeError(`unknown parity scene ${name}`);
@@ -654,8 +724,8 @@ async function start(): Promise<ParityProof> {
         gpuMs: typegpu.gpuMs,
       };
     },
-    async perf(labels) {
-      const result = await perf(labels);
+    async perf(labels, font) {
+      const result = await perf(labels, font);
       if (errors.length !== 0) throw new Error(errors.splice(0).join('\n'));
       return result;
     },

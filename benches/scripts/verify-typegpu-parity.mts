@@ -204,13 +204,34 @@ try {
   }
 
   if (withPerf) {
-    for (const labels of [1, 200, 1000]) {
-      const perf: ParityPerf = await page.evaluate(async (count) => (await window.typegpuParity).perf(count), labels);
+    const costs = await page.evaluate(async () => (await window.typegpuParity).fontCosts());
+    process.stdout.write('\nMSDF fonts added one at a time (one outlined text each, all kept)\n');
+    process.stdout.write(
+      `${row(['font', 'shader modules', 'pipelines', 'bind groups', 'texture bytes', 'buffer bytes'])}\n`,
+    );
+    process.stdout.write(`${row(Array.from({ length: 6 }, () => '---'))}\n`);
+    for (const cost of costs) {
+      process.stdout.write(
+        `${row([cost.font, cost.shaderModules, cost.pipelines, cost.bindGroups, cost.textureBytes, cost.bufferBytes])}\n`,
+      );
+    }
+    for (const [labels, font] of [
+      [1, 'inter'],
+      [200, 'inter'],
+      [1000, 'inter'],
+      [1, 'latin'],
+      [200, 'latin'],
+      [1000, 'latin'],
+    ] as const) {
+      const perf: ParityPerf = await page.evaluate(
+        async ([count, face]) => (await window.typegpuParity).perf(count, face),
+        [labels, font] as const,
+      );
       if (errors.length !== 0) throw new Error(`perf ${String(labels)}: browser errors: ${errors.join(' | ')}`);
       if (perf.growth.error !== undefined)
         failures.push(`perf ${String(labels)}: ${perf.growth.error.split('\n')[0]!}`);
       process.stdout.write(
-        `\n${labels === 1 ? 'one text (the "one" scene)' : `${String(labels)} labels`}, ${String(perf.glyphs)} glyphs\n`,
+        `\n${labels === 1 ? 'one text (the "one" scene)' : `${String(labels)} labels`}, ${font === 'inter' ? 'full-font' : 'Latin-subset'} bake, ${String(perf.glyphs)} glyphs\n`,
       );
       const ms = (value: number | undefined): string => (value === undefined ? 'n/a' : value.toFixed(4));
       process.stdout.write(
@@ -241,6 +262,10 @@ try {
           row([
             '  bind groups / buffers created',
             `${String(perf.edit.createBindGroup)} / ${String(perf.edit.createBuffer)}`,
+          ]),
+          row([
+            `edit one label to a never-drawn glyph: median / max ms (n=${String(perf.editNewGlyph.count)})`,
+            `${ms(perf.editNewGlyph.medianMs)} / ${ms(perf.editNewGlyph.maxMs)}`,
           ]),
           row(['edit one label (count changes): ms', ms(perf.editCount.ms)]),
           row([

@@ -20,13 +20,11 @@ import {
   colorTransform,
   corner,
   createSceneGroup,
-  placedOrigin,
   preparedDraw,
-  projectText,
   projectWithScene,
   recordDraw,
-  textOffset,
   shaderRoot,
+  textScene,
   storageTable,
   target,
   type PipelineOptions,
@@ -108,9 +106,9 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
       'use gpu';
       const unit = corner(input.index);
       return {
-        position: projectText(
-          bitmapQuadPosition(placedOrigin(input.origin, input.instance), input.size, unit),
-          textOffset(input.instance),
+        position: textScene.projectText(
+          bitmapQuadPosition(textScene.placedOrigin(input.origin, input.instance), input.size, unit),
+          textScene.textOffset(input.instance),
         ),
         uv: bitmapAtlasUv(input.uvOrigin, input.uvSize, unit),
         color: input.color,

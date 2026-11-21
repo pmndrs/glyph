@@ -109,26 +109,49 @@ export function createSceneGroup(
     transforms: lanes.transformTable,
   });
 }
-/** An instance's origin moved by its paragraph placement. */
-export function placedOrigin(origin: d.v2f, instance: number): d.v2f {
-  'use gpu';
-  return origin.add(scene.$.placements[scene.$.placementSlots[instance]!]!);
+/** What a batched layout must hold for the scene functions: the session tables and the viewport. */
+export interface SceneLayout {
+  readonly $: {
+    readonly viewport: d.v2f;
+    readonly placementSlots: readonly number[];
+    readonly placements: readonly d.v2f[];
+    readonly transformIndices: readonly number[];
+    readonly transforms: readonly d.v2f[];
+  };
 }
-/** The offset of the Text an instance belongs to (its position and anchor), from the transform table. */
-export function textOffset(instance: number): d.v2f {
-  'use gpu';
-  return d.vec2f(scene.$.transforms[scene.$.transformIndices[instance]!]!);
+/** The scene reads of one batched layout; MSDF adds its font to its own layout, so it reads through its own. */
+export interface SceneFunctions {
+  /** An instance's origin moved by its paragraph placement. */
+  placedOrigin(origin: d.v2f, instance: number): d.v2f;
+  /** The offset of the Text an instance belongs to (its position and anchor), from the transform table. */
+  textOffset(instance: number): d.v2f;
+  /** The logical viewport the current draw() was given. */
+  viewportSize(): d.v2f;
+  /** Projects a paragraph-space position (y up) moved by a text offset. */
+  projectText(position: d.v3f, offset: d.v2f): d.v4f;
 }
-/** The logical viewport the current draw() was given. */
-export function viewportSize(): d.v2f {
-  'use gpu';
-  return d.vec2f(scene.$.viewport);
+export function sceneFunctions(layout: SceneLayout): SceneFunctions {
+  return {
+    placedOrigin: (origin: d.v2f, instance: number): d.v2f => {
+      'use gpu';
+      return origin.add(layout.$.placements[layout.$.placementSlots[instance]!]!);
+    },
+    textOffset: (instance: number): d.v2f => {
+      'use gpu';
+      return d.vec2f(layout.$.transforms[layout.$.transformIndices[instance]!]!);
+    },
+    viewportSize: (): d.v2f => {
+      'use gpu';
+      return d.vec2f(layout.$.viewport);
+    },
+    projectText: (position: d.v3f, offset: d.v2f): d.v4f => {
+      'use gpu';
+      return projectWithScene(position, layout.$.viewport, offset);
+    },
+  };
 }
-/** Projects a paragraph-space position (y up) moved by a text offset. */
-export function projectText(position: d.v3f, offset: d.v2f): d.v4f {
-  'use gpu';
-  return projectWithScene(position, scene.$.viewport, offset);
-}
+/** Bitmap's scene. */
+export const textScene: SceneFunctions = sceneFunctions(scene as unknown as SceneLayout);
 export function target(options: PipelineOptions): GPUColorTargetState {
   return {
     format: options.format,
