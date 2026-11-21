@@ -123,13 +123,13 @@ function assertRectangle(font: Font<typeof slug>): void {
     [left, 0, left, top / 2, left, top],
     [left, top, (left + right) / 2, top, right, top],
   ];
-  const actual = [...references]
-    .sort((a, b) => a - b)
-    .map((offset) =>
-      Array.from({ length: 6 }, (_, index) =>
-        THREE.DataUtils.fromHalfFloat(curve.getUint16((data.glyphs.curveBase[glyph]! + offset) * 8 + index * 2, true)),
-      ),
-    );
-  if (JSON.stringify(actual) !== JSON.stringify(expected))
+  // Curves are compared as a set: the order a glyph's references take depends on how its page stores them.
+  const canonical = (curves: readonly (readonly number[])[]) => curves.map((value) => JSON.stringify(value)).sort();
+  const actual = [...references].map((offset) =>
+    Array.from({ length: 6 }, (_, index) =>
+      THREE.DataUtils.fromHalfFloat(curve.getUint16((data.glyphs.curveBase[glyph]! + offset) * 8 + index * 2, true)),
+    ),
+  );
+  if (JSON.stringify(canonical(actual)) !== JSON.stringify(canonical(expected)))
     throw new Error('authenticated Inter I is not the oracle rectangle');
 }

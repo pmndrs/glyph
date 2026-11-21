@@ -10,12 +10,10 @@ import {
   msdfFragment,
   msdfPixelRangeAccessor,
   msdfSampleSlot,
-  slugCurveTexelSlot,
-  slugCurveWidthAccessor,
+  slugBandCurveTexelSlot,
+  slugBandCurveWidthAccessor,
   slugHeaderTexelSlot,
   slugHeaderWidthAccessor,
-  slugReferenceTexelSlot,
-  slugReferenceWidthAccessor,
   slugRenderWithOptions,
   SlugShaderGlyph,
 } from '../../dist/shaders/typegpu/index.js';
@@ -43,16 +41,13 @@ test('MTSDF resources can be supplied through slots and accessors', () => {
 });
 
 test('Slug page data can come from consumer functions with accessor-provided widths', () => {
-  const curve = tgpu.fn([d.vec2i], d.vec4f)`(coordinate) { return vec4f(vec2f(coordinate), 0.0, 0.0); }`;
   const integer = tgpu.fn([d.vec2i], d.vec4u)`(coordinate) { return vec4u(vec2u(coordinate), 0u, 0u); }`;
   const configured = tgpu
     .fn(slugRenderWithOptions)
-    .with(slugCurveTexelSlot, curve)
     .with(slugHeaderTexelSlot, integer)
-    .with(slugReferenceTexelSlot, integer)
-    .with(slugCurveWidthAccessor, d.u32(64))
+    .with(slugBandCurveTexelSlot, integer)
     .with(slugHeaderWidthAccessor, d.u32(32))
-    .with(slugReferenceWidthAccessor, d.u32(16));
+    .with(slugBandCurveWidthAccessor, d.u32(64));
   const shader = tgpu.fn([SlugShaderGlyph, d.vec2f, d.bool, d.bool, d.f32, d.f32], d.f32)(configured);
   const source = tgpu.resolve([shader]);
   assert.match(source, /fn slugRenderWithOptions\(/);

@@ -9,12 +9,10 @@ import {
   type SlugShaderPage,
 } from '../../../shaders/typegpu/slug/slug-render.js';
 import {
-  slugCurveTexelSlot,
-  slugCurveWidthAccessor,
+  slugBandCurveTexelSlot,
+  slugBandCurveWidthAccessor,
   slugHeaderTexelSlot,
   slugHeaderWidthAccessor,
-  slugReferenceTexelSlot,
-  slugReferenceWidthAccessor,
 } from '../../../shaders/typegpu/slug/slug-texture.js';
 import { slugDilate, slugDilateMatrix } from './slug/slug-dilate.js';
 
@@ -45,14 +43,13 @@ export interface TslSlugInstanceNodes {
   readonly verticalBandCount: Node<'uint'>;
 }
 
-/** The three integer textures one decoded Slug page publishes, plus the row widths that address them. */
+/** The two integer textures one Slug page publishes (band headers and band curves), plus the row widths that address them. */
 export interface TslSlugPageResources {
-  readonly curveTexture: DataTexture;
-  readonly curveWidth: number;
   readonly headerTexture: DataTexture;
   readonly headerWidth: number;
-  readonly referenceTexture: DataTexture;
-  readonly referenceWidth: number;
+  /** One `rgba32uint` texel per band entry: the curve's control points as `pack2x16float` words `[p0, p1, p2, 0]`. */
+  readonly bandCurveTexture: DataTexture;
+  readonly bandCurveWidth: number;
 }
 
 /** Optional coverage controls. Omitted fields keep the canonical non-zero winding rule with no weight compensation. */
@@ -165,12 +162,10 @@ export function slugShader(instance: TslSlugInstanceNodes, resources: TslSlugSha
   const page = shaderPage(resources.page);
   const specializedSlugRender = tgpu
     .fn(slugRenderWithOptions)
-    .with(slugCurveWidthAccessor, d.u32(page.curveWidth))
     .with(slugHeaderWidthAccessor, d.u32(page.headerWidth))
-    .with(slugReferenceWidthAccessor, d.u32(page.referenceWidth))
-    .with(slugCurveTexelSlot, page.loadCurve)
+    .with(slugBandCurveWidthAccessor, d.u32(page.bandCurveWidth))
     .with(slugHeaderTexelSlot, page.loadHeader)
-    .with(slugReferenceTexelSlot, page.loadReference);
+    .with(slugBandCurveTexelSlot, page.loadBandCurve);
   const rule = renderOptions(resources.fillRule);
   const coverageAt = (coordinate: Node<'vec2'>): Node<'float'> =>
     t3.toTSL(() => {
@@ -214,24 +209,18 @@ function renderOptions(rule: TslSlugFillRule | undefined): Required<TslSlugFillR
 }
 
 function shaderPage(resources: TslSlugPageResources): SlugShaderPage {
-  const curveTexture = t3.fromTSL(resources.curveTexture, d.texture2d(d.f32));
   const headerTexture = t3.fromTSL(resources.headerTexture, d.texture2d(d.u32));
-  const referenceTexture = t3.fromTSL(resources.referenceTexture, d.texture2d(d.u32));
+  const bandCurveTexture = t3.fromTSL(resources.bandCurveTexture, d.texture2d(d.u32));
   return {
-    curveWidth: resources.curveWidth,
     headerWidth: resources.headerWidth,
-    referenceWidth: resources.referenceWidth,
-    loadCurve: (coords: d.v2i) => {
-      'use gpu';
-      return std.textureLoad(curveTexture.$, coords, 0);
-    },
+    bandCurveWidth: resources.bandCurveWidth,
     loadHeader: (coords: d.v2i) => {
       'use gpu';
       return std.textureLoad(headerTexture.$, coords, 0);
     },
-    loadReference: (coords: d.v2i) => {
+    loadBandCurve: (coords: d.v2i) => {
       'use gpu';
-      return std.textureLoad(referenceTexture.$, coords, 0);
+      return std.textureLoad(bandCurveTexture.$, coords, 0);
     },
   };
 }

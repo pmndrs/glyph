@@ -13,7 +13,6 @@ export {
   slugBandReferenceOffset,
   slugHorizontalCurveContribution,
   slugPixelsPerEm,
-  slugReferenceFromPair,
   slugThickenFactor,
   slugVerticalCurveContribution,
 } from './band.js';

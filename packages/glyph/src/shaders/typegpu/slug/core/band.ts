@@ -2,8 +2,8 @@
  * Adapted from three-flatland Slug at 2935a89f (MIT).
  *
  * These functions are the whole per-fragment fill algorithm apart from resource
- * access: a host supplies band headers, glyph-local curve references, and curve
- * control points however its backend stores them, and evaluates the same math.
+ * access: a host supplies band headers and each band entry's curve control points
+ * however its backend stores them, and evaluates the same math.
  */
 import { d, std } from 'typegpu';
 import { calcRootCode } from './root-code.js';
@@ -58,13 +58,6 @@ export function slugBandReferenceOffset(header: number): number {
   return header & d.u32(HEADER_REFERENCE_MASK);
 }
 
-/** Unpack one V0 u16 curve reference from the u32 pair holding it. */
-export function slugReferenceFromPair(pair: number, referenceIndex: number): number {
-  'use gpu';
-
-  return (pair >>> ((referenceIndex & d.u32(1)) * 16)) & d.u32(HEADER_REFERENCE_MASK);
-}
-
 /**
  * One candidate curve's contribution to a fill band, in the band's ray frame.
  *
@@ -91,8 +84,13 @@ function curveContribution(
   const rootCode = calcRootCode(p0.y, p1.y, p2.y);
   let coverage = d.f32(0);
   let weight = d.f32(0);
+  // A curve wholly beyond the fragment's half-pixel window crosses the ray at full coverage with zero weight; its
+  // roots lie within its control points' hull, so the solve is skipped with no change in either.
+  const nearest = std.min(p0.x, p1.x, p2.x) * pixelsPerEm;
 
-  if (rootCode > 0) {
+  if (std.min(nearest, nearest * thickenFactor) > 0.5) {
+    coverage = d.f32(rootCode & d.u32(1)) - d.f32((rootCode >> d.u32(8)) & d.u32(1));
+  } else if (rootCode > 0) {
     const roots = solveHorizontalPolynomial(p0, p1, p2);
     const firstRoot = roots.x * pixelsPerEm;
     const secondRoot = roots.y * pixelsPerEm;

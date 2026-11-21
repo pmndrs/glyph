@@ -10,7 +10,8 @@ import { slugSchema } from '../../raster/slug.js';
 import { slug } from '../../raster/slug.js';
 import type { RetainedSlugPage, ThreeRendererResources } from './renderer-resources.js';
 import { createMsdfAtlas, type RetainedMsdfAtlas } from './msdf-atlas.js';
-import { slugGlyphRow, slugGlyphTable } from './slug-glyph-table.js';
+import { slugGlyphRow } from './slug-glyph-table.js';
+import { createSlugPage, registerSlugPageUse } from './slug-residency.js';
 import { registerMsdfAtlasUse, registerMsdfEffectVariants } from './msdf-draws.js';
 import type { TslMsdfEffects } from '../../shaders/tsl/index.js';
 import { atlasTextureArray } from './portable-resource.js';
@@ -19,15 +20,7 @@ import type { ThreeRasterProgramBuffer } from '../raster-program.js';
 import { decorationSchema, threeSystemBuffers } from '../codec.js';
 import type { ThreeBufferBinding, ThreeResolvedMaterialBinding, ThreeResolvedResourceBinding } from '../schema.js';
 import type { RetainedBuffer, ThreeBufferBindingId } from './host-buffer.js';
-import {
-  bufferMember,
-  dataTexture,
-  ownedUint16,
-  ownedUint32,
-  resourceGroup,
-  textureArrayResource,
-  textureMember,
-} from './portable-resource.js';
+import { resourceGroup, textureArrayResource } from './portable-resource.js';
 import type {
   MaterialRealization,
   MaterialStorageNode,
@@ -340,6 +333,7 @@ export class ThreeMaterialRealizer {
       position,
       createDefaultMaterial: () => coverageMaterial(shader, position),
     });
+    registerSlugPageUse(material, page);
     this.#retain(key, material, resource, lanes, transform.kind, shape);
     return material;
   }
@@ -558,46 +552,7 @@ export class ThreeMaterialRealizer {
   #slugPage(binding: ThreeResolvedResourceBinding, data: PortableResourceGroupPayload): RetainedSlugPage {
     let lease = this.#context.slugPages.get(binding);
     if (lease !== undefined) return lease.resource;
-    lease = this.#coordinator.acquireSlugPageResource(data, () => {
-      const curves = textureMember(data, 'curves', 'rgba16float', 'Slug');
-      const headers = textureMember(data, 'headers', 'r32uint', 'Slug');
-      const references = textureMember(data, 'references', 'r32uint', 'Slug');
-      const curveBytes = ownedUint16(curves.bytes);
-      const headerBytes = ownedUint32(headers.bytes);
-      const referenceBytes = ownedUint32(references.bytes);
-      const curveTexture = dataTexture(curveBytes, curves.width, curves.height, THREE.RGBAFormat, THREE.HalfFloatType);
-      const headerTexture = dataTexture(
-        headerBytes,
-        headers.width,
-        headers.height,
-        THREE.RedIntegerFormat,
-        THREE.UnsignedIntType,
-      );
-      const referenceTexture = dataTexture(
-        referenceBytes,
-        references.width,
-        references.height,
-        THREE.RedIntegerFormat,
-        THREE.UnsignedIntType,
-      );
-      const glyphTable = slugGlyphTable(bufferMember(data, 'glyphs', 'Slug').bytes);
-      return {
-        curveTexture,
-        curveWidth: curves.width,
-        headerTexture,
-        headerWidth: headers.width,
-        referenceTexture,
-        referenceWidth: references.width,
-        glyphTable,
-        byteLength: curveBytes.byteLength + headerBytes.byteLength + referenceBytes.byteLength + glyphTable.byteLength,
-        dispose() {
-          curveTexture.dispose();
-          headerTexture.dispose();
-          referenceTexture.dispose();
-          glyphTable.texture.dispose();
-        },
-      };
-    });
+    lease = this.#coordinator.acquireSlugPageResource(data, () => createSlugPage(data));
     this.#context.newTextures.add(lease);
     this.#context.slugPages.set(binding, lease);
     return lease.resource;

@@ -39,12 +39,10 @@ export {
 export { slugDilate, slugDilateMatrix } from './slug/core/index.js';
 export { slugRender, slugRenderWithOptions, SlugShaderGlyph, type SlugShaderPage } from './slug/slug-render.js';
 export {
-  slugCurveTexelSlot,
-  slugCurveWidthAccessor,
+  slugBandCurveTexelSlot,
+  slugBandCurveWidthAccessor,
   slugHeaderTexelSlot,
   slugHeaderWidthAccessor,
-  slugReferenceTexelSlot,
-  slugReferenceWidthAccessor,
 } from './slug/slug-texture.js';
 export { decorationShader, TypeGpuDecorationInput, TypeGpuDecorationOutput } from './decoration-shader.js';
 export type { BitmapCoverageSource } from './bitmap-shader.js';

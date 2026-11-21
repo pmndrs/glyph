@@ -1,17 +1,18 @@
-import tgpu, { d, std, type TgpuRoot } from 'typegpu';
+import tgpu, { d, std, type TgpuRenderPipeline, type TgpuRoot } from 'typegpu';
 import type { CodecBufferId, PortableResource, PortableLeafResource } from '../../index.js';
 import { bitmapSchema } from '../../raster/bitmap.js';
 import { slugSchema } from '../../raster/slug.js';
+import { SLUG_RESIDENT_BAND_CURVE_WIDTH } from '../../raster/internal/slug-residency.js';
+import { ResidentSlugBands } from './slug-bands.js';
 import { bitmapFragment, bitmapQuadPosition, bitmapAtlasUv } from '../../shaders/typegpu/bitmap-shader.js';
 import { slugRender, SlugShaderGlyph } from '../../shaders/typegpu/slug/slug-render.js';
 import { slugDilate } from '../../shaders/typegpu/slug/core/dilate.js';
 import {
-  slugCurveTexelSlot,
+  slugBandCurveTexelSlot,
+  slugBandCurveWidthAccessor,
   slugHeaderTexelSlot,
-  slugReferenceTexelSlot,
-  slugCurveWidthAccessor,
   slugHeaderWidthAccessor,
-  slugReferenceWidthAccessor,
+  slugUnpackHalvesSlot,
 } from '../../shaders/typegpu/slug/slug-texture.js';
 import { bitmapPageAccessor } from '../../shaders/typegpu/bitmap-shader.js';
 import { TYPEGPU_PLACEMENT_SLOT_BUFFER_ID, TYPEGPU_TRANSFORM_INDEX_BUFFER_ID } from './codec.js';
@@ -20,13 +21,12 @@ import {
   colorTransform,
   corner,
   createSceneGroup,
-  preparedDraw,
-  projectWithScene,
   recordDraw,
   shaderRoot,
+  sceneFunctions,
   textScene,
-  storageTable,
   target,
+  type SceneLayout,
   type PipelineOptions,
   type TypeGpuResource,
 } from './pipeline.js';
@@ -35,12 +35,21 @@ export type { Draw, TypeGpuResource } from './pipeline.js';
 
 /** One row of a Slug page's `glyphs` table: the em quad and band transform, then the table bases and band counts. */
 const SlugGlyphRow = d.struct({ quad: d.vec4f, band: d.vec4f, starts: d.vec4u, counts: d.vec4u });
-const slugScene = tgpu.bindGroupLayout({
+/**
+ * Slug binds its page with the session tables in one group, as MSDF binds its font: a caller may bring up to two groups
+ * of its own and the catch-all takes one, within WebGPU's four.
+ */
+const slugPage = tgpu.bindGroupLayout({
   viewport: { uniform: d.vec2f },
-  position: { uniform: d.vec2f },
+  placementSlots: { storage: d.arrayOf(d.u32), access: 'readonly', visibility: ['vertex'] },
   placements: { storage: d.arrayOf(d.vec2f), access: 'readonly', visibility: ['vertex'] },
+  transformIndices: { storage: d.arrayOf(d.u32), access: 'readonly', visibility: ['vertex'] },
+  transforms: { storage: d.arrayOf(d.vec2f), access: 'readonly', visibility: ['vertex'] },
+  headers: { texture: d.texture2d(d.u32), visibility: ['fragment'] },
+  bandCurves: { texture: d.texture2d(d.u32), visibility: ['fragment'] },
   glyphs: { storage: d.arrayOf(SlugGlyphRow), access: 'readonly', visibility: ['vertex'] },
 });
+const slugScene = sceneFunctions(slugPage as unknown as SceneLayout);
 const v2 = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
 const v4 = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const u1 = tgpu.vertexLayout(d.disarrayOf(d.uint32), 'instance');
@@ -53,14 +62,6 @@ const uvSizeLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
 const colorLayout = v4;
 const rectLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 
-function projectSlug(position: d.v3f): d.v4f {
-  'use gpu';
-  return projectWithScene(position, slugScene.$.viewport, slugScene.$.position);
-}
-function placedSlugOrigin(origin: d.v2f, placementSlot: number): d.v2f {
-  'use gpu';
-  return origin.add(slugScene.$.placements[placementSlot]!);
-}
 function texture(root: TgpuRoot, payload: PortableLeafResource) {
   if (payload.kind !== 'texture' && payload.kind !== 'texture-array') throw new Error('Expected a raster texture');
   const result = root
@@ -184,18 +185,12 @@ function slugResource(
   members: Readonly<Record<string, PortableLeafResource>>,
 ): TypeGpuResource {
   const { root } = options;
-  const textures: ReturnType<typeof texture>[] = [];
-  const glyphs = storageTable(root, members.glyphs!);
+  const bands = new ResidentSlugBands(root, members.curves!, members.references!, members.glyphs!);
+  let headers: ReturnType<typeof texture> | undefined;
   try {
-    const curves = texture(root, members.curves!);
-    textures.push(curves);
-    const headers = texture(root, members.headers!);
-    textures.push(headers);
-    const references = texture(root, members.references!);
-    textures.push(references);
-    const curveView = curves.createView(d.texture2d(d.f32));
-    const headerView = headers.createView(d.texture2d(d.u32));
-    const referenceView = references.createView(d.texture2d(d.u32));
+    headers = texture(root, members.headers!);
+    const headerView = root.unwrap(headers).createView();
+    const headerWidth = headers.props.size[0];
     const varyings = {
       coordinate: d.vec2f,
       color: d.vec4f,
@@ -206,6 +201,7 @@ function slugResource(
     const vertex = tgpu.vertexFn({
       in: {
         index: d.builtin.vertexIndex,
+        instance: d.builtin.instanceIndex,
         rect: d.vec4f,
         color: d.vec4f,
         glyph: d.vec2u,
@@ -215,17 +211,18 @@ function slugResource(
       'use gpu';
       const unit = corner(input.index);
       // What every drawing of a glyph shares is read once per vertex from the page's glyph table.
-      const row = slugScene.$.glyphs[input.glyph.x]!;
-      const origin = placedSlugOrigin(input.rect.xy, input.glyph.y);
+      const row = slugPage.$.glyphs[input.glyph.x]!;
+      const origin = slugScene.placedOrigin(input.rect.xy, input.instance);
+      const offset = slugScene.textOffset(input.instance);
       const local = d.vec2f(origin.x + unit.x * input.rect.z, -(origin.y + unit.y * input.rect.w));
       const normal = d.vec2f((unit.x - 0.5) * input.rect.z, -(unit.y - 0.5) * input.rect.w);
       const em = d.vec2f(row.quad.x + unit.x * row.quad.z, row.quad.y - unit.y * row.quad.w);
       // Em units per layout unit: the quad is the em quad scaled by the font size.
       const inverseScale = (row.quad.z + row.quad.w) / std.max(input.rect.z + input.rect.w, 1e-30);
       // Local homogeneous projection derivatives keep Slug's half-pixel expansion in screen space.
-      const clip = projectSlug(d.vec3f(local, 0));
-      const dx = projectSlug(d.vec3f(local.x + 1, local.y, 0)).sub(clip);
-      const dy = projectSlug(d.vec3f(local.x, local.y + 1, 0)).sub(clip);
+      const clip = slugScene.projectText(d.vec3f(local, 0), offset);
+      const dx = slugScene.projectText(d.vec3f(local.x + 1, local.y, 0), offset).sub(clip);
+      const dy = slugScene.projectText(d.vec3f(local.x, local.y + 1, 0), offset).sub(clip);
       const dilated = slugDilate(
         d.vec2f(0),
         normal,
@@ -234,10 +231,10 @@ function slugResource(
         d.vec4f(dx.x, dy.x, 0, clip.x),
         d.vec4f(dx.y, dy.y, 0, clip.y),
         d.vec4f(dx.w, dy.w, 0, clip.w),
-        slugScene.$.viewport,
+        slugScene.viewportSize(),
       );
       return {
-        position: projectSlug(d.vec3f(local.add(dilated.xy), 0)),
+        position: slugScene.projectText(d.vec3f(local.add(dilated.xy), 0), offset),
         coordinate: dilated.zw,
         color: input.color,
         band: row.band,
@@ -262,20 +259,20 @@ function slugResource(
       return colorTransform.$(d.vec4f(input.color.rgb, input.color.a * coverage), input.position);
     });
     const pipeline = shaderRoot(options)
-      .with(slugCurveWidthAccessor, d.u32(curves.props.size[0]))
-      .with(slugHeaderWidthAccessor, d.u32(headers.props.size[0]))
-      .with(slugReferenceWidthAccessor, d.u32(references.props.size[0]))
-      .with(slugCurveTexelSlot, (coords) => {
-        'use gpu';
-        return std.textureLoad(curveView.$, coords, 0);
-      })
+      .with(slugHeaderWidthAccessor, d.u32(headerWidth))
+      .with(slugBandCurveWidthAccessor, d.u32(SLUG_RESIDENT_BAND_CURVE_WIDTH))
       .with(slugHeaderTexelSlot, (coords) => {
         'use gpu';
-        return std.textureLoad(headerView.$, coords, 0);
+        return std.textureLoad(slugPage.$.headers, coords, 0);
       })
-      .with(slugReferenceTexelSlot, (coords) => {
+      .with(slugBandCurveTexelSlot, (coords) => {
         'use gpu';
-        return std.textureLoad(referenceView.$, coords, 0);
+        return std.textureLoad(slugPage.$.bandCurves, coords, 0);
+      })
+      // This renderer is WebGPU only, so it decodes the packed control points with the builtin.
+      .with(slugUnpackHalvesSlot, (word) => {
+        'use gpu';
+        return std.unpack2x16float(word);
       })
       .createRenderPipeline({
         vertex,
@@ -290,25 +287,57 @@ function slugResource(
         depthStencil: options.depthStencil,
       });
     pipeline.initSync();
+    const ownedHeaders = headers;
     return {
       dispose: () => {
-        for (const value of textures) value.destroy();
-        glyphs.destroy();
+        ownedHeaders.destroy();
+        bands.dispose();
       },
-      prepare(buffers, placementTable, viewport, position, start, count) {
-        const group = root.createBindGroup(slugScene, { viewport, position, placements: placementTable, glyphs });
+      bind(lanes) {
+        const lane = (id: CodecBufferId): GPUBuffer => {
+          const buffer = lanes.buffers.get(id);
+          if (buffer === undefined) throw new Error('TypeGPU Slug draw is missing one of its lanes');
+          return buffer;
+        };
         const b = slugSchema.buffers;
-        const draw = pipeline
-          .with(group)
-          .with(rectLayout, buffers.get(b.rect.id)!)
-          .with(colorLayout, buffers.get(b.color.id)!)
-          .with(u2, buffers.get(b.glyph.id)!);
-        return preparedDraw(root, draw, start, count);
+        const glyphLane = lanes.bytes.get(b.glyph.id)!;
+        // Rebuilt whenever the band curves grow into a new texture.
+        let generation = -1;
+        let bound: TgpuRenderPipeline | undefined;
+        return {
+          watchedLanes: [glyphLane],
+          variant(start, count) {
+            // Glyphs a frame publishes become resident at its commit, before the frame that draws them.
+            bands.use(glyphLane, start, count);
+            return 0;
+          },
+          draw(pass, bindGroups, _variant, first, count) {
+            if (generation !== bands.generation || bound === undefined) {
+              generation = bands.generation;
+              const group = root.createBindGroup(slugPage, {
+                viewport: lanes.viewport,
+                placementSlots: lane(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID),
+                placements: lanes.placementTable,
+                transformIndices: lane(TYPEGPU_TRANSFORM_INDEX_BUFFER_ID),
+                transforms: lanes.transformTable,
+                headers: headerView,
+                bandCurves: bands.view,
+                glyphs: bands.glyphs,
+              });
+              bound = pipeline
+                .with(group)
+                .with(rectLayout, lane(b.rect.id))
+                .with(colorLayout, lane(b.color.id))
+                .with(u2, lane(b.glyph.id));
+            }
+            recordDraw(root, bound, pass, bindGroups, first, count);
+          },
+        };
       },
     };
   } catch (error) {
-    for (const value of textures) value.destroy();
-    glyphs.destroy();
+    headers?.destroy();
+    bands.dispose();
     throw error;
   }
 }

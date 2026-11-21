@@ -91,8 +91,13 @@ export const SLUG_GLYPH_TABLE_STRIDE = 16;
  * which glyph it is. What every drawing of a glyph shares lives once per glyph in its page's `glyphs` table, addressed
  * by the `glyph` lane. A row is sixteen little-endian words: the em-space quad `[left, top, width, height]` and the
  * band transform `[scaleX, scaleY, offsetX, offsetY]` as `f32` bits, then `[curveBase, horizontalHeaderBase,
- * verticalHeaderBase, referenceBase]` and `[horizontalBands, verticalBands, 0, 0]` as `u32`. The second `glyph` lane
- * is free for the host: both first-party renderers store the placement slot there.
+ * verticalHeaderBase, referenceBase]` and `[horizontalBands, verticalBands, entryCount, 0]` as `u32`. The second `glyph` lane
+ * is free for the host: the Three renderer stores the placement slot there.
+ *
+ * A page holds the band headers (`(count << 16) | offset`, as baked), which a renderer uploads, and the baked curves
+ * (`rgba16float` texels) and glyph-local references (`u16`), which stay on the CPU: a renderer resolves each band
+ * entry's curve into its own band-curve texture when a glyph is first drawn (see `SlugBandResidency`) and points the
+ * row's `referenceBase` there. The row's third `u32` vector holds the glyph's entry count in its third word.
  */
 export const slugSchema: TechniqueSchema<
   {
@@ -121,9 +126,9 @@ export const slugSchema: TechniqueSchema<
       readonly kind: 'group';
       readonly cardinality: 'many';
       readonly members: {
-        readonly curves: { readonly kind: 'texture'; readonly format: 'rgba16float' };
         readonly headers: { readonly kind: 'texture'; readonly format: 'r32uint' };
-        readonly references: { readonly kind: 'texture'; readonly format: 'r32uint' };
+        readonly curves: { readonly kind: 'buffer' };
+        readonly references: { readonly kind: 'buffer' };
         readonly glyphs: { readonly kind: 'buffer' };
       };
     };
@@ -147,9 +152,9 @@ export const slugSchema: TechniqueSchema<
       kind: 'group',
       cardinality: 'many',
       members: {
-        curves: { kind: 'texture', format: 'rgba16float' },
         headers: { kind: 'texture', format: 'r32uint' },
-        references: { kind: 'texture', format: 'r32uint' },
+        curves: { kind: 'buffer' },
+        references: { kind: 'buffer' },
         glyphs: { kind: 'buffer' },
       },
     },
@@ -177,10 +182,9 @@ export const slugCodec: RasterCodec<typeof slug, typeof slugSchema> = registerGl
   },
   compileFont(compiler) {
     const data = compiler.font.data;
-    const usedCurveRows = slugUsedCurveRows(data);
     const tables = slugGlyphTables(data);
     for (const [index, page] of data.pages.entries()) {
-      compiler.retain('page', page.resource, slugPagePayload(page, usedCurveRows[index]!, tables.pages[index]!));
+      compiler.retain('page', page.resource, slugPagePayload(page, tables.pages[index]!));
     }
     const view = new DataView(data.records.buffer, data.records.byteOffset);
     const record = (row: number) => row * SLUG_GLYPH_RECORD_STRIDE;
@@ -248,40 +252,23 @@ function writeSlugGlyphRow(table: DataView, target: number, records: DataView, r
   const horizontalHeaderBase = records.getUint32(record + 24, true);
   const verticalHeaderBase = records.getUint32(record + 28, true);
   const referenceBase = records.getUint32(record + 32, true);
-  const words = [curveBase, horizontalHeaderBase, verticalHeaderBase, referenceBase, horizontalBands, verticalBands];
+  const entryCount = records.getUint32(record + 36, true);
+  const words = [
+    curveBase,
+    horizontalHeaderBase,
+    verticalHeaderBase,
+    referenceBase,
+    horizontalBands,
+    verticalBands,
+    entryCount,
+  ];
   for (const [index, value] of words.entries()) table.setUint32(target + 32 + index * 4, value, true);
 }
 
-/**
- * Rows of each page's curve texture that glyph records address. The baker sizes the texture from an upper estimate
- * rounded up to a power of two, so about half of a typical page is zero rows no glyph reads; they are not uploaded.
- */
-function slugUsedCurveRows(data: SlugData): number[] {
-  const view = new DataView(data.records.buffer, data.records.byteOffset, data.records.byteLength);
-  const texels = data.pages.map(() => 0);
-  for (let record = 0; record < data.records.byteLength; record += SLUG_GLYPH_RECORD_STRIDE) {
-    const page = view.getUint16(record + 8, true);
-    if (page === ABSENT_PAGE) continue;
-    texels[page] = Math.max(texels[page]!, view.getUint32(record + 16, true) + view.getUint32(record + 20, true));
-  }
-  return texels.map((used, index) => {
-    const page = data.pages[index]!;
-    return Math.min(page.curveHeight, Math.max(1, Math.ceil(used / page.curveWidth)));
-  });
-}
-
-function slugPagePayload(page: SlugPageData, curveRows: number, glyphs: Uint8Array) {
-  const references = packSlugReferences(page.referenceBytes, page.referenceWidth);
+function slugPagePayload(page: SlugPageData, glyphs: Uint8Array) {
   return {
     kind: 'group' as const,
     members: {
-      curves: {
-        kind: 'texture' as const,
-        format: 'rgba16float' as const,
-        width: page.curveWidth,
-        height: curveRows,
-        bytes: page.curveBytes.subarray(0, page.curveWidth * curveRows * 8),
-      },
       headers: {
         kind: 'texture' as const,
         format: 'r32uint' as const,
@@ -289,27 +276,9 @@ function slugPagePayload(page: SlugPageData, curveRows: number, glyphs: Uint8Arr
         height: page.headerHeight,
         bytes: page.headerBytes,
       },
-      references: {
-        kind: 'texture' as const,
-        format: 'r32uint' as const,
-        width: references.width,
-        height: references.height,
-        bytes: new Uint8Array(references.data.buffer),
-      },
+      curves: { kind: 'buffer' as const, bytes: page.curveBytes, stride: 8 },
+      references: { kind: 'buffer' as const, bytes: page.referenceBytes, stride: 2 },
       glyphs: { kind: 'buffer' as const, bytes: glyphs, stride: SLUG_GLYPH_TABLE_STRIDE * 4 },
     },
   };
-}
-
-function packSlugReferences(bytes: Uint8Array, preferredWidth: number) {
-  const copied = bytes.slice();
-  const references = new Uint16Array(copied.buffer, copied.byteOffset, copied.byteLength / 2);
-  const texelCount = Math.ceil(references.length / 2);
-  const width = Math.min(preferredWidth, texelCount);
-  const height = Math.ceil(texelCount / width);
-  const data = new Uint32Array(width * height);
-  for (let index = 0; index < references.length; index += 1) {
-    data[index >> 1] = (data[index >> 1] ?? 0) | (references[index]! << ((index & 1) * 16));
-  }
-  return { data, width, height };
 }

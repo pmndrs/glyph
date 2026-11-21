@@ -1,6 +1,6 @@
 // Real-device proof for the direct TypeGPU renderer: the same scenes through `@pmndrs/glyph/typegpu` and through the
 // Three MSDF path at the same camera, read back as pixels, plus draw/bind-group/upload counters and frame timings.
-import { bitmap, glyph, msdf, type FontFace } from '@pmndrs/glyph';
+import { bitmap, glyph, msdf, slug, type FontFace } from '@pmndrs/glyph';
 import { defineThreeConfig, type Text as ThreeText } from '@pmndrs/glyph/three';
 import {
   defineTypeGpuConfig,
@@ -17,7 +17,9 @@ import devanagariFontUrl from '../fixtures/rendering/noto-sans-devanagari-mtsdf.
 import interLatinFontUrl from '../../apps/typegpu-hello-world/assets/inter-latin.font.glb?url';
 import interBitmapFontUrl from '../fixtures/rendering/inter-bitmap-16-32.font.glb?url';
 import interFontUrl from '../fixtures/rendering/inter-mtsdf.font.glb.gz?url';
+import interSlugFontUrl from '../fixtures/rendering/inter-slug.font.glb.gz?url';
 import showcaseManifest from '../fixtures/rendering/showcase-mtsdf-fixtures-v0.json' with { type: 'json' };
+import slugManifest from '../fixtures/rendering/showcase-slug-fixtures-v0.json' with { type: 'json' };
 import type { Counters, FontCost, ParityPerf, ParityProof } from './typegpu-parity-contract';
 import { fetchAuthenticatedGzipAsset } from './workloads/font-assets/authenticated-gzip';
 
@@ -26,7 +28,7 @@ const WIDTH = 832;
 const HEIGHT = 600;
 
 type Style = NonNullable<TypeGpuTextOptions['style']>;
-type FontName = 'inter' | 'latin' | 'dancing' | 'devanagari' | 'bitmap';
+type FontName = 'inter' | 'latin' | 'dancing' | 'devanagari' | 'bitmap' | 'slug';
 interface Item {
   readonly font: FontName;
   readonly text: string;
@@ -166,12 +168,12 @@ function fxScene(only?: 'plain' | 'outline' | 'shadow' | 'both'): Scene {
   return { items };
 }
 
-function labelScene(count: number): Scene {
+function labelScene(count: number, font: FontName = 'inter'): Scene {
   const items: Item[] = [];
   const columns = 25;
   for (let index = 0; index < count; index += 1) {
     items.push({
-      font: 'inter',
+      font,
       text: `Label ${String(index)}`,
       x: 2 + (index % columns) * 32,
       y: 1 + Math.floor(index / columns) * 14.9,
@@ -206,7 +208,7 @@ function mixedLabelScene(): Scene {
 }
 
 /** Every printable ASCII glyph in two fonts at several sizes and effects, revealed over several frames. */
-function arrivingScene(): Scene {
+function arrivingScene(font: (index: number) => FontName = (index) => (index % 2 === 0 ? 'inter' : 'dancing')): Scene {
   const lines = [
     'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
     'abcdefghijklmnopqrstuvwxyz',
@@ -216,16 +218,17 @@ function arrivingScene(): Scene {
   let y = 6;
   for (const [index, size] of [14, 22, 34, 48].entries()) {
     for (const text of lines) {
+      const effects = font(index) !== 'slug';
       items.push({
-        font: index % 2 === 0 ? 'inter' : 'dancing',
+        font: font(index),
         text,
         x: 8,
         y,
         style: {
           fontSize: size,
           color: '#ffffff',
-          ...(index === 2 ? { outline: { color: '#ff3030', width: size / 24 } } : {}),
-          ...(index === 3 ? { shadow: { color: '#3060ff', offset: [size / 20, size / 20] as const } } : {}),
+          ...(effects && index === 2 ? { outline: { color: '#ff3030', width: size / 24 } } : {}),
+          ...(effects && index === 3 ? { shadow: { color: '#3060ff', offset: [size / 20, size / 20] as const } } : {}),
         },
       });
       y += size * 1.2 + 2;
@@ -276,6 +279,32 @@ const scenes: Readonly<Record<string, Scene>> = {
   'glyphs-arriving': arrivingScene(),
   'fx-sdf': { ...fxScene(), sdf: true },
   'arriving-sdf': { ...arrivingScene(), sdf: true },
+  // Slug batches like MSDF: one draw per buffer set, growth past 1,000 labels included.
+  slug: {
+    items: [
+      ...[9, 14, 24, 40, 64].map((size, index) => ({
+        font: 'slug' as const,
+        text: 'Slug Ag fj Wy 0123',
+        x: 10,
+        y: 10 + [0, 14, 34, 66, 116][index]!,
+        style: { fontSize: size, color: index % 2 === 0 ? '#ffffff' : '#80c0ff' },
+      })),
+      ...labelScene(200, 'slug').items.map((item) => ({ ...item, y: item.y + 200 })),
+    ],
+  },
+  // Glyphs arrive over six frames, fill only (Slug draws no effects): band curves become resident across frames and grow past several
+  // doublings of the resident texture.
+  'slug-arriving': arrivingScene(() => 'slug'),
+  // The same text drawn in one frame, so the arriving capture can be compared with it.
+  'slug-arrived': { items: arrivingScene(() => 'slug').items },
+  'slug-labels': labelScene(1000, 'slug'),
+  'slug-labels-grown': {
+    items: [
+      ...labelScene(1000, 'slug').items,
+      ...labelScene(1000, 'slug').items.map((item) => ({ ...item, x: item.x + 13, y: item.y + 5 })),
+    ],
+    grownFrom: 1000,
+  },
   bitmap: {
     items: [
       { font: 'bitmap', text: 'Bitmap strike 16 px: Glyph Ag fj Wy', x: 10, y: 10, style: { fontSize: 16 } },
@@ -305,12 +334,18 @@ async function start(): Promise<ParityProof> {
     new Blob([await fetchAuthenticatedGzipAsset(url, manifest(fixture), `${fixture} MTSDF fixture`)], {
       type: 'model/gltf-binary',
     });
-  const fonts: Record<FontName, FontFace<typeof msdf> | FontFace<ReturnType<typeof bitmap>>> = {
+  const slugFixture = slugManifest.artifacts.find((artifact) => artifact.fontFixture === 'inter');
+  if (slugFixture === undefined) throw new Error('Slug fixture manifest for inter is missing');
+  const slugFont = new Blob([await fetchAuthenticatedGzipAsset(interSlugFontUrl, slugFixture, 'inter Slug fixture')], {
+    type: 'model/gltf-binary',
+  });
+  const fonts: Record<FontName, FontFace<typeof msdf> | FontFace<ReturnType<typeof bitmap>> | FontFace<typeof slug>> = {
     inter: glyph.fontFace(await gzipFont(interFontUrl, 'inter'), { format: msdf }),
     latin: glyph.fontFace(interLatinFontUrl, { format: msdf }),
     dancing: glyph.fontFace(await gzipFont(dancingFontUrl, 'dancing-script'), { format: msdf }),
     devanagari: glyph.fontFace(await gzipFont(devanagariFontUrl, 'noto-sans-devanagari'), { format: msdf }),
     bitmap: glyph.fontFace(interBitmapFontUrl, { format: bitmap({ strikes: [16, 32] }) }),
+    slug: glyph.fontFace(slugFont, { format: slug }),
   };
   await Promise.all(Object.values(fonts).map((font) => font.load()));
 

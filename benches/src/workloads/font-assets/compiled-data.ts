@@ -179,12 +179,12 @@ export function compiledSlugData(font: Font<typeof slug>): SlugCpuReferenceData 
     const row = view.u32('glyph', glyph) * SLUG_GLYPH_TABLE_STRIDE * 4;
     if (row + SLUG_GLYPH_TABLE_STRIDE * 4 > table.byteLength)
       throw new TypeError('Slug glyph row is outside its table');
-    glyphs.curveBase[glyph] = table.getUint32(row + 32, true);
     glyphs.horizontalHeaderBase[glyph] = table.getUint32(row + 36, true);
     glyphs.verticalHeaderBase[glyph] = table.getUint32(row + 40, true);
     glyphs.referenceBase[glyph] = table.getUint32(row + 44, true);
     glyphs.horizontalBands[glyph] = u16(table.getUint32(row + 48, true), 'Slug horizontal bands');
     glyphs.verticalBands[glyph] = u16(table.getUint32(row + 52, true), 'Slug vertical bands');
+    glyphs.curveBase[glyph] = table.getUint32(row + 32, true);
   }
   return { planeUnitsPerEm: SLUG_PLANE_UNITS_PER_EM, glyphs, pages };
 }
@@ -294,34 +294,35 @@ function slugGlyphTable(resource: CompiledRasterFontResource): DataView {
   return new DataView(table.bytes.buffer, table.bytes.byteOffset, table.bytes.byteLength);
 }
 
+/** The page as baked: the header grid the renderer uploads, and the curves and references it resolves on demand. */
 function slugPage(resource: CompiledRasterFontResource): SlugPageData {
   const group = resourceGroup(resource, 'Slug page');
-  const curves = groupTexture(group, 'curves', 'Slug curves');
   const headers = groupTexture(group, 'headers', 'Slug headers');
-  const packedReferences = groupTexture(group, 'references', 'Slug references');
-  const packed = new Uint32Array(
-    packedReferences.bytes.buffer,
-    packedReferences.bytes.byteOffset,
-    packedReferences.bytes.byteLength / 4,
-  );
-  const references = new Uint16Array(packed.length * 2);
-  for (let index = 0; index < packed.length; index += 1) {
-    references[index * 2] = packed[index]! & 0xffff;
-    references[index * 2 + 1] = packed[index]! >>> 16;
+  const curves = group.members.curves;
+  const references = group.members.references;
+  if (curves?.kind !== 'buffer' || references?.kind !== 'buffer') {
+    throw new TypeError('Slug page curves and references must be buffers');
   }
+  // Curves are linear rgba16float texels; any row width addresses them the same way.
+  const curveTexels = curves.bytes.byteLength / 8;
+  const curveWidth = Math.min(4096, Math.max(1, curveTexels));
+  const curveHeight = Math.ceil(curveTexels / curveWidth);
+  const curveBytes = new Uint8Array(curveWidth * curveHeight * 8);
+  curveBytes.set(curves.bytes);
+  const referenceCount = references.bytes.byteLength / 2;
   return {
     resource: resource.key,
-    curveWidth: curves.width,
-    curveHeight: curves.height,
-    curveBytes: curves.bytes,
+    curveWidth,
+    curveHeight,
+    curveBytes,
     headerCount: headers.width * headers.height,
     headerWidth: headers.width,
     headerHeight: headers.height,
     headerBytes: headers.bytes,
-    referenceCount: references.length,
-    referenceWidth: packedReferences.width * 2,
-    referenceHeight: packedReferences.height,
-    referenceBytes: new Uint8Array(references.buffer),
+    referenceCount,
+    referenceWidth: referenceCount,
+    referenceHeight: 1,
+    referenceBytes: references.bytes,
   };
 }
 

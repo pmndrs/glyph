@@ -4,7 +4,7 @@ import { defineCodecBuffers } from '../../config/schema.js';
 import { createHostRasterCodecProgram } from '../../config/raster-host.js';
 import { bitmapCodec } from '../../raster/bitmap.js';
 import { msdfCodec } from '../../raster/msdf.js';
-import { slugCodec, slugSchema } from '../../raster/slug.js';
+import { slugCodec } from '../../raster/slug.js';
 
 const system = defineCodecBuffers({
   stableGlyphId: { id: id.buffer('glyph-typegpu/stable-glyph'), scalar: 'u32', lanes: ['stableGlyphId'] },
@@ -12,7 +12,7 @@ const system = defineCodecBuffers({
   transformIndex: { id: id.buffer('glyph-typegpu/transform-index'), scalar: 'u32', lanes: ['transformIndex'] },
 });
 export const TYPEGPU_PLACEMENT_SLOT_BUFFER_ID: CodecBufferId = system.placementSlot.id;
-/** Per-instance record in the renderer's transform table; MSDF and bitmap programs are indexed. */
+/** Per-instance record in the renderer's transform table; every first-party program is indexed. */
 export const TYPEGPU_TRANSFORM_INDEX_BUFFER_ID: CodecBufferId = system.transformIndex.id;
 const capabilitySet: CodecCapabilitySet = {
   capabilities: ['storage-buffers', 'alias-vec2', 'alias-vec4', 'ordered-direct'],
@@ -37,20 +37,12 @@ export function codecDescriptor(ids: CodecIdFactory): CodecDescriptor {
     capabilitySet,
     transformMode: 'indexed',
   } as const;
-  // Slug keeps one draw per Text until its batching lands; with three technique lanes it has room for its own
-  // transform-index buffer.
-  const slugOptions = {
-    ...options,
-    system: { stableGlyphId: system.stableGlyphId, placementSlot: system.placementSlot },
-    transformMode: 'direct',
-    placementSlotTarget: { buffer: slugSchema.buffers.glyph.id, lane: 1 },
-  } as const;
   return {
     capabilitySets: [capabilitySet],
     programs: [
       createHostRasterCodecProgram(bitmapCodec, options),
       createHostRasterCodecProgram(msdfCodec, options),
-      createHostRasterCodecProgram(slugCodec, slugOptions),
+      createHostRasterCodecProgram(slugCodec, options),
     ],
   };
 }
