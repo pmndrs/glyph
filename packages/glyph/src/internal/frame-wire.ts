@@ -442,12 +442,16 @@ export function writePreparedPlannerFrameUpdate(
   bytes: Uint8Array,
   boundView?: DataView,
 ): void {
-  if (!(bytes instanceof Uint8Array) || bytes.byteLength !== prepared.byteLength) {
+  // An owned target is exactly the request; a bound arena view spans the whole arena and outlives the request.
+  if (
+    !(bytes instanceof Uint8Array) ||
+    (boundView === undefined ? bytes.byteLength !== prepared.byteLength : bytes.byteLength < prepared.byteLength)
+  ) {
     throw new RangeError(`planner frame target must contain exactly ${prepared.byteLength} bytes`);
   }
   const view = boundView ?? new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  bytes.fill(0);
-  writeHeader(view, prepared.frame, bytes.length, prepared.offsets);
+  clearUnwrittenBytes(prepared, bytes);
+  writeHeader(view, prepared.frame, prepared.byteLength, prepared.offsets);
   if (prepared.singleTextMutation) {
     writeTextMutations(view, prepared.offsets.textOffset, prepared.textMutations, prepared.textPayloads);
     return;
@@ -468,6 +472,25 @@ export function writePreparedPlannerFrameUpdate(
   writeRegions(view, prepared.offsets.regionOffset, prepared.regions, prepared.regionVertexOffsets);
   writeExclusions(view, prepared.offsets.exclusionOffset, prepared.exclusions, prepared.exclusionVertexOffsets);
   writeInlineObjects(view, prepared.offsets.inlineObjectOffset, prepared.inlineObjects);
+}
+
+/**
+ * Zeroes the request's padding and reserved fields. Text payloads are written unit for unit afterwards, so the
+ * largest part of an edit request is not written twice.
+ */
+function clearUnwrittenBytes(prepared: PreparedPlannerFrameUpdate, bytes: Uint8Array): void {
+  let cursor = 0;
+  for (let index = 0; index < prepared.textMutations.length; index += 1) {
+    const start = prepared.textPayloads[index]!;
+    // Payloads are allocated in mutation order; anything else falls back to clearing the whole request.
+    if (start < cursor) {
+      cursor = 0;
+      break;
+    }
+    bytes.fill(0, cursor, start);
+    cursor = start + prepared.textMutations[index]!.insert.length * 2;
+  }
+  bytes.fill(0, cursor, prepared.byteLength);
 }
 
 /** @internal Serialize one package-owned frame; tests use this owned copy as the direct-arena wire oracle. */

@@ -29,9 +29,9 @@ import {
 import { updateGeometryInstances } from './internal/geometry.js';
 import { prepareDrawReplacement } from './internal/draw-realizer.js';
 import { visibleBelowRoot } from './internal/scene-tree.js';
+import { GlyphOriginIndex } from './internal/glyph-origin-index.js';
 import type {
   MaterialRealization,
-  OriginRecord,
   OriginSegment,
   PreparationContext,
   PreparedDrawReplacement,
@@ -53,6 +53,11 @@ export interface ThreeRendererHost {
   readonly renderOrderBase?: number;
   /** Resolves retained visibility when transforms are not descendants of the private publication object. */
   visibleObject?(object: THREE.Object3D): boolean;
+  /**
+   * The owner re-synchronizes a retained transform whenever its object moves or changes visibility, so a
+   * publication may keep the committed row of an object that stays at the same transform identity.
+   */
+  readonly retainsSynchronizedTransforms?: boolean;
   /** Placement-only paragraph translation; candidate state is used transactionally during decode. */
   anchorOffset?(object: THREE.Object3D, preparing: boolean): LayoutPoint | undefined;
   /** Optional transform remapping used when a copied plan is imported beneath a detached root. */
@@ -68,6 +73,8 @@ export interface ThreeRendererHost {
 }
 
 type PublicationFailure = Readonly<{ error: unknown }>;
+
+const noAnchorOffset: LayoutPoint = Object.freeze({ x: 0, y: 0 });
 
 /** Applies retained Rust command-buffer deltas to Three storage attributes and draw objects. */
 export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, void> {
@@ -86,7 +93,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
   #transforms = new Map<number, THREE.Object3D>();
   #transformIdsByObject = new WeakMap<THREE.Object3D, readonly number[]>();
   readonly #requestedTransformIds: number[] = [];
-  readonly #originRecords = new Map<number, OriginRecord>();
+  readonly #origins = new GlyphOriginIndex();
   readonly #transformSynchronizer = new ThreeTransformSynchronizer();
   readonly #anchorTranslation = new THREE.Matrix4();
   readonly #transformState: ThreeTransformState;
@@ -157,39 +164,40 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     if (stableIds.length !== shapedX.length || stableIds.length !== shapedY.length) {
       throw new RangeError('glyph origin snapshot arrays must be parallel');
     }
-    this.#ensureOriginRecords();
+    const origins = this.#origins;
     const drawnX = shapedX.slice();
     const drawnY = shapedY.slice();
     const incomplete: number[] = [];
     for (let index = 0; index < stableIds.length; index += 1) {
-      const record = this.#originRecords.get(stableIds[index]!);
-      if (record === undefined || !(record.buffer.array instanceof Float32Array)) {
+      if (!origins.locate(stableIds[index]!)) {
         incomplete.push(index);
         continue;
       }
-      const offset = record.index * record.buffer.vectorWidth;
-      drawnX[index] = shapedX[index]! + (record.buffer.array[offset]! - record.targetX);
-      drawnY[index] = shapedY[index]! + (record.buffer.array[offset + 1]! - record.targetY);
+      const lane = origins.segment.origins;
+      const offset = origins.record * lane.vectorWidth;
+      const values = lane.array as Float32Array;
+      drawnX[index] = shapedX[index]! + (values[offset]! - origins.rest(0));
+      drawnY[index] = shapedY[index]! + (values[offset + 1]! - origins.rest(1));
     }
     return { drawnX, drawnY, incomplete };
   }
 
   /** Returns retained supplied geometry for requested stable glyph ids. */
   glyphGeometry(stableIds: Uint32Array): ReadonlyMap<number, ThreeGlyphGeometrySource> {
-    this.#ensureOriginRecords();
+    const origins = this.#origins;
     const geometry = new Map<number, ThreeGlyphGeometrySource>();
     for (const stableId of stableIds) {
-      const record = this.#originRecords.get(stableId);
-      if (record?.geometry !== undefined) geometry.set(stableId, record.geometry);
+      if (!origins.locate(stableId)) continue;
+      const source = origins.segment.geometry;
+      if (source !== undefined) geometry.set(stableId, source);
     }
     return geometry;
   }
 
   /** Returns the detached plan's physical record address for one stable glyph id. */
   glyphRecord(stableId: number): Readonly<{ storageKey: string; index: number }> | undefined {
-    this.#ensureOriginRecords();
-    const record = this.#originRecords.get(stableId);
-    return record === undefined ? undefined : { storageKey: record.storageKey, index: record.index };
+    const origins = this.#origins;
+    return origins.locate(stableId) ? { storageKey: origins.segment.storageKey, index: origins.record } : undefined;
   }
 
   /** Material instances owned exclusively by this renderer's current draw branch. */
@@ -199,11 +207,11 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
 
   /** Returns the first realized draw order containing any selected stable glyph. */
   renderOrderBaseForGlyphs(stableIds: Uint32Array): number | undefined {
-    this.#ensureOriginRecords();
+    const origins = this.#origins;
     let base: number | undefined;
     for (const stableId of stableIds) {
-      const drawIndex = this.#originRecords.get(stableId)?.drawIndex;
-      const renderOrder = drawIndex === undefined ? undefined : this.#draws[drawIndex]?.renderOrder;
+      if (!origins.locate(stableId)) continue;
+      const renderOrder = this.#draws[origins.segment.drawIndex]?.renderOrder;
       if (renderOrder === undefined) continue;
       base = base === undefined ? renderOrder : Math.min(base, renderOrder);
     }
@@ -279,8 +287,8 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     this.#activeTransformIndices.clear();
     this.#directDrawsByTransform.clear();
     this.#batchDrawsByScope = new WeakMap();
-    this.#originRecords.clear();
     this.#originSegments = [];
+    this.#origins.reset(this.#originSegments);
   }
 
   #decodeRendererCommit(view: CommandBufferView<ThreeBindings>): PreparedRendererCommit<void> {
@@ -474,7 +482,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
         attempt(() => draw.updateMatrixWorld(false));
       }
     }
-    this.#originRecords.clear();
+    this.#origins.reset(this.#originSegments);
     return failure;
   }
 
@@ -610,27 +618,6 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     }
   }
 
-  #ensureOriginRecords(): void {
-    if (this.#originRecords.size !== 0) return;
-    for (const segment of this.#originSegments) {
-      if (!(segment.origins.array instanceof Float32Array) || !(segment.stableIds.array instanceof Uint32Array))
-        continue;
-      for (let index = segment.start; index < segment.start + segment.count; index += 1) {
-        const stableId = segment.stableIds.array[index]!;
-        const offset = index * segment.origins.vectorWidth;
-        this.#originRecords.set(stableId, {
-          buffer: segment.origins,
-          storageKey: segment.storageKey,
-          index,
-          geometry: segment.geometry,
-          drawIndex: segment.drawIndex,
-          targetX: segment.origins.array[offset]!,
-          targetY: segment.origins.array[offset + 1]!,
-        });
-      }
-    }
-  }
-
   #retiredTextures(context: PreparationContext): readonly RetainedGpuResourceLease[] {
     const retained = new Set<RetainedGpuResourceLease>([
       ...context.bitmapTextures.values(),
@@ -647,48 +634,80 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     ].filter((texture) => !retained.has(texture));
   }
 
+  /**
+   * Stages one row per transform whose table entry is not already current. An owner that keeps retained rows
+   * synchronized as its objects move lets a publication skip every row it did not introduce or re-anchor.
+   */
   #prepareTransforms(draws: PreparedDrawReplacement): PreparedTransforms {
     const attribute = this.#preparation?.transformAttribute ?? this.#transformAttribute;
-    const contents = (attribute.array as Float32Array).slice();
-    const direct: PreparedTransformUpdate[] = [];
-    let start = contents.length;
-    let end = 0;
-    const transformIds = new Set<number>();
     const transforms = this.#preparation?.transforms ?? this.#transforms;
-    for (const transformId of transforms.keys()) {
-      if (draws.activeTransformIndices.has(transformId) || draws.directDrawsByTransform.has(transformId)) {
-        transformIds.add(transformId);
-      }
-    }
-    if (transformIds.size === 0) return { contents, start: 0, end: 0, direct };
+    const pending = this.#transformsToPrepare(draws, transforms, attribute === this.#transformAttribute);
+    const rows: number[] = [];
+    const values = new Float32Array(pending.length * 16);
+    const direct: PreparedTransformUpdate[] = [];
+    if (pending.length === 0) return { rows, values, direct };
     draws.root.updateWorldMatrix(true, false, true);
     const rootInverse = new THREE.Matrix4().copy(draws.root.matrixWorld).invert();
     const relative = new THREE.Matrix4();
-    for (const transformId of transformIds) {
-      const object = transforms.get(transformId);
-      if (object === undefined)
-        throw new Error(`Three command-buffer renderer has no candidate transform ${transformId}`);
-      object.updateWorldMatrix(true, false, true);
-      if (object === draws.root) relative.identity();
-      else relative.multiplyMatrices(rootInverse, object.matrixWorld);
-      const anchor = this.#owner.anchorOffset?.(object, true);
-      if (anchor !== undefined && (anchor.x !== 0 || anchor.y !== 0)) {
-        relative.multiply(this.#anchorTranslation.makeTranslation(anchor.x, -anchor.y, 0));
-      }
-      const visible = this.#owner.visibleObject?.(object) ?? visibleBelowRoot(object, draws.root);
+    const capacity = (attribute.array as Float32Array).length;
+    for (const transformId of pending) {
+      const object = transforms.get(transformId)!;
+      const visible = this.#candidateTransform(object, draws.root, rootInverse, relative);
       if (draws.activeTransformIndices.has(transformId)) {
-        const offset = transformId * 16;
-        if (offset > contents.length - 16) throw new RangeError('transform identity exceeds its prepared table');
-        if (visible) contents.set(relative.elements, offset);
-        else contents.fill(0, offset, offset + 16);
-        start = Math.min(start, offset);
-        end = Math.max(end, offset + 16);
+        if (transformId * 16 > capacity - 16) throw new RangeError('transform identity exceeds its prepared table');
+        // Rows start zeroed, which is also the hidden encoding.
+        if (visible) values.set(relative.elements, rows.length * 16);
+        rows.push(transformId);
       }
       for (const mesh of draws.directDrawsByTransform.get(transformId) ?? []) {
         direct.push({ mesh, matrix: relative.clone(), visible });
       }
     }
-    return { contents, start: end > start ? start : 0, end, direct };
+    return { rows, values, direct };
+  }
+
+  /** The drawn transform identities whose committed row cannot be kept. */
+  #transformsToPrepare(
+    draws: PreparedDrawReplacement,
+    transforms: ReadonlyMap<number, THREE.Object3D>,
+    sameTable: boolean,
+  ): number[] {
+    const rowsRetained = sameTable && this.#owner.retainsSynchronizedTransforms === true;
+    const pending: number[] = [];
+    for (const [transformId, object] of transforms) {
+      const direct = draws.directDrawsByTransform.has(transformId);
+      if (!direct && !draws.activeTransformIndices.has(transformId)) continue;
+      if (rowsRetained && !direct && this.#retainsSynchronizedRow(transformId, object)) continue;
+      pending.push(transformId);
+    }
+    return pending;
+  }
+
+  /** Writes one object's candidate root-relative transform into `relative` and answers its visibility. */
+  #candidateTransform(
+    object: THREE.Object3D,
+    root: THREE.Object3D,
+    rootInverse: THREE.Matrix4,
+    relative: THREE.Matrix4,
+  ): boolean {
+    object.updateWorldMatrix(true, false, true);
+    if (object === root) relative.identity();
+    else relative.multiplyMatrices(rootInverse, object.matrixWorld);
+    const anchor = this.#owner.anchorOffset?.(object, true);
+    if (anchor !== undefined && (anchor.x !== 0 || anchor.y !== 0)) {
+      relative.multiply(this.#anchorTranslation.makeTranslation(anchor.x, -anchor.y, 0));
+    }
+    return this.#owner.visibleObject?.(object) ?? visibleBelowRoot(object, root);
+  }
+
+  /** Whether the committed table row already belongs to this object under an unchanged placement anchor. */
+  #retainsSynchronizedRow(transformId: number, object: THREE.Object3D): boolean {
+    if (this.#transforms.get(transformId) !== object || !this.#activeTransformIndices.has(transformId)) return false;
+    const anchorOffset = this.#owner.anchorOffset;
+    if (anchorOffset === undefined) return true;
+    const staged = anchorOffset(object, true) ?? noAnchorOffset;
+    const committed = anchorOffset(object, false) ?? noAnchorOffset;
+    return staged.x === committed.x && staged.y === committed.y;
   }
 
   #discardPreparation(context: PreparationContext, draws: PreparedDrawReplacement | undefined): void {

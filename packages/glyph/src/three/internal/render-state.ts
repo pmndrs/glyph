@@ -34,17 +34,6 @@ export interface OriginSegment {
   readonly drawIndex: number;
 }
 
-export interface OriginRecord {
-  readonly buffer: RetainedBuffer;
-  readonly storageKey: string;
-  readonly index: number;
-  readonly geometry: ThreeGlyphGeometrySource | undefined;
-  readonly drawIndex: number;
-  /** The lane's value with the glyph at rest. Displacement from it is the technique-free bridge. */
-  targetX: number;
-  targetY: number;
-}
-
 export type TransformRealization =
   | Readonly<{ kind: 'direct'; transformId: number }>
   | Readonly<{ kind: 'indexed'; indices: RetainedBuffer }>;
@@ -67,9 +56,9 @@ export interface PreparedTransformUpdate {
 }
 
 export interface PreparedTransforms {
-  readonly contents: Float32Array;
-  readonly start: number;
-  readonly end: number;
+  /** Transform identities whose table rows are replaced, parallel to sixteen `values` each. */
+  readonly rows: readonly number[];
+  readonly values: Float32Array;
   readonly direct: readonly PreparedTransformUpdate[];
 }
 
