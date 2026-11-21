@@ -14,7 +14,7 @@ use super::{
     frame::{AXIS_AT_MOST, AXIS_EXACT, AXIS_UNCONSTRAINED},
     placement_state::SegmentTranslation,
     positioning::{
-        PositionedSemanticGlyph, ThreadTypography, constraint_typography,
+        LineInk, LineInkState, PositionedSemanticGlyph, ThreadTypography, constraint_typography,
         positioned_fragment_advance,
     },
     retained_rope::{RopeCursor, RopeCursorRange, RopeIter},
@@ -69,6 +69,17 @@ impl InkBounds {
             self.joined = true;
         }
         Ok(())
+    }
+
+    /// A line's ink as positioning measured it.
+    fn from_line(line: LineInk) -> Self {
+        Self {
+            inline_min: line.inline_min,
+            block_min: line.block_min,
+            inline_max: line.inline_max,
+            block_max: line.block_max,
+            joined: line.state == LineInkState::Joined,
+        }
     }
 
     fn join(&mut self, other: Self) {
@@ -379,6 +390,7 @@ fn append_measurement(
         positioned_glyphs.len(),
         || rows.next().ok_or(EngineError::InvalidRequest),
         placement_translations,
+        None,
         starts,
         counts,
         semantic_line_inline_extents,
@@ -402,6 +414,7 @@ pub(crate) fn append_measurement_from_occurrences(
     positioned_count: usize,
     next_glyph: impl FnMut() -> Result<PositionedSemanticGlyph, EngineError>,
     placement_translations: &[SegmentTranslation],
+    line_ink: Option<(&[LineInk], &[u32])>,
     semantic_line_glyph_starts: &[u32],
     semantic_line_glyph_counts: &[u32],
     semantic_line_inline_extents: Option<&[f64]>,
@@ -421,6 +434,7 @@ pub(crate) fn append_measurement_from_occurrences(
         positioned_count,
         next_glyph,
         placement_translations,
+        line_ink,
         semantic_line_glyph_starts,
         semantic_line_glyph_counts,
         semantic_line_inline_extents,
@@ -468,6 +482,7 @@ pub(crate) fn append_measurement_from_inline_occurrences(
         positioned_count,
         next_glyph,
         placement_translations,
+        None,
         semantic_line_glyph_starts,
         semantic_line_glyph_counts,
         None,
@@ -490,6 +505,7 @@ fn append_measurement_from_occurrences_source(
     positioned_count: usize,
     mut next_glyph: impl FnMut() -> Result<PositionedSemanticGlyph, EngineError>,
     placement_translations: &[SegmentTranslation],
+    line_ink: Option<(&[LineInk], &[u32])>,
     semantic_line_glyph_starts: &[u32],
     semantic_line_glyph_counts: &[u32],
     semantic_line_inline_extents: Option<&[f64]>,
@@ -498,6 +514,8 @@ fn append_measurement_from_occurrences_source(
     include_glyph_spans: bool,
     include_glyphs: bool,
 ) -> Result<(), EngineError> {
+    #[cfg(feature = "stage-bench")]
+    let _clock = super::state::oracle::stage_bench::clock::MEASUREMENT.guard();
     let constraint = geometry
         .constraints
         .first()
@@ -512,6 +530,10 @@ fn append_measurement_from_occurrences_source(
     {
         return Err(EngineError::InvalidRequest);
     }
+    // Glyph records need every glyph; a measurement alone unions the lines positioning measured.
+    let line_ink_lanes = line_ink.filter(|(ink, missing)| {
+        !include_glyphs && ink.len() == source.line_len() && missing.len() == source.line_len()
+    });
     let mut line_count = 0_usize;
     let mut fragment_cursor = source.fragment_cursor()?;
     for (_, line) in source.lines() {
@@ -577,7 +599,18 @@ fn append_measurement_from_occurrences_source(
             return Err(EngineError::InvalidRequest);
         }
         let mut line_ink = InkBounds::default();
-        for _ in 0..span_count {
+        if let Some((ink, missing)) = line_ink_lanes {
+            missing_glyph_count += missing[index] as usize;
+            if line.flow_thread_id == constraint.flow_thread_id && !fragments.is_empty() {
+                line_ink = InkBounds::from_line(ink[index]);
+            }
+            glyph_cursor += span_count;
+        }
+        for _ in 0..if line_ink_lanes.is_some() {
+            0
+        } else {
+            span_count
+        } {
             let glyph = next_glyph()?;
             missing_glyph_count += usize::from(glyph.glyph_id == 0);
             let translation = *placement_translations

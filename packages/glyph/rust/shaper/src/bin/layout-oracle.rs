@@ -108,6 +108,8 @@ fn run_tool(arguments: &[String]) -> Result<bool, String> {
         "fuzz" => fuzz(&options),
         "dump" => dump(&options),
         "diff" => diff(&options),
+        #[cfg(feature = "stage-bench")]
+        "bench" => bench(&options),
         other => Err(format!("unknown command {other}")),
     }
 }
@@ -139,6 +141,23 @@ fn library(cases: &[Case]) -> Result<FontLibrary, String> {
         }
     }
     Ok(library)
+}
+
+/// `bench <stage-bench command>`: the probe's stage clocks, natively, for a profiler.
+#[cfg(feature = "stage-bench")]
+fn bench(options: &Options) -> Result<bool, String> {
+    let mut library = FontLibrary::default();
+    for font in FONTS {
+        if let Some(bytes) =
+            font_root(font.root).and_then(|root| fs::read(root.join(font.path)).ok())
+        {
+            library.insert(font.key, bytes)?;
+        }
+    }
+    let line = format!("bench {}", options.positional.join(" "));
+    let answer = run::command(&library, &ReferenceSet::new(&options.set), &line, "");
+    print!("{answer}");
+    Ok(answer.starts_with("ok"))
 }
 
 fn selected(options: &Options) -> Result<Vec<Case>, String> {

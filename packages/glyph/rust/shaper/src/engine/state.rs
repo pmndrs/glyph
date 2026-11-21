@@ -2524,6 +2524,7 @@ fn append_paragraph_measurement(
                 .ok_or(EngineError::InvalidRequest)
         },
         positioned.placement_translations(),
+        positioned.line_ink(),
         line_glyph_starts,
         line_glyph_counts,
         Some(positioned.semantic_line_inline_extents()),
@@ -11567,7 +11568,9 @@ mod tests {
         assert_eq!(first_query_work.intrinsic_flow_preparations, 1);
         assert_eq!(first_query_work.intrinsic_positioning_preparations, 0);
         assert_eq!(first_query_work.measurement_intrinsic_cluster_visits, 40);
-        assert_eq!(first_query_work.measurement_ink_glyph_visits, 5);
+        // Positioning measured each line's ink while the setter prepared; the query unions lines.
+        assert_eq!(setter_work.measurement_ink_glyph_visits, 5);
+        assert_eq!(first_query_work.measurement_ink_glyph_visits, 0);
         assert_eq!(first_query_shape_calls, 0);
         engine.commit_measure(measured).unwrap();
         assert_eq!(

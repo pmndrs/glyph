@@ -366,6 +366,129 @@ impl PlacementState {
         Ok(index)
     }
 
+    /// Whether `segment` would join the segment recorded last were their published
+    /// translations equal: the content half of `push_segment`'s merge.
+    pub(crate) fn joins_last(&self, segment: PlacementSegment) -> bool {
+        self.last_segment.is_some_and(|(last_index, previous, _)| {
+            usize::try_from(last_index).ok() == self.segments.len().checked_sub(1)
+                && same_segment_key(previous, segment)
+                && joined_span(
+                    previous.run_cluster_start,
+                    previous.run_cluster_count,
+                    segment.run_cluster_start,
+                    segment.run_cluster_count,
+                )
+                .is_some()
+                && joined_span(
+                    previous.source_glyph_start,
+                    previous.source_glyph_count,
+                    segment.source_glyph_start,
+                    segment.source_glyph_count,
+                )
+                .is_some()
+        })
+    }
+
+    /// Appends the segments of one line of `previous` under new translations, one per segment
+    /// in order: the numeric-only repass of a line whose content and breaks are unchanged.
+    /// The caller has proved the translations keep every segment distinct from its neighbour,
+    /// and closes the line with `finish_line`.
+    pub(crate) fn append_retranslated_segments(
+        &mut self,
+        previous: &Self,
+        line_index: usize,
+        (old_fragment_start, new_fragment_start): (u32, u32),
+        translations: &[SegmentTranslation],
+    ) -> Result<RetainedSegmentRemap, EngineError> {
+        let (slice_start, slice_end) = line_span(
+            &previous.line_segment_starts,
+            &previous.line_segment_counts,
+            line_index,
+            previous.segments.len(),
+        )?;
+        let count = slice_end - slice_start;
+        if translations.len() != count || !previous.has_aligned_lanes() {
+            return Err(EngineError::InvalidRequest);
+        }
+        let next_start = self.segments.len();
+        checked_grow(next_start, count)?;
+        self.segments
+            .try_reserve(count)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        self.translations
+            .try_reserve(count)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        self.segment_instance_counts
+            .try_reserve(count)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        for (segment, translation) in previous.segments[slice_start..slice_end]
+            .iter()
+            .zip(translations)
+        {
+            let fragment_index = segment
+                .fragment_index
+                .checked_sub(old_fragment_start)
+                .and_then(|offset| new_fragment_start.checked_add(offset))
+                .ok_or(EngineError::InvalidRequest)?;
+            self.segments.push(PlacementSegment {
+                fragment_index,
+                placement_handle: None,
+                ..*segment
+            });
+            self.translations.push(*translation);
+        }
+        self.segment_instance_counts
+            .extend_from_slice(&previous.segment_instance_counts[slice_start..slice_end]);
+        self.last_segment = self.segments.len().checked_sub(1).and_then(|index| {
+            Some((
+                u32::try_from(index).ok()?,
+                self.segments[index],
+                self.translations[index],
+            ))
+        });
+        Ok(RetainedSegmentRemap {
+            previous_start: u32::try_from(slice_start).map_err(|_| EngineError::ResultTooLarge)?,
+            next_start: u32::try_from(next_start).map_err(|_| EngineError::ResultTooLarge)?,
+            count: u32::try_from(count).map_err(|_| EngineError::ResultTooLarge)?,
+        })
+    }
+
+    /// The segments of one line, as a range of `segment_rows`.
+    pub(crate) fn line_segment_range(
+        &self,
+        line_index: usize,
+    ) -> Result<core::ops::Range<usize>, EngineError> {
+        let (start, end) = line_span(
+            &self.line_segment_starts,
+            &self.line_segment_counts,
+            line_index,
+            self.segments.len(),
+        )?;
+        Ok(start..end)
+    }
+
+    /// Points a retained boundary segment at the run that holds its glyphs in this build.
+    pub(crate) fn rebind_segment_run(
+        &mut self,
+        index: usize,
+        layout_run_index: u32,
+        canonical_revision: Option<RunCanonicalRevision>,
+    ) -> Result<(), EngineError> {
+        let segment = self
+            .segments
+            .get_mut(index)
+            .ok_or(EngineError::InvalidRequest)?;
+        segment.layout_run_index = layout_run_index;
+        segment.canonical_revision = canonical_revision;
+        let segment = *segment;
+        if let Some((last_index, last, _)) = &mut self.last_segment
+            && usize::try_from(*last_index).ok() == Some(index)
+        {
+            *last = segment;
+        }
+        Ok(())
+    }
+
     pub(crate) fn extend_last_segment(
         &mut self,
         segment_index: u32,
