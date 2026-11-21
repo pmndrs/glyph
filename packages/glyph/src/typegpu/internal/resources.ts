@@ -1,5 +1,5 @@
 import tgpu, { d, std, type TgpuRoot } from 'typegpu';
-import type { PortableResource, PortableLeafResource } from '../../index.js';
+import type { CodecBufferId, PortableResource, PortableLeafResource } from '../../index.js';
 import { bitmapSchema } from '../../raster/bitmap.js';
 import { slugSchema } from '../../raster/slug.js';
 import { bitmapFragment, bitmapQuadPosition, bitmapAtlasUv } from '../../shaders/typegpu/bitmap-shader.js';
@@ -14,13 +14,18 @@ import {
   slugReferenceWidthAccessor,
 } from '../../shaders/typegpu/slug/slug-texture.js';
 import { bitmapPageAccessor } from '../../shaders/typegpu/bitmap-shader.js';
-import { TYPEGPU_PLACEMENT_SLOT_BUFFER_ID } from './codec.js';
+import { TYPEGPU_PLACEMENT_SLOT_BUFFER_ID, TYPEGPU_TRANSFORM_INDEX_BUFFER_ID } from './codec.js';
 import { msdfResource } from './msdf.js';
 import {
   colorTransform,
   corner,
+  createSceneGroup,
+  placedOrigin,
   preparedDraw,
+  projectText,
   projectWithScene,
+  recordDraw,
+  textOffset,
   shaderRoot,
   target,
   type PipelineOptions,
@@ -29,16 +34,6 @@ import {
 
 export type { Draw, TypeGpuResource } from './pipeline.js';
 
-function sceneEntries() {
-  return {
-    viewport: { uniform: d.vec2f },
-    position: { uniform: d.vec2f },
-    placementSlots: { storage: d.arrayOf(d.u32), access: 'readonly' as const, visibility: ['vertex' as const] },
-    placements: { storage: d.arrayOf(d.vec2f), access: 'readonly' as const, visibility: ['vertex' as const] },
-  };
-}
-
-const scene = tgpu.bindGroupLayout(sceneEntries());
 const slugScene = tgpu.bindGroupLayout({
   viewport: { uniform: d.vec2f },
   position: { uniform: d.vec2f },
@@ -60,14 +55,6 @@ const bandLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const inverseLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const countsLayout = tgpu.vertexLayout(d.disarrayOf(d.uint32x4), 'instance');
 
-function project(position: d.v3f): d.v4f {
-  'use gpu';
-  return projectWithScene(position, scene.$.viewport, scene.$.position);
-}
-function placedOrigin(origin: d.v2f, instance: number): d.v2f {
-  'use gpu';
-  return origin.add(scene.$.placements[scene.$.placementSlots[instance]!]!);
-}
 function projectSlug(position: d.v3f): d.v4f {
   'use gpu';
   return projectWithScene(position, slugScene.$.viewport, slugScene.$.position);
@@ -121,7 +108,10 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
       'use gpu';
       const unit = corner(input.index);
       return {
-        position: project(bitmapQuadPosition(placedOrigin(input.origin, input.instance), input.size, unit)),
+        position: projectText(
+          bitmapQuadPosition(placedOrigin(input.origin, input.instance), input.size, unit),
+          textOffset(input.instance),
+        ),
         uv: bitmapAtlasUv(input.uvOrigin, input.uvSize, unit),
         color: input.color,
         layer: input.layer,
@@ -155,20 +145,35 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
     pipeline.initSync();
     return {
       dispose: () => atlas.destroy(),
-      prepare(buffers, placementTable, viewport, position, start, count) {
-        const placementSlots = buffers.get(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID);
-        if (placementSlots === undefined) throw new Error('TypeGPU glyph draw is missing its placement-slot lane');
-        const group = root.createBindGroup(scene, { viewport, position, placementSlots, placements: placementTable });
+      bind(lanes) {
+        const lane = (id: CodecBufferId): GPUBuffer => {
+          const buffer = lanes.buffers.get(id);
+          if (buffer === undefined) throw new Error('TypeGPU bitmap draw is missing one of its lanes');
+          return buffer;
+        };
         const b = bitmapSchema.buffers;
-        const draw = pipeline
-          .with(group)
-          .with(originLayout, buffers.get(b.origin.id)!)
-          .with(sizeLayout, buffers.get(b.size.id)!)
-          .with(uvOriginLayout, buffers.get(b.uvOrigin.id)!)
-          .with(uvSizeLayout, buffers.get(b.uvSize.id)!)
-          .with(colorLayout, buffers.get(b.color.id)!)
-          .with(u1, buffers.get(b.page.id)!);
-        return preparedDraw(root, draw, start, count);
+        const bound = pipeline
+          .with(
+            createSceneGroup(
+              root,
+              lanes,
+              lane(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID),
+              lane(TYPEGPU_TRANSFORM_INDEX_BUFFER_ID),
+            ),
+          )
+          .with(originLayout, lane(b.origin.id))
+          .with(sizeLayout, lane(b.size.id))
+          .with(uvOriginLayout, lane(b.uvOrigin.id))
+          .with(uvSizeLayout, lane(b.uvSize.id))
+          .with(colorLayout, lane(b.color.id))
+          .with(u1, lane(b.page.id));
+        return {
+          variantLane: undefined,
+          variant: () => 0,
+          draw(pass, bindGroups, _variant, first, count) {
+            recordDraw(root, bound, pass, bindGroups, first, count);
+          },
+        };
       },
     };
   } catch (error) {

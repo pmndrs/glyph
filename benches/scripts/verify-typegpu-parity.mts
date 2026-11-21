@@ -139,7 +139,14 @@ try {
   for (const scene of scenes) {
     if (selected !== undefined && !selected.includes(scene)) continue;
     const capture: ParityCapture = await page.evaluate(
-      async (name) => (await window.typegpuParity).capture(name, true),
+      // A failure is rethrown as text: renderer errors can hold reference chains Playwright cannot serialize.
+      async (name) => {
+        try {
+          return await (await window.typegpuParity).capture(name, true);
+        } catch (error) {
+          throw new Error(error instanceof Error ? (error.stack ?? error.message) : String(error), { cause: error });
+        }
+      },
       scene,
     );
     if (errors.length !== 0) throw new Error(`${scene}: browser errors: ${errors.join(' | ')}`);

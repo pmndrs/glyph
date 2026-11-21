@@ -1,5 +1,5 @@
 import tgpu, { d, std, type TgpuRoot, type TgpuRenderPipeline } from 'typegpu';
-import type { PortableLeafResource } from '../../index.js';
+import type { CodecBufferId, PortableLeafResource } from '../../index.js';
 import { MSDF_GLYPH_TABLE_LAYER_STEP, msdfBakedPages, msdfSchema } from '../../raster/msdf.js';
 import {
   MsdfCompositeInput,
@@ -11,26 +11,28 @@ import {
 } from '../../shaders/typegpu/msdf-shader.js';
 import { msdfDistances } from '../../shaders/typegpu/msdf/distance.js';
 import { decorationPaint } from '../../shaders/typegpu/decoration-shader.js';
-import { TYPEGPU_PLACEMENT_SLOT_BUFFER_ID } from './codec.js';
+import { TYPEGPU_PLACEMENT_SLOT_BUFFER_ID, TYPEGPU_TRANSFORM_INDEX_BUFFER_ID } from './codec.js';
 import {
   colorTransform,
   corner,
-  projectWithScene,
+  createSceneGroup,
+  placedOrigin,
+  projectText,
   recordDraw,
   shaderRoot,
   target,
+  textOffset,
+  viewportSize,
   type PipelineOptions,
   type TypeGpuResource,
 } from './pipeline.js';
 
-const msdfScene = tgpu.bindGroupLayout({
-  viewport: { uniform: d.vec2f },
-  position: { uniform: d.vec2f },
-  placementSlots: { storage: d.arrayOf(d.u32), access: 'readonly' as const, visibility: ['vertex' as const] },
-  placements: { storage: d.arrayOf(d.vec2f), access: 'readonly' as const, visibility: ['vertex' as const] },
-  /** One row per baked glyph: `[left, top, width, height + layer * 4096]` in atlas texels. */
-  glyphs: { storage: d.arrayOf(d.vec4f), access: 'readonly' as const, visibility: ['vertex' as const] },
-});
+/**
+ * One row of the font's glyph table: `[left, top, width, height + layer * 4096]` in atlas texels. Each font's
+ * pipelines capture their table as a fixed resource, so it rides in TypeGPU's catch-all group with the atlas and
+ * costs the caller no bind group slot.
+ */
+const glyphRowSlot = tgpu.slot<(glyph: number) => d.v4f>();
 // Each attribute needs its own layout identity, even when its physical shape matches.
 const rectLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const colorLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
@@ -79,9 +81,9 @@ const TRIM_ANTIALIAS_PIXELS = 1;
  */
 const TRIM_FIELD_TEXELS = 0.5;
 
-function projectCell(origin: d.v2f, size: d.v2f, cell: d.v2f): d.v4f {
+function projectCell(origin: d.v2f, size: d.v2f, cell: d.v2f, offset: d.v2f): d.v4f {
   'use gpu';
-  return projectWithScene(msdfPosition(origin, size, d.vec3f(cell, 0)), msdfScene.$.viewport, msdfScene.$.position);
+  return projectText(msdfPosition(origin, size, d.vec3f(cell, 0)), offset);
 }
 
 /**
@@ -105,16 +107,17 @@ function trimmedCell(
   unit: d.v2f,
   outlineTexels: number,
   shadowTexels: d.v2f,
+  offset: d.v2f,
 ): d.v2f {
   'use gpu';
   const padding = std.ceil(msdfPixelRangeAccessor.$ * 0.5);
   // The projection is linear in the cell coordinate before the perspective divide: clip(u, v) = a + u b + v c.
-  const a = projectCell(origin, size, d.vec2f(0, 0));
-  const b = projectCell(origin, size, d.vec2f(1, 0)).sub(a);
-  const c = projectCell(origin, size, d.vec2f(0, 1)).sub(a);
+  const a = projectCell(origin, size, d.vec2f(0, 0), offset);
+  const b = projectCell(origin, size, d.vec2f(1, 0), offset).sub(a);
+  const c = projectCell(origin, size, d.vec2f(0, 1), offset).sub(a);
   const clip = a.add(b.mul(unit.x)).add(c.mul(unit.y));
   // Screen-pixel Jacobian of the cell coordinate at this corner, scaled by w squared to avoid the divide.
-  const halfViewport = msdfScene.$.viewport.mul(0.5);
+  const halfViewport = viewportSize().mul(0.5);
   const alongU = b.xy.mul(clip.w).sub(clip.xy.mul(b.w)).mul(halfViewport);
   const alongV = c.xy.mul(clip.w).sub(clip.xy.mul(c.w)).mul(halfViewport);
   const area = std.abs(alongU.x * alongV.y - alongU.y * alongV.x);
@@ -145,12 +148,13 @@ function msdfGlyph(
   'use gpu';
   const atlasSize = msdfAtlasSizeAccessor.$;
   const scale = effectScaleAccessor.$;
-  const row = msdfScene.$.glyphs[d.u32(effect.w)]!;
+  const row = glyphRowSlot.$(d.u32(effect.w));
   const layer = std.floor(row.w / MSDF_GLYPH_TABLE_LAYER_STEP);
   const cellTexels = std.max(d.vec2f(row.z, row.w - layer * MSDF_GLYPH_TABLE_LAYER_STEP), d.vec2f(1e-6));
   const uvOrigin = row.xy.div(atlasSize);
   const uvSize = cellTexels.div(atlasSize);
-  const origin = rect.xy.add(msdfScene.$.placements[msdfScene.$.placementSlots[instance]!]!);
+  const origin = placedOrigin(rect.xy, instance);
+  const offset = textOffset(instance);
   const width = effect.z * scale.z;
   const shadowOffset = effect.xy.mul(scale.xy);
   const cell = trimmedCell(
@@ -160,10 +164,11 @@ function msdfGlyph(
     corner(index),
     outlineReach * std.max(width, 0) * msdfPixelRangeAccessor.$,
     shadowOffset.mul(atlasSize).mul(shadowReach),
+    offset,
   );
   const uv = uvOrigin.add(cell.mul(uvSize));
   return MsdfGlyph({
-    position: projectCell(origin, rect.zw, cell),
+    position: projectCell(origin, rect.zw, cell, offset),
     uv,
     bounds: d.vec4f(uvOrigin, uvOrigin.add(uvSize)),
     layer: d.u32(layer),
@@ -379,6 +384,7 @@ export function msdfResource(
   try {
     const view = atlas.createView(d.texture2dArray(d.f32));
     const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'linear' });
+    const glyphRows = root.createReadonly(d.arrayOf(d.vec4f, glyphs.size / 16), glyphs);
     const configured = shaderRoot(options)
       .with(msdfAtlasSizeAccessor, d.vec2f(atlas.props.size[0], atlas.props.size[1]))
       .with(msdfPixelRangeAccessor, scalar(members.pixelRange!))
@@ -388,6 +394,10 @@ export function msdfResource(
       )
       // The atlas has one mip level, so an explicit level samples exactly what an implicit one would, and stays
       // legal inside the shadow's per-instance branch.
+      .with(glyphRowSlot, (glyph) => {
+        'use gpu';
+        return d.vec4f(glyphRows.$[glyph]!);
+      })
       .with(msdfSampleSlot, (uv, layer) => {
         'use gpu';
         return std.textureSampleLevel(view.$, sampler.$, uv, layer, 0);
@@ -432,40 +442,41 @@ export function msdfResource(
         atlas.destroy();
         glyphs.destroy();
       },
-      prepare(buffers, placementTable, viewport, position, start, count, bytes) {
-        const placementSlots = buffers.get(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID);
-        if (placementSlots === undefined) throw new Error('TypeGPU glyph draw is missing its placement-slot lane');
-        const group = root.createBindGroup(msdfScene, {
-          viewport,
-          position,
-          placementSlots,
-          placements: placementTable,
-          glyphs,
-        });
+      bind(lanes) {
         const b = msdfSchema.buffers;
-        const effectColors = bytes.get(b.effectColor.id)!;
-        const bind = (key: EffectKey): TgpuRenderPipeline =>
-          pipeline(key)
-            .with(group)
-            .with(rectLayout, buffers.get(b.rect.id)!)
-            .with(colorLayout, buffers.get(b.color.id)!)
-            .with(effectColorLayout, buffers.get(b.effectColor.id)!)
-            .with(effectLayout, buffers.get(b.effect.id)!);
-        let effects: EffectKey | undefined;
-        let bound: TgpuRenderPipeline | undefined;
-        const refresh = (written: ReadonlySet<Uint8Array>): TgpuRenderPipeline => {
-          if (bound !== undefined && !written.has(effectColors)) return bound;
-          const next = effectsInUse(effectColors, start, count);
-          if (bound === undefined || next !== effects) {
-            effects = next;
-            bound = bind(next);
-          }
-          return bound;
+        const lane = (id: CodecBufferId): GPUBuffer => {
+          const buffer = lanes.buffers.get(id);
+          if (buffer === undefined) throw new Error('TypeGPU MSDF draw is missing one of its lanes');
+          return buffer;
         };
+        const scene = createSceneGroup(
+          root,
+          lanes,
+          lane(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID),
+          lane(TYPEGPU_TRANSFORM_INDEX_BUFFER_ID),
+        );
+        const bound: (TgpuRenderPipeline | undefined)[] = [];
+        const effectColors = lanes.bytes.get(b.effectColor.id)!;
         return {
-          refresh,
-          draw(pass, bindGroups) {
-            recordDraw(root, bound ?? refresh(new Set()), pass, bindGroups, start, count);
+          variantLane: effectColors,
+          variant(start, count) {
+            const key = effectsInUse(effectColors, start, count);
+            // Builds the program at commit, not in the caller's next draw.
+            pipeline(key);
+            return key;
+          },
+          draw(pass, bindGroups, variant, first, count) {
+            let pipelineForVariant = bound[variant];
+            if (pipelineForVariant === undefined) {
+              pipelineForVariant = pipeline(variant as EffectKey)
+                .with(scene)
+                .with(rectLayout, lane(b.rect.id))
+                .with(colorLayout, lane(b.color.id))
+                .with(effectColorLayout, lane(b.effectColor.id))
+                .with(effectLayout, lane(b.effect.id));
+              bound[variant] = pipelineForVariant;
+            }
+            recordDraw(root, pipelineForVariant, pass, bindGroups, first, count);
           },
         };
       },

@@ -35,6 +35,16 @@ interface Scene {
   readonly items: readonly Item[];
   /** A perspective camera over a rotated plane instead of the pixel-aligned orthographic view. */
   readonly perspective?: boolean;
+  /**
+   * TypeGPU only: mount this many items and draw, then add the rest 16 at a time with a shape and a frame after
+   * each group, crossing every capacity step on the way. Three renders the final set.
+   */
+  readonly grownFrom?: number;
+  /**
+   * TypeGPU only: mount every item displaced by this offset and draw, then move all of them a step per frame for 12
+   * frames (one shape() halfway) to their positions. Three renders the final positions.
+   */
+  readonly movedFrom?: readonly [number, number];
 }
 const counters = emptyCounters();
 installCounters();
@@ -161,6 +171,30 @@ function labelScene(count: number): Scene {
   return { items };
 }
 
+/**
+ * Overlapping labels where plain ones alternate with outlined, shadowed and both: a batch splits into a draw per
+ * run of one effect program, and later labels must still paint over earlier ones.
+ */
+function mixedLabelScene(): Scene {
+  const styles: readonly Style[] = [
+    {},
+    {},
+    { outline: { color: '#ff3030', width: 0.6 } },
+    {},
+    { shadow: { color: '#3060ff', offset: [1.2, 1.2] } },
+    { outline: { color: '#ffb000', width: 0.5 }, shadow: { color: '#30c060', offset: [-1, 1.5] } },
+  ];
+  return {
+    items: Array.from({ length: 240 }, (_, index) => ({
+      font: 'inter' as const,
+      text: `Mixed ${String(index)}`,
+      x: 4 + (index % 20) * 40,
+      y: 4 + Math.floor(index / 20) * 11,
+      style: { fontSize: 14, color: index % 2 === 0 ? '#ffffff' : '#80c0ff', ...styles[index % styles.length]! },
+    })),
+  };
+}
+
 const scenes: Readonly<Record<string, Scene>> = {
   one: { items: [{ font: 'inter', text: 'Hello, TypeGPU!', x: 24, y: 40, style: { fontSize: 72, color: '#ffffff' } }] },
   fx: fxScene(),
@@ -190,6 +224,16 @@ const scenes: Readonly<Record<string, Scene>> = {
     }),
   },
   labels: labelScene(1000),
+  // Doubling past 1,000 labels reallocates the lanes and the session placement table.
+  'labels-grown': {
+    items: [
+      ...labelScene(1000).items,
+      ...labelScene(1000).items.map((item) => ({ ...item, x: item.x + 13, y: item.y + 5 })),
+    ],
+    grownFrom: 1000,
+  },
+  'labels-moving': { ...labelScene(200), movedFrom: [-37, -11] },
+  'labels-mixed': mixedLabelScene(),
   bitmap: {
     items: [
       { font: 'bitmap', text: 'Bitmap strike 16 px: Glyph Ag fj Wy', x: 10, y: 10, style: { fontSize: 16 } },
@@ -390,9 +434,38 @@ async function start(): Promise<ParityProof> {
 
   async function captureTypeGpu(scene: Scene): Promise<{ pixels: Uint8Array; gpuMs: number | undefined }> {
     const handle = scene.perspective === true ? projected : flat;
-    const texts = mount(handle, scene);
+    const texts = mount(handle, {
+      items: scene.items
+        .slice(0, scene.grownFrom)
+        .map((item) =>
+          scene.movedFrom === undefined
+            ? item
+            : { ...item, x: item.x + scene.movedFrom[0], y: item.y + scene.movedFrom[1] },
+        ),
+    });
     try {
       glyph.shape();
+      frame(handle);
+      if (scene.grownFrom !== undefined) {
+        for (let from = scene.grownFrom; from < scene.items.length; from += 16) {
+          texts.push(...mount(handle, { items: scene.items.slice(from, from + 16) }));
+          glyph.shape();
+          frame(handle);
+        }
+      }
+      if (scene.movedFrom !== undefined) {
+        const [dx, dy] = scene.movedFrom;
+        for (let step = 1; step <= 12; step += 1) {
+          const remaining = 1 - step / 12;
+          for (const [index, item] of scene.items.entries()) {
+            texts[index]!.update({ position: [item.x + dx * remaining, item.y + dy * remaining] });
+          }
+          if (step === 6) glyph.shape();
+          frame(handle);
+        }
+      }
+      await device.queue.onSubmittedWorkDone();
+      if (errors.length !== 0) throw new Error(errors.splice(0).join('\n'));
       const pixels = await readPixels(handle);
       return { pixels, gpuMs: await gpuPass(handle) };
     } finally {
