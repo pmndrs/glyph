@@ -37,12 +37,21 @@ license = "MIT"
 repository = "https://github.com/harfbuzz/harfrust"
 
 [features]
-default = ["std"]
+# Apple Advanced Typography shaping: `morx`, `kerx`, `trak`, `ankr`, `feat`.
+# Legacy OpenType `kern` does not depend on this feature.
+aat = []
+default = [
+    "std",
+    "aat",
+    "rand",
+]
 experimental_font_api = []
 libm = [
     "dep:core_maths",
     "read-fonts/libm",
 ]
+# Random alternate selection for the OpenType `rand` feature.
+rand = []
 std = ["read-fonts/std"]
 
 [lib]

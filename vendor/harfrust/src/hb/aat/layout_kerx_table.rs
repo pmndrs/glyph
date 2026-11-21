@@ -145,10 +145,7 @@ pub(crate) fn apply(c: &mut AatApplyContext) -> Option<()> {
     Some(())
 }
 
-pub trait SimpleKerning {
-    fn simple_kerning(&self, left: GlyphId, right: GlyphId) -> Option<i32>;
-    fn collect_glyphs(&self, _first_set: &mut U32Set, _second_set: &mut U32Set, _num_glyphs: u32);
-}
+pub use super::layout_common::SimpleKerning;
 
 impl SimpleKerning for Subtable0<'_> {
     fn simple_kerning(&self, left: GlyphId, right: GlyphId) -> Option<i32> {

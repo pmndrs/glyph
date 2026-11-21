@@ -74,6 +74,7 @@ pub type pause_func_t = fn(&hb_ot_shape_plan_t, &mut FontFuncsDispatch, &mut hb_
 
 impl hb_ot_map_t {
     pub const MAX_BITS: u32 = 8;
+    #[cfg(feature = "rand")]
     pub const MAX_VALUE: u32 = (1 << Self::MAX_BITS) - 1;
 
     #[inline]

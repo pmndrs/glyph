@@ -494,7 +494,7 @@ pub static feature_mappings: &[FeatureMapping] = &[
     FeatureMapping::new(b"zero", FEATURE_TYPE_TYPOGRAPHIC_EXTRAS, FEATURE_SELECTOR_SLASHED_ZERO_ON, FEATURE_SELECTOR_SLASHED_ZERO_OFF),
 ];
 
-pub const DELETED_GLYPH: u32 = 0xFFFF;
+pub use super::layout_common::DELETED_GLYPH;
 
 /// HB: hb_aat_layout_substitute
 ///

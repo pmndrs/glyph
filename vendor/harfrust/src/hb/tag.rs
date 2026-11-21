@@ -186,6 +186,9 @@ pub(super) fn strncmp(s1: impl AsRef<[u8]>, s2: impl AsRef<[u8]>, n: usize) -> b
     s1[..n1] == s2[..n2]
 }
 
+// Kept out of line so BCP 47 to OpenType language resolution stays one function in an
+// optimized binary. A caller that always passes `-x-hbot` tags never reaches it.
+#[inline(never)]
 fn tags_from_language(language: &Language, tags: &mut ThreeTags) {
     let language = language.as_bytes();
 

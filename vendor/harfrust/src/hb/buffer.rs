@@ -400,6 +400,7 @@ impl GlyphInfo {
         GlyphId::new(self.glyph_id)
     }
 
+    #[cfg_attr(not(feature = "aat"), allow(dead_code))]
     #[inline]
     pub(crate) fn as_gid16(&self) -> Option<GlyphId16> {
         let gid: u16 = self.glyph_id.try_into().ok()?;
@@ -947,6 +948,7 @@ impl hb_buffer_t {
     }
 
     /// Copies glyph at idx to output but doesn't advance idx.
+    #[cfg(feature = "aat")]
     pub fn copy_glyph(&mut self) {
         if !self.make_room_for(0, 1) {
             return;

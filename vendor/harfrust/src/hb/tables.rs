@@ -42,6 +42,7 @@ const UNICODE_2_0_FULL_ENCODING: u16 = 4;
 const UNICODE_FULL_ENCODING: u16 = 6;
 
 #[derive(Clone)]
+#[cfg_attr(not(feature = "aat"), allow(dead_code))]
 pub struct TableRanges {
     pub num_glyphs: u32,
     pub units_per_em: u16,

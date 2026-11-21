@@ -1,3 +1,4 @@
+#[cfg(feature = "aat")]
 use super::aat::map::*;
 use super::buffer::*;
 use super::font_funcs::{AdvanceWidthBatch, FontFuncsDispatch};
@@ -9,6 +10,7 @@ use super::ot_shaper::*;
 use super::unicode::CharExt;
 use super::*;
 use super::{hb_font_t, hb_tag_t};
+#[cfg(feature = "aat")]
 use crate::hb::aat;
 use crate::hb::algs::{rb_flag, rb_flag_unsafe};
 use crate::hb::buffer::GlyphFlags;
@@ -28,6 +30,7 @@ pub struct hb_ot_shape_planner_t<'a> {
     pub script: Option<Script>,
     pub language: Option<Language>,
     pub ot_map: hb_ot_map_builder_t<'a>,
+    #[cfg(feature = "aat")]
     pub aat_map: AatMapBuilder,
     pub apply_morx: bool,
     pub script_zero_marks: bool,
@@ -43,6 +46,7 @@ impl<'a> hb_ot_shape_planner_t<'a> {
         language: Option<&Language>,
     ) -> Self {
         let ot_map = hb_ot_map_builder_t::new(face, script, language);
+        #[cfg(feature = "aat")]
         let aat_map = AatMapBuilder::default();
 
         let mut shaper = match script {
@@ -58,8 +62,11 @@ impl<'a> hb_ot_shape_planner_t<'a> {
         let script_fallback_position = shaper.fallback_position;
 
         // https://github.com/harfbuzz/harfbuzz/issues/2124
+        #[cfg(feature = "aat")]
         let apply_morx = face.aat_tables.morx.is_some()
             && (direction.is_horizontal() || face.ot_tables.gsub.is_none());
+        #[cfg(not(feature = "aat"))]
+        let apply_morx = false;
 
         // https://github.com/harfbuzz/harfbuzz/issues/1528
         if apply_morx && !ptr::eq(ptr::from_ref(shaper), ptr::from_ref(&DEFAULT_SHAPER)) {
@@ -72,6 +79,7 @@ impl<'a> hb_ot_shape_planner_t<'a> {
             script,
             language: language.cloned(),
             ot_map,
+            #[cfg(feature = "aat")]
             aat_map,
             apply_morx,
             script_zero_marks,
@@ -125,6 +133,7 @@ impl<'a> hb_ot_shape_planner_t<'a> {
         self.ot_map.add_feature(hb_tag_t::new(b"dnom"), empty, 1);
 
         // Random!
+        #[cfg(feature = "rand")]
         self.ot_map
             .enable_feature(hb_tag_t::new(b"rand"), F_RANDOM, hb_ot_map_t::MAX_VALUE);
 
@@ -182,7 +191,9 @@ impl<'a> hb_ot_shape_planner_t<'a> {
 
     pub fn compile(mut self, features: &[Feature]) -> hb_ot_shape_plan_t {
         let ot_map = self.ot_map.compile();
+        #[cfg(feature = "aat")]
         let mut aat_map = AatMap::default();
+        #[cfg(feature = "aat")]
         if self.apply_morx {
             self.aat_map.compile(self.face, &mut aat_map);
         }
@@ -221,7 +232,10 @@ impl<'a> hb_ot_shape_planner_t<'a> {
         let mut apply_kern = false;
 
         // Decide who does positioning. GPOS, kerx, kern, or fallback.
+        #[cfg(feature = "aat")]
         let has_kerx = self.face.aat_tables.kerx.is_some();
+        #[cfg(not(feature = "aat"))]
+        let has_kerx = false;
         let has_gsub = !apply_morx && self.face.ot_tables.gsub.is_some();
         let has_gpos = !disable_gpos && self.face.ot_tables.gpos.is_some();
 
@@ -272,6 +286,7 @@ impl<'a> hb_ot_shape_planner_t<'a> {
             language: self.language,
             shaper: self.shaper,
             ot_map,
+            #[cfg(feature = "aat")]
             aat_map,
             data: None,
             frac_mask,
@@ -312,6 +327,7 @@ pub(crate) struct OtShapeContext<'a, 'u> {
     pub features: &'a [Feature],
     // Transient stuff
     pub target_direction: Direction,
+    #[cfg_attr(not(feature = "aat"), allow(dead_code))]
     pub point_size: Option<f32>,
     pub font_funcs: &'a mut FontFuncsDispatch<'a, 'u>,
 }
@@ -360,6 +376,7 @@ impl OtShapeContext<'_, '_> {
 
         self.substitute_plan();
 
+        #[cfg(feature = "aat")]
         if self.plan.apply_morx && self.plan.apply_gpos {
             aat::layout::remove_deleted_glyphs(self.buffer);
         }
@@ -367,6 +384,7 @@ impl OtShapeContext<'_, '_> {
 
     // hb_ot_substitute_post: <https://github.com/harfbuzz/harfbuzz/blob/22ea52f42fa4fc168be91ef4e56aee3affda6e28/src/hb-ot-shape.cc#L951>
     fn substitute_post(&mut self) {
+        #[cfg(feature = "aat")]
         if self.plan.apply_morx && !self.plan.apply_gpos {
             aat::layout::remove_deleted_glyphs(self.buffer);
         }
@@ -418,13 +436,14 @@ impl OtShapeContext<'_, '_> {
             hb_synthesize_glyph_classes(self.buffer);
         }
 
+        #[cfg(feature = "aat")]
         if self.plan.apply_morx {
             aat::layout::substitute(self.plan, self.face, self.buffer, self.features);
             self.buffer.update_digest();
-        } else {
-            self.buffer.update_digest();
-            ot_layout_gsub_table::substitute(self.plan, self.face, self.font_funcs, self.buffer);
+            return;
         }
+        self.buffer.update_digest();
+        ot_layout_gsub_table::substitute(self.plan, self.face, self.font_funcs, self.buffer);
     }
 
     // hb_ot_position: <https://github.com/harfbuzz/harfbuzz/blob/22ea52f42fa4fc168be91ef4e56aee3affda6e28/src/hb-ot-shape.cc#L1094>
@@ -524,7 +543,9 @@ impl OtShapeContext<'_, '_> {
         let buffer = &mut *self.buffer;
         if plan.apply_gpos {
             ot_layout_gpos_table::position(plan, face, self.font_funcs, buffer);
-        } else if plan.apply_kerx {
+        }
+        #[cfg(feature = "aat")]
+        if !plan.apply_gpos && plan.apply_kerx {
             aat::layout::position(plan, face, *self.font_funcs.scale(), buffer);
         }
         if plan.apply_kern {
@@ -533,6 +554,7 @@ impl OtShapeContext<'_, '_> {
             ot_shape_fallback::_hb_ot_shape_fallback_kern(plan, face, buffer);
         }
 
+        #[cfg(feature = "aat")]
         if plan.apply_trak {
             aat::layout::track(
                 plan,

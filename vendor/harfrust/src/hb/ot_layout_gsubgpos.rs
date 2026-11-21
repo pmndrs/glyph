@@ -864,6 +864,7 @@ pub mod OT {
         pub auto_zwnj: bool,
         pub auto_zwj: bool,
         pub random: bool,
+        #[cfg(feature = "rand")]
         pub random_state: u32,
         pub new_syllables: Option<u8>,
         pub last_base: i32,
@@ -894,6 +895,7 @@ pub mod OT {
                 auto_zwnj: true,
                 auto_zwj: true,
                 random: false,
+                #[cfg(feature = "rand")]
                 random_state: 1,
                 new_syllables: None,
                 last_base: -1,
@@ -915,6 +917,7 @@ pub mod OT {
             self.scale.scale_y_f(value)
         }
 
+        #[cfg(feature = "rand")]
         pub fn random_number(&mut self) -> u32 {
             // http://www.cplusplus.com/reference/random/minstd_rand/
             self.random_state = self.random_state.wrapping_mul(48271) % (i32::MAX as u32);

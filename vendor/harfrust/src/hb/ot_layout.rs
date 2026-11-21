@@ -603,6 +603,7 @@ impl GlyphInfo {
     ///
     /// See <https://github.com/harfbuzz/harfbuzz/blob/368598b5bd9c37a15cb0fd5438b8e617e254609b/src/hb-ot-layout.hh#L426>
     #[doc(alias = "_hb_glyph_info_is_aat_deleted")]
+    #[cfg(feature = "aat")]
     #[inline]
     pub(crate) fn is_aat_deleted(&self) -> bool {
         self.is_unicode_format()

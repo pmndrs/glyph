@@ -14,9 +14,11 @@ impl Apply for AlternateSet<'_> {
 
         // Note: This breaks badly if two features enabled this lookup together.
         let shift = ctx.lookup_mask().trailing_zeros();
+        #[cfg_attr(not(feature = "rand"), allow(unused_mut))]
         let mut alt_index = (ctx.lookup_mask() & glyph_mask) >> shift;
 
         // If alt_index is MAX_VALUE, randomize feature if it is the rand feature.
+        #[cfg(feature = "rand")]
         if alt_index == crate::hb::ot_map::hb_ot_map_t::MAX_VALUE && ctx.random {
             // Maybe we can do better than unsafe-to-break all; but since we are
             // changing random state, it would be hard to track that.  Good 'nough.

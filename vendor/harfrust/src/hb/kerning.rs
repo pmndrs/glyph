@@ -1,4 +1,3 @@
-use super::aat::layout::DELETED_GLYPH;
 use alloc::boxed::Box;
 use read_fonts::{
     tables::{
@@ -8,8 +7,9 @@ use read_fonts::{
     types::{GlyphId, GlyphId16},
 };
 
-use super::aat::layout_common::{AatApplyContext, ClassCache, START_OF_TEXT};
-use super::aat::layout_kerx_table::SimpleKerning;
+use super::aat::layout_common::{
+    AatApplyContext, ClassCache, SimpleKerning, DELETED_GLYPH, START_OF_TEXT,
+};
 use super::buffer::*;
 use super::face::Scale;
 use super::ot_layout::TableIndex;

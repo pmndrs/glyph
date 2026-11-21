@@ -1,4 +1,8 @@
-use super::layout::DELETED_GLYPH;
+// Legacy OpenType `kern` shares this module with the AAT tables; without the
+// `aat` feature only the `kern` subset of it is reachable.
+#![cfg_attr(not(feature = "aat"), allow(dead_code, unused_imports))]
+
+#[cfg(feature = "aat")]
 use super::map::RangeFlags;
 use crate::hb::buffer::{hb_buffer_t, HB_BUFFER_SCRATCH_FLAG_SHAPER0};
 use crate::hb::face::hb_font_t;
@@ -13,6 +17,8 @@ use read_fonts::types::{FixedSize, GlyphId};
 pub const HB_BUFFER_SCRATCH_FLAG_AAT_HAS_DELETED: u32 = HB_BUFFER_SCRATCH_FLAG_SHAPER0;
 
 pub(crate) const START_OF_TEXT: u16 = 0;
+
+pub const DELETED_GLYPH: u32 = 0xFFFF;
 
 pub(crate) type ClassCache = MappingCache;
 
@@ -41,7 +47,9 @@ pub struct AatApplyContext<'a> {
     pub scale: Scale,
     pub buffer: &'a mut hb_buffer_t,
     pub has_glyph_classes: bool,
+    #[cfg(feature = "aat")]
     pub range_flags: Option<&'a [RangeFlags]>,
+    #[cfg(feature = "aat")]
     pub subtable_flags: hb_mask_t,
     pub(crate) buffer_is_reversed: bool,
     // Caches
@@ -65,7 +73,9 @@ impl<'a> AatApplyContext<'a> {
             scale,
             buffer,
             has_glyph_classes: face.ot_tables.has_glyph_classes(),
+            #[cfg(feature = "aat")]
             range_flags: None,
+            #[cfg(feature = "aat")]
             subtable_flags: 0,
             buffer_is_reversed: false,
             using_buffer_glyph_set: false,
@@ -168,6 +178,11 @@ impl<'a> AatApplyContext<'a> {
             self.buffer.info[i].set_glyph_props(self.face.ot_tables.glyph_props(glyph.into()));
         }
     }
+}
+
+pub trait SimpleKerning {
+    fn simple_kerning(&self, left: GlyphId, right: GlyphId) -> Option<i32>;
+    fn collect_glyphs(&self, _first_set: &mut U32Set, _second_set: &mut U32Set, _num_glyphs: u32);
 }
 
 pub trait TypedCollectGlyphs<T: LookupValue> {

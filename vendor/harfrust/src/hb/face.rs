@@ -39,7 +39,7 @@ impl ShaperData {
         let aat_cache = AatCache::new(font);
         let table_ranges = TableRanges::new(font);
         let cmap_cache = cmap_cache_t::new();
-        let apply_trak = font.trak().is_ok() && font.stat().is_ok();
+        let apply_trak = cfg!(feature = "aat") && font.trak().is_ok() && font.stat().is_ok();
         Self {
             table_ranges,
             ot_cache,
@@ -55,7 +55,8 @@ impl ShaperData {
         let aat_cache = AatCache::new(&tables);
         let table_ranges = TableRanges::from_tables(&tables);
         let cmap_cache = cmap_cache_t::new();
-        let apply_trak = tables.trak_data().is_some() && tables.stat_data().is_some();
+        let apply_trak =
+            cfg!(feature = "aat") && tables.trak_data().is_some() && tables.stat_data().is_some();
         Self {
             table_ranges,
             ot_cache,
@@ -436,6 +437,7 @@ impl Scale {
 ///
 /// Will panic when debugging assertions are enabled if the buffer and plan have mismatched
 /// properties.
+#[cfg_attr(not(feature = "experimental_font_api"), allow(dead_code))]
 pub fn shape(
     font: &crate::font::FontInstance,
     mut buffer: UnicodeBuffer,

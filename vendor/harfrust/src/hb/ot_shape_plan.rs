@@ -6,6 +6,7 @@ use crate::hb::common::HB_FEATURE_GLOBAL_END;
 use crate::hb::common::HB_FEATURE_GLOBAL_START;
 use crate::ShaperInstance;
 
+#[cfg(feature = "aat")]
 use super::aat::map::*;
 use super::ot_map::*;
 use super::ot_shape::*;
@@ -19,6 +20,7 @@ pub struct hb_ot_shape_plan_t {
     pub(crate) language: Option<Language>,
     pub(crate) shaper: &'static hb_ot_shaper_t,
     pub(crate) ot_map: hb_ot_map_t,
+    #[cfg(feature = "aat")]
     pub(crate) aat_map: AatMap,
     pub(crate) data: Option<Box<dyn Any + Send + Sync>>,
 
@@ -40,8 +42,11 @@ pub struct hb_ot_shape_plan_t {
     pub(crate) apply_gpos: bool,
     pub(crate) apply_fallback_kern: bool,
     pub(crate) apply_kern: bool,
+    #[cfg_attr(not(feature = "aat"), allow(dead_code))]
     pub(crate) apply_kerx: bool,
+    #[cfg_attr(not(feature = "aat"), allow(dead_code))]
     pub(crate) apply_morx: bool,
+    #[cfg_attr(not(feature = "aat"), allow(dead_code))]
     pub(crate) apply_trak: bool,
 
     pub(crate) user_features: SmallVec<[Feature; 4]>,
