@@ -10,6 +10,9 @@ mod generated {
 #[path = "unicode_kernel.rs"]
 pub(crate) mod kernel;
 
+#[path = "unicode_resync.rs"]
+pub mod resync;
+
 pub use generated::UNICODE_VERSION;
 pub use kernel::KernelCoverage;
 

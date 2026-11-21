@@ -27,13 +27,14 @@ mod generated {
     include!("generated/kernel_data.rs");
 }
 
-#[cfg(test)]
-pub(crate) use generated::KERNEL_TEST_REPRESENTATIVES;
 pub(crate) use generated::{
     K_AL, K_B2, K_BA, K_BB, K_CL, K_CP, K_EX, K_GL, K_H23, K_HARD, K_HH, K_HL, K_HY, K_ID, K_IN,
     K_IS, K_NS, K_NU, K_OP, K_PF, K_PI, K_PO, K_PR, K_QU, K_SP, K_SY, KERNEL_SCRIPT_COMPLEX,
     KERNEL_SCRIPT_SET_BASE, KERNEL_SCRIPT_TAGS,
 };
+pub(crate) use generated::{KERNEL_CLASS_MASK, KERNEL_RESYNC_LETTER};
+#[cfg(test)]
+pub(crate) use generated::{KERNEL_TEST_REPRESENTATIVES, SEGMENTATION_TEST_REPRESENTATIVES};
 
 const BLOCK: usize = 64;
 const MASKS: usize = 32;
@@ -54,11 +55,18 @@ pub(crate) fn unit_value(unit: u16) -> u16 {
     generated::KERNEL_VALUES[usize::from(generated::KERNEL_LEAVES[(leaf << 4) | (unit & 15)])]
 }
 
-/// The kernel class byte of a unit: class id in the low five bits, East Asian width in bit 5.
-#[cfg(test)]
+/// The kernel class byte of a unit: class id in the low five bits, East Asian width in bit 5,
+/// the resync-letter property in bit 6.
 #[inline]
 pub(crate) fn unit_class(unit: u16) -> u8 {
     (unit_value(unit) & 0xff) as u8
+}
+
+/// The script byte of a unit: 0 neutral, an index into `KERNEL_SCRIPT_TAGS`, a candidate-set id,
+/// or the complex mark.
+#[inline]
+pub(crate) fn unit_script(unit: u16) -> u8 {
+    (unit_value(unit) >> 8) as u8
 }
 
 /// The candidate scripts of a neutral unit whose script byte is a set id.
