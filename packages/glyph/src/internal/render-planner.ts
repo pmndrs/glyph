@@ -68,6 +68,7 @@ import { reuseOrCreateTextPropertySnapshot, reuseOrCreateTextStyleSnapshot } fro
 import type { ParagraphId, ResourceHandle, StyleId } from './glyph-id.js';
 import { codecCapabilitySetSelectionId, selectCodecCapabilitySet } from './codec-capability-selection.js';
 import { ownTextInput } from '../config/text-span-owner.js';
+import { minimalTextReplacement, wellFormedText } from '../text-mutation.js';
 
 const MAX_U32 = 0xffff_ffff;
 const claimedTargets = new WeakSet<object>();
@@ -264,7 +265,7 @@ export interface RetainedText {
   update(update: RetainedTextUpdate): void;
   /** Repositions this paragraph without invalidating its semantic or measured state. */
   updateOrder(order: number, orderScope: number, orderRank: number): void;
-  /** Returns aggregate metrics from the preparation synchronously completed by the latest assignment. */
+  /** Returns aggregate metrics for the current desired state, preparing this paragraph first when it is dirty. */
   measure(): ParagraphLayoutSummary;
   /** Returns aggregate metrics with authoritative positioned ink bounds. */
   measureInk(): ParagraphLayoutSummary;
@@ -380,10 +381,13 @@ interface RetainedTextState {
   readonly styleIds: StyleId[];
   desired: ResolvedTextOptions;
   metrics: RetainedTextMetrics;
-  preparedText: string;
+  /**
+   * The desired state the engine last prepared, leased until a later preparation replaces it. Every
+   * mutation is derived against it, so values overwritten before a preparation never reach the engine.
+   */
+  preparedDesired: ResolvedTextOptions | undefined;
   preparedOrder: number;
   prepared: boolean;
-  styleChanges: readonly RetainedStyleChange[];
   geometryRevision: number;
   committedFlowRegions: Map<string, CommittedFlowRegion>;
   committedFlowExclusions: Map<string, CommittedFlowExclusion>;
@@ -425,7 +429,28 @@ interface RetainedTextMetrics {
   readonly inlineObjectCount: number;
 }
 
-type RetainedTextLimitState = Pick<RetainedTextState, 'desired' | 'metrics' | 'dirty' | 'styleChanges'>;
+interface RetainedTextLimitState {
+  readonly desired: ResolvedTextOptions;
+  readonly metrics: RetainedTextMetrics;
+  readonly styleChanges: readonly RetainedStyleChange[];
+}
+
+/** One paragraph's share of a preparation request, derived against what the engine last prepared. */
+interface ParagraphPreparation {
+  readonly state: RetainedTextState;
+  readonly text: PlannerTextMutation | undefined;
+  readonly styles: readonly PlannerStyleMutation[];
+  readonly geometryChanged: boolean;
+  readonly geometryRevision: number;
+  /** Whether the engine has anything to do for this paragraph beyond answering a measurement. */
+  readonly changed: boolean;
+}
+
+interface StagedPreparation {
+  readonly paragraphs: readonly ParagraphPreparation[];
+  readonly removals: readonly RetainedTextState[];
+  readonly includeMeasurement: boolean;
+}
 
 interface ResolvedPublicationTransforms {
   readonly transforms: readonly ResolvedPlanTransform[];
@@ -443,10 +468,20 @@ interface StagedBatchPublication {
   readonly semanticViewMask: number;
 }
 
-/** @internal One retained synchronous planner staged for the engine-wide shape batch. */
-export interface StagedRenderPlanner {
+/** @internal A request written into one root's arena, waiting for an engine-wide batch call. */
+export interface StagedPlannerRequest {
   readonly rootId: number;
   readonly requestLength: number;
+}
+
+/** @internal One root's dirty paragraphs staged for the engine-wide batch preparation. */
+export interface StagedPlannerPreparation extends StagedPlannerRequest {
+  adoptPreparation(resultPointer: number, memoryBuffer: ArrayBuffer): void;
+  discardPreparation(): void;
+}
+
+/** @internal One retained synchronous planner staged for the engine-wide shape batch. */
+export interface StagedRenderPlanner extends StagedPlannerRequest {
   adopt(resultPointer: number, memoryBuffer: ArrayBuffer): void;
   consume(): PlanAcceptance;
   settle(): void;
@@ -481,6 +516,15 @@ export function observeRenderPlannerDirty(planner: RenderPlanner, listener: () =
   return planner._observeDirty(listener);
 }
 
+/** @internal Stage every dirty paragraph of one root for batch preparation without crossing into Wasm. */
+export function stageRenderPlannerPreparation(
+  planner: RenderPlanner,
+  measureAll: boolean,
+): StagedPlannerPreparation | undefined {
+  if (!(planner instanceof RenderPlannerImpl)) throw new TypeError('render planner was not created by this package');
+  return planner._stagePreparation(measureAll);
+}
+
 /** @internal Stage one synchronous root without crossing into Wasm. */
 export function stageRenderPlanner(
   planner: RenderPlanner,
@@ -502,8 +546,11 @@ class RenderPlannerImpl {
   readonly #origin: PlanOrigin = Object.freeze(new PlanOriginImpl());
   readonly #limits: RenderPlannerLimits;
   readonly #texts = new Set<RetainedTextState>();
-  // Accepted setters already prepared Rust; retain only owners awaiting publication adoption.
+  /** Owners whose renderer publication is behind their desired state. */
   readonly #pendingTexts = new Set<RetainedTextState>();
+  /** Owners whose desired state the engine has not prepared: a setter adds, a read or the batch removes. */
+  readonly #unprepared = new Set<RetainedTextState>();
+  #stagedPreparation: StagedPreparation | undefined;
   #transforms: readonly ResolvedPlanTransform[] | undefined;
   readonly #removed = new Set<RetainedTextState>();
   readonly #preparationRemovals = new Set<RetainedTextState>();
@@ -626,10 +673,9 @@ class RenderPlannerImpl {
       styleIds: [],
       desired,
       metrics: retainedTextMetrics(desired, ordinal),
-      preparedText: '',
+      preparedDesired: undefined,
       preparedOrder: 0,
       prepared: false,
-      styleChanges: retainedStyleChanges(desired),
       geometryRevision: 0,
       committedFlowRegions: new Map(),
       committedFlowExclusions: new Map(),
@@ -650,25 +696,21 @@ class RenderPlannerImpl {
       measurementRead: false,
       inspection: undefined,
     };
-    let candidatePrepared = false;
     try {
       state.preparedOrder = this.#preparationOrderForCreation(state.metrics.order);
-      this.#validateAggregateLimits(state);
-      this.#ensureEngineRebuilt();
-      this.#prepareTextCandidate(state);
-      candidatePrepared = true;
+      this.#validateAggregateLimits({
+        desired,
+        metrics: state.metrics,
+        styleChanges: retainedStyleChanges(desired),
+      });
     } catch (error) {
-      this.#invalidateUnadoptedPreparation();
-      if (candidatePrepared) this.#engineNeedsRebuild = true;
       releaseResolvedText(desired);
       throw error;
     }
     const previousBaseOrderValidationPending = this.#baseOrderValidationPending;
-    state.prepared = true;
-    state.preparedText = desired.text;
+    // The first preparation installs the paragraph at its preparation order; publication restates it only when
+    // another live paragraph still holds the desired one.
     state.lifecycleDirty = state.preparedOrder !== state.metrics.order;
-    state.styleChanges = noRetainedStyleChanges;
-    state.geometryDirty = false;
     const text = new RetainedTextImpl(this, state);
     textStates.set(text, { planner: this, state });
     this.#claimPreparedOrder(state);
@@ -676,14 +718,14 @@ class RenderPlannerImpl {
     this.#texts.add(state);
     this.#transforms = undefined;
     this.#pendingTexts.add(state);
+    this.#unprepared.add(state);
     this.#baseOrderValidationPending = true;
     this.#nextTextOrdinal = nextOrdinal;
-    this.#transport.acceptPreparedMutation();
     try {
       this.#dirtyListener?.();
     } catch (error) {
       this.#texts.delete(state);
-      this.#pendingTexts.delete(state);
+      this.#unprepared.delete(state);
       this.#removeLiveState(state);
       this.#releasePreparedOrder(state);
       textStates.delete(text);
@@ -692,21 +734,21 @@ class RenderPlannerImpl {
       releaseResolvedText(desired);
       this.#nextTextOrdinal = ordinal;
       this.#baseOrderValidationPending = previousBaseOrderValidationPending;
-      this.#engineNeedsRebuild = true;
-      throw new Error('text creation failed after preparing its candidate; the candidate was discarded', {
-        cause: error,
-      });
+      throw new Error('text creation failed while notifying its root; the text was discarded', { cause: error });
     }
     return text;
   }
 
-  /** @internal */
+  /**
+   * @internal Validates an update and records it as the desired state. The engine is not entered: the next read
+   * of this text, or the next batch preparation, derives one mutation against what the engine last prepared.
+   */
   _updateText(state: RetainedTextState, update: RetainedTextUpdate): { error: unknown } | undefined {
     this.#assertPublicationMutationAllowed();
     if (state.disposed) throw new Error('text engine text has been disposed');
     if (!isNonArrayObject(update)) throw new TypeError('text engine text update must be an object');
     const textOnly = textOnlyUpdate(update, state.desired);
-    if (textOnly !== undefined && textOnly === state.desired.text && !this.#engineNeedsRebuild) return;
+    if (textOnly !== undefined && textOnly === state.desired.text) return;
     const desired =
       textOnly === undefined
         ? resolveTextOptions(
@@ -724,137 +766,60 @@ class RenderPlannerImpl {
       this.#engineRevision === this.#revision &&
       sameTextExceptAnchor(state.desired, desired, state.ordinal)
     ) {
-      const anchor = desired.source.constraints?.anchor;
-      let measurement: ParagraphLayoutSummary | undefined;
-      let inspection: TextInspection | undefined;
-      try {
-        measurement = state.measurement === undefined ? undefined : withTextAnchor(state.measurement, anchor);
-        inspection =
-          state.inspection?.kind === 'owned'
-            ? this.#ownedInspection(withTextAnchor(state.inspection.source, anchor))
-            : state.inspection;
-      } catch (error) {
-        releaseResolvedText(desired);
-        throw error;
-      }
-      const previousDesired = state.desired;
-      const previousCommitted = state.committed!;
-      // The accepted geometry and bindings are unchanged; own the new semantic identity for
-      // both the desired and committed references before any old lease can be released.
-      retainResolvedText(desired);
-      state.desired = desired;
-      state.committed = desired;
-      state.measurement = measurement;
-      state.inspection = inspection;
-      let postCommitError: unknown;
-      let postCommitFailed = false;
-      for (const previous of [previousDesired, previousCommitted]) {
-        try {
-          releaseResolvedText(previous);
-        } catch (error) {
-          if (!postCommitFailed) postCommitError = error;
-          postCommitFailed = true;
-        }
-      }
-      try {
-        this.#dirtyListener?.();
-      } catch (error) {
-        if (!postCommitFailed) postCommitError = error;
-        postCommitFailed = true;
-      }
-      if (postCommitFailed) {
-        return {
-          error: new PostCommitError('text anchor update was accepted, but a post-commit step failed', postCommitError),
-        };
-      }
-      return;
+      return this.#adoptAnchorOnlyUpdate(state, desired);
     }
     const metrics = retainedTextMetrics(desired, state.ordinal);
-    const styleChanges =
-      desired.text.length !== state.desired.text.length || updateChangesStyle(update, state.desired, desired)
-        ? retainedStyleChanges(desired, state.desired)
-        : noRetainedStyleChanges;
-    const geometryDirty =
-      desired.transform.handle !== state.desired.transform.handle ||
-      desired.source.layout !== state.desired.source.layout ||
-      !sameConstraintSizes(desired.source.constraints, state.desired.source.constraints) ||
-      (Object.hasOwn(update, 'flow') && (update.flow !== undefined || state.desired.source.flow !== undefined)) ||
-      (Object.hasOwn(update, 'inlineObjects') &&
-        (update.inlineObjects !== undefined || state.desired.source.inlineObjects !== undefined));
-    const previousOrder = state.metrics.order;
-    const nextOrder = metrics.order;
-    const lifecycleDirty = state.lifecycleDirty || previousOrder !== nextOrder;
-    const candidate: RetainedTextLimitState = {
-      desired,
-      metrics,
-      dirty: true,
-      styleChanges,
-    };
-    const wasPending = this.#pendingTexts.has(state);
-    let preparation: RetainedTextState;
-    let preparedRevisionChanged: boolean;
-    let candidatePrepared = false;
+    const prepared = state.prepared ? state.preparedDesired : undefined;
     try {
-      this.#validateAggregateLimits(candidate, state);
-      this.#ensureEngineRebuilt();
-      preparation = {
-        ...state,
-        desired,
-        metrics,
-        styleChanges,
-        // Existing paragraph order belongs to the publication transaction. Setter preparation
-        // updates this paragraph's semantic state without exposing half of an atomic order swap.
-        lifecycleDirty: false,
-        geometryDirty,
-        pendingFlowRegions: geometryDirty ? new Map() : state.pendingFlowRegions,
-        pendingFlowExclusions: geometryDirty ? new Map() : state.pendingFlowExclusions,
-      };
-      preparedRevisionChanged = this.#prepareTextCandidate(preparation);
-      candidatePrepared = true;
+      this.#validateAggregateLimits({ desired, metrics, styleChanges: retainedStyleChanges(desired, prepared) }, state);
     } catch (error) {
-      this.#invalidateUnadoptedPreparation();
-      if (candidatePrepared) this.#engineNeedsRebuild = true;
-      if (!wasPending) this.#pendingTexts.delete(state);
       releaseResolvedText(desired);
       throw error;
     }
-
     const previousDesired = state.desired;
+    const previousOrder = state.metrics.order;
+    const nextOrder = metrics.order;
+    // A value the engine already prepared needs no preparation; one the renderer already draws needs no
+    // publication either. Restoring a value before anything consumed the detour therefore costs nothing.
+    const restoresPrepared = prepared !== undefined && sameEngineInput(desired, prepared, state.ordinal);
+    const next = restoresPrepared ? prepared : desired;
+    if (restoresPrepared) {
+      retainResolvedText(prepared);
+      releaseResolvedText(desired);
+    }
     const transformsChanged =
-      desired.transform.handle !== previousDesired.transform.handle ||
-      desired.flowTransforms.length !== previousDesired.flowTransforms.length ||
-      desired.flowTransforms.some(
+      next.transform.handle !== previousDesired.transform.handle ||
+      next.flowTransforms.length !== previousDesired.flowTransforms.length ||
+      next.flowTransforms.some(
         (transform, index) => transform.handle !== previousDesired.flowTransforms[index]!.handle,
       );
     this.#replaceLiveState(state, metrics);
-    state.desired = desired;
+    state.desired = next;
     state.metrics = metrics;
     if (transformsChanged) this.#transforms = undefined;
-    state.preparedText = preparation.preparedText;
-    state.prepared = true;
-    state.dirty = true;
-    state.lifecycleDirty = lifecycleDirty;
-    state.styleChanges = noRetainedStyleChanges;
-    state.geometryDirty = false;
-    state.geometryRevision = preparation.geometryRevision;
-    state.committedFlowRegions = preparation.committedFlowRegions;
-    state.committedFlowExclusions = preparation.committedFlowExclusions;
-    state.pendingFlowRegions = preparation.pendingFlowRegions;
-    state.pendingFlowExclusions = preparation.pendingFlowExclusions;
-    state.measurement = preparation.measurement;
-    state.measurementRead = false;
-    if (preparedRevisionChanged) state.inspection = undefined;
-    else if (state.inspection?.kind === 'owned') {
-      state.inspection = this.#ownedInspection(
-        withTextAnchor(state.inspection.source, desired.source.constraints?.anchor),
-      );
+    state.lifecycleDirty ||= previousOrder !== nextOrder;
+    if (previousOrder !== nextOrder) this.#baseOrderValidationPending = true;
+    if (restoresPrepared) {
+      this.#unprepared.delete(state);
+      state.geometryDirty = false;
+    } else {
+      this.#unprepared.add(state);
+      state.geometryDirty ||=
+        next.transform.handle !== previousDesired.transform.handle ||
+        next.source.layout !== previousDesired.source.layout ||
+        !sameConstraintSizes(next.source.constraints, previousDesired.source.constraints) ||
+        (Object.hasOwn(update, 'flow') && (update.flow !== undefined || previousDesired.source.flow !== undefined)) ||
+        (Object.hasOwn(update, 'inlineObjects') &&
+          (update.inlineObjects !== undefined || previousDesired.source.inlineObjects !== undefined));
     }
-    this.#pendingTexts.add(state);
-    if (previousOrder !== nextOrder) {
-      this.#baseOrderValidationPending = true;
+    if (restoresPrepared && state.published && state.committed === next && !state.lifecycleDirty && !state.orderDirty) {
+      state.dirty = false;
+      this.#pendingTexts.delete(state);
+    } else {
+      state.dirty = true;
+      this.#pendingTexts.add(state);
     }
-    this.#transport.acceptPreparedMutation();
-    // Both operations are post-commit: attempt lease release and dirty notification before
+    // Both operations follow acceptance: attempt lease release and dirty notification before
     // reporting the first failure as occurring after acceptance.
     let postCommitError: unknown;
     let postCommitFailed = false;
@@ -873,6 +838,58 @@ class RenderPlannerImpl {
     if (postCommitFailed) {
       return {
         error: new PostCommitError('text update was accepted, but a post-commit step failed', postCommitError),
+      };
+    }
+    return undefined;
+  }
+
+  /** Re-anchors an accepted, published paragraph whose layout input is otherwise unchanged; nothing is prepared. */
+  #adoptAnchorOnlyUpdate(state: RetainedTextState, desired: ResolvedTextOptions): { error: unknown } | undefined {
+    const anchor = desired.source.constraints?.anchor;
+    let measurement: ParagraphLayoutSummary | undefined;
+    let inspection: TextInspection | undefined;
+    try {
+      measurement = state.measurement === undefined ? undefined : withTextAnchor(state.measurement, anchor);
+      inspection =
+        state.inspection?.kind === 'owned'
+          ? this.#ownedInspection(withTextAnchor(state.inspection.source, anchor))
+          : state.inspection;
+    } catch (error) {
+      releaseResolvedText(desired);
+      throw error;
+    }
+    const previous = [state.desired, state.committed!];
+    // The accepted geometry and bindings are unchanged; own the new semantic identity for every
+    // reference before any old lease can be released.
+    retainResolvedText(desired);
+    state.desired = desired;
+    state.committed = desired;
+    if (state.preparedDesired !== undefined) {
+      previous.push(state.preparedDesired);
+      retainResolvedText(desired);
+      state.preparedDesired = desired;
+    }
+    state.measurement = measurement;
+    state.inspection = inspection;
+    let postCommitError: unknown;
+    let postCommitFailed = false;
+    for (const released of previous) {
+      try {
+        releaseResolvedText(released);
+      } catch (error) {
+        if (!postCommitFailed) postCommitError = error;
+        postCommitFailed = true;
+      }
+    }
+    try {
+      this.#dirtyListener?.();
+    } catch (error) {
+      if (!postCommitFailed) postCommitError = error;
+      postCommitFailed = true;
+    }
+    if (postCommitFailed) {
+      return {
+        error: new PostCommitError('text anchor update was accepted, but a post-commit step failed', postCommitError),
       };
     }
     return undefined;
@@ -1051,6 +1068,17 @@ class RenderPlannerImpl {
     state.styleIds.length = 0;
     this.#transforms = undefined;
     this.#removeLiveState(state);
+    this.#unprepared.delete(state);
+    if (!state.prepared) {
+      // The engine never saw this paragraph, so there is nothing to remove from it or from the renderer.
+      this.#texts.delete(state);
+      this.#releasePreparedOrder(state);
+      state.removed = true;
+      state.desiredReleased = true;
+      releaseResolvedText(state.desired);
+      this.#dirtyListener?.();
+      return;
+    }
     // Rust preparation still owns these bindings until the queued removal is consumed.
     // Publication adoption or root teardown releases them after removing that reference.
     state.removed = true;
@@ -1080,7 +1108,12 @@ class RenderPlannerImpl {
     if (this.#target.delivery !== 'borrowed') {
       throw new TypeError('glyph.shape() requires a synchronous borrowed renderer target');
     }
-    if (this.#stagedBatch !== undefined) throw new Error('render planner is already staged');
+    if (this.#stagedBatch !== undefined || this.#stagedPreparation !== undefined) {
+      throw new Error('render planner is already staged');
+    }
+    if (this.#unprepared.size !== 0) {
+      throw new Error('render planner has unprepared text; glyph.shape() prepares before it publishes');
+    }
     if (!force && !this.#isDirty()) return undefined;
     const checkpointGeneration = this.#checkpointGeneration;
     const frame = this.#compileFrame(options, checkpointGeneration);
@@ -1090,13 +1123,128 @@ class RenderPlannerImpl {
   }
 
   get rootId(): number {
-    if (this.#stagedBatch === undefined) throw new Error('render planner is not staged');
+    this.#assertStaged();
     return this.#transport.handle;
   }
 
   get requestLength(): number {
-    if (this.#stagedBatch === undefined) throw new Error('render planner is not staged');
+    this.#assertStaged();
     return this.#stagedRequestLength;
+  }
+
+  #assertStaged(): void {
+    if (this.#stagedBatch === undefined && this.#stagedPreparation === undefined) {
+      throw new Error('render planner is not staged');
+    }
+  }
+
+  /**
+   * @internal Writes one request that prepares every dirty paragraph of this root, without entering the engine.
+   * Returns `undefined` when a read already prepared everything. `measureAll` also returns every prepared
+   * paragraph's summary, for a caller about to read them.
+   */
+  _stagePreparation(measureAll: boolean): StagedPlannerPreparation | undefined {
+    this.#assertMutable();
+    this.#ensureEngineRebuilt();
+    if (this.#stagedBatch !== undefined || this.#stagedPreparation !== undefined) {
+      throw new Error('render planner is already staged');
+    }
+    if (this.#unprepared.size === 0) return undefined;
+    // The engine routes records by ascending paragraph identity.
+    const states = [...this.#unprepared].sort((left, right) => left.paragraphId - right.paragraphId);
+    const removals = [...this.#preparationRemovals];
+    const paragraphMutations: PlannerParagraphMutation[] = removals.map((removed) => ({
+      opcode: 'remove',
+      paragraphId: removed.paragraphId,
+    }));
+    const textMutations: PlannerTextMutation[] = [];
+    const styleMutations: PlannerStyleMutation[] = [];
+    const constraints: PlannerConstraint[] = [];
+    const regions: PlannerRegion[] = [];
+    const exclusions: PlannerExclusion[] = [];
+    const inlineObjects: PlannerInlineObject[] = [];
+    const paragraphs: ParagraphPreparation[] = [];
+    let includeMeasurement = measureAll;
+    for (const state of states) {
+      const preparation = this.#paragraphPreparation(state);
+      if (!preparation.changed) {
+        // Setters cancelled out against the prepared value in a way only the derived mutation shows.
+        this.#markPrepared(state);
+        continue;
+      }
+      paragraphs.push(preparation);
+      includeMeasurement ||= wantsMeasurement(state);
+      if (!state.prepared) {
+        paragraphMutations.push({ opcode: 'upsert', paragraphId: state.paragraphId, order: state.preparedOrder });
+      }
+      if (preparation.text !== undefined) textMutations.push(preparation.text);
+      for (const style of preparation.styles) styleMutations.push(style);
+      if (preparation.geometryChanged) {
+        const geometry = compileGeometry(
+          this.#handleState,
+          state,
+          regions.length,
+          exclusions.length,
+          preparation.geometryRevision,
+        );
+        constraints.push(geometry.constraint);
+        for (const region of geometry.regions) regions.push(region);
+        for (const exclusion of geometry.exclusions) exclusions.push(exclusion);
+        for (const object of compileInlineObjects(this.#handleState, state, preparation.geometryRevision)) {
+          inlineObjects.push(object);
+        }
+      }
+    }
+    if (paragraphs.length === 0) return undefined;
+    this.#stagedRequestLength = this.#transport.stageUpdate({
+      ...this.#preparationRequestHeader(includeMeasurement),
+      paragraphMutations,
+      paragraphOrderMutations: EMPTY_REQUEST_ITEMS,
+      textMutations,
+      styleMutations,
+      constraints,
+      regions,
+      exclusions,
+      inlineObjects,
+    });
+    this.#stagedPreparation = { paragraphs, removals, includeMeasurement };
+    return this;
+  }
+
+  adoptPreparation(resultPointer: number, memoryBuffer: ArrayBuffer): void {
+    const staged = this.#stagedPreparation;
+    if (staged === undefined) throw new Error('render planner has no staged preparation');
+    this.#stagedPreparation = undefined;
+    this.#stagedRequestLength = 0;
+    try {
+      let measurements: ReadonlyMap<number, ParagraphLayoutSummary> | undefined;
+      this.#transport.consumeStagedPreparation(
+        resultPointer,
+        memoryBuffer,
+        staged.includeMeasurement
+          ? (publication) => {
+              measurements = readPlannerMeasurements(publication);
+            }
+          : undefined,
+      );
+      for (const preparation of staged.paragraphs) {
+        this.#adoptParagraphPreparation(preparation, measurements?.get(preparation.state.paragraphId));
+      }
+      this.#adoptPreparedRemovals(staged.removals);
+      this.#transport.acceptPreparedMutation();
+    } catch (error) {
+      this.#engineNeedsRebuild =
+        this.#transport.invalidateUnadoptedMutation() || this.#transport.failureInvalidatedRoot;
+      throw error;
+    }
+  }
+
+  discardPreparation(): void {
+    if (this.#stagedPreparation === undefined) return;
+    this.#stagedPreparation = undefined;
+    this.#stagedRequestLength = 0;
+    this.#engineNeedsRebuild = true;
+    this.#transport.discardStagedUpdate();
   }
 
   adopt(resultPointer: number, memoryBuffer: ArrayBuffer): void {
@@ -1157,6 +1305,7 @@ class RenderPlannerImpl {
   }
 
   discard(): void {
+    this.discardPreparation();
     this.#stagedPublication = undefined;
     this.#stagedAcceptance = undefined;
     if (this.#stagedBatch === undefined) return;
@@ -1196,6 +1345,8 @@ class RenderPlannerImpl {
       state.desiredReleased = true;
       if (state.committed !== undefined) attempt(() => releaseResolvedText(state.committed!));
       state.committed = undefined;
+      if (state.preparedDesired !== undefined) attempt(() => releaseResolvedText(state.preparedDesired!));
+      state.preparedDesired = undefined;
     }
     this.#texts.clear();
     this.#removed.clear();
@@ -1207,6 +1358,7 @@ class RenderPlannerImpl {
     this.#liveExclusionCount = 0;
     this.#liveInlineObjectCount = 0;
     this.#pendingTexts.clear();
+    this.#unprepared.clear();
     attempt(() => this.#codec.dispose());
     this.#handleState._detachPlanner(this);
     if (failurePresent) throw failure;
@@ -1234,54 +1386,36 @@ class RenderPlannerImpl {
     }
   }
 
-  #prepareTextCandidate(
-    state: RetainedTextState,
-    // A summary is produced when asked for or when an anchor needs it; an earlier read does not make every later
-    // setter measure again.
-    // A summary stays current for a caller that reads it between edits, or for an anchor that needs it. One read
-    // long ago does not make every later setter measure.
-    includeMeasurement = (state.measurement !== undefined && state.measurementRead) ||
-      state.desired.source.constraints?.anchor !== undefined,
-  ): boolean {
-    const styles = compileStyles(this.#handleState, state);
-    const geometryChanged = state.geometryDirty || !state.prepared;
-    const geometryRevision = state.geometryRevision + Number(geometryChanged);
-    const geometry = geometryChanged ? compileGeometry(this.#handleState, state, 0, 0, geometryRevision) : undefined;
-    const textMutation: PlannerTextMutation | undefined =
-      state.preparedText === state.desired.text
-        ? undefined
-        : {
-            paragraphId: state.paragraphId,
-            start: 0,
-            deleteCount: state.preparedText.length,
-            insert: state.desired.text,
-          };
-    const preparedRemovals =
-      this.#preparationRemovals.size === 0 ? EMPTY_REQUEST_ITEMS : [...this.#preparationRemovals];
-    const preparationChanged =
-      !state.prepared ||
-      textMutation !== undefined ||
-      styles.length !== 0 ||
-      geometry !== undefined ||
-      preparedRemovals.length !== 0;
-    // Requested summaries stay current; unqueried text needs only durable layout preparation.
-    if (!preparationChanged && (!includeMeasurement || state.measurement !== undefined)) {
-      if (state.measurement !== undefined)
-        state.measurement = withTextAnchor(state.measurement, state.desired.source.constraints?.anchor);
-      return false;
-    }
-    const paragraphMutations: readonly PlannerParagraphMutation[] =
-      state.prepared && preparedRemovals.length === 0
+  /** Derives what the engine must be told to bring one paragraph from its prepared value to its desired one. */
+  #paragraphPreparation(state: RetainedTextState): ParagraphPreparation {
+    const prepared = state.prepared ? state.preparedDesired : undefined;
+    const desired = state.desired;
+    const styles =
+      prepared === desired
         ? EMPTY_REQUEST_ITEMS
-        : [
-            ...preparedRemovals.map((removed) => ({ opcode: 'remove' as const, paragraphId: removed.paragraphId })),
-            {
-              opcode: 'upsert' as const,
+        : compileStyles(this.#handleState, state, retainedStyleChanges(desired, prepared));
+    const geometryChanged = state.geometryDirty || prepared === undefined;
+    const replacement = minimalTextReplacement(prepared?.text ?? '', desired.text);
+    return {
+      state,
+      text:
+        replacement === undefined
+          ? undefined
+          : {
               paragraphId: state.paragraphId,
-              order: state.preparedOrder,
+              start: replacement.start,
+              deleteCount: replacement.end - replacement.start,
+              insert: replacement.insert,
             },
-          ];
-    const request: PlannerFrameUpdate = {
+      styles,
+      geometryChanged,
+      geometryRevision: state.geometryRevision + Number(geometryChanged),
+      changed: prepared === undefined || replacement !== undefined || styles.length !== 0 || geometryChanged,
+    };
+  }
+
+  #preparationRequestHeader(includeMeasurement: boolean) {
+    return {
       rootId: this.#transport.handle,
       codecHandle: this.#codec.handle,
       ...(this.#capabilitySet === undefined ? {} : { capabilitySet: this.#capabilitySet }),
@@ -1292,15 +1426,82 @@ class RenderPlannerImpl {
         ? textShaperAbi.engine.semanticViewMasks.measurement | textShaperAbi.engine.semanticViewMasks.borrowedLayout
         : 0,
       limits: this.#limits,
+    };
+  }
+
+  /** Records that the engine now holds this paragraph's desired state, leasing it until the next preparation. */
+  #markPrepared(state: RetainedTextState): void {
+    const previous = state.preparedDesired;
+    if (previous !== state.desired) {
+      retainResolvedText(state.desired);
+      state.preparedDesired = state.desired;
+      if (previous !== undefined) releaseResolvedText(previous);
+    }
+    state.prepared = true;
+    state.geometryDirty = false;
+    this.#unprepared.delete(state);
+  }
+
+  #adoptParagraphPreparation(preparation: ParagraphPreparation, measurement: ParagraphLayoutSummary | undefined): void {
+    const { state } = preparation;
+    if (preparation.geometryChanged) commitFlowEntityRevisions(state);
+    state.geometryRevision = preparation.geometryRevision;
+    state.measurement =
+      measurement === undefined ? undefined : withTextAnchor(measurement, state.desired.source.constraints?.anchor);
+    // A summary nobody reads again is not kept current by the next preparation.
+    state.measurementRead = false;
+    state.inspection = undefined;
+    this.#markPrepared(state);
+  }
+
+  #adoptPreparedRemovals(removals: readonly RetainedTextState[]): void {
+    for (const removed of removals) {
+      this.#preparationRemovals.delete(removed);
+      this.#releasePreparedOrder(removed);
+    }
+  }
+
+  /**
+   * Prepares one paragraph for a read. Returns whether the engine changed its retained preparation; a paragraph
+   * that is already prepared only has its summary serialized when the read needs one.
+   */
+  #prepareTextCandidate(state: RetainedTextState, includeMeasurement: boolean): boolean {
+    const preparation = this.#paragraphPreparation(state);
+    const removals = this.#preparationRemovals.size === 0 ? EMPTY_REQUEST_ITEMS : [...this.#preparationRemovals];
+    const preparationChanged = preparation.changed || removals.length !== 0;
+    // Requested summaries stay current; unqueried text needs only durable layout preparation.
+    if (!preparationChanged && (!includeMeasurement || state.measurement !== undefined)) {
+      if (state.measurement !== undefined) {
+        state.measurement = withTextAnchor(state.measurement, state.desired.source.constraints?.anchor);
+      }
+      this.#markPrepared(state);
+      return false;
+    }
+    const geometry = preparation.geometryChanged
+      ? compileGeometry(this.#handleState, state, 0, 0, preparation.geometryRevision)
+      : undefined;
+    const paragraphMutations: readonly PlannerParagraphMutation[] =
+      state.prepared && removals.length === 0
+        ? EMPTY_REQUEST_ITEMS
+        : [
+            ...removals.map((removed) => ({ opcode: 'remove' as const, paragraphId: removed.paragraphId })),
+            {
+              opcode: 'upsert' as const,
+              paragraphId: state.paragraphId,
+              order: state.preparedOrder,
+            },
+          ];
+    const request: PlannerFrameUpdate = {
+      ...this.#preparationRequestHeader(includeMeasurement),
       paragraphMutations,
       paragraphOrderMutations: EMPTY_REQUEST_ITEMS,
-      textMutations: textMutation === undefined ? EMPTY_REQUEST_ITEMS : [textMutation],
-      styleMutations: styles,
+      textMutations: preparation.text === undefined ? EMPTY_REQUEST_ITEMS : [preparation.text],
+      styleMutations: preparation.styles,
       constraints: geometry === undefined ? EMPTY_REQUEST_ITEMS : [geometry.constraint],
       regions: geometry === undefined ? EMPTY_REQUEST_ITEMS : geometry.regions,
       exclusions: geometry === undefined ? EMPTY_REQUEST_ITEMS : geometry.exclusions,
-      inlineObjects: geometryChanged
-        ? compileInlineObjects(this.#handleState, state, geometryRevision)
+      inlineObjects: preparation.geometryChanged
+        ? compileInlineObjects(this.#handleState, state, preparation.geometryRevision)
         : EMPTY_REQUEST_ITEMS,
     };
     let measurement: ParagraphLayoutSummary | undefined;
@@ -1315,23 +1516,17 @@ class RenderPlannerImpl {
     );
     if (includeMeasurement && measurement === undefined)
       throw new Error('text engine returned no measurement for prepared text');
-    if (geometryChanged) commitFlowEntityRevisions(state);
-    state.geometryRevision = geometryRevision;
-    state.preparedText = state.desired.text;
-    state.measurement =
-      measurement === undefined ? undefined : withTextAnchor(measurement, state.desired.source.constraints?.anchor);
-    if (preparationChanged) state.inspection = undefined;
-    for (const removed of preparedRemovals) {
-      this.#preparationRemovals.delete(removed);
-      this.#releasePreparedOrder(removed);
-    }
+    const inspection = state.inspection;
+    this.#adoptParagraphPreparation(preparation, measurement);
+    if (!preparationChanged) state.inspection = inspection;
+    this.#adoptPreparedRemovals(removals);
     return preparationChanged;
   }
 
   #compileFrame(options: NormalizedPublishOptions, checkpointGeneration: number): PlannerFrameUpdate {
     this.#assertUniqueBaseOrders();
     const pendingTexts = [...this.#pendingTexts];
-    // Semantic text, styles, and geometry were synchronously committed by the setter. Publication
+    // Semantic text, styles, and geometry were committed by a read or by the batch preparation. Publication
     // carries only renderer lifecycle/order work and compiles that exact preparation revision.
     let paragraphMutations: PlannerParagraphMutation[] | undefined;
     for (const state of this.#preparationRemovals) {
@@ -1462,8 +1657,6 @@ class RenderPlannerImpl {
       this.#claimPreparedOrder(state);
       state.dirty = false;
       state.lifecycleDirty = false;
-      state.styleChanges = noRetainedStyleChanges;
-      state.geometryDirty = false;
       state.orderDirty = false;
       this.#pendingTexts.delete(state);
     }
@@ -1668,9 +1861,8 @@ class RenderPlannerImpl {
     this.#assertMutable();
     this.#ensureEngineRebuilt();
     if (state.disposed) throw new Error('text engine text has been disposed');
-    // Every query reads the summary, so the next setter keeps it current for a caller that alternates.
-    state.measurementRead = true;
-    if (state.measurement === undefined) {
+    // A read is never stale: it prepares this paragraph, and only this one, when a setter left it dirty.
+    if (this.#unprepared.has(state) || state.measurement === undefined) {
       try {
         this.#prepareTextCandidate(state, true);
         this.#transport.acceptPreparedMutation();
@@ -1679,12 +1871,19 @@ class RenderPlannerImpl {
         throw error;
       }
     }
+    // Every query reads the summary, so the next preparation keeps it current for a caller that alternates.
+    state.measurementRead = true;
   }
 
   #invalidateUnadoptedPreparation(): void {
     if (this.#transport.invalidateUnadoptedMutation()) this.#engineNeedsRebuild = true;
   }
 
+  /**
+   * Discards the engine's derived root after a failure and marks every live paragraph unprepared. Nothing is
+   * replayed here: the next read or batch preparation restates each paragraph from its current desired value, so
+   * a value assigned after the failure is the one the engine sees.
+   */
   #ensureEngineRebuilt(): void {
     if (!this.#engineNeedsRebuild) return;
     this.#transport.resetDerivedRoot();
@@ -1692,46 +1891,29 @@ class RenderPlannerImpl {
     this.#revision = 0;
     this.#checkpointGeneration = checkedNextCheckpointGeneration(this.#checkpointGeneration);
     this.#preparationRemovals.clear();
-    try {
-      for (const state of this.#texts) {
-        if (state.removed || state.disposed) continue;
-        const replay: RetainedTextState = {
-          ...state,
-          prepared: false,
-          preparedText: '',
-          committedFlowRegions: new Map(),
-          committedFlowExclusions: new Map(),
-          pendingFlowRegions: new Map(),
-          pendingFlowExclusions: new Map(),
-          styleChanges: retainedStyleChanges(state.desired),
-          geometryDirty: true,
-        };
-        this.#prepareTextCandidate(replay);
-        state.prepared = true;
-        state.preparedText = replay.preparedText;
-        state.geometryRevision = replay.geometryRevision;
-        state.committedFlowRegions = replay.committedFlowRegions;
-        state.committedFlowExclusions = replay.committedFlowExclusions;
-        state.pendingFlowRegions = replay.pendingFlowRegions;
-        state.pendingFlowExclusions = replay.pendingFlowExclusions;
-        state.measurement = replay.measurement;
-        state.inspection = undefined;
-        state.dirty = true;
-        state.lifecycleDirty = true;
-        state.geometryDirty = false;
-        state.orderDirty = true;
-        state.styleChanges = noRetainedStyleChanges;
-        this.#pendingTexts.add(state);
-        this.#transport.acceptPreparedMutation();
-      }
-      this.#transforms = undefined;
-      this.#baseOrderValidationPending = true;
-      this.#dirtyListener?.();
-      this.#engineNeedsRebuild = false;
-    } catch (error) {
-      this.#engineNeedsRebuild = true;
-      throw error;
+    for (const state of this.#texts) {
+      if (state.removed || state.disposed) continue;
+      const prepared = state.preparedDesired;
+      state.preparedDesired = undefined;
+      state.prepared = false;
+      state.committedFlowRegions = new Map();
+      state.committedFlowExclusions = new Map();
+      state.pendingFlowRegions = new Map();
+      state.pendingFlowExclusions = new Map();
+      state.measurement = undefined;
+      state.inspection = undefined;
+      state.dirty = true;
+      state.lifecycleDirty = true;
+      state.geometryDirty = true;
+      state.orderDirty = true;
+      this.#pendingTexts.add(state);
+      this.#unprepared.add(state);
+      if (prepared !== undefined) releaseResolvedText(prepared);
     }
+    this.#transforms = undefined;
+    this.#baseOrderValidationPending = true;
+    this.#engineNeedsRebuild = false;
+    this.#dirtyListener?.();
   }
 
   #isDirty(): boolean {
@@ -1895,7 +2077,11 @@ function resolveTextOptions(
   if (!isNonArrayObject(value)) throw new TypeError('text engine text options must be an object');
   validateTextScalarOptions(value);
   const previousInput = typeof previous?.source.text === 'object' ? previous.source.text : undefined;
-  const formattedText = ownTextInput(value.text, previousInput);
+  const ownedText = ownTextInput(value.text, previousInput);
+  // Lone surrogates are data, not a caller error: every integration reaches the engine with well-formed text.
+  const formattedText = ownedText.text.isWellFormed()
+    ? ownedText
+    : Object.freeze({ text: wellFormedText(ownedText.text).text, spans: ownedText.spans });
   validateInlineObjects(value.inlineObjects, formattedText.text.length);
   const style =
     value.style === undefined ? {} : reuseOrCreateTextStyleSnapshot(previous?.source.style, value.style, 'text style');
@@ -2122,28 +2308,21 @@ function textOnlyUpdate(update: RetainedTextUpdate, previous: ResolvedTextOption
   if (update.text.length !== previous.text.length) {
     assertTextStyleFeatureRanges(previous.source.style ?? {}, 0, update.text.length, 'text style');
   }
-  return update.text;
-}
-
-function updateChangesStyle(
-  update: RetainedTextUpdate,
-  previous: ResolvedTextOptions,
-  desired: ResolvedTextOptions,
-): boolean {
-  return (
-    Object.hasOwn(update, 'font') ||
-    Object.hasOwn(update, 'material') ||
-    Object.hasOwn(update, 'rasterPixelRatio') ||
-    Object.hasOwn(update, 'style') ||
-    (Object.hasOwn(update, 'text') && (previous.spans.length !== 0 || desired.spans.length !== 0))
-  );
+  return update.text.isWellFormed() ? update.text : wellFormedText(update.text).text;
 }
 
 function sameTextExceptAnchor(previous: ResolvedTextOptions, next: ResolvedTextOptions, ordinal: number): boolean {
-  const beforeAnchor = previous.source.constraints?.anchor;
-  const afterAnchor = next.source.constraints?.anchor;
-  if (beforeAnchor === afterAnchor) return false;
+  return (
+    previous.source.constraints?.anchor !== next.source.constraints?.anchor &&
+    sameEngineInputExceptAnchor(previous, next, ordinal)
+  );
+}
 
+function sameEngineInputExceptAnchor(
+  previous: ResolvedTextOptions,
+  next: ResolvedTextOptions,
+  ordinal: number,
+): boolean {
   const left = previous.source;
   const right = next.source;
   return (
@@ -2160,6 +2339,22 @@ function sameTextExceptAnchor(previous: ResolvedTextOptions, next: ResolvedTextO
     (left.order ?? ordinal - 1) === (right.order ?? ordinal - 1) &&
     left.rasterPixelRatio === right.rasterPixelRatio &&
     sameConstraintSizes(left.constraints, right.constraints)
+  );
+}
+
+/** Whether two resolved values state the same engine input, anchor included. */
+function sameEngineInput(previous: ResolvedTextOptions, next: ResolvedTextOptions, ordinal: number): boolean {
+  return (
+    previous === next ||
+    (previous.source.constraints?.anchor === next.source.constraints?.anchor &&
+      sameEngineInputExceptAnchor(previous, next, ordinal))
+  );
+}
+
+/** A summary is produced for an anchor that needs it, or for a caller that read the last one. */
+function wantsMeasurement(state: RetainedTextState): boolean {
+  return (
+    (state.measurement !== undefined && state.measurementRead) || state.desired.source.constraints?.anchor !== undefined
   );
 }
 
@@ -2226,11 +2421,15 @@ function sameSpanEngineStyle(left: ResolvedSpan, right: ResolvedSpan): boolean {
   );
 }
 
-function compileStyles(handleState: GlyphHandleState, state: RetainedTextState): readonly PlannerStyleMutation[] {
-  if (state.styleChanges.length === 0) return EMPTY_REQUEST_ITEMS;
+function compileStyles(
+  handleState: GlyphHandleState,
+  state: RetainedTextState,
+  changes: readonly RetainedStyleChange[],
+): readonly PlannerStyleMutation[] {
+  if (changes.length === 0) return EMPTY_REQUEST_ITEMS;
   const desired = state.desired;
   const source = desired.source;
-  return state.styleChanges.map((change): PlannerStyleMutation => {
+  return changes.map((change): PlannerStyleMutation => {
     const styleIndex = change.kind === 'root' ? 1 : change.styleIndex;
     const styleId = (state.styleIds[styleIndex] ??= engineStyleId(handleState.id, state.paragraphId, styleIndex));
     if (change.kind === 'remove') {

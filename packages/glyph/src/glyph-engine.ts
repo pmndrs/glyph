@@ -13,7 +13,12 @@ import { createRuntimeShaper, runtimeShaperEngineExports, type RuntimeShaper } f
 import { GlyphEngineStatusError } from './engine-error.js';
 import { GlyphHandleState, type GlyphHandleStateOptions } from './internal/handle-state.js';
 import type { FontHandle } from './identity.js';
-import type { PlanAcceptance, StagedRenderPlanner } from './internal/render-planner.js';
+import type {
+  PlanAcceptance,
+  StagedPlannerPreparation,
+  StagedPlannerRequest,
+  StagedRenderPlanner,
+} from './internal/render-planner.js';
 import { textShaperAbi } from './generated/text-shaper-abi.js';
 
 /** Options for constructing one independent Wasm shaping engine. */
@@ -30,6 +35,13 @@ export interface GlyphEngine {
 
 /** @internal One renderer-neutral root participating in the next engine-wide shape transaction. */
 export interface GlyphShapeParticipant {
+  /**
+   * Reconciles the root and stages its dirty paragraphs for the batch preparation. `measureAll` asks for every
+   * prepared paragraph's summary, which an explicit `glyph.prepare()` wants and a frame does not.
+   */
+  prepare(measureAll: boolean): StagedPlannerPreparation | undefined;
+  /** Runs once this root's paragraphs are all prepared, before anything is staged for publication. */
+  prepared(): void;
   stage(): StagedRenderPlanner | undefined;
   accepted(): void;
   rejected(error: unknown): void;
@@ -141,6 +153,12 @@ export function registerGlyphShapeParticipant(
 ): GlyphShapeRegistration {
   if (!(glyphEngine instanceof GlyphEngineImpl)) throw new TypeError('glyph engine was not created by this package');
   return glyphEngine._registerShapeParticipant(participant);
+}
+
+/** @internal Prepares every dirty paragraph of every dirty root in one engine call, without publishing. */
+export function prepareGlyphEngine(glyphEngine: GlyphEngine): void {
+  if (!(glyphEngine instanceof GlyphEngineImpl)) throw new TypeError('glyph engine was not created by this package');
+  glyphEngine._prepare();
 }
 
 /** @internal Flushes every dirty root registered with one Glyph engine. */
@@ -366,7 +384,38 @@ class GlyphEngineImpl implements GlyphEngine {
     this.#shapeRegistrations.delete(registration);
   }
 
-  /** @internal */
+  /**
+   * @internal Batch-prepares every dirty root and leaves each queued for the next `shape()`. A root whose
+   * preparation fails is told so and the failure is thrown after every other root was prepared.
+   */
+  _prepare(): void {
+    this.#assertActive();
+    if (this.#shapeActive) throw new Error('glyph.prepare() cannot run inside glyph.shape() or glyph.prepare()');
+    if (this.#dirtyShapeRegistrations.size === 0) return;
+    this.#shapeActive = true;
+    const registrations = [...this.#dirtyShapeRegistrations];
+    const outcomes: ShapeOutcome[] = [];
+    const errors = new Set<unknown>();
+    try {
+      this.#prepareShapeParticipants(registrations, outcomes, true);
+      for (let index = 0; index < registrations.length; index += 1) {
+        const outcome = outcomes[index];
+        if (!isShapeFailure(outcome)) continue;
+        errors.add(outcome.error);
+        try {
+          registrations[index]!.rejected(outcome.error);
+        } catch (error) {
+          errors.add(error);
+        }
+      }
+    } finally {
+      this.#shapeActive = false;
+    }
+    if (errors.size === 1) throw errors.values().next().value;
+    if (errors.size > 1) throw new AggregateError(errors, 'multiple Glyph roots rejected prepare()');
+  }
+
+  /** @internal Prepares whatever is still dirty, then publishes: a paragraph is never laid out twice for one value. */
   _shape(): void {
     this.#assertActive();
     if (this.#shapeActive) throw new Error('glyph.shape() cannot be reentered');
@@ -384,6 +433,7 @@ class GlyphEngineImpl implements GlyphEngine {
     try {
       for (const registration of this.#dirtyShapeRegistrations) registrations.push(registration);
       this.#dirtyShapeRegistrations.clear();
+      this.#prepareShapeParticipants(registrations, outcomes, false);
       this.#stageShapeParticipants(registrations, staged, stagedRegistrationIndices, outcomes);
       if (staged.length !== 0) {
         try {
@@ -415,6 +465,100 @@ class GlyphEngineImpl implements GlyphEngine {
     if (failure !== undefined) throw failure.error;
   }
 
+  /** Reconciles each root, prepares all their dirty paragraphs in one engine call, then tells each root. */
+  #prepareShapeParticipants(
+    registrations: readonly GlyphShapeRegistrationImpl[],
+    outcomes: ShapeOutcome[],
+    measureAll: boolean,
+  ): void {
+    const staged: StagedPlannerPreparation[] = [];
+    const stagedRegistrationIndices: number[] = [];
+    try {
+      for (let index = 0; index < registrations.length; index += 1) {
+        const registration = registrations[index]!;
+        if (registration.disposed) continue;
+        try {
+          const preparation = registration.prepare(measureAll);
+          if (preparation === undefined) continue;
+          staged.push(preparation);
+          stagedRegistrationIndices.push(index);
+        } catch (error) {
+          outcomes[index] = shapeFailure(error);
+        }
+      }
+      if (staged.length !== 0) {
+        try {
+          const exports = runtimeShaperEngineExports(this.#shaper);
+          const results = this.#callBatch(staged, exports.prepareBatch, 'prepare Glyph batch');
+          const layout = textShaperAbi.layouts.engineUpdateBatchEntry;
+          for (let stagedIndex = 0; stagedIndex < staged.length; stagedIndex += 1) {
+            const offset = stagedIndex * layout.size;
+            const status = results.view.getUint32(offset + layout.status, true);
+            const resultPointer = results.view.getUint32(offset + layout.resultPointer, true);
+            try {
+              if (resultPointer === 0) requireEngineStatus(status, 'prepare Glyph root');
+              staged[stagedIndex]!.adoptPreparation(resultPointer, results.memory);
+            } catch (error) {
+              outcomes[stagedRegistrationIndices[stagedIndex]!] = shapeFailure(error);
+            }
+          }
+        } catch (error) {
+          const batchError = shapeFailure(error);
+          for (const index of stagedRegistrationIndices) outcomes[index] ??= batchError;
+        }
+      }
+    } finally {
+      for (const preparation of staged) {
+        try {
+          preparation.discardPreparation();
+        } catch {
+          // The root already recorded that its derived state must be rebuilt.
+        }
+      }
+    }
+    for (let index = 0; index < registrations.length; index += 1) {
+      const registration = registrations[index]!;
+      if (registration.disposed || isShapeFailure(outcomes[index])) continue;
+      try {
+        registration.prepared();
+      } catch (error) {
+        outcomes[index] = shapeFailure(error);
+      }
+    }
+  }
+
+  /** Writes one entry per staged root into the shared batch arena and makes the single engine call. */
+  #callBatch(
+    staged: readonly StagedPlannerRequest[],
+    call: (entriesPointer: number, count: number) => number,
+    operation: string,
+  ): { readonly view: DataView; readonly memory: ArrayBuffer } {
+    const exports = runtimeShaperEngineExports(this.#shaper);
+    const count = staged.length;
+    if (count > exports.updateBatchCapacity()) {
+      requireEngineStatus(exports.reserveUpdateBatch(count), 'reserve Glyph batch');
+    }
+    const pointer = exports.updateBatchPointer();
+    if (pointer === 0) throw new GlyphEngineStatusError('resolve Glyph batch', textShaperAbi.status.resultTooLarge);
+    const layout = textShaperAbi.layouts.engineUpdateBatchEntry;
+    const byteLength = count * layout.size;
+    if (pointer + byteLength > exports.memory.buffer.byteLength) {
+      throw new RangeError('Glyph batch descriptor arena is out of bounds');
+    }
+    const view = new DataView(exports.memory.buffer, pointer, byteLength);
+    for (let index = 0; index < count; index += 1) {
+      const request = staged[index]!;
+      const offset = index * layout.size;
+      view.setUint32(offset + layout.rootId, request.rootId, true);
+      view.setUint32(offset + layout.requestLength, request.requestLength, true);
+      view.setUint32(offset + layout.resultPointer, 0, true);
+      view.setUint32(offset + layout.status, 0, true);
+    }
+    requireEngineStatus(call(pointer, count), operation);
+    const memory = exports.memory.buffer as ArrayBuffer;
+    return { view: new DataView(memory, pointer, byteLength), memory };
+  }
+
   #stageShapeParticipants(
     registrations: GlyphShapeRegistrationImpl[],
     staged: StagedRenderPlanner[],
@@ -423,7 +567,7 @@ class GlyphEngineImpl implements GlyphEngine {
   ): void {
     for (let index = 0; index < registrations.length; index += 1) {
       const registration = registrations[index]!;
-      if (registration.disposed) continue;
+      if (registration.disposed || isShapeFailure(outcomes[index])) continue;
       try {
         const planner = registration.stage();
         this.#dirtyShapeRegistrations.delete(registration);
@@ -447,30 +591,8 @@ class GlyphEngineImpl implements GlyphEngine {
     outcomes: ShapeOutcome[],
   ): void {
     const exports = runtimeShaperEngineExports(this.#shaper);
-    const count = staged.length;
-    if (count > exports.updateBatchCapacity()) {
-      requireEngineStatus(exports.reserveUpdateBatch(count), 'reserve Glyph shape batch');
-    }
-    const pointer = exports.updateBatchPointer();
-    if (pointer === 0)
-      throw new GlyphEngineStatusError('resolve Glyph shape batch', textShaperAbi.status.resultTooLarge);
+    const { view, memory: finalMemory } = this.#callBatch(staged, exports.textUpdateBatch, 'publish Glyph shape batch');
     const layout = textShaperAbi.layouts.engineUpdateBatchEntry;
-    const byteLength = count * layout.size;
-    if (pointer + byteLength > exports.memory.buffer.byteLength) {
-      throw new RangeError('Glyph shape batch descriptor arena is out of bounds');
-    }
-    let view = new DataView(exports.memory.buffer, pointer, byteLength);
-    for (let index = 0; index < count; index += 1) {
-      const planner = staged[index]!;
-      const offset = index * layout.size;
-      view.setUint32(offset + layout.rootId, planner.rootId, true);
-      view.setUint32(offset + layout.requestLength, planner.requestLength, true);
-      view.setUint32(offset + layout.resultPointer, 0, true);
-      view.setUint32(offset + layout.status, 0, true);
-    }
-    requireEngineStatus(exports.textUpdateBatch(pointer, count), 'publish Glyph shape batch');
-    const finalMemory = exports.memory.buffer as ArrayBuffer;
-    view = new DataView(finalMemory, pointer, byteLength);
     for (let stagedIndex = 0; stagedIndex < staged.length; stagedIndex += 1) {
       const registrationIndex = stagedRegistrationIndices[stagedIndex]!;
       const planner = staged[stagedIndex]!;
@@ -641,6 +763,14 @@ class GlyphShapeRegistrationImpl implements GlyphShapeRegistration {
   invalidate(): void {
     if (this.#disposed) throw new Error('Glyph shape registration has been disposed');
     this.#engine._invalidateShapeParticipant(this);
+  }
+
+  prepare(measureAll: boolean): StagedPlannerPreparation | undefined {
+    return this.#participant.prepare(measureAll);
+  }
+
+  prepared(): void {
+    this.#participant.prepared();
   }
 
   stage(): StagedRenderPlanner | undefined {

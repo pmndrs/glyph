@@ -2048,6 +2048,7 @@ pub fn json() -> String {
             "textUpdate": "pmndrs_glyph_engine_update",
             "textUpdateBatch": "pmndrs_glyph_engine_update_batch",
             "measureParagraph": "pmndrs_glyph_engine_measure_paragraph",
+            "prepareBatch": "pmndrs_glyph_engine_prepare_batch",
             "borrowParagraphLayout": "pmndrs_glyph_engine_borrow_paragraph_layout",
             "borrowParagraphGlyphs": "pmndrs_glyph_engine_borrow_paragraph_glyphs",
             "copyGlyphs": "pmndrs_glyph_engine_copy_glyphs",

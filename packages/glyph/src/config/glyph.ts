@@ -510,6 +510,13 @@ export interface GlyphRootServices<Bindings extends GlyphBindingSet, RendererRes
 export interface GlyphRootShapeHooks<RendererResult> {
   /** Reconciles retained adapter state. Returning false defers this root until its next invalidation. */
   prepare?(): GlyphShapeOptions | false | undefined;
+  /**
+   * Runs after every dirty paragraph of this root is prepared and before anything is published. Reading a text
+   * here enters the engine at most to serialize a summary; this is where an adapter resolves anchors.
+   */
+  prepared?(): void;
+  /** Runs instead of `accepted` when the renderer already draws this root's desired state. */
+  unchanged?(): void;
   /** Runs after the renderer accepted this root and the borrowed command buffer expired. */
   accepted?(result: RendererResult): void;
   /** Runs after this root failed without changing its last accepted renderer state. */

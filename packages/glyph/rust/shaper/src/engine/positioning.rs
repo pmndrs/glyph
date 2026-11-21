@@ -2615,6 +2615,13 @@ impl PositionedGlyphArena {
             .then_some(self.recomposed_glyphs.as_slice())
     }
 
+    /// Declares every source row unpublished without repositioning any: a paint-only change
+    /// alters what a row projects, not where it sits.
+    pub(crate) fn mark_unpublished(&mut self) {
+        self.recomposed_glyphs.clear();
+        self.recomposed_glyphs_retained = false;
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn position_drop_cap(
         &mut self,

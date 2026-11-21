@@ -1360,6 +1360,48 @@ export class PlanTransport {
     return this.#decodeResult(header, resultPointer, memoryBuffer, staged.initialMemoryBuffer);
   }
 
+  /**
+   * @internal Read the answer to a staged batch preparation. `consume` sees the requested semantic
+   * views synchronously; without it only the result extent is recorded.
+   */
+  consumeStagedPreparation(
+    resultPointer: number,
+    memoryBuffer: ArrayBuffer,
+    consume?: (publication: PlanPublication) => void,
+  ): void {
+    if (this.#disposed) throw new Error('plan transport is disposed');
+    const staged = this.#stagedUpdate;
+    if (staged === undefined) throw new Error('no text preparation request is staged');
+    this.#stagedUpdate = undefined;
+    // From here an error may follow Rust preparation writes; the owner rebuilds rather than retries.
+    this.#preparedMutationUnadopted = true;
+    this.#lastFailureInvalidatedRoot = true;
+    if (memoryBuffer !== this.#exports.memory.buffer) {
+      throw new Error('text preparation batch supplied stale Wasm memory');
+    }
+    if (resultPointer === 0) throw engineStatusError('prepare text', textShaperAbi.status.resultTooLarge);
+    const layout = textShaperAbi.layouts.engineResult;
+    if (resultPointer + layout.size > memoryBuffer.byteLength) {
+      throw new RangeError('text engine returned an out-of-bounds result header');
+    }
+    const header = this.#boundResultHeader(memoryBuffer, resultPointer, layout.size);
+    const status = header.getUint32(layout.status, true);
+    this.#lastFailureInvalidatedRoot =
+      (header.getUint32(layout.flags, true) & textShaperAbi.engine.resultFlags.rootInvalidated) !== 0;
+    if (status !== textShaperAbi.status.ok) {
+      this.#preparedMutationUnadopted = this.#lastFailureInvalidatedRoot;
+      throw engineStatusError(
+        'prepare text',
+        status,
+        header.getUint32(layout.requiredRequestCapacity, true),
+        header.getUint32(layout.requiredResultCapacity, true),
+        headerFault(header),
+      );
+    }
+    if (consume === undefined) this.#recordResultExtent(header, resultPointer, memoryBuffer);
+    else consume(this.#decodeResult(header, resultPointer, memoryBuffer, staged.initialMemoryBuffer));
+  }
+
   /** @internal Whether the last rejected engine result invalidated Rust's derived root. */
   get failureInvalidatedRoot(): boolean {
     return this.#lastFailureInvalidatedRoot;

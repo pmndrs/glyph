@@ -10,6 +10,7 @@ const BOOKKEEPING = /alloc|request_ptr|capacity|_ptr$|_len$|_count$|abi_version/
 const SETUP = /register_|create_root|reserve_|shaper_initialize/;
 
 const calls = new Map();
+const lastArguments = new Map();
 let failNext;
 let instances = 0;
 let memory;
@@ -30,6 +31,7 @@ WebAssembly.instantiate = async (source, imports) => {
     const short = name.replace(PREFIX, '');
     exports[name] = (...args) => {
       calls.set(short, (calls.get(short) ?? 0) + 1);
+      lastArguments.set(short, args);
       if (failNext !== undefined && failNext.test(short)) {
         failNext = undefined;
         throw new WebAssembly.RuntimeError('unreachable');
@@ -60,6 +62,11 @@ export function crossingsOf(operation) {
   const snapshot = crossingSnapshot();
   operation();
   return crossingsSince(snapshot);
+}
+
+/** The arguments of the most recent call to one export, by short name. */
+export function lastCallArguments(name) {
+  return lastArguments.get(name);
 }
 
 /** Makes the next call to an export matching `pattern` trap as a panic in shipped Wasm does. */

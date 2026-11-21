@@ -1,4 +1,5 @@
 import { sameConstraintSizes } from '../text-anchor.js';
+import { wellFormedText } from '../text-mutation.js';
 import * as THREE from 'three/webgpu';
 
 import { type FormattedText, type ParagraphSpan, type TextInput } from '../formatted-text.js';
@@ -121,6 +122,8 @@ export type TextCommitState =
 interface DesiredTextState<Format extends RasterFormatMetadata> {
   readonly font: FontSelection<Format>;
   readonly text: string;
+  /** How many lone surrogates of the authored text were replaced by U+FFFD to make `text`. */
+  readonly replacedSurrogates: number;
   readonly spans: readonly TextSpan<Format>[];
   readonly style: TextStyle;
   readonly layout: ParagraphLayout;
@@ -734,6 +737,11 @@ export class ThreeRootHost {
     return prepared;
   }
 
+  /** @internal Resolve anchors once this root's paragraphs are prepared, before its publication is staged. */
+  resolvePreparedAnchors(): void {
+    this.#binding?.resolvePreparedAnchors();
+  }
+
   /** @internal Apply adapter bookkeeping after this root's renderer accepts its command buffer. */
   acceptShape(): void {
     try {
@@ -1167,8 +1175,13 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   set font(value: FontSelection<Format>) {
     this.set({ font: value });
   }
+  /** The text as the engine sees it: what was assigned, with every lone surrogate replaced by U+FFFD. */
   get text(): string {
     return this.#desired.text;
+  }
+  /** How many lone surrogates of the assigned text were replaced by U+FFFD. Zero for well-formed text. */
+  get replacedSurrogates(): number {
+    return this.#desired.replacedSurrogates;
   }
   set text(value: TextInput<Format>) {
     this.set({ text: value } as TextUpdate<Format>);
@@ -1257,7 +1270,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return true;
   }
 
-  /** Measures synchronously prepared desired layout in unanchored paragraph-local coordinates (+X right, +Y down); `anchorOffset` is separate metadata. */
+  /** Measures the desired layout, preparing this paragraph first when a setter left it dirty, in unanchored paragraph-local coordinates (+X right, +Y down); `anchorOffset` is separate metadata. */
   measure(): ParagraphLayoutSummary {
     this.#assertActive();
     return this.#root.measurement(this);
@@ -2083,6 +2096,17 @@ class ThreeRootPublication {
     return Object.freeze({ semanticViews: 'none' });
   }
 
+  /** Resolves the anchor of every text about to be published, from the layout the batch just prepared. */
+  resolvePreparedAnchors(): void {
+    this.#assertActive();
+    for (const text of this.#pendingMeasurements) {
+      const entry = this.#entries.get(text)!;
+      if (entry.stagedDesired.constraints.anchor !== undefined) {
+        entry.stagedAnchorOffset = entry.handle.measure().anchorOffset;
+      }
+    }
+  }
+
   acceptShape(): void {
     this.#assertActive();
     this.#rendererUpdateRejected = false;
@@ -2249,8 +2273,10 @@ class ThreeRootPublication {
     }
     const entry = this.#entries.get(text)!;
     entry.stagedDesired = desired;
+    // Re-anchoring published text places it at once from its prepared layout. Every other anchor is resolved
+    // after the batch preparation, so a setter never lays out.
     entry.stagedAnchorOffset =
-      desired.constraints.anchor === undefined ? undefined : entry.handle.measure().anchorOffset;
+      desired.constraints.anchor === undefined || !placementOnly ? undefined : entry.handle.measure().anchorOffset;
     if (placementOnly) {
       entry.committedAnchorOffset = entry.stagedAnchorOffset;
       this.#root.queueTransform(text);
@@ -2409,8 +2435,13 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
   if (!layoutReused || !constraintsReused) normalizedColumns(layout, constraints);
   const formatted = typeof properties.text === 'string' ? undefined : properties.text;
   if (formatted !== undefined && !isFormattedText(formatted)) throw new TypeError('Text content is invalid');
-  const text = formatted?.text ?? (properties.text as string);
-  if (typeof text !== 'string') throw new TypeError('Text content must be a string or formatted text');
+  const authored = formatted?.text ?? (properties.text as string);
+  if (typeof authored !== 'string') throw new TypeError('Text content must be a string or formatted text');
+  // An unchanged text was already made well formed; its count describes what the author wrote, not this merge.
+  const { text, replacedSurrogates } =
+    previous !== undefined && authored === previous.text
+      ? { text: authored, replacedSurrogates: previous.replacedSurrogates }
+      : wellFormedText(authored);
   if (style !== previous?.style || text.length !== previous.text.length) {
     assertTextStyleFeatureRanges(style, 0, text.length, 'Text style');
   }
@@ -2448,6 +2479,7 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
   return Object.freeze({
     font: properties.font,
     text,
+    replacedSurrogates,
     spans,
     style,
     layout: layoutReused ? layout : reuseOrCreateTextPropertySnapshot(previous?.layout, layout, 'Text layout'),
@@ -2462,13 +2494,14 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
 
 function replaceDesiredString<Format extends RasterFormatMetadata>(
   previous: DesiredTextState<Format>,
-  text: string,
+  authored: string,
 ): DesiredTextState<Format> {
-  assertPairedSurrogates(text);
+  const { text, replacedSurrogates } = wellFormedText(authored);
   if (text.length !== previous.text.length) assertTextStyleFeatureRanges(previous.style, 0, text.length, 'Text style');
   return Object.freeze({
     ...previous,
     text,
+    replacedSurrogates,
     spans: emptyTextSpans,
   });
 }
@@ -2510,7 +2543,6 @@ function assertSpanRanges<Format extends RasterFormatMetadata>(
   text: string,
   spans: readonly TextSpan<Format>[],
 ): readonly TextSpan<Format>[] {
-  assertPairedSurrogates(text);
   for (const [index, span] of spans.entries()) {
     if (typeof span !== 'object' || span === null || Array.isArray(span)) {
       throw new TypeError(`Text span ${index} must be an object`);
@@ -2594,20 +2626,6 @@ function assertSpansNest<Format extends RasterFormatMetadata>(spans: readonly Te
     throw new RangeError(
       `span ${duplicateSecondIndex} duplicates span ${duplicateFirstIndex} over [${span.start}:${span.end})`,
     );
-  }
-}
-
-function assertPairedSurrogates(text: string): void {
-  for (let index = 0; index < text.length; index += 1) {
-    const unit = text.charCodeAt(index);
-    if (unit < 0xd800 || unit > 0xdfff) continue;
-    const high = unit <= 0xdbff;
-    const next = high ? text.charCodeAt(index + 1) : Number.NaN;
-    if (high && next >= 0xdc00 && next <= 0xdfff) {
-      index += 1;
-      continue;
-    }
-    throw new RangeError(`text offset ${index} is an unpaired ${high ? 'high' : 'low'} surrogate`);
   }
 }
 

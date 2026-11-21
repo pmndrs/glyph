@@ -144,14 +144,8 @@ export function createText<Selection extends TypeGpuFontSelection>(
     writePosition(transform, positionValue, positionX, positionY);
     controller = services.createText(coreState(state, font));
     acquiredController = controller;
-    if (hasAuthoredAnchor) {
-      const offset = controller.measure().anchorOffset;
-      anchorX = offset.x;
-      anchorY = offset.y;
-      pendingAnchorX = anchorX;
-      pendingAnchorY = anchorY;
-      writePosition(transform, positionValue, positionX + anchorX, positionY + anchorY);
-    }
+    // An anchor is resolved from the batch preparation, so constructing a text never enters the engine.
+    pendingAnchorNeedsMeasure = hasAuthoredAnchor;
   } catch (error) {
     try {
       acquiredController?.dispose();
@@ -187,7 +181,6 @@ export function createText<Selection extends TypeGpuFontSelection>(
       if (nextInput.style?.decoration !== undefined)
         throw new TypeError('TypeGPU text decoration lines are not supported');
       const next = ownedSemanticState(previousState, nextInput);
-      const anchorsPresent = next.constraints?.anchor !== undefined || hasAuthoredAnchor;
       const wasPendingSemantic = pendingSemantic;
       const anchorOnlyChange =
         previousState.constraints?.anchor !== next.constraints?.anchor &&
@@ -197,7 +190,9 @@ export function createText<Selection extends TypeGpuFontSelection>(
         previousState.layout === next.layout &&
         Object.is(previousState.rasterPixelRatio, next.rasterPixelRatio) &&
         sameConstraintSizes(previousState.constraints, next.constraints);
-      const previousMeasurement = anchorOnlyChange && !wasPendingSemantic ? controller.measure() : undefined;
+      // Only a re-anchoring of published text is placed at once; both reads answer from the prepared layout.
+      const placesNow = anchorOnlyChange && !wasPendingSemantic;
+      const previousMeasurement = placesNow ? controller.measure() : undefined;
       const nextFont = next.font === previousState.font ? font : fonts.acquire(next.font);
       let failure: PostCommitError | undefined;
       try {
@@ -219,10 +214,12 @@ export function createText<Selection extends TypeGpuFontSelection>(
       pendingSemantic = true;
       pendingAnchorNeedsMeasure = hasAuthoredAnchor;
       try {
-        const nextMeasurement: ParagraphLayoutSummary | undefined = anchorsPresent ? controller.measure() : undefined;
-        pendingAnchorX = nextMeasurement?.anchorOffset.x ?? 0;
-        pendingAnchorY = nextMeasurement?.anchorOffset.y ?? 0;
-        pendingAnchorNeedsMeasure = false;
+        const nextMeasurement: ParagraphLayoutSummary | undefined = placesNow ? controller.measure() : undefined;
+        if (nextMeasurement !== undefined || !hasAuthoredAnchor) {
+          pendingAnchorX = nextMeasurement?.anchorOffset.x ?? 0;
+          pendingAnchorY = nextMeasurement?.anchorOffset.y ?? 0;
+          pendingAnchorNeedsMeasure = false;
+        }
         const placementOnly =
           failure === undefined &&
           previousMeasurement !== undefined &&

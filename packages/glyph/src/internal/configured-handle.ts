@@ -45,10 +45,16 @@ import type {
   RetainedTextFlowInput,
   RetainedTextOptions,
   RetainedTextUpdate,
+  StagedPlannerPreparation,
   StagedRenderPlanner,
   OwnedTextInspectionView,
 } from './render-planner.js';
-import { observeRenderPlannerDirty, ownedTextInspection, stageRenderPlanner } from './render-planner.js';
+import {
+  observeRenderPlannerDirty,
+  ownedTextInspection,
+  stageRenderPlanner,
+  stageRenderPlannerPreparation,
+} from './render-planner.js';
 import { reuseOrCreateTextPropertySnapshot } from '../config/text-property.js';
 import { mapTextSpanBindings, ownTextSpanRecords } from '../config/text-span-owner.js';
 import type { BorrowedGlyphLayout } from '../layout.js';
@@ -441,6 +447,8 @@ class ConfiguredRootServices<
   #stopObservingDirty: (() => void) | undefined;
   #shapeHooks: GlyphRootCreateOptions<Bindings, RendererResult, Boundary>['shape'];
   #forceShape = false;
+  /** What the root's `prepare` hook answered in this shape, consumed when the root is staged. */
+  #reconciled: import('../config/glyph.js').GlyphShapeOptions | false | undefined;
   #disposed = false;
 
   constructor(
@@ -485,6 +493,8 @@ class ConfiguredRootServices<
         textCapacity: commands?.textUnits ?? 64,
       });
       registration = registerGlyphShapeParticipant(this.#engine, {
+        prepare: (measureAll) => this.#prepareShape(measureAll),
+        prepared: () => this.#shapeHooks?.prepared?.(),
         stage: () => this.#stageShape(),
         accepted: () => this.#acceptShape(),
         rejected: (error) => this.#rejectShape(error),
@@ -814,13 +824,24 @@ class ConfiguredRootServices<
     return this.#planner;
   }
 
+  #prepareShape(measureAll: boolean): StagedPlannerPreparation | undefined {
+    const planner = this.#requiredPlanner();
+    this.#reconciled = this.#shapeHooks?.prepare?.();
+    if (this.#reconciled === false) return undefined;
+    return stageRenderPlannerPreparation(planner, measureAll);
+  }
+
   #stageShape(): StagedRenderPlanner | undefined {
     const planner = this.#requiredPlanner();
     const force = this.#forceShape;
     this.#forceShape = false;
-    const prepared = this.#shapeHooks?.prepare?.();
-    if (prepared === false) return undefined;
-    return stageRenderPlanner(planner, prepared, force);
+    const reconciled = this.#reconciled;
+    this.#reconciled = undefined;
+    if (reconciled === false) return undefined;
+    const staged = stageRenderPlanner(planner, reconciled, force);
+    // The renderer already draws what this root desires, so the root settles without a publication.
+    if (staged === undefined) this.#shapeHooks?.unchanged?.();
+    return staged;
   }
 
   #acceptShape(): void {

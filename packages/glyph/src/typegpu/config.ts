@@ -133,8 +133,11 @@ export function defineTypeGpuConfig(options: TypeGpuConfigOptions): TypeGpuGlyph
               defaultRenderer: renderer,
               dispose,
               shape: {
-                prepare: () => {
+                prepared: () => {
                   for (const text of texts.values()) text.prepare();
+                },
+                unchanged: () => {
+                  for (const text of texts.values()) text.accepted();
                 },
                 rejected: () => {
                   for (const text of texts.values()) text.rejected();

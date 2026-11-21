@@ -63,6 +63,8 @@ mod style_state;
 pub(crate) mod work_attribution;
 
 pub(crate) use positioning::SemanticGlyph;
+#[cfg(target_arch = "wasm32")]
+pub(crate) use state::PreparationTarget;
 #[cfg(feature = "oracle")]
 pub use state::oracle;
 pub use state::{EngineError, FrameFault, TextEngine};

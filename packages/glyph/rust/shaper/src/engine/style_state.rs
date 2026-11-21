@@ -152,6 +152,29 @@ pub(crate) struct StyleInvalidation {
     pub metrics: bool,
     pub positioning: bool,
     pub cluster_mapping: bool,
+    /// Colour, opacity or material differs. Also sets `positioning`.
+    pub paint: bool,
+    /// An effect extent, decoration geometry or raster ratio differs. Also sets `positioning`.
+    pub effects: bool,
+    /// The UTF-16 range whose resolved style differs.
+    pub changed: super::state::DirtyInterval,
+}
+
+impl StyleInvalidation {
+    pub(crate) fn any(self) -> bool {
+        self.bidi || self.shaping || self.metrics || self.positioning || self.cluster_mapping
+    }
+
+    /// Whether the only difference is paint: no glyph moves, no extent changes, no span boundary
+    /// moves, so retained shaping, lines and positions all still answer.
+    pub(crate) fn paint_only(self) -> bool {
+        self.paint
+            && !self.effects
+            && !self.metrics
+            && !self.cluster_mapping
+            && !self.shaping
+            && !self.bidi
+    }
 }
 
 #[derive(Default)]
@@ -256,6 +279,9 @@ impl ResolvedStyleArena {
                 metrics: true,
                 positioning: true,
                 cluster_mapping: true,
+                paint: true,
+                effects: true,
+                changed: super::state::DirtyInterval::ALL,
             };
         }
         let mut invalidation = StyleInvalidation::default();
@@ -282,22 +308,37 @@ impl ResolvedStyleArena {
                 || old.letter_spacing.to_bits() != new.letter_spacing.to_bits()
                 || old.word_spacing.to_bits() != new.word_spacing.to_bits()
                 || old.baseline_shift.to_bits() != new.baseline_shift.to_bits();
-            invalidation.positioning |= invalidation.metrics
-                || invalidation.cluster_mapping
-                || old.material_id != new.material_id
-                || old.raster_pixel_ratio.to_bits() != new.raster_pixel_ratio.to_bits()
+            let paint = old.material_id != new.material_id
                 || old.foreground_rgba != new.foreground_rgba
                 || old.opacity.to_bits() != new.opacity.to_bits()
                 || old.outline_rgba != new.outline_rgba
-                || old.outline_width.to_bits() != new.outline_width.to_bits()
                 || old.shadow_rgba != new.shadow_rgba
+                || old.decoration_rgba != new.decoration_rgba;
+            let effects = old.raster_pixel_ratio.to_bits() != new.raster_pixel_ratio.to_bits()
+                || old.outline_width.to_bits() != new.outline_width.to_bits()
                 || old.shadow_offset_x.to_bits() != new.shadow_offset_x.to_bits()
                 || old.shadow_offset_y.to_bits() != new.shadow_offset_y.to_bits()
-                || old.decoration_rgba != new.decoration_rgba
                 || old.decoration_flags != new.decoration_flags
                 || old.decoration_style != new.decoration_style
                 || old.decoration_thickness.to_bits() != new.decoration_thickness.to_bits()
                 || old.decoration_offset.to_bits() != new.decoration_offset.to_bits();
+            let before = invalidation;
+            invalidation.paint |= paint;
+            invalidation.effects |= effects;
+            invalidation.positioning |=
+                invalidation.metrics || invalidation.cluster_mapping || paint || effects;
+            if invalidation != before || paint || effects {
+                invalidation.changed = super::state::DirtyInterval {
+                    start: invalidation
+                        .changed
+                        .start
+                        .min(previous.text_start.max(next.text_start)),
+                    end: invalidation
+                        .changed
+                        .end
+                        .max(previous.text_end.min(next.text_end)),
+                };
+            }
             if previous.text_end <= next.text_end {
                 old_index += 1;
             }
@@ -1731,44 +1772,56 @@ mod tests {
             font_size: 24.0,
             ..ResolvedStyle::default()
         };
+        let metrics = previous.invalidation_against(&storage, &resolved(font_size), &storage);
         assert_eq!(
-            previous.invalidation_against(&storage, &resolved(font_size), &storage),
+            metrics,
             StyleInvalidation {
-                bidi: false,
-                shaping: false,
                 metrics: true,
                 positioning: true,
-                cluster_mapping: false,
+                changed: metrics.changed,
+                ..StyleInvalidation::default()
             },
         );
+        assert!(!metrics.paint_only());
 
         let foreground = ResolvedStyle {
             foreground_rgba: 0xff00_00ff,
             ..ResolvedStyle::default()
         };
+        let paint = previous.invalidation_against(&storage, &resolved(foreground), &storage);
         assert_eq!(
-            previous.invalidation_against(&storage, &resolved(foreground), &storage),
+            paint,
             StyleInvalidation {
-                bidi: false,
-                shaping: false,
-                metrics: false,
                 positioning: true,
-                cluster_mapping: false,
+                paint: true,
+                changed: paint.changed,
+                ..StyleInvalidation::default()
             },
         );
+        assert!(paint.paint_only());
+        assert!(!paint.changed.is_empty());
+
+        let outline_width = ResolvedStyle {
+            outline_width: 2.0,
+            ..ResolvedStyle::default()
+        };
+        let effects = previous.invalidation_against(&storage, &resolved(outline_width), &storage);
+        assert!(effects.effects && effects.positioning && !effects.paint_only());
 
         let direction = ResolvedStyle {
             direction: 2,
             ..ResolvedStyle::default()
         };
+        let bidi = previous.invalidation_against(&storage, &resolved(direction), &storage);
         assert_eq!(
-            previous.invalidation_against(&storage, &resolved(direction), &storage),
+            bidi,
             StyleInvalidation {
                 bidi: true,
                 shaping: true,
                 metrics: true,
                 positioning: true,
-                cluster_mapping: false,
+                changed: bidi.changed,
+                ..StyleInvalidation::default()
             },
         );
     }

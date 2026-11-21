@@ -16,31 +16,27 @@ const LABELS = 200;
 
 /** Engine crossings per operation, for a root of `LABELS` labels. */
 const BUDGET = {
-  'mount: construct and attach N labels, then one frame': {
-    engine_measure_paragraph: 2 * LABELS,
-    engine_update_batch: 1,
-  },
+  'mount: construct and attach N labels, then one frame': { engine_prepare_batch: 1, engine_update_batch: 1 },
   'idle: a traversal with nothing dirty': {},
-  'setter: N text setters': { engine_measure_paragraph: LABELS },
-  'setter + frame: the frame after N setters': { engine_update_batch: 1 },
+  'setter: N text setters': {},
+  'setter + frame: the frame after N setters': { engine_prepare_batch: 1, engine_update_batch: 1 },
   'read: first measure of a clean label': { engine_measure_paragraph: 1 },
   'read: second measure of the same label': {},
   'setter + read: one read among N dirty siblings': { engine_measure_paragraph: 1 },
-  'setter + read: reading every remaining dirty label': { engine_measure_paragraph: LABELS - 2 },
+  'setter + read: reading every remaining dirty label': { engine_measure_paragraph: LABELS - 1 },
   'frame after reads': { engine_update_batch: 1 },
   'interleaved: N x (set, measure)': { engine_measure_paragraph: LABELS },
   'interleaved: the frame after': { engine_update_batch: 1 },
-  'overwrite before publication: 2N setters and one frame': {
-    engine_measure_paragraph: 2 * LABELS,
-    engine_update_batch: 1,
-  },
-  'restore the published value: two setters and one frame': { engine_measure_paragraph: 2, engine_update_batch: 1 },
-  'paint-only change: one setter and one frame': { engine_measure_paragraph: 1, engine_update_batch: 1 },
-  'multi-pass frame: three traversals after N setters': { engine_update_batch: 1 },
-  'anchored text: constraint and text setters': { engine_measure_paragraph: 2 },
-  'anchored text: the frame after': { engine_update_batch: 1 },
+  'overwrite before publication: 2N setters and one frame': { engine_prepare_batch: 1, engine_update_batch: 1 },
+  'restore the published value: two setters and one frame': {},
+  'paint-only change: one setter and one frame': { engine_prepare_batch: 1, engine_update_batch: 1 },
+  'multi-pass frame: three traversals after N setters': { engine_prepare_batch: 1, engine_update_batch: 1 },
+  // Anchoring a published text places it at once from its prepared layout: one summary is serialized, nothing is laid out.
+  'anchored text: first anchor on a published label': { engine_measure_paragraph: 1 },
+  'anchored text: text setter on an anchored label': {},
+  'anchored text: the frame after': { engine_prepare_batch: 1, engine_update_batch: 1 },
   'detached texts: two texts measured alternately, twice': { engine_measure_paragraph: 2 },
-  'constructor: createText': { engine_measure_paragraph: 1 },
+  'constructor: createText': {},
 };
 
 const fonts = createFontCache({ inter: { file: 'inter-bitmap-16.font.glb', raster: bitmap({ strikes: [16] }) } });
@@ -107,8 +103,10 @@ test('crossing budget', { timeout }, async (t) => {
     frame();
     frame();
   });
-  spend('anchored text: constraint and text setters', () => {
+  spend('anchored text: first anchor on a published label', () => {
     nodes[1].constraints = { anchor: { x: 'center', y: 'middle' } };
+  });
+  spend('anchored text: text setter on an anchored label', () => {
     nodes[1].text = 'anchored text edit';
   });
   spend('anchored text: the frame after', frame);

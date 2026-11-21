@@ -45,6 +45,7 @@ use crate::{
     wire::read_u32,
 };
 
+use super::super::PreparationTarget;
 use super::{
     fonts::{FontLibrary, PreparedFont},
     model::{
@@ -263,9 +264,21 @@ impl Session {
     fn measure(&mut self, bytes: &[u8]) -> Result<Vec<SemanticRecord>, String> {
         let request = parse_update_request(bytes, ROOT_ID).map_err(status)?;
         let revision = self.engine.root_revision(ROOT_ID).map_err(debug)?;
+        // A request that carries input takes the frame's batch entry, which prepares every
+        // paragraph with input; a pure read takes the single-paragraph entry. Both must stage
+        // the same candidates and the same records.
+        let carries_input = request.text_mutations.len() != 0
+            || request.style_mutations.len() != 0
+            || request.geometry.constraint_count() != 0
+            || request.geometry.inline_object_count() != 0;
+        let target = if carries_input {
+            PreparationTarget::Dirty
+        } else {
+            PreparationTarget::One(PARAGRAPH_ID)
+        };
         let measured = self
             .engine
-            .measure_paragraph_with_shaper(&mut self.registry, request, PARAGRAPH_ID)
+            .prepare_paragraphs_with_shaper(&mut self.registry, request, target)
             .map_err(|error| format!("measure: {error:?}"))?;
         let staged = (|| {
             let views = self

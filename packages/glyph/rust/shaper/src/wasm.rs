@@ -7,7 +7,7 @@ use crate::{
     STATUS_REGISTRATION_IN_USE, STATUS_RESULT_TOO_LARGE, STATUS_REVISION_CONFLICT,
     STATUS_ROOT_CONFLICT, STATUS_ROOT_MISSING, ShaperRegistry,
     engine::{
-        EngineError, FrameFault, TextEngine,
+        EngineError, FrameFault, PreparationTarget, TextEngine,
         codec::CapabilitySetId,
         codec_wire::parse_codec,
         font_binding_wire::parse_font_binding,
@@ -1039,6 +1039,7 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_copy_decorations(
     })
 }
 
+/// Prepares one paragraph for a read and stages its requested semantic views.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pmndrs_glyph_engine_measure_paragraph(
     root_id: u32,
@@ -1047,78 +1048,147 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_measure_paragraph(
     paragraph_id: u32,
 ) -> u32 {
     with_state(|state| {
-        let revision = match state.engine.root_revision(root_id) {
-            Ok(revision) => revision,
-            Err(_) => return 0,
+        prepare(
+            state,
+            root_id,
+            Some(request_offset as usize),
+            request_len,
+            PreparationTarget::One(paragraph_id),
+        )
+    })
+}
+
+/// Prepares every paragraph each listed root carries input for, without publishing.
+///
+/// Entries use the update-batch arena and layout: each names a root whose request arena already
+/// holds `request_length` bytes, and receives that root's result pointer and status. One root's
+/// failure leaves the other roots prepared.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pmndrs_glyph_engine_prepare_batch(
+    entries_pointer: u32,
+    count: u32,
+) -> u32 {
+    with_state(|state| {
+        let mut batch = core::mem::take(&mut state.update_batch);
+        let status = batch.process(
+            entries_pointer as usize,
+            count,
+            |root_id, request_length| {
+                let result_pointer = prepare(
+                    state,
+                    root_id,
+                    None,
+                    request_length,
+                    PreparationTarget::Dirty,
+                );
+                let status = if result_pointer == 0 {
+                    STATUS_ROOT_MISSING
+                } else {
+                    state
+                        .frames
+                        .get(&root_id)
+                        .and_then(|transport| transport.result_status(result_pointer as usize))
+                        .unwrap_or(STATUS_INVALID_REQUEST)
+                };
+                UpdateBatchResult {
+                    result_pointer,
+                    status,
+                }
+            },
+        );
+        state.update_batch = batch;
+        status
+    })
+}
+
+fn prepare(
+    state: &mut WasmState,
+    root_id: u32,
+    request_pointer: Option<usize>,
+    request_len: u32,
+    target: PreparationTarget,
+) -> u32 {
+    let revision = match state.engine.root_revision(root_id) {
+        Ok(revision) => revision,
+        Err(_) => return 0,
+    };
+    let request = {
+        let Some(transport) = state.frames.get(&root_id) else {
+            return 0;
         };
-        let request = {
-            let Some(transport) = state.frames.get(&root_id) else {
-                return 0;
-            };
-            let bytes = match transport.request_at(request_offset as usize, request_len) {
-                Ok(bytes) => bytes,
-                Err(status) => {
-                    return publish_failure(state, root_id, revision, status, request_len, 0);
-                }
-            };
-            match parse_update_request(bytes, root_id) {
-                Ok(request) => request,
-                Err(status) => {
-                    return publish_failure(state, root_id, revision, status, 0, 0);
-                }
+        let request_bytes = match request_pointer {
+            Some(pointer) => transport.request_at(pointer, request_len),
+            None => transport.request_at_current(request_len),
+        };
+        let bytes = match request_bytes {
+            Ok(bytes) => bytes,
+            Err(status) => {
+                return publish_failure(state, root_id, revision, status, request_len, 0);
             }
         };
-        let measured = match state.engine.measure_paragraph_with_shaper(
-            &mut state.registry,
-            request,
-            paragraph_id,
-        ) {
+        match parse_update_request(bytes, root_id) {
+            Ok(request) => request,
+            Err(status) => {
+                return publish_failure(state, root_id, revision, status, 0, 0);
+            }
+        }
+    };
+    let measured =
+        match state
+            .engine
+            .prepare_paragraphs_with_shaper(&mut state.registry, request, target)
+        {
             Ok(measured) => measured,
             Err(error) => {
                 return publish_engine_failure(state, root_id, revision, error);
             }
         };
-        let staged = match state.engine.measured_semantic_views(measured) {
-            Ok(semantic_views) => match query_layout(semantic_views) {
-                Ok(layout) if layout.byte_length > request.limits.max_output_bytes => Err((
-                    STATUS_RESULT_TOO_LARGE,
-                    FrameFault::default(),
-                    layout.byte_length,
-                )),
-                Ok(layout) => state
-                    .frames
-                    .get_mut(&root_id)
-                    .ok_or(STATUS_ROOT_MISSING)
-                    .and_then(|transport| {
+    // A batch sizes its own result arena; a read reports the capacity it needs instead.
+    let grow_output = matches!(target, PreparationTarget::Dirty);
+    let staged = match state.engine.measured_semantic_views(measured) {
+        Ok(semantic_views) => match query_layout(semantic_views) {
+            Ok(layout) if layout.byte_length > request.limits.max_output_bytes => Err((
+                STATUS_RESULT_TOO_LARGE,
+                FrameFault::default(),
+                layout.byte_length,
+            )),
+            Ok(layout) => state
+                .frames
+                .get_mut(&root_id)
+                .ok_or(STATUS_ROOT_MISSING)
+                .and_then(|transport| {
+                    if grow_output {
+                        transport.reserve_publish_capacity(layout.byte_length)?;
+                    } else {
                         transport.ensure_publish_capacity(layout.byte_length)?;
-                        transport.stage_query(root_id, revision, semantic_views)
-                    })
-                    .map_err(|status| (status, FrameFault::default(), layout.byte_length)),
-                Err(status) => Err((status, FrameFault::default(), 0)),
-            },
-            Err(error) => Err((engine_status(error), error.fault(), 0)),
-        };
-        match staged {
-            Ok(pointer) => match state.engine.commit_measure(measured) {
-                Ok(_) => u32::try_from(pointer).unwrap_or(0),
-                Err(error) => publish_engine_failure(state, root_id, revision, error),
-            },
-            Err((status, fault, required_result_capacity)) => {
-                // The output was not delivered, so discard the derived root. The caller
-                // sees this failure and can make an explicit next request after reserving.
-                let _ = state.engine.invalidate_after_measure_failure(measured);
-                publish_attributed_failure(
-                    state,
-                    root_id,
-                    revision,
-                    status,
-                    fault,
-                    0,
-                    required_result_capacity,
-                )
-            }
+                    }
+                    transport.stage_query(root_id, revision, semantic_views)
+                })
+                .map_err(|status| (status, FrameFault::default(), layout.byte_length)),
+            Err(status) => Err((status, FrameFault::default(), 0)),
+        },
+        Err(error) => Err((engine_status(error), error.fault(), 0)),
+    };
+    match staged {
+        Ok(pointer) => match state.engine.commit_measure(measured) {
+            Ok(_) => u32::try_from(pointer).unwrap_or(0),
+            Err(error) => publish_engine_failure(state, root_id, revision, error),
+        },
+        Err((status, fault, required_result_capacity)) => {
+            // The output was not delivered, so discard the derived root. The caller
+            // sees this failure and can make an explicit next request after reserving.
+            let _ = state.engine.invalidate_after_measure_failure(measured);
+            publish_attributed_failure(
+                state,
+                root_id,
+                revision,
+                status,
+                fault,
+                0,
+                required_result_capacity,
+            )
         }
-    })
+    }
 }
 
 #[unsafe(no_mangle)]
