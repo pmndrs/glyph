@@ -8,17 +8,17 @@
 //! the neighbouring units and add-carry propagation for the starred rules (`OP SP*`, `CL SP* NS`,
 //! `B2 SP* B2`, `NU (SY|IS)*`).
 //!
-//! The kernel never guesses. A boundary it cannot decide marks its units dirty, and every dirty
-//! unit is covered by a window that runs from the nearest safe cut before it to the nearest safe
-//! cut after it. `unicode.rs` hands each window to the conformance-tested scalar analysis as an
-//! independent string. A safe cut is a position where that is exact:
+//! The kernel never guesses. Every unit outside the closure is covered by a window that runs
+//! from the nearest safe cut before it to the nearest safe cut after it, and `unicode.rs` hands
+//! each window to the conformance-tested scalar analysis as an independent string. A safe cut is
+//! a position where that is exact:
 //!
-//! - `I I | I`, three closure letters or ideographs in a row, or
-//! - `(I | SP | start) I SP | I`, a single space between letters with a letter or space before.
+//! - `I | I`, between two closure letters or ideographs,
+//! - `I SP | I`, after a single space between two of them, or
+//! - directly after a required break.
 //!
-//! Two units before the cut are required because the scalar machine carries its `spaces` flag one
-//! unit past an initial quotation mark (`«a b` has no break after the space). The exhaustive and
-//! fuzz tests in `unicode.rs` are the proof of both the rules and the cuts.
+//! The exhaustive and fuzz tests in `unicode_kernel_tests.rs` are the proof of both the rules
+//! and the cuts.
 
 use alloc::vec::Vec;
 
@@ -90,7 +90,6 @@ pub(crate) struct Kernel {
 
 #[derive(Default)]
 struct Carry {
-    setter_high: u64,
     base_high: u64,
     flagged_high: u64,
     flag_run: bool,
@@ -105,7 +104,6 @@ struct Carry {
 struct Decision {
     allowed: u64,
     required: u64,
-    dirty_boundaries: u64,
     safe: u64,
 }
 
@@ -188,17 +186,10 @@ impl Kernel {
                 block == 0,
                 last_unit,
             );
-            let dirty_boundaries = decision.dirty_boundaries & boundary_mask;
             self.allowed.push(decision.allowed & boundary_mask);
             self.required.push(decision.required & boundary_mask);
-            self.safe
-                .push(decision.safe & boundary_mask & !dirty_boundaries);
-            // A dirty boundary dirties the unit on each side of it.
-            self.dirty
-                .push((current[RESIDUE] & unit_mask) | dirty_boundaries | (dirty_boundaries >> 1));
-            if dirty_boundaries & 1 != 0 && block > 0 {
-                self.dirty[block - 1] |= 1 << 63;
-            }
+            self.safe.push(decision.safe & boundary_mask);
+            self.dirty.push(current[RESIDUE] & unit_mask);
             previous = current;
             current = next;
         }
@@ -377,11 +368,10 @@ fn decide_block(
     first: bool,
     last_unit: u64,
 ) -> Decision {
-    // `was(x)`: the unit before is in x. `was2`, `was3`: two and three units before.
+    // `was(x)`: the unit before is in x. `was2`: two units before.
     // `then(x)`: the unit after is in x. `then2`: two units after.
     let was = |classes: &[u8]| (union(current, classes) << 1) | (union(previous, classes) >> 63);
     let was2 = |classes: &[u8]| (union(current, classes) << 2) | (union(previous, classes) >> 62);
-    let was3 = |classes: &[u8]| (union(current, classes) << 3) | (union(previous, classes) >> 61);
     let then = |classes: &[u8]| (union(current, classes) >> 1) | (union(next, classes) << 63);
     let then2 = |classes: &[u8]| (union(current, classes) >> 2) | (union(next, classes) << 62);
     let is = |classes: &[u8]| union(current, classes);
@@ -397,25 +387,18 @@ fn decide_block(
     let was_space = was(&[K_SP]);
     let hard = is(&[K_HARD]);
 
-    // LB15a. An initial quote after one of these sets the scalar machine's `spaces` flag unless
-    // an earlier rule returned first. The flag suppresses the next boundary and any space run
-    // that follows it, so the unit after the quote behaves as a second flag base.
-    let quote_start = is(&[K_PI])
-        & (was(&[K_HARD, K_OP, K_QU, K_PF, K_GL, K_SP]) | start)
-        & !then(&[K_HARD, K_GL, K_CL, K_CP, K_EX, K_SY])
-        & !was(&[K_PI]);
-    let after_quote = ((quote_start << 1) | carry.setter_high) & !space;
-    carry.setter_high = quote_start >> 63;
-    let flag_base = is(&[K_OP]) | quote_start | after_quote;
+    // LB14 and LB15a: `OP SP* ×` and `(sot | BK | LF | NL | OP | QU | GL | SP) Pi SP* ×`. The
+    // boundary after a space run that follows such a base is not a break.
+    let flag_base =
+        is(&[K_OP]) | (is(&[K_PI]) & (was(&[K_HARD, K_OP, K_QU, K_PI, K_PF, K_GL, K_SP]) | start));
     let flagged_spaces = runs_after(
         (flag_base << 1) | carry.base_high,
         space,
         &mut carry.flag_run,
     );
     carry.base_high = flag_base >> 63;
-    let flag_source = flagged_spaces | after_quote;
-    let flagged = (flag_source << 1) | carry.flagged_high;
-    carry.flagged_high = flag_source >> 63;
+    let flagged = (flagged_spaces << 1) | carry.flagged_high;
+    carry.flagged_high = flagged_spaces >> 63;
 
     // LB16 and LB17 look past a space run for NS or B2.
     let close_spaces = runs_after(was(&[K_CL, K_CP]), space, &mut carry.close_run);
@@ -487,22 +470,16 @@ fn decide_block(
 
     let no_break = early | (!space_before_number & (before_spaces | (!was_space & late)));
 
-    // The scalar flag survives a required break (`( ` then a newline suppresses a later
-    // boundary), and two adjacent initial quotes alternate. Both go to the scalar residue.
-    let dirty_boundaries = (flagged & hard) | (is(&[K_PI]) & was(&[K_PI]));
-
+    // A safe cut: a letter or ideograph after another, or after one and a single space, or
+    // any unit after a required break. No rule's context crosses these.
     let inert = is(&[K_AL, K_HL, K_ID, K_H23]);
-    let was_inert = was(&[K_AL, K_HL, K_ID, K_H23]);
-    let was2_inert = was2(&[K_AL, K_HL, K_ID, K_H23]);
-    let safe = inert
-        & !flagged
-        & ((was2_inert & was_inert)
-            | ((was3(&[K_AL, K_HL, K_ID, K_H23, K_SP]) | (start << 2)) & was2_inert & was_space));
+    let safe = (inert
+        & (was(&[K_AL, K_HL, K_ID, K_H23]) | (was2(&[K_AL, K_HL, K_ID, K_H23]) & was_space)))
+        | required;
 
     Decision {
         allowed: !no_break & !required,
         required,
-        dirty_boundaries,
         safe,
     }
 }
