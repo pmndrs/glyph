@@ -37,17 +37,18 @@ Based on `8176a24e0` (tip of `experiments/held-rope-ascii-anchor-wip`).
 | `sil-green-10`      | Pure TypeGPU batching through indexed transforms; growth device-error fix                                                                                                                                                     | `experiments/sil-typegpu` (kept: on-demand atlas is next)                              |
 | `sil-green-11`      | UAX #14 opening-quote fix, single bidi classification, script set ids, resync predicates (unit 1d part 2)                                                                                                                     | `experiments/sil-unicode` (kept: part 3 is next)                                       |
 | `sil-green-12`      | Metric-change rescale and line-height class; pure TypeGPU shared programs, on-demand atlas, single-channel mode                                                                                                               | `experiments/sil-geometry` (deleted), `experiments/sil-typegpu` (deleted)              |
+| `sil-green-13`      | Preparation model stages 0–2; Slug batching, fragment cost and on-demand band curves; decorated-text material fix                                                                                                             | `experiments/sil-prepare` (kept), `experiments/sil-render` (kept)                      |
+| `sil-green-14`      | Dense cluster build (unit 1c); word and sentence lanes, three-stage Unicode tries                                                                                                                                             | `experiments/sil-cluster` (deleted), `experiments/sil-unicode` (deleted)               |
+| `sil-green-15`      | Positioning topology/numeric split and per-line ink (unit 1b)                                                                                                                                                                 | `experiments/sil-positioning` (deleted)                                                |
 | after `sil-green-4` | Stale process guidance removed; plan, decisions, build log and this map                                                                                                                                                       | integration branch                                                                     |
 
 ## Open lane branches
 
-| Branch                        | Worktree               | Feature in progress                                                           | On `origin`            | State                       |
-| ----------------------------- | ---------------------- | ----------------------------------------------------------------------------- | ---------------------- | --------------------------- |
-| `experiments/sil-positioning` | `glyph-wt-positioning` | Unit 1b: positioning topology/numeric split, per-line ink                     | no                     | building                    |
-| `experiments/sil-unicode`     | `glyph-wt-unicode`     | Unit 1d part 3: word and sentence lanes, break-source seam, table re-encoding | yes                    | building (parts 1–2 merged) |
-| `experiments/sil-prepare`     | `glyph-wt-prepare`     | Preparation and error model (unit 3): batch prepare and the setter flip first | yes (guard tests only) | building                    |
-| `experiments/sil-render`      | `glyph-wt-render`      | Slug fragment cost; Slug batching                                             | yes                    | building                    |
-| `experiments/sil-cluster`     | `glyph-wt-cluster`     | Unit 1c: dense cluster build with dirty-range output                          | no                     | building                    |
+| Branch                    | Worktree           | Feature in progress                                                                                          | On `origin` | State    |
+| ------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------ | ----------- | -------- |
+| `experiments/sil-prepare` | `glyph-wt-prepare` | Ship gate: paragraph-local failure, trap recovery; publication hold, `onLayout`; API docs and migration note | yes         | building |
+| `experiments/sil-render`  | `glyph-wt-render`  | Ship gate: Slug on direct TypeGPU matching Three                                                             | yes         | building |
+| `experiments/sil-oracle`  | `glyph-wt-oracle`  | Ship gate: oracle coverage for decorations, multi-paragraph, inline objects, multi-region                    | no          | building |
 
 ## Not on any branch yet
 

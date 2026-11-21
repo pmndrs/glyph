@@ -1,7 +1,9 @@
-/* @workflow { "name": "glyph:stage-bench", "summary": "Time the run-local geometry stage and the engine steps around it inside the optimized wasm32+simd128 oracle probe.", "requirements": "Pinned Rust through mise and installed package dependencies for wasm-opt. Evidence for a rewrite, not a benchmark protocol: run one at a time on a quiet machine.", "writes": "packages/glyph/rust/shaper/target/stage-bench-wasm; never dist." } */
+/* @workflow { "name": "glyph:stage-bench", "summary": "Time the run-local geometry stage, the cluster build, positioning and measurement and the engine steps around them inside the optimized wasm32+simd128 oracle probe.", "requirements": "Pinned Rust through mise and installed package dependencies for wasm-opt. Evidence for a rewrite, not a benchmark protocol: run one at a time on a quiet machine.", "writes": "packages/glyph/rust/shaper/target/stage-bench-wasm; never dist." } */
 // Usage:
 //   node scripts/stage-bench.mjs [--iterations N] [--rounds N] [--only SUBSTRING] [--save FILE]
-//                                [--probe LABEL=FILE]...
+//                                [--suite stage|layout] [--probe LABEL=FILE]...
+// `--suite layout` times positioning and measurement per change class (cold, edit, width change
+// with and without moved breaks, alignment change) for each fixture, alignment and size.
 // With no --probe the current source is built and timed. Each --probe names a saved probe; several are
 // timed interleaved, round by round, so two builds can be compared in one session.
 import { spawn } from 'node:child_process';
@@ -27,10 +29,14 @@ const fonts = [
   ['amiri', 'arabic'],
   ['devanagari', 'devanagari'],
   ['cjk-jp', 'cjk'],
+  // A fallback stack: Inter has no Arabic, so every Arabic run shapes in the second font.
+  ['inter+amiri', 'arabic'],
 ];
 const sizes = [1000, 15000, 22000];
+const layoutFixtures = ['inter', 'fredoka', 'amiri', 'bidi', 'cjk', 'dropcap', 'exclusion'];
+const alignments = ['start', 'center', 'end', 'justify'];
 
-const options = { iterations: 40, rounds: 3, only: undefined, save: undefined, probes: [] };
+const options = { iterations: 40, rounds: 3, only: undefined, save: undefined, suite: 'stage', probes: [] };
 const arguments_ = process.argv.slice(2);
 for (let index = 0; index < arguments_.length; index += 2) {
   const [key, value] = [arguments_[index], arguments_[index + 1]];
@@ -39,6 +45,7 @@ for (let index = 0; index < arguments_.length; index += 2) {
   else if (key === '--rounds') options.rounds = Number(value);
   else if (key === '--only') options.only = value;
   else if (key === '--save') options.save = value;
+  else if (key === '--suite') options.suite = value;
   else if (key === '--probe') options.probes.push(value.split('='));
   else throw new Error(`unknown option ${key}`);
 }
@@ -51,10 +58,17 @@ if (options.probes.length === 0) {
 const probes = [];
 for (const [label, file] of options.probes) probes.push({ label, probe: await instantiateProbe(file) });
 
-const cases = [
-  ...fonts.flatMap(([font, script]) => sizes.map((size) => `paragraph ${font} ${script} ${size}`)),
-  'labels inter latin 200',
-].filter((name) => options.only === undefined || name.includes(options.only));
+if (options.suite !== 'stage' && options.suite !== 'layout') throw new Error(`unknown suite ${options.suite}`);
+const cases = (
+  options.suite === 'layout'
+    ? layoutFixtures.flatMap((fixture) =>
+        alignments.flatMap((align) => sizes.map((size) => `layout ${fixture} ${align} ${size}`)),
+      )
+    : [
+        ...fonts.flatMap(([font, script]) => sizes.map((size) => `paragraph ${font} ${script} ${size}`)),
+        'labels inter latin 200',
+      ]
+).filter((name) => options.only === undefined || name.includes(options.only));
 
 for (const name of cases) {
   /** metric -> label -> [median, minimum, per glyph] of the round with the lowest minimum. */

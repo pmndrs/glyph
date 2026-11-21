@@ -2538,6 +2538,7 @@ fn append_paragraph_measurement(
                 .ok_or(EngineError::InvalidRequest)
         },
         positioned.placement_translations(),
+        positioned.line_ink(),
         line_glyph_starts,
         line_glyph_counts,
         Some(positioned.semantic_line_inline_extents()),
@@ -6161,9 +6162,11 @@ impl ParagraphState {
             }
             return self.finish_cluster_preparation(shaper).map(|()| true);
         }
-        self.clusters
-            .pending_mut()
-            .build(build_input(), |handle| shaper.font_metrics(handle))?;
+        self.clusters.pending_mut().build_with_ink(
+            build_input(),
+            |handle| shaper.font_metrics(handle),
+            |handle| shaper.font_ink_table(handle),
+        )?;
         let (pending_clusters, committed_clusters) = self.clusters.derive_mut();
         let previous: &dyn CanonicalClusterView = match self.prepared_layout.committed() {
             PreparedLayout::Inline(leaf) => leaf,
@@ -11580,7 +11583,9 @@ mod tests {
         assert_eq!(first_query_work.intrinsic_flow_preparations, 1);
         assert_eq!(first_query_work.intrinsic_positioning_preparations, 0);
         assert_eq!(first_query_work.measurement_intrinsic_cluster_visits, 40);
-        assert_eq!(first_query_work.measurement_ink_glyph_visits, 5);
+        // Positioning measured each line's ink while the setter prepared; the query unions lines.
+        assert_eq!(setter_work.measurement_ink_glyph_visits, 5);
+        assert_eq!(first_query_work.measurement_ink_glyph_visits, 0);
         assert_eq!(first_query_shape_calls, 0);
         engine.commit_measure(measured).unwrap();
         assert_eq!(
@@ -16364,10 +16369,10 @@ mod tests {
                 assert_eq!(preparation.canonical_style_resolutions, 0);
                 if kind == "scattered" {
                     assert_eq!(preparation.canonical_text_validations, 1);
-                    assert_eq!(
-                        preparation.canonical_cluster_comparisons,
-                        original_units.len()
-                    );
+                    // Only the 64-cluster chunks an edit lands in are walked cluster by
+                    // cluster; the rest of the run is compared lane against lane.
+                    assert!(preparation.canonical_cluster_comparisons > 0);
+                    assert!(preparation.canonical_cluster_comparisons < original_units.len());
                 } else if kind == "unchanged" {
                     assert_eq!(preparation.canonical_text_validations, 0);
                     assert_eq!(preparation.canonical_cluster_comparisons, 0);

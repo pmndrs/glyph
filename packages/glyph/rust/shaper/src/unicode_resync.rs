@@ -152,7 +152,7 @@ pub fn script_resync_range(text: &[u16], start: usize, end: usize) -> (usize, us
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use alloc::{string::String, vec::Vec};
 
     use unicode_segmentation::UnicodeSegmentation;
@@ -161,7 +161,7 @@ mod tests {
     use crate::{bidi, line_break::LineBreakAnalysis, unicode::UnicodeAnalysis};
 
     /// The reviewer's adversarial alphabet (`review-v5/i18n-editing.md`, finding 3), extended.
-    const ALPHABET: &[&str] = &[
+    pub(crate) const ALPHABET: &[&str] = &[
         "a",
         "b",
         "Z",
