@@ -9243,7 +9243,9 @@ mod prepare_paragraphs;
 #[cfg(test)]
 use change_class::ChangeClass;
 pub(crate) use change_class::{DirtyInterval, ParagraphChange};
-pub(crate) use prepare_paragraphs::{MeasuredParagraphs, PreparationTarget};
+#[cfg(any(target_arch = "wasm32", feature = "oracle", test))]
+pub(crate) use prepare_paragraphs::MeasuredParagraphs;
+pub(crate) use prepare_paragraphs::PreparationTarget;
 
 #[cfg(test)]
 mod unsafe_break_tests;
