@@ -1098,7 +1098,99 @@ fn host_buffers(
         capture.u32s(&format!("gpu.glyph.translation_{lane}"), Value, rows);
     }
     capture.u8s("gpu.drawn", Value, session.host_buffers.drawn()?);
+    plan_records(capture, session);
     Ok(())
+}
+
+/// Stages added after the first reference set was frozen. A case frozen before them leaves
+/// them out of its frozen text, so its file stays byte-identical; the differential compares
+/// them for every case.
+pub const EXTENDED_STAGES: [&str; 1] = ["plan"];
+
+/// The draw structure the renderer holds: what each packet binds (material, clip, depth,
+/// transform) and what each primitive span names. A paint change that republishes retained
+/// rows must still restate these.
+fn plan_records(capture: &mut Capture, session: &Session) {
+    let draws = session.host_buffers.draws();
+    for (lane, class, column) in [
+        ("program_id", Value, column(draws, |d| d.program_id)),
+        (
+            "program_variant",
+            Value,
+            column(draws, |d| u32::from(d.program_variant)),
+        ),
+        ("flags", Value, column(draws, |d| u32::from(d.flags))),
+        ("material_id", Value, column(draws, |d| d.material_id)),
+        ("clip_id", Value, column(draws, |d| d.clip_id)),
+        ("depth_key", Value, column(draws, |d| d.depth_key)),
+        ("transform_id", Value, column(draws, |d| d.transform_id)),
+        (
+            "primitive_count",
+            Value,
+            column(draws, |d| d.primitive_count),
+        ),
+        ("buffer_count", Value, column(draws, |d| d.buffer_count)),
+        ("resource_count", Value, column(draws, |d| d.resource_count)),
+        ("id", Identity, column(draws, |d| d.id)),
+        ("order_token", Identity, column(draws, |d| d.order_token)),
+    ] {
+        capture.u32s(&format!("plan.draw.{lane}"), class, column);
+    }
+    let primitives = session.host_buffers.primitives();
+    for (lane, class, column) in [
+        ("kind", Value, column(primitives, |p| u32::from(p.kind))),
+        ("flags", Value, column(primitives, |p| u32::from(p.flags))),
+        (
+            "technique_id",
+            Value,
+            column(primitives, |p| p.technique_id),
+        ),
+        ("resource_id", Value, column(primitives, |p| p.resource_id)),
+        (
+            "resource_generation",
+            Value,
+            column(primitives, |p| p.resource_generation),
+        ),
+        ("program_id", Value, column(primitives, |p| p.program_id)),
+        (
+            "program_variant",
+            Value,
+            column(primitives, |p| u32::from(p.program_variant)),
+        ),
+        (
+            "record_count",
+            Value,
+            column(primitives, |p| u32::from(p.record_count)),
+        ),
+        ("clip_id", Value, column(primitives, |p| p.clip_id)),
+        ("id", Identity, column(primitives, |p| p.id)),
+        ("buffer_id", Identity, column(primitives, |p| p.buffer_id)),
+        (
+            "record_index",
+            Identity,
+            column(primitives, |p| p.record_index),
+        ),
+        (
+            "logical_order",
+            Identity,
+            column(primitives, |p| p.logical_order),
+        ),
+        (
+            "semantic_id",
+            Identity,
+            column(primitives, |p| p.semantic_id),
+        ),
+    ] {
+        capture.u32s(&format!("plan.primitive.{lane}"), class, column);
+    }
+    for (lane, column) in [
+        ("inline_start", column(primitives, |p| p.inline_start)),
+        ("block_start", column(primitives, |p| p.block_start)),
+        ("inline_extent", column(primitives, |p| p.inline_extent)),
+        ("block_extent", column(primitives, |p| p.block_extent)),
+    ] {
+        capture.f32s(&format!("plan.primitive.{lane}"), Value, column);
+    }
 }
 
 /// Projected u32 fields that carry allocation-order identity rather than layout.

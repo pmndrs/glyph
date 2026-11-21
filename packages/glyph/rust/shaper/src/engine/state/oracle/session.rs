@@ -343,6 +343,16 @@ impl HostBuffers {
             .map(|((id, _), bytes)| (*id, bytes.as_slice()))
     }
 
+    /// The draw packets the renderer holds, in draw order.
+    pub fn draws(&self) -> &[DrawRecord] {
+        &self.draws
+    }
+
+    /// The primitive spans the draw packets index.
+    pub fn primitives(&self) -> &[PrimitiveRecord] {
+        &self.primitives
+    }
+
     /// The records the renderer draws, in draw order: buffer layout, slack and capacity drop
     /// out, and what is left is what reaches the screen.
     pub fn drawn(&self) -> Result<Vec<u8>, String> {

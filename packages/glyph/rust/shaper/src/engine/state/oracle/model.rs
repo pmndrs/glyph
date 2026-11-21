@@ -16,7 +16,8 @@ use crate::{
         OVERFLOW_VISIBLE, SHAPE_POLYGON, SHAPE_RECTANGLE, STYLE_FIELD_BASELINE_SHIFT,
         STYLE_FIELD_DECORATION, STYLE_FIELD_DIRECTION, STYLE_FIELD_FONT_SIZE,
         STYLE_FIELD_FONT_STACK, STYLE_FIELD_FOREGROUND, STYLE_FIELD_LETTER_SPACING,
-        STYLE_FIELD_LINE_HEIGHT, STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FIELD_WORD_SPACING,
+        STYLE_FIELD_LINE_HEIGHT, STYLE_FIELD_MATERIAL, STYLE_FIELD_OPACITY, STYLE_FIELD_OUTLINE,
+        STYLE_FIELD_RASTER_PIXEL_RATIO, STYLE_FIELD_SHADOW, STYLE_FIELD_WORD_SPACING,
         STYLE_FLAG_ROOT, STYLE_MUTATION_REMOVE, STYLE_MUTATION_UPSERT, TEXT_ENCODING_UTF16_LE,
         TEXT_MUTATION_REPLACE_UTF16, WRAP_WORD, WRITING_HORIZONTAL_TB,
     },
@@ -34,6 +35,33 @@ const ROOT_STYLE_ID: u32 = 1;
 const UNBOUNDED_EXTENT: f32 = 16_777_216.0;
 const MAX_OUTPUT_BYTES: u32 = 32 * 1024 * 1024;
 
+/// One decoration group: which lines, how they are drawn, and their colour.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Decoration {
+    /// `DECORATION_UNDERLINE | DECORATION_OVERLINE | DECORATION_LINE_THROUGH | DECORATION_SKIP_INK`.
+    pub flags: u32,
+    /// `DECORATION_SOLID` and friends.
+    pub style: u8,
+    pub rgba: u32,
+    pub thickness: f32,
+    pub offset: f32,
+}
+
+/// What a style declares about how its text is painted, as opposed to laid out. Every field
+/// is optional and an unset field writes nothing, so a style without paint encodes exactly as
+/// it did before paint existed.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Paint {
+    pub material: Option<u32>,
+    pub foreground: Option<u32>,
+    pub opacity: Option<f32>,
+    pub decoration: Option<Decoration>,
+    /// Colour and width.
+    pub outline: Option<(u32, f32)>,
+    /// Colour and inline, block offset.
+    pub shadow: Option<(u32, f32, f32)>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RootStyle {
     pub font_stack: u32,
@@ -42,6 +70,7 @@ pub struct RootStyle {
     pub letter_spacing: f32,
     pub word_spacing: f32,
     pub direction: u8,
+    pub paint: Paint,
 }
 
 impl Default for RootStyle {
@@ -53,6 +82,7 @@ impl Default for RootStyle {
             letter_spacing: 0.0,
             word_spacing: 0.0,
             direction: DIRECTION_AUTO,
+            paint: Paint::default(),
         }
     }
 }
@@ -66,6 +96,8 @@ pub struct SpanStyle {
     pub baseline_shift: Option<f32>,
     pub foreground: Option<u32>,
     pub underline: bool,
+    /// Paint beyond the two legacy fields above; a decoration here replaces `underline`.
+    pub paint: Paint,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -371,6 +403,7 @@ impl RequestWriter {
             mask |= STYLE_FIELD_DIRECTION;
             self.bytes[record + abi::ENGINE_STYLE_MUTATION_DIRECTION] = root.direction;
         }
+        mask |= self.paint(record, root.paint);
         self.style_record(record, ROOT_STYLE_ID, 0, length, mask);
         self.bytes[record + abi::ENGINE_STYLE_MUTATION_FLAGS] = STYLE_FLAG_ROOT;
         self.u32(
@@ -448,11 +481,72 @@ impl RequestWriter {
                 1.0,
             );
         }
+        mask |= self.paint(record, style.paint);
         self.style_record(record, span.id, span.start, span.end, mask);
         self.u32(
             record + abi::ENGINE_STYLE_MUTATION_CASCADE_ORDER,
             cascade_order,
         );
+    }
+
+    /// Writes the paint fields that are set and returns their field mask.
+    fn paint(&mut self, record: usize, paint: Paint) -> u32 {
+        let mut mask = 0;
+        let words = [
+            (
+                paint.material,
+                STYLE_FIELD_MATERIAL,
+                abi::ENGINE_STYLE_MUTATION_MATERIAL_ID,
+            ),
+            (
+                paint.foreground,
+                STYLE_FIELD_FOREGROUND,
+                abi::ENGINE_STYLE_MUTATION_FOREGROUND_RGBA,
+            ),
+            (
+                paint.opacity.map(f32::to_bits),
+                STYLE_FIELD_OPACITY,
+                abi::ENGINE_STYLE_MUTATION_OPACITY,
+            ),
+        ];
+        for (value, field, offset) in words {
+            if let Some(value) = value {
+                mask |= field;
+                self.u32(record + offset, value);
+            }
+        }
+        if let Some(decoration) = paint.decoration {
+            mask |= STYLE_FIELD_DECORATION;
+            self.bytes[record + abi::ENGINE_STYLE_MUTATION_DECORATION_STYLE] = decoration.style;
+            self.u32(
+                record + abi::ENGINE_STYLE_MUTATION_DECORATION_FLAGS,
+                decoration.flags,
+            );
+            self.u32(
+                record + abi::ENGINE_STYLE_MUTATION_DECORATION_RGBA,
+                decoration.rgba,
+            );
+            self.f32(
+                record + abi::ENGINE_STYLE_MUTATION_DECORATION_THICKNESS,
+                decoration.thickness,
+            );
+            self.f32(
+                record + abi::ENGINE_STYLE_MUTATION_DECORATION_OFFSET,
+                decoration.offset,
+            );
+        }
+        if let Some((rgba, width)) = paint.outline {
+            mask |= STYLE_FIELD_OUTLINE;
+            self.u32(record + abi::ENGINE_STYLE_MUTATION_OUTLINE_RGBA, rgba);
+            self.f32(record + abi::ENGINE_STYLE_MUTATION_OUTLINE_WIDTH, width);
+        }
+        if let Some((rgba, inline, block)) = paint.shadow {
+            mask |= STYLE_FIELD_SHADOW;
+            self.u32(record + abi::ENGINE_STYLE_MUTATION_SHADOW_RGBA, rgba);
+            self.f32(record + abi::ENGINE_STYLE_MUTATION_SHADOW_OFFSET_X, inline);
+            self.f32(record + abi::ENGINE_STYLE_MUTATION_SHADOW_OFFSET_Y, block);
+        }
+        mask
     }
 
     fn geometry(&mut self, layout: &Layout, revision: u32) {

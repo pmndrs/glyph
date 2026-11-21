@@ -387,7 +387,7 @@ pub(super) fn cases(cases: &mut Vec<Case>) {
 
 /// The ways a host reaches the engine: publish with every view, publish with none and read
 /// back, publish with none and no read, and measure before publishing.
-const ROUTES: [(&str, Route); 4] = [
+pub(super) const ROUTES: [(&str, Route); 4] = [
     ("full", Route::FULL),
     (
         "silent-then-measure",

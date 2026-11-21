@@ -10,7 +10,7 @@ use alloc::{
 use core::fmt::Write;
 
 use super::{
-    capture::capture,
+    capture::{EXTENDED_STAGES, capture},
     fonts::{FONTS, FontLibrary, FontRoot},
     fuzz::{self, Planned, incremental_differences, remap_spans},
     lanes::{Capture, LaneClass, LaneDifference, digest, golden_differences, golden_line_lane},
@@ -93,7 +93,9 @@ pub fn reference(library: &FontLibrary, case: &Case, known: &[&str]) -> Result<R
         divergences: Vec::new(),
         clusters,
     };
-    reference.text.push_str(&frozen_text("cold", &cold, true));
+    reference
+        .text
+        .push_str(&frozen_text("cold", &cold, true, case.extended));
     reference.captures.push(("cold".to_string(), cold));
     for (index, planned) in frozen_steps(case).into_iter().enumerate() {
         let label = format!("{:02} {}", index + 1, planned.label);
@@ -113,7 +115,7 @@ pub fn reference(library: &FontLibrary, case: &Case, known: &[&str]) -> Result<R
                 );
                 reference
                     .text
-                    .push_str(&frozen_text(&label, &stepped, false));
+                    .push_str(&frozen_text(&label, &stepped, false, case.extended));
                 reference.captures.push((label, stepped));
             }
             (Err(error), Err(cold_error)) if error == cold_error => {
@@ -153,7 +155,7 @@ pub fn reference(library: &FontLibrary, case: &Case, known: &[&str]) -> Result<R
 /// (`class repr …`). A digest covers its lanes' names, kinds, row counts and rows, so any change
 /// inside the group changes the line; `dump` and `diff` then locate the lane and the row.
 /// Lanes with no rows are left out, so a lane that gains rows changes its group too.
-fn frozen_text(step: &str, capture: &Capture, by_stage: bool) -> String {
+fn frozen_text(step: &str, capture: &Capture, by_stage: bool, extended: bool) -> String {
     let mut groups: Vec<(String, usize, String)> = Vec::new();
     let golden = capture.golden(step);
     for line in golden.lines().skip(1) {
@@ -165,6 +167,9 @@ fn frozen_text(step: &str, capture: &Capture, by_stage: bool) -> String {
             continue;
         }
         let stage = name.split('.').next().unwrap_or(name);
+        if !extended && EXTENDED_STAGES.contains(&stage) {
+            continue;
+        }
         let group = if by_stage {
             format!("stage {stage} {class}")
         } else {

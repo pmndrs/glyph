@@ -17,8 +17,9 @@ use alloc::{
 use crate::{
     bidi::{DIRECTION_AUTO, DIRECTION_LTR, DIRECTION_RTL},
     engine::frame::{
-        ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE,
-        SEMANTIC_VIEW_MEASUREMENT,
+        ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START, DECORATION_DOUBLE,
+        DECORATION_LINE_THROUGH, DECORATION_SOLID, DECORATION_UNDERLINE, OVERFLOW_ELLIPSIS,
+        OVERFLOW_VISIBLE, SEMANTIC_VIEW_MEASUREMENT,
     },
 };
 
@@ -28,7 +29,7 @@ use super::{
     fonts::FontLibrary,
     lanes::{Capture, LaneClass, LaneDifference, cache_differences, differences},
     matrix::Case,
-    model::{Model, Span, SpanStyle, TextEdit},
+    model::{Decoration, Model, Span, SpanStyle, TextEdit},
     rng::Rng,
     session::{ALL_VIEWS, Route, Session},
 };
@@ -80,6 +81,10 @@ impl Hints {
 struct Planner<'a> {
     script: Script,
     stack_count: usize,
+    /// Whether the case was added after the first reference set was frozen. The operations
+    /// added since draw from the generator only for such a case, so an earlier case plans
+    /// exactly the requests it was frozen with.
+    extended: bool,
     hints: &'a Hints,
     rng: &'a mut Rng,
     next: Model,
@@ -97,6 +102,7 @@ fn plan(case: &Case, model: &Model, hints: &Hints, rng: &mut Rng) -> Planned {
     let mut planner = Planner {
         script: case.script,
         stack_count: case.stacks.len(),
+        extended: case.extended,
         hints,
         rng,
         next: model.clone(),
@@ -128,6 +134,9 @@ impl Planner<'_> {
     }
 
     fn change(&mut self) {
+        if self.extended && self.rng.chance(1, 3) {
+            return self.paint();
+        }
         match self.rng.below(20) {
             0..=4 => self.insert(),
             5..=7 => self.delete(),
@@ -144,6 +153,72 @@ impl Planner<'_> {
 
     fn label(&mut self, text: String) {
         self.labels.push(text);
+    }
+
+    /// Changes one paint field of the root style or of one span.
+    fn paint(&mut self) {
+        let span = match self.next.spans.len() {
+            0 => None,
+            count => self.rng.chance(1, 2).then(|| self.rng.below(count)),
+        };
+        let mut paint = match span {
+            Some(index) => self.next.spans[index].style.paint,
+            None => self.next.root.paint,
+        };
+        let colour = [0xff20_20e0, 0xffe0_6020, 0x8040_4040][self.rng.below(3)];
+        let what = match self.rng.below(6) {
+            0 => {
+                paint.material = [None, Some(1), Some(2), Some(3)][self.rng.below(4)];
+                "material"
+            }
+            1 => {
+                paint.decoration = self.decoration(colour);
+                "decoration"
+            }
+            2 => {
+                paint.outline = [None, Some((colour, 1.0)), Some((colour, 2.5))][self.rng.below(3)];
+                "outline"
+            }
+            3 => {
+                paint.shadow =
+                    [None, Some((colour, 1.0, 1.0)), Some((colour, -2.0, 0.5))][self.rng.below(3)];
+                "shadow"
+            }
+            4 => {
+                paint.opacity = [None, Some(0.5), Some(0.25)][self.rng.below(3)];
+                "opacity"
+            }
+            _ => {
+                paint.foreground = [None, Some(colour)][self.rng.below(2)];
+                "foreground"
+            }
+        };
+        match span {
+            Some(index) => {
+                self.next.spans[index].style.paint = paint;
+                self.label(format!("{what} of span {}", self.next.spans[index].id));
+            }
+            None => {
+                self.next.root.paint = paint;
+                self.label(format!("{what} of the root"));
+            }
+        }
+    }
+
+    fn decoration(&mut self, rgba: u32) -> Option<Decoration> {
+        let flags = [
+            0,
+            DECORATION_UNDERLINE,
+            DECORATION_LINE_THROUGH,
+            DECORATION_UNDERLINE | DECORATION_LINE_THROUGH,
+        ][self.rng.below(4)];
+        (flags != 0).then(|| Decoration {
+            flags,
+            style: [DECORATION_SOLID, DECORATION_DOUBLE][self.rng.below(2)],
+            rgba,
+            thickness: [1.0, 2.0][self.rng.below(2)],
+            offset: 0.0,
+        })
     }
 
     /// A code-point boundary of the current text, from one of the offset strategies.

@@ -1,0 +1,80 @@
+# glyph layout oracle reference v1
+case fx-material-then-decoration-latin-full
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 8600ad73a1a6c020
+stage text identity 1 a3a46d7c994fbdfd
+stage unicode value 6 ef36e5145be13849
+stage bidi value 8 c12d7b90e0cb00d6
+stage style value 26 d8e961640812f7a0
+stage shaping_run value 5 c04b2c99301561f8
+stage shape value 14 da305f304ef2f60f
+stage cluster value 29 439f36d3ec38d94b
+stage cluster identity 4 7709950db8e94e35
+stage cluster repr 11 7e5e853c660d5a1c
+stage cluster cache 5 ab968f21cb7a4012
+stage run_local repr 16 400061383a76cd67
+stage flow value 35 63c3af90ba3d6a98
+stage boundary value 28 d3dcb213712895b8
+stage boundary identity 1 edf58fbc86f25acf
+stage positioned identity 4 efd4e28be099e202
+stage positioned value 20 5e0c9c934f11df7f
+stage positioned repr 37 b61c5e19f5d9e847
+stage public value 13 c67d02748c564e5f
+stage public identity 1 2ad2ff017860f003
+stage view identity 4 2582fcb2bb4e9f98
+stage view value 40 cd7892bc1977a734
+stage wire wire 1 7f458ad79f946cbf
+stage gather identity 7 993aca606064d3eb
+stage gather value 36 a2012f79019520ae
+stage gpu identity 2 86c34ed1e43d83b0
+stage gpu value 3 371bf5d8fb1e8fa6
+stage plan value 23 6e085fdd90adc5b0
+stage plan identity 7 b65a14036160df65
+step 01 material on
+class value 288 b7cbcdd4a44abaa6
+class identity 31 e90c868d6dbe96dc
+class repr 64 6d0e001b71a0ba42
+class cache 5 ab968f21cb7a4012
+class wire 1 6c68335e08b5d677
+step 02 material swapped
+class value 288 13bcd3803332c947
+class identity 31 9c2991457cdf3bce
+class repr 64 6d0e001b71a0ba42
+class cache 5 ab968f21cb7a4012
+class wire 1 1eb2856d0475d830
+step 03 underline on
+class value 300 54254aead116ea6f
+class identity 31 2f2d207d4fe9a2a0
+class repr 64 6d0e001b71a0ba42
+class cache 5 ab968f21cb7a4012
+class wire 1 499e0225f20bb101
+step 04 material swapped under decoration
+class value 300 fa7c9b11ecc14416
+class identity 31 70563fc9b01dda23
+class repr 64 6d0e001b71a0ba42
+class cache 5 ab968f21cb7a4012
+class wire 1 92c1b524d0ae2a9d
+step 05 underline off
+class value 288 757423e67d136882
+class identity 31 bd81570ec2fc2de5
+class repr 64 6d0e001b71a0ba42
+class cache 5 ab968f21cb7a4012
+class wire 1 c718aa679dba117f
+step 06 delete 3 at 79 + material of the root + decoration of the root
+class value 300 baf1c198826df851
+class identity 31 be4c641f78185868
+class repr 64 221ab2b54b31bab0
+class cache 5 135421ae73fc5dc2
+class wire 1 dd19d6d565f44459
+step 07 width 420.01563 + delete 4 at 186 + opacity of the root
+class value 300 b56634ff6ef0dda5
+class identity 31 eaf9b430d2bcba57
+class repr 64 56aedf5af44f4636
+class cache 5 b2a16ccd17593fd6
+class wire 1 b90c0c5684357dac
+step 08 delete 200 at 13
+class value 265 1f4d42f7ceb3f427
+class identity 29 2cc64d24f2bb821a
+class repr 41 9112c25319b44da4
+class wire 1 d2a197feddfcc26a

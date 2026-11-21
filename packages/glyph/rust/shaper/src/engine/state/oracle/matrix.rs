@@ -57,6 +57,10 @@ pub struct Case {
     pub fuzz: bool,
     /// Paragraph cases must reach the plan's 2,000-cluster floor.
     pub paragraph: bool,
+    /// Added after the first reference set was frozen: its frozen text includes the stages
+    /// added since, and the driver uses the operations added since. Cases frozen earlier
+    /// leave both out so their files and their seeded requests stay exactly as blessed.
+    pub extended: bool,
 }
 
 impl Case {
@@ -159,6 +163,7 @@ pub fn cases() -> Vec<Case> {
     labels(&mut cases);
     degenerate(&mut cases);
     super::mechanisms::cases(&mut cases);
+    super::effects::cases(&mut cases);
     cases
 }
 
@@ -183,6 +188,7 @@ pub(super) fn new_case(name: String, tier: Tier, stack: &[&'static str], script:
         steps: Vec::new(),
         fuzz: false,
         paragraph: false,
+        extended: false,
     }
 }
 

@@ -1,0 +1,87 @@
+# glyph layout oracle reference v1
+case fx-outline-latin-full
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 8600ad73a1a6c020
+stage text identity 1 a3a46d7c994fbdfd
+stage unicode value 6 ef36e5145be13849
+stage bidi value 8 c12d7b90e0cb00d6
+stage style value 26 d8e961640812f7a0
+stage shaping_run value 5 c04b2c99301561f8
+stage shape value 14 da305f304ef2f60f
+stage cluster value 29 439f36d3ec38d94b
+stage cluster identity 4 7709950db8e94e35
+stage cluster repr 11 7e5e853c660d5a1c
+stage cluster cache 5 ab968f21cb7a4012
+stage run_local repr 16 400061383a76cd67
+stage flow value 35 63c3af90ba3d6a98
+stage boundary value 28 d3dcb213712895b8
+stage boundary identity 1 edf58fbc86f25acf
+stage positioned identity 4 efd4e28be099e202
+stage positioned value 20 5e0c9c934f11df7f
+stage positioned repr 37 b61c5e19f5d9e847
+stage public value 13 c67d02748c564e5f
+stage public identity 1 2ad2ff017860f003
+stage view identity 4 2582fcb2bb4e9f98
+stage view value 40 cd7892bc1977a734
+stage wire wire 1 7f458ad79f946cbf
+stage gather identity 7 993aca606064d3eb
+stage gather value 36 a2012f79019520ae
+stage gpu identity 2 86c34ed1e43d83b0
+stage gpu value 3 371bf5d8fb1e8fa6
+stage plan value 23 6e085fdd90adc5b0
+stage plan identity 7 b65a14036160df65
+step 01 outline on
+class value 288 845b666ea4762c69
+class identity 31 17fcc71fdd6ce0c7
+class repr 64 6d0e001b71a0ba42
+class cache 5 ab968f21cb7a4012
+class wire 1 6c68335e08b5d677
+step 02 recolour
+class value 288 aed52fe386637dcb
+class identity 31 46476056c9372240
+class repr 64 6d0e001b71a0ba42
+class cache 5 ab968f21cb7a4012
+class wire 1 1eb2856d0475d830
+step 03 wider
+class value 288 3c5826d175684398
+class identity 31 33026d683a49d609
+class repr 64 6d0e001b71a0ba42
+class cache 5 ab968f21cb7a4012
+class wire 1 499e0225f20bb101
+step 04 wider and edit
+class value 288 d8d10f555939b925
+class identity 31 2967905d29f282e1
+class repr 64 df7aeef910c33cd2
+class cache 5 6c222f41092c1a77
+class wire 1 eb4d667e2e8c99d5
+step 05 outline off
+class value 288 32e914744c4cc7aa
+class identity 31 3855549f54143115
+class repr 64 df7aeef910c33cd2
+class cache 5 6c222f41092c1a77
+class wire 1 8426446040cf53a5
+step 06 outline on with width
+class value 288 d9e0c9a8525ebd96
+class identity 31 c800b11d32a8268c
+class repr 64 ff2361ae7a30e17e
+class cache 5 3837f998dbcab93c
+class wire 1 67e88bdb492e7d41
+step 07 opacity of the root
+class value 268 135f636a66614faa
+class identity 29 27ed76aeaa398c88
+class repr 64 ff2361ae7a30e17e
+class cache 5 3837f998dbcab93c
+class wire 1 93fa8c568be4aaf2
+step 08 material of the root + foreground of the root
+class value 288 6e0eea32bbf17eb9
+class identity 31 1c5614a3fd4147df
+class repr 64 ff2361ae7a30e17e
+class cache 5 3837f998dbcab93c
+class wire 1 a2a5a6d813b46553
+step 09 max lines 0
+class value 268 dac4356e4d62c4e0
+class identity 29 e27b0becd87b5822
+class repr 64 ff2361ae7a30e17e
+class cache 5 3837f998dbcab93c
+class wire 1 3c05f2eb6cf92ef2
