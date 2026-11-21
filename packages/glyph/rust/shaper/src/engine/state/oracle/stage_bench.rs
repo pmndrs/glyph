@@ -1,9 +1,11 @@
-//! Stage clocks for run-local geometry, runnable inside the optimized wasm32 build.
+//! Stage clocks for run-local geometry and the cluster build, runnable inside the optimized
+//! wasm32 build.
 //!
 //! Evidence tooling, not a benchmark protocol: it times the run-local stage alone on a real
 //! paragraph (the calls the engine makes for a cold build, a metric change and a line-height
-//! change) and the whole engine step around it, so a rewrite of the stage can be read against
-//! the code it replaces. Behind the `stage-bench` feature; no shipped artifact carries it.
+//! change), the cluster stage's self-time inside real edits, and the whole engine step around
+//! them, so a rewrite of a stage can be read against the code it replaces. Behind the
+//! `stage-bench` feature; no shipped artifact carries it.
 
 use alloc::{
     format,
@@ -17,9 +19,35 @@ use super::{
     super::{ParagraphState, PreparedLayout},
     corpus::{self, Script},
     fonts::FontLibrary,
-    model::{Layout, Model, PARAGRAPH_ID, ROOT_ID, RootStyle},
+    model::{Layout, Model, PARAGRAPH_ID, ROOT_ID, RootStyle, TextEdit},
     session::{Route, Session},
 };
+
+/// Self-time of the cluster stage's entry points since the last `take`, in milliseconds as
+/// f64 bits. The probe is single-threaded; the atomic only makes the static safe to name.
+static CLUSTER_STAGE: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+
+/// Adds the time from construction to drop to the cluster stage's clock. The cluster arena
+/// holds one across each entry point that derives cluster lanes; none of them nests.
+pub(crate) struct ClusterStageClock(f64);
+
+impl ClusterStageClock {
+    pub(crate) fn start() -> Self {
+        Self(now())
+    }
+}
+
+impl Drop for ClusterStageClock {
+    fn drop(&mut self) {
+        use core::sync::atomic::Ordering::Relaxed;
+        let total = f64::from_bits(CLUSTER_STAGE.load(Relaxed)) + (now() - self.0);
+        CLUSTER_STAGE.store(total.to_bits(), Relaxed);
+    }
+}
+
+fn take_cluster_stage() -> f64 {
+    f64::from_bits(CLUSTER_STAGE.swap(0, core::sync::atomic::Ordering::Relaxed))
+}
 
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "env")]
@@ -148,14 +176,19 @@ fn paragraph(
     };
     let mut report = String::new();
 
+    // `first+second` is a fallback stack: text the first font lacks shapes in the second.
+    let stack: Vec<&str> = font.split('+').collect();
     let mut cold = Vec::new();
+    let mut cold_clusters = Vec::new();
     for _ in 0..iterations.div_ceil(8).max(3) {
-        let mut session = Session::new(library, &[&[font]])?;
+        let mut session = Session::new(library, &[&stack])?;
+        take_cluster_stage();
         let started = now();
         session.step(&base, &[], ROUTE)?;
         cold.push(now() - started);
+        cold_clusters.push(take_cluster_stage());
     }
-    let mut session = Session::new(library, &[&[font]])?;
+    let mut session = Session::new(library, &[&stack])?;
     session.step(&base, &[], ROUTE)?;
     let glyphs = paragraph_state(&mut session)?
         .clusters
@@ -177,6 +210,12 @@ fn paragraph(
         "shape\tglyphs {glyphs}\tclusters {clusters}\tblocks {blocks}\n"
     ));
     row(&mut report, "op.cold", &mut cold, glyphs);
+    row(
+        &mut report,
+        "stage.cluster.cold",
+        &mut cold_clusters,
+        glyphs,
+    );
 
     // 23.7 over a 1000- or 2048-unit em is not a dyadic scale.
     let changes: [(&str, Restyle); 3] = [
@@ -200,7 +239,106 @@ fn paragraph(
     }
 
     stage(&mut session, &mut report, iterations, glyphs)?;
+    edits(&mut session, &mut report, &base, script, iterations, glyphs)?;
     Ok(format!("ok\n{report}"))
+}
+
+/// Text edits through the whole engine step, with the cluster stage's self-time inside each:
+/// one grapheme typed mid-paragraph, three typed in one request at the quarter points, and the
+/// whole text replaced by another of the same script. Each edit alternates with the edit that undoes it; only the
+/// forward edit is reported.
+fn edits(
+    session: &mut Session,
+    report: &mut String,
+    base: &Model,
+    script: Script,
+    iterations: usize,
+    glyphs: usize,
+) -> Result<(), String> {
+    let starts = paragraph_state(session)?
+        .clusters
+        .committed()
+        .starts
+        .clone();
+    // Typing repeats the grapheme before the caret, so the edit stays in the paragraph's
+    // script: (caret, the units typed).
+    let typed = |numerator: usize| -> Result<(u32, Vec<u16>), String> {
+        let from = (starts.len() * numerator / 4).max(1);
+        (from..starts.len())
+            .map(|cluster| (starts[cluster - 1] as usize, starts[cluster] as usize))
+            .find(|(start, _)| !matches!(base.text[*start], 0x0a | 0x20))
+            .map(|(start, end)| (end as u32, base.text[start..end].to_vec()))
+            .ok_or_else(|| "the paragraph has no grapheme to repeat".to_string())
+    };
+    let insert = |carets: &[(u32, Vec<u16>)]| -> Vec<TextEdit> {
+        // Applied in order, so each later caret counts the units typed before it.
+        let mut before = 0;
+        carets
+            .iter()
+            .map(|(caret, units)| {
+                let edit = TextEdit {
+                    start: caret + before,
+                    delete: 0,
+                    insert: units.clone(),
+                };
+                before += units.len() as u32;
+                edit
+            })
+            .collect()
+    };
+    let remove = |carets: &[(u32, Vec<u16>)]| -> Vec<TextEdit> {
+        carets
+            .iter()
+            .map(|(caret, units)| TextEdit {
+                start: *caret,
+                delete: units.len() as u32,
+                insert: Vec::new(),
+            })
+            .collect()
+    };
+    let other = corpus::paragraph(script, 11, starts.len());
+    let whole = |from: &[u16], to: &[u16]| {
+        alloc::vec![TextEdit {
+            start: 0,
+            delete: from.len() as u32,
+            insert: to.to_vec(),
+        }]
+    };
+    let middle = [typed(2)?];
+    let three = [typed(1)?, typed(2)?, typed(3)?];
+    let cases: [(&str, Vec<TextEdit>, Vec<TextEdit>); 3] = [
+        ("insert_mid", insert(&middle), remove(&middle)),
+        ("three_range", insert(&three), remove(&three)),
+        (
+            "replace_all",
+            whole(&base.text, &other),
+            whole(&other, &base.text),
+        ),
+    ];
+    for (name, forward, backward) in cases {
+        let mut edited = base.clone();
+        for edit in &forward {
+            edit.apply(&mut edited.text);
+        }
+        let mut whole_step = Vec::new();
+        let mut cluster_stage = Vec::new();
+        for _ in 0..iterations {
+            take_cluster_stage();
+            let started = now();
+            session.step(&edited, &forward, ROUTE)?;
+            whole_step.push(now() - started);
+            cluster_stage.push(take_cluster_stage());
+            session.step(base, &backward, ROUTE)?;
+        }
+        row(report, &format!("op.{name}"), &mut whole_step, glyphs);
+        row(
+            report,
+            &format!("stage.cluster.{name}"),
+            &mut cluster_stage,
+            glyphs,
+        );
+    }
+    Ok(())
 }
 
 /// The run-local stage alone, called the way each change class calls it.
@@ -381,6 +519,11 @@ mod tests {
             "stage.run_local.cold",
             "stage.run_local.metric",
             "stage.run_local.line_height",
+            "stage.cluster.cold",
+            "op.insert_mid",
+            "stage.cluster.insert_mid",
+            "stage.cluster.three_range",
+            "stage.cluster.replace_all",
         ] {
             assert!(paragraph.contains(stage), "{paragraph}");
         }
