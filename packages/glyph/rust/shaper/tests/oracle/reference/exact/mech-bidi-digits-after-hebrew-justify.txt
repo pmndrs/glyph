@@ -1,0 +1,39 @@
+# glyph layout oracle reference v1
+case mech-bidi-digits-after-hebrew-justify
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 a174e2fa3b79dcc8
+stage text identity 1 a6ab6cd01384ddd6
+stage unicode value 6 63a96f6a7684d7c7
+stage bidi value 8 0f2455871bc9ad7b
+stage style value 26 92308a0c1db38f46
+stage shaping_run value 5 5a8ac931b76d76f2
+stage shape value 14 bcee2f7b34213ae2
+stage cluster value 29 bdb9f3cbf8248338
+stage cluster identity 4 f9b906167ab795ef
+stage cluster repr 8 ce672723887a02f0
+stage run_local repr 16 7bffdf4090cf7f1e
+stage flow value 35 48e763a8249a4d73
+stage positioned identity 3 f48411d059af391d
+stage positioned value 13 ed72ad71480d7b78
+stage positioned repr 17 fdd8d3758ad4598c
+stage public value 13 29a7401d360b9d2e
+stage public identity 1 3708d9bde4875dcd
+stage view identity 4 c770d4332c3d7ab5
+stage view value 40 dade84ff732423bd
+stage wire wire 1 fa89a5c578eb649b
+stage gather identity 7 648cf4ea41a5e88a
+stage gather value 36 a841e421fac9aa11
+stage gpu identity 2 94df24363efff5c5
+stage gpu value 3 e6890ba2ea83093b
+step 01 delete the Hebrew letter
+class value 230 ed36a753944b54a3
+class identity 22 5daa855150f66ae2
+class repr 41 e87998a415bcbaac
+class cache 5 62de11a5818d0afd
+class wire 1 d02967383381e878
+step 02 restore
+class value 230 1a3ed363ceb91db9
+class identity 22 a9d850ce964394d1
+class repr 41 32bd3815b4f7d057
+class wire 1 a42aac55c767115b

@@ -1,0 +1,22 @@
+# glyph layout oracle reference v1
+case label-devanagari-12-center
+step cold
+stage owner value 1 07e27e8ffd8af189
+stage text value 1 c7baf8bd9cdfd105
+stage text identity 1 dbb780610710d727
+stage unicode value 6 0c040a58bb3b0e07
+stage bidi value 8 3e79f7a08192c587
+stage style value 26 fe2ec0e1598b02cd
+stage shaping_run value 5 97abfa7f0fced5a8
+stage inline value 81 6001ce92c1af85eb
+stage inline identity 5 27705160752c3774
+stage inline repr 21 ebc99598e6edb1b6
+stage public value 13 607420914f26e93b
+stage public identity 1 9516520da7dd0005
+stage view identity 4 9ff97a10525f924e
+stage view value 40 8db044ab80616881
+stage wire wire 1 3cbabe4a8ace4133
+stage gather identity 7 12db54ef30649b75
+stage gather value 36 d1d6c14e9224a1f4
+stage gpu identity 2 b05839d3dba76820
+stage gpu value 3 428ccb4edbe69c52

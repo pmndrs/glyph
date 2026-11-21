@@ -1,0 +1,54 @@
+# glyph layout oracle reference v1
+case mech-regional-indicators-5
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 9760d39767cd1849
+stage text identity 1 796cdbc13987dc09
+stage unicode value 6 d71d4df156a4e321
+stage bidi value 8 0ca14a9b57479af0
+stage style value 26 853f5afe9e5b4200
+stage shaping_run value 5 c4a06c1791d8fec2
+stage shape value 14 811c8fddc665ab30
+stage cluster value 29 1e2bbe132ecbcbdd
+stage cluster identity 4 31810bb7bec8e973
+stage cluster repr 8 2b23ffda796024d3
+stage run_local repr 16 778f4674ad9f498e
+stage flow value 35 2b751d95f83b7331
+stage positioned identity 3 4a1ae32ec48fadcb
+stage positioned value 13 a986d3b2edc26c4f
+stage positioned repr 17 b1b79be1df227e18
+stage public value 13 cf2ad1372e3ebc23
+stage public identity 1 9516520da7dd0005
+stage view identity 4 dc41cb8d8e02edd1
+stage view value 40 c408c2a4b9f86887
+stage wire wire 1 6b2a578415e742cf
+stage gather identity 7 d507de0f93f14e2f
+stage gather value 36 52aff9a2007c51bb
+stage gpu identity 2 7ef4bc18bb7c4221
+stage gpu value 3 d9f485ed38b4a073
+step 01 insert one indicator
+class value 230 5a0bde0a054897b7
+class identity 22 be7f6c90b8129adc
+class repr 41 7266ae71b07fff14
+class cache 5 4efb1aa3c4f58257
+class wire 1 ea82af09b501ca8f
+step 02 restore
+class value 230 a2f6fb2f52546141
+class identity 22 8a2bdd1ab7e3636e
+class repr 41 96fee091b45f778f
+class wire 1 dbc7040d90136600
+step 03 width 87
+class value 230 51dcbf6ae128575f
+class identity 22 d8cb9c62b3dc7005
+class repr 41 51165d3e271647e7
+class wire 1 367ea56434a999bb
+step 04 width 199
+class value 230 a4b2bde0e98ecc0f
+class identity 22 48ffa19a5203de47
+class repr 41 d3701fe1a84d4528
+class wire 1 c4d4a5af0bd31d4a
+step 05 width 0
+class value 230 159bcfd4f09ee74d
+class identity 22 48ffa19a5203de47
+class repr 41 d3701fe1a84d4528
+class wire 1 83ed146329814d61

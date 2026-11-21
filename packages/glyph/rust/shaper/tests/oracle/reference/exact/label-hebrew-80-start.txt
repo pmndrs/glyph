@@ -1,0 +1,43 @@
+# glyph layout oracle reference v1
+case label-hebrew-80-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 025066176c1bbed1
+stage text identity 1 55aefb92285c7d44
+stage unicode value 6 0ab30aa669304a4d
+stage bidi value 8 a5978411e0d858d6
+stage style value 26 2cfa62768b29af0b
+stage shaping_run value 5 9c7b4e6f9b9ef346
+stage shape value 14 fa8c200b2ad0af5b
+stage cluster value 29 024d91d5ae5f154e
+stage cluster identity 4 a8442b4541f14b0c
+stage cluster repr 11 447224d378133436
+stage run_local repr 16 a894099f27e3e6fa
+stage flow value 35 fffea54bb4079d19
+stage positioned identity 3 4df4725b69c5e830
+stage positioned value 13 465c8df485ec5062
+stage positioned repr 17 8c9cb1abb80b8a67
+stage public value 13 a4adce56caec0f79
+stage public identity 1 5b92d79eb0a72602
+stage view identity 4 fe8ce024b76090cf
+stage view value 40 1ab136f36249a7e3
+stage wire wire 1 c955b15d74b34d20
+stage gather identity 7 252fcceb77b379bf
+stage gather value 36 f2d6c773b258a913
+stage gpu identity 2 43f274759739fc57
+stage gpu value 3 521e3395e7c9eba3
+step 01 replace 2 at 13 + insert HardBreak (1 units) at 42 + width 259 + width 259.01563
+class value 230 fa62df6ab00c7ce8
+class identity 22 e39476ff97fa9dfd
+class repr 44 36af8179c4691efd
+class wire 1 d6940c044fc9b6f9
+step 02 insert Word (3 units) at 4
+class value 230 4eb6048155018535
+class identity 22 3a6e8d4b106f660a
+class repr 44 977556084adc2b50
+class wire 1 113053d434819551
+step 03 
+class value 210 8111740356c6feae
+class identity 20 b5784e92a14ff85b
+class repr 44 977556084adc2b50
+class wire 1 e3e5eaecf105ce0b

@@ -1,0 +1,49 @@
+# glyph layout oracle reference v1
+case feature-ellipsis-3-lines-cjk
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 22b43bab6488a4b6
+stage text identity 1 9b62f35211793997
+stage unicode value 6 76ce71bca3505914
+stage bidi value 8 9238506de87f3737
+stage style value 26 59e387ffe68734b6
+stage shaping_run value 5 923c2a8115e424e1
+stage shape value 14 a4e7e93fc8da7077
+stage cluster value 29 9131aada37da2f0b
+stage cluster identity 4 d4407ce5d709315b
+stage cluster repr 8 924cfa5dd216de53
+stage cluster cache 5 9ab4250dfbd22d1c
+stage run_local repr 16 df5ab7140c37b917
+stage flow value 36 c1b6467db09b8ba6
+stage boundary value 28 cdc26fb0ea7c6a89
+stage boundary identity 1 fd631376ca902436
+stage positioned identity 4 1adb61d81333a2d9
+stage positioned value 20 4612f5eee7f68a96
+stage positioned repr 37 89875866a980c9f5
+stage public value 13 c12ae3234d942e76
+stage public identity 1 4602a1bcd084662d
+stage view identity 4 fffdab7c64527dea
+stage view value 40 3fecf6d1a4f0ed5d
+stage wire wire 1 61032e0e06549b93
+stage gather identity 7 41dcd6376e388eef
+stage gather value 36 c313b2d7d1ee2d5d
+stage gpu identity 2 ba10253680c39f85
+stage gpu value 3 5489de245e3fa172
+step 01 insert HardBreak (1 units) at 1224 + insert Bidi (1 units) at 2423 + replace 3 at 846
+class value 266 9dfbb7cad5b1fa5b
+class identity 24 511dc4a671de2a94
+class repr 61 0a96a1b8f980c070
+class cache 5 5c22547422c6d468
+class wire 1 a6fd2be61f137c15
+step 02 replace 1 at 894
+class value 266 81dcd2938d02fd5e
+class identity 24 23f050d5f2559f11
+class repr 61 49cbfca3d7fd1066
+class cache 5 5c22547422c6d468
+class wire 1 317dffcaa1a0e118
+step 03 direction 1
+class value 266 3dce7a2a5a0f0ee0
+class identity 24 a343bea7122f58c9
+class repr 61 49cbfca3d7fd1066
+class cache 5 5c22547422c6d468
+class wire 1 bb1e19c2b93f09ca

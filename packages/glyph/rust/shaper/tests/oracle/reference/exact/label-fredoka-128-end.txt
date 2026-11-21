@@ -1,0 +1,31 @@
+# glyph layout oracle reference v1
+case label-fredoka-128-end
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 9edfc51b60639cbd
+stage text identity 1 926b5a9322c6921d
+stage unicode value 6 af7675b91fee5ee0
+stage bidi value 8 ab104938b3dbdeb0
+stage style value 26 f19eb437e911c514
+stage shaping_run value 5 e54d376afaa549ab
+stage shape value 14 24b92d1b65ee1bd5
+stage cluster value 29 62c7fad90cab989c
+stage cluster identity 4 37cfc85c6b632d56
+stage cluster repr 11 5c66d17f43f25e11
+stage cluster cache 5 f8499bc4efa1c4cd
+stage run_local repr 16 8e77c8dac08a7c8c
+stage flow value 35 0e24a0a8f94882da
+stage boundary value 28 1f66ff6713673786
+stage boundary identity 1 e414505210543456
+stage positioned identity 4 ad0a0ee986f29497
+stage positioned value 20 e4dd14bfb6ccc611
+stage positioned repr 37 3bed6874138ab983
+stage public value 13 9fbe5f78be4eb14a
+stage public identity 1 98bc703727297dd8
+stage view identity 4 c1bfebb0c5c21982
+stage view value 40 e8154e600dcca4db
+stage wire wire 1 528ab044611e30a4
+stage gather identity 7 7bb6ab0c2514d3fc
+stage gather value 36 48cf284902e95d6f
+stage gpu identity 2 f5d44010aa074610
+stage gpu value 3 b8197da2aac91fae

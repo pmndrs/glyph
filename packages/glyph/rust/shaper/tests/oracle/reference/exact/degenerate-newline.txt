@@ -1,0 +1,29 @@
+# glyph layout oracle reference v1
+case degenerate-newline
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 e8ec0598831b63f9
+stage text identity 1 8b4193d3cf71402e
+stage unicode value 6 e3561f08f0b70385
+stage bidi value 8 40211967813bc79a
+stage style value 26 2d413f846c34624c
+stage cluster value 1 22f168877ee6a927
+stage cluster repr 1 cc2006c36bdeb2ed
+stage view identity 4 a6d93c56fce255c9
+stage view value 40 79045b895a409ba1
+stage wire wire 1 5f1f8357b3352e5e
+step 01 max lines 12
+class value 83 8419aadb09e940fa
+class identity 5 dcad5953f46a75e3
+class repr 1 cc2006c36bdeb2ed
+class wire 1 b5882463d3d05750
+step 02 delete 1 at 0
+class value 77 c0236a9b5ec5c842
+class repr 1 cc2006c36bdeb2ed
+class identity 4 a6d93c56fce255c9
+class wire 1 676648b2b594af03
+step 03 width 655.5 + insert Bidi (1 units) at 0
+class value 230 3bc91dc5ef6efb8f
+class identity 22 b1bfee57444e96a6
+class repr 41 4fa87f430ec451d0
+class wire 1 cedbfcbc10390fac

@@ -1,0 +1,63 @@
+# glyph layout oracle reference v1
+case font-nabla-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 a745ff56de2b4fa5
+stage text identity 1 06066976dde5f69e
+stage unicode value 6 8cda633f45c4d6e6
+stage bidi value 8 7062e55c691117db
+stage style value 26 57dd8e5a7d04299d
+stage shaping_run value 5 548cbad69f4d75d4
+stage shape value 14 fada6a6a90ee7522
+stage cluster value 29 5f6ceeb5cd7575d8
+stage cluster identity 4 cdd8f8d1245a330b
+stage cluster repr 11 07845bab6c9a1e69
+stage run_local repr 16 d5b45e6f77dc784f
+stage flow value 35 ebea4ca3e22f526c
+stage positioned identity 3 5cf5b4344254b95a
+stage positioned value 13 62ee46342fcb42ca
+stage positioned repr 17 c43a11b6f91b428c
+stage public value 13 17491b250bf5142e
+stage public identity 1 3fc56f88fc243bf4
+stage view identity 4 b34ce2ebee5ef04a
+stage view value 40 7c5c6778d22b9ba1
+stage wire wire 1 73da13ff1e67168a
+stage gather identity 7 9f1faba5b00e8222
+stage gather value 36 fabddef5f6ca8f62
+stage gpu identity 2 012488f00fa24b54
+stage gpu value 3 00e3f5fbe541a569
+step 01 width 417
+class value 230 c533dfbe5549075f
+class identity 22 f2e0b0018104103e
+class repr 44 ca4dd4f6a441c676
+class wire 1 9cab73ae6ef15047
+step 02 width 418
+class value 230 4960658e7b470552
+class identity 22 f2e0b0018104103e
+class repr 44 ca4dd4f6a441c676
+class wire 1 59c1d1b836bdbcf1
+step 03 width 233.5
+class value 230 724cd243188ba9ac
+class identity 22 76a7b06f3c10f161
+class repr 44 fe0f676ffdf151e4
+class wire 1 72f496352d4bad52
+step 04 width 600
+class value 230 d1e4a74fbc65154f
+class identity 22 9d1698c809bacc8d
+class repr 44 7b1208a82b97e47e
+class wire 1 b3ed00e783ad3a55
+step 05 insert Space (1 units) at 519
+class value 230 9e9fbe40b75ae8a9
+class identity 22 f44dc172799a8b0c
+class repr 44 074f6f5400aa4e8c
+class wire 1 684c17bd8278b7f2
+step 06 max lines 3 + insert Foreign (6 units) at 1308
+class value 230 0365897d18fd2da9
+class identity 22 db9e831a702fa7a3
+class repr 44 b2c90bcd2cda6e2c
+class wire 1 a6aa55d5c8af81f2
+step 07 insert Mark (1 units) at 2471
+class value 230 541ddf1d039f5c86
+class identity 22 f30c396b9c93182e
+class repr 44 38224f981d3f9108
+class wire 1 39bd238b5944b4a6

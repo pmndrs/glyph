@@ -1,0 +1,49 @@
+# glyph layout oracle reference v1
+case feature-ellipsis-12-lines-justify-latin
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 a745ff56de2b4fa5
+stage text identity 1 06066976dde5f69e
+stage unicode value 6 8cda633f45c4d6e6
+stage bidi value 8 7062e55c691117db
+stage style value 26 57dd8e5a7d04299d
+stage shaping_run value 5 548cbad69f4d75d4
+stage shape value 14 d61a9f6e2de17b92
+stage cluster value 29 3a2cf65230f8161f
+stage cluster identity 4 80d1547dbea9946d
+stage cluster repr 11 fe00aad15b100f67
+stage cluster cache 5 004b23df7958b0ea
+stage run_local repr 16 74092203f37787f3
+stage flow value 36 004bcc6596cbef4f
+stage boundary value 28 9a45565b1a872c1f
+stage boundary identity 1 3ab698cd0e7c970c
+stage positioned identity 4 6a2fa936af31df62
+stage positioned value 20 f2e3dc9dc993bbaa
+stage positioned repr 37 646e964595f6c2f4
+stage public value 13 643161f5a0743756
+stage public identity 1 533c251eaf820005
+stage view identity 4 253f5f5603059304
+stage view value 40 17c53ad275d36989
+stage wire wire 1 c377a8bc79b8140e
+stage gather identity 7 e7ab4c18ed15cd1d
+stage gather value 36 305ca22ca3132962
+stage gpu identity 2 309dec035405b8c2
+stage gpu value 3 5f3b9bf8f026a737
+step 01 insert SpacedWord (9 units) at 814
+class value 266 125e1b7b2a451681
+class identity 24 087b033523be6e36
+class repr 64 c557b069637f128a
+class cache 5 e324dcf149f1460d
+class wire 1 192b315a5fc8761b
+step 02 add span 1632..1666 + delete 1 at 1205 + remove span 2
+class value 266 2b377fafbabb1f8f
+class identity 24 6f4bccaa75f413a9
+class repr 64 2c619eb6c564a2ff
+class cache 5 c45de08d2cb8a980
+class wire 1 3290f4366afae644
+step 03 add span 1240..1268
+class value 266 4dd41f84baf7f820
+class identity 24 a7c9fed3745da015
+class repr 64 2c619eb6c564a2ff
+class cache 5 c45de08d2cb8a980
+class wire 1 729ae2a2aaae31d1

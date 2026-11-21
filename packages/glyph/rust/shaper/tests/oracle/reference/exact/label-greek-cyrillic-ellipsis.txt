@@ -1,0 +1,45 @@
+# glyph layout oracle reference v1
+case label-greek-cyrillic-ellipsis
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 dd9b0f11d013f5cc
+stage text identity 1 e26d97a0d7cc4905
+stage unicode value 6 5b788e789123d3a2
+stage bidi value 8 693f3d408d8dcdcf
+stage style value 26 f4dd21aa72cafc15
+stage shaping_run value 5 d258c9458d90d370
+stage shape value 14 61ce090bba5c6c59
+stage cluster value 29 0ce4f7f1e86fbaa7
+stage cluster identity 4 429bb286479daa69
+stage cluster repr 8 e8a4649d9415b8f2
+stage run_local repr 16 de05b2945f6bfe83
+stage flow value 36 978f3a66a4d1146c
+stage boundary value 28 b004ee2e192f10e2
+stage boundary identity 1 28803b518ac44076
+stage positioned identity 4 52bc99fccde90a2a
+stage positioned value 20 4c9cbb3581ff34c7
+stage positioned repr 37 53ffa28068d07c1f
+stage public value 13 787baecfcfd61f30
+stage public identity 1 6ade88c09c906ed6
+stage view identity 4 29faa2d94ddb628f
+stage view value 40 46354375a3d23da3
+stage wire wire 1 10f0079b6fc72026
+stage gather identity 7 5a9fe3b3493627a7
+stage gather value 36 7e48dbdcfcc03763
+stage gpu identity 2 94920704f134b666
+stage gpu value 3 bb03fe20c9e75afb
+step 01 metrics size 16 spacing 0 line 1.2 word 0
+class value 246 d703f8822c518757
+class identity 22 6fab61db97356474
+class repr 61 6153ed7e95f9acd2
+class wire 1 f72166e21bcf4e04
+step 02 width 119
+class value 266 52c696d83b276bea
+class identity 24 384e8e8ac025ab44
+class repr 61 6153ed7e95f9acd2
+class wire 1 96e7e2c6359dbe4d
+step 03 width 126 + max lines 3 + replace 1 at 42 + insert SpacedWord (4 units) at 27
+class value 230 6c4194a9084abb76
+class identity 22 98e9cb7ec9e35cfe
+class repr 41 d4b442964b6b3b27
+class wire 1 a8d43c7350685aae

@@ -1,0 +1,71 @@
+# glyph layout oracle reference v1
+case para-bengali-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 ad09cf773760c765
+stage text identity 1 cdba50946c57bb11
+stage unicode value 6 71e9dfac3e65a028
+stage bidi value 8 7e185cc7108a74fb
+stage style value 26 af3f2831733d4362
+stage shaping_run value 5 bccea5dd1ce58446
+stage shape value 14 426f1b00820c79d9
+stage cluster value 29 1ccf1242a1cf7d61
+stage cluster identity 4 19e3493b2a7489a8
+stage cluster repr 11 b02f1c0bf68b0309
+stage cluster cache 5 5e6978dbfe6b13f4
+stage run_local repr 16 457adaf18ce61199
+stage flow value 35 1e5b0f372e81eda8
+stage boundary value 28 d91c7d7e6b5937c1
+stage boundary identity 1 13087d564a37d4ee
+stage positioned identity 4 3e3064c97b4e4711
+stage positioned value 20 fbbafe6be47259ea
+stage positioned repr 37 1f60546ecda2e39e
+stage public value 13 8e483e64e7d6249e
+stage public identity 1 9ad154368469928f
+stage view identity 4 bbacc41dc8b65e3f
+stage view value 40 4aaa507a9af68888
+stage wire wire 1 20ebd6e32d873aac
+stage gather identity 7 6df99b76f1ffdc69
+stage gather value 36 9ea6a386d9a8b30b
+stage gpu identity 2 eff8ea96a9c751c6
+stage gpu value 3 c89ee0d132d4bba5
+step 01 width 417
+class value 265 1e1b55366c7ff243
+class identity 24 7f5553df394243a8
+class repr 64 08ef15146ba061f9
+class cache 5 6ec871de98338966
+class wire 1 d675e8952ccc1477
+step 02 width 418
+class value 265 b3b76cf02836bc5f
+class identity 24 497d3ee6edeb706f
+class repr 64 73fb9820e1dd7d81
+class cache 5 c082a807d506cd2f
+class wire 1 9e05f8f5030bc28f
+step 03 width 233.5
+class value 265 1aab9078db9f5d5e
+class identity 24 bf74d59d02ad674c
+class repr 64 915184c0caca0f44
+class cache 5 1356f23b35540e70
+class wire 1 2926ba271c5ce63f
+step 04 width 600
+class value 265 9a5e425705d278e4
+class identity 24 3f56697b9b45cf38
+class repr 64 033e7be8e82de8dc
+class cache 5 1356f23b35540e70
+class wire 1 a0c3a8597e6d631f
+step 05 replace 1 at 2371 + insert Foreign (183 units) at 0 + width 188
+class value 265 654b770343fc9a9e
+class identity 24 bc18e63a2b6a5289
+class repr 64 76ea4f642a38a5c6
+class cache 5 7a11226c8f20235e
+class wire 1 b33732ad08dcdc87
+step 06 insert Word (5 units) at 4397 + direction 2
+class value 230 f6fc52c7cb593b3b
+class identity 22 61bfbc6556c16f1a
+class repr 44 09b0b4b788417f14
+class wire 1 17090ebd6a9ef1b6
+step 07 add span 1431..1439
+class value 230 f2d7819b00ebeabc
+class identity 22 3f2106b727f2213f
+class repr 44 60e36c548c2c5304
+class wire 1 01e35011af154fbc

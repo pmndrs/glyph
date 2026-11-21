@@ -1,0 +1,65 @@
+# glyph layout oracle reference v1
+case para-emoji-justify
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 d5c3e93a65b192a5
+stage text identity 1 9827804ca187ff1d
+stage unicode value 6 5f79bff06e565083
+stage bidi value 8 5f7e83703c58e28c
+stage style value 26 3b796b36227d2031
+stage shaping_run value 5 ee43a5dd0a62707e
+stage shape value 14 92fcdb6db60c96c4
+stage cluster value 29 e4f42fff44a0e308
+stage cluster identity 4 a9f2114f8c61ba87
+stage cluster repr 11 9a71ac2e228dfd88
+stage run_local repr 16 3a2138ce4dee311d
+stage flow value 35 c15d5a2f7294d1a8
+stage positioned identity 3 efc2aca8fb6e16fd
+stage positioned value 13 a8923ed1c24a1fca
+stage positioned repr 17 eeb3b381f34282a7
+stage public value 13 225bd69a5a9c80d6
+stage public identity 1 9795bc021d10777b
+stage view identity 4 f420fc484e3b52a6
+stage view value 40 51d506c62569348d
+stage wire wire 1 da8f5aafa70f44f9
+stage gather identity 7 7b80c9cf474f6dec
+stage gather value 36 d95c8850abd68e84
+stage gpu identity 2 8f2948e7dc93128b
+stage gpu value 3 a73950a5c6109273
+step 01 width 417
+class value 230 767a1f144874510c
+class identity 22 87b789886dde0053
+class repr 44 5e4a3a3d80def79f
+class wire 1 b407ff0f2085e179
+step 02 width 418
+class value 230 df3233ce8377d14e
+class identity 22 f29e8990b33e0df2
+class repr 44 fa2a60941c434539
+class wire 1 4e948a3921b659f9
+step 03 width 233.5
+class value 230 3342ff590e25a019
+class identity 22 3cd0a0701f671abd
+class repr 44 f9cbdd52789b4c66
+class wire 1 a9d7abf6f9605716
+step 04 width 600
+class value 230 1da2e52b1d94cd32
+class identity 22 bd1e12b53bec3280
+class repr 44 5cfab2aa4383014b
+class wire 1 aff542d6a77a5419
+step 05 insert Space (191 units) at 3059
+class value 230 810ded4d29f509f0
+class identity 22 de44424bdf5a014e
+class repr 44 b334cc773083d1aa
+class wire 1 6833a03e62ff8989
+step 06 insert Foreign (2 units) at 2320 + insert Mark (1 units) at 3641 + add span 3740..3792
+class value 230 f0f74442d15ae091
+class identity 22 d4b23efd1804d394
+class repr 44 7ada20066ad3891d
+class cache 3 e7dcbc18847e1c7d
+class wire 1 3b1ec386dec2cdde
+step 07 width 720
+class value 230 90285bc7fb6f7b1b
+class identity 22 b8ba333d6f5eecfb
+class repr 44 936cd75920f0485e
+class cache 3 e7dcbc18847e1c7d
+class wire 1 672708a96fccd34f

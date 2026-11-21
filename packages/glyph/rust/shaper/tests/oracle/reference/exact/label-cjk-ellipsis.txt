@@ -1,0 +1,49 @@
+# glyph layout oracle reference v1
+case label-cjk-ellipsis
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 2a2e50ff2962c88d
+stage text identity 1 e26d97a0d7cc4905
+stage unicode value 6 e61f4f3ca85f5541
+stage bidi value 8 69f5a09b035d90f3
+stage style value 26 f4dd21aa72cafc15
+stage shaping_run value 5 a3bdf4064b4213fa
+stage shape value 14 a410481955ba5886
+stage cluster value 29 4e67036c29bd2a48
+stage cluster identity 4 ffdc26ad9eed8994
+stage cluster repr 8 605d7ee364e5ab10
+stage cluster cache 3 dcc7e82b7a57c95e
+stage run_local repr 16 055234398a82f778
+stage flow value 36 416ce4caa21ec7e7
+stage boundary value 28 50ee4c6b3dc217f1
+stage boundary identity 1 6c4cd3597277c571
+stage positioned identity 4 87a472fb23f7e5de
+stage positioned value 20 41ed1f73c58545da
+stage positioned repr 37 9c08cdbeb29cfe09
+stage public value 13 f789a4f25871589e
+stage public identity 1 196e6a8694022882
+stage view identity 4 afbe420cfc992620
+stage view value 40 5d367775f49893ce
+stage wire wire 1 adf4edec616073de
+stage gather identity 7 376ee480c7b50f8e
+stage gather value 36 2c9a0b8bfa6aead0
+stage gpu identity 2 4796c0137c7948ea
+stage gpu value 3 ce55df246bf4e4a9
+step 01 metrics size 16 spacing 0 line 1.2 word 0
+class value 246 74aa21cd730034b9
+class identity 22 376db173e28911b9
+class repr 61 fef05276f9ef40a2
+class cache 3 dcc7e82b7a57c95e
+class wire 1 f72166e21bcf4e04
+step 02 insert SpacedWord (2 units) at 57
+class value 266 fefcb78c1fb0dcf5
+class identity 24 caf3b19f8f957168
+class repr 61 af8e7bde85d8a43a
+class cache 3 cdcd383b65a3a3b6
+class wire 1 110215daed47d5da
+step 03 insert SpacedWord (87 units) at 45
+class value 266 7c29cc615af7302d
+class identity 24 cfdad59d2084a2fa
+class repr 61 f65aca13c8a76778
+class cache 3 af08abab55691dae
+class wire 1 dcaff6effc194767

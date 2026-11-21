@@ -1,0 +1,53 @@
+# glyph layout oracle reference v1
+case mech-nastaliq-delete-space
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 8c21f947881b1711
+stage text identity 1 473ff03fcf428b33
+stage unicode value 6 ef692fafdd5f2d6c
+stage bidi value 8 9e75728ac923e358
+stage style value 26 795aa93df7115395
+stage shaping_run value 5 3fde025ddfb7dcfe
+stage shape value 14 ac81672906047b04
+stage cluster value 29 940ed77ec887c057
+stage cluster identity 4 bc4c0297bb8940d5
+stage cluster repr 8 7a03e625a538c7a9
+stage run_local repr 16 baee659599b03836
+stage flow value 35 ed9c55c0c88c7477
+stage positioned identity 3 c2faebe32a024e08
+stage positioned value 13 316d825cad084567
+stage positioned repr 17 d11744069909f69d
+stage public value 13 5362dac8c4697caa
+stage public identity 1 08edb904e6014471
+stage view identity 4 0a5ef47ac14bce34
+stage view value 40 6fc3829077076a0c
+stage wire wire 1 4eaded71d7673be4
+stage gather identity 7 3db7e8fc7222cc25
+stage gather value 36 741cdafdb8c02f7f
+stage gpu identity 2 a5776b625f70ac16
+stage gpu value 3 f3d3248fca708872
+step 01 delete space
+class value 230 1b7f0c12fc1d8cee
+class identity 22 e7cbd2b0bcbdfadf
+class repr 41 0e370a7ac01fa8c7
+class wire 1 93664ae29454bab1
+step 02 restore
+class value 230 f7b2fd9a006c86c1
+class identity 22 e06a5d5d4b1ae482
+class repr 41 6acd0b6e2b83b729
+class wire 1 1f94317fe110d419
+step 03 insert HardBreak (1 units) at 2 + insert SpacedWord (4 units) at 10
+class value 230 d73d430ab540b8c7
+class identity 22 1291cd1c032fc7bd
+class repr 41 af09e67c46a8bc0c
+class wire 1 ff3c732abf2b3104
+step 04 replace 5 at 3 + insert Mark (1 units) at 11
+class value 230 c028327b1d658004
+class identity 22 9e7be0ac8c715430
+class repr 41 7f2b5a26485197e2
+class wire 1 5399b99feb5d5280
+step 05 delete 9 at 11 + add span 1..10 + insert SpacedWord (5 units) at 6
+class value 242 b7c88af0e6862aa0
+class identity 22 c5784cd6ccee9c74
+class repr 41 602619cabf54cb38
+class wire 1 d0fae7510ad83674

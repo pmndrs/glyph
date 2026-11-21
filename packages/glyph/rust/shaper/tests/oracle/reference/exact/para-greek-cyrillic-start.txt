@@ -1,0 +1,63 @@
+# glyph layout oracle reference v1
+case para-greek-cyrillic-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 09c29ea7e532c76a
+stage text identity 1 c999e3f9f6c7c3c6
+stage unicode value 6 4054d26e9e65bc63
+stage bidi value 8 3a24f36c13cf2527
+stage style value 26 eec52becda9237bf
+stage shaping_run value 5 3f1d3e9663db3050
+stage shape value 14 89a9d0c4dc5e3395
+stage cluster value 29 cae94d71f52e196d
+stage cluster identity 4 5fef41b5da4a5023
+stage cluster repr 11 5d677b08ef1c3bf3
+stage run_local repr 16 2b67f1187ca835b3
+stage flow value 35 b8555b9b07ec5b5a
+stage positioned identity 3 6e2ab39fce37d0f6
+stage positioned value 13 871496a8b01f8696
+stage positioned repr 17 29b42abcae7b9011
+stage public value 13 c8ecde6352b65758
+stage public identity 1 ffeed191fb0a0085
+stage view identity 4 c9549b2e6303d5b8
+stage view value 40 48d99692cd36fb02
+stage wire wire 1 b462b749d0a10d62
+stage gather identity 7 1be970ccd4105295
+stage gather value 36 26546f5544c7b59e
+stage gpu identity 2 c1f22cbbe9f483de
+stage gpu value 3 aaa71a2df77c9d1c
+step 01 width 417
+class value 230 b1ddb7cebfc3d0da
+class identity 22 9903d0497b9344ea
+class repr 44 e84fe731c88c66dc
+class wire 1 b03ad2a230f7d111
+step 02 width 418
+class value 230 5dd3cb0de8338261
+class identity 22 afc853cf3c6af841
+class repr 44 e151aae02d671ae1
+class wire 1 6d404ec582c79ae7
+step 03 width 233.5
+class value 230 2ffcb28a92f4d269
+class identity 22 70b9b7bed24a8504
+class repr 44 9d631b61ab09139a
+class wire 1 bc7488be30471cc5
+step 04 width 600
+class value 230 aab22375a4a998ba
+class identity 22 6db8c14b35f2cafb
+class repr 44 01529d5e7372be8f
+class wire 1 e1ba2632ab74a15e
+step 05 direction 1 + replace 4 at 1307
+class value 230 f25a6e6a04109155
+class identity 22 483db29075c4a002
+class repr 44 caac3110fd839ae0
+class wire 1 0046ea2afe2acf96
+step 06 
+class value 210 de9d9954f8c25d3d
+class identity 20 64249cf6e5e48ef1
+class repr 44 caac3110fd839ae0
+class wire 1 1c03b8f80a468318
+step 07 width 408.25 + replace 3 at 1334
+class value 230 c39752bf157cbdec
+class identity 22 49c28a4ac2c32368
+class repr 44 d8d07fac4c0926c4
+class wire 1 11ada513d136ca59

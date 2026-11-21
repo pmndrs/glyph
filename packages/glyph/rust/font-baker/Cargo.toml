@@ -63,3 +63,8 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+# HarfRust is forked in-tree (vendor/harfrust, see GLYPH-FORK.md there). The fork adds default-on
+# `aat` and `rand` cargo features; the dependency above leaves both off.
+[patch.crates-io]
+harfrust = { path = "../../../../vendor/harfrust" }

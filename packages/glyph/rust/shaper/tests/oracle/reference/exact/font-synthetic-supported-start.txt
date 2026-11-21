@@ -1,0 +1,63 @@
+# glyph layout oracle reference v1
+case font-synthetic-supported-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 7353d0d585888fc3
+stage text identity 1 ca489d80302530fb
+stage unicode value 6 b1fe77f5e362a947
+stage bidi value 8 6fdabb3cf05cfe44
+stage style value 26 e4bc46804dd3467f
+stage shaping_run value 5 366ba0dbe941606e
+stage shape value 14 4d1df37efea23dc5
+stage cluster value 29 6eb02b1ed62b81e5
+stage cluster identity 4 de88fff182b0f5c0
+stage cluster repr 11 743e582f114cf9b6
+stage run_local repr 16 5243a82c3002a5f4
+stage flow value 35 d637119a2e3c2d11
+stage positioned identity 3 5fe33babaaa23d3c
+stage positioned value 13 ef4b7d121dc4e5c4
+stage positioned repr 17 693cb109ae7f2a29
+stage public value 13 f61922897d1fad24
+stage public identity 1 45e8a59f26f54f15
+stage view identity 4 901631f50756c050
+stage view value 40 d0ae97143f169b32
+stage wire wire 1 48e08f17b91445ab
+stage gather identity 7 9930a3e2d6be82d4
+stage gather value 36 139e0e50c75d730f
+stage gpu identity 2 6eadc3a42897279c
+stage gpu value 3 72d994933e00bb99
+step 01 width 417
+class value 230 c32238b22ff0be4d
+class identity 22 177e870ed9f5eae0
+class repr 44 1ab414108911aa3a
+class wire 1 e76a7c4dd8bc7945
+step 02 width 418
+class value 230 5045dc81d8d12a0e
+class identity 22 177e870ed9f5eae0
+class repr 44 1ab414108911aa3a
+class wire 1 dcb3636b82e23905
+step 03 width 233.5
+class value 230 80d98bd348b95344
+class identity 22 9416c4b41cc34f15
+class repr 44 895c455b35e67846
+class wire 1 884e8d445e3fdb90
+step 04 width 600
+class value 230 2af07e8ba409a6f2
+class identity 22 55596e91733caf37
+class repr 44 dc5071738f61bb25
+class wire 1 53b50dea2b064df5
+step 05 delete 1 at 97 + insert Bidi (1 units) at 172
+class value 230 fdf4c228228f5493
+class identity 22 4200de386e6130d5
+class repr 44 3337eea5025030d8
+class wire 1 542bfc71e87ff54c
+step 06 add span 92..94
+class value 230 e62fc1355da86788
+class identity 22 30effe49aed61b92
+class repr 44 6381daeeb2611003
+class wire 1 ad473a0124f15981
+step 07 add span 165..193 + insert Foreign (4 units) at 114
+class value 242 8f9a3a60439396f7
+class identity 22 69d99a844733b51a
+class repr 44 3ddaa6555f128443
+class wire 1 d505c6480792b69c

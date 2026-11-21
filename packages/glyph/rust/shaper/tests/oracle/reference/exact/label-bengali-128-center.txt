@@ -1,0 +1,29 @@
+# glyph layout oracle reference v1
+case label-bengali-128-center
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 6392b2a9ea958fe8
+stage text identity 1 a38eced43a3ea490
+stage unicode value 6 89c0f853ca9ca3af
+stage bidi value 8 feb4dce2d1e251eb
+stage style value 26 980e068f0ed89a5c
+stage shaping_run value 5 9a0d0601671f2668
+stage shape value 14 54d56a1ecb0f3fee
+stage cluster value 29 7cc5b17401129f9f
+stage cluster identity 4 571b3f6029d1467c
+stage cluster repr 11 8893d9daadc85fb5
+stage cluster cache 3 9b4268e1f56690b7
+stage run_local repr 16 2fba08632f05602c
+stage flow value 35 053709004adf4797
+stage positioned identity 3 bfb36604424ea495
+stage positioned value 13 56089cd2337bd754
+stage positioned repr 17 666d9f5bbfa7c16d
+stage public value 13 9aa98afce2de8221
+stage public identity 1 a6663f4f4c50e3c2
+stage view identity 4 3daa412cf1bdaa08
+stage view value 40 e8d2a90519676985
+stage wire wire 1 e28c970e261ac161
+stage gather identity 7 31ccc3a8ad5842d1
+stage gather value 36 cfefa688620994ed
+stage gpu identity 2 d272b316fc939fa6
+stage gpu value 3 07137e8ed668f43e

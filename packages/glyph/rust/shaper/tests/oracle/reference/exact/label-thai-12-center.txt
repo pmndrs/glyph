@@ -1,0 +1,22 @@
+# glyph layout oracle reference v1
+case label-thai-12-center
+step cold
+stage owner value 1 07e27e8ffd8af189
+stage text value 1 89b1d7a6474c43c2
+stage text identity 1 bc739551caf080aa
+stage unicode value 6 27ca21f79de273a8
+stage bidi value 8 d159bc75b9ac15d0
+stage style value 26 2d290e6f96ce7163
+stage shaping_run value 5 e6856f842ddffc6c
+stage inline value 81 2b931c7bc41f9e3c
+stage inline identity 5 3821b65da421ff86
+stage inline repr 21 9aa3070c92e50ba5
+stage public value 13 703e7104c7218e42
+stage public identity 1 3a7ff0a69ae552f2
+stage view identity 4 951a1e88d424b5bf
+stage view value 40 e45e3dbe3f205875
+stage wire wire 1 1294526c59fd6250
+stage gather identity 7 68a307f835c7cab3
+stage gather value 36 b3ff713c68a9a7a8
+stage gpu identity 2 4f8202a9424d4496
+stage gpu value 3 c43c0290bbd2302c

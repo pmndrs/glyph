@@ -1,0 +1,37 @@
+# glyph layout oracle reference v1
+case label-greek-cyrillic-12-start
+step cold
+stage owner value 1 07e27e8ffd8af189
+stage text value 1 5c796c911f909959
+stage text identity 1 864b3c2a4fe37861
+stage unicode value 6 fd080c1dfc3fb520
+stage bidi value 8 8de35bca7a874f82
+stage style value 26 6162228261c3295c
+stage shaping_run value 5 fae5fcf223369d8a
+stage inline value 81 26775b2be1f8e728
+stage inline identity 5 50643ff7dc7e9f95
+stage inline repr 21 b6ccf12bee19b092
+stage public value 13 656e393da6a92bb6
+stage public identity 1 e4c904a53c6f08f5
+stage view identity 4 3e38aa7f774b2937
+stage view value 40 aac484014d1a22d5
+stage wire wire 1 e8b9d385f90d0272
+stage gather identity 7 fb5a81bbef89f517
+stage gather value 36 f7a659ca3cac489e
+stage gpu identity 2 a32a0fff07370325
+stage gpu value 3 a820b27048d1394c
+step 01 insert HardBreak (1 units) at 0
+class value 230 af22c6e0859e468e
+class identity 22 2d66d85eb88cd139
+class repr 41 c732c3b0ec4a43e7
+class wire 1 66841c3a3b773184
+step 02 width 260.01563
+class value 230 e51095072b691eaf
+class identity 22 2d66d85eb88cd139
+class repr 41 c732c3b0ec4a43e7
+class wire 1 315d66942bcf679d
+step 03 insert HardBreak (1 units) at 4
+class value 230 5d04bf8cbd9ba6cd
+class identity 22 75a84e663a6c591d
+class repr 41 35144265acbe0dd3
+class wire 1 f2f92e8e7374c90b

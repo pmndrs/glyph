@@ -1,0 +1,73 @@
+# glyph layout oracle reference v1
+case para-devanagari-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 73a306cf2b9c2eec
+stage text identity 1 18b9276caa2c7c5b
+stage unicode value 6 3c1ef1428d86ed0d
+stage bidi value 8 961f6581bd607757
+stage style value 26 c0911f7c7fc13ec8
+stage shaping_run value 5 1e77b80f54a81041
+stage shape value 14 80632ffcd196d39a
+stage cluster value 29 379a8214070f7782
+stage cluster identity 4 caab0ecfa7ced031
+stage cluster repr 11 b8f0c76d4ec7fcec
+stage cluster cache 5 4b7a73cd2b1f5757
+stage run_local repr 16 a991d7afe04c6e38
+stage flow value 35 96b579d7831fc51a
+stage boundary value 28 f4d019db97d37c8b
+stage boundary identity 1 3b73393d51038095
+stage positioned identity 4 643ac82213b4f7dd
+stage positioned value 20 091b765f53af6acf
+stage positioned repr 37 fe384b5ee7715e19
+stage public value 13 adf24ced9bad7d8c
+stage public identity 1 5820ec78d74e8bcc
+stage view identity 4 75848d426bdc0d74
+stage view value 40 8effce20859bbea0
+stage wire wire 1 c8260475b4975965
+stage gather identity 7 e38255fdef86e38b
+stage gather value 36 280987609190fa01
+stage gpu identity 2 aa81e92c53ddf277
+stage gpu value 3 0d0925c7c52aa138
+step 01 width 417
+class value 265 e230750ce684f940
+class identity 24 2c1e32486e49c58c
+class repr 64 e8ddca6881874792
+class cache 5 c556ecec338e581a
+class wire 1 76405cc121f96ec8
+step 02 width 418
+class value 265 78d2cab46a4c411a
+class identity 24 7b0fb0e400a69015
+class repr 64 e8ddca6881874792
+class cache 5 c556ecec338e581a
+class wire 1 71c3c6f06aee9d3a
+step 03 width 233.5
+class value 265 98d3fc5b9c432bb1
+class identity 24 666821fdabb2055f
+class repr 64 5fdd021154808057
+class cache 5 81aeede017484a9d
+class wire 1 72354f51059c74be
+step 04 width 600
+class value 265 e6bb2e7988239856
+class identity 24 52d6639092386db1
+class repr 64 e863eb167506913c
+class cache 5 81aeede017484a9d
+class wire 1 c2fcd3bea379f22a
+step 05 insert Word (2 units) at 3703
+class value 265 96bf75c6c46b66f2
+class identity 24 19b5d88c35cb8f3b
+class repr 64 e799078b0e2d4b1d
+class cache 5 0b0a806870a33406
+class wire 1 9e79af2b3b55c36b
+step 06 direction 1 + align 2 + insert Bidi (1 units) at 3721
+class value 265 76f04a3504c20845
+class identity 24 8407fc33fb1de024
+class repr 64 e57497af535299f2
+class cache 5 05dd3d7e0aaf86b6
+class wire 1 40777e1bf60a6863
+step 07 insert SpacedWord (177 units) at 3533
+class value 265 28ff87b0a3af33ea
+class identity 24 ccb4e87f6e757ef4
+class repr 64 b3e12e159bb54559
+class cache 5 8172f5f40783d049
+class wire 1 f6d0cc119b08760d

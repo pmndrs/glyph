@@ -1,0 +1,63 @@
+# glyph layout oracle reference v1
+case font-nastaliq-justify
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 8828795b2ade4383
+stage text identity 1 0c4a1af057ea40b5
+stage unicode value 6 6bc76fc9680ef26e
+stage bidi value 8 7f1f6d789a4d626e
+stage style value 26 b2e9202d1dd549f0
+stage shaping_run value 5 67f70143f12927f6
+stage shape value 14 16c15dd2f50e934e
+stage cluster value 29 cff657330e235f4e
+stage cluster identity 4 8df836659e71164c
+stage cluster repr 11 986c6cc8b49abd19
+stage run_local repr 16 ef0ac46fd394ee3b
+stage flow value 35 712735a0d145eb00
+stage positioned identity 3 c37322ad3215872f
+stage positioned value 13 26a16f47ee2a05e1
+stage positioned repr 17 19e3239329bcf78d
+stage public value 13 d54b2c5f369af437
+stage public identity 1 7c3e91e2454a9f83
+stage view identity 4 6db300052aa18eee
+stage view value 40 16a9ea62c65c68df
+stage wire wire 1 db54258749b57051
+stage gather identity 7 b372d8f27759e673
+stage gather value 36 8386b4c6dac1985f
+stage gpu identity 2 b5bb83ce2f1b3f19
+stage gpu value 3 64ee8b44502400d3
+step 01 width 417
+class value 230 3e043004a3a580f3
+class identity 22 1ad93c18adbfbb4a
+class repr 44 7e15cabd760262b2
+class wire 1 461542a5ca9785e0
+step 02 width 418
+class value 230 e67451267ca0566c
+class identity 22 2e28a156386f6c86
+class repr 44 55f8121125a6a46f
+class wire 1 2313db5ec6687020
+step 03 width 233.5
+class value 230 effb6ba4d00f4e5b
+class identity 22 c69214ee1a3288f5
+class repr 44 9d32c27ecc1e0f13
+class wire 1 23d553097f069f4d
+step 04 width 600
+class value 230 8f5ca59e775977aa
+class identity 22 76769c1978ad0e57
+class repr 44 3718696eb192b2fc
+class wire 1 ada7352c0908f0f4
+step 05 
+class value 210 f28c8a94ec221081
+class identity 20 d135cd299fee7180
+class repr 44 3718696eb192b2fc
+class wire 1 3e036ead4b4c2362
+step 06 add span 1353..1375
+class value 230 0ddf9da2da28dca4
+class identity 22 746774dd8ae13829
+class repr 44 3718696eb192b2fc
+class wire 1 ae0e473a17666f89
+step 07 align 3 + insert Space (1 units) at 706 + insert Bidi (1 units) at 1448 + remove span 2
+class value 230 7fe4e64c45d619cf
+class identity 22 5f4d7e00624d46dd
+class repr 44 ca81f2651be20bb9
+class wire 1 e3cf8d680c042e37
