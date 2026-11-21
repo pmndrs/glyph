@@ -1239,3 +1239,77 @@ fn movement_steps_over_a_sequence_as_one_unit() {
         .collect();
     assert_eq!(visited, boundaries);
 }
+
+#[test]
+fn a_conjunct_of_a_real_font_moves_as_one_unit() {
+    // Tamil has no Indic_Conjunct_Break data, so KA + VIRAMA + SSA is two graphemes ("க்", "ஷ")
+    // that a Tamil font shapes into one conjunct glyph. The boundary between them is a valid
+    // offset and not a caret stop. Needs a Tamil font at
+    // `$GLYPH_ADVERSARIAL_FONTS/hind-madurai/HindMadurai-Regular.ttf`; without it the rule is
+    // proven on a hand-built layout only (`src/engine/editing/tests.rs`).
+    use pmndrs_glyph_shaper::engine::oracle::fonts::FontLibrary;
+    let Some(path) = editing::adversarial_root()
+        .map(|root| root.join("hind-madurai/HindMadurai-Regular.ttf"))
+        .filter(|path| path.exists())
+    else {
+        eprintln!("skipped: no Tamil font on this machine");
+        return;
+    };
+    let mut library = FontLibrary::default();
+    library
+        .insert("tamil", std::fs::read(path).expect("read the font"))
+        .expect("prepare the font");
+    let stack: &[&str] = &["tamil"];
+    // "பக்ஷி" (bird): PA, then the conjunct KA + VIRAMA + SSA with a vowel sign I.
+    let text = "\u{baa}\u{b95}\u{bcd}\u{bb7}\u{bbf}";
+    let session = session(&library, &[stack], &model(text));
+    let queries = editing(&session);
+    assert_eq!(
+        queries.source().grapheme_boundaries(),
+        [0, 1, 3, 5],
+        "the virama does not join the two consonants into one grapheme"
+    );
+    let cluster = queries.locate(down(1)).unwrap().cluster;
+    assert_eq!(
+        cluster,
+        TextRange { start: 1, end: 5 },
+        "the font shapes the conjunct as one cluster"
+    );
+    assert_eq!(queries.caret_stops().unwrap(), [0, 1, 5]);
+    assert_eq!(queries.is_caret_stop(3), Ok(false));
+    for (from, direction, to) in [
+        (1, TextDirection::Forward, 5),
+        (5, TextDirection::Backward, 1),
+        (1, TextDirection::Right, 5),
+        (5, TextDirection::Left, 1),
+        (3, TextDirection::Forward, 5),
+        (3, TextDirection::Backward, 1),
+    ] {
+        assert_eq!(
+            step(&queries, down(from), direction, TextUnit::Grapheme).offset,
+            to,
+            "{direction:?} from {from}"
+        );
+    }
+    // The interior boundary is still an offset a caret or a range may name: it is drawn inside
+    // the conjunct, and no hit lands on it.
+    let (start, inside, end) = (
+        x(&queries, down(1)),
+        x(&queries, down(3)),
+        x(&queries, up(5)),
+    );
+    assert!(start < inside && inside < end);
+    assert!(close(inside, (start + end) * 0.5));
+    for hit in [start + 0.1, inside, end - 0.1] {
+        let offset = queries.hit_test(hit, 5.0).unwrap().offset;
+        assert!(
+            offset == 1 || offset == 5,
+            "hit at {hit} landed on {offset}"
+        );
+    }
+    let halves = (
+        queries.range_rects(1, 3).unwrap(),
+        queries.range_rects(3, 5).unwrap(),
+    );
+    assert!(close(halves.0[0].width + halves.1[0].width, end - start));
+}
