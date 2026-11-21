@@ -404,6 +404,11 @@ it.
 | An engine trap during a frame                                 | The affected texts' `error` and `onError`; the next frame retries  |
 | An exception thrown by a layout callback                      | That text's `onError`                                              |
 
+A publication that the result arena cannot hold (a memory cap) fails that one frame for the root. The largest
+paragraph is then withheld: it reports the error, is `failed`, draws nothing and cannot be read until its input
+changes, and its siblings publish from the next frame on. The engine still discards the root on that failure, so
+the recovery frame lays the root's other paragraphs out again.
+
 `root.onError` also receives every failure in the last four rows, once per report, so one handler can observe a
 root. It is assigned on the root (`handle.onError = …` for the anonymous root, `handle('hud').onError = …` for
 a named one). GPU device loss is not detected by this package; the host observes `device.lost` and rebuilds.

@@ -67,12 +67,12 @@ for (const recovery of ['shrink', 'dispose']) {
           assert.equal(report.recovery.value.glyphs, 'small again'.length);
         }
         assert.deepEqual(report.siblingAfter, { value: { status: 'committed', error: true } });
-        // A paragraph refused at its own preparation never reaches its sibling. Only a publication
-        // that no longer fits, the 300-page case, fails the root's frame as a whole until it shrinks.
-        if (/prepare text failed/.test(report.failure.error)) {
-          assert.equal(report.siblingErrorAtFailure, undefined);
-          assert.deepEqual(report.siblingSet, { value: 'committed' });
-        }
+        // A paragraph refused at its own preparation never reaches its sibling. A publication that no
+        // longer fits, the 300-page case, fails that one frame for the root; the paragraph that does not
+        // fit is then withheld, so the sibling publishes from the next frame on while the victim stays failed.
+        if (/prepare text failed/.test(report.failure.error)) assert.equal(report.siblingErrorAtFailure, undefined);
+        assert.deepEqual(report.siblingSet, { value: 'committed' });
+        assert.deepEqual(report.victimWhileSiblingPublishes, { value: { status: 'failed', reportsItsError: true } });
       },
     );
   }
