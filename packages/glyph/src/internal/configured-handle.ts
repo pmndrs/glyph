@@ -50,6 +50,7 @@ import type {
   OwnedTextInspectionView,
 } from './render-planner.js';
 import {
+  assertTextUnitLimit,
   observeRenderPlannerDirty,
   ownedTextInspection,
   stageRenderPlanner,
@@ -491,6 +492,7 @@ class ConfiguredRootServices<
         requestCapacity: commands?.requestBytes ?? 64 * 1024,
         resultCapacity: commands?.resultBytes ?? 256 * 1024,
         textCapacity: commands?.textUnits ?? 64,
+        ...(commands?.maxTextUnits === undefined ? {} : { maxTextUnits: commands.maxTextUnits }),
       });
       registration = registerGlyphShapeParticipant(this.#engine, {
         prepare: (measureAll) => this.#prepareShape(measureAll),
@@ -674,6 +676,10 @@ class ConfiguredRootServices<
 
   assertTextCall(): void {
     this.#requiredPlanner();
+  }
+
+  assertTextUnits(text: string): void {
+    assertTextUnitLimit(text, this.#config.commands?.maxTextUnits);
   }
 
   assertMutationAllowed(): void {
@@ -970,6 +976,10 @@ class ConfiguredTextController<
     this.#services.assertMutationAllowed();
     const orderRank = normalizeParagraphOrderRank(rank);
     this.#text.updateOrder(order, this.#services.bindParagraphOrderScope(scope), orderRank);
+  }
+
+  get refusal(): unknown {
+    return this.#text.refusal;
   }
 
   measure() {

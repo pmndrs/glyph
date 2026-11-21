@@ -8440,7 +8440,7 @@ test('a setter crosses into the engine once and reuses its request arena views',
     assert.equal(instrumentedGlyph.arenaQueries, 0, 'a request that fits the arena asks the engine nothing first');
 
     // A request larger than the arena reserves once, resolves the moved arena once, and then settles again.
-    const long = 'long paragraph '.repeat(6_000);
+    const long = 'long paragraph '.repeat(4_000);
     label.text = long;
     assert.equal(label.measure().glyphCount, long.length);
     const afterGrowth = instrumentedGlyph.arenaQueries;

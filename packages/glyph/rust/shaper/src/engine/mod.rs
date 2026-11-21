@@ -65,11 +65,11 @@ mod style_state;
 pub(crate) mod work_attribution;
 
 pub(crate) use positioning::SemanticGlyph;
-#[cfg(target_arch = "wasm32")]
-pub(crate) use state::PreparationTarget;
 #[cfg(feature = "oracle")]
 pub use state::oracle;
 pub use state::{EngineError, FrameFault, TextEngine};
+#[cfg(target_arch = "wasm32")]
+pub(crate) use state::{MeasuredParagraphs, PreparationTarget};
 
 fn reserve_vec<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineError> {
     if values.capacity() < capacity {

@@ -470,6 +470,11 @@ export interface GlyphTextController<Format extends RasterFormatMetadata, Materi
   update(state: GlyphTextState<Format, MaterialInput, TransformInput>): void;
   /** Changes only this paragraph's root slot and scoped rank; shaping, layout, and measurement remain reusable. */
   updateParagraphOrder(order: number, scope: object | undefined, rank: number): void;
+  /**
+   * The error that refused this text's last preparation, or `undefined`. A refusal is local to the text: it
+   * draws nothing and its siblings are unaffected until its input changes or it is disposed.
+   */
+  readonly refusal: unknown;
   measure(): ParagraphLayoutSummary;
   /** Returns aggregate metrics after positioning glyphs so ink bounds are authoritative. */
   measureInk(): ParagraphLayoutSummary;
@@ -492,6 +497,8 @@ export interface GlyphRootServices<Bindings extends GlyphBindingSet, RendererRes
   _preflightLifecycleMutation(): void;
   /** @internal Whether this root is already queued for the next engine shape transaction. */
   _isShapeQueued(): boolean;
+  /** Throws when `text` holds more UTF-16 units than one text of this root accepts, so an adapter can refuse it in its own setter. */
+  assertTextUnits(text: string): void;
   createText<Format extends RasterFormatMetadata>(
     state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>,
   ): GlyphTextController<Format, Bindings['materialInput'], Bindings['transformInput']>;
@@ -557,6 +564,11 @@ export interface GlyphCommandCapacity {
   readonly requestBytes: number;
   readonly resultBytes: number;
   readonly textUnits: number;
+  /**
+   * The most UTF-16 units one text may hold. A setter that exceeds it throws, so the limit an author meets is
+   * this number and not however much memory the device happens to have. Defaults to 65,536.
+   */
+  readonly maxTextUnits?: number;
 }
 
 /** Adapter-provided host boundary used to finish one core-owned publication root. */

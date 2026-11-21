@@ -333,6 +333,8 @@ export class ThreeRootHost {
   #traversalPublishing = false;
   readonly #renderObjectWorld = new Float64Array(16);
   readonly #attributedErrorTexts = new Set<Text<RasterFormatMetadata>>();
+  /** Texts whose preparation the engine refused, with the error already reported for each. */
+  readonly #refusedTexts = new Map<Text<RasterFormatMetadata>, unknown>();
   readonly #onTreeChange = (): void => {
     this.#membersDirty = true;
     this.#reconcileDirty = true;
@@ -739,7 +741,25 @@ export class ThreeRootHost {
 
   /** @internal Resolve anchors once this root's paragraphs are prepared, before its publication is staged. */
   resolvePreparedAnchors(): void {
-    this.#binding?.resolvePreparedAnchors();
+    const binding = this.#binding;
+    if (binding === undefined) return;
+    binding.resolvePreparedAnchors();
+    this.#reportRefusals(binding.refusals());
+  }
+
+  /**
+   * Attributes each refused preparation to its own text, once: the text reports the error and `failed`, draws
+   * nothing, and its siblings publish as usual. A refusal ends when the text's input changes.
+   */
+  #reportRefusals(refusals: ReadonlyMap<Text<RasterFormatMetadata>, unknown>): void {
+    for (const text of this.#refusedTexts.keys()) {
+      if (!refusals.has(text)) this.#refusedTexts.delete(text);
+    }
+    for (const [text, refusal] of refusals) {
+      if (Object.is(this.#refusedTexts.get(text), refusal)) continue;
+      this.#refusedTexts.set(text, refusal);
+      this.#reportError(refusal, [text]);
+    }
   }
 
   /** @internal Apply adapter bookkeeping after this root's renderer accepts its command buffer. */
@@ -750,6 +770,11 @@ export class ThreeRootHost {
       const publicationFailure = this.#renderer.takePublicationFailure() ?? this.#deferredTraversalFailure;
       if (publicationFailure === undefined) this.#clearErrors();
       else this.#reportError(publicationFailure.error, texts, true);
+      // An accepted publication clears what it resolved, never a refusal that still stands.
+      for (const [text, refusal] of this.#refusedTexts) {
+        reconciler.setError(text, refusal, false);
+        this.#attributedErrorTexts.add(text);
+      }
       if (this.#needsInitialTransformSync) {
         try {
           this.#syncTransforms(false, texts);
@@ -1136,6 +1161,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     host.assertMutationAllowed();
     assertNoRawSpans(properties, 'Text properties');
     const desired = normalizeDesired(properties);
+    host.services.assertTextUnits(desired.text);
     this.#ownedFonts = ownedFonts;
     this.#desired = desired;
     this.#pixelSnapping = normalizePixelSnapping(properties.pixelSnapping);
@@ -1251,6 +1277,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       updateKeys.length === 1 && updateKeys[0] === 'text' && typeof update.text === 'string'
         ? replaceDesiredString(this.#desired, update.text)
         : normalizeDesired({ ...this.#desired, ...replacedContent(update) } as TextProperties<Format>, this.#desired);
+    if (next.text !== this.#desired.text) this.#root.services.assertTextUnits(next.text);
     if (
       (!preserveExplicitPublication || (!Object.hasOwn(update, 'font') && !Object.hasOwn(update, 'material'))) &&
       sameDesiredTextState(this.#desired, next)
@@ -2101,10 +2128,21 @@ class ThreeRootPublication {
     this.#assertActive();
     for (const text of this.#pendingMeasurements) {
       const entry = this.#entries.get(text)!;
-      if (entry.stagedDesired.constraints.anchor !== undefined) {
+      // A text the engine refused has no layout to anchor; it draws nothing until its input changes.
+      if (entry.handle.refusal === undefined && entry.stagedDesired.constraints.anchor !== undefined) {
         entry.stagedAnchorOffset = entry.handle.measure().anchorOffset;
       }
     }
+  }
+
+  /** The error that refused each retained text's last preparation, for the texts that have one. */
+  refusals(): ReadonlyMap<Text<RasterFormatMetadata>, unknown> {
+    const refusals = new Map<Text<RasterFormatMetadata>, unknown>();
+    for (const [text, entry] of this.#entries) {
+      const refusal = entry.handle.refusal;
+      if (refusal !== undefined) refusals.set(text, refusal);
+    }
+    return refusals;
   }
 
   acceptShape(): void {
@@ -2127,6 +2165,7 @@ class ThreeRootPublication {
       if (
         entry.stagedRevision === acceptedRevision &&
         this.#pendingMeasurements.delete(text) &&
+        entry.handle.refusal === undefined &&
         reconciler.boundsRequested(text)
       ) {
         reconciler.publishMeasurement(text, entry.handle.measure());

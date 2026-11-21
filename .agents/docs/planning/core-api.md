@@ -36,10 +36,12 @@ generated:
 
 ## Held refactor contract
 
-The [accepted preparation/publication decision](decisions/retained-prepare-publish.md) governs the held ropes work.
-Bound setters prepare retained Rust layout synchronously. Reads and independent copies use that prepared revision;
-publication handles accumulated renderer updates and batching. Existing public signatures remain unchanged. This is
-a refactor target; passing implementation evidence is tracked in [publication-frontier](publication-frontier.md).
+[Deferred, never-stale preparation](decisions/deferred-never-stale-preparation.md) governs when layout runs; it
+supersedes the setter rule of the [retained preparation/publication decision](decisions/retained-prepare-publish.md),
+whose remainder stands. A setter validates its input and marks the paragraph dirty; it does not enter the engine. A
+read prepares that one paragraph on demand, so no read is stale. `glyph.shape()` (and a Three scene traversal)
+batch-prepares every paragraph still dirty in one engine call, then publishes; `glyph.prepare()` does the first half
+alone. Reads, copies and publication share one prepared revision.
 
 Applications import the values and types they encounter from `@pmndrs/glyph`. Integration authors import the
 renderer-neutral construction helpers from `@pmndrs/glyph/core`. The engine-driving API formerly published at `/core`
