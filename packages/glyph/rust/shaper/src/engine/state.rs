@@ -453,6 +453,9 @@ struct RankedParagraph {
     id: u32,
     rank: f64,
     slot: u32,
+    /// The member's authored root order: it travels with the id to the slot the rank assigns,
+    /// so the next lifecycle request sorts every paragraph back to its own place first.
+    order: u32,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -3553,6 +3556,7 @@ impl PlannerState {
                 id: paragraph.id,
                 rank: placement.rank,
                 slot: u32::try_from(slot).map_err(|_| EngineError::ResultTooLarge)?,
+                order: ordered.order,
             });
         }
         sort::prepare_pairs(&mut self.rank_sort_scratch, self.ranked_paragraphs.len())?;
@@ -3571,8 +3575,11 @@ impl PlannerState {
                 self.ranked_paragraphs.iter().zip(&self.rank_sort_scratch)
             {
                 let source = usize::try_from(source).map_err(|_| EngineError::InvalidRequest)?;
-                self.pending_ordered_paragraphs[destination.slot as usize].id =
-                    self.ranked_paragraphs[source].id;
+                let ranked = self.ranked_paragraphs[source];
+                self.pending_ordered_paragraphs[destination.slot as usize] = ParagraphOrder {
+                    order: ranked.order,
+                    id: ranked.id,
+                };
             }
         } else {
             sort::apply_pair_order(&mut self.ranked_paragraphs, &mut self.rank_sort_scratch);
@@ -3594,7 +3601,10 @@ impl PlannerState {
             {
                 let destination =
                     usize::try_from(destination).map_err(|_| EngineError::InvalidRequest)?;
-                self.pending_ordered_paragraphs[destination].id = ranked.id;
+                self.pending_ordered_paragraphs[destination] = ParagraphOrder {
+                    order: ranked.order,
+                    id: ranked.id,
+                };
             }
         }
         self.lifecycle_changed = self.pending_ordered_paragraphs != self.ordered_paragraphs;

@@ -258,9 +258,8 @@ fn steps(start: &Document, route: Route) -> Vec<Step> {
 }
 
 /// Found by the scripted life above when it ranked a paragraph it later removed: a scope's
-/// members trade places in the order by rank, and when one of them is removed the others keep
-/// the places they traded into, where a cold layout of the remaining paragraphs gives each
-/// its own.
+/// members trade places in the order by rank, and when one of them is removed the others
+/// must return to their own places, as a cold layout of the remaining paragraphs puts them.
 fn ranked_member_removed() -> Case {
     let start = mixed(4, 60);
     let mut ranked = start.clone();

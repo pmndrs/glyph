@@ -14,7 +14,7 @@ use pmndrs_glyph_shaper::{
         fuzz::incremental_differences,
         lanes::Capture,
         matrix::utf16,
-        model::{Layout, Model, Span, SpanStyle, TextEdit},
+        model::{Document, Layout, Model, Paragraph, Span, SpanStyle, TextEdit},
         session::{ALL_VIEWS, Route, Session},
     },
 };
@@ -364,4 +364,80 @@ fn metric_and_line_height_changes_equal_a_cold_layout_at_the_new_metrics() {
             ],
         );
     }
+}
+
+/// Four explicit paragraphs in authored order 100, 200, 300, 400.
+fn four_paragraphs() -> Document {
+    Document {
+        paragraphs: (1..=4)
+            .map(|id| Paragraph {
+                id,
+                order: id * 100,
+                scope: 0,
+                rank: 0.0,
+                model: Model {
+                    text: utf16(&format!("paragraph {id}")),
+                    ..Model::default()
+                },
+            })
+            .collect(),
+        explicit: true,
+        minted: 4,
+    }
+}
+
+/// Lays `start` out cold, moves that engine through `documents` one request each, and requires
+/// every result to equal a cold layout of the same document.
+fn assert_documents_equal_cold(start: &Document, documents: &[Document]) {
+    let library = library(&["inter"]);
+    let stacks: [&[&str]; 1] = [&["inter"]];
+    let mut warm = Session::new(&library, &stacks).expect("warm session");
+    warm.step_document(start, &[], Route::FULL)
+        .expect("cold layout");
+    for (index, document) in documents.iter().enumerate() {
+        let warm_output = warm
+            .step_document(document, &[], Route::FULL)
+            .unwrap_or_else(|error| panic!("document {index} was rejected incrementally: {error}"));
+        let mut cold = Session::new(&library, &stacks).expect("cold session");
+        let cold_output = cold
+            .step_document(document, &[], Route::FULL)
+            .expect("cold layout of the document");
+        let warm_capture = capture(&warm, &warm_output).expect("capture");
+        let cold_capture = capture(&cold, &cold_output).expect("capture");
+        assert!(cold_capture.lane("doc.order.id").is_some());
+        let (differences, _) = incremental_differences(&warm_capture, &cold_capture);
+        let rendered: Vec<String> = differences.iter().map(|d| d.render()).collect();
+        assert!(
+            rendered.is_empty(),
+            "document {index} differs from cold:\n{}",
+            rendered.join("\n")
+        );
+    }
+}
+
+/// Members of a scope trade the scope's places in the root order by rank. A place belongs to
+/// the authored order of the paragraph that holds it without ranks, so when a member is
+/// removed, leaves the scope or is reordered, the others return to their own places.
+#[test]
+fn ranked_scope_members_return_to_their_own_places() {
+    let start = four_paragraphs();
+    let mut ranked = start.clone();
+    for (id, rank) in [(2, 2.5), (4, -1.0)] {
+        let paragraph = ranked
+            .paragraph_mut(id)
+            .expect("a paragraph of the document");
+        paragraph.scope = 7;
+        paragraph.rank = rank;
+    }
+    let mut removed = ranked.clone();
+    removed.paragraphs.retain(|paragraph| paragraph.id != 2);
+    assert_documents_equal_cold(&start, &[ranked.clone(), removed]);
+
+    let mut left = ranked.clone();
+    left.paragraph_mut(4).expect("paragraph 4").scope = 0;
+    assert_documents_equal_cold(&start, &[ranked.clone(), left]);
+
+    let mut reordered = ranked.clone();
+    reordered.paragraph_mut(3).expect("paragraph 3").order = 50;
+    assert_documents_equal_cold(&start, &[ranked, reordered]);
 }

@@ -97,8 +97,8 @@ class repr 173 05cbe7778eb814b1
 class cache 3 95295bd90571493a
 class wire 1 b56ebf1196cc78ab
 step 02 remove paragraph 2
-class value 578 a5d38824fbe47138
-class identity 49 492e95ba58fd2be3
+class value 578 0ded7161c1faa2d3
+class identity 49 5111f1fdcebeffe3
 class repr 129 b516134c0c824f0b
 class cache 3 95295bd90571493a
-class wire 1 b5d2ea36b748a4f9
+class wire 1 985eb1ee716b12fc
