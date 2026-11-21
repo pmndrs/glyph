@@ -1,0 +1,42 @@
+# glyph layout oracle reference v1
+case mech-ltr-is-text-wide-justify
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 477c19b025f1a50d
+stage text identity 1 abc8eec81ef1cbb9
+stage unicode value 6 b06d5b8281d998b9
+stage bidi value 8 a7bb55b60e1dbdc2
+stage style value 26 a597fdfae2d2f090
+stage shaping_run value 5 ea9827547069e9a4
+stage shape value 14 50dabfdc472ae039
+stage cluster value 29 2671cec8eba26542
+stage cluster identity 4 bd8ea23122705fa1
+stage cluster repr 11 f44084f528f0bc85
+stage cluster cache 5 8aa735c8a2972aa1
+stage run_local repr 16 45f8e9f187bab39e
+stage flow value 35 1ec5fd5b3807b746
+stage boundary value 28 439c24358d100111
+stage boundary identity 1 d3bc1f800cf4a5e8
+stage positioned identity 4 89c5a588e61cda29
+stage positioned value 20 d638dffee3bf10ac
+stage positioned repr 37 5898fe1d779dc3de
+stage public value 13 4416f9d33ddcb554
+stage public identity 1 44b75dd169e91bf2
+stage view identity 4 84c3efc36977ddfb
+stage view value 40 20ef5bf0b0d4c231
+stage wire wire 1 16359605223cfe92
+stage gather identity 7 2110940cf139cd67
+stage gather value 36 e1dbdc1869d3ace2
+stage gpu identity 2 aa04158024f68d3f
+stage gpu value 3 e52f82856502fec2
+step 01 one Arabic letter in paragraph two
+class value 230 4a14bb7d2e67ca3d
+class identity 22 d0a4ff11c172e70c
+class repr 44 e17969779aeb8418
+class wire 1 40d3000c2940bfda
+step 02 restore
+class value 265 0e436bddd7b21b22
+class identity 24 2f3caffd2b289650
+class repr 64 3c987d880d3f6c4e
+class cache 5 8aa735c8a2972aa1
+class wire 1 297d6e21f8bc39ec

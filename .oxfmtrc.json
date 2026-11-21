@@ -21,6 +21,8 @@
     "packages/glyph/src/bakers/schemas/**",
     "packages/glyph/src/font-baker/schemas/**",
     "packages/**/src/**/generated/**",
-    "packages/**/tests/fixtures/**"
+    "packages/**/tests/fixtures/**",
+    "vendor/harfrust/README.md",
+    "vendor/harfrust/src/**"
   ]
 }

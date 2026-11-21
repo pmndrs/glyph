@@ -1,0 +1,37 @@
+# glyph layout oracle reference v1
+case label-fredoka-12-start
+step cold
+stage owner value 1 07e27e8ffd8af189
+stage text value 1 f8b48d9e446edb3a
+stage text identity 1 a2a03cda62be10c2
+stage unicode value 6 c517839417cd4efa
+stage bidi value 8 ec0527b86d651cb3
+stage style value 26 fc493d49dda3e8e3
+stage shaping_run value 5 71cfc6e9e645620c
+stage inline value 81 000adca1966de7cc
+stage inline identity 5 da9985254ecc97dc
+stage inline repr 21 208ef6bcb8dd94dd
+stage public value 13 3187d00b8ca6b235
+stage public identity 1 9516520da7dd0005
+stage view identity 4 9ff97a10525f924e
+stage view value 40 80502578366f8d6f
+stage wire wire 1 eef28d58d54d602f
+stage gather identity 7 62ec12bf0ea47fce
+stage gather value 36 93f096c6a99df1a2
+stage gpu identity 2 46d463a0709073d2
+stage gpu value 3 46e693f696a1b32a
+step 01 delete 4 at 1
+class value 220 210a8dcb8e69c378
+class identity 20 76efa361b76dd481
+class repr 21 e6044fd9182f2f17
+class wire 1 e105a2a98ea27f06
+step 02 delete 2 at 3
+class value 220 e9ae70d9698f0d35
+class identity 20 0f62c1a9397c96ec
+class repr 21 384c506ecd3d5c70
+class wire 1 7a32bc6203f4c88e
+step 03 metrics size 16 spacing 0 line 1.2 word 0
+class value 200 aaf871c6a23a12cc
+class identity 18 517a53fabf74dfd5
+class repr 21 384c506ecd3d5c70
+class wire 1 e3e5eaecf105ce0b

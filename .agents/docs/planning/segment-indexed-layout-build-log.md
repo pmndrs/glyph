@@ -14,37 +14,39 @@ Commits are local; nothing is pushed until the feature is done.
 
 Updated in place; the history of each change is in the log below.
 
-| Feature                                                                                 | State    | Where                                               | Notes                                             |
-| --------------------------------------------------------------------------------------- | -------- | --------------------------------------------------- | ------------------------------------------------- |
-| Plan, branch rules, feature-scope decision                                              | merged   | `771ef41de`                                         |                                                   |
-| Snapshots: `v0.1.0`, main, branch start                                                 | tested   | `glyph-baselines-2026-11-21/`                       | Loose reference                                   |
-| Adversarial font set                                                                    | tested   | `/Volumes/Depot/Developer/glyph-adversarial-fonts/` | Not in the repo (large)                           |
-| Competitor's eight measures, same machine                                               | tested   | `/Volumes/Depot/Developer/glyph-competitor-bench/`  | Reconstructed scenes                              |
-| Profile: size and memory                                                                | tested   | `profiles/7-size-and-memory.md`                     |                                                   |
-| Profile: font-size and inspection                                                       | tested   | `profiles/5-6-fontsize-and-inspection.md`           |                                                   |
-| Profile: browser first frame and idle                                                   | tested   | `profiles/1-2-browser-first-frame-idle.md`          |                                                   |
-| Profile: colour-only and many-label                                                     | tested   | `profiles/3-4-colour-and-many-label.md`             |                                                   |
-| Unit 0: correctness oracle                                                              | building | integration branch                                  | Gates every engine unit                           |
-| HarfRust fork (AAT and `rand` off, `kern` kept), panic removal, lazy outline decoder    | building | `experiments/sil-harfrust`                          |                                                   |
-| Renderer: one draw, ink-trimmed quads, on-demand atlas, TypeGPU batching                | building | `experiments/sil-render`                            |                                                   |
-| Host: idle frame, linear mount, first-frame JavaScript, first set, ingress, readback    | building | `experiments/sil-host`                              |                                                   |
-| Whole-plan review (five reviewers)                                                      | building | `glyph-baselines-2026-11-21/review-v5/`             | Refines the plan; cuts nothing                    |
-| Unit 1a: dense run-local geometry                                                       | held     | —                                                   | Needs oracle                                      |
-| Unit 1b: dense positioning and per-line ink                                             | held     | —                                                   | Needs oracle, 1a                                  |
-| Unit 1c: dense cluster build                                                            | held     | —                                                   | Needs oracle, 1a                                  |
-| Unit 1d: table-driven Unicode classes                                                   | held     | —                                                   | Needs oracle                                      |
-| Gather rewrite (write-only path, lane compare)                                          | held     | —                                                   | Needs oracle                                      |
-| Unit 2: local edits                                                                     | held     | —                                                   | Needs 1b, 1c                                      |
-| Metric changes: keep island shapes, dense rescale                                       | held     | —                                                   | Needs 1a                                          |
-| Unit 3: preparation and error model, `onLayout`                                         | held     | —                                                   | Sequenced after the host lane                     |
-| Unit 4: publication (retained topology, `PATCH_COPY`, multi-range uploads)              | held     | —                                                   | After unit 3                                      |
-| Many-label updates and paint-only changes                                               | held     | —                                                   | Needs its profile and unit 3                      |
-| Editing support (offset map, boundaries, carets, affinity, ligature carets, IME ranges) | held     | —                                                   | Needs 1d, 2 and an API design                     |
-| SIMD experiments (fourteen)                                                             | held     | —                                                   | Each needs the oracle; adopted if faster or equal |
-| Sub-ulp output changes (integer pen, affine placement)                                  | held     | —                                                   | Awaiting owner approval; measured only            |
-| Final interleaved comparison against main and the competitor set                        | held     | —                                                   | Last                                              |
-| Typography other than editing support                                                   | deferred | decision record                                     |                                                   |
-| `rand`, Apple AAT                                                                       | dropped  | decision record                                     |                                                   |
+| Feature                                                                                                                                   | State    | Where                                               | Notes                                                                     |
+| ----------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------------------------------------------------- | ------------------------------------------------------------------------- |
+| Plan, branch rules, feature-scope decision                                                                                                | merged   | `771ef41de`                                         |                                                                           |
+| Snapshots: `v0.1.0`, main, branch start                                                                                                   | tested   | `glyph-baselines-2026-11-21/`                       | Loose reference                                                           |
+| Adversarial font set                                                                                                                      | tested   | `/Volumes/Depot/Developer/glyph-adversarial-fonts/` | Not in the repo (large)                                                   |
+| Competitor's eight measures, same machine                                                                                                 | tested   | `/Volumes/Depot/Developer/glyph-competitor-bench/`  | Reconstructed scenes                                                      |
+| Profile: size and memory                                                                                                                  | tested   | `profiles/7-size-and-memory.md`                     |                                                                           |
+| Profile: font-size and inspection                                                                                                         | tested   | `profiles/5-6-fontsize-and-inspection.md`           |                                                                           |
+| Profile: browser first frame and idle                                                                                                     | tested   | `profiles/1-2-browser-first-frame-idle.md`          |                                                                           |
+| Profile: colour-only and many-label                                                                                                       | tested   | `profiles/3-4-colour-and-many-label.md`             |                                                                           |
+| Unit 0: correctness oracle                                                                                                                | building | integration branch                                  | Gates every engine unit                                                   |
+| HarfRust fork (AAT and `rand` off, `kern` kept), panic removal                                                                            | tested   | `experiments/sil-harfrust` (`8afd89c0d`)            | Shaper wasm 630.7 → 567.2 kB gzip; awaiting merge behind the oracle       |
+| Lazy outline decoder (−22.7 kB gzip)                                                                                                      | held     | —                                                   | Needs an ABI change; goes with the one-ABI-change-at-a-time sequence      |
+| Renderer part 1 (Three, MSDF): one draw, effect-specialized shaders, ink-trimmed quads, glyph table, on-demand atlas; Slug curve crop     | tested   | `experiments/sil-render` (`91c86f9dc`)              | Steady frame 0.234 → 0.142 ms; GPU memory 1.44 → 0.56 MiB; awaiting merge |
+| Renderer part 2: growth without new pipelines, Slug table/trim/fragment, atlas load copies, prewarm, R8 mode, TypeGPU parity and batching | building | `experiments/sil-render`                            |                                                                           |
+| Host: idle frame, linear mount, first-frame JavaScript, first set, ingress, readback                                                      | building | `experiments/sil-host`                              |                                                                           |
+| Whole-plan review (five reviewers)                                                                                                        | building | `glyph-baselines-2026-11-21/review-v5/`             | Refines the plan; cuts nothing                                            |
+| Unit 1a: dense run-local geometry                                                                                                         | held     | —                                                   | Needs oracle                                                              |
+| Unit 1b: dense positioning and per-line ink                                                                                               | held     | —                                                   | Needs oracle, 1a                                                          |
+| Unit 1c: dense cluster build                                                                                                              | held     | —                                                   | Needs oracle, 1a                                                          |
+| Unit 1d: table-driven Unicode classes                                                                                                     | held     | —                                                   | Needs oracle                                                              |
+| Gather rewrite (write-only path, lane compare)                                                                                            | held     | —                                                   | Needs oracle                                                              |
+| Unit 2: local edits                                                                                                                       | held     | —                                                   | Needs 1b, 1c                                                              |
+| Metric changes: keep island shapes, dense rescale                                                                                         | held     | —                                                   | Needs 1a                                                                  |
+| Unit 3: preparation and error model, `onLayout`                                                                                           | held     | —                                                   | Sequenced after the host lane                                             |
+| Unit 4: publication (retained topology, `PATCH_COPY`, multi-range uploads)                                                                | held     | —                                                   | After unit 3                                                              |
+| Many-label updates and paint-only changes                                                                                                 | held     | —                                                   | Needs its profile and unit 3                                              |
+| Editing support (offset map, boundaries, carets, affinity, ligature carets, IME ranges)                                                   | held     | —                                                   | Needs 1d, 2 and an API design                                             |
+| SIMD experiments (fourteen)                                                                                                               | held     | —                                                   | Each needs the oracle; adopted if faster or equal                         |
+| Sub-ulp output changes (integer pen, affine placement)                                                                                    | held     | —                                                   | Awaiting owner approval; measured only                                    |
+| Final interleaved comparison against main and the competitor set                                                                          | held     | —                                                   | Last                                                                      |
+| Typography other than editing support                                                                                                     | deferred | decision record                                     |                                                                           |
+| `rand`, Apple AAT                                                                                                                         | dropped  | decision record                                     |                                                                           |
 
 ## Log
 
@@ -178,3 +180,45 @@ Updated in place; the history of each change is in the log below.
 - **All five reviews are complete and folded into the plan.** Nothing was cut.
 - **Building.** Gather lane (unit 1e) started in its own worktree ahead of the oracle merge, proven against
   the existing fresh-gather equality test until the oracle is available.
+- **Built and tested: HarfRust fork and size cuts** (`experiments/sil-harfrust`, five commits ending
+  `8afd89c0d`). Shaper wasm 630.7 → 567.2 kB gzip (−63.5 kB): fork with AAT and `rand` off −27 kB, panic
+  machinery removed −36.5 kB. Shaping proven identical to the crates.io release in one process: 6.76 million
+  glyphs over the repo fixtures and 3.86 million over 27 adversarial fonts; legacy `kern` swept over every
+  character pair on three kern fonts, with a check that fails if `kern` is silently lost. 622 Rust and 1,147
+  Node tests pass. Speed within ±3.1% on a coarse interleaved check. The pristine crate is its own commit, so
+  the upstream patch is one `git diff`.
+- **Deviation to note.** Panic removal uses the pinned stable compiler with `RUSTC_BOOTSTRAP=1` rather than a
+  nightly toolchain, so the shipped wasm is built by the same compiler that runs the tests. The owner accepted
+  nightly; this gets the same result. It can be switched to a dated nightly in one script.
+- **Machine change to note.** The lane added the `rust-src` component to the installed 1.97.1 toolchain and
+  listed it in `rust-toolchain.toml`.
+- **Held: lazy outline decoder.** It would save a further 22.7 kB gzip but removes three exports from the
+  shaper wasm, which is an ABI break; it is queued with the other ABI changes.
+- **Not covered.** No fixture has AAT tables, so the AAT-off path is tested only by its absence. Two clippy
+  findings in `ascii_anchor_policy.rs` predate the lane and were left.
+- **Built and tested: renderer part 1** (`experiments/sil-render`, five commits ending `91c86f9dc`). Three's
+  MSDF path now beats the competitor on steady frame and draw count (same machine, interleaved, medians):
+  paragraph at 4× fill 0.234 → 0.142 ms per frame (competitor 0.183); 200 labels 0.257 → 0.150 (0.189); one
+  draw instead of two; GPU memory for a paragraph 1.44 → 0.56 MiB (0.49), and 55.5 → 0.6 MiB with a full-font
+  bake; 200 labels 1.55 → 0.39 MiB (0.30). WebGL2 improved too (0.433 → 0.170). First frame improved slightly
+  (40.5 → 36.4 ms; competitor 30.1). Never-drawn letter level at the median; its maximum was noisy.
+  How: one shader graph per effect combination; ink-trimmed quads grown by effect extent (−20% covered pixels
+  at 4×); a per-font glyph table replacing 32 of 88 instance bytes, with atlas size as a uniform so all MSDF
+  fonts share one program; glyph cells copied into a resident atlas on first use, before the frame that draws
+  them.
+- **Correctness.** Pixel comparison against the branch-start build over 18 scenes (effects, sizes, rotation,
+  perspective, Arabic): no pixel differs by more than 6/255 on WebGPU or 4/255 on WebGL2. The repo's render
+  proof passes on both backends and caught two bugs that were fixed. 711 tests pass.
+- **Visible differences, intended.** Edge pixels move by up to 6/255; overlapping opposite-facing glyphs in
+  one draw blend in instance order; one proof's tolerance was relaxed to one byte on up to three channels.
+- **Breaking surface.** `msdfSchema` buffers are now `rect`, `color`, `effectColor`, `effect`; `uvRect`,
+  `uvBounds` and `page` are gone.
+- **Finding.** `flat` varyings are slow on this GPU (nine of them made the frame slower than the start).
+- **Not done in part 1, now building as part 2:** buffer growth still creates new pipelines; Slug steady frame
+  unchanged (0.755 ms); the pure TypeGPU path has the glyph table only; TypeGPU direct mode is still one draw
+  per text; no R8 memory mode; no atlas prewarm or eviction; the baked atlas is still copied three times at
+  load. Multi-range upload folding is left to the integrator because the host lane is editing the same file.
+- **Unexplained.** One integration test (`font-binding-wire`) is killed with exit 137 on this machine; cause
+  not separated from machine load. Part 2 is asked to establish it.
+- **Wire needs handed to the engine lanes:** an effect flag per draw span (so mixed-style batches use the
+  fill-only shader for unshadowed glyphs) and engine-owned atlas copy records.

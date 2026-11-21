@@ -1,0 +1,67 @@
+# glyph layout oracle reference v1
+case mech-max-lines-count-change
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 2df3bbb4d7b3d502
+stage text identity 1 ae1df8da10cab35e
+stage unicode value 6 b22404bae51919f8
+stage bidi value 8 9d54c092cb48d09c
+stage style value 26 b78f334bedd68606
+stage shaping_run value 5 732e3450995b39db
+stage shape value 14 6253f0d70c92e84b
+stage cluster value 29 544e068327e62402
+stage cluster identity 4 3503d241dd0a9f09
+stage cluster repr 11 eb1340d67a07103c
+stage cluster cache 5 79709bfe78b4e242
+stage run_local repr 16 be2a25cccd2b6dcf
+stage flow value 36 38e0a27377552369
+stage boundary value 28 eb189686fd23af9a
+stage boundary identity 1 488fa70724072e8e
+stage positioned identity 4 1081eb534fc1c281
+stage positioned value 20 c5794411f7efef95
+stage positioned repr 37 510ab63667a65011
+stage public value 13 cd59a06f94f8bb09
+stage public identity 1 f6e9d3c27ae4acfe
+stage view identity 4 426b035a7970da03
+stage view value 40 48e221338896feaf
+stage wire wire 1 2d0b8212b9d2dc7a
+stage gather identity 7 f9e911f05d7cccca
+stage gather value 36 42d5c85ae344097d
+stage gpu identity 2 ca0cd29e1eda099d
+stage gpu value 3 2e442c271e8e3e2a
+step 01 delete half, under the limit
+class value 230 ba470d708a346c18
+class identity 22 87f3836180f5aeb4
+class repr 44 dc8f71cb435e1b09
+class cache 5 5d81e22640576ca3
+class wire 1 c92f5a5d0cdf4434
+step 02 two edits in one request, over the limit
+class value 266 ecf8730a3af44772
+class identity 24 f28587000760a191
+class repr 64 61e5bb566e975693
+class cache 5 7cb63a456530cfbe
+class wire 1 4d6365fd9c125aea
+step 03 raise the limit
+class value 230 021d026c198d4bc4
+class identity 22 8097fe7697bb4283
+class repr 44 231587889f680f9f
+class cache 5 7cb63a456530cfbe
+class wire 1 01aa15ce525ea717
+step 04 insert HardBreak (1 units) at 11
+class value 265 d3f21bb10583e05f
+class identity 24 6f5d3f3a162204f5
+class repr 64 d423a1c16c94cf0a
+class cache 5 ba9f86dc411f0161
+class wire 1 f72334d4fc71dc20
+step 05 metrics size 16 spacing 0 line 1.2 word 0
+class value 245 e798a15455ea828a
+class identity 22 c263d4dd15ab932f
+class repr 64 d423a1c16c94cf0a
+class cache 5 ba9f86dc411f0161
+class wire 1 613b3b92a0235ef4
+step 06 insert Word (2 units) at 248 + insert HardBreak (1 units) at 243 + replace 3 at 32 + max lines 3
+class value 230 2148859a1310025c
+class identity 22 0d48307fcb97178c
+class repr 44 983229dfcccfa77d
+class cache 5 62f9280ccc167138
+class wire 1 8a1c8bd0edf907b4

@@ -615,6 +615,12 @@ impl OrderedPlanCompiler {
         })
     }
 
+    /// Whether the prepared view replaces the renderer's draw structure or leaves it as it is.
+    #[cfg(feature = "oracle")]
+    pub(crate) fn publishes_bindings(&self) -> bool {
+        self.publish_bindings
+    }
+
     #[cfg(test)]
     pub fn commit(&mut self) -> Result<(), OrderedPlanError> {
         self.preflight_commit()?;

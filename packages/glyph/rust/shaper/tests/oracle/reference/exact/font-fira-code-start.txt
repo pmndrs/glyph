@@ -1,0 +1,71 @@
+# glyph layout oracle reference v1
+case font-fira-code-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 d1068de2cec785ed
+stage text identity 1 301481f039bd8ccd
+stage unicode value 6 ed8874c4a09bd435
+stage bidi value 8 9b53d90824661971
+stage style value 26 10d903b6aff2b620
+stage shaping_run value 5 572061d20c844d76
+stage shape value 14 b1c03309a85efcd7
+stage cluster value 29 3913b7f6a826b812
+stage cluster identity 4 b741d4e50627fe01
+stage cluster repr 11 f04259cbe4c5ded5
+stage cluster cache 5 b6de471e0797c5db
+stage run_local repr 16 6fe582fa73d059df
+stage flow value 35 2217e7d61997c3ad
+stage positioned identity 3 e7383c3eb88c32d6
+stage positioned value 13 34a9637de6f58eff
+stage positioned repr 17 8ddd2c6542012b64
+stage public value 13 55eb60c00d497ca9
+stage public identity 1 afbbb85cc3fc663f
+stage view identity 4 fdb89125acf30333
+stage view value 40 aafb175c18f34ec5
+stage wire wire 1 250d7be2dd34e575
+stage gather identity 7 b953ad10e725d542
+stage gather value 36 da825392da1fc70a
+stage gpu identity 2 d4a8ce5fd79e03a3
+stage gpu value 3 57c68d4678c3f6ac
+step 01 width 417
+class value 230 a2ef885c79cd3324
+class identity 22 7a26966d74f0c5f8
+class repr 44 609fbd78c2796ca5
+class cache 5 3790221c6eec5305
+class wire 1 e01d265aaa2cecc8
+step 02 width 418
+class value 230 fc2f8363df1e3d40
+class identity 22 7a26966d74f0c5f8
+class repr 44 609fbd78c2796ca5
+class cache 5 3790221c6eec5305
+class wire 1 4f3a01ad152c152a
+step 03 width 233.5
+class value 230 48321505476be601
+class identity 22 083111f07355710a
+class repr 44 8e7ab7fa15a4fdc7
+class cache 5 b521b64d7861b8c2
+class wire 1 7cb18e58539dcb5c
+step 04 width 600
+class value 230 246da22bfbbf8adf
+class identity 22 ec96210ac9e3f11d
+class repr 44 7a538e8bdceb4045
+class cache 5 b521b64d7861b8c2
+class wire 1 787aa8be4bc309a9
+step 05 flip case at 2077
+class value 230 af15083330061c52
+class identity 22 b7c3d124436dc744
+class repr 44 673b2efecec9b084
+class cache 5 a3ea252f7190ba7c
+class wire 1 472e528d4c313f68
+step 06 insert Foreign (8 units) at 1107
+class value 230 26cd37a106513bef
+class identity 22 2ed304e8e936bca0
+class repr 44 ba9445166aee61c9
+class cache 5 84ac0fbd2b2160b9
+class wire 1 e81ac79c96eda28f
+step 07 replace 6 at 1812
+class value 230 3194e3b064994061
+class identity 22 fb75ec8f3f26db72
+class repr 44 f69f2545e0ef3806
+class cache 5 4e50c38418c3ce12
+class wire 1 85cb1855c7be07a7

@@ -1,0 +1,37 @@
+# glyph layout oracle reference v1
+case label-devanagari-12-start
+step cold
+stage owner value 1 07e27e8ffd8af189
+stage text value 1 c7baf8bd9cdfd105
+stage text identity 1 dbb780610710d727
+stage unicode value 6 0c040a58bb3b0e07
+stage bidi value 8 3e79f7a08192c587
+stage style value 26 fe2ec0e1598b02cd
+stage shaping_run value 5 97abfa7f0fced5a8
+stage inline value 81 b7def565915391ac
+stage inline identity 5 27705160752c3774
+stage inline repr 21 fe91a0e764c4212e
+stage public value 13 83a0ae18edac47e7
+stage public identity 1 9516520da7dd0005
+stage view identity 4 9ff97a10525f924e
+stage view value 40 991149068964e4bc
+stage wire wire 1 de0aca3a9c8870a8
+stage gather identity 7 12db54ef30649b75
+stage gather value 36 271f8351caf52fd9
+stage gpu identity 2 c4e6c8eb2e1163ad
+stage gpu value 3 07f03d0c41bd09d3
+step 01 insert Word (8 units) at 10
+class value 220 61a2ccaab658dcb3
+class identity 20 f139dadd6d85ceb5
+class repr 21 e5a5e0e8c66224b2
+class wire 1 7d08c5429c1ef5c9
+step 02 delete 6 at 9
+class value 220 c8a015cae38f4d80
+class identity 20 b4c408c0a3c26b41
+class repr 21 813eb4a350dfcfaa
+class wire 1 895fd0b936d06a14
+step 03 width 260.01563 + insert Bidi (1 units) at 0 + replace 6 at 3
+class value 230 ddf61292de554984
+class identity 22 e0b4181eaaed5aa8
+class repr 41 375f91988a108827
+class wire 1 6b8c88c2d4cb77f0

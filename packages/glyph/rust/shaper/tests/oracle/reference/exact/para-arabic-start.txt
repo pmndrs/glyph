@@ -1,0 +1,63 @@
+# glyph layout oracle reference v1
+case para-arabic-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 5b3a111553d413f4
+stage text identity 1 39af7160bee6b18c
+stage unicode value 6 ef3a10f4e434595d
+stage bidi value 8 af0e549dc355ed1f
+stage style value 26 97310a081f23d310
+stage shaping_run value 5 2a2ab56d69b0ec95
+stage shape value 14 ccc84c9d892ecf3f
+stage cluster value 29 05e90e5e3e7fcd97
+stage cluster identity 4 4a4d1c81be2f2d3b
+stage cluster repr 11 335a15ce5aa3ef4d
+stage run_local repr 16 01f1c13c9fd9e69e
+stage flow value 35 18c4d6b1978c3cbb
+stage positioned identity 3 5bad1c45cf074258
+stage positioned value 13 4d2239848a29f3d6
+stage positioned repr 17 3238052347a700c0
+stage public value 13 9f09fb5c8208e115
+stage public identity 1 37cc247c9fb347fc
+stage view identity 4 b2885d4e83914ce3
+stage view value 40 3df2232433b08cac
+stage wire wire 1 0d05d0eef774fdf4
+stage gather identity 7 a412674641fc2f06
+stage gather value 36 b640eeaefc5a9732
+stage gpu identity 2 15fec90446435607
+stage gpu value 3 0f4370a3123cd99b
+step 01 width 417
+class value 230 69f5b3f44b09c1e4
+class identity 22 981c4bfe4f62a413
+class repr 44 b866a6ca285c4c19
+class wire 1 d0914ddae2a43848
+step 02 width 418
+class value 230 568dc8b757acccb6
+class identity 22 dbeba97abf42b312
+class repr 44 ac86613ed68430dd
+class wire 1 6af3a97458011821
+step 03 width 233.5
+class value 230 182b9288e9d72ff0
+class identity 22 95156d65ba1e5981
+class repr 44 9b5eb625653b2ad7
+class wire 1 1511a3f7d013150c
+step 04 width 600
+class value 230 2ef9cf63109cdba0
+class identity 22 695b2943ce2341b5
+class repr 44 2f4fbb7b06d1d057
+class wire 1 8c66f00b8cdedb52
+step 05 width 599
+class value 230 c9efb2492b583066
+class identity 22 bc4222bc11741a99
+class repr 44 9aa753b8c58f1c67
+class wire 1 6773fc649b23b138
+step 06 add span 1756..1790
+class value 230 021033c27bf304ca
+class identity 22 ec3ea828060ecc84
+class repr 44 8a3338edc15838b6
+class wire 1 6a4c491df2ba4aab
+step 07 width 328.75 + replace 4 at 0 + align 1
+class value 230 dbb99991d985ee29
+class identity 22 de8cf7ef756bc5ad
+class repr 44 7a460bedf6f32466
+class wire 1 ecec844f20432741

@@ -15,6 +15,16 @@ name = "generate-shaper-abi"
 path = "src/bin/generate-shaper-abi.rs"
 required-features = ["std"]
 
+[[bin]]
+name = "layout-oracle"
+path = "src/bin/layout-oracle.rs"
+required-features = ["std", "oracle"]
+
+[[test]]
+name = "layout_oracle"
+path = "tests/layout_oracle.rs"
+required-features = ["std", "oracle"]
+
 [features]
 default = ["std"]
 std = ["serde_json/std"]
@@ -22,6 +32,9 @@ kernel-lab = []
 simd128 = []
 debug-validation = []
 diagnostic-live-memory = []
+# The layout correctness oracle: lane capture, fixture matrix and the seeded differential
+# driver. Off in every shipped artifact.
+oracle = []
 
 [dependencies]
 harfrust = { version = "0.12.0", default-features = false, features = ["libm"] }
@@ -46,3 +59,8 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+# HarfRust is forked in-tree (vendor/harfrust, see GLYPH-FORK.md there). The fork adds default-on
+# `aat` and `rand` cargo features; the dependency above leaves both off.
+[patch.crates-io]
+harfrust = { path = "../../../../vendor/harfrust" }

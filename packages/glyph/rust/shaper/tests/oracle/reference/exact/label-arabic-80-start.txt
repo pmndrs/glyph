@@ -1,0 +1,43 @@
+# glyph layout oracle reference v1
+case label-arabic-80-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 8073d3ef76b183dd
+stage text identity 1 f5b9de716cf61de4
+stage unicode value 6 eb6acf244608dc21
+stage bidi value 8 aa98059407cc0c82
+stage style value 26 c6d0f53c9f25597b
+stage shaping_run value 5 1e6ca73ac2f4da85
+stage shape value 14 39b496eec30bd512
+stage cluster value 29 2fd6644effb0f3fc
+stage cluster identity 4 42242c92e3112db4
+stage cluster repr 11 f5b0f121f6a18a81
+stage run_local repr 16 02d7cd816a7bde12
+stage flow value 35 e04035c00101db74
+stage positioned identity 3 60b2809623eb146e
+stage positioned value 13 f4e3f4b4a7e5c69e
+stage positioned repr 17 d5353dcae88af9a8
+stage public value 13 36af6535e42b7bdf
+stage public identity 1 e0cdb503cb09f55d
+stage view identity 4 a6bcfb65c3a06894
+stage view value 40 6f844eec99f238b2
+stage wire wire 1 2e1801e0a9692ac3
+stage gather identity 7 f706aaf8950df9e6
+stage gather value 36 10c739ea87d502f9
+stage gpu identity 2 cadc9b2e3ed79ce4
+stage gpu value 3 4e8e68300fa002ca
+step 01 insert HardBreak (1 units) at 41
+class value 230 6431aa99030af87e
+class identity 22 bbc021bfa23a596b
+class repr 44 e7078b348653cf1c
+class wire 1 126e1cba5491ece1
+step 02 width 441
+class value 230 6ef44abae1c0d724
+class identity 22 43d40ed247a78473
+class repr 44 629f212aace16c8a
+class wire 1 45cbedd0c56b38a6
+step 03 insert Bidi (1 units) at 15
+class value 230 4b45d518f29b656a
+class identity 22 114c8cde06a147bd
+class repr 44 c298fa3704e72a41
+class wire 1 db82cf3313c079f2

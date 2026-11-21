@@ -1,0 +1,45 @@
+# glyph layout oracle reference v1
+case label-emoji-256-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 90e0f65905b3da57
+stage text identity 1 34caf0709424abb4
+stage unicode value 6 6b45a320e2b86c51
+stage bidi value 8 2ac7cad269f5f861
+stage style value 26 152c1a631eaae331
+stage shaping_run value 5 e673672905b4e8e1
+stage shape value 14 fadb345e9ad30312
+stage cluster value 29 8f0063679e10e0aa
+stage cluster identity 4 f463b39333dbd59a
+stage cluster repr 11 dd6e0ed84998d357
+stage run_local repr 16 de5e8a53ce4364f1
+stage flow value 35 98b8e4d3d03549c4
+stage positioned identity 3 9245449ab629ad62
+stage positioned value 13 4cfda64635aa432e
+stage positioned repr 17 9f215550d625fbc1
+stage public value 13 eb845f193c984e75
+stage public identity 1 4f040436fc063ad4
+stage view identity 4 ba28e04e12b86f23
+stage view value 40 a7c20b73b58d2ad0
+stage wire wire 1 5ebd5a130c72533d
+stage gather identity 7 4dd05d832af44c6d
+stage gather value 36 c4583ec59f8a680f
+stage gpu identity 2 6fa711059535618e
+stage gpu value 3 99d3f1ef9eeb3e8a
+step 01 delete 200 at 0
+class value 230 832dd97de67acded
+class identity 22 99178e2015ccdd11
+class repr 41 59703f46cd1d156d
+class wire 1 ee6b2b677aa36d52
+step 02 insert Mark (1 units) at 39 + metrics size 24 spacing 0 line 1.2 word 0 + insert SpacedWord (2 units) at 24 + width 838.5
+class value 230 f5b21f8a580f525d
+class identity 22 88ca353dd048e69d
+class repr 41 63fc2d5a363c33c3
+class cache 3 afcf64a761aba74e
+class wire 1 1899027900e0444a
+step 03 insert SpacedWord (5 units) at 4
+class value 230 72f3c539a6afb398
+class identity 22 6665680aae60bf8b
+class repr 41 b9ca106d4025c320
+class cache 3 105c9cb18d7a4df0
+class wire 1 5dd798baf612f9f2

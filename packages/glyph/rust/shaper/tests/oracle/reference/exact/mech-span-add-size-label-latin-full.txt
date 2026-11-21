@@ -1,0 +1,32 @@
+# glyph layout oracle reference v1
+case mech-span-add-size-label-latin-full
+step cold
+stage owner value 1 07e27e8ffd8af189
+stage text value 1 9b2fe864fec8c4a0
+stage text identity 1 65bb2bcf0e65c419
+stage unicode value 6 545827f2437e8b2c
+stage bidi value 8 6f35e651e8e87655
+stage style value 26 e79601d7c94851d9
+stage shaping_run value 5 9eeb432b2eced77e
+stage inline value 81 bfac06bfdbb04639
+stage inline identity 5 7d14e4935d5d60a1
+stage inline repr 21 fdee235d7efe919b
+stage public value 13 e54c488c68dd5415
+stage public identity 1 046b9fc2bf660167
+stage view identity 4 3ff5fb1dab08e46c
+stage view value 40 500c57db6b6d914a
+stage wire wire 1 293d7317e3c307b8
+stage gather identity 7 37eaf406b07958ae
+stage gather value 36 b2c211b3621cca23
+stage gpu identity 2 cb22b7176c06fbea
+stage gpu value 3 727941098af27b9b
+step 01 change the span
+class value 230 d6a7ff6b19f3d668
+class identity 22 d433f148deacb66e
+class repr 41 c42c7ada0f2405c6
+class wire 1 4935b6456cf0e78e
+step 02 restore
+class value 230 c2ed874497687c8d
+class identity 22 6fd369beac8ed568
+class repr 41 64288e81bfadfa2e
+class wire 1 485b756eef898fc4

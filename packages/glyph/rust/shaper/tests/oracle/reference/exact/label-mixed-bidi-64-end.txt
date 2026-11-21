@@ -1,0 +1,28 @@
+# glyph layout oracle reference v1
+case label-mixed-bidi-64-end
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 5eabefb48770dc42
+stage text identity 1 ffaebe3e7b50ce97
+stage unicode value 6 5ac414ac74f5a235
+stage bidi value 8 e0f9dd9b28e7e64f
+stage style value 26 2e00632fbec40ea4
+stage shaping_run value 5 fe4591310cb28167
+stage shape value 14 4d000fd1a25cb2c9
+stage cluster value 29 9e1dad987f9b91d6
+stage cluster identity 4 c82757d3185b2668
+stage cluster repr 8 d56bcb6ac0fc2306
+stage run_local repr 16 6bf4568651cd6920
+stage flow value 35 20ce250dbc5f4770
+stage positioned identity 3 b5a0af2f0c1c8e1e
+stage positioned value 13 c9b10198e76174eb
+stage positioned repr 17 a2ac870c8d3154a1
+stage public value 13 cb0c77feac4960d5
+stage public identity 1 e19a9a2c56287afd
+stage view identity 4 38a2a87ef35fbcdc
+stage view value 40 cfdb31ce64dae3fd
+stage wire wire 1 7cfc7ad705f6a394
+stage gather identity 7 e3ccf0ce8f413d41
+stage gather value 36 e4f8ab7560e8eec9
+stage gpu identity 2 2c57fd8536b32f43
+stage gpu value 3 92ca1ce409d080b1

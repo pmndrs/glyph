@@ -1,0 +1,63 @@
+# glyph layout oracle reference v1
+case para-arabic-justify
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 5b3a111553d413f4
+stage text identity 1 39af7160bee6b18c
+stage unicode value 6 ef3a10f4e434595d
+stage bidi value 8 af0e549dc355ed1f
+stage style value 26 97310a081f23d310
+stage shaping_run value 5 2a2ab56d69b0ec95
+stage shape value 14 ccc84c9d892ecf3f
+stage cluster value 29 05e90e5e3e7fcd97
+stage cluster identity 4 4a4d1c81be2f2d3b
+stage cluster repr 11 335a15ce5aa3ef4d
+stage run_local repr 16 01f1c13c9fd9e69e
+stage flow value 35 db48240b652d4310
+stage positioned identity 3 b8d956500bb49354
+stage positioned value 13 1fdf2cddc06a433c
+stage positioned repr 17 6da03d2acc844312
+stage public value 13 dc1f88e78721c92e
+stage public identity 1 37cc247c9fb347fc
+stage view identity 4 b2885d4e83914ce3
+stage view value 40 dc94a19567fc1c01
+stage wire wire 1 e45efb3193396d29
+stage gather identity 7 7e6c3dd051572fc8
+stage gather value 36 92633a1aea4ea20c
+stage gpu identity 2 8bcda7aff4bb4c6c
+stage gpu value 3 f90d2a09cedafd72
+step 01 width 417
+class value 230 9ca6e8ee14a32cd8
+class identity 22 3857c0eec6dd3de9
+class repr 44 9db156dbf24521ff
+class wire 1 bcaf807ab9177f9b
+step 02 width 418
+class value 230 cfdb54b38529d626
+class identity 22 d6e530d3c3693f82
+class repr 44 f8347eba1f4b7506
+class wire 1 73de9e5ec9a0d713
+step 03 width 233.5
+class value 230 b1dda8430eb05636
+class identity 22 13dc2a4634b24b0e
+class repr 44 435036fe1af713d0
+class wire 1 129b211fd99f98c1
+step 04 width 600
+class value 230 63af9acd282c2838
+class identity 22 82e3b7e6c291b40b
+class repr 44 22d0b315fbc5eed1
+class wire 1 140103550221ac7b
+step 05 insert Space (1 units) at 825
+class value 230 5102c33259ed8c4b
+class identity 22 ec2d6423dd3ba45c
+class repr 44 5e10cb0f4fbade8b
+class wire 1 67f410d052ec777f
+step 06 replace 3 at 56 + delete 8 at 785
+class value 230 8d2cd3ffa338dbb6
+class identity 22 2c05ee08c7443f55
+class repr 44 a819370ff25d0f26
+class wire 1 1cb4c3f7f7094848
+step 07 delete 5 at 360 + max lines 3 + direction 2
+class value 266 ffae455c55cf89d6
+class identity 24 2dcdc4a9bb40b8b6
+class repr 64 d82af2d0990cddf7
+class wire 1 09c45bd8a5ad53f8

@@ -1,0 +1,63 @@
+# glyph layout oracle reference v1
+case font-recursive-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 a745ff56de2b4fa5
+stage text identity 1 06066976dde5f69e
+stage unicode value 6 8cda633f45c4d6e6
+stage bidi value 8 7062e55c691117db
+stage style value 26 57dd8e5a7d04299d
+stage shaping_run value 5 548cbad69f4d75d4
+stage shape value 14 d34eee9d594aac2a
+stage cluster value 29 8cffbd4947f9a3bd
+stage cluster identity 4 13eae97c3d772a46
+stage cluster repr 11 25f4abbad1cf78a2
+stage run_local repr 16 ebe83fcd690034bc
+stage flow value 35 637b717b5181dfac
+stage positioned identity 3 6df5ab036ee02709
+stage positioned value 13 a67484e042a1e82a
+stage positioned repr 17 241e5fc78a2bb3bb
+stage public value 13 5008ba3894049b97
+stage public identity 1 a6aa7f77d1663f93
+stage view identity 4 d2493f100aab7a95
+stage view value 40 4b2a4504b920dc5d
+stage wire wire 1 be8d6b6a7ec4fe32
+stage gather identity 7 44c35daf57f0c42d
+stage gather value 36 b740d97b48d493f4
+stage gpu identity 2 9c3a92c89e3ce99b
+stage gpu value 3 2ae33cdfcc17058f
+step 01 width 417
+class value 230 4c757d235e8719a6
+class identity 22 bb9762d86bf21bab
+class repr 44 8159ccbd1bc1a904
+class wire 1 e371f6d9e7415ca2
+step 02 width 418
+class value 230 3a72745db24abca5
+class identity 22 1ed8e98616213bc2
+class repr 44 d4c5eebab58e7d8b
+class wire 1 25280349dc9f00f9
+step 03 width 233.5
+class value 230 4763ddbc5487260a
+class identity 22 316a65b0bce1537e
+class repr 44 7c96fd557cce247d
+class wire 1 3a017f13b18337b3
+step 04 width 600
+class value 230 b5086024c47dcf58
+class identity 22 8b825b5255337329
+class repr 44 9bd73c73afb25116
+class wire 1 1bae388b4eee67f3
+step 05 align 1
+class value 230 b5086024c47dcf58
+class identity 22 8b825b5255337329
+class repr 44 9bd73c73afb25116
+class wire 1 aa3c2fe455e456fb
+step 06 align 4
+class value 230 bdd26f23db04bb70
+class identity 22 a109138b703fcf2f
+class repr 44 8ec1c5a1a2b0e1d7
+class wire 1 665d912ec5d74809
+step 07 flip case at 85
+class value 230 9b602b1ccd6ba516
+class identity 22 5030d46ce9659290
+class repr 44 ea3391689ecf5d0b
+class wire 1 b90891b8d4fa1b9c

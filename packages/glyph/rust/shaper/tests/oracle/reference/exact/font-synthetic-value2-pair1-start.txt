@@ -1,0 +1,63 @@
+# glyph layout oracle reference v1
+case font-synthetic-value2-pair1-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 7353d0d585888fc3
+stage text identity 1 ca489d80302530fb
+stage unicode value 6 b1fe77f5e362a947
+stage bidi value 8 6fdabb3cf05cfe44
+stage style value 26 e4bc46804dd3467f
+stage shaping_run value 5 366ba0dbe941606e
+stage shape value 14 7865639055f9f6a1
+stage cluster value 29 4e38b75665915a8b
+stage cluster identity 4 de88fff182b0f5c0
+stage cluster repr 11 743e582f114cf9b6
+stage run_local repr 16 5243a82c3002a5f4
+stage flow value 35 d637119a2e3c2d11
+stage positioned identity 3 5fe33babaaa23d3c
+stage positioned value 13 24ddc73de7325022
+stage positioned repr 17 693cb109ae7f2a29
+stage public value 13 4c5b26171b77d7a3
+stage public identity 1 45e8a59f26f54f15
+stage view identity 4 901631f50756c050
+stage view value 40 2eea58ce1558cfda
+stage wire wire 1 a4c1b4d856fd89e3
+stage gather identity 7 9930a3e2d6be82d4
+stage gather value 36 139e0e50c75d730f
+stage gpu identity 2 6eadc3a42897279c
+stage gpu value 3 72d994933e00bb99
+step 01 width 417
+class value 230 054d60f894c0cf85
+class identity 22 177e870ed9f5eae0
+class repr 44 1ab414108911aa3a
+class wire 1 297140ac0c307f56
+step 02 width 418
+class value 230 62c92e87d33a06d4
+class identity 22 177e870ed9f5eae0
+class repr 44 1ab414108911aa3a
+class wire 1 47d17b4089c6182a
+step 03 width 233.5
+class value 230 049832782160154b
+class identity 22 9416c4b41cc34f15
+class repr 44 895c455b35e67846
+class wire 1 f117ade997138015
+step 04 width 600
+class value 230 5a0b8d6d78d78752
+class identity 22 55596e91733caf37
+class repr 44 dc5071738f61bb25
+class wire 1 cf576d35fca4fd48
+step 05 insert Mark (1 units) at 84
+class value 230 2ae768ef67bcca96
+class identity 22 fb5f3fe12cee5d10
+class repr 44 0908b060a1686a07
+class wire 1 2de3092620c26314
+step 06 delete 5 at 21
+class value 230 ae5edbd33f758d24
+class identity 22 56ba80a676ff295d
+class repr 44 003cd6dca7581db9
+class wire 1 0486920b95e10ba4
+step 07 direction 1
+class value 230 11c57087312c5f05
+class identity 22 48a1f880eea5faa3
+class repr 44 003cd6dca7581db9
+class wire 1 9711a6614f7eb19a

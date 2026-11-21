@@ -1,5 +1,6 @@
 [toolchain]
 channel = "1.97.1"
 profile = "minimal"
-components = ["cargo", "clippy", "rustfmt"]
+# rust-src: the shipped shaper Wasm rebuilds core and alloc (packages/glyph/scripts/support/shaper-build.mjs).
+components = ["cargo", "clippy", "rustfmt", "rust-src"]
 targets = ["wasm32-unknown-unknown"]

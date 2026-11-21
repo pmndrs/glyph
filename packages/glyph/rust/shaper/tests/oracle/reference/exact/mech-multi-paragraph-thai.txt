@@ -1,0 +1,53 @@
+# glyph layout oracle reference v1
+case mech-multi-paragraph-thai
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 3412f292b80cabc4
+stage text identity 1 92cb6922b563f861
+stage unicode value 6 e29d7870ff8032d1
+stage bidi value 8 50c5e2756781c68b
+stage style value 26 b2976749a5c5fae0
+stage shaping_run value 5 d73997ffc4065aa7
+stage shape value 14 08c6ecf29fb3fc2b
+stage cluster value 29 1dd48602fa959ab4
+stage cluster identity 4 8ec22e2b02f4a8ea
+stage cluster repr 11 4bb0e074ee3ecac4
+stage run_local repr 16 695cb3cca3718650
+stage flow value 35 b86fcf2e5f780e58
+stage positioned identity 3 34d837984ce6a9eb
+stage positioned value 13 da98f70876c75936
+stage positioned repr 17 3ee4f4f83fa465b0
+stage public value 13 aa4c5c0b9d0b4b5e
+stage public identity 1 23a2062e49f3982e
+stage view identity 4 6285eabe54726ab5
+stage view value 40 f7a15a21fc3d02e8
+stage wire wire 1 dde50bc374337d4b
+stage gather identity 7 4d02984bf8d4161d
+stage gather value 36 0513aefd478a29c4
+stage gpu identity 2 1337c1aeb8b21be0
+stage gpu value 3 feddaa3c316db9bb
+step 01 insert in paragraph one
+class value 230 dd7d56a5667af8b9
+class identity 22 1cb7523f84b55aa1
+class repr 44 bd58f8df4e40181a
+class wire 1 8f4c890cd31cb7b0
+step 02 restore
+class value 230 a2d3a84607f5a3fe
+class identity 22 5d7e1812df4535ee
+class repr 44 018e3ad3d67a67ee
+class wire 1 d545670997d5f68d
+step 03 insert Word (6 units) at 398
+class value 230 131f0b4ac9f564fd
+class identity 22 254cdb7b06eba3d3
+class repr 44 ec03cfd49a2cba1b
+class wire 1 5287b5439c631d28
+step 04 align 4 + insert Foreign (4 units) at 180 + add span 793..795
+class value 242 bb3155f43c1e0797
+class identity 22 89587a1ccf3d341b
+class repr 44 80821e2b72887e7b
+class wire 1 ed83174e083e907c
+step 05 delete 7 at 638
+class value 242 afdcc26fc6326fb2
+class identity 22 bbb353245baa1a4f
+class repr 44 eb5922583143a0f3
+class wire 1 7c00cbec8cb2b818
