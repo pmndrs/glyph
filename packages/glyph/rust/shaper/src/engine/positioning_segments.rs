@@ -10,11 +10,12 @@ use crate::{FontMetrics, bidi::BidiAnalysis};
 use super::{
     BodyLine, CLUSTER_HARD_BREAK, ClusterArena, ClusterOrder, EngineError, FRAGMENT_ADJUSTS_GAPS,
     FRAGMENT_ADJUSTS_SPACES, FRAGMENT_HUNG_LEADS, FRAGMENT_VISUAL_ORDER, FlowFragment, FlowLine,
-    FragmentPositionState, GlyphSource, JustifyDistribution, LayoutRun, NO_LANE, OccurrenceSpan,
-    PlacementCluster, PositionedCluster, PositionedGlyphArena, RopeCursorRange, RunGeometry,
-    STEP_CHECKED, STEP_JOINED, STEP_MERGEABLE, STEP_REVERSE, SegmentTranslation, SegmentWalk,
-    SourceLine, SourceLineFacts, ThreadTypography, apply_justification, cluster_level, finite_f32,
-    fragment_pen, paragraph_level_at, reserve,
+    FragmentPositionState, GlyphSource, JustifyDistribution, LayoutRun, LayoutRunOwner,
+    LayoutRunSourceKind, NO_LANE, OccurrenceSpan, PlacementCluster, PositionedCluster,
+    PositionedGlyphArena, RopeCursorRange, RunGeometry, STEP_CHECKED, STEP_JOINED, STEP_MERGEABLE,
+    STEP_REVERSE, SegmentTranslation, SegmentWalk, SourceLine, SourceLineFacts, ThreadTypography,
+    apply_justification, boundary_role_index, cluster_level, finite_f32, fragment_pen,
+    paragraph_level_at, positioned_fragment_advance, reserve,
 };
 
 /// The span being grown over visually consecutive clusters of one segment.
@@ -356,6 +357,174 @@ impl PositionedGlyphArena {
         self.pen_steps.extend_from_slice(steps);
         reserve(&mut self.fragment_topology, topology.len())?;
         self.fragment_topology.extend_from_slice(topology);
+        Ok(Some(inline_end))
+    }
+
+    /// Retains a line with edge records whose every positioning input and every edge record's
+    /// content equal `previous_line`'s. Its segments, translations, spans and decorations are
+    /// what positioning it in full would write, except that an island's glyphs sit elsewhere
+    /// in this flow's boundary arena under a run of this build, so boundary segments and spans
+    /// are pointed at that run. The line is still published as repositioned: its islands'
+    /// glyphs may carry new stable ids.
+    ///
+    /// Returns the line's inline end, or `None`, with nothing written, when the retained line
+    /// cannot be carried over.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn retain_edge_line(
+        &mut self,
+        previous: &Self,
+        (previous_line, previous_fragment_start): (usize, usize),
+        (line_index, line): (usize, FlowLine),
+        fragments: &RopeCursorRange<'_, FlowFragment>,
+        final_line: bool,
+        typography: ThreadTypography,
+        clusters: &ClusterArena,
+        fragment_start: u32,
+    ) -> Result<Option<f64>, EngineError> {
+        let old_segments = previous.placement.line_segment_range(previous_line)?;
+        let spans = previous.line_spans(previous_line)?;
+        if spans
+            .iter()
+            .any(|span| !matches!(span.line, SourceLine::Body(_)))
+        {
+            return Ok(None);
+        }
+        // This build's run for each retained boundary segment, before anything is written.
+        self.edge_runs.clear();
+        reserve(&mut self.edge_runs, old_segments.len())?;
+        for segment in &previous.placement.segment_rows()[old_segments.clone()] {
+            if segment.layout_run_owner != LayoutRunOwner::Replacement {
+                self.edge_runs.push(u32::MAX);
+                continue;
+            }
+            let old_run = segment.layout_run_index as usize;
+            let (Some(old_record), Some(LayoutRunSourceKind::Boundary { role, .. })) = (
+                previous.replacement_run_boundary_indices.get(old_run),
+                previous
+                    .replacement_runs
+                    .get(old_run)
+                    .map(|run| run.source_kind),
+            ) else {
+                return Ok(None);
+            };
+            let Some(run) = self
+                .edge_pairs
+                .iter()
+                .find(|(old, _)| old == old_record)
+                .and_then(|(_, next)| self.replacement_run_indices.get(*next as usize))
+                .and_then(|indices| indices[boundary_role_index(role)])
+            else {
+                return Ok(None);
+            };
+            self.edge_runs.push(run);
+        }
+
+        let mut inline_end = f64::NEG_INFINITY;
+        for fragment in fragments.iter() {
+            let indent = if fragment.line.cluster_start == 0 {
+                typography.first_line_indent
+            } else {
+                0.0
+            };
+            inline_end = inline_end.max(
+                fragment.slot_start
+                    + positioned_fragment_advance(
+                        line,
+                        *fragment,
+                        final_line,
+                        clusters,
+                        indent,
+                        typography.justify,
+                    )?,
+            );
+        }
+
+        let remap = self.placement.append_retranslated_segments(
+            &previous.placement,
+            previous_line,
+            (
+                u32::try_from(previous_fragment_start).map_err(|_| EngineError::ResultTooLarge)?,
+                fragment_start,
+            ),
+            &previous.placement.translations()[old_segments.clone()],
+        )?;
+        for (offset, run) in self.edge_runs.iter().copied().enumerate() {
+            if run != u32::MAX {
+                let revision = self
+                    .replacement_runs
+                    .get(run as usize)
+                    .ok_or(EngineError::InvalidRequest)?
+                    .canonical_revision;
+                self.placement.rebind_segment_run(
+                    remap.next_start as usize + offset,
+                    run,
+                    revision,
+                )?;
+            }
+        }
+        reserve(&mut self.occurrence_spans, spans.len())?;
+        let source_line =
+            SourceLine::Body(u32::try_from(line_index).map_err(|_| EngineError::ResultTooLarge)?);
+        let line_facts = SourceLineFacts::from(line);
+        for old in spans {
+            let offset = old
+                .placement_segment
+                .checked_sub(remap.previous_start)
+                .filter(|offset| *offset < remap.count)
+                .ok_or(EngineError::InvalidRequest)?;
+            let (run_index, source_glyph_start) = if old.source == GlyphSource::Boundary {
+                let run = self.edge_runs[offset as usize];
+                let old_run = previous
+                    .replacement_runs
+                    .get(old.run_index as usize)
+                    .ok_or(EngineError::InvalidRequest)?;
+                let next_run = self
+                    .replacement_runs
+                    .get(run as usize)
+                    .ok_or(EngineError::InvalidRequest)?;
+                (
+                    run,
+                    old.source_glyph_start
+                        .checked_sub(old_run.glyph_start)
+                        .and_then(|offset| next_run.glyph_start.checked_add(offset))
+                        .ok_or(EngineError::InvalidRequest)?,
+                )
+            } else {
+                (old.run_index, old.source_glyph_start)
+            };
+            self.occurrence_spans.push(OccurrenceSpan {
+                run_index,
+                source_glyph_start,
+                placement_segment: remap.next_start + offset,
+                line: source_line,
+                line_facts,
+                semantic_start: self.occurrence_semantic_count,
+                outlined_start: self.occurrence_outlined_count,
+                ..*old
+            });
+            self.occurrence_semantic_count = self
+                .occurrence_semantic_count
+                .checked_add(old.source_glyph_count)
+                .ok_or(EngineError::ResultTooLarge)?;
+            self.occurrence_outlined_count = self
+                .occurrence_outlined_count
+                .checked_add(old.outlined_count)
+                .ok_or(EngineError::ResultTooLarge)?;
+        }
+        let decoration_start = *previous
+            .line_decoration_starts
+            .get(previous_line)
+            .ok_or(EngineError::InvalidRequest)? as usize;
+        let decoration_count = *previous
+            .line_decoration_counts
+            .get(previous_line)
+            .ok_or(EngineError::InvalidRequest)? as usize;
+        let decorations = previous
+            .decorations
+            .get(decoration_start..decoration_start + decoration_count)
+            .ok_or(EngineError::InvalidRequest)?;
+        reserve(&mut self.decorations, decorations.len())?;
+        self.decorations.extend_from_slice(decorations);
         Ok(Some(inline_end))
     }
 

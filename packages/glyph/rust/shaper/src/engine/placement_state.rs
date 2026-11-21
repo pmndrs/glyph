@@ -453,6 +453,42 @@ impl PlacementState {
         })
     }
 
+    /// The segments of one line, as a range of `segment_rows`.
+    pub(crate) fn line_segment_range(
+        &self,
+        line_index: usize,
+    ) -> Result<core::ops::Range<usize>, EngineError> {
+        let (start, end) = line_span(
+            &self.line_segment_starts,
+            &self.line_segment_counts,
+            line_index,
+            self.segments.len(),
+        )?;
+        Ok(start..end)
+    }
+
+    /// Points a retained boundary segment at the run that holds its glyphs in this build.
+    pub(crate) fn rebind_segment_run(
+        &mut self,
+        index: usize,
+        layout_run_index: u32,
+        canonical_revision: Option<RunCanonicalRevision>,
+    ) -> Result<(), EngineError> {
+        let segment = self
+            .segments
+            .get_mut(index)
+            .ok_or(EngineError::InvalidRequest)?;
+        segment.layout_run_index = layout_run_index;
+        segment.canonical_revision = canonical_revision;
+        let segment = *segment;
+        if let Some((last_index, last, _)) = &mut self.last_segment
+            && usize::try_from(*last_index).ok() == Some(index)
+        {
+            *last = segment;
+        }
+        Ok(())
+    }
+
     pub(crate) fn extend_last_segment(
         &mut self,
         segment_index: u32,

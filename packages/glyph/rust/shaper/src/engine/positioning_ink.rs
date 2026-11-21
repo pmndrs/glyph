@@ -55,7 +55,7 @@ fn line_ink(
     let mut block_min = f64::INFINITY;
     let mut inline_max = f64::NEG_INFINITY;
     let mut block_max = f64::NEG_INFINITY;
-    // Zero while every placed origin is finite: `x - x` is NaN for an infinity or a NaN.
+    // Zero while every placed origin is finite: `x * 0.0` is NaN for an infinity or a NaN.
     let mut residue = 0.0_f32;
     let mut glyphs = 0_usize;
     let mut missing = 0_u32;
@@ -107,7 +107,7 @@ fn line_ink(
             .zip(ink_inline_extent)
         {
             let origin = origin + inline;
-            residue += origin - origin;
+            residue += origin * 0.0;
             let min = f64::from(start + inline);
             let max = min + f64::from(*extent);
             inline_min = if min < inline_min { min } else { inline_min };
@@ -119,7 +119,7 @@ fn line_ink(
             .zip(ink_block_extent)
         {
             let origin = origin + block;
-            residue += origin - origin;
+            residue += origin * 0.0;
             let min = f64::from(start + block);
             let max = min + f64::from(*extent);
             block_min = if min < block_min { min } else { block_min };

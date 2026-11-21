@@ -931,6 +931,10 @@ pub(crate) struct PositionedGlyphArena {
     /// Whether the line's pen steps describe all of it: no edge record, drop cap or decoration.
     line_repositionable: Vec<bool>,
     numeric_translations: Vec<SegmentTranslation>,
+    /// Scratch: the retained flow's edge record and this flow's, per edge of the line in hand.
+    edge_pairs: Vec<(u32, u32)>,
+    /// Scratch: this build's replacement run for each retained boundary segment.
+    edge_runs: Vec<u32>,
     // Line ink: written in the pass that places the line, read by measurement.
     line_ink: Vec<LineInk>,
     line_missing_glyphs: Vec<u32>,
@@ -2034,8 +2038,9 @@ impl PositionedGlyphArena {
                 }
             }
             let mut numeric_source = None;
-            if flow.drop_caps.is_empty()
-                && retained_flow.is_some_and(|previous| previous.drop_caps.is_empty())
+            // The line that owns a drop cap is positioned in full; the lines beside it are not
+            // special, since the cap reaches them only through their slots.
+            if drop_cap.is_none()
                 && let Some(retained_cursor) = retained_cursor.as_mut()
                 && let Some(matched) = matching_retained_line(
                     line,
@@ -2046,6 +2051,11 @@ impl PositionedGlyphArena {
                     bidi,
                     typography_for(line.flow_thread_id),
                     retained_typography_for(line.flow_thread_id),
+                    (
+                        boundary_shape,
+                        previous_boundary_shape,
+                        &mut self.edge_pairs,
+                    ),
                 )?
             {
                 let (previous_line_index, previous_line) = (matched.index, matched.line);
@@ -2053,8 +2063,9 @@ impl PositionedGlyphArena {
                     .fragment_index
                     .checked_sub(usize::from(previous_line.fragment_count))
                     .ok_or(EngineError::InvalidRequest)?;
-                if !matched.exact {
-                    numeric_source = Some((previous_line_index, previous_fragment_start));
+                if !matched.exact || matched.edges {
+                    numeric_source =
+                        Some((previous_line_index, previous_fragment_start, matched.edges));
                 } else {
                     let previous_glyph_count = *previous
                         .line_glyph_counts
@@ -2185,22 +2196,42 @@ impl PositionedGlyphArena {
             self.placement_fragment_index = fragment_start;
             // A line holding the clusters it held before repeats only its arithmetic.
             let repositioned = match numeric_source {
-                Some(source) => self.reposition_retained_line(
+                Some((previous_line, previous_fragment_start, false)) => self
+                    .reposition_retained_line(
+                        previous,
+                        (previous_line, previous_fragment_start),
+                        (line_index, line),
+                        &fragments,
+                        final_line,
+                        typography,
+                        clusters,
+                        bidi,
+                        fragment_start,
+                    )?,
+                Some((previous_line, previous_fragment_start, true)) => self.retain_edge_line(
                     previous,
-                    source,
+                    (previous_line, previous_fragment_start),
                     (line_index, line),
                     &fragments,
                     final_line,
                     typography,
                     clusters,
-                    bidi,
                     fragment_start,
                 )?,
                 None => None,
             };
             if let Some(end) = repositioned {
                 inline_end = end;
-                self.push_line_topology((line_span_start, line_step_start), 0, true)?;
+                let edges = numeric_source.is_some_and(|(_, _, edges)| edges);
+                self.push_line_topology(
+                    (line_span_start, line_step_start),
+                    if edges {
+                        usize::from(line.fragment_count)
+                    } else {
+                        0
+                    },
+                    !edges,
+                )?;
             } else {
                 if !visually_ltr {
                     prepare_line_levels(
@@ -2500,6 +2531,8 @@ impl PositionedGlyphArena {
         self.line_span_starts.clear();
         self.line_repositionable.clear();
         self.numeric_translations.clear();
+        self.edge_pairs.clear();
+        self.edge_runs.clear();
         self.line_ink.clear();
         self.line_missing_glyphs.clear();
         self.line_ink_complete = true;
@@ -4363,11 +4396,14 @@ impl<'a> RetainedFlowLineCursor<'a> {
 }
 
 /// A line of the retained flow holding the same clusters in the same fragments. `exact` adds
-/// that every positioning input is bit-equal, so the line's numbers are retained as well.
+/// that every positioning input is bit-equal, so the line's numbers are retained as well. A
+/// line with edge records matches only exactly.
 struct RetainedLineMatch {
     index: usize,
     line: FlowLine,
     exact: bool,
+    /// The line has edge records, each equal in content to the retained line's.
+    edges: bool,
 }
 
 // Each argument is one independently compared positioning input. Packing them
@@ -4382,6 +4418,11 @@ fn matching_retained_line(
     bidi: &BidiAnalysis,
     typography: ThreadTypography,
     previous_typography: ThreadTypography,
+    (boundary, previous_boundary, edge_pairs): (
+        &BoundaryShapeArena,
+        &BoundaryShapeArena,
+        &mut Vec<(u32, u32)>,
+    ),
 ) -> Result<Option<RetainedLineMatch>, EngineError> {
     let Some(first) = fragments.first() else {
         return Ok(None);
@@ -4438,22 +4479,31 @@ fn matching_retained_line(
             .advance(usize::from(previous_line.fragment_count))
             .ok_or(EngineError::InvalidRequest)?;
         cursor.fragment_index = previous_fragment_end;
-        // Content: the same clusters in the same fragments, with no edge record on either side.
-        let same_content = fragments.len() == previous_fragments.len()
-            && fragments
-                .iter()
-                .zip(previous_fragments.iter())
-                .all(|(next, old)| {
-                    next.line == old.line
-                        && next.boundary_index == super::flow_composition::NO_BOUNDARY
-                        && old.boundary_index == super::flow_composition::NO_BOUNDARY
-                        && next.lead_index == super::flow_composition::NO_BOUNDARY
-                        && old.lead_index == super::flow_composition::NO_BOUNDARY
-                        && next.tail_index == super::flow_composition::NO_BOUNDARY
-                        && old.tail_index == super::flow_composition::NO_BOUNDARY
-                });
-        if !same_content {
+        // Content: the same clusters in the same fragments, with an edge record wherever the
+        // retained line had one.
+        if fragments.len() != previous_fragments.len() {
             return Ok(None);
+        }
+        edge_pairs.clear();
+        for (next, old) in fragments.iter().zip(previous_fragments.iter()) {
+            if next.line != old.line {
+                return Ok(None);
+            }
+            for (next, old) in [
+                (next.lead_index, old.lead_index),
+                (next.tail_index, old.tail_index),
+                (next.boundary_index, old.boundary_index),
+            ] {
+                let absent = super::flow_composition::NO_BOUNDARY;
+                match (next == absent, old == absent) {
+                    (true, true) => {}
+                    (false, false) => {
+                        reserve(edge_pairs, 1)?;
+                        edge_pairs.push((old, next));
+                    }
+                    _ => return Ok(None),
+                }
+            }
         }
         let previous_final_line = cursor
             .lines
@@ -4500,13 +4550,84 @@ fn matching_retained_line(
                         && inputs(line, next, typography, final_line)
                             == inputs(previous_line, old, previous_typography, previous_final_line)
                 });
+        let edges = !edge_pairs.is_empty();
+        if edges {
+            // An island advances the pen by its own content, so only a line whose numbers and
+            // edge content are both unchanged is retained.
+            if !exact {
+                return Ok(None);
+            }
+            for (old, next) in edge_pairs.iter().copied() {
+                if !same_edge_record(boundary, next, previous_boundary, old)? {
+                    return Ok(None);
+                }
+            }
+        }
         return Ok(Some(RetainedLineMatch {
             index: previous_index,
             line: previous_line,
             exact,
+            edges,
         }));
     }
     Ok(None)
+}
+
+/// Whether two edge records shape the same glyphs over the same clusters. Where the records
+/// sit in their arenas, and the stable ids their glyphs were given, are not content.
+fn same_edge_record(
+    current: &BoundaryShapeArena,
+    current_index: u32,
+    previous: &BoundaryShapeArena,
+    previous_index: u32,
+) -> Result<bool, EngineError> {
+    let next = current
+        .record(current_index)
+        .ok_or(EngineError::InvalidRequest)?;
+    let old = previous
+        .record(previous_index)
+        .ok_or(EngineError::InvalidRequest)?;
+    let unplaced = |record: BoundaryShape| BoundaryShape {
+        source_glyph_start: 0,
+        ellipsis_glyph_start: 0,
+        ..record
+    };
+    if unplaced(next) != unplaced(old) {
+        return Ok(false);
+    }
+    for (next_start, old_start, count) in [
+        (
+            next.source_glyph_start,
+            old.source_glyph_start,
+            next.source_glyph_count,
+        ),
+        (
+            next.ellipsis_glyph_start,
+            old.ellipsis_glyph_start,
+            next.ellipsis_glyph_count,
+        ),
+    ] {
+        let next = next_start as usize..next_start as usize + count as usize;
+        let old = old_start as usize..old_start as usize + count as usize;
+        fn lane<'a, T>(
+            lane: &'a [T],
+            range: &core::ops::Range<usize>,
+        ) -> Result<&'a [T], EngineError> {
+            lane.get(range.clone()).ok_or(EngineError::InvalidRequest)
+        }
+        let (a, b) = (&current.shape, &previous.shape);
+        if lane(&a.glyph_ids, &next)? != lane(&b.glyph_ids, &old)?
+            || lane(&a.clusters, &next)? != lane(&b.clusters, &old)?
+            || lane(&a.x_advances, &next)? != lane(&b.x_advances, &old)?
+            || lane(&a.y_advances, &next)? != lane(&b.y_advances, &old)?
+            || lane(&a.x_offsets, &next)? != lane(&b.x_offsets, &old)?
+            || lane(&a.y_offsets, &next)? != lane(&b.y_offsets, &old)?
+            || lane(&a.glyph_flags, &next)? != lane(&b.glyph_flags, &old)?
+        {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 pub(super) fn is_trivially_ltr(bidi: &BidiAnalysis, runs: &[ShapingRun]) -> bool {
@@ -6298,6 +6419,11 @@ mod tests {
                     &bidi,
                     pending_typography,
                     committed_typography,
+                    (
+                        &BoundaryShapeArena::default(),
+                        &BoundaryShapeArena::default(),
+                        &mut Vec::new(),
+                    ),
                 )
                 .unwrap()
                 .filter(|matched| matched.exact)
