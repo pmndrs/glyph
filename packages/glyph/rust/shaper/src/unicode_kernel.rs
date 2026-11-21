@@ -32,7 +32,7 @@ pub(crate) use generated::KERNEL_TEST_REPRESENTATIVES;
 pub(crate) use generated::{
     K_AL, K_B2, K_BA, K_BB, K_CL, K_CP, K_EX, K_GL, K_H23, K_HARD, K_HH, K_HL, K_HY, K_ID, K_IN,
     K_IS, K_NS, K_NU, K_OP, K_PF, K_PI, K_PO, K_PR, K_QU, K_SP, K_SY, KERNEL_SCRIPT_COMPLEX,
-    KERNEL_SCRIPT_TAGS,
+    KERNEL_SCRIPT_SET_BASE, KERNEL_SCRIPT_TAGS,
 };
 
 const BLOCK: usize = 64;
@@ -59,6 +59,15 @@ pub(crate) fn unit_value(unit: u16) -> u16 {
 #[inline]
 pub(crate) fn unit_class(unit: u16) -> u8 {
     (unit_value(unit) & 0xff) as u8
+}
+
+/// The candidate scripts of a neutral unit whose script byte is a set id.
+#[inline]
+pub(crate) fn script_set(id: u8) -> &'static [u32] {
+    let index = usize::from(id - KERNEL_SCRIPT_SET_BASE);
+    let start = usize::from(generated::KERNEL_SCRIPT_SET_OFFSETS[index]);
+    let end = usize::from(generated::KERNEL_SCRIPT_SET_OFFSETS[index + 1]);
+    &generated::KERNEL_SCRIPT_SET_TAGS[start..end]
 }
 
 /// How much of a text the kernel decided and how much went to the scalar residue.
