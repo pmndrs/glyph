@@ -388,12 +388,13 @@ async function start(): Promise<ParityProof> {
     );
   }
 
-  async function captureTypeGpu(scene: Scene): Promise<Uint8Array> {
+  async function captureTypeGpu(scene: Scene): Promise<{ pixels: Uint8Array; gpuMs: number | undefined }> {
     const handle = scene.perspective === true ? projected : flat;
     const texts = mount(handle, scene);
     try {
       glyph.shape();
-      return await readPixels(handle);
+      const pixels = await readPixels(handle);
+      return { pixels, gpuMs: await gpuPass(handle) };
     } finally {
       for (const text of texts) text.dispose();
       glyph.shape();
@@ -409,6 +410,23 @@ async function start(): Promise<ParityProof> {
     return { ...snapshot(), ms };
   };
 
+  /** Median render-pass time over 60 frames by timestamp query; undefined without the feature. */
+  async function gpuPass(handle: TypeGpuHandle): Promise<number | undefined> {
+    if (querySet === undefined) return undefined;
+    const samples: number[] = [];
+    for (let index = 0; index < 60; index += 1) {
+      const encoder = encodeFrame(handle, true);
+      encoder.resolveQuerySet(querySet, 0, 2, queryResolve, 0);
+      encoder.copyBufferToBuffer(queryResolve, 0, queryRead, 0, 16);
+      device.queue.submit([encoder.finish()]);
+      await queryRead.mapAsync(GPUMapMode.READ);
+      const [begin, end] = new BigUint64Array(queryRead.getMappedRange().slice(0));
+      queryRead.unmap();
+      samples.push(Number(end! - begin!) / 1e6);
+    }
+    return median(samples);
+  }
+
   /** Device errors arrive asynchronously; naming the phase that just finished locates them. */
   const settle = async (phase: string): Promise<void> => {
     await device.queue.onSubmittedWorkDone();
@@ -416,7 +434,8 @@ async function start(): Promise<ParityProof> {
   };
 
   async function perf(labels: number): Promise<ParityPerf> {
-    const scene = labelScene(labels);
+    // One text is the 72 px "one" scene: the fill-bound case, where fragment cost dominates.
+    const scene = labels === 1 ? scenes.one! : labelScene(labels);
     let texts: TypeGpuText[] = [];
     const mountCost = measured(() => {
       texts = mount(flat, scene);
@@ -445,21 +464,7 @@ async function start(): Promise<ParityProof> {
         await device.queue.onSubmittedWorkDone();
         batchSamples.push((performance.now() - started) / 100);
       }
-      let gpuFrameMs: number | undefined;
-      if (querySet !== undefined) {
-        const gpuSamples: number[] = [];
-        for (let index = 0; index < 60; index += 1) {
-          const encoder = encodeFrame(flat, true);
-          encoder.resolveQuerySet(querySet, 0, 2, queryResolve, 0);
-          encoder.copyBufferToBuffer(queryResolve, 0, queryRead, 0, 16);
-          device.queue.submit([encoder.finish()]);
-          await queryRead.mapAsync(GPUMapMode.READ);
-          const [begin, end] = new BigUint64Array(queryRead.getMappedRange().slice(0));
-          queryRead.unmap();
-          gpuSamples.push(Number(end! - begin!) / 1e6);
-        }
-        gpuFrameMs = median(gpuSamples);
-      }
+      const gpuFrameMs = await gpuPass(flat);
 
       // One label, same glyph count: alternate two strings of equal length.
       const subject = texts[Math.floor(labels / 2)]!;
@@ -566,13 +571,14 @@ async function start(): Promise<ParityProof> {
       if (scene === undefined) throw new RangeError(`unknown parity scene ${name}`);
       // Three first: the perspective scene takes its clip matrix from the Three camera.
       const threePixels = withThree || scene.perspective === true ? await captureThree(scene) : undefined;
-      const typegpuPixels = await captureTypeGpu(scene);
+      const typegpu = await captureTypeGpu(scene);
       if (errors.length !== 0) throw new Error(errors.splice(0).join('\n'));
       return {
         width: WIDTH,
         height: HEIGHT,
-        typegpu: base64(typegpuPixels),
+        typegpu: base64(typegpu.pixels),
         three: withThree && threePixels !== undefined ? base64(threePixels) : undefined,
+        gpuMs: typegpu.gpuMs,
       };
     },
     async perf(labels) {

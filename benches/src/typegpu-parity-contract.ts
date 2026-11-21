@@ -22,6 +22,8 @@ export interface ParityCapture {
   /** Base64 RGBA rows, top first. */
   readonly typegpu: string;
   readonly three: string | undefined;
+  /** Median GPU pass time of the TypeGPU frame (timestamp query), when the adapter supports it. */
+  readonly gpuMs: number | undefined;
 }
 export interface ParityPerf {
   readonly labels: number;

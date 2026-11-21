@@ -1,4 +1,4 @@
-/* @workflow { "name": "benchmark:typegpu-parity", "summary": "Render the direct TypeGPU renderer on a real WebGPU device and compare its pixels with the Three MSDF path and a saved capture; --perf reports draws, bind groups and frame cost.", "requirements": "Playwright Chromium with WebGPU and the baked rendering fixtures. --scenes=a,b selects scenes; --baseline=<dir> compares with saved captures (default benches/render-reference/typegpu-start); --capture=<dir> writes captures; --out=<dir> writes this run's images; --tolerance=<n> sets the channel tolerance (default 8); --perf adds the 200 and 1,000 label measurements.", "writes": "Only the directories named by --capture and --out." } */
+/* @workflow { "name": "benchmark:typegpu-parity", "summary": "Render the direct TypeGPU renderer on a real WebGPU device and compare its pixels with the Three MSDF path and a saved capture; --perf reports draws, bind groups and frame cost.", "requirements": "Playwright Chromium with WebGPU and the baked rendering fixtures. --scenes=a,b selects scenes; --baseline=<dir> compares with saved captures (default benches/render-reference/typegpu-start); --capture=<dir> writes captures; --out=<dir> writes this run's images; --tolerance=<n> sets the channel tolerance (default 8; a pixel may leave the capture only towards Three); --perf adds the one-text, 200 and 1,000 label measurements.", "writes": "Only the directories named by --capture and --out." } */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -69,6 +69,25 @@ function compare(candidate: Uint8Array, reference: Uint8Array, width: number): D
   return { differing, over, max, lost, lit, where };
 }
 
+/**
+ * Pixels that moved away from the saved capture by more than the tolerance without landing within it of Three.
+ * A change towards the Three path (an intended parity fix) is not drift; any other change is.
+ */
+function driftAwayFromThree(candidate: Uint8Array, baseline: Uint8Array, three: Uint8Array): number {
+  let away = 0;
+  for (let offset = 0; offset < candidate.length; offset += 4) {
+    let fromBaseline = 0;
+    let fromThree = 0;
+    for (let channel = 0; channel < 3; channel += 1) {
+      const value = candidate[offset + channel]!;
+      fromBaseline = Math.max(fromBaseline, Math.abs(value - baseline[offset + channel]!));
+      fromThree = Math.max(fromThree, Math.abs(value - three[offset + channel]!));
+    }
+    if (fromBaseline > tolerance && fromThree > tolerance) away += 1;
+  }
+  return away;
+}
+
 const decode = (text: string): Uint8Array => new Uint8Array(Buffer.from(text, 'base64'));
 const row = (cells: readonly (string | number)[]): string => `| ${cells.join(' | ')} |`;
 
@@ -114,9 +133,9 @@ try {
 
   process.stdout.write(`Channel tolerance ${String(tolerance)}/255; "lost" = lit in the reference, black here.\n\n`);
   process.stdout.write(
-    `${row(['scene', 'lit px', 'vs Three: differ', 'over', 'max', 'lost', 'vs capture: differ', 'over', 'max', 'lost'])}\n`,
+    `${row(['scene', 'lit px', 'GPU ms', 'vs Three: differ', 'over', 'max', 'lost', 'vs capture: differ', 'over', 'max', 'lost'])}\n`,
   );
-  process.stdout.write(`${row(Array.from({ length: 10 }, () => '---'))}\n`);
+  process.stdout.write(`${row(Array.from({ length: 11 }, () => '---'))}\n`);
   for (const scene of scenes) {
     if (selected !== undefined && !selected.includes(scene)) continue;
     const capture: ParityCapture = await page.evaluate(
@@ -128,6 +147,7 @@ try {
     const threeDifference =
       capture.three === undefined ? undefined : compare(candidate, decode(capture.three), capture.width);
     let baselineDifference: Difference | undefined;
+    let drift: number | undefined;
     const baselinePng = await readFile(resolve(baselineDirectory, `${scene}.png`)).catch(() => undefined);
     if (baselinePng !== undefined) {
       const baseline = await page.evaluate(
@@ -135,6 +155,10 @@ try {
         baselinePng.toString('base64'),
       );
       baselineDifference = compare(candidate, decode(baseline), capture.width);
+      drift =
+        capture.three === undefined || (threeBudget[scene] === undefined && scene in threeBudget)
+          ? baselineDifference.over
+          : driftAwayFromThree(candidate, decode(baseline), decode(capture.three));
     }
     for (const directory of [captureDirectory, outDirectory]) {
       if (directory === undefined) continue;
@@ -152,7 +176,8 @@ try {
         ? ['-', '-', '-', '-']
         : [difference.differing, difference.over, difference.max, difference.lost];
     const lit = compare(candidate, candidate, capture.width).lit;
-    process.stdout.write(`${row([scene, lit, ...cells(threeDifference), ...cells(baselineDifference)])}\n`);
+    const gpu = capture.gpuMs === undefined ? 'n/a' : capture.gpuMs.toFixed(4);
+    process.stdout.write(`${row([scene, lit, gpu, ...cells(threeDifference), ...cells(baselineDifference)])}\n`);
     if (process.argv.includes('--where')) {
       for (const at of threeDifference?.where ?? []) process.stdout.write(`    Three   ${at}\n`);
       for (const at of baselineDifference?.where ?? []) process.stdout.write(`    capture ${at}\n`);
@@ -164,24 +189,22 @@ try {
         `${scene}: ${String(threeDifference.over)} pixels differ from Three by more than ${String(tolerance)}/255`,
       );
     }
-    if (
-      baselineDifference !== undefined &&
-      baselineDifference.over > 0 &&
-      !process.argv.includes('--allow-capture-drift')
-    ) {
+    if (drift !== undefined && drift > 0 && !process.argv.includes('--allow-capture-drift')) {
       failures.push(
-        `${scene}: ${String(baselineDifference.over)} pixels differ from the saved capture by more than ${String(tolerance)}/255`,
+        `${scene}: ${String(drift)} pixels differ from the saved capture by more than ${String(tolerance)}/255 and are not within it of Three`,
       );
     }
   }
 
   if (withPerf) {
-    for (const labels of [200, 1000]) {
+    for (const labels of [1, 200, 1000]) {
       const perf: ParityPerf = await page.evaluate(async (count) => (await window.typegpuParity).perf(count), labels);
       if (errors.length !== 0) throw new Error(`perf ${String(labels)}: browser errors: ${errors.join(' | ')}`);
       if (perf.growth.error !== undefined)
         failures.push(`perf ${String(labels)}: ${perf.growth.error.split('\n')[0]!}`);
-      process.stdout.write(`\n${String(labels)} labels, ${String(perf.glyphs)} glyphs\n`);
+      process.stdout.write(
+        `\n${labels === 1 ? 'one text (the "one" scene)' : `${String(labels)} labels`}, ${String(perf.glyphs)} glyphs\n`,
+      );
       const ms = (value: number | undefined): string => (value === undefined ? 'n/a' : value.toFixed(4));
       process.stdout.write(
         [
