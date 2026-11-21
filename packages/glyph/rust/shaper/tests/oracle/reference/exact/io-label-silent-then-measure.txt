@@ -1,0 +1,65 @@
+# glyph layout oracle reference v1
+case io-label-silent-then-measure
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 2879ebb645f93196
+stage text identity 1 e6a56f1a253f95f5
+stage unicode value 6 2d274fa7a0c97660
+stage bidi value 8 4e953887524303ce
+stage style value 26 6e561db66fd234ae
+stage shaping_run value 5 31477ea3d3df3570
+stage shape value 14 afeeaef85f97aeb3
+stage cluster value 29 3091c39c0665e87f
+stage cluster identity 4 ef0afef35c1d4745
+stage cluster repr 8 a47621ed706f552e
+stage run_local repr 16 261467766c4e53b5
+stage flow value 35 59d12708b7a71214
+stage positioned identity 3 4aa0b4dc83c26bed
+stage positioned value 13 0b58b56c1647045c
+stage positioned repr 17 f6fce73aceecc15a
+stage public value 13 d6fcc3e5b58cc62e
+stage public identity 1 a7565d089b77c68d
+stage view identity 4 1214032c5184c4a2
+stage view value 40 4faebc04c02fa016
+stage wire wire 1 356acb2659bed1e0
+stage gather identity 7 4513e2ac2ec439bf
+stage gather value 36 fe447c00aa7aa94e
+stage gpu identity 2 da90228547fc9986
+stage gpu value 3 fb76e6209b161179
+stage plan value 23 f0c1507de8530dcb
+stage plan identity 7 b65a14036160df65
+step 01 add one at the end
+class value 233 1a2ab000caa0e979
+class identity 27 d0fbaeb03a8366f1
+class repr 41 33226e841cfdcdd7
+class wire 1 f72166e21bcf4e04
+step 02 move and grow the middle one
+class value 233 1a2ab000caa0e979
+class identity 27 d0fbaeb03a8366f1
+class repr 41 33226e841cfdcdd7
+class wire 1 a936ab69eca40f59
+step 03 align to the text top with margins
+class value 233 1a2ab000caa0e979
+class identity 27 d0fbaeb03a8366f1
+class repr 41 33226e841cfdcdd7
+class wire 1 e3e5eaecf105ce0b
+step 04 edit the text and leave the objects
+class value 233 a8911d5b5bf87a22
+class identity 27 23f36d25889e6e14
+class repr 41 41991d0cedfaad5a
+class wire 1 def0fa21a8897269
+step 05 narrow the measure and re-anchor
+class value 233 21dda090ac7f182c
+class identity 27 bda2889fdec32e5e
+class repr 41 5998cd8fc9548214
+class wire 1 d65f22a4d7dfbba4
+step 06 remove every object
+class value 233 21dda090ac7f182c
+class identity 27 bda2889fdec32e5e
+class repr 41 5998cd8fc9548214
+class wire 1 a531049b9c6e615b
+step 07 put two back
+class value 233 21dda090ac7f182c
+class identity 27 bda2889fdec32e5e
+class repr 41 5998cd8fc9548214
+class wire 1 93fa8c568be4aaf2

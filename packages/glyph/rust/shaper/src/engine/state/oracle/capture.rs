@@ -22,7 +22,7 @@ use crate::engine::{
 use super::{
     super::{ParagraphState, PlannerState},
     lanes::{Capture, LaneClass},
-    model::{PARAGRAPH_ID, ROOT_ID},
+    model::{Document, PARAGRAPH_ID, ROOT_ID},
     session::{Session, StepOutput},
 };
 
@@ -52,21 +52,53 @@ pub fn capture(session: &Session, output: &StepOutput) -> Result<Capture, String
         .planners
         .get(&ROOT_ID)
         .ok_or("root is missing")?;
-    let paragraph = &planner
-        .paragraph(PARAGRAPH_ID)
-        .ok_or("paragraph is missing")?
-        .state;
-    let inline = paragraph.active_inline();
-    capture.bools("owner.inline", Value, [inline.is_some()]);
-    analysis(&mut capture, paragraph);
-    match inline {
-        Some(leaf) => inline_leaf(&mut capture, leaf),
-        None => general(&mut capture, paragraph)?,
+    let ids = session.document().map(Document::ids).unwrap_or_default();
+    for id in &ids {
+        let paragraph = &planner
+            .paragraph(*id)
+            .ok_or_else(|| format!("paragraph {id} is missing"))?
+            .state;
+        capture.prefix = paragraph_prefix(*id);
+        let inline = paragraph.active_inline();
+        capture.bools("owner.inline", Value, [inline.is_some()]);
+        analysis(&mut capture, paragraph);
+        match inline {
+            Some(leaf) => inline_leaf(&mut capture, leaf),
+            None => general(&mut capture, paragraph)?,
+        }
+        public_glyphs(&mut capture, session, *id)?;
     }
-    public(&mut capture, session, output)?;
+    capture.prefix.clear();
+    views(&mut capture, output);
     gather(&mut capture, session);
     host_buffers(&mut capture, session, planner)?;
+    let explicit = session.document().is_some_and(|document| document.explicit);
+    document(&mut capture, planner, explicit);
     Ok(capture)
+}
+
+/// The first paragraph's lanes are unprefixed, as they were when it was the only one.
+pub fn paragraph_prefix(id: u32) -> String {
+    if id == PARAGRAPH_ID {
+        String::new()
+    } else {
+        format!("p{id}:")
+    }
+}
+
+/// The root's paragraphs: which are live, and the order the renderer draws them in.
+fn document(capture: &mut Capture, planner: &PlannerState, explicit: bool) {
+    capture.bools("doc.explicit", Value, [explicit]);
+    capture.u32s(
+        "doc.paragraph.id",
+        Value,
+        planner.paragraphs.iter().map(|paragraph| paragraph.id),
+    );
+    capture.u32s(
+        "doc.order.id",
+        Value,
+        planner.active_order().iter().map(|ordered| ordered.id),
+    );
 }
 
 /// Text, Unicode facts, bidi levels and resolved styles: computed for both owners.
@@ -903,15 +935,15 @@ fn inline_leaf(capture: &mut Capture, leaf: &InlineLeaf) {
 
 /// What a host can read back: placed glyph records, the semantic records each call returned,
 /// and the encoded publication.
-fn public(capture: &mut Capture, session: &Session, output: &StepOutput) -> Result<(), String> {
+fn public_glyphs(capture: &mut Capture, session: &Session, paragraph: u32) -> Result<(), String> {
     let count = session
         .engine
-        .borrowed_paragraph_layout(ROOT_ID, PARAGRAPH_ID)
+        .borrowed_paragraph_layout(ROOT_ID, paragraph)
         .map_err(debug)?;
     let mut glyphs = alloc::vec![SemanticGlyph::default(); count];
     session
         .engine
-        .borrowed_paragraph_glyphs(ROOT_ID, PARAGRAPH_ID, 0, &mut glyphs)
+        .borrowed_paragraph_glyphs(ROOT_ID, paragraph, 0, &mut glyphs)
         .map_err(debug)?;
     columns!(capture, "public.glyph", Value, glyphs, {
         u32s: [font_handle, cluster];
@@ -927,11 +959,23 @@ fn public(capture: &mut Capture, session: &Session, output: &StepOutput) -> Resu
         Identity,
         glyphs.iter().map(|glyph| glyph.stable_id),
     );
+    Ok(())
+}
+
+/// The semantic records each call returned, and the encoded publication.
+fn views(capture: &mut Capture, output: &StepOutput) {
     semantic_records(capture, "view.published", &output.published_views);
     semantic_records(capture, "view.measured_first", &output.measured_first);
-    semantic_records(capture, "view.measured_after", &output.measured_after);
+    // With no read after the publication the first paragraph still has its (empty) lanes.
+    if output.measured_after.is_empty() {
+        semantic_records(capture, "view.measured_after", &[]);
+    }
+    for (paragraph, records) in &output.measured_after {
+        capture.prefix = paragraph_prefix(*paragraph);
+        semantic_records(capture, "view.measured_after", records);
+    }
+    capture.prefix.clear();
     capture.u8s("wire.publication", Wire, output.publication.iter().copied());
-    Ok(())
 }
 
 /// Line, measurement and glyph records: line and paragraph ink live here.
@@ -1098,7 +1142,99 @@ fn host_buffers(
         capture.u32s(&format!("gpu.glyph.translation_{lane}"), Value, rows);
     }
     capture.u8s("gpu.drawn", Value, session.host_buffers.drawn()?);
+    plan_records(capture, session);
     Ok(())
+}
+
+/// Stages added after the first reference set was frozen. A case frozen before them leaves
+/// them out of its frozen text, so its file stays byte-identical; the differential compares
+/// them for every case.
+pub const EXTENDED_STAGES: [&str; 2] = ["plan", "doc"];
+
+/// The draw structure the renderer holds: what each packet binds (material, clip, depth,
+/// transform) and what each primitive span names. A paint change that republishes retained
+/// rows must still restate these.
+fn plan_records(capture: &mut Capture, session: &Session) {
+    let draws = session.host_buffers.draws();
+    for (lane, class, column) in [
+        ("program_id", Value, column(draws, |d| d.program_id)),
+        (
+            "program_variant",
+            Value,
+            column(draws, |d| u32::from(d.program_variant)),
+        ),
+        ("flags", Value, column(draws, |d| u32::from(d.flags))),
+        ("material_id", Value, column(draws, |d| d.material_id)),
+        ("clip_id", Value, column(draws, |d| d.clip_id)),
+        ("depth_key", Value, column(draws, |d| d.depth_key)),
+        ("transform_id", Value, column(draws, |d| d.transform_id)),
+        (
+            "primitive_count",
+            Value,
+            column(draws, |d| d.primitive_count),
+        ),
+        ("buffer_count", Value, column(draws, |d| d.buffer_count)),
+        ("resource_count", Value, column(draws, |d| d.resource_count)),
+        ("id", Identity, column(draws, |d| d.id)),
+        ("order_token", Identity, column(draws, |d| d.order_token)),
+    ] {
+        capture.u32s(&format!("plan.draw.{lane}"), class, column);
+    }
+    let primitives = session.host_buffers.primitives();
+    for (lane, class, column) in [
+        ("kind", Value, column(primitives, |p| u32::from(p.kind))),
+        ("flags", Value, column(primitives, |p| u32::from(p.flags))),
+        (
+            "technique_id",
+            Value,
+            column(primitives, |p| p.technique_id),
+        ),
+        ("resource_id", Value, column(primitives, |p| p.resource_id)),
+        (
+            "resource_generation",
+            Value,
+            column(primitives, |p| p.resource_generation),
+        ),
+        ("program_id", Value, column(primitives, |p| p.program_id)),
+        (
+            "program_variant",
+            Value,
+            column(primitives, |p| u32::from(p.program_variant)),
+        ),
+        (
+            "record_count",
+            Value,
+            column(primitives, |p| u32::from(p.record_count)),
+        ),
+        ("clip_id", Value, column(primitives, |p| p.clip_id)),
+        ("id", Identity, column(primitives, |p| p.id)),
+        ("buffer_id", Identity, column(primitives, |p| p.buffer_id)),
+        (
+            "record_index",
+            Identity,
+            column(primitives, |p| p.record_index),
+        ),
+        (
+            "logical_order",
+            Identity,
+            column(primitives, |p| p.logical_order),
+        ),
+        (
+            "semantic_id",
+            Identity,
+            column(primitives, |p| p.semantic_id),
+        ),
+    ] {
+        capture.u32s(&format!("plan.primitive.{lane}"), class, column);
+    }
+    for (lane, column) in [
+        ("inline_start", column(primitives, |p| p.inline_start)),
+        ("block_start", column(primitives, |p| p.block_start)),
+        ("inline_extent", column(primitives, |p| p.inline_extent)),
+        ("block_extent", column(primitives, |p| p.block_extent)),
+    ] {
+        capture.f32s(&format!("plan.primitive.{lane}"), Value, column);
+    }
 }
 
 /// Projected u32 fields that carry allocation-order identity rather than layout.

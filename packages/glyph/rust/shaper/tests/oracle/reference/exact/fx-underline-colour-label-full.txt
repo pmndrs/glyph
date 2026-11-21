@@ -1,0 +1,80 @@
+# glyph layout oracle reference v1
+case fx-underline-colour-label-full
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 9905404f54edefec
+stage text identity 1 e6a56f1a253f95f5
+stage unicode value 6 3bb09daca3bd60de
+stage bidi value 8 a7e9f1055db59fb7
+stage style value 26 ca6079df275c3fa3
+stage shaping_run value 5 31477ea3d3df3570
+stage shape value 14 f0eb794aad841f69
+stage cluster value 29 c156811216bccfaa
+stage cluster identity 4 f59f266359f8fdd5
+stage cluster repr 8 e7b54e0d26a23871
+stage run_local repr 16 49dfa0de8634ec3b
+stage flow value 35 089cf87053fd061c
+stage positioned identity 3 4534caadac20b9e0
+stage positioned value 25 d51b89c61a5cb64e
+stage positioned repr 17 3ddec720486957dd
+stage public value 13 0073e209450629ad
+stage public identity 1 a7565d089b77c68d
+stage view identity 4 1214032c5184c4a2
+stage view value 40 2c36ba31d1530b11
+stage wire wire 1 cfa04b2b985fc23a
+stage gather identity 7 850d47eb73e2c483
+stage gather value 36 2f8015f9c5ede1c6
+stage gpu identity 2 68fc66a75be58a57
+stage gpu value 3 078907d31cb5d992
+stage plan value 23 84d23bc5caf17d6e
+stage plan identity 7 b65a14036160df65
+step 01 recolour
+class value 265 0efd99c2862cc663
+class identity 29 12da22ea20f067fb
+class repr 41 b6b254b9129b61de
+class wire 1 e92ac6ebcb953b8d
+step 02 recolour and width
+class value 265 b103a839a064fc01
+class identity 29 22e11050c9216f33
+class repr 41 b6b254b9129b61de
+class wire 1 61d4e692d8df6c74
+step 03 thicker
+class value 265 c38621787c9eea42
+class identity 29 8ad6a3d5ec8c9965
+class repr 41 b6b254b9129b61de
+class wire 1 3256e23ac3507aa4
+step 04 double
+class value 265 e46cdbd529568295
+class identity 29 5c307be37e40a258
+class repr 41 b6b254b9129b61de
+class wire 1 5a2d66070416241e
+step 05 add strikethrough
+class value 265 9f95ca1aab468174
+class identity 29 7841722420bf490f
+class repr 41 b6b254b9129b61de
+class wire 1 2b34e199cfc5aa8f
+step 06 decoration off
+class value 253 5d2b8cb8af792a08
+class identity 29 7841722420bf490f
+class repr 41 b6b254b9129b61de
+class wire 1 b06b7a73ec9216f0
+step 07 decoration on with an edit
+class value 265 90bbea7409ed95e0
+class identity 29 126ea1aa35635cd5
+class repr 41 6a1504d257109642
+class wire 1 88f39615e1aa5315
+step 08 material of the root + decoration of the root
+class value 265 8de006d82fe6f335
+class identity 29 a9d9a4d94067e8d2
+class repr 41 6a1504d257109642
+class wire 1 a070cf035ee278c3
+step 09 flip case at 15 + add span 11..18 + outline of the root
+class value 265 b5542c704c21aaf5
+class identity 29 e38082776efd3f10
+class repr 41 288038b95b82cb96
+class wire 1 4d3a3ae13aa2882f
+step 10 delete 1 at 18
+class value 265 da22177d78be0ceb
+class identity 29 844f668364f8fd1c
+class repr 41 bab5bdeed44b0d10
+class wire 1 ad5c9b2b08688b0b

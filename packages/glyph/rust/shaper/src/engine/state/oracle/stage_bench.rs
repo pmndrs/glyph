@@ -116,6 +116,7 @@ const ROUTE: Route = Route {
     view_mask: 0,
     measure_first: false,
     measure_after: false,
+    ..Route::FULL
 };
 
 /// Microseconds: (median, minimum).
@@ -452,6 +453,7 @@ const MEASURED: Route = Route {
     view_mask: 0,
     measure_first: false,
     measure_after: true,
+    ..Route::FULL
 };
 
 /// The fragments' cluster ranges: two layouts with the same list broke at the same places.

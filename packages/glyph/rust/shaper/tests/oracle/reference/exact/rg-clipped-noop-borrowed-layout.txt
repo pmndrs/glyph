@@ -1,0 +1,50 @@
+# glyph layout oracle reference v1
+case rg-clipped-noop-borrowed-layout
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 841327f45f201ca2
+stage text identity 1 e6507bdf9722a9ae
+stage unicode value 6 24d64a168caf2adc
+stage bidi value 8 f50cd6c7221f06e6
+stage style value 26 f99ccc1b3cac3109
+stage shaping_run value 5 a117e4e0dac9ad65
+stage shape value 14 493b85e87ec318d3
+stage cluster value 29 7e5bf4a4e767c1b7
+stage cluster identity 4 3da43a6941563d32
+stage cluster repr 11 023bf95d39b982ad
+stage run_local repr 16 bf706fb4a8fb5eb6
+stage flow value 35 9838147c6e35c9c6
+stage positioned identity 3 a472f88791456530
+stage positioned value 13 e42692907932f83c
+stage positioned repr 17 842453e23067ea97
+stage public value 13 03126c64bbcd2c70
+stage public identity 1 58c3da09c9788ebb
+stage view identity 4 167fa8f78826c0de
+stage view value 40 ea53ffd858e8a512
+stage wire wire 1 c335fbeda7f70b25
+stage gather identity 7 49eda5f2f0480861
+stage gather value 36 d4a01256ef54639f
+stage gpu identity 2 b36a751ceb3e2e78
+stage gpu value 3 bc5c9681784df674
+stage plan value 23 f76f36dacc1fcf27
+stage plan identity 7 b65a14036160df65
+step 01 nothing changes, full
+class value 233 9e2af5db601e4dcd
+class identity 27 54d1089debdb9c07
+class repr 44 c43a93bd749a7452
+class wire 1 f72166e21bcf4e04
+step 02 nothing changes, silent-then-measure
+class value 233 9e2af5db601e4dcd
+class identity 27 54d1089debdb9c07
+class repr 44 c43a93bd749a7452
+class wire 1 a936ab69eca40f59
+step 03 nothing changes, silent
+class value 213 50c194f470660067
+class identity 25 52409ea0492a1ea1
+class repr 44 c43a93bd749a7452
+class wire 1 e3e5eaecf105ce0b
+step 04 nothing changes, measure-first
+class value 233 f55e7f09b8806d90
+class identity 27 6b6ef2b4da9e78ba
+class repr 44 c43a93bd749a7452
+class wire 1 27ae8fb4331492db

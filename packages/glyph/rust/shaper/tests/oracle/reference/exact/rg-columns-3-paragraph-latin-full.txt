@@ -1,0 +1,93 @@
+# glyph layout oracle reference v1
+case rg-columns-3-paragraph-latin-full
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 76965f0cecc37ff6
+stage text identity 1 7d671fabcc9615db
+stage unicode value 6 464066f2e817d47f
+stage bidi value 8 19905a2ae1ea3984
+stage style value 26 5e7a4afb04705336
+stage shaping_run value 5 b3e7de417c56db5c
+stage shape value 14 7bc9ea7b98b49480
+stage cluster value 29 749f12600481a20e
+stage cluster identity 4 cb3dcb094185ff21
+stage cluster repr 11 ded1445f7a2639c5
+stage cluster cache 5 109269d9945fbcfd
+stage run_local repr 16 31bdd16107f2fe7d
+stage flow value 35 34f06f57fdf71f9e
+stage boundary value 28 e6b526f0dac08144
+stage boundary identity 1 8805e089e5a58aed
+stage positioned identity 4 5468a7720ff96ade
+stage positioned value 20 f91986990ebf0750
+stage positioned repr 37 611de049a2f521e1
+stage public value 13 8cef9c576baafa54
+stage public identity 1 ae79e57f1ab222ef
+stage view identity 4 cd381f098ad1d0b7
+stage view value 40 291e45bd273d48f4
+stage wire wire 1 15f08a22b34adf78
+stage gather identity 7 4d8b2815c7a87554
+stage gather value 36 39a2d279b6f9367d
+stage gpu identity 2 9502914cc26fdf38
+stage gpu value 3 f97a27c7e46061f7
+stage plan value 23 5547b08826e90691
+stage plan identity 7 b65a14036160df65
+step 01 insert in the first region
+class value 288 a6439c481ec6a571
+class identity 31 62afbacdda52f07e
+class repr 64 6ef237e4ec2d9cbd
+class cache 5 98b6b8eaa40950d2
+class wire 1 f31be40e5bf05512
+step 02 delete in a later region
+class value 288 63ce10eda55aafe2
+class identity 31 628bd0ea05047985
+class repr 64 d4c18fe584e5f916
+class cache 5 143dcf786e0bb44d
+class wire 1 f97e9be39e9d71a2
+step 03 narrower measure
+class value 288 46a15f4a9603af4f
+class identity 31 730af92f75251f8f
+class repr 64 d8d113aca80ff4aa
+class cache 5 143dcf786e0bb44d
+class wire 1 743bfecf14599fbf
+step 04 shorter regions
+class value 288 d88179e2357f4d30
+class identity 31 acbcf968ad5b1bab
+class repr 64 d4c18fe584e5f916
+class cache 5 143dcf786e0bb44d
+class wire 1 9ded75170fadf26a
+step 05 three columns, wider gap
+class value 253 b98bd98568bd9af6
+class identity 29 8455f483162339f6
+class repr 44 dadb21ac729907c6
+class cache 5 143dcf786e0bb44d
+class wire 1 ba5b168cd02da688
+step 06 one region
+class value 253 6b16625f24c07127
+class identity 29 ad2b0aaa5ec8bdce
+class repr 44 4a06e6dcbcce67b2
+class cache 5 143dcf786e0bb44d
+class wire 1 728b9144b42c2264
+step 07 the starting regions
+class value 288 63ce10eda55aafe2
+class identity 31 11abf638529002af
+class repr 64 d4c18fe584e5f916
+class cache 5 143dcf786e0bb44d
+class wire 1 e62de6a8b3f8111a
+step 08 direction 0
+class value 268 be082008fb599df7
+class identity 29 80436d34eda97ddc
+class repr 64 d4c18fe584e5f916
+class cache 5 143dcf786e0bb44d
+class wire 1 cf46ff48deca1f53
+step 09 flip case at 2196
+class value 288 bbb4448cd6359e1b
+class identity 31 b36d67694dc490ed
+class repr 64 d0b319f53daebd49
+class cache 5 4e59808dd5e90db2
+class wire 1 3e223c9228648dba
+step 10 regions Columns { count: 3, gap: 0.0 } height 1600
+class value 288 cd59549abc8ca893
+class identity 31 3d2db8b840e129b1
+class repr 64 f4e58876226caed3
+class cache 5 4e59808dd5e90db2
+class wire 1 96ba1ce24009da1e

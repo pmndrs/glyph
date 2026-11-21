@@ -1,0 +1,49 @@
+# glyph layout oracle reference v1
+case fx-shadow-span-label-silent
+step cold
+stage owner value 1 07e27e8ffd8af189
+stage text value 1 9905404f54edefec
+stage text identity 1 e6a56f1a253f95f5
+stage unicode value 6 3bb09daca3bd60de
+stage bidi value 8 a7e9f1055db59fb7
+stage style value 26 6e561db66fd234ae
+stage shaping_run value 5 31477ea3d3df3570
+stage inline value 81 87b553b030f41f08
+stage inline identity 5 8f6aff6d6bef7546
+stage inline repr 21 8f1718588ca49665
+stage public value 13 0073e209450629ad
+stage public identity 1 a7565d089b77c68d
+stage view identity 4 1214032c5184c4a2
+stage view value 40 2c36ba31d1530b11
+stage wire wire 1 cfa04b2b985fc23a
+stage gather identity 7 850d47eb73e2c483
+stage gather value 36 2f8015f9c5ede1c6
+stage gpu identity 2 68fc66a75be58a57
+stage gpu value 3 078907d31cb5d992
+stage plan value 23 84d23bc5caf17d6e
+stage plan identity 7 b65a14036160df65
+step 01 shadow on
+class value 213 a8189bd571471ea2
+class identity 25 60bc7f84740cea65
+class repr 41 b6b254b9129b61de
+class wire 1 4157b93085a6f6b0
+step 02 moved
+class value 213 0aa4963ebf0cf959
+class identity 25 83c00d16f82233a0
+class repr 41 b6b254b9129b61de
+class wire 1 7ab2b0ecf3288566
+step 03 recolour and same-length edit
+class value 213 1e09b561fc2bfc83
+class identity 25 ab93153a9830df0a
+class repr 41 f4affac3e2fb1754
+class wire 1 06def9a0286e9886
+step 04 shadow off and edit
+class value 213 d1e72bc278641a76
+class identity 25 45ae1eec644ad53a
+class repr 41 ec71269b67054192
+class wire 1 d87cf21c820ed5c3
+step 05 shadow and outline on
+class value 213 9b21f7e36c47652a
+class identity 25 2eec698361bcce6d
+class repr 41 ec71269b67054192
+class wire 1 73c0827c6efa8e55

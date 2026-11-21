@@ -1,0 +1,69 @@
+# glyph layout oracle reference v1
+case fx-outline-label-full
+step cold
+stage owner value 1 07e27e8ffd8af189
+stage text value 1 9905404f54edefec
+stage text identity 1 e6a56f1a253f95f5
+stage unicode value 6 3bb09daca3bd60de
+stage bidi value 8 a7e9f1055db59fb7
+stage style value 26 6e561db66fd234ae
+stage shaping_run value 5 31477ea3d3df3570
+stage inline value 81 87b553b030f41f08
+stage inline identity 5 8f6aff6d6bef7546
+stage inline repr 21 8f1718588ca49665
+stage public value 13 0073e209450629ad
+stage public identity 1 a7565d089b77c68d
+stage view identity 4 1214032c5184c4a2
+stage view value 40 2c36ba31d1530b11
+stage wire wire 1 cfa04b2b985fc23a
+stage gather identity 7 850d47eb73e2c483
+stage gather value 36 2f8015f9c5ede1c6
+stage gpu identity 2 68fc66a75be58a57
+stage gpu value 3 078907d31cb5d992
+stage plan value 23 84d23bc5caf17d6e
+stage plan identity 7 b65a14036160df65
+step 01 outline on
+class value 243 a525089b9c6af83b
+class identity 27 71ee7a0edc667da4
+class repr 21 8f1718588ca49665
+class wire 1 e92ac6ebcb953b8d
+step 02 recolour
+class value 243 8112bd052d49a103
+class identity 27 ebb6d8218d98047f
+class repr 21 8f1718588ca49665
+class wire 1 e7dfd22b3669201a
+step 03 wider
+class value 243 43e695d458485fb3
+class identity 27 72c95baa34b2b404
+class repr 21 8f1718588ca49665
+class wire 1 db2e0b4851585992
+step 04 wider and edit
+class value 243 79dbc2b678d48db3
+class identity 27 9ece43471aba70e9
+class repr 21 68a8aa61301517dc
+class wire 1 e33543c20be13947
+step 05 outline off
+class value 243 cb4c65aa1acba892
+class identity 27 4c4b2867558d4efd
+class repr 21 68a8aa61301517dc
+class wire 1 838d582699700792
+step 06 outline on with width
+class value 243 cd8436abc805c04f
+class identity 27 83b2aad7e23aa5cb
+class repr 21 68a8aa61301517dc
+class wire 1 342b6c13254e9fa4
+step 07 shadow of the root + width 277 + delete 8 at 1
+class value 243 082851de8d607e47
+class identity 27 25c1ccf8ce076024
+class repr 21 129b09fe9ae2599d
+class wire 1 cf9310181bdcfc37
+step 08 insert Space (1 units) at 3 + insert Foreign (4 units) at 9 + width 0 + insert Mark (1 units) at 2
+class value 253 e23d16eb600d3f64
+class identity 29 75b0cfa7a4005d34
+class repr 41 980c60f3c2a2da40
+class wire 1 d8f6043c78733518
+step 09 
+class value 233 91c40050f2d3d472
+class identity 27 5d0797f8273631f0
+class repr 41 980c60f3c2a2da40
+class wire 1 3c05f2eb6cf92ef2

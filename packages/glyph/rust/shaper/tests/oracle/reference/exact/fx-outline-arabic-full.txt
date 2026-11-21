@@ -1,0 +1,75 @@
+# glyph layout oracle reference v1
+case fx-outline-arabic-full
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 1fa24e8c494c224b
+stage text identity 1 8c79cdd234e899aa
+stage unicode value 6 1c188d1ec29a3b21
+stage bidi value 8 29c5cdaf3ea9f587
+stage style value 26 2311e7915d7a1a2d
+stage shaping_run value 5 c7bf0d2877dba0d1
+stage shape value 14 10b65f881c74956b
+stage cluster value 29 9e5e3a2577a709c2
+stage cluster identity 4 ee33e0566e267ff4
+stage cluster repr 11 bdd4311f9a20761c
+stage run_local repr 16 cd37f99ac10fc32c
+stage flow value 35 8884b6899fd77e80
+stage positioned identity 3 4d4842675b4b514a
+stage positioned value 13 630154b42c0161b5
+stage positioned repr 17 a6c14b4ca4465c3c
+stage public value 13 8d745db684648007
+stage public identity 1 9f58ac2691d9d2e1
+stage view identity 4 b7b7f58c55341768
+stage view value 40 0cc031ab06df0421
+stage wire wire 1 1d3d509f91b20f9b
+stage gather identity 7 c2c572bffa9b1d93
+stage gather value 36 b291ba1f7ae0483c
+stage gpu identity 2 11f6365e1b348138
+stage gpu value 3 4ea2dcdc921d40a8
+stage plan value 23 bf342c97bf9cc38c
+stage plan identity 7 c0abddf879e48152
+step 01 outline on
+class value 253 b519d77ba7fcf911
+class identity 29 c7422fd082c998b2
+class repr 44 f1d759e2cd755ef7
+class wire 1 51f72f8f94fc585d
+step 02 recolour
+class value 253 4aec2ba00ccf3b96
+class identity 29 0ef27985e6aa344b
+class repr 44 f1d759e2cd755ef7
+class wire 1 9f609dfea61c78e9
+step 03 wider
+class value 253 04c691d3f538f4cf
+class identity 29 fc3629034e908119
+class repr 44 f1d759e2cd755ef7
+class wire 1 d339a1ea7ac8a567
+step 04 wider and edit
+class value 253 af8829d1b58a1a2d
+class identity 29 4b34bb3ed4a014ca
+class repr 44 13df520d68a42971
+class wire 1 88053efea2703f28
+step 05 outline off
+class value 253 a739268e1726b206
+class identity 29 8688ec5a58185f22
+class repr 44 13df520d68a42971
+class wire 1 fb924d39b3eaa80c
+step 06 outline on with width
+class value 253 23c4af22a21d6815
+class identity 29 c71507444018313c
+class repr 44 90c3103dd644092e
+class wire 1 3a681c070e87899b
+step 07 width 277
+class value 253 8ca791675b580785
+class identity 29 2fcbc4e848f8c5d4
+class repr 44 31b248fb48660c99
+class wire 1 678287a36ffba232
+step 08 insert Word (7 units) at 4
+class value 253 81ce272a8241fcda
+class identity 29 9fc5604e338c47d8
+class repr 44 70e65c3d41721317
+class wire 1 854e37685d79cd5b
+step 09 decoration of the root
+class value 265 501369f5bdc2279d
+class identity 29 793c1ac3590a8f26
+class repr 44 70e65c3d41721317
+class wire 1 e15b3c28ef1ee649

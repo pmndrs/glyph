@@ -1,0 +1,54 @@
+# glyph layout oracle reference v1
+case fx-outline-label-silent-then-measure
+step cold
+stage owner value 1 07e27e8ffd8af189
+stage text value 1 9905404f54edefec
+stage text identity 1 e6a56f1a253f95f5
+stage unicode value 6 3bb09daca3bd60de
+stage bidi value 8 a7e9f1055db59fb7
+stage style value 26 6e561db66fd234ae
+stage shaping_run value 5 31477ea3d3df3570
+stage inline value 81 87b553b030f41f08
+stage inline identity 5 8f6aff6d6bef7546
+stage inline repr 21 8f1718588ca49665
+stage public value 13 0073e209450629ad
+stage public identity 1 a7565d089b77c68d
+stage view identity 4 1214032c5184c4a2
+stage view value 40 2c36ba31d1530b11
+stage wire wire 1 cfa04b2b985fc23a
+stage gather identity 7 850d47eb73e2c483
+stage gather value 36 2f8015f9c5ede1c6
+stage gpu identity 2 68fc66a75be58a57
+stage gpu value 3 078907d31cb5d992
+stage plan value 23 84d23bc5caf17d6e
+stage plan identity 7 b65a14036160df65
+step 01 outline on
+class value 223 b5e8dac440153cd4
+class identity 25 de334ceebe079986
+class repr 21 8f1718588ca49665
+class wire 1 4157b93085a6f6b0
+step 02 recolour
+class value 223 61a58e1a445f837c
+class identity 25 376745e886a9025d
+class repr 21 8f1718588ca49665
+class wire 1 7ab2b0ecf3288566
+step 03 wider
+class value 223 d3750b2d87128cd6
+class identity 25 b7c056041d9d278a
+class repr 21 8f1718588ca49665
+class wire 1 8004877882ddbbcd
+step 04 wider and edit
+class value 223 375e137d424d3fef
+class identity 25 f6ffe1230979295d
+class repr 21 68a8aa61301517dc
+class wire 1 ae233427de9643f1
+step 05 outline off
+class value 223 1aad7f922a4af3e1
+class identity 25 dfd8e07733e81621
+class repr 21 68a8aa61301517dc
+class wire 1 73c0827c6efa8e55
+step 06 outline on with width
+class value 223 c3b293bbd55b8e21
+class identity 25 558f7ae622bde562
+class repr 21 68a8aa61301517dc
+class wire 1 2570cc7ab008ea38

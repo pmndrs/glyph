@@ -157,6 +157,9 @@ impl Lane {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Capture {
     pub lanes: Vec<Lane>,
+    /// Prepended to the name of every lane pushed while it is set: the paragraph a lane
+    /// belongs to, for every paragraph but the first.
+    pub prefix: String,
 }
 
 macro_rules! lane_writer {
@@ -179,7 +182,7 @@ macro_rules! lane_writer {
 impl Capture {
     fn push(&mut self, name: &str, class: LaneClass, kind: LaneKind, bytes: Vec<u8>) {
         self.lanes.push(Lane {
-            name: name.to_string(),
+            name: format!("{}{name}", self.prefix),
             class,
             kind,
             bytes,

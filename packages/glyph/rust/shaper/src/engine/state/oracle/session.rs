@@ -49,8 +49,8 @@ use super::super::{MeasuredParagraphs, PreparationTarget};
 use super::{
     fonts::{FontLibrary, PreparedFont},
     model::{
-        CODEC_HANDLE, FIRST_STACK_HANDLE, Model, PARAGRAPH_ID, ROOT_ID, RequestHeader, TextEdit,
-        request,
+        CODEC_HANDLE, Change, Document, FIRST_STACK_HANDLE, Lifecycle, Limits, Model, PARAGRAPH_ID,
+        Paragraph, ROOT_ID, RequestHeader, TextEdit, request,
     },
 };
 
@@ -65,15 +65,31 @@ const FIRST_FONT_HANDLE: u32 = 1;
 const FIRST_BINDING_HANDLE: u32 = 41;
 const INITIAL_TRANSPORT_BYTES: u32 = 1 << 16;
 
+/// How a step that prepares before publishing splits its preparation across requests.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Split {
+    /// One request prepares every changed paragraph: the frame's batch.
+    #[default]
+    Batch,
+    /// One request per changed paragraph, each a read of that paragraph while its changed
+    /// siblings wait.
+    Each,
+    /// A read of the first changed paragraph, then one batch for the rest.
+    OneThenBatch,
+}
+
 /// How one step reaches the engine. A cold layout replays the same route with no history.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Route {
     /// Semantic views requested with the publication.
     pub view_mask: u32,
-    /// Apply the change through a paragraph measurement first, then publish what it prepared.
+    /// Apply the change through preparation first, then publish what it prepared.
     pub measure_first: bool,
-    /// Measure once more after the publication, as a host reading layout back does.
+    /// Measure every paragraph once more after the publication, as a host reading layout
+    /// back does.
     pub measure_after: bool,
+    /// With `measure_first`, how the preparation is split.
+    pub split: Split,
 }
 
 impl Route {
@@ -81,6 +97,7 @@ impl Route {
         view_mask: ALL_VIEWS,
         measure_first: false,
         measure_after: true,
+        split: Split::Batch,
     };
 }
 
@@ -91,20 +108,78 @@ pub struct StepOutput {
     pub publication: Vec<u8>,
     /// Semantic records returned with the publication.
     pub published_views: Vec<SemanticRecord>,
-    /// Semantic records of the measurement that preceded the publication, if any.
+    /// Semantic records of the preparation that preceded the publication, if any.
     pub measured_first: Vec<SemanticRecord>,
-    /// Semantic records of the measurement that followed the publication, if any.
-    pub measured_after: Vec<SemanticRecord>,
+    /// Semantic records of the read of each paragraph that followed the publication, if any.
+    pub measured_after: Vec<(u32, Vec<SemanticRecord>)>,
 }
 
 pub struct Session {
     pub(super) registry: ShaperRegistry,
     pub(super) engine: TextEngine,
     transport: FrameTransport,
-    geometry_revision: u32,
-    model: Option<Model>,
+    /// The document the engine holds, and the geometry revision last sent per paragraph.
+    document: Option<Document>,
+    geometry_revisions: BTreeMap<u32, u32>,
     /// What a renderer holds after applying every publication so far.
     pub(super) host_buffers: HostBuffers,
+}
+
+/// What one step sends, worked out from the document the engine holds and the one it is to
+/// hold next.
+struct Plan<'a> {
+    changes: Vec<Change<'a>>,
+    /// Paragraphs the engine has not seen: `(paragraph, order)`.
+    created: Vec<(u32, u32)>,
+    /// Paragraphs it has seen whose order changed.
+    reordered: Vec<(u32, u32)>,
+    removed: Vec<u32>,
+    ranked: Vec<(u32, u32, f64)>,
+}
+
+impl Plan<'_> {
+    /// Records where `paragraph` sorts if that is new or has changed.
+    fn place(&mut self, paragraph: &Paragraph, sent: Option<&Paragraph>) {
+        match sent {
+            None => self.created.push((paragraph.id, paragraph.order)),
+            Some(sent) if sent.order != paragraph.order => {
+                self.reordered.push((paragraph.id, paragraph.order));
+            }
+            Some(_) => {}
+        }
+        let ranked = sent.map_or((0, 0.0), |sent| (sent.scope, sent.rank));
+        if (paragraph.scope, paragraph.rank.to_bits()) != (ranked.0, ranked.1.to_bits()) {
+            self.ranked
+                .push((paragraph.id, paragraph.scope, paragraph.rank));
+        }
+    }
+
+    /// The order a new paragraph is created at by a preparation request. Its own order may
+    /// still belong to a paragraph the publication is about to move or remove, so it is
+    /// created at a temporary one counted down from the top, as the host does, and the
+    /// publication restates it.
+    fn preparation_order(&self, previous: Option<&Document>, id: u32, order: u32) -> u32 {
+        let held = previous.is_some_and(|previous| {
+            previous
+                .paragraphs
+                .iter()
+                .any(|sent| sent.order == order && !self.removed.contains(&sent.id))
+        });
+        if !held {
+            return order;
+        }
+        let index = self.created.iter().position(|(created, _)| *created == id);
+        u32::MAX - index.unwrap_or(0) as u32
+    }
+
+    /// New paragraphs that a preparation created away from their own order.
+    fn displaced(&self, previous: Option<&Document>) -> Vec<(u32, u32)> {
+        self.created
+            .iter()
+            .copied()
+            .filter(|(id, order)| self.preparation_order(previous, *id, *order) != *order)
+            .collect()
+    }
 }
 
 impl Session {
@@ -144,59 +219,237 @@ impl Session {
             engine,
             transport: FrameTransport::new(INITIAL_TRANSPORT_BYTES, INITIAL_TRANSPORT_BYTES)
                 .map_err(status)?,
-            geometry_revision: 0,
-            model: None,
+            document: None,
+            geometry_revisions: BTreeMap::new(),
             host_buffers: HostBuffers::default(),
         })
     }
 
-    pub fn model(&self) -> Option<&Model> {
-        self.model.as_ref()
+    pub fn document(&self) -> Option<&Document> {
+        self.document.as_ref()
     }
 
-    /// Moves the engine to `next`. `edits` are the text difference from the current model, in
-    /// application order, and are ignored on the first step, which inserts the whole text.
+    /// Moves a root that holds one implicit paragraph to `next`. `edits` are the text
+    /// difference from the current model, in application order, and are ignored on the first
+    /// step, which inserts the whole text.
     pub fn step(
         &mut self,
         next: &Model,
         edits: &[TextEdit],
         route: Route,
     ) -> Result<StepOutput, String> {
-        if self.model.is_none() {
+        self.step_document(
+            &Document::single(next.clone()),
+            &[(PARAGRAPH_ID, edits.to_vec())],
+            route,
+        )
+    }
+
+    /// Moves the engine to `next`. `edits` are each paragraph's text difference from the
+    /// current document, in application order; a paragraph new to the engine ignores them and
+    /// inserts its whole text.
+    pub fn step_document(
+        &mut self,
+        next: &Document,
+        edits: &[(u32, Vec<TextEdit>)],
+        route: Route,
+    ) -> Result<StepOutput, String> {
+        let previous = self.document.take();
+        if previous.is_none() {
+            let units: usize = next.paragraphs.iter().map(|p| p.model.text.len()).sum();
             self.engine
-                .reserve_root_text(ROOT_ID, next.text.len().max(1) as u32)
+                .reserve_root_text(ROOT_ID, units.max(1) as u32)
                 .map_err(debug)?;
         }
-        if self
-            .model
-            .as_ref()
-            .is_none_or(|model| model.layout != next.layout)
-        {
-            self.geometry_revision += 1;
-        }
+        self.advance_geometry(previous.as_ref(), next);
+        let plan = self.plan(previous.as_ref(), next, edits);
+        // A single implicit paragraph declares the bounds of the text it is given, as it
+        // always has; a document declares bounds that also cover what the step removes.
+        let limits = match (&previous, next.explicit) {
+            (Some(previous), true) => Limits::of(next).covering(Limits::of(previous)),
+            _ => Limits::of(next),
+        };
         let mut output = StepOutput::default();
-        if route.measure_first {
-            let change = self.request(next, edits, MEASURE_VIEWS, true);
-            output.measured_first = self.measure(&change)?;
-            self.model = Some(next.clone());
-            let publish = self.request(next, &[], route.view_mask, false);
-            self.publish(&publish, &mut output)?;
-        } else {
-            let change = self.request(next, edits, route.view_mask, true);
-            self.publish(&change, &mut output)?;
-            self.model = Some(next.clone());
+        // The engine holds `next` from the first request that carries it, whatever follows.
+        let sent = (|| {
+            if route.measure_first {
+                let preparations =
+                    self.preparations(&plan, limits, (previous.as_ref(), next), route.split);
+                // Removals ride in the first preparation request. With nothing to prepare and
+                // no paragraph left to read there is none, and the publication carries them.
+                let unsent = if preparations.is_empty() {
+                    plan.removed.clone()
+                } else {
+                    Vec::new()
+                };
+                for (bytes, target) in preparations {
+                    output.measured_first.extend(self.measure(&bytes, target)?);
+                }
+                // A paragraph created at a temporary order is restated at its own here.
+                let lifecycle = Lifecycle {
+                    removes: unsent,
+                    upserts: [plan.reordered.clone(), plan.displaced(previous.as_ref())].concat(),
+                    orders: plan.ranked.clone(),
+                };
+                let publish = request(self.header(route.view_mask), limits, &lifecycle, &[]);
+                self.publish(&publish, &mut output)
+            } else {
+                let lifecycle = Lifecycle {
+                    removes: plan.removed.clone(),
+                    upserts: [plan.created.clone(), plan.reordered.clone()].concat(),
+                    orders: plan.ranked.clone(),
+                };
+                let change = request(
+                    self.header(route.view_mask),
+                    limits,
+                    &lifecycle,
+                    &plan.changes,
+                );
+                self.publish(&change, &mut output)
+            }
+        })();
+        drop(plan);
+        match sent {
+            Ok(()) => self.document = Some(next.clone()),
+            Err(error) => {
+                self.document = previous;
+                return Err(error);
+            }
         }
         if route.measure_after {
-            let query = self.request(next, &[], MEASURE_VIEWS, false);
-            output.measured_after = self.measure(&query)?;
+            for id in next.ids() {
+                let query = request(
+                    self.header(MEASURE_VIEWS),
+                    limits,
+                    &Lifecycle::default(),
+                    &[],
+                );
+                let views = self.measure(&query, Some(id))?;
+                output.measured_after.push((id, views));
+            }
         }
         Ok(output)
     }
 
-    /// `changes` false asks for the current model again: a header-only request.
-    fn request(&self, next: &Model, edits: &[TextEdit], view_mask: u32, changes: bool) -> Vec<u8> {
+    /// A paragraph's geometry revision advances each time its geometry is sent.
+    fn advance_geometry(&mut self, previous: Option<&Document>, next: &Document) {
+        for paragraph in &next.paragraphs {
+            let unchanged = previous
+                .and_then(|previous| previous.paragraph(paragraph.id))
+                .is_some_and(|sent| !paragraph.model.geometry_differs(&sent.model));
+            if !unchanged {
+                *self.geometry_revisions.entry(paragraph.id).or_insert(0) += 1;
+            }
+        }
+    }
+
+    fn plan<'a>(
+        &self,
+        previous: Option<&'a Document>,
+        next: &'a Document,
+        edits: &'a [(u32, Vec<TextEdit>)],
+    ) -> Plan<'a> {
+        let mut plan = Plan {
+            changes: Vec::new(),
+            created: Vec::new(),
+            reordered: Vec::new(),
+            removed: Vec::new(),
+            ranked: Vec::new(),
+        };
+        for id in next.ids() {
+            let Some(paragraph) = next.paragraph(id) else {
+                continue;
+            };
+            let sent = previous.and_then(|previous| previous.paragraph(id));
+            let edits = edits
+                .iter()
+                .find(|(edited, _)| *edited == id)
+                .map_or(&[][..], |(_, edits)| edits.as_slice());
+            // An edit that leaves the text as it was is still sent: the host sends what the
+            // caller set.
+            if sent.is_none_or(|sent| sent.model != paragraph.model) || !edits.is_empty() {
+                plan.changes.push(Change {
+                    id,
+                    previous: sent.map(|sent| &sent.model),
+                    next: &paragraph.model,
+                    edits,
+                    geometry_revision: self.geometry_revisions.get(&id).copied().unwrap_or(1),
+                });
+            }
+            if next.explicit {
+                plan.place(paragraph, sent);
+            }
+        }
+        if let (true, Some(previous)) = (next.explicit, previous) {
+            plan.removed = previous
+                .ids()
+                .into_iter()
+                .filter(|id| next.paragraph(*id).is_none())
+                .collect();
+        }
+        plan
+    }
+
+    /// The preparation requests of a step that prepares before publishing, each with the
+    /// paragraph it reads, or `None` for the batch. Removals ride in the first request, and a
+    /// new paragraph's creation rides with its own input, as the host sends them.
+    fn preparations(
+        &self,
+        plan: &Plan<'_>,
+        limits: Limits,
+        (previous, next): (Option<&Document>, &Document),
+        split: Split,
+    ) -> Vec<(Vec<u8>, Option<u32>)> {
+        let groups: Vec<(&[Change<'_>], Option<u32>)> = match (split, plan.changes.as_slice()) {
+            // Nothing changed: the host still reads, and reads the first paragraph. A root
+            // with no paragraph has nothing to read.
+            (_, []) => next
+                .ids()
+                .first()
+                .map(|first| (&[][..], Some(*first)))
+                .into_iter()
+                .collect(),
+            (Split::Batch, changes) => alloc::vec![(changes, None)],
+            (Split::Each, changes) => changes
+                .chunks(1)
+                .rev()
+                .map(|change| (change, Some(change[0].id)))
+                .collect(),
+            (Split::OneThenBatch, [first, rest @ ..]) => {
+                let mut groups = alloc::vec![(core::slice::from_ref(first), Some(first.id))];
+                if !rest.is_empty() {
+                    groups.push((rest, None));
+                }
+                groups
+            }
+        };
+        groups
+            .into_iter()
+            .enumerate()
+            .map(|(index, (changes, target))| {
+                let lifecycle = Lifecycle {
+                    removes: if index == 0 {
+                        plan.removed.clone()
+                    } else {
+                        Vec::new()
+                    },
+                    upserts: plan
+                        .created
+                        .iter()
+                        .filter(|(id, _)| changes.iter().any(|change| change.id == *id))
+                        .map(|(id, order)| (*id, plan.preparation_order(previous, *id, *order)))
+                        .collect(),
+                    orders: Vec::new(),
+                };
+                let bytes = request(self.header(MEASURE_VIEWS), limits, &lifecycle, changes);
+                (bytes, target)
+            })
+            .collect()
+    }
+
+    fn header(&self, view_mask: u32) -> RequestHeader {
         let revision = self.engine.root_revision(ROOT_ID).unwrap_or_default();
-        let header = RequestHeader {
+        RequestHeader {
             engine_revision: revision.engine,
             root_revision: revision.root,
             acknowledged_generation: self
@@ -204,14 +457,7 @@ impl Session {
                 .next_publication_generation()
                 .map_or(0, |next| next - 1),
             view_mask,
-            geometry_revision: self.geometry_revision,
-        };
-        let previous = if changes {
-            self.model.as_ref()
-        } else {
-            Some(next)
-        };
-        request(header, previous, next, edits)
+        }
     }
 
     fn publish(&mut self, bytes: &[u8], output: &mut StepOutput) -> Result<(), String> {
@@ -261,7 +507,10 @@ impl Session {
         Ok(())
     }
 
-    fn measure(&mut self, bytes: &[u8]) -> Result<Vec<SemanticRecord>, String> {
+    /// Prepares without publishing. `read` names the paragraph a read asks about; without one
+    /// the request is the frame's batch when it carries input, and a read of the first
+    /// paragraph when it does not.
+    fn measure(&mut self, bytes: &[u8], read: Option<u32>) -> Result<Vec<SemanticRecord>, String> {
         let request = parse_update_request(bytes, ROOT_ID).map_err(status)?;
         let revision = self.engine.root_revision(ROOT_ID).map_err(debug)?;
         // A request that carries input takes the frame's batch entry, which prepares every
@@ -271,10 +520,10 @@ impl Session {
             || request.style_mutations.len() != 0
             || request.geometry.constraint_count() != 0
             || request.geometry.inline_object_count() != 0;
-        let target = if carries_input {
-            PreparationTarget::Dirty(MeasuredParagraphs::All)
-        } else {
-            PreparationTarget::One(PARAGRAPH_ID)
+        let target = match read {
+            Some(paragraph) => PreparationTarget::One(paragraph),
+            None if carries_input => PreparationTarget::Dirty(MeasuredParagraphs::All),
+            None => PreparationTarget::One(PARAGRAPH_ID),
         };
         let measured = self
             .engine
@@ -348,6 +597,16 @@ impl HostBuffers {
                     .is_none_or(|binding| binding.generation == *generation)
             })
             .map(|((id, _), bytes)| (*id, bytes.as_slice()))
+    }
+
+    /// The draw packets the renderer holds, in draw order.
+    pub fn draws(&self) -> &[DrawRecord] {
+        &self.draws
+    }
+
+    /// The primitive spans the draw packets index.
+    pub fn primitives(&self) -> &[PrimitiveRecord] {
+        &self.primitives
     }
 
     /// The records the renderer draws, in draw order: buffer layout, slack and capacity drop

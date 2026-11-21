@@ -1,0 +1,90 @@
+# glyph layout oracle reference v1
+case fx-underline-colour-latin-full
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 8600ad73a1a6c020
+stage text identity 1 a3a46d7c994fbdfd
+stage unicode value 6 ef36e5145be13849
+stage bidi value 8 c12d7b90e0cb00d6
+stage style value 26 4678f9455ed0b994
+stage shaping_run value 5 c04b2c99301561f8
+stage shape value 14 da305f304ef2f60f
+stage cluster value 29 439f36d3ec38d94b
+stage cluster identity 4 7709950db8e94e35
+stage cluster repr 11 7e5e853c660d5a1c
+stage cluster cache 5 ab968f21cb7a4012
+stage run_local repr 16 400061383a76cd67
+stage flow value 35 63c3af90ba3d6a98
+stage boundary value 28 d3dcb213712895b8
+stage boundary identity 1 edf58fbc86f25acf
+stage positioned identity 4 efd4e28be099e202
+stage positioned value 32 c60a503eabb79e17
+stage positioned repr 37 b61c5e19f5d9e847
+stage public value 13 c67d02748c564e5f
+stage public identity 1 2ad2ff017860f003
+stage view identity 4 2582fcb2bb4e9f98
+stage view value 40 cd7892bc1977a734
+stage wire wire 1 7f458ad79f946cbf
+stage gather identity 7 993aca606064d3eb
+stage gather value 36 a2012f79019520ae
+stage gpu identity 2 86c34ed1e43d83b0
+stage gpu value 3 371bf5d8fb1e8fa6
+stage plan value 23 6e085fdd90adc5b0
+stage plan identity 7 b65a14036160df65
+step 01 recolour
+class value 300 94121c7786d2985b
+class identity 31 17fcc71fdd6ce0c7
+class repr 64 6d0e001b71a0ba42
+class cache 5 ab968f21cb7a4012
+class wire 1 6c68335e08b5d677
+step 02 recolour and width
+class value 300 f91fb67cecc1c8b8
+class identity 31 198db73f469cf89f
+class repr 64 b8dac8757781cc0e
+class cache 5 9671cfa50cb38fc4
+class wire 1 081ec5bd2d757ad4
+step 03 thicker
+class value 300 1c25028403602a4b
+class identity 31 637844c0022f673f
+class repr 64 b8dac8757781cc0e
+class cache 5 9671cfa50cb38fc4
+class wire 1 1a8d052207850256
+step 04 double
+class value 300 c6ac9ea1fd45f130
+class identity 31 eb9ad6886a5ad9a4
+class repr 64 b8dac8757781cc0e
+class cache 5 9671cfa50cb38fc4
+class wire 1 6860856f77a1a3ef
+step 05 add strikethrough
+class value 300 eeb6f74f989b765f
+class identity 31 92e5fcb23cd2560b
+class repr 64 b8dac8757781cc0e
+class cache 5 9671cfa50cb38fc4
+class wire 1 ac98f9e9af248c72
+step 06 decoration off
+class value 288 f3a1e5c992f93005
+class identity 31 6ff6ab3264e145f2
+class repr 64 b8dac8757781cc0e
+class cache 5 9671cfa50cb38fc4
+class wire 1 78630cb00071d615
+step 07 decoration on with an edit
+class value 300 910ef4a3eaa034d2
+class identity 31 d13b493ad4e89487
+class repr 64 e06874a6094ab5ee
+class cache 5 0f4bb9d81a500ee9
+class wire 1 a844224b3b55083f
+step 08 direction 2
+class value 265 da630dc4526bc584
+class identity 29 4eead0c119308396
+class repr 44 adc167d1dc144898
+class wire 1 1503736f38bbe7a8
+step 09 insert Bidi (1 units) at 224
+class value 265 600b4690f63f712b
+class identity 29 4dc7096d4e6e833d
+class repr 44 f19771330dfc23b5
+class wire 1 03af4bf2ce36c9c4
+step 10 insert Word (228 units) at 192
+class value 265 8ef5cc8874048576
+class identity 29 d14b8058dbda97f3
+class repr 44 cb0bef6960189bf9
+class wire 1 a2b821b136110254

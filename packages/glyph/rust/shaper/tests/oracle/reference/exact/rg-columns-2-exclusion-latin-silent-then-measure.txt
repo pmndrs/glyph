@@ -1,0 +1,65 @@
+# glyph layout oracle reference v1
+case rg-columns-2-exclusion-latin-silent-then-measure
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 841327f45f201ca2
+stage text identity 1 e6507bdf9722a9ae
+stage unicode value 6 24d64a168caf2adc
+stage bidi value 8 f50cd6c7221f06e6
+stage style value 26 f99ccc1b3cac3109
+stage shaping_run value 5 a117e4e0dac9ad65
+stage shape value 14 493b85e87ec318d3
+stage cluster value 29 7e5bf4a4e767c1b7
+stage cluster identity 4 3da43a6941563d32
+stage cluster repr 11 023bf95d39b982ad
+stage run_local repr 16 bf706fb4a8fb5eb6
+stage flow value 35 f5651bc61d6b9937
+stage positioned identity 3 9a1887195ba51870
+stage positioned value 13 feed6bcb477770ee
+stage positioned repr 17 2f128b278dcb15f2
+stage public value 13 c2411d91ac12d1ee
+stage public identity 1 58c3da09c9788ebb
+stage view identity 4 2fcab168274c1a5f
+stage view value 40 3a9208aa7d465336
+stage wire wire 1 e4ba7ceb9b881c19
+stage gather identity 7 1949053b19876b8e
+stage gather value 36 a2c12d1e7e636841
+stage gpu identity 2 038dcb70e848c5e6
+stage gpu value 3 9b191492b0572518
+stage plan value 23 cd24a940cd48eb9f
+stage plan identity 7 1b4580ec5a380b9b
+step 01 insert in the first region
+class value 233 dad6319b4572a39f
+class identity 27 a336b2bcbae76a73
+class repr 44 756e2937064e0fef
+class wire 1 1bf9c80fc84d6830
+step 02 delete in a later region
+class value 233 c53c27eedc45769c
+class identity 27 e02f5a07dc804d7a
+class repr 44 24568e905455cf33
+class wire 1 392ac1e0084d6e40
+step 03 narrower measure
+class value 233 37ca5be77b50fc14
+class identity 27 57c52a438c164e44
+class repr 44 08e30966a117d62e
+class wire 1 f5b2a74f0a787b4e
+step 04 shorter regions
+class value 233 380a10c9a4d9b85c
+class identity 27 caf67fe925eafe4f
+class repr 44 eea98131ee08b719
+class wire 1 9fd8067ba23d5a07
+step 05 three columns, wider gap
+class value 233 51109a1e2f5ce3ff
+class identity 27 1d042f21c92afdfa
+class repr 44 aed6307b5b79e394
+class wire 1 db1d1243ff41f643
+step 06 one region
+class value 233 8af6b36a625c194f
+class identity 27 aca1b664ddd13ceb
+class repr 44 541c8dcc63147821
+class wire 1 232d308d3921b8d0
+step 07 the starting regions
+class value 233 c53c27eedc45769c
+class identity 27 535cdd61677ea6ae
+class repr 44 24568e905455cf33
+class wire 1 a4d59360a96039b6
