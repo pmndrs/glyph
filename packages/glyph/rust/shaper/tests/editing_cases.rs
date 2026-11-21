@@ -1,5 +1,5 @@
-//! Hand-written expectations for carets and range rectangles on real fonts: the cases whose
-//! right answer is a decision rather than an identity.
+//! Hand-written expectations for carets, range rectangles, hit testing and movement on real
+//! fonts: the cases whose right answer is a decision rather than an identity.
 //!
 //! `cargo test --release --features oracle --test editing_cases`. Tests that need a font from
 //! the fetched adversarial set pass vacuously when `GLYPH_ADVERSARIAL_FONTS` is unset; the
@@ -8,15 +8,16 @@
 mod editing;
 
 use editing::{
-    Queries, close, down, editing, glyphs, lay_out, lay_out_if_present, library, model, session,
-    try_library, units, up, wrapped,
+    Queries, close, down, editing, glyphs, lay_out, lay_out_if_present, library, model, sequences,
+    session, try_library, units, up, wrapped,
 };
 use pmndrs_glyph_shaper::{
     bidi::DIRECTION_RTL,
     engine::{
         editing::{
             Affinity, EditingError, GlyphRole, LayoutSource, MAX_LIGATURE_CARETS, OffsetArgument,
-            OffsetError, OffsetReason, Rect, TextPosition, TextRange, TextUnit, ligature_carets,
+            OffsetError, OffsetReason, Rect, TextDirection, TextPosition, TextRange, TextUnit,
+            ligature_carets,
         },
         oracle::matrix,
     },
@@ -30,6 +31,32 @@ const OVERFLOW_ELLIPSIS: u8 = 3;
 
 fn x(queries: &Queries<'_>, position: TextPosition) -> f64 {
     queries.caret(position).expect("caret").rect.x
+}
+
+fn step(
+    queries: &Queries<'_>,
+    position: TextPosition,
+    direction: TextDirection,
+    unit: TextUnit,
+) -> TextPosition {
+    queries
+        .move_position(position, direction, unit, None)
+        .expect("move")
+        .position
+}
+
+/// The positions a walk rests at, from `start` until it stops moving.
+fn walk(queries: &Queries<'_>, start: TextPosition, direction: TextDirection) -> Vec<TextPosition> {
+    let mut visited = vec![queries.normalize(start).expect("normalize")];
+    loop {
+        let last = *visited.last().expect("a start");
+        let next = step(queries, last, direction, TextUnit::Grapheme);
+        if next == last {
+            return visited;
+        }
+        visited.push(next);
+        assert!(visited.len() < 10_000, "the walk does not end");
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -140,12 +167,92 @@ fn a_bidi_boundary_has_a_caret_on_each_side() {
         );
     }
 
+    // A hit names the side it is on; exactly on the shared edge, the lower level.
+    let y = 5.0;
+    assert_eq!(queries.hit_test(left - 0.5, y).unwrap(), up(4));
+    assert_eq!(queries.hit_test(left + 0.5, y).unwrap(), up(8));
+    assert_eq!(queries.hit_test(x(&queries, up(4)), y).unwrap(), up(4));
+    assert_eq!(queries.hit_test(right - 0.5, y).unwrap(), down(4));
+    assert_eq!(queries.hit_test(right + 0.5, y).unwrap(), down(8));
+    assert_eq!(queries.hit_test(x(&queries, down(8)), y).unwrap(), down(8));
+
     // A logical range that crosses the boundary is two rectangles: `c`, space, and the first
     // two Arabic letters, which are the right half of the run.
     let rects = queries.range_rects(2, 6).unwrap();
     assert_eq!(rects.len(), 2);
     assert!(close(rects[0].x, x(&queries, down(2))) && close(rects[0].x + rects[0].width, left));
     assert!(close(rects[1].x, x(&queries, down(6))) && close(rects[1].x + rects[1].width, right));
+}
+
+#[test]
+fn visual_movement_crosses_a_bidi_run_in_x_order() {
+    let session = lay_out(&["inter", "amiri"], &model(BIDI));
+    let queries = editing(&session);
+    // Rightward the caret enters the run at its left edge, which is its logical end, and stays
+    // attached to the letter it just crossed.
+    assert_eq!(
+        walk(&queries, down(0), TextDirection::Right),
+        [
+            down(0),
+            down(1),
+            down(2),
+            down(3),
+            up(4),
+            down(7),
+            down(6),
+            down(5),
+            down(4),
+            down(9),
+            down(10),
+            down(11),
+            up(12),
+        ]
+    );
+    assert_eq!(
+        walk(&queries, up(12), TextDirection::Left),
+        [
+            up(12),
+            down(11),
+            down(10),
+            down(9),
+            down(8),
+            down(5),
+            down(6),
+            down(7),
+            up(8),
+            down(3),
+            down(2),
+            down(1),
+            down(0),
+        ]
+    );
+    // Each walk's x is strictly monotonic: every place once.
+    for (direction, start) in [
+        (TextDirection::Right, down(0)),
+        (TextDirection::Left, up(12)),
+    ] {
+        let xs: Vec<f64> = walk(&queries, start, direction)
+            .into_iter()
+            .map(|position| x(&queries, position))
+            .collect();
+        assert!(
+            xs.windows(2)
+                .all(|pair| if direction == TextDirection::Right {
+                    pair[1] > pair[0]
+                } else {
+                    pair[1] < pair[0]
+                }),
+            "{xs:?}"
+        );
+    }
+    // Logical movement ignores the drawing order.
+    assert_eq!(
+        walk(&queries, down(0), TextDirection::Forward)
+            .iter()
+            .map(|position| position.offset)
+            .collect::<Vec<_>>(),
+        (0..=12).collect::<Vec<_>>()
+    );
 }
 
 #[test]
@@ -172,8 +279,32 @@ fn a_soft_wrap_is_two_places_for_one_offset() {
     assert_eq!(queries.normalize(up(7)).unwrap(), up(7));
     assert_eq!(queries.normalize(down(7)).unwrap(), down(7));
 
-    // Line units follow the affinity.
+    // Past the end of a line is that line's end, upstream; before a line's start, downstream.
+    assert_eq!(queries.hit_test(1_000.0, first.top + 1.0).unwrap(), up(7));
+    assert_eq!(queries.hit_test(-5.0, second.top + 1.0).unwrap(), down(7));
+    // Between two lines the nearer one answers; above and below the paragraph, the first and
+    // the last.
+    assert_eq!(queries.hit_test(-5.0, second.top - 0.01).unwrap(), down(0));
+    assert_eq!(queries.hit_test(-5.0, -1_000.0).unwrap(), down(0));
+    assert_eq!(queries.hit_test(1_000.0, 1_000.0).unwrap(), up(28));
+
+    // Line movement and line units follow the affinity.
     let line = TextUnit::Line;
+    assert_eq!(step(&queries, down(2), TextDirection::Forward, line), up(7));
+    assert_eq!(
+        step(&queries, up(7), TextDirection::Backward, line),
+        down(0)
+    );
+    assert_eq!(
+        step(&queries, down(7), TextDirection::Backward, line),
+        down(7)
+    );
+    assert_eq!(
+        step(&queries, down(7), TextDirection::Forward, line),
+        up(14)
+    );
+    assert_eq!(step(&queries, down(2), TextDirection::Right, line), up(7));
+    assert_eq!(step(&queries, down(9), TextDirection::Left, line), down(7));
     assert_eq!(
         queries.boundary(up(7), line).unwrap(),
         TextRange { start: 0, end: 7 }
@@ -181,6 +312,42 @@ fn a_soft_wrap_is_two_places_for_one_offset() {
     assert_eq!(
         queries.boundary(down(7), line).unwrap(),
         TextRange { start: 7, end: 14 }
+    );
+
+    // A wrap is one stop when moving: it rests at the start of the later line, and one more
+    // step from either side of it leaves it.
+    assert_eq!(
+        step(
+            &queries,
+            down(6),
+            TextDirection::Forward,
+            TextUnit::Grapheme
+        ),
+        down(7)
+    );
+    assert_eq!(
+        step(&queries, down(6), TextDirection::Right, TextUnit::Grapheme),
+        down(7)
+    );
+    assert_eq!(
+        step(&queries, up(7), TextDirection::Right, TextUnit::Grapheme),
+        down(8)
+    );
+    assert_eq!(
+        step(&queries, down(7), TextDirection::Right, TextUnit::Grapheme),
+        down(8)
+    );
+    assert_eq!(
+        step(&queries, down(7), TextDirection::Left, TextUnit::Grapheme),
+        down(6)
+    );
+    assert_eq!(
+        step(&queries, up(7), TextDirection::Left, TextUnit::Grapheme),
+        down(6)
+    );
+    assert_eq!(
+        step(&queries, down(8), TextDirection::Left, TextUnit::Grapheme),
+        down(7)
     );
 
     // A range across the wrap is one rectangle per line.
@@ -218,6 +385,25 @@ fn hard_breaks_and_empty_lines_have_carets() {
     // After the second break: the start of the third line.
     assert_eq!((caret(up(4)).line, caret(up(4)).rect.x), (2, 0.0));
 
+    // Any x on the empty line is its one stop.
+    for x in [-50.0, 0.0, 300.0, 9_000.0] {
+        assert_eq!(queries.hit_test(x, tops[1] + 2.0).unwrap(), down(3));
+    }
+    // Stepping visually or logically passes through it once.
+    assert_eq!(
+        walk(&queries, down(0), TextDirection::Right)
+            .iter()
+            .map(|position| position.offset)
+            .collect::<Vec<_>>(),
+        [0, 1, 2, 3, 4, 5, 6]
+    );
+    assert_eq!(
+        walk(&queries, up(6), TextDirection::Left)
+            .iter()
+            .map(|position| position.offset)
+            .collect::<Vec<_>>(),
+        [6, 5, 4, 3, 2, 1, 0]
+    );
     // Line units tile the text: a line owns its break.
     let lines: Vec<TextRange> = [0, 3, 4]
         .into_iter()
@@ -239,6 +425,7 @@ fn hard_breaks_and_empty_lines_have_carets() {
     let queries = editing(&session);
     assert_eq!(queries.caret(down(5)).unwrap().line, 1);
     assert_eq!(queries.caret(down(4)).unwrap().line, 0);
+    assert_eq!(queries.hit_test(40.0, 30.0).unwrap(), down(5));
 }
 
 #[test]
@@ -280,6 +467,7 @@ fn text_with_no_line_has_no_line_box_to_stand_in() {
             assert_eq!(caret.rect, Rect::default());
             assert!(!caret.clipped);
         }
+        assert_eq!(queries.hit_test(10.0, 10.0).unwrap(), down(0));
         assert_eq!(
             queries.boundary(down(0), TextUnit::Line).unwrap(),
             TextRange {
@@ -329,11 +517,30 @@ fn a_drop_cap_has_its_own_box() {
     assert_eq!(queries.normalize(up(1)).unwrap(), up(1));
     assert_eq!(queries.normalize(down(1)).unwrap(), down(1));
 
-    // The initial's line is still the first.
+    // Inside the initial the hit is the initial's; its line is still the first.
+    let middle = cap.top + cap.height * 0.5;
+    assert_eq!(
+        queries.hit_test(before.rect.x + 1.0, middle).unwrap(),
+        down(0)
+    );
+    assert_eq!(queries.hit_test(after.rect.x - 1.0, middle).unwrap(), up(1));
     assert_eq!(queries.boundary(down(0), TextUnit::Line).unwrap().start, 0);
     assert_eq!(
         queries.boundary(down(0), TextUnit::Line).unwrap(),
         queries.boundary(down(5), TextUnit::Line).unwrap()
+    );
+    // Moving right leaves the initial for the body in one step, and comes back the same way.
+    assert_eq!(
+        step(&queries, down(0), TextDirection::Right, TextUnit::Grapheme),
+        down(1)
+    );
+    assert_eq!(
+        step(&queries, down(1), TextDirection::Left, TextUnit::Grapheme),
+        down(0)
+    );
+    assert_eq!(
+        step(&queries, down(4), TextDirection::Backward, TextUnit::Line),
+        down(0)
     );
     // A range over the initial and the first word is one rectangle in each box.
     let rects = queries.range_rects(0, 3).unwrap();
@@ -381,6 +588,20 @@ fn a_line_around_an_exclusion_is_one_rectangle_per_fragment() {
     assert!(upstream.rect.x < f64::from(exclusion.inline_start) + 8.0);
     assert!(downstream.rect.x >= f64::from(exclusion.inline_end));
     assert_eq!((upstream.secondary, downstream.secondary), (None, None));
+    // A point inside the exclusion goes to the nearer fragment.
+    let y = facts.top + 1.0;
+    assert_eq!(
+        queries
+            .hit_test(f64::from(exclusion.inline_start) + 20.0, y)
+            .unwrap(),
+        up(wrap)
+    );
+    assert_eq!(
+        queries
+            .hit_test(f64::from(exclusion.inline_end) - 20.0, y)
+            .unwrap(),
+        down(wrap)
+    );
     // The line unit is the whole line, both fragments.
     assert_eq!(
         queries.boundary(down(wrap), TextUnit::Line).unwrap(),
@@ -426,6 +647,51 @@ fn clipped_text_parks_its_caret_after_the_ellipsis() {
             );
         }
     }
+    // A hit on or past the ellipsis is the last drawn offset; hits never land in clipped text.
+    for x in [marker.pen + 1.0, marker.pen + marker.advance, 5_000.0] {
+        assert_eq!(queries.hit_test(x, 5.0).unwrap(), up(visible));
+    }
+    // Movement goes on through the hidden text one grapheme at a time, and comes back.
+    assert_eq!(
+        step(
+            &queries,
+            up(visible),
+            TextDirection::Forward,
+            TextUnit::Grapheme
+        )
+        .offset,
+        visible + 1
+    );
+    assert_eq!(
+        step(
+            &queries,
+            up(visible),
+            TextDirection::Right,
+            TextUnit::Grapheme
+        )
+        .offset,
+        visible + 1
+    );
+    assert_eq!(
+        step(
+            &queries,
+            down(visible + 1),
+            TextDirection::Left,
+            TextUnit::Grapheme
+        )
+        .offset,
+        visible
+    );
+    assert_eq!(
+        step(
+            &queries,
+            down(visible + 5),
+            TextDirection::Backward,
+            TextUnit::Grapheme
+        )
+        .offset,
+        visible + 4
+    );
     // Hidden text has no rectangle, and the one line owns all of the text.
     let drawn = queries.range_rects(visible - 3, visible).unwrap();
     assert_eq!(
@@ -464,10 +730,27 @@ fn ligature_stops_come_from_the_font_when_it_has_them() {
     assert!(close(x(&queries, down(2)), ligature.pen + 285.0 * scale));
     assert!(close(x(&queries, down(3)), ligature.pen + 569.0 * scale));
     assert!(close(x(&queries, down(4)), ligature.pen + ligature.advance));
-    // The middle `f` selects exactly the span between the two carets.
+    // The middle `f` selects exactly the span between the two carets, and a hit inside it
+    // resolves to the nearer caret.
     let rects = queries.range_rects(2, 3).unwrap();
     assert_eq!(rects.len(), 1);
     assert!(close(rects[0].width, (569.0 - 285.0) * scale));
+    assert_eq!(
+        queries.hit_test(ligature.pen + 300.0 * scale, 5.0).unwrap(),
+        down(2)
+    );
+    assert_eq!(
+        queries.hit_test(ligature.pen + 560.0 * scale, 5.0).unwrap(),
+        down(3)
+    );
+    for offset in 1..=4 {
+        let position = queries.normalize(down(offset)).unwrap();
+        let caret = queries.caret(position).unwrap();
+        assert_eq!(
+            queries.hit_test(caret.rect.x, caret.rect.y + 1.0).unwrap(),
+            position
+        );
+    }
 }
 
 #[test]
@@ -661,6 +944,201 @@ fn a_caret_or_a_range_inside_a_grapheme_is_refused() {
     assert!(queries.caret(down(7)).is_err());
 }
 
+// ---------------------------------------------------------------------------------------------
+// Unit 3: movement.
+// ---------------------------------------------------------------------------------------------
+
+#[test]
+fn word_and_sentence_movement_stop_at_words_and_sentences() {
+    let text = "Hello, world! How are you? Fine.";
+    let session = lay_out(&["inter"], &model(text));
+    let queries = editing(&session);
+    let walk_by = |start: u32, direction, unit| {
+        let mut offsets = vec![start];
+        loop {
+            let last = *offsets.last().unwrap();
+            let next = step(&queries, down(last), direction, unit).offset;
+            if next == last {
+                return offsets;
+            }
+            offsets.push(next);
+        }
+    };
+    // Forward rests at the end of each word; backward at the start of each.
+    assert_eq!(
+        walk_by(0, TextDirection::Forward, TextUnit::Word),
+        [0, 5, 12, 17, 21, 25, 31, 32]
+    );
+    assert_eq!(
+        walk_by(32, TextDirection::Backward, TextUnit::Word),
+        [32, 27, 22, 18, 14, 7, 0]
+    );
+    // From inside a word: to its end, to its start.
+    assert_eq!(
+        step(&queries, down(9), TextDirection::Forward, TextUnit::Word),
+        down(12)
+    );
+    assert_eq!(
+        step(&queries, down(9), TextDirection::Backward, TextUnit::Word),
+        down(7)
+    );
+    assert_eq!(
+        walk_by(0, TextDirection::Forward, TextUnit::Sentence),
+        [0, 14, 27, 32]
+    );
+    assert_eq!(
+        walk_by(32, TextDirection::Backward, TextUnit::Sentence),
+        [32, 27, 14, 0]
+    );
+    // Left and right by word follow the base direction: here, left is backward.
+    assert_eq!(
+        step(&queries, down(9), TextDirection::Left, TextUnit::Word),
+        down(7)
+    );
+    assert_eq!(
+        step(&queries, down(9), TextDirection::Right, TextUnit::Word),
+        down(12)
+    );
+}
+
+#[test]
+fn vertical_movement_keeps_its_goal_column() {
+    let text = "aaaaaaaaaa\na\naaaaaaaaaa";
+    let session = lay_out(&["inter"], &model(text));
+    let queries = editing(&session);
+    let start = down(8);
+    let column = x(&queries, start);
+    let line = TextUnit::Line;
+
+    let first = queries
+        .move_position(start, TextDirection::Down, line, None)
+        .unwrap();
+    assert_eq!(
+        first.position,
+        up(12),
+        "the short line ends before the column"
+    );
+    assert_eq!(first.goal_x, column);
+    // With the goal the column survives the short line; without it the caret's own x is used.
+    let second = queries
+        .move_position(
+            first.position,
+            TextDirection::Down,
+            line,
+            Some(first.goal_x),
+        )
+        .unwrap();
+    assert_eq!((second.position, second.goal_x), (down(21), column));
+    let forgotten = queries
+        .move_position(first.position, TextDirection::Down, line, None)
+        .unwrap();
+    assert_eq!(forgotten.position, down(14));
+    // And back up the same way.
+    let third = queries
+        .move_position(
+            second.position,
+            TextDirection::Up,
+            line,
+            Some(second.goal_x),
+        )
+        .unwrap();
+    let fourth = queries
+        .move_position(third.position, TextDirection::Up, line, Some(third.goal_x))
+        .unwrap();
+    assert_eq!((third.position, fourth.position), (up(12), start));
+
+    // Above the first line is the start of the text, below the last its end; the goal stays.
+    let top = queries
+        .move_position(down(3), TextDirection::Up, line, Some(40.0))
+        .unwrap();
+    assert_eq!((top.position, top.goal_x), (down(0), 40.0));
+    let bottom = queries
+        .move_position(down(15), TextDirection::Down, line, Some(40.0))
+        .unwrap();
+    assert_eq!((bottom.position, bottom.goal_x), (up(23), 40.0));
+    // Any other move reports the new caret's x as the next goal.
+    let sideways = queries
+        .move_position(
+            down(3),
+            TextDirection::Forward,
+            TextUnit::Grapheme,
+            Some(999.0),
+        )
+        .unwrap();
+    assert_eq!(sideways.goal_x, x(&queries, down(4)));
+}
+
+#[test]
+fn misuse_is_an_error() {
+    let session = lay_out(&["inter"], &model("abc"));
+    let queries = editing(&session);
+    for direction in [TextDirection::Up, TextDirection::Down] {
+        for unit in [TextUnit::Grapheme, TextUnit::Word, TextUnit::Sentence] {
+            assert_eq!(
+                queries
+                    .move_position(down(1), direction, unit, None)
+                    .map(|moved| moved.position),
+                Err(EditingError::UnitNotSupported { direction, unit })
+            );
+        }
+    }
+    assert_eq!(
+        queries.hit_test(f64::NAN, 0.0),
+        Err(EditingError::NotFinite)
+    );
+    assert_eq!(
+        queries.hit_test(0.0, f64::INFINITY),
+        Err(EditingError::NotFinite)
+    );
+    assert_eq!(
+        queries
+            .move_position(down(1), TextDirection::Down, TextUnit::Line, Some(f64::NAN))
+            .map(|moved| moved.position),
+        Err(EditingError::NotFinite)
+    );
+    // A paragraph the root does not have.
+    let (engine, fonts) = session.engine();
+    assert!(matches!(
+        engine.editing(fonts, 4, 99),
+        Err(EditingError::NotPrepared)
+    ));
+}
+
+#[test]
+fn a_right_to_left_paragraph_moves_right_toward_its_start() {
+    let Some(session) = lay_out_if_present(
+        &["hebrew"],
+        &model("\u{5e9}\u{5dc}\u{5d5}\u{5dd} \u{5e2}\u{5d5}\u{5dc}\u{5dd}"),
+    ) else {
+        return;
+    };
+    let queries = editing(&session);
+    assert_eq!(
+        walk(&queries, up(9), TextDirection::Right)
+            .iter()
+            .map(|position| position.offset)
+            .collect::<Vec<_>>(),
+        [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+    );
+    assert_eq!(
+        step(&queries, down(2), TextDirection::Left, TextUnit::Grapheme),
+        down(3)
+    );
+    // By word and by line, right is backward here.
+    assert_eq!(
+        step(&queries, down(7), TextDirection::Right, TextUnit::Word),
+        down(5)
+    );
+    assert_eq!(
+        step(&queries, down(2), TextDirection::Right, TextUnit::Line),
+        down(0)
+    );
+    assert_eq!(
+        step(&queries, down(2), TextDirection::Left, TextUnit::Line),
+        up(9)
+    );
+}
+
 #[test]
 fn carets_after_an_edit_equal_a_cold_layout() {
     // Typing into a ligature and across a wrap, each step through the engine's edit path.
@@ -699,4 +1177,65 @@ fn carets_after_an_edit_equal_a_cold_layout() {
             }
         }
     }
+}
+
+#[test]
+fn a_move_from_inside_a_grapheme_is_refused() {
+    let session = lay_out(&["inter"], &model("a\u{1f44d}\u{1f3fd}b"));
+    let queries = editing(&session);
+    for direction in [
+        TextDirection::Forward,
+        TextDirection::Backward,
+        TextDirection::Left,
+        TextDirection::Right,
+        TextDirection::Up,
+        TextDirection::Down,
+    ] {
+        let unit = if matches!(direction, TextDirection::Up | TextDirection::Down) {
+            TextUnit::Line
+        } else {
+            TextUnit::Grapheme
+        };
+        assert_eq!(
+            queries
+                .move_position(down(3), direction, unit, None)
+                .map(|moved| moved.position),
+            Err(EditingError::Offset(OffsetError {
+                argument: OffsetArgument::Offset,
+                offset: 3.0,
+                reason: OffsetReason::InsideGrapheme,
+                text_length: 6,
+                before: Some(1),
+                after: Some(5),
+            }))
+        );
+    }
+}
+
+#[test]
+fn movement_steps_over_a_sequence_as_one_unit() {
+    // An emoji ZWJ sequence, regional-indicator pairs, a keycap, combining marks, conjoining
+    // jamo, a conjunct, an emoji modifier, CRLF.
+    let (text, boundaries) = sequences();
+    let session = lay_out(&["inter"], &model(&text));
+    let queries = editing(&session);
+    for pair in boundaries.windows(2) {
+        for (direction, from, to) in [
+            (TextDirection::Forward, pair[0], pair[1]),
+            (TextDirection::Backward, pair[1], pair[0]),
+        ] {
+            assert_eq!(
+                step(&queries, down(from), direction, TextUnit::Grapheme).offset,
+                to,
+                "{direction:?} from {from}"
+            );
+        }
+    }
+    // The same stops, visually: the first line left to right, then the line after the hard
+    // break, which is not a stop of its own.
+    let visited: Vec<u32> = walk(&queries, down(0), TextDirection::Right)
+        .iter()
+        .map(|position| position.offset)
+        .collect();
+    assert_eq!(visited, boundaries);
 }

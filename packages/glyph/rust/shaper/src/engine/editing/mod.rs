@@ -36,10 +36,14 @@
 
 mod boundary;
 mod caret;
+mod hit;
 mod lig_caret;
 mod line;
+mod motion;
 mod offset;
 mod place;
+#[cfg(test)]
+mod tests;
 
 pub use boundary::Location;
 pub use lig_caret::{MAX_LIGATURE_CARETS, ligature_carets};

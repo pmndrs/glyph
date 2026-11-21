@@ -36,6 +36,11 @@ path = "tests/editing_offsets.rs"
 required-features = ["std", "oracle"]
 
 [[test]]
+name = "editing_properties"
+path = "tests/editing_properties.rs"
+required-features = ["std", "oracle"]
+
+[[test]]
 name = "editing_cases"
 path = "tests/editing_cases.rs"
 required-features = ["std", "oracle"]
