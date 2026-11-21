@@ -1,4 +1,4 @@
-use alloc::{collections::BTreeMap, vec::Vec};
+use alloc::{boxed::Box, collections::BTreeMap, vec::Vec};
 use core::{cell::RefCell, num::NonZeroU32};
 
 use crate::{
@@ -278,7 +278,9 @@ struct PlannerState {
     placement_slot_count: u32,
     pending_placement_slot_count: u32,
     spare_paragraph: Option<ParagraphState>,
-    paragraphs: Vec<RetainedParagraph>,
+    /// Sorted by id. Boxed so that creating or removing one paragraph moves pointers, not every
+    /// retained paragraph's stages: mount cost must not depend on how many paragraphs a root holds.
+    paragraphs: Vec<Box<RetainedParagraph>>,
     ordered_paragraphs: Vec<ParagraphOrder>,
     pending_ordered_paragraphs: Vec<ParagraphOrder>,
     /// Source count from the last undecorated gather; authorized only by its exact cache key.
@@ -3030,14 +3032,14 @@ impl PlannerState {
         self.paragraphs
             .binary_search_by_key(&id, |paragraph| paragraph.id)
             .ok()
-            .map(|index| &self.paragraphs[index])
+            .map(|index| &*self.paragraphs[index])
     }
 
     fn paragraph_mut(&mut self, id: u32) -> Option<&mut RetainedParagraph> {
         self.paragraphs
             .binary_search_by_key(&id, |paragraph| paragraph.id)
             .ok()
-            .map(|index| &mut self.paragraphs[index])
+            .map(|index| &mut *self.paragraphs[index])
     }
 
     fn prepare_semantic_inputs(
@@ -3622,7 +3624,7 @@ impl PlannerState {
                 };
                 self.paragraphs.insert(
                     index,
-                    RetainedParagraph {
+                    Box::new(RetainedParagraph {
                         id,
                         incarnation,
                         placement: ParagraphPlacement {
@@ -3644,7 +3646,7 @@ impl PlannerState {
                         renderer_order_index: usize::MAX,
                         placement_range: RecordSpan::default(),
                         state,
-                    },
+                    }),
                 );
                 Ok(())
             }

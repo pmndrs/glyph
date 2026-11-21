@@ -387,6 +387,11 @@ interface RetainedTextState {
    */
   preparedDesired: ResolvedTextOptions | undefined;
   preparedOrder: number;
+  /**
+   * Whether the engine holds this paragraph. The first read of a root creates every paragraph it has not seen
+   * in that one request, so the lifecycle work of a mount is paid once and not once per read.
+   */
+  created: boolean;
   prepared: boolean;
   geometryRevision: number;
   committedFlowRegions: Map<string, CommittedFlowRegion>;
@@ -675,6 +680,7 @@ class RenderPlannerImpl {
       metrics: retainedTextMetrics(desired, ordinal),
       preparedDesired: undefined,
       preparedOrder: 0,
+      created: false,
       prepared: false,
       geometryRevision: 0,
       committedFlowRegions: new Map(),
@@ -1041,7 +1047,7 @@ class RenderPlannerImpl {
     this.#transforms = undefined;
     this.#removeLiveState(state);
     this.#unprepared.delete(state);
-    if (!state.prepared) {
+    if (!state.created) {
       // The engine never saw this paragraph, so there is nothing to remove from it or from the renderer.
       this.#texts.delete(state);
       this.#releasePreparedOrder(state);
@@ -1151,7 +1157,7 @@ class RenderPlannerImpl {
       }
       paragraphs.push(preparation);
       includeMeasurement ||= wantsMeasurement(state);
-      if (!state.prepared) {
+      if (!state.created) {
         upserts.push({ opcode: 'upsert', paragraphId: state.paragraphId, order: state.preparedOrder });
       }
       if (preparation.text !== undefined) textMutations.push(preparation.text);
@@ -1420,6 +1426,7 @@ class RenderPlannerImpl {
       state.preparedDesired = state.desired;
       if (previous !== undefined) releaseResolvedText(previous);
     }
+    state.created = true;
     state.prepared = true;
     state.geometryDirty = false;
     this.#unprepared.delete(state);
@@ -1463,16 +1470,19 @@ class RenderPlannerImpl {
     const geometry = preparation.geometryChanged
       ? compileGeometry(this.#handleState, state, 0, 0, preparation.geometryRevision)
       : undefined;
+    // A read that creates its paragraph creates every sibling the engine has not seen too. The lifecycle is then
+    // settled for the whole root, and the reads that follow carry no lifecycle rows at all.
+    const creations = state.created ? EMPTY_REQUEST_ITEMS : this.#uncreatedTexts();
     const paragraphMutations: readonly PlannerParagraphMutation[] =
-      state.prepared && removals.length === 0
+      state.created && removals.length === 0
         ? EMPTY_REQUEST_ITEMS
         : [
             ...removals.map((removed) => ({ opcode: 'remove' as const, paragraphId: removed.paragraphId })),
-            {
+            ...(state.created ? [state] : creations).map((created) => ({
               opcode: 'upsert' as const,
-              paragraphId: state.paragraphId,
-              order: state.preparedOrder,
-            },
+              paragraphId: created.paragraphId,
+              order: created.preparedOrder,
+            })),
           ];
     const request: PlannerFrameUpdate = {
       ...this.#preparationRequestHeader(includeMeasurement),
@@ -1500,6 +1510,7 @@ class RenderPlannerImpl {
     if (includeMeasurement && measurement === undefined)
       throw new Error('text engine returned no measurement for prepared text');
     const inspection = state.inspection;
+    for (const created of creations) created.created = true;
     this.#adoptParagraphPreparation(preparation, measurement);
     if (!preparationChanged) state.inspection = inspection;
     this.#adoptPreparedRemovals(removals);
@@ -1852,6 +1863,13 @@ class RenderPlannerImpl {
     state.measurementRead = true;
   }
 
+  /** Live paragraphs the engine does not hold yet. */
+  #uncreatedTexts(): readonly RetainedTextState[] {
+    const uncreated: RetainedTextState[] = [];
+    for (const state of this.#unprepared) if (!state.created) uncreated.push(state);
+    return uncreated;
+  }
+
   /** Prepares one paragraph by its own request and adopts the result. */
   #prepareAlone(state: RetainedTextState, includeMeasurement: boolean): void {
     try {
@@ -1883,6 +1901,7 @@ class RenderPlannerImpl {
       if (state.removed || state.disposed) continue;
       const prepared = state.preparedDesired;
       state.preparedDesired = undefined;
+      state.created = false;
       state.prepared = false;
       state.committedFlowRegions = new Map();
       state.committedFlowExclusions = new Map();
