@@ -62,7 +62,7 @@ export const textShaperAbi = {
       "end": 3,
       "start": 1
     },
-    "borrowedGlyphCapacity": 32,
+    "borrowedGlyphCapacity": 1048576,
     "bufferStrategies": {
       "orderedDirect": 1,
       "sessionShared": 3

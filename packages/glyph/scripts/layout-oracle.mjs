@@ -88,6 +88,8 @@ async function buildProbe() {
       'wasm32-unknown-unknown',
       '--release',
       '--locked',
+      // The shipped shaper's flags make panics trap in place, which needs core and alloc rebuilt.
+      '-Zbuild-std=core,alloc',
       '--no-default-features',
       '--features',
       'simd128,oracle',

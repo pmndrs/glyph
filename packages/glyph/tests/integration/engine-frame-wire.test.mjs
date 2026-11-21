@@ -132,6 +132,50 @@ test('prepared frame writes exact bytes into a nonzero-offset request arena', ()
   assert.throws(() => writePreparedPlannerFrameUpdate(prepared, arena.subarray(1)), /exactly/u);
 });
 
+test('a bound arena view longer than the request is written without touching the bytes past it', () => {
+  const frame = {
+    rootId: ROOT_ID,
+    codecHandle: CODEC_ID,
+    expectedEngineRevision: 1,
+    consumedRevision: 2,
+    acknowledgedPublicationGeneration: 3,
+    limits: {
+      maxParagraphs: 2,
+      maxClusters: 32,
+      maxLines: 8,
+      maxRegions: 1,
+      maxExclusions: 1,
+      maxInlineObjects: 1,
+      maxSlotsPerBand: 1,
+      maxOutputBytes: 65_536,
+    },
+    paragraphOrderMutations: [{ paragraphId: PARAGRAPH_ID, orderScope: 4, orderRank: 5 }],
+    textMutations: [
+      { paragraphId: PARAGRAPH_ID, start: 1, deleteCount: 2, insert: 'A😀B' },
+      { paragraphId: PARAGRAPH_ID, start: 0, deleteCount: 0, insert: 'odd' },
+      { paragraphId: PARAGRAPH_ID, start: 0, deleteCount: 0, insert: '' },
+    ],
+  };
+  const expected = compilePlannerFrameUpdate(frame);
+  const prepared = preparePlannerFrameUpdate(frame);
+  // The arena starts dirty, as it is after an earlier and longer request.
+  const arena = new Uint8Array(prepared.byteLength + 64).fill(0xa5);
+  const view = new DataView(arena.buffer);
+
+  writePreparedPlannerFrameUpdate(prepared, arena, view);
+  assert.deepEqual(arena.subarray(0, prepared.byteLength), expected, 'padding and reserved fields are cleared');
+  assert.deepEqual(arena.subarray(prepared.byteLength), new Uint8Array(64).fill(0xa5));
+
+  const shorter = preparePlannerFrameUpdate({ ...frame, textMutations: [frame.textMutations[1]] });
+  writePreparedPlannerFrameUpdate(shorter, arena, view);
+  assert.deepEqual(
+    arena.subarray(0, shorter.byteLength),
+    compilePlannerFrameUpdate({ ...frame, textMutations: [frame.textMutations[1]] }),
+    'the same views serve a request of another length',
+  );
+  assert.throws(() => writePreparedPlannerFrameUpdate(prepared, arena.subarray(0, 8), view), /exactly/u);
+});
+
 test('single-text preparation clears prior variable payload scratch and preserves general fallback', () => {
   const base = {
     rootId: ROOT_ID,

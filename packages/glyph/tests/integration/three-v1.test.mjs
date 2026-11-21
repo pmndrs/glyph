@@ -3690,7 +3690,7 @@ test('Three carries supported text effects into MSDF lanes and rejects them for 
     const draw = rootDraws(scene)[0];
     assert.ok(draw, 'MSDF effect text must publish a draw');
     const effects = draw.geometry.getAttribute(glyphAttribute(msdfSchema.buffers.effectColor.id)).array;
-    const page = draw.geometry.getAttribute(glyphAttribute(msdfSchema.buffers.page.id)).array;
+    const page = draw.geometry.getAttribute(glyphAttribute(msdfSchema.buffers.effect.id)).array;
     const color = draw.geometry.getAttribute(glyphAttribute(msdfSchema.buffers.color.id)).array;
     assert.deepEqual([...color.slice(0, 3)], [0, 1, 0], 'a typography-only span must inherit foreground');
     assert.deepEqual([...effects.slice(0, 2)], [0x400000ff, 0x40ff0000]);
@@ -3712,6 +3712,46 @@ test('Three carries supported text effects into MSDF lanes and rejects them for 
       [0x40ffff00, 0x40ff0000],
       'a retained color-only edit must rewrite the packed effect buffer',
     );
+    assert.ok(Number.isInteger(page[3]) && page[3] > 0, 'the fourth effect lane addresses the glyph table row');
+
+    // Shaders negate the unit quad's y, so its triangles must be clockwise in the unit square to face +z.
+    const corners = draw.geometry.getAttribute('position').array;
+    for (const first of [0, 9]) {
+      const [ax, ay, , bx, by, , cx, cy] = corners.subarray(first, first + 9);
+      const placedArea = (bx - ax) * (-cy + ay) - (-by + ay) * (cx - ax);
+      assert.ok(placedArea > 0, 'a placed glyph quad is front-facing');
+    }
+
+    // A draw renders with the graph that composes exactly the effects its instances use.
+    const complete = rootDraws(scene)[0].material;
+    label.style = { fontSize: 32, color: '#00ff00' };
+    scene.updateMatrixWorld(true);
+    const fillOnly = rootDraws(scene)[0].material;
+    assert.notEqual(fillOnly, complete, 'text without effects leaves the outline-and-shadow graph');
+    label.style = { fontSize: 32, color: '#00ff00', shadow: { color: '#0000ff80', offset: [3, 4] } };
+    scene.updateMatrixWorld(true);
+    const shadowed = rootDraws(scene)[0].material;
+    assert.notEqual(shadowed, fillOnly, 'a paint change that adds a shadow selects a graph that composes it');
+    assert.notEqual(shadowed, complete, 'a shadow alone does not compose an outline');
+    label.style = { fontSize: 32, color: '#00ff00' };
+    scene.updateMatrixWorld(true);
+    assert.equal(rootDraws(scene)[0].material, fillOnly, 'each effect combination keeps one material');
+    label.style = effectStyle;
+    scene.updateMatrixWorld(true);
+    assert.equal(rootDraws(scene)[0].material, complete, 'both effects return to the complete graph');
+
+    // A caller's material is never exchanged, whatever effects its instances use.
+    label.style = { fontSize: 32, color: '#00ff00' };
+    scene.updateMatrixWorld(true);
+    const authored = [];
+    label.material = defineTextMaterial((context) => {
+      const material = context.createDefaultMaterial();
+      authored.push(material);
+      return material;
+    });
+    scene.updateMatrixWorld(true);
+    assert.equal(authored.length > 0, true, 'the factory realizes the MSDF draw');
+    assert.equal(rootDraws(scene)[0].material, authored.at(-1), 'a custom material stays on its draw');
   } finally {
     group.dispose();
     label.dispose();
@@ -4236,14 +4276,14 @@ test('an already queued Three root observes presentation only during preparation
     readsBeforePrepare = undefined;
     scene.updateMatrixWorld(true);
     assert.equal(readsBeforePrepare, 0, 'a queued root must not repeat presentation preflight before preparation');
-    assert.ok(materialReads > 0, 'preparation still observes the complete ancestor presentation');
+    assert.equal(materialReads, 0, 'the setter already staged this presentation, so preparation does not re-read it');
     assert.equal(services._isShapeQueued(), false);
     assert.equal(label.commitState().status, 'committed');
 
     const crossings = instrumentedGlyph.crossings;
     materialReads = 0;
     scene.updateMatrixWorld(true);
-    assert.ok(materialReads > 0, 'an unqueued traversal still checks raw hierarchy and presentation changes');
+    assert.equal(materialReads, 0, 'an unchanged unqueued traversal resolves no presentation');
     assert.equal(instrumentedGlyph.crossings, crossings, 'an unchanged unqueued traversal must not publish');
     group.renderOrder = 8;
     scene.updateMatrixWorld(true);
@@ -4619,7 +4659,7 @@ test('Three disposes superseded and final indexed-transform storage', async (t) 
   fontDomain.dispose();
 });
 
-test('Three retires materials bound to a replaced buffer generation', async (t) => {
+test('Three keeps a material across a replaced buffer generation and binds it to the successors', async (t) => {
   const spanAndDrawBuffers = [];
   const config = defineThreeConfig({ capacity: { size: 2, policy: 'grow' } });
   const three = await createThreeTestHandle(t, {
@@ -4659,6 +4699,7 @@ test('Three retires materials bound to a replaced buffer generation', async (t) 
   scene.updateMatrixWorld();
   const initialMaterial = rootDraws(scene)[0]?.material;
   assert.equal(initialMaterial, materials[0]);
+  const initialAttributes = new Set(Object.values(rootDraws(scene)[0].geometry.attributes));
   const initialBuffer = spanAndDrawBuffers.at(-1)?.drawBuffer;
   assert.ok(initialBuffer);
   assert.equal(spanAndDrawBuffers.at(-1).spanBuffer, initialBuffer);
@@ -4673,8 +4714,33 @@ test('Three retires materials bound to a replaced buffer generation', async (t) 
     grownBuffers.drawBuffer,
     'the span binds the new generation before draw lookup',
   );
-  assert.ok(materials.length > 1, 'growing physical buffers must realize a material for the new generation');
-  assert.ok(disposed.has(initialMaterial), 'the material retaining the retired generation must be disposed');
+  // Capacity growth must not rebuild the shader graph: the same material reads the successor buffers.
+  const grownDraw = rootDraws(scene)[0];
+  assert.equal(materials.length, 1, 'growing physical buffers realizes no new material');
+  assert.equal(grownDraw.material, initialMaterial, 'the grown draw renders with the material it had');
+  assert.equal(disposed.size, 0, 'the surviving material is not retired with the buffers it used to read');
+  const storageNodes = [];
+  const seen = new Set();
+  const visit = (node) => {
+    if (node === null || typeof node !== 'object' || seen.has(node)) return;
+    seen.add(node);
+    if (node.isStorageBufferNode === true) storageNodes.push(node);
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) value.forEach(visit);
+      else if (value?.isNode === true) visit(value);
+    }
+  };
+  for (const root of [initialMaterial.positionNode, initialMaterial.colorNode, initialMaterial.opacityNode])
+    visit(root);
+  assert.ok(storageNodes.length > 0, 'the material graph reads instance storage');
+  const drawn = new Set(Object.values(grownDraw.geometry.attributes));
+  assert.ok(
+    storageNodes.some((node) => drawn.has(node.value) && !initialAttributes.has(node.value)),
+    'storage nodes read the successor buffers',
+  );
+  for (const node of storageNodes) {
+    assert.ok(drawn.has(node.value) || !initialAttributes.has(node.value), 'no storage node reads a retired buffer');
+  }
 
   group.dispose();
   label.dispose();
@@ -6506,7 +6572,11 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
     'one requested semantic publication must populate every retained paragraph',
   );
   scene.updateMatrixWorld();
-  assert.equal(instrumented.measureCrossings, 2, 'each property assignment synchronously prepares its own revision');
+  assert.equal(
+    instrumented.measureCrossings,
+    3,
+    'each assignment prepares its own revision, and the summary nobody read between them is produced by the read',
+  );
   assert.equal(instrumented.crossings, 1, 'render traversal publishes the last prepared revision once');
 
   const version = transforms.version;
@@ -6586,6 +6656,8 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   instrumented.reset();
   right.style = { ...right.style, fontSize: 20 };
   scene.updateMatrixWorld();
+  // Captured before the read below, which now produces the summary nobody had asked this revision for.
+  const fontSizeSetterRequest = instrumented.latestMeasurementRequestCounts();
   assert.equal(right.glyphs().glyphFontSizes[0], 20);
   assert.deepEqual(
     instrumented.latestRequestCounts(),
@@ -6602,7 +6674,7 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
     'font-size publication replays no semantic input',
   );
   assert.deepEqual(
-    instrumented.latestMeasurementRequestCounts(),
+    fontSizeSetterRequest,
     {
       paragraph: 0,
       paragraphOrder: 0,
@@ -6805,6 +6877,7 @@ function instrumentNextGlyphEngine() {
   const originalInstantiate = WebAssembly.instantiate;
   let crossings = 0;
   let measureCrossings = 0;
+  let arenaQueries = 0;
   let latestRequest;
   let latestMeasurementRequest;
   let latestUpdateFlags = 0;
@@ -6862,6 +6935,13 @@ function instrumentNextGlyphEngine() {
     const requestPointer = exports[abi.functions.requestPointer];
     assert.equal(typeof updateBatch, 'function', 'instrumented shaper must export text_update_batch');
     assert.equal(typeof requestPointer, 'function', 'instrumented shaper must export request_ptr');
+    for (const name of [abi.functions.requestPointer, abi.functions.requestCapacity]) {
+      const query = exports[name];
+      exports[name] = (...arguments_) => {
+        arenaQueries += 1;
+        return query(...arguments_);
+      };
+    }
     exports[abi.functions.textUpdateBatch] = (pointer, count) => {
       crossings += 1;
       latestBatchCount = count;
@@ -6934,6 +7014,9 @@ function instrumentNextGlyphEngine() {
     },
     get measureCrossings() {
       return measureCrossings;
+    },
+    get arenaQueries() {
+      return arenaQueries;
     },
     get latestUpdateFlags() {
       return latestUpdateFlags;
@@ -7047,6 +7130,7 @@ function instrumentNextGlyphEngine() {
     reset() {
       crossings = 0;
       measureCrossings = 0;
+      arenaQueries = 0;
       borrowedGlyphRangeCalls = 0;
       borrowedLayoutCalls = 0;
       borrowedGlyphRangeCounts = [];
@@ -7912,13 +7996,13 @@ test('Text.readGlyphs promotes actual dense demand before the next callback and 
   });
   assert.equal(
     instrumentedGlyph.borrowedGlyphRangeCalls,
-    count,
-    'the first full demand remains sparse until its callback ends',
+    3,
+    'a sequential scan crosses for its first record and then for the rest as one range',
   );
   label.readGlyphs((layout) => {
     assert.equal(
       instrumentedGlyph.borrowedGlyphRangeCalls,
-      count + Math.ceil(count / textShaperAbi.engine.borrowedGlyphCapacity),
+      3 + Math.ceil(count / textShaperAbi.engine.borrowedGlyphCapacity),
       'range promotion completes before the next caller callback',
     );
     records.forEach((record, index) => assert.deepEqual(layout.glyphAt(index + 1), record));
@@ -7926,7 +8010,7 @@ test('Text.readGlyphs promotes actual dense demand before the next callback and 
   });
   assert.equal(
     instrumentedGlyph.borrowedGlyphRangeCalls,
-    count + Math.ceil(count / textShaperAbi.engine.borrowedGlyphCapacity),
+    3 + Math.ceil(count / textShaperAbi.engine.borrowedGlyphCapacity),
     'owned callbacks cross no record ABI',
   );
   assert.throws(() => label.set({ constraints: { width: { mode: 'exact', size: NaN } } }), RangeError);
@@ -8013,6 +8097,131 @@ test('seeded inspection demand remains equal to cold recomputation across edits 
   }
 });
 
+test('a setter crosses into the engine once and reuses its request arena views', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const label = three.createText({ font, text: 'first' });
+  scene.add(label);
+  try {
+    scene.updateMatrixWorld();
+    label.measure();
+    instrumentedGlyph.reset();
+    for (const text of ['a', 'a much longer replacement', 'mid', '']) {
+      label.text = text;
+      assert.equal(label.measure().glyphCount, text.length);
+    }
+    assert.equal(instrumentedGlyph.measureCrossings, 4, 'each setter prepares in one crossing');
+    assert.equal(instrumentedGlyph.arenaQueries, 0, 'a request that fits the arena asks the engine nothing first');
+
+    // A request larger than the arena reserves once, resolves the moved arena once, and then settles again.
+    const long = 'long paragraph '.repeat(6_000);
+    label.text = long;
+    assert.equal(label.measure().glyphCount, long.length);
+    const afterGrowth = instrumentedGlyph.arenaQueries;
+    assert.ok(afterGrowth <= 1, `growing the arena resolves it at most once (${String(afterGrowth)})`);
+    label.text = `${long}!`;
+    label.text = 'short again';
+    assert.equal(label.measure().glyphCount, 11);
+    assert.equal(instrumentedGlyph.arenaQueries, afterGrowth);
+    scene.updateMatrixWorld();
+    assert.equal(label.commitState().status, 'committed');
+  } finally {
+    label.dispose();
+    font.dispose();
+  }
+});
+
+test('a setter keeps the summary current only for a caller that read the previous one', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const label = three.createText({ font, text: 'first' });
+  try {
+    label.measure();
+    instrumentedGlyph.reset();
+    for (const text of ['one', 'two', 'three']) {
+      label.text = text;
+      assert.equal(label.measure().glyphCount, text.length);
+    }
+    assert.equal(instrumentedGlyph.measureCrossings, 3, 'alternating edits and reads cross once per edit');
+
+    instrumentedGlyph.reset();
+    for (const text of ['four', 'five', 'six', 'seven']) label.text = text;
+    assert.equal(instrumentedGlyph.measureCrossings, 4);
+    assert.equal(label.measure().glyphCount, 5, 'the unread summaries were not kept, so the read produces one');
+    assert.equal(instrumentedGlyph.measureCrossings, 5);
+    assert.equal(label.measure().glyphCount, 5);
+    assert.equal(instrumentedGlyph.measureCrossings, 5, 'the produced summary is cached');
+  } finally {
+    label.dispose();
+    font.dispose();
+  }
+});
+
+test('borrowed reads fetch one record in isolation and growing ranges in sequence', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const count = 700;
+  const label = three.createText({ font, text: 'x'.repeat(count) });
+  const other = three.createText({ font, text: 'other paragraph' });
+  try {
+    instrumentedGlyph.reset();
+    const scanned = label.readGlyphs((layout) => {
+      const records = [];
+      for (let index = 0; index < layout.glyphCount; index += 1) records.push(layout.glyphAt(index));
+      return records;
+    });
+    assert.deepEqual(
+      instrumentedGlyph.borrowedGlyphRangeCounts,
+      [1, 32, 128, 512, 27],
+      'a full scan crosses a logarithmic number of times',
+    );
+    const owned = label.glyphs();
+    assert.equal(scanned.length, owned.glyphCount);
+    scanned.forEach((record, index) => {
+      assert.equal(record.stableId, owned.glyphStableIds[index]);
+      assert.equal(record.x, owned.x[index]);
+      assert.equal(record.advance, owned.glyphAdvances[index]);
+    });
+
+    label.constraints = { width: { mode: 'exact', size: 300 } };
+    const wrapped = label.glyphs();
+    label.constraints = { width: { mode: 'exact', size: 301 } };
+    instrumentedGlyph.reset();
+    const sparse = label.readGlyphs((layout) => [650, 3, 400, 401, 2].map((index) => layout.glyphAt(index).x));
+    assert.deepEqual(
+      instrumentedGlyph.borrowedGlyphRangeCounts,
+      [1, 1, 1, 32, 1],
+      'isolated reads fetch single records; only a read continuing the previous one widens',
+    );
+    assert.equal(sparse.length, 5);
+    assert.equal(wrapped.glyphCount, count);
+
+    label.constraints = { width: { mode: 'exact', size: 302 } };
+    const expected = label.glyphs();
+    label.constraints = { width: { mode: 'exact', size: 303 } };
+    label.constraints = { width: { mode: 'exact', size: 302 } };
+    label.readGlyphs((layout) => {
+      assert.equal(layout.glyphAt(10).x, expected.x[10]);
+      assert.equal(layout.glyphAt(11).x, expected.x[11]);
+      // No other engine call can run inside a borrow, so nothing can rewrite the fetched range.
+      assert.throws(() => other.readGlyphs((inner) => inner.glyphAt(0)), /cannot be reentered/u);
+      assert.equal(layout.glyphAt(12).x, expected.x[12]);
+      assert.equal(layout.glyphAt(600).x, expected.x[600]);
+    });
+    let escaped;
+    label.readGlyphs((layout) => {
+      layout.glyphAt(0);
+      escaped = layout;
+    });
+    assert.throws(() => escaped.glyphAt(0), /expired/u, 'a fetched range does not outlive its callback');
+  } finally {
+    label.dispose();
+    other.dispose();
+    font.dispose();
+  }
+});
+
 test('owned inspection borrows complete bounded ranges and a final tail', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
@@ -8077,11 +8286,11 @@ test('Text.readGlyphs and owned inspection remain available beyond the publicati
   assert.deepEqual(instrumentedGlyph.borrowedGlyphRangeCounts, [1, 1, 1]);
   const owned = label.glyphs();
   assert.equal(owned.glyphCount, label.measure().glyphCount);
-  assert.ok(owned.glyphCount > textShaperAbi.engine.borrowedGlyphCapacity);
+  assert.ok(owned.glyphCount > 32, 'the paragraph is larger than one sequential window');
   assert.equal(
     instrumentedGlyph.borrowedGlyphRangeCalls,
     3 + Math.ceil(owned.glyphCount / textShaperAbi.engine.borrowedGlyphCapacity),
-    'owned copy uses bounded range exports even when the semantic publication budget is small',
+    'owned copy reads the whole paragraph in one range export even when the semantic publication budget is small',
   );
   assert.equal(instrumentedGlyph.borrowedLayoutCalls, 4, 'three sparse descriptors and one owned descriptor');
   instrumentedGlyph.reset();

@@ -1,6 +1,11 @@
 import type * as THREE from 'three/webgpu';
 
-import type { RetainedSlugPage, ThreeRenderResourceLease, ThreeRendererResources } from './renderer-resources.js';
+import type {
+  RetainedMsdfAtlas,
+  RetainedSlugPage,
+  ThreeRenderResourceLease,
+  ThreeRendererResources,
+} from './renderer-resources.js';
 import type { ThreeGlyphGeometrySource } from '../glyph-measurement.js';
 import type { ThreeBufferBinding, ThreeResolvedResourceBinding } from '../schema.js';
 import type { RetainedBuffer, StagedBufferMutations } from './host-buffer.js';
@@ -15,13 +20,26 @@ export interface RetainedResource {
 
 export type RetainedTextureLease = ThreeRenderResourceLease<THREE.DataArrayTexture>;
 export type RetainedSlugPageLease = ThreeRenderResourceLease<RetainedSlugPage>;
-export type RetainedGpuResourceLease = RetainedTextureLease | RetainedSlugPageLease;
+export type RetainedMsdfAtlasLease = ThreeRenderResourceLease<RetainedMsdfAtlas>;
+export type RetainedGpuResourceLease = RetainedTextureLease | RetainedSlugPageLease | RetainedMsdfAtlasLease;
+
+/** One storage node of a realized material and the Codec lane whose buffer it reads. */
+export interface MaterialStorageNode {
+  readonly node: { value: THREE.StorageBufferAttribute | THREE.StorageInstancedBufferAttribute };
+  readonly lane: RetainedBuffer['codecBufferId'];
+}
 
 export interface MaterialRealization {
   readonly material: THREE.NodeMaterial;
   readonly resource: ThreeResolvedResourceBinding | undefined;
   readonly buffers: readonly ThreeBufferBinding[];
   readonly indexedTransform: boolean;
+  /** Everything that identifies the material except which buffers its lanes currently read. */
+  readonly shape?: string;
+  /** The material's storage nodes, when they can be pointed at successor buffers without rebuilding the graph. */
+  readonly storage?: readonly MaterialStorageNode[];
+  /** Successor buffers to bind when the publication that adopted this material commits. */
+  pendingStorage?: readonly (readonly [MaterialStorageNode['node'], THREE.StorageInstancedBufferAttribute])[];
 }
 
 export interface OriginSegment {
@@ -32,17 +50,6 @@ export interface OriginSegment {
   readonly start: number;
   readonly count: number;
   readonly drawIndex: number;
-}
-
-export interface OriginRecord {
-  readonly buffer: RetainedBuffer;
-  readonly storageKey: string;
-  readonly index: number;
-  readonly geometry: ThreeGlyphGeometrySource | undefined;
-  readonly drawIndex: number;
-  /** The lane's value with the glyph at rest. Displacement from it is the technique-free bridge. */
-  targetX: number;
-  targetY: number;
 }
 
 export type TransformRealization =
@@ -67,9 +74,9 @@ export interface PreparedTransformUpdate {
 }
 
 export interface PreparedTransforms {
-  readonly contents: Float32Array;
-  readonly start: number;
-  readonly end: number;
+  /** Transform identities whose table rows are replaced, parallel to sixteen `values` each. */
+  readonly rows: readonly number[];
+  readonly values: Float32Array;
   readonly direct: readonly PreparedTransformUpdate[];
 }
 
@@ -91,7 +98,7 @@ export interface PreparationContext {
   placementTable: RetainedBuffer | undefined;
   readonly resources: Map<ThreeResolvedResourceBinding, RetainedResource>;
   readonly bitmapTextures: Map<ThreeResolvedResourceBinding, RetainedTextureLease>;
-  readonly msdfAtlases: Map<ThreeResolvedResourceBinding, RetainedTextureLease>;
+  readonly msdfAtlases: Map<ThreeResolvedResourceBinding, RetainedMsdfAtlasLease>;
   readonly slugPages: Map<ThreeResolvedResourceBinding, RetainedSlugPageLease>;
   readonly materials: Map<string, MaterialRealization>;
   readonly newMaterials: Set<THREE.NodeMaterial>;

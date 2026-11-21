@@ -497,7 +497,8 @@ export interface GlyphRootServices<Bindings extends GlyphBindingSet, RendererRes
   ): GlyphTextController<Format, Bindings['materialInput'], Bindings['transformInput']>;
   /** Schedules root-owned semantic or presentation state for the next top-level `glyph.shape()`. */
   invalidate(): void;
-  syncTransforms(): void;
+  /** Synchronizes the named retained transforms, or every retained transform when none are named. */
+  syncTransforms(updates?: readonly TransformUpdate<Bindings['transform']>[]): void;
   copy<Format extends RasterFormatMetadata>(
     text: GlyphTextController<Format, Bindings['materialInput'], Bindings['transformInput']>,
     request: GlyphCopyRequest,

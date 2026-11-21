@@ -129,3 +129,65 @@ test('an equal prior snapshot wins over a different package-owned identity', () 
   assert.notEqual(equalOwned, previous);
   assert.equal(reuseOrCreateTextPropertySnapshot(previous, equalOwned, 'Test property'), previous);
 });
+
+test('plain records snapshot to exactly what structuredClone produces', () => {
+  const holes = [1, 2, 3];
+  delete holes[1];
+  const tagged = Object.assign([1, 2], { extra: true });
+  const cases = [
+    {
+      fontSize: 12,
+      color: '#fff',
+      features: [{ tag: 'liga', value: 0, start: 0, end: 4 }],
+      nested: { deep: [[1], []] },
+    },
+    { negativeZero: -0, notANumber: Number.NaN, big: 12n, missing: undefined, nothing: null },
+    Object.assign(Object.create(null), { bare: 1 }),
+    Object.defineProperty({ visible: 1 }, 'hidden', { value: 2, enumerable: false }),
+    { [Symbol('ignored')]: 1, kept: 2 },
+    JSON.parse('{"__proto__": {"polluted": true}, "own": 1}'),
+    { holes, tagged, date: new Date(0), map: new Map([[1, 2]]) },
+    {
+      get computed() {
+        return 7;
+      },
+    },
+  ];
+  for (const value of cases) {
+    const snapshot = reuseOrCreateTextPropertySnapshot(undefined, value, 'Test property');
+    assert.notEqual(snapshot, value);
+    assert.deepStrictEqual(snapshot, structuredClone(value));
+    assert.equal(Object.isFrozen(snapshot), true);
+    assert.equal(Object.getPrototypeOf(snapshot), Object.prototype);
+    assert.deepEqual(Reflect.ownKeys(snapshot), Reflect.ownKeys(structuredClone(value)));
+  }
+  assert.equal({}.polluted, undefined);
+
+  for (const uncloneable of [{ call() {} }, { tag: Symbol('s') }, { nested: [() => 1] }]) {
+    assert.throws(
+      () => reuseOrCreateTextPropertySnapshot(undefined, uncloneable, 'Test property'),
+      (error) => error instanceof TypeError && /must contain cloneable data/u.test(error.message),
+    );
+  }
+  assert.throws(
+    () =>
+      reuseOrCreateTextPropertySnapshot(
+        undefined,
+        {
+          get broken() {
+            throw new Error('getter failed');
+          },
+        },
+        'Test property',
+      ),
+    (error) => error instanceof TypeError && error.cause?.message === 'getter failed',
+  );
+});
+
+test('caller mutation after a plain snapshot does not reach the owned record', () => {
+  const value = { list: [{ size: 1 }] };
+  const snapshot = reuseOrCreateTextPropertySnapshot(undefined, value, 'Test property');
+  value.list[0].size = 2;
+  value.list.push({ size: 3 });
+  assert.deepEqual(snapshot, { list: [{ size: 1 }] });
+});

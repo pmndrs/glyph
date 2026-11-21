@@ -209,14 +209,10 @@ impl FontRenderBinding {
         &self.resource_u32
     }
 
-    pub fn select(
-        &self,
-        glyph: u32,
-        font_size: f32,
-        raster_pixel_ratio: f32,
-    ) -> Option<SelectedGlyphBinding> {
-        if glyph >= self.glyph_count
-            || !font_size.is_finite()
+    /// The strike a size selects. It never depends on the glyph, so a run of one size
+    /// resolves it once; `None` when the size cannot select any raster.
+    pub fn strike_for(&self, font_size: f32, raster_pixel_ratio: f32) -> Option<u32> {
+        if !font_size.is_finite()
             || font_size <= 0.0
             || !raster_pixel_ratio.is_finite()
             || raster_pixel_ratio <= 0.0
@@ -232,7 +228,27 @@ impl FontRenderBinding {
         } else {
             nearest_strike(&self.strikes, target)
         };
-        let strike = u32::try_from(strike).ok()?;
+        u32::try_from(strike).ok()
+    }
+
+    /// One strike's resource index per glyph id; `MISSING_RESOURCE_INDEX` marks a glyph
+    /// without a raster. The lane is `glyph_count` long.
+    pub fn strike_resource_indices(&self, strike: u32) -> Option<&[u32]> {
+        let glyphs = usize::try_from(self.glyph_count).ok()?;
+        let start = usize::try_from(strike).ok()?.checked_mul(glyphs)?;
+        self.resource_indices.get(start..start.checked_add(glyphs)?)
+    }
+
+    pub fn select(
+        &self,
+        glyph: u32,
+        font_size: f32,
+        raster_pixel_ratio: f32,
+    ) -> Option<SelectedGlyphBinding> {
+        if glyph >= self.glyph_count {
+            return None;
+        }
+        let strike = self.strike_for(font_size, raster_pixel_ratio)?;
         let strike_row = strike.checked_mul(self.glyph_count)?.checked_add(glyph)?;
         let resource = *self
             .resource_indices

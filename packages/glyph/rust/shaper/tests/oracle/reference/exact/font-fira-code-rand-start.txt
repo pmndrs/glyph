@@ -8,56 +8,64 @@ stage unicode value 6 ed8874c4a09bd435
 stage bidi value 8 9b53d90824661971
 stage style value 26 10d903b6aff2b620
 stage shaping_run value 5 572061d20c844d76
-stage shape value 14 df8ecda8af8a9e98
-stage cluster value 29 88ae555be0e9e8f6
+stage shape value 14 b1c03309a85efcd7
+stage cluster value 29 3913b7f6a826b812
 stage cluster identity 4 b741d4e50627fe01
 stage cluster repr 11 f04259cbe4c5ded5
-stage run_local repr 16 83f4494b2a8bd298
-stage flow value 35 b2a6eb796d25c7a4
+stage cluster cache 5 b6de471e0797c5db
+stage run_local repr 16 6fe582fa73d059df
+stage flow value 35 2217e7d61997c3ad
 stage positioned identity 3 e7383c3eb88c32d6
-stage positioned value 13 af7a569f96b0adc7
-stage positioned repr 17 6354e835ebe283c0
-stage public value 13 c851160bd3212237
+stage positioned value 13 34a9637de6f58eff
+stage positioned repr 17 8ddd2c6542012b64
+stage public value 13 55eb60c00d497ca9
 stage public identity 1 afbbb85cc3fc663f
 stage view identity 4 fdb89125acf30333
-stage view value 40 edd38873c9b8a031
-stage wire wire 1 77b8cfe01a442ca6
-stage gather identity 7 b8a7cffff3fe750e
-stage gather value 36 229c4c548ba510ad
-stage gpu identity 2 1d5e04a6c5ccc288
-stage gpu value 3 c3d64d88a87643e4
+stage view value 40 aafb175c18f34ec5
+stage wire wire 1 250d7be2dd34e575
+stage gather identity 7 b953ad10e725d542
+stage gather value 36 da825392da1fc70a
+stage gpu identity 2 d4a8ce5fd79e03a3
+stage gpu value 3 57c68d4678c3f6ac
 step 01 width 417
-class value 230 e1ea11ab28950ca3
-class identity 22 03d91ca740a844ae
-class repr 44 9465c0cf28e880b8
-class wire 1 41b0cd6995936cdf
+class value 230 a2ef885c79cd3324
+class identity 22 7a26966d74f0c5f8
+class repr 44 609fbd78c2796ca5
+class cache 5 3790221c6eec5305
+class wire 1 e01d265aaa2cecc8
 step 02 width 418
-class value 230 762819d343b3f860
-class identity 22 03d91ca740a844ae
-class repr 44 9465c0cf28e880b8
-class wire 1 d736aaf117ffe0d7
+class value 230 fc2f8363df1e3d40
+class identity 22 7a26966d74f0c5f8
+class repr 44 609fbd78c2796ca5
+class cache 5 3790221c6eec5305
+class wire 1 4f3a01ad152c152a
 step 03 width 233.5
-class value 230 eb03971fa2322b1f
-class identity 22 7883779e6e0c15b3
-class repr 44 49c6e34cff513880
-class wire 1 23a95de97dff8db5
+class value 230 48321505476be601
+class identity 22 083111f07355710a
+class repr 44 8e7ab7fa15a4fdc7
+class cache 5 b521b64d7861b8c2
+class wire 1 7cb18e58539dcb5c
 step 04 width 600
-class value 230 335e9dc09abbc848
-class identity 22 ec25c549f5e5af15
-class repr 44 a2ea020261245087
-class wire 1 c7e7823983737dab
+class value 230 246da22bfbbf8adf
+class identity 22 ec96210ac9e3f11d
+class repr 44 7a538e8bdceb4045
+class cache 5 b521b64d7861b8c2
+class wire 1 787aa8be4bc309a9
 step 05 max lines 3 + direction 1 + insert Space (1 units) at 2072 + flip case at 2078
-class value 266 e0c9f016bb1324fc
-class identity 24 30e1287ce9b56026
-class repr 64 83f9783bc11a6814
-class wire 1 44d01b0a4c643b5b
+class value 266 b9b9a2a8fdbf0ca8
+class identity 24 14c77f427df032b0
+class repr 64 70d9653e5d3bdf04
+class cache 5 9a5e063d609261a9
+class wire 1 f760670cc09f6aac
 step 06 insert Mark (1 units) at 1349
-class value 266 4a6de2b5ad5e98a8
-class identity 24 c46f7e4874435b7d
-class repr 64 e9847f87cdd4d815
-class wire 1 e6da44333db826b5
+class value 266 aff101c02cd6f63b
+class identity 24 4eabcabe18692210
+class repr 64 3ae5d7d602767b6e
+class cache 5 06b5d65a8cfdff1e
+class wire 1 1d2436e36939ac22
 step 07 replace 4 at 1613
-class value 266 d47d352ef5fac885
-class identity 24 bf6f32fe784825b5
-class repr 64 2fbf889af4f83b55
-class wire 1 fc280a86ed86ec02
+class value 266 0fca864bc732464e
+class identity 24 545add9c2b6c4bff
+class repr 64 5d9f9ca983cda4ca
+class cache 5 b16990b2b9cd3cf3
+class wire 1 60ae3bb93d48e74b

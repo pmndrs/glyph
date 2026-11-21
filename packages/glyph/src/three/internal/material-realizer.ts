@@ -4,28 +4,36 @@ import * as THREE from 'three/webgpu';
 import type { CodecBufferDeclaration, CodecBufferDeclarations, TechniqueSchemaMetadata } from '../../config/schema.js';
 import type { PortableResourceGroupPayload, PortableTextureArrayPayload } from '../../config/resources.js';
 import { bitmapSchema, bitmap } from '../../raster/bitmap.js';
-import { msdfSchema } from '../../raster/msdf.js';
+import { MSDF_GLYPH_TABLE_LAYER_STEP, msdfSchema } from '../../raster/msdf.js';
 import { msdf } from '../../raster/msdf.js';
 import { slugSchema } from '../../raster/slug.js';
 import { slug } from '../../raster/slug.js';
 import type { RetainedSlugPage, ThreeRendererResources } from './renderer-resources.js';
+import { createMsdfAtlas, type RetainedMsdfAtlas } from './msdf-atlas.js';
+import { registerMsdfAtlasUse, registerMsdfEffectVariants } from './msdf-draws.js';
+import type { TslMsdfEffects } from '../../shaders/tsl/index.js';
+import { atlasTextureArray } from './portable-resource.js';
 import type { ThreeRootContext, ThreeTextMaterialContext } from '../material.js';
 import type { ThreeRasterProgramBuffer } from '../raster-program.js';
 import { decorationSchema, threeSystemBuffers } from '../codec.js';
-import type { ThreeResolvedMaterialBinding, ThreeResolvedResourceBinding } from '../schema.js';
+import type { ThreeBufferBinding, ThreeResolvedMaterialBinding, ThreeResolvedResourceBinding } from '../schema.js';
 import type { RetainedBuffer, ThreeBufferBindingId } from './host-buffer.js';
 import {
   dataTexture,
-  f32BufferMember,
-  f32x3BufferMember,
   ownedUint16,
   ownedUint32,
   resourceGroup,
-  textureArrayMember,
   textureArrayResource,
   textureMember,
 } from './portable-resource.js';
-import type { PreparationContext, RetainedResource, ThreeHostResource, TransformRealization } from './render-state.js';
+import type {
+  MaterialRealization,
+  MaterialStorageNode,
+  PreparationContext,
+  RetainedResource,
+  ThreeHostResource,
+  TransformRealization,
+} from './render-state.js';
 
 type MaterialSelection = ThreeResolvedMaterialBinding | undefined;
 
@@ -46,6 +54,8 @@ interface ThreeMaterialRealizerOptions {
   readonly context: PreparationContext;
   readonly ownedMaterials: WeakSet<THREE.NodeMaterial>;
   readonly bindingId: (value: object) => number;
+  /** Buffers the display list being realized still draws from; a material reading any of them cannot move on. */
+  readonly liveBuffers: ReadonlySet<ThreeBufferBinding>;
 }
 
 /** Realizes program-specific Three materials and GPU resources inside one publication transaction. */
@@ -55,6 +65,7 @@ export class ThreeMaterialRealizer {
   readonly #context: PreparationContext;
   readonly #ownedMaterials: WeakSet<THREE.NodeMaterial>;
   readonly #bindingId: (value: object) => number;
+  readonly #liveBuffers: ReadonlySet<ThreeBufferBinding>;
 
   constructor(options: ThreeMaterialRealizerOptions) {
     this.#coordinator = options.coordinator;
@@ -62,6 +73,7 @@ export class ThreeMaterialRealizer {
     this.#context = options.context;
     this.#ownedMaterials = options.ownedMaterials;
     this.#bindingId = options.bindingId;
+    this.#liveBuffers = options.liveBuffers;
   }
 
   key(material: MaterialSelection): string {
@@ -82,16 +94,18 @@ export class ThreeMaterialRealizer {
     if (rect === undefined || packed === undefined) {
       throw new Error('decoration draw is missing its rectangle or packed Codec buffer');
     }
+    const lanes = materialBuffers([rect, packed], transform);
     const key = `decoration:${this.key(selection)}:${rect.storageKey}:${packed.storageKey}:${transformProgramKey(
       transform,
       this.#context.transformGeneration,
     )}`;
-    const cached = this.#context.materials.get(key);
-    if (cached !== undefined) return cached.material;
+    const shape = `decoration:${this.key(selection)}:${this.#transformShape(transform)}`;
+    const cached = this.#cached(key, shape, lanes);
+    if (cached !== undefined) return cached;
     const instance = runInstance();
     const shader = this.#coordinator.shaders.decorationShader({
-      rect: TSL.storage(rect.attribute, 'vec4', rect.attribute.count).setPBO(true).element(instance),
-      packed: TSL.storage(packed.attribute, 'uvec2', packed.attribute.count).setPBO(true).element(instance),
+      rect: storageVec4(rect, instance),
+      packed: storageUvec2(packed, instance),
     });
     const position = this.#position(shader.position, instance, buffers, transform);
     const material = this.#createMaterial(selection, {
@@ -101,7 +115,7 @@ export class ThreeMaterialRealizer {
       position,
       createDefaultMaterial: () => coverageMaterial(shader, position),
     });
-    this.#retain(key, material, undefined, materialBuffers([rect, packed], transform), transform.kind);
+    this.#retain(key, material, undefined, lanes, transform.kind, shape);
     return material;
   }
 
@@ -131,15 +145,19 @@ export class ThreeMaterialRealizer {
     const required = [part.origin, part.size, part.uvOrigin, part.uvSize, part.color, part.page];
     const placement = this.#placementSources(buffers);
     const retained = [...required, ...placement.buffers];
+    const lanes = materialBuffers(retained, transform);
     const key = this.#cacheKey('bitmap', resource, selection, retained, buffers, transform, [
       `snap=${String(this.#owner.pixelSnapping ?? selection?.pixelSnapping ?? false)}`,
     ]);
-    const cached = this.#context.materials.get(key);
-    if (cached !== undefined) return cached.material;
+    const shape = this.#cacheShape('bitmap', resource, selection, retained, buffers, transform, [
+      `snap=${String(this.#owner.pixelSnapping ?? selection?.pixelSnapping ?? false)}`,
+    ]);
+    const cached = this.#cached(key, shape, lanes);
+    if (cached !== undefined) return cached;
     const atlas = textureArrayResource(resource.resolved, 'atlas', 'r8unorm', 'Bitmap');
     const instance = runInstance();
     const placementOffset = this.#placementOffset(instance, placement);
-    const texture = this.#textureArray(resource.binding, atlas, 'bitmap');
+    const texture = this.#bitmapPages(resource.binding, atlas);
     const shader = this.#coordinator.shaders.bitmapShader(
       {
         origin: storageVec2(part.origin, instance).add(placementOffset),
@@ -161,7 +179,7 @@ export class ThreeMaterialRealizer {
       position,
       createDefaultMaterial: () => bitmapMaterial(shader, position),
     });
-    this.#retain(key, material, resource, materialBuffers(retained, transform), transform.kind);
+    this.#retain(key, material, resource, lanes, transform.kind, shape);
     return material;
   }
 
@@ -172,41 +190,66 @@ export class ThreeMaterialRealizer {
     transform: TransformRealization,
   ): THREE.NodeMaterial {
     const part = schemaDrawBuffers(msdfSchema, buffers, 'MSDF');
-    const required = [part.rect, part.uvRect, part.uvBounds, part.color, part.effectColor, part.page];
+    const required = [part.rect, part.color, part.effectColor, part.effect];
     const placement = this.#placementSources(buffers);
     const retained = [...required, ...placement.buffers];
+    const lanes = materialBuffers(retained, transform);
     const key = this.#cacheKey('msdf', resource, selection, retained, buffers, transform);
-    const cached = this.#context.materials.get(key);
-    if (cached !== undefined) return cached.material;
-    const atlas = resourceGroup(resource.resolved, 'atlas', 'MSDF');
-    const data = textureArrayMember(atlas, 'texture', 'rgba8unorm', 'MSDF');
+    const shape = this.#cacheShape('msdf', resource, selection, retained, buffers, transform);
+    const cached = this.#cached(key, shape, lanes);
+    if (cached !== undefined) return cached;
+    const atlas = this.#msdfAtlas(resource.binding, resourceGroup(resource.resolved, 'atlas', 'MSDF'));
     const instance = runInstance();
     const placementOffset = this.#placementOffset(instance, placement);
-    const field = (buffer: RetainedBuffer) => storageVec4(buffer, instance);
-    const rect = field(part.rect);
-    const uvRect = field(part.uvRect);
-    const page = field(part.page);
-    const shader = this.#coordinator.shaders.msdfShader(
-      {
-        origin: rect.xy.add(placementOffset),
-        size: rect.zw,
-        uvOrigin: uvRect.xy,
-        uvSize: uvRect.zw,
-        uvBounds: field(part.uvBounds),
-        fillColor: field(part.color),
-        effectColor: storageUvec2(part.effectColor, instance),
-        shadowOffset: page.xy.mul(TSL.vec2(...f32x3BufferMember(atlas, 'effectScale', 'MSDF').slice(0, 2))),
-        outlineWidth: page.z.mul(f32x3BufferMember(atlas, 'effectScale', 'MSDF')[2]),
-        pageIndex: page.w,
-      },
-      {
-        atlas: this.#textureArray(resource.binding, data, 'msdf'),
-        atlasWidth: data.width,
-        atlasHeight: data.height,
-        pixelRange: f32BufferMember(atlas, 'pixelRange', 'MSDF'),
-      },
+    const rect = storageVec4(part.rect, instance);
+    const effect = storageVec4(part.effect, instance);
+    // Atlas extent and field range are uniforms, not literals, so every MSDF font compiles to the same program.
+    const metrics = TSL.uniform(atlas.metrics);
+    const atlasSize = metrics.xy;
+    // What every drawing of a glyph shares is read once per vertex from the font's glyph table.
+    const glyph = TSL.int(effect.w);
+    const cell = TSL.textureLoad(
+      atlas.glyphs,
+      TSL.ivec2(glyph.mod(TSL.int(atlas.glyphsWidth)), glyph.div(TSL.int(atlas.glyphsWidth))),
     );
-    const position = this.#position(shader.position, instance, buffers, transform);
+    const layer = TSL.floor(cell.w.div(MSDF_GLYPH_TABLE_LAYER_STEP));
+    const uvOrigin = cell.xy.div(atlasSize);
+    const uvSize = TSL.vec2(cell.z, cell.w.sub(layer.mul(MSDF_GLYPH_TABLE_LAYER_STEP))).div(atlasSize);
+    const place = this.#positionTransform(instance, buffers, transform);
+    const modelViewProjection = TSL.cameraProjectionMatrix.mul(TSL.modelViewMatrix);
+    const instanceNodes = {
+      origin: rect.xy.add(placementOffset),
+      size: rect.zw,
+      uvOrigin,
+      uvSize,
+      uvBounds: TSL.vec4(uvOrigin, uvOrigin.add(uvSize)),
+      fillColor: storageVec4(part.color, instance),
+      effectColor: storageUvec2(part.effectColor, instance),
+      shadowOffset: effect.xy.mul(metrics.w).mul(metrics.z).div(atlasSize),
+      outlineWidth: effect.z.mul(metrics.w),
+      pageIndex: layer,
+    };
+    const graph = (effects: TslMsdfEffects) => {
+      const shader = this.#coordinator.shaders.msdfShader(instanceNodes, {
+        atlas: atlas.texture,
+        atlasWidth: metrics.x,
+        atlasHeight: metrics.y,
+        pixelRange: metrics.z,
+        // A caller's material may draw anywhere in the cell (a glow from the true distance, say), so only the
+        // default material, whose reach is known, gets trimmed quads.
+        ...(selection?.material === undefined
+          ? {
+              trim: {
+                project: (position: THREE.Node<'vec3'>) => modelViewProjection.mul(TSL.vec4(place(position), 1)),
+              },
+            }
+          : {}),
+        effects,
+        singleChannel: atlas.singleChannel,
+      });
+      return { shader, position: place(shader.position) };
+    };
+    const { shader, position } = graph({ outline: true, shadow: true });
     const material = this.#createMaterial(selection, {
       root: this.#root(selection),
       kind: 'glyph',
@@ -215,7 +258,15 @@ export class ThreeMaterialRealizer {
       position,
       createDefaultMaterial: () => coverageMaterial(shader, position),
     });
-    this.#retain(key, material, resource, materialBuffers(retained, transform), transform.kind);
+    registerMsdfAtlasUse(material, atlas);
+    // A caller's material is theirs to keep, so only the default material is exchanged for effect specializations.
+    if (selection?.material === undefined) {
+      registerMsdfEffectVariants(material, (effects) => {
+        const variant = graph(effects);
+        return coverageMaterial(variant.shader, variant.position);
+      });
+    }
+    this.#retain(key, material, resource, lanes, transform.kind, shape);
     return material;
   }
 
@@ -237,9 +288,11 @@ export class ThreeMaterialRealizer {
     ];
     const placementTable = this.#placementTable();
     const retained = [...required, placementTable];
+    const lanes = materialBuffers(retained, transform);
     const key = this.#cacheKey('slug', resource, selection, retained, buffers, transform);
-    const cached = this.#context.materials.get(key);
-    if (cached !== undefined) return cached.material;
+    const shape = this.#cacheShape('slug', resource, selection, retained, buffers, transform);
+    const cached = this.#cached(key, shape, lanes);
+    if (cached !== undefined) return cached;
     const page = resourceGroup(resource.resolved, 'page', 'Slug');
     const instance = runInstance();
     const field = (buffer: RetainedBuffer) => storageVec4(buffer, instance);
@@ -250,7 +303,7 @@ export class ThreeMaterialRealizer {
     const placementOffset = storageVec2(placementTable, counts.z);
     const indexed =
       transform.kind === 'indexed'
-        ? indexedTransformNodes(transform.indices.attribute, this.#context.transformAttribute, instance)
+        ? indexedTransformNodes(transform.indices, this.#context.transformAttribute, instance)
         : undefined;
     const modelViewProjection =
       indexed === undefined
@@ -287,7 +340,7 @@ export class ThreeMaterialRealizer {
       position,
       createDefaultMaterial: () => coverageMaterial(shader, position),
     });
-    this.#retain(key, material, resource, materialBuffers(retained, transform), transform.kind);
+    this.#retain(key, material, resource, lanes, transform.kind, shape);
     return material;
   }
 
@@ -356,18 +409,84 @@ export class ThreeMaterialRealizer {
     ].join(':');
   }
 
+  /** The cache key with every buffer reduced to its lane: equal for a material and its successor after growth. */
+  #cacheShape(
+    kind: string,
+    resource: RetainedResource,
+    material: MaterialSelection,
+    required: readonly RetainedBuffer[],
+    buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
+    transform: TransformRealization,
+    extra: readonly string[] = [],
+  ): string {
+    return [
+      kind,
+      this.#bindingId(resource.binding),
+      this.key(material),
+      ...extra,
+      required.map((buffer) => buffer.codecBufferId).join(','),
+      // A detached branch's graph captures its per-glyph transform table, which no successor shares.
+      this.#owner.glyphStorage === undefined ? 'glyph-storage:none' : glyphStorageProgramKey(buffers),
+      this.#transformShape(transform),
+    ].join(':');
+  }
+
+  #transformShape(transform: TransformRealization): string {
+    return transform.kind === 'direct' ? 'direct' : `indexed:table:${this.#context.transformGeneration}`;
+  }
+
+  /**
+   * The material for `key`, or one whose buffers were all replaced by successors.
+   *
+   * When instance storage outgrows its capacity the engine publishes new buffers under new identities. A material
+   * that read the old ones, and that no draw of the new display list still needs for them, keeps its graph (and so
+   * its shader modules and pipeline): its storage nodes are pointed at the successors when the publication commits.
+   */
+  #cached(key: string, shape: string, lanes: readonly RetainedBuffer[]): THREE.NodeMaterial | undefined {
+    const exact = this.#context.materials.get(key);
+    if (exact !== undefined) return exact.material;
+    const requested = new Set(lanes.map(({ binding }) => binding));
+    for (const [previousKey, previous] of this.#context.materials) {
+      if (previous.shape !== shape || previous.storage === undefined) continue;
+      // Lanes the successor shares are not replaced; every other one must have left the display list.
+      if (previous.buffers.some((binding) => !requested.has(binding) && this.#liveBuffers.has(binding))) continue;
+      const pendingStorage = successorStorage(previous.storage, lanes);
+      if (pendingStorage === undefined) continue;
+      this.#context.materials.delete(previousKey);
+      this.#context.materials.set(key, {
+        ...previous,
+        buffers: lanes.map(({ binding }) => binding),
+        pendingStorage,
+      });
+      return previous.material;
+    }
+    return undefined;
+  }
+
   #position(
     position: THREE.Node<'vec3'>,
     instance: THREE.Node<'uint'>,
     buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
     transform: TransformRealization,
   ): THREE.Node<'vec3'> {
-    const glyphPosition = this.#glyphPosition(position, instance, buffers);
-    return transform.kind === 'indexed'
-      ? indexedTransformNodes(transform.indices.attribute, this.#context.transformAttribute, instance).position(
-          glyphPosition,
-        )
-      : glyphPosition;
+    return this.#positionTransform(instance, buffers, transform)(position);
+  }
+
+  /** The glyph-local to object-local map of one draw; every use shares the same storage reads. */
+  #positionTransform(
+    instance: THREE.Node<'uint'>,
+    buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
+    transform: TransformRealization,
+  ): (position: THREE.Node<'vec3'>) => THREE.Node<'vec3'> {
+    const glyph = this.#glyphTransform(instance, buffers);
+    const indexed =
+      transform.kind === 'indexed'
+        ? indexedTransformNodes(transform.indices, this.#context.transformAttribute, instance)
+        : undefined;
+    return (position) => {
+      const placed = glyph === undefined ? position : glyph(position);
+      return indexed === undefined ? placed : indexed.position(placed);
+    };
   }
 
   #placementSources(
@@ -401,41 +520,38 @@ export class ThreeMaterialRealizer {
     instance: THREE.Node<'uint'>,
     buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
   ): THREE.Node<'vec3'> {
-    const stableIds = buffers.get(threeSystemBuffers.stableGlyphId.id);
-    const retained = stableIds === undefined ? undefined : this.#owner.glyphStorage?.(glyphStorageKey(stableIds));
-    if (retained === undefined) return position;
-    const table = TSL.storage(retained.transforms, 'vec4', retained.transforms.count).setPBO(true);
-    const firstColumn = instance.mul(4);
-    const column0 = table.element(firstColumn);
-    const column1 = table.element(firstColumn.add(1));
-    const column2 = table.element(firstColumn.add(2));
-    const column3 = table.element(firstColumn.add(3));
-    const local = TSL.vec4(position, 1);
-    return column0.mul(local.x).add(column1.mul(local.y)).add(column2.mul(local.z)).add(column3.mul(local.w)).xyz;
+    return this.#glyphTransform(instance, buffers)?.(position) ?? position;
   }
 
-  #textureArray(
-    binding: ThreeResolvedResourceBinding,
-    data: PortableTextureArrayPayload,
-    kind: 'bitmap' | 'msdf',
-  ): THREE.DataArrayTexture {
-    const textures = kind === 'bitmap' ? this.#context.bitmapTextures : this.#context.msdfAtlases;
-    let lease = textures.get(binding);
+  #glyphTransform(
+    instance: THREE.Node<'uint'>,
+    buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
+  ): ((position: THREE.Node<'vec3'>) => THREE.Node<'vec3'>) | undefined {
+    const stableIds = buffers.get(threeSystemBuffers.stableGlyphId.id);
+    const retained = stableIds === undefined ? undefined : this.#owner.glyphStorage?.(glyphStorageKey(stableIds));
+    if (retained === undefined) return undefined;
+    return affineColumns(retained.transforms, instance.mul(4)).position;
+  }
+
+  #bitmapPages(binding: ThreeResolvedResourceBinding, data: PortableTextureArrayPayload): THREE.DataArrayTexture {
+    let lease = this.#context.bitmapTextures.get(binding);
     if (lease !== undefined) return lease.resource;
-    lease = this.#coordinator.acquireTextureArrayResource(data, () => {
-      const texture = new THREE.DataArrayTexture(data.bytes, data.width, data.height, data.layers);
-      texture.format = kind === 'bitmap' ? THREE.RedFormat : THREE.RGBAFormat;
-      texture.type = THREE.UnsignedByteType;
-      texture.colorSpace = THREE.NoColorSpace;
-      texture.magFilter = THREE.LinearFilter;
-      texture.minFilter = THREE.LinearFilter;
-      texture.generateMipmaps = false;
-      texture.flipY = false;
-      texture.needsUpdate = true;
-      return texture;
-    });
+    lease = this.#coordinator.acquireTextureArrayResource(data, () =>
+      atlasTextureArray(data.bytes, data.width, data.height, data.layers, THREE.RedFormat),
+    );
     this.#context.newTextures.add(lease);
-    textures.set(binding, lease);
+    this.#context.bitmapTextures.set(binding, lease);
+    return lease.resource;
+  }
+
+  #msdfAtlas(binding: ThreeResolvedResourceBinding, group: PortableResourceGroupPayload): RetainedMsdfAtlas {
+    let lease = this.#context.msdfAtlases.get(binding);
+    if (lease !== undefined) return lease.resource;
+    lease = this.#coordinator.acquireMsdfAtlasResource(group, () =>
+      createMsdfAtlas(group, this.#coordinator.msdfSingleChannel),
+    );
+    this.#context.newTextures.add(lease);
+    this.#context.msdfAtlases.set(binding, lease);
     return lease.resource;
   }
 
@@ -512,12 +628,15 @@ export class ThreeMaterialRealizer {
     resource: RetainedResource | undefined,
     buffers: readonly RetainedBuffer[],
     transformKind: TransformRealization['kind'],
+    shape?: string,
   ): void {
+    const storage = takeStorageNodes();
     this.#context.materials.set(key, {
       material,
       resource: resource?.binding,
       buffers: buffers.map(({ binding }) => binding),
       indexedTransform: transformKind === 'indexed',
+      ...(shape === undefined ? {} : { shape, storage }),
     });
   }
 }
@@ -563,16 +682,48 @@ function runInstance(): THREE.Node<'uint'> {
   return TSL.instanceIndex.add(runStart);
 }
 
-const storageVec2 = (buffer: RetainedBuffer, instance: THREE.Node<'uint'>) =>
-  TSL.storage(buffer.attribute, 'vec2', buffer.attribute.count).setPBO(true).element(instance);
-const storageVec4 = (buffer: RetainedBuffer, instance: THREE.Node<'uint'>) =>
-  TSL.storage(buffer.attribute, 'vec4', buffer.attribute.count).setPBO(true).element(instance);
-const storageUvec2 = (buffer: RetainedBuffer, instance: THREE.Node<'uint'>) =>
-  TSL.storage(buffer.attribute, 'uvec2', buffer.attribute.count).setPBO(true).element(instance);
-const storageUvec4 = (buffer: RetainedBuffer, instance: THREE.Node<'uint'>) =>
-  TSL.storage(buffer.attribute, 'uvec4', buffer.attribute.count).setPBO(true).element(instance);
-const storageUint = (buffer: RetainedBuffer, instance: THREE.Node<'uint'>) =>
-  TSL.storage(buffer.attribute, 'uint', buffer.attribute.count).setPBO(true).element(instance);
+/** Storage nodes created since the last realization was retained; realization is synchronous and not re-entrant. */
+let createdStorageNodes: MaterialStorageNode[] = [];
+
+function takeStorageNodes(): readonly MaterialStorageNode[] {
+  const taken = createdStorageNodes;
+  createdStorageNodes = [];
+  return taken;
+}
+
+function storageLane<Type extends 'vec2' | 'vec4' | 'uvec2' | 'uvec4' | 'uint'>(buffer: RetainedBuffer, type: Type) {
+  const node = TSL.storage(buffer.attribute, type, buffer.attribute.count).setPBO(true);
+  createdStorageNodes.push({ node, lane: buffer.codecBufferId });
+  return node;
+}
+
+/**
+ * The successor attribute for each storage node, or `undefined` when the graph cannot move: a lane has no successor,
+ * or the node was compiled for WebGL2, where Three bakes a storage attribute into a texture at build time.
+ */
+function successorStorage(
+  storage: readonly MaterialStorageNode[],
+  lanes: readonly RetainedBuffer[],
+): MaterialRealization['pendingStorage'] {
+  const successors: (readonly [MaterialStorageNode['node'], THREE.StorageInstancedBufferAttribute])[] = [];
+  for (const { node, lane } of storage) {
+    const successor = lanes.find((buffer) => buffer.codecBufferId === lane);
+    if (successor === undefined || 'pbo' in node.value) return undefined;
+    successors.push([node, successor.attribute]);
+  }
+  return successors;
+}
+
+const storageVec2 = (buffer: RetainedBuffer, instance: THREE.Node<'uint'>): THREE.Node<'vec2'> =>
+  storageLane(buffer, 'vec2').element(instance);
+const storageVec4 = (buffer: RetainedBuffer, instance: THREE.Node<'uint'>): THREE.Node<'vec4'> =>
+  storageLane(buffer, 'vec4').element(instance);
+const storageUvec2 = (buffer: RetainedBuffer, instance: THREE.Node<'uint'>): THREE.Node<'uvec2'> =>
+  storageLane(buffer, 'uvec2').element(instance);
+const storageUvec4 = (buffer: RetainedBuffer, instance: THREE.Node<'uint'>): THREE.Node<'uvec4'> =>
+  storageLane(buffer, 'uvec4').element(instance);
+const storageUint = (buffer: RetainedBuffer, instance: THREE.Node<'uint'>): THREE.Node<'uint'> =>
+  storageLane(buffer, 'uint').element(instance);
 
 function glyphStorageProgramKey(buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>): string {
   const stableIds = buffers.get(threeSystemBuffers.stableGlyphId.id);
@@ -589,12 +740,16 @@ function materialBuffers(
 }
 
 function indexedTransformNodes(
-  indexAttribute: THREE.StorageInstancedBufferAttribute,
+  indices: RetainedBuffer,
   transforms: THREE.StorageInstancedBufferAttribute,
   instance: THREE.Node<'uint'>,
 ) {
-  const transformIndex = TSL.storage(indexAttribute, 'uint', indexAttribute.count).setPBO(true).element(instance);
-  const firstColumn = transformIndex.mul(4);
+  const transformIndex = storageUint(indices, instance);
+  return affineColumns(transforms, transformIndex.mul(4));
+}
+
+/** One column-major 4x4 stored as four consecutive vec4 records. */
+function affineColumns(transforms: THREE.StorageInstancedBufferAttribute, firstColumn: THREE.Node<'uint'>) {
   const table = TSL.storage(transforms, 'vec4', transforms.count).setPBO(true);
   const column0 = table.element(firstColumn);
   const column1 = table.element(firstColumn.add(1));
@@ -602,7 +757,7 @@ function indexedTransformNodes(
   const column3 = table.element(firstColumn.add(3));
   return {
     matrix: TSL.mat4(column0, column1, column2, column3),
-    position(position: THREE.Node<'vec3'>) {
+    position(position: THREE.Node<'vec3'>): THREE.Node<'vec3'> {
       const local = TSL.vec4(position, 1);
       return column0.mul(local.x).add(column1.mul(local.y)).add(column2.mul(local.z)).add(column3.mul(local.w)).xyz;
     },
@@ -637,6 +792,9 @@ function baseTextMaterial(): THREE.MeshBasicNodeMaterial {
     blending: THREE.NormalBlending,
     depthTest: false,
     depthWrite: false,
+    // Three draws a transparent double-sided material twice (back faces, then front faces). Text quads are
+    // coplanar and never depth-tested, so one pass with culling off produces the same pixels in half the draws.
+    forceSinglePass: true,
     side: THREE.DoubleSide,
     transparent: true,
   });

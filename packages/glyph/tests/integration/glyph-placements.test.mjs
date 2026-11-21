@@ -984,3 +984,46 @@ test('pending split uses desired render order before source publication', async 
     node.dispose();
   }
 });
+
+test('measureGlyphs equals measurements built from the full placement snapshot', async (t) => {
+  const { measureGlyphPlacements } = await import('../../dist/three/glyph-measurement.js');
+  const cases = [
+    ['inter', 'office affluent AVATAR\nsecond line, with a wrap that needs room', {}],
+    ['inter', 'anchored paragraph that wraps twice', { constraints: { anchor: { x: 'center', y: 'bottom' } } }],
+    ['amiri', 'السلام عليكم ورحمة الله abc وبركاته', {}],
+    ['inter', '', {}],
+  ];
+  for (const [fixture, text, properties] of cases) {
+    const font = await loadFont(fixture);
+    const { node: label, scene } = await mount(t, font, text, {
+      layout: { wrap: 'word' },
+      ...properties,
+      constraints: { width: { mode: 'exact', size: 120 }, ...properties.constraints },
+    });
+    for (const published of [true, false]) {
+      // The second pass reads an edited revision before its publication.
+      if (!published && text !== '') label.style = { fontSize: 17 };
+      const layout = label.glyphs();
+      const measured = label.measureGlyphs();
+      assert.ok(measured !== undefined);
+      const expected = measureGlyphPlacements(
+        createGlyphPlacements(layout, text, layout.x, layout.y, []),
+        new Map(),
+        layout.anchorOffset,
+      );
+      assert.equal(measured.length, expected.length);
+      const plain = (entry) => {
+        const { anchorPoint, ...fields } = entry;
+        return {
+          ...fields,
+          anchors: ['ink', 'advance'].flatMap((bounds) =>
+            ['min', 'center', 'max'].map((axis) => anchorPoint({ x: axis, y: axis }, bounds).toArray()),
+          ),
+        };
+      };
+      assert.deepEqual(measured.map(plain), expected.map(plain), `${fixture} ${JSON.stringify(text)} ${published}`);
+      assert.ok(measured.every((entry) => Object.isFrozen(entry)) && Object.isFrozen(measured));
+    }
+    assert.equal(scene.children.length > 0, true);
+  }
+});

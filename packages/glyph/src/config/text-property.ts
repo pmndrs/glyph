@@ -53,11 +53,62 @@ export function reuseOrCreateTextPropertySnapshot<Value extends object>(
   if (isOwnedTextPropertySnapshot(value)) return value;
   let snapshot: Value;
   try {
-    snapshot = structuredClone(value);
+    const plain = clonePlainData(value, new Set());
+    snapshot = plain === notPlainData ? structuredClone(value) : (plain as Value);
   } catch (cause) {
     throw new TypeError(`${label} must contain cloneable data`, { cause });
   }
   return ownTextPropertySnapshot(snapshot);
+}
+
+const notPlainData: unique symbol = Symbol('not plain data');
+
+/**
+ * Clones the records text properties are written as -- plain objects, dense arrays and primitives -- with the
+ * result `structuredClone` would give. Anything else, including an object reached twice, answers `notPlainData`
+ * so the caller takes the general algorithm, which preserves shared references and owns the error cases.
+ */
+function clonePlainData(value: unknown, seen: Set<object>): unknown {
+  if (typeof value !== 'object') {
+    return typeof value === 'function' || typeof value === 'symbol' ? notPlainData : value;
+  }
+  if (value === null) return value;
+  if (seen.has(value)) return notPlainData;
+  seen.add(value);
+  if (Array.isArray(value)) return clonePlainArray(value, seen);
+  const prototype: unknown = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null
+    ? clonePlainRecord(value as Record<string, unknown>, seen)
+    : notPlainData;
+}
+
+function clonePlainArray(value: readonly unknown[], seen: Set<object>): unknown {
+  // A subclass, a hole or an extra property is not what a dense array clones to.
+  if (Object.getPrototypeOf(value) !== Array.prototype || Object.keys(value).length !== value.length) {
+    return notPlainData;
+  }
+  const copy: unknown[] = [];
+  for (const element of value) {
+    const cloned = clonePlainData(element, seen);
+    if (cloned === notPlainData) return notPlainData;
+    copy.push(cloned);
+  }
+  return copy;
+}
+
+function clonePlainRecord(value: Record<string, unknown>, seen: Set<object>): unknown {
+  const copy: Record<string, unknown> = {};
+  for (const key of Object.keys(value)) {
+    const property = clonePlainData(value[key], seen);
+    if (property === notPlainData) return notPlainData;
+    // An own `__proto__` key must stay data, as it does through structuredClone.
+    if (key === '__proto__') {
+      Object.defineProperty(copy, key, { value: property, writable: true, enumerable: true, configurable: true });
+    } else {
+      copy[key] = property;
+    }
+  }
+  return copy;
 }
 
 /** @internal Structural equality for canonical package-owned text state. */

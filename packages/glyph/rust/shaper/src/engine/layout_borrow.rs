@@ -1,5 +1,6 @@
-/// Maximum records returned by one borrowed inspection call; scratch is owned by the Wasm state.
-pub(crate) const BORROWED_GLYPH_CAPACITY: usize = 32;
+/// Maximum records returned by one borrowed inspection call. The Wasm state owns the scratch and grows it to
+/// the largest range requested, so a whole paragraph is one crossing.
+pub(crate) const BORROWED_GLYPH_CAPACITY: usize = 1 << 20;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]

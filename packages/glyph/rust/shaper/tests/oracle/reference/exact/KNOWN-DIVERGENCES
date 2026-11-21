@@ -10,6 +10,3 @@
 # Every one reproduces as a single request after a cold layout. Replay one with
 # `layout-oracle fuzz --case <case> --seed <seed> --steps <step + 1>`. The driver continues past
 # each from a cold layout, so the entries of one run do not depend on each other being fixed.
-seed font-fira-code-rand-start 1 3 shape.glyph.id | flip case at 38
-seed font-fira-code-rand-start 3 3 shape.glyph.id | flip case at 1339
-seed font-fira-code-rand-start 3 15 shape.glyph.id | flip case at 418
