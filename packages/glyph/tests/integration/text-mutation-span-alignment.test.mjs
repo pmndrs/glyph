@@ -747,8 +747,8 @@ test('raw span updates do not run JavaScript grapheme segmentation', { timeout }
       }
       assert.equal(
         structuredCloneCalls,
-        1,
-        'Three snapshots the changed caller style once before Rust prepares the authored ranges',
+        0,
+        'Three snapshots the changed plain caller style without entering the structured-clone serializer',
       );
       assert.equal(wellFormedChecks, 0, 'a paint-only update must not scan or segment unchanged text in JS');
       assert.deepEqual(node.measure(), accepted, 'a paint-only update preserves shaping and placement');

@@ -559,7 +559,9 @@ test('TypeGPU text snapshots nested desired state before comparing later updates
     const after = text.measure();
     assert.equal(after.width, 40);
     assert.ok(after.lineCount > before.lineCount);
-    assert.equal(structuredCloneCalls, 1, 'one owning boundary snapshots an actual property change');
+    assert.equal(structuredCloneCalls, 0, 'a plain property change is snapshotted without the serializer');
+    width.size = 400;
+    assert.equal(text.measure().width, 40, 'the owned snapshot is isolated from later caller mutation');
 
     const OriginalWeakMap = globalThis.WeakMap;
     globalThis.WeakMap = class extends OriginalWeakMap {
