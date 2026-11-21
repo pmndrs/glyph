@@ -83,6 +83,8 @@ pub(crate) struct RunLocalGlyphInput {
 
 #[derive(Clone, Copy)]
 pub(crate) enum ClusterFinish {
+    /// Line-edge islands continue; only tests stage a resynchronizing run.
+    #[cfg_attr(not(test), allow(dead_code))]
     Resync(f64),
     Continue {
         letter_spacing: f32,
@@ -1068,6 +1070,8 @@ fn cover(
     Ok(())
 }
 
+// Out of line: a derived arena copies a dozen lanes, and one body per element type is enough.
+#[inline(never)]
 fn copy_lane<T: Copy>(lane: &mut Vec<T>, source: &[T]) -> Result<(), RunLocalBuildError> {
     lane.clear();
     reserve(lane, source.len())?;
