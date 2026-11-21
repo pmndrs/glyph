@@ -45,7 +45,7 @@ use crate::{
     wire::read_u32,
 };
 
-use super::super::PreparationTarget;
+use super::super::{MeasuredParagraphs, PreparationTarget};
 use super::{
     fonts::{FontLibrary, PreparedFont},
     model::{
@@ -272,7 +272,7 @@ impl Session {
             || request.geometry.constraint_count() != 0
             || request.geometry.inline_object_count() != 0;
         let target = if carries_input {
-            PreparationTarget::Dirty
+            PreparationTarget::Dirty(MeasuredParagraphs::All)
         } else {
             PreparationTarget::One(PARAGRAPH_ID)
         };

@@ -9243,7 +9243,7 @@ mod prepare_paragraphs;
 #[cfg(test)]
 use change_class::ChangeClass;
 pub(crate) use change_class::{DirtyInterval, ParagraphChange};
-pub(crate) use prepare_paragraphs::PreparationTarget;
+pub(crate) use prepare_paragraphs::{MeasuredParagraphs, PreparationTarget};
 
 #[cfg(test)]
 mod unsafe_break_tests;

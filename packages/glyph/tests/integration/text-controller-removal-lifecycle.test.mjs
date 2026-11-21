@@ -179,13 +179,19 @@ test('a canceled unprepared creation never adds lifecycle rows to a copy, a read
       preparations.push(request.paragraphMutations.map((mutation) => mutation.opcode));
       return prepareParagraph.call(this, request, ...rest);
     };
+    const stagePreparation = PlanTransport.prototype.stagePreparation;
     PlanTransport.prototype.stageUpdate = function (frame, ...rest) {
       staged.push(frame.paragraphMutations.map((mutation) => mutation.opcode));
       return stageUpdate.call(this, frame, ...rest);
     };
+    PlanTransport.prototype.stagePreparation = function (frame, ...rest) {
+      staged.push(frame.paragraphMutations.map((mutation) => mutation.opcode));
+      return stagePreparation.call(this, frame, ...rest);
+    };
     t.after(() => {
       PlanTransport.prototype.prepareParagraph = prepareParagraph;
       PlanTransport.prototype.stageUpdate = stageUpdate;
+      PlanTransport.prototype.stagePreparation = stagePreparation;
     });
     copy = root.services.copy(source, { kind: 'glyphs', stableIds: inspection.glyphStableIds }, destination());
     assert.deepEqual(preparations, [], 'copy consumes durable preparation without another lifecycle request');

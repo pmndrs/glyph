@@ -219,6 +219,20 @@ impl FrameTransport {
         self.request_at(self.request.pointer(), length)
     }
 
+    /// The arena bytes after a request of `length` bytes, from the next 4-byte boundary. A batch
+    /// preparation states there which paragraphs' summaries it wants.
+    pub fn request_trailer(&self, length: u32) -> Result<&[u8], u32> {
+        let start = usize::try_from(length)
+            .ok()
+            .and_then(|length| length.checked_add(3))
+            .map(|end| end & !3)
+            .ok_or(STATUS_INVALID_REQUEST)?;
+        self.request
+            .bytes()
+            .get(start..)
+            .ok_or(STATUS_INVALID_REQUEST)
+    }
+
     pub fn ensure_publish_capacity(&self, byte_length: u32) -> Result<(), u32> {
         if byte_length <= self.result_capacity() {
             Ok(())

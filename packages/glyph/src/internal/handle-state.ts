@@ -1324,6 +1324,23 @@ export class PlanTransport {
     return requestLength;
   }
 
+  /**
+   * @internal Compile one root's batch preparation into its arena. `measured` names, in ascending order, the
+   * paragraphs whose summary the engine serializes; `'all'` asks for every prepared paragraph's.
+   */
+  stagePreparation(frame: PlannerFrameUpdate, measured: readonly number[] | 'all'): number {
+    this.#assertActive();
+    if (this.#stagedUpdate !== undefined) throw new Error('text update request is already staged');
+    const trailer = measured === 'all' ? ALL_PARAGRAPHS_MEASURED : measured;
+    const { requestLength, initialMemoryBuffer } = this.#writeFrameRequest(
+      frame,
+      'text preparation byte length',
+      trailer,
+    );
+    this.#stagedUpdate = { requestLength, initialMemoryBuffer };
+    return requestLength;
+  }
+
   /** @internal Decode the publication produced for the currently staged batch request. */
   consumeStagedUpdate(resultPointer: number, memoryBuffer: ArrayBuffer): PlanPublication {
     if (this.#disposed) throw new Error('plan transport is disposed');
@@ -1684,6 +1701,7 @@ export class PlanTransport {
   #writeFrameRequest(
     frame: PlannerFrameUpdate,
     lengthLabel: string,
+    measured?: readonly number[] | typeof ALL_PARAGRAPHS_MEASURED,
   ): { requestLength: number; requestPointer: number; initialMemoryBuffer: ArrayBuffer } {
     // The planner's arrays belong to this transport and are borrowed only until this synchronous write ends.
     // No staged request or issued publication retains the descriptor or its authored frame.
@@ -1692,8 +1710,14 @@ export class PlanTransport {
       this.#invalidate();
       const requestLength = uint32(request.byteLength, lengthLabel);
       const initialMemoryBuffer = this.#exports.memory.buffer;
+      // A batch preparation states after its request which summaries it wants: a count, then the paragraph ids.
+      const trailerOffset = (requestLength + 3) & ~3;
+      const arenaLength =
+        measured === undefined
+          ? requestLength
+          : uint32(trailerOffset + 4 + (measured === ALL_PARAGRAPHS_MEASURED ? 0 : measured.length * 4), lengthLabel);
       // The recorded capacity never exceeds the arena's, so a request that fits it needs no engine query.
-      if (requestLength > this.#requestCapacity) this.reserve(requestLength, this.#resultCapacity);
+      if (arenaLength > this.#requestCapacity) this.reserve(arenaLength, this.#resultCapacity);
       let requestPointer = this.#requestPointer;
       if (requestPointer === 0) {
         requestPointer = this.#exports.requestPointer(this.#handle);
@@ -1704,13 +1728,20 @@ export class PlanTransport {
       }
       const memoryBuffer = this.#exports.memory.buffer;
       let target = this.#requestView;
-      if (target === undefined || target.bytes.buffer !== memoryBuffer || target.bytes.byteLength < requestLength) {
+      if (target === undefined || target.bytes.buffer !== memoryBuffer || target.bytes.byteLength < arenaLength) {
         const capacity = this.#requestCapacity;
         const bytes = new Uint8Array(memoryBuffer, requestPointer, capacity);
         target = { bytes, view: new DataView(memoryBuffer, requestPointer, capacity) };
         this.#requestView = target;
       }
       writePreparedPlannerFrameUpdate(request, target.bytes, target.view);
+      if (measured === ALL_PARAGRAPHS_MEASURED) target.view.setUint32(trailerOffset, MAX_U32, true);
+      else if (measured !== undefined) {
+        target.view.setUint32(trailerOffset, measured.length, true);
+        for (let index = 0; index < measured.length; index += 1) {
+          target.view.setUint32(trailerOffset + 4 + index * 4, measured[index]!, true);
+        }
+      }
       return { requestLength, requestPointer, initialMemoryBuffer };
     } finally {
       clearPlannerFrameScratch(this.#frameScratch);
@@ -1731,6 +1762,9 @@ export class PlanTransport {
     return header;
   }
 }
+
+/** The trailer value that asks a batch preparation for every prepared paragraph's summary. */
+const ALL_PARAGRAPHS_MEASURED = Symbol('all paragraphs measured');
 
 function requireStatus(status: number, operation: string): void {
   if (status !== textShaperAbi.status.ok) throw engineStatusError(operation, status);

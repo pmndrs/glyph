@@ -301,3 +301,31 @@ test(
     assert.ok(byRead * 65_536 < 1_500 * 48_000, `a read mount grew memory by ${String(byRead)} pages`);
   },
 );
+
+test('a batch serializes a summary only for the paragraphs someone will read', { timeout }, async (t) => {
+  const { add, frame } = await createScene(t);
+  const texts = Array.from({ length: 40 }, (_, index) => add({ text: `label ${String(index)}` }));
+  frame();
+  const [read, anchored, plain] = texts;
+  read.measure();
+  anchored.constraints = { anchor: { x: 'center', y: 'middle' } };
+  frame();
+  for (const [index, text] of texts.entries()) text.text = `value ${String(index)}`;
+  assert.deepEqual(crossingsOf(frame), { engine_prepare_batch: 1, engine_update_batch: 1 });
+  assert.deepEqual(
+    crossingsOf(() => {
+      read.measure();
+      anchored.measure();
+    }),
+    {},
+    'the text that was read and the anchored text got their summaries from the batch',
+  );
+  assert.deepEqual(
+    crossingsOf(() => plain.measure()),
+    { engine_measure_paragraph: 1 },
+    'a sibling nobody read was prepared without a summary',
+  );
+  const cold = await createScene(t);
+  assert.deepEqual(layoutOf(plain), layoutOf(cold.add({ text: 'value 2' })));
+  assert.equal(anchored.measure().width, cold.add({ text: 'value 1' }).measure().width);
+});

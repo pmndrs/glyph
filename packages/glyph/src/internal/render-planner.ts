@@ -1138,7 +1138,7 @@ class RenderPlannerImpl {
     const exclusions: PlannerExclusion[] = [];
     const inlineObjects: PlannerInlineObject[] = [];
     const paragraphs: ParagraphPreparation[] = [];
-    let includeMeasurement = measureAll;
+    const measured: number[] = [];
     for (const state of states) {
       const preparation = this.#paragraphPreparation(state);
       if (!preparation.changed) {
@@ -1156,7 +1156,8 @@ class RenderPlannerImpl {
         continue;
       }
       paragraphs.push(preparation);
-      includeMeasurement ||= wantsMeasurement(state);
+      // Only a paragraph whose summary someone will read has it serialized; its siblings stay unmeasured.
+      if (!measureAll && wantsMeasurement(state)) measured.push(state.paragraphId);
       if (!state.created) {
         upserts.push({ opcode: 'upsert', paragraphId: state.paragraphId, order: state.preparedOrder });
       }
@@ -1185,17 +1186,21 @@ class RenderPlannerImpl {
       paragraphId: removed.paragraphId,
     }));
     for (const upsert of upserts) paragraphMutations.push(upsert);
-    this.#stagedRequestLength = this.#transport.stageUpdate({
-      ...this.#preparationRequestHeader(includeMeasurement),
-      paragraphMutations,
-      paragraphOrderMutations: EMPTY_REQUEST_ITEMS,
-      textMutations,
-      styleMutations,
-      constraints,
-      regions,
-      exclusions,
-      inlineObjects,
-    });
+    const includeMeasurement = measureAll || measured.length !== 0;
+    this.#stagedRequestLength = this.#transport.stagePreparation(
+      {
+        ...this.#preparationRequestHeader(includeMeasurement),
+        paragraphMutations,
+        paragraphOrderMutations: EMPTY_REQUEST_ITEMS,
+        textMutations,
+        styleMutations,
+        constraints,
+        regions,
+        exclusions,
+        inlineObjects,
+      },
+      measureAll ? 'all' : measured,
+    );
     this.#stagedPreparation = { paragraphs, removals, includeMeasurement };
     return this;
   }

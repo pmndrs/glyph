@@ -7,7 +7,7 @@ use crate::{
     STATUS_REGISTRATION_IN_USE, STATUS_RESULT_TOO_LARGE, STATUS_REVISION_CONFLICT,
     STATUS_ROOT_CONFLICT, STATUS_ROOT_MISSING, ShaperRegistry,
     engine::{
-        EngineError, FrameFault, PreparationTarget, TextEngine,
+        EngineError, FrameFault, MeasuredParagraphs, PreparationTarget, TextEngine,
         codec::CapabilitySetId,
         codec_wire::parse_codec,
         font_binding_wire::parse_font_binding,
@@ -1053,7 +1053,7 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_measure_paragraph(
             root_id,
             Some(request_offset as usize),
             request_len,
-            PreparationTarget::One(paragraph_id),
+            Some(paragraph_id),
         )
     })
 }
@@ -1063,6 +1063,10 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_measure_paragraph(
 /// Entries use the update-batch arena and layout: each names a root whose request arena already
 /// holds `request_length` bytes, and receives that root's result pointer and status. One root's
 /// failure leaves the other roots prepared.
+///
+/// After its request, from the next 4-byte boundary, each arena holds a `u32` count and that many
+/// ascending `u32` paragraph ids: the paragraphs whose summary is serialized when the request
+/// asks for measurement views. A count of `u32::MAX` serializes every prepared paragraph.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pmndrs_glyph_engine_prepare_batch(
     entries_pointer: u32,
@@ -1074,13 +1078,7 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_prepare_batch(
             entries_pointer as usize,
             count,
             |root_id, request_length| {
-                let result_pointer = prepare(
-                    state,
-                    root_id,
-                    None,
-                    request_length,
-                    PreparationTarget::Dirty,
-                );
+                let result_pointer = prepare(state, root_id, None, request_length, None);
                 let status = if result_pointer == 0 {
                     STATUS_ROOT_MISSING
                 } else {
@@ -1106,7 +1104,7 @@ fn prepare(
     root_id: u32,
     request_pointer: Option<usize>,
     request_len: u32,
-    target: PreparationTarget,
+    queried_paragraph: Option<u32>,
 ) -> u32 {
     let revision = match state.engine.root_revision(root_id) {
         Ok(revision) => revision,
@@ -1133,6 +1131,26 @@ fn prepare(
             }
         }
     };
+    // A read names its paragraph. A batch states after its request which summaries it wants.
+    let target = match queried_paragraph {
+        Some(paragraph_id) => PreparationTarget::One(paragraph_id),
+        None => {
+            let interest = state
+                .frames
+                .get(&root_id)
+                .ok_or(EngineError::RootMissing)
+                .and_then(|transport| {
+                    transport
+                        .request_trailer(request_len)
+                        .map_err(|_| EngineError::InvalidRequest)
+                })
+                .and_then(MeasuredParagraphs::parse);
+            match interest {
+                Ok(interest) => PreparationTarget::Dirty(interest),
+                Err(error) => return publish_engine_failure(state, root_id, revision, error),
+            }
+        }
+    };
     let measured =
         match state
             .engine
@@ -1144,7 +1162,7 @@ fn prepare(
             }
         };
     // A batch sizes its own result arena; a read reports the capacity it needs instead.
-    let grow_output = matches!(target, PreparationTarget::Dirty);
+    let grow_output = queried_paragraph.is_none();
     let staged = match state.engine.measured_semantic_views(measured) {
         Ok(semantic_views) => match query_layout(semantic_views) {
             Ok(layout) if layout.byte_length > request.limits.max_output_bytes => Err((
