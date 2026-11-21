@@ -728,3 +728,13 @@ Updated in place; the history of each change is in the log below.
 - **Known limit, being worked:** without `root.attach(scene)` the first frame prepares and publishes together,
   so `onLayout` cannot position before frame 1. The preparation lane is making the first frame exact without
   `attach`, or adding a loud warning if that cannot be done soundly.
+- **Tagged `sil-green-20`** (pushed): the ranked-order fix and unit 3 stages 5–6 (frame integration,
+  `onLayout`, error surfaces). Verified on the combined tree after a clean rebuild: full repository check
+  exits 0; glyph package tests; PixiJS 3D package check (34 tests) and parity suite; TypeGPU parity; both
+  render proofs; live check; full oracle tier native at 588 cases equal, 0 unlisted divergences.
+- **Built, on the preparation lane's branch:** the first frame is exact without `root.attach(scene)`. When a
+  layout callback fires after the traversal has begun, the root recomputes the scene's matrices once before
+  syncing transforms. Proven in plain Three with and without `attach` (frame-1 renderer bytes equal a scene
+  with the positions preset) and for react-three-fiber in a real browser canvas (callback before traversal;
+  frame 1 carries the callback position; on-demand loop renders only after a setter). Cost: one extra matrix
+  pass in a frame where a callback fired late.
