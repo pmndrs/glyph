@@ -24,18 +24,18 @@ Updated in place; the history of each change is in the log below.
 | Profile: font-size and inspection                                                                                                         | tested   | `profiles/5-6-fontsize-and-inspection.md`           |                                                                           |
 | Profile: browser first frame and idle                                                                                                     | tested   | `profiles/1-2-browser-first-frame-idle.md`          |                                                                           |
 | Profile: colour-only and many-label                                                                                                       | tested   | `profiles/3-4-colour-and-many-label.md`             |                                                                           |
-| Unit 0: correctness oracle                                                                                                                | building | integration branch                                  | Gates every engine unit                                                   |
-| HarfRust fork (AAT and `rand` off, `kern` kept), panic removal                                                                            | tested   | `experiments/sil-harfrust` (`8afd89c0d`)            | Shaper wasm 630.7 → 567.2 kB gzip; awaiting merge behind the oracle       |
+| Unit 0: correctness oracle                                                                                                                | merged   | `758b0a54b`, tag `sil-green-0`                      | 423 cases; native and wasm agree; found existing engine divergences       |
+| HarfRust fork (AAT and `rand` off, `kern` kept), panic removal                                                                            | merged   | `d012c2f4e`, tag `sil-green-1`                      | Shaper wasm 630.7 → 567.2 kB gzip; oracle quick tier green after merge    |
 | Lazy outline decoder (−22.7 kB gzip)                                                                                                      | held     | —                                                   | Needs an ABI change; goes with the one-ABI-change-at-a-time sequence      |
 | Renderer part 1 (Three, MSDF): one draw, effect-specialized shaders, ink-trimmed quads, glyph table, on-demand atlas; Slug curve crop     | tested   | `experiments/sil-render` (`91c86f9dc`)              | Steady frame 0.234 → 0.142 ms; GPU memory 1.44 → 0.56 MiB; awaiting merge |
 | Renderer part 2: growth without new pipelines, Slug table/trim/fragment, atlas load copies, prewarm, R8 mode, TypeGPU parity and batching | building | `experiments/sil-render`                            |                                                                           |
 | Host: idle frame, linear mount, first-frame JavaScript, first set, ingress, readback                                                      | building | `experiments/sil-host`                              |                                                                           |
 | Whole-plan review (five reviewers)                                                                                                        | building | `glyph-baselines-2026-11-21/review-v5/`             | Refines the plan; cuts nothing                                            |
-| Unit 1a: dense run-local geometry                                                                                                         | held     | —                                                   | Needs oracle                                                              |
+| Unit 1a: dense run-local geometry, metric rescale                                                                                         | building | `experiments/sil-geometry`                          |                                                                           |
 | Unit 1b: dense positioning and per-line ink                                                                                               | held     | —                                                   | Needs oracle, 1a                                                          |
-| Unit 1c: dense cluster build                                                                                                              | held     | —                                                   | Needs oracle, 1a                                                          |
-| Unit 1d: table-driven Unicode classes                                                                                                     | held     | —                                                   | Needs oracle                                                              |
-| Gather rewrite (write-only path, lane compare)                                                                                            | held     | —                                                   | Needs oracle                                                              |
+| Existing-engine divergence fixes, then unit 1c: dense cluster build with dirty-range output                                               | building | `experiments/sil-cluster`                           | Divergences first                                                         |
+| Unit 1d: Unicode class closure, bitmap kernels, per-paragraph bidi, resync predicate, word and sentence lanes                             | building | `experiments/sil-unicode`                           |                                                                           |
+| Unit 1e: column gather (write-only by change class, diff when sparse)                                                                     | building | `experiments/sil-gather`                            |                                                                           |
 | Unit 2: local edits                                                                                                                       | held     | —                                                   | Needs 1b, 1c                                                              |
 | Metric changes: keep island shapes, dense rescale                                                                                         | held     | —                                                   | Needs 1a                                                                  |
 | Unit 3: preparation and error model, `onLayout`                                                                                           | held     | —                                                   | Sequenced after the host lane                                             |
@@ -222,3 +222,23 @@ Updated in place; the history of each change is in the log below.
   not separated from machine load. Part 2 is asked to establish it.
 - **Wire needs handed to the engine lanes:** an effect flag per draw span (so mixed-style batches use the
   fill-only shader for unshadowed glyphs) and engine-owned atlas copy records.
+- **Merged: unit 0, the correctness oracle** (`758b0a54b`, tag `sil-green-0`). 423 cases across 11 scripts,
+  four alignments, fallback, spans, drop cap, ellipsis, exclusions, labels of 12–256 units, the adversarial
+  fonts and 76 mechanism cases from the reviews. A seeded driver issues requests of 1–4 coalesced changes and
+  compares every step with a cold layout (43,680 requests in the full tier). It compares what the renderer
+  draws after patches are applied. Native and optimized wasm agree on every digest. Quick tier 3.4 s, full
+  63 s native and 120 s in wasm. The frozen reference cannot be regenerated without two explicit flags.
+- **Finding: the current engine is not always equal to a cold layout.** 75 of 43,680 seeded requests and 4
+  scripted cases differ, each reproducible as one request. Largest family (48): adding, removing or restyling
+  a span without changing length leaves stale style data, often visible (for example a font-size span on the
+  last script run of a mixed-script label is not applied). 18 are valid inputs rejected incrementally but
+  accepted cold. Also: lost unsafe-to-break flags at the edge of a reshaped window, 3 stale `measure` results
+  after a width change. All are recorded in `KNOWN-DIVERGENCES`, a list that may only shrink.
+- **Merged: HarfRust fork and size cuts** (`d012c2f4e`, tag `sil-green-1`); quick oracle tier green on the
+  merged tree. Shaper wasm on the integration branch: 567.2 kB gzip.
+- **Building: three engine lanes** off `sil-green-1`: geometry (1a and metric rescale), Unicode (1d plus word
+  and sentence lanes), cluster (divergence fixes first, then 1c). Gather (1e) and host lanes told to merge the
+  integration branch to pick up the oracle.
+- **Not in the oracle yet:** inline objects, several paragraphs per root, columns, vertical modes, language
+  and feature spans. `WordBreakTest`, `SentenceBreakTest` and a Tamil/Kannada font were not fetched by the
+  oracle lane; the Unicode lane is fetching the two test files through the repo's sync script.
