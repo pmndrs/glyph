@@ -710,11 +710,15 @@ impl StagedRun {
         (end_first, end_second): (f64, f64),
     ) -> Result<(), RunLocalBuildError> {
         let glyph_count = self.glyph_count()? - glyph_start;
-        reserve(&mut self.glyph_starts, 1)?;
-        reserve(&mut self.glyph_counts, 1)?;
-        reserve(&mut self.detached, 1)?;
-        reserve(&mut self.end_first, 1)?;
-        reserve(&mut self.end_second, 1)?;
+        if self.glyph_starts.len() == self.glyph_starts.capacity() {
+            // One growth decision for the five cluster lanes, which fill together.
+            let more = self.glyph_starts.len().max(LAYOUT_CHUNK);
+            reserve(&mut self.glyph_starts, more)?;
+            reserve(&mut self.glyph_counts, more)?;
+            reserve(&mut self.detached, more)?;
+            reserve(&mut self.end_first, more)?;
+            reserve(&mut self.end_second, more)?;
+        }
         self.glyph_starts.push(glyph_start);
         self.glyph_counts.push(glyph_count);
         self.detached.push(u8::from(detached));
@@ -725,12 +729,16 @@ impl StagedRun {
 
     fn push_glyph(&mut self, input: RunLocalGlyphInput) -> Result<(), RunLocalBuildError> {
         let ink = input.outline.map(ink_units).transpose()?;
-        reserve(&mut self.source, 1)?;
-        reserve(&mut self.inline_advance, 1)?;
-        reserve(&mut self.inline_offset, 1)?;
-        reserve(&mut self.block_offset, 1)?;
-        reserve(&mut self.ink, 1)?;
-        reserve(&mut self.outlined, 1)?;
+        if self.source.len() == self.source.capacity() {
+            // One growth decision for the six glyph lanes, which fill together.
+            let more = self.source.len().max(LAYOUT_CHUNK);
+            reserve(&mut self.source, more)?;
+            reserve(&mut self.inline_advance, more)?;
+            reserve(&mut self.inline_offset, more)?;
+            reserve(&mut self.block_offset, more)?;
+            reserve(&mut self.ink, more)?;
+            reserve(&mut self.outlined, more)?;
+        }
         self.source.push(input.source_glyph);
         self.inline_advance.push(input.x_advance);
         self.inline_offset.push(input.x_offset);

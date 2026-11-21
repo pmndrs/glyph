@@ -636,7 +636,15 @@ fn record_rows(
     first_cluster: usize,
 ) {
     #[cfg(not(test))]
-    let _ = (&rows, scratch, first_cluster);
+    {
+        let _ = (&rows, scratch, first_cluster);
+        if !candidate.input.reverse {
+            // Emission order is glyph order.
+            let glyphs = candidate.glyph_base..candidate.glyph_base + candidate.glyph_count;
+            index.row_order.extend(glyphs.map(|glyph| glyph as u32));
+            return;
+        }
+    }
     let mut placed = 0;
     for (visit, cluster) in candidate.clusters().enumerate() {
         let owned = candidate.input.clusters.glyph_counts[cluster] as usize;
