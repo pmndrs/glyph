@@ -314,3 +314,53 @@ fn reflow_into_the_trailing_empty_line_still_ends_with_one() {
         }],
     );
 }
+
+/// Metric changes rerun run-local geometry from the font units the paragraph already holds,
+/// and a line-height change reuses the geometry. Both must land on the cold layout's bits:
+/// 23.7 over Inter's 2048-unit em and Fredoka's 1000-unit em are not dyadic scales, and Fredoka
+/// corrects a break at every space.
+#[test]
+fn metric_and_line_height_changes_equal_a_cold_layout_at_the_new_metrics() {
+    for font in ["inter", "fredoka"] {
+        let model = Model {
+            text: utf16(&format!("{}AVATAR To Wa office affine. ", prose(40))),
+            ..Model::default()
+        };
+        let restyled = |change: fn(&mut Model)| {
+            let mut next = model.clone();
+            change(&mut next);
+            Change {
+                next,
+                edits: Vec::new(),
+                route: Route::FULL,
+            }
+        };
+        assert_changes_equal_cold(
+            &[font],
+            &model,
+            &[
+                restyled(|next| next.root.font_size = 23.7),
+                restyled(|next| next.root.line_height = 1.45),
+                restyled(|next| {
+                    next.root.font_size = 23.7;
+                    next.root.line_height = 1.45;
+                }),
+                restyled(|next| next.root.letter_spacing = 0.35),
+                restyled(|next| next.root.word_spacing = 1.3),
+                restyled(|next| {
+                    next.spans = vec![Span {
+                        id: 2,
+                        start: 30,
+                        end: 300,
+                        style: SpanStyle {
+                            font_size: Some(11.3),
+                            baseline_shift: Some(2.5),
+                            ..SpanStyle::default()
+                        },
+                    }];
+                }),
+                restyled(|_| ()),
+            ],
+        );
+    }
+}

@@ -129,20 +129,43 @@ function kernelClass(codePoint) {
   return id | (EastAsianWidth.get(codePoint) ? EAST_ASIAN_BIT : 0);
 }
 
-/** Script byte: 0 neutral with no candidates, 1.. an explicit single script, 0xff the scalar path. */
+/**
+ * Script byte: 0 neutral with no candidates, 1.. an explicit single script, SCRIPT_SET_BASE.. a
+ * neutral unit whose Script_Extensions name candidate scripts (index into the set table), and
+ * 0xff the scalar path.
+ */
+const SCRIPT_SET_BASE = 0x80;
 const scriptIds = new Map();
 const scriptTags = ['Zyyy'];
+let scriptSetIds = new Map();
+let scriptSets = [];
+let setPopulation = new Map();
+/** When set, only these candidate sets get an id; the rest take the scalar path. */
+let allowedSets;
 function scriptByte(codePoint) {
   const script = scriptOf.get(codePoint) ?? 'Zzzz';
   const extensions = extensionsOf.get(codePoint) ?? [script];
   if (NEUTRAL.has(script)) {
-    return extensions.every((tag) => NEUTRAL.has(tag)) ? 0 : SCRIPT_COMPLEX;
+    const candidates = extensions.filter((tag) => !NEUTRAL.has(tag)).sort();
+    if (candidates.length === 0) return 0;
+    const key = candidates.join(',');
+    if (allowedSets !== undefined && !allowedSets.has(key)) return SCRIPT_COMPLEX;
+    let id = scriptSetIds.get(key);
+    if (id === undefined) {
+      id = SCRIPT_SET_BASE + scriptSets.length;
+      if (id >= SCRIPT_COMPLEX) return SCRIPT_COMPLEX;
+      scriptSetIds.set(key, id);
+      scriptSets.push(candidates);
+      setPopulation.set(key, 0);
+    }
+    setPopulation.set(key, setPopulation.get(key) + 1);
+    return id;
   }
   if (extensions.length !== 1 || extensions[0] !== script) return SCRIPT_COMPLEX;
   let id = scriptIds.get(script);
   if (id === undefined) {
     id = scriptTags.length;
-    if (id >= SCRIPT_COMPLEX) throw new Error('explicit script ids no longer fit one byte');
+    if (id >= SCRIPT_SET_BASE) throw new Error('explicit script ids no longer fit below the sets');
     scriptIds.set(script, id);
     scriptTags.push(script);
   }
@@ -171,7 +194,7 @@ function isResyncLetter(codePoint, kernel, script) {
     (name === 'AL' || name === 'HL') &&
     (kernel & EAST_ASIAN_BIT) === 0 &&
     script !== 0 &&
-    script !== SCRIPT_COMPLEX &&
+    script < SCRIPT_SET_BASE &&
     RESYNC_WORD_BREAK.has(wordBreak.get(codePoint) ?? 'Other') &&
     RESYNC_SENTENCE_BREAK.has(sentenceBreak.get(codePoint) ?? 'Other')
   );
@@ -179,19 +202,39 @@ function isResyncLetter(codePoint, kernel, script) {
 
 const UNIT_COUNT = 0x1_0000;
 const values = new Array(UNIT_COUNT);
-const summary = new Map();
-for (let unit = 0; unit < UNIT_COUNT; unit += 1) {
-  const base = kernelClass(unit);
-  const script = base === 0 ? SCRIPT_COMPLEX : scriptByte(unit);
-  const kernel = base | (isResyncLetter(unit, base, script) ? RESYNC_LETTER_BIT : 0);
-  values[unit] = kernel | (script << 8);
-  const name =
-    KERNEL_CLASSES[kernel & 0x1f] +
-    (kernel & EAST_ASIAN_BIT ? '+EastAsian' : '') +
-    (kernel & RESYNC_LETTER_BIT ? '+ResyncLetter' : '');
-  const entry = summary.get(name) ?? { count: 0, first: unit };
-  entry.count += 1;
-  summary.set(name, entry);
+let summary;
+function classifyUnits() {
+  scriptSetIds = new Map();
+  scriptSets = [];
+  setPopulation = new Map();
+  summary = new Map();
+  for (let unit = 0; unit < UNIT_COUNT; unit += 1) {
+    const base = kernelClass(unit);
+    const script = base === 0 ? SCRIPT_COMPLEX : scriptByte(unit);
+    const kernel = base | (isResyncLetter(unit, base, script) ? RESYNC_LETTER_BIT : 0);
+    values[unit] = kernel | (script << 8);
+    const name =
+      KERNEL_CLASSES[kernel & 0x1f] +
+      (kernel & EAST_ASIAN_BIT ? '+EastAsian' : '') +
+      (kernel & RESYNC_LETTER_BIT ? '+ResyncLetter' : '');
+    const entry = summary.get(name) ?? { count: 0, first: unit };
+    entry.count += 1;
+    summary.set(name, entry);
+  }
+  return new Set(values).size;
+}
+// The leaves index a value table with one byte, so at most 256 distinct class and script pairs
+// fit. Candidate sets are admitted most-populous first until the table is full; a set left out
+// costs only speed, since its units take the scalar script routine.
+if (classifyUnits() > 0x100) {
+  const ranked = [...setPopulation].sort(
+    ([leftKey, left], [rightKey, right]) => right - left || leftKey.localeCompare(rightKey),
+  );
+  let admitted = ranked.length;
+  do {
+    admitted -= 1;
+    allowedSets = new Set(ranked.slice(0, admitted).map(([key]) => key));
+  } while (classifyUnits() > 0x100);
 }
 
 // Three-stage table over the BMP: 16-unit leaves, 16-leaf middles. Leaves and middles are
@@ -276,6 +319,8 @@ for (let codePoint = 0; codePoint < 0x11_0000; codePoint += 1) {
 const hex = (value) => `0x${value.toString(16)}`;
 const tagValue = (tag) =>
   tag.charCodeAt(0) * 0x1_000000 + tag.charCodeAt(1) * 0x1_0000 + tag.charCodeAt(2) * 0x100 + tag.charCodeAt(3);
+const setOffsets = [0];
+for (const set of scriptSets) setOffsets.push(setOffsets.at(-1) + set.length);
 const closure = [...summary]
   .sort(([left], [right]) => left.localeCompare(right))
   .map(
@@ -294,8 +339,9 @@ const source = `// Generated by scripts/generate-unicode-kernel-data.mjs from
 // Kernel closure by class (BMP UTF-16 units; XX is the scalar residue):
 ${closure}
 //
-// Explicit single-script units carry one of ${scriptTags.length - 1} script ids; units with
-// Script_Extensions candidates or outside the closure carry SCRIPT_COMPLEX.
+// Explicit single-script units carry one of ${scriptTags.length - 1} script ids, neutral units with
+// Script_Extensions candidates one of ${scriptSets.length} set ids; an explicit script with other
+// extensions and everything outside the closure carry SCRIPT_COMPLEX.
 
 ${classConstants}
 pub const KERNEL_CLASS_MASK: u8 = 0x1f;
@@ -306,6 +352,16 @@ pub const KERNEL_SCRIPT_COMPLEX: u8 = ${hex(SCRIPT_COMPLEX)};
 /// Script tags indexed by the script byte; index 0 is Common (a neutral unit).
 pub static KERNEL_SCRIPT_TAGS: &[u32] = &[
 ${rustRows(scriptTags.map(tagValue))}
+];
+
+/// Candidate script sets of neutral units: set \`i\` (script byte \`KERNEL_SCRIPT_SET_BASE + i\`)
+/// is \`KERNEL_SCRIPT_SET_TAGS[KERNEL_SCRIPT_SET_OFFSETS[i]..KERNEL_SCRIPT_SET_OFFSETS[i + 1]]\`.
+pub const KERNEL_SCRIPT_SET_BASE: u8 = ${hex(SCRIPT_SET_BASE)};
+pub static KERNEL_SCRIPT_SET_OFFSETS: &[u16] = &[
+${rustRows(setOffsets)}
+];
+pub static KERNEL_SCRIPT_SET_TAGS: &[u32] = &[
+${rustRows(scriptSets.flat().map(tagValue))}
 ];
 
 /// \`class | script << 8\` for units below 0x80, read without the staged lookup.

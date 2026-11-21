@@ -19,12 +19,9 @@ import {
   colorTransform,
   corner,
   createSceneGroup,
-  placedOrigin,
-  projectText,
   recordDraw,
-  textOffset,
-  viewportSize,
   shaderRoot,
+  textScene,
   storageTable,
   target,
   type PipelineOptions,
@@ -92,9 +89,9 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
       'use gpu';
       const unit = corner(input.index);
       return {
-        position: projectText(
-          bitmapQuadPosition(placedOrigin(input.origin, input.instance), input.size, unit),
-          textOffset(input.instance),
+        position: textScene.projectText(
+          bitmapQuadPosition(textScene.placedOrigin(input.origin, input.instance), input.size, unit),
+          textScene.textOffset(input.instance),
         ),
         uv: bitmapAtlasUv(input.uvOrigin, input.uvSize, unit),
         color: input.color,
@@ -152,7 +149,7 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
           .with(colorLayout, lane(b.color.id))
           .with(u1, lane(b.page.id));
         return {
-          variantLane: undefined,
+          watchedLanes: [],
           variant: () => 0,
           draw(pass, bindGroups, _variant, first, count) {
             recordDraw(root, bound, pass, bindGroups, first, count);
@@ -201,17 +198,17 @@ function slugResource(
       const unit = corner(input.index);
       // What every drawing of a glyph shares is read once per vertex from the page's glyph table.
       const row = glyphRows.$[input.glyph.x]!;
-      const origin = placedOrigin(input.rect.xy, input.instance);
-      const offset = textOffset(input.instance);
+      const origin = textScene.placedOrigin(input.rect.xy, input.instance);
+      const offset = textScene.textOffset(input.instance);
       const local = d.vec2f(origin.x + unit.x * input.rect.z, -(origin.y + unit.y * input.rect.w));
       const normal = d.vec2f((unit.x - 0.5) * input.rect.z, -(unit.y - 0.5) * input.rect.w);
       const em = d.vec2f(row.quad.x + unit.x * row.quad.z, row.quad.y - unit.y * row.quad.w);
       // Em units per layout unit: the quad is the em quad scaled by the font size.
       const inverseScale = (row.quad.z + row.quad.w) / std.max(input.rect.z + input.rect.w, 1e-30);
       // Local homogeneous projection derivatives keep Slug's half-pixel expansion in screen space.
-      const clip = projectText(d.vec3f(local, 0), offset);
-      const dx = projectText(d.vec3f(local.x + 1, local.y, 0), offset).sub(clip);
-      const dy = projectText(d.vec3f(local.x, local.y + 1, 0), offset).sub(clip);
+      const clip = textScene.projectText(d.vec3f(local, 0), offset);
+      const dx = textScene.projectText(d.vec3f(local.x + 1, local.y, 0), offset).sub(clip);
+      const dy = textScene.projectText(d.vec3f(local.x, local.y + 1, 0), offset).sub(clip);
       const dilated = slugDilate(
         d.vec2f(0),
         normal,
@@ -220,10 +217,10 @@ function slugResource(
         d.vec4f(dx.x, dy.x, 0, clip.x),
         d.vec4f(dx.y, dy.y, 0, clip.y),
         d.vec4f(dx.w, dy.w, 0, clip.w),
-        viewportSize(),
+        textScene.viewportSize(),
       );
       return {
-        position: projectText(d.vec3f(local.add(dilated.xy), 0), offset),
+        position: textScene.projectText(d.vec3f(local.add(dilated.xy), 0), offset),
         coordinate: dilated.zw,
         color: input.color,
         band: row.band,
@@ -301,7 +298,7 @@ function slugResource(
           .with(colorLayout, lane(b.color.id))
           .with(u2, lane(b.glyph.id));
         return {
-          variantLane: undefined,
+          watchedLanes: [],
           variant: () => 0,
           draw(pass, bindGroups, _variant, first, count) {
             recordDraw(root, bound, pass, bindGroups, first, count);

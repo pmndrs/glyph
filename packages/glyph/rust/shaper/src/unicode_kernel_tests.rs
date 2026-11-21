@@ -162,6 +162,12 @@ fn kernel_equals_scalar_exhaustively() {
     exhaustive(&mut pair, &[], kernel::KERNEL_TEST_REPRESENTATIVES, 3);
     exhaustive(&mut pair, &[], &reduced_alphabet(), 4);
     exhaustive(&mut pair, &[], &closure_alphabet(), 5);
+    // Length 6 over the classes that carry context: flags, space runs, numeric prefixes, cuts.
+    let context = [
+        0x61, 0x4e00, 0x20, 0x201c, 0x201d, 0x28, 0x7d, 0x3005, 0x2014, 0x0a, 0x2c, 0x31, 0x2f,
+        0x25, 0x2d, 0x301, 0x22,
+    ];
+    exhaustive(&mut pair, &[], &context, 6);
     // The same class strings straddling a 64-unit block edge.
     for lead in 60..=63 {
         let prefix = alloc::vec![0x61u32; lead];

@@ -124,7 +124,7 @@ function recordingHost(rasterSchema = msdfSchema) {
             transformTables.add(transformTable);
             for (const [codecId, gpu] of buffers) codecIdByGpu.set(gpu, codecId);
             return {
-              variantLane: undefined,
+              watchedLanes: [],
               variant: () => 0,
               draw(_pass, _bindGroups, _variant, first, count) {
                 const indices = new DataView(buffers.get(TYPEGPU_TRANSFORM_INDEX_BUFFER_ID).bytes.buffer);

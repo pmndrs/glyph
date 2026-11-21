@@ -351,9 +351,8 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
         ranges.push(last);
         continue;
       }
-      const lane = target.binding.variantLane;
       let variant = this.#variants[index];
-      if (variant === undefined || (lane !== undefined && written.has(lane))) {
+      if (variant === undefined || target.binding.watchedLanes.some((lane) => written.has(lane))) {
         variant = target.binding.variant(span.start, span.count);
         this.#variants[index] = variant;
       }

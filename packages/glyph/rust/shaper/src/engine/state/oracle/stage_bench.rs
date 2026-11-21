@@ -11,7 +11,7 @@ use alloc::{
     vec::Vec,
 };
 
-use crate::engine::cluster_state::LAYOUT_CHUNK;
+use crate::engine::{cluster_state::LAYOUT_CHUNK, run_local::Inherited};
 
 use super::{
     super::{ParagraphState, PreparedLayout},
@@ -223,20 +223,33 @@ fn stage(
     let styles = paragraph.styles.active().resolved.segments();
     let runs = paragraph.shaping_runs.active().runs();
     let (pending, committed) = paragraph.clusters.derive_mut();
-    // Each change class calls the stage after deriving the pending clusters; until a class gets
-    // its own path the three rows time the same rebuild.
-    for (name, metrics_changed) in [
-        ("stage.run_local.cold", false),
-        ("stage.run_local.metric", true),
-        ("stage.run_local.line_height", false),
+    for (name, inherited) in [
+        ("stage.run_local.cold", None),
+        ("stage.run_local.metric", Some(Inherited::Ink)),
+        ("stage.run_local.line_height", Some(Inherited::Geometry)),
     ] {
         let mut samples = Vec::new();
         for _ in 0..iterations {
+            // What a style-only change derives before the stage runs; untimed.
             pending
-                .refresh_styles_from_stream(committed, styles, runs, metrics_changed)
+                .refresh_styles_from_stream(
+                    committed,
+                    styles,
+                    runs,
+                    inherited == Some(Inherited::Ink),
+                )
                 .map_err(|error| format!("refresh: {error:?}"))?
                 .ok_or("the committed clusters cannot be refreshed")?;
+            pending.run_local.take_inherited();
             let started = now();
+            // The stage's whole cost for the class: what it copies from the committed arena,
+            // then the rebuild.
+            if let Some(inherited) = inherited {
+                pending
+                    .run_local
+                    .inherit(&committed.run_local, inherited)
+                    .map_err(|error| format!("inherit: {error:?}"))?;
+            }
             pending
                 .rebuild_run_local_geometry(runs, styles, |handle, glyph| {
                     registry.font_glyph_extents(handle, glyph)
