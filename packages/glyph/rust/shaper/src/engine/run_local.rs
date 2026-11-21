@@ -285,6 +285,24 @@ fn ink_units(extents: FontGlyphExtents) -> Result<[i16; 4], RunLocalBuildError> 
     ])
 }
 
+/// What a derived arena took from the arena it was copied from, valid for one rebuild.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Inherited {
+    /// The glyph stream is the same: font-unit ink is reused and the kernel reruns.
+    Ink,
+    /// Every run-local input is the same: the geometry itself is reused.
+    Geometry,
+}
+
+/// One laid-out paragraph run: what inherited geometry must still match, and its blocks.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) struct RunRecord {
+    pub cluster_start: u32,
+    pub cluster_end: u32,
+    pub reverse: bool,
+    pub blocks: NumericBlockSpan,
+}
+
 #[derive(Default)]
 pub(crate) struct RunLocalArena {
     pub(super) index: BlockIndex,
@@ -292,6 +310,9 @@ pub(crate) struct RunLocalArena {
     source_words: Vec<SourceWord>,
     source_prefix: Vec<SourceWordPrefix>,
     pub(super) ink: InkUnitLanes,
+    /// The paragraph's runs in layout order; empty for an arena filled by the staged writer.
+    pub(super) runs: Vec<RunRecord>,
+    inherited: Option<Inherited>,
     pub(super) scratch: KernelScratch,
     /// Scale spans of the paragraph run being laid out.
     pub(super) spans: Vec<ScaleSpan>,
@@ -314,6 +335,48 @@ impl RunLocalArena {
     pub(crate) fn clear(&mut self) {
         self.clear_geometry();
         self.ink.clear();
+        self.inherited = None;
+    }
+
+    /// Takes the inheritance recorded by `inherit`, so it serves exactly one rebuild.
+    pub(super) fn take_inherited(&mut self) -> Option<Inherited> {
+        self.inherited.take()
+    }
+
+    /// Copies from the arena this one's owner was derived from: the font-unit ink, and for
+    /// `Geometry` everything else. The next rebuild checks that what was copied still fits.
+    pub(crate) fn inherit(
+        &mut self,
+        previous: &Self,
+        inherited: Inherited,
+    ) -> Result<(), RunLocalBuildError> {
+        self.clear();
+        copy_lane(&mut self.ink.units, &previous.ink.units)?;
+        copy_lane(&mut self.ink.outlined, &previous.ink.outlined)?;
+        if inherited == Inherited::Geometry {
+            copy_lane(&mut self.index.blocks, &previous.index.blocks)?;
+            copy_lane(
+                &mut self.index.cluster_blocks,
+                &previous.index.cluster_blocks,
+            )?;
+            copy_lane(
+                &mut self.index.cluster_prefixes,
+                &previous.index.cluster_prefixes,
+            )?;
+            self.index.row_count = previous.index.row_count;
+            #[cfg(any(test, feature = "oracle"))]
+            self.index.row_order.clone_from(&previous.index.row_order);
+            for (lane, from) in self.rows.lanes_mut().into_iter().zip(previous.rows.lanes()) {
+                copy_lane(lane, from)?;
+            }
+            #[cfg(test)]
+            self.rows.pen_inline.clone_from(&previous.rows.pen_inline);
+            copy_lane(&mut self.source_words, &previous.source_words)?;
+            copy_lane(&mut self.source_prefix, &previous.source_prefix)?;
+            copy_lane(&mut self.runs, &previous.runs)?;
+        }
+        self.inherited = Some(inherited);
+        Ok(())
     }
 
     /// Drops blocks, rows and the outline index; font-unit ink stays.
@@ -322,6 +385,7 @@ impl RunLocalArena {
         self.rows.clear();
         self.source_words.clear();
         self.source_prefix.clear();
+        self.runs.clear();
     }
 
     pub(crate) fn blocks(&self) -> &[NumericBlock] {
@@ -1029,6 +1093,13 @@ where
         }
         Ok(())
     }
+}
+
+fn copy_lane<T: Copy>(lane: &mut Vec<T>, source: &[T]) -> Result<(), RunLocalBuildError> {
+    lane.clear();
+    reserve(lane, source.len())?;
+    lane.extend_from_slice(source);
+    Ok(())
 }
 
 fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), RunLocalBuildError> {

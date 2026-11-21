@@ -12,7 +12,7 @@ use super::{
     identity_index::{IdentityIndex, identity_index_error},
     line_composition::Correction,
     reserve_vec as reserve,
-    run_local::{NumericBlockSpan, RunLocalArena},
+    run_local::{Inherited, NumericBlockSpan, RunLocalArena},
     shaping_state::{ShapeArena, ShapingRun},
     style_state::{ResolvedStyle, StyleArena, StyleSegment},
 };
@@ -1448,6 +1448,16 @@ impl ClusterArena {
         // arrives the same way.
         self.ltr = all_ltr(runs);
         self.rebuild_layout_runs_for_shaping(runs)?;
+        // The glyph stream is the previous one, so its font-unit ink is too; with no metric
+        // change every run-local input is, and the geometry carries over where the runs agree.
+        let inherited = if metrics_changed {
+            Inherited::Ink
+        } else {
+            Inherited::Geometry
+        };
+        self.run_local
+            .inherit(&previous.run_local, inherited)
+            .map_err(|_| EngineError::ResultTooLarge)?;
         if metrics_changed {
             self.reset_break_corrections(0, self.starts.len());
             self.refresh_layout_units()?;
