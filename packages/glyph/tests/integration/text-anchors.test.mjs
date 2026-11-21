@@ -227,8 +227,10 @@ test('empty, tight leading, sizing, dynamic text, mixed fonts and fallback retai
     text: '',
     constraints: { anchor: { y: 'first-baseline' } },
   });
-  assert.equal(text.measure().lineCount, 0);
-  assert.deepEqual(text.measure().anchorOffset, { x: 0, y: 0 });
+  // Empty text still has one line, so a first-baseline anchor has a baseline to stand on.
+  assert.equal(text.measure().lineCount, 1);
+  assert.deepEqual(text.measure().anchorOffset, { x: 0, y: -19.275390625 });
+  assert.equal(text.measure().anchorOffset.y, -text.measure().firstBaseline);
   text.text = 'x\n\nx';
   assert.equal(text.measure().lineCount, 3);
   for (const line of text.measure().lines)

@@ -9159,11 +9159,12 @@ test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async (t) 
   const inspection = label.glyphs();
   assert.ok(inspection);
   assert.equal(inspection.lineTextEnds[0], 3, 'the fixed width must preserve the unsafe-boundary fixture');
-  assert.equal(inspection.clusters.at(-1), 3, 'the ellipsis is anchored at the truncation boundary');
-  assert.deepEqual([...inspection.glyphIds], [61, 2613, 2598, 6597]);
-  assert.deepEqual([...inspection.clusters], [2, 1, 0, 3]);
+  // Glyphs are in visual order: in a right-to-left paragraph the ellipsis ends the line at its left edge.
+  assert.equal(inspection.clusters.at(0), 3, 'the ellipsis is anchored at the truncation boundary');
+  assert.deepEqual([...inspection.glyphIds], [6597, 61, 2613, 2598]);
+  assert.deepEqual([...inspection.clusters], [3, 2, 1, 0]);
   // CPU inspection and the renderer share the declared local-plus-offset f32 placement authority.
-  assert.deepEqual([...inspection.x], [0.2320079803466797, 10.808008193969727, 18.376007080078125, 23.91200828552246]);
+  assert.deepEqual([...inspection.x], [0.2320079803466797, 13.32000732421875, 23.896007537841797, 31.464008331298828]);
 
   label.dispose();
   font.dispose();
