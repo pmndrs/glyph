@@ -42,6 +42,7 @@ mod line;
 mod motion;
 mod offset;
 mod place;
+mod rebase;
 #[cfg(test)]
 mod tests;
 pub mod wire;
@@ -50,6 +51,7 @@ pub use boundary::Location;
 pub use lig_caret::{MAX_LIGATURE_CARETS, ligature_carets};
 pub use line::is_hard_break_unit;
 pub use offset::{OffsetArgument, OffsetError, OffsetReason};
+pub use rebase::rebase_span;
 
 use alloc::vec::Vec;
 

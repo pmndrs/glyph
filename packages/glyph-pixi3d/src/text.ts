@@ -7,7 +7,6 @@ import type {
   FontFaceRasterOf,
   FontFaceSelection,
   GlyphHandleFonts,
-  GlyphCaret,
   GlyphKey,
   LayoutBox,
   LayoutPoint,
@@ -18,8 +17,14 @@ import type {
   ParagraphLayout,
   ParagraphLayoutSummary,
   RasterFormatRequest,
+  TextCaret,
+  TextDirection,
+  TextMovement,
+  TextPosition,
+  TextRange,
   TextStyle,
   TextInput,
+  TextUnit,
 } from '@pmndrs/glyph';
 import { bitmap, msdf, slug } from '@pmndrs/glyph';
 import { Box, Container3D, type Destroy3DOptions, Mesh3D } from '@pixi/3d';
@@ -246,23 +251,30 @@ export class Pixi3DText<Selection extends Pixi3DFontSelection = Pixi3DFontSelect
       ),
     );
   }
-  /** Nearest desired cluster boundary to logical Text-local x/y (+X right, +Y down), including anchor placement but no native transform. */
-  caretAt(x: number, y: number): GlyphCaret {
-    const placements = this.#placements();
-    const offset = placements.layout.anchorOffset;
-    return anchoredCaret(placements.caretAt(x - offset.x, y - offset.y), offset);
+  /** Where the caret of a position is drawn, in anchored logical Text-local space (+Y down), before native transforms. Throws `TextOffsetError` for an offset that is not on a grapheme boundary of the text. */
+  caret(position: TextPosition): TextCaret {
+    this.#assertActive();
+    return this.#controller.editing.caret(position);
   }
-  /** Desired caret rectangle in anchored logical Text-local space (+Y down) for a UTF-16 offset; respects clusters, bidi and line boundaries. */
-  caretForOffset(offset: number): GlyphCaret {
-    const placements = this.#placements();
-    return anchoredCaret(placements.caretForOffset(offset), placements.layout.anchorOffset);
+  /** The caret stop nearest a point in anchored logical Text-local space; the point may be between lines or outside the text. */
+  hitTest(point: LayoutPoint): TextPosition {
+    this.#assertActive();
+    return this.#controller.editing.hitTest(point);
   }
-  /** Desired selection rectangles in anchored logical Text-local space (+Y down), before native transforms. */
-  selectionRects(start: number, end: number): readonly LayoutBox[] {
-    const placements = this.#placements();
-    const offset = placements.layout.anchorOffset;
-    const boxes = placements.selectionRects(start, end);
-    return offset.x === 0 && offset.y === 0 ? boxes : Object.freeze(boxes.map((box) => anchoredBox(box, offset)));
+  /** Moves a position one unit: `forward`/`backward` logically, `left`/`right` visually across bidi runs, `up`/`down` by line toward `goalX`. */
+  move(position: TextPosition, direction: TextDirection, unit: TextUnit, goalX?: number): TextMovement {
+    this.#assertActive();
+    return this.#controller.editing.move(position, direction, unit, goalX);
+  }
+  /** The grapheme, word, sentence or line that contains a position. */
+  boundary(position: TextPosition, unit: TextUnit): TextRange {
+    this.#assertActive();
+    return this.#controller.editing.boundary(position, unit);
+  }
+  /** The rectangles covering `[start, end)` in anchored logical Text-local space (+Y down), before native transforms. */
+  rangeRects(start: number, end: number): readonly LayoutBox[] {
+    this.#assertActive();
+    return this.#controller.editing.rangeRects(start, end);
   }
   #placements() {
     const layout = this.glyphs();
@@ -404,9 +416,4 @@ function plainText(input: string | { readonly text: string }): string {
 function anchoredBox(box: LayoutBox, offset: LayoutPoint): LayoutBox {
   if (offset.x === 0 && offset.y === 0) return box;
   return Object.freeze({ ...box, x: box.x + offset.x, y: box.y + offset.y });
-}
-
-function anchoredCaret(caret: GlyphCaret, offset: LayoutPoint): GlyphCaret {
-  if (offset.x === 0 && offset.y === 0) return caret;
-  return Object.freeze({ ...caret, rect: anchoredBox(caret.rect, offset) });
 }

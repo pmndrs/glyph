@@ -70,7 +70,14 @@ import { reuseOrCreateTextPropertySnapshot, reuseOrCreateTextStyleSnapshot } fro
 import type { ParagraphId, ResourceHandle, StyleId } from './glyph-id.js';
 import { codecCapabilitySetSelectionId, selectCodecCapabilitySet } from './codec-capability-selection.js';
 import { ownTextInput } from '../config/text-span-owner.js';
-import { changesLayoutStyle, LAYOUT_PHASE_WRITE_MESSAGE, minimalTextReplacement } from '../text-mutation.js';
+import {
+  changesLayoutStyle,
+  LAYOUT_PHASE_WRITE_MESSAGE,
+  minimalTextReplacement,
+  statedTextReplacement,
+  type TextRangeReplacement,
+} from '../text-mutation.js';
+import type { TextQuery } from '../text-editing.js';
 
 const MAX_U32 = 0xffff_ffff;
 /**
@@ -290,6 +297,10 @@ export interface RetainedText {
   glyphs(): GlyphLayoutInspection;
   /** Demand-reads positioned glyphs through a synchronous expiring view. */
   readGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result;
+  /** Runs one editing query over the current desired state, preparing this paragraph first when it is dirty. */
+  textQuery<Result>(query: TextQuery<Result>): Result;
+  /** States the exact range the next text value replaces, so the engine is told that range and not a compared one. */
+  stateReplacement(replacement: TextRangeReplacement): void;
   /** Offers a complete checkpoint containing selected desired-layout stable glyph ids to one renderer target. */
   copyGlyphs(stableIds: ArrayLike<number>, target: PlanTarget): PlanAcceptance;
   /** Offers a complete checkpoint containing this paragraph's desired decorations. */
@@ -412,6 +423,8 @@ interface RetainedTextState {
    */
   created: boolean;
   prepared: boolean;
+  /** The range the last `replace()` named, used when it still takes the prepared text to the desired one. */
+  statedReplacement?: TextRangeReplacement;
   /**
    * The error of a preparation the engine refused for this paragraph alone. The engine emptied the paragraph, so
    * it is restated from nothing once its input changes; until then it is left out of every batch.
@@ -1057,6 +1070,12 @@ class RenderPlannerImpl {
     return inspection;
   }
 
+  /** @internal Runs one editing query over this paragraph, prepared first as any read prepares it. */
+  _textQuery<Result>(state: RetainedTextState, query: TextQuery<Result>): Result {
+    this.#assertTextQueryable(state);
+    return this.#transport.textQuery((exports, root) => query(exports, root, state.paragraphId));
+  }
+
   /** @internal */
   _readGlyphs<Result>(state: RetainedTextState, read: (glyphs: BorrowedGlyphLayout) => Result): Result {
     this.#assertTextQueryable(state);
@@ -1569,7 +1588,10 @@ class RenderPlannerImpl {
         ? EMPTY_REQUEST_ITEMS
         : compileStyles(this.#handleState, state, retainedStyleChanges(desired, prepared));
     const geometryChanged = state.geometryDirty || prepared === undefined;
-    const replacement = minimalTextReplacement(prepared?.text ?? '', desired.text);
+    // An edit that stated its range is told to the engine as stated; a whole-string setter is compared.
+    const replacement =
+      statedTextReplacement(state.statedReplacement, prepared?.text, desired.text) ??
+      minimalTextReplacement(prepared?.text ?? '', desired.text);
     return {
       state,
       text:
@@ -2268,6 +2290,14 @@ class RetainedTextImpl implements RetainedText {
 
   readGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result {
     return this.#planner._readGlyphs(this.#state, read);
+  }
+
+  textQuery<Result>(query: TextQuery<Result>): Result {
+    return this.#planner._textQuery(this.#state, query);
+  }
+
+  stateReplacement(replacement: TextRangeReplacement): void {
+    this.#state.statedReplacement = replacement;
   }
 
   copyGlyphs(stableIds: ArrayLike<number>, target: PlanTarget): PlanAcceptance {

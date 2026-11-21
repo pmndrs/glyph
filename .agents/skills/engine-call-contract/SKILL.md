@@ -54,7 +54,7 @@ calls lives on `/core`.**
 schema, portable-resource, and raster-format construction helpers share that entry. Built-in `bitmap`, `msdf`, and `slug`
 format values and their public options/data types live at root; their schemas, codecs, and format interpretation helpers
 live on `/core`. `createGlyphPlacements` also lives there because an integration combines a package-produced layout with
-its renderer's drawn origins; applications encounter only `GlyphCaret` through an integration such as Three. Internal engine,
+its renderer's drawn origins; applications reach caret and selection geometry through an integration such as Three. Internal engine,
 planner, wire, projection, and binding machinery has no public subpath. Boundary and packed-package tests enforce all
 three facts.
 

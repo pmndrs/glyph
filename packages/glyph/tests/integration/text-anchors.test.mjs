@@ -289,8 +289,8 @@ test('Three draw transforms, bounds, glyph measures, carets, selection and split
       const base = text.measure();
       const ink = text.computeBoundingBox().clone();
       const glyphs = text.measureGlyphs();
-      const caret = text.caretForOffset(1);
-      const selection = text.selectionRects(0, 2);
+      const caret = text.caret({ offset: 1, affinity: 'downstream' });
+      const selection = text.rangeRects(0, 2);
       const beforeDraws = draws(scene).map((draw) => ({ draw, matrix: draw.matrix.clone() }));
       assert.ok(beforeDraws.length > 0);
       text.constraints = { anchor: { x: 'center', y: 'first-baseline' } };
@@ -303,11 +303,11 @@ test('Three draw transforms, bounds, glyph measures, carets, selection and split
       const changed = text.measureGlyphs();
       for (let i = 0; i < glyphs.length; i++)
         assert.ok(changed[i].drawnOrigin.equals(glyphs[i].drawnOrigin.clone().add(translation)));
-      const changedCaret = text.caretForOffset(1);
+      const changedCaret = text.caret({ offset: 1, affinity: 'downstream' });
       near(changedCaret.rect.x, caret.rect.x + offset.x, 'caret x');
       near(changedCaret.rect.y, caret.rect.y + offset.y, 'caret y');
-      assert.equal(text.caretAt(changedCaret.rect.x, changedCaret.rect.y).offset, 1);
-      const changedSelection = text.selectionRects(0, 2);
+      assert.equal(text.hitTest({ x: changedCaret.rect.x, y: changedCaret.rect.y }).offset, 1);
+      const changedSelection = text.rangeRects(0, 2);
       near(changedSelection[0].x, selection[0].x + offset.x, 'selection x');
       near(changedSelection[0].y, selection[0].y + offset.y, 'selection y');
       if (transformMode === 'direct') {

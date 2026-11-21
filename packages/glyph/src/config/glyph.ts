@@ -1,3 +1,4 @@
+import type { TextEditingQueries } from '../text-editing.js';
 import type { Font } from '../font.js';
 import type { FontFaceRasterOf, FontFaceSelection } from '../font-face.js';
 import type { BorrowedGlyphLayout, GlyphLayoutInspection, ParagraphLayoutSummary } from '../layout.js';
@@ -490,6 +491,8 @@ export interface GlyphTextController<Format extends RasterFormatMetadata, Materi
   inspect(): GlyphLayoutInspection;
   /** Synchronously reads indexed glyph data and returns the callback's result. The view expires when the callback exits; repeated unchanged reads may retain one private canonical snapshot. */
   readGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result;
+  /** Carets, hit testing, movement, unit boundaries and range rectangles over the current desired layout. */
+  readonly editing: TextEditingQueries;
   dispose(): void;
 }
 

@@ -4,7 +4,17 @@ import * as THREE from 'three/webgpu';
 import { type FormattedText, type ParagraphSpan, type TextInput } from '../formatted-text.js';
 import type { Font } from '../font.js';
 import { isFontFaceSelection, resolveFontFace, type FontFaceSelection, type FontFaceRasterOf } from '../font-face.js';
-import { createGlyphPlacements, type GlyphCaret, type GlyphPlacements } from '../glyph-placement.js';
+import { createGlyphPlacements, type GlyphPlacements } from '../glyph-placement.js';
+import {
+  replaceInText,
+  type TextCaret,
+  type TextDirection,
+  type TextEditingQueries,
+  type TextMovement,
+  type TextPosition,
+  type TextRange,
+  type TextUnit,
+} from '../text-editing.js';
 import {
   copyGlyphLayoutInspection,
   type BorrowedGlyphLayout,
@@ -699,6 +709,12 @@ export class ThreeRootHost {
   readGlyphs<Result>(text: THREE.Object3D, read: (glyphs: BorrowedGlyphLayout) => Result): Result {
     this.#assertMember(text);
     return this.#rootBinding().readGlyphs(text, read);
+  }
+
+  /** @internal The editing queries of one root member. */
+  editing(text: THREE.Object3D): TextEditingQueries {
+    this.#assertMember(text);
+    return this.#rootBinding().editing(text);
   }
 
   /** @internal Return the publication-facing view after authenticating root membership. */
@@ -1673,30 +1689,46 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return sourceByIndex;
   }
 
-  /** Finds the nearest desired caret to logical Text-local coordinates (+X right, +Y down), anchor included; does not publish a frame. */
-  caretAt(x: number, y: number): GlyphCaret | undefined {
-    const placements = this.#glyphPlacements();
-    if (placements === undefined) return undefined;
-    const offset = placements.layout.anchorOffset;
-    return anchoredCaret(placements.caretAt(x - offset.x, y - offset.y), offset);
+  #editing(): TextEditingQueries {
+    this.#assertActive();
+    return this.#root.editing(this);
   }
 
-  /** Resolves a UTF-16 offset to a desired caret in logical Text-local coordinates (+X right, +Y down), anchor included. */
-  caretForOffset(offset: number): GlyphCaret | undefined {
-    const placements = this.#glyphPlacements();
-    return placements === undefined
-      ? undefined
-      : anchoredCaret(placements.caretForOffset(offset), placements.layout.anchorOffset);
+  /** Where the caret of a position is drawn, in logical Text-local coordinates (+X right, +Y down), anchor included. Prepares this paragraph first when a setter left it dirty; does not publish a frame. Throws `TextOffsetError` for an offset that is not on a grapheme boundary of the text. */
+  caret(position: TextPosition): TextCaret {
+    return this.#editing().caret(position);
   }
 
-  /** Returns desired selection rectangles in logical Text-local coordinates (+X right, +Y down), anchor included; does not publish a frame. */
-  selectionRects(start: number, end: number): readonly LayoutBox[] | undefined {
-    const placements = this.#glyphPlacements();
-    return placements === undefined
-      ? undefined
-      : Object.freeze(
-          placements.selectionRects(start, end).map((box) => anchoredBox(box, placements.layout.anchorOffset)),
-        );
+  /** The caret stop nearest a point in logical Text-local coordinates; the point may be between lines or outside the text. */
+  hitTest(point: LayoutPoint): TextPosition {
+    return this.#editing().hitTest(point);
+  }
+
+  /** Moves a position one unit: `forward`/`backward` logically, `left`/`right` visually across bidi runs, `up`/`down` by line toward `goalX`. Pass the returned `goalX` to the next vertical move. */
+  move(position: TextPosition, direction: TextDirection, unit: TextUnit, goalX?: number): TextMovement {
+    return this.#editing().move(position, direction, unit, goalX);
+  }
+
+  /** The grapheme, word, sentence or line that contains a position. */
+  boundary(position: TextPosition, unit: TextUnit): TextRange {
+    return this.#editing().boundary(position, unit);
+  }
+
+  /** The rectangles covering `[start, end)` in logical Text-local coordinates: one per run of the range that is contiguous on its line. */
+  rangeRects(start: number, end: number): readonly LayoutBox[] {
+    return this.#editing().rangeRects(start, end);
+  }
+
+  /**
+   * Replaces UTF-16 code units `[start, end)` of the text with `insert`. Both offsets must be grapheme
+   * boundaries of the current text, or `TextOffsetError` is thrown and nothing changes. Spans follow the edit:
+   * inserted text takes the style of the grapheme before it.
+   */
+  replace(start: number, end: number, insert: string): void {
+    if (typeof insert !== 'string') throw new GlyphInputError(['insert'], 'replace() insert must be a string');
+    const range = this.#editing().beginReplace(start, end, insert);
+    const next = replaceInText(this.#desired.text, this.#desired.spans, range, insert);
+    this.set({ text: next.spans.length === 0 ? next.text : next } as unknown as TextUpdate<Format>);
   }
 
   /**
@@ -2234,6 +2266,13 @@ class ThreeRootPublication {
     const result = entry.handle.readGlyphs(read);
     this.#detachedQuery = nearestScene(text) === undefined ? text : undefined;
     return result;
+  }
+
+  editing(text: Text<RasterFormatMetadata>): TextEditingQueries {
+    this.#assertActive();
+    const entry = this.#queryEntry(text, false);
+    this.#detachedQuery = nearestScene(text) === undefined ? text : undefined;
+    return entry.handle.editing;
   }
 
   #queryEntry(text: Text<RasterFormatMetadata>, presentationRequired = true): BoundTextEntry {
@@ -3250,14 +3289,6 @@ function checkedNextRevision(current: number): number {
   const next = current + 1;
   if (!Number.isSafeInteger(next)) throw new RangeError('Text revisions are exhausted');
   return next;
-}
-
-function anchoredBox(box: LayoutBox, offset: LayoutPoint): LayoutBox {
-  return Object.freeze({ ...box, x: box.x + offset.x, y: box.y + offset.y });
-}
-
-function anchoredCaret(caret: GlyphCaret, offset: LayoutPoint): GlyphCaret {
-  return Object.freeze({ ...caret, rect: anchoredBox(caret.rect, offset) });
 }
 
 function sameDesiredExceptAnchor(

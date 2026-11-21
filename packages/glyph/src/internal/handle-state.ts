@@ -1565,6 +1565,15 @@ export class PlanTransport {
     this.#invalidate();
   }
 
+  /** @internal Runs one editing query (`text-editing.ts`) against this root; its answer ends every layout borrow. */
+  textQuery<Result>(
+    run: (exports: ReturnType<typeof runtimeShaperEngineExports>, root: PlannerHandle) => Result,
+  ): Result {
+    this.#assertActive();
+    this.#invalidate();
+    return run(this.#exports, this.#handle);
+  }
+
   /** @internal Borrows the current prepared positioning through a fixed-size demand descriptor. */
   borrowParagraphLayout(paragraphId: ParagraphId): BorrowedLayoutPublication {
     this.#assertActive();

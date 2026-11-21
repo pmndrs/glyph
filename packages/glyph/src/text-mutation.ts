@@ -38,6 +38,22 @@ export function minimalTextReplacement(previous: string, next: string): TextRang
   return { start, end: previousEnd, insert: next.slice(start, nextEnd) };
 }
 
+/**
+ * The replacement an edit stated, when applying it to `previous` gives exactly `next`; otherwise `undefined`
+ * and the caller compares the two texts. A stated range is the only thing that tells the engine which of
+ * several equal characters an edit inserted, and so which text unit keeps its identity.
+ */
+export function statedTextReplacement(
+  stated: TextRangeReplacement | undefined,
+  previous: string | undefined,
+  next: string,
+): TextRangeReplacement | undefined {
+  if (stated === undefined || previous === undefined || previous === next) return undefined;
+  if (stated.start > stated.end || stated.end > previous.length) return undefined;
+  if (previous.length - (stated.end - stated.start) + stated.insert.length !== next.length) return undefined;
+  return previous.slice(0, stated.start) + stated.insert + previous.slice(stated.end) === next ? stated : undefined;
+}
+
 function isHighSurrogate(unit: number): boolean {
   return unit >= 0xd800 && unit <= 0xdbff;
 }

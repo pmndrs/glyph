@@ -3106,17 +3106,12 @@ test('same-source drop caps compose through an explicit multi-line flow region',
     const bodyLine = 3;
     const bodyGlyph = inspected.lineGlyphStarts[bodyLine];
     const caret = (glyphIndex, line) => {
-      const result = text.caretAt(inspected.x[glyphIndex], inspected.lineBaselines[line]);
-      return result === undefined
-        ? undefined
-        : {
-            offset: result.offset,
-            leading: result.leading,
-            rect: [result.rect.x, result.rect.y, result.rect.width, result.rect.height],
-          };
+      const position = text.hitTest({ x: inspected.x[glyphIndex], y: inspected.lineBaselines[line] });
+      const { rect } = text.caret(position);
+      return { ...position, rect: [rect.x, rect.y, rect.width, rect.height] };
     };
     const selection = (start, end) =>
-      text.selectionRects(start, end)?.map((rect) => [rect.x, rect.y, rect.width, rect.height]);
+      text.rangeRects(start, end).map((rect) => [rect.x, rect.y, rect.width, rect.height]);
     return {
       capCaret: caret(0, 0),
       bodyCaret: caret(bodyGlyph, bodyLine),
@@ -3381,8 +3376,8 @@ test('a clean anchor edit retains accepted drawn origins and drawable split memb
   try {
     assert.equal(label.commitState().status, 'committed');
     const before = label.measureGlyphs();
-    const caret = label.caretForOffset(1);
-    const selection = label.selectionRects(0, 2);
+    const caret = label.caret({ offset: 1, affinity: 'downstream' });
+    const selection = label.rangeRects(0, 2);
     [beforeCopy] = label.split();
     assert.ok(beforeCopy.count < label.glyphs().glyphCount, 'the published space has no drawable record');
     assert.ok(beforeCopy.count > 0);
@@ -3400,11 +3395,11 @@ test('a clean anchor edit retains accepted drawn origins and drawable split memb
     for (let index = 0; index < anchoredGlyphs.length; index += 1) {
       assert.ok(anchoredGlyphs[index].drawnOrigin.equals(before[index].drawnOrigin.clone().add(translation)));
     }
-    const anchoredCaret = label.caretForOffset(1);
-    assert.equal(anchoredCaret.offset, caret.offset);
+    const anchoredCaret = label.caret({ offset: 1, affinity: 'downstream' });
+    assert.equal(anchoredCaret.line, caret.line);
     assert.ok(Math.abs(anchoredCaret.rect.x - caret.rect.x - offset.x) < 1e-5);
     assert.ok(Math.abs(anchoredCaret.rect.y - caret.rect.y - offset.y) < 1e-5);
-    const anchoredSelection = label.selectionRects(0, 2);
+    const anchoredSelection = label.rangeRects(0, 2);
     assert.equal(anchoredSelection.length, selection.length);
     for (let index = 0; index < selection.length; index += 1) {
       assert.ok(Math.abs(anchoredSelection[index].x - selection[index].x - offset.x) < 1e-5);
@@ -7822,15 +7817,15 @@ test('placement reads retain their scoped inspection cache through matching publ
     assert.ok(before.length > 0);
     const queries = instrumentedGlyph.measureCrossings;
     assert.equal(queries, 1, 'the first placement read materializes the missing summary');
-    label.caretAt(0, 0);
-    label.caretForOffset(label.text.length);
-    label.selectionRects(0, label.text.length);
+    label.hitTest({ x: 0, y: 0 });
+    label.caret({ offset: label.text.length, affinity: 'upstream' });
+    label.rangeRects(0, label.text.length);
     assert.equal(instrumentedGlyph.measureCrossings, queries, 'all placement helpers share one inspection');
     assert.equal(instrumentedGlyph.crossings, 0, 'placement reads do not publish');
     scene.updateMatrixWorld(true);
     assert.equal(instrumentedGlyph.crossings, 1);
     label.measureGlyphs();
-    label.caretAt(0, 0);
+    label.hitTest({ x: 0, y: 0 });
     assert.equal(instrumentedGlyph.measureCrossings, queries, 'matching publication preserves the query cache');
     label.text = 'edited placement';
     label.measureGlyphs();

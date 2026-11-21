@@ -193,8 +193,8 @@ test(
       assert.equal(measurement.glyphCount, 2);
       assert.equal(inspection.glyphCount, 2);
       assert.equal(mounted.nodes[0].measure().glyphCount, 2, 'repeated measurement reads the same prepared value');
-      assert.equal(mounted.nodes[0].caretForOffset(2)?.offset, 2);
-      assert.ok(mounted.nodes[0].selectionRects(0, 2)?.length);
+      assert.equal(mounted.nodes[0].caret({ offset: 2, affinity: 'upstream' }).line, 0);
+      assert.ok(mounted.nodes[0].rangeRects(0, 2).length);
       split = mounted.nodes[0].split()[0];
       assert.equal(split.count, 2);
       assert.equal(preparations, 1, 'measurement, inspection, caret, selection, and split do not reprepare');
@@ -314,7 +314,7 @@ test('same-length bound roundtrip keeps each prepared read and the first split i
         x: [...glyphs.x],
         y: [...glyphs.y],
       },
-      caret: source.caretForOffset(text.length),
+      caret: source.caret({ offset: text.length, affinity: 'upstream' }),
       split: copySnapshot(copy),
     };
     decorations?.dispose();

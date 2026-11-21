@@ -1,3 +1,12 @@
+import {
+  replaceInText,
+  type TextCaret,
+  type TextDirection,
+  type TextMovement,
+  type TextPosition,
+  type TextRange,
+  type TextUnit,
+} from '../text-editing.js';
 import type {
   Font,
   FontFaceRasterOf,
@@ -13,6 +22,7 @@ import type {
   ParagraphLayout,
   Constraints,
 } from '../index.js';
+import type { LayoutBox, LayoutPoint } from '../layout.js';
 import type { bitmap } from '../raster/bitmap.js';
 import type { msdf } from '../raster/msdf.js';
 import type { slug } from '../raster/slug.js';
@@ -119,6 +129,18 @@ export interface TypeGpuText<Selection extends TypeGpuFontSelection = TypeGpuFon
   glyphs(): GlyphLayoutInspection;
   /** Synchronously reads indexed glyph data and returns the callback's result. The view expires when the callback exits; repeated unchanged reads may retain one private canonical snapshot. */
   readGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result;
+  /** Where the caret of a position is drawn, in Text-local coordinates (+X right, +Y down), anchor included. Throws `TextOffsetError` for an offset that is not on a grapheme boundary of the text. */
+  caret(position: TextPosition): TextCaret;
+  /** The caret stop nearest a point in Text-local coordinates; the point may be between lines or outside the text. */
+  hitTest(point: LayoutPoint): TextPosition;
+  /** Moves a position one unit: `forward`/`backward` logically, `left`/`right` visually across bidi runs, `up`/`down` by line toward `goalX`. */
+  move(position: TextPosition, direction: TextDirection, unit: TextUnit, goalX?: number): TextMovement;
+  /** The grapheme, word, sentence or line that contains a position. */
+  boundary(position: TextPosition, unit: TextUnit): TextRange;
+  /** The rectangles covering `[start, end)`: one per run of the range that is contiguous on its line. */
+  rangeRects(start: number, end: number): readonly LayoutBox[];
+  /** Replaces UTF-16 code units `[start, end)` with `insert`; both offsets must be grapheme boundaries of the current text. */
+  replace(start: number, end: number, insert: string): void;
   dispose(): void;
 }
 
@@ -336,6 +358,33 @@ export function createText<Selection extends TypeGpuFontSelection>(
     readGlyphs(read) {
       assertActive();
       return controller.readGlyphs(read);
+    },
+    caret(position) {
+      assertActive();
+      return controller.editing.caret(position);
+    },
+    hitTest(point) {
+      assertActive();
+      return controller.editing.hitTest(point);
+    },
+    move(position, direction, unit, goalX) {
+      assertActive();
+      return controller.editing.move(position, direction, unit, goalX);
+    },
+    boundary(position, unit) {
+      assertActive();
+      return controller.editing.boundary(position, unit);
+    },
+    rangeRects(start, end) {
+      assertActive();
+      return controller.editing.rangeRects(start, end);
+    },
+    replace(start, end, insert) {
+      assertActive();
+      if (typeof insert !== 'string') throw new GlyphInputError(['insert'], 'replace() insert must be a string');
+      const range = controller.editing.beginReplace(start, end, insert);
+      // TypeGPU text is plain: there are no spans to rebase.
+      applyUpdate({ text: replaceInText(state.text, [], range, insert).text } as TypeGpuTextUpdate<Selection>);
     },
     dispose() {
       if (disposed) return;

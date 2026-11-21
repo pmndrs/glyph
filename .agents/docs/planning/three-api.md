@@ -461,7 +461,7 @@ The coordinate spaces are intentional and must not be mixed:
 | ------------------------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------- |
 | `measure()`, `glyphs()`, `readGlyphs()`                       | Paragraph-local, +X right, +Y down                                       | No; `anchorOffset` is separate metadata |
 | `Text.measureGlyphs()`, `boundingBox`, `computeBoundingBox()` | Text-local Three, +X right, +Y up                                        | Yes                                     |
-| `caretAt()`, `caretForOffset()`, `selectionRects()`           | Logical Text-local, +X right, +Y down                                    | Yes                                     |
+| `caret()`, `hitTest()`, `move()`, `rangeRects()`              | Logical Text-local, +X right, +Y down                                    | Yes                                     |
 | `Glyphs.measurements`, `getMatrixAt()`, `setMatrixAt()`       | Glyphs-local Three, +X right, +Y up; same frame as the source at capture | Yes                                     |
 | `Glyphs.getWorldMatrixAt()`, `setWorldMatrixAt()`             | World, after owner and ancestors                                         | Yes                                     |
 
@@ -668,11 +668,16 @@ if (decorations !== undefined) {
 glyphs.dispose();
 ```
 
-`caretAt(x, y)` and `selectionRects(start, end)` remain synchronous interaction helpers over desired glyph extents, using accepted renderer origins when current. They
-resolve to clusters, not JavaScript characters: a ligature is one glyph over several characters, and under bidi the
-character after an offset can be drawn to its left.
+`caret(position)`, `hitTest(point)`, `move(position, direction, unit, goalX?)`, `boundary(position, unit)` and
+`rangeRects(start, end)` are synchronous editing queries over the desired layout, answered by the engine in one call
+each. Offsets are UTF-16 code units of the source text on the engine's grapheme boundaries; an offset that is not one
+throws `TextOffsetError` and nothing is snapped. A position is `{ offset, affinity }`: `'upstream'` and
+`'downstream'` differ at a soft wrap and at a bidi boundary. A caret can stand inside a ligature; a conjunct or an
+emoji sequence is one unit. `replace(start, end, insert)` is the one edit: it validates its range the same way and
+rebases spans so inserted text takes the style of the grapheme before it. Selection state, caret drawing and input
+handling belong to the application.
 
-`measure()`, `glyphs()`, `measureGlyphs()`, `caretAt()`, `caretForOffset()`, and `selectionRects()` can read current
+`measure()`, `glyphs()`, `measureGlyphs()` and the editing queries can read current
 desired layout before first render and after an unpublished edit. Repeated unchanged reads reuse cached preparation.
 `split()` realizes an independent copy of that layout; neither interaction reads nor copying publish the source batch.
 The next ordinary publication adopts matching preparation. [#299](https://github.com/pmndrs/glyph/pull/299) replaces

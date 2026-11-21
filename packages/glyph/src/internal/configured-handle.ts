@@ -1,3 +1,4 @@
+import { createTextEditingQueries, type TextEditingQueries } from '../text-editing.js';
 import type { Font } from '../font.js';
 import {
   createGlyphHandleState,
@@ -1029,6 +1030,16 @@ class ConfiguredTextController<
     this.#services.assertTextCall();
     return this.#text.readGlyphs(read);
   }
+
+  readonly editing: TextEditingQueries = createTextEditingQueries({
+    run: (query) => {
+      this.#assertActive();
+      this.#services.assertTextCall();
+      return this.#text.textQuery(query);
+    },
+    anchorOffset: () => this.measure().anchorOffset,
+    stateReplacement: (replacement) => this.#text.stateReplacement(replacement),
+  });
 
   /** @internal Reuses the retained planner's owned columns for an integration query. */
   ownedInspection(): OwnedTextInspectionView {
