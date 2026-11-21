@@ -18,7 +18,7 @@ import {
 
 const exact = (size) => ({ width: { mode: 'exact', size } });
 
-export function makeGlyphAdapter({ glyph, msdf, slug, ThreeConfig, build }) {
+export function makeGlyphAdapter({ glyph, msdf, slug, ThreeConfig, build, defineTextMaterial }) {
   let three;
   let font;
   let text;
@@ -124,6 +124,21 @@ export function makeGlyphAdapter({ glyph, msdf, slug, ThreeConfig, build }) {
       } else {
         text = three.createText({
           font,
+          // ?custom=1 composes a caller material over the canonical graph (red fill, glow from the true distance).
+          ...(context.query.has('custom') && defineTextMaterial !== undefined
+            ? {
+                material: defineTextMaterial((material) => {
+                  const composed = material.createDefaultMaterial();
+                  const pixels = material.shader.trueDistance.mul(material.shader.pixelRange);
+                  composed.colorNode = context.TSL.vec3(1, 0, 0);
+                  composed.opacityNode = context.TSL.max(
+                    material.shader.opacity,
+                    context.TSL.smoothstep(-1.5, 0, pixels).mul(0.5),
+                  );
+                  return composed;
+                }),
+              }
+            : {}),
           text: PARAGRAPH,
           style: {
             fontSize: PARAGRAPH_FONT_SIZE,

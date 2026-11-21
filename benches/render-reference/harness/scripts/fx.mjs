@@ -21,9 +21,11 @@ const scenes = (process.env.SCENES ?? 'fx,para,labels,kern,arabic').split(',');
 try {
   const page = await (await browser.newContext()).newPage();
   for (const scene of scenes) {
-    for (const variant of scene === 'fx'
-      ? variants.filter((v) => process.env.VARIANTS === undefined || process.env.VARIANTS.split(',').includes(v.name))
-      : [variants[0]]) {
+    for (const variant of process.env.CUSTOM
+      ? [variants[0], variants[2]]
+      : scene === 'fx'
+        ? variants.filter((v) => process.env.VARIANTS === undefined || process.env.VARIANTS.split(',').includes(v.name))
+        : [variants[0]]) {
       const files = [];
       for (const lib of [before, after]) {
         const file = `screenshots/fx/${tag}-${scene}-${variant.name}-${lib}.png`;
@@ -32,6 +34,7 @@ try {
           ...variant.extra,
           ...(process.env.WEBGL ? { webgl: '1' } : {}),
           ...(process.env.TECH ? { tech: process.env.TECH } : {}),
+          ...(process.env.CUSTOM ? { custom: '1' } : {}),
         });
         await session.page.evaluate(() => window.bench.settle());
         await session.page.screenshot({ path: file, clip: { x: 800, y: 0, width: 800, height: 600 } });

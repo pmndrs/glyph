@@ -89,12 +89,15 @@ export interface TslMsdfShaderOutput {
  * Builds the canonical MSDF graph the executor renders; composing over it inherits median decode, screen-space range,
  * and layer compositing. Reads `uv()` from a `[0, 1]` unit quad, origin at upper-left.
  *
- * Everything constant across one glyph is resolved in the vertex stage and reaches the fragment stage through flat
- * varyings, so a fragment reads no instance storage and decodes no packed color.
+ * What is constant across one glyph is resolved in the vertex stage, so a fragment decodes no packed color and reads
+ * instance storage only for the fill color.
  */
 export function msdfShader(instance: TslMsdfInstanceNodes, resources: TslMsdfShaderResources): TslMsdfShaderOutput {
   const effects = resources.effects ?? { outline: true, shadow: true };
-  const fillColor = perGlyph(instance.fillColor);
+  // The fill color is the one per-glyph value read in the fragment stage: a single storage load measured faster
+  // than four more interpolated floats, it is exact, and it keeps the vertex stage within eight storage buffers
+  // when a detached branch adds its per-glyph transform table.
+  const fillColor = instance.fillColor;
   // An integer varying would force flat interpolation; the layer travels as a float and is rounded back.
   const layer = TSL.int(perGlyph(TSL.float(TSL.int(instance.pageIndex))).add(0.5));
   const atlasSize = TSL.vec2(scalar(resources.atlasWidth), scalar(resources.atlasHeight));

@@ -3739,6 +3739,19 @@ test('Three carries supported text effects into MSDF lanes and rejects them for 
     label.style = effectStyle;
     scene.updateMatrixWorld(true);
     assert.equal(rootDraws(scene)[0].material, complete, 'both effects return to the complete graph');
+
+    // A caller's material is never exchanged, whatever effects its instances use.
+    label.style = { fontSize: 32, color: '#00ff00' };
+    scene.updateMatrixWorld(true);
+    const authored = [];
+    label.material = defineTextMaterial((context) => {
+      const material = context.createDefaultMaterial();
+      authored.push(material);
+      return material;
+    });
+    scene.updateMatrixWorld(true);
+    assert.equal(authored.length > 0, true, 'the factory realizes the MSDF draw');
+    assert.equal(rootDraws(scene)[0].material, authored.at(-1), 'a custom material stays on its draw');
   } finally {
     group.dispose();
     label.dispose();

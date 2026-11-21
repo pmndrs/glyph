@@ -422,7 +422,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     if (prepared.draws.changed) {
       for (const update of prepared.draws.reusedUpdates) applyReusedDrawUpdate(update);
     }
-    syncMsdfDraws(prepared.draws.changed ? prepared.draws.draws : this.#draws, prepared);
+    syncMsdfDraws(prepared.draws.draws, prepared);
     if (prepared.transforms !== undefined) {
       commitTransforms(prepared.context.transformAttribute, prepared.transforms);
       for (const update of prepared.transforms.direct) applyTransformUpdate(update);

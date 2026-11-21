@@ -1,6 +1,7 @@
 // Library-neutral harness. One page = one contender + one scene; the driver (scripts/run.mjs)
 // opens one page per contender and interleaves samples round-robin.
 import * as THREE from 'three/webgpu';
+import * as TSL from 'three/tsl';
 import { WIDTHS, knownEdit, newLetterEdit } from './content.js';
 
 const moduleStartMs = performance.now();
@@ -202,6 +203,7 @@ async function boot() {
     colorSpace: THREE.SRGBColorSpace,
   });
   const scene = new THREE.Scene();
+  window.benchScene = scene;
   // One scene unit = one CSS pixel; the 800x600 px stage fills the 3200x2400 target (4x).
   // ?scale=1 keeps the same content at 1 target pixel per CSS pixel (text fills a 800x600 corner).
   const scale = Number(query.get('scale') ?? 4);
@@ -225,7 +227,16 @@ async function boot() {
       }
     : () => device.queue.onSubmittedWorkDone();
   const { default: adapter } = await adapters[lib]();
-  const context = { THREE, renderer, scene, camera: view, sceneName, query, stage: document.querySelector('#stage') };
+  const context = {
+    THREE,
+    TSL,
+    renderer,
+    scene,
+    camera: view,
+    sceneName,
+    query,
+    stage: document.querySelector('#stage'),
+  };
   const frame = () => {
     adapter.frame();
     renderer.render(scene, view);

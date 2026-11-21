@@ -216,7 +216,15 @@ export class ThreeMaterialRealizer {
         atlasWidth: metrics.x,
         atlasHeight: metrics.y,
         pixelRange: metrics.z,
-        trim: { project: (position) => modelViewProjection.mul(TSL.vec4(place(position), 1)) },
+        // A caller's material may draw anywhere in the cell (a glow from the true distance, say), so only the
+        // default material, whose reach is known, gets trimmed quads.
+        ...(selection?.material === undefined
+          ? {
+              trim: {
+                project: (position: THREE.Node<'vec3'>) => modelViewProjection.mul(TSL.vec4(place(position), 1)),
+              },
+            }
+          : {}),
         effects,
       });
       return { shader, position: place(shader.position) };
@@ -230,10 +238,9 @@ export class ThreeMaterialRealizer {
       position,
       createDefaultMaterial: () => coverageMaterial(shader, position),
     });
-    // A caller's material or a detached branch exposes its material instances, so only the default path may
-    // exchange them for effect specializations.
     registerMsdfAtlasUse(material, atlas, part.effect);
-    if (selection?.material === undefined && this.#owner.glyphStorage === undefined) {
+    // A caller's material is theirs to keep, so only the default material is exchanged for effect specializations.
+    if (selection?.material === undefined) {
       registerMsdfEffectVariants(material, part.effectColor, (effects) => {
         const variant = graph(effects);
         return coverageMaterial(variant.shader, variant.position);

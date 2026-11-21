@@ -43,7 +43,7 @@ export function msdfShader(source: TslMsdfInstanceNodes, resources: TslMsdfShade
   // Per-glyph values resolve in the vertex stage; fragments read flat varyings instead of instance storage.
   const instance = {
     uvBounds: perGlyph(source.uvBounds),
-    fillColor: perGlyph(source.fillColor),
+    fillColor: source.fillColor,
     shadowOffset: perGlyph(source.shadowOffset),
     outlineWidth: perGlyph(source.outlineWidth),
   };
