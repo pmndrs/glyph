@@ -1,3 +1,13 @@
+---
+type: Reference
+title: 'Layout refactor branch map'
+description: 'Which feature is on which branch and tag in the layout refactor.'
+status: draft
+generated:
+  by: anthropic/claude-fable-5-2
+  at: '2026-11-21T12:00:00Z'
+---
+
 # Layout refactor: branch map
 
 Which feature is on which branch. Updated at every merge and every hand-back. Companion to the

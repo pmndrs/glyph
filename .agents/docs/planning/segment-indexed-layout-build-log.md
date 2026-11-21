@@ -1,3 +1,13 @@
+---
+type: Log
+title: 'Layout refactor build log'
+description: 'Append-only record of decisions and the state of each feature in the layout refactor.'
+status: draft
+generated:
+  by: anthropic/claude-fable-5-2
+  at: '2026-11-21T12:00:00Z'
+---
+
 # Layout refactor: build log
 
 Running record for the owner's review. Appended to as work proceeds; entries are never rewritten, only
