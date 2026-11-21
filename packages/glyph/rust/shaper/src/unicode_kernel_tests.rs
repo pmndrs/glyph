@@ -333,7 +333,7 @@ fn kernel_equals_scalar_on_seeded_fuzz() {
         let plain = round % 3 == 0;
         for _ in 0..length {
             let pick = xorshift(&mut state);
-            if plain && pick % 4 != 0 {
+            if plain && !pick.is_multiple_of(4) {
                 text.push_str(["a", "b", " ", "я", "字", "the ", "word"][(pick >> 8) as usize % 7]);
             } else {
                 text.push_str(FUZZ_TOKENS[(pick >> 8) as usize % FUZZ_TOKENS.len()]);

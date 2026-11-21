@@ -466,7 +466,7 @@ mod tests {
             let mut text = String::new();
             for _ in 0..length {
                 let pick = next() as usize;
-                text.push_str(if ltr_only && pick % 5 != 0 {
+                text.push_str(if ltr_only && !pick.is_multiple_of(5) {
                     ["a", " ", "1", "\n", "(", ")", "\u{2029}", "word "][(pick >> 8) % 8]
                 } else {
                     TOKENS[(pick >> 8) % TOKENS.len()]

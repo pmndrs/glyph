@@ -283,6 +283,16 @@ impl UnicodeAnalysis {
             });
         self.grapheme_boundaries
             .extend((start + 1..=end).map(|boundary| boundary as u32));
+        self.emit_stretch_scripts(text, start, end)
+    }
+
+    /// Streams the script bytes of closure units `[start, end)` into the script items.
+    fn emit_stretch_scripts(
+        &mut self,
+        text: &[u16],
+        start: usize,
+        end: usize,
+    ) -> Result<(), UnicodeError> {
         let mut index = start;
         while index < end {
             let id = self.kernel.scripts[index];
