@@ -1028,6 +1028,85 @@ mod tests {
         assert_eq!(registry.dispose_font(1), STATUS_FONT_MISSING);
     }
 
+    /// Shapes `text` as one Latin run through the registry and returns each glyph's advance.
+    fn latin_advances(
+        registry: &mut ShaperRegistry,
+        font_handle: u32,
+        text: &str,
+        features: &[FeatureRecord],
+    ) -> Vec<i32> {
+        let units: Vec<u16> = text.encode_utf16().collect();
+        let run = ShapeRunRef {
+            text_start: 0,
+            text_end: u32::try_from(units.len()).unwrap(),
+            script: u32::from_be_bytes(*b"Latn"),
+            language: None,
+            features,
+            direction: 0,
+            cluster_level: 0,
+            flags: 0,
+        };
+        registry
+            .with_shaped_run(font_handle, &units, run, |glyphs| {
+                Ok(glyphs
+                    .glyph_positions()
+                    .iter()
+                    .map(|position| position.x_advance)
+                    .collect())
+            })
+            .expect("fixture text shapes")
+    }
+
+    // HarfRust reaches the legacy OpenType `kern` table through its AAT cache. The in-tree fork
+    // is built without AAT, and these two fonts have no GPOS, so the kerned advances below exist
+    // only if that path survived. The parity suite in `vendor/harfrust-parity` compares every
+    // pair against the unforked release; this pins the product's own entry point.
+    #[test]
+    fn legacy_kern_table_kerns_fonts_without_gpos() {
+        const CHERRY_CREAM_SODA: &[u8] = include_bytes!(
+            "../../../../../vendor/harfrust-parity/fonts/cherry-cream-soda/CherryCreamSoda-Regular.ttf"
+        );
+        const SYNCOPATE_KERN_ONLY: &[u8] = include_bytes!(
+            "../../../../../vendor/harfrust-parity/fonts/syncopate/Syncopate-Regular-kernonly-SYNTH.ttf"
+        );
+        let kerning_off = [FeatureRecord {
+            tag: u32::from_be_bytes(*b"kern"),
+            value: 0,
+            start: 0,
+            end: u32::MAX,
+        }];
+        for (handle, sfnt, glyph_count, kerned, unkerned) in [
+            // Advances recorded from the crates.io HarfRust 0.12.0 release, before the fork.
+            (
+                1,
+                CHERRY_CREAM_SODA,
+                228_usize,
+                [860, 772, 634, 728],
+                [860, 731, 614, 748],
+            ),
+            (
+                2,
+                SYNCOPATE_KERN_ONLY,
+                370,
+                [1603, 1614, 1431, 1995],
+                [1665, 1675, 1452, 2015],
+            ),
+        ] {
+            let mut registry = ShaperRegistry::default();
+            let extents = alloc::vec![0u8; glyph_count * 8];
+            let availability = alloc::vec![0u8; glyph_count.div_ceil(8)];
+            assert_eq!(
+                registry.register_font(handle, sfnt, &extents, &availability, 0, 0),
+                STATUS_OK
+            );
+            assert_eq!(latin_advances(&mut registry, handle, "AVTo", &[]), kerned);
+            assert_eq!(
+                latin_advances(&mut registry, handle, "AVTo", &kerning_off),
+                unkerned
+            );
+        }
+    }
+
     #[test]
     fn utf16_item_shaping_replaces_unpaired_surrogates() {
         let text = [b'A' as u16, 0xd83d, 0xde00, 0xd800, b'B' as u16];
