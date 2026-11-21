@@ -13,6 +13,13 @@ pub(crate) mod kernel;
 #[path = "unicode_resync.rs"]
 pub mod resync;
 
+#[path = "unicode_boundaries.rs"]
+pub mod boundaries;
+
+pub use boundaries::{
+    BoundaryLanes, BreakSource, GRAPHEME_BOUNDARY, SENTENCE_BOUNDARY, Segmentation,
+    Uax29BreakSource, WORD_BOUNDARY,
+};
 pub use generated::UNICODE_VERSION;
 pub use kernel::KernelCoverage;
 
@@ -97,6 +104,8 @@ pub struct UnicodeAnalysis {
     deferred_tags: Vec<u32>,
     previous_script: u32,
     previous_script_id: u8,
+    /// Grapheme, word and sentence bits for editing, computed on first query, never by `analyze`.
+    boundaries: BoundaryLanes,
     #[cfg(test)]
     analysis_count: usize,
 }
@@ -165,6 +174,46 @@ impl UnicodeAnalysis {
         self.resolve_neutral_scripts();
         self.itemize_scripts()?;
         Ok(())
+    }
+
+    /// Analyses `text`, the previous text with units `[start, start + removed)` replaced by
+    /// `inserted` units, and keeps the boundary lanes already computed outside the edit: they
+    /// recompute only the window around it, and only when next queried.
+    pub fn analyze_edit(
+        &mut self,
+        text: &[u16],
+        start: usize,
+        removed: usize,
+        inserted: usize,
+    ) -> Result<(), UnicodeError> {
+        let mut lanes = core::mem::take(&mut self.boundaries);
+        let analysed = self.analyze(text);
+        lanes.splice(start, removed, inserted);
+        self.boundaries = lanes;
+        if analysed.is_err() {
+            self.boundaries.invalidate();
+        }
+        analysed
+    }
+
+    /// The boundary lane of `text`, which must be the text of the last `analyze`: one byte per
+    /// UTF-16 offset, `text.len() + 1` entries, with every kind in `kinds` (`GRAPHEME_BOUNDARY`,
+    /// `WORD_BOUNDARY`, `SENTENCE_BOUNDARY`) current. Word and sentence bits are computed here on
+    /// first query, and after an `analyze_edit` only around the edit.
+    pub fn boundary_lane(&mut self, text: &[u16], kinds: u8) -> Result<&[u8], UnicodeError> {
+        debug_assert_eq!(
+            self.grapheme_boundaries.last().copied(),
+            Some(text.len() as u32),
+            "boundary_lane asks about a text other than the analysed one"
+        );
+        self.boundaries
+            .ensure(text, &self.grapheme_boundaries, kinds)
+    }
+
+    /// The paragraph's boundary lanes: to install another `BreakSource`, or to move computed lanes
+    /// to the analysis of the edited text before `BoundaryLanes::splice`.
+    pub fn boundary_lanes_mut(&mut self) -> &mut BoundaryLanes {
+        &mut self.boundaries
     }
 
     /// How much of the last `analyze` the kernel decided, for measurement.
@@ -264,6 +313,7 @@ impl UnicodeAnalysis {
         self.script_items.clear();
         self.deferred_scripts.clear();
         self.deferred_tags.clear();
+        self.boundaries.invalidate();
     }
 
     fn kernel_ascii_facts(&self) -> PrintableAsciiFacts {
