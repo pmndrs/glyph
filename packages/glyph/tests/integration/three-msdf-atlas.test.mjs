@@ -157,3 +157,21 @@ test('an MSDF atlas reads baked pages by reference and outlives the font data', 
     atlas.dispose();
   }
 });
+
+test('a single-channel MSDF atlas keeps only the true-distance channel', () => {
+  const { group, data } = bakedGroup(8, 40, 256, 256);
+  // Give the alpha channel its own value so the copy is distinguishable from the color channels.
+  for (let offset = 3; offset < data.pages[0].bytes.length; offset += 4) data.pages[0].bytes[offset] = 200;
+  const atlas = createMsdfAtlas(group, true);
+  try {
+    atlas.use(lane([2, 5]), 0, 2, STRIDE);
+    const { data: texels, width, height } = atlas.texture.image;
+    assert.equal(atlas.singleChannel, true);
+    assert.equal(texels.length, width * height, 'one byte per texel');
+    const cell = residentCell(atlas, 5);
+    assert.equal(texels[(cell.top + 20) * width + cell.left + 20], 200, 'the byte is the baked alpha distance');
+    assert.equal(texels[(cell.top + 20) * width + cell.left + 60], 0, 'texels outside admitted cells stay empty');
+  } finally {
+    atlas.dispose();
+  }
+});

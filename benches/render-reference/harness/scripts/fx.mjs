@@ -28,13 +28,16 @@ try {
         : [variants[0]]) {
       const files = [];
       for (const lib of [before, after]) {
-        const file = `screenshots/fx/${tag}-${scene}-${variant.name}-${lib}.png`;
+        const file = `screenshots/fx/${tag}-${scene}-${variant.name}-${lib}${before === after ? `-${files.length === 0 ? 'before' : 'after'}` : ''}.png`;
         const session = await open(browser, lib, scene, {
           shot: '1',
           ...variant.extra,
           ...(process.env.WEBGL ? { webgl: '1' } : {}),
           ...(process.env.TECH ? { tech: process.env.TECH } : {}),
           ...(process.env.CUSTOM ? { custom: '1' } : {}),
+          ...(process.env.AFTER_EXTRA && lib === after && files.length === 1
+            ? Object.fromEntries(new URLSearchParams(process.env.AFTER_EXTRA))
+            : {}),
         });
         await session.page.evaluate(() => window.bench.settle());
         await session.page.screenshot({ path: file, clip: { x: 800, y: 0, width: 800, height: 600 } });

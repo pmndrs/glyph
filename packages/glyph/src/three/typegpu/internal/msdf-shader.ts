@@ -17,7 +17,13 @@ import type {
   TslMsdfShaderOutput,
   TslMsdfShaderResources,
 } from '../../../shaders/tsl/msdf-shader.js';
-import { conditionalShadowSample, perGlyph, scalar, trimmedCell } from '../../../shaders/shared/msdf-quad-tsl.js';
+import {
+  conditionalShadowSample,
+  distanceField,
+  perGlyph,
+  scalar,
+  trimmedCell,
+} from '../../../shaders/shared/msdf-quad-tsl.js';
 import { decorationPaint } from '../../../shaders/typegpu/decoration-shader.js';
 
 export type {
@@ -89,8 +95,9 @@ export function msdfShader(source: TslMsdfInstanceNodes, resources: TslMsdfShade
   }) as Node<'vec4'>;
   // An integer varying would force flat interpolation; the layer travels as a float and is rounded back.
   const layer = TSL.int(perGlyph(TSL.float(TSL.int(source.pageIndex))).add(0.5));
-  const baseSample = TSL.texture(resources.atlas, clamped.xy).depth(layer);
-  const shadowSample = conditionalShadowSample(shadowColor.a, resources.atlas, clamped.zw, layer);
+  const singleChannel = resources.singleChannel === true;
+  const baseSample = distanceField(TSL.texture(resources.atlas, clamped.xy).depth(layer), singleChannel);
+  const shadowSample = conditionalShadowSample(shadowColor.a, resources.atlas, clamped.zw, layer, singleChannel);
   const distances = (
     t3.toTSL(() => {
       'use gpu';

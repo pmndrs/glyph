@@ -1,7 +1,14 @@
 import * as TSL from 'three/tsl';
 import type { Node, Texture } from 'three/webgpu';
 
-import { cellPosition, conditionalShadowSample, perGlyph, scalar, trimmedCell } from '../shared/msdf-quad-tsl.js';
+import {
+  cellPosition,
+  conditionalShadowSample,
+  distanceField,
+  perGlyph,
+  scalar,
+  trimmedCell,
+} from '../shared/msdf-quad-tsl.js';
 import { unpackSrgbRgba } from './packed-color.js';
 
 /** One glyph instance's canonical MSDF fields, resolved to nodes; the technique schema owns lane meaning/packing, the target owns GPU storage. */
@@ -47,6 +54,11 @@ export interface TslMsdfShaderResources {
    * its output is zero whatever the instance says; omitted, both are composed.
    */
   readonly effects?: TslMsdfEffects;
+  /**
+   * The atlas holds only the true distance, in its red channel. The fill is then reconstructed from that distance,
+   * which rounds corners the multi-channel field keeps sharp, for a quarter of the atlas memory.
+   */
+  readonly singleChannel?: boolean;
 }
 
 /** The effects one MSDF graph composes over the fill. */
@@ -109,7 +121,11 @@ export function msdfShader(instance: TslMsdfInstanceNodes, resources: TslMsdfSha
   const cell =
     resources.trim === undefined ? TSL.uv() : trimmedCell(instance, effects, atlasSize, fieldRange, resources.trim);
   const atlas = TSL.varying(instance.uvOrigin.add(cell.mul(instance.uvSize)));
-  const baseSample = TSL.texture(resources.atlas, TSL.clamp(atlas, minimum, maximum)).depth(layer);
+  const singleChannel = resources.singleChannel === true;
+  const baseSample = distanceField(
+    TSL.texture(resources.atlas, TSL.clamp(atlas, minimum, maximum)).depth(layer),
+    singleChannel,
+  );
   const fillDistance = median3(baseSample.rgb).sub(0.5);
   const trueDistance = baseSample.a.sub(0.5);
   const pixelRange = screenPixelRange(atlas.x, atlas.y, atlasSize, fieldRange);
@@ -134,7 +150,14 @@ export function msdfShader(instance: TslMsdfInstanceNodes, resources: TslMsdfSha
     : TSL.float(0);
   const shadowColor = effects.shadow ? perGlyph(unpackSrgbRgba(instance.effectColor.y)) : TSL.vec4(0);
   const shadowCoverage = effects.shadow
-    ? shadowFill(instance, resources.atlas, atlas, shadowColor.a, { minimum, maximum, halfTexel, layer, pixelRange })
+    ? shadowFill(instance, resources.atlas, atlas, shadowColor.a, {
+        minimum,
+        maximum,
+        halfTexel,
+        layer,
+        pixelRange,
+        singleChannel,
+      })
     : TSL.float(0);
   const outlineAlpha = outlineColor.a.mul(outlineOnly);
   const glyphAlpha = fillAlpha.add(outlineAlpha);
@@ -160,6 +183,7 @@ function shadowFill(
     readonly halfTexel: Node<'vec2'>;
     readonly layer: Node<'int'>;
     readonly pixelRange: Node<'float'>;
+    readonly singleChannel: boolean;
   },
 ): Node<'float'> {
   const shadowUv = atlas.sub(perGlyph(instance.shadowOffset));
@@ -168,6 +192,7 @@ function shadowFill(
     atlasTexture,
     TSL.clamp(shadowUv, cell.minimum, cell.maximum),
     cell.layer,
+    cell.singleChannel,
   );
   const low = cell.minimum.sub(cell.halfTexel);
   const high = cell.maximum.add(cell.halfTexel);

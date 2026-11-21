@@ -43,6 +43,8 @@ export interface RetainedMsdfAtlas {
   readonly glyphsWidth: number;
   /** `(atlas width, atlas height, field range in texels, plane units per em over field range)`. */
   readonly metrics: THREE.Vector4;
+  /** The texture holds only the true distance, in its red channel. */
+  readonly singleChannel: boolean;
   readonly byteLength: number;
   /**
    * Makes the atlas cells of the glyph rows in `lane` resident. `lane` holds `stride` values per instance with the
@@ -65,12 +67,14 @@ export function createThreeCodec(
   descriptor: (programs: readonly CompiledThreeRasterProgram[]) => Codec['descriptor'],
   material: ThreeTextMaterial | undefined,
   shaders: ThreeShaderSet,
+  msdfSingleChannel = false,
 ): ThreeCodec {
   const programs = compiledThreeRasterPrograms(ids, transformMode);
   const resources = new ThreeRendererResources(
     new Map(programs.map((program) => [program.raster.id, program])),
     material,
     shaders,
+    msdfSingleChannel,
   );
   let disposed = false;
   const codec: ThreeCodec = Object.freeze({
@@ -108,6 +112,8 @@ export class ThreeRendererResources {
     programs: ReadonlyMap<string, CompiledThreeRasterProgram>,
     material: ThreeTextMaterial | undefined,
     readonly shaders: ThreeShaderSet,
+    /** MSDF atlases of this handle keep only the true-distance channel. */
+    readonly msdfSingleChannel = false,
   ) {
     this.programs = programs;
     this.material = material;

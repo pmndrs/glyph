@@ -94,13 +94,22 @@ export function conditionalShadowSample(
   atlas: Texture,
   coordinate: Node<'vec2'>,
   layer: Node<'int'>,
+  singleChannel = false,
 ): Node<'vec4'> {
   const sample: Node<'vec4'> = TSL.Fn(() => {
     const value = TSL.vec4(0).toVar();
     TSL.If(shadowAlpha.greaterThan(0), () => {
-      value.assign(TSL.texture(atlas, coordinate).depth(layer).level(TSL.float(0)));
+      value.assign(distanceField(TSL.texture(atlas, coordinate).depth(layer).level(TSL.float(0)), singleChannel));
     });
     return value;
   })();
   return sample;
+}
+
+/**
+ * An atlas sample as the four-channel field the reconstruction expects. A single-channel atlas holds only the true
+ * distance, so every channel reads it: the median and the alpha distance are then the same value.
+ */
+export function distanceField(sample: Node<'vec4'>, singleChannel: boolean): Node<'vec4'> {
+  return singleChannel ? TSL.vec4(sample.r, sample.r, sample.r, sample.r) : sample;
 }

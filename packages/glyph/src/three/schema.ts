@@ -101,6 +101,12 @@ export interface ThreeConfigOptions extends ThreeRootOptions {
   readonly defaultFontFormat?: keyof ThreeFontFormats;
   /** Renderer-wide fallback after span, Text, TextGroup, and root material selection. */
   readonly material?: ThreeTextMaterial;
+  /**
+   * What the GPU atlas keeps of an MSDF font. `'msdf'` (default) keeps all four channels. `'sdf'` keeps only the
+   * true distance: a quarter of the atlas memory, with corners rounded where the multi-channel field keeps them
+   * sharp (visible at large sizes).
+   */
+  readonly msdfAtlas?: 'msdf' | 'sdf';
 }
 
 export interface ThreeFontFormats {

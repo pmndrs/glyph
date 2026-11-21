@@ -18,7 +18,7 @@ import {
 
 const exact = (size) => ({ width: { mode: 'exact', size } });
 
-export function makeGlyphAdapter({ glyph, msdf, slug, ThreeConfig, build, defineTextMaterial }) {
+export function makeGlyphAdapter({ glyph, msdf, slug, ThreeConfig, build, defineTextMaterial, defineThreeConfig }) {
   let three;
   let font;
   let text;
@@ -26,7 +26,13 @@ export function makeGlyphAdapter({ glyph, msdf, slug, ThreeConfig, build, define
   return {
     async prepare(context) {
       await glyph.init();
-      three = glyph.handle('main', ThreeConfig);
+      // ?sdf=1 keeps only the true-distance channel of the MSDF atlas on the GPU.
+      three = glyph.handle(
+        'main',
+        context.query.has('sdf') && defineThreeConfig !== undefined
+          ? defineThreeConfig({ msdfAtlas: 'sdf' })
+          : ThreeConfig,
+      );
       // ?tech=slug draws the same scenes with the Slug technique (ASCII bake).
       const useSlug = context.query.get('tech') === 'slug';
       const name = useSlug

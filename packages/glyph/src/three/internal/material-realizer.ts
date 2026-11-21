@@ -245,6 +245,7 @@ export class ThreeMaterialRealizer {
             }
           : {}),
         effects,
+        singleChannel: atlas.singleChannel,
       });
       return { shader, position: place(shader.position) };
     };
@@ -546,7 +547,9 @@ export class ThreeMaterialRealizer {
   #msdfAtlas(binding: ThreeResolvedResourceBinding, group: PortableResourceGroupPayload): RetainedMsdfAtlas {
     let lease = this.#context.msdfAtlases.get(binding);
     if (lease !== undefined) return lease.resource;
-    lease = this.#coordinator.acquireMsdfAtlasResource(group, () => createMsdfAtlas(group));
+    lease = this.#coordinator.acquireMsdfAtlasResource(group, () =>
+      createMsdfAtlas(group, this.#coordinator.msdfSingleChannel),
+    );
     this.#context.newTextures.add(lease);
     this.#context.msdfAtlases.set(binding, lease);
     return lease.resource;

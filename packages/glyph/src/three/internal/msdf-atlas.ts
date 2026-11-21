@@ -16,7 +16,8 @@ export type { RetainedMsdfAtlas } from './renderer-resources.js';
 const GLYPH_TABLE_WIDTH = 1024;
 /** Edge of one resident atlas layer in texels, unless a single baked cell is larger. */
 const RESIDENT_PAGE_SIZE = 256;
-const TEXEL_BYTES = 4;
+/** Bytes per baked texel; the last one is the true distance. */
+const BAKED_TEXEL_BYTES = 4;
 
 /**
  * Realizes one MSDF font resource group as a resident atlas that starts empty.
@@ -25,7 +26,7 @@ const TEXEL_BYTES = 4;
  * is published, and its table row is pointed there; GPU memory follows the glyphs drawn, not the glyphs baked. Cells
  * are shelf-packed in arrival order and never move or leave, so a row written once stays valid.
  */
-export function createMsdfAtlas(group: PortableResourceGroupPayload): RetainedMsdfAtlas {
+export function createMsdfAtlas(group: PortableResourceGroupPayload, singleChannel = false): RetainedMsdfAtlas {
   const baked = bakedPages(group.members.pages);
   const pixelRange = f32BufferMember(group, 'pixelRange', 'MSDF');
   const effectScale = f32x3BufferMember(group, 'effectScale', 'MSDF');
@@ -44,9 +45,10 @@ export function createMsdfAtlas(group: PortableResourceGroupPayload): RetainedMs
   glyphs.magFilter = THREE.NearestFilter;
   glyphs.needsUpdate = true;
 
-  const layerBytes = page * page * TEXEL_BYTES;
+  const texelBytes = singleChannel ? 1 : BAKED_TEXEL_BYTES;
+  const layerBytes = page * page * texelBytes;
   let texels = new Uint8Array(layerBytes);
-  const texture = atlasTextureArray(texels, page, page, 1, THREE.RGBAFormat);
+  const texture = atlasTextureArray(texels, page, page, 1, singleChannel ? THREE.RedFormat : THREE.RGBAFormat);
   const resident = new Uint8Array(rows);
   // The open shelf: the next cell goes at (penX, shelfTop) on `layer`; the shelf is as tall as its tallest cell.
   let layer = 0;
@@ -88,9 +90,15 @@ export function createMsdfAtlas(group: PortableResourceGroupPayload): RetainedMs
     const sourceTop = cells[source + 1]!;
     const sourcePage = baked.pages[sourceLayer]!;
     for (let line = 0; line < height; line += 1) {
-      const from = ((sourceTop + line) * sourcePage.width + sourceLeft) * TEXEL_BYTES;
-      const to = ((layer * page + shelfTop + line) * page + penX) * TEXEL_BYTES;
-      texels.set(sourcePage.bytes.subarray(from, from + width * TEXEL_BYTES), to);
+      const from = ((sourceTop + line) * sourcePage.width + sourceLeft) * BAKED_TEXEL_BYTES;
+      const to = ((layer * page + shelfTop + line) * page + penX) * texelBytes;
+      if (singleChannel) {
+        for (let texel = 0; texel < width; texel += 1) {
+          texels[to + texel] = sourcePage.bytes[from + texel * BAKED_TEXEL_BYTES + BAKED_TEXEL_BYTES - 1]!;
+        }
+      } else {
+        texels.set(sourcePage.bytes.subarray(from, from + width * BAKED_TEXEL_BYTES), to);
+      }
     }
     table[source] = penX;
     table[source + 1] = shelfTop;
@@ -108,6 +116,7 @@ export function createMsdfAtlas(group: PortableResourceGroupPayload): RetainedMs
     glyphs,
     glyphsWidth: tableWidth,
     metrics: new THREE.Vector4(page, page, pixelRange, effectScale[2]),
+    singleChannel,
     get byteLength() {
       return texels.byteLength + table.byteLength;
     },
