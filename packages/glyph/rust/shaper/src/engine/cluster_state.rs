@@ -823,6 +823,7 @@ impl ClusterArena {
         previous: &Self,
         input: ClusterBuildInput<'_>,
         source_run: u32,
+        styles_changed: bool,
         metrics_for: impl Fn(u32) -> Option<FontMetrics>,
     ) -> Result<Option<(usize, usize)>, EngineError> {
         let ClusterBuildInput {
@@ -888,6 +889,12 @@ impl ClusterArena {
         }
         self.copy_from(previous, false)?;
         self.ltr = all_ltr(runs);
+        // A style change in the same request renumbers the resolved segments of the whole
+        // paragraph, not only those of the reshaped run.
+        if styles_changed && !self.remap_style_indexes(styles)? {
+            self.clear();
+            return Ok(None);
+        }
         for cluster in cluster_start..cluster_end {
             let start = self.starts[cluster];
             let end = self.ends[cluster];
@@ -1339,6 +1346,30 @@ impl ClusterArena {
         Ok(())
     }
 
+    /// Points every cluster at the resolved segment that now covers it. `false` when a segment
+    /// boundary falls inside a cluster, which the full build reports as the caller's error.
+    fn remap_style_indexes(&mut self, styles: &[StyleSegment]) -> Result<bool, EngineError> {
+        let mut style_index = 0usize;
+        for cluster in 0..self.starts.len() {
+            let (start, end) = (self.starts[cluster], self.ends[cluster]);
+            while styles
+                .get(style_index)
+                .is_some_and(|segment| segment.text_end <= start)
+            {
+                style_index += 1;
+            }
+            let Some(segment) = styles.get(style_index) else {
+                return Ok(false);
+            };
+            if segment.text_start > start || segment.text_end < end {
+                return Ok(false);
+            }
+            self.style_indexes[cluster] =
+                u32::try_from(style_index).map_err(|_| EngineError::ResultTooLarge)?;
+        }
+        Ok(true)
+    }
+
     /// Remaps retained clusters to current styles. Metric dirt also re-derives
     /// advances in shaping order; mapping-only dirt preserves line corrections.
     /// Uncovered clusters fall back to the existing full build.
@@ -1346,6 +1377,7 @@ impl ClusterArena {
         &mut self,
         previous: &Self,
         styles: &[StyleSegment],
+        runs: &[ShapingRun],
         metrics_changed: bool,
     ) -> Result<Option<()>, EngineError> {
         self.copy_from(previous, !metrics_changed)?;
@@ -1411,6 +1443,11 @@ impl ClusterArena {
             }
             self.advances[cluster] = advance;
         }
+        // Adjacent script runs share a layout run only while their styles agree on layout, so a
+        // restyle can split or merge runs without reshaping anything; a direction override
+        // arrives the same way.
+        self.ltr = all_ltr(runs);
+        self.rebuild_layout_runs_for_shaping(runs)?;
         if metrics_changed {
             self.reset_break_corrections(0, self.starts.len());
             self.refresh_layout_units()?;
@@ -1574,6 +1611,8 @@ impl ClusterArena {
         islands.slots.clear();
         self.layout_runs.clear();
         self.run_local.clear();
+        // An arena with no clusters answers like a fresh one, whatever it held before.
+        self.ltr = false;
     }
 
     pub(crate) fn layout_runs(&self) -> &[LayoutRun] {
@@ -3791,7 +3830,7 @@ mod tests {
 
         let mut retained = ClusterArena::default();
         retained
-            .rebuild_source_run_if_topology_is_stable(&previous, input(&shape), 0, metrics)
+            .rebuild_source_run_if_topology_is_stable(&previous, input(&shape), 0, false, metrics)
             .unwrap()
             .unwrap();
         // Run 0 is clusters 0..2; the island after it plus 5 clusters of context reach slot 8.
@@ -3812,7 +3851,7 @@ mod tests {
 
         let mut restyled = ClusterArena::default();
         restyled
-            .refresh_styles_from_stream(&previous, &styles, true)
+            .refresh_styles_from_stream(&previous, &styles, &runs, true)
             .unwrap()
             .unwrap();
         assert!(
@@ -3932,6 +3971,7 @@ mod tests {
                     shape: &new_shape,
                 },
                 0,
+                false,
                 metrics,
             )
             .unwrap()
@@ -4092,7 +4132,7 @@ mod tests {
         let mut cold = build(new_style);
         let mut refreshed = ClusterArena::default();
         refreshed
-            .refresh_styles_from_stream(&previous, &segment(new_style), true)
+            .refresh_styles_from_stream(&previous, &segment(new_style), &run(new_style), true)
             .unwrap()
             .unwrap();
         macro_rules! assert_lane {
@@ -4127,6 +4167,20 @@ mod tests {
         assert_lane!(index_at);
         assert_lane!(shaped);
         assert_lane!(unsafe_before);
+        assert!(refreshed.ltr && cold.ltr);
+        // The direction flag follows the runs handed in, not the arena copied from.
+        let mut overridden = new_style;
+        overridden.bidi_override = true;
+        let mut redirected = ClusterArena::default();
+        redirected
+            .refresh_styles_from_stream(&previous, &segment(overridden), &run(overridden), true)
+            .unwrap()
+            .unwrap();
+        assert!(!redirected.ltr);
+        // An emptied arena answers like a fresh one.
+        let mut emptied = build(old_style);
+        emptied.clear();
+        assert_eq!(emptied.ltr, ClusterArena::default().ltr);
         for arena in [&mut cold, &mut refreshed] {
             arena.ensure_word_breaks().unwrap();
             arena.ensure_placement_segment_anchors().unwrap();
@@ -4167,6 +4221,7 @@ mod tests {
                         text_end: 2,
                         style: new_style,
                     }],
+                    &run(new_style),
                     true,
                 )
                 .unwrap()

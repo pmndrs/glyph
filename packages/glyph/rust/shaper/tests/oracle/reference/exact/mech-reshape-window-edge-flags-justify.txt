@@ -27,10 +27,10 @@ stage gather value 36 96f2433322b11256
 stage gpu identity 2 f2c1e4de760e383f
 stage gpu value 3 c16fed12bce1e2fe
 step 01 space to right-to-left mark
-class value 230 7873b6316728cf8f
+class value 230 d64496285c4fd0f8
 class identity 22 f9efc1cfef77d6ad
 class repr 41 e9693aceb901a85b
-class wire 1 7fac75c3069d5c2d
+class wire 1 c5a8b43651e4b515
 step 02 restore
 class value 230 ce6e095a9b1ece92
 class identity 22 cf7d8e58bced3282

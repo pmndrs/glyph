@@ -1096,9 +1096,15 @@ impl FlowLayoutArena {
                     work.flow_metric_mismatches += usize::from(!metrics_stable);
                     work.flow_drop_cap_blocks += usize::from(next_cap_affected);
                 });
+                // The cursor also carries the empty line a final hard break still owes. The old
+                // flow continues in this thread exactly when its cursor was not complete here,
+                // so the new one must agree before the old tail can stand for its own.
+                let old_continues =
+                    next_line.is_some_and(|next| next.flow_thread_id == flow_thread_id);
                 if old_last.line.text_end >= dirty.end
                     && metrics_stable
                     && cursor.cluster() == old_cluster_end
+                    && cursor.is_complete(clusters.starts.len()) != old_continues
                     && unmoved
                     && !next_cap_affected
                 {

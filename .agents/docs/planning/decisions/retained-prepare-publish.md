@@ -17,6 +17,8 @@ generated:
 
 # Retained preparation and renderer-only publication
 
+Setter rule superseded by [deferred-never-stale-preparation.md](deferred-never-stale-preparation.md) on 2026-11-21.
+
 ## Decision
 
 A bound `set()` or property assignment invokes internal preparation synchronously. Rust owns retained text, Unicode,
@@ -63,8 +65,6 @@ separate revisions and lifetimes. Main's query-first behavior remains the correc
 no release, tag, or demo merge is authorized by this decision.
 
 Acceptance requires cold/incremental parity, seeded edits and lifecycle coverage, prepared-read reuse, split independence,
-batched and standalone rendering, bounded failure/rebuild tests, and real browser visual checks. Measure set-only,
-set/read, set/read/publish, and set/split at 1/100/1,000 labels; include count changes, trailing spans, and scattered large
-ASCII assignments. Compare the same frozen candidate against main and published 0.1.0 with absolute times. Record source
-retirement and production additions/deletions, raw/gzip Wasm, and runtime delivery sizes after each wave. Unexplained
-size growth or duplicated execution paths block readiness.
+batched and standalone rendering, bounded failure/rebuild tests, and real browser visual checks.
+
+Process guidance removed 2026-11-21; see the branch rules in AGENTS.md.

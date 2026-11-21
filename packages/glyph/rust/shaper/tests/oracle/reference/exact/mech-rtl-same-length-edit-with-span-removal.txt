@@ -27,4 +27,7 @@ stage gather value 36 f7adbc741d315611
 stage gpu identity 2 0fe393ab060a9d91
 stage gpu value 3 2d84f2b48da8f2ef
 step 01 capitalize and remove the span
-outcome incremental failed with prepare: InvalidRequest but cold succeeded
+class value 230 d79ef2cff3bff0fe
+class identity 22 c11de35302f5c92e
+class repr 44 6b3de83cdb5552e8
+class wire 1 3c4cd15d0970fd09
