@@ -1,4 +1,4 @@
-use alloc::{string::String, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::line_break::{LineBreak, LineBreakAnalysis};
@@ -105,7 +105,7 @@ pub struct UnicodeAnalysis {
     previous_script: u32,
     previous_script_id: u8,
     /// Grapheme, word and sentence bits for editing, computed on first query, never by `analyze`.
-    boundaries: BoundaryLanes,
+    boundaries: Option<Box<BoundaryLanes>>,
     #[cfg(test)]
     analysis_count: usize,
 }
@@ -186,13 +186,15 @@ impl UnicodeAnalysis {
         removed: usize,
         inserted: usize,
     ) -> Result<(), UnicodeError> {
-        let mut lanes = core::mem::take(&mut self.boundaries);
+        let mut lanes = self.boundaries.take();
         let analysed = self.analyze(text);
-        lanes.splice(start, removed, inserted);
-        self.boundaries = lanes;
-        if analysed.is_err() {
-            self.boundaries.invalidate();
+        if let Some(lanes) = &mut lanes {
+            lanes.splice(start, removed, inserted);
+            if analysed.is_err() {
+                lanes.invalidate();
+            }
         }
+        self.boundaries = lanes;
         analysed
     }
 
@@ -207,13 +209,14 @@ impl UnicodeAnalysis {
             "boundary_lane asks about a text other than the analysed one"
         );
         self.boundaries
+            .get_or_insert_default()
             .ensure(text, &self.grapheme_boundaries, kinds)
     }
 
     /// The paragraph's boundary lanes: to install another `BreakSource`, or to move computed lanes
     /// to the analysis of the edited text before `BoundaryLanes::splice`.
     pub fn boundary_lanes_mut(&mut self) -> &mut BoundaryLanes {
-        &mut self.boundaries
+        self.boundaries.get_or_insert_default()
     }
 
     /// How much of the last `analyze` the kernel decided, for measurement.
@@ -313,7 +316,9 @@ impl UnicodeAnalysis {
         self.script_items.clear();
         self.deferred_scripts.clear();
         self.deferred_tags.clear();
-        self.boundaries.invalidate();
+        if let Some(lanes) = &mut self.boundaries {
+            lanes.invalidate();
+        }
     }
 
     fn kernel_ascii_facts(&self) -> PrintableAsciiFacts {

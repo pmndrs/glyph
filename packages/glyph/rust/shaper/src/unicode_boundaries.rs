@@ -134,7 +134,9 @@ pub struct BoundaryLanes {
     lane: Vec<u8>,
     graphemes_ready: bool,
     states: [LaneState; 2],
-    source: Box<dyn BreakSource>,
+    /// `None` is `Uax29BreakSource`, called directly: a boxed default would put its vtable, and
+    /// with it the UAX #29 word and sentence tables, in every build that never queries a lane.
+    source: Option<Box<dyn BreakSource>>,
     window: Vec<u8>,
 }
 
@@ -144,8 +146,7 @@ impl Default for BoundaryLanes {
             lane: Vec::new(),
             graphemes_ready: false,
             states: [LaneState::Stale; 2],
-            // A zero-sized source: no allocation.
-            source: Box::new(Uax29BreakSource),
+            source: None,
             window: Vec::new(),
         }
     }
@@ -154,7 +155,7 @@ impl Default for BoundaryLanes {
 impl BoundaryLanes {
     /// Replaces the source of word and sentence boundaries; both lanes recompute on next query.
     pub fn set_source(&mut self, source: Box<dyn BreakSource>) {
-        self.source = source;
+        self.source = Some(source);
         self.states = [LaneState::Stale; 2];
     }
 
@@ -277,8 +278,11 @@ impl BoundaryLanes {
             .try_reserve_exact(to - from + 1)
             .map_err(|_| UnicodeError::ResultTooLarge)?;
         self.window.resize(to - from + 1, 0);
-        self.source
-            .mark(segmentation, &text[from..to], &mut self.window)?;
+        let window = &text[from..to];
+        match &self.source {
+            Some(source) => source.mark(segmentation, window, &mut self.window)?,
+            None => Uax29BreakSource.mark(segmentation, window, &mut self.window)?,
+        }
         let joint = |position: usize| {
             position == 0
                 || position == text.len()
