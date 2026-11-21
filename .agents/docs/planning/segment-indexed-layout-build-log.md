@@ -685,3 +685,13 @@ Updated in place; the history of each change is in the log below.
   clipped paragraph is stale. Findings: inline objects are accepted and validated but no layout stage reads
   them; regions were exercised only as horizontal rectangles. The lane is catching up with the integration
   branch before the coverage merges.
+- **Merged: oracle coverage** (tag `sil-green-19`, pushed; full tier native and wasm: 588 cases equal, 54,240
+  requests, 0 unlisted divergences; reference set `9eec1a5a309ffe3f`; every pre-existing case byte-identical).
+  Ship-gate item closed for coverage. One of the three reported divergences was retracted: the "emptied
+  root" case was a bug in the oracle's own driver (removals were not sent when a step removed every
+  paragraph), fixed; an emptied root equals cold. **Two engine divergences stand** and are listed: (1)
+  paragraph draw order under ranked scopes depends on history (lead: `validate_lifecycle_input` rebuilds the
+  pending order from the already rank-permuted list, and `prepare_lifecycle` permutes again); (2) a
+  borrowed-glyph read after a no-op on a clipped paragraph is stale (lead: `append_paragraph_measurement`
+  keeps the previous clipped-inspection mode when nothing is pending, regardless of the views requested).
+  Both leads come from reading the code, not from a fix. A fix lane has started.

@@ -43,6 +43,7 @@ Based on `8176a24e0` (tip of `experiments/held-rope-ascii-anchor-wip`).
 | `sil-green-16`      | Slug on direct TypeGPU matching Three (sub-pixel tie-break in both shaders)                                                                                                                                                   | `experiments/sil-render` (deleted)                                                     |
 | `sil-green-17`      | Error model: paragraph-local failure, trap recovery, text-size limit; linear engine mount                                                                                                                                     | `experiments/sil-prepare` (kept: frame integration is next)                            |
 | `sil-green-18`      | PixiJS 3D renderer package `@pmndrs/glyph-pixi3d` on the official release, with a parity suite                                                                                                                                | `experiments/sil-pixi3d` (deleted)                                                     |
+| `sil-green-19`      | Oracle coverage: decorated text and effects, several paragraphs per root, columns and regions, inline objects                                                                                                                 | `experiments/sil-oracle` (kept: two divergence fixes are next)                         |
 | after `sil-green-4` | Stale process guidance removed; plan, decisions, build log and this map                                                                                                                                                       | integration branch                                                                     |
 
 ## Open lane branches
@@ -50,7 +51,7 @@ Based on `8176a24e0` (tip of `experiments/held-rope-ascii-anchor-wip`).
 | Branch                    | Worktree           | Feature in progress                                                                               | On `origin` | State    |
 | ------------------------- | ------------------ | ------------------------------------------------------------------------------------------------- | ----------- | -------- |
 | `experiments/sil-prepare` | `glyph-wt-prepare` | Ship gate: publication hold, `onLayout`, error surfaces; API docs and migration note              | yes         | building |
-| `experiments/sil-oracle`  | `glyph-wt-oracle`  | Ship gate: oracle coverage for decorations, multi-paragraph, inline objects, multi-region         | no          | building |
+| `experiments/sil-oracle`  | `glyph-wt-oracle`  | Ship gate: fix the two engine divergences the new coverage found                                  | no          | building |
 | `experiments/sil-editing` | `glyph-wt-editing` | Ship gate: editing support, engine half (offset map, carets, hit test, movement, selection rects) | no          | building |
 
 ## Not on any branch yet
