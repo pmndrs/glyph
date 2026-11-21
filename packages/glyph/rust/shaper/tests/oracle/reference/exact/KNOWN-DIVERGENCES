@@ -30,14 +30,6 @@ seed rg-boxes-latin-full 3 20 public.glyph.font_handle | align 1 (already 1), pu
 # and published lane that follows that order); each paragraph's own layout is equal.
 step doc-ranked-scope-member-removed 02 paragraphs 2 and 4 ranked in one scope, then paragraph 2 removed: paragraph 4 keeps the place it took from 2
 #
-# Emptied root. Removing every paragraph of a root publishes an empty plan: no draw structure,
-# no retirement. A renderer applying publications therefore still holds the removed paragraphs'
-# draws and buffers, and the engine's gather still holds their glyphs. The next request on the
-# emptied root is rejected with InvalidRequest, where a root that never had a paragraph accepts
-# the same request.
-step doc-emptied-and-refilled 01 every paragraph removed: gather, gpu.drawn and plan lanes still hold the removed paragraphs' 317 glyphs
-step doc-emptied-and-refilled 02 a request that changes nothing on the emptied root: rejected incrementally (prepare: InvalidRequest), accepted cold
-#
 # Seeded requests of the scoped-rank class (full tier, seeds 1-4, 60 requests), same format as
 # above.
 seed doc-four-long-batch 3 21 gather.glyph.transform_id | paragraph 1: add span 277..309 + delete 7 at 77 + flip case at 205 + insert Bidi (1 units) at 210 + rank paragraph 3 3/-2 + paragraph 4: delete 7 at 418 (reprod

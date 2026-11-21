@@ -273,16 +273,23 @@ impl Session {
         // The engine holds `next` from the first request that carries it, whatever follows.
         let sent = (|| {
             if route.measure_first {
-                for (bytes, target) in
-                    self.preparations(&plan, limits, (previous.as_ref(), next), route.split)
-                {
+                let preparations =
+                    self.preparations(&plan, limits, (previous.as_ref(), next), route.split);
+                // Removals ride in the first preparation request. With nothing to prepare and
+                // no paragraph left to read there is none, and the publication carries them.
+                let unsent = if preparations.is_empty() {
+                    plan.removed.clone()
+                } else {
+                    Vec::new()
+                };
+                for (bytes, target) in preparations {
                     output.measured_first.extend(self.measure(&bytes, target)?);
                 }
                 // A paragraph created at a temporary order is restated at its own here.
                 let lifecycle = Lifecycle {
+                    removes: unsent,
                     upserts: [plan.reordered.clone(), plan.displaced(previous.as_ref())].concat(),
                     orders: plan.ranked.clone(),
-                    ..Lifecycle::default()
                 };
                 let publish = request(self.header(route.view_mask), limits, &lifecycle, &[]);
                 self.publish(&publish, &mut output)

@@ -50,14 +50,16 @@ stage plan value 23 c6fac25bf3f88c92
 stage plan identity 7 e4589a0e40621213
 stage doc value 3 78f7e067128eb5cb
 step 01 remove every paragraph
-class wire 1 f72166e21bcf4e04
-class identity 16 0db17be0ad73f1d0
-class value 65 7a8f28c773cc5a71
+class wire 1 cceaffe44f844cb4
+class identity 1 0b15778fb54f5b80
+class value 1 16373847b11b5f2e
 step 02 nothing, on an empty root
-outcome incremental failed with prepare: InvalidRequest but cold succeeded
+class wire 1 a936ab69eca40f59
+class identity 1 0b15778fb54f5b80
+class value 1 16373847b11b5f2e
 step 03 three new paragraphs
 class value 538 75c429a9b5cffc87
-class identity 45 d2848af8d19cf912
+class identity 45 fca300848de8d47b
 class repr 129 30be3287fadc7f8c
 class cache 3 bd7bf1e48747bc49
-class wire 1 9d09ba4b5bd993c7
+class wire 1 244ce82c5df934c4

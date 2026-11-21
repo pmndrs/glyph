@@ -6,7 +6,7 @@ e83fdf2d7b8794e3 degenerate-one-letter
 c1c4dee04ce138ca degenerate-spaces
 0a81bd87340278b7 degenerate-trailing-newline
 91560190a258863d degenerate-trailing-spaces
-38c5f219cbb05b6f doc-emptied-and-refilled
+117143e590b2e2bc doc-emptied-and-refilled
 a67c37dc3a1e5b52 doc-four-long-batch
 36356c8d477cb8fc doc-four-long-batch-silent
 d57a37bf04260a71 doc-four-long-publish
@@ -586,4 +586,4 @@ fd870cfc3335d7c1 rg-columns-3-justify-latin-full
 d8bb0a42c42db714 rg-columns-3-justify-latin-silent
 c3237a73f2197527 rg-columns-3-justify-latin-silent-then-measure
 bcd3ec7c9adc9c8b rg-columns-3-paragraph-latin-full
-ec49a777290549aa set
+9eec1a5a309ffe3f set
