@@ -1,0 +1,412 @@
+import { Pixi3DRenderer, zeroAnchor } from './renderer.js';
+import { Pixi3DTextSnapshot } from './detached.js';
+import type {
+  BorrowedGlyphLayout,
+  Constraints,
+  Font,
+  FontFaceRasterOf,
+  FontFaceSelection,
+  GlyphHandleFonts,
+  GlyphCaret,
+  GlyphKey,
+  LayoutBox,
+  LayoutPoint,
+  TextFlow,
+  GlyphLayoutInspection,
+  GlyphRootServices,
+  GlyphTextController,
+  ParagraphLayout,
+  ParagraphLayoutSummary,
+  RasterFormatRequest,
+  TextStyle,
+  TextInput,
+} from '@pmndrs/glyph';
+import { bitmap, msdf, slug } from '@pmndrs/glyph';
+import { Box, Container3D, type Destroy3DOptions, Mesh3D } from '@pixi/3d';
+import { createGlyphPlacements } from '@pmndrs/glyph/core';
+
+import type { Pixi3DBindings, Pixi3DRootBoundary } from './bindings.js';
+import { isPixi3DTextMaterial, type Pixi3DTextMaterial } from './material.js';
+
+export type Pixi3DFontSelection = FontFaceSelection<
+  typeof bitmap | typeof msdf | typeof slug | RasterFormatRequest<typeof bitmap | typeof msdf | typeof slug> | undefined
+>;
+
+export interface Pixi3DTextOptions<Selection extends Pixi3DFontSelection = Pixi3DFontSelection> {
+  readonly font: Selection;
+  readonly text: TextInput<FontFaceRasterOf<Selection>>;
+  /** Construction-fixed Pixi3D shader bits and their independently mutable material data. */
+  readonly material?: Pixi3DTextMaterial;
+  readonly style?: TextStyle;
+  readonly layout?: ParagraphLayout;
+  readonly constraints?: Constraints;
+  readonly flow?: TextFlow | undefined;
+  readonly rasterPixelRatio?: number;
+}
+
+export type Pixi3DTextUpdate<Selection extends Pixi3DFontSelection = Pixi3DFontSelection> = Partial<
+  Omit<Pixi3DTextOptions<Selection>, 'material'>
+>;
+
+/** One desired glyph in logical Text-local space (+X right, +Y down), including anchor placement. Native Container3D coordinates use +Y up. */
+export interface Pixi3DGlyphMeasurement {
+  readonly key: GlyphKey;
+  readonly index: number;
+  readonly cluster: number;
+  readonly line: number;
+  readonly x: number;
+  readonly y: number;
+  readonly advance: number;
+  readonly ink: LayoutBox;
+  readonly bounds: LayoutBox;
+}
+
+export class Pixi3DText<Selection extends Pixi3DFontSelection = Pixi3DFontSelection> extends Container3D {
+  readonly #fonts: GlyphHandleFonts;
+  readonly #services: GlyphRootServices<Pixi3DBindings, void, Pixi3DRootBoundary>;
+  #controller: GlyphTextController<FontFaceRasterOf<Selection>, Pixi3DBindings['materialInput'], Pixi3DText>;
+  #font: Font<FontFaceRasterOf<Selection>>;
+  readonly #material: Pixi3DTextMaterial | undefined;
+  #state: Pixi3DTextOptions<Selection>;
+  #disposed = false;
+  #preparedAnchor: LayoutPoint = zeroAnchor;
+  #acceptedAnchor: LayoutPoint = zeroAnchor;
+  #publicationError: { readonly error: unknown } | undefined;
+  /** Receives a rejected publication once; the last accepted native meshes remain live. */
+  onError: ((error: unknown) => void) | undefined;
+
+  constructor(
+    fonts: GlyphHandleFonts,
+    services: GlyphRootServices<Pixi3DBindings, void, Pixi3DRootBoundary>,
+    options: Pixi3DTextOptions<Selection>,
+    private readonly releaseMembership?: () => void,
+  ) {
+    super({ label: 'Glyph Pixi3D Text', hitVolume: 'box' });
+    assertTextOptions(options);
+    this.#fonts = fonts;
+    this.#services = services;
+    this.#material = options.material;
+    this.#state = options;
+    this.#font = fonts.acquire(options.font);
+    try {
+      this.#controller = services.createText(this.#coreState(options, this.#font));
+    } catch (error) {
+      this.#font.dispose();
+      throw error;
+    }
+  }
+
+  get disposed(): boolean {
+    return this.#disposed;
+  }
+
+  /** Most recent rejected publication for this text's root; cleared after its next accepted publication. */
+  get error(): unknown {
+    return this.#publicationError?.error;
+  }
+  /** @internal Publish every participant's error state before delivering notifications. */
+  rejectPublication(error: unknown): boolean {
+    const notify = this.#publicationError === undefined || !Object.is(this.#publicationError.error, error);
+    this.#publicationError = { error };
+    return notify;
+  }
+  /** @internal Stage placement before renderer preparation; omitted anchors do not issue a query. */
+  preparePublication(): void {
+    this.#preparedAnchor = this.#state.constraints?.anchor === undefined ? zeroAnchor : this.measure().anchorOffset;
+  }
+  /** @internal The renderer translates only its owned meshes using accepted placement. */
+  get acceptedAnchor(): LayoutPoint {
+    return this.#acceptedAnchor;
+  }
+  /** @internal Root acceptance clears the previous publication error without rebuilding meshes. */
+  acceptPublication(): void {
+    this.#acceptedAnchor = this.#preparedAnchor;
+    this.#publicationError = undefined;
+  }
+
+  get material(): Pixi3DTextMaterial | undefined {
+    return this.#material;
+  }
+
+  get text(): TextInput<FontFaceRasterOf<Selection>> {
+    return this.#state.text;
+  }
+  set text(value: TextInput<FontFaceRasterOf<Selection>>) {
+    this.update({ text: value });
+  }
+  get font(): Selection {
+    return this.#state.font;
+  }
+  set font(value: Selection) {
+    this.update({ font: value });
+  }
+  get style(): NonNullable<Pixi3DTextOptions<Selection>['style']> {
+    return this.#state.style ?? {};
+  }
+  set style(value: NonNullable<Pixi3DTextOptions<Selection>['style']>) {
+    this.update({ style: value });
+  }
+  get layout(): ParagraphLayout {
+    return this.#state.layout ?? {};
+  }
+  set layout(value: ParagraphLayout) {
+    this.update({ layout: value });
+  }
+  get constraints(): Constraints {
+    return this.#state.constraints ?? {};
+  }
+  set constraints(value: Constraints) {
+    this.update({ constraints: value });
+  }
+  get flow(): TextFlow | undefined {
+    return this.#state.flow;
+  }
+  set flow(value: TextFlow | undefined) {
+    this.update({ flow: value });
+  }
+  get rasterPixelRatio(): number {
+    return this.#state.rasterPixelRatio ?? 1;
+  }
+  set rasterPixelRatio(value: number) {
+    this.update({ rasterPixelRatio: value });
+  }
+  /** GPU geometry bytes referenced by this text; shared buffers count once within this text. */
+  get gpuBytes(): number {
+    const buffers = new Set<import('pixi.js').Buffer>();
+    for (const child of this.children)
+      if (child instanceof Mesh3D) {
+        for (const attribute of Object.values(child.geometry.attributes)) buffers.add(attribute.buffer);
+        if (child.geometry.indexBuffer !== undefined) buffers.add(child.geometry.indexBuffer);
+      }
+    return [...buffers].reduce((total, buffer) => total + buffer.data.byteLength, 0);
+  }
+
+  update(update: Pixi3DTextUpdate<Selection>): void {
+    this.#assertActive();
+    if (typeof update !== 'object' || update === null || Array.isArray(update)) {
+      throw new TypeError('Pixi3D text update must be an object');
+    }
+    if ('material' in update) throw new TypeError('Pixi3D text material is fixed at construction');
+    const next = { ...this.#state, ...update };
+    assertTextOptions(next);
+    const nextFont = next.font === this.#state.font ? this.#font : this.#fonts.acquire(next.font);
+    try {
+      this.#controller.update(this.#coreState(next, nextFont));
+    } catch (error) {
+      if (nextFont !== this.#font) nextFont.dispose();
+      throw error;
+    }
+    if (nextFont !== this.#font) this.#font.dispose();
+    this.#font = nextFont;
+    const anchorChanged = next.constraints?.anchor !== this.#state.constraints?.anchor;
+    this.#state = next;
+    if (anchorChanged) this.#services.invalidate();
+  }
+
+  /** Allocation-light desired metrics in unanchored paragraph space (top-left, +X right, +Y down).
+   * `anchorOffset` describes host placement; it does not shift these metrics or include native transforms.
+   */
+  measure(): ParagraphLayoutSummary {
+    this.#assertActive();
+    return this.#controller.measure();
+  }
+
+  /** Desired metrics with positioned ink bounds in unanchored paragraph space (+Y down). Positions glyphs for the query without publishing native meshes. */
+  measureInk(): ParagraphLayoutSummary {
+    this.#assertActive();
+    return this.#controller.measureInk();
+  }
+
+  /** Desired anchored ink bounds in this Container3D's native local XY space (+X right, +Y up), before its transform or ancestors. Rejected draws may still show older accepted geometry. */
+  computeBoundingBox(): Box {
+    const measurement = this.measureInk();
+    const ink = measurement.inkBounds;
+    const offset = measurement.anchorOffset;
+    const box = new Box();
+    if (ink !== undefined) {
+      box.min.set(ink.x + offset.x, -(ink.y + offset.y + ink.height), 0);
+      box.max.set(ink.x + offset.x + ink.width, -(ink.y + offset.y), 0);
+    }
+    return box;
+  }
+  /** Copies desired glyph positions/boxes in anchored logical Text-local space (+X right, +Y down), before native transforms. Raw glyphs() stays paragraph-local. */
+  measureGlyphs(): readonly Pixi3DGlyphMeasurement[] {
+    const placements = this.#placements();
+    const offset = placements.layout.anchorOffset;
+    if (offset.x === 0 && offset.y === 0) return placements.glyphs;
+    return Object.freeze(
+      placements.glyphs.map((glyph) =>
+        Object.freeze({
+          ...glyph,
+          x: glyph.x + offset.x,
+          y: glyph.y + offset.y,
+          ink: anchoredBox(glyph.ink, offset),
+          bounds: anchoredBox(glyph.bounds, offset),
+        }),
+      ),
+    );
+  }
+  /** Nearest desired cluster boundary to logical Text-local x/y (+X right, +Y down), including anchor placement but no native transform. */
+  caretAt(x: number, y: number): GlyphCaret {
+    const placements = this.#placements();
+    const offset = placements.layout.anchorOffset;
+    return anchoredCaret(placements.caretAt(x - offset.x, y - offset.y), offset);
+  }
+  /** Desired caret rectangle in anchored logical Text-local space (+Y down) for a UTF-16 offset; respects clusters, bidi and line boundaries. */
+  caretForOffset(offset: number): GlyphCaret {
+    const placements = this.#placements();
+    return anchoredCaret(placements.caretForOffset(offset), placements.layout.anchorOffset);
+  }
+  /** Desired selection rectangles in anchored logical Text-local space (+Y down), before native transforms. */
+  selectionRects(start: number, end: number): readonly LayoutBox[] {
+    const placements = this.#placements();
+    const offset = placements.layout.anchorOffset;
+    const boxes = placements.selectionRects(start, end);
+    return offset.x === 0 && offset.y === 0 ? boxes : Object.freeze(boxes.map((box) => anchoredBox(box, offset)));
+  }
+  #placements() {
+    const layout = this.glyphs();
+    return createGlyphPlacements(layout, plainText(this.#state.text), layout.x, layout.y, []);
+  }
+
+  /** Copies desired glyph/line columns in unanchored paragraph space (top-left, +X right, +Y down); native draw acceptance and transforms do not affect the query. */
+  glyphs(): GlyphLayoutInspection {
+    this.#assertActive();
+    return this.#controller.inspect();
+  }
+
+  /** Borrows desired unanchored paragraph columns (+X right, +Y down) for the callback, avoiding the full glyph-array copy; the view expires on return. */
+  readGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result {
+    this.#assertActive();
+    return this.#controller.readGlyphs(read);
+  }
+
+  /** Copies drawable desired glyphs into independently transformable children plus a decoration snapshot.
+   * Snapshot roots copy this object's local transform and origin; child positions include the captured anchor once.
+   * Attach the roots to the same parent for an exact replacement, without adding the anchor again.
+   * Each child uses native +Y up and starts at its anchored pen origin, so local rotation/scale pivots there.
+   * Queries/copies reflect desired state even after a rejected draw. Resources survive later source edits/disposal;
+   * splitting allocates separate meshes and can increase draws. Dispose both returned snapshots independently.
+   */
+  split(): readonly [glyphs: Pixi3DTextSnapshot, decorations: Pixi3DTextSnapshot | undefined] {
+    this.#assertActive();
+    const placements = this.#placements();
+    const incomplete = new Set(placements.incomplete);
+    const drawable = placements.glyphs.filter((glyph) => !incomplete.has(glyph.index));
+    if (drawable.length === 0) throw new Error('cannot split text with no drawable glyphs');
+    const glyphs = new Pixi3DTextSnapshot();
+    const decorations = new Pixi3DTextSnapshot();
+    this.updateLocalTransform();
+    for (const snapshot of [glyphs, decorations]) {
+      snapshot.position.copyFrom(this.position);
+      snapshot.scale.copyFrom(this.scale);
+      snapshot.rotation.copyFrom(this.rotation);
+      snapshot.quaternion.copyFrom(this.quaternion);
+      snapshot.origin.copyFrom(this.origin);
+    }
+    const copy = (
+      target: Container3D,
+      request: import('@pmndrs/glyph').GlyphCopyRequest,
+      owner: Pixi3DTextSnapshot,
+      offset: LayoutPoint = placements.layout.anchorOffset,
+    ) => {
+      const renderer = new Pixi3DRenderer(target, offset);
+      try {
+        owner.retain(this.#services.copy(this.#controller, request, { boundary: { name: undefined }, renderer }));
+      } catch (error) {
+        renderer.dispose();
+        throw error;
+      }
+    };
+    try {
+      for (const glyph of drawable) {
+        const target = new Container3D();
+        const anchor = placements.layout.anchorOffset;
+        target.position.set(glyph.x + anchor.x, -(glyph.y + anchor.y), 0);
+        glyphs.addChild(target);
+        copy(
+          target,
+          { kind: 'glyphs', stableIds: new Uint32Array([placements.layout.glyphStableIds[glyph.index]!]) },
+          glyphs,
+          // Copied geometry retains paragraph coordinates; make its pen the child's local zero.
+          { x: -glyph.x, y: -glyph.y },
+        );
+      }
+      copy(decorations, { kind: 'decorations' }, decorations);
+      if (decorations.children.length === 0) {
+        decorations.dispose();
+        return Object.freeze([glyphs, undefined]);
+      }
+      return Object.freeze([glyphs, decorations]);
+    } catch (error) {
+      decorations.dispose();
+      glyphs.dispose();
+      throw error;
+    }
+  }
+
+  dispose(): void {
+    if (this.#disposed) return;
+    // Core rejects disposal during publication before changing its controller or leases.
+    this.#controller.dispose();
+    this.#disposed = true;
+    this.releaseMembership?.();
+    this.#publicationError = undefined;
+    this.#font.dispose();
+  }
+
+  override destroy(options?: Destroy3DOptions): void {
+    this.dispose();
+    super.destroy(options);
+  }
+
+  #coreState(state: Pixi3DTextOptions<Selection>, font: Font<FontFaceRasterOf<Selection>>) {
+    return {
+      font,
+      text: state.text,
+      transform: this,
+      ...(state.style === undefined ? {} : { style: state.style }),
+      ...(state.layout === undefined ? {} : { layout: state.layout }),
+      ...(state.constraints === undefined ? {} : { constraints: state.constraints }),
+      ...(state.flow === undefined ? {} : { flow: state.flow }),
+      ...(state.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: state.rasterPixelRatio }),
+    };
+  }
+
+  #assertActive(): void {
+    if (this.#disposed) throw new Error('Pixi3D text is disposed');
+  }
+}
+
+function assertTextOptions<Selection extends Pixi3DFontSelection>(options: Pixi3DTextOptions<Selection>): void {
+  if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+    throw new TypeError('Pixi3D text options must be an object');
+  }
+  if (typeof options.text !== 'string') {
+    if (
+      typeof options.text !== 'object' ||
+      options.text === null ||
+      typeof options.text.text !== 'string' ||
+      !Array.isArray(options.text.spans)
+    ) {
+      throw new TypeError('Pixi3D text content must be a string or formatted text');
+    }
+  }
+  if (options.material !== undefined && !isPixi3DTextMaterial(options.material)) {
+    throw new TypeError('Pixi3D text material must be a Pixi3DTextMaterial');
+  }
+}
+
+function plainText(input: string | { readonly text: string }): string {
+  return typeof input === 'string' ? input : input.text;
+}
+
+function anchoredBox(box: LayoutBox, offset: LayoutPoint): LayoutBox {
+  if (offset.x === 0 && offset.y === 0) return box;
+  return Object.freeze({ ...box, x: box.x + offset.x, y: box.y + offset.y });
+}
+
+function anchoredCaret(caret: GlyphCaret, offset: LayoutPoint): GlyphCaret {
+  if (offset.x === 0 && offset.y === 0) return caret;
+  return Object.freeze({ ...caret, rect: anchoredBox(caret.rect, offset) });
+}

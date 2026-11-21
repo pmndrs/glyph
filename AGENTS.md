@@ -42,6 +42,7 @@ Skills live in `.agents/skills`. If your harness does not list them, run
 - `engine-call-contract` before changing a published entry point, an engine call's error path or result type, or
   deciding whether a failure is the caller's;
 - `tsl` for Three.js Shading Language and `typegpu` for TypeGPU work, checked against the installed versions;
+- `pixi3d` for `@pmndrs/glyph-pixi3d` and the PixiJS 3D release it renders through;
 - `gh-stack` for every dependent branch or pull-request chain;
 - `codemod` only for migrations of APIs already on the default branch or released;
 - `maintainability-review` for deliberate cleanups and audits;
