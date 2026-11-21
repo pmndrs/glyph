@@ -75,28 +75,38 @@ function clonePlainData(value: unknown, seen: Set<object>): unknown {
   if (value === null) return value;
   if (seen.has(value)) return notPlainData;
   seen.add(value);
-  if (Array.isArray(value)) {
-    if (Object.getPrototypeOf(value) !== Array.prototype || Object.keys(value).length !== value.length) {
-      return notPlainData;
-    }
-    const copy: unknown[] = [];
-    for (let index = 0; index < value.length; index += 1) {
-      const element = clonePlainData(value[index], seen);
-      if (element === notPlainData) return notPlainData;
-      copy.push(element);
-    }
-    return copy;
-  }
+  if (Array.isArray(value)) return clonePlainArray(value, seen);
   const prototype: unknown = Object.getPrototypeOf(value);
-  if (prototype !== Object.prototype && prototype !== null) return notPlainData;
+  return prototype === Object.prototype || prototype === null
+    ? clonePlainRecord(value as Record<string, unknown>, seen)
+    : notPlainData;
+}
+
+function clonePlainArray(value: readonly unknown[], seen: Set<object>): unknown {
+  // A subclass, a hole or an extra property is not what a dense array clones to.
+  if (Object.getPrototypeOf(value) !== Array.prototype || Object.keys(value).length !== value.length) {
+    return notPlainData;
+  }
+  const copy: unknown[] = [];
+  for (const element of value) {
+    const cloned = clonePlainData(element, seen);
+    if (cloned === notPlainData) return notPlainData;
+    copy.push(cloned);
+  }
+  return copy;
+}
+
+function clonePlainRecord(value: Record<string, unknown>, seen: Set<object>): unknown {
   const copy: Record<string, unknown> = {};
   for (const key of Object.keys(value)) {
-    const property = clonePlainData((value as Record<string, unknown>)[key], seen);
+    const property = clonePlainData(value[key], seen);
     if (property === notPlainData) return notPlainData;
     // An own `__proto__` key must stay data, as it does through structuredClone.
-    if (key === '__proto__')
+    if (key === '__proto__') {
       Object.defineProperty(copy, key, { value: property, writable: true, enumerable: true, configurable: true });
-    else copy[key] = property;
+    } else {
+      copy[key] = property;
+    }
   }
   return copy;
 }

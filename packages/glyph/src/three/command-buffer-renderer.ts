@@ -74,6 +74,8 @@ export interface ThreeRendererHost {
 
 type PublicationFailure = Readonly<{ error: unknown }>;
 
+const noAnchorOffset: LayoutPoint = Object.freeze({ x: 0, y: 0 });
+
 /** Applies retained Rust command-buffer deltas to Three storage attributes and draw objects. */
 export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, void> {
   readonly #resourcesContext: ThreeRendererResources;
@@ -639,15 +641,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
   #prepareTransforms(draws: PreparedDrawReplacement): PreparedTransforms {
     const attribute = this.#preparation?.transformAttribute ?? this.#transformAttribute;
     const transforms = this.#preparation?.transforms ?? this.#transforms;
-    const rowsRetained = this.#owner.retainsSynchronizedTransforms === true && attribute === this.#transformAttribute;
-    const pending: number[] = [];
-    for (const [transformId, object] of transforms) {
-      const indexed = draws.activeTransformIndices.has(transformId);
-      const direct = draws.directDrawsByTransform.has(transformId);
-      if (!indexed && !direct) continue;
-      if (rowsRetained && !direct && this.#retainsSynchronizedRow(transformId, object)) continue;
-      pending.push(transformId);
-    }
+    const pending = this.#transformsToPrepare(draws, transforms, attribute === this.#transformAttribute);
     const rows: number[] = [];
     const values = new Float32Array(pending.length * 16);
     const direct: PreparedTransformUpdate[] = [];
@@ -658,14 +652,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     const capacity = (attribute.array as Float32Array).length;
     for (const transformId of pending) {
       const object = transforms.get(transformId)!;
-      object.updateWorldMatrix(true, false, true);
-      if (object === draws.root) relative.identity();
-      else relative.multiplyMatrices(rootInverse, object.matrixWorld);
-      const anchor = this.#owner.anchorOffset?.(object, true);
-      if (anchor !== undefined && (anchor.x !== 0 || anchor.y !== 0)) {
-        relative.multiply(this.#anchorTranslation.makeTranslation(anchor.x, -anchor.y, 0));
-      }
-      const visible = this.#owner.visibleObject?.(object) ?? visibleBelowRoot(object, draws.root);
+      const visible = this.#candidateTransform(object, draws.root, rootInverse, relative);
       if (draws.activeTransformIndices.has(transformId)) {
         if (transformId * 16 > capacity - 16) throw new RangeError('transform identity exceeds its prepared table');
         // Rows start zeroed, which is also the hidden encoding.
@@ -679,12 +666,48 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     return { rows, values, direct };
   }
 
+  /** The drawn transform identities whose committed row cannot be kept. */
+  #transformsToPrepare(
+    draws: PreparedDrawReplacement,
+    transforms: ReadonlyMap<number, THREE.Object3D>,
+    sameTable: boolean,
+  ): number[] {
+    const rowsRetained = sameTable && this.#owner.retainsSynchronizedTransforms === true;
+    const pending: number[] = [];
+    for (const [transformId, object] of transforms) {
+      const direct = draws.directDrawsByTransform.has(transformId);
+      if (!direct && !draws.activeTransformIndices.has(transformId)) continue;
+      if (rowsRetained && !direct && this.#retainsSynchronizedRow(transformId, object)) continue;
+      pending.push(transformId);
+    }
+    return pending;
+  }
+
+  /** Writes one object's candidate root-relative transform into `relative` and answers its visibility. */
+  #candidateTransform(
+    object: THREE.Object3D,
+    root: THREE.Object3D,
+    rootInverse: THREE.Matrix4,
+    relative: THREE.Matrix4,
+  ): boolean {
+    object.updateWorldMatrix(true, false, true);
+    if (object === root) relative.identity();
+    else relative.multiplyMatrices(rootInverse, object.matrixWorld);
+    const anchor = this.#owner.anchorOffset?.(object, true);
+    if (anchor !== undefined && (anchor.x !== 0 || anchor.y !== 0)) {
+      relative.multiply(this.#anchorTranslation.makeTranslation(anchor.x, -anchor.y, 0));
+    }
+    return this.#owner.visibleObject?.(object) ?? visibleBelowRoot(object, root);
+  }
+
   /** Whether the committed table row already belongs to this object under an unchanged placement anchor. */
   #retainsSynchronizedRow(transformId: number, object: THREE.Object3D): boolean {
     if (this.#transforms.get(transformId) !== object || !this.#activeTransformIndices.has(transformId)) return false;
-    const staged = this.#owner.anchorOffset?.(object, true);
-    const committed = this.#owner.anchorOffset?.(object, false);
-    return (staged?.x ?? 0) === (committed?.x ?? 0) && (staged?.y ?? 0) === (committed?.y ?? 0);
+    const anchorOffset = this.#owner.anchorOffset;
+    if (anchorOffset === undefined) return true;
+    const staged = anchorOffset(object, true) ?? noAnchorOffset;
+    const committed = anchorOffset(object, false) ?? noAnchorOffset;
+    return staged.x === committed.x && staged.y === committed.y;
   }
 
   #discardPreparation(context: PreparationContext, draws: PreparedDrawReplacement | undefined): void {
