@@ -1,5 +1,25 @@
 # Repository guidance
 
+## This branch: layout and publication refactor
+
+This branch is one architectural attempt, judged as a whole: at the end it beats the existing architecture or it is
+abandoned. Until then these rules replace anything below, in `.agents/docs`, or in earlier handoffs that conflicts:
+
+- Work in large units. Commit coherent milestones; do not split work to preserve one invariant per commit.
+- Benchmarks are spikes for evidence before committing to a direction. Saved snapshots of `v0.1.0`, main and the
+  branch start are a loose reference only; any benchmark run after that is interleaved against main in the same
+  session. No statistical protocol, thresholds, arm counts, or size report after each change.
+- Alongside the linters and formatters, run `fallow` (TypeScript) and `kimun` (code metrics) on the code you
+  touch and act on complexity, duplication and unused-code findings before calling a unit done.
+- Keep work. Do not revert or discard a unit because an intermediate measurement is flat or negative.
+- Correctness is not negotiable and is not ceremony: incremental results must equal cold whole-paragraph layout, and
+  the tests that prove it stay green.
+- Earlier decisions and plans (`planning/decisions/`, `decision-register.md`, `retained-text-assignment.md`,
+  `publication-frontier.md`, `fragment-relative-reflow.md`) are history and constraints to understand, not gates.
+  Where the plan in `.agents/docs/planning/segment-indexed-layout.md` departs from them, the plan wins.
+- Skip `docs:attest`, per-change log records and package-size evidence here; documentation is reconciled once, at the
+  end, if the branch succeeds.
+
 `pmndrs/glyph` is an ESM-only monorepo for portable font baking, universal shaping, paragraph layout, and optional
 raster renderers. Packages and applications live under `packages/` and `apps/`; the benchmark application is
 `benches/`.
@@ -33,7 +53,7 @@ Read the [engineering standard](.agents/docs/engineering/code-style.md) before w
 Validate by who can author a value: public caller input, third-party callback results, and external data once at the
 boundary; trust package-owned output and prove it at the producer. Never justify a runtime guard with a test that forges
 a value no production caller can supply. For TSL typing changes, start from `packages/glyph/tests/types/tsl-*.test.ts`.
-Create small Conventional Commits, each preserving one invariant, and finish with a clean worktree.
+Use Conventional Commit messages.
 
 ## Docs
 
