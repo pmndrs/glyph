@@ -1,25 +1,8 @@
-import tgpu, {
-  d,
-  std,
-  type TgpuRoot,
-  type TgpuUniform,
-  type TgpuRenderPass,
-  type TgpuBindGroup,
-  type TgpuRenderPipeline,
-} from 'typegpu';
-import type { CodecBufferId, PortableResource, PortableLeafResource } from '../../index.js';
+import tgpu, { d, std, type TgpuRoot } from 'typegpu';
+import type { PortableResource, PortableLeafResource } from '../../index.js';
 import { bitmapSchema } from '../../raster/bitmap.js';
-import { MSDF_GLYPH_TABLE_LAYER_STEP, msdfBakedPages, msdfSchema } from '../../raster/msdf.js';
 import { slugSchema } from '../../raster/slug.js';
 import { bitmapFragment, bitmapQuadPosition, bitmapAtlasUv } from '../../shaders/typegpu/bitmap-shader.js';
-import {
-  msdfFragment,
-  msdfVertex,
-  msdfSampleSlot,
-  msdfAtlasSizeAccessor,
-  msdfPixelRangeAccessor,
-} from '../../shaders/typegpu/msdf-shader.js';
-import { decorationPaint } from '../../shaders/typegpu/decoration-shader.js';
 import { slugRender, SlugShaderGlyph } from '../../shaders/typegpu/slug/slug-render.js';
 import { slugDilate } from '../../shaders/typegpu/slug/core/dilate.js';
 import {
@@ -30,41 +13,21 @@ import {
   slugHeaderWidthAccessor,
   slugReferenceWidthAccessor,
 } from '../../shaders/typegpu/slug/slug-texture.js';
-import type { TypeGpuConfigOptions, TypeGpuPositionTransform, TypeGpuColorTransform } from '../config.js';
 import { bitmapPageAccessor } from '../../shaders/typegpu/bitmap-shader.js';
 import { TYPEGPU_PLACEMENT_SLOT_BUFFER_ID } from './codec.js';
+import { msdfResource } from './msdf.js';
+import {
+  colorTransform,
+  corner,
+  preparedDraw,
+  projectWithScene,
+  shaderRoot,
+  target,
+  type PipelineOptions,
+  type TypeGpuResource,
+} from './pipeline.js';
 
-export interface Draw {
-  draw(pass: TgpuRenderPass | GPURenderPassEncoder, bindGroups: readonly TgpuBindGroup[]): void;
-}
-export interface TypeGpuResource {
-  prepare(
-    buffers: ReadonlyMap<CodecBufferId, GPUBuffer>,
-    placementTable: GPUBuffer,
-    viewport: TgpuUniform<d.Vec2f>,
-    position: TgpuUniform<d.Vec2f>,
-    start: number,
-    count: number,
-  ): Draw;
-  dispose(): void;
-}
-type PipelineOptions = TypeGpuConfigOptions;
-
-const defaultPosition: TypeGpuPositionTransform = (position, viewport) => {
-  'use gpu';
-  return d.vec4f((position.x * 2) / viewport.x - 1, 1 - (position.y * 2) / viewport.y, position.z, 1);
-};
-const positionTransform = tgpu.slot<TypeGpuPositionTransform>(defaultPosition);
-const defaultColor: TypeGpuColorTransform = (color) => {
-  'use gpu';
-  return d.vec4f(color);
-};
-const colorTransform = tgpu.slot<TypeGpuColorTransform>(defaultColor);
-function shaderRoot(options: PipelineOptions) {
-  return options.root
-    .with(positionTransform, options.transformPosition ?? defaultPosition)
-    .with(colorTransform, options.transformColor ?? defaultColor);
-}
+export type { Draw, TypeGpuResource } from './pipeline.js';
 
 function sceneEntries() {
   return {
@@ -74,12 +37,8 @@ function sceneEntries() {
     placements: { storage: d.arrayOf(d.vec2f), access: 'readonly' as const, visibility: ['vertex' as const] },
   };
 }
+
 const scene = tgpu.bindGroupLayout(sceneEntries());
-const msdfScene = tgpu.bindGroupLayout({
-  ...sceneEntries(),
-  /** One row per baked glyph: `[left, top, width, height + layer * 4096]` in atlas texels. */
-  glyphs: { storage: d.arrayOf(d.vec4f), access: 'readonly' as const, visibility: ['vertex' as const] },
-});
 const slugScene = tgpu.bindGroupLayout({
   viewport: { uniform: d.vec2f },
   position: { uniform: d.vec2f },
@@ -88,7 +47,6 @@ const slugScene = tgpu.bindGroupLayout({
 const v2 = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
 const v4 = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const u1 = tgpu.vertexLayout(d.disarrayOf(d.uint32), 'instance');
-const u2 = tgpu.vertexLayout(d.disarrayOf(d.uint32x2), 'instance');
 const u4 = tgpu.vertexLayout(d.disarrayOf(d.uint32x4), 'instance');
 // Each attribute needs its own layout identity, even when its physical shape matches.
 const originLayout = v2;
@@ -97,24 +55,11 @@ const uvOriginLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
 const uvSizeLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
 const colorLayout = v4;
 const rectLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
-const pageLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const planeLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const bandLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const inverseLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const countsLayout = tgpu.vertexLayout(d.disarrayOf(d.uint32x4), 'instance');
 
-function corner(index: number): d.v2f {
-  'use gpu';
-  // Two triangles, top-left origin, no geometry/index allocation.
-  const x = index === 1 || index === 4 || index === 5;
-  const y = index === 2 || index === 3 || index === 5;
-  return d.vec2f(std.select(0, 1, x), std.select(0, 1, y));
-}
-function projectWithScene(position: d.v3f, viewport: d.v2f, offset: d.v2f): d.v4f {
-  'use gpu';
-  const pixel = d.vec2f(position.x, -position.y).add(offset);
-  return positionTransform.$(d.vec3f(pixel, position.z), viewport);
-}
 function project(position: d.v3f): d.v4f {
   'use gpu';
   return projectWithScene(position, scene.$.viewport, scene.$.position);
@@ -130,15 +75,6 @@ function projectSlug(position: d.v3f): d.v4f {
 function placedSlugOrigin(origin: d.v2f, placementSlot: number): d.v2f {
   'use gpu';
   return origin.add(slugScene.$.placements[placementSlot]!);
-}
-function target(options: PipelineOptions): GPUColorTargetState {
-  return {
-    format: options.format,
-    blend: {
-      color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
-      alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-    },
-  };
 }
 function texture(root: TgpuRoot, payload: PortableLeafResource) {
   if (payload.kind !== 'texture' && payload.kind !== 'texture-array') throw new Error('Expected a raster texture');
@@ -156,47 +92,6 @@ function texture(root: TgpuRoot, payload: PortableLeafResource) {
     throw error;
   }
 }
-/** Uploads every baked MSDF page as one layer, straight from the decoded page bytes. */
-function bakedAtlas(root: TgpuRoot, token: PortableLeafResource) {
-  if (token.kind !== 'buffer') throw new Error('Expected the MSDF baked-pages token');
-  const baked = msdfBakedPages(token);
-  const result = root
-    .createTexture({ size: [baked.width, baked.height, baked.pages.length], format: 'rgba8unorm' })
-    .$usage('sampled');
-  try {
-    const gpu = root.unwrap(result);
-    for (const [layer, page] of baked.pages.entries()) {
-      root.device.queue.writeTexture(
-        { texture: gpu, origin: [0, 0, layer] },
-        page.bytes,
-        { bytesPerRow: page.width * 4, rowsPerImage: page.height },
-        [page.width, page.height, 1],
-      );
-    }
-    return result;
-  } catch (error) {
-    result.destroy();
-    throw error;
-  }
-}
-/** Uploads a portable constant table as a read-only storage buffer. */
-function storageTable(root: TgpuRoot, payload: PortableLeafResource): GPUBuffer {
-  if (payload.kind !== 'buffer') throw new Error('Expected a raster constant table');
-  const buffer = root.device.createBuffer({
-    size: Math.max(16, payload.bytes.byteLength),
-    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-  });
-  root.device.queue.writeBuffer(buffer, 0, payload.bytes);
-  return buffer;
-}
-function scalar(payload: PortableLeafResource, index = 0): number {
-  if (payload.kind !== 'buffer') throw new Error('Expected a raster constant');
-  return new DataView(payload.bytes.buffer, payload.bytes.byteOffset, payload.bytes.byteLength).getFloat32(
-    index * 4,
-    true,
-  );
-}
-
 export function createResource(options: PipelineOptions, format: string, payload: PortableResource): TypeGpuResource {
   if (format === 'pmndrs.bitmap') return bitmapResource(options, payload);
   if (payload.kind !== 'group') throw new Error('Expected grouped raster resources');
@@ -204,16 +99,6 @@ export function createResource(options: PipelineOptions, format: string, payload
   if (format === 'pmndrs.slug') return slugResource(options, payload.members);
   throw new TypeError(`TypeGPU cannot render raster format "${format}"`);
 }
-function preparedDraw(root: TgpuRoot, pipeline: TgpuRenderPipeline, start: number, count: number): Draw {
-  return {
-    draw(pass, bindGroups) {
-      let bound = pipeline;
-      for (const group of bindGroups) bound = bound.with(group);
-      bound.with('resourceType' in pass ? root.unwrap(pass) : pass).draw(6, count, 0, start);
-    },
-  };
-}
-
 function bitmapResource(options: PipelineOptions, payload: PortableResource): TypeGpuResource {
   if (payload.kind === 'group') throw new Error('Expected bitmap atlas');
   const { root } = options;
@@ -288,148 +173,6 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
     };
   } catch (error) {
     atlas.destroy();
-    throw error;
-  }
-}
-function msdfResource(
-  options: PipelineOptions,
-  members: Readonly<Record<string, PortableLeafResource>>,
-): TypeGpuResource {
-  const { root } = options;
-  const atlas = bakedAtlas(root, members.pages!);
-  const glyphs = storageTable(root, members.glyphs!);
-  try {
-    const view = atlas.createView(d.texture2dArray(d.f32));
-    const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'linear' });
-    const atlasSize = d.vec2f(atlas.props.size[0], atlas.props.size[1]);
-    const pixelRange = scalar(members.pixelRange!);
-    const effectScale = d.vec3f(
-      scalar(members.effectScale!, 0),
-      scalar(members.effectScale!, 1),
-      scalar(members.effectScale!, 2),
-    );
-    const varyings = {
-      uv: d.vec2f,
-      shadowUv: d.vec2f,
-      bounds: d.vec4f,
-      color: d.vec4f,
-      outline: d.vec4f,
-      shadow: d.vec4f,
-      width: d.f32,
-      layer: d.interpolate('flat', d.u32),
-    };
-    const vertex = tgpu.vertexFn({
-      in: {
-        index: d.builtin.vertexIndex,
-        instance: d.builtin.instanceIndex,
-        rect: d.vec4f,
-        color: d.vec4f,
-        effectColor: d.vec2u,
-        effect: d.vec4f,
-      },
-      out: { position: d.builtin.position, ...varyings },
-    })((input) => {
-      'use gpu';
-      const unit = corner(input.index);
-      // What every drawing of a glyph shares is read once per vertex from the font's glyph table.
-      const cell = msdfScene.$.glyphs[d.u32(input.effect.w)]!;
-      const layer = std.floor(cell.w / MSDF_GLYPH_TABLE_LAYER_STEP);
-      const uvOrigin = cell.xy.div(atlasSize);
-      const uvSize = d.vec2f(cell.z, cell.w - layer * MSDF_GLYPH_TABLE_LAYER_STEP).div(atlasSize);
-      const origin = input.rect.xy.add(msdfScene.$.placements[msdfScene.$.placementSlots[input.instance]!]!);
-      const output = msdfVertex({
-        unitPosition: d.vec3f(unit, 0),
-        unitUv: unit,
-        instance: {
-          origin,
-          size: input.rect.zw,
-          uvOrigin,
-          uvSize,
-          uvBounds: d.vec4f(uvOrigin, uvOrigin.add(uvSize)),
-          fillColor: input.color,
-          outlineColor: decorationPaint(d.vec2u(input.effectColor.x, 0)),
-          shadowColor: decorationPaint(d.vec2u(input.effectColor.y, 0)),
-          shadowOffset: input.effect.xy.mul(effectScale.xy),
-          outlineWidth: input.effect.z * effectScale.z,
-          pageIndex: d.u32(layer),
-        },
-      });
-      return {
-        position: projectWithScene(output.position, msdfScene.$.viewport, msdfScene.$.position),
-        uv: output.atlasCoordinate,
-        shadowUv: output.shadowCoordinate,
-        bounds: output.uvBounds,
-        color: output.fillColor,
-        outline: output.outlineColor,
-        shadow: output.shadowColor,
-        width: output.outlineWidth,
-        layer: output.pageIndex,
-      };
-    });
-    const fragment = tgpu.fragmentFn({ in: { position: d.builtin.position, ...varyings }, out: d.vec4f })((input) => {
-      'use gpu';
-      const output = msdfFragment({
-        position: d.vec3f(0),
-        atlasCoordinate: input.uv,
-        shadowCoordinate: input.shadowUv,
-        uvBounds: input.bounds,
-        fillColor: input.color,
-        outlineColor: input.outline,
-        shadowColor: input.shadow,
-        outlineWidth: input.width,
-        pageIndex: input.layer,
-      });
-      return colorTransform.$(d.vec4f(output.color, output.opacity), input.position);
-    });
-    const pipeline = shaderRoot(options)
-      .with(msdfAtlasSizeAccessor, atlasSize)
-      .with(msdfPixelRangeAccessor, pixelRange)
-      .with(msdfSampleSlot, (uv, layer) => {
-        'use gpu';
-        return std.textureSample(view.$, sampler.$, uv, layer);
-      })
-      .createRenderPipeline({
-        vertex,
-        fragment,
-        attribs: {
-          rect: rectLayout.attrib,
-          color: colorLayout.attrib,
-          effectColor: u2.attrib,
-          effect: pageLayout.attrib,
-        },
-        targets: target(options),
-        multisample: { count: options.sampleCount ?? 1 },
-        depthStencil: options.depthStencil,
-      });
-    pipeline.initSync();
-    return {
-      dispose: () => {
-        atlas.destroy();
-        glyphs.destroy();
-      },
-      prepare(buffers, placementTable, viewport, position, start, count) {
-        const placementSlots = buffers.get(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID);
-        if (placementSlots === undefined) throw new Error('TypeGPU glyph draw is missing its placement-slot lane');
-        const group = root.createBindGroup(msdfScene, {
-          viewport,
-          position,
-          placementSlots,
-          placements: placementTable,
-          glyphs,
-        });
-        const b = msdfSchema.buffers;
-        const draw = pipeline
-          .with(group)
-          .with(rectLayout, buffers.get(b.rect.id)!)
-          .with(colorLayout, buffers.get(b.color.id)!)
-          .with(u2, buffers.get(b.effectColor.id)!)
-          .with(pageLayout, buffers.get(b.effect.id)!);
-        return preparedDraw(root, draw, start, count);
-      },
-    };
-  } catch (error) {
-    atlas.destroy();
-    glyphs.destroy();
     throw error;
   }
 }

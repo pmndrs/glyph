@@ -3,7 +3,7 @@ import type { TgpuRoot, TgpuUniform, TgpuBindGroup, TgpuRenderPass } from 'typeg
 import { d } from 'typegpu';
 import type { CodecBufferId, CommandBufferView, GlyphRenderer, PreparedRendererCommit } from '../../index.js';
 import type { Bindings, BufferBinding } from './bindings.js';
-import type { Draw, TypeGpuResource } from './resources.js';
+import type { Draw, TypeGpuResource } from './pipeline.js';
 import { TYPEGPU_PLACEMENT_SLOT_BUFFER_ID } from './codec.js';
 
 export interface TypeGpuTransform {
@@ -200,9 +200,12 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
                 return this.#draws[index]!;
               }
               const named = new Map<CodecBufferId, GPUBuffer>();
+              const bytes = new Map<CodecBufferId, Uint8Array>();
               for (const binding of span.buffers) {
-                if (binding.input.declaration.kind === 'codec')
-                  named.set(binding.input.declaration.value.id, buffers.get(binding)!.gpu);
+                if (binding.input.declaration.kind !== 'codec') continue;
+                const retained = buffers.get(binding)!;
+                named.set(binding.input.declaration.value.id, retained.gpu);
+                bytes.set(binding.input.declaration.value.id, retained.bytes);
               }
               if (placementTable === undefined)
                 throw new Error('TypeGPU glyph draw is missing its session placement table');
@@ -213,6 +216,7 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
                 span.transform.position,
                 span.start,
                 span.count,
+                bytes,
               );
             });
       let active = true;
@@ -232,6 +236,9 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
               );
             }
           }
+          const written = new Set<Uint8Array>();
+          for (const target of uploads.keys()) written.add(target.bytes);
+          for (const draw of draws) draw.refresh?.(written);
           for (const [key, previous] of this.#buffers) if (buffers.get(key) !== previous) previous.gpu.destroy();
           this.#buffers = buffers;
           this.#placementTable = placementTable;
