@@ -1,4 +1,5 @@
-import { createTextEditingQueries, type TextEditingQueries } from '../text-editing.js';
+import type { TextEditingQueries } from '../text-editing.js';
+import { createTextEditingQueries } from './text-queries.js';
 import type { Font } from '../font.js';
 import {
   createGlyphHandleState,

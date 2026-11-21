@@ -77,7 +77,7 @@ import {
   statedTextReplacement,
   type TextRangeReplacement,
 } from '../text-mutation.js';
-import type { TextQuery } from '../text-editing.js';
+import type { TextQuery } from './text-queries.js';
 
 const MAX_U32 = 0xffff_ffff;
 /**

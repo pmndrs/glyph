@@ -39,7 +39,7 @@ export function minimalTextReplacement(previous: string, next: string): TextRang
 }
 
 /**
- * The replacement an edit stated, when applying it to `previous` gives exactly `next`; otherwise `undefined`
+ * @internal The replacement an edit stated, when applying it to `previous` gives exactly `next`; otherwise `undefined`
  * and the caller compares the two texts. A stated range is the only thing that tells the engine which of
  * several equal characters an edit inserted, and so which text unit keeps its identity.
  */

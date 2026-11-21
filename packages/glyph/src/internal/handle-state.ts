@@ -1565,7 +1565,7 @@ export class PlanTransport {
     this.#invalidate();
   }
 
-  /** @internal Runs one editing query (`text-editing.ts`) against this root; its answer ends every layout borrow. */
+  /** @internal Runs one editing query (`text-queries.ts`) against this root; its answer ends every layout borrow. */
   textQuery<Result>(
     run: (exports: ReturnType<typeof runtimeShaperEngineExports>, root: PlannerHandle) => Result,
   ): Result {
