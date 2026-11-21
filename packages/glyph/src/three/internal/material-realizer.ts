@@ -22,7 +22,6 @@ import type { RetainedBuffer, ThreeBufferBindingId } from './host-buffer.js';
 import {
   bufferMember,
   dataTexture,
-  ownedUint16,
   ownedUint32,
   resourceGroup,
   textureArrayResource,
@@ -559,13 +558,10 @@ export class ThreeMaterialRealizer {
     let lease = this.#context.slugPages.get(binding);
     if (lease !== undefined) return lease.resource;
     lease = this.#coordinator.acquireSlugPageResource(data, () => {
-      const curves = textureMember(data, 'curves', 'rgba16float', 'Slug');
       const headers = textureMember(data, 'headers', 'r32uint', 'Slug');
-      const references = textureMember(data, 'references', 'r32uint', 'Slug');
-      const curveBytes = ownedUint16(curves.bytes);
+      const bandCurves = textureMember(data, 'bandCurves', 'rgba32uint', 'Slug');
       const headerBytes = ownedUint32(headers.bytes);
-      const referenceBytes = ownedUint32(references.bytes);
-      const curveTexture = dataTexture(curveBytes, curves.width, curves.height, THREE.RGBAFormat, THREE.HalfFloatType);
+      const bandCurveBytes = ownedUint32(bandCurves.bytes);
       const headerTexture = dataTexture(
         headerBytes,
         headers.width,
@@ -573,27 +569,24 @@ export class ThreeMaterialRealizer {
         THREE.RedIntegerFormat,
         THREE.UnsignedIntType,
       );
-      const referenceTexture = dataTexture(
-        referenceBytes,
-        references.width,
-        references.height,
-        THREE.RedIntegerFormat,
+      const bandCurveTexture = dataTexture(
+        bandCurveBytes,
+        bandCurves.width,
+        bandCurves.height,
+        THREE.RGBAIntegerFormat,
         THREE.UnsignedIntType,
       );
       const glyphTable = slugGlyphTable(bufferMember(data, 'glyphs', 'Slug').bytes);
       return {
-        curveTexture,
-        curveWidth: curves.width,
         headerTexture,
         headerWidth: headers.width,
-        referenceTexture,
-        referenceWidth: references.width,
+        bandCurveTexture,
+        bandCurveWidth: bandCurves.width,
         glyphTable,
-        byteLength: curveBytes.byteLength + headerBytes.byteLength + referenceBytes.byteLength + glyphTable.byteLength,
+        byteLength: headerBytes.byteLength + bandCurveBytes.byteLength + glyphTable.byteLength,
         dispose() {
-          curveTexture.dispose();
           headerTexture.dispose();
-          referenceTexture.dispose();
+          bandCurveTexture.dispose();
           glyphTable.texture.dispose();
         },
       };

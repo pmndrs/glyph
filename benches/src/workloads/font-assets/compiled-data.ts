@@ -179,12 +179,19 @@ export function compiledSlugData(font: Font<typeof slug>): SlugCpuReferenceData 
     const row = view.u32('glyph', glyph) * SLUG_GLYPH_TABLE_STRIDE * 4;
     if (row + SLUG_GLYPH_TABLE_STRIDE * 4 > table.byteLength)
       throw new TypeError('Slug glyph row is outside its table');
-    glyphs.curveBase[glyph] = table.getUint32(row + 32, true);
     glyphs.horizontalHeaderBase[glyph] = table.getUint32(row + 36, true);
     glyphs.verticalHeaderBase[glyph] = table.getUint32(row + 40, true);
     glyphs.referenceBase[glyph] = table.getUint32(row + 44, true);
     glyphs.horizontalBands[glyph] = u16(table.getUint32(row + 48, true), 'Slug horizontal bands');
     glyphs.verticalBands[glyph] = u16(table.getUint32(row + 52, true), 'Slug vertical bands');
+    // The page's band curves are resolved per entry; the rebuilt curve grid stores entry k at texels 2k and 2k + 1.
+    glyphs.curveBase[glyph] = glyphs.referenceBase[glyph]! * 2;
+    assignSlugReferences(
+      pages[selectedPage]!,
+      [glyphs.horizontalHeaderBase[glyph]!, glyphs.verticalHeaderBase[glyph]!],
+      [glyphs.horizontalBands[glyph]!, glyphs.verticalBands[glyph]!],
+      glyphs.referenceBase[glyph]!,
+    );
   }
   return { planeUnitsPerEm: SLUG_PLANE_UNITS_PER_EM, glyphs, pages };
 }
@@ -294,35 +301,77 @@ function slugGlyphTable(resource: CompiledRasterFontResource): DataView {
   return new DataView(table.bytes.buffer, table.bytes.byteOffset, table.bytes.byteLength);
 }
 
+/**
+ * Rebuilds the reference-and-curve layout the CPU oracle reads from the renderer's band curves: band entry `k` becomes
+ * curve texels `2k` (p0, p1) and `2k + 1` (p2), and its reference is `2(k - referenceBase)` from a curve base of
+ * `2 * referenceBase`, which names the same control points the GPU reads for that entry.
+ */
 function slugPage(resource: CompiledRasterFontResource): SlugPageData {
   const group = resourceGroup(resource, 'Slug page');
-  const curves = groupTexture(group, 'curves', 'Slug curves');
   const headers = groupTexture(group, 'headers', 'Slug headers');
-  const packedReferences = groupTexture(group, 'references', 'Slug references');
-  const packed = new Uint32Array(
-    packedReferences.bytes.buffer,
-    packedReferences.bytes.byteOffset,
-    packedReferences.bytes.byteLength / 4,
+  const bandCurves = groupTexture(group, 'bandCurves', 'Slug band curves');
+  const entries = new Uint32Array(
+    bandCurves.bytes.buffer,
+    bandCurves.bytes.byteOffset,
+    bandCurves.bytes.byteLength / 4,
   );
-  const references = new Uint16Array(packed.length * 2);
-  for (let index = 0; index < packed.length; index += 1) {
-    references[index * 2] = packed[index]! & 0xffff;
-    references[index * 2 + 1] = packed[index]! >>> 16;
+  const entryCount = entries.length / 4;
+  const curveWidth = 2 * bandCurves.width;
+  const curveWords = new Uint32Array(entryCount * 4);
+  for (let entry = 0; entry < entryCount; entry += 1) {
+    curveWords[entry * 4] = entries[entry * 4]!;
+    curveWords[entry * 4 + 1] = entries[entry * 4 + 1]!;
+    curveWords[entry * 4 + 2] = entries[entry * 4 + 2]!;
   }
+  // Filled per glyph by `assignSlugReferences`, which knows which entries each glyph's bands name.
+  const references = new Uint16Array(entryCount);
   return {
     resource: resource.key,
-    curveWidth: curves.width,
-    curveHeight: curves.height,
-    curveBytes: curves.bytes,
+    curveWidth,
+    curveHeight: Math.ceil((entryCount * 2) / curveWidth),
+    curveBytes: new Uint8Array(curveWords.buffer),
     headerCount: headers.width * headers.height,
     headerWidth: headers.width,
     headerHeight: headers.height,
     headerBytes: headers.bytes,
     referenceCount: references.length,
-    referenceWidth: packedReferences.width * 2,
-    referenceHeight: packedReferences.height,
+    referenceWidth: references.length,
+    referenceHeight: 1,
     referenceBytes: new Uint8Array(references.buffer),
   };
+}
+
+/**
+ * Points each of a glyph's band entries at a rebuilt curve: entry `k` at reference `2(k - referenceBase)`, except that
+ * an entry repeating a curve an earlier entry of the glyph already holds names that earlier one, so a glyph's distinct
+ * references are its distinct curves, as baked.
+ */
+function assignSlugReferences(
+  page: SlugPageData,
+  headerBases: readonly number[],
+  bandCounts: readonly number[],
+  referenceBase: number,
+) {
+  const headers = new DataView(page.headerBytes.buffer, page.headerBytes.byteOffset, page.headerBytes.byteLength);
+  const curves = new DataView(page.curveBytes.buffer, page.curveBytes.byteOffset, page.curveBytes.byteLength);
+  const references = new Uint16Array(
+    page.referenceBytes.buffer,
+    page.referenceBytes.byteOffset,
+    page.referenceBytes.byteLength / 2,
+  );
+  const seen = new Map<string, number>();
+  for (const [axis, headerBase] of headerBases.entries()) {
+    for (let band = 0; band < bandCounts[axis]!; band += 1) {
+      const header = headers.getUint32((headerBase + band) * 4, true);
+      const first = referenceBase + (header & 0xffff);
+      for (let entry = first; entry < first + (header >>> 16); entry += 1) {
+        const key = [0, 4, 8].map((offset) => curves.getUint32(entry * 16 + offset, true)).join(',');
+        const own = u16((entry - referenceBase) * 2, 'rebuilt Slug reference');
+        references[entry] = seen.get(key) ?? own;
+        if (!seen.has(key)) seen.set(key, own);
+      }
+    }
+  }
 }
 
 function planeValue(value: number, planeUnitsPerEm: number, label: string): number {

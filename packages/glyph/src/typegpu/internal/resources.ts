@@ -6,12 +6,11 @@ import { bitmapFragment, bitmapQuadPosition, bitmapAtlasUv } from '../../shaders
 import { slugRender, SlugShaderGlyph } from '../../shaders/typegpu/slug/slug-render.js';
 import { slugDilate } from '../../shaders/typegpu/slug/core/dilate.js';
 import {
-  slugCurveTexelSlot,
+  slugBandCurveTexelSlot,
+  slugBandCurveWidthAccessor,
   slugHeaderTexelSlot,
-  slugReferenceTexelSlot,
-  slugCurveWidthAccessor,
   slugHeaderWidthAccessor,
-  slugReferenceWidthAccessor,
+  slugUnpackHalvesSlot,
 } from '../../shaders/typegpu/slug/slug-texture.js';
 import { bitmapPageAccessor } from '../../shaders/typegpu/bitmap-shader.js';
 import { TYPEGPU_PLACEMENT_SLOT_BUFFER_ID, TYPEGPU_TRANSFORM_INDEX_BUFFER_ID } from './codec.js';
@@ -174,15 +173,12 @@ function slugResource(
   const textures: ReturnType<typeof texture>[] = [];
   const glyphs = storageTable(root, members.glyphs!);
   try {
-    const curves = texture(root, members.curves!);
-    textures.push(curves);
     const headers = texture(root, members.headers!);
     textures.push(headers);
-    const references = texture(root, members.references!);
-    textures.push(references);
-    const curveView = curves.createView(d.texture2d(d.f32));
+    const bandCurves = texture(root, members.bandCurves!);
+    textures.push(bandCurves);
     const headerView = headers.createView(d.texture2d(d.u32));
-    const referenceView = references.createView(d.texture2d(d.u32));
+    const bandCurveView = bandCurves.createView(d.texture2d(d.u32));
     const varyings = {
       coordinate: d.vec2f,
       color: d.vec4f,
@@ -252,20 +248,20 @@ function slugResource(
       return colorTransform.$(d.vec4f(input.color.rgb, input.color.a * coverage), input.position);
     });
     const pipeline = shaderRoot(options)
-      .with(slugCurveWidthAccessor, d.u32(curves.props.size[0]))
       .with(slugHeaderWidthAccessor, d.u32(headers.props.size[0]))
-      .with(slugReferenceWidthAccessor, d.u32(references.props.size[0]))
-      .with(slugCurveTexelSlot, (coords) => {
-        'use gpu';
-        return std.textureLoad(curveView.$, coords, 0);
-      })
+      .with(slugBandCurveWidthAccessor, d.u32(bandCurves.props.size[0]))
       .with(slugHeaderTexelSlot, (coords) => {
         'use gpu';
         return std.textureLoad(headerView.$, coords, 0);
       })
-      .with(slugReferenceTexelSlot, (coords) => {
+      .with(slugBandCurveTexelSlot, (coords) => {
         'use gpu';
-        return std.textureLoad(referenceView.$, coords, 0);
+        return std.textureLoad(bandCurveView.$, coords, 0);
+      })
+      // This renderer is WebGPU only, so it decodes the packed control points with the builtin.
+      .with(slugUnpackHalvesSlot, (word) => {
+        'use gpu';
+        return std.unpack2x16float(word);
       })
       .createRenderPipeline({
         vertex,

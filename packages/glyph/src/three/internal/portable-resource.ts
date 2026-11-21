@@ -121,11 +121,6 @@ export function atlasTextureArray(
   return texture;
 }
 
-export function ownedUint16(bytes: Uint8Array): Uint16Array {
-  const copy = bytes.slice();
-  return new Uint16Array(copy.buffer, copy.byteOffset, copy.byteLength / 2);
-}
-
 export function ownedUint32(bytes: Uint8Array): Uint32Array {
   const copy = bytes.slice();
   return new Uint32Array(copy.buffer, copy.byteOffset, copy.byteLength / 4);

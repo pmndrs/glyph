@@ -7,7 +7,7 @@ import {
   slugHorizontalCurveContribution,
   slugVerticalCurveContribution,
 } from './core/band.js';
-import { loadCurve, loadHeader, loadReference, type SlugShaderCurve } from './slug-texture.js';
+import { loadBandCurve, loadHeader, type SlugShaderCurve } from './slug-texture.js';
 
 export const SlugShaderGlyph: d.WgslStruct<{
   curveBaseTexel: d.U32;
@@ -92,12 +92,10 @@ function genericEvaluateBand(
   let curveIndex /* u32 */ = d.u32(0);
 
   while (curveIndex < curveCount) {
-    const referenceIndex = /* u32 */ d.u32(glyph.referenceBase + localReferenceOffset + curveIndex);
-    const curveReference = /* u32 */ loadReference(referenceIndex);
-    const curve = loadCurve(glyph.curveBaseTexel + curveReference);
+    const curve = loadBandCurve(d.u32(glyph.referenceBase + localReferenceOffset + curveIndex));
     const contribution = getCurveContribution(axisSlot.$)(curve, renderCoordinate, pixelsPerEm, thickenFactor);
 
-    // The references of a band are sorted by descending ray-axis maximum, so the
+    // The entries of a band are sorted by descending ray-axis maximum, so the
     // first curve that cannot reach this fragment ends the band.
     if (contribution.z < -0.5) {
       curveIndex = curveCount;

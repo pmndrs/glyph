@@ -4,11 +4,8 @@ import {
   add as addOperator,
   bitAnd as bitAndOperator,
   bitOr as bitOrOperator,
-  div as divOperator,
   fwidth as fwidthOperator,
   lessThan as lessThanOperator,
-  mod as modOperator,
-  mul as mulOperator,
   shiftLeft as shiftLeftOperator,
   shiftRight as shiftRightOperator,
   sub as subOperator,
@@ -19,14 +16,6 @@ import {
 /** Three 0.185.1 omits the runtime while-loop overload and unsigned texture result type. */
 const loopRuntime: Function = loopOperator;
 const textureLoadRuntime: Function = textureLoadOperator;
-
-export function intDiv(left: Node<'int'>, right: Node<'int'>): Node<'int'> {
-  return divOperator(left, right);
-}
-
-export function intMod(left: Node<'int'>, right: Node<'int'>): Node<'int'> {
-  return modOperator(left, right);
-}
 
 export function intLessThan(left: Node<'int'>, right: Node<'int'>): Node<'bool'> {
   return lessThanOperator(left, right);
@@ -54,10 +43,6 @@ export function uintBitAnd(left: Node<'uint'>, right: Node<'uint'>): Node<'uint'
 
 export function uintBitOr(left: Node<'uint'>, right: Node<'uint'>): Node<'uint'> {
   return bitOrOperator(left, right);
-}
-
-export function uintMul(left: Node<'uint'>, right: Node<'uint'>): Node<'uint'> {
-  return mulOperator(left, right);
 }
 
 export function uintShiftLeft(left: Node<'uint'>, right: Node<'uint'>): Node<'uint'> {

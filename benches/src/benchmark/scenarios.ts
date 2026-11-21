@@ -186,9 +186,11 @@ function slugTextValidation(values: readonly import('./contracts').BenchmarkMeas
       !finitePositive(metrics.slugHeaderBytes) ||
       !finitePositive(metrics.slugReferenceBytes) ||
       !finitePositive(metrics.slugResourceBytes) ||
-      // GPU bytes below the decoded resource total means the renderer dropped a page rather than repacking one.
+      // GPU bytes below the curve and header total means the renderer dropped a page rather than repacking one. The
+      // compiled page holds each band entry's curve (the oracle's curve bytes) and the headers; the oracle's reference
+      // table only re-indexes those curves for the CPU reference and has no GPU counterpart.
       !finitePositive(metrics.slugGpuBytes) ||
-      metrics.slugGpuBytes < metrics.slugResourceBytes ||
+      metrics.slugGpuBytes < metrics.slugCurveBytes + metrics.slugHeaderBytes ||
       metrics.renderTargetGpuBytes !== value.outputBytes ||
       !finiteNonnegative(metrics.fontLoadMs) ||
       !finiteNonnegative(metrics.firstDrawMs) ||
