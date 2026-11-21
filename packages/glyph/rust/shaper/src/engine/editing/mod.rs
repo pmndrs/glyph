@@ -35,6 +35,7 @@
 //! end of a line that ends in a hard break).
 
 mod boundary;
+mod caret;
 mod lig_caret;
 mod line;
 mod offset;
