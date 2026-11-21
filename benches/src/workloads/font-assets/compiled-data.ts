@@ -17,7 +17,11 @@ import {
 } from '@pmndrs/glyph';
 import {
   bitmapCodec,
+  msdfBakedPages,
   msdfCodec,
+  MSDF_GLYPH_TABLE_LAYER_STEP,
+  MSDF_GLYPH_TABLE_STRIDE,
+  SLUG_GLYPH_TABLE_STRIDE,
   SLUG_PLANE_UNITS_PER_EM,
   slugCodec,
   compileRasterFont,
@@ -73,8 +77,14 @@ export function compiledMsdfData(font: Font<typeof msdf>, configuration: MsdfCon
   const resource = view.resources.find(({ payload }) => payload.kind === 'group');
   if (resource === undefined) throw new TypeError('MTSDF compiled binding has no atlas group');
   const group = resourceGroup(resource, 'MTSDF atlas');
-  const atlas = groupTextureArray(group, 'texture', 'MTSDF atlas texture');
-  assertTextureArrayFormat(atlas, 'rgba8unorm', 'MTSDF atlas texture');
+  // The atlas group carries a token for the baked pages (a renderer copies glyphs out of them on demand) and a
+  // per-glyph table `[left, top, width, height + layer * step]` in atlas texels, addressed by the binding's glyph row.
+  const pagesToken = group.members.pages;
+  if (pagesToken?.kind !== 'buffer') throw new TypeError('MTSDF atlas pages must be a token buffer');
+  const baked = msdfBakedPages(pagesToken);
+  const table = group.members.glyphs;
+  if (table?.kind !== 'buffer') throw new TypeError('MTSDF atlas glyphs must be a buffer');
+  const glyphTable = new DataView(table.bytes.buffer, table.bytes.byteOffset, table.bytes.byteLength);
   const pixelRangeBuffer = group.members.pixelRange;
   if (pixelRangeBuffer?.kind !== 'buffer' || pixelRangeBuffer.bytes.byteLength !== 4) {
     throw new TypeError('MTSDF atlas pixelRange must be one f32 value');
@@ -99,16 +109,29 @@ export function compiledMsdfData(font: Font<typeof msdf>, configuration: MsdfCon
       output.setUint16(record + 16, ABSENT_PAGE, true);
       continue;
     }
-    writeDenseRecord(output, record, view, glyph, atlas.width, atlas.height, planeUnitsPerEm);
+    writePlaneRect(output, record, view, glyph, planeUnitsPerEm);
+    const row = view.u32('glyph', glyph) * MSDF_GLYPH_TABLE_STRIDE * 4;
+    if (row + MSDF_GLYPH_TABLE_STRIDE * 4 > glyphTable.byteLength) {
+      throw new TypeError('MTSDF glyph row is outside its table');
+    }
+    const left = glyphTable.getFloat32(row, true);
+    const top = glyphTable.getFloat32(row + 4, true);
+    const packedHeight = glyphTable.getFloat32(row + 12, true);
+    const layer = Math.floor(packedHeight / MSDF_GLYPH_TABLE_LAYER_STEP);
+    output.setUint16(record + 8, u16(left, 'atlas left'), true);
+    output.setUint16(record + 10, u16(top, 'atlas top'), true);
+    output.setUint16(record + 12, u16(left + glyphTable.getFloat32(row + 8, true), 'atlas right'), true);
+    output.setUint16(record + 14, u16(top + packedHeight - layer * MSDF_GLYPH_TABLE_LAYER_STEP, 'atlas bottom'), true);
+    output.setUint16(record + 16, u16(layer, 'atlas page'), true);
   }
   return {
     resource: resource.key,
-    binding: { width: atlas.width, height: atlas.height, layers: atlas.layers },
+    binding: { width: baked.width, height: baked.height, layers: baked.pages.length },
     emSize: planeUnitsPerEm,
     pixelRange,
     planeUnitsPerEm,
     records,
-    pages: textureArrayPages(resource, atlas),
+    pages: baked.pages,
   };
 }
 
@@ -119,6 +142,7 @@ export function compiledSlugData(font: Font<typeof slug>): SlugCpuReferenceData 
     throw new TypeError('Slug compiled binding must use one glyph-scoped strike');
   }
   const pages = view.resources.map((resource) => slugPage(resource));
+  const tables = view.resources.map((resource) => slugGlyphTable(resource));
   const pageIndex = new Map(view.resources.map((resource, index) => [resource.key, index]));
   const glyphs = {
     planeLeft: new Int16Array(view.glyphCount),
@@ -150,12 +174,17 @@ export function compiledSlugData(font: Font<typeof slug>): SlugCpuReferenceData 
     glyphs.planeRight[glyph] = planeValue(right, SLUG_PLANE_UNITS_PER_EM, 'Slug right');
     glyphs.planeTop[glyph] = planeValue(top, SLUG_PLANE_UNITS_PER_EM, 'Slug top');
     glyphs.page[glyph] = u16(selectedPage, 'Slug page index');
-    glyphs.horizontalBands[glyph] = u16(view.u32('horizontalBands', glyph), 'Slug horizontal bands');
-    glyphs.verticalBands[glyph] = u16(view.u32('verticalBands', glyph), 'Slug vertical bands');
-    glyphs.curveBase[glyph] = view.u32('curveBase', glyph);
-    glyphs.horizontalHeaderBase[glyph] = view.u32('horizontalHeaderBase', glyph);
-    glyphs.verticalHeaderBase[glyph] = view.u32('verticalHeaderBase', glyph);
-    glyphs.referenceBase[glyph] = view.u32('referenceBase', glyph);
+    // Band counts and table bases live in the page's glyph table, at the row the binding names.
+    const table = tables[selectedPage]!;
+    const row = view.u32('glyph', glyph) * SLUG_GLYPH_TABLE_STRIDE * 4;
+    if (row + SLUG_GLYPH_TABLE_STRIDE * 4 > table.byteLength)
+      throw new TypeError('Slug glyph row is outside its table');
+    glyphs.curveBase[glyph] = table.getUint32(row + 32, true);
+    glyphs.horizontalHeaderBase[glyph] = table.getUint32(row + 36, true);
+    glyphs.verticalHeaderBase[glyph] = table.getUint32(row + 40, true);
+    glyphs.referenceBase[glyph] = table.getUint32(row + 44, true);
+    glyphs.horizontalBands[glyph] = u16(table.getUint32(row + 48, true), 'Slug horizontal bands');
+    glyphs.verticalBands[glyph] = u16(table.getUint32(row + 52, true), 'Slug vertical bands');
   }
   return { planeUnitsPerEm: SLUG_PLANE_UNITS_PER_EM, glyphs, pages };
 }
@@ -185,6 +214,21 @@ function declaredResource(
   return resource;
 }
 
+function writePlaneRect(
+  output: DataView,
+  record: number,
+  view: CompiledRasterFontView,
+  row: number,
+  planeUnitsPerEm: number,
+): void {
+  const left = view.f32('bearingX', row);
+  const top = view.f32('bearingY', row);
+  output.setInt16(record, planeValue(left, planeUnitsPerEm, 'raster left'), true);
+  output.setInt16(record + 2, planeValue(top - view.f32('height', row), planeUnitsPerEm, 'raster bottom'), true);
+  output.setInt16(record + 4, planeValue(left + view.f32('width', row), planeUnitsPerEm, 'raster right'), true);
+  output.setInt16(record + 6, planeValue(top, planeUnitsPerEm, 'raster top'), true);
+}
+
 function writeDenseRecord(
   output: DataView,
   record: number,
@@ -194,12 +238,7 @@ function writeDenseRecord(
   atlasHeight: number,
   planeUnitsPerEm: number,
 ): void {
-  const left = view.f32('bearingX', row);
-  const top = view.f32('bearingY', row);
-  output.setInt16(record, planeValue(left, planeUnitsPerEm, 'raster left'), true);
-  output.setInt16(record + 2, planeValue(top - view.f32('height', row), planeUnitsPerEm, 'raster bottom'), true);
-  output.setInt16(record + 4, planeValue(left + view.f32('width', row), planeUnitsPerEm, 'raster right'), true);
-  output.setInt16(record + 6, planeValue(top, planeUnitsPerEm, 'raster top'), true);
+  writePlaneRect(output, record, view, row, planeUnitsPerEm);
   const atlasLeft = texelValue(view.f32('uvOriginX', row), atlasWidth, 'atlas left');
   const atlasTop = texelValue(view.f32('uvOriginY', row), atlasHeight, 'atlas top');
   output.setUint16(record + 8, atlasLeft, true);
@@ -243,20 +282,16 @@ function resourceGroup(resource: CompiledRasterFontResource, label: string): Por
   return resource.payload;
 }
 
-function groupTextureArray(
-  group: PortableResourceGroupPayload,
-  name: string,
-  label: string,
-): PortableTextureArrayPayload {
-  const member = group.members[name];
-  if (member?.kind !== 'texture-array') throw new TypeError(`${label} must be a texture array`);
-  return member;
-}
-
 function groupTexture(group: PortableResourceGroupPayload, name: string, label: string): PortableTexturePayload {
   const member = group.members[name];
   if (member?.kind !== 'texture') throw new TypeError(`${label} must be a texture`);
   return member;
+}
+
+function slugGlyphTable(resource: CompiledRasterFontResource): DataView {
+  const table = resourceGroup(resource, 'Slug page').members.glyphs;
+  if (table?.kind !== 'buffer') throw new TypeError('Slug page glyphs must be a buffer');
+  return new DataView(table.bytes.buffer, table.bytes.byteOffset, table.bytes.byteLength);
 }
 
 function slugPage(resource: CompiledRasterFontResource): SlugPageData {

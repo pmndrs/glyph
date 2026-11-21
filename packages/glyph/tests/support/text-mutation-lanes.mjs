@@ -14,8 +14,8 @@ import { PLACEMENT_SLOT_BUFFER_ID, STABLE_GLYPH_BUFFER_ID, TRANSFORM_BUFFER_ID }
 
 export const IDENTITY_LANE = `_pmndrsGlyph_${STABLE_GLYPH_BUFFER_ID}`;
 export const PLACEMENT_SLOT_LANE = `_pmndrsGlyph_${PLACEMENT_SLOT_BUFFER_ID}`;
-const SLUG_BAND_COUNTS_LANE = `_pmndrsGlyph_${slugSchema.buffers.bandCounts.id}`;
-const SLUG_PLACEMENT_SLOT_COMPONENT = 2;
+const SLUG_GLYPH_LANE = `_pmndrsGlyph_${slugSchema.buffers.glyph.id}`;
+const SLUG_PLACEMENT_SLOT_COMPONENT = 1;
 const TRANSFORM_INDEX_LANE = `_pmndrsGlyph_${TRANSFORM_BUFFER_ID}`;
 const TRANSFORM_TABLE = '_pmndrsGlyphTransforms';
 
@@ -211,11 +211,11 @@ export function assertMatchesFreshBuild(font, mounted, paragraphs, context) {
           );
           continue;
         }
-        if (name === SLUG_BAND_COUNTS_LANE) {
+        if (name === SLUG_GLYPH_LANE) {
           assertEqualExceptComponent(
             draw.attributes[name],
             expected.attributes[name],
-            4,
+            2,
             SLUG_PLACEMENT_SLOT_COMPONENT,
             `${context}: draw ${index} packed ${name}`,
           );
@@ -230,7 +230,7 @@ export function assertMatchesFreshBuild(font, mounted, paragraphs, context) {
   }
 }
 
-/** Three packs Slug's lifecycle-local placement slot into bandCounts.z; the remaining band-count lanes stay geometric. */
+/** Three packs Slug's lifecycle-local placement slot into the glyph lane's second component; the glyph row stays exact. */
 function assertEqualExceptComponent(actual, expected, width, omitted, where) {
   assert.equal(actual.length, expected.length, `${where} length`);
   for (let index = 0; index < actual.length; index += 1) {
