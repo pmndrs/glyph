@@ -1,7 +1,7 @@
 use std::{fs::File, io::Read, path::PathBuf};
 
 use flate2::read::GzDecoder;
-use pmndrs_glyph_shaper::line_break::LineBreakAnalysis;
+use pmndrs_glyph_shaper::{line_break::LineBreakAnalysis, unicode::UnicodeAnalysis};
 
 const LINE_BREAK_TEST_CASES: usize = 19_338;
 
@@ -9,6 +9,7 @@ const LINE_BREAK_TEST_CASES: usize = 19_338;
 fn unicode_17_line_break_test_is_fully_conformant() {
     let source = fixture("LineBreakTest.txt.gz");
     let mut analysis = LineBreakAnalysis::default();
+    let mut dense = UnicodeAnalysis::default();
     let mut cases = 0usize;
     for (line_index, source) in source.lines().enumerate() {
         let body = source.split('#').next().unwrap_or_default().trim();
@@ -42,6 +43,16 @@ fn unicode_17_line_break_test_is_fully_conformant() {
             .map(|line_break| line_break.position)
             .collect();
         assert_eq!(actual, expected, "LineBreakTest:{}", line_index + 1);
+        // The dense kernel path, with its scalar windows, must pass the same vectors.
+        dense
+            .analyze(&text)
+            .unwrap_or_else(|error| panic!("LineBreakTest:{}: {error:?}", line_index + 1));
+        let actual: Vec<u32> = dense
+            .line_breaks()
+            .iter()
+            .map(|line_break| line_break.position)
+            .collect();
+        assert_eq!(actual, expected, "LineBreakTest kernel:{}", line_index + 1);
         cases += 1;
     }
     assert_eq!(cases, LINE_BREAK_TEST_CASES);
