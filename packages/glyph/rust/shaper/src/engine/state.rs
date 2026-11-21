@@ -6100,7 +6100,7 @@ impl ParagraphState {
         let unicode = self.unicode.active();
         let styles = self.styles.active().resolved.segments();
         let runs = self.shaping_runs.active().runs();
-        if runs.is_empty() {
+        if runs.is_empty() && styles.is_empty() {
             self.clusters.pending_mut().clear();
             return self.finish_cluster_preparation(shaper).map(|()| true);
         }

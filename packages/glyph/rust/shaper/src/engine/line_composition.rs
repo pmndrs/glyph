@@ -103,6 +103,16 @@ impl LineCursor {
         }
     }
 
+    /// The cursor of a text with no cluster. It is still one paragraph, and an empty
+    /// paragraph is one empty line: the same line that follows a final hard break.
+    pub(crate) const fn empty_paragraph() -> Self {
+        Self {
+            cluster: 0,
+            trailing_empty: true,
+            start_correction: Correction::ZERO,
+        }
+    }
+
     pub(crate) const fn cluster(self) -> usize {
         self.cluster
     }

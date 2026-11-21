@@ -590,7 +590,8 @@ impl FlowLayoutArena {
     ) -> Result<(), EngineError> {
         let paragraph_level = first_paragraph_level(bidi);
         self.clear();
-        if clusters.starts.is_empty() || geometry.constraints.is_empty() {
+        // A text with no cluster and no style has no face to take a line box from.
+        if geometry.constraints.is_empty() || (clusters.starts.is_empty() && styles.is_empty()) {
             return Ok(());
         }
         // Limits reject excess work; they are not allocation requests. A line consumes at
@@ -627,15 +628,25 @@ impl FlowLayoutArena {
                 metrics_for,
                 first_font_for_stack,
             )?;
-            let resume = if let Some(cap) = drop_cap.as_ref() {
-                usize::try_from(cap.body_resume_cluster).map_err(|_| EngineError::InvalidRequest)?
+            // A text with no cluster is still a paragraph: one line, empty, with its strut.
+            let mut cursor = if clusters.starts.is_empty() {
+                if constraint.resume_cluster != 0 {
+                    return Err(EngineError::InvalidRequest);
+                }
+                LineCursor::empty_paragraph()
             } else {
-                cluster_for_offset(clusters, constraint.resume_cluster)?
+                let resume = if let Some(cap) = drop_cap.as_ref() {
+                    usize::try_from(cap.body_resume_cluster)
+                        .map_err(|_| EngineError::InvalidRequest)?
+                } else {
+                    cluster_for_offset(clusters, constraint.resume_cluster)?
+                };
+                let mut cursor = LineCursor::at_cluster(resume);
+                if constraint.wrap == WRAP_WORD {
+                    cursor.start_correction = corrections.right(resume)?;
+                }
+                cursor
             };
-            let mut cursor = LineCursor::at_cluster(resume);
-            if constraint.wrap == WRAP_WORD {
-                cursor.start_correction = corrections.right(resume)?;
-            }
             let constraint_line_limit = if constraint.max_lines == 0 {
                 max_lines
             } else {
@@ -2225,18 +2236,32 @@ fn line_metrics_for_cluster(
     metrics_for: impl Fn(u32) -> Option<FontMetrics>,
     first_font_for_stack: impl Fn(u32) -> Option<u32>,
 ) -> Result<ClusterLineMetrics, EngineError> {
-    let style_index = usize::try_from(
-        *clusters
+    line_metrics_for_style(
+        line_style(clusters, styles, index)?,
+        metrics_for,
+        first_font_for_stack,
+    )
+}
+
+/// The style a line at cluster `index` takes its strut from. A text with no cluster has no
+/// cluster to ask, and its one style segment is the style its empty line is set in.
+fn line_style(
+    clusters: &ClusterArena,
+    styles: &[StyleSegment],
+    index: usize,
+) -> Result<ResolvedStyle, EngineError> {
+    let segment = if clusters.starts.is_empty() {
+        styles.first()
+    } else {
+        clusters
             .style_indexes
             .get(index)
-            .ok_or(EngineError::InvalidRequest)?,
-    )
-    .map_err(|_| EngineError::InvalidRequest)?;
-    let style = styles
-        .get(style_index)
-        .ok_or(EngineError::InvalidRequest)?
-        .style;
-    line_metrics_for_style(style, metrics_for, first_font_for_stack)
+            .and_then(|style_index| usize::try_from(*style_index).ok())
+            .and_then(|style_index| styles.get(style_index))
+    };
+    segment
+        .map(|segment| segment.style)
+        .ok_or(EngineError::InvalidRequest)
 }
 
 /// The same authored-stack strut formula serves General's cluster walk and the one-run leaf.
@@ -2348,18 +2373,8 @@ fn positive_extents(
     if extents.height().is_finite() && extents.height() > 0.0 {
         return Ok(extents);
     }
-    let style_index = usize::try_from(
-        *clusters
-            .style_indexes
-            .get(index.min(clusters.starts.len().saturating_sub(1)))
-            .ok_or(EngineError::InvalidRequest)?,
-    )
-    .map_err(|_| EngineError::InvalidRequest)?;
-    let style = styles
-        .get(style_index)
-        .ok_or(EngineError::InvalidRequest)?
-        .style;
-    positive_extents_for_style(extents, style)
+    let index = index.min(clusters.starts.len().saturating_sub(1));
+    positive_extents_for_style(extents, line_style(clusters, styles, index)?)
 }
 
 fn positive_extents_for_style(
@@ -3489,6 +3504,91 @@ mod tests {
             )
             .unwrap();
         layout
+    }
+
+    /// A text with no cluster is one paragraph and so one line; each hard break ends a line
+    /// and the paragraph after the last one is a line too. None of these lines has a glyph,
+    /// so each is zero wide and takes its box from the authored face: at size 10 an ascender
+    /// of 800 and a descender of 200 in a 1000-unit em are a baseline at 8 and a height of 10.
+    #[test]
+    fn empty_text_and_newline_only_text_compose_empty_lines_with_the_font_strut() {
+        /// A line's block start, baseline and height.
+        type LineBox = (f64, f64, f64);
+        /// A line's cluster range, its text range, and whether a hard break ends it.
+        type LineSpan = (u32, u32, u32, u32, bool);
+        fn lines_of(hard_breaks: u32) -> (Vec<LineBox>, Vec<LineSpan>) {
+            let count = hard_breaks as usize;
+            let clusters = quantized(ClusterArena {
+                starts: (0..hard_breaks).collect(),
+                ends: (1..=hard_breaks).collect(),
+                advances: vec![0.0; count],
+                flags: vec![
+                    CLUSTER_HARD_BREAK | super::super::cluster_state::CLUSTER_REQUIRED_BREAK;
+                    count
+                ],
+                style_indexes: vec![0; count],
+                source_runs: vec![0; count],
+                font_handles: vec![1; count],
+                index_at: (0..=hard_breaks).collect(),
+                ..ClusterArena::default()
+            });
+            let layout = composed(
+                &plain_geometry(constraint()),
+                &clusters,
+                &[uniform_style(hard_breaks)],
+            );
+            assert!(
+                layout.fragments.iter().all(|fragment| {
+                    fragment.line.advance == 0.0
+                        && fragment.line.hung_advance == 0.0
+                        && fragment.slot_start == 0.0
+                        && fragment.slot_end == 10.0
+                }),
+                "an empty line is zero wide in the whole slot"
+            );
+            assert!(layout.lines.iter().all(|line| line.fragment_count == 1));
+            (
+                layout
+                    .lines
+                    .iter()
+                    .map(|line| (line.block_start, line.baseline, line.height))
+                    .collect(),
+                layout
+                    .fragments
+                    .iter()
+                    .map(|fragment| {
+                        (
+                            fragment.line.cluster_start,
+                            fragment.line.cluster_end,
+                            fragment.line.text_start,
+                            fragment.line.text_end,
+                            fragment.line.hard_break,
+                        )
+                    })
+                    .collect(),
+            )
+        }
+        // "": one line.
+        assert_eq!(
+            lines_of(0),
+            (vec![(0.0, 8.0, 10.0)], vec![(0, 0, 0, 0, false)])
+        );
+        // "\n": the line the break ends, and the empty paragraph after it.
+        assert_eq!(
+            lines_of(1),
+            (
+                vec![(0.0, 8.0, 10.0), (10.0, 8.0, 10.0)],
+                vec![(0, 1, 0, 0, true), (1, 1, 1, 1, false)]
+            )
+        );
+        // "\n\n": three.
+        assert_eq!(
+            lines_of(2),
+            (
+                vec![(0.0, 8.0, 10.0), (10.0, 8.0, 10.0), (20.0, 8.0, 10.0)],
+                vec![(0, 1, 0, 0, true), (1, 2, 1, 1, true), (2, 2, 2, 2, false)]
+            )
+        );
     }
 
     #[test]
