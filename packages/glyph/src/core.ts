@@ -6,6 +6,11 @@ export * from './config/schema.js';
 export * from './config/resources.js';
 export * from './config/raster.js';
 export * from './config/raster-format.js';
+export {
+  createDecorationCodecProgram,
+  decorationSchema,
+  type DecorationCodecProgramOptions,
+} from './config/decoration.js';
 export { bitmapSchema, bitmapCodec, selectBitmapStrikePpem } from './raster/bitmap.js';
 export {
   msdfSchema,
@@ -25,5 +30,10 @@ export {
   SLUG_GLYPH_TABLE_STRIDE,
   SLUG_PLANE_UNITS_PER_EM,
 } from './raster/slug.js';
+export {
+  SlugBandResidency,
+  SLUG_RESIDENT_BAND_CURVE_WIDTH,
+  type SlugAdmission,
+} from './raster/internal/slug-residency.js';
 export { createGlyphPlacements } from './glyph-placement.js';
 export type { GlyphLine, GlyphPlacement, GlyphPlacements, GlyphRun, GlyphSpace } from './glyph-placement.js';
