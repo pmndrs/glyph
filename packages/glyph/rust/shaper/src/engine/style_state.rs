@@ -319,7 +319,16 @@ impl ResolvedStyleArena {
                 || old.outline_rgba != new.outline_rgba
                 || old.shadow_rgba != new.shadow_rgba
                 || old.decoration_rgba != new.decoration_rgba;
-            let effects = old.raster_pixel_ratio.to_bits() != new.raster_pixel_ratio.to_bits()
+            // Positioning bakes each decoration record's colour and material, and decides once per
+            // paragraph whether its rows carry outline and shadow. A paint change that reaches
+            // either is not paint-only: the paint-only preparation keeps those positioned facts.
+            let decorated = (old.decoration_flags | new.decoration_flags) != 0;
+            let effects = (decorated
+                && (old.material_id != new.material_id
+                    || old.decoration_rgba != new.decoration_rgba))
+                || super::positioning::style_has_text_effects(old)
+                    != super::positioning::style_has_text_effects(new)
+                || old.raster_pixel_ratio.to_bits() != new.raster_pixel_ratio.to_bits()
                 || old.outline_width.to_bits() != new.outline_width.to_bits()
                 || old.shadow_offset_x.to_bits() != new.shadow_offset_x.to_bits()
                 || old.shadow_offset_y.to_bits() != new.shadow_offset_y.to_bits()
@@ -1830,6 +1839,58 @@ mod tests {
         };
         let effects = previous.invalidation_against(&storage, &resolved(outline_width), &storage);
         assert!(effects.effects && effects.positioning && !effects.paint_only());
+
+        // Material on undecorated text is paint; on decorated text it is baked into the
+        // positioned decoration records, as is the decoration colour.
+        let material = ResolvedStyle {
+            material_id: 9,
+            ..ResolvedStyle::default()
+        };
+        assert!(
+            previous
+                .invalidation_against(&storage, &resolved(material), &storage)
+                .paint_only()
+        );
+        let underlined = ResolvedStyle {
+            decoration_flags: super::super::frame::DECORATION_UNDERLINE,
+            ..ResolvedStyle::default()
+        };
+        let decorated = resolved(underlined);
+        for changed in [
+            ResolvedStyle {
+                material_id: 9,
+                ..underlined
+            },
+            ResolvedStyle {
+                decoration_rgba: 0xff00_00ff,
+                ..underlined
+            },
+        ] {
+            let invalidation =
+                decorated.invalidation_against(&storage, &resolved(changed), &storage);
+            assert!(invalidation.paint && invalidation.effects && !invalidation.paint_only());
+        }
+
+        // Positioning decides once whether rows carry outline and shadow; a colour that turns them
+        // on or off is not paint-only, a colour that only changes them is.
+        let outlined = ResolvedStyle {
+            outline_rgba: 0x0000_ffff,
+            ..ResolvedStyle::default()
+        };
+        assert!(
+            !previous
+                .invalidation_against(&storage, &resolved(outlined), &storage)
+                .paint_only()
+        );
+        let recoloured = ResolvedStyle {
+            outline_rgba: 0x00ff_00ff,
+            ..ResolvedStyle::default()
+        };
+        assert!(
+            resolved(outlined)
+                .invalidation_against(&storage, &resolved(recoloured), &storage)
+                .paint_only()
+        );
 
         let direction = ResolvedStyle {
             direction: 2,
