@@ -1,0 +1,80 @@
+# glyph layout oracle reference v1
+case rg-columns-2-exclusion-latin-full
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 841327f45f201ca2
+stage text identity 1 e6507bdf9722a9ae
+stage unicode value 6 24d64a168caf2adc
+stage bidi value 8 f50cd6c7221f06e6
+stage style value 26 f99ccc1b3cac3109
+stage shaping_run value 5 a117e4e0dac9ad65
+stage shape value 14 493b85e87ec318d3
+stage cluster value 29 7e5bf4a4e767c1b7
+stage cluster identity 4 3da43a6941563d32
+stage cluster repr 11 023bf95d39b982ad
+stage run_local repr 16 bf706fb4a8fb5eb6
+stage flow value 35 f5651bc61d6b9937
+stage positioned identity 3 9a1887195ba51870
+stage positioned value 13 feed6bcb477770ee
+stage positioned repr 17 2f128b278dcb15f2
+stage public value 13 c2411d91ac12d1ee
+stage public identity 1 58c3da09c9788ebb
+stage view identity 4 2fcab168274c1a5f
+stage view value 40 3a9208aa7d465336
+stage wire wire 1 e4ba7ceb9b881c19
+stage gather identity 7 1949053b19876b8e
+stage gather value 36 a2c12d1e7e636841
+stage gpu identity 2 038dcb70e848c5e6
+stage gpu value 3 9b191492b0572518
+stage plan value 23 cd24a940cd48eb9f
+stage plan identity 7 1b4580ec5a380b9b
+step 01 insert in the first region
+class value 253 8f1239c5ed0182bf
+class identity 29 39e467e81b5db60d
+class repr 44 756e2937064e0fef
+class wire 1 ee358b96d5f9d883
+step 02 delete in a later region
+class value 253 0e3cd0cc2fc5b141
+class identity 29 1737edd852064414
+class repr 44 24568e905455cf33
+class wire 1 17bc5bcabff0dd63
+step 03 narrower measure
+class value 253 7bc61acfa5fd5af8
+class identity 29 a8424eac183011b9
+class repr 44 08e30966a117d62e
+class wire 1 11c70414a6329a47
+step 04 shorter regions
+class value 253 2a5e2f6ba3f76042
+class identity 29 bc95b1fcb80cf81c
+class repr 44 eea98131ee08b719
+class wire 1 26d6f93f8c00e330
+step 05 three columns, wider gap
+class value 253 673e7f9debb288aa
+class identity 29 4de92116dd3d41e4
+class repr 44 aed6307b5b79e394
+class wire 1 fa9ba4605ac8afbf
+step 06 one region
+class value 253 ffd73a00522013a7
+class identity 29 61fe48682288a39e
+class repr 44 541c8dcc63147821
+class wire 1 b222b67a2ec1ad19
+step 07 the starting regions
+class value 253 0e3cd0cc2fc5b141
+class identity 29 f2b31629f1f3fb68
+class repr 44 24568e905455cf33
+class wire 1 afe38b9ba797c9dd
+step 08 add span 380..412 + insert Word (4 units) at 0 + insert Foreign (8 units) at 112 + insert Foreign (217 units) at 465
+class value 253 7bbf6fcb78672824
+class identity 29 1e109fea5fefa215
+class repr 44 77e460b175f01baa
+class wire 1 4e3d675dbf06544b
+step 09 
+class value 233 a638a0344a915579
+class identity 27 67dbef9c1837f303
+class repr 44 77e460b175f01baa
+class wire 1 432a3283d6ae83c0
+step 10 add span 274..292
+class value 253 4610717f97c74780
+class identity 29 67cd1ff25f1c21c1
+class repr 44 a61492c387e1ed0c
+class wire 1 16c1c1000c987f48

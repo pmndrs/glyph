@@ -27,6 +27,7 @@ const SILENT_THEN_MEASURE: Route = Route {
     view_mask: 0,
     measure_first: false,
     measure_after: true,
+    ..Route::FULL
 };
 
 fn library(keys: &[&str]) -> FontLibrary {

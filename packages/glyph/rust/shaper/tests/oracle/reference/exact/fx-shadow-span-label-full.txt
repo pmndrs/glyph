@@ -1,0 +1,64 @@
+# glyph layout oracle reference v1
+case fx-shadow-span-label-full
+step cold
+stage owner value 1 07e27e8ffd8af189
+stage text value 1 9905404f54edefec
+stage text identity 1 e6a56f1a253f95f5
+stage unicode value 6 3bb09daca3bd60de
+stage bidi value 8 a7e9f1055db59fb7
+stage style value 26 6e561db66fd234ae
+stage shaping_run value 5 31477ea3d3df3570
+stage inline value 81 87b553b030f41f08
+stage inline identity 5 8f6aff6d6bef7546
+stage inline repr 21 8f1718588ca49665
+stage public value 13 0073e209450629ad
+stage public identity 1 a7565d089b77c68d
+stage view identity 4 1214032c5184c4a2
+stage view value 40 2c36ba31d1530b11
+stage wire wire 1 cfa04b2b985fc23a
+stage gather identity 7 850d47eb73e2c483
+stage gather value 36 2f8015f9c5ede1c6
+stage gpu identity 2 68fc66a75be58a57
+stage gpu value 3 078907d31cb5d992
+stage plan value 23 84d23bc5caf17d6e
+stage plan identity 7 b65a14036160df65
+step 01 shadow on
+class value 253 e59a7349980bc5af
+class identity 29 12da22ea20f067fb
+class repr 41 b6b254b9129b61de
+class wire 1 e92ac6ebcb953b8d
+step 02 moved
+class value 253 67c75b4dd8076611
+class identity 29 d57bd0846fae9cf2
+class repr 41 b6b254b9129b61de
+class wire 1 e7dfd22b3669201a
+step 03 recolour and same-length edit
+class value 253 1d86a4db8dd47a9c
+class identity 29 4e6c0e9adfa3a4d5
+class repr 41 f4affac3e2fb1754
+class wire 1 662d6b20e1e523cc
+step 04 shadow off and edit
+class value 253 8abdd2c8a7a56a79
+class identity 29 a8e4bcfb4f8ba174
+class repr 41 ec71269b67054192
+class wire 1 0de9072ce0fbc4be
+step 05 shadow and outline on
+class value 253 166ed8e6018ac0cb
+class identity 29 d26b235074f388c2
+class repr 41 ec71269b67054192
+class wire 1 fa7f5f41c5fd7e42
+step 06 opacity of the root
+class value 253 50683bae6595e6df
+class identity 29 8b0d4890424274e7
+class repr 41 ec71269b67054192
+class wire 1 5f5d82cb098378d1
+step 07 delete 3 at 1 + insert SpacedWord (4 units) at 0 + insert Foreign (3 units) at 11 + foreground of the root
+class value 253 d5257b8d1d431f1c
+class identity 29 df13388c57625c9c
+class repr 41 67bc688991bd5003
+class wire 1 7b1e109c82b0d5ac
+step 08 insert SpacedWord (5 units) at 1
+class value 253 c69bd7e7e9e46d76
+class identity 29 ce9255ab4630c617
+class repr 41 6c0c489c8e05c926
+class wire 1 01c33d9e4317d0ef

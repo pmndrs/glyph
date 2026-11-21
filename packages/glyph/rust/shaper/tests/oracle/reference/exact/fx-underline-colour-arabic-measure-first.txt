@@ -1,0 +1,65 @@
+# glyph layout oracle reference v1
+case fx-underline-colour-arabic-measure-first
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 1fa24e8c494c224b
+stage text identity 1 8c79cdd234e899aa
+stage unicode value 6 1c188d1ec29a3b21
+stage bidi value 8 29c5cdaf3ea9f587
+stage style value 26 ba13c5c6cb9c549a
+stage shaping_run value 5 c7bf0d2877dba0d1
+stage shape value 14 10b65f881c74956b
+stage cluster value 29 9e5e3a2577a709c2
+stage cluster identity 4 ee33e0566e267ff4
+stage cluster repr 11 bdd4311f9a20761c
+stage run_local repr 16 cd37f99ac10fc32c
+stage flow value 35 8884b6899fd77e80
+stage positioned identity 3 4d4842675b4b514a
+stage positioned value 25 0e77343db99bdb84
+stage positioned repr 17 a6c14b4ca4465c3c
+stage public value 13 8d745db684648007
+stage public identity 1 9f58ac2691d9d2e1
+stage view identity 4 b7b7f58c55341768
+stage view value 40 0cc031ab06df0421
+stage wire wire 1 1d3d509f91b20f9b
+stage gather identity 7 c2c572bffa9b1d93
+stage gather value 36 b291ba1f7ae0483c
+stage gpu identity 2 11f6365e1b348138
+stage gpu value 3 4ea2dcdc921d40a8
+stage plan value 23 bf342c97bf9cc38c
+stage plan identity 7 c0abddf879e48152
+step 01 recolour
+class value 245 6b7cb1fd81f4cf9c
+class identity 27 26de73fde7033b14
+class repr 44 f1d759e2cd755ef7
+class wire 1 4157b93085a6f6b0
+step 02 recolour and width
+class value 245 38e9d8c16494858a
+class identity 27 10a98a42efe876ad
+class repr 44 5d8b11d4cd7a9784
+class wire 1 a6d42999f4532dba
+step 03 thicker
+class value 245 1a0f6b54d9b1577e
+class identity 27 309848b1fa15f5e0
+class repr 44 5d8b11d4cd7a9784
+class wire 1 8004877882ddbbcd
+step 04 double
+class value 245 ffa86cce3087b41f
+class identity 27 567736fdc787f6dc
+class repr 44 5d8b11d4cd7a9784
+class wire 1 0a6d35a76cf32f4d
+step 05 add strikethrough
+class value 245 0be8d79c759aa969
+class identity 27 ef8738ae3cff1704
+class repr 44 5d8b11d4cd7a9784
+class wire 1 73c0827c6efa8e55
+step 06 decoration off
+class value 233 ff08e0611f3889a1
+class identity 27 ef8738ae3cff1704
+class repr 44 5d8b11d4cd7a9784
+class wire 1 2570cc7ab008ea38
+step 07 decoration on with an edit
+class value 245 507dfc2bee0f4191
+class identity 27 c30899730888c8c7
+class repr 44 8f5f9ee9bced004c
+class wire 1 399a0eca7af5ea48

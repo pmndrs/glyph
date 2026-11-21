@@ -1,0 +1,65 @@
+# glyph layout oracle reference v1
+case io-latin-measure-first
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 2df3bbb4d7b3d502
+stage text identity 1 ae1df8da10cab35e
+stage unicode value 6 b22404bae51919f8
+stage bidi value 8 9d54c092cb48d09c
+stage style value 26 b78f334bedd68606
+stage shaping_run value 5 732e3450995b39db
+stage shape value 14 1646485b2504d03a
+stage cluster value 29 628d52a0abe2b830
+stage cluster identity 4 3503d241dd0a9f09
+stage cluster repr 11 2bcdd3fcc62960ec
+stage run_local repr 16 9e71f2467a1fda2e
+stage flow value 35 17a2fd153ebe57f5
+stage positioned identity 3 3f7c36db76c1d84c
+stage positioned value 13 5062b1c1d040f784
+stage positioned repr 17 665ce88368d4a0dc
+stage public value 13 3582ea85b78f8d8e
+stage public identity 1 3e373b7ccf7333b7
+stage view identity 4 2a8e0773b715036d
+stage view value 40 e5b6f01e634326d0
+stage wire wire 1 466ef69d2a5acce1
+stage gather identity 7 bb51b46f5cab59fa
+stage gather value 36 7b85bf42cc5cf6bd
+stage gpu identity 2 391d936a8c01c224
+stage gpu value 3 4f84ad1cc85fdf77
+stage plan value 23 43173392a2ebf135
+stage plan identity 7 b65a14036160df65
+step 01 add one at the end
+class value 233 78362be8ec0b5e0d
+class identity 27 3b1624d4c4d19b72
+class repr 44 58c6b786c5e94c12
+class wire 1 4157b93085a6f6b0
+step 02 move and grow the middle one
+class value 233 78362be8ec0b5e0d
+class identity 27 3b1624d4c4d19b72
+class repr 44 58c6b786c5e94c12
+class wire 1 7ab2b0ecf3288566
+step 03 align to the text top with margins
+class value 233 78362be8ec0b5e0d
+class identity 27 3b1624d4c4d19b72
+class repr 44 58c6b786c5e94c12
+class wire 1 8004877882ddbbcd
+step 04 edit the text and leave the objects
+class value 233 7c8acf4ae8ad9f74
+class identity 27 56af183d42c93a4d
+class repr 44 dd1038a8a5f6eb8b
+class wire 1 5adda0f0c3109c8c
+step 05 narrow the measure and re-anchor
+class value 233 5679931da048f9fc
+class identity 27 0435f773eb6b9a27
+class repr 44 7fa4144f80f122ab
+class wire 1 c183c43574c66cef
+step 06 remove every object
+class value 233 5679931da048f9fc
+class identity 27 0435f773eb6b9a27
+class repr 44 7fa4144f80f122ab
+class wire 1 2570cc7ab008ea38
+step 07 put two back
+class value 233 5679931da048f9fc
+class identity 27 0435f773eb6b9a27
+class repr 44 7fa4144f80f122ab
+class wire 1 3f28b527d845fb6d

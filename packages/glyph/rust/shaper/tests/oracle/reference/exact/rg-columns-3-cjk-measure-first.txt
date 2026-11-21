@@ -1,0 +1,73 @@
+# glyph layout oracle reference v1
+case rg-columns-3-cjk-measure-first
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 1135b6121b97d859
+stage text identity 1 10d8a01e301e9bd5
+stage unicode value 6 9c07cfc800c6198a
+stage bidi value 8 a8641c6cffe0ae17
+stage style value 26 9bf2c2e0369f1ae0
+stage shaping_run value 5 113bb61c06182604
+stage shape value 14 90be16faa4575e9e
+stage cluster value 29 ddb7756f3099747a
+stage cluster identity 4 14836ddfcc2ba58f
+stage cluster repr 8 41bd7d43d0f1d7bb
+stage cluster cache 5 076b6c74a719fbb2
+stage run_local repr 16 b8286593bb4987da
+stage flow value 35 791a7e16a5ffc587
+stage positioned identity 3 ee85fafeae029a04
+stage positioned value 13 b8ae006e9d54ba79
+stage positioned repr 17 49cab7c0508aa44d
+stage public value 13 1be2a471aec308a6
+stage public identity 1 66b95a5097109928
+stage view identity 4 33a35a8becc3fbf2
+stage view value 40 c3be12aa91b58433
+stage wire wire 1 c3daf000a454597b
+stage gather identity 7 4e9c88186b72d1f8
+stage gather value 36 1c90a0e53ca0c001
+stage gpu identity 2 b0c9e31b9320729a
+stage gpu value 3 7916b337ff426917
+stage plan value 23 15829cb9484b234c
+stage plan identity 7 b0213307e84bbf7e
+step 01 insert in the first region
+class value 233 b91bbaf9965af2fe
+class identity 27 6fd1b9bfb9dfe12c
+class repr 41 e6678d94aa8602dd
+class cache 5 787c25e5584a2c5f
+class wire 1 7e61e0a96f356d69
+step 02 delete in a later region
+class value 233 719bf6a175106c71
+class identity 27 54554e228c34a59f
+class repr 41 deca997ac3471e37
+class cache 5 66b6c983a5cb9c3e
+class wire 1 3d41b71998039116
+step 03 narrower measure
+class value 233 413dd4c813eeed5b
+class identity 27 448b41ed07a6f04b
+class repr 41 13062b25f7f64964
+class cache 5 25ed881d012485b5
+class wire 1 322948c664dd3af8
+step 04 shorter regions
+class value 233 8f616b0d76f2577a
+class identity 27 c6697fe74bbd0434
+class repr 41 35df1ab9b6f387c4
+class cache 5 25ed881d012485b5
+class wire 1 eee06dc19625b8e5
+step 05 three columns, wider gap
+class value 233 2c3822b3de4b7a83
+class identity 27 3e20be16b9ce9c4f
+class repr 41 3dffc59a576c2584
+class cache 5 25ed881d012485b5
+class wire 1 625c7d596a164712
+step 06 one region
+class value 233 91d3c46fe96490b6
+class identity 27 bcc3a5c1f1bfa7fe
+class repr 41 82d4bf639d9ff4db
+class cache 5 25ed881d012485b5
+class wire 1 7dc2df21de098d7c
+step 07 the starting regions
+class value 233 719bf6a175106c71
+class identity 27 da99796a0167cad6
+class repr 41 deca997ac3471e37
+class cache 5 25ed881d012485b5
+class wire 1 f7b03b2f3b81a7c3

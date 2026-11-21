@@ -40,15 +40,18 @@ Based on `8176a24e0` (tip of `experiments/held-rope-ascii-anchor-wip`).
 | `sil-green-13`      | Preparation model stages 0–2; Slug batching, fragment cost and on-demand band curves; decorated-text material fix                                                                                                             | `experiments/sil-prepare` (kept), `experiments/sil-render` (kept)                      |
 | `sil-green-14`      | Dense cluster build (unit 1c); word and sentence lanes, three-stage Unicode tries                                                                                                                                             | `experiments/sil-cluster` (deleted), `experiments/sil-unicode` (deleted)               |
 | `sil-green-15`      | Positioning topology/numeric split and per-line ink (unit 1b)                                                                                                                                                                 | `experiments/sil-positioning` (deleted)                                                |
+| `sil-green-16`      | Slug on direct TypeGPU matching Three (sub-pixel tie-break in both shaders)                                                                                                                                                   | `experiments/sil-render` (deleted)                                                     |
+| `sil-green-17`      | Error model: paragraph-local failure, trap recovery, text-size limit; linear engine mount                                                                                                                                     | `experiments/sil-prepare` (kept: frame integration is next)                            |
+| `sil-green-18`      | PixiJS 3D renderer package `@pmndrs/glyph-pixi3d` on the official release, with a parity suite                                                                                                                                | `experiments/sil-pixi3d` (deleted)                                                     |
 | after `sil-green-4` | Stale process guidance removed; plan, decisions, build log and this map                                                                                                                                                       | integration branch                                                                     |
 
 ## Open lane branches
 
-| Branch                    | Worktree           | Feature in progress                                                                                          | On `origin` | State    |
-| ------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------ | ----------- | -------- |
-| `experiments/sil-prepare` | `glyph-wt-prepare` | Ship gate: paragraph-local failure, trap recovery; publication hold, `onLayout`; API docs and migration note | yes         | building |
-| `experiments/sil-render`  | `glyph-wt-render`  | Ship gate: Slug on direct TypeGPU matching Three                                                             | yes         | building |
-| `experiments/sil-oracle`  | `glyph-wt-oracle`  | Ship gate: oracle coverage for decorations, multi-paragraph, inline objects, multi-region                    | no          | building |
+| Branch                    | Worktree           | Feature in progress                                                                               | On `origin` | State    |
+| ------------------------- | ------------------ | ------------------------------------------------------------------------------------------------- | ----------- | -------- |
+| `experiments/sil-prepare` | `glyph-wt-prepare` | Ship gate: publication hold, `onLayout`, error surfaces; API docs and migration note              | yes         | building |
+| `experiments/sil-oracle`  | `glyph-wt-oracle`  | Ship gate: oracle coverage for decorations, multi-paragraph, inline objects, multi-region         | no          | building |
+| `experiments/sil-editing` | `glyph-wt-editing` | Ship gate: editing support, engine half (offset map, carets, hit test, movement, selection rects) | no          | building |
 
 ## Not on any branch yet
 

@@ -1,0 +1,60 @@
+# glyph layout oracle reference v1
+case fx-outline-arabic-silent
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 1fa24e8c494c224b
+stage text identity 1 8c79cdd234e899aa
+stage unicode value 6 1c188d1ec29a3b21
+stage bidi value 8 29c5cdaf3ea9f587
+stage style value 26 2311e7915d7a1a2d
+stage shaping_run value 5 c7bf0d2877dba0d1
+stage shape value 14 10b65f881c74956b
+stage cluster value 29 9e5e3a2577a709c2
+stage cluster identity 4 ee33e0566e267ff4
+stage cluster repr 11 bdd4311f9a20761c
+stage run_local repr 16 cd37f99ac10fc32c
+stage flow value 35 8884b6899fd77e80
+stage positioned identity 3 4d4842675b4b514a
+stage positioned value 13 630154b42c0161b5
+stage positioned repr 17 a6c14b4ca4465c3c
+stage public value 13 8d745db684648007
+stage public identity 1 9f58ac2691d9d2e1
+stage view identity 4 b7b7f58c55341768
+stage view value 40 0cc031ab06df0421
+stage wire wire 1 1d3d509f91b20f9b
+stage gather identity 7 c2c572bffa9b1d93
+stage gather value 36 b291ba1f7ae0483c
+stage gpu identity 2 11f6365e1b348138
+stage gpu value 3 4ea2dcdc921d40a8
+stage plan value 23 bf342c97bf9cc38c
+stage plan identity 7 c0abddf879e48152
+step 01 outline on
+class value 213 e9c997dddff391fe
+class identity 25 5cf1e33dce638918
+class repr 44 f1d759e2cd755ef7
+class wire 1 4157b93085a6f6b0
+step 02 recolour
+class value 213 8b3c845275ab7b44
+class identity 25 2eacc0ee70585832
+class repr 44 f1d759e2cd755ef7
+class wire 1 7ab2b0ecf3288566
+step 03 wider
+class value 213 afb3e85b56dd8caf
+class identity 25 1a882aa049d712fb
+class repr 44 f1d759e2cd755ef7
+class wire 1 8004877882ddbbcd
+step 04 wider and edit
+class value 213 6bf5844f75cc1af4
+class identity 25 d277563d9e7b86b8
+class repr 44 13df520d68a42971
+class wire 1 684196b73889828e
+step 05 outline off
+class value 213 9660641442937d41
+class identity 25 e081a4f51ecf420e
+class repr 44 13df520d68a42971
+class wire 1 73c0827c6efa8e55
+step 06 outline on with width
+class value 213 8b58723c906a3187
+class identity 25 522b3fefc73615be
+class repr 44 90c3103dd644092e
+class wire 1 2b999482c70457d2

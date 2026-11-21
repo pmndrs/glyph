@@ -1,0 +1,75 @@
+# glyph layout oracle reference v1
+case fx-underline-material-label-full
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 9905404f54edefec
+stage text identity 1 e6a56f1a253f95f5
+stage unicode value 6 3bb09daca3bd60de
+stage bidi value 8 a7e9f1055db59fb7
+stage style value 26 ca6079df275c3fa3
+stage shaping_run value 5 31477ea3d3df3570
+stage shape value 14 f0eb794aad841f69
+stage cluster value 29 c156811216bccfaa
+stage cluster identity 4 f59f266359f8fdd5
+stage cluster repr 8 e7b54e0d26a23871
+stage run_local repr 16 49dfa0de8634ec3b
+stage flow value 35 089cf87053fd061c
+stage positioned identity 3 4534caadac20b9e0
+stage positioned value 25 d51b89c61a5cb64e
+stage positioned repr 17 3ddec720486957dd
+stage public value 13 0073e209450629ad
+stage public identity 1 a7565d089b77c68d
+stage view identity 4 1214032c5184c4a2
+stage view value 40 2c36ba31d1530b11
+stage wire wire 1 cfa04b2b985fc23a
+stage gather identity 7 850d47eb73e2c483
+stage gather value 36 2f8015f9c5ede1c6
+stage gpu identity 2 68fc66a75be58a57
+stage gpu value 3 078907d31cb5d992
+stage plan value 23 84d23bc5caf17d6e
+stage plan identity 7 b65a14036160df65
+step 01 material on
+class value 265 6b4898520185fd95
+class identity 29 12da22ea20f067fb
+class repr 41 b6b254b9129b61de
+class wire 1 e92ac6ebcb953b8d
+step 02 material swapped
+class value 265 73e2cb9283dcc0f2
+class identity 29 22e11050c9216f33
+class repr 41 b6b254b9129b61de
+class wire 1 e7dfd22b3669201a
+step 03 material and width
+class value 265 e2ecd5908af21776
+class identity 29 8ad6a3d5ec8c9965
+class repr 41 b6b254b9129b61de
+class wire 1 2ada0952b30f7363
+step 04 material and edit
+class value 265 cb3b74ac6b046fb2
+class identity 29 ac51896dd6f5e90f
+class repr 41 6a1504d257109642
+class wire 1 5fe7bd87241e152c
+step 05 material and same-length edit
+class value 265 4876bed4b27f611f
+class identity 29 9659d9b837edec83
+class repr 41 569e89e05002d736
+class wire 1 b984b82887c424be
+step 06 material off
+class value 265 eb81e1c431e8252b
+class identity 29 8df2b7cc26a5304d
+class repr 41 569e89e05002d736
+class wire 1 e897e150f09c0c92
+step 07 add span 24..25
+class value 265 d9d5648499d09dcb
+class identity 29 3aaae443451889d0
+class repr 41 569e89e05002d736
+class wire 1 eb1fd3ea2cd21765
+step 08 max lines 12
+class value 265 d9d5648499d09dcb
+class identity 29 3aaae443451889d0
+class repr 41 569e89e05002d736
+class wire 1 7870fecefe48c49a
+step 09 width 300.01563 + max lines 0 + delete 2 at 16
+class value 265 4b9ef76149e9c66a
+class identity 29 9652e9b77f05dd5f
+class repr 41 e49c6d7363026766
+class wire 1 b74dd72fe4903a3f

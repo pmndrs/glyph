@@ -10,12 +10,12 @@ use alloc::{
 use core::fmt::Write;
 
 use super::{
-    capture::capture,
+    capture::{EXTENDED_STAGES, capture},
     fonts::{FONTS, FontLibrary, FontRoot},
     fuzz::{self, Planned, incremental_differences, remap_spans},
     lanes::{Capture, LaneClass, LaneDifference, digest, golden_differences, golden_line_lane},
     matrix::{self, Case, Step, Tier},
-    model::Model,
+    model::{Document, Model, PARAGRAPH_ID, TextEdit},
     session::{Route, Session},
     tier::{self, Files},
 };
@@ -34,44 +34,72 @@ pub struct Reference {
     pub clusters: usize,
 }
 
-fn planned_from_step(model: &Model, step: &Step) -> Planned {
-    let mut next = model.clone();
-    for edit in &step.edits {
-        edit.apply(&mut next.text);
-        remap_spans(&mut next.spans, edit, &next.text);
+fn planned_from_step(document: &Document, step: &Step) -> Planned {
+    // A step's document says which paragraphs exist and where they sort. A paragraph that
+    // already exists keeps the content earlier steps gave it.
+    let mut next = step.document.clone().unwrap_or_else(|| document.clone());
+    for paragraph in &mut next.paragraphs {
+        if let Some(current) = document.paragraph(paragraph.id) {
+            paragraph.model.clone_from(&current.model);
+        }
     }
-    if let Some(layout) = step.layout {
-        next.layout = layout;
+    let id = step.paragraph.unwrap_or(PARAGRAPH_ID);
+    let mut edits = Vec::new();
+    let own = (id, step.edits.clone());
+    for (edited, list) in core::iter::once(&own).chain(&step.more_edits) {
+        let Some(paragraph) = next.paragraph_mut(*edited) else {
+            continue;
+        };
+        apply_edits(&mut paragraph.model, list);
+        edits.push((*edited, list.clone()));
     }
-    if let Some(root) = step.root {
-        next.root = root;
-    }
-    if let Some(spans) = &step.spans {
-        next.spans.clone_from(spans);
+    if let Some(paragraph) = next.paragraph_mut(id) {
+        apply_fields(&mut paragraph.model, step);
     }
     Planned {
         label: step.label.clone(),
         next,
-        edits: step.edits.clone(),
+        edits,
         route: step.route.unwrap_or(Route::FULL),
+    }
+}
+
+fn apply_edits(model: &mut Model, edits: &[TextEdit]) {
+    for edit in edits {
+        edit.apply(&mut model.text);
+        remap_spans(&mut model.spans, edit, &model.text);
+    }
+}
+
+/// The parts of a step that replace a paragraph's input outright.
+fn apply_fields(model: &mut Model, step: &Step) {
+    if let Some(layout) = step.layout {
+        model.layout = layout;
+    }
+    if let Some(root) = step.root {
+        model.root = root;
+    }
+    if let Some(spans) = &step.spans {
+        model.spans.clone_from(spans);
+    }
+    if let Some(objects) = &step.inline_objects {
+        model.inline_objects.clone_from(objects);
     }
 }
 
 /// Every request the reference freezes after the cold layout: the case's scripted steps, then
 /// seeded ones for cases the driver edits.
 fn frozen_steps(case: &Case) -> Vec<Planned> {
-    let mut model = case.model.clone();
+    let mut document = case.start();
     let mut steps = Vec::new();
     for step in &case.steps {
-        let planned = planned_from_step(&model, step);
-        model = planned.next.clone();
+        let planned = planned_from_step(&document, step);
+        document = planned.next.clone();
         steps.push(planned);
     }
     if case.fuzz {
-        let mut continued = case.clone();
-        continued.model = model;
         let seed = digest(case.name.as_bytes());
-        steps.extend(fuzz::scripted(&continued, seed, FROZEN_SEEDED_STEPS));
+        steps.extend(fuzz::scripted(case, &document, seed, FROZEN_SEEDED_STEPS));
     }
     steps
 }
@@ -81,7 +109,7 @@ fn frozen_steps(case: &Case) -> Vec<Planned> {
 pub fn reference(library: &FontLibrary, case: &Case, known: &[&str]) -> Result<Reference, String> {
     let stacks: Vec<&[&str]> = case.stacks.iter().map(Vec::as_slice).collect();
     let mut warm = Session::new(library, &stacks)?;
-    let output = warm.step(&case.model, &[], Route::FULL)?;
+    let output = warm.step_document(&case.start(), &[], Route::FULL)?;
     let cold = capture(&warm, &output)?;
     let clusters = cold
         .lane("cluster.text_start")
@@ -93,13 +121,15 @@ pub fn reference(library: &FontLibrary, case: &Case, known: &[&str]) -> Result<R
         divergences: Vec::new(),
         clusters,
     };
-    reference.text.push_str(&frozen_text("cold", &cold, true));
+    reference
+        .text
+        .push_str(&frozen_text("cold", &cold, true, later_stages(case)));
     reference.captures.push(("cold".to_string(), cold));
     for (index, planned) in frozen_steps(case).into_iter().enumerate() {
         let label = format!("{:02} {}", index + 1, planned.label);
-        let stepped = warm.step(&planned.next, &planned.edits, planned.route);
+        let stepped = warm.step_document(&planned.next, &planned.edits, planned.route);
         let mut fresh = Session::new(library, &stacks)?;
-        let cold = fresh.step(&planned.next, &[], planned.route);
+        let cold = fresh.step_document(&planned.next, &[], planned.route);
         match (stepped, cold) {
             (Ok(output), Ok(cold_output)) => {
                 let stepped = capture(&warm, &output)?;
@@ -113,15 +143,15 @@ pub fn reference(library: &FontLibrary, case: &Case, known: &[&str]) -> Result<R
                 );
                 reference
                     .text
-                    .push_str(&frozen_text(&label, &stepped, false));
+                    .push_str(&frozen_text(&label, &stepped, false, later_stages(case)));
                 reference.captures.push((label, stepped));
             }
             (Err(error), Err(cold_error)) if error == cold_error => {
                 let _ = writeln!(reference.text, "step {label}\nrejected {error}");
                 // The engine is unusable after a rejected request: restart where it was.
-                let previous = warm.model().cloned().unwrap_or_default();
+                let previous = warm.document().cloned().unwrap_or_default();
                 warm = Session::new(library, &stacks)?;
-                warm.step(&previous, &[], Route::FULL)?;
+                warm.step_document(&previous, &[], Route::FULL)?;
             }
             (stepped, cold) => {
                 // One side rejected what the other accepted: a divergence in its own right.
@@ -138,9 +168,9 @@ pub fn reference(library: &FontLibrary, case: &Case, known: &[&str]) -> Result<R
                     .divergences
                     .push(format!("step {label}: outcome: {finding}"));
                 warm = Session::new(library, &stacks)?;
-                if warm.step(&planned.next, &[], Route::FULL).is_err() {
+                if warm.step_document(&planned.next, &[], Route::FULL).is_err() {
                     warm = Session::new(library, &stacks)?;
-                    warm.step(&case.model, &[], Route::FULL)?;
+                    warm.step_document(&case.start(), &[], Route::FULL)?;
                 }
             }
         }
@@ -148,12 +178,23 @@ pub fn reference(library: &FontLibrary, case: &Case, known: &[&str]) -> Result<R
     Ok(reference)
 }
 
+/// The stages added since the first reference set that `case` freezes: none for a case frozen
+/// before them, the draw structure for a case added since, and the root's paragraph list for a
+/// case with several paragraphs.
+fn later_stages(case: &Case) -> &'static [&'static str] {
+    match (case.extended, case.document.is_some()) {
+        (false, _) => &[],
+        (true, false) => &["plan"],
+        (true, true) => &["plan", "doc"],
+    }
+}
+
 /// One step's frozen lines: one digest per group of lanes, where a group is a stage and a
 /// class for the cold layout (`stage cluster value …`) and a class alone for the steps after it
 /// (`class repr …`). A digest covers its lanes' names, kinds, row counts and rows, so any change
 /// inside the group changes the line; `dump` and `diff` then locate the lane and the row.
 /// Lanes with no rows are left out, so a lane that gains rows changes its group too.
-fn frozen_text(step: &str, capture: &Capture, by_stage: bool) -> String {
+fn frozen_text(step: &str, capture: &Capture, by_stage: bool, later: &[&str]) -> String {
     let mut groups: Vec<(String, usize, String)> = Vec::new();
     let golden = capture.golden(step);
     for line in golden.lines().skip(1) {
@@ -165,6 +206,9 @@ fn frozen_text(step: &str, capture: &Capture, by_stage: bool) -> String {
             continue;
         }
         let stage = name.split('.').next().unwrap_or(name);
+        if EXTENDED_STAGES.contains(&stage) && !later.contains(&stage) {
+            continue;
+        }
         let group = if by_stage {
             format!("stage {stage} {class}")
         } else {

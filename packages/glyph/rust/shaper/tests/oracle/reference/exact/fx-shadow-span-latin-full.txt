@@ -1,0 +1,81 @@
+# glyph layout oracle reference v1
+case fx-shadow-span-latin-full
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 8600ad73a1a6c020
+stage text identity 1 a3a46d7c994fbdfd
+stage unicode value 6 ef36e5145be13849
+stage bidi value 8 c12d7b90e0cb00d6
+stage style value 26 d8e961640812f7a0
+stage shaping_run value 5 c04b2c99301561f8
+stage shape value 14 da305f304ef2f60f
+stage cluster value 29 439f36d3ec38d94b
+stage cluster identity 4 7709950db8e94e35
+stage cluster repr 11 7e5e853c660d5a1c
+stage cluster cache 5 ab968f21cb7a4012
+stage run_local repr 16 400061383a76cd67
+stage flow value 35 63c3af90ba3d6a98
+stage boundary value 28 d3dcb213712895b8
+stage boundary identity 1 edf58fbc86f25acf
+stage positioned identity 4 efd4e28be099e202
+stage positioned value 20 5e0c9c934f11df7f
+stage positioned repr 37 b61c5e19f5d9e847
+stage public value 13 c67d02748c564e5f
+stage public identity 1 2ad2ff017860f003
+stage view identity 4 2582fcb2bb4e9f98
+stage view value 40 cd7892bc1977a734
+stage wire wire 1 7f458ad79f946cbf
+stage gather identity 7 993aca606064d3eb
+stage gather value 36 a2012f79019520ae
+stage gpu identity 2 86c34ed1e43d83b0
+stage gpu value 3 371bf5d8fb1e8fa6
+stage plan value 23 6e085fdd90adc5b0
+stage plan identity 7 b65a14036160df65
+step 01 shadow on
+class value 288 faaee8f7c31af01f
+class identity 31 fb46ada5a644d93c
+class repr 64 6d0e001b71a0ba42
+class cache 5 ab968f21cb7a4012
+class wire 1 6c68335e08b5d677
+step 02 moved
+class value 288 c85b05bfc3fa5181
+class identity 31 48c1e879529b4478
+class repr 64 6d0e001b71a0ba42
+class cache 5 ab968f21cb7a4012
+class wire 1 1eb2856d0475d830
+step 03 recolour and same-length edit
+class value 288 682f973065a96b35
+class identity 31 fba078b660ca9eb6
+class repr 64 5e8596b9a2799b0e
+class cache 5 ab968f21cb7a4012
+class wire 1 425b3e4bd6c0a968
+step 04 shadow off and edit
+class value 288 14dd9941f5b7338b
+class identity 31 6148ae5332ec2a71
+class repr 64 25cf857d15f1ed6a
+class cache 5 6c222f41092c1a77
+class wire 1 b8d3618618cfdd05
+step 05 shadow and outline on
+class value 288 24b349c60cdba665
+class identity 31 6aa90bd9ccd58fa8
+class repr 64 25cf857d15f1ed6a
+class cache 5 6c222f41092c1a77
+class wire 1 ad0992480d428937
+step 06 decoration of the root
+class value 268 b2dd5bc371835dfd
+class identity 29 12d173a36db2a0ad
+class repr 64 25cf857d15f1ed6a
+class cache 5 6c222f41092c1a77
+class wire 1 a531049b9c6e615b
+step 07 insert Space (1 units) at 204
+class value 288 be8255128fef7e32
+class identity 31 4ee739df2d12f396
+class repr 64 e6adbf289e5108fe
+class cache 5 1c8e109c7d0d7ac7
+class wire 1 a8b0c6ef54b5887e
+step 08 width 487.75
+class value 288 5b259e74d3c9ba29
+class identity 31 1c2f504027ae8043
+class repr 64 1e1ee3fb73b25013
+class cache 5 08b169cbc74cae0d
+class wire 1 2d585d6a683a34e0

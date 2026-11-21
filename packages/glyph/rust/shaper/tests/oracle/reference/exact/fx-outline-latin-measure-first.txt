@@ -1,0 +1,69 @@
+# glyph layout oracle reference v1
+case fx-outline-latin-measure-first
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 8600ad73a1a6c020
+stage text identity 1 a3a46d7c994fbdfd
+stage unicode value 6 ef36e5145be13849
+stage bidi value 8 c12d7b90e0cb00d6
+stage style value 26 d8e961640812f7a0
+stage shaping_run value 5 c04b2c99301561f8
+stage shape value 14 da305f304ef2f60f
+stage cluster value 29 439f36d3ec38d94b
+stage cluster identity 4 7709950db8e94e35
+stage cluster repr 11 7e5e853c660d5a1c
+stage cluster cache 5 ab968f21cb7a4012
+stage run_local repr 16 400061383a76cd67
+stage flow value 35 63c3af90ba3d6a98
+stage boundary value 28 d3dcb213712895b8
+stage boundary identity 1 edf58fbc86f25acf
+stage positioned identity 4 efd4e28be099e202
+stage positioned value 20 5e0c9c934f11df7f
+stage positioned repr 37 b61c5e19f5d9e847
+stage public value 13 c67d02748c564e5f
+stage public identity 1 2ad2ff017860f003
+stage view identity 4 2582fcb2bb4e9f98
+stage view value 40 cd7892bc1977a734
+stage wire wire 1 7f458ad79f946cbf
+stage gather identity 7 993aca606064d3eb
+stage gather value 36 a2012f79019520ae
+stage gpu identity 2 86c34ed1e43d83b0
+stage gpu value 3 371bf5d8fb1e8fa6
+stage plan value 23 6e085fdd90adc5b0
+stage plan identity 7 b65a14036160df65
+step 01 outline on
+class value 268 88f4d3e3efe8dd1a
+class identity 29 5df86e6882b6e76d
+class repr 64 6d0e001b71a0ba42
+class cache 5 ab968f21cb7a4012
+class wire 1 4157b93085a6f6b0
+step 02 recolour
+class value 268 3865191c4abdb6f0
+class identity 29 6fd630ea5943d046
+class repr 64 6d0e001b71a0ba42
+class cache 5 ab968f21cb7a4012
+class wire 1 7ab2b0ecf3288566
+step 03 wider
+class value 268 5909773607a67750
+class identity 29 52d8a1f126918835
+class repr 64 6d0e001b71a0ba42
+class cache 5 ab968f21cb7a4012
+class wire 1 8004877882ddbbcd
+step 04 wider and edit
+class value 268 686797fd8a63c804
+class identity 29 7d5845fb2fd62d7a
+class repr 64 df7aeef910c33cd2
+class cache 5 6c222f41092c1a77
+class wire 1 28ce40c4f86dc8ff
+step 05 outline off
+class value 268 972cc2cec0bd42f3
+class identity 29 7c88ca4a129f9035
+class repr 64 df7aeef910c33cd2
+class cache 5 6c222f41092c1a77
+class wire 1 73c0827c6efa8e55
+step 06 outline on with width
+class value 268 2910ba993c510fcf
+class identity 29 fe1be7d7de48fdac
+class repr 64 ff2361ae7a30e17e
+class cache 5 3837f998dbcab93c
+class wire 1 1b1f5ab8114183b3

@@ -41,7 +41,7 @@ Updated in place; the history of each change is in the log below.
 | Slug per-font glyph table; benchmark MSDF oracle fix; full repository check passing                                                                                                                                           | merged   | tag `sil-green-9`                                   | Instances 112 → 40 B; upload per edit 84.5 → 27.6 kB; steady frame unchanged                       |
 | Slug batching on the pure TypeGPU path                                                                                                                                                                                        | merged   | tag `sil-green-13`                                  |                                                                                                    |
 | Slug fragment cost with band curves resident on demand                                                                                                                                                                        | merged   | tag `sil-green-13`                                  | Steady frame −27%; GPU memory with a full bake 5.80 → 0.94 MiB                                     |
-| Slug on direct TypeGPU matching Three with no pixel budget (ship gate)                                                                                                                                                        | tested   | `experiments/sil-render` (`670cc248a`)              | Merged into the integration branch; proofs re-running before the tag                               |
+| Slug on direct TypeGPU matching Three with no pixel budget (ship gate)                                                                                                                                                        | merged   | tag `sil-green-16`                                  | 0 pixels over tolerance on every Slug scene                                                        |
 | Pure TypeGPU path, units 1–2: effect-specialized shaders, ink-trimmed quads                                                                                                                                                   | merged   | tag `sil-green-6`                                   | Plain-text GPU pass −19%; pixel-identical to Three within 2/255                                    |
 | Pure TypeGPU batching (indexed transforms) and growth fix                                                                                                                                                                     | merged   | tag `sil-green-10`                                  | 1,000 labels: 1,000 → 1 draw, CPU 0.628 → 0.004 ms per frame                                       |
 | Pure TypeGPU: one program per effect variant across fonts, on-demand atlas, single-channel mode                                                                                                                               | merged   | tag `sil-green-12`                                  | Atlas memory with a full-font bake 41.9 MB → 0.26 MB                                               |
@@ -64,8 +64,9 @@ Updated in place; the history of each change is in the log below.
 | Unit 2: local edits                                                                                                                                                                                                           | held     | —                                                   | Needs 1b, 1c                                                                                       |
 | Metric changes: keep island shapes, dense rescale                                                                                                                                                                             | held     | —                                                   | Needs 1a                                                                                           |
 | Unit 3 stages 0–2: guards, batch `prepare()`, the setter flip, paint-only path, minimal mutation, change class                                                                                                                | merged   | tag `sil-green-13`                                  | 200-label mount 401 → 2 engine calls; setters make none                                            |
-| Unit 3 stages 4–6 (ship gate): paragraph-local failure, trap recovery, text-size limit; publication hold, nested renders, on-demand loops, `onLayout`                                                                         | building | `experiments/sil-prepare`                           |                                                                                                    |
-| Unit 3 performance items: linear engine mount, per-paragraph measurement interest, edit-proportional validation                                                                                                               | held     | —                                                   | After the ship gate                                                                                |
+| Unit 3 stage 4 (ship gate): paragraph-local failure, trap recovery, `maxTextUnits`, failed-frame retry; linear engine mount; per-paragraph measurement interest                                                               | merged   | tag `sil-green-17`                                  | No memory cap leaves a root dead; 4,000-label frame 3.4 s → 109 ms                                 |
+| Unit 3 stages 5–6 (ship gate): publication hold, nested renders, on-demand loops, `onLayout`, root `onError`, error boundary; remove `replacedSurrogates`; API docs and migration note                                        | building | `experiments/sil-prepare`                           |                                                                                                    |
+| Unit 3 leftovers: publication failures still discard the root; failure inventory; interleaving fuzz                                                                                                                           | held     | —                                                   | After stages 5–6                                                                                   |
 | Unit 4: publication (retained topology, `PATCH_COPY`, multi-range uploads)                                                                                                                                                    | held     | —                                                   | After unit 3                                                                                       |
 | Many-label updates and paint-only changes                                                                                                                                                                                     | held     | —                                                   | Needs its profile and unit 3                                                                       |
 | Editing support (ship gate): offset map, carets, affinity, ligature carets, IME ranges, edit session                                                                                                                          | held     | —                                                   | Waits on the owner's API review and the positioning merge                                          |
@@ -623,3 +624,64 @@ Updated in place; the history of each change is in the log below.
   unchanged; today's `caretForOffset` snaps an offset inside a cluster to its start and `selectionRects`
   swaps and clips ranges silently, which conflicts with the owner's "nothing snapped silently" rule; two doc
   comments are wrong. Editing support is held until the owner answers.
+- **Merged: Slug parity on direct TypeGPU** (tag `sil-green-16`, pushed). Verified on the combined tree after
+  a clean rebuild: glyph package tests, TypeGPU real-device parity, both render proofs on WebGPU and WebGL2,
+  live check. The full repository check was not re-run for this shader-only merge (it passed on the lane's
+  branch and at `sil-green-15`). Ship-gate item closed.
+- **Tested, not merged: error model (unit 3 group A)** (`experiments/sil-prepare`, `8cda3229a`). A failure in
+  one paragraph empties that paragraph only; `maxTextUnits` (default 65,536) throws at the setter; every
+  engine call goes through one gateway that recovers from a trap by replacing the instance and restating
+  fonts and roots; a failed frame is retried once. Capped-memory test now permanent: at 500–4,000 pages only
+  the oversized paragraph is refused and siblings are unaffected; at 300 pages the root's publication no
+  longer fits, reads still work, and shrinking or disposing the victim recovers. No cap leaves a root dead.
+  Also in that lane: mount linear in label count (4,000-label frame 3.4 s → 109 ms) and per-paragraph
+  measurement interest. Settled: the slow colour-only reading was machine load (119 / 124 / 126 µs across
+  three builds); typing is 44% shaping because the whole run is reshaped, and validation is 7.6 µs, so the
+  typing gap belongs to local edits. Not done: publication failures still discard the root; failure
+  inventory and interleaving fuzz; a per-text error surface on TypeGPU-direct. Proven on a base before the
+  cluster-build and positioning merges; the lane is catching up before it merges.
+- **Question from the owner: pixi3d.** The refactor does not run in the pixi3d checkout
+  (`/Volumes/Depot/Developer/text`, `feature/pixi3d`), which is untouched. `packages/glyph-pixi3d` exists
+  only on that branch, largely uncommitted, and was built against the old Slug and MSDF schemas and
+  synchronous setters, so official integration is a port. Awaiting the owner on whether it is in the ship
+  gate and who commits the uncommitted work.
+- **Decision (owner): API summary approved** with the recommended answers, except lone surrogates.
+- **Decision (owner): lone surrogates get no public API.** They render as the replacement character instead
+  of throwing, and that is all: `Text.replacedSurrogates` is removed and no count is added anywhere.
+  `text.text` returns the string as assigned.
+- **Decision (owner): PixiJS 3D support is part of 0.2.0.** The owner's pixi work was committed locally on
+  `feature/pixi3d` (`2ecb36411`; hook bypassed for two unused-symbol warnings in the demo app; not pushed).
+  Left out of that commit and untouched on disk: 52 GB of untracked demo assets and new app files, the
+  vendored private beta tarball, two scratch directories. The renderer package is being ported onto the
+  integration branch against the official public release, proven by a pixel comparison against Three; demos,
+  examples and apps stay behind; the private beta tarball must not enter the public repository.
+- **Building.** Editing support, engine half (`experiments/sil-editing`): offset map, carets, hit testing,
+  movement, selection rectangles, with property tests over the oracle corpus. PixiJS 3D port
+  (`experiments/sil-pixi3d`). Oracle coverage (`experiments/sil-oracle`). Preparation lane: catching up, then
+  frame integration and `onLayout`.
+- **Merged: error model, unit 3 stage 4** (tag `sil-green-17`, pushed). Verified on the combined tree after a
+  clean rebuild: glyph package tests 1,234 of 1,234; TypeGPU real-device parity; both render proofs on WebGPU
+  and WebGL2; live check; full oracle tier native and wasm at 423 equal, 0 divergences. The full repository
+  check passed on the lane's merged branch and was not re-run on the integration tree for this tag.
+- **Merged: PixiJS 3D renderer** (tag `sil-green-18`, pushed). Package `@pmndrs/glyph-pixi3d`, public, against
+  the official `@pixi/3d` 0.1.0 (MIT, published 2026-11-12) and `pixi.js` 8.23 as peer dependencies; both
+  earlier patches dropped; nothing from the private beta copied. Techniques carried: bitmap, MSDF/MTSDF with
+  outline and shadow, Slug, decorations; also spans, `split()`, anchors, custom materials. Verified on the
+  combined tree after a clean install and rebuild: full repository check exits 0; glyph package tests; the
+  package's own check (34 tests); new `benchmark:pixi3d-parity` (27 scenes against Three on WebGPU and
+  WebGL2); TypeGPU parity; both render proofs; live check. The Rust engine is unchanged by this merge, so the
+  oracle was not re-run. Parity: WebGPU within tolerance on every scene (max 2/255) except 13 of 74,484
+  pixels in one outline scene; WebGL2 Slug at most 13 pixels over; WebGL2 bitmap up to 1.63% of lit pixels
+  over; each difference is a named budget with its cause. Gaps: MSDF uploads every baked page on PixiJS 3D;
+  no ordered `TextGroup` equivalent; decorations, `split()` and instancing have unit tests but no parity
+  scene; no performance numbers. Left behind: the demo app, the GLYPH//BREAKER shader bit, two demo skills.
+- **Needs owner sign-off: three new `/core` names** the port required: `createDecorationCodecProgram` and
+  `decorationSchema`; `SlugBandResidency` and `SLUG_RESIDENT_BAND_CURVE_WIDTH`.
+- **Tested, not merged: oracle coverage** (`experiments/sil-oracle`): 165 new cases (decorated text and
+  effects 84, several paragraphs per root 27, columns and regions 38, inline objects 16); full tier 588 cases
+  and 54,240 requests. It now catches the decorated-text material bug. Three new engine divergences recorded,
+  not fixed: paragraph draw order under ranked scopes depends on history; removing every paragraph from a
+  root leaves its glyphs drawn and the next request rejected; a borrowed-glyph read after a no-op on a
+  clipped paragraph is stale. Findings: inline objects are accepted and validated but no layout stage reads
+  them; regions were exercised only as horizontal rectangles. The lane is catching up with the integration
+  branch before the coverage merges.

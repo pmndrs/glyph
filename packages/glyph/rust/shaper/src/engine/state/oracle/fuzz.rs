@@ -17,28 +17,33 @@ use alloc::{
 use crate::{
     bidi::{DIRECTION_AUTO, DIRECTION_LTR, DIRECTION_RTL},
     engine::frame::{
-        ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE,
-        SEMANTIC_VIEW_MEASUREMENT,
+        ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START, DECORATION_DOUBLE,
+        DECORATION_LINE_THROUGH, DECORATION_SOLID, DECORATION_UNDERLINE, OVERFLOW_ELLIPSIS,
+        OVERFLOW_VISIBLE, SEMANTIC_VIEW_MEASUREMENT,
     },
 };
 
 use super::{
-    capture::capture,
+    capture::{capture, paragraph_prefix},
     corpus::{self, FRAGMENTS, Script},
     fonts::FontLibrary,
     lanes::{Capture, LaneClass, LaneDifference, cache_differences, differences},
-    matrix::Case,
-    model::{Model, Span, SpanStyle, TextEdit},
+    matrix::{Case, Extras},
+    model::{
+        Decoration, Document, InlineObject, Model, PARAGRAPH_ID, Paragraph, RegionBox, Regions,
+        Span, SpanStyle, TextEdit,
+    },
     rng::Rng,
-    session::{ALL_VIEWS, Route, Session},
+    session::{ALL_VIEWS, Route, Session, Split},
 };
 
-/// One request: the model it produces, the text edits that get there, and the route it takes.
+/// One step: the document it produces, each paragraph's text edits that get there, and the
+/// route it takes.
 #[derive(Clone, Debug)]
 pub struct Planned {
     pub label: String,
-    pub next: Model,
-    pub edits: Vec<TextEdit>,
+    pub next: Document,
+    pub edits: Vec<(u32, Vec<TextEdit>)>,
     pub route: Route,
 }
 
@@ -52,10 +57,12 @@ struct Hints {
 }
 
 impl Hints {
-    fn new(capture: &Capture, text: &[u16]) -> Self {
-        let mut line_edges = capture.u32_rows("flow.fragment.text_start");
-        line_edges.extend(capture.u32_rows("flow.fragment.text_end"));
-        let clusters = capture.u32_rows("cluster.text_start");
+    /// `prefix` selects the paragraph's lanes in `capture`.
+    fn new(capture: &Capture, prefix: &str, text: &[u16]) -> Self {
+        let rows = |lane: &str| capture.u32_rows(&format!("{prefix}{lane}"));
+        let mut line_edges = rows("flow.fragment.text_start");
+        line_edges.extend(rows("flow.fragment.text_end"));
+        let clusters = rows("cluster.text_start");
         // The run-local block cut and the chunk summaries are both every 64 clusters.
         let block_edges = (1..)
             .map(|block| block * 64)
@@ -66,7 +73,7 @@ impl Hints {
         Self {
             line_edges,
             block_edges,
-            script_edges: capture.u32_rows("unicode.script_item.text_start"),
+            script_edges: rows("unicode.script_item.text_start"),
             hard_breaks: text
                 .iter()
                 .enumerate()
@@ -80,6 +87,10 @@ impl Hints {
 struct Planner<'a> {
     script: Script,
     stack_count: usize,
+    /// The operations added since the first reference set that this case uses. Each draws
+    /// from the generator only when its case turns it on, so every other case plans exactly
+    /// the requests it was frozen with.
+    extras: Extras,
     hints: &'a Hints,
     rng: &'a mut Rng,
     next: Model,
@@ -87,8 +98,165 @@ struct Planner<'a> {
     labels: Vec<String>,
 }
 
-/// Plans one request against `model`.
-fn plan(case: &Case, model: &Model, hints: &Hints, rng: &mut Rng) -> Planned {
+/// Plans one step against `document`, finding offsets worth editing in `last`, the capture
+/// after the previous step. With no capture (a sequence planned with no engine in the loop)
+/// offsets are uniform.
+fn plan(case: &Case, document: &Document, last: Option<&Capture>, rng: &mut Rng) -> Planned {
+    if document.explicit {
+        return plan_document(case, document, last, rng);
+    }
+    let model = document
+        .paragraph(PARAGRAPH_ID)
+        .map(|paragraph| paragraph.model.clone())
+        .unwrap_or_default();
+    let hints = last.map_or_else(Hints::default, |last| Hints::new(last, "", &model.text));
+    let (label, next, edits, route) = plan_paragraph(case, &model, &hints, rng);
+    Planned {
+        label,
+        next: Document::single(next),
+        edits: alloc::vec![(PARAGRAPH_ID, edits)],
+        route,
+    }
+}
+
+/// Plans one step against a document of several paragraphs: edits to one or to all of them,
+/// a paragraph added, removed or reordered, and the way the step is split between reads, the
+/// batch preparation and the publication.
+fn plan_document(
+    case: &Case,
+    document: &Document,
+    last: Option<&Capture>,
+    rng: &mut Rng,
+) -> Planned {
+    let mut planner = DocumentPlanner {
+        case,
+        last,
+        next: document.clone(),
+        edits: Vec::new(),
+        labels: Vec::new(),
+    };
+    for _ in 0..1 + rng.below(3) {
+        planner.change(rng);
+    }
+    let route = Route {
+        view_mask: *rng
+            .pick(&[ALL_VIEWS, SEMANTIC_VIEW_MEASUREMENT, 0])
+            .unwrap_or(&ALL_VIEWS),
+        measure_first: rng.chance(2, 3),
+        measure_after: rng.chance(1, 2),
+        split: [Split::Batch, Split::Each, Split::OneThenBatch][rng.below(3)],
+    };
+    Planned {
+        label: planner.labels.join(" + "),
+        next: planner.next,
+        edits: planner.edits,
+        route,
+    }
+}
+
+struct DocumentPlanner<'a> {
+    case: &'a Case,
+    last: Option<&'a Capture>,
+    next: Document,
+    edits: Vec<(u32, Vec<TextEdit>)>,
+    labels: Vec<String>,
+}
+
+impl DocumentPlanner<'_> {
+    fn change(&mut self, rng: &mut Rng) {
+        let ids = self.next.ids();
+        let pick = ids.get(rng.below(ids.len())).copied();
+        match (rng.below(10), pick) {
+            (0..=4, Some(id)) => self.edit(id, rng),
+            (5, _) if ids.len() < 6 => self.add(rng),
+            (6, Some(id)) if ids.len() > 1 => {
+                self.next.paragraphs.retain(|paragraph| paragraph.id != id);
+                self.edits.retain(|(edited, _)| *edited != id);
+                self.labels.push(format!("remove paragraph {id}"));
+            }
+            (7, Some(id)) => self.reorder(id, rng),
+            (8, Some(id)) => {
+                let (scope, rank) = [(0, 0.0), (0, 1.5), (3, -2.0), (3, 4.0)][rng.below(4)];
+                if let Some(paragraph) = self.next.paragraph_mut(id) {
+                    paragraph.scope = scope;
+                    paragraph.rank = rank;
+                }
+                self.labels
+                    .push(format!("rank paragraph {id} {scope}/{rank}"));
+            }
+            // Every paragraph dirty in one step: what the batch preparation exists for.
+            _ => {
+                for id in ids {
+                    self.edit(id, rng);
+                }
+            }
+        }
+    }
+
+    /// Changes one paragraph the way the single-paragraph planner does.
+    fn edit(&mut self, id: u32, rng: &mut Rng) {
+        // Offsets read from the capture are stale once this step has edited the paragraph.
+        let fresh = !self.edits.iter().any(|(edited, _)| *edited == id);
+        let Some(paragraph) = self.next.paragraph_mut(id) else {
+            return;
+        };
+        let hints = match self.last {
+            Some(last) if fresh => Hints::new(last, &paragraph_prefix(id), &paragraph.model.text),
+            _ => Hints::default(),
+        };
+        let (label, model, more, _) = plan_paragraph(self.case, &paragraph.model, &hints, rng);
+        paragraph.model = model;
+        self.labels.push(format!("paragraph {id}: {label}"));
+        match self.edits.iter_mut().find(|(edited, _)| *edited == id) {
+            Some((_, list)) => list.extend(more),
+            None => self.edits.push((id, more)),
+        }
+    }
+
+    fn add(&mut self, rng: &mut Rng) {
+        let id = self.next.minted + 1;
+        let which = rng.below(self.case.stacks.len().min(3));
+        let script = [Script::Latin, Script::Arabic, Script::Cjk][which];
+        let text = corpus::paragraph(script, rng.next_u64(), 20 + rng.below(160));
+        let last = self.next.paragraphs.iter().map(|p| p.order).max();
+        let layout = self
+            .next
+            .paragraphs
+            .first()
+            .map(|first| first.model.layout)
+            .unwrap_or_default();
+        self.next.paragraphs.push(Paragraph {
+            order: last.unwrap_or(0) + 100,
+            ..super::documents::paragraph(id, text, which as u32, layout)
+        });
+        self.next.minted = id;
+        self.labels.push(format!("add paragraph {id}"));
+    }
+
+    /// Moves a paragraph to an order no live paragraph holds: before the first or past the
+    /// last.
+    fn reorder(&mut self, id: u32, rng: &mut Rng) {
+        let orders = || self.next.paragraphs.iter().map(|paragraph| paragraph.order);
+        let (low, high) = (orders().min().unwrap_or(1), orders().max().unwrap_or(0));
+        let order = if rng.chance(1, 2) && low > 0 {
+            low - 1
+        } else {
+            high + 100
+        };
+        if let Some(paragraph) = self.next.paragraph_mut(id) {
+            paragraph.order = order;
+        }
+        self.labels.push(format!("order paragraph {id} at {order}"));
+    }
+}
+
+/// Plans one request's changes to one paragraph.
+fn plan_paragraph(
+    case: &Case,
+    model: &Model,
+    hints: &Hints,
+    rng: &mut Rng,
+) -> (String, Model, Vec<TextEdit>, Route) {
     let changes = if rng.chance(3, 5) {
         1
     } else {
@@ -97,6 +265,7 @@ fn plan(case: &Case, model: &Model, hints: &Hints, rng: &mut Rng) -> Planned {
     let mut planner = Planner {
         script: case.script,
         stack_count: case.stacks.len(),
+        extras: case.extras,
         hints,
         rng,
         next: model.clone(),
@@ -107,12 +276,12 @@ fn plan(case: &Case, model: &Model, hints: &Hints, rng: &mut Rng) -> Planned {
         planner.change();
     }
     let route = planner.route();
-    Planned {
-        label: planner.labels.join(" + "),
-        next: planner.next,
-        edits: planner.edits,
+    (
+        planner.labels.join(" + "),
+        planner.next,
+        planner.edits,
         route,
-    }
+    )
 }
 
 impl Planner<'_> {
@@ -124,10 +293,20 @@ impl Planner<'_> {
                 .unwrap_or(&ALL_VIEWS),
             measure_first: self.rng.chance(1, 4),
             measure_after: self.rng.chance(1, 2),
+            split: Split::Batch,
         }
     }
 
     fn change(&mut self) {
+        if self.extras.paint && self.rng.chance(1, 3) {
+            return self.paint();
+        }
+        if self.extras.objects && self.rng.chance(1, 3) {
+            return self.inline_object();
+        }
+        if self.extras.regions && self.rng.chance(1, 4) {
+            return self.regions();
+        }
         match self.rng.below(20) {
             0..=4 => self.insert(),
             5..=7 => self.delete(),
@@ -144,6 +323,149 @@ impl Planner<'_> {
 
     fn label(&mut self, text: String) {
         self.labels.push(text);
+    }
+
+    /// Adds, removes or alters one inline object.
+    fn inline_object(&mut self) {
+        let length = self.next.text.len() as u32;
+        let count = self.next.inline_objects.len();
+        let offset = self.rng.below(length as usize + 1) as u32;
+        let object = InlineObject {
+            text_offset: snap(&self.next.text, offset),
+            inline_extent: [8.0, 24.0, 64.0][self.rng.below(3)],
+            block_extent: [8.0, 20.0, 48.0][self.rng.below(3)],
+            baseline_offset: [0.0, -3.0][self.rng.below(2)],
+            baseline_alignment: 1 + self.rng.below(4) as u8,
+            margin_inline: [0.0, 4.0][self.rng.below(2)],
+        };
+        match self.rng.below(3) {
+            0 if count != 0 => {
+                self.next.inline_objects.remove(self.rng.below(count));
+                self.label("remove an inline object".to_string());
+            }
+            1 if count != 0 => {
+                let index = self.rng.below(count);
+                self.next.inline_objects[index] = object;
+                self.label(format!("alter inline object {index}"));
+            }
+            _ if count < 6 => {
+                self.next.inline_objects.push(object);
+                self.label(format!("add an inline object at {}", object.text_offset));
+            }
+            _ => {}
+        }
+    }
+
+    /// Changes the regions the paragraph flows through, or their height.
+    fn regions(&mut self) {
+        let layout = &mut self.next.layout;
+        match self.rng.below(5) {
+            0 => layout.regions = Regions::Single,
+            1 | 2 => {
+                layout.regions = Regions::Columns {
+                    count: 2 + self.rng.below(2) as u8,
+                    gap: [0.0, 12.0, 30.0][self.rng.below(3)],
+                };
+            }
+            3 => {
+                let wide = 200.0 + self.rng.below(300) as f32;
+                layout.regions = Regions::Boxes {
+                    boxes: [
+                        RegionBox {
+                            inline_start: 0.0,
+                            block_start: 0.0,
+                            inline_end: wide,
+                            block_end: 90.0,
+                        },
+                        RegionBox {
+                            inline_start: 20.0,
+                            block_start: 100.0,
+                            inline_end: wide + 80.0,
+                            block_end: 260.0,
+                        },
+                        RegionBox::default(),
+                    ],
+                    count: 2,
+                };
+            }
+            _ => layout.height = [120.0, 200.0, 420.0][self.rng.below(3)],
+        }
+        // Several regions are only reachable when each one can fill.
+        if layout.regions != Regions::Single && layout.height == 0.0 {
+            layout.height = 200.0;
+        }
+        if layout.width == 0.0 {
+            layout.width = 600.0;
+        }
+        let regions = layout.regions;
+        let height = layout.height;
+        self.label(format!("regions {regions:?} height {height}"));
+    }
+
+    /// Changes one paint field of the root style or of one span.
+    fn paint(&mut self) {
+        let span = match self.next.spans.len() {
+            0 => None,
+            count => self.rng.chance(1, 2).then(|| self.rng.below(count)),
+        };
+        let mut paint = match span {
+            Some(index) => self.next.spans[index].style.paint,
+            None => self.next.root.paint,
+        };
+        let colour = [0xff20_20e0, 0xffe0_6020, 0x8040_4040][self.rng.below(3)];
+        let what = match self.rng.below(6) {
+            0 => {
+                paint.material = [None, Some(1), Some(2), Some(3)][self.rng.below(4)];
+                "material"
+            }
+            1 => {
+                paint.decoration = self.decoration(colour);
+                "decoration"
+            }
+            2 => {
+                paint.outline = [None, Some((colour, 1.0)), Some((colour, 2.5))][self.rng.below(3)];
+                "outline"
+            }
+            3 => {
+                paint.shadow =
+                    [None, Some((colour, 1.0, 1.0)), Some((colour, -2.0, 0.5))][self.rng.below(3)];
+                "shadow"
+            }
+            4 => {
+                paint.opacity = [None, Some(0.5), Some(0.25)][self.rng.below(3)];
+                "opacity"
+            }
+            _ => {
+                paint.foreground = [None, Some(colour)][self.rng.below(2)];
+                "foreground"
+            }
+        };
+        match span {
+            Some(index) => {
+                self.next.spans[index].style.paint = paint;
+                self.label(format!("{what} of span {}", self.next.spans[index].id));
+            }
+            None => {
+                self.next.root.paint = paint;
+                self.label(format!("{what} of the root"));
+            }
+        }
+    }
+
+    fn decoration(&mut self, rgba: u32) -> Option<Decoration> {
+        let flags = [
+            0,
+            DECORATION_UNDERLINE,
+            DECORATION_LINE_THROUGH,
+            DECORATION_UNDERLINE | DECORATION_LINE_THROUGH,
+        ][self.rng.below(4)];
+        (flags != 0).then(|| Decoration {
+            flags,
+            style: [DECORATION_SOLID, DECORATION_DOUBLE][self.rng.below(2)],
+            rgba,
+            thickness: [1.0, 2.0][self.rng.below(2)],
+            offset: 0.0,
+        })
     }
 
     /// A code-point boundary of the current text, from one of the offset strategies.
@@ -485,28 +807,54 @@ impl Failure {
 
 /// Lanes a host can read back; the only ones compared when the two sides chose different
 /// owners, which keep different internals by design.
-const PUBLIC_PREFIXES: [&str; 8] = [
-    "public.", "view.", "gather.", "gpu.", "text.", "unicode.", "bidi.", "style.",
+const PUBLIC_PREFIXES: [&str; 10] = [
+    "public.", "view.", "gather.", "gpu.", "text.", "unicode.", "bidi.", "style.", "plan.", "doc.",
 ];
 
+/// A lane's name without the paragraph it belongs to.
+fn bare(lane: &str) -> &str {
+    match lane.split_once(':') {
+        Some((paragraph, rest)) if paragraph.starts_with('p') => rest,
+        _ => lane,
+    }
+}
+
 /// The lanes that must agree between an edit history and a cold layout, as differences, and
-/// whether both sides used the same owner.
+/// whether every paragraph used the same owner on both sides.
 pub fn incremental_differences(warm: &Capture, cold: &Capture) -> (Vec<LaneDifference>, bool) {
-    let same_owner = warm.lane("owner.inline") == cold.lane("owner.inline");
+    let same_owner = warm
+        .lanes
+        .iter()
+        .filter(|lane| bare(&lane.name) == "owner.inline")
+        .all(|lane| cold.lane(&lane.name) == Some(lane));
+    let rows = |capture: &Capture, lane: &str| capture.lane(lane).map_or(0, |lane| lane.rows());
     // A publication returns semantic views only for what it prepared. A request that changes
     // nothing returns none, and the measurement lanes carry that comparison instead.
-    let unprepared = warm
-        .lane("view.published.kind")
-        .is_none_or(|lane| lane.rows() == 0);
+    let unprepared = rows(warm, "view.published.kind") == 0;
+    // With several paragraphs an edit history prepares the changed ones and a cold layout
+    // prepares all of them, so the records a preparation or publication returns cover
+    // different paragraphs. They are compared when they cover the same number of records;
+    // the read of every paragraph after the step is compared always.
+    let several = warm
+        .lane("doc.explicit")
+        .is_some_and(|lane| lane.bytes == [1]);
+    let partial = |view: &str| {
+        let kind = format!("{view}kind");
+        several && rows(warm, &kind) != rows(cold, &kind)
+    };
+    let skipped: Vec<&str> = ["view.published.", "view.measured_first."]
+        .into_iter()
+        .filter(|view| partial(view) || (unprepared && *view == "view.published."))
+        .collect();
     let mut found: Vec<LaneDifference> = differences(warm, cold, LaneClass::history_independent)
         .into_iter()
         .filter(|difference| {
             same_owner
                 || PUBLIC_PREFIXES
                     .iter()
-                    .any(|prefix| difference.lane.starts_with(prefix))
+                    .any(|prefix| bare(&difference.lane).starts_with(prefix))
         })
-        .filter(|difference| !(unprepared && difference.lane.starts_with("view.published.")))
+        .filter(|difference| !skipped.iter().any(|view| difference.lane.starts_with(view)))
         .collect();
     found.extend(cache_differences(warm, cold));
     (found, same_owner)
@@ -541,9 +889,9 @@ fn check(
     planned: &Planned,
     known: &[&str],
 ) -> Result<Outcome, String> {
-    let warm_result = warm.step(&planned.next, &planned.edits, planned.route);
+    let warm_result = warm.step_document(&planned.next, &planned.edits, planned.route);
     let mut cold = Session::new(library, stacks)?;
-    let cold_result = cold.step(&planned.next, &[], planned.route);
+    let cold_result = cold.step_document(&planned.next, &[], planned.route);
     match (warm_result, cold_result) {
         (Ok(warm_output), Ok(cold_output)) => {
             let warm_capture = capture(warm, &warm_output)?;
@@ -588,10 +936,10 @@ fn outcome_text(error: Option<String>) -> String {
 fn cold_session(
     library: &FontLibrary,
     stacks: &[&[&str]],
-    model: &Model,
+    document: &Document,
 ) -> Result<(Session, Capture), String> {
     let mut session = Session::new(library, stacks)?;
-    let output = session.step(model, &[], Route::FULL)?;
+    let output = session.step_document(document, &[], Route::FULL)?;
     let capture = capture(&session, &output)?;
     Ok((session, capture))
 }
@@ -608,7 +956,7 @@ pub fn fuzz(
     let stacks: Vec<&[&str]> = case.stacks.iter().map(Vec::as_slice).collect();
     // Mixing in the case name gives every case its own sequence under one seed.
     let mut rng = Rng::new(seed ^ super::lanes::digest(case.name.as_bytes()));
-    let (warm, last) = cold_session(library, &stacks, &case.model)?;
+    let (warm, last) = cold_session(library, &stacks, &case.start())?;
     let mut run = Run {
         library,
         stacks: &stacks,
@@ -622,10 +970,9 @@ pub fn fuzz(
         report: FuzzReport::default(),
     };
     for step in 0..steps {
-        let model = run.warm.model().cloned().unwrap_or_default();
-        let hints = Hints::new(&run.last, &model.text);
-        let planned = plan(case, &model, &hints, &mut rng);
-        run.step(step, model, planned)?;
+        let document = run.warm.document().cloned().unwrap_or_default();
+        let planned = plan(case, &document, Some(&run.last), &mut rng);
+        run.step(step, document, planned)?;
     }
     Ok(run.report)
 }
@@ -641,14 +988,14 @@ struct Run<'a> {
     last: Capture,
     /// `models[n]` is the model before `history[n]`; together they replay the run since
     /// `origin`, the step at which the engine was last restarted cold.
-    models: Vec<Model>,
+    models: Vec<Document>,
     history: Vec<Planned>,
     origin: usize,
     report: FuzzReport,
 }
 
 impl Run<'_> {
-    fn step(&mut self, step: usize, model: Model, planned: Planned) -> Result<(), String> {
+    fn step(&mut self, step: usize, model: Document, planned: Planned) -> Result<(), String> {
         self.models.push(model.clone());
         self.history.push(planned.clone());
         self.report.steps = step + 1;
@@ -674,7 +1021,19 @@ impl Run<'_> {
                 Ok(())
             }
             Outcome::Rejected(reason) => {
-                push_unique(&mut self.report.rejections, reason);
+                // The first request rejected for each reason is kept with what it did.
+                if !self
+                    .report
+                    .rejections
+                    .iter()
+                    .any(|known| known.starts_with(&reason))
+                {
+                    let route = planned.route;
+                    self.report.rejections.push(format!(
+                        "{reason} (step {step}: {}; {route:?})",
+                        planned.label
+                    ));
+                }
                 self.report.rejected += 1;
                 // A rejected request leaves the root unusable; a host replays its accepted
                 // values, which is a cold layout of the model before the step.
@@ -693,7 +1052,7 @@ impl Run<'_> {
     fn failure(
         &self,
         step: usize,
-        model: &Model,
+        model: &Document,
         planned: &Planned,
         mut details: Vec<String>,
     ) -> Failure {
@@ -720,7 +1079,13 @@ impl Run<'_> {
             details.push(format!("before: {}", describe(model)));
             details.push(format!("after:  {}", describe(&planned.next)));
             details.push(format!("edits:  {:?}", planned.edits));
-            details.push(format!("text before: {}", escaped(&model.text)));
+            for paragraph in &model.paragraphs {
+                details.push(format!(
+                    "text of {} before: {}",
+                    paragraph.id,
+                    escaped(&paragraph.model.text)
+                ));
+            }
             details.push(format!("route:  {:?}", planned.route));
         }
         Failure {
@@ -733,7 +1098,12 @@ impl Run<'_> {
     }
 
     /// Replaces the engine with a cold layout of `model`, or of `fallback` if that fails.
-    fn restart(&mut self, step: usize, model: &Model, fallback: &Model) -> Result<(), String> {
+    fn restart(
+        &mut self,
+        step: usize,
+        model: &Document,
+        fallback: &Document,
+    ) -> Result<(), String> {
         (self.warm, self.last) = match cold_session(self.library, self.stacks, model) {
             Ok(restarted) => restarted,
             Err(_) => cold_session(self.library, self.stacks, fallback)?,
@@ -756,15 +1126,27 @@ fn escaped(text: &[u16]) -> String {
     String::from_utf16_lossy(text).escape_unicode().to_string()
 }
 
-/// Everything about a model except its text.
-fn describe(model: &Model) -> String {
-    format!(
-        "{} units, root {:?}, layout {:?}, spans {:?}",
-        model.text.len(),
-        model.root,
-        model.layout,
-        model.spans
-    )
+/// Everything about a document except its text.
+fn describe(document: &Document) -> String {
+    document
+        .paragraphs
+        .iter()
+        .map(|paragraph| {
+            let model = &paragraph.model;
+            format!(
+                "paragraph {} order {} rank {}: {} units, root {:?}, layout {:?}, spans {:?}, inline objects {:?}",
+                paragraph.id,
+                paragraph.order,
+                paragraph.rank,
+                model.text.len(),
+                model.root,
+                model.layout,
+                model.spans,
+                model.inline_objects
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 /// The latest step after which a cold start still reproduces the final step's failure:
@@ -772,7 +1154,7 @@ fn describe(model: &Model) -> String {
 fn shortest_replay(
     library: &FontLibrary,
     stacks: &[&[&str]],
-    models: &[Model],
+    models: &[Document],
     history: &[Planned],
     known: &[&str],
 ) -> usize {
@@ -790,7 +1172,7 @@ fn shortest_replay(
 fn replay_fails(
     library: &FontLibrary,
     stacks: &[&[&str]],
-    start: &Model,
+    start: &Document,
     steps: &[Planned],
     known: &[&str],
 ) -> bool {
@@ -802,7 +1184,7 @@ fn replay_fails(
     };
     for planned in earlier {
         if warm
-            .step(&planned.next, &planned.edits, planned.route)
+            .step_document(&planned.next, &planned.edits, planned.route)
             .is_err()
         {
             return false;
@@ -817,15 +1199,14 @@ fn replay_fails(
 /// The first `count` requests `seed` plans against `case`, for freezing an edited sequence.
 /// Each is planned against the model the one before it produced, with no engine in the loop,
 /// so the sequence depends only on the seed and the case.
-pub fn scripted(case: &Case, seed: u64, count: usize) -> Vec<Planned> {
+pub fn scripted(case: &Case, start: &Document, seed: u64, count: usize) -> Vec<Planned> {
     let mut rng = Rng::new(seed);
-    let hints = Hints::default();
-    let mut model = case.model.clone();
+    let mut document = start.clone();
     let mut planned = Vec::with_capacity(count);
     for _ in 0..count {
-        let mut step = plan(case, &model, &hints, &mut rng);
+        let mut step = plan(case, &document, None, &mut rng);
         step.route = Route::FULL;
-        model = step.next.clone();
+        document = step.next.clone();
         planned.push(step);
     }
     planned
