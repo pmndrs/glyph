@@ -290,6 +290,8 @@ pub fn command(library: &FontLibrary, files: &dyn Files, line: &str, payload: &s
                 tier::differential(library, files, cases, seeds, steps)
             })
         }
+        #[cfg(feature = "stage-bench")]
+        ["bench", rest @ ..] => super::stage_bench::command(library, rest),
         _ => Err(format!("unknown command `{line}`")),
     };
     answer.unwrap_or_else(|error| format!("fail\n{error}"))

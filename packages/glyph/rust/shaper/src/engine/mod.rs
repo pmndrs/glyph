@@ -52,6 +52,8 @@ pub mod render_plan_compiler;
 pub(crate) mod render_plan_wire;
 mod retained_rope;
 mod run_local;
+mod run_local_kernel;
+mod run_local_paragraph;
 pub(crate) mod semantic_view;
 mod semantic_wire;
 mod session_placement;

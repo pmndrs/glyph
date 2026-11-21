@@ -32,6 +32,11 @@ export function installRasterCodecFontCompiler(compile: RasterCodecFontCompiler)
   compileRasterCodecFont = compile;
 }
 
+/** @internal Whether a registered codec can compile a font now; false until the generic compiler module has loaded. */
+export function rasterCodecFontCompilerInstalled(): boolean {
+  return compileRasterCodecFont !== undefined;
+}
+
 export function registerRasterCodecInternal<
   const Format extends RasterFormatMetadata,
   const Schema extends TechniqueSchemaMetadata,

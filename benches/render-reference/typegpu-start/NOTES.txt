@@ -1,0 +1,10 @@
+Captures of the direct TypeGPU renderer (@pmndrs/glyph/typegpu) at the start of the parity and batching work
+(branch experiments/sil-typegpu, cut from sil-green-4), 832x600, Chrome 149 headless, WebGPU on Metal.
+
+Written and compared by `pnpm scripts run benchmark:typegpu-parity` (benches/scripts/verify-typegpu-parity.mts,
+page benches/src/typegpu-parity-proof.ts). The same run compares every scene with the Three MSDF path drawn at the
+same camera into an 8-bit linear target.
+
+Starting result against Three at 8/255: one 1, fx 6, fx-outline 6, fx-shadow 1, fx-both 6, devanagari 4 pixels over
+(all on cell edges the Three path trims away), fx-plain, fx-persp and labels 0. Bitmap is compared with its own
+capture only: the Three path snaps bitmap quads to the pixel grid and this renderer does not.

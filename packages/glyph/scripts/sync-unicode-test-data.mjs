@@ -15,6 +15,16 @@ const fixtures = [
     url: 'https://www.unicode.org/Public/17.0.0/ucd/auxiliary/LineBreakTest.txt',
   },
   {
+    file: 'WordBreakTest.txt.gz',
+    sha256: '1de23a75f37904abc7d206239ee8d34f8fdf0fb4ab32a7174dfbabbde25419b2',
+    url: 'https://www.unicode.org/Public/17.0.0/ucd/auxiliary/WordBreakTest.txt',
+  },
+  {
+    file: 'SentenceBreakTest.txt.gz',
+    sha256: '12cb47d028ded0c1cb8a28558f95479cbcd24559c46977015c82f3b50a1cc6e4',
+    url: 'https://www.unicode.org/Public/17.0.0/ucd/auxiliary/SentenceBreakTest.txt',
+  },
+  {
     file: 'BidiTest.txt.gz',
     sha256: '888bdfc8090652272d1f859cdb00ae659e2dc6c26740be61ef1d03998a687620',
     url: 'https://www.unicode.org/Public/17.0.0/ucd/BidiTest.txt',

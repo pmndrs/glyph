@@ -1,19 +1,8 @@
 # Lanes on which the engine at the reference commit differs between an edit history and a cold
 # layout of the same input. One lane prefix per line, then the finding. The oracle counts and
 # reports every hit; a lane leaves this list when the engine is fixed.
-flow.fragment.slot_end after a width change that moves no break, the retained fragments keep the previous slot end
-flow.fragment.flexible_end same step as slot_end: the retained fragment keeps the previous flexible-end flag
-cluster.ltr the text-wide left-to-right flag is retained as true after an edit that leaves a hard break or an empty run first, where a cold layout computes false; no drawn difference found
 
 # Scripted steps that differ from cold: `step <case> <NN>`, then the finding.
-step mech-rtl-same-length-edit-with-span-removal 01 rejected incrementally with InvalidRequest, accepted cold
-step mech-reshape-window-edge-flags 01 a same-length replacement reshapes a window; the glyph at its edge loses UNSAFE_TO_BREAK|UNSAFE_TO_CONCAT, which also clears cluster.unsafe_before and changes cluster.flags; visible in public.glyph.flags
-step mech-reshape-window-edge-flags-justify 01 same as above under justification
-step mech-span-add-size-mixed-label-full 01 a font-size span added over the last script run of a 38-unit mixed-script label, with no text change, is not applied: glyphs keep the root size and the line is not re-centred; visible in public.glyph and gpu.drawn
-step mech-span-add-size-mixed-label-silent-then-measure 01 same as above, publication without views then a measurement
-step mech-span-add-size-mixed-label-silent 01 same as above, publication without views
-step mech-span-add-size-mixed-label-measure-first 01 same as above, measurement before publication
-step feature-spans-cjk 01 a metric change, a width change and a span restyle in one request leave one more layout run than a cold layout builds
 
 # Requests of the seeded driver that differ from a cold layout of the same input, found at the
 # reference commit with the full tier (seeds 1-4, 60 requests):
@@ -21,75 +10,3 @@ step feature-spans-cjk 01 a metric change, a width change and a span restyle in 
 # Every one reproduces as a single request after a cold layout. Replay one with
 # `layout-oracle fuzz --case <case> --seed <seed> --steps <step + 1>`. The driver continues past
 # each from a cold layout, so the entries of one run do not depend on each other being fixed.
-seed degenerate-newline 2 51 cluster.layout_run.source_kind | add span 1..3
-seed degenerate-newline 4 13 outcome | remove span 2 + replace 6 at 340
-seed degenerate-one-space 4 37 cluster.style_index | flip case at 65 + add span 158..166
-seed degenerate-trailing-newline 4 45 cluster.style_index | add span 687..693 + flip case at 71
-seed degenerate-trailing-spaces 2 21 cluster.style_index | add span 182..190 + flip case at 66
-seed feature-arabic-ltr-base-justify 3 8 view.measured_after.block_extent | width 15
-seed feature-clip-height-latin 3 59 cluster.style_index | add span 434..452 + replace 5 at 87
-seed feature-drop-cap-arabic 1 24 cluster.style_index | replace 5 at 1 + add span 1572..1573
-seed feature-drop-cap-cjk 2 58 cluster.layout_run.source_kind | add span 52..64
-seed feature-drop-cap-cjk 3 23 cluster.layout_run.source_kind | add span 119..130 + width 0
-seed feature-ellipsis-3-lines-cjk 1 46 cluster.layout_run.source_kind | add span 14..37
-seed feature-ellipsis-3-lines-cjk 3 16 cluster.layout_run.source_kind | add span 1463..1472
-seed feature-spacing-indent-latin 1 30 outcome | align 3 + remove span 2 + replace 5 at 34
-seed feature-spans-cjk 1 43 cluster.layout_run.source_kind | add span 120..160
-seed feature-spans-cjk 1 52 outcome | remove span 10 + flip case at 5
-seed feature-wrap-character-latin 3 18 cluster.style_index | add span 1837..1861 + replace 2 at 772
-seed font-cjk-sc-start 1 49 cluster.style_index | width 733.5 + add span 927..945 + replace 2 at 346 + width 847
-seed font-dancing-script-start 2 37 cluster.style_index | flip case at 655 + add span 1925..1929
-seed font-fredoka-justify 3 59 outcome | width 259.25 + flip case at 33 + remove span 5
-seed font-kern-only-start 4 55 cluster.style_index | add span 1338..1368 + flip case at 463 + width 420.25
-seed font-kern-only-synth-start 3 43 outcome | remove span 4 + replace 3 at 426
-seed label-bengali-128-start 2 24 cluster.layout_run.source_kind | remove span 2
-seed label-cjk-256-start 1 57 cluster.style_index | replace 1 at 5 + add span 102..110
-seed label-cjk-48-start 2 25 cluster.layout_run.source_kind | add span 4..17
-seed label-cjk-48-start 4 34 cluster.layout_run.source_kind | add span 165..192
-seed label-cjk-64-start 2 10 cluster.layout_run.source_kind | restyle span 2 + add span 14..15
-seed label-cjk-64-start 2 11 cluster.layout_run.source_kind | max lines 0 + remove span 2
-seed label-cjk-64-start 2 36 outcome | remove span 2 + flip case at 63
-seed label-cjk-64-start 2 38 cluster.style_index | max lines 0 + flip case at 43 + add span 192..194
-seed label-cjk-64-start 4 44 cluster.layout_run.source_kind | add span 152..163
-seed label-cjk-ellipsis 2 7 cluster.layout_run.source_kind | add span 16..36 + width 872.75
-seed label-cjk-ellipsis 2 23 cluster.layout_run.source_kind | restyle span 2 + width 730.75
-seed label-cjk-ellipsis 2 41 cluster.layout_run.source_kind | restyle span 2
-seed label-devanagari-128-start 4 9 outcome | max lines 3 + replace 1 at 155 + remove span 2
-seed label-devanagari-64-start 4 53 cluster.layout_run.source_kind | remove span 2 + metrics size 24 spacing 2 line 1 word 3
-seed label-fredoka-12-start 4 56 cluster.style_index | add span 221..224 + add span 207..216 + replace 5 at 42 + max lines 3
-seed label-fredoka-128-start 1 26 outcome | flip case at 618 + remove span 3 + direction 0
-seed label-fredoka-256-start 4 34 outcome | restyle span 5 + replace 1 at 69 + remove span 4
-seed label-greek-cyrillic-128-start 4 15 cluster.layout_run.source_kind | remove span 2
-seed label-greek-cyrillic-256-start 4 21 cluster.layout_run.source_kind | restyle span 2
-seed label-hangul-12-start 2 25 cluster.layout_run.source_kind | restyle span 2
-seed label-hangul-128-start 1 39 cluster.layout_run.source_kind | restyle span 2
-seed label-hangul-48-start 1 36 cluster.layout_run.source_kind | restyle span 2
-seed label-hangul-ellipsis 2 17 outcome | replace 2 at 150 + remove span 3
-seed label-hebrew-ellipsis 3 29 cluster.layout_run.source_kind | remove span 2
-seed label-hebrew-ellipsis 4 45 shape.glyph.flags | replace 2 at 133
-seed label-latin-12-start 1 20 outcome | max lines 3 + replace 2 at 4
-seed label-latin-128-start 3 57 cluster.style_index | flip case at 30 + add span 130..146 + max lines 3
-seed label-latin-128-start 4 28 cluster.style_index | replace 4 at 306 + add span 477..487 + restyle span 6
-seed label-latin-256-start 1 56 cluster.style_index | width 798 + flip case at 133 + max lines 3 + add span 197..212
-seed label-latin-80-start 2 16 outcome | replace 2 at 8
-seed label-latin-ellipsis 3 41 cluster.layout_run.source_kind | restyle span 2
-seed label-thai-12-start 3 57 outcome | remove span 3 + replace 2 at 2 + replace 2 at 1
-seed label-thai-128-start 4 39 flow.line.flow_thread_id | replace 4 at 249
-seed label-thai-64-start 1 56 cluster.layout_run.source_kind | remove span 2
-seed mech-bidi-digits-after-hebrew 1 1 shape.glyph.flags | replace 1 at 24
-seed mech-bidi-first-strong 3 20 view.measured_after.inline_extent | width 35.75
-seed mech-inter-hyphen-chain 1 49 cluster.style_index | replace 2 at 34 + add span 326..354 + max lines 0
-seed mech-inter-hyphen-chain 2 33 outcome | restyle span 4 + replace 5 at 196 + max lines 12
-seed mech-multi-paragraph-cjk 3 9 cluster.layout_run.source_kind | remove span 2
-seed mech-nastaliq-delete-space 2 34 view.measured_after.inline_extent | width 130.25
-seed mech-script-across-break-forward 1 22 cluster.style_index | add span 21..23 + flip case at 20 + width 273.25
-seed mech-script-across-break-forward 3 36 cluster.layout_run.source_kind | restyle span 2
-seed mech-sentence-long-lookahead 3 54 outcome | add span 11..17 + remove span 2 + replace 1 at 0 + width 6
-seed mech-sentence-vertical-tab 4 18 cluster.layout_run.source_kind | add span 5..6
-seed mech-space-combining-mark 3 12 outcome | replace 5 at 26
-seed para-cjk-justify 1 33 cluster.layout_run.source_kind | add span 689..722 + metrics size 11.5 spacing 0 line 1.2 word 0 + width 567.03125
-seed para-greek-cyrillic-start 2 52 cluster.layout_run.source_kind | add span 74..75
-seed para-hebrew-start 2 11 cluster.style_index | width 548.5 + replace 3 at 28 + add span 1069..1080
-seed para-latin-justify 1 13 cluster.style_index | add span 1881..1883 + replace 5 at 394 + flip case at 0
-seed para-latin-start 3 28 outcome | align 3 + direction 2 + flip case at 1174 + remove span 3
-seed para-mixed-bidi-justify 4 38 outcome | flip case at 1210 + remove span 4 + max lines 3 + width 8.015625

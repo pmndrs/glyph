@@ -534,16 +534,9 @@ mod gather_equivalence {
                     foreground: Some(0xff20_40ff),
                     ..Style::span(2)
                 });
-                styles.push(if scenario.unit_boundaries {
-                    Style {
-                        opacity: Some(0.5),
-                        ..Style::span(3)
-                    }
-                } else {
-                    Style {
-                        font_size: Some(22.0),
-                        ..Style::span(3)
-                    }
+                styles.push(Style {
+                    font_size: Some(22.0),
+                    ..Style::span(3)
                 });
             }
             let mut fixture = Self {
@@ -670,8 +663,8 @@ mod gather_equivalence {
             let mut restyle = change.styles;
             let text_bytes = change.text.map(|(start, delete, insert)| {
                 let bytes = text_mutation_bytes(&[(start, delete, &insert)]);
-                // Style ranges only have to follow a text whose length changed.
-                restyle |= delete as usize != insert.len();
+                // Every text change re-sends the ranges, a same-length replacement included.
+                restyle = true;
                 self.text
                     .splice(start as usize..(start + delete) as usize, insert);
                 bytes
@@ -1094,7 +1087,7 @@ mod gather_equivalence {
                 fixture.styles[1].opacity = Some(random.pick(&[1.0, 0.75]));
                 (styled, "span colour")
             }
-            11 if spans && !fixture.scenario.unit_boundaries => {
+            11 if spans => {
                 fixture.styles[2].font_size = Some(random.pick(&[12.0, 18.0, 22.0, 30.0]));
                 (styled, "span font size")
             }

@@ -25,6 +25,11 @@ name = "layout_oracle"
 path = "tests/layout_oracle.rs"
 required-features = ["std", "oracle"]
 
+[[test]]
+name = "incremental_equals_cold"
+path = "tests/incremental_equals_cold.rs"
+required-features = ["std", "oracle"]
+
 [features]
 default = ["std"]
 std = ["serde_json/std"]
@@ -35,6 +40,8 @@ diagnostic-live-memory = []
 # The layout correctness oracle: lane capture, fixture matrix and the seeded differential
 # driver. Off in every shipped artifact.
 oracle = []
+# Stage clocks for the oracle probe (`scripts/stage-bench.mjs`). Off in every shipped artifact.
+stage-bench = ["oracle"]
 
 [dependencies]
 harfrust = { version = "0.12.0", default-features = false, features = ["libm"] }

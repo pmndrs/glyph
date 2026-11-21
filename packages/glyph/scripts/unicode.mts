@@ -1,4 +1,4 @@
-/* @workflow { "name": "glyph:unicode-data:generate", "summary": "Regenerate the Rust Unicode script, bidi, and line-break tables.", "requirements": "Repository-pinned Node.js.", "writes": "Generated Rust Unicode data.", "args": ["generate-data"] } */
+/* @workflow { "name": "glyph:unicode-data:generate", "summary": "Regenerate the Rust Unicode script, bidi, line-break, and kernel tables.", "requirements": "Repository-pinned Node.js.", "writes": "Generated Rust Unicode data.", "args": ["generate-data"] } */
 /* @workflow { "name": "glyph:unicode-data:check", "summary": "Verify Unicode script and bidi tables without writing.", "requirements": "Repository-pinned Node.js.", "writes": "Nothing.", "args": ["check-data"] } */
 /* @workflow { "name": "glyph:unicode-tests:sync", "summary": "Synchronize official Unicode conformance vectors.", "requirements": "Network access to the pinned Unicode sources.", "writes": "Authenticated Unicode test fixtures.", "args": ["sync-tests"] } */
 /* @workflow { "name": "glyph:unicode-tests:check", "summary": "Verify official Unicode conformance vectors without downloading.", "requirements": "Checked-in authenticated fixtures.", "writes": "Nothing.", "args": ["check-tests"] } */
@@ -12,11 +12,13 @@ export async function runUnicode(arguments_: readonly string[]): Promise<void> {
       await runNode('scripts/generate-unicode-script-data.mjs', rest);
       await runNode('scripts/generate-unicode-bidi-data.mjs', rest);
       await runNode('scripts/generate-unicode-line-break-data.mjs', rest);
+      await runNode('scripts/generate-unicode-kernel-data.mjs', rest);
       return;
     case 'check-data':
       await runNode('scripts/generate-unicode-script-data.mjs', ['--check', ...rest]);
       await runNode('scripts/generate-unicode-bidi-data.mjs', ['--check', ...rest]);
       await runNode('scripts/generate-unicode-line-break-data.mjs', ['--check', ...rest]);
+      await runNode('scripts/generate-unicode-kernel-data.mjs', ['--check', ...rest]);
       return;
     case 'sync-tests':
       await runNode('scripts/sync-unicode-test-data.mjs', rest);

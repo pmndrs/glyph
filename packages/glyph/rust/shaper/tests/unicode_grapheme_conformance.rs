@@ -42,6 +42,16 @@ fn unicode_17_grapheme_break_test_is_fully_conformant() {
             "GraphemeBreakTest:{}",
             line_index + 1
         );
+        // `analyze` is the dense kernel path; the scalar reference must agree on the same vectors.
+        analysis
+            .analyze_scalar(&text)
+            .unwrap_or_else(|error| panic!("GraphemeBreakTest:{}: {error:?}", line_index + 1));
+        assert_eq!(
+            analysis.grapheme_boundaries(),
+            expected,
+            "GraphemeBreakTest scalar:{}",
+            line_index + 1
+        );
         cases += 1;
     }
     assert_eq!(cases, GRAPHEME_BREAK_TEST_CASES);

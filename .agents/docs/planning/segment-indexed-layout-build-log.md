@@ -14,41 +14,47 @@ Commits are local; nothing is pushed until the feature is done.
 
 Updated in place; the history of each change is in the log below.
 
-| Feature                                                                                                                                   | State    | Where                                               | Notes                                                                                    |
-| ----------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Plan, branch rules, feature-scope decision                                                                                                | merged   | `771ef41de`                                         |                                                                                          |
-| Snapshots: `v0.1.0`, main, branch start                                                                                                   | tested   | `glyph-baselines-2026-11-21/`                       | Loose reference                                                                          |
-| Adversarial font set                                                                                                                      | tested   | `/Volumes/Depot/Developer/glyph-adversarial-fonts/` | Not in the repo (large)                                                                  |
-| Competitor's eight measures, same machine                                                                                                 | tested   | `/Volumes/Depot/Developer/glyph-competitor-bench/`  | Reconstructed scenes                                                                     |
-| Profile: size and memory                                                                                                                  | tested   | `profiles/7-size-and-memory.md`                     |                                                                                          |
-| Profile: font-size and inspection                                                                                                         | tested   | `profiles/5-6-fontsize-and-inspection.md`           |                                                                                          |
-| Profile: browser first frame and idle                                                                                                     | tested   | `profiles/1-2-browser-first-frame-idle.md`          |                                                                                          |
-| Profile: colour-only and many-label                                                                                                       | tested   | `profiles/3-4-colour-and-many-label.md`             |                                                                                          |
-| Unit 0: correctness oracle                                                                                                                | merged   | `758b0a54b`, tag `sil-green-0`                      | 423 cases; native and wasm agree; found existing engine divergences                      |
-| HarfRust fork (AAT and `rand` off, `kern` kept), panic removal                                                                            | merged   | `d012c2f4e`, tag `sil-green-1`                      | Shaper wasm 630.7 → 567.2 kB gzip; oracle quick tier green after merge                   |
-| Lazy outline decoder (−22.7 kB gzip)                                                                                                      | held     | —                                                   | Needs an ABI change; goes with the one-ABI-change-at-a-time sequence                     |
-| Renderer part 1 (Three, MSDF): one draw, effect-specialized shaders, ink-trimmed quads, glyph table, on-demand atlas; Slug curve crop     | tested   | `experiments/sil-render` (`91c86f9dc`)              | Steady frame 0.234 → 0.142 ms; GPU memory 1.44 → 0.56 MiB; awaiting merge                |
-| Renderer part 2: growth without new pipelines, Slug table/trim/fragment, atlas load copies, prewarm, R8 mode, TypeGPU parity and batching | building | `experiments/sil-render`                            |                                                                                          |
-| Host part 1: idle frame, linear mount in JavaScript, per-publication work, ingress, readback                                              | merged   | tag `sil-green-2`                                   | Idle 1,000 labels 0.196 → 0.042 ms; setter 3 → 1 crossings; `glyphs()` 812 → 3 crossings |
-| First-frame JavaScript: engine warm-up, font digest, font binding compile                                                                 | held     | —                                                   | Each needs a decision or a renderer-free path; see log                                   |
-| Whole-plan review (five reviewers)                                                                                                        | building | `glyph-baselines-2026-11-21/review-v5/`             | Refines the plan; cuts nothing                                                           |
-| Unit 1a: dense run-local geometry, metric rescale                                                                                         | building | `experiments/sil-geometry`                          |                                                                                          |
-| Unit 1b: dense positioning and per-line ink                                                                                               | held     | —                                                   | Needs oracle, 1a                                                                         |
-| Existing-engine divergence fixes, then unit 1c: dense cluster build with dirty-range output                                               | building | `experiments/sil-cluster`                           | Divergences first                                                                        |
-| Unit 1d: Unicode class closure, bitmap kernels, per-paragraph bidi, resync predicate, word and sentence lanes                             | building | `experiments/sil-unicode`                           |                                                                                          |
-| Unit 1e part 1: column gather for prepared owners                                                                                         | merged   | tag `sil-green-3`                                   | Gather 3.40 → 0.98 ms on a 25.9k font-size publication (main 1.20)                       |
-| Unit 1e part 2: gather by change class (colour-only columns, origin-only columns, line height)                                            | held     | —                                                   | Needs an accumulated per-paragraph change class in `state.rs`; scheduled after unit 3    |
-| Unit 2: local edits                                                                                                                       | held     | —                                                   | Needs 1b, 1c                                                                             |
-| Metric changes: keep island shapes, dense rescale                                                                                         | held     | —                                                   | Needs 1a                                                                                 |
-| Unit 3: preparation and error model, `onLayout`, minimal mutations, linear engine mount, out-of-memory and trap policy                    | building | `experiments/sil-prepare`                           |                                                                                          |
-| Unit 4: publication (retained topology, `PATCH_COPY`, multi-range uploads)                                                                | held     | —                                                   | After unit 3                                                                             |
-| Many-label updates and paint-only changes                                                                                                 | held     | —                                                   | Needs its profile and unit 3                                                             |
-| Editing support (offset map, boundaries, carets, affinity, ligature carets, IME ranges)                                                   | held     | —                                                   | Needs 1d, 2 and an API design                                                            |
-| SIMD experiments (fourteen)                                                                                                               | held     | —                                                   | Each needs the oracle; adopted if faster or equal                                        |
-| Sub-ulp output changes (integer pen, affine placement)                                                                                    | held     | —                                                   | Awaiting owner approval; measured only                                                   |
-| Final interleaved comparison against main and the competitor set                                                                          | held     | —                                                   | Last                                                                                     |
-| Typography other than editing support                                                                                                     | deferred | decision record                                     |                                                                                          |
-| `rand`, Apple AAT                                                                                                                         | dropped  | decision record                                     |                                                                                          |
+| Feature                                                                                                                                                                                                                       | State    | Where                                               | Notes                                                                                              |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Plan, branch rules, feature-scope decision                                                                                                                                                                                    | merged   | `771ef41de`                                         |                                                                                                    |
+| Snapshots: `v0.1.0`, main, branch start                                                                                                                                                                                       | tested   | `glyph-baselines-2026-11-21/`                       | Loose reference                                                                                    |
+| Adversarial font set                                                                                                                                                                                                          | tested   | `/Volumes/Depot/Developer/glyph-adversarial-fonts/` | Not in the repo (large)                                                                            |
+| Competitor's eight measures, same machine                                                                                                                                                                                     | tested   | `/Volumes/Depot/Developer/glyph-competitor-bench/`  | Reconstructed scenes                                                                               |
+| Profile: size and memory                                                                                                                                                                                                      | tested   | `profiles/7-size-and-memory.md`                     |                                                                                                    |
+| Profile: font-size and inspection                                                                                                                                                                                             | tested   | `profiles/5-6-fontsize-and-inspection.md`           |                                                                                                    |
+| Profile: browser first frame and idle                                                                                                                                                                                         | tested   | `profiles/1-2-browser-first-frame-idle.md`          |                                                                                                    |
+| Profile: colour-only and many-label                                                                                                                                                                                           | tested   | `profiles/3-4-colour-and-many-label.md`             |                                                                                                    |
+| Unit 0: correctness oracle                                                                                                                                                                                                    | merged   | `758b0a54b`, tag `sil-green-0`                      | 423 cases; native and wasm agree; found existing engine divergences                                |
+| HarfRust fork (AAT and `rand` off, `kern` kept), panic removal                                                                                                                                                                | merged   | `d012c2f4e`, tag `sil-green-1`                      | Shaper wasm 630.7 → 567.2 kB gzip; oracle quick tier green after merge                             |
+| Lazy outline decoder (−22.7 kB gzip)                                                                                                                                                                                          | held     | —                                                   | Needs an ABI change; goes with the one-ABI-change-at-a-time sequence                               |
+| Renderer parts 1–2 (Three, MSDF): one draw, effect-specialized shaders, ink-trimmed quads, glyph table, on-demand atlas, growth without new pipelines, atlas pages as views, per-range uploads, optional single-channel atlas | merged   | tag `sil-green-4`                                   | Steady frame 0.234 → 0.142 ms (competitor 0.183); GPU memory 1.44 → 0.56 MiB (0.18 single-channel) |
+| Slug: glyph table, fragment cost, growth, `r16` references                                                                                                                                                                    | building | `experiments/sil-render`                            | Steady frame 0.755 ms untouched so far                                                             |
+| Pure TypeGPU path, units 1–2: effect-specialized shaders, ink-trimmed quads                                                                                                                                                   | merged   | tag `sil-green-6`                                   | Plain-text GPU pass −19%; pixel-identical to Three within 2/255                                    |
+| Pure TypeGPU path, units 3–5: batching through indexed transforms, growth bug, on-demand atlas, shared pipelines                                                                                                              | building | `experiments/sil-typegpu`                           | 1,000 labels are still 1,000 draws                                                                 |
+| Atlas prewarm API                                                                                                                                                                                                             | held     | —                                                   | Needs a handle-level entry point owned by the preparation lane                                     |
+| Host part 1: idle frame, linear mount in JavaScript, per-publication work, ingress, readback                                                                                                                                  | merged   | tag `sil-green-2`                                   | Idle 1,000 labels 0.196 → 0.042 ms; setter 3 → 1 crossings; `glyphs()` 812 → 3 crossings           |
+| First-frame JavaScript: engine warm-up, font digest, font binding compile                                                                                                                                                     | held     | —                                                   | Each needs a decision or a renderer-free path; see log                                             |
+| Whole-plan review (five reviewers)                                                                                                                                                                                            | building | `glyph-baselines-2026-11-21/review-v5/`             | Refines the plan; cuts nothing                                                                     |
+| Unit 1a: dense run-local geometry, metric rescale                                                                                                                                                                             | building | `experiments/sil-geometry`                          |                                                                                                    |
+| Unit 1b: dense positioning and per-line ink                                                                                                                                                                                   | held     | —                                                   | Needs oracle, 1a                                                                                   |
+| Existing-engine divergence fixes (all seven families)                                                                                                                                                                         | merged   | tag `sil-green-5`                                   | `KNOWN-DIVERGENCES` is empty; 43,680 seeded requests all equal cold                                |
+| Unit 1c: dense cluster build with dirty-range output                                                                                                                                                                          | held     | —                                                   | Starts after geometry (1a) merges; both touch `cluster_state.rs`                                   |
+| Unit 1d part 1: Unicode property closure, dense line-break/grapheme/script kernel, per-paragraph bidi                                                                                                                         | merged   | tag `sil-green-7`                                   | Unicode stage 18–25× faster for Latin, Cyrillic, Arabic; 5.8× CJK; no gain for Indic or Thai       |
+| Unit 1d part 2: UAX #14 scalar bug fix, bidi double classification, resync predicate, word and sentence lanes, table re-encoding                                                                                              | building | `experiments/sil-unicode`                           |                                                                                                    |
+| Font binding compiled at font load                                                                                                                                                                                            | merged   | tag `sil-green-7`                                   | First `createText` 16.2 → 12.7 ms with a full font                                                 |
+| Unit 1e part 1: column gather for prepared owners                                                                                                                                                                             | merged   | tag `sil-green-3`                                   | Gather 3.40 → 0.98 ms on a 25.9k font-size publication (main 1.20)                                 |
+| Unit 1e part 2: gather by change class (colour-only columns, origin-only columns, line height)                                                                                                                                | held     | —                                                   | Needs an accumulated per-paragraph change class in `state.rs`; scheduled after unit 3              |
+| Unit 2: local edits                                                                                                                                                                                                           | held     | —                                                   | Needs 1b, 1c                                                                                       |
+| Metric changes: keep island shapes, dense rescale                                                                                                                                                                             | held     | —                                                   | Needs 1a                                                                                           |
+| Unit 3: preparation and error model, `onLayout`, minimal mutations, linear engine mount, out-of-memory and trap policy                                                                                                        | building | `experiments/sil-prepare`                           |                                                                                                    |
+| Unit 4: publication (retained topology, `PATCH_COPY`, multi-range uploads)                                                                                                                                                    | held     | —                                                   | After unit 3                                                                                       |
+| Many-label updates and paint-only changes                                                                                                                                                                                     | held     | —                                                   | Needs its profile and unit 3                                                                       |
+| Editing support (offset map, boundaries, carets, affinity, ligature carets, IME ranges)                                                                                                                                       | held     | —                                                   | Needs 1d, 2 and an API design                                                                      |
+| SIMD experiments (fourteen)                                                                                                                                                                                                   | held     | —                                                   | Each needs the oracle; adopted if faster or equal                                                  |
+| Sub-ulp output changes (integer pen, affine placement)                                                                                                                                                                        | held     | —                                                   | Awaiting owner approval; measured only                                                             |
+| Final interleaved comparison against main and the competitor set                                                                                                                                                              | held     | —                                                   | Last                                                                                               |
+| Typography other than editing support                                                                                                                                                                                         | deferred | decision record                                     |                                                                                                    |
+| `rand`, Apple AAT                                                                                                                                                                                                             | dropped  | decision record                                     |                                                                                                    |
 
 ## Log
 
@@ -296,3 +302,123 @@ Updated in place; the history of each change is in the log below.
 - **Found by the gather lane, outside gather:** a debug assertion in positioning fires when a font-size span
   boundary falls inside a layout run and the span range moves (same family as the listed span divergences);
   the cluster lane owns that family.
+- **Merged: renderer part 2** (tag `sil-green-4`; full oracle tier green after merge; pixels against the
+  branch-start reference unchanged, largest difference 6/255). Capacity growth now creates 0 shader modules
+  and 0 pipelines on WebGPU (growth edit 5.4–6.1 → 2.1–2.5 ms); on WebGL2 materials are still rebuilt because
+  Three bakes storage attributes into textures there. Baked atlas pages are views of the loaded file (three
+  copies removed); first frame for 200 labels 60.4 → 54.9 ms (competitor 33.2). A rendered front-face test was
+  added. Per-range uploads are in, with no gain on contiguous edits. An opt-in single-channel atlas mode cuts
+  GPU memory to 0.18 MiB for a paragraph (competitor 0.49) but **looks different** (8.7% of lit pixels differ,
+  up to 120/255 at rounded corners), so it is off by default.
+- **Correction from the lane.** The integration test killed with exit 137 was caused by the lane itself, not
+  the machine: a hand-written codec mirror was not updated, the comparison failed, and the assertion library
+  built a multi-gigabyte diff. Fixed; the earlier "also fails on baseline" observation was wrong.
+- **Not done by renderer part 2, now building as two lanes:** Slug (steady frame still 0.755 ms) and the pure
+  TypeGPU path (no effect variants, trimming or on-demand atlas; one draw per text).
+- **Held: atlas prewarm API.** The renderer primitive exists; the public entry point needs shaping and a
+  handle-level call owned by the preparation lane.
+- **Known gap in checks.** The repository's full `check` stops at two clippy findings in
+  `ascii_anchor_policy.rs` (code scheduled for deletion), so later steps of the check have not run on this
+  branch. The Slug lane is asked to scope-allow them and report what the rest of the check finds.
+- **New breaking surfaces (renderer).** MSDF atlas resource group: `texture` replaced by a `pages` token plus
+  a `glyphs` table (an external renderer must exchange the token in-process); materials survive buffer growth
+  on WebGPU; decoded atlas pages alias the loaded file's bytes.
+- **Stopped: all six running lanes hit the account's weekly usage limit** on the top model (resets
+  2026-11-23 15:00 America/Detroit). Nothing was lost; each lane's worktree holds its state:
+  geometry (`glyph-wt-geometry`): stage clocks committed, the dense kernel and paragraph files written but
+  uncommitted and unproven; Unicode (`glyph-wt-unicode`): dense kernel over the property closure committed,
+  generator changes uncommitted, oracle tiers not yet run; cluster (`glyph-wt-cluster`): divergence fixes in
+  progress, uncommitted, with a new regression test file; preparation (`glyph-wt-prepare`): stage 0 guards
+  (crossing budget) committed, the flip not started; Slug (`glyph-wt-render`): clippy allows and early
+  glyph-table edits uncommitted; TypeGPU (`glyph-wt-typegpu`): real-device parity harness committed, no
+  renderer change yet. None of this is merged. The integration branch is unaffected at `sil-green-4`.
+- **Cause.** Every lane, profile and review ran on the top model. Mechanical work (profiles, font fetching,
+  harness building, merges, log upkeep) did not need it.
+
+### 2026-11-21, after the usage reset
+
+- **Decision (owner).** A breaking release is acceptable.
+- **Decision (owner).** An editing session with `replace(start, end, insert)` may be public, on conditions:
+  it must not reintroduce the edge cases that caused API errors before; it throws when misused; and it must be
+  easy to understand, because "start" and "end" mean different things for glyphs and characters. Design rule
+  taken from this: offsets are UTF-16 code units of the source text and nothing else (never glyph or cluster
+  indices); an offset that is out of range, reversed, or not on a grapheme boundary throws a typed error
+  naming the offset and the nearest valid boundaries; nothing is snapped silently.
+- **Decision (owner).** Of the three first-frame options, only **compiling the font binding at font load** is
+  approved. Engine warm-up at `init()` with an embedded font, and replacing the JavaScript font hash with a
+  bake-time digest, are **not approved** and stay held.
+- **Decision (owner).** Stale process guidance may be deleted, with a list of what was removed.
+- **Decision (owner).** Match the model to the work from here on.
+- **Salvaged.** Interrupted work committed as unverified checkpoints: geometry `a20cec258`, Unicode
+  `2f5788bf7`, Slug `0231437a3`. The cluster worktree's files are staged but not committed (its commit hook
+  needs dependencies installed). Preparation and TypeGPU worktrees were clean.
+- **Dispatch, by model.** Top model, resumed with their context: cluster (divergence fixes, then 1c),
+  geometry (1a), Unicode (1d), preparation model (unit 3). Opus, fresh: Slug; pure TypeGPU path; font binding
+  at load. Sonnet: stale-guidance deletion; salvage. Integration (merge, full oracle tier, tests, this log)
+  stays with the coordinator and is kept small.
+- **Done: stale process guidance removed** (`038690bb1`). Removed from `publication-frontier.md`: "Roles and
+  bounded context" (model and effort tiers per step), "Execution and completion gates", and the checkbox list
+  of remaining acceptance gates. Removed from `decisions/retained-prepare-publish.md`: the per-wave
+  measurement and size requirements; a supersession line now points to the new preparation decision.
+  `session-handoff.md` had no such process section, so nothing was removed there. Candidates left alone
+  because process text is interleaved with measurements or design: several chronological passages in
+  `publication-frontier.md`, two in `retained-text-assignment.md`, and acceptance gates for unrelated
+  features. Full list: `stale-guidance-removed-2026-11-21.md`.
+- **Decision (owner).** Integrate, commit and push to the remote as each feature resolves, so no work is at
+  risk. This replaces "push when the feature is done".
+- **Pushed.** `experiments/segment-indexed-layout` and tags `sil-green-0` to `sil-green-4` are on
+  `origin`. In-progress lane branches are pushed as backups (`experiments/sil-geometry`, `sil-unicode`,
+  `sil-render`, `sil-prepare`, `sil-typegpu`); they hold unverified checkpoints and are not for review. No
+  pull request is opened. From here: each lane result is merged, gated on the full oracle tier and the
+  package tests, tagged, and pushed in the same step; lane branches are pushed at each hand-back.
+- **Merged: divergence fixes** (tag `sil-green-5`, pushed). All seven families of "incremental differs from
+  cold" are fixed at their cause and the known-divergence list is empty: the full tier now reads 423 cases
+  equal, 0 scripted steps and 0 of 43,680 seeded requests differing, native and wasm. Root causes: a style
+  refresh that copied the previous layout runs and kept stale style indexes outside the reshaped run (this
+  one cause produced the 48 span cases, the 18 rejected-valid-input cases and the extra CJK layout run); a
+  sparse reshape window that could not see what its unchanged left neighbour does to its first glyph (now
+  shapes one cluster ahead; costs two more shaped units in two tests); a resize shortcut that skipped the step
+  retiring a cached measurement and discarded the newly composed flow; a convergence test that could drop a
+  final empty line; a direction flag not reset. All were reachable from the public API. Seven new regression
+  tests each fail on the previous tag and pass now.
+- **Integrator action.** 37 frozen cases had recorded the divergent result and were re-frozen (reference set
+  `d8e1146486189b8b`). Checked before accepting: only incremental step digests and one recorded rejection
+  changed; no cold-stage digest changed, so the cold reference the rewrite is judged against is untouched.
+- **Note.** The lane tried to add waiver entries itself and the permission system blocked it; no waivers were
+  added by anyone.
+- **Merged: pure TypeGPU path, units 1–2** (tag `sil-green-6`, pushed; full oracle tier green). MSDF
+  fragments are specialized by effect and quads are trimmed to ink with the same rule as Three. GPU pass for
+  plain text −19% (0.0384 → 0.0310 ms), Devanagari −14%. The TypeGPU output now matches Three at the same
+  camera with 0 pixels over tolerance (max difference 2/255); before, six scenes had pixels off by up to
+  57/255. Labels did not improve: at 1,000 labels the cost is per-draw (1,000 draws, 2,000 bind-group calls,
+  0.33 ms GPU, 0.6–0.7 ms CPU), which is what batching removes.
+- **Found, not yet fixed.** Growing past 1,000 labels on the TypeGPU path raises a device error; likely cause
+  is a reused draw keeping a bind group on a reallocated placement table. Assigned with batching.
+- **Design accepted for batching.** Use the codec's existing indexed-transform mode for MSDF and bitmap (a
+  per-instance transform index and one renderer-owned transform table), so moving a label is one 8-byte
+  write and 1,000 same-font labels become about one draw. Slug stays in direct mode until its lane frees a
+  buffer slot.
+- **New behaviour to note.** On TypeGPU the first appearance of an outline or shadow compiles its pipeline in
+  that frame; a custom colour transform no longer sees the empty part of a glyph cell.
+- **Merged: unit 1d part 1, dense Unicode analysis** (tag `sil-green-7`, pushed; full oracle tier green,
+  native and wasm). Fast-path membership is generated from the Unicode database as a property closure, not a
+  script list. Unicode stage self-time in wasm at 22k units (before → after, µs): Latin 1,208 → 50; Cyrillic
+  1,429 → 60; Arabic 1,319 → 69; CJK 1,554 → 261; Devanagari 1,325 → 1,357; Thai unchanged. Proven by an
+  exhaustive kernel-versus-scalar comparison over 82.8 million strings, a 400,000-string fuzz, and all UAX
+  conformance files through both paths. Bidi is now classified per bidi paragraph with counts exposed.
+- **Costs and gaps of part 1.** Wasm grew by 8.8 kB gzip (the new table and kernel; the table re-encoding
+  meant to offset it is not done). Bidi is about 25% slower on paragraphs with right-to-left text because
+  they are classified twice. Indic and Thai text gain nothing (all residue). Whole-operation edit time
+  against main was not measured.
+- **Finding: the existing line breaker has UAX #14 bugs** not covered by the official test file (inherited
+  from the library it was ported from): after an opening quote the break after the following unit is
+  suppressed (`“A dog` has no break after the space; `«字字字` no break between the first two ideographs), and
+  two state flags survive a required line break. The kernel reproduces the current behaviour bit for bit.
+  **Default taken:** fix it, since correct multilingual line breaking is a stated requirement; it changes
+  line breaks against main for text with opening quotes and changes cold references for the affected oracle
+  cases, which will be listed and re-frozen as a separate commit that is easy to revert. Assigned to part 2.
+- **Merged: font binding compiled at font load** (tag `sil-green-7`). The first `createText` no longer
+  compiles the binding: 16.2 → 12.7 ms with a full 55 MB font in the browser, first frame 39.7 → 35.9 ms.
+  Smaller than the 12 ms the profile suggested, because most of that figure was the atlas re-pack at first
+  draw, which did not move. Total time from font load to first frame did not measurably change. Cost for a
+  font loaded and never drawn: 3–8 ms of CPU at load and 0.3–4.4 MiB held until release.
