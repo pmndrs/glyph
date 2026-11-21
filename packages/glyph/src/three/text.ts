@@ -10,6 +10,7 @@ import {
   type BorrowedGlyphLayout,
   type LayoutBox,
   type LayoutPoint,
+  type GlyphLayoutColumns,
   type GlyphLayoutInspection,
   type ParagraphLayoutSummary,
 } from '../layout.js';
@@ -49,11 +50,7 @@ import { setThreeBatchScope } from './internal/batch-scope.js';
 import { mapTextSpanBindings, ownTextSpanRecords } from '../config/text-span-owner.js';
 import type { ThreePublicationBoundary } from './internal/publication-boundary.js';
 import type { ThreeRendererResources } from './internal/renderer-resources.js';
-import {
-  measureGlyphPlacements,
-  type ThreeGlyphGeometrySource,
-  type ThreeGlyphMeasurement,
-} from './glyph-measurement.js';
+import { measureGlyphLayout, type ThreeGlyphGeometrySource, type ThreeGlyphMeasurement } from './glyph-measurement.js';
 import { createGlyphs, setGlyphDrawOrder, type Glyphs } from './glyphs.js';
 import { createDecorations, decorationDraws, type Decorations } from './decorations.js';
 import { PostCommitError } from '../glyph-error.js';
@@ -134,6 +131,15 @@ interface DesiredTextState<Format extends RasterFormatMetadata> {
 }
 
 const emptyTextSpans: readonly never[] = Object.freeze([]);
+const noIncompleteGlyphs: readonly number[] = Object.freeze([]);
+
+/** Desired inspection columns with the origin each glyph is currently drawn at. */
+interface GlyphOrigins {
+  readonly layout: GlyphLayoutInspection;
+  readonly drawnX: Float32Array;
+  readonly drawnY: Float32Array;
+  readonly incomplete: readonly number[];
+}
 
 type AttributedErrorState =
   | Readonly<{ present: false }>
@@ -602,6 +608,13 @@ export class ThreeRootHost {
     if (this.#disposed) return undefined;
     this.#assertMember(text);
     return this.#rootBinding().glyphPlacements(text);
+  }
+
+  /** @internal Query desired columns and their drawn origins without building placement objects. */
+  glyphOrigins(text: THREE.Object3D): GlyphOrigins | undefined {
+    if (this.#disposed) return undefined;
+    this.#assertMember(text);
+    return this.#rootBinding().glyphOrigins(text);
   }
 
   /** @internal Borrow one root member's positioned layout for a synchronous callback. */
@@ -1275,9 +1288,11 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
 
   /** Synchronously measures desired glyphs in Text-local Three coordinates (+X right, +Y up), anchor included. Uses accepted source geometry when current. */
   measureGlyphs(): readonly ThreeGlyphMeasurement[] | undefined {
-    const placements = this.#glyphPlacements();
-    if (placements === undefined) return undefined;
-    return measureGlyphPlacements(placements, this.#glyphGeometry(placements), placements.layout.anchorOffset);
+    this.#assertActive();
+    const origins = this.#root.glyphOrigins(this);
+    if (origins === undefined) return undefined;
+    const { layout } = origins;
+    return measureGlyphLayout(layout, origins.drawnX, origins.drawnY, this.#glyphGeometry(layout), layout.anchorOffset);
   }
 
   /** Independently copies desired drawable content (excluding blanks) into the same Text-local Three frame (+X right, +Y up), anchor included once. Detached roots keep this object's local transform/pivot. */
@@ -1339,13 +1354,13 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     }
   }
 
-  #glyphGeometry(placements: GlyphPlacements): ReadonlyMap<number, ThreeGlyphGeometrySource> {
+  #glyphGeometry(layout: GlyphLayoutColumns): ReadonlyMap<number, ThreeGlyphGeometrySource> {
     if (this.commitState().status !== 'committed') return new Map();
-    const sourceByStableId = this.#binding?.glyphGeometry(placements.layout.glyphStableIds);
-    if (sourceByStableId === undefined) return new Map();
+    const sourceByStableId = this.#binding?.glyphGeometry(layout.glyphStableIds);
+    if (sourceByStableId === undefined || sourceByStableId.size === 0) return new Map();
     const sourceByIndex = new Map<number, ThreeGlyphGeometrySource>();
-    for (let index = 0; index < placements.glyphs.length; index += 1) {
-      const stableId = placements.layout.glyphStableIds[index];
+    for (let index = 0; index < layout.glyphCount; index += 1) {
+      const stableId = layout.glyphStableIds[index];
       const source = stableId === undefined ? undefined : sourceByStableId.get(stableId);
       if (source !== undefined) sourceByIndex.set(index, source);
     }
@@ -1988,16 +2003,20 @@ class ThreeRootPublication {
     this.#pendingMeasurements.delete(cached.text);
   }
 
-  glyphPlacements(text: Text<RasterFormatMetadata>): GlyphPlacements | undefined {
+  glyphPlacements(text: Text<RasterFormatMetadata>): GlyphPlacements {
+    const { layout, drawnX, drawnY, incomplete } = this.glyphOrigins(text);
+    return createGlyphPlacements(layout, text.text, drawnX, drawnY, incomplete);
+  }
+
+  glyphOrigins(text: Text<RasterFormatMetadata>): GlyphOrigins {
     const entry = this.#queryEntry(text);
     const inspection = configuredTextInspection(entry.handle);
     const layout = inspection.columns;
     const drawn =
       inspection.readyToDraw && !this.#rendererUpdateRejected
         ? this.#target.snapshotGlyphOrigins(layout.glyphStableIds, layout.x, layout.y)
-        : { drawnX: layout.x, drawnY: layout.y, incomplete: [] };
-    const placements = createGlyphPlacements(layout, text.text, drawn.drawnX, drawn.drawnY, drawn.incomplete);
-    return placements;
+        : { drawnX: layout.x, drawnY: layout.y, incomplete: noIncompleteGlyphs };
+    return { layout, drawnX: drawn.drawnX, drawnY: drawn.drawnY, incomplete: drawn.incomplete };
   }
 
   glyphGeometry(stableIds: Uint32Array): ReadonlyMap<number, ThreeGlyphGeometrySource> {

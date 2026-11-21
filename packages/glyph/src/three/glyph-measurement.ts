@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 
 import type { PortableGeometryPayload } from '../config/resources.js';
 import type { GlyphKey, GlyphPlacement, GlyphPlacements } from '../glyph-placement.js';
-import type { LayoutBox, LayoutPoint } from '../layout.js';
+import type { GlyphLayoutColumns, LayoutPoint } from '../layout.js';
 
 export type GlyphAnchorAxis = 'min' | 'center' | 'max';
 
@@ -61,6 +61,69 @@ export function measureGlyphPlacements(
   return Object.freeze(measurements);
 }
 
+/**
+ * Builds the same measurements as {@link measureGlyphPlacements} straight from inspection columns and drawn origins,
+ * without the placement, word and line objects a caret or selection query needs.
+ */
+export function measureGlyphLayout(
+  layout: GlyphLayoutColumns,
+  drawnX: Float32Array,
+  drawnY: Float32Array,
+  geometryByIndex: ReadonlyMap<number, ThreeGlyphGeometrySource>,
+  offset: LayoutPoint,
+): readonly ThreeGlyphMeasurement[] {
+  const glyphCount = layout.glyphCount;
+  const translation = offset.x === 0 && offset.y === 0 ? undefined : new THREE.Vector3(offset.x, -offset.y, 0);
+  const lineOfGlyph = new Uint32Array(glyphCount);
+  for (let line = 0; line < layout.lineCount; line += 1) {
+    const start = layout.lineGlyphStarts[line]!;
+    const end = Math.min(start + layout.lineGlyphCounts[line]!, glyphCount);
+    for (let index = start; index < end; index += 1) lineOfGlyph[index] = line;
+  }
+  // A key counts earlier glyphs with the same font, glyph id and cluster; chaining glyphs by cluster finds them
+  // without a string per glyph.
+  const lastOfCluster = new Map<number, number>();
+  const previousOfCluster = new Int32Array(glyphCount);
+  const measurements = new Array<ThreeGlyphMeasurement>(glyphCount);
+  for (let index = 0; index < glyphCount; index += 1) {
+    const fontSlot = layout.glyphFontSlots[index]!;
+    const glyphId = layout.glyphIds[index]!;
+    const cluster = layout.clusters[index]!;
+    const previous = lastOfCluster.get(cluster) ?? -1;
+    previousOfCluster[index] = previous;
+    lastOfCluster.set(cluster, index);
+    let occurrence = 0;
+    for (let earlier = previous; earlier !== -1; earlier = previousOfCluster[earlier]!) {
+      if (layout.glyphFontSlots[earlier] === fontSlot && layout.glyphIds[earlier] === glyphId) occurrence += 1;
+    }
+    const metrics = layout.lines[lineOfGlyph[index]!];
+    const shapedX = layout.x[index]!;
+    const shapedY = layout.y[index]!;
+    const x = drawnX[index]!;
+    const y = drawnY[index]!;
+    measurements[index] = measureGlyphBoxes(
+      `${layout.fontHandles[fontSlot]!}:${glyphId}:${cluster}:${occurrence}` as GlyphKey,
+      index,
+      shapedX,
+      shapedY,
+      x,
+      y,
+      // Ink is published around the shaped origin, so a moved glyph carries it by the same delta.
+      x + (layout.glyphInkX[index]! - shapedX),
+      y + (layout.glyphInkY[index]! - shapedY),
+      layout.glyphInkWidths[index]!,
+      layout.glyphInkHeights[index]!,
+      y - (metrics?.ascent ?? 0),
+      layout.glyphAdvances[index]!,
+      metrics?.lineHeight ?? 0,
+      geometryByIndex.get(index),
+      offset,
+      translation,
+    );
+  }
+  return Object.freeze(measurements);
+}
+
 /** Creates the renderer-neutral source view for a retained portable geometry payload. */
 export function createSuppliedGlyphGeometrySource(
   payload: PortableGeometryPayload,
@@ -112,15 +175,56 @@ function measureGlyph(
   offset: LayoutPoint,
   translation: THREE.Vector3 | undefined,
 ): ThreeGlyphMeasurement {
-  const localInkBounds = paragraphBox(placement.ink);
-  const localAdvanceBounds = paragraphBox(placement.bounds);
+  const ink = placement.ink;
+  const bounds = placement.bounds;
+  return measureGlyphBoxes(
+    placement.key,
+    placement.index,
+    placement.shapedX,
+    placement.shapedY,
+    placement.x,
+    placement.y,
+    ink.x,
+    ink.y,
+    ink.width,
+    ink.height,
+    bounds.y,
+    bounds.width,
+    bounds.height,
+    suppliedGeometry,
+    offset,
+    translation,
+  );
+}
+
+/** One measurement from paragraph-space boxes (+Y down): ink, and an advance box that starts at the drawn x. */
+function measureGlyphBoxes(
+  key: GlyphKey,
+  index: number,
+  shapedX: number,
+  shapedY: number,
+  drawnX: number,
+  drawnY: number,
+  inkX: number,
+  inkY: number,
+  inkWidth: number,
+  inkHeight: number,
+  advanceY: number,
+  advanceWidth: number,
+  advanceHeight: number,
+  suppliedGeometry: ThreeGlyphGeometrySource | undefined,
+  offset: LayoutPoint,
+  translation: THREE.Vector3 | undefined,
+): ThreeGlyphMeasurement {
+  const localInkBounds = paragraphBox(inkX, inkY, inkWidth, inkHeight);
+  const localAdvanceBounds = paragraphBox(drawnX, advanceY, advanceWidth, advanceHeight);
   if (translation !== undefined) {
     localInkBounds.translate(translation);
     localAdvanceBounds.translate(translation);
   }
   const localQuad = quadFromBox(localInkBounds);
-  const shapedOrigin = new THREE.Vector3(placement.shapedX + offset.x, -(placement.shapedY + offset.y), 0);
-  const drawnOrigin = new THREE.Vector3(placement.x + offset.x, -(placement.y + offset.y), 0);
+  const shapedOrigin = new THREE.Vector3(shapedX + offset.x, -(shapedY + offset.y), 0);
+  const drawnOrigin = new THREE.Vector3(drawnX + offset.x, -(drawnY + offset.y), 0);
   const originalMatrix = new THREE.Matrix4().makeTranslation(drawnOrigin.x, drawnOrigin.y, drawnOrigin.z);
   const anchorInkBounds = localInkBounds.clone();
   const anchorAdvanceBounds = localAdvanceBounds.clone();
@@ -148,8 +252,8 @@ function measureGlyph(
     );
   };
   return Object.freeze({
-    key: placement.key,
-    index: placement.index,
+    key,
+    index,
     shapedOrigin,
     drawnOrigin,
     originalMatrix,
@@ -210,11 +314,8 @@ function componentByteLength(componentType: PortableGeometryPayload['accessors']
   return 1;
 }
 
-function paragraphBox(box: LayoutBox): THREE.Box3 {
-  return new THREE.Box3(
-    new THREE.Vector3(box.x, -(box.y + box.height), 0),
-    new THREE.Vector3(box.x + box.width, -box.y, 0),
-  );
+function paragraphBox(x: number, y: number, width: number, height: number): THREE.Box3 {
+  return new THREE.Box3(new THREE.Vector3(x, -(y + height), 0), new THREE.Vector3(x + width, -y, 0));
 }
 
 function quadFromBox(box: THREE.Box3): readonly [THREE.Vector3, THREE.Vector3, THREE.Vector3, THREE.Vector3] {
