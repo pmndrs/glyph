@@ -17,12 +17,15 @@ import {
 } from './text.js';
 
 /** Vertex-stage callback: top-left, y-down logical pixels (including text.position) to homogeneous clip coordinates.
- * May capture TypeGPU resources. Slug estimates its antialiasing footprint from nearby positions;
- * matrix projections are exact, while nonlinear deformations use a local approximation.
+ * May capture TypeGPU resources. Slug estimates its antialiasing footprint from nearby positions, and MSDF sizes the
+ * one-pixel margin of its ink-trimmed quads from the corners of each glyph cell; matrix projections are exact for both,
+ * while nonlinear deformations use a local approximation.
  */
 export type TypeGpuPositionTransform = (position: d.v3f, viewport: d.v2f) => d.v4f;
 /** Fragment-stage callback: straight RGBA after raster coverage, plus WebGPU fragment position (physical pixels).
  * Preserve color.a to retain glyph edges. May capture TypeGPU resources; runs for fill, outline, and shadow together.
+ * MSDF runs it only within a glyph's reach (ink box, one screen pixel, outline and shadow), not over its whole atlas
+ * cell, so it cannot paint where the glyph has no coverage.
  */
 export type TypeGpuColorTransform = (color: d.v4f, fragmentPosition: d.v4f) => d.v4f;
 
