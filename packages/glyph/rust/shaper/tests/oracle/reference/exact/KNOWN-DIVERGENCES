@@ -39,9 +39,6 @@ seed feature-spans-cjk 1 52 outcome | remove span 10 + flip case at 5
 seed feature-wrap-character-latin 3 18 cluster.style_index | add span 1837..1861 + replace 2 at 772
 seed font-cjk-sc-start 1 49 cluster.style_index | width 733.5 + add span 927..945 + replace 2 at 346 + width 847
 seed font-dancing-script-start 2 37 cluster.style_index | flip case at 655 + add span 1925..1929
-seed font-fira-code-rand-start 1 3 shape.glyph.id | flip case at 38
-seed font-fira-code-rand-start 3 3 shape.glyph.id | flip case at 1339
-seed font-fira-code-rand-start 3 15 shape.glyph.id | flip case at 418
 seed font-fredoka-justify 3 59 outcome | width 259.25 + flip case at 33 + remove span 5
 seed font-kern-only-start 4 55 cluster.style_index | add span 1338..1368 + flip case at 463 + width 420.25
 seed font-kern-only-synth-start 3 43 outcome | remove span 4 + replace 3 at 426

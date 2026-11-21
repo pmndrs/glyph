@@ -252,7 +252,10 @@ export const slugCodec: RasterCodec<typeof slug, typeof slugSchema> = registerGl
   },
   compileFont(compiler) {
     const data = compiler.font.data;
-    for (const page of data.pages) compiler.retain('page', page.resource, slugPagePayload(page));
+    const usedCurveRows = slugUsedCurveRows(data);
+    for (const [index, page] of data.pages.entries()) {
+      compiler.retain('page', page.resource, slugPagePayload(page, usedCurveRows[index]!));
+    }
     const view = new DataView(data.records.buffer, data.records.byteOffset);
     const record = (row: number) => row * SLUG_GLYPH_RECORD_STRIDE;
     const page = (row: number) => view.getUint16(record(row) + 8, true);
@@ -292,7 +295,25 @@ export const slugCodec: RasterCodec<typeof slug, typeof slugSchema> = registerGl
   },
 });
 
-function slugPagePayload(page: SlugPageData) {
+/**
+ * Rows of each page's curve texture that glyph records address. The baker sizes the texture from an upper estimate
+ * rounded up to a power of two, so about half of a typical page is zero rows no glyph reads; they are not uploaded.
+ */
+function slugUsedCurveRows(data: SlugData): number[] {
+  const view = new DataView(data.records.buffer, data.records.byteOffset, data.records.byteLength);
+  const texels = data.pages.map(() => 0);
+  for (let record = 0; record < data.records.byteLength; record += SLUG_GLYPH_RECORD_STRIDE) {
+    const page = view.getUint16(record + 8, true);
+    if (page === ABSENT_PAGE) continue;
+    texels[page] = Math.max(texels[page]!, view.getUint32(record + 16, true) + view.getUint32(record + 20, true));
+  }
+  return texels.map((used, index) => {
+    const page = data.pages[index]!;
+    return Math.min(page.curveHeight, Math.max(1, Math.ceil(used / page.curveWidth)));
+  });
+}
+
+function slugPagePayload(page: SlugPageData, curveRows: number) {
   const references = packSlugReferences(page.referenceBytes, page.referenceWidth);
   return {
     kind: 'group' as const,
@@ -301,8 +322,8 @@ function slugPagePayload(page: SlugPageData) {
         kind: 'texture' as const,
         format: 'rgba16float' as const,
         width: page.curveWidth,
-        height: page.curveHeight,
-        bytes: page.curveBytes,
+        height: curveRows,
+        bytes: page.curveBytes.subarray(0, page.curveWidth * curveRows * 8),
       },
       headers: {
         kind: 'texture' as const,
