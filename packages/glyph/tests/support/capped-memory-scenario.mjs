@@ -80,6 +80,10 @@ report.siblingSet = attempt(() => {
   frame();
   return sibling.commitState().status;
 });
+report.victimWhileSiblingPublishes = attempt(() => ({
+  status: victim.commitState().status,
+  reportsItsError: victim.error !== undefined,
+}));
 if (recover === 'shrink') {
   report.recovery = attempt(() => {
     victim.text = 'small again';

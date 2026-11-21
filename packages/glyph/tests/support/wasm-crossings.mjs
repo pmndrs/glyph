@@ -16,6 +16,29 @@ let trapWhen;
 let instances = 0;
 let memory;
 
+/** The two calls that carry one status per root, and where each entry keeps it. */
+const BATCH = /^engine_(prepare|update)_batch$/;
+let batchEntry;
+const nonOk = [];
+
+function recordBatchStatuses(name, status, pointer, count) {
+  if (status !== 0) nonOk.push({ name, status });
+  const view = new DataView(memory.buffer, pointer, count * batchEntry.size);
+  for (let index = 0; index < count; index += 1) {
+    const entry = view.getUint32(index * batchEntry.size + batchEntry.status, true);
+    if (entry !== 0) nonOk.push({ name, entry: index, status: entry });
+  }
+}
+
+/**
+ * Starts recording every batch crossing whose own status or any root's entry status is not OK. `layout` is
+ * `textShaperAbi.layouts.engineUpdateBatchEntry`. Returns the live list.
+ */
+export function recordNonOkCrossings(layout) {
+  batchEntry = layout;
+  return nonOk;
+}
+
 const NativeInstance = WebAssembly.Instance;
 let refuseSynchronousInstantiation = false;
 
@@ -39,7 +62,9 @@ function countedExports(instance) {
         throw new WebAssembly.RuntimeError('unreachable');
       }
       if (trapWhen?.(short, args) === true) throw new WebAssembly.RuntimeError('unreachable');
-      return value(...args);
+      const result = value(...args);
+      if (batchEntry !== undefined && BATCH.test(short)) recordBatchStatuses(short, result, args[0], args[1]);
+      return result;
     };
   }
   return exports;

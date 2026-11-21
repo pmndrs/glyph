@@ -60,6 +60,68 @@ function writerDuringTraversal(write) {
   };
 }
 
+/** Every draw's attribute bytes, the transform table among them: what the renderer would upload. */
+function rendererBytes(scene) {
+  const draws = [];
+  scene.traverse((object) => {
+    if (!object.isMesh || object.geometry?.attributes === undefined) return;
+    draws.push(
+      Object.entries(object.geometry.attributes)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([name, attribute]) => [
+          name,
+          Buffer.from(attribute.array.buffer, attribute.array.byteOffset, attribute.array.byteLength).toString('hex'),
+        ]),
+    );
+  });
+  return draws;
+}
+
+for (const attached of [true, false]) {
+  test(`Three: a layout callback positions the first frame exactly ${attached ? 'with' : 'without'} attach()`, async (t) => {
+    const build = (place) => {
+      const handle = glyph.handle(`three:frame-layout-phase:${String(nextHandle++)}`, ThreeConfig);
+      t.after(() => handle.dispose());
+      const scene = new THREE.Scene();
+      if (attached) handle.attach(scene);
+      // The panel precedes the label and the label sits in a group: both are visited before the label.
+      const panel = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+      const group = new THREE.Group();
+      const label = handle.createText({ font, text: 'centred on its own width' });
+      const sibling = handle.createText({ font, text: 'sibling' });
+      scene.add(panel, group, sibling);
+      group.add(label);
+      place({ panel, group, label });
+      return { scene, panel, group, label };
+    };
+    const reference = build(({ panel, group, label }) => {
+      const layout = label.measure();
+      label.position.x = -layout.width / 2;
+      group.position.y = layout.height;
+      panel.scale.set(layout.width, layout.height, 1);
+    });
+    const subject = build(({ panel, group, label }) => {
+      label.onLayout = (text, layout) => {
+        text.position.x = -layout.width / 2;
+        group.position.y = layout.height;
+        panel.scale.set(layout.width, layout.height, 1);
+      };
+    });
+    reference.scene.updateMatrixWorld(true);
+    subject.scene.updateMatrixWorld(true);
+    const width = subject.label.measure().width;
+    assert.ok(width > 0);
+    assert.equal(subject.label.matrixWorld.elements[12], -width / 2);
+    assert.equal(subject.panel.matrixWorld.elements[0], width, 'an object visited before the label is current too');
+    assert.equal(subject.label.matrixWorld.elements[13], subject.label.measure().height, 'and so is its parent');
+    assert.equal(subject.label.commitState().status, 'committed');
+    assert.deepEqual(rendererBytes(subject.scene), rendererBytes(reference.scene), 'frame 1 draws the placed text');
+    const first = rendererBytes(subject.scene);
+    subject.scene.updateMatrixWorld(true);
+    assert.deepEqual(rendererBytes(subject.scene), first, 'frame 2 has nothing to correct');
+  });
+}
+
 test('Three: a setter issued mid-traversal holds only the text that has a layout callback', async (t) => {
   const handle = glyph.handle(`three:frame-layout-phase:${String(nextHandle++)}`, ThreeConfig);
   t.after(() => handle.dispose());

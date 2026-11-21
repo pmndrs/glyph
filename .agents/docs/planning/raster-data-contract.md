@@ -62,10 +62,7 @@ interface RasterReference {
   kind: string;
   extension: string;
   version: number;
-  source:
-    | { type: 'embedded' }
-    | { type: 'external'; uri: string }
-    | { type: 'external' };
+  source: { type: 'embedded' } | { type: 'external'; uri: string } | { type: 'external' };
 }
 ```
 

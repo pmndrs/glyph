@@ -256,7 +256,8 @@ export interface ThreeRoot extends GlyphRoot {
   onInvalidate: (() => void) | undefined;
   /**
    * Tells the root which Scene its text lives in before the first traversal finds out, so the first frame is
-   * prepared at the front of that Scene like every later one.
+   * prepared at the front of that Scene like every later one. Optional: without it the first frame is still
+   * exact, at the cost of computing the Scene's matrices twice when a layout callback runs in it.
    */
   attach(scene: THREE.Scene): void;
 }
@@ -367,6 +368,10 @@ export class ThreeRootHost {
   /** How many `renderer.render` calls are inside one another on this root's Scene; above zero is a nested pass. */
   #renderDepth = 0;
   #restoreSceneHooks: (() => void) | undefined;
+  /** A layout callback ran since the last point at which every matrix of the Scene was still to be computed. */
+  #layoutCallbacksRan = false;
+  /** The Scene's matrices are being recomputed after layout callbacks moved objects mid-traversal. */
+  #resynchronizing = false;
   #capacityReported = false;
   onError: ((error: unknown) => void) | undefined;
   onInvalidate: (() => void) | undefined;
@@ -859,6 +864,7 @@ export class ThreeRootHost {
     if (binding === undefined) return;
     for (const [text, layout] of binding.layoutsToNotify()) {
       if (text.disposed) continue;
+      this.#layoutCallbacksRan = true;
       try {
         text.onLayout?.(text, layout);
       } catch (error) {
@@ -1012,7 +1018,7 @@ export class ThreeRootHost {
   }
 
   #commitTraversal(worldMatricesCurrent: boolean, sceneTraversal = false): void {
-    if (this.#disposed) return;
+    if (this.#disposed || (this.#resynchronizing && !sceneTraversal)) return;
     const texts = this.#renderMembers();
     if (this.#reconcileDirty) {
       try {
@@ -1044,6 +1050,7 @@ export class ThreeRootHost {
       this.#traversalPublishing = false;
     }
     try {
+      this.#resynchronizeAfterLayout();
       this.#flushTransforms(worldMatricesCurrent, texts);
     } catch (error) {
       if (!this.#ownsTraversalFailure(error)) this.#reportError(error, texts);
@@ -1236,6 +1243,28 @@ export class ThreeRootHost {
       prepareGlyphFrame();
     } catch {
       // Every participating root received its attributed error before the global call threw.
+    }
+    // No matrix of this traversal is computed yet, so whatever the callbacks moved is seen as it goes.
+    this.#layoutCallbacksRan = false;
+  }
+
+  /**
+   * Layout callbacks that ran after the traversal began (the first frame of a Scene nobody named with `attach`,
+   * or a preparation object that is not first) may have moved objects whose matrices this traversal already
+   * computed. The Scene's matrices are computed once more, so the frame draws what the callbacks wrote.
+   */
+  #resynchronizeAfterLayout(): void {
+    if (!this.#layoutCallbacksRan) return;
+    this.#layoutCallbacksRan = false;
+    const scene = this.#scene;
+    if (scene === undefined || this.#resynchronizing) return;
+    this.#resynchronizing = true;
+    this.#renderDepth += 1;
+    try {
+      scene.updateMatrixWorld(true);
+    } finally {
+      this.#renderDepth -= 1;
+      this.#resynchronizing = false;
     }
   }
 
@@ -2805,7 +2834,10 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
       ownTextSpanRecords(previous?.spans, assertSpanRanges(text, stated), { kind: 'three' }),
     );
   }
-  const rootTechniques = immutableFontSelectionFonts(properties.font).map((font) => font.raster);
+  // A font disposed while a text still names it fails here, on the next setter, whatever that setter wrote.
+  const rootTechniques = validatingInput(['font'], () =>
+    immutableFontSelectionFonts(properties.font).map((font) => font.raster),
+  );
   const inheritedTechniques = [
     ...rootTechniques,
     ...spans.flatMap((span) =>

@@ -602,6 +602,8 @@ class RenderPlannerImpl {
   readonly #pendingTexts = new Set<RetainedTextState>();
   /** Owners whose desired state the engine has not prepared: a setter adds, a read or the batch removes. */
   readonly #unprepared = new Set<RetainedTextState>();
+  /** Paragraphs left out of the engine after a publication that could not hold them, with the error each reports. */
+  readonly #withheld = new WeakMap<RetainedTextState, unknown>();
   #stagedPreparation: StagedPreparation | undefined;
   #transforms: readonly ResolvedPlanTransform[] | undefined;
   readonly #removed = new Set<RetainedTextState>();
@@ -880,6 +882,7 @@ class RenderPlannerImpl {
     } else {
       // New input is a new chance: a refused paragraph is restated from nothing by the next preparation.
       state.refusal = undefined;
+      this.#withheld.delete(state);
       this.#unprepared.add(state);
       state.geometryDirty ||= updateChangesGeometry(update, previousDesired, next);
     }
@@ -1440,9 +1443,25 @@ class RenderPlannerImpl {
       // leaves this now-adopted engine state intact.
       this.#engineNeedsRebuild =
         this.#transport.invalidateUnadoptedMutation() || this.#transport.failureInvalidatedRoot;
+      if (this.#engineNeedsRebuild) this.#withholdAfterCapacityFailure(error);
       this.#retryNextFrame();
       throw error;
     }
+  }
+
+  /**
+   * A publication the result arena cannot hold fails for the whole root, and the engine discards the root. The
+   * largest paragraph is what does not fit, so it is withheld: the rebuild restates every other paragraph and
+   * the next frame publishes them. The withheld one reports this error and draws nothing until its input changes.
+   */
+  #withholdAfterCapacityFailure(error: unknown): void {
+    if (!(error instanceof GlyphEngineStatusError) || error.statusCode !== 'result-too-large') return;
+    let largest: RetainedTextState | undefined;
+    for (const state of this.#texts) {
+      if (state.removed || state.disposed || this.#withheld.has(state)) continue;
+      if (largest === undefined || state.desired.text.length > largest.desired.text.length) largest = state;
+    }
+    if (largest !== undefined) this.#withheld.set(largest, error);
   }
 
   consume(): PlanAcceptance {
@@ -2082,6 +2101,8 @@ class RenderPlannerImpl {
     this.#assertMutable();
     this.#ensureEngineRebuilt();
     if (state.disposed) throw new Error('text engine text has been disposed');
+    // A withheld paragraph has no layout to read: preparing it would put it back into the publication it broke.
+    if (this.#withheld.has(state)) throw this.#withheld.get(state);
     // A read is never stale: it prepares this paragraph, and only this one, when a setter left it dirty.
     if (this.#unprepared.has(state) || state.measurement === undefined) this.#prepareForRead(state);
     // Every query reads the summary, so the next preparation keeps it current for a caller that alternates.
@@ -2182,9 +2203,16 @@ class RenderPlannerImpl {
       state.lifecycleDirty = true;
       state.geometryDirty = true;
       state.orderDirty = true;
+      if (prepared !== undefined) releaseResolvedText(prepared);
+      if (this.#withheld.has(state)) {
+        // Never restated: the engine does not hold it, and no preparation or publication names it.
+        state.refusal = this.#withheld.get(state);
+        this.#pendingTexts.delete(state);
+        this.#unprepared.delete(state);
+        continue;
+      }
       this.#pendingTexts.add(state);
       this.#unprepared.add(state);
-      if (prepared !== undefined) releaseResolvedText(prepared);
     }
     this.#transforms = undefined;
     this.#baseOrderValidationPending = true;

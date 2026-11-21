@@ -1,6 +1,6 @@
 ---
 type: Decision
-title: "Scope Three text batches to authored groups"
+title: 'Scope Three text batches to authored groups'
 description: 'Make top-level authored TextGroups physical draw boundaries by default, with explicit nested and shared policies.'
 decision_status: Accepted
 decided: '2026-10-08'
