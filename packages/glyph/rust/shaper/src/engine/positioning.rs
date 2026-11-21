@@ -976,6 +976,14 @@ struct PlacementOccurrence {
     translation_block: f32,
 }
 
+/// The part of a boundary slice one numeric block holds, placed.
+#[derive(Clone, Copy)]
+struct BoundarySlice {
+    occurrence: PlacementOccurrence,
+    glyph_count: u32,
+    cluster_count: u32,
+}
+
 #[derive(Clone, Copy)]
 struct ActiveFallbackPlacement {
     layout_run_index: usize,
@@ -3874,13 +3882,24 @@ impl PositionedGlyphArena {
             } else {
                 glyph = source_end;
             }
-            if glyph > piece_start {
-                let occurrence = self.record_boundary_slice(
+            // The run-local arena cuts a long island into numeric blocks, each with its own anchor
+            // and a prefix that restarts at zero, so every block is its own placed segment.
+            let mut block_glyph = piece_start;
+            while block_glyph < glyph {
+                let owner = if block_glyph == piece_start {
+                    cluster
+                } else {
+                    clusters
+                        .starts
+                        .binary_search(&arena.shape.clusters[block_glyph as usize])
+                        .unwrap_or(cluster)
+                };
+                let slice = self.record_boundary_slice(
                     _boundary_index,
                     boundary.flow_thread_id,
                     BoundaryRunRole::BoundarySource,
-                    (cluster.min(clusters.starts.len().saturating_sub(1)), pieces),
-                    (piece_start, glyph - piece_start),
+                    (owner.min(clusters.starts.len().saturating_sub(1)), pieces),
+                    (block_glyph, glyph - block_glyph),
                     cursor,
                     baseline,
                     clusters,
@@ -3888,8 +3907,8 @@ impl PositionedGlyphArena {
                 cursor = self.position_boundary_span(
                     line,
                     cursor,
-                    piece_start,
-                    glyph - piece_start,
+                    block_glyph,
+                    slice.glyph_count,
                     boundary.source_binding_handle,
                     boundary.source_font_handle,
                     bidi_level,
@@ -3900,9 +3919,10 @@ impl PositionedGlyphArena {
                     clusters,
                     styles,
                     metrics_for,
-                    Some(occurrence),
+                    Some(slice.occurrence),
                 )?;
-                pieces += 1;
+                block_glyph += slice.glyph_count;
+                pieces += slice.cluster_count;
             }
             if split {
                 let style = boundary_cluster_style(styles, clusters, cluster)?;
@@ -3929,6 +3949,7 @@ impl PositionedGlyphArena {
                 cursor = state.cursor;
             }
         }
+        // The marker is one cluster, and a block never divides a cluster.
         let replacement_occurrence = (boundary.ellipsis_glyph_count != 0)
             .then(|| {
                 self.record_boundary_slice(
@@ -3941,6 +3962,11 @@ impl PositionedGlyphArena {
                     baseline,
                     clusters,
                 )
+                .and_then(|slice| {
+                    (slice.glyph_count == boundary.ellipsis_glyph_count)
+                        .then_some(slice.occurrence)
+                        .ok_or(EngineError::InvalidRequest)
+                })
             })
             .transpose()?;
         self.position_boundary_span(
@@ -3962,6 +3988,12 @@ impl PositionedGlyphArena {
         )
     }
 
+    /// Places the part of a boundary run's glyphs `glyph_start..glyph_start + glyph_count` that
+    /// lies in the numeric block of the run's cluster `ordinal`, with the pen at `cursor`.
+    ///
+    /// A block carries its own anchor and its cluster prefixes restart at zero, so one
+    /// translation is right for one block only: the caller places the rest of a longer slice
+    /// with the pen where this part ended. A slice that stops inside its block is one cluster.
     #[allow(clippy::too_many_arguments)]
     fn record_boundary_slice(
         &mut self,
@@ -3973,7 +4005,7 @@ impl PositionedGlyphArena {
         cursor: f64,
         baseline: f64,
         clusters: &ClusterArena,
-    ) -> Result<PlacementOccurrence, EngineError> {
+    ) -> Result<BoundarySlice, EngineError> {
         let run_index = self
             .replacement_run_indices
             .get(usize::try_from(boundary_index).map_err(|_| EngineError::InvalidRequest)?)
@@ -3990,9 +4022,9 @@ impl PositionedGlyphArena {
                     }
             })
             .ok_or(EngineError::InvalidRequest)?;
-        let whole = glyph_count == run.glyph_count;
         if glyph_start < run.glyph_start
             || glyph_start - run.glyph_start + glyph_count > run.glyph_count
+            || ordinal >= run.numeric_blocks.cluster_count
         {
             return Err(EngineError::InvalidRequest);
         }
@@ -4014,6 +4046,31 @@ impl PositionedGlyphArena {
             .cluster_prefixes()
             .get(block_lane)
             .ok_or(EngineError::InvalidRequest)?;
+        let block_glyph_end = block
+            .source_glyph_start
+            .checked_add(block.source_glyph_count)
+            .ok_or(EngineError::InvalidRequest)?;
+        if glyph_start < block.source_glyph_start || glyph_start >= block_glyph_end {
+            return Err(EngineError::InvalidRequest);
+        }
+        let reaches_block_end = glyph_count >= block_glyph_end - glyph_start;
+        let glyph_count = glyph_count.min(block_glyph_end - glyph_start);
+        let cluster_count = if reaches_block_end {
+            let run_lanes = usize::try_from(run.numeric_blocks.cluster_count - ordinal)
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let lanes = self
+                .replacement_run_local
+                .cluster_blocks()
+                .get(block_lane..)
+                .ok_or(EngineError::InvalidRequest)?
+                .iter()
+                .take(run_lanes)
+                .take_while(|index| **index == block_index)
+                .count();
+            u32::try_from(lanes).map_err(|_| EngineError::ResultTooLarge)?
+        } else {
+            1
+        };
         let translation = SegmentTranslation {
             translation_inline: cursor - local_prefix + block.anchor_inline,
             translation_block: baseline + block.anchor_block,
@@ -4035,21 +4092,21 @@ impl PositionedGlyphArena {
                     .filter(|ordinal| *ordinal < run.numeric_blocks.count)
                     .ok_or(EngineError::InvalidRequest)?,
                 run_cluster_start: ordinal,
-                run_cluster_count: if whole {
-                    run.numeric_blocks.cluster_count
-                } else {
-                    1
-                },
+                run_cluster_count: cluster_count,
                 glyph_source: GlyphSource::Boundary,
                 source_glyph_start: glyph_start - run.glyph_start,
                 source_glyph_count: glyph_count,
             },
             translation,
         )?;
-        Ok(PlacementOccurrence {
-            segment_index,
-            translation_inline,
-            translation_block,
+        Ok(BoundarySlice {
+            occurrence: PlacementOccurrence {
+                segment_index,
+                translation_inline,
+                translation_block,
+            },
+            glyph_count,
+            cluster_count,
         })
     }
 
@@ -7360,6 +7417,228 @@ mod tests {
             );
         }
         assert_eq!(plain.decorations.len(), 0);
+    }
+
+    /// An ellipsis island longer than one numeric block: the run-local arena cuts a run every
+    /// 64 glyphs, and each block has its own anchor and a prefix that restarts at zero. Seventy
+    /// glyphs pitched 6.0 (advance 5.0, letter spacing 1.0) from a pen at 0.0 sit at 0, 6, … 414
+    /// and the marker at 420; the six glyphs of the second block are the ones a single
+    /// translation drew back at the pen origin.
+    #[test]
+    fn an_island_longer_than_one_numeric_block_is_drawn_at_its_pen() {
+        const ISLAND: u32 = 70;
+        let count = ISLAND as usize;
+        let text = vec![0x61; count];
+        let style = ResolvedStyle::test_typography(10.0, 1.0, 0.0);
+        let styles = [StyleSegment {
+            text_start: 0,
+            text_end: ISLAND,
+            style,
+        }];
+        let runs = [ShapingRun {
+            text_start: 0,
+            text_end: ISLAND,
+            script: u32::from_be_bytes(*b"Latn"),
+            direction: 0,
+            bidi_level: 0,
+            style,
+        }];
+        let mut clusters = ClusterArena {
+            starts: (0..ISLAND).collect(),
+            ends: (1..=ISLAND).collect(),
+            advances: vec![6.0; count],
+            units_per_em: vec![1_000.0; count],
+            flags: vec![CLUSTER_SAFE_BEFORE; count],
+            style_indexes: vec![0; count],
+            source_runs: vec![0; count],
+            binding_handles: vec![11; count],
+            font_handles: vec![1; count],
+            stable_ids: (1..=ISLAND).collect(),
+            glyph_starts: (0..ISLAND).collect(),
+            glyph_counts: vec![1; count],
+            glyph_ids: vec![1; count],
+            glyph_clusters: (0..ISLAND).collect(),
+            glyph_x_advances: vec![500; count],
+            glyph_x_offsets: vec![0; count],
+            glyph_y_offsets: vec![0; count],
+            glyph_shape_flags: vec![0; count],
+            glyph_stable_ids: (1_001..=1_000 + ISLAND).collect(),
+            index_at: (0..=ISLAND).collect(),
+            ..ClusterArena::default()
+        };
+        clusters.rebuild_layout_runs().unwrap();
+        let bidi = BidiAnalysis {
+            levels: vec![0; count],
+            classes: vec![0; count],
+            paragraph_starts: vec![0],
+            paragraph_ends: vec![ISLAND],
+            paragraph_levels: vec![0],
+            runs: vec![],
+        };
+        // The island is the whole line reshaped, then one marker glyph of advance 3.0.
+        let boundary = BoundaryShapeArena {
+            records: vec![BoundaryShape {
+                flow_thread_id: 7,
+                source_run: 0,
+                cluster_start: 0,
+                cluster_end: ISLAND,
+                text_end: ISLAND,
+                source_binding_handle: 11,
+                source_font_handle: 1,
+                ellipsis_binding_handle: 11,
+                ellipsis_font_handle: 1,
+                source_glyph_start: 0,
+                source_glyph_count: ISLAND,
+                ellipsis_glyph_start: ISLAND,
+                ellipsis_glyph_count: 1,
+                line_start: false,
+            }],
+            shape: ShapeArena {
+                runs: vec![],
+                glyph_ids: [vec![1; count], vec![45]].concat(),
+                clusters: (0..ISLAND).chain([ISLAND]).collect(),
+                x_advances: [vec![500; count], vec![300]].concat(),
+                y_advances: vec![0; count + 1],
+                x_offsets: vec![0; count + 1],
+                y_offsets: vec![0; count + 1],
+                glyph_flags: vec![0; count + 1],
+            },
+            stable_ids: (2_001..=2_001 + ISLAND).collect(),
+        };
+        let flow = FlowLayoutArena {
+            lines: vec![FlowLine {
+                typography: Default::default(),
+                flow_thread_id: 7,
+                region_id: 9,
+                transform_index: 9,
+                clip_id: 9,
+                fragment_count: 1,
+                align: ALIGN_START,
+                block_start: 0.0,
+                baseline: 8.0,
+                height: 10.0,
+            }]
+            .into(),
+            fragments: vec![FlowFragment {
+                line: ComposedLine {
+                    cluster_start: 0,
+                    cluster_end: ISLAND,
+                    text_start: 0,
+                    text_end: ISLAND,
+                    advance: 423.0,
+                    hung_advance: 0.0,
+                    hard_break: false,
+                    start_correction: Correction::ZERO,
+                    end_correction: Correction::ZERO,
+                },
+                slot_start: 0.0,
+                slot_end: 500.0,
+                flexible_end: false,
+                boundary_index: 0,
+                lead_index: NO_BOUNDARY,
+                tail_index: NO_BOUNDARY,
+            }]
+            .into(),
+            ..FlowLayoutArena::default()
+        };
+        let metrics = |_| {
+            Some(FontMetrics {
+                units_per_em: 1_000,
+                ascender: 800,
+                cap_height: 700,
+                x_height: 500,
+                height_fallbacks: 0,
+                descender: -200,
+                line_gap: 0,
+                underline_position: -100,
+                underline_thickness: 50,
+                strikeout_position: 300,
+                strikeout_size: 50,
+            })
+        };
+        let extents = |_, _| {
+            Some(FontGlyphExtents {
+                x_min: 0,
+                y_min: 0,
+                x_max: 500,
+                y_max: 700,
+            })
+        };
+        prepare_positioning_clusters(&mut clusters, &text, &runs, &styles, extents);
+        let mut index = IdentityIndex::default();
+        let mut active = PositionedGlyphArena::default();
+        let mut next_revision = 1;
+        let mut next_run_revision = 1;
+        active
+            .build(
+                &PositionedGlyphArena::default(),
+                &flow,
+                None,
+                flow.recomposed_line_ranges(),
+                &text,
+                &clusters,
+                &clusters,
+                &runs,
+                &runs,
+                &boundary,
+                &boundary,
+                &styles,
+                &bidi,
+                &mut index,
+                &mut next_revision,
+                &mut next_run_revision,
+                |_| ThreadTypography::default(),
+                |_| ThreadTypography::default(),
+                metrics,
+                extents,
+            )
+            .unwrap();
+
+        // The premise: the island's run spans two blocks, 64 glyphs and 6.
+        assert_eq!(active.replacement_runs[0].numeric_blocks.count, 2);
+        let blocks = active.replacement_run_local().blocks();
+        assert_eq!(
+            blocks
+                .iter()
+                .map(|block| block.source_glyph_count)
+                .collect::<Vec<_>>(),
+            [64, 6, 1]
+        );
+        assert_eq!(active.replacement_run_local().cluster_prefixes()[64], 0.0);
+
+        assert_eq!(active.outlined_count(), count + 1);
+        for glyph in 0..count {
+            let placed = placed_semantic_at(&active, glyph, &clusters, &boundary);
+            assert_eq!(placed.inline_origin, 6.0 * glyph as f32, "glyph {glyph}");
+            assert_eq!(placed.block_origin, 8.0, "glyph {glyph}");
+            assert_eq!(
+                semantic_row_at(&active, glyph, &clusters, &boundary).stable_id,
+                2_001 + glyph as u32
+            );
+        }
+        assert_eq!(
+            placed_semantic_at(&active, count, &clusters, &boundary).inline_origin,
+            420.0
+        );
+        // One placed segment per block, each owning exactly its block's clusters and glyphs.
+        let segments: Vec<_> = active
+            .placement
+            .segment_rows()
+            .iter()
+            .map(|segment| {
+                (
+                    segment.numeric_block_ordinal,
+                    segment.run_cluster_start,
+                    segment.run_cluster_count,
+                    segment.source_glyph_start,
+                    segment.source_glyph_count,
+                )
+            })
+            .collect();
+        assert_eq!(
+            segments,
+            [(0, 0, 64, 0, 64), (1, 64, 6, 64, 6), (0, 0, 1, 0, 1)]
+        );
     }
 
     /// Roadmap 11.13: the contract must represent a break-inserted hyphen glyph that has
