@@ -6506,7 +6506,11 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
     'one requested semantic publication must populate every retained paragraph',
   );
   scene.updateMatrixWorld();
-  assert.equal(instrumented.measureCrossings, 2, 'each property assignment synchronously prepares its own revision');
+  assert.equal(
+    instrumented.measureCrossings,
+    3,
+    'each assignment prepares its own revision, and the summary nobody read between them is produced by the read',
+  );
   assert.equal(instrumented.crossings, 1, 'render traversal publishes the last prepared revision once');
 
   const version = transforms.version;
@@ -8054,6 +8058,32 @@ test('a setter crosses into the engine once and reuses its request arena views',
     assert.equal(instrumentedGlyph.arenaQueries, afterGrowth);
     scene.updateMatrixWorld();
     assert.equal(label.commitState().status, 'committed');
+  } finally {
+    label.dispose();
+    font.dispose();
+  }
+});
+
+test('a setter keeps the summary current only for a caller that read the previous one', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+  const label = three.createText({ font, text: 'first' });
+  try {
+    label.measure();
+    instrumentedGlyph.reset();
+    for (const text of ['one', 'two', 'three']) {
+      label.text = text;
+      assert.equal(label.measure().glyphCount, text.length);
+    }
+    assert.equal(instrumentedGlyph.measureCrossings, 3, 'alternating edits and reads cross once per edit');
+
+    instrumentedGlyph.reset();
+    for (const text of ['four', 'five', 'six', 'seven']) label.text = text;
+    assert.equal(instrumentedGlyph.measureCrossings, 4);
+    assert.equal(label.measure().glyphCount, 5, 'the unread summaries were not kept, so the read produces one');
+    assert.equal(instrumentedGlyph.measureCrossings, 5);
+    assert.equal(label.measure().glyphCount, 5);
+    assert.equal(instrumentedGlyph.measureCrossings, 5, 'the produced summary is cached');
   } finally {
     label.dispose();
     font.dispose();

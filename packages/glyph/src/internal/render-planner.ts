@@ -401,6 +401,8 @@ interface RetainedTextState {
   desiredReleased: boolean;
   committed: ResolvedTextOptions | undefined;
   measurement: ParagraphLayoutSummary | undefined;
+  /** Whether a caller read the current measurement; only then does the next setter keep one current. */
+  measurementRead: boolean;
   inspection: TextInspection | undefined;
 }
 
@@ -645,6 +647,7 @@ class RenderPlannerImpl {
       desiredReleased: false,
       committed: undefined,
       measurement: undefined,
+      measurementRead: false,
       inspection: undefined,
     };
     let candidatePrepared = false;
@@ -839,6 +842,7 @@ class RenderPlannerImpl {
     state.pendingFlowRegions = preparation.pendingFlowRegions;
     state.pendingFlowExclusions = preparation.pendingFlowExclusions;
     state.measurement = preparation.measurement;
+    state.measurementRead = false;
     if (preparedRevisionChanged) state.inspection = undefined;
     else if (state.inspection?.kind === 'owned') {
       state.inspection = this.#ownedInspection(
@@ -1234,7 +1238,10 @@ class RenderPlannerImpl {
     state: RetainedTextState,
     // A summary is produced when asked for or when an anchor needs it; an earlier read does not make every later
     // setter measure again.
-    includeMeasurement = state.measurement !== undefined || state.desired.source.constraints?.anchor !== undefined,
+    // A summary stays current for a caller that reads it between edits, or for an anchor that needs it. One read
+    // long ago does not make every later setter measure.
+    includeMeasurement = (state.measurement !== undefined && state.measurementRead) ||
+      state.desired.source.constraints?.anchor !== undefined,
   ): boolean {
     const styles = compileStyles(this.#handleState, state);
     const geometryChanged = state.geometryDirty || !state.prepared;
@@ -1661,6 +1668,8 @@ class RenderPlannerImpl {
     this.#assertMutable();
     this.#ensureEngineRebuilt();
     if (state.disposed) throw new Error('text engine text has been disposed');
+    // Every query reads the summary, so the next setter keeps it current for a caller that alternates.
+    state.measurementRead = true;
     if (state.measurement === undefined) {
       try {
         this.#prepareTextCandidate(state, true);
