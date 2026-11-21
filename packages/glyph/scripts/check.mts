@@ -15,6 +15,13 @@ const rustCrates = [
   'slug-fontations',
 ] as const;
 
+// The parity crate is repository-owned code beside the vendored HarfRust fork. The fork itself keeps upstream's
+// formatting and lint configuration and is checked there, not here.
+const rustManifests = [
+  ...rustCrates.map((crate) => `rust/${crate}/Cargo.toml`),
+  '../../vendor/harfrust-parity/Cargo.toml',
+];
+
 export async function runGlyphCheck(): Promise<void> {
   await runGlyphTest();
   await runGlyphStaticCheck();
@@ -34,18 +41,9 @@ export async function runGlyphStaticCheck(): Promise<void> {
   // The Rust crates carried 42 rustfmt diffs and 18 Clippy findings before this gate
   // existed, because nothing ran either. The fuzz crate is excluded: it is pinned to its
   // own dated nightly for cargo-fuzz and does not share this toolchain.
-  for (const crate of rustCrates) {
-    await runCargo(['fmt', '--manifest-path', `rust/${crate}/Cargo.toml`, '--', '--check']);
-    await runCargo([
-      'clippy',
-      '--manifest-path',
-      `rust/${crate}/Cargo.toml`,
-      '--locked',
-      '--all-targets',
-      '--',
-      '-D',
-      'warnings',
-    ]);
+  for (const manifest of rustManifests) {
+    await runCargo(['fmt', '--manifest-path', manifest, '--', '--check']);
+    await runCargo(['clippy', '--manifest-path', manifest, '--locked', '--all-targets', '--', '-D', 'warnings']);
   }
 }
 
