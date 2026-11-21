@@ -53,7 +53,8 @@ Updated in place; the history of each change is in the log below.
 | Existing-engine divergence fixes (all seven families)                                                                                                                                                                         | merged   | tag `sil-green-5`                                   | `KNOWN-DIVERGENCES` is empty; 43,680 seeded requests all equal cold                                |
 | Unit 1c: dense cluster build with dirty-range output                                                                                                                                                                          | held     | —                                                   | Starts after geometry (1a) merges; both touch `cluster_state.rs`                                   |
 | Unit 1d part 1: Unicode property closure, dense line-break/grapheme/script kernel, per-paragraph bidi                                                                                                                         | merged   | tag `sil-green-7`                                   | Unicode stage 18–25× faster for Latin, Cyrillic, Arabic; 5.8× CJK; no gain for Indic or Thai       |
-| Unit 1d part 2: UAX #14 scalar bug fix, bidi double classification, resync predicate, word and sentence lanes, table re-encoding                                                                                              | building | `experiments/sil-unicode`                           |                                                                                                    |
+| Unit 1d part 2: UAX #14 opening-quote fix, single bidi classification, script set ids, resync predicates                                                                                                                      | merged   | tag `sil-green-11`                                  | CJK Unicode stage 261 → 199 µs at 22k; bidi on RTL text within 1–5% of the original                |
+| Unit 1d part 3: word and sentence boundary lanes, break-source seam, Unicode table re-encoding                                                                                                                                | building | `experiments/sil-unicode`                           | Opus                                                                                               |
 | Font binding compiled at font load                                                                                                                                                                                            | merged   | tag `sil-green-7`                                   | First `createText` 16.2 → 12.7 ms with a full font                                                 |
 | Unit 1e part 1: column gather for prepared owners                                                                                                                                                                             | merged   | tag `sil-green-3`                                   | Gather 3.40 → 0.98 ms on a 25.9k font-size publication (main 1.20)                                 |
 | Unit 1e part 2: gather by change class (colour-only columns, origin-only columns, line height)                                                                                                                                | held     | —                                                   | Needs an accumulated per-paragraph change class in `state.rs`; scheduled after unit 3              |
@@ -479,3 +480,20 @@ Updated in place; the history of each change is in the log below.
   like MSDF and bitmap and be batched the same way; no lane packing is needed. Assigned to the Slug lane with
   the fragment-cost unit.
 - **Building.** Slug: fragment cost, then batching. TypeGPU: shared pipelines, then on-demand atlas.
+- **Merged: unit 1d part 2** (tag `sil-green-11`, pushed; full oracle tier green, native and wasm).
+  (A) The line breaker's opening-quote bug is fixed in the scalar and the kernel: `“A dog` can now break
+  after the space, `«字字字` between the first two ideographs, and state no longer leaks across a required
+  break. Proven by an exhaustive kernel-versus-scalar run over 106.9 million strings and the official test
+  file on both paths. **This changes line breaking against main** for text with an opening quote; it is its
+  own commit (`670cbc24a`). Two oracle label cases whose edit steps create the pattern gained one break
+  opportunity and were re-frozen (set `126c1d9ef4c23603`); checked: only step digests changed, no cold-stage
+  digest. (B) Right-to-left paragraphs are classified once: bidi at 22k Arabic 510 → 410 µs (original 391),
+  so it is **still 1–5% slower than before the kernel work**, not equal. CJK Unicode stage 261 → 199 µs.
+  (C) Per-lane resync predicates for local edits, with the reviewer's 400,000-string fuzz ported per lane and
+  200,000 random edits for the script window. Wasm +0.17 kB gzip.
+- **Correction.** Two mixed-bidi figures logged for part 1 (94 and 57 µs) were first-run allocation effects
+  from too few iterations; the steady-state figures are 35 and 52 µs.
+- **Interim: geometry unit 2** (not merged; full proof running on the lane). Run-local stage at 22k in wasm:
+  metric change 1,265 → 299 µs; line height 1,264 → 15 µs (its own class now); 200 labels 104 → 67.6 µs, so
+  the label regression is gone. Wasm size recovered only about 0.5 kB of the 9.9 kB the first unit added.
+- **Shaper wasm on the integration branch: 589.8 kB gzip.**
