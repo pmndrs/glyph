@@ -36,7 +36,8 @@ Updated in place; the history of each change is in the log below.
 | Unit 1b: dense positioning and per-line ink                                                                                               | held     | —                                                   | Needs oracle, 1a                                                                         |
 | Existing-engine divergence fixes, then unit 1c: dense cluster build with dirty-range output                                               | building | `experiments/sil-cluster`                           | Divergences first                                                                        |
 | Unit 1d: Unicode class closure, bitmap kernels, per-paragraph bidi, resync predicate, word and sentence lanes                             | building | `experiments/sil-unicode`                           |                                                                                          |
-| Unit 1e: column gather (write-only by change class, diff when sparse)                                                                     | building | `experiments/sil-gather`                            |                                                                                          |
+| Unit 1e part 1: column gather for prepared owners                                                                                         | merged   | tag `sil-green-3`                                   | Gather 3.40 → 0.98 ms on a 25.9k font-size publication (main 1.20)                       |
+| Unit 1e part 2: gather by change class (colour-only columns, origin-only columns, line height)                                            | held     | —                                                   | Needs an accumulated per-paragraph change class in `state.rs`; scheduled after unit 3    |
 | Unit 2: local edits                                                                                                                       | held     | —                                                   | Needs 1b, 1c                                                                             |
 | Metric changes: keep island shapes, dense rescale                                                                                         | held     | —                                                   | Needs 1a                                                                                 |
 | Unit 3: preparation and error model, `onLayout`, minimal mutations, linear engine mount, out-of-memory and trap policy                    | building | `experiments/sil-prepare`                           |                                                                                          |
@@ -270,3 +271,28 @@ Updated in place; the history of each change is in the log below.
   worktree. The pop conflicted, so git kept the stash; all three stashes are still listed and intact. The lane
   reset its worktree. Side effect: conflict preimages were recorded in the shared `.git/rr-cache`.
 - **Building: unit 3** (preparation and error model) in `experiments/sil-prepare`, off `sil-green-2`.
+- **Merged: unit 1e part 1, column gather** (tag `sil-green-3`). Gather for prepared paragraphs is now
+  column-at-a-time. Wasm gather stage, 25.9k glyphs (new / before / main, ms): font size 0.98 / 3.40 / 1.20;
+  colour 0.90 / 3.44 / 1.16; 1,000 labels rewritten 0.91 / 1.81 / 0.94; scattered edits in 8,192 spans
+  0.70 / 1.59 / 0.94. Whole operation: font-size publication 5.42 / 7.62 / 5.82; colour 2.89 / 5.44 / 3.94;
+  1,000 labels rewritten 12.28 / 14.00 / 14.25. The sparse wins are kept (one of 1,000 labels: 0.0013 ms
+  against 0.098 on main). Proven by a seeded property test (13 scenarios, 14 change classes) in which the
+  retained result, a fresh gather and an independent row-by-row projection must agree bit for bit, and by the
+  oracle. Measured first: forcing the non-diff path made every case slower, so the cost was the row
+  projection, as the review said.
+- **Not reached.** The model's 0.11 ms was not reached (0.98). Three cases where main narrows the work by
+  change class stay far behind main at the gather stage: line height 0.93 against 0.07, a first-character edit
+  0.88 against 0.09, one span of 8,192 recoloured 0.90 against 0.04. Gather has no change class to act on; it
+  needs one accumulated per paragraph in `state.rs`. Held as part 2 until unit 3 lands, since unit 3 changes
+  when preparation happens. The plan stage is now the larger part of a publication (1.3 against 0.8 ms).
+- **Integrator fixes at this merge.** (1) Full-tier oracle showed two cases differing: both use the synthetic
+  `rand` font, and the cause is the intended one — the fork turns `rand` off. Those two cases were re-frozen
+  (reference set is now `254b4ddfe69776cc`); three listed divergences on that font no longer occur and were
+  removed from the list. (2) The wasm oracle probe failed to build after the fork merge (it lacked the
+  rebuilt-standard-library flag the shipped build now uses); fixed. **Lesson applied:** merges are now gated
+  on the full tier, not the quick tier.
+- **State at `sil-green-3`:** full tier native 423 of 423 cases equal, 0 unlisted divergences; wasm quick
+  tier green. Shaper wasm 569.0 kB gzip.
+- **Found by the gather lane, outside gather:** a debug assertion in positioning fires when a font-size span
+  boundary falls inside a layout run and the span range moves (same family as the listed span divergences);
+  the cluster lane owns that family.
