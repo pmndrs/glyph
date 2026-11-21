@@ -637,6 +637,9 @@ function baseTextMaterial(): THREE.MeshBasicNodeMaterial {
     blending: THREE.NormalBlending,
     depthTest: false,
     depthWrite: false,
+    // Three draws a transparent double-sided material twice (back faces, then front faces). Text quads are
+    // coplanar and never depth-tested, so one pass with culling off produces the same pixels in half the draws.
+    forceSinglePass: true,
     side: THREE.DoubleSide,
     transparent: true,
   });
