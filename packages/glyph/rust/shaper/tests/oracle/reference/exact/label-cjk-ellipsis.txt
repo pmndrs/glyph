@@ -36,14 +36,14 @@ class repr 61 fef05276f9ef40a2
 class cache 3 dcc7e82b7a57c95e
 class wire 1 f72166e21bcf4e04
 step 02 insert SpacedWord (2 units) at 57
-class value 266 fefcb78c1fb0dcf5
+class value 266 08348d6ca2d74587
 class identity 24 caf3b19f8f957168
 class repr 61 af8e7bde85d8a43a
 class cache 3 cdcd383b65a3a3b6
-class wire 1 110215daed47d5da
+class wire 1 e4a06aa3708e1eae
 step 03 insert SpacedWord (87 units) at 45
-class value 266 7c29cc615af7302d
+class value 266 f1b3524782b60579
 class identity 24 cfdad59d2084a2fa
 class repr 61 f65aca13c8a76778
 class cache 3 af08abab55691dae
-class wire 1 dcaff6effc194767
+class wire 1 1a88b474a3a961ec

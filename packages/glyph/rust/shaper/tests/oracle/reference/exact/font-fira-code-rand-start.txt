@@ -52,20 +52,20 @@ class repr 44 7a538e8bdceb4045
 class cache 5 b521b64d7861b8c2
 class wire 1 787aa8be4bc309a9
 step 05 max lines 3 + direction 1 + insert Space (1 units) at 2072 + flip case at 2078
-class value 266 b9b9a2a8fdbf0ca8
-class identity 24 14c77f427df032b0
-class repr 64 70d9653e5d3bdf04
+class value 266 658d9b8ca547299b
+class identity 24 358b22b5aa9425ba
+class repr 64 bd9f43f7711dd174
 class cache 5 9a5e063d609261a9
-class wire 1 f760670cc09f6aac
+class wire 1 11526d7f3dd6adfa
 step 06 insert Mark (1 units) at 1349
-class value 266 aff101c02cd6f63b
-class identity 24 4eabcabe18692210
-class repr 64 3ae5d7d602767b6e
+class value 266 f623901d1562c473
+class identity 24 ad258841cd84ed28
+class repr 64 f238f1d8a31c5f35
 class cache 5 06b5d65a8cfdff1e
-class wire 1 1d2436e36939ac22
+class wire 1 3c2a47c9a3baf270
 step 07 replace 4 at 1613
-class value 266 0fca864bc732464e
-class identity 24 545add9c2b6c4bff
-class repr 64 5d9f9ca983cda4ca
+class value 266 6efa204badb507cf
+class identity 24 a5cb9f9e2439307d
+class repr 64 16dfb941eb144aad
 class cache 5 b16990b2b9cd3cf3
-class wire 1 60ae3bb93d48e74b
+class wire 1 59dba851d54774c8

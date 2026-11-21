@@ -147,12 +147,12 @@ class repr 193 b037b1825a00f50b
 class cache 5 1a5be9c436312d17
 class wire 1 6bfc415a5e16b8b2
 step 11 paragraph 1: max lines 12 + insert Space (1 units) at 141 + max lines 3 + align 4 + paragraph 7: insert Foreign (209 units) at 105
-class value 805 63dfa6a26c6a6482
+class value 805 59680352f969bff3
 class identity 64 52f373bf49350f2e
 class repr 193 64de76a4f6cb5d42
-class wire 1 55d5a0e3272a7544
+class wire 1 ffcc0fd6b83e991d
 step 12 paragraph 7: metrics size 11.5 spacing 0 line 1.2 word 0
-class value 805 9e5b6b7f796ddc3e
+class value 805 0633069ffcf4d318
 class identity 64 6c9b2adb52519e46
 class repr 193 9b5b84ffbc5eed40
 class wire 1 d7d8166621455bbe

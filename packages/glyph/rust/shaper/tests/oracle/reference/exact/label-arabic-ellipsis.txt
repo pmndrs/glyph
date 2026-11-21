@@ -16,23 +16,23 @@ stage run_local repr 16 8e673e2627152a79
 stage flow value 36 acdb5af20b8395fe
 stage boundary value 28 4be7349d2cb1645d
 stage boundary identity 1 d2625b68da017f0d
-stage positioned identity 4 bed2f1859be29c5e
-stage positioned value 20 4d59c09898b2ffe4
-stage positioned repr 37 48111ff503574cd8
-stage public value 13 bcf00142e423e0fc
-stage public identity 1 b9af26a7a86a86e4
-stage view identity 4 cf765418062256eb
-stage view value 40 94d2fcb85a6f0a14
-stage wire wire 1 4fc83d1b0a960c68
-stage gather identity 7 be361df0997aa1df
-stage gather value 36 fd2f542b037fc662
-stage gpu identity 2 a39ad412696234d8
-stage gpu value 3 da5864782b490ad9
+stage positioned identity 4 51da7c13c9d90679
+stage positioned value 20 da66269fec37978f
+stage positioned repr 37 29f96ed06e635390
+stage public value 13 3bf9bd90dd557f73
+stage public identity 1 60b7023ca5ec5917
+stage view identity 4 6242838c4eddb6dc
+stage view value 40 173263f17ceae7eb
+stage wire wire 1 a8ca9fa32afdb776
+stage gather identity 7 978b2de0f2a218cc
+stage gather value 36 e6009adfc674dd42
+stage gpu identity 2 3b0353164b3a0c14
+stage gpu value 3 e39ab0c21638ac30
 step 01 insert HardBreak (1 units) at 22 + delete 2 at 44 + width 119 + insert SpacedWord (5 units) at 44
-class value 266 1f57f05555b43f86
-class identity 24 6f31b8a0eacdbd84
-class repr 61 0dd7a070727ef24b
-class wire 1 794c608081de1b22
+class value 266 3ea5361dfffdf977
+class identity 24 533db28ddb873641
+class repr 61 94a944aefb24239e
+class wire 1 3b7abab4bcd417c3
 step 02 max lines 0 + insert HardBreak (1 units) at 64 + insert HardBreak (1 units) at 0
 class value 230 284c12e44e97de09
 class identity 22 1eb2ad78b20ce2d6

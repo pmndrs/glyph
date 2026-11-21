@@ -13,33 +13,33 @@ stage cluster value 29 05e90e5e3e7fcd97
 stage cluster identity 4 4a4d1c81be2f2d3b
 stage cluster repr 11 335a15ce5aa3ef4d
 stage run_local repr 16 01f1c13c9fd9e69e
-stage flow value 36 11783e4fa351fdcf
+stage flow value 36 721d03b659f950f5
 stage boundary value 28 91ac508c3627920a
 stage boundary identity 1 2b10b8e08cf24c5c
-stage positioned identity 4 87e386c29f8baaee
-stage positioned value 20 c3cf27dddf3d673e
-stage positioned repr 37 7e4373fcf11dc786
-stage public value 13 f71c751fe52bea25
-stage public identity 1 afc10960756ca754
-stage view identity 4 e5235b4cdf77bde3
-stage view value 40 7ead82512e7eaf6f
-stage wire wire 1 84dc46703e2e8391
-stage gather identity 7 48c0909f269ccbe6
-stage gather value 36 a9c858974e66c03a
-stage gpu identity 2 3d591ede1178926d
-stage gpu value 3 3f9d58cd7c9107c9
+stage positioned identity 4 4ca3e4768f7f5f9d
+stage positioned value 20 44e28c0d6eb4f7b1
+stage positioned repr 37 3e7677a29420b4d2
+stage public value 13 ac13dd82fd8a29f8
+stage public identity 1 d82b93833a60c211
+stage view identity 4 06b2546cc3c8e83e
+stage view value 40 299c0a1420b0cd05
+stage wire wire 1 2f194de6627269dd
+stage gather identity 7 5e5596def4c2cc26
+stage gather value 36 113bb362e810e9b8
+stage gpu identity 2 6c51211ce1109553
+stage gpu value 3 49ab2d105a1c906e
 step 01 delete 8 at 719 + insert SpacedWord (6 units) at 2679
-class value 266 7ecb9134283b628d
-class identity 24 e3a153d1c06f87b1
-class repr 64 94abf34f237d3814
-class wire 1 7d1d0265e8d9533c
+class value 266 2f8e4b75bd9074f6
+class identity 24 5e885862366446ff
+class repr 64 299aabc46b1227cc
+class wire 1 208485c7604dcc53
 step 02 insert HardBreak (1 units) at 539 + max lines 12 + width 865 + width 694.5
-class value 266 68ea850388d29b02
-class identity 24 292fa5db5b88a54b
-class repr 64 7bc683c169717776
-class wire 1 462eeaf0cd3a5598
+class value 266 a4dcfbf45eed19ba
+class identity 24 77533438d170ad31
+class repr 64 429d3283344602c3
+class wire 1 311c9fc2e186d8a5
 step 03 add span 1953..1964
-class value 266 ee3146c6f36f07ee
-class identity 24 292fa5db5b88a54b
-class repr 64 7bc683c169717776
-class wire 1 08a0d44a96404de5
+class value 266 ca5ad7b66e08c768
+class identity 24 77533438d170ad31
+class repr 64 429d3283344602c3
+class wire 1 c8837950b097624b

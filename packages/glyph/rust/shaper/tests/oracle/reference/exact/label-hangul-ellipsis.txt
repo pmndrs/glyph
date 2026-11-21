@@ -39,7 +39,7 @@ class identity 24 4eff9b71ede69fb5
 class repr 61 3099435d1b949a37
 class wire 1 5fec84d100607326
 step 03 insert SpacedWord (3 units) at 59
-class value 266 28b701cbf33d3226
-class identity 24 69e796170fc123cd
-class repr 61 f0c496298d1688d8
-class wire 1 11620d182cd17591
+class value 266 675e16a82390c2a2
+class identity 24 c1fc60e1cf9177a2
+class repr 61 c536327e1b0275bc
+class wire 1 26b419869ba708ed

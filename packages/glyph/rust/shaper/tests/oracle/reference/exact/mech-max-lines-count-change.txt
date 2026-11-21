@@ -14,36 +14,36 @@ stage cluster identity 4 3503d241dd0a9f09
 stage cluster repr 11 eb1340d67a07103c
 stage cluster cache 5 79709bfe78b4e242
 stage run_local repr 16 be2a25cccd2b6dcf
-stage flow value 36 38e0a27377552369
-stage boundary value 28 eb189686fd23af9a
-stage boundary identity 1 488fa70724072e8e
-stage positioned identity 4 1081eb534fc1c281
-stage positioned value 20 c5794411f7efef95
-stage positioned repr 37 510ab63667a65011
-stage public value 13 cd59a06f94f8bb09
-stage public identity 1 f6e9d3c27ae4acfe
-stage view identity 4 426b035a7970da03
-stage view value 40 48e221338896feaf
-stage wire wire 1 2d0b8212b9d2dc7a
-stage gather identity 7 f9e911f05d7cccca
-stage gather value 36 42d5c85ae344097d
-stage gpu identity 2 ca0cd29e1eda099d
-stage gpu value 3 2e442c271e8e3e2a
+stage flow value 36 31a48e94d85a9a95
+stage boundary value 28 f69a81905d3090df
+stage boundary identity 1 3fff981fb8885b2c
+stage positioned identity 4 1e53c70ab230bc52
+stage positioned value 20 6c342e3b05ad5a67
+stage positioned repr 37 74d59f28db66e4cc
+stage public value 13 7e06a0f3f449d540
+stage public identity 1 8d30a0eb48126d14
+stage view identity 4 8959839ef0638c09
+stage view value 40 7fad22e4f4674912
+stage wire wire 1 a9b3a4573776941e
+stage gather identity 7 84f6c268a4c0c66d
+stage gather value 36 4864fe7248647cc7
+stage gpu identity 2 f2e29aa5ab43293a
+stage gpu value 3 e74bdf8d60815a12
 step 01 delete half, under the limit
 class value 230 ba470d708a346c18
-class identity 22 87f3836180f5aeb4
+class identity 22 833780f7fd29fd69
 class repr 44 dc8f71cb435e1b09
 class cache 5 5d81e22640576ca3
 class wire 1 c92f5a5d0cdf4434
 step 02 two edits in one request, over the limit
-class value 266 ecf8730a3af44772
-class identity 24 f28587000760a191
-class repr 64 61e5bb566e975693
+class value 266 c427c0123f146fe8
+class identity 24 2951df3eb70b049b
+class repr 64 673023b045028888
 class cache 5 7cb63a456530cfbe
-class wire 1 4d6365fd9c125aea
+class wire 1 8faeaa359d1ea159
 step 03 raise the limit
 class value 230 021d026c198d4bc4
-class identity 22 8097fe7697bb4283
+class identity 22 24c1f200e2f3abdd
 class repr 44 231587889f680f9f
 class cache 5 7cb63a456530cfbe
 class wire 1 01aa15ce525ea717

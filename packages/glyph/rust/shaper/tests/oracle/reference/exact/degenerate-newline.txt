@@ -7,23 +7,30 @@ stage text identity 1 8b4193d3cf71402e
 stage unicode value 6 e3561f08f0b70385
 stage bidi value 8 40211967813bc79a
 stage style value 26 2d413f846c34624c
-stage cluster value 1 22f168877ee6a927
-stage cluster repr 1 cc2006c36bdeb2ed
-stage view identity 4 a6d93c56fce255c9
-stage view value 40 79045b895a409ba1
-stage wire wire 1 5f1f8357b3352e5e
+stage cluster value 23 664cad05ec10f286
+stage cluster identity 3 672f31888da26115
+stage cluster repr 8 1c348b77d1ece20b
+stage run_local repr 2 f62d3d56a07e5f93
+stage flow value 35 560cfe9f825e126f
+stage positioned value 3 37de90d4677c1022
+stage positioned repr 12 59709650106d3efa
+stage positioned identity 2 54219e9e1774a79a
+stage view identity 4 4249c21001735eae
+stage view value 40 cdf99a18d22b3a82
+stage wire wire 1 c592fdbe12ca6555
+stage gpu identity 1 2330bd9b7e98d57a
 step 01 max lines 12
-class value 83 8419aadb09e940fa
-class identity 5 dcad5953f46a75e3
-class repr 1 cc2006c36bdeb2ed
-class wire 1 b5882463d3d05750
+class value 143 b439b94ce25a299b
+class identity 11 49f927601c671a87
+class repr 22 99ccd7e1a08f548c
+class wire 1 8743fc0b5bfd4836
 step 02 delete 1 at 0
-class value 77 c0236a9b5ec5c842
+class value 115 b02c52b7b8540d4b
 class repr 1 cc2006c36bdeb2ed
-class identity 4 a6d93c56fce255c9
-class wire 1 676648b2b594af03
+class identity 5 71860769367570d2
+class wire 1 73f1a63aa55f78ad
 step 03 width 655.5 + insert Bidi (1 units) at 0
 class value 230 3bc91dc5ef6efb8f
-class identity 22 b1bfee57444e96a6
+class identity 22 2dda32d48a06a732
 class repr 41 4fa87f430ec451d0
-class wire 1 cedbfcbc10390fac
+class wire 1 8b6dc34fe0fd1784

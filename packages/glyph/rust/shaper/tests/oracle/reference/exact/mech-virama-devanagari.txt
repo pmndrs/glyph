@@ -37,17 +37,17 @@ class identity 22 9aa383360b145ae6
 class repr 44 bda88cdfb04d6cfd
 class wire 1 1f25d443917c40ad
 step 03 max lines 3
-class value 266 894187d3ddae9143
+class value 266 7c51137d27bb489b
 class identity 24 bf409afbc89a5406
 class repr 64 c6b27d044964b1c3
-class wire 1 b48285989df7577f
+class wire 1 baa27ec2d399b669
 step 04 delete 4 at 383 + width 382.75 + insert HardBreak (1 units) at 205
-class value 266 a6b3ed2f8523d46d
-class identity 24 a4d7097cfa4fe849
-class repr 64 a4d0025e44a85c1c
-class wire 1 5f544fbae0b99a21
+class value 266 7d295776c6f7f248
+class identity 24 07f4a0b1df126eb8
+class repr 64 0326fd83a73a4d21
+class wire 1 3ab42757999a17d3
 step 05 width 349.75
-class value 266 cf1a2406fb31b4c0
-class identity 24 400df8d8808060b5
+class value 266 7519a7e17c1cfd8d
+class identity 24 6879aeb3b2c962d1
 class repr 64 81baf3c1811ac0b7
-class wire 1 f6cd6d4f56a2b742
+class wire 1 33b802c7af96d77d

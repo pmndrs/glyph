@@ -80,11 +80,11 @@ class repr 64 2c62bdead7488132
 class cache 5 771fd592c628b6df
 class wire 1 9a63b4b88c2ed0df
 step 09 delete 2 at 201 + direction 1 + max lines 12
-class value 325 bff073e7dceb8a77
+class value 325 f6c4f93e5d25fe03
 class identity 31 988161113bc3c746
 class repr 64 3119195207dfdf2b
 class cache 5 9bd027ade8a8b6b7
-class wire 1 a5d3fc8b9dd07377
+class wire 1 5e438fb5c6994a70
 step 10 add span 457..475 + delete 403 at 203 + width 600.03125 + direction 2
 class value 324 2e5630eb698dc819
 class identity 31 6525b3775221d488

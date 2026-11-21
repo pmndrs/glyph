@@ -14,36 +14,36 @@ stage cluster identity 4 cdd8f8d1245a330b
 stage cluster repr 11 acff4d2aeaa2ab86
 stage cluster cache 3 cb18201ad8c33652
 stage run_local repr 16 844c047bfc7f823d
-stage flow value 36 0d637f63b75a01ef
+stage flow value 36 ae6e0ec87ae9843f
 stage boundary value 28 4b7ca1b842bb7ca9
 stage boundary identity 1 cdde9c7f50175152
-stage positioned identity 4 b2704e5625018a4e
-stage positioned value 20 52d62fb49a1ab9b3
-stage positioned repr 37 ba79c73fc9d37c11
-stage public value 13 071b16d4d299c244
+stage positioned identity 4 9790b3f349f5d339
+stage positioned value 20 353559de5872af76
+stage positioned repr 37 558cbaa587a3cb1b
+stage public value 13 b5d5bc4bb1757a3f
 stage public identity 1 d9307e619ed32aa5
 stage view identity 4 5373ad777873d66e
-stage view value 40 b233bc794e600a3a
-stage wire wire 1 2fa6d96fcf555c9b
-stage gather identity 7 10c123b2b18c2198
-stage gather value 36 d369520b987ea2eb
-stage gpu identity 2 152eda864aa99009
-stage gpu value 3 eeb57f52ac223e63
+stage view value 40 0f778dd39da4e909
+stage wire wire 1 649927dfa3e368e8
+stage gather identity 7 2a59f7bfb073fb78
+stage gather value 36 2112bba1be5968cb
+stage gpu identity 2 8e87a455d6b0f2d2
+stage gpu value 3 cea23c55be6492fe
 step 01 insert SpacedWord (212 units) at 1697
-class value 266 daa4ddee72e275ac
-class identity 24 dfa0999a2c1baddf
-class repr 64 e941d412d7b20e4f
+class value 266 3090e20567825739
+class identity 24 6193f1ddd0e19d9d
+class repr 64 8ca19965e7dcc2fc
 class cache 3 384e40279767e342
-class wire 1 4908afd06c772966
+class wire 1 bc1e22ef545d6b3c
 step 02 insert Space (1 units) at 444 + width 607 + width 0
-class value 266 2ce681615d67acc1
-class identity 24 db57f83d70dafccc
-class repr 64 bed0e8beb6cbc97e
+class value 266 1f18c344bff86f71
+class identity 24 85c429f70343c9a7
+class repr 64 1ec9aecd72f9e469
 class cache 3 a6b54575d613eec3
-class wire 1 8954176e1a822f75
+class wire 1 76dac1f64b36d856
 step 03 add span 1674..1689
-class value 266 ab984d1b5ac84447
-class identity 24 c0c78ae988f443e8
-class repr 64 222fd4a381951261
+class value 266 896ca6f3debad38b
+class identity 24 5de0ed083c9932e6
+class repr 64 dde080712b445ded
 class cache 3 a6b54575d613eec3
-class wire 1 1977a48c3ef01fc2
+class wire 1 0913c9c17421996b

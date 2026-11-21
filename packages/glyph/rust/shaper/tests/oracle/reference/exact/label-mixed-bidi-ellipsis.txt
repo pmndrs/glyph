@@ -16,30 +16,30 @@ stage run_local repr 16 25ea89892f117910
 stage flow value 36 63419227657bc62c
 stage boundary value 28 d2ea2e1faa6278dd
 stage boundary identity 1 d62c6c73015a8ff9
-stage positioned identity 4 5f3d1fdf822558e6
-stage positioned value 20 f64eb01d61b85314
-stage positioned repr 37 fd8fcc2ca7b8a82a
-stage public value 13 3e5042078744ac12
-stage public identity 1 810acc7664cee6e3
-stage view identity 4 912d7e900dfc06d0
-stage view value 40 74f58dd77da19a99
-stage wire wire 1 8699d2689b2e1261
-stage gather identity 7 b57dfb7e85f0b131
-stage gather value 36 d72cfc881df5cb38
-stage gpu identity 2 6b38ca3add6c9f30
-stage gpu value 3 bc07a6bd884cba89
+stage positioned identity 4 1ac915d09ac10929
+stage positioned value 20 50bcda8bfee1862f
+stage positioned repr 37 2f5554b87e4ed14f
+stage public value 13 d3d5dadefe3af064
+stage public identity 1 e27e3eac21ef8d16
+stage view identity 4 2cbe6e52d540f168
+stage view value 40 1ab2bdb20006b89e
+stage wire wire 1 aa0da3ec67b501e6
+stage gather identity 7 62a0b42596fbbf62
+stage gather value 36 949962c870a323d7
+stage gpu identity 2 20f3e6eed65ddb52
+stage gpu value 3 3fe8ce1ad1238ccd
 step 01 add span 13..45
-class value 266 06b3d93680750d83
-class identity 24 c226f9f33b18488b
-class repr 61 da11f7686e2c589a
-class wire 1 012a28ae3df213b9
+class value 266 cf3a2c32a34ecf9d
+class identity 24 a87f1994b4fcc8b0
+class repr 61 0275be5a7359712e
+class wire 1 c7a7bbfd424a5611
 step 02 insert Foreign (8 units) at 15 + replace 5 at 15
-class value 266 2404b899b393fa7f
-class identity 24 8e6219dc63c73e52
-class repr 61 06da31df1e9f5d2e
-class wire 1 98e696b71d54cf52
+class value 266 7d352cdc58a99d18
+class identity 24 5763987fcb8361a8
+class repr 61 26a3d6feb8a03c16
+class wire 1 bc4301098dbaefd1
 step 03 max lines 12
-class value 266 2404b899b393fa7f
-class identity 24 8e6219dc63c73e52
-class repr 61 06da31df1e9f5d2e
-class wire 1 1e333755ae5efed9
+class value 266 7d352cdc58a99d18
+class identity 24 5763987fcb8361a8
+class repr 61 26a3d6feb8a03c16
+class wire 1 02c232fec47be2e3

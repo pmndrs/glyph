@@ -7,19 +7,21 @@ stage style value 26 46266f873ee533fd
 stage shaping_run value 5 5641b2c4bdc35a0b
 stage cluster value 2 e193e0703bae230f
 stage cluster repr 1 cc2006c36bdeb2ed
-stage view identity 4 a6d93c56fce255c9
-stage view value 40 f6c354268a4b8c15
-stage wire wire 1 6557c3c9b7f4a6c1
+stage flow value 35 4cf9db5079198c11
+stage positioned value 3 5673f87630672a73
+stage view identity 4 4648cb62dc1fa65c
+stage view value 40 103f6183c7213c7f
+stage wire wire 1 447bef7ee2189dab
 step 01 align 2
-class value 77 c0236a9b5ec5c842
+class value 115 c9183c0ca3112c3d
 class repr 1 cc2006c36bdeb2ed
-class identity 4 a6d93c56fce255c9
-class wire 1 53f42d56167d2ba4
+class identity 4 4648cb62dc1fa65c
+class wire 1 2d8ec30f17d3a50b
 step 02 width 458
-class value 77 1754f9edc4044277
+class value 115 fea8c75f91e04a08
 class repr 1 cc2006c36bdeb2ed
-class identity 4 a6d93c56fce255c9
-class wire 1 5cfba2a545153965
+class identity 4 4648cb62dc1fa65c
+class wire 1 550149ca8865ed96
 step 03 insert Word (5 units) at 0 + replace 1 at 4
 class value 220 c6917f967cd364d3
 class identity 20 53f717e1e7896036
