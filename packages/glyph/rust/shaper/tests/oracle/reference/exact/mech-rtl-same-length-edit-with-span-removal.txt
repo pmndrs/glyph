@@ -1,0 +1,30 @@
+# glyph layout oracle reference v1
+case mech-rtl-same-length-edit-with-span-removal
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 9a6775a1bbbc40fe
+stage text identity 1 dc4b266db39b837d
+stage unicode value 6 42645c4cae05aced
+stage bidi value 8 1dff00e6e745ec54
+stage style value 26 9f8c1991fde989a3
+stage shaping_run value 5 ac8d0247b4e87685
+stage shape value 14 cdfc6c8d6175a00b
+stage cluster value 29 06d042ad90590f6e
+stage cluster identity 4 d39c409d12d70809
+stage cluster repr 11 652ad9497a4e19ae
+stage run_local repr 16 7de08c1dd9783e48
+stage flow value 35 ee93641f8477e557
+stage positioned identity 3 e05c524f1df96de3
+stage positioned value 25 9bcb9ea355609326
+stage positioned repr 17 1f46ea23c60490ee
+stage public value 13 e939ea3261e92afa
+stage public identity 1 c11926941e92da5b
+stage view identity 4 b29170f9e63cd5af
+stage view value 40 adf1b396dda60604
+stage wire wire 1 9af25b504d326a76
+stage gather identity 7 b5147c305cba7155
+stage gather value 36 f7adbc741d315611
+stage gpu identity 2 0fe393ab060a9d91
+stage gpu value 3 2d84f2b48da8f2ef
+step 01 capitalize and remove the span
+outcome incremental failed with prepare: InvalidRequest but cold succeeded

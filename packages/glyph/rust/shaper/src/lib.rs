@@ -13,6 +13,8 @@ pub mod unicode;
 #[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
 mod wire;
 
+#[cfg(all(target_arch = "wasm32", feature = "oracle"))]
+mod oracle_wasm;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
 

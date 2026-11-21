@@ -2305,7 +2305,7 @@ impl PositionedGlyphArena {
         &self.replacement_runs
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "oracle"))]
     pub(crate) fn replacement_run_local(&self) -> &RunLocalArena {
         &self.replacement_run_local
     }

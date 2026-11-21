@@ -1,0 +1,58 @@
+# glyph layout oracle reference v1
+case mech-ltr-is-text-wide
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 477c19b025f1a50d
+stage text identity 1 abc8eec81ef1cbb9
+stage unicode value 6 b06d5b8281d998b9
+stage bidi value 8 a7bb55b60e1dbdc2
+stage style value 26 a597fdfae2d2f090
+stage shaping_run value 5 ea9827547069e9a4
+stage shape value 14 50dabfdc472ae039
+stage cluster value 29 2671cec8eba26542
+stage cluster identity 4 bd8ea23122705fa1
+stage cluster repr 11 f44084f528f0bc85
+stage cluster cache 5 8aa735c8a2972aa1
+stage run_local repr 16 45f8e9f187bab39e
+stage flow value 35 a8825da202cf2b5a
+stage boundary value 28 439c24358d100111
+stage boundary identity 1 d3bc1f800cf4a5e8
+stage positioned identity 4 89c5a588e61cda29
+stage positioned value 20 29f5a9a96f373e62
+stage positioned repr 37 2b220dd90e1005c4
+stage public value 13 76d2c60a469481ee
+stage public identity 1 44b75dd169e91bf2
+stage view identity 4 84c3efc36977ddfb
+stage view value 40 a91a3651dbabf6af
+stage wire wire 1 88fdcb859be06895
+stage gather identity 7 2110940cf139cd67
+stage gather value 36 16f9fe6127268d3b
+stage gpu identity 2 6f9a98c6d7cb3b89
+stage gpu value 3 5558b05e63d9b85d
+step 01 one Arabic letter in paragraph two
+class value 230 a6e9bf7c7d83ede8
+class identity 22 20dea345d3966723
+class repr 44 1231ece2c565a9cd
+class wire 1 1d85dfa2589316d1
+step 02 restore
+class value 265 5f88738a309b762a
+class identity 24 93302c1ec7996815
+class repr 64 bcd790e042d19d68
+class cache 5 8aa735c8a2972aa1
+class wire 1 040dece21f2d5f3b
+step 03 insert HardBreak (1 units) at 320 + insert Word (8 units) at 68 + replace 4 at 343
+class value 265 25a63f23964f5485
+class identity 24 2cbe89179995dab0
+class repr 64 61395f49e2b3ba47
+class cache 5 e5154318b56dcc4f
+class wire 1 d7e854a2a93f699d
+step 04 insert SpacedWord (209 units) at 379
+class value 230 5a3f8ffd335a8a09
+class identity 22 40c6c681c2c8ef4c
+class repr 44 715c0623075014a5
+class wire 1 e2a55d5d3cf62421
+step 05 width 709.5
+class value 230 5c33a78bf9f2d816
+class identity 22 c4aaa82c9c333eb6
+class repr 44 c9ee8a586768b58c
+class wire 1 86bc00c85abafa5f

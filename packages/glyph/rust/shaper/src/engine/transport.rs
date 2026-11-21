@@ -189,6 +189,12 @@ impl FrameTransport {
         self.request.capacity()
     }
 
+    /// The whole output arena, for the layout oracle to read a publication back natively.
+    #[cfg(feature = "oracle")]
+    pub fn result_bytes(&self) -> &[u8] {
+        self.output.bytes()
+    }
+
     pub fn result_capacity(&self) -> u32 {
         self.output.capacity()
     }

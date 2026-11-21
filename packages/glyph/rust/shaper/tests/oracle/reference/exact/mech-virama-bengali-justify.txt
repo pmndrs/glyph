@@ -1,0 +1,38 @@
+# glyph layout oracle reference v1
+case mech-virama-bengali-justify
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 6082a6dcada07e29
+stage text identity 1 337a860331b15c78
+stage unicode value 6 72a370588f7b3970
+stage bidi value 8 e90190e773a7f4b2
+stage style value 26 1b65b189943b5279
+stage shaping_run value 5 9c6cff4b06fc2e72
+stage shape value 14 7b59671b64540c7a
+stage cluster value 29 c67051ce345889ed
+stage cluster identity 4 00fc2af545aa2799
+stage cluster repr 11 946ec705296e92c9
+stage run_local repr 16 a8d5efc1fa4ab5ae
+stage flow value 35 39c2dd1443cd859f
+stage positioned identity 3 04bc1acdd0eb204a
+stage positioned value 13 0200490b51823c39
+stage positioned repr 17 daee9bc4645ee01d
+stage public value 13 97de4f7e6d751d47
+stage public identity 1 8db892aa8a87db79
+stage view identity 4 f809f631f9577d9f
+stage view value 40 01d66ebfa22cf13a
+stage wire wire 1 2c0cd5869a314cef
+stage gather identity 7 18845cdcc65cd65e
+stage gather value 36 7003a28f5d101bcd
+stage gpu identity 2 8466d5ad1a345c81
+stage gpu value 3 b499b36a252d5020
+step 01 join a conjunct
+class value 230 b7a14492ec6360e7
+class identity 22 e4f29054327c6bcb
+class repr 44 043fa70f7cc7709a
+class wire 1 22e48720221c24f1
+step 02 restore
+class value 230 35d64cae3f4863df
+class identity 22 f87bba69669db4da
+class repr 44 b90d042ef620f20e
+class wire 1 05c39bb7f0fed94c

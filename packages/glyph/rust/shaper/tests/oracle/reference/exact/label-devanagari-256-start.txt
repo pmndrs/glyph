@@ -1,0 +1,49 @@
+# glyph layout oracle reference v1
+case label-devanagari-256-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 63f1d58b3fbd6f54
+stage text identity 1 a8b922db3955fa16
+stage unicode value 6 41d3b4e2201fe526
+stage bidi value 8 866f07831ebcc3e7
+stage style value 26 1362210123e45163
+stage shaping_run value 5 1ba0251cf747da1e
+stage shape value 14 b8c175970399ef53
+stage cluster value 29 075487ff384f44ea
+stage cluster identity 4 0bb629a229e99118
+stage cluster repr 11 41dbbaf689f0ac1e
+stage cluster cache 5 fc8091385e143802
+stage run_local repr 16 4e007180f12fea3e
+stage flow value 35 75a386ada4a42805
+stage boundary value 28 df5ff634b7432a32
+stage boundary identity 1 1251ed2f93b77134
+stage positioned identity 4 0f49910fe08aa732
+stage positioned value 20 7ba19ea64c9eebb8
+stage positioned repr 37 bdbf3bce086d0f49
+stage public value 13 52b2bfef8b79b0d7
+stage public identity 1 35b972bfc474af6e
+stage view identity 4 0cc2041d8f84762a
+stage view value 40 dce399c1551e978e
+stage wire wire 1 213ba56731e30f49
+stage gather identity 7 33ff331e3be91bfe
+stage gather value 36 adb07ae25a53d111
+stage gpu identity 2 c7b7eb5425ac5784
+stage gpu value 3 a9596ea758978d6e
+step 01 direction 2
+class value 265 dec334d9d2ea0501
+class identity 24 820f68a0236050e6
+class repr 64 c78e7630989baa7c
+class cache 5 fc8091385e143802
+class wire 1 e59536234113ce95
+step 02 
+class value 245 b64addb113d86828
+class identity 22 2e478a281e1f0d06
+class repr 64 c78e7630989baa7c
+class cache 5 fc8091385e143802
+class wire 1 a936ab69eca40f59
+step 03 insert Word (6 units) at 126
+class value 230 9c0fbb04ccab4229
+class identity 22 70c8c041da90dc1b
+class repr 44 876f561f8b456f3f
+class cache 3 1031f2c4b445e150
+class wire 1 ffe5394362072fdb

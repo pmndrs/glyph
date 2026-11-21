@@ -317,6 +317,13 @@ impl RenderPlanCompiler {
         self.prepared_strategy = PreparedStrategy::None;
     }
 
+    /// Whether the prepared view replaces the renderer's draw structure. An empty strategy
+    /// reuses what is live (or has never drawn anything), so it replaces nothing.
+    #[cfg(feature = "oracle")]
+    pub(crate) fn publishes_bindings(&self) -> bool {
+        self.prepared_strategy == PreparedStrategy::Ordered && self.ordered.publishes_bindings()
+    }
+
     pub fn buffer_bytes(&self, id: u32) -> Option<&[u8]> {
         self.session
             .buffer_bytes(id)

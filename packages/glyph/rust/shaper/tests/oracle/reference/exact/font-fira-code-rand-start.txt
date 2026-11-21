@@ -1,0 +1,63 @@
+# glyph layout oracle reference v1
+case font-fira-code-rand-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 d1068de2cec785ed
+stage text identity 1 301481f039bd8ccd
+stage unicode value 6 ed8874c4a09bd435
+stage bidi value 8 9b53d90824661971
+stage style value 26 10d903b6aff2b620
+stage shaping_run value 5 572061d20c844d76
+stage shape value 14 df8ecda8af8a9e98
+stage cluster value 29 88ae555be0e9e8f6
+stage cluster identity 4 b741d4e50627fe01
+stage cluster repr 11 f04259cbe4c5ded5
+stage run_local repr 16 83f4494b2a8bd298
+stage flow value 35 b2a6eb796d25c7a4
+stage positioned identity 3 e7383c3eb88c32d6
+stage positioned value 13 af7a569f96b0adc7
+stage positioned repr 17 6354e835ebe283c0
+stage public value 13 c851160bd3212237
+stage public identity 1 afbbb85cc3fc663f
+stage view identity 4 fdb89125acf30333
+stage view value 40 edd38873c9b8a031
+stage wire wire 1 77b8cfe01a442ca6
+stage gather identity 7 b8a7cffff3fe750e
+stage gather value 36 229c4c548ba510ad
+stage gpu identity 2 1d5e04a6c5ccc288
+stage gpu value 3 c3d64d88a87643e4
+step 01 width 417
+class value 230 e1ea11ab28950ca3
+class identity 22 03d91ca740a844ae
+class repr 44 9465c0cf28e880b8
+class wire 1 41b0cd6995936cdf
+step 02 width 418
+class value 230 762819d343b3f860
+class identity 22 03d91ca740a844ae
+class repr 44 9465c0cf28e880b8
+class wire 1 d736aaf117ffe0d7
+step 03 width 233.5
+class value 230 eb03971fa2322b1f
+class identity 22 7883779e6e0c15b3
+class repr 44 49c6e34cff513880
+class wire 1 23a95de97dff8db5
+step 04 width 600
+class value 230 335e9dc09abbc848
+class identity 22 ec25c549f5e5af15
+class repr 44 a2ea020261245087
+class wire 1 c7e7823983737dab
+step 05 max lines 3 + direction 1 + insert Space (1 units) at 2072 + flip case at 2078
+class value 266 e0c9f016bb1324fc
+class identity 24 30e1287ce9b56026
+class repr 64 83f9783bc11a6814
+class wire 1 44d01b0a4c643b5b
+step 06 insert Mark (1 units) at 1349
+class value 266 4a6de2b5ad5e98a8
+class identity 24 c46f7e4874435b7d
+class repr 64 e9847f87cdd4d815
+class wire 1 e6da44333db826b5
+step 07 replace 4 at 1613
+class value 266 d47d352ef5fac885
+class identity 24 bf6f32fe784825b5
+class repr 64 2fbf889af4f83b55
+class wire 1 fc280a86ed86ec02

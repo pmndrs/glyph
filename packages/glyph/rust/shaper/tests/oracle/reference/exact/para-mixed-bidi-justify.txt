@@ -1,0 +1,63 @@
+# glyph layout oracle reference v1
+case para-mixed-bidi-justify
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 34872c6c25638b34
+stage text identity 1 dda5788083da2cf5
+stage unicode value 6 eb2115c32b039849
+stage bidi value 8 59757ab16976f5de
+stage style value 26 059a2838df0c01a5
+stage shaping_run value 5 cec9f8a8c8db940a
+stage shape value 14 f11c55b9781c1967
+stage cluster value 29 17fa4b5a9652e0b1
+stage cluster identity 4 cb45846a9315820c
+stage cluster repr 11 26a26fcc4192dd46
+stage run_local repr 16 ad97798dd341638b
+stage flow value 35 260eb5545ad0f7ca
+stage positioned identity 3 34b9ade12aab2410
+stage positioned value 13 93612cb199b42fe4
+stage positioned repr 17 f6fb1b6ab9952f5b
+stage public value 13 626c4326164e99e4
+stage public identity 1 ce085dbd5b591f7e
+stage view identity 4 7d7eae477bbf5f3e
+stage view value 40 4a76ee62fcc0d16a
+stage wire wire 1 3b1624452bce1600
+stage gather identity 7 eb1afbecfec56dbb
+stage gather value 36 f82ad0ba9f39fe84
+stage gpu identity 2 056179072907177f
+stage gpu value 3 ff67d800a7dabcfb
+step 01 width 417
+class value 230 e18221dd8c55627b
+class identity 22 f393b181348f47b2
+class repr 44 46f70dee6db779b4
+class wire 1 f9425ce4d6353685
+step 02 width 418
+class value 230 1e4c6775a47e1945
+class identity 22 4a0cbd3a373244c7
+class repr 44 c6f1140d86f2da15
+class wire 1 9767ae952a5348c9
+step 03 width 233.5
+class value 230 0ba4b5155829c6e3
+class identity 22 a127694aa04af4ef
+class repr 44 dd1e283c2b7d34f1
+class wire 1 722d1c1ba886b87d
+step 04 width 600
+class value 230 c37fcc12b3ab3640
+class identity 22 7216c2ebe89aad6d
+class repr 44 c2063d009f2c5613
+class wire 1 4b105ca30d5da9a9
+step 05 delete 1 at 1434
+class value 230 f22ef315d828b80c
+class identity 22 d969a7ecf3beaead
+class repr 44 927fd0941ea48712
+class wire 1 46d99947414c5df2
+step 06 width 634.75 + insert Mark (1 units) at 2286
+class value 230 657d6fc53774fd28
+class identity 22 75d7ad0cb8415639
+class repr 44 89da544e1678eb82
+class wire 1 e5dd6a70e08c14d9
+step 07 insert HardBreak (1 units) at 846
+class value 230 027e93b3a8cf6041
+class identity 22 21d4ed5bd957048e
+class repr 44 458891c32828738c
+class wire 1 c926cd3394d96aad

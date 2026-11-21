@@ -63,6 +63,8 @@ mod style_state;
 pub(crate) mod work_attribution;
 
 pub(crate) use positioning::SemanticGlyph;
+#[cfg(feature = "oracle")]
+pub use state::oracle;
 pub use state::{EngineError, FrameFault, TextEngine};
 
 fn reserve_vec<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineError> {

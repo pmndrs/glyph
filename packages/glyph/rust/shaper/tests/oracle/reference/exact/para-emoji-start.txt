@@ -1,0 +1,63 @@
+# glyph layout oracle reference v1
+case para-emoji-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 d5c3e93a65b192a5
+stage text identity 1 9827804ca187ff1d
+stage unicode value 6 5f79bff06e565083
+stage bidi value 8 5f7e83703c58e28c
+stage style value 26 3b796b36227d2031
+stage shaping_run value 5 ee43a5dd0a62707e
+stage shape value 14 92fcdb6db60c96c4
+stage cluster value 29 e4f42fff44a0e308
+stage cluster identity 4 a9f2114f8c61ba87
+stage cluster repr 11 9a71ac2e228dfd88
+stage run_local repr 16 3a2138ce4dee311d
+stage flow value 35 f0cd6e58543ba3f2
+stage positioned identity 3 efc2aca8fb6e16fd
+stage positioned value 13 ebc45f663de6a7ad
+stage positioned repr 17 22f59d5ea4dec378
+stage public value 13 05d2935ec5a9f525
+stage public identity 1 9795bc021d10777b
+stage view identity 4 f420fc484e3b52a6
+stage view value 40 407bbd5df80629bd
+stage wire wire 1 0e9784fc6a496213
+stage gather identity 7 7b80c9cf474f6dec
+stage gather value 36 13bb229a7fdee71f
+stage gpu identity 2 e7842dba5d57e448
+stage gpu value 3 25ccf16d382a130c
+step 01 width 417
+class value 230 6f206becc88c7de5
+class identity 22 95247390808fa1d7
+class repr 44 9fb9b2c6712b9de6
+class wire 1 4f4f11cc2b67d45b
+step 02 width 418
+class value 230 172dd9a14fac6ddd
+class identity 22 5c81d34d541b7a18
+class repr 44 ab466c9ec668e416
+class wire 1 5cd545ec4bdff8ae
+step 03 width 233.5
+class value 230 b51ae180162cbeef
+class identity 22 92acc57790f45e46
+class repr 44 7ed268885eb5ddbe
+class wire 1 82660f3f79972141
+step 04 width 600
+class value 230 d87c7c85039d66c3
+class identity 22 2c8f9eb37e1306fc
+class repr 44 a69afaf539448fcb
+class wire 1 782fb64571011409
+step 05 max lines 12 + replace 3 at 1049 + replace 4 at 3106
+class value 266 a63835e7aeba7c5a
+class identity 24 d8fa5f808db1b3b5
+class repr 64 17f12e5920a0889d
+class wire 1 6dbda4806dae052b
+step 06 insert Mark (1 units) at 0 + metrics size 16 spacing -0.25 line 1.2 word 0 + max lines 0
+class value 230 24eb3e0f5d5a0cad
+class identity 22 38ea2d5da79683bd
+class repr 44 53cd72af6c18a59b
+class wire 1 ba52e4247b7734a6
+step 07 insert Space (1 units) at 0 + flip case at 1252
+class value 230 f32ee356b7c9ca45
+class identity 22 32702174d7cb7e83
+class repr 44 61d23ba90ad8cfea
+class wire 1 f5ba737837e92444

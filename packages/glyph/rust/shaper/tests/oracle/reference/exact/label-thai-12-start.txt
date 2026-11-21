@@ -1,0 +1,37 @@
+# glyph layout oracle reference v1
+case label-thai-12-start
+step cold
+stage owner value 1 07e27e8ffd8af189
+stage text value 1 89b1d7a6474c43c2
+stage text identity 1 bc739551caf080aa
+stage unicode value 6 27ca21f79de273a8
+stage bidi value 8 d159bc75b9ac15d0
+stage style value 26 2d290e6f96ce7163
+stage shaping_run value 5 e6856f842ddffc6c
+stage inline value 81 c32ff80690548745
+stage inline identity 5 3821b65da421ff86
+stage inline repr 21 ddb1355b1dd14a4a
+stage public value 13 74dcdda83432aac0
+stage public identity 1 3a7ff0a69ae552f2
+stage view identity 4 951a1e88d424b5bf
+stage view value 40 363bab8f0ddb5e25
+stage wire wire 1 14bee484c8b6a60d
+stage gather identity 7 68a307f835c7cab3
+stage gather value 36 d1871ae6f8eb781c
+stage gpu identity 2 8763516975bc126d
+stage gpu value 3 cb0ec711628e018a
+step 01 max lines 12 + insert Word (8 units) at 0 + insert Foreign (6 units) at 11
+class value 230 22ea292ae167d9a4
+class identity 22 26a681953704c840
+class repr 41 5d5a25c7ee37065e
+class wire 1 37e80e2e0d8df454
+step 02 delete 3 at 0 + max lines 12
+class value 230 bab5cd5893265a17
+class identity 22 6b3075db1e7db311
+class repr 41 44de741656f39689
+class wire 1 37e0f7d6e8b69f18
+step 03 flip case at 8 + add span 20..23 + delete 2 at 21
+class value 230 5a32164b145491bc
+class identity 22 36bcc5ee4551be92
+class repr 41 d53cffb686446d7f
+class wire 1 1c7f745dbb83e2e6

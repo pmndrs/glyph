@@ -1,0 +1,63 @@
+# glyph layout oracle reference v1
+case para-mixed-bidi-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 34872c6c25638b34
+stage text identity 1 dda5788083da2cf5
+stage unicode value 6 eb2115c32b039849
+stage bidi value 8 59757ab16976f5de
+stage style value 26 059a2838df0c01a5
+stage shaping_run value 5 cec9f8a8c8db940a
+stage shape value 14 f11c55b9781c1967
+stage cluster value 29 17fa4b5a9652e0b1
+stage cluster identity 4 cb45846a9315820c
+stage cluster repr 11 26a26fcc4192dd46
+stage run_local repr 16 ad97798dd341638b
+stage flow value 35 8b621e5128096214
+stage positioned identity 3 55ec277cfa5929c1
+stage positioned value 13 0cafcefa8ab5d2a8
+stage positioned repr 17 5c0a9bef3aa0cb62
+stage public value 13 1b743447141fb5f4
+stage public identity 1 ce085dbd5b591f7e
+stage view identity 4 7d7eae477bbf5f3e
+stage view value 40 4bb32ad2d38eee5c
+stage wire wire 1 085646abe1055934
+stage gather identity 7 9f41d5097440f2ca
+stage gather value 36 cbb57f8c15bb658f
+stage gpu identity 2 5326d601df249c56
+stage gpu value 3 b950a1a6569b77c9
+step 01 width 417
+class value 230 34942fa8111e3a0b
+class identity 22 f862ff07d8345a07
+class repr 44 e319f00b1cea1d19
+class wire 1 87fcf54b88b984a7
+step 02 width 418
+class value 230 12bc5942dab88b4b
+class identity 22 dfc5b62ec04b1154
+class repr 44 ffb2314a72fa8aec
+class wire 1 adb9e46f1629c60d
+step 03 width 233.5
+class value 230 b09c75f11833b5e0
+class identity 22 aceb0c7c5cbfc8d4
+class repr 44 8535e6669eec827d
+class wire 1 a1e3d8f35ff4cf46
+step 04 width 600
+class value 230 8dbc965fcb1dcaf3
+class identity 22 2591f88f67a34731
+class repr 44 1f74270dab3d76a2
+class wire 1 276fb3e4f8762c08
+step 05 direction 0 + width 600.0156 + flip case at 1124
+class value 230 82be01ca24cd1767
+class identity 22 a031b654d32d783c
+class repr 44 c7580c874a7f024b
+class wire 1 96d5a999761d9f5a
+step 06 add span 2278..2287 + width 600.03125 + metrics size 16 spacing 0 line 1.2 word 3 + width 807.75
+class value 230 df627266f9a58adc
+class identity 22 ab31a4f785cb182b
+class repr 44 95ee6fe9b239bb9d
+class wire 1 fbcbe11ec8612083
+step 07 insert Mark (196 units) at 0
+class value 230 10b28d808ea98525
+class identity 22 2afca679680386ff
+class repr 44 f026c69041835521
+class wire 1 71b18b4bf2952e8b

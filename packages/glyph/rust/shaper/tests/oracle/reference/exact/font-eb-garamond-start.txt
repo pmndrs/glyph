@@ -1,0 +1,63 @@
+# glyph layout oracle reference v1
+case font-eb-garamond-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 a745ff56de2b4fa5
+stage text identity 1 06066976dde5f69e
+stage unicode value 6 8cda633f45c4d6e6
+stage bidi value 8 7062e55c691117db
+stage style value 26 57dd8e5a7d04299d
+stage shaping_run value 5 548cbad69f4d75d4
+stage shape value 14 d614865d3925cb6c
+stage cluster value 29 dfef5223b12ede37
+stage cluster identity 4 9521491d47855fc2
+stage cluster repr 11 c58c911c50cec335
+stage run_local repr 16 a92f0f49156e3250
+stage flow value 35 ae13281c69879cfc
+stage positioned identity 3 ab8768dc8a592bcc
+stage positioned value 13 84daf49c31346818
+stage positioned repr 17 bc31fdeacf938f3c
+stage public value 13 86f744f9e323817c
+stage public identity 1 6398ac29306462c3
+stage view identity 4 27c526c5dcc43452
+stage view value 40 a9d5a9a1c54fca95
+stage wire wire 1 98951789b329a1c8
+stage gather identity 7 21773ce74c172daf
+stage gather value 36 20bed2ba24297cc1
+stage gpu identity 2 401ef5238eef1760
+stage gpu value 3 58fd9133e6ffe777
+step 01 width 417
+class value 230 b118f75b66d8281c
+class identity 22 4715888b81a4aac8
+class repr 44 d2e66a47b1624c3d
+class wire 1 df9671b3d0847a1e
+step 02 width 418
+class value 230 489428ecbd225c57
+class identity 22 4715888b81a4aac8
+class repr 44 d2e66a47b1624c3d
+class wire 1 179854134a42629f
+step 03 width 233.5
+class value 230 773dac9a7bacfe9a
+class identity 22 1afeaa85b1829a4c
+class repr 44 eab4987bbffb8507
+class wire 1 15942a918c0f262d
+step 04 width 600
+class value 230 906839d50e2a76b6
+class identity 22 201f6d35b03dd271
+class repr 44 934258b5e4213fb8
+class wire 1 95457dca3e3f8c6f
+step 05 insert SpacedWord (5 units) at 1609
+class value 230 b40abbc47160d4f1
+class identity 22 a6f30f0f4de61e93
+class repr 44 36fc97d1941b56cd
+class wire 1 0d0bbf7802117d71
+step 06 width 483.5
+class value 230 814d7e8815f0226d
+class identity 22 375686688e80d15d
+class repr 44 5eeb1255e47fce75
+class wire 1 3253abcd8c1246fe
+step 07 add span 2329..2362
+class value 242 57a839833817dcd6
+class identity 22 d37c4038cb8c684b
+class repr 44 5eeb1255e47fce75
+class wire 1 fc273d75c0bc64d5

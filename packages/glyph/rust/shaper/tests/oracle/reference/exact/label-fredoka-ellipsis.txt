@@ -1,0 +1,49 @@
+# glyph layout oracle reference v1
+case label-fredoka-ellipsis
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 1326edcdf3001c87
+stage text identity 1 238f223d09246651
+stage unicode value 6 a4854a855fba0ec9
+stage bidi value 8 1b0f03d5afacf078
+stage style value 26 02eed4cefae6485a
+stage shaping_run value 5 ecd506ed1afd1543
+stage shape value 14 b0961a83a52c6dad
+stage cluster value 29 edad9c9c26af46bc
+stage cluster identity 4 6eac224ef51bc756
+stage cluster repr 8 7c9a26191489bcdb
+stage cluster cache 3 33566591890c8004
+stage run_local repr 16 4b3e8c40df1e01f0
+stage flow value 36 7c61d880bea10976
+stage boundary value 28 626d8f93fdd9702f
+stage boundary identity 1 3314ce256bc214e1
+stage positioned identity 4 0fb2070d150249d5
+stage positioned value 20 73417abd05a21eaf
+stage positioned repr 37 0072e2189164689e
+stage public value 13 ab6deacf0755ed37
+stage public identity 1 80d632b3f0cdf7ec
+stage view identity 4 eb6ea626e6fdd534
+stage view value 40 903b04fbca7b8eac
+stage wire wire 1 6e9c21c4b6b06de7
+stage gather identity 7 ae9bdbdc77ac9bc6
+stage gather value 36 d08cd6ad1ed8e0ba
+stage gpu identity 2 4a83a622ed90dbcc
+stage gpu value 3 a6da80c5e6c82f3f
+step 01 flip case at 56 + add span 9..31 + flip case at 22 + align 1
+class value 266 53c5bec6d457e52a
+class identity 24 96fa28c83791451f
+class repr 61 776ce5fe366e34ee
+class cache 3 33566591890c8004
+class wire 1 2453e80dc1b3eb42
+step 02 width 358.25 + replace 4 at 40 + delete 2 at 34 + width 325.25
+class value 266 2135ac41bc2b56cf
+class identity 24 e1be81a401c2d447
+class repr 61 1a2a7561ff2ac766
+class cache 3 4488d22f682a8363
+class wire 1 e1e6d7d1274422c9
+step 03 delete 5 at 26 + metrics size 16 spacing 0 line 1.2 word 0 + flip case at 10
+class value 266 7f1771e4cf0019ca
+class identity 24 888543dec92878b3
+class repr 61 0709d2209a02645c
+class cache 3 9898c9bb881231db
+class wire 1 8927046f443b78de

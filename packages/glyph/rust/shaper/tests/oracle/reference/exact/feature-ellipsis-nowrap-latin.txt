@@ -1,0 +1,31 @@
+# glyph layout oracle reference v1
+case feature-ellipsis-nowrap-latin
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 a745ff56de2b4fa5
+stage text identity 1 06066976dde5f69e
+stage unicode value 6 8cda633f45c4d6e6
+stage bidi value 8 7062e55c691117db
+stage style value 26 57dd8e5a7d04299d
+stage shaping_run value 5 548cbad69f4d75d4
+stage shape value 14 4d0f27a927284990
+stage cluster value 29 2faf2a4e6e781480
+stage cluster identity 4 cdd8f8d1245a330b
+stage cluster repr 11 acff4d2aeaa2ab86
+stage cluster cache 3 cb18201ad8c33652
+stage run_local repr 16 844c047bfc7f823d
+stage flow value 36 b76c8359eeff093e
+stage boundary value 28 ad248f89288dc7d1
+stage boundary identity 1 12728bdf8d79e87d
+stage positioned identity 4 0a69b2fee9fdd140
+stage positioned value 20 a870f8e106f36c32
+stage positioned repr 37 118c1314fd6787e0
+stage public value 13 5b54a07c125c4412
+stage public identity 1 2f99f911feca186c
+stage view identity 4 cc03d8734badb8eb
+stage view value 40 348de92b0217a046
+stage wire wire 1 fb4b08796b240ee9
+stage gather identity 7 2ca814bf150971d3
+stage gather value 36 a71ece223eb588ba
+stage gpu identity 2 3c05a708c0d215e5
+stage gpu value 3 a074fd31c3d73a1e
