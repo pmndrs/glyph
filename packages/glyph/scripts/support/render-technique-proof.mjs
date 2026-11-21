@@ -36,18 +36,10 @@ function mtsdfProof(abi, raster) {
     width: Math.max(...raster.pages.map((page) => page.width)),
     height: Math.max(...raster.pages.map((page) => page.height)),
   };
-  const fields = denseAtlasFields(view, raster.glyphCount, extension.planeUnitsPerEm, raster.pages, binding);
-  fields.push(
-    field(raster.glyphCount, (record) => {
-      const page = view.getUint16(record + 16, true);
-      if (page === ABSENT_PAGE) return 0;
-      return view.getUint16(record + 12, true) / binding.width;
-    }),
-    field(raster.glyphCount, (record) => {
-      const page = view.getUint16(record + 16, true);
-      if (page === ABSENT_PAGE) return 0;
-      return view.getUint16(record + 14, true) / binding.height;
-    }),
+  // The glyph's atlas cell lives in the font's glyph table; the binding carries plane metrics and the table row.
+  const fields = denseAtlasFields(view, raster.glyphCount, extension.planeUnitsPerEm, raster.pages, binding).slice(
+    0,
+    4,
   );
   return proof(abi, mtsdfProgram(abi), {
     glyphCount: raster.glyphCount,
@@ -55,7 +47,7 @@ function mtsdfProof(abi, raster) {
     resources: [{ id: 1, generation: 1, kind: 1, reference: 1 }],
     resourceIndices: pageIndices(view, raster.glyphCount, true),
     glyphF32: fields,
-    glyphU32: [field(raster.glyphCount, (record) => view.getUint16(record + 16, true))],
+    glyphU32: [field(raster.glyphCount, (record) => record / 20)],
   });
 }
 
@@ -194,42 +186,37 @@ function mtsdfProgram(abi) {
   transformed(1, 1, 1, 11, 'subtractF32');
   scaled(1, 2, 12, 2);
   scaled(1, 3, 13, 2);
-  for (let lane = 0; lane < 4; lane += 1) copyF32(2, lane, 14 + lane);
-  copyF32(3, 0, 14);
-  copyF32(3, 1, 15);
-  copyF32(3, 2, 18);
-  copyF32(3, 3, 19);
-  for (let lane = 0; lane < 4; lane += 1) copyF32(4, lane, 3 + lane);
+  for (let lane = 0; lane < 4; lane += 1) copyF32(2, lane, 3 + lane);
   loadU32(0, 1);
-  storeU32(5, 0, 0);
+  storeU32(3, 0, 0);
   loadU32(0, 2);
-  storeU32(5, 1, 0);
-  copyF32(6, 0, 8);
-  copyF32(6, 1, 9);
-  copyF32(6, 2, 7);
+  storeU32(3, 1, 0);
+  copyF32(4, 0, 8);
+  copyF32(4, 1, 9);
+  copyF32(4, 2, 7);
   loadU32(0, 3);
   operations.push({ opcode: abi.codec.opcodes.convertU32ToF32, target: 1, operand0: 0 });
-  storeF32(6, 3, 1);
+  storeF32(4, 3, 1);
   loadU32(0, 0);
-  storeU32(7, 0, 0);
+  storeU32(5, 0, 0);
   const context = {
     inputs: [
       ...semanticFields.map((inputField) => ({ scope: 'semantic', field: inputField })),
-      ...Array.from({ length: 10 }, (_, fieldIndex) => ({ scope: 'glyph', field: fieldIndex })),
+      ...Array.from({ length: 4 }, (_, fieldIndex) => ({ scope: 'glyph', field: fieldIndex })),
       { scope: 'semantic', field: semanticU32.placementSlot },
       { scope: 'semantic', field: semanticU32.outlineRgba },
       { scope: 'semantic', field: semanticU32.shadowRgba },
       { scope: 'glyph', field: 0 },
     ],
     operations,
-    f32InputCount: 20,
+    f32InputCount: 14,
     u32InputCount: 4,
   };
   return program(context, [
-    ...floatBuffers(abi, [4, 4, 4, 4]),
-    ...uintBuffers(abi, [2], 5),
-    { id: 6, scalar: abi.codec.scalarTypes.f32, vectorWidth: 4 },
-    { id: 7, scalar: abi.codec.scalarTypes.u32, vectorWidth: 1 },
+    ...floatBuffers(abi, [4, 4]),
+    ...uintBuffers(abi, [2], 3),
+    { id: 4, scalar: abi.codec.scalarTypes.f32, vectorWidth: 4 },
+    { id: 5, scalar: abi.codec.scalarTypes.u32, vectorWidth: 1 },
   ]);
 }
 
