@@ -3714,6 +3714,14 @@ test('Three carries supported text effects into MSDF lanes and rejects them for 
     );
     assert.ok(Number.isInteger(page[3]) && page[3] > 0, 'the fourth effect lane addresses the glyph table row');
 
+    // Shaders negate the unit quad's y, so its triangles must be clockwise in the unit square to face +z.
+    const corners = draw.geometry.getAttribute('position').array;
+    for (const first of [0, 9]) {
+      const [ax, ay, , bx, by, , cx, cy] = corners.subarray(first, first + 9);
+      const placedArea = (bx - ax) * (-cy + ay) - (-by + ay) * (cx - ax);
+      assert.ok(placedArea > 0, 'a placed glyph quad is front-facing');
+    }
+
     // A draw renders with the graph that composes exactly the effects its instances use.
     const complete = rootDraws(scene)[0].material;
     label.style = { fontSize: 32, color: '#00ff00' };

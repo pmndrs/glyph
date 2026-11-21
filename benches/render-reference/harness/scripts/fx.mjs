@@ -27,7 +27,12 @@ try {
       const files = [];
       for (const lib of [before, after]) {
         const file = `screenshots/fx/${tag}-${scene}-${variant.name}-${lib}.png`;
-        const session = await open(browser, lib, scene, { shot: '1', ...variant.extra });
+        const session = await open(browser, lib, scene, {
+          shot: '1',
+          ...variant.extra,
+          ...(process.env.WEBGL ? { webgl: '1' } : {}),
+          ...(process.env.TECH ? { tech: process.env.TECH } : {}),
+        });
         await session.page.evaluate(() => window.bench.settle());
         await session.page.screenshot({ path: file, clip: { x: 800, y: 0, width: 800, height: 600 } });
         const errors = session.errors.filter((e) => !e.includes('404'));

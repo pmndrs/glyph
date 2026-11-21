@@ -187,12 +187,13 @@ function installInstrumentation() {
 async function boot() {
   if (instrument) installInstrumentation();
   const canvas = document.querySelector('#canvas');
-  const renderer = new THREE.WebGPURenderer({ canvas, antialias: false });
+  const webgl = query.has('webgl');
+  const renderer = new THREE.WebGPURenderer({ canvas, antialias: false, forceWebGL: webgl });
   renderer.setPixelRatio(1);
   renderer.setSize(800, 600, false);
   await renderer.init();
   const device = renderer.backend.device;
-  if (device === undefined) throw new Error('WebGPU backend is not active');
+  if (device === undefined && !webgl) throw new Error('WebGPU backend is not active');
   renderer.setClearColor(0x101418, 1);
 
   const target = new THREE.RenderTarget(TARGET_WIDTH, TARGET_HEIGHT, {
@@ -215,7 +216,14 @@ async function boot() {
   const view = perspective ?? camera;
   renderer.setRenderTarget(shot ? null : target);
 
-  const done = () => device.queue.onSubmittedWorkDone();
+  const done = webgl
+    ? async () => {
+        // WebGL2 has no completion promise: reading one pixel forces the queued work to finish.
+        const gl = renderer.getContext();
+        gl.finish();
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
+      }
+    : () => device.queue.onSubmittedWorkDone();
   const { default: adapter } = await adapters[lib]();
   const context = { THREE, renderer, scene, camera: view, sceneName, query, stage: document.querySelector('#stage') };
   const frame = () => {

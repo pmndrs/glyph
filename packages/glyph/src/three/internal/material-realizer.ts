@@ -10,7 +10,7 @@ import { slugSchema } from '../../raster/slug.js';
 import { slug } from '../../raster/slug.js';
 import type { RetainedSlugPage, ThreeRendererResources } from './renderer-resources.js';
 import { createMsdfAtlas, type RetainedMsdfAtlas } from './msdf-atlas.js';
-import { registerMsdfEffectVariants } from './msdf-effect-variants.js';
+import { registerMsdfAtlasUse, registerMsdfEffectVariants } from './msdf-draws.js';
 import type { TslMsdfEffects } from '../../shaders/tsl/index.js';
 import { atlasTextureArray } from './portable-resource.js';
 import type { ThreeRootContext, ThreeTextMaterialContext } from '../material.js';
@@ -232,6 +232,7 @@ export class ThreeMaterialRealizer {
     });
     // A caller's material or a detached branch exposes its material instances, so only the default path may
     // exchange them for effect specializations.
+    registerMsdfAtlasUse(material, atlas, part.effect);
     if (selection?.material === undefined && this.#owner.glyphStorage === undefined) {
       registerMsdfEffectVariants(material, part.effectColor, (effects) => {
         const variant = graph(effects);

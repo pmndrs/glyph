@@ -18,7 +18,7 @@ import {
 
 const exact = (size) => ({ width: { mode: 'exact', size } });
 
-export function makeGlyphAdapter({ glyph, msdf, ThreeConfig, build }) {
+export function makeGlyphAdapter({ glyph, msdf, slug, ThreeConfig, build }) {
   let three;
   let font;
   let text;
@@ -27,17 +27,32 @@ export function makeGlyphAdapter({ glyph, msdf, ThreeConfig, build }) {
     async prepare(context) {
       await glyph.init();
       three = glyph.handle('main', ThreeConfig);
-      const name = context.sceneName === 'arabic' ? 'amiri-arabic' : `noto-${context.query.get('font') ?? 'ascii'}`;
-      font = await glyph.fontFace(`/fonts/${name}.${build}.font.glb`, { format: msdf }).load();
+      // ?tech=slug draws the same scenes with the Slug technique (ASCII bake).
+      const useSlug = context.query.get('tech') === 'slug';
+      const name = useSlug
+        ? 'noto-slug'
+        : context.sceneName === 'arabic'
+          ? 'amiri-arabic'
+          : `noto-${context.query.get('font') ?? 'ascii'}`;
+      font = await glyph.fontFace(`/fonts/${name}.${build}.font.glb`, { format: useSlug ? slug : msdf }).load();
     },
     author(context) {
       const { sceneName, scene } = context;
+      const shadowShare = Number(context.query.get('shadow') ?? 0);
       if (sceneName === 'labels') {
         for (const label of LABELS) {
           const item = three.createText({
             font,
             text: label.text,
-            style: { fontSize: LABEL_FONT_SIZE, lineHeight: LABEL_LINE_HEIGHT / LABEL_FONT_SIZE, color: '#ffffff' },
+            style: {
+              fontSize: LABEL_FONT_SIZE,
+              lineHeight: LABEL_LINE_HEIGHT / LABEL_FONT_SIZE,
+              color: '#ffffff',
+              // ?shadow=N gives N percent of the labels a hard shadow (effect-variant comparison).
+              ...(shadowShare >= 100 || (shadowShare > 0 && texts.length % Math.round(100 / shadowShare) === 0)
+                ? { shadow: { color: '#3060ff', offset: [0.6, 0.6] } }
+                : {}),
+            },
             layout: { wrap: 'none' },
           });
           item.position.set(label.x, 600 - label.y, 0);

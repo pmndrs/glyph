@@ -32,7 +32,10 @@ export interface RetainedSlugPage extends TslSlugPageResources {
   dispose(): void;
 }
 
-/** One MSDF font's GPU state: the distance-field atlas and the per-glyph table that addresses it. */
+/**
+ * One MSDF font's GPU state: an atlas holding only the glyphs that have been drawn, and the per-glyph table that
+ * says where each one is.
+ */
 export interface RetainedMsdfAtlas {
   readonly texture: THREE.DataArrayTexture;
   /** `rgba32float`, one texel per baked glyph record: `[left, top, width, height + layer * 4096]` in atlas texels. */
@@ -41,6 +44,11 @@ export interface RetainedMsdfAtlas {
   /** `(atlas width, atlas height, field range in texels, plane units per em over field range)`. */
   readonly metrics: THREE.Vector4;
   readonly byteLength: number;
+  /**
+   * Makes the atlas cells of the glyph rows in `lane` resident. `lane` holds `stride` values per instance with the
+   * glyph table row last; `start` and `end` are instance indices.
+   */
+  use(lane: Float32Array, start: number, end: number, stride: number): void;
   dispose(): void;
 }
 
