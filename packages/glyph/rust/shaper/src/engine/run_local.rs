@@ -275,7 +275,7 @@ impl InkUnitLanes {
     }
 }
 
-fn ink_units(extents: FontGlyphExtents) -> Result<[i16; 4], RunLocalBuildError> {
+pub(crate) fn ink_units(extents: FontGlyphExtents) -> Result<[i16; 4], RunLocalBuildError> {
     let narrow = |value: i32| i16::try_from(value).map_err(|_| RunLocalBuildError::InvalidSource);
     Ok([
         narrow(extents.x_min)?,
@@ -428,31 +428,6 @@ impl RunLocalArena {
         self.rows.row(glyph, word.outlined & bit != 0, origin)
     }
 
-    /// Marks `count` glyphs from `start` as owned by a block. A glyph owned twice is a broken
-    /// producer.
-    fn cover(&mut self, start: usize, count: usize) -> Result<(), RunLocalBuildError> {
-        let end = start + count;
-        let words = end.div_ceil(64);
-        if self.source_words.len() < words {
-            let missing = words - self.source_words.len();
-            reserve(&mut self.source_words, missing)?;
-            self.source_words.resize(words, SourceWord::default());
-        }
-        let mut cursor = start;
-        while cursor < end {
-            let offset = cursor % 64;
-            let width = (64 - offset).min(end - cursor);
-            let mask = (u64::MAX >> (64 - width)) << offset;
-            let word = &mut self.source_words[cursor / 64];
-            if word.covered & mask != 0 {
-                return Err(RunLocalBuildError::InvalidSource);
-            }
-            word.covered |= mask;
-            cursor += width;
-        }
-        Ok(())
-    }
-
     /// Covers the glyph range of every block from `first_block`: the paragraph's rows are
     /// already at their source index.
     pub(super) fn cover_blocks(&mut self, first_block: usize) -> Result<(), RunLocalBuildError> {
@@ -462,7 +437,11 @@ impl RunLocalArena {
                 source_glyph_count,
                 ..
             } = self.index.blocks[block];
-            self.cover(source_glyph_start as usize, source_glyph_count as usize)?;
+            cover(
+                &mut self.source_words,
+                source_glyph_start as usize,
+                source_glyph_count as usize,
+            )?;
         }
         Ok(())
     }
@@ -632,30 +611,20 @@ impl RunLocalArena {
         &self.index.cluster_prefixes
     }
 
-    pub(crate) fn begin_run(&mut self) -> RunLocalBlockWriter<GeneralSink<'_>> {
-        RunLocalBlockWriter::new(GeneralSink(self))
+    pub(crate) fn begin_run(&mut self) -> RunLocalWriter<'_> {
+        self.staged.clear();
+        RunLocalWriter { arena: self }
     }
 }
-
-/// Where a staged run's rows go once the kernel has laid them out.
-pub(crate) trait RunLocalBlockSink {
-    fn take_staged(&mut self) -> StagedRun;
-    fn recycle_staged(&mut self, staged: StagedRun);
-    fn kernel(&mut self) -> (&mut BlockIndex, &mut KernelScratch);
-    /// Moves the rows of the blocks from `first_block` out of `staged` and rewrites those
-    /// blocks' glyph ranges from staged order to source glyphs.
-    fn commit(&mut self, staged: &StagedRun, first_block: usize) -> Result<(), RunLocalBuildError>;
-}
-
-pub(crate) struct GeneralSink<'a>(&'a mut RunLocalArena);
 
 /// The bounded producer stores final local rows at source indices. It carries no
 /// General source bitsets or rank prefix.
 pub(crate) struct RunLocalCompact<T> {
     index: BlockIndex,
     rows: Vec<Option<T>>,
+    /// The kernel's rows for the run being laid out; each is mapped into `rows` and dropped.
+    lanes: RowLanes,
     scratch: KernelScratch,
-    staged: StagedRun,
 }
 
 impl<T> Default for RunLocalCompact<T> {
@@ -663,10 +632,22 @@ impl<T> Default for RunLocalCompact<T> {
         Self {
             index: BlockIndex::default(),
             rows: Vec::new(),
+            lanes: RowLanes::default(),
             scratch: KernelScratch::default(),
-            staged: StagedRun::default(),
         }
     }
+}
+
+/// One bounded run as the kernel's lanes: glyphs in source order, every cluster attached and
+/// resynchronizing to its own advance.
+pub(crate) struct CompactRun<'a> {
+    pub units: GlyphUnits<'a>,
+    /// One bit per glyph: the font has an outline for it.
+    pub outlined: u64,
+    pub spans: &'a [ScaleSpan],
+    pub glyph_starts: &'a [u32],
+    pub glyph_counts: &'a [u32],
+    pub advances: &'a [f64],
 }
 
 impl<T> RunLocalCompact<T> {
@@ -675,13 +656,71 @@ impl<T> RunLocalCompact<T> {
         self.rows.clear();
     }
 
-    /// The mapper writes the final leaf row from the kernel's lanes. The compact store itself
-    /// is that row owner; production must not keep a second row array beside it.
-    pub(crate) fn begin_run<F>(&mut self, map: F) -> RunLocalBlockWriter<CompactSink<'_, T, F>>
-    where
-        F: FnMut(u32, u32, RunLocalGlyph) -> Result<T, RunLocalBuildError>,
-    {
-        RunLocalBlockWriter::new(CompactSink { compact: self, map })
+    /// Lays one run out and stores `row(source glyph, local row)` for every glyph a block
+    /// owns. The compact store is the row owner: nothing keeps the kernel's lanes afterward.
+    pub(crate) fn layout(
+        &mut self,
+        run: CompactRun<'_>,
+        mut row: impl FnMut(u32, RunLocalGlyph) -> T,
+    ) -> Result<NumericBlockSpan, RunLocalBuildError> {
+        let glyphs = run.units.inline_advance.len();
+        let clusters = run.glyph_starts.len();
+        // The leaf is one layout chunk: more clusters or rows than that belong to General.
+        if glyphs > LAYOUT_CHUNK || clusters > LAYOUT_CHUNK {
+            return Err(RunLocalBuildError::InvalidSource);
+        }
+        self.lanes.grow(glyphs)?;
+        let first_block = self.index.blocks.len();
+        let span = layout_run(
+            &mut self.index,
+            &mut self.lanes,
+            &mut self.scratch,
+            &RunInput {
+                units: run.units,
+                spans: run.spans,
+                clusters: ClusterLanes {
+                    glyph_starts: run.glyph_starts,
+                    glyph_counts: run.glyph_counts,
+                    flags: &[0; LAYOUT_CHUNK][..clusters],
+                    detached_mask: 0,
+                    end: ClusterEnd::Resync(run.advances),
+                },
+                cluster_start: 0,
+                cluster_end: clusters,
+                reverse: false,
+                cut: LAYOUT_CUT,
+            },
+        )?;
+        if self.rows.len() < glyphs {
+            let missing = glyphs - self.rows.len();
+            reserve(&mut self.rows, missing)?;
+            self.rows.resize_with(glyphs, || None);
+        }
+        for block in first_block..self.index.blocks.len() {
+            let NumericBlock {
+                source_glyph_start,
+                source_glyph_count,
+                ..
+            } = self.index.blocks[block];
+            for source in source_glyph_start..source_glyph_start + source_glyph_count {
+                let slot = source as usize;
+                if self.rows[slot].is_some() {
+                    return Err(RunLocalBuildError::InvalidSource);
+                }
+                let origin = RowOrigin {
+                    #[cfg(test)]
+                    source_glyph: source,
+                    #[cfg(test)]
+                    block_index: block as u32,
+                };
+                let local = self
+                    .lanes
+                    .row(slot, run.outlined & (1 << slot) != 0, origin)
+                    .ok_or(RunLocalBuildError::InvalidSource)?;
+                self.rows[slot] = Some(row(source, local));
+            }
+        }
+        Ok(span)
     }
 
     pub(crate) fn blocks(&self) -> &[NumericBlock] {
@@ -710,13 +749,6 @@ impl<T> RunLocalCompact<T> {
         &self.rows
     }
 }
-
-pub(crate) struct CompactSink<'a, T, F> {
-    compact: &'a mut RunLocalCompact<T>,
-    map: F,
-}
-
-pub(crate) type RunLocalWriter<'a> = RunLocalBlockWriter<GeneralSink<'a>>;
 
 /// One run handed over glyph by glyph, staged as the kernel's lanes: glyphs in push order with
 /// their source glyph, clusters in visit order.
@@ -880,21 +912,6 @@ impl StagedRun {
         let start = block.source_glyph_start as usize;
         start..start + block.source_glyph_count as usize
     }
-
-    fn row(&self, staged: usize, block_index: usize) -> Option<RunLocalGlyph> {
-        #[cfg(not(test))]
-        let _ = block_index;
-        self.rows.row(
-            staged,
-            *self.outlined.get(staged)?,
-            RowOrigin {
-                #[cfg(test)]
-                source_glyph: *self.source.get(staged)?,
-                #[cfg(test)]
-                block_index: block_index as u32,
-            },
-        )
-    }
 }
 
 /// Rewrites a block's glyph range from staged order to the source glyphs its rows landed on.
@@ -912,52 +929,50 @@ fn rebase_block(block: &mut NumericBlock, sources: &[u32]) -> Result<(), RunLoca
     Ok(())
 }
 
-pub(crate) struct RunLocalBlockWriter<S: RunLocalBlockSink> {
-    sink: S,
-    staged: StagedRun,
+/// Stages one run into its arena glyph by glyph, for a client whose glyphs are not already in
+/// cluster-order lanes (line-edge islands). `finish` runs the kernel.
+pub(crate) struct RunLocalWriter<'a> {
+    arena: &'a mut RunLocalArena,
 }
 
-impl<S: RunLocalBlockSink> RunLocalBlockWriter<S> {
-    fn new(mut sink: S) -> Self {
-        let mut staged = sink.take_staged();
-        staged.clear();
-        Self { sink, staged }
-    }
-
+impl RunLocalWriter<'_> {
     pub(crate) fn begin_cluster(&mut self) -> Result<(), RunLocalBuildError> {
-        if self.staged.open_cluster.is_some() {
+        let staged = &mut self.arena.staged;
+        if staged.open_cluster.is_some() {
             return Err(RunLocalBuildError::InvalidSource);
         }
-        self.staged.open_cluster = Some(self.staged.glyph_count()?);
+        staged.open_cluster = Some(staged.glyph_count()?);
         Ok(())
     }
 
     /// Production detaches clusters through the paragraph's flag lane; tests stage them.
     #[cfg(test)]
     pub(crate) fn push_detached_cluster(&mut self) -> Result<(), RunLocalBuildError> {
-        if self.staged.open_cluster.is_some() {
+        let staged = &mut self.arena.staged;
+        if staged.open_cluster.is_some() {
             return Err(RunLocalBuildError::InvalidSource);
         }
-        let glyph_start = self.staged.glyph_count()?;
-        self.staged.push_cluster(glyph_start, true, (0.0, 0.0))
+        let glyph_start = staged.glyph_count()?;
+        staged.push_cluster(glyph_start, true, (0.0, 0.0))
     }
 
     pub(crate) fn push_glyph(
         &mut self,
         input: RunLocalGlyphInput,
     ) -> Result<(), RunLocalBuildError> {
-        if self.staged.open_cluster.is_none() || !input.scale.is_finite() || input.scale <= 0.0 {
+        let staged = &mut self.arena.staged;
+        if staged.open_cluster.is_none() || !input.scale.is_finite() || input.scale <= 0.0 {
             return Err(RunLocalBuildError::InvalidSource);
         }
-        self.staged.push_glyph(input)
+        staged.push_glyph(input)
     }
 
     pub(crate) fn finish_cluster(
         &mut self,
         finish: ClusterFinish,
     ) -> Result<(), RunLocalBuildError> {
-        let glyph_start = self
-            .staged
+        let staged = &mut self.arena.staged;
+        let glyph_start = staged
             .open_cluster
             .take()
             .ok_or(RunLocalBuildError::InvalidSource)?;
@@ -975,124 +990,84 @@ impl<S: RunLocalBlockSink> RunLocalBlockWriter<S> {
                 ),
             ),
         };
-        if *self.staged.resync.get_or_insert(resync) != resync {
+        if *staged.resync.get_or_insert(resync) != resync {
             return Err(RunLocalBuildError::InvalidSource);
         }
-        self.staged.push_cluster(glyph_start, false, end)
+        staged.push_cluster(glyph_start, false, end)
     }
 
     /// Lays the staged run out. Geometry the kernel rejects is reported here, not by the call
     /// that staged it.
-    pub(crate) fn finish(mut self) -> Result<NumericBlockSpan, RunLocalBuildError> {
-        if self.staged.open_cluster.is_some() {
+    pub(crate) fn finish(self) -> Result<NumericBlockSpan, RunLocalBuildError> {
+        let RunLocalArena {
+            index,
+            rows,
+            source_words,
+            scratch,
+            staged,
+            ..
+        } = self.arena;
+        if staged.open_cluster.is_some() {
             return Err(RunLocalBuildError::InvalidSource);
         }
-        let (index, scratch) = self.sink.kernel();
         let first_block = index.blocks.len();
-        let span = self.staged.layout(index, scratch)?;
-        self.sink.commit(&self.staged, first_block)?;
+        let span = staged.layout(index, scratch)?;
+        #[cfg(any(test, feature = "oracle"))]
+        {
+            let run_rows: usize = index.blocks[first_block..]
+                .iter()
+                .map(|block| block.row_count as usize)
+                .sum();
+            let first_row = index.row_order.len() - run_rows;
+            for row in &mut index.row_order[first_row..] {
+                *row = staged.source[*row as usize];
+            }
+        }
+        // Rows move from staged order to their source glyphs, and the blocks follow them.
+        for block in &mut index.blocks[first_block..] {
+            let staged_rows = StagedRun::block_rows(block);
+            for row in staged_rows.clone() {
+                let source = staged.source[row] as usize;
+                rows.grow(source + 1)?;
+                cover(source_words, source, 1)?;
+                if staged.outlined[row] {
+                    source_words[source / 64].outlined |= 1 << (source % 64);
+                }
+                rows.copy_row(source, &staged.rows, row);
+            }
+            rebase_block(block, &staged.source[staged_rows])?;
+        }
         Ok(span)
     }
 }
 
-impl<S: RunLocalBlockSink> Drop for RunLocalBlockWriter<S> {
-    fn drop(&mut self) {
-        self.sink.recycle_staged(core::mem::take(&mut self.staged));
+/// Marks `count` glyphs from `start` as owned by a block. A glyph owned twice is a broken
+/// producer.
+fn cover(
+    source_words: &mut Vec<SourceWord>,
+    start: usize,
+    count: usize,
+) -> Result<(), RunLocalBuildError> {
+    let end = start + count;
+    let words = end.div_ceil(64);
+    if source_words.len() < words {
+        let missing = words - source_words.len();
+        reserve(source_words, missing)?;
+        source_words.resize(words, SourceWord::default());
     }
-}
-
-impl RunLocalBlockSink for GeneralSink<'_> {
-    fn take_staged(&mut self) -> StagedRun {
-        core::mem::take(&mut self.0.staged)
-    }
-
-    fn recycle_staged(&mut self, staged: StagedRun) {
-        self.0.staged = staged;
-    }
-
-    fn kernel(&mut self) -> (&mut BlockIndex, &mut KernelScratch) {
-        (&mut self.0.index, &mut self.0.scratch)
-    }
-
-    fn commit(&mut self, staged: &StagedRun, first_block: usize) -> Result<(), RunLocalBuildError> {
-        let arena = &mut *self.0;
-        #[cfg(any(test, feature = "oracle"))]
-        {
-            let run_rows: usize = arena.index.blocks[first_block..]
-                .iter()
-                .map(|block| block.row_count as usize)
-                .sum();
-            let first_row = arena.index.row_order.len() - run_rows;
-            for row in &mut arena.index.row_order[first_row..] {
-                *row = staged.source[*row as usize];
-            }
-        }
-        for block in first_block..arena.index.blocks.len() {
-            let rows = StagedRun::block_rows(&arena.index.blocks[block]);
-            for row in rows.clone() {
-                let source = staged.source[row] as usize;
-                arena.rows.grow(source + 1)?;
-                arena.cover(source, 1)?;
-                if staged.outlined[row] {
-                    arena.source_words[source / 64].outlined |= 1 << (source % 64);
-                }
-                arena.rows.copy_row(source, &staged.rows, row);
-            }
-            rebase_block(&mut arena.index.blocks[block], &staged.source[rows])?;
-        }
-        Ok(())
-    }
-}
-
-impl<T, F> RunLocalBlockSink for CompactSink<'_, T, F>
-where
-    F: FnMut(u32, u32, RunLocalGlyph) -> Result<T, RunLocalBuildError>,
-{
-    fn take_staged(&mut self) -> StagedRun {
-        core::mem::take(&mut self.compact.staged)
-    }
-
-    fn recycle_staged(&mut self, staged: StagedRun) {
-        self.compact.staged = staged;
-    }
-
-    fn kernel(&mut self) -> (&mut BlockIndex, &mut KernelScratch) {
-        (&mut self.compact.index, &mut self.compact.scratch)
-    }
-
-    fn commit(&mut self, staged: &StagedRun, first_block: usize) -> Result<(), RunLocalBuildError> {
-        let compact = &mut *self.compact;
-        // The leaf is one layout chunk: more clusters or rows than that belong to General.
-        if compact.index.cluster_blocks.len() > LAYOUT_CHUNK
-            || compact.index.row_count as usize > LAYOUT_CHUNK
-        {
+    let mut cursor = start;
+    while cursor < end {
+        let offset = cursor % 64;
+        let width = (64 - offset).min(end - cursor);
+        let mask = (u64::MAX >> (64 - width)) << offset;
+        let word = &mut source_words[cursor / 64];
+        if word.covered & mask != 0 {
             return Err(RunLocalBuildError::InvalidSource);
         }
-        for block in first_block..compact.index.blocks.len() {
-            let rows = StagedRun::block_rows(&compact.index.blocks[block]);
-            for row in rows.clone() {
-                let source = staged.source[row];
-                let slot = source as usize;
-                if slot >= LAYOUT_CHUNK {
-                    return Err(RunLocalBuildError::InvalidSource);
-                }
-                if compact.rows.len() <= slot {
-                    let missing = slot + 1 - compact.rows.len();
-                    reserve(&mut compact.rows, missing)?;
-                    compact.rows.resize_with(slot + 1, || None);
-                }
-                if compact.rows[slot].is_some() {
-                    return Err(RunLocalBuildError::InvalidSource);
-                }
-                let local = staged
-                    .row(row, block)
-                    .ok_or(RunLocalBuildError::InvalidSource)?;
-                compact.rows[slot] = Some((self.map)(source, block as u32, local)?);
-            }
-            rebase_block(&mut compact.index.blocks[block], &staged.source[rows])?;
-        }
-        Ok(())
+        word.covered |= mask;
+        cursor += width;
     }
+    Ok(())
 }
 
 fn copy_lane<T: Copy>(lane: &mut Vec<T>, source: &[T]) -> Result<(), RunLocalBuildError> {
@@ -1113,86 +1088,93 @@ mod tests {
     use super::*;
 
     #[test]
-    fn compact_sink_matches_general_bits_through_precision_split_and_source_reorder() {
-        fn feed<S: RunLocalBlockSink>(mut writer: RunLocalBlockWriter<S>) -> NumericBlockSpan {
-            for (ordinal, source) in [2, 0, 3, 1].into_iter().enumerate() {
-                writer.begin_cluster().unwrap();
-                let mut input = glyph(source, if ordinal == 0 { 8_000 } else { 1_000 });
-                if ordinal == 1 {
-                    input.x_offset = -1_000;
-                }
-                if ordinal == 2 {
-                    input.baseline_shift = -0.5;
-                    input.y_offset = -3;
-                    input.scale = 0.25;
-                    input.outline = None;
-                }
-                if ordinal == 3 {
-                    input.x_offset = 1;
-                    input.scale = 0.5;
-                }
-                writer.push_glyph(input).unwrap();
-                writer
-                    .finish_cluster(ClusterFinish::Resync(if ordinal == 0 {
-                        -8_000.0
-                    } else {
-                        1_000.0
-                    }))
-                    .unwrap();
-            }
-            writer.finish().unwrap()
-        }
-
+    fn compact_lanes_match_the_staged_writer_bits_through_a_precision_split() {
+        // Four one-glyph clusters; the first is wide enough that the second closes its block.
+        let advances = [8_000, 1_000, 1_000, 1_000];
+        let offsets = [0, -1_000, 0, 1];
+        let rises = [0, 0, -3, 0];
+        let ink = [
+            [0, -1, 8_000, 1],
+            [0, -1, 1_000, 1],
+            [0; 4],
+            [0, -1, 1_000, 1],
+        ];
+        let cluster_advances = [-8_000.0, 1_000.0, 1_000.0, 1_000.0];
+        let scales = [1.0, 1.0, 0.25, 0.5];
+        let shifts = [0.0, 0.0, -0.5, 0.0];
+        let spans = [
+            ScaleSpan {
+                glyph_end: 2,
+                scale: 1.0,
+                baseline_shift: 0.0,
+            },
+            ScaleSpan {
+                glyph_end: 3,
+                scale: 0.25,
+                baseline_shift: -0.5,
+            },
+            ScaleSpan {
+                glyph_end: 4,
+                scale: 0.5,
+                baseline_shift: 0.0,
+            },
+        ];
         let mut general = RunLocalArena::default();
+        let mut writer = general.begin_run();
+        for source in 0..4 {
+            let [x_min, y_min, x_max, y_max] = ink[source].map(i32::from);
+            writer.begin_cluster().unwrap();
+            writer
+                .push_glyph(RunLocalGlyphInput {
+                    source_glyph: source as u32,
+                    x_advance: advances[source],
+                    x_offset: offsets[source],
+                    y_offset: rises[source],
+                    baseline_shift: shifts[source],
+                    scale: scales[source],
+                    outline: (source != 2).then_some(FontGlyphExtents {
+                        x_min,
+                        y_min,
+                        x_max,
+                        y_max,
+                    }),
+                })
+                .unwrap();
+            writer
+                .finish_cluster(ClusterFinish::Resync(cluster_advances[source]))
+                .unwrap();
+        }
+        let span = writer.finish().unwrap();
+
         let mut compact = RunLocalCompact::<RunLocalGlyph>::default();
-        assert_eq!(
-            feed(general.begin_run()),
-            feed(compact.begin_run(|_, _, local| Ok(local)))
-        );
+        let compact_span = compact
+            .layout(
+                CompactRun {
+                    units: GlyphUnits {
+                        inline_advance: &advances,
+                        inline_offset: &offsets,
+                        block_offset: &rises,
+                        ink: &ink,
+                    },
+                    outlined: 0b1011,
+                    spans: &spans,
+                    glyph_starts: &[0, 1, 2, 3],
+                    glyph_counts: &[1; 4],
+                    advances: &cluster_advances,
+                },
+                |_, local| local,
+            )
+            .unwrap();
+
+        assert_eq!(span, compact_span);
         assert_eq!(general.blocks().len(), 2);
-        assert_eq!(general.blocks().len(), compact.blocks().len());
-        for (left, right) in general.blocks().iter().zip(compact.blocks()) {
-            assert_eq!(left.source_glyph_start, right.source_glyph_start);
-            assert_eq!(left.source_glyph_count, right.source_glyph_count);
-            assert_eq!(left.row_start, right.row_start);
-            assert_eq!(left.row_count, right.row_count);
-            assert_eq!(left.anchor_inline.to_bits(), right.anchor_inline.to_bits());
-            assert_eq!(left.anchor_block.to_bits(), right.anchor_block.to_bits());
-        }
+        assert_eq!(general.blocks(), compact.blocks());
         assert_eq!(general.cluster_blocks(), compact.cluster_blocks());
-        for (left, right) in general
-            .cluster_prefixes()
-            .iter()
-            .zip(compact.cluster_prefixes())
-        {
-            assert_eq!(left.to_bits(), right.to_bits());
-        }
+        assert_eq!(general.cluster_prefixes(), compact.cluster_prefixes());
         for source in 0..4 {
             let left = general.row_for_source_glyph(source).unwrap();
             let right = compact.row_for_source_glyph(source).unwrap();
-            assert_eq!(left.inline_origin.to_bits(), right.inline_origin.to_bits());
-            assert_eq!(left.block_origin.to_bits(), right.block_origin.to_bits());
-            assert_eq!(
-                left.inline_advance.to_bits(),
-                right.inline_advance.to_bits()
-            );
-            assert_eq!(
-                left.ink_inline_start.to_bits(),
-                right.ink_inline_start.to_bits()
-            );
-            assert_eq!(
-                left.ink_block_start.to_bits(),
-                right.ink_block_start.to_bits()
-            );
-            assert_eq!(
-                left.ink_inline_extent.to_bits(),
-                right.ink_inline_extent.to_bits()
-            );
-            assert_eq!(
-                left.ink_block_extent.to_bits(),
-                right.ink_block_extent.to_bits()
-            );
-            assert_eq!(left.has_outline, right.has_outline);
+            assert_eq!(format!("{left:?}"), format!("{right:?}"), "glyph {source}");
         }
         assert!(compact.row_for_source_glyph(4).is_none());
     }

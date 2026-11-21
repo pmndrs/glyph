@@ -36,9 +36,8 @@ use super::{
         PositionedSemanticGlyph, ProjectedRowOwner, ProjectedSourceRow, SourceLineFacts,
         fragment_pen_origin, projected_semantic_row, style_has_text_effects,
     },
-    run_local::{
-        ClusterFinish, RunLocalBuildError, RunLocalCompact, RunLocalGlyph, RunLocalGlyphInput,
-    },
+    run_local::{CompactRun, RunLocalBuildError, RunLocalCompact, RunLocalGlyph, ink_units},
+    run_local_kernel::{GlyphUnits, ScaleSpan},
     shaping_state::{ShapeArena, ShapedRun},
     state::EngineError,
     style_state::StyleSegment,
@@ -451,9 +450,9 @@ impl InlineLeaf {
         Ok(ids)
     }
 
-    /// Writes exact local numeric values straight into final semantic row slots. The shared
-    /// RunLocal block writer alone owns the midpoint/rounding arithmetic; there is no Compact
-    /// `RunLocalGlyph` array later copied into these rows.
+    /// Writes exact local numeric values straight into final semantic row slots. The leaf's
+    /// glyphs and clusters become the run-local kernel's lanes on the stack; the kernel alone
+    /// owns the midpoint and rounding arithmetic.
     pub(crate) fn build_numeric_rows(
         &mut self,
         ids: &[u32; LAYOUT_CHUNK],
@@ -462,13 +461,51 @@ impl InlineLeaf {
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
     ) -> Result<(), EngineError> {
         let raw = self.shape.glyphs();
+        if raw.len() > LAYOUT_CHUNK || self.clusters.len() > LAYOUT_CHUNK {
+            return Err(EngineError::InvalidRequest);
+        }
         let mut metadata = [InlineGlyphMeta::default(); LAYOUT_CHUNK];
-        for cluster in &self.clusters {
+        let mut inline_advance = [0_i32; LAYOUT_CHUNK];
+        let mut inline_offset = [0_i32; LAYOUT_CHUNK];
+        let mut block_offset = [0_i32; LAYOUT_CHUNK];
+        let mut ink = [[0_i16; 4]; LAYOUT_CHUNK];
+        let mut outlined = 0_u64;
+        let mut glyph_starts = [0_u32; LAYOUT_CHUNK];
+        let mut glyph_counts = [0_u32; LAYOUT_CHUNK];
+        let mut advances = [0.0_f64; LAYOUT_CHUNK];
+        let mut spans = [ScaleSpan {
+            glyph_end: 0,
+            scale: 0.0,
+            baseline_shift: 0.0,
+        }; LAYOUT_CHUNK];
+        let mut span_count = 0;
+        for (index, cluster) in self.clusters.iter().enumerate() {
             let style = styles
                 .get(cluster.style_index as usize)
                 .ok_or(EngineError::InvalidRequest)?
                 .style;
-            for source in cluster.glyph_start..cluster.glyph_start + cluster.glyph_count {
+            let glyph_end = cluster.glyph_start + cluster.glyph_count;
+            glyph_starts[index] = cluster.glyph_start;
+            glyph_counts[index] = cluster.glyph_count;
+            advances[index] = cluster.advance;
+            let span = ScaleSpan {
+                glyph_end,
+                scale: f64::from(style.font_size) / cluster.units_per_em,
+                baseline_shift: f64::from(style.baseline_shift),
+            };
+            match spans[..span_count].last_mut() {
+                Some(last)
+                    if last.scale.to_bits() == span.scale.to_bits()
+                        && last.baseline_shift.to_bits() == span.baseline_shift.to_bits() =>
+                {
+                    last.glyph_end = glyph_end;
+                }
+                _ => {
+                    spans[span_count] = span;
+                    span_count += 1;
+                }
+            }
+            for source in cluster.glyph_start..glyph_end {
                 let index = source as usize;
                 let glyph = *raw.get(index).ok_or(EngineError::InvalidRequest)?;
                 metadata[index] = InlineGlyphMeta {
@@ -480,42 +517,36 @@ impl InlineLeaf {
                     bidi_level,
                     font_size: style.font_size,
                 };
+                inline_advance[index] = glyph.x_advance;
+                inline_offset[index] = glyph.x_offset;
+                block_offset[index] = glyph.y_offset;
+                if let Some(extents) = extents_for(cluster.font_handle, u32::from(glyph.glyph_id)) {
+                    ink[index] = ink_units(extents).map_err(run_local_error)?;
+                    outlined |= 1 << index;
+                }
             }
         }
+        let clusters = self.clusters.len();
         self.rows.clear();
-        let mut writer = self.rows.begin_run(|source, _, local| {
-            let index = usize::try_from(source).map_err(|_| RunLocalBuildError::InvalidSource)?;
-            let meta = *metadata
-                .get(index)
-                .ok_or(RunLocalBuildError::InvalidSource)?;
-            Ok(InlineRow::from_local(meta, local))
-        });
-        for cluster in &self.clusters {
-            let style = styles
-                .get(cluster.style_index as usize)
-                .ok_or(EngineError::InvalidRequest)?
-                .style;
-            let scale = f64::from(style.font_size) / cluster.units_per_em;
-            writer.begin_cluster().map_err(run_local_error)?;
-            for source in cluster.glyph_start..cluster.glyph_start + cluster.glyph_count {
-                let glyph = raw[source as usize];
-                writer
-                    .push_glyph(RunLocalGlyphInput {
-                        source_glyph: source,
-                        x_advance: glyph.x_advance,
-                        x_offset: glyph.x_offset,
-                        y_offset: glyph.y_offset,
-                        baseline_shift: style.baseline_shift,
-                        scale,
-                        outline: extents_for(cluster.font_handle, u32::from(glyph.glyph_id)),
-                    })
-                    .map_err(run_local_error)?;
-            }
-            writer
-                .finish_cluster(ClusterFinish::Resync(cluster.advance))
-                .map_err(run_local_error)?;
-        }
-        let span = writer.finish().map_err(run_local_error)?;
+        let span = self
+            .rows
+            .layout(
+                CompactRun {
+                    units: GlyphUnits {
+                        inline_advance: &inline_advance[..raw.len()],
+                        inline_offset: &inline_offset[..raw.len()],
+                        block_offset: &block_offset[..raw.len()],
+                        ink: &ink[..raw.len()],
+                    },
+                    outlined,
+                    spans: &spans[..span_count],
+                    glyph_starts: &glyph_starts[..clusters],
+                    glyph_counts: &glyph_counts[..clusters],
+                    advances: &advances[..clusters],
+                },
+                |source, local| InlineRow::from_local(metadata[source as usize], local),
+            )
+            .map_err(run_local_error)?;
         self.layout_run
             .as_mut()
             .ok_or(EngineError::InvalidRequest)?
