@@ -29,7 +29,8 @@ Updated in place; the history of each change is in the log below.
 | Lazy outline decoder (−22.7 kB gzip)                                                                                                                                                                                          | held     | —                                                   | Needs an ABI change; goes with the one-ABI-change-at-a-time sequence                               |
 | Renderer parts 1–2 (Three, MSDF): one draw, effect-specialized shaders, ink-trimmed quads, glyph table, on-demand atlas, growth without new pipelines, atlas pages as views, per-range uploads, optional single-channel atlas | merged   | tag `sil-green-4`                                   | Steady frame 0.234 → 0.142 ms (competitor 0.183); GPU memory 1.44 → 0.56 MiB (0.18 single-channel) |
 | Slug: glyph table, fragment cost, growth, `r16` references                                                                                                                                                                    | building | `experiments/sil-render`                            | Steady frame 0.755 ms untouched so far                                                             |
-| Pure TypeGPU path: effect variants, trimming, on-demand atlas, batching                                                                                                                                                       | building | `experiments/sil-typegpu`                           | Still one draw per text                                                                            |
+| Pure TypeGPU path, units 1–2: effect-specialized shaders, ink-trimmed quads                                                                                                                                                   | merged   | tag `sil-green-6`                                   | Plain-text GPU pass −19%; pixel-identical to Three within 2/255                                    |
+| Pure TypeGPU path, units 3–5: batching through indexed transforms, growth bug, on-demand atlas, shared pipelines                                                                                                              | building | `experiments/sil-typegpu`                           | 1,000 labels are still 1,000 draws                                                                 |
 | Atlas prewarm API                                                                                                                                                                                                             | held     | —                                                   | Needs a handle-level entry point owned by the preparation lane                                     |
 | Host part 1: idle frame, linear mount in JavaScript, per-publication work, ingress, readback                                                                                                                                  | merged   | tag `sil-green-2`                                   | Idle 1,000 labels 0.196 → 0.042 ms; setter 3 → 1 crossings; `glyphs()` 812 → 3 crossings           |
 | First-frame JavaScript: engine warm-up, font digest, font binding compile                                                                                                                                                     | held     | —                                                   | Each needs a decision or a renderer-free path; see log                                             |
@@ -383,3 +384,17 @@ Updated in place; the history of each change is in the log below.
   changed; no cold-stage digest changed, so the cold reference the rewrite is judged against is untouched.
 - **Note.** The lane tried to add waiver entries itself and the permission system blocked it; no waivers were
   added by anyone.
+- **Merged: pure TypeGPU path, units 1–2** (tag `sil-green-6`, pushed; full oracle tier green). MSDF
+  fragments are specialized by effect and quads are trimmed to ink with the same rule as Three. GPU pass for
+  plain text −19% (0.0384 → 0.0310 ms), Devanagari −14%. The TypeGPU output now matches Three at the same
+  camera with 0 pixels over tolerance (max difference 2/255); before, six scenes had pixels off by up to
+  57/255. Labels did not improve: at 1,000 labels the cost is per-draw (1,000 draws, 2,000 bind-group calls,
+  0.33 ms GPU, 0.6–0.7 ms CPU), which is what batching removes.
+- **Found, not yet fixed.** Growing past 1,000 labels on the TypeGPU path raises a device error; likely cause
+  is a reused draw keeping a bind group on a reallocated placement table. Assigned with batching.
+- **Design accepted for batching.** Use the codec's existing indexed-transform mode for MSDF and bitmap (a
+  per-instance transform index and one renderer-owned transform table), so moving a label is one 8-byte
+  write and 1,000 same-font labels become about one draw. Slug stays in direct mode until its lane frees a
+  buffer slot.
+- **New behaviour to note.** On TypeGPU the first appearance of an outline or shadow compiles its pipeline in
+  that frame; a custom colour transform no longer sees the empty part of a glyph cell.
