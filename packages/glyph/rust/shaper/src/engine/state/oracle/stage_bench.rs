@@ -233,7 +233,7 @@ fn stage(
         let mut samples = Vec::new();
         for _ in 0..iterations {
             pending
-                .refresh_styles_from_stream(committed, styles, metrics_changed)
+                .refresh_styles_from_stream(committed, styles, runs, metrics_changed)
                 .map_err(|error| format!("refresh: {error:?}"))?
                 .ok_or("the committed clusters cannot be refreshed")?;
             let started = now();
