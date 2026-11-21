@@ -1,0 +1,75 @@
+# glyph layout oracle reference v1
+case rg-columns-3-justify-latin-measure-first
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 67457eed4a395156
+stage text identity 1 789c644d2d63f052
+stage unicode value 6 e14f5e2fd41eb782
+stage bidi value 8 ea9e54675e47b037
+stage style value 26 db78bdeba099e2dd
+stage shaping_run value 5 34520715c6ae4f6b
+stage shape value 14 de0041dc58e264e0
+stage cluster value 29 5c184e93696894b3
+stage cluster identity 4 94ae5c76759329be
+stage cluster repr 11 1bbd179a4eed863c
+stage cluster cache 5 b5a9568dc6740ca9
+stage run_local repr 16 73e3364507c03565
+stage flow value 35 9763e8a4f7993b6a
+stage boundary value 28 582eb485513bd5da
+stage boundary identity 1 97cda39131246a3d
+stage positioned identity 4 c5eb659dababa2b1
+stage positioned value 20 9aacc6d929ae1ef6
+stage positioned repr 37 da3eebaebde3aff5
+stage public value 13 09024bc14a3a8c6d
+stage public identity 1 c9ac5a78d5483cdb
+stage view identity 4 7049b04ecee23d36
+stage view value 40 13af191cf929fc11
+stage wire wire 1 6263816008938f2b
+stage gather identity 7 0158e53cf4f97f7c
+stage gather value 36 4698263444f5b3fc
+stage gpu identity 2 29d6f6c13061d4ac
+stage gpu value 3 01d11886d227d325
+stage plan value 23 d9b74b8849c586a3
+stage plan identity 7 351b54e32927a68e
+step 01 insert in the first region
+class value 268 6ab130c707bbf470
+class identity 29 795e9df1bc43ab55
+class repr 64 09e49a6dbc1bb8e8
+class cache 5 b7541a0ed2382b8b
+class wire 1 3cf06b8ebd301e00
+step 02 delete in a later region
+class value 268 1fb185b4d1cee378
+class identity 29 7487941c4c4c9b87
+class repr 64 e934fde2c6b20674
+class cache 5 9705c860f7a03f40
+class wire 1 43210ac9cf60dbeb
+step 03 narrower measure
+class value 268 d0c7d1a4f828b460
+class identity 29 70a94d129db35a3c
+class repr 64 78452b15443932af
+class cache 5 52cd87d4aef771a3
+class wire 1 8b3f4f409c5ec44f
+step 04 shorter regions
+class value 268 bf1046e829fb8dbc
+class identity 29 01a7558fd0438a6a
+class repr 64 cf414c2af969c17c
+class cache 5 52cd87d4aef771a3
+class wire 1 f1c06e8a8d60cc6c
+step 05 three columns, wider gap
+class value 268 aca7d92326a2ebf1
+class identity 29 80ff822ef4008179
+class repr 64 053c1a62847840f6
+class cache 5 8ffda01a42e2ed80
+class wire 1 b95f3ba8f59d0e6d
+step 06 one region
+class value 268 b0e3d7773d5eb248
+class identity 29 058342c8d8fb3426
+class repr 64 1ac85ba5b8b7ec06
+class cache 5 d7e96085f1fdf37b
+class wire 1 ff03df2f8eb07fb7
+step 07 the starting regions
+class value 268 1fb185b4d1cee378
+class identity 29 451930ccc311f264
+class repr 64 e934fde2c6b20674
+class cache 5 d7e96085f1fdf37b
+class wire 1 d04d7e3eef330134

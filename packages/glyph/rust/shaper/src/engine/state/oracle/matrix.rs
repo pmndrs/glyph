@@ -195,6 +195,8 @@ pub fn cases() -> Vec<Case> {
     super::mechanisms::cases(&mut cases);
     super::effects::cases(&mut cases);
     super::inline_objects::cases(&mut cases);
+    super::regions::cases(&mut cases);
+    super::regions::clipped_noop(&mut cases);
     cases
 }
 

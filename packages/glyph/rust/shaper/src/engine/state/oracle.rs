@@ -22,6 +22,7 @@ pub mod lanes;
 pub mod matrix;
 mod mechanisms;
 pub mod model;
+mod regions;
 pub mod rng;
 pub mod run;
 pub mod session;

@@ -10,3 +10,13 @@
 # Every one reproduces as a single request after a cold layout. Replay one with
 # `layout-oracle fuzz --case <case> --seed <seed> --steps <step + 1>`. The driver continues past
 # each from a cold layout, so the entries of one run do not depend on each other being fixed.
+
+# Found when region and column cases were added (reference set at that point: see MANIFEST).
+# A request that changes nothing, on a paragraph clipped by a bounded height: what
+# `borrowed_paragraph_glyphs` serves afterwards follows the views earlier requests asked for
+# rather than the views this request asks for, so it differs from a cold layout on the same
+# route. Only the `public.glyph.*` lanes differ; positioned, gathered and drawn lanes are equal.
+step rg-clipped-noop-borrowed-layout 03 a no-change publication with no views after publications with views: the borrowed read serves 596 glyphs (the unclipped inspection kept from before) where cold serves 464
+seed rg-columns-3-cjk-full 4 6 public.glyph.font_handle | align 4 (already 4: nothing changes), published with no views; 510 glyphs against 10 cold
+seed rg-columns-2-drop-cap-latin-full 4 37 public.glyph.font_handle | regions set to what they already are, published with no views; 784 glyphs against 520 cold
+seed rg-boxes-latin-full 3 20 public.glyph.font_handle | align 1 (already 1), published with every view; 432 glyphs against 1041 cold

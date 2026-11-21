@@ -1,0 +1,91 @@
+# glyph layout oracle reference v1
+case rg-columns-3-cjk-full
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 1135b6121b97d859
+stage text identity 1 10d8a01e301e9bd5
+stage unicode value 6 9c07cfc800c6198a
+stage bidi value 8 a8641c6cffe0ae17
+stage style value 26 9bf2c2e0369f1ae0
+stage shaping_run value 5 113bb61c06182604
+stage shape value 14 90be16faa4575e9e
+stage cluster value 29 ddb7756f3099747a
+stage cluster identity 4 14836ddfcc2ba58f
+stage cluster repr 8 41bd7d43d0f1d7bb
+stage cluster cache 5 076b6c74a719fbb2
+stage run_local repr 16 b8286593bb4987da
+stage flow value 35 791a7e16a5ffc587
+stage positioned identity 3 ee85fafeae029a04
+stage positioned value 13 b8ae006e9d54ba79
+stage positioned repr 17 49cab7c0508aa44d
+stage public value 13 1be2a471aec308a6
+stage public identity 1 66b95a5097109928
+stage view identity 4 33a35a8becc3fbf2
+stage view value 40 c3be12aa91b58433
+stage wire wire 1 c3daf000a454597b
+stage gather identity 7 4e9c88186b72d1f8
+stage gather value 36 1c90a0e53ca0c001
+stage gpu identity 2 b0c9e31b9320729a
+stage gpu value 3 7916b337ff426917
+stage plan value 23 15829cb9484b234c
+stage plan identity 7 b0213307e84bbf7e
+step 01 insert in the first region
+class value 253 a014714303d19644
+class identity 29 6f1c2836b899fd87
+class repr 41 e6678d94aa8602dd
+class cache 5 787c25e5584a2c5f
+class wire 1 9818f5869ce886b7
+step 02 delete in a later region
+class value 253 dae44c2939e3d044
+class identity 29 efaac776109b0282
+class repr 41 deca997ac3471e37
+class cache 5 66b6c983a5cb9c3e
+class wire 1 6711ae92c984873f
+step 03 narrower measure
+class value 253 25f2568b22be8596
+class identity 29 e5e7d48c4871f234
+class repr 41 13062b25f7f64964
+class cache 5 25ed881d012485b5
+class wire 1 19935c2861fe6d0b
+step 04 shorter regions
+class value 253 abff8ef1891fc4d8
+class identity 29 fac7353d7f954860
+class repr 41 35df1ab9b6f387c4
+class cache 5 25ed881d012485b5
+class wire 1 4105f34624deb7a1
+step 05 three columns, wider gap
+class value 253 a5fa71bd3458a1fb
+class identity 29 b971be166516726c
+class repr 41 3dffc59a576c2584
+class cache 5 25ed881d012485b5
+class wire 1 f3f2504da950f1c6
+step 06 one region
+class value 253 a48de72d57438d04
+class identity 29 5cbd98e45e0d7987
+class repr 41 82d4bf639d9ff4db
+class cache 5 25ed881d012485b5
+class wire 1 ddb529512abb06e8
+step 07 the starting regions
+class value 253 dae44c2939e3d044
+class identity 29 4d32c6734fce6d57
+class repr 41 deca997ac3471e37
+class cache 5 25ed881d012485b5
+class wire 1 f1fbc2f7c74af6ec
+step 08 insert SpacedWord (5 units) at 247
+class value 253 02516d8137157fd2
+class identity 29 f14ea6f2a3b8d295
+class repr 41 bc061170aa1399c9
+class cache 5 e03f3211c9ecb69e
+class wire 1 a36f42595961e05c
+step 09 delete 3 at 161 + regions Columns { count: 3, gap: 12.0 } height 200 + metrics size 16 spacing 0 line 1.2 word 0
+class value 253 0fc967e38b0d381a
+class identity 29 fed4aed7f0d29027
+class repr 41 e863ba4ebf80af3d
+class cache 5 8f7b66c608cb3f5b
+class wire 1 e482a9f604b8f5a2
+step 10 width 567
+class value 288 6dbff2872efc636a
+class identity 31 d2476a97aab95b3f
+class repr 61 63738396ce87b64d
+class cache 5 c5072d9487f7c713
+class wire 1 94a61707aca0f927
