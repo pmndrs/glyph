@@ -1906,7 +1906,10 @@ impl FlowLayoutArena {
         let cluster_start = usize::try_from(fragment.line.cluster_start)
             .map_err(|_| EngineError::InvalidRequest)?;
         let mut cluster_end = consumed.min(cluster_count);
-        let mut source_advance = fragment.line.advance;
+        // The fitted line does not charge its terminating spaces to `advance`, but they are
+        // among its clusters: ahead of the marker they are drawn and take room, and cut
+        // away they give back exactly what they are charged here.
+        let mut source_advance = fragment.line.advance + fragment.line.hung_advance;
         while cluster_end > cluster_start
             && clusters.flags[cluster_end - 1] & CLUSTER_HARD_BREAK != 0
         {
@@ -4937,6 +4940,10 @@ mod tests {
 
     #[test]
     fn ellipsis_truncation_reuses_the_final_slot_and_removes_only_required_clusters() {
+        // Three clusters of advance 3; the third is the space the fitted line hung, so the
+        // line is charged 6 for all three. With a marker costing 5 in a slot of 10 the whole
+        // line would be 9 + 5, without the space 6 + 5, and one cluster and the marker fit
+        // at 3 + 5 = 8.
         let clusters = quantized(ClusterArena {
             starts: vec![0, 1, 2, 3],
             ends: vec![1, 2, 3, 4],
@@ -4944,7 +4951,7 @@ mod tests {
             flags: vec![CLUSTER_SAFE_BEFORE; 4],
             ..ClusterArena::default()
         });
-        let mut layout = FlowLayoutArena {
+        let line = |hung_advance: f64, slot_end: f64| FlowLayoutArena {
             lines: vec![FlowLine {
                 typography: Default::default(),
                 flow_thread_id: 7,
@@ -4961,17 +4968,17 @@ mod tests {
             fragments: vec![FlowFragment {
                 line: ComposedLine {
                     cluster_start: 0,
-                    cluster_end: 2,
+                    cluster_end: 3,
                     text_start: 0,
-                    text_end: 2,
-                    advance: 6.0,
-                    hung_advance: 3.0,
+                    text_end: 3,
+                    advance: 9.0 - hung_advance,
+                    hung_advance,
                     hard_break: false,
                     start_correction: Correction::ZERO,
                     end_correction: Correction::ZERO,
                 },
                 slot_start: 0.0,
-                slot_end: 10.0,
+                slot_end,
                 flexible_end: false,
                 boundary_index: NO_BOUNDARY,
                 lead_index: NO_BOUNDARY,
@@ -4980,27 +4987,33 @@ mod tests {
             .into(),
             ..FlowLayoutArena::default()
         };
-
-        let target = layout
-            .truncate_for_ellipsis(7, &clusters, |cluster_end, _| {
-                Ok(EllipsisReplacement {
-                    cluster_start: cluster_end,
-                    advance_adjustment: 5.0,
+        let truncated = |mut layout: FlowLayoutArena| {
+            let target = layout
+                .truncate_for_ellipsis(7, &clusters, |cluster_end, _| {
+                    Ok(EllipsisReplacement {
+                        cluster_start: cluster_end,
+                        advance_adjustment: 5.0,
+                    })
                 })
-            })
-            .unwrap()
-            .unwrap();
-        assert_eq!(target.line_cluster_start, 0);
-        assert_eq!(target.boundary_cluster_start, 1);
-        assert_eq!(target.cluster_end, 1);
-        assert_eq!(target.text_end, 1);
-        assert_eq!(layout.fragments[0].line.cluster_end, 1);
-        assert_eq!(layout.fragments[0].line.text_end, 1);
-        assert_eq!(layout.fragments[0].line.advance, 8.0);
-        assert_eq!(
-            layout.fragments[0].line.hung_advance, 0.0,
-            "the ellipsis terminates the line, so nothing hangs off its end",
-        );
+                .unwrap()
+                .unwrap();
+            assert_eq!(target.line_cluster_start, 0);
+            assert_eq!(target.boundary_cluster_start, target.cluster_end);
+            assert_eq!(layout.fragments[0].line.cluster_end, target.cluster_end);
+            assert_eq!(layout.fragments[0].line.text_end, target.text_end);
+            assert_eq!(
+                layout.fragments[0].line.hung_advance, 0.0,
+                "the ellipsis terminates the line, so nothing hangs off its end",
+            );
+            (target.cluster_end, layout.fragments[0].line.advance)
+        };
+        assert_eq!(truncated(line(3.0, 10.0)), (1, 8.0));
+        // The space is charged whether or not the fit hung it.
+        assert_eq!(truncated(line(0.0, 10.0)), (1, 8.0));
+        // A slot of 11 holds two clusters and the marker, and still not the space.
+        assert_eq!(truncated(line(3.0, 11.0)), (2, 11.0));
+        // A slot of 14 holds the space too, drawn ahead of the marker and charged for.
+        assert_eq!(truncated(line(3.0, 14.0)), (3, 14.0));
     }
 
     #[test]
