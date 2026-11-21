@@ -4,12 +4,15 @@
  * This module only wires TypeGPU values into the host-agnostic core: the fragment scale,
  * the thickening factor, and the final weighted blend are all portable core calls.
  */
-import { d } from 'typegpu';
+import { d, std } from 'typegpu';
 import { slugPixelsPerEm, slugThickenFactor } from './core/band.js';
 import { calcCoverage } from './core/coverage.js';
 import { evaluateBand, type SlugShaderGlyph } from './slug-band.js';
 
 export { MAX_SAFE_SLUG_BAND_CURVES } from './core/band.js';
+
+/** Pixels the coverage sample sits off the fragment centre, on both axes; mirrored by the TSL graph. */
+const SLUG_TIE_OFFSET = -0.0001;
 export type { SlugShaderPage } from './slug-texture.js';
 export { SlugShaderGlyph } from './slug-band.js';
 
@@ -41,8 +44,11 @@ export function slugRenderWithOptions(
   // core keeps one shader signature instead of an optional parameter per effect.
   const thickenFactor /* f32 */ = slugThickenFactor(thicken, pixelsPerEm.z);
 
-  const horizontal = evaluateBand('horizontal')(glyph, renderCoordinate, pixelsPerEm.x, thickenFactor);
-  const vertical = evaluateBand('vertical')(glyph, renderCoordinate, pixelsPerEm.y, thickenFactor);
+  // Coverage is evaluated a ten-thousandth of a pixel off the fragment centre, towards lower x and y, as the TSL graph
+  // does: a centre exactly on an outline edge is a tie the last bit of the interpolated coordinate would decide.
+  const sample = renderCoordinate.add(std.fwidth(renderCoordinate).mul(SLUG_TIE_OFFSET));
+  const horizontal = evaluateBand('horizontal')(glyph, sample, pixelsPerEm.x, thickenFactor);
+  const vertical = evaluateBand('vertical')(glyph, sample, pixelsPerEm.y, thickenFactor);
 
   return calcCoverage(
     horizontal.coverage,
