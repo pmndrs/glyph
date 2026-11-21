@@ -57,6 +57,10 @@ const KERNEL_CLASSES = [
   'BB',
 ];
 const EAST_ASIAN_BIT = 0x20;
+/// Set on closure letters that a local edit may resynchronise between (see `unicode_resync.rs`).
+const RESYNC_LETTER_BIT = 0x40;
+const RESYNC_WORD_BREAK = new Set(['ALetter', 'Hebrew_Letter']);
+const RESYNC_SENTENCE_BREAK = new Set(['Upper', 'Lower', 'OLetter']);
 const SCRIPT_COMPLEX = 0xff;
 const INERT_GRAPHEME = new Set(['Other', 'Control', 'LF', 'LV', 'LVT']);
 
@@ -145,14 +149,46 @@ function scriptByte(codePoint) {
   return id;
 }
 
+const sentenceBreak = new Map();
+for (const value of unicode.Sentence_Break) {
+  if (value === 'Other') continue;
+  for (const codePoint of codePoints(`Sentence_Break/${value}`)) sentenceBreak.set(codePoint, value);
+}
+const wordBreak = new Map();
+for (const value of unicode.Word_Break) {
+  if (value === 'Other') continue;
+  for (const codePoint of codePoints(`Word_Break/${value}`)) wordBreak.set(codePoint, value);
+}
+
+/**
+ * The resync letter property: line-break class AL or HL, an explicit single script, and a word
+ * and sentence class that is a plain letter, so a single space between two of them restarts the
+ * line-break, grapheme, word and sentence lanes.
+ */
+function isResyncLetter(codePoint, kernel, script) {
+  const name = KERNEL_CLASSES[kernel & 0x1f];
+  return (
+    (name === 'AL' || name === 'HL') &&
+    (kernel & EAST_ASIAN_BIT) === 0 &&
+    script !== 0 &&
+    script !== SCRIPT_COMPLEX &&
+    RESYNC_WORD_BREAK.has(wordBreak.get(codePoint) ?? 'Other') &&
+    RESYNC_SENTENCE_BREAK.has(sentenceBreak.get(codePoint) ?? 'Other')
+  );
+}
+
 const UNIT_COUNT = 0x1_0000;
 const values = new Array(UNIT_COUNT);
 const summary = new Map();
 for (let unit = 0; unit < UNIT_COUNT; unit += 1) {
-  const kernel = kernelClass(unit);
-  const script = kernel === 0 ? SCRIPT_COMPLEX : scriptByte(unit);
+  const base = kernelClass(unit);
+  const script = base === 0 ? SCRIPT_COMPLEX : scriptByte(unit);
+  const kernel = base | (isResyncLetter(unit, base, script) ? RESYNC_LETTER_BIT : 0);
   values[unit] = kernel | (script << 8);
-  const name = KERNEL_CLASSES[kernel & 0x1f] + (kernel & EAST_ASIAN_BIT ? '+EastAsian' : '');
+  const name =
+    KERNEL_CLASSES[kernel & 0x1f] +
+    (kernel & EAST_ASIAN_BIT ? '+EastAsian' : '') +
+    (kernel & RESYNC_LETTER_BIT ? '+ResyncLetter' : '');
   const entry = summary.get(name) ?? { count: 0, first: unit };
   entry.count += 1;
   summary.set(name, entry);
@@ -200,16 +236,6 @@ const leafType = Math.max(...middles.flat) > 0xff ? 'u16' : 'u8';
 // One representative per distinct tuple of every property the scalar analysis reads, so the
 // exhaustive closure tests cover each behaviour the tables can produce, not one sample per class.
 const representatives = new Map();
-const sentenceBreak = new Map();
-for (const value of unicode.Sentence_Break) {
-  if (value === 'Other') continue;
-  for (const codePoint of codePoints(`Sentence_Break/${value}`)) sentenceBreak.set(codePoint, value);
-}
-const wordBreak = new Map();
-for (const value of unicode.Word_Break) {
-  if (value === 'Other') continue;
-  for (const codePoint of codePoints(`Word_Break/${value}`)) wordBreak.set(codePoint, value);
-}
 function lineTuple(codePoint) {
   const resolved = resolve(LineBreak.get(codePoint), String.fromCodePoint(codePoint));
   return [
@@ -242,7 +268,7 @@ for (let codePoint = 0; codePoint < 0x11_0000; codePoint += 1) {
     sentenceBreak.get(codePoint) ?? 'Other',
     graphemeBreak.get(codePoint) ?? 'Other',
     pictographic.has(codePoint),
-    codePoint < UNIT_COUNT ? values[codePoint] & 0x1f : 0,
+    codePoint < UNIT_COUNT ? values[codePoint] & 0x5f : 0,
   ].join('|');
   if (!segmentationRepresentatives.has(key)) segmentationRepresentatives.set(key, codePoint);
 }
@@ -274,6 +300,7 @@ ${closure}
 ${classConstants}
 pub const KERNEL_CLASS_MASK: u8 = 0x1f;
 pub const KERNEL_EAST_ASIAN: u8 = ${hex(EAST_ASIAN_BIT)};
+pub const KERNEL_RESYNC_LETTER: u8 = ${hex(RESYNC_LETTER_BIT)};
 pub const KERNEL_SCRIPT_COMPLEX: u8 = ${hex(SCRIPT_COMPLEX)};
 
 /// Script tags indexed by the script byte; index 0 is Common (a neutral unit).
