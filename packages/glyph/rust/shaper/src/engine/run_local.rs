@@ -172,17 +172,6 @@ impl RowLanes {
         Ok(())
     }
 
-    fn copy_from(&mut self, source: &Self) -> Result<(), RunLocalBuildError> {
-        for (lane, from) in self.lanes_mut().into_iter().zip(source.lanes()) {
-            lane.clear();
-            reserve(lane, from.len())?;
-            lane.extend_from_slice(from);
-        }
-        #[cfg(test)]
-        self.pen_inline.clone_from(&source.pen_inline);
-        Ok(())
-    }
-
     fn copy_row(&mut self, to: usize, source: &Self, from: usize) {
         for (lane, source) in self.lanes_mut().into_iter().zip(source.lanes()) {
             lane[to] = source[from];
@@ -237,8 +226,8 @@ struct RowOrigin {
     block_index: u32,
 }
 
-/// Font-unit ink boxes in cluster (source glyph) order: what a metric change rescales from, so
-/// a size change never asks the font registry for an extent.
+/// Font-unit ink boxes in cluster (source glyph) order, beside the glyph stream they describe:
+/// the kernel's fourth glyph lane, and what a metric change will rescale from.
 #[derive(Default)]
 pub(crate) struct InkUnitLanes {
     /// `[inline_min, block_min, inline_max, block_max]`, block axis up; zero without an outline.
@@ -280,17 +269,8 @@ impl InkUnitLanes {
         Ok(())
     }
 
-    pub(crate) fn len(&self) -> usize {
-        self.units.len()
-    }
-
     pub(crate) fn units(&self) -> &[[i16; 4]] {
         &self.units
-    }
-
-    fn copy_from(&mut self, source: &Self) -> Result<(), RunLocalBuildError> {
-        copy_lane(&mut self.units, &source.units)?;
-        copy_lane(&mut self.outlined, &source.outlined)
     }
 }
 
@@ -304,15 +284,6 @@ fn ink_units(extents: FontGlyphExtents) -> Result<[i16; 4], RunLocalBuildError> 
     ])
 }
 
-/// What a derived arena took from the arena it was copied from, valid for one rebuild.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Inherited {
-    /// The glyphs are the same: font-unit ink is reused and the kernel reruns.
-    Ink,
-    /// Every run-local input is the same: the geometry itself is reused.
-    Geometry,
-}
-
 #[derive(Default)]
 pub(crate) struct RunLocalArena {
     pub(super) index: BlockIndex,
@@ -320,7 +291,6 @@ pub(crate) struct RunLocalArena {
     source_words: Vec<SourceWord>,
     source_prefix: Vec<SourceWordPrefix>,
     pub(super) ink: InkUnitLanes,
-    inherited: Option<Inherited>,
     pub(super) scratch: KernelScratch,
     /// Scale spans of the paragraph run being laid out.
     pub(super) spans: Vec<ScaleSpan>,
@@ -343,7 +313,6 @@ impl RunLocalArena {
     pub(crate) fn clear(&mut self) {
         self.clear_geometry();
         self.ink.clear();
-        self.inherited = None;
     }
 
     /// Drops blocks, rows and the outline index; font-unit ink stays.
@@ -392,41 +361,6 @@ impl RunLocalArena {
             })? as u32,
         };
         self.rows.row(glyph, word.outlined & bit != 0, origin)
-    }
-
-    /// Takes the inheritance recorded by `inherit`, so it serves exactly one rebuild.
-    pub(super) fn take_inherited(&mut self) -> Option<Inherited> {
-        self.inherited.take()
-    }
-
-    /// Copies from the arena this one's owner was derived from. `Geometry` copies everything;
-    /// `Ink` copies the font-unit ink only. The next rebuild decides whether it still applies.
-    pub(crate) fn inherit(
-        &mut self,
-        previous: &Self,
-        inherited: Inherited,
-    ) -> Result<(), RunLocalBuildError> {
-        self.clear();
-        self.ink.copy_from(&previous.ink)?;
-        if inherited == Inherited::Geometry {
-            copy_lane(&mut self.index.blocks, &previous.index.blocks)?;
-            copy_lane(
-                &mut self.index.cluster_blocks,
-                &previous.index.cluster_blocks,
-            )?;
-            copy_lane(
-                &mut self.index.cluster_prefixes,
-                &previous.index.cluster_prefixes,
-            )?;
-            self.index.row_count = previous.index.row_count;
-            #[cfg(any(test, feature = "oracle"))]
-            self.index.row_order.clone_from(&previous.index.row_order);
-            self.rows.copy_from(&previous.rows)?;
-            copy_lane(&mut self.source_words, &previous.source_words)?;
-            copy_lane(&mut self.source_prefix, &previous.source_prefix)?;
-        }
-        self.inherited = Some(inherited);
-        Ok(())
     }
 
     /// Marks `count` glyphs from `start` as owned by a block. A glyph owned twice is a broken
@@ -1086,13 +1020,6 @@ where
         }
         Ok(())
     }
-}
-
-fn copy_lane<T: Copy>(lane: &mut Vec<T>, source: &[T]) -> Result<(), RunLocalBuildError> {
-    lane.clear();
-    reserve(lane, source.len())?;
-    lane.extend_from_slice(source);
-    Ok(())
 }
 
 fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), RunLocalBuildError> {

@@ -5,16 +5,9 @@
 //! therefore hands the kernel borrowed lanes; nothing is copied or looked up per glyph except
 //! the ink of a glyph stream this arena has not seen.
 //!
-//! Three change classes reach `rebuild`:
-//!
-//! - a new glyph stream (cold build, edit, reshape): ink is read from the font once, then the
-//!   kernel runs;
-//! - a metric change (font size, letter or word spacing, baseline shift) over the same glyph
-//!   stream: the arena inherited its ink, so the kernel reruns from font units and the font
-//!   registry is never asked. The result is the cold build's, bit for bit, because it is the
-//!   same kernel over the same lanes;
-//! - a change that touches no run-local input (line height, span boundaries): the arena
-//!   inherited the geometry itself and nothing runs.
+//! Ink is read through the registry closure on every rebuild for now. The lanes are the seam
+//! for the two follow-ups: the cluster build filling them as it scatters the glyph stream, and
+//! a metric change rerunning the kernel over ink it already holds.
 
 use alloc::vec::Vec;
 
@@ -23,9 +16,7 @@ use crate::FontGlyphExtents;
 use super::{
     EngineError,
     cluster_state::{CLUSTER_HARD_BREAK, ClusterArena, LayoutRun},
-    run_local::{
-        Inherited, InkUnitLanes, LAYOUT_CUT, NumericBlockSpan, RunLocalArena, RunLocalBuildError,
-    },
+    run_local::{InkUnitLanes, LAYOUT_CUT, NumericBlockSpan, RunLocalArena, RunLocalBuildError},
     run_local_kernel::{ClusterEnd, ClusterLanes, GlyphUnits, RunInput, ScaleSpan, layout_run},
     shaping_state::ShapingRun,
     style_state::StyleSegment,
@@ -42,19 +33,12 @@ pub(crate) fn rebuild(
     extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
 ) -> Result<(), EngineError> {
     let glyphs = clusters.glyph_ids.len();
-    let inherited = run_local.take_inherited();
-    if inherited == Some(Inherited::Geometry) && geometry_fits(run_local, layout_runs, glyphs) {
-        return Ok(());
-    }
-    let keep_ink = inherited == Some(Inherited::Ink) && run_local.ink.len() == glyphs;
-    run_local.clear_geometry();
+    run_local.clear();
     for run in layout_runs.iter_mut() {
         run.numeric_blocks = NumericBlockSpan::default();
     }
     let result = (|| {
-        if !keep_ink {
-            fill_ink(&mut run_local.ink, clusters, extents_for)?;
-        }
+        fill_ink(&mut run_local.ink, clusters, extents_for)?;
         run_local.rows.grow(glyphs).map_err(error)?;
         for run in layout_runs.iter_mut() {
             run.numeric_blocks = layout(run_local, *run, clusters, runs, styles)?;
@@ -68,24 +52,6 @@ pub(crate) fn rebuild(
         }
     }
     result
-}
-
-/// Whether inherited geometry has the shape of these clusters. The caller inherits only from
-/// the arena it copied its lanes from; this guards the arena having been built at all.
-fn geometry_fits(run_local: &RunLocalArena, layout_runs: &[LayoutRun], glyphs: usize) -> bool {
-    let clusters: u64 = layout_runs
-        .iter()
-        .map(|run| u64::from(run.cluster_end.saturating_sub(run.cluster_start)))
-        .sum();
-    run_local.lanes().inline_origin.len() == glyphs
-        && run_local.ink.len() == glyphs
-        && run_local.cluster_blocks().len() as u64 == clusters
-        && layout_runs.iter().all(|run| {
-            let span = run.numeric_blocks;
-            span.cluster_count == run.cluster_end.saturating_sub(run.cluster_start)
-                && u64::from(span.cluster_start) + u64::from(span.cluster_count) <= clusters
-                && u64::from(span.start) + u64::from(span.count) <= run_local.blocks().len() as u64
-        })
 }
 
 /// The adapter from the font registry's per-glyph lookup to ink lanes. A producer that already

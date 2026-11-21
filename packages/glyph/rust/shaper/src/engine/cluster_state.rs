@@ -17,8 +17,6 @@ use super::{
     style_state::{ResolvedStyle, StyleArena, StyleSegment},
 };
 
-use super::run_local::{Inherited, RunLocalBuildError};
-
 pub(crate) const CLUSTER_SAFE_BEFORE: u8 = 1 << 0;
 pub(crate) const CLUSTER_REQUIRED_BREAK: u8 = 1 << 1;
 pub(crate) const CLUSTER_HARD_BREAK: u8 = 1 << 2;
@@ -1351,18 +1349,6 @@ impl ClusterArena {
         metrics_changed: bool,
     ) -> Result<Option<()>, EngineError> {
         self.copy_from(previous, !metrics_changed)?;
-        // The glyph stream is the previous one, so its font-unit ink is too; with no metric
-        // change every run-local input is, and the geometry itself carries over.
-        self.run_local
-            .inherit(
-                &previous.run_local,
-                if metrics_changed {
-                    Inherited::Ink
-                } else {
-                    Inherited::Geometry
-                },
-            )
-            .map_err(run_local_error)?;
         let stream_len = self.glyph_ids.len();
         if self.glyph_x_advances.len() != stream_len {
             self.clear();
@@ -2131,15 +2117,6 @@ impl ClusterArena {
             return Err(EngineError::InvalidRequest);
         }
         Ok(index)
-    }
-}
-
-fn run_local_error(error: RunLocalBuildError) -> EngineError {
-    match error {
-        RunLocalBuildError::AllocationFailed => EngineError::ResultTooLarge,
-        RunLocalBuildError::InvalidSource | RunLocalBuildError::LocalGeometryOutOfRange => {
-            EngineError::InvalidRequest
-        }
     }
 }
 

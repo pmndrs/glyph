@@ -359,7 +359,8 @@ fn scale_candidate(
         ..
     } = candidate;
     if scratch.glyphs.len() < glyph_count {
-        reserve(&mut scratch.glyphs, glyph_count - scratch.glyphs.len())?;
+        let missing = glyph_count - scratch.glyphs.len();
+        reserve(&mut scratch.glyphs, missing)?;
         scratch.glyphs.resize(glyph_count, Scaled::default());
     }
     let glyph_end = glyph_base + glyph_count;
