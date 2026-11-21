@@ -107,8 +107,8 @@ pub(crate) struct RowLanes {
 }
 
 /// Borrowed row lanes for readers that walk glyph ranges: index by source glyph.
-// Single-glyph readers still gather a `RunLocalGlyph`; the column gather and positioning
-// migrate to these lanes in their own units.
+// The column gather reads six of these; positioning still gathers a `RunLocalGlyph` per glyph
+// and takes `inline_advance` with the rest when it migrates.
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
 pub(crate) struct RunLocalLanes<'a> {
@@ -182,7 +182,6 @@ impl RowLanes {
         }
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     fn view(&self) -> RunLocalLanes<'_> {
         RunLocalLanes {
             inline_origin: &self.inline_origin,
@@ -394,7 +393,6 @@ impl RunLocalArena {
 
     /// The row lanes, indexed by source glyph. A glyph no block covers reads as zeros; ask
     /// `source_range_counts` or `next_outlined_source` which glyphs are covered.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn lanes(&self) -> RunLocalLanes<'_> {
         self.rows.view()
     }
