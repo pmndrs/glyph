@@ -79,13 +79,28 @@ impl<'request> MeasuredParagraphs<'request> {
     }
 }
 
+/// The outcome of one preparation request: a witness to commit, and the one paragraph, if any,
+/// whose preparation was refused.
+///
+/// A refusal is local to its paragraph. That paragraph is reset to empty and stays in the root;
+/// every paragraph prepared before it in the request commits with the witness, and the ones after
+/// it were not started. Nothing else in the root is disturbed, so a host restates the refused
+/// paragraph from scratch once its input changes, or removes it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct PreparedParagraphs {
+    pub witness: MeasuredParagraph,
+    /// The refused paragraph and why. Most failures carry no paragraph of their own, so it is
+    /// named here.
+    pub refused: Option<(u32, EngineError)>,
+}
+
 impl TextEngine {
     pub(crate) fn prepare_paragraphs_with_shaper(
         &mut self,
         shaper: &mut ShaperRegistry,
         request: UpdateRequest<'_>,
         target: PreparationTarget<'_>,
-    ) -> Result<MeasuredParagraph, EngineError> {
+    ) -> Result<PreparedParagraphs, EngineError> {
         self.prepare_paragraphs(Some(shaper), request, target)
     }
 
@@ -94,7 +109,7 @@ impl TextEngine {
         mut shaper: Option<&mut ShaperRegistry>,
         request: UpdateRequest<'_>,
         target: PreparationTarget<'_>,
-    ) -> Result<MeasuredParagraph, EngineError> {
+    ) -> Result<PreparedParagraphs, EngineError> {
         if !request.limits.all_nonzero() {
             return Err(EngineError::InvalidRequest);
         }
@@ -172,6 +187,10 @@ impl TextEngine {
             & (super::super::frame::SEMANTIC_VIEW_MEASUREMENT
                 | super::super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION)
             != 0;
+        let mut refused = None;
+        // Everything up to here either validated without writing or wrote only scratch. From
+        // here a failure of the lifecycle still discards the derived root; a failure inside one
+        // paragraph's own stages is confined to that paragraph.
         let preparation: Result<(), EngineError> = (|| {
             planner.semantic_records.clear();
             planner.prepare_lifecycle(
@@ -196,17 +215,28 @@ impl TextEngine {
                     &mut planner.unpublished_preparation_ids,
                     paragraph_id,
                 )?;
-                let preflight_candidate =
-                    preflight_text_candidate_mut(&mut preflight_text_candidates, paragraph_id);
-                // Preparation is durable independently of the result sidecar the host requested,
-                // so it always includes positioning. A semantic mask controls serialization, not
-                // which stage becomes the current retained preparation.
-                let paragraph = planner
-                    .paragraph_mut(paragraph_id)
-                    .ok_or(EngineError::InvalidRequest)?;
-                paragraph.positioned_changed = paragraph
-                    .state
-                    .prepare(
+                let serialized = match target {
+                    PreparationTarget::One(_) => measured,
+                    PreparationTarget::Dirty(interest) => {
+                        measured && interest.contains(paragraph_id)
+                    }
+                };
+                let stages = (|| {
+                    let preflight_candidate =
+                        preflight_text_candidate_mut(&mut preflight_text_candidates, paragraph_id);
+                    let paragraph = planner
+                        .paragraph_mut(paragraph_id)
+                        .ok_or(EngineError::InvalidRequest)?;
+                    // Every lane whose size follows the text is reserved before the first stage
+                    // writes, so running out of memory refuses this paragraph with nothing to
+                    // undo instead of failing halfway through a stage.
+                    paragraph
+                        .state
+                        .reserve_text(prepared_text_length(&paragraph.state, text)?)?;
+                    // Preparation is durable independently of the result sidecar the host
+                    // requested, so it always includes positioning. A semantic mask controls
+                    // serialization, not which stage becomes the current retained preparation.
+                    paragraph.positioned_changed = paragraph.state.prepare(
                         shaper.as_deref_mut(),
                         font_stacks,
                         font_bindings,
@@ -217,15 +247,10 @@ impl TextEngine {
                         &mut next_glyph_id,
                         preflight_candidate,
                         &preflight_edit_scratch,
-                    )
-                    .map_err(|error| error.in_paragraph(paragraph_id))?;
-                let serialized = match target {
-                    PreparationTarget::One(_) => measured,
-                    PreparationTarget::Dirty(interest) => {
-                        measured && interest.contains(paragraph_id)
+                    )?;
+                    if !serialized {
+                        return Ok(());
                     }
-                };
-                if serialized {
                     let mut records = core::mem::take(&mut planner.semantic_records);
                     let query = append_paragraph_measurement(
                         &mut records,
@@ -246,7 +271,12 @@ impl TextEngine {
                             != 0,
                     );
                     planner.semantic_records = records;
-                    query.map_err(|error| error.in_paragraph(paragraph_id))?;
+                    query
+                })();
+                if let Err(error) = stages {
+                    refuse_paragraph(planner, paragraph_id)?;
+                    refused = Some((paragraph_id, error.in_paragraph(paragraph_id)));
+                    break;
                 }
             }
             Ok(())
@@ -262,15 +292,50 @@ impl TextEngine {
         // Reserve identities when they become observable, even if result encoding later fails.
         planner.next_glyph_id = planner.next_glyph_id.max(next_glyph_id);
         planner.measure_generation = next_measure_generation;
-        Ok(MeasuredParagraph {
-            root_id: request.root_id,
-            revision: planner.revision,
-            preparation_revision: planner.preparation_revision,
-            measure_generation: next_measure_generation,
-            codec_handle: request.codec_handle,
-            codec_fingerprint,
+        Ok(PreparedParagraphs {
+            witness: MeasuredParagraph {
+                root_id: request.root_id,
+                revision: planner.revision,
+                preparation_revision: planner.preparation_revision,
+                measure_generation: next_measure_generation,
+                codec_handle: request.codec_handle,
+                codec_fingerprint,
+            },
+            refused,
         })
     }
+}
+
+/// The UTF-16 length a paragraph's text will have once the request's replacements apply.
+fn prepared_text_length(
+    state: &ParagraphState,
+    mutations: super::super::semantic_wire::TextMutationBatch<'_>,
+) -> Result<usize, EngineError> {
+    let mut length = state.text.committed().units.len();
+    for index in 0..mutations.len() {
+        let mutation = mutations.get(index).ok_or(EngineError::InvalidRequest)?;
+        let deleted =
+            usize::try_from(mutation.delete_count).map_err(|_| EngineError::InvalidRequest)?;
+        length = length
+            .checked_sub(deleted)
+            .and_then(|length| length.checked_add(mutation.insert_utf16_le.len() / 2))
+            .ok_or(EngineError::InvalidRequest)?;
+    }
+    Ok(length)
+}
+
+/// Confines a failed preparation to its paragraph: the paragraph is emptied and its memory released,
+/// it keeps its place in the root, and it is marked changed so the next publication withdraws what
+/// it drew.
+fn refuse_paragraph(planner: &mut PlannerState, paragraph_id: u32) -> Result<(), EngineError> {
+    let paragraph = planner
+        .paragraph_mut(paragraph_id)
+        .ok_or(EngineError::InvalidRequest)?;
+    // Dropped, not cleared: a refusal is usually memory, and a cleared paragraph keeps every lane it
+    // had grown, which would leave its siblings as short of memory as it was.
+    paragraph.state = ParagraphState::default();
+    paragraph.positioned_changed = true;
+    Ok(())
 }
 
 type ParagraphInput<'request> = (

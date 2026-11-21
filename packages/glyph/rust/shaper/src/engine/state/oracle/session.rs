@@ -280,6 +280,13 @@ impl Session {
             .engine
             .prepare_paragraphs_with_shaper(&mut self.registry, request, target)
             .map_err(|error| format!("measure: {error:?}"))?;
+        if let Some((_, error)) = measured.refused {
+            self.engine
+                .commit_measure(measured.witness)
+                .map_err(debug)?;
+            return Err(format!("measure: {error:?}"));
+        }
+        let measured = measured.witness;
         let staged = (|| {
             let views = self
                 .engine

@@ -41,6 +41,13 @@ impl DirtyInterval {
         end: u32::MAX,
     };
 
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "read by publication once gather narrows by change class"
+        )
+    )]
     pub(crate) fn is_empty(self) -> bool {
         self.start >= self.end
     }

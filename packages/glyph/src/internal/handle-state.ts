@@ -5,10 +5,15 @@ import type { GlyphOutlineStore, GlyphOutlineView } from '../glyph-outline.js';
 import type { FontHandle } from '../identity.js';
 import { immutableFontStackFonts, type FontStack } from '../loaded-font.js';
 import type { RasterFormatMetadata } from '../config/raster-format.js';
-import { runtimeShaperEngineExports, type RuntimeShaper } from '../shaper.js';
+import { onRuntimeShaperRestart, runtimeShaperEngineExports, type RuntimeShaper } from '../shaper.js';
 import { compileRasterFont, type CompiledRasterFont } from '../config/raster.js';
 import type { PortableResource } from '../config/resources.js';
-import { createRenderPlanner, type RenderPlanner, type RenderPlannerOptions } from './render-planner.js';
+import {
+  createRenderPlanner,
+  restartRenderPlanner,
+  type RenderPlanner,
+  type RenderPlannerOptions,
+} from './render-planner.js';
 import { compileCodec, type CodecDescriptor, type CodecIdFactory } from '../config/codec.js';
 import { CodecIdScope } from './render-id.js';
 import { resolveRasterCodecInternal } from './raster-codec-registry.js';
@@ -276,6 +281,13 @@ export class GlyphHandleState {
   readonly #codecs = new Set<CodecHandle>();
   readonly #fontStacks = new Map<FontStackHandle, readonly FontBindingHandle[]>();
   readonly #fontBindings = new Set<FontBindingHandle>();
+  /** What each font binding and codec was registered with, kept so a restarted engine can be told again. */
+  readonly #fontBindingBytes = new Map<
+    FontBindingHandle,
+    { readonly shapingFontHandle: FontHandle; readonly bytes: Uint8Array }
+  >();
+  readonly #codecBytes = new Map<CodecHandle, Uint8Array>();
+  readonly #stopObservingRestart: () => void;
   readonly #installedCodecs = new Set<InstalledCodecRegistration>();
   readonly #retainedFontBindings = new WeakMap<object, RetainedHandleFontBinding>();
   readonly #liveRetainedFontBindings = new Set<RetainedHandleFontBinding>();
@@ -330,6 +342,39 @@ export class GlyphHandleState {
     this.#assertEngineAvailable = assertEngineAvailable;
     this.#enterEngineBorrow = enterEngineBorrow;
     this.#assertEngineLifecycleMutationAllowed = assertEngineLifecycleMutationAllowed;
+    this.#stopObservingRestart = onRuntimeShaperRestart(shaper, () => this.#restateAfterEngineRestart());
+  }
+
+  /**
+   * Restates everything this handle state registered, on the fresh engine instance that replaced a trapped one:
+   * font bindings, then the stacks naming them, then codecs, then each root. Planners then treat every text as
+   * unseen, so the next read or frame restates it from its current desired value.
+   */
+  #restateAfterEngineRestart(): void {
+    if (this.#disposed) return;
+    for (const [handle, { shapingFontHandle, bytes }] of this.#fontBindingBytes) {
+      this.#withBytes(bytes, (pointer, length) =>
+        requireStatus(
+          this.#exports.registerFontBinding(handle, shapingFontHandle, pointer, length),
+          'restate font binding',
+        ),
+      );
+    }
+    for (const [handle, fontHandles] of this.#fontStacks) {
+      const bytes = new Uint8Array(fontHandles.length * 4);
+      const view = new DataView(bytes.buffer);
+      for (const [index, fontHandle] of fontHandles.entries()) view.setUint32(index * 4, fontHandle, true);
+      this.#withBytes(bytes, (pointer) =>
+        requireStatus(this.#exports.registerFontStack(handle, pointer, fontHandles.length), 'restate font stack'),
+      );
+    }
+    for (const [handle, bytes] of this.#codecBytes) {
+      this.#withBytes(bytes, (pointer, length) =>
+        requireStatus(this.#exports.registerCodec(handle, pointer, length), 'restate render codec'),
+      );
+    }
+    for (const transport of this.#transports) transport.restateRoot();
+    for (const planner of this.#planners) restartRenderPlanner(planner);
   }
 
   /** @internal Fills `target` with views over the outline its font decoded when it loaded. */
@@ -664,6 +709,7 @@ export class GlyphHandleState {
         ),
       );
       this.#fontBindings.add(bindingHandle);
+      this.#fontBindingBytes.set(bindingHandle, { shapingFontHandle, bytes });
     } catch (error) {
       this.#rollbackClaim(this.#owners.fontBindings, bindingHandle, claimed);
       if (adopted) this.#ids.release(bindingHandle, 'font-binding');
@@ -685,6 +731,7 @@ export class GlyphHandleState {
     }
     requireStatus(this.#exports.disposeFontBinding(bindingHandle), 'dispose font binding');
     this.#fontBindings.delete(bindingHandle);
+    this.#fontBindingBytes.delete(bindingHandle);
     this.#releaseClaim(this.#owners.fontBindings, bindingHandle);
     this.#ids.release(bindingHandle, 'font-binding');
   }
@@ -741,6 +788,7 @@ export class GlyphHandleState {
         requireStatus(this.#exports.registerCodec(handle, pointer, length), 'register render codec'),
       );
       this.#codecs.add(handle);
+      this.#codecBytes.set(handle, bytes);
     } catch (error) {
       this.#rollbackClaim(this.#owners.codecs, handle, claimed);
       if (adopted) this.#ids.release(handle, 'codec');
@@ -755,6 +803,7 @@ export class GlyphHandleState {
     if (!this.#codecs.has(handle)) throw new Error(`render codec ${handle} is not owned by this Glyph handle state`);
     requireStatus(this.#exports.disposeCodec(handle), 'dispose render codec');
     this.#codecs.delete(handle);
+    this.#codecBytes.delete(handle);
     this.#releaseClaim(this.#owners.codecs, handle);
     this.#ids.release(handle, 'codec');
   }
@@ -840,6 +889,7 @@ export class GlyphHandleState {
   dispose(): void {
     if (this.#disposed) return;
     this._assertEngineLifecycleMutationAllowed();
+    this.#stopObservingRestart();
     for (const planner of this.#planners) planner.assertMutationAllowed();
     for (const transport of this.#transports) transport.assertMutationAllowed();
     let failurePresent = false;
@@ -1244,6 +1294,7 @@ export class PlanTransport {
   #stagedUpdate: { readonly requestLength: number; readonly initialMemoryBuffer: ArrayBuffer } | undefined;
   #preparedMutationUnadopted = false;
   #lastFailureInvalidatedRoot = false;
+  #lastFailureRefusedParagraph = false;
   readonly #frameScratch = createPlannerFrameScratch();
   /** Views over the whole request arena; they outlive a request and are rebuilt only when the arena or memory moves. */
   #requestView: { readonly bytes: Uint8Array; readonly view: DataView } | undefined;
@@ -1387,6 +1438,14 @@ export class PlanTransport {
     return this.#lastFailureInvalidatedRoot;
   }
 
+  /**
+   * @internal Whether the last rejected preparation was confined to one paragraph: the engine emptied that
+   * paragraph, committed everything the request prepared before it, and left the rest of the root intact.
+   */
+  get failureRefusedParagraph(): boolean {
+    return this.#lastFailureRefusedParagraph;
+  }
+
   /** @internal Abandon a staged request when the batch could not produce this planner's result. */
   discardStagedUpdate(): void {
     if (this.#disposed) return;
@@ -1431,8 +1490,10 @@ export class PlanTransport {
     }
     const header = this.#boundResultHeader(memoryBuffer, resultPointer, layout.size);
     const status = header.getUint32(layout.status, true);
-    this.#lastFailureInvalidatedRoot =
-      (header.getUint32(layout.flags, true) & textShaperAbi.engine.resultFlags.rootInvalidated) !== 0;
+    const flags = header.getUint32(layout.flags, true);
+    this.#lastFailureInvalidatedRoot = (flags & textShaperAbi.engine.resultFlags.rootInvalidated) !== 0;
+    this.#lastFailureRefusedParagraph =
+      status !== textShaperAbi.status.ok && (flags & textShaperAbi.engine.resultFlags.paragraphRefused) !== 0;
     if (status !== textShaperAbi.status.ok) {
       throw engineStatusError(
         operation,
@@ -1467,6 +1528,23 @@ export class PlanTransport {
     this.#stagedUpdate = undefined;
     this.#invalidate();
     return true;
+  }
+
+  /** @internal Creates this root again on the engine instance that replaced a trapped one. */
+  restateRoot(): void {
+    if (this.#disposed) return;
+    requireStatus(
+      this.#exports.createRoot(this.#handle, this.#requestCapacity, this.#resultCapacity, this.#textCapacity),
+      'restate Glyph root',
+    );
+    this.#requestPointer = 0;
+    this.#requestView = undefined;
+    this.#resultHeader = undefined;
+    this.#preparedMutationUnadopted = false;
+    this.#lastFailureInvalidatedRoot = false;
+    this.#lastFailureRefusedParagraph = false;
+    this.#stagedUpdate = undefined;
+    this.#invalidate();
   }
 
   /** @internal Clears all derived root state while preserving its renderer publication fence. */

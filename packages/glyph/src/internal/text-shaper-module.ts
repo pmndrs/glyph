@@ -1,3 +1,4 @@
+import { GlyphError } from '../glyph-error.js';
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { compileWasmResponse } from './compile-wasm-response.js';
 import { textShaperWasmUrl } from './shaper-wasm-url.js';
@@ -93,7 +94,14 @@ export interface ShaperExports {
 }
 
 export interface ShaperModule {
+  /**
+   * The one gateway to the engine. Every function traps through it: a `WebAssembly.RuntimeError` means the
+   * instance stopped mid-mutation and nothing in it can be trusted, so the gateway replaces the instance, lets
+   * each owner restate what it had registered, and throws {@link GlyphEngineRestartError} to the caller.
+   */
   readonly exports: ShaperExports;
+  /** Registers an owner that restates its engine registrations on a fresh instance. Owners run in order. */
+  onRestart(listener: () => void): () => void;
 }
 
 export async function compileDefaultWasm(): Promise<WebAssembly.Module> {
@@ -110,7 +118,7 @@ export async function compileDefaultWasm(): Promise<WebAssembly.Module> {
   return compileWasmResponse(response);
 }
 
-export function readModule(instance: WebAssembly.Instance): ShaperModule {
+function readExports(instance: WebAssembly.Instance): ShaperExports {
   const memory = instance.exports.memory;
   if (!(memory instanceof WebAssembly.Memory)) throw new TypeError('text shaper is missing memory');
   const functions = textShaperAbi.functions;
@@ -130,42 +138,124 @@ export function readModule(instance: WebAssembly.Instance): ShaperModule {
   const status = initialize();
   if (status !== 0) throw shaperStatusError(status, 'initialize');
   return {
-    exports: {
-      memory,
-      allocate: exportedFunction(instance, functions.allocate),
-      deallocate: exportedFunction(instance, functions.deallocate),
-      registerFont: exportedFunction(instance, functions.registerFont),
-      disposeFont: exportedFunction(instance, functions.disposeFont),
-      fontCount: exportedFunction(instance, functions.fontCount),
-      retainedFontBytes: exportedFunction(instance, functions.retainedFontBytes),
-      shapePlanCount: exportedFunction(instance, functions.shapePlanCount),
-      glyphOutline: exportedFunction(instance, functions.glyphOutline),
-      glyphOutlinePointer: exportedFunction(instance, functions.glyphOutlinePointer),
-      glyphOutlineLength: exportedFunction(instance, functions.glyphOutlineLength),
-      registerFontBinding: exportedFunction(instance, functions.registerFontBinding),
-      disposeFontBinding: exportedFunction(instance, functions.disposeFontBinding),
-      fontBindingCount: exportedFunction(instance, functions.fontBindingCount),
-      registerFontStack: exportedFunction(instance, functions.registerFontStack),
-      disposeFontStack: exportedFunction(instance, functions.disposeFontStack),
-      registerCodec: exportedFunction(instance, functions.registerCodec),
-      disposeCodec: exportedFunction(instance, functions.disposeCodec),
-      createRoot: exportedFunction(instance, functions.createRoot),
-      reserveRoot: exportedFunction(instance, functions.reserveRoot),
-      resetRoot: exportedFunction(instance, functions.resetRoot),
-      disposeRoot: exportedFunction(instance, functions.disposeRoot),
-      requestPointer: exportedFunction(instance, functions.requestPointer),
-      requestCapacity: exportedFunction(instance, functions.requestCapacity),
-      reserveUpdateBatch: exportedFunction(instance, functions.reserveUpdateBatch),
-      updateBatchPointer: exportedFunction(instance, functions.updateBatchPointer),
-      updateBatchCapacity: exportedFunction(instance, functions.updateBatchCapacity),
-      textUpdate: exportedFunction(instance, functions.textUpdate),
-      textUpdateBatch: exportedFunction(instance, functions.textUpdateBatch),
-      measureParagraph: exportedFunction(instance, functions.measureParagraph),
-      prepareBatch: exportedFunction(instance, functions.prepareBatch),
-      borrowParagraphLayout: exportedFunction(instance, functions.borrowParagraphLayout),
-      borrowParagraphGlyphs: exportedFunction(instance, functions.borrowParagraphGlyphs),
-      copyGlyphs: exportedFunction(instance, functions.copyGlyphs),
-      copyDecorations: exportedFunction(instance, functions.copyDecorations),
+    memory,
+    allocate: exportedFunction(instance, functions.allocate),
+    deallocate: exportedFunction(instance, functions.deallocate),
+    registerFont: exportedFunction(instance, functions.registerFont),
+    disposeFont: exportedFunction(instance, functions.disposeFont),
+    fontCount: exportedFunction(instance, functions.fontCount),
+    retainedFontBytes: exportedFunction(instance, functions.retainedFontBytes),
+    shapePlanCount: exportedFunction(instance, functions.shapePlanCount),
+    glyphOutline: exportedFunction(instance, functions.glyphOutline),
+    glyphOutlinePointer: exportedFunction(instance, functions.glyphOutlinePointer),
+    glyphOutlineLength: exportedFunction(instance, functions.glyphOutlineLength),
+    registerFontBinding: exportedFunction(instance, functions.registerFontBinding),
+    disposeFontBinding: exportedFunction(instance, functions.disposeFontBinding),
+    fontBindingCount: exportedFunction(instance, functions.fontBindingCount),
+    registerFontStack: exportedFunction(instance, functions.registerFontStack),
+    disposeFontStack: exportedFunction(instance, functions.disposeFontStack),
+    registerCodec: exportedFunction(instance, functions.registerCodec),
+    disposeCodec: exportedFunction(instance, functions.disposeCodec),
+    createRoot: exportedFunction(instance, functions.createRoot),
+    reserveRoot: exportedFunction(instance, functions.reserveRoot),
+    resetRoot: exportedFunction(instance, functions.resetRoot),
+    disposeRoot: exportedFunction(instance, functions.disposeRoot),
+    requestPointer: exportedFunction(instance, functions.requestPointer),
+    requestCapacity: exportedFunction(instance, functions.requestCapacity),
+    reserveUpdateBatch: exportedFunction(instance, functions.reserveUpdateBatch),
+    updateBatchPointer: exportedFunction(instance, functions.updateBatchPointer),
+    updateBatchCapacity: exportedFunction(instance, functions.updateBatchCapacity),
+    textUpdate: exportedFunction(instance, functions.textUpdate),
+    textUpdateBatch: exportedFunction(instance, functions.textUpdateBatch),
+    measureParagraph: exportedFunction(instance, functions.measureParagraph),
+    prepareBatch: exportedFunction(instance, functions.prepareBatch),
+    borrowParagraphLayout: exportedFunction(instance, functions.borrowParagraphLayout),
+    borrowParagraphGlyphs: exportedFunction(instance, functions.borrowParagraphGlyphs),
+    copyGlyphs: exportedFunction(instance, functions.copyGlyphs),
+    copyDecorations: exportedFunction(instance, functions.copyDecorations),
+  };
+}
+
+/** Thrown by the call during which the engine trapped. The engine was replaced; the same call may be made again. */
+export class GlyphEngineRestartError extends GlyphError<'engine-failed'> {
+  /** Whether a fresh engine instance is already live, so the call that threw can simply be made again. */
+  readonly restarted: boolean;
+
+  constructor(message: string, cause: unknown, restarted = false) {
+    super('engine-failed', message, { cause });
+    this.name = 'GlyphEngineRestartError';
+    this.restarted = restarted;
+  }
+}
+
+/**
+ * Wraps one instance of the shaper module behind a facade that survives the instance. `module` is retained so a
+ * trapped instance can be replaced; `instance` is its first instantiation.
+ */
+export function readModule(instance: WebAssembly.Instance, module?: WebAssembly.Module): ShaperModule {
+  let current = readExports(instance);
+  /** `replaying` admits the owners restating themselves; `dead` admits nothing until an instance lands. */
+  let state: 'live' | 'replaying' | 'dead' = 'live';
+  let failure: unknown;
+  const listeners = new Set<() => void>();
+  const replay = (replacement: WebAssembly.Instance): void => {
+    current = readExports(replacement);
+    state = 'replaying';
+    try {
+      for (const listener of listeners) listener();
+      state = 'live';
+    } catch (error) {
+      state = 'dead';
+      failure = error;
+      throw error;
+    }
+  };
+  const restart = (cause: unknown): never => {
+    failure = cause;
+    // A trap while owners restate themselves, or without a module to instantiate, leaves nothing to restart from.
+    if (state !== 'live' || module === undefined) {
+      state = 'dead';
+      throw new GlyphEngineRestartError('the text engine trapped and cannot be restarted', cause);
+    }
+    state = 'dead';
+    let replacement: WebAssembly.Instance | undefined;
+    try {
+      replacement = new WebAssembly.Instance(module, {});
+    } catch {
+      // Some hosts refuse to instantiate a module of this size synchronously on the main thread.
+    }
+    if (replacement === undefined) {
+      void WebAssembly.instantiate(module, {})
+        .then(replay)
+        .catch(() => undefined);
+      throw new GlyphEngineRestartError('the text engine trapped and is restarting', cause);
+    }
+    try {
+      replay(replacement);
+    } catch (error) {
+      throw new GlyphEngineRestartError('the text engine trapped and could not restate its registrations', error);
+    }
+    throw new GlyphEngineRestartError('the text engine trapped and was restarted', cause, true);
+  };
+  const facade: Record<string, unknown> = {};
+  for (const name of Object.keys(current) as (keyof ShaperExports)[]) {
+    if (name === 'memory') continue;
+    facade[name] = (...parameters: number[]): number => {
+      if (state === 'dead') throw new GlyphEngineRestartError('the text engine is restarting', failure);
+      try {
+        return (current[name] as (...parameters: number[]) => number)(...parameters);
+      } catch (error) {
+        if (error instanceof WebAssembly.RuntimeError) return restart(error);
+        throw error;
+      }
+    };
+  }
+  Object.defineProperty(facade, 'memory', { enumerable: true, get: () => current.memory });
+  return {
+    exports: facade as unknown as ShaperExports,
+    onRestart(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
     },
   };
 }

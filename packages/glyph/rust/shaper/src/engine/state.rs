@@ -1467,6 +1467,7 @@ impl TextEngine {
     /// positioning run for the selected paragraph without advancing renderer-plan revision,
     /// acknowledging a renderer fence, gathering, or compiling a plan. The Wasm boundary commits
     /// this transaction only after its requested semantic result has encoded successfully.
+    #[cfg(test)]
     pub(crate) fn measure_paragraph_with_shaper(
         &mut self,
         shaper: &mut ShaperRegistry,
@@ -1485,13 +1486,24 @@ impl TextEngine {
         self.measure_paragraph_inner(None, request, paragraph_id)
     }
 
+    #[cfg(test)]
     fn measure_paragraph_inner(
         &mut self,
         shaper: Option<&mut ShaperRegistry>,
         request: UpdateRequest<'_>,
         paragraph_id: u32,
     ) -> Result<MeasuredParagraph, EngineError> {
-        self.prepare_paragraphs(shaper, request, PreparationTarget::One(paragraph_id))
+        let prepared =
+            self.prepare_paragraphs(shaper, request, PreparationTarget::One(paragraph_id))?;
+        match prepared.refused {
+            None => Ok(prepared.witness),
+            // This entry answers with one witness or one error, so it settles the refusal itself:
+            // whatever else the request prepared is committed and the paragraph's error returned.
+            Some((_, error)) => {
+                self.commit_measure(prepared.witness)?;
+                Err(error)
+            }
+        }
     }
 
     fn prepare_update_inner(
@@ -9244,8 +9256,7 @@ mod prepare_paragraphs;
 use change_class::ChangeClass;
 pub(crate) use change_class::{DirtyInterval, ParagraphChange};
 #[cfg(any(target_arch = "wasm32", feature = "oracle", test))]
-pub(crate) use prepare_paragraphs::MeasuredParagraphs;
-pub(crate) use prepare_paragraphs::PreparationTarget;
+pub(crate) use prepare_paragraphs::{MeasuredParagraphs, PreparationTarget};
 
 #[cfg(test)]
 mod unsafe_break_tests;
@@ -22259,6 +22270,7 @@ mod tests {
         assert_eq!(after_glyphs, before_glyphs);
     }
     include!("state/change_class_tests.rs");
+    include!("state/refusal_tests.rs");
     include!("state_ascii_anchor_runtime_oracle.rs");
     include!("state_ascii_anchor_acceptance_tests.rs");
     include!("state_ascii_anchor_policy_tests.rs");

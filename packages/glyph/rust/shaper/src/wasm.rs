@@ -1151,16 +1151,37 @@ fn prepare(
             }
         }
     };
-    let measured =
+    let prepared =
         match state
             .engine
             .prepare_paragraphs_with_shaper(&mut state.registry, request, target)
         {
-            Ok(measured) => measured,
+            Ok(prepared) => prepared,
             Err(error) => {
                 return publish_engine_failure(state, root_id, revision, error);
             }
         };
+    let measured = prepared.witness;
+    if let Some((paragraph_id, error)) = prepared.refused {
+        // One paragraph was refused and reset. Whatever the request prepared before it commits;
+        // the answer names the paragraph and says the root itself is intact.
+        return match state.engine.commit_measure(measured) {
+            Ok(_) => publish_attributed_failure(
+                state,
+                root_id,
+                revision,
+                engine_status(error),
+                FrameFault {
+                    paragraph_id,
+                    ..error.fault()
+                },
+                0,
+                0,
+                crate::engine::frame::RESULT_FLAG_PARAGRAPH_REFUSED,
+            ),
+            Err(error) => publish_engine_failure(state, root_id, revision, error),
+        };
+    }
     // A batch sizes its own result arena; a read reports the capacity it needs instead.
     let grow_output = queried_paragraph.is_none();
     let staged = match state.engine.measured_semantic_views(measured) {
@@ -1204,6 +1225,7 @@ fn prepare(
                 fault,
                 0,
                 required_result_capacity,
+                0,
             )
         }
     }
@@ -1454,6 +1476,7 @@ fn publish_prepared_failure(
         fault,
         required_request_capacity,
         required_result_capacity,
+        0,
     )
 }
 
@@ -1473,6 +1496,7 @@ fn publish_failure(
         FrameFault::default(),
         required_request_capacity,
         required_result_capacity,
+        0,
     )
 }
 
@@ -1490,6 +1514,7 @@ fn publish_engine_failure(
         revision,
         engine_status(error),
         error.fault(),
+        0,
         0,
         0,
     )
@@ -1511,12 +1536,14 @@ fn publish_attributed_failure(
     fault: FrameFault,
     required_request_capacity: u32,
     required_result_capacity: u32,
+    outcome_flags: u32,
 ) -> u32 {
-    let flags = if state.engine.root_revision(root_id).is_err() {
-        crate::engine::frame::RESULT_FLAG_ROOT_INVALIDATED
-    } else {
-        0
-    };
+    let flags = outcome_flags
+        | if state.engine.root_revision(root_id).is_err() {
+            crate::engine::frame::RESULT_FLAG_ROOT_INVALIDATED
+        } else {
+            0
+        };
     state
         .frames
         .get_mut(&root_id)

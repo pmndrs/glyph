@@ -1,6 +1,8 @@
 pub(crate) const RESULT_FLAG_CHECKPOINT: u32 = 1;
 pub(crate) const RESULT_FLAG_RETAINED_HOST_TOPOLOGY: u32 = 1 << 1;
 pub(crate) const RESULT_FLAG_ROOT_INVALIDATED: u32 = 1 << 2;
+/// The failure is one paragraph's: it was reset to empty and the rest of the root is intact.
+pub(crate) const RESULT_FLAG_PARAGRAPH_REFUSED: u32 = 1 << 3;
 pub(crate) const FRAME_FLAG_COMPOSITING_INDEPENDENT: u32 = 1;
 pub(crate) const FRAME_FLAGS: u32 = FRAME_FLAG_COMPOSITING_INDEPENDENT;
 pub(crate) const SEMANTIC_VIEW_MEASUREMENT: u32 = 1 << 0;
