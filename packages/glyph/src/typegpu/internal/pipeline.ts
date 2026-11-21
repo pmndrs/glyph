@@ -31,9 +31,12 @@ export interface BatchLanes {
  * ranges recorded against it; they own nothing.
  */
 export interface BatchBinding {
-  /** Lane whose contents select the program variant (the MSDF effect colors), or undefined when there is one. */
-  readonly variantLane: Uint8Array | undefined;
-  /** The program variant records `[start, start + count)` need. Reads committed lane bytes. */
+  /** Lanes whose contents `variant` reads (MSDF effect colors and glyph rows); a write to one re-reads its spans. */
+  readonly watchedLanes: readonly Uint8Array[];
+  /**
+   * The program variant records `[start, start + count)` need. Runs at commit over committed lane bytes, and may
+   * prepare what those records draw (MSDF makes their glyphs resident).
+   */
   variant(start: number, count: number): number;
   draw(
     pass: TgpuRenderPass | GPURenderPassEncoder,

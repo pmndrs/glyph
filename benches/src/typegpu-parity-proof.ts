@@ -48,6 +48,13 @@ interface Scene {
    * frames (one shape() halfway) to their positions. Three renders the final positions.
    */
   readonly movedFrom?: readonly [number, number];
+  /**
+   * TypeGPU only: mount every item with its first character, then reveal each text over 6 frames (shape and frame
+   * after each step), so glyphs nothing has drawn arrive frame by frame. Three renders the full texts.
+   */
+  readonly arriving?: boolean;
+  /** Both renderers keep only the true-distance channel of the MSDF atlas (`msdfAtlas: 'sdf'`). */
+  readonly sdf?: boolean;
 }
 const counters = emptyCounters();
 installCounters();
@@ -198,6 +205,35 @@ function mixedLabelScene(): Scene {
   };
 }
 
+/** Every printable ASCII glyph in two fonts at several sizes and effects, revealed over several frames. */
+function arrivingScene(): Scene {
+  const lines = [
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+    'abcdefghijklmnopqrstuvwxyz',
+    '0123456789 !"#$%&\'()*+,-./:;<=>?@[]^_`{|}~',
+  ];
+  const items: Item[] = [];
+  let y = 6;
+  for (const [index, size] of [14, 22, 34, 48].entries()) {
+    for (const text of lines) {
+      items.push({
+        font: index % 2 === 0 ? 'inter' : 'dancing',
+        text,
+        x: 8,
+        y,
+        style: {
+          fontSize: size,
+          color: '#ffffff',
+          ...(index === 2 ? { outline: { color: '#ff3030', width: size / 24 } } : {}),
+          ...(index === 3 ? { shadow: { color: '#3060ff', offset: [size / 20, size / 20] as const } } : {}),
+        },
+      });
+      y += size * 1.2 + 2;
+    }
+  }
+  return { items, arriving: true };
+}
+
 const scenes: Readonly<Record<string, Scene>> = {
   one: { items: [{ font: 'inter', text: 'Hello, TypeGPU!', x: 24, y: 40, style: { fontSize: 72, color: '#ffffff' } }] },
   fx: fxScene(),
@@ -237,6 +273,9 @@ const scenes: Readonly<Record<string, Scene>> = {
   },
   'labels-moving': { ...labelScene(200), movedFrom: [-37, -11] },
   'labels-mixed': mixedLabelScene(),
+  'glyphs-arriving': arrivingScene(),
+  'fx-sdf': { ...fxScene(), sdf: true },
+  'arriving-sdf': { ...arrivingScene(), sdf: true },
   bitmap: {
     items: [
       { font: 'bitmap', text: 'Bitmap strike 16 px: Glyph Ag fj Wy', x: 10, y: 10, style: { fontSize: 16 } },
@@ -278,6 +317,7 @@ async function start(): Promise<ParityProof> {
   const format = 'rgba8unorm';
   const matrix = root.createUniform(d.mat4x4f);
   const flat = glyph.handle('typegpu-parity:flat', defineTypeGpuConfig({ root, format }));
+  const flatSdf = glyph.handle('typegpu-parity:flat-sdf', defineTypeGpuConfig({ root, format, msdfAtlas: 'sdf' }));
   const projected = glyph.handle(
     'typegpu-parity:projected',
     defineTypeGpuConfig({
@@ -347,7 +387,8 @@ async function start(): Promise<ParityProof> {
   threeTarget.texture.colorSpace = THREE.NoColorSpace;
   renderer.setRenderTarget(threeTarget);
   renderer.setClearColor(0x000000, 1);
-  const three = glyph.handle('typegpu-parity:three', defineThreeConfig({}));
+  const threeMsdf = glyph.handle('typegpu-parity:three', defineThreeConfig({}));
+  const threeSdf = glyph.handle('typegpu-parity:three-sdf', defineThreeConfig({ msdfAtlas: 'sdf' }));
 
   const pixelCamera = new THREE.OrthographicCamera(0, WIDTH, 0, -HEIGHT, 0.1, 10);
   pixelCamera.position.z = 1;
@@ -374,7 +415,7 @@ async function start(): Promise<ParityProof> {
     const texts: ThreeText<typeof msdf>[] = [];
     try {
       for (const item of scene.items) {
-        const text = three.createText({
+        const text = (scene.sdf === true ? threeSdf : threeMsdf).createText({
           font: fonts[item.font] as FontFace<typeof msdf>,
           text: item.text,
           style: item.style,
@@ -438,15 +479,15 @@ async function start(): Promise<ParityProof> {
   }
 
   async function captureTypeGpu(scene: Scene): Promise<{ pixels: Uint8Array; gpuMs: number | undefined }> {
-    const handle = scene.perspective === true ? projected : flat;
+    const handle = scene.perspective === true ? projected : scene.sdf === true ? flatSdf : flat;
     const texts = mount(handle, {
-      items: scene.items
-        .slice(0, scene.grownFrom)
-        .map((item) =>
+      items: scene.items.slice(0, scene.grownFrom).map((item) => {
+        const moved =
           scene.movedFrom === undefined
             ? item
-            : { ...item, x: item.x + scene.movedFrom[0], y: item.y + scene.movedFrom[1] },
-        ),
+            : { ...item, x: item.x + scene.movedFrom[0], y: item.y + scene.movedFrom[1] };
+        return scene.arriving === true ? { ...moved, text: item.text.slice(0, 1) } : moved;
+      }),
     });
     try {
       glyph.shape();
@@ -466,6 +507,15 @@ async function start(): Promise<ParityProof> {
             texts[index]!.update({ position: [item.x + dx * remaining, item.y + dy * remaining] });
           }
           if (step === 6) glyph.shape();
+          frame(handle);
+        }
+      }
+      if (scene.arriving === true) {
+        for (let step = 1; step <= 6; step += 1) {
+          for (const [index, item] of scene.items.entries()) {
+            texts[index]!.update({ text: item.text.slice(0, Math.ceil((item.text.length * step) / 6)) });
+          }
+          glyph.shape();
           frame(handle);
         }
       }

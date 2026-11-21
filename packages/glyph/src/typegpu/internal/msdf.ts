@@ -1,9 +1,10 @@
-import tgpu, { d, std, type TgpuRoot, type TgpuRenderPipeline, type TgpuSampler } from 'typegpu';
+import tgpu, { d, std, type TgpuBindGroup, type TgpuRenderPipeline, type TgpuSampler } from 'typegpu';
 import type { CodecBufferId, PortableLeafResource } from '../../index.js';
-import { MSDF_GLYPH_TABLE_LAYER_STEP, msdfBakedPages, msdfSchema } from '../../raster/msdf.js';
+import { MSDF_GLYPH_TABLE_LAYER_STEP, msdfSchema } from '../../raster/msdf.js';
 import { MsdfCompositeInput, msdfComposite, msdfPosition } from '../../shaders/typegpu/msdf-shader.js';
 import { msdfDistances } from '../../shaders/typegpu/msdf/distance.js';
 import { decorationPaint } from '../../shaders/typegpu/decoration-shader.js';
+import { ResidentMsdfAtlas } from './msdf-atlas.js';
 import { TYPEGPU_PLACEMENT_SLOT_BUFFER_ID, TYPEGPU_TRANSFORM_INDEX_BUFFER_ID } from './codec.js';
 import {
   colorTransform,
@@ -15,7 +16,6 @@ import {
   target,
   type PipelineOptions,
   type TypeGpuResource,
-  storageTable,
 } from './pipeline.js';
 
 /**
@@ -361,29 +361,6 @@ const bothFragment = tgpu.fragmentFn({
   const shadow = shadowCoverage(input.shadowUv, input.bounds, input.layer, input.shadow.a, field);
   return composeEffects(field, input.color, input.outline, input.width, input.shadow, shadow, input.position);
 });
-/** Uploads every baked MSDF page as one layer, straight from the decoded page bytes. */
-function bakedAtlas(root: TgpuRoot, token: PortableLeafResource) {
-  if (token.kind !== 'buffer') throw new Error('Expected the MSDF baked-pages token');
-  const baked = msdfBakedPages(token);
-  const result = root
-    .createTexture({ size: [baked.width, baked.height, baked.pages.length], format: 'rgba8unorm' })
-    .$usage('sampled');
-  try {
-    const gpu = root.unwrap(result);
-    for (const [layer, page] of baked.pages.entries()) {
-      root.device.queue.writeTexture(
-        { texture: gpu, origin: [0, 0, layer] },
-        page.bytes,
-        { bytesPerRow: page.width * 4, rowsPerImage: page.height },
-        [page.width, page.height, 1],
-      );
-    }
-    return result;
-  } catch (error) {
-    result.destroy();
-    throw error;
-  }
-}
 function scalar(payload: PortableLeafResource, index = 0): number {
   if (payload.kind !== 'buffer') throw new Error('Expected a raster constant');
   return new DataView(payload.bytes.buffer, payload.bytes.byteOffset, payload.bytes.byteLength).getFloat32(
@@ -449,25 +426,21 @@ export function msdfResource(
 ): TypeGpuResource {
   const { root } = options;
   const programs = msdfPrograms(options);
-  const atlas = bakedAtlas(root, members.pages!);
-  const glyphs = storageTable(root, members.glyphs!);
-  const metrics = root.createUniform(MsdfFontMetrics, {
-    atlas: d.vec4f(
-      atlas.props.size[0],
-      atlas.props.size[1],
-      scalar(members.pixelRange!),
-      scalar(members.effectScale!, 2),
-    ),
-    singleChannel: 0,
-  });
+  const atlas = new ResidentMsdfAtlas(root, members.pages!, members.glyphs!, options.msdfAtlas === 'sdf');
+  let metrics: ReturnType<typeof createMetrics> | undefined;
+  const createMetrics = () =>
+    root.createUniform(MsdfFontMetrics, {
+      atlas: d.vec4f(atlas.page, atlas.page, scalar(members.pixelRange!), scalar(members.effectScale!, 2)),
+      singleChannel: atlas.singleChannel ? 1 : 0,
+    });
   try {
+    metrics = createMetrics();
+    const fontMetrics = metrics;
     programs.pipeline(0);
-    const atlasView = atlas.createView(d.texture2dArray(d.f32));
     return {
       dispose: () => {
-        atlas.destroy();
-        glyphs.destroy();
-        metrics.buffer.destroy();
+        atlas.dispose();
+        fontMetrics.buffer.destroy();
       },
       bind(lanes) {
         const b = msdfSchema.buffers;
@@ -476,28 +449,38 @@ export function msdfResource(
           if (buffer === undefined) throw new Error('TypeGPU MSDF draw is missing one of its lanes');
           return buffer;
         };
-        const group = root.createBindGroup(font, {
-          viewport: lanes.viewport,
-          placementSlots: lane(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID),
-          placements: lanes.placementTable,
-          transformIndices: lane(TYPEGPU_TRANSFORM_INDEX_BUFFER_ID),
-          transforms: lanes.transformTable,
-          atlas: atlasView,
-          sampler: programs.sampler,
-          glyphs,
-          metrics,
-        });
-        const bound: (TgpuRenderPipeline | undefined)[] = [];
+        // Rebuilt with its pipelines whenever the atlas grows into a new texture.
+        let generation = -1;
+        let group: TgpuBindGroup | undefined;
+        let bound: (TgpuRenderPipeline | undefined)[] = [];
         const effectColors = lanes.bytes.get(b.effectColor.id)!;
+        const effects = lanes.bytes.get(b.effect.id)!;
         return {
-          variantLane: effectColors,
+          watchedLanes: [effectColors, effects],
           variant(start, count) {
+            // Glyphs a frame publishes become resident at its commit, before the frame that draws them.
+            atlas.use(effects, start, count);
             const key = effectsInUse(effectColors, start, count);
             // Builds the program at commit, not in the caller's next draw.
             programs.pipeline(key);
             return key;
           },
           draw(pass, bindGroups, variant, first, count) {
+            if (generation !== atlas.generation || group === undefined) {
+              generation = atlas.generation;
+              bound = [];
+              group = root.createBindGroup(font, {
+                viewport: lanes.viewport,
+                placementSlots: lane(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID),
+                placements: lanes.placementTable,
+                transformIndices: lane(TYPEGPU_TRANSFORM_INDEX_BUFFER_ID),
+                transforms: lanes.transformTable,
+                atlas: atlas.view,
+                sampler: programs.sampler,
+                glyphs: atlas.glyphs,
+                metrics: fontMetrics,
+              });
+            }
             let pipelineForVariant = bound[variant];
             if (pipelineForVariant === undefined) {
               pipelineForVariant = programs
@@ -515,9 +498,8 @@ export function msdfResource(
       },
     };
   } catch (error) {
-    atlas.destroy();
-    glyphs.destroy();
-    metrics.buffer.destroy();
+    atlas.dispose();
+    metrics?.buffer.destroy();
     throw error;
   }
 }

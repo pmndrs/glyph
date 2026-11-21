@@ -166,7 +166,7 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
           .with(colorLayout, lane(b.color.id))
           .with(u1, lane(b.page.id));
         return {
-          variantLane: undefined,
+          watchedLanes: [],
           variant: () => 0,
           draw(pass, bindGroups, _variant, first, count) {
             recordDraw(root, bound, pass, bindGroups, first, count);
