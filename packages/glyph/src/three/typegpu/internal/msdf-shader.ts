@@ -1,7 +1,7 @@
 import * as t3 from '@typegpu/three';
 import { d } from 'typegpu';
 import * as TSL from 'three/tsl';
-import type { Node, Texture } from 'three/webgpu';
+import type { Node } from 'three/webgpu';
 
 import {
   MsdfCompositeInput,
@@ -12,72 +12,92 @@ import {
   msdfPosition,
 } from '../../../shaders/typegpu/msdf-shader.js';
 import { msdfCoverageFromDistances, msdfDistances } from '../../../shaders/typegpu/msdf/distance.js';
-import type { TslMsdfShaderOutput } from '../../../shaders/tsl/msdf-shader.js';
+import type {
+  TslMsdfInstanceNodes,
+  TslMsdfShaderOutput,
+  TslMsdfShaderResources,
+} from '../../../shaders/tsl/msdf-shader.js';
+import {
+  conditionalShadowSample,
+  distanceField,
+  perGlyph,
+  scalar,
+  trimmedCell,
+} from '../../../shaders/shared/msdf-quad-tsl.js';
 import { decorationPaint } from '../../../shaders/typegpu/decoration-shader.js';
 
-export type { TslMsdfShaderOutput } from '../../../shaders/tsl/msdf-shader.js';
-
-export interface TslMsdfInstanceNodes {
-  readonly origin: Node<'vec2'>;
-  readonly size: Node<'vec2'>;
-  readonly uvOrigin: Node<'vec2'>;
-  readonly uvSize: Node<'vec2'>;
-  readonly uvBounds: Node<'vec4'>;
-  readonly fillColor: Node<'vec4'>;
-  /** Packed little-endian sRGB outline and shadow colors from the technique's `effectColor` buffer. */
-  readonly effectColor: Node<'uvec2'>;
-  readonly shadowOffset: Node<'vec2'>;
-  readonly outlineWidth: Node<'float'>;
-  readonly pageIndex: Node<'float'>;
-}
-
-export interface TslMsdfShaderResources {
-  readonly atlas: Texture;
-  readonly atlasWidth: number;
-  readonly atlasHeight: number;
-  readonly pixelRange: number;
-}
+export type {
+  TslMsdfInstanceNodes,
+  TslMsdfShaderOutput,
+  TslMsdfShaderResources,
+} from '../../../shaders/tsl/msdf-shader.js';
 
 /** Adapt Three texture sampling and nodes to the canonical TypeGPU MTSDF algorithm. */
-export function msdfShader(instance: TslMsdfInstanceNodes, resources: TslMsdfShaderResources): TslMsdfShaderOutput {
-  const outlineColor = t3.toTSL(() => {
-    'use gpu';
-    return decorationPaint(d.vec2u(t3.fromTSL(instance.effectColor.x, d.u32).$, 0));
-  }) as Node<'vec4'>;
-  const shadowColor = t3.toTSL(() => {
-    'use gpu';
-    return decorationPaint(d.vec2u(t3.fromTSL(instance.effectColor.y, d.u32).$, 0));
-  }) as Node<'vec4'>;
+export function msdfShader(source: TslMsdfInstanceNodes, resources: TslMsdfShaderResources): TslMsdfShaderOutput {
+  const atlasSize = TSL.vec2(scalar(resources.atlasWidth), scalar(resources.atlasHeight));
+  const fieldRange = scalar(resources.pixelRange);
+  const cell =
+    resources.trim === undefined
+      ? TSL.uv()
+      : trimmedCell(
+          source,
+          resources.effects ?? { outline: true, shadow: true },
+          atlasSize,
+          fieldRange,
+          resources.trim,
+        );
+  // Per-glyph values resolve in the vertex stage; fragments read flat varyings instead of instance storage.
+  const instance = {
+    uvBounds: perGlyph(source.uvBounds),
+    fillColor: source.fillColor,
+    shadowOffset: perGlyph(source.shadowOffset),
+    outlineWidth: perGlyph(source.outlineWidth),
+  };
+  const outlineColor = perGlyph(
+    t3.toTSL(() => {
+      'use gpu';
+      return decorationPaint(d.vec2u(t3.fromTSL(source.effectColor.x, d.u32).$, 0));
+    }) as Node<'vec4'>,
+  );
+  const shadowColor = perGlyph(
+    t3.toTSL(() => {
+      'use gpu';
+      return decorationPaint(d.vec2u(t3.fromTSL(source.effectColor.y, d.u32).$, 0));
+    }) as Node<'vec4'>,
+  );
   const position = t3.toTSL(() => {
     'use gpu';
     return msdfPosition(
-      t3.fromTSL(instance.origin, d.vec2f).$,
-      t3.fromTSL(instance.size, d.vec2f).$,
-      t3.positionLocal.$,
+      t3.fromTSL(source.origin, d.vec2f).$,
+      t3.fromTSL(source.size, d.vec2f).$,
+      d.vec3f(t3.fromTSL(cell, d.vec2f).$, 0),
     );
   }) as Node<'vec3'>;
-  const atlasUv = t3.toTSL(() => {
-    'use gpu';
-    return msdfAtlasCoordinate(
-      t3.fromTSL(instance.uvOrigin, d.vec2f).$,
-      t3.fromTSL(instance.uvSize, d.vec2f).$,
-      t3.uv().$,
-    );
-  }) as Node<'vec2'>;
+  const atlasUv = TSL.varying(
+    t3.toTSL(() => {
+      'use gpu';
+      return msdfAtlasCoordinate(
+        t3.fromTSL(source.uvOrigin, d.vec2f).$,
+        t3.fromTSL(source.uvSize, d.vec2f).$,
+        t3.fromTSL(cell, d.vec2f).$,
+      );
+    }) as Node<'vec2'>,
+  );
   const shadowUv = TSL.sub(atlasUv, instance.shadowOffset);
-  const atlasSize = TSL.vec2(resources.atlasWidth, resources.atlasHeight);
   const clamped = t3.toTSL(() => {
     'use gpu';
     return msdfClampedCoordinates(
       t3.fromTSL(atlasUv, d.vec2f).$,
       t3.fromTSL(shadowUv, d.vec2f).$,
       t3.fromTSL(instance.uvBounds, d.vec4f).$,
-      d.vec2f(resources.atlasWidth, resources.atlasHeight),
+      t3.fromTSL(atlasSize, d.vec2f).$,
     );
   }) as Node<'vec4'>;
-  const layer = TSL.int(instance.pageIndex);
-  const baseSample = TSL.texture(resources.atlas, clamped.xy).depth(layer);
-  const shadowSample = TSL.texture(resources.atlas, clamped.zw).depth(layer);
+  // An integer varying would force flat interpolation; the layer travels as a float and is rounded back.
+  const layer = TSL.int(perGlyph(TSL.float(TSL.int(source.pageIndex))).add(0.5));
+  const singleChannel = resources.singleChannel === true;
+  const baseSample = distanceField(TSL.texture(resources.atlas, clamped.xy).depth(layer), singleChannel);
+  const shadowSample = conditionalShadowSample(shadowColor.a, resources.atlas, clamped.zw, layer, singleChannel);
   const distances = (
     t3.toTSL(() => {
       'use gpu';
@@ -85,7 +105,7 @@ export function msdfShader(instance: TslMsdfInstanceNodes, resources: TslMsdfSha
         t3.fromTSL(baseSample, d.vec4f).$,
         t3.fromTSL(atlasUv, d.vec2f).$,
         t3.fromTSL(atlasSize, d.vec2f).$,
-        resources.pixelRange,
+        t3.fromTSL(fieldRange, d.f32).$,
       );
     }) as Node<'vec3'>
   ).toVar();
@@ -97,7 +117,7 @@ export function msdfShader(instance: TslMsdfInstanceNodes, resources: TslMsdfSha
         shadowCoordinate: t3.fromTSL(shadowUv, d.vec2f).$,
         uvBounds: t3.fromTSL(instance.uvBounds, d.vec4f).$,
         atlasSize: t3.fromTSL(atlasSize, d.vec2f).$,
-        pixelRange: resources.pixelRange,
+        pixelRange: t3.fromTSL(fieldRange, d.f32).$,
         baseSample: t3.fromTSL(baseSample, d.vec4f).$,
         shadowSample: t3.fromTSL(shadowSample, d.vec4f).$,
         outlineWidth: t3.fromTSL(instance.outlineWidth, d.f32).$,

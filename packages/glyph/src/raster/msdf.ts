@@ -70,7 +70,9 @@ export const msdf: RasterFormat<
     signal?.throwIfAborted();
     return data;
   },
-  dispose() {},
+  dispose(data) {
+    releaseMsdfBakedPages(data);
+  },
 });
 
 import { f32, techniqueProgram, u32 } from '../config/codec-program.js';
@@ -80,29 +82,73 @@ import { registerGlyphRasterCodec } from '../internal/raster-codec-registry.js';
 import { defineTechniqueSchema, type TechniqueSchema } from '../config/schema.js';
 
 const MSDF_RECT_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/rect');
-const MSDF_UV_RECT_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/uv-rect');
-const MSDF_UV_BOUNDS_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/uv-bounds');
 const MSDF_COLOR_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/color');
 const MSDF_EFFECT_COLOR_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/effect-color');
-const MSDF_PAGE_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/page');
+const MSDF_EFFECT_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/effect');
 
-/** The authoritative physical shape of the MSDF technique. */
+/** The baked pages of one loaded MSDF font, as its atlas resource names them. */
+export interface MsdfBakedPages {
+  /** Extent the baked glyph table addresses; pages smaller than it are anchored at its origin. */
+  readonly width: number;
+  readonly height: number;
+  readonly pages: readonly MsdfPageData[];
+}
+
+/**
+ * Baked pages are megabytes, and a renderer copies only the glyphs it draws out of them. They therefore never enter
+ * the portable resource (which owns a copy of every byte it carries): the resource holds a token, and a renderer in
+ * this process exchanges it for the decoded pages themselves.
+ */
+const bakedPagesByToken = new Map<number, MsdfBakedPages>();
+const bakedPageTokens = new WeakMap<MsdfData, number>();
+let nextBakedPagesToken = 1;
+
+function msdfBakedPagesToken(data: MsdfData): Uint8Array {
+  let token = bakedPageTokens.get(data);
+  if (token === undefined) {
+    token = nextBakedPagesToken;
+    nextBakedPagesToken += 1;
+    bakedPageTokens.set(data, token);
+    bakedPagesByToken.set(token, { width: data.binding.width, height: data.binding.height, pages: data.pages });
+  }
+  return new Uint8Array(new Uint32Array([token]).buffer);
+}
+
+function releaseMsdfBakedPages(data: MsdfData): void {
+  const token = bakedPageTokens.get(data);
+  if (token !== undefined) bakedPagesByToken.delete(token);
+}
+
+/**
+ * The baked pages behind an atlas resource's `pages` member. A renderer resolves them when it first realizes the
+ * resource and keeps the reference; the font may be disposed afterwards.
+ */
+export function msdfBakedPages(pages: { readonly bytes: Uint8Array }): MsdfBakedPages {
+  const token = new DataView(pages.bytes.buffer, pages.bytes.byteOffset, pages.bytes.byteLength).getUint32(0, true);
+  const baked = bakedPagesByToken.get(token);
+  if (baked === undefined) throw new Error('MSDF atlas pages were released before a renderer realized them');
+  return baked;
+}
+
+/** `f32` values per glyph in the atlas `glyphs` table. */
+export const MSDF_GLYPH_TABLE_STRIDE = 4;
+/** The fourth table value is `height + layer * MSDF_GLYPH_TABLE_LAYER_STEP`; both stay exact in an `f32`. */
+export const MSDF_GLYPH_TABLE_LAYER_STEP = 4096;
+
+/**
+ * The authoritative physical shape of the MSDF technique.
+ *
+ * An instance carries what differs between two drawings of one glyph: where it is, how large, and how it is painted.
+ * What every drawing of a glyph shares (its atlas cell and layer) lives once per glyph in the atlas `glyphs` table,
+ * addressed by the `glyph` lane: `[left, top, width, height + layer * 4096]` in atlas texels. The atlas texels stay
+ * in the baked pages, reached through the `pages` token (see `msdfBakedPages`).
+ */
 export const msdfSchema: TechniqueSchema<
   {
     readonly rect: {
       readonly id: typeof MSDF_RECT_BUFFER_ID;
       readonly scalar: 'f32';
       readonly lanes: readonly ['left', 'top', 'width', 'height'];
-    };
-    readonly uvRect: {
-      readonly id: typeof MSDF_UV_RECT_BUFFER_ID;
-      readonly scalar: 'f32';
-      readonly lanes: readonly ['u0', 'v0', 'uSpan', 'vSpan'];
-    };
-    readonly uvBounds: {
-      readonly id: typeof MSDF_UV_BOUNDS_BUFFER_ID;
-      readonly scalar: 'f32';
-      readonly lanes: readonly ['u0', 'v0', 'uMax', 'vMax'];
     };
     readonly color: {
       readonly id: typeof MSDF_COLOR_BUFFER_ID;
@@ -114,34 +160,24 @@ export const msdfSchema: TechniqueSchema<
       readonly scalar: 'u32';
       readonly lanes: readonly ['outline', 'shadow'];
     };
-    readonly page: {
-      readonly id: typeof MSDF_PAGE_BUFFER_ID;
+    readonly effect: {
+      readonly id: typeof MSDF_EFFECT_BUFFER_ID;
       readonly scalar: 'f32';
-      readonly lanes: readonly ['x', 'y', 'z', 'page'];
+      readonly lanes: readonly ['shadowX', 'shadowY', 'outlineWidth', 'glyph'];
     };
   },
   {
-    readonly f32: readonly [
-      'bearingX',
-      'bearingY',
-      'width',
-      'height',
-      'uvOriginX',
-      'uvOriginY',
-      'uvSizeX',
-      'uvSizeY',
-      'uvMaxX',
-      'uvMaxY',
-    ];
-    readonly u32: readonly ['page'];
+    readonly f32: readonly ['bearingX', 'bearingY', 'width', 'height'];
+    readonly u32: readonly ['glyph'];
   },
   {
     readonly atlas: {
       readonly kind: 'group';
       readonly members: {
-        readonly texture: { readonly kind: 'texture-array'; readonly format: 'rgba8unorm' };
+        readonly pages: { readonly kind: 'buffer' };
         readonly pixelRange: { readonly kind: 'buffer' };
         readonly effectScale: { readonly kind: 'buffer' };
+        readonly glyphs: { readonly kind: 'buffer' };
       };
     };
   },
@@ -151,35 +187,23 @@ export const msdfSchema: TechniqueSchema<
   scope: 'glyph',
   glyphOrigin: { buffer: 'rect' },
   binding: {
-    f32: [
-      'bearingX',
-      'bearingY',
-      'width',
-      'height',
-      'uvOriginX',
-      'uvOriginY',
-      'uvSizeX',
-      'uvSizeY',
-      'uvMaxX',
-      'uvMaxY',
-    ],
-    u32: ['page'],
+    f32: ['bearingX', 'bearingY', 'width', 'height'],
+    u32: ['glyph'],
   },
   buffers: {
     rect: { id: MSDF_RECT_BUFFER_ID, scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
-    uvRect: { id: MSDF_UV_RECT_BUFFER_ID, scalar: 'f32', lanes: ['u0', 'v0', 'uSpan', 'vSpan'] },
-    uvBounds: { id: MSDF_UV_BOUNDS_BUFFER_ID, scalar: 'f32', lanes: ['u0', 'v0', 'uMax', 'vMax'] },
     color: { id: MSDF_COLOR_BUFFER_ID, scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
     effectColor: { id: MSDF_EFFECT_COLOR_BUFFER_ID, scalar: 'u32', lanes: ['outline', 'shadow'] },
-    page: { id: MSDF_PAGE_BUFFER_ID, scalar: 'f32', lanes: ['x', 'y', 'z', 'page'] },
+    effect: { id: MSDF_EFFECT_BUFFER_ID, scalar: 'f32', lanes: ['shadowX', 'shadowY', 'outlineWidth', 'glyph'] },
   },
   resources: {
     atlas: {
       kind: 'group',
       members: {
-        texture: { kind: 'texture-array', format: 'rgba8unorm' },
+        pages: { kind: 'buffer' },
         pixelRange: { kind: 'buffer' },
         effectScale: { kind: 'buffer' },
+        glyphs: { kind: 'buffer' },
       },
     },
   },
@@ -195,8 +219,7 @@ export const msdfCodec: RasterCodec<typeof msdf, typeof msdfSchema> = registerGl
     if (outline === undefined || shadow === undefined) {
       throw new Error('MSDF text effects are not configured');
     }
-    const { bearingX, bearingY, width, height, uvOriginX, uvOriginY, uvSizeX, uvSizeY, uvMaxX, uvMaxY, page } =
-      p.binding;
+    const { bearingX, bearingY, width, height, glyph } = p.binding;
     return p.compile({
       rect: [
         f32.add(inlineOrigin, f32.mul(bearingX, fontSize)),
@@ -204,11 +227,9 @@ export const msdfCodec: RasterCodec<typeof msdf, typeof msdfSchema> = registerGl
         f32.mul(width, fontSize),
         f32.mul(height, fontSize),
       ],
-      uvRect: [uvOriginX, uvOriginY, uvSizeX, uvSizeY],
-      uvBounds: [uvOriginX, uvOriginY, uvMaxX, uvMaxY],
       color: [color.red, color.green, color.blue, color.alpha],
       effectColor: [outline.color, shadow.color],
-      page: [shadow.offsetXEm, shadow.offsetYEm, outline.widthEm, u32.toF32(page)],
+      effect: [shadow.offsetXEm, shadow.offsetYEm, outline.widthEm, u32.toF32(glyph)],
     });
   },
   compileFont(compiler) {
@@ -217,7 +238,7 @@ export const msdfCodec: RasterCodec<typeof msdf, typeof msdfSchema> = registerGl
     compiler.retain('atlas', data.resource, {
       kind: 'group',
       members: {
-        texture: msdfAtlas(data),
+        pages: { kind: 'buffer', bytes: msdfBakedPagesToken(data), stride: 4 },
         pixelRange: { kind: 'buffer', bytes: portableF32(data.pixelRange), stride: 4 },
         effectScale: {
           kind: 'buffer',
@@ -228,17 +249,11 @@ export const msdfCodec: RasterCodec<typeof msdf, typeof msdfSchema> = registerGl
           ),
           stride: 12,
         },
+        glyphs: { kind: 'buffer', bytes: msdfGlyphTable(data), stride: MSDF_GLYPH_TABLE_STRIDE * 4 },
       },
     });
     const record = (row: number) => row * RECORD_STRIDE;
     const page = (row: number) => view.getUint16(record(row) + 16, true);
-    const atlas = (row: number, offset: number, dimension: 'width' | 'height') =>
-      page(row) === 0xffff ? 0 : view.getUint16(record(row) + offset, true) / data.binding[dimension];
-    const span = (row: number, start: number, end: number, dimension: 'width' | 'height') =>
-      page(row) === 0xffff
-        ? 0
-        : (view.getUint16(record(row) + end, true) - view.getUint16(record(row) + start, true)) /
-          data.binding[dimension];
     return compiler.compile({
       strikes: [0],
       resource: (glyph) => (page(glyph) === 0xffff ? undefined : data.resource),
@@ -249,36 +264,31 @@ export const msdfCodec: RasterCodec<typeof msdf, typeof msdfSchema> = registerGl
           (view.getInt16(record(row) + 4, true) - view.getInt16(record(row), true)) / data.planeUnitsPerEm,
         height: (row) =>
           (view.getInt16(record(row) + 6, true) - view.getInt16(record(row) + 2, true)) / data.planeUnitsPerEm,
-        uvOriginX: (row) => atlas(row, 8, 'width'),
-        uvOriginY: (row) => atlas(row, 10, 'height'),
-        uvSizeX: (row) => span(row, 8, 12, 'width'),
-        uvSizeY: (row) => span(row, 10, 14, 'height'),
-        uvMaxX: (row) => atlas(row, 12, 'width'),
-        uvMaxY: (row) => atlas(row, 14, 'height'),
       },
-      u32: { page },
+      u32: { glyph: (row) => row },
     });
   },
 });
 
-function msdfAtlas(data: MsdfData) {
-  const bytes = new Uint8Array(data.binding.width * data.binding.height * data.binding.layers * 4);
-  for (let layer = 0; layer < data.pages.length; layer += 1) {
-    const page = data.pages[layer]!;
-    for (let row = 0; row < page.height; row += 1) {
-      const source = row * page.width * 4;
-      const target = (layer * data.binding.height + row) * data.binding.width * 4;
-      bytes.set(page.bytes.subarray(source, source + page.width * 4), target);
-    }
+/** One row per baked glyph record: its atlas cell in texels and its layer; an absent glyph is an empty cell. */
+function msdfGlyphTable(data: MsdfData): Uint8Array {
+  const view = new DataView(data.records.buffer, data.records.byteOffset, data.records.byteLength);
+  const rows = data.records.byteLength / RECORD_STRIDE;
+  const bytes = new Uint8Array(rows * MSDF_GLYPH_TABLE_STRIDE * 4);
+  const table = new DataView(bytes.buffer);
+  for (let row = 0; row < rows; row += 1) {
+    const record = row * RECORD_STRIDE;
+    const page = view.getUint16(record + 16, true);
+    if (page === 0xffff) continue;
+    const left = view.getUint16(record + 8, true);
+    const top = view.getUint16(record + 10, true);
+    const target = row * MSDF_GLYPH_TABLE_STRIDE * 4;
+    table.setFloat32(target, left, true);
+    table.setFloat32(target + 4, top, true);
+    table.setFloat32(target + 8, view.getUint16(record + 12, true) - left, true);
+    table.setFloat32(target + 12, view.getUint16(record + 14, true) - top + page * MSDF_GLYPH_TABLE_LAYER_STEP, true);
   }
-  return {
-    kind: 'texture-array' as const,
-    format: 'rgba8unorm' as const,
-    width: data.binding.width,
-    height: data.binding.height,
-    layers: data.binding.layers,
-    bytes,
-  };
+  return bytes;
 }
 
 function portableF32(value: number): Uint8Array {

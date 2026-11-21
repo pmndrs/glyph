@@ -22,6 +22,8 @@ export function createThreeConfig(options: ThreeConfigOptions, shaders: ThreeSha
   }
   const transformMode = options.transformMode ?? 'indexed';
   const defaultFontFormat = options.defaultFontFormat ?? 'msdf';
+  const msdfAtlas = options.msdfAtlas ?? 'msdf';
+  if (msdfAtlas !== 'msdf' && msdfAtlas !== 'sdf') throw new TypeError('ThreeConfig msdfAtlas must be "msdf" or "sdf"');
   const capacity =
     options.capacity === undefined ? undefined : normalizeGlyphBufferCapacity(options.capacity, 'ThreeConfig capacity');
   const config = defineGlyphConfig({
@@ -39,6 +41,7 @@ export function createThreeConfig(options: ThreeConfigOptions, shaders: ThreeSha
           ),
         options.material,
         shaders,
+        msdfAtlas === 'sdf',
       ),
     resolve: ({ format, resourceName, resources }) =>
       resourceLease(

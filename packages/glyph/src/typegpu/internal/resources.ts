@@ -9,7 +9,7 @@ import tgpu, {
 } from 'typegpu';
 import type { CodecBufferId, PortableResource, PortableLeafResource } from '../../index.js';
 import { bitmapSchema } from '../../raster/bitmap.js';
-import { msdfSchema } from '../../raster/msdf.js';
+import { MSDF_GLYPH_TABLE_LAYER_STEP, msdfBakedPages, msdfSchema } from '../../raster/msdf.js';
 import { slugSchema } from '../../raster/slug.js';
 import { bitmapFragment, bitmapQuadPosition, bitmapAtlasUv } from '../../shaders/typegpu/bitmap-shader.js';
 import {
@@ -66,11 +66,19 @@ function shaderRoot(options: PipelineOptions) {
     .with(colorTransform, options.transformColor ?? defaultColor);
 }
 
-const scene = tgpu.bindGroupLayout({
-  viewport: { uniform: d.vec2f },
-  position: { uniform: d.vec2f },
-  placementSlots: { storage: d.arrayOf(d.u32), access: 'readonly', visibility: ['vertex'] },
-  placements: { storage: d.arrayOf(d.vec2f), access: 'readonly', visibility: ['vertex'] },
+function sceneEntries() {
+  return {
+    viewport: { uniform: d.vec2f },
+    position: { uniform: d.vec2f },
+    placementSlots: { storage: d.arrayOf(d.u32), access: 'readonly' as const, visibility: ['vertex' as const] },
+    placements: { storage: d.arrayOf(d.vec2f), access: 'readonly' as const, visibility: ['vertex' as const] },
+  };
+}
+const scene = tgpu.bindGroupLayout(sceneEntries());
+const msdfScene = tgpu.bindGroupLayout({
+  ...sceneEntries(),
+  /** One row per baked glyph: `[left, top, width, height + layer * 4096]` in atlas texels. */
+  glyphs: { storage: d.arrayOf(d.vec4f), access: 'readonly' as const, visibility: ['vertex' as const] },
 });
 const slugScene = tgpu.bindGroupLayout({
   viewport: { uniform: d.vec2f },
@@ -89,8 +97,6 @@ const uvOriginLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
 const uvSizeLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
 const colorLayout = v4;
 const rectLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
-const uvRectLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
-const boundsLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const pageLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const planeLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const bandLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
@@ -149,6 +155,39 @@ function texture(root: TgpuRoot, payload: PortableLeafResource) {
     result.destroy();
     throw error;
   }
+}
+/** Uploads every baked MSDF page as one layer, straight from the decoded page bytes. */
+function bakedAtlas(root: TgpuRoot, token: PortableLeafResource) {
+  if (token.kind !== 'buffer') throw new Error('Expected the MSDF baked-pages token');
+  const baked = msdfBakedPages(token);
+  const result = root
+    .createTexture({ size: [baked.width, baked.height, baked.pages.length], format: 'rgba8unorm' })
+    .$usage('sampled');
+  try {
+    const gpu = root.unwrap(result);
+    for (const [layer, page] of baked.pages.entries()) {
+      root.device.queue.writeTexture(
+        { texture: gpu, origin: [0, 0, layer] },
+        page.bytes,
+        { bytesPerRow: page.width * 4, rowsPerImage: page.height },
+        [page.width, page.height, 1],
+      );
+    }
+    return result;
+  } catch (error) {
+    result.destroy();
+    throw error;
+  }
+}
+/** Uploads a portable constant table as a read-only storage buffer. */
+function storageTable(root: TgpuRoot, payload: PortableLeafResource): GPUBuffer {
+  if (payload.kind !== 'buffer') throw new Error('Expected a raster constant table');
+  const buffer = root.device.createBuffer({
+    size: Math.max(16, payload.bytes.byteLength),
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  });
+  root.device.queue.writeBuffer(buffer, 0, payload.bytes);
+  return buffer;
 }
 function scalar(payload: PortableLeafResource, index = 0): number {
   if (payload.kind !== 'buffer') throw new Error('Expected a raster constant');
@@ -257,7 +296,8 @@ function msdfResource(
   members: Readonly<Record<string, PortableLeafResource>>,
 ): TypeGpuResource {
   const { root } = options;
-  const atlas = texture(root, members.texture!);
+  const atlas = bakedAtlas(root, members.pages!);
+  const glyphs = storageTable(root, members.glyphs!);
   try {
     const view = atlas.createView(d.texture2dArray(d.f32));
     const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'linear' });
@@ -283,35 +323,39 @@ function msdfResource(
         index: d.builtin.vertexIndex,
         instance: d.builtin.instanceIndex,
         rect: d.vec4f,
-        uvRect: d.vec4f,
-        bounds: d.vec4f,
         color: d.vec4f,
-        effect: d.vec2u,
-        page: d.vec4f,
+        effectColor: d.vec2u,
+        effect: d.vec4f,
       },
       out: { position: d.builtin.position, ...varyings },
     })((input) => {
       'use gpu';
       const unit = corner(input.index);
+      // What every drawing of a glyph shares is read once per vertex from the font's glyph table.
+      const cell = msdfScene.$.glyphs[d.u32(input.effect.w)]!;
+      const layer = std.floor(cell.w / MSDF_GLYPH_TABLE_LAYER_STEP);
+      const uvOrigin = cell.xy.div(atlasSize);
+      const uvSize = d.vec2f(cell.z, cell.w - layer * MSDF_GLYPH_TABLE_LAYER_STEP).div(atlasSize);
+      const origin = input.rect.xy.add(msdfScene.$.placements[msdfScene.$.placementSlots[input.instance]!]!);
       const output = msdfVertex({
         unitPosition: d.vec3f(unit, 0),
         unitUv: unit,
         instance: {
-          origin: placedOrigin(input.rect.xy, input.instance),
+          origin,
           size: input.rect.zw,
-          uvOrigin: input.uvRect.xy,
-          uvSize: input.uvRect.zw,
-          uvBounds: input.bounds,
+          uvOrigin,
+          uvSize,
+          uvBounds: d.vec4f(uvOrigin, uvOrigin.add(uvSize)),
           fillColor: input.color,
-          outlineColor: decorationPaint(d.vec2u(input.effect.x, 0)),
-          shadowColor: decorationPaint(d.vec2u(input.effect.y, 0)),
-          shadowOffset: input.page.xy.mul(effectScale.xy),
-          outlineWidth: input.page.z * effectScale.z,
-          pageIndex: d.u32(input.page.w),
+          outlineColor: decorationPaint(d.vec2u(input.effectColor.x, 0)),
+          shadowColor: decorationPaint(d.vec2u(input.effectColor.y, 0)),
+          shadowOffset: input.effect.xy.mul(effectScale.xy),
+          outlineWidth: input.effect.z * effectScale.z,
+          pageIndex: d.u32(layer),
         },
       });
       return {
-        position: project(output.position),
+        position: projectWithScene(output.position, msdfScene.$.viewport, msdfScene.$.position),
         uv: output.atlasCoordinate,
         shadowUv: output.shadowCoordinate,
         bounds: output.uvBounds,
@@ -349,11 +393,9 @@ function msdfResource(
         fragment,
         attribs: {
           rect: rectLayout.attrib,
-          uvRect: uvRectLayout.attrib,
-          bounds: boundsLayout.attrib,
           color: colorLayout.attrib,
-          effect: u2.attrib,
-          page: pageLayout.attrib,
+          effectColor: u2.attrib,
+          effect: pageLayout.attrib,
         },
         targets: target(options),
         multisample: { count: options.sampleCount ?? 1 },
@@ -361,25 +403,33 @@ function msdfResource(
       });
     pipeline.initSync();
     return {
-      dispose: () => atlas.destroy(),
+      dispose: () => {
+        atlas.destroy();
+        glyphs.destroy();
+      },
       prepare(buffers, placementTable, viewport, position, start, count) {
         const placementSlots = buffers.get(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID);
         if (placementSlots === undefined) throw new Error('TypeGPU glyph draw is missing its placement-slot lane');
-        const group = root.createBindGroup(scene, { viewport, position, placementSlots, placements: placementTable });
+        const group = root.createBindGroup(msdfScene, {
+          viewport,
+          position,
+          placementSlots,
+          placements: placementTable,
+          glyphs,
+        });
         const b = msdfSchema.buffers;
         const draw = pipeline
           .with(group)
           .with(rectLayout, buffers.get(b.rect.id)!)
-          .with(uvRectLayout, buffers.get(b.uvRect.id)!)
-          .with(boundsLayout, buffers.get(b.uvBounds.id)!)
           .with(colorLayout, buffers.get(b.color.id)!)
           .with(u2, buffers.get(b.effectColor.id)!)
-          .with(pageLayout, buffers.get(b.page.id)!);
+          .with(pageLayout, buffers.get(b.effect.id)!);
         return preparedDraw(root, draw, start, count);
       },
     };
   } catch (error) {
     atlas.destroy();
+    glyphs.destroy();
     throw error;
   }
 }
