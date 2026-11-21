@@ -42,7 +42,7 @@ class identity 22 60541a09ff934a89
 class repr 41 dbf56ed7d83d04e6
 class wire 1 5f4fb76ac5a0a9fd
 step 04 width 247.75
-class value 230 92d88d96f5b6c952
+class value 230 6a0a42e533c22293
 class identity 22 60541a09ff934a89
 class repr 41 dbf56ed7d83d04e6
 class wire 1 0e3cddf87c078d6c

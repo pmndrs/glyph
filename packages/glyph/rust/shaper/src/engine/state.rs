@@ -216,6 +216,9 @@ struct TextEdit {
 struct ShapeWindow {
     old_start: u32,
     old_end: u32,
+    /// Where the window's shaping starts: one cluster ahead of `new_start`, so the flags on the
+    /// window's first cluster record what the unchanged text before it does to it.
+    probe_start: u32,
     new_start: u32,
     new_end: u32,
     probe_end: u32,
@@ -4747,8 +4750,14 @@ impl ParagraphState {
                         |thread| thread_typography(self.geometry.committed(), thread),
                     )?
                 {
-                    self.discard_flow_layout_candidate();
+                    // The composed flow is the layout of the new geometry and commits with it:
+                    // only positioning is proven unchanged. Fragment slots and anything else
+                    // positioning does not read still follow the new width, and so does the
+                    // unclipped layout a measurement derives, which is retired here because
+                    // positioning, which otherwise retires it, does not run.
                     self.discard_positioned_candidate();
+                    self.clipped_inspection.pending_mut().mode = IntrinsicInspection::None;
+                    self.clipped_inspection.mark_prepared();
                     return Ok(false);
                 }
             }
@@ -5901,7 +5910,7 @@ impl ParagraphState {
                         flags: 0x40,
                     },
                     ShapeRangeRef {
-                        item_start: window.new_start,
+                        item_start: window.probe_start,
                         item_end: window.probe_end,
                         context_start: new_run.text_start,
                         context_end: new_run.text_end,
@@ -5912,7 +5921,7 @@ impl ParagraphState {
                             source_run_index,
                             fallback.font_handle,
                             fallback.binding_handle,
-                            window.new_start,
+                            window.probe_start,
                             window.probe_end,
                             shaped,
                         )
@@ -6080,6 +6089,7 @@ impl ParagraphState {
                 .refresh_styles_from_stream(
                     committed_clusters,
                     styles,
+                    runs,
                     self.style_invalidation.metrics,
                 )?
                 .is_some()
@@ -6118,6 +6128,7 @@ impl ParagraphState {
                     committed_clusters,
                     build_input(),
                     source_run,
+                    self.styles.is_prepared(),
                     |handle| shaper.font_metrics(handle),
                 )?
             }
@@ -7694,11 +7705,17 @@ fn build_sparse_shape_windows(
         _ => return Ok(false),
     };
     let run_start_boundary = if rtl { glyph_end } else { glyph_start };
+    let run_start = SafeBoundary {
+        text: source_run.text_start,
+        glyph: run_start_boundary,
+        preceding: source_run.text_start,
+    };
     let mut builder = SparseWindowBuilder {
         edits,
         next_edit: 0,
-        previous_safe: (source_run.text_start, run_start_boundary),
-        window_start: (source_run.text_start, run_start_boundary),
+        previous_boundary: source_run.text_start,
+        previous_safe: run_start,
+        window_start: run_start,
         rtl,
         windows,
     };
@@ -7766,11 +7783,22 @@ fn build_sparse_shape_windows(
     Ok(!windows.is_empty())
 }
 
+/// A cluster boundary no glyph of the retained shape flags unsafe to concatenate across.
+#[derive(Clone, Copy)]
+struct SafeBoundary {
+    text: u32,
+    glyph: usize,
+    /// The cluster boundary before this one, or this one at the start of the run.
+    preceding: u32,
+}
+
 struct SparseWindowBuilder<'a> {
     edits: &'a [TextEdit],
     next_edit: usize,
-    previous_safe: (u32, usize),
-    window_start: (u32, usize),
+    /// The boundary of the last visit, safe or not.
+    previous_boundary: u32,
+    previous_safe: SafeBoundary,
+    window_start: SafeBoundary,
     rtl: bool,
     windows: &'a mut Vec<ShapeWindow>,
 }
@@ -7788,15 +7816,21 @@ impl SparseWindowBuilder<'_> {
         {
             window.probe_end = boundary;
         }
+        let preceding = core::mem::replace(&mut self.previous_boundary, boundary);
         if !safe {
             return Ok(());
         }
+        let here = SafeBoundary {
+            text: boundary,
+            glyph: glyph_boundary,
+            preceding,
+        };
         while let Some(edit) = self.edits.get(self.next_edit).copied() {
             let edit_start =
                 u32::try_from(edit.old_start).map_err(|_| EngineError::ResultTooLarge)?;
             let edit_end = u32::try_from(edit.old_end).map_err(|_| EngineError::ResultTooLarge)?;
             if boundary <= edit_start {
-                self.window_start = (boundary, glyph_boundary);
+                self.window_start = here;
                 break;
             }
             if boundary < edit_end {
@@ -7810,17 +7844,21 @@ impl SparseWindowBuilder<'_> {
             let next_start =
                 u32::try_from(next.old_start).map_err(|_| EngineError::ResultTooLarge)?;
             if boundary <= next_start {
-                self.window_start = (boundary, glyph_boundary);
+                self.window_start = here;
                 break;
             }
             self.window_start = self.previous_safe;
         }
-        self.previous_safe = (boundary, glyph_boundary);
+        self.previous_safe = here;
         Ok(())
     }
 
     fn push_window(&mut self, end: u32, end_glyph: usize) -> Result<(), EngineError> {
-        let (start, start_glyph) = self.window_start;
+        let SafeBoundary {
+            text: start,
+            glyph: start_glyph,
+            preceding: probe_start,
+        } = self.window_start;
         if start >= end {
             return Err(EngineError::InvalidRequest);
         }
@@ -7848,6 +7886,7 @@ impl SparseWindowBuilder<'_> {
         self.windows.push(ShapeWindow {
             old_start: start,
             old_end: end,
+            probe_start,
             new_start: start,
             new_end: end,
             probe_end: 0,
@@ -7878,6 +7917,7 @@ fn set_whole_shape_window(
     windows.push(ShapeWindow {
         old_start: old_run.text_start,
         old_end: old_run.text_end,
+        probe_start: new_run.text_start,
         new_start: new_run.text_start,
         new_end: new_run.text_end,
         probe_end: new_run.text_end,
@@ -15413,7 +15453,9 @@ mod tests {
             .unwrap();
         engine.commit_update(prepared).unwrap();
         let sparse_units = crate::SHAPED_UNITS.with(core::cell::Cell::get) - before_units;
-        assert_eq!(sparse_units, 5, "three distant edits reshape five units");
+        // `A` opens the run and brings the cluster after it; `J` and `T` each bring the
+        // cluster before, and `J` the one after as well.
+        assert_eq!(sparse_units, 7, "three distant edits reshape seven units");
 
         let (cold, _) = shaped_engine(edited);
         let warm = engine
@@ -15451,7 +15493,7 @@ mod tests {
         engine.commit_update(prepared).unwrap();
         let sparse_units = crate::SHAPED_UNITS.with(core::cell::Cell::get) - before_units;
         assert_eq!(
-            sparse_units, 5,
+            sparse_units, 7,
             "the next assignment must reuse the retained shaped run"
         );
         let (cold, _) = shaped_engine(original);

@@ -36,7 +36,8 @@ Updated in place; the history of each change is in the log below.
 | Whole-plan review (five reviewers)                                                                                                                                                                                            | building | `glyph-baselines-2026-11-21/review-v5/`             | Refines the plan; cuts nothing                                                                     |
 | Unit 1a: dense run-local geometry, metric rescale                                                                                                                                                                             | building | `experiments/sil-geometry`                          |                                                                                                    |
 | Unit 1b: dense positioning and per-line ink                                                                                                                                                                                   | held     | —                                                   | Needs oracle, 1a                                                                                   |
-| Existing-engine divergence fixes, then unit 1c: dense cluster build with dirty-range output                                                                                                                                   | building | `experiments/sil-cluster`                           | Divergences first                                                                                  |
+| Existing-engine divergence fixes (all seven families)                                                                                                                                                                         | merged   | tag `sil-green-5`                                   | `KNOWN-DIVERGENCES` is empty; 43,680 seeded requests all equal cold                                |
+| Unit 1c: dense cluster build with dirty-range output                                                                                                                                                                          | held     | —                                                   | Starts after geometry (1a) merges; both touch `cluster_state.rs`                                   |
 | Unit 1d: Unicode class closure, bitmap kernels, per-paragraph bidi, resync predicate, word and sentence lanes                                                                                                                 | building | `experiments/sil-unicode`                           |                                                                                                    |
 | Unit 1e part 1: column gather for prepared owners                                                                                                                                                                             | merged   | tag `sil-green-3`                                   | Gather 3.40 → 0.98 ms on a 25.9k font-size publication (main 1.20)                                 |
 | Unit 1e part 2: gather by change class (colour-only columns, origin-only columns, line height)                                                                                                                                | held     | —                                                   | Needs an accumulated per-paragraph change class in `state.rs`; scheduled after unit 3              |
@@ -319,3 +320,66 @@ Updated in place; the history of each change is in the log below.
 - **New breaking surfaces (renderer).** MSDF atlas resource group: `texture` replaced by a `pages` token plus
   a `glyphs` table (an external renderer must exchange the token in-process); materials survive buffer growth
   on WebGPU; decoded atlas pages alias the loaded file's bytes.
+- **Stopped: all six running lanes hit the account's weekly usage limit** on the top model (resets
+  2026-11-23 15:00 America/Detroit). Nothing was lost; each lane's worktree holds its state:
+  geometry (`glyph-wt-geometry`): stage clocks committed, the dense kernel and paragraph files written but
+  uncommitted and unproven; Unicode (`glyph-wt-unicode`): dense kernel over the property closure committed,
+  generator changes uncommitted, oracle tiers not yet run; cluster (`glyph-wt-cluster`): divergence fixes in
+  progress, uncommitted, with a new regression test file; preparation (`glyph-wt-prepare`): stage 0 guards
+  (crossing budget) committed, the flip not started; Slug (`glyph-wt-render`): clippy allows and early
+  glyph-table edits uncommitted; TypeGPU (`glyph-wt-typegpu`): real-device parity harness committed, no
+  renderer change yet. None of this is merged. The integration branch is unaffected at `sil-green-4`.
+- **Cause.** Every lane, profile and review ran on the top model. Mechanical work (profiles, font fetching,
+  harness building, merges, log upkeep) did not need it.
+
+### 2026-11-21, after the usage reset
+
+- **Decision (owner).** A breaking release is acceptable.
+- **Decision (owner).** An editing session with `replace(start, end, insert)` may be public, on conditions:
+  it must not reintroduce the edge cases that caused API errors before; it throws when misused; and it must be
+  easy to understand, because "start" and "end" mean different things for glyphs and characters. Design rule
+  taken from this: offsets are UTF-16 code units of the source text and nothing else (never glyph or cluster
+  indices); an offset that is out of range, reversed, or not on a grapheme boundary throws a typed error
+  naming the offset and the nearest valid boundaries; nothing is snapped silently.
+- **Decision (owner).** Of the three first-frame options, only **compiling the font binding at font load** is
+  approved. Engine warm-up at `init()` with an embedded font, and replacing the JavaScript font hash with a
+  bake-time digest, are **not approved** and stay held.
+- **Decision (owner).** Stale process guidance may be deleted, with a list of what was removed.
+- **Decision (owner).** Match the model to the work from here on.
+- **Salvaged.** Interrupted work committed as unverified checkpoints: geometry `a20cec258`, Unicode
+  `2f5788bf7`, Slug `0231437a3`. The cluster worktree's files are staged but not committed (its commit hook
+  needs dependencies installed). Preparation and TypeGPU worktrees were clean.
+- **Dispatch, by model.** Top model, resumed with their context: cluster (divergence fixes, then 1c),
+  geometry (1a), Unicode (1d), preparation model (unit 3). Opus, fresh: Slug; pure TypeGPU path; font binding
+  at load. Sonnet: stale-guidance deletion; salvage. Integration (merge, full oracle tier, tests, this log)
+  stays with the coordinator and is kept small.
+- **Done: stale process guidance removed** (`038690bb1`). Removed from `publication-frontier.md`: "Roles and
+  bounded context" (model and effort tiers per step), "Execution and completion gates", and the checkbox list
+  of remaining acceptance gates. Removed from `decisions/retained-prepare-publish.md`: the per-wave
+  measurement and size requirements; a supersession line now points to the new preparation decision.
+  `session-handoff.md` had no such process section, so nothing was removed there. Candidates left alone
+  because process text is interleaved with measurements or design: several chronological passages in
+  `publication-frontier.md`, two in `retained-text-assignment.md`, and acceptance gates for unrelated
+  features. Full list: `stale-guidance-removed-2026-11-21.md`.
+- **Decision (owner).** Integrate, commit and push to the remote as each feature resolves, so no work is at
+  risk. This replaces "push when the feature is done".
+- **Pushed.** `experiments/segment-indexed-layout` and tags `sil-green-0` to `sil-green-4` are on
+  `origin`. In-progress lane branches are pushed as backups (`experiments/sil-geometry`, `sil-unicode`,
+  `sil-render`, `sil-prepare`, `sil-typegpu`); they hold unverified checkpoints and are not for review. No
+  pull request is opened. From here: each lane result is merged, gated on the full oracle tier and the
+  package tests, tagged, and pushed in the same step; lane branches are pushed at each hand-back.
+- **Merged: divergence fixes** (tag `sil-green-5`, pushed). All seven families of "incremental differs from
+  cold" are fixed at their cause and the known-divergence list is empty: the full tier now reads 423 cases
+  equal, 0 scripted steps and 0 of 43,680 seeded requests differing, native and wasm. Root causes: a style
+  refresh that copied the previous layout runs and kept stale style indexes outside the reshaped run (this
+  one cause produced the 48 span cases, the 18 rejected-valid-input cases and the extra CJK layout run); a
+  sparse reshape window that could not see what its unchanged left neighbour does to its first glyph (now
+  shapes one cluster ahead; costs two more shaped units in two tests); a resize shortcut that skipped the step
+  retiring a cached measurement and discarded the newly composed flow; a convergence test that could drop a
+  final empty line; a direction flag not reset. All were reachable from the public API. Seven new regression
+  tests each fail on the previous tag and pass now.
+- **Integrator action.** 37 frozen cases had recorded the divergent result and were re-frozen (reference set
+  `d8e1146486189b8b`). Checked before accepting: only incremental step digests and one recorded rejection
+  changed; no cold-stage digest changed, so the cold reference the rewrite is judged against is untouched.
+- **Note.** The lane tried to add waiver entries itself and the permission system blocked it; no waivers were
+  added by anyone.

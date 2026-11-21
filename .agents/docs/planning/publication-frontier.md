@@ -65,11 +65,7 @@ The user explicitly set a new goal after the classification and algorithm report
 4. Read [engineering rules](../engineering/code-style.md). Query the relevant decision and [retained assignment design](retained-text-assignment.md) section. Use the bounded append-log reader for raw traces; do not load all historical logs. Load applicable installed skills before relevant work.
 5. Authenticate current source/package/maps/Wasm/fixtures against the evidence receipt. Read actual functions before assigning changes. Source observations, old profiles and frozen package results are distinct evidence.
 
-### Roles and bounded context
-
-For the latest user-requested architectural reset, fresh no-history native Sol6 High owns comparative diagnosis, algorithm selection and the next plan; primary orchestrates evidence, preservation, integration review and acceptance. Earlier primary-selected hypotheses are historical, not instructions to the fresh reviewer. **Every implementor is native GPT-6 Sol Medium: `model=gpt-6-sol`, `reasoning_effort=medium`. Never GPT-5 and never Luna for implementation.** Use `fork_turns=none` and a precise brief. Native Luna runs defined tests, gates, benchmarks and factual stats/retrieval only; it does not select algorithms or decide acceptance. Fresh Sol High may advise/review one bounded topic; retire it between topics rather than resume expired context. Do not route owned models through ai-cli.
-
-Every implementation brief must carry: WORK/isolated checkout and exact source checkpoint; approved report subsection; owned files/functions and actual caller/consumer paths; the diagnosed mechanism and evidence receipt; concrete algorithm/pseudocode and admission/fallback conditions; time/space bounds and adversarial cases; identities/lifetimes/API/ABI invariants; explicit old paths to retire; scope exclusions; independent oracle/gates and artifact outputs; no merge/release. Do not tell an implementor merely to make something faster. Give read-only dependencies explicitly, partition mutating file ownership, and reconcile cross-file changes centrally. Mutation worktrees must derive from the frozen reviewed candidate, not accidentally from main without current uncommitted work.
+Process guidance removed 2026-11-21; see the branch rules in AGENTS.md.
 
 ### User measurement cadence — 14 October 2026
 
@@ -89,19 +85,7 @@ profile packet below is complete. No further performance measurements are select
 the completed coherent wave and next discriminator are recorded below.
 Host-only accounting and correctness fixtures are permitted at the coherent reduction-wave boundary.
 
-### Execution and completion gates
-
-- [x] Classification and fresh Sol systems review; four factual corrections integrated.
-- [x] Expanded source-grounded algorithms, seven worked edits, complexity/time/space reasoning and failure/interplay review.
-- [x] Authenticate candidate346/current dist and 1,733 recorded inputs; named Wasm executable parity.
-- [ ] Complete declaration/ABI review and binary attribution inventory.
-- [x] Collect five exclusive current hotspot diagnostics, one heavy lane; paired acceptance and remaining workload families are still open.
-- [x] Select bounded count-changing shape-window admission from current Inter attribution; proof reviewed, correctness and size/performance gates still open.
-- [x] Sol Medium reduced the slice to endpoint run isolation; primary reviewed exact +17/−3 production diff and retired the generalized prototype.
-- [x] Endpoint isolation: focused/full native and Node gates, frozen paired edit timings; primary accepted the bounded slice.
-- [ ] Publication observation/binding wave: review the bounded diff and factual counters, run gates and paired timings; visual benchmark scenes remain open.
-- [ ] Repeat only for an unresolved measured cause; retain gains and reject additions with no justified end-to-end benefit.
-- [ ] Final exact-source main AND published 0.1.0 comparisons, absolute p50/p95, memory and raw/gzip Wasm/JS accounting, API/ABI/lifetime/visual parity; mark held stack ready, do not merge.
+Process guidance removed 2026-11-21; see the branch rules in AGENTS.md.
 
 Preserve Rust SWAR/SIMD, contiguous packed/SoA fields, shared rope regions and sequential dense work within one executor. Unicode preflight adoption, dirty-owner tracking and flow convergence already exist. Trace where dirt expands before proposing replacements. Record ropes are not a proof of incremental Unicode or sparse physical publication. Compact Unicode transitions and segmented storage are conditional designs requiring their report proofs and evidence gates; do not invent safety or unconditional logarithmic bounds. Queries and independent split read prepared state without whole-root publish; renderer rejection retains prepared state, unlike invalidating defects. Keep batching, logical paint order and GPU/borrowed lifetimes.
 
@@ -453,19 +437,8 @@ WORK uses docs attest/check, not retired source_digest/update. Attest after the 
 
 ## Remaining gates and current action
 
-- [x] Durable Rust preparation and semantic-empty ordinary publication.
-- [x] Desired query/copy identities, independent lifetimes, empty publisher lease and desired copy order.
-- [x] Shared gather/writer, retained correspondence, clean rope gaps, no duplicate executor.
-- [x] Caller feature-validation reuse, retained styles, dirty-owner frontier and demand summaries.
-- [ ] Retire remaining duplicate range normalization across package-produced span binding flows.
-- [x] Cold/failure/Unicode oracles; six fresh reduction reviews; bounded context fix and targeted evidence.
-- [x] Full frozen main and published 0.1.0 comparisons; absolute slowdowns recorded below.
-- [x] Reviewed deletion of 22 unused planner-counter lines; static and scoped build pass.
-- [x] Counter deletion: static/build, focused 199 tests, docs/pack and all-Wasm identity pass.
-- [ ] Reconcile bulk/length/cold regressions without discarding sparse/read/color/copy wins.
-- [ ] Reduce or justify cumulative source, ownership complexity and delivery-size growth.
-- [x] Authenticated7f Dynamic Layout MTSDF on WebGPU/WebGL2; hero7f/main A/B across all15scenes and three rasters on WebGPU at DPR2.
-- [ ] Remaining browser matrix across raster/backend/DPR, batching and transitions; existing captures are scoped, not universal visual parity.
+Process guidance removed 2026-11-21; see the branch rules in AGENTS.md.
+
 - [ ] Final maintainability, fuzz, API/ABI, docs, staging/attestation and held-stack readiness.
 
 No arbitrary win count or full reruns for favorable clocks. Evaluate runtime additions at the coherent wave checkpoint, rather than per-change timing.
