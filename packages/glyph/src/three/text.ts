@@ -2834,7 +2834,10 @@ function normalizeDesired<Format extends RasterFormatMetadata>(
       ownTextSpanRecords(previous?.spans, assertSpanRanges(text, stated), { kind: 'three' }),
     );
   }
-  const rootTechniques = immutableFontSelectionFonts(properties.font).map((font) => font.raster);
+  // A font disposed while a text still names it fails here, on the next setter, whatever that setter wrote.
+  const rootTechniques = validatingInput(['font'], () =>
+    immutableFontSelectionFonts(properties.font).map((font) => font.raster),
+  );
   const inheritedTechniques = [
     ...rootTechniques,
     ...spans.flatMap((span) =>
