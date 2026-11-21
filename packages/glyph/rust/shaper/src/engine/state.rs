@@ -16493,10 +16493,10 @@ mod tests {
                 assert_eq!(preparation.canonical_style_resolutions, 0);
                 if kind == "scattered" {
                     assert_eq!(preparation.canonical_text_validations, 1);
-                    assert_eq!(
-                        preparation.canonical_cluster_comparisons,
-                        original_units.len()
-                    );
+                    // Only the 64-cluster chunks an edit lands in are walked cluster by
+                    // cluster; the rest of the run is compared lane against lane.
+                    assert!(preparation.canonical_cluster_comparisons > 0);
+                    assert!(preparation.canonical_cluster_comparisons < original_units.len());
                 } else if kind == "unchanged" {
                     assert_eq!(preparation.canonical_text_validations, 0);
                     assert_eq!(preparation.canonical_cluster_comparisons, 0);

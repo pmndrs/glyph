@@ -119,7 +119,7 @@ impl ClusterArena {
                 let hard_break = is_hard_break_unit(unit);
                 let space = unit == 0x20;
                 self.flags.push(
-                    u8::from(hard_break) * CLUSTER_HARD_BREAK | u8::from(space) * CLUSTER_SPACE,
+                    (u8::from(hard_break) * CLUSTER_HARD_BREAK) | (u8::from(space) * CLUSTER_SPACE),
                 );
                 self.advances.push(if hard_break {
                     0.0

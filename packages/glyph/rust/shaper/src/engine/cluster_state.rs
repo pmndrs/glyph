@@ -7,6 +7,9 @@ use core::{
 use crate::{FontGlyphExtents, FontInkTable, FontMetrics, unicode::UnicodeAnalysis};
 
 mod build;
+mod diff;
+
+pub(crate) use diff::ClusterChanges;
 
 use super::{
     EngineError, FrameFault,
@@ -200,6 +203,11 @@ pub(crate) trait CanonicalClusterView {
 
     fn stable_glyph_id(&self, index: usize) -> Option<u32> {
         self.glyph(index).map(|glyph| glyph.stable_id)
+    }
+
+    /// The cluster arena behind this view, whose lanes can be compared directly.
+    fn cluster_arena(&self) -> Option<&ClusterArena> {
+        None
     }
 }
 
@@ -551,6 +559,12 @@ pub(crate) struct ClusterArena {
     pub(super) run_local: RunLocalArena,
     /// Build scratch: what each shaped run scales its clusters by.
     pub(super) run_scales: Vec<build::RunScale>,
+    /// How these clusters pair with the previous arena's by stable text id, kept from glyph
+    /// identity assignment for the lane comparison that follows it while `aligned`.
+    pub(super) alignment: Vec<diff::Segment>,
+    pub(super) aligned: bool,
+    /// Which clusters differ from the arena this one replaces; see `ClusterChanges`.
+    pub(super) changes: ClusterChanges,
 }
 
 impl CanonicalClusterView for ClusterArena {
@@ -613,6 +627,10 @@ impl CanonicalClusterView for ClusterArena {
 
     fn layout_run(&self, index: usize) -> Option<LayoutRun> {
         self.layout_runs.runs.get(index).copied()
+    }
+
+    fn cluster_arena(&self) -> Option<&ClusterArena> {
+        Some(self)
     }
 }
 
@@ -1514,6 +1532,16 @@ impl ClusterArena {
         let _clock = StageClock::start();
         reserve(&mut self.glyph_stable_ids, self.glyph_ids.len())?;
         self.glyph_stable_ids.resize(self.glyph_ids.len(), 0);
+        if let Some(previous) = previous.cluster_arena() {
+            #[cfg(any(test, feature = "debug-validation"))]
+            let first_id = *next_id;
+            let result = self.assign_stable_glyph_ids_from_arena(previous, index, next_id);
+            #[cfg(any(test, feature = "debug-validation"))]
+            if result.is_ok() {
+                self.assert_glyph_ids_follow_the_view_rule(previous, first_id, *next_id);
+            }
+            return result;
+        }
         assign_stable_glyph_ids_from_view(
             previous,
             self.stable_ids.len(),
@@ -1550,6 +1578,40 @@ impl ClusterArena {
                 && self.layout_runs.runs.len() == previous.layout_run_count()
                 && current.text.len() == committed.text.len();
         }
+        if let Some(previous) = previous.cluster_arena() {
+            #[cfg(any(test, feature = "debug-validation"))]
+            let expected = self.revisions_by_the_view_rule(
+                previous,
+                current,
+                committed,
+                *next_revision,
+                layout_dirty
+                    .as_deref()
+                    .map(|dirty| (dirty.valid, styles_unchanged)),
+            );
+            let result = self.finalize_revisions_from_arena(
+                previous,
+                current,
+                committed,
+                index,
+                next_revision,
+                layout_dirty
+                    .as_deref_mut()
+                    .map(|dirty| (dirty, styles_unchanged)),
+            );
+            #[cfg(any(test, feature = "debug-validation"))]
+            if result.is_ok() {
+                self.assert_revisions_follow_the_view_rule(
+                    previous,
+                    expected,
+                    *next_revision,
+                    layout_dirty.as_deref(),
+                );
+            }
+            return result;
+        }
+        // An inline leaf pairs with nothing cluster by cluster.
+        self.changes.reset();
         prepare_run_revision_index(previous, index)?;
 
         for run_index in 0..self.layout_runs.runs.len() {
@@ -1612,8 +1674,18 @@ impl ClusterArena {
         islands.slots.clear();
         self.layout_runs.clear();
         self.run_local.clear();
+        self.aligned = false;
+        self.changes.reset();
         // An arena with no clusters answers like a fresh one, whatever it held before.
         self.ltr = false;
+    }
+
+    /// Which clusters differ from the arena this one replaced, as of the last
+    /// `finalize_layout_run_revisions`. Nothing in the engine reads it yet: cache retention
+    /// across an edit is bounded by these ranges.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn changes(&self) -> &ClusterChanges {
+        &self.changes
     }
 
     pub(crate) fn layout_runs(&self) -> &[LayoutRun] {
@@ -2720,6 +2792,131 @@ mod tests {
         assert_eq!(next_revision, 3);
     }
 
+    /// A paragraph of `ids.len()` one-unit clusters in one run, each drawn as its id's glyph.
+    fn changes_fixture(ids: &[u32], style: ResolvedStyle) -> CanonicalFixture {
+        let text: Vec<u16> = ids.iter().map(|id| *id as u16).collect();
+        let mut fixture = canonical_fixture(&text, ids, &vec![0; ids.len()], style);
+        stamp_revisions(&mut fixture, &[1]);
+        fixture
+    }
+
+    fn changes_between(
+        current: &mut CanonicalFixture,
+        previous: &CanonicalFixture,
+    ) -> Vec<[u32; 4]> {
+        finalize_fixture(current, previous, &mut IdentityIndex::default(), &mut 2);
+        assert!(!current.arena.changes().everything);
+        current
+            .arena
+            .changes()
+            .ranges
+            .iter()
+            .map(|range| {
+                [
+                    range.new.start,
+                    range.new.end,
+                    range.old.start,
+                    range.old.end,
+                ]
+            })
+            .collect()
+    }
+
+    #[test]
+    fn cluster_changes_are_the_edits_and_nothing_else() {
+        let style = ResolvedStyle::test_typography(16.0, 0.0, 0.0);
+        let ids: Vec<u32> = (1..=300).collect();
+        let previous = changes_fixture(&ids, style);
+
+        // Nothing changed: no range, however many chunks the paragraph spans.
+        let mut same = changes_fixture(&ids, style);
+        assert!(changes_between(&mut same, &previous).is_empty());
+
+        // One cluster typed after the hundredth.
+        let mut typed = ids.clone();
+        typed.insert(100, 900);
+        let mut inserted = changes_fixture(&typed, style);
+        assert_eq!(
+            changes_between(&mut inserted, &previous),
+            [[100, 101, 100, 100]]
+        );
+
+        // Three edits in one request: a deletion, a cluster whose glyph changed in place, and
+        // an insertion. The clusters between them pair at the shift each edit leaves.
+        let mut edited = ids.clone();
+        edited.remove(9);
+        edited.insert(250, 901);
+        let mut three = changes_fixture(&edited, style);
+        three.arena.glyph_ids[149] = 7;
+        assert_eq!(
+            changes_between(&mut three, &previous),
+            [[9, 9, 9, 10], [149, 150, 150, 151], [250, 251, 251, 251]]
+        );
+
+        // The whole text replaced: one range over both arenas.
+        let replaced: Vec<u32> = (1_000..1_200).collect();
+        let mut all = changes_fixture(&replaced, style);
+        assert_eq!(changes_between(&mut all, &previous), [[0, 200, 0, 300]]);
+    }
+
+    #[test]
+    fn cluster_changes_cover_owner_break_and_advance_lanes() {
+        let style = ResolvedStyle::test_typography(16.0, 0.0, 0.0);
+        let ids: Vec<u32> = (1..=130).collect();
+        let previous = changes_fixture(&ids, style);
+        type Change = fn(&mut ClusterArena);
+        let changes: [(u32, Change); 6] = [
+            // The binding is paint, which a run revision ignores and a cache does not.
+            (3, |arena| arena.binding_handles[3] = 55),
+            (64, |arena| arena.flags[64] |= CLUSTER_ALLOWED_BREAK),
+            (65, |arena| arena.unsafe_before[65] = 1),
+            (70, |arena| arena.glyph_x_offsets[70] = 12),
+            (71, |arena| arena.glyph_shape_flags[71] = 1),
+            (129, |arena| arena.advances[129] = 2.0),
+        ];
+        for (cluster, change) in changes {
+            let mut current = changes_fixture(&ids, style);
+            change(&mut current.arena);
+            assert_eq!(
+                changes_between(&mut current, &previous),
+                [[cluster, cluster + 1, cluster, cluster + 1]]
+            );
+        }
+        // A metric the lanes do not carry changes every cluster, and the pairing stands.
+        let mut resized = changes_fixture(&ids, ResolvedStyle::test_typography(18.0, 0.0, 0.0));
+        assert_eq!(changes_between(&mut resized, &previous), [[0, 130, 0, 130]]);
+    }
+
+    #[test]
+    fn cluster_changes_withdraw_the_pairing_when_shaping_inputs_change() {
+        let style = ResolvedStyle::test_typography(16.0, 0.0, 0.0);
+        let ids: Vec<u32> = (1..=70).collect();
+        let previous = changes_fixture(&ids, style);
+        let everything = |current: &mut CanonicalFixture| {
+            finalize_fixture(current, &previous, &mut IdentityIndex::default(), &mut 2);
+            let changes = current.arena.changes();
+            changes.everything && changes.ranges.is_empty()
+        };
+
+        let mut redirected = changes_fixture(&ids, style);
+        redirected.arena.ltr = true;
+        assert!(everything(&mut redirected), "paragraph direction flag");
+
+        let mut other_stack = style;
+        other_stack.font_stack_handle = 9;
+        assert!(
+            everything(&mut changes_fixture(&ids, other_stack)),
+            "font stack"
+        );
+
+        let mut reshaped = changes_fixture(&ids, style);
+        reshaped.shaping_runs[0].script = 0x4772_656b;
+        assert!(everything(&mut reshaped), "run script");
+
+        // An arena that was never compared keeps nothing either.
+        assert!(changes_fixture(&ids, style).arena.changes().everything);
+    }
+
     #[test]
     fn canonical_revision_invalidates_split_and_merge_topology() {
         let style = ResolvedStyle::test_typography(16.0, 0.0, 0.0);
@@ -2756,10 +2953,11 @@ mod tests {
         let mut next_revision = 2;
         super::super::work_attribution::reset();
         finalize_fixture(&mut paint_only, &previous, &mut index, &mut next_revision);
-        assert_eq!(
-            super::super::work_attribution::snapshot().canonical_style_resolutions,
-            2
-        );
+        // Two arenas resolve their styles once per stretch of clusters that share them, and
+        // an equal run is never walked cluster by cluster.
+        let work = super::super::work_attribution::snapshot();
+        assert_eq!(work.canonical_style_resolutions, 0);
+        assert_eq!(work.canonical_cluster_comparisons, 0);
         assert_eq!(revisions(&paint_only), [1]);
         assert_eq!(next_revision, 2);
 
