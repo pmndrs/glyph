@@ -663,3 +663,25 @@ Updated in place; the history of each change is in the log below.
   clean rebuild: glyph package tests 1,234 of 1,234; TypeGPU real-device parity; both render proofs on WebGPU
   and WebGL2; live check; full oracle tier native and wasm at 423 equal, 0 divergences. The full repository
   check passed on the lane's merged branch and was not re-run on the integration tree for this tag.
+- **Merged: PixiJS 3D renderer** (tag `sil-green-18`, pushed). Package `@pmndrs/glyph-pixi3d`, public, against
+  the official `@pixi/3d` 0.1.0 (MIT, published 2026-11-12) and `pixi.js` 8.23 as peer dependencies; both
+  earlier patches dropped; nothing from the private beta copied. Techniques carried: bitmap, MSDF/MTSDF with
+  outline and shadow, Slug, decorations; also spans, `split()`, anchors, custom materials. Verified on the
+  combined tree after a clean install and rebuild: full repository check exits 0; glyph package tests; the
+  package's own check (34 tests); new `benchmark:pixi3d-parity` (27 scenes against Three on WebGPU and
+  WebGL2); TypeGPU parity; both render proofs; live check. The Rust engine is unchanged by this merge, so the
+  oracle was not re-run. Parity: WebGPU within tolerance on every scene (max 2/255) except 13 of 74,484
+  pixels in one outline scene; WebGL2 Slug at most 13 pixels over; WebGL2 bitmap up to 1.63% of lit pixels
+  over; each difference is a named budget with its cause. Gaps: MSDF uploads every baked page on PixiJS 3D;
+  no ordered `TextGroup` equivalent; decorations, `split()` and instancing have unit tests but no parity
+  scene; no performance numbers. Left behind: the demo app, the GLYPH//BREAKER shader bit, two demo skills.
+- **Needs owner sign-off: three new `/core` names** the port required: `createDecorationCodecProgram` and
+  `decorationSchema`; `SlugBandResidency` and `SLUG_RESIDENT_BAND_CURVE_WIDTH`.
+- **Tested, not merged: oracle coverage** (`experiments/sil-oracle`): 165 new cases (decorated text and
+  effects 84, several paragraphs per root 27, columns and regions 38, inline objects 16); full tier 588 cases
+  and 54,240 requests. It now catches the decorated-text material bug. Three new engine divergences recorded,
+  not fixed: paragraph draw order under ranked scopes depends on history; removing every paragraph from a
+  root leaves its glyphs drawn and the next request rejected; a borrowed-glyph read after a no-op on a
+  clipped paragraph is stale. Findings: inline objects are accepted and validated but no layout stage reads
+  them; regions were exercised only as horizontal rectangles. The lane is catching up with the integration
+  branch before the coverage merges.
