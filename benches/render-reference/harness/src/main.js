@@ -314,6 +314,11 @@ async function boot() {
     width: (index, mode) => timedMutation(() => adapter.setWidth(WIDTHS[index % WIDTHS.length], mode)),
     editKnown: (index) => timedMutation(() => adapter.setText(knownEdit(index))),
     editNew: (index) => timedMutation(() => adapter.setText(newLetterEdit(index))),
+    // Appends `extra` known letters to the paragraph (capacity-growth probe).
+    grow: (extra) =>
+      timedMutation(() =>
+        adapter.setText(knownEdit(0) + ' ' + 'lorem ipsum dolor '.repeat(Math.ceil(extra / 18)).slice(0, extra)),
+      ),
     async settle() {
       for (let i = 0; i < 8; i += 1) frame();
       await done();

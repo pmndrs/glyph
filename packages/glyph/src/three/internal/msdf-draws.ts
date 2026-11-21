@@ -1,25 +1,16 @@
 import type * as THREE from 'three/webgpu';
 
 import type { TslMsdfEffects } from '../../shaders/tsl/index.js';
+import { msdfSchema } from '../../raster/msdf.js';
 import type { RetainedBuffer } from './host-buffer.js';
+import type { MaterialRealization } from './render-state.js';
 import type { RetainedMsdfAtlas } from './renderer-resources.js';
 
-/** What the publication pass needs to keep one MSDF draw's atlas cells resident. */
-interface MsdfAtlasUse {
-  readonly atlas: RetainedMsdfAtlas;
-  /** The technique's effect lane; its fourth value is the instance's glyph table row. */
-  readonly glyphs: RetainedBuffer;
-}
+const atlasByMaterial = new WeakMap<THREE.Material, RetainedMsdfAtlas>();
 
-const atlasUseByMaterial = new WeakMap<THREE.Material, MsdfAtlasUse>();
-
-/** Records which atlas and glyph lane every draw of `material` reads. */
-export function registerMsdfAtlasUse(
-  material: THREE.NodeMaterial,
-  atlas: RetainedMsdfAtlas,
-  glyphs: RetainedBuffer,
-): void {
-  atlasUseByMaterial.set(material, { atlas, glyphs });
+/** Records which atlas every draw of `material` samples. */
+export function registerMsdfAtlasUse(material: THREE.NodeMaterial, atlas: RetainedMsdfAtlas): void {
+  atlasByMaterial.set(material, atlas);
 }
 
 /**
@@ -30,9 +21,20 @@ export function registerMsdfAtlasUse(
  * moves to another graph when an edit or a paint change adds or removes one.
  */
 export interface MsdfEffectVariants {
-  /** The technique's packed `[outline, shadow]` color lane; an alpha byte of zero means the effect is absent. */
-  readonly colors: RetainedBuffer;
   material(effects: TslMsdfEffects): THREE.NodeMaterial;
+}
+
+/**
+ * What the publication pass reads for one MSDF draw. The lanes belong to the draw, not its material: a material
+ * outlives the buffers it was built over, while a draw is rebuilt whenever its buffers are replaced.
+ */
+interface MsdfDrawState {
+  readonly atlas: RetainedMsdfAtlas;
+  /** The technique's effect lane; its fourth value is the instance's glyph table row. */
+  readonly glyphs: RetainedBuffer;
+  /** The packed `[outline, shadow]` color lane; an alpha byte of zero means the effect is absent. */
+  readonly colors: RetainedBuffer;
+  readonly variants: MsdfEffectVariants | undefined;
 }
 
 const variantsByComplete = new WeakMap<THREE.Material, MsdfEffectVariants>();
@@ -43,7 +45,6 @@ const variantsByComplete = new WeakMap<THREE.Material, MsdfEffectVariants>();
  */
 export function registerMsdfEffectVariants(
   complete: THREE.NodeMaterial,
-  colors: RetainedBuffer,
   create: (effects: TslMsdfEffects) => THREE.NodeMaterial,
 ): void {
   const specialized = new Map<number, THREE.NodeMaterial>();
@@ -52,7 +53,6 @@ export function registerMsdfEffectVariants(
     specialized.clear();
   });
   variantsByComplete.set(complete, {
-    colors,
     material(effects) {
       if (effects.outline && effects.shadow) return complete;
       const key = (effects.outline ? 1 : 0) | (effects.shadow ? 2 : 0);
@@ -66,41 +66,57 @@ export function registerMsdfEffectVariants(
   });
 }
 
-/** Remembers a new draw's MSDF state; the mesh may later render with a specialization instead of `material`. */
-export function attachMsdfDrawState(mesh: THREE.Mesh, material: THREE.Material): void {
-  const variants = variantsByComplete.get(material);
-  if (variants !== undefined) mesh.userData.pmndrsGlyphEffectVariants = variants;
-  const atlasUse = atlasUseByMaterial.get(material);
-  if (atlasUse !== undefined) mesh.userData.pmndrsGlyphAtlasUse = atlasUse;
+/** Remembers a new MSDF draw's lanes and materials; it may later render with a specialization of `material`. */
+export function attachMsdfDrawState(
+  mesh: THREE.Mesh,
+  material: THREE.Material,
+  lanes: ReadonlyMap<RetainedBuffer['codecBufferId'], RetainedBuffer>,
+): void {
+  const atlas = atlasByMaterial.get(material);
+  const glyphs = lanes.get(msdfSchema.buffers.effect.id);
+  const colors = lanes.get(msdfSchema.buffers.effectColor.id);
+  if (atlas === undefined || glyphs === undefined || colors === undefined) return;
+  const state: MsdfDrawState = { atlas, glyphs, colors, variants: variantsByComplete.get(material) };
+  mesh.userData.pmndrsGlyphMsdf = state;
 }
 
 /**
- * Brings each MSDF draw in line with the instances a publication just wrote: the atlas cells of every glyph it draws
- * are resident before the frame that first shows them, and it renders with the graph for the effects in its range.
- * A publication that kept its draws only revisits those whose lanes it wrote.
+ * Brings the renderer in line with what a publication just committed.
+ *
+ * Materials adopted by successor buffers are pointed at them. Then, for each MSDF draw whose lanes the publication
+ * wrote (or every draw, when it replaced them), the atlas cells of the glyphs it draws are made resident before the
+ * frame that first shows them, and the draw renders with the graph for the effects in its range.
  */
 export function syncMsdfDraws(
   draws: readonly THREE.Mesh[],
   publication: Readonly<{
+    context: { readonly materials: ReadonlyMap<string, MaterialRealization> };
     draws: { readonly changed: boolean };
     bufferMutations: { readonly uploads: readonly { readonly buffer: RetainedBuffer }[] };
   }>,
 ): void {
+  for (const realization of publication.context.materials.values()) bindSuccessorStorage(realization);
   const uploads = publication.bufferMutations.uploads;
   if (!publication.draws.changed && uploads.length === 0) return;
   const written = publication.draws.changed ? undefined : new Set(uploads.map(({ buffer }) => buffer));
   for (const mesh of draws) {
+    const state = mesh.userData.pmndrsGlyphMsdf as MsdfDrawState | undefined;
+    if (state === undefined) continue;
     const start = (mesh.userData.pmndrsGlyphRunStart as number | undefined) ?? 0;
     const end = start + (mesh.geometry as THREE.InstancedBufferGeometry).instanceCount;
-    const atlasUse = mesh.userData.pmndrsGlyphAtlasUse as MsdfAtlasUse | undefined;
-    if (atlasUse !== undefined && (written === undefined || written.has(atlasUse.glyphs))) {
-      atlasUse.atlas.use(atlasUse.glyphs.array as Float32Array, start, end, atlasUse.glyphs.vectorWidth);
+    if (written === undefined || written.has(state.glyphs)) {
+      state.atlas.use(state.glyphs.array as Float32Array, start, end, state.glyphs.vectorWidth);
     }
-    const variants = mesh.userData.pmndrsGlyphEffectVariants as MsdfEffectVariants | undefined;
-    if (variants !== undefined && (written === undefined || written.has(variants.colors))) {
-      mesh.material = variants.material(effectsInUse(variants.colors, start, end));
+    if (state.variants !== undefined && (written === undefined || written.has(state.colors))) {
+      mesh.material = state.variants.material(effectsInUse(state.colors, start, end));
     }
   }
+}
+
+function bindSuccessorStorage(realization: MaterialRealization): void {
+  if (realization.pendingStorage === undefined) return;
+  for (const [node, attribute] of realization.pendingStorage) node.value = attribute;
+  delete realization.pendingStorage;
 }
 
 function effectsInUse(lane: RetainedBuffer, start: number, end: number): TslMsdfEffects {

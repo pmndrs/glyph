@@ -23,11 +23,23 @@ export type RetainedSlugPageLease = ThreeRenderResourceLease<RetainedSlugPage>;
 export type RetainedMsdfAtlasLease = ThreeRenderResourceLease<RetainedMsdfAtlas>;
 export type RetainedGpuResourceLease = RetainedTextureLease | RetainedSlugPageLease | RetainedMsdfAtlasLease;
 
+/** One storage node of a realized material and the Codec lane whose buffer it reads. */
+export interface MaterialStorageNode {
+  readonly node: { value: THREE.StorageBufferAttribute | THREE.StorageInstancedBufferAttribute };
+  readonly lane: RetainedBuffer['codecBufferId'];
+}
+
 export interface MaterialRealization {
   readonly material: THREE.NodeMaterial;
   readonly resource: ThreeResolvedResourceBinding | undefined;
   readonly buffers: readonly ThreeBufferBinding[];
   readonly indexedTransform: boolean;
+  /** Everything that identifies the material except which buffers its lanes currently read. */
+  readonly shape?: string;
+  /** The material's storage nodes, when they can be pointed at successor buffers without rebuilding the graph. */
+  readonly storage?: readonly MaterialStorageNode[];
+  /** Successor buffers to bind when the publication that adopted this material commits. */
+  pendingStorage?: readonly (readonly [MaterialStorageNode['node'], THREE.StorageInstancedBufferAttribute])[];
 }
 
 export interface OriginSegment {

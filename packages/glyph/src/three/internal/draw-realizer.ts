@@ -60,6 +60,7 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
     context,
     ownedMaterials: options.ownedMaterials,
     bindingId,
+    liveBuffers: drawnBuffers(options.children, context),
   });
 
   const next: THREE.Mesh[] = [];
@@ -175,7 +176,7 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
           }
           if (transform.kind === 'indexed') geometry.setAttribute('_pmndrsGlyphTransforms', context.transformAttribute);
           mesh = new THREE.Mesh(geometry, material);
-          attachMsdfDrawState(mesh, material);
+          attachMsdfDrawState(mesh, material, byCodecId);
           mesh.userData.pmndrsGlyphRunStart = span.recordIndex;
           mesh.userData.pmndrsGlyphPrimitiveKind = decoration ? 'decoration' : 'glyph';
           mesh.userData.pmndrsGlyphDepthKey = draw.depthKey;
@@ -215,6 +216,19 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
     directDrawsByTransform,
     batchDrawsByScope,
   };
+}
+
+/** Every buffer the new display list draws from, plus the session placement table every glyph draw reads. */
+function drawnBuffers(
+  children: PrepareDrawReplacementOptions['children'],
+  context: PreparationContext,
+): ReadonlySet<ThreeBufferBinding> {
+  const drawn = new Set<ThreeBufferBinding>();
+  for (let index = 0; index < children.length; index += 1) {
+    for (const binding of children.at(index)!.value.input.buffers) drawn.add(binding);
+  }
+  if (context.placementTable !== undefined) drawn.add(context.placementTable.binding);
+  return drawn;
 }
 
 function appendIndexedDraw<Key extends object | number>(

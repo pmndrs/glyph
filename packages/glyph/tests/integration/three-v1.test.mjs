@@ -4659,7 +4659,7 @@ test('Three disposes superseded and final indexed-transform storage', async (t) 
   fontDomain.dispose();
 });
 
-test('Three retires materials bound to a replaced buffer generation', async (t) => {
+test('Three keeps a material across a replaced buffer generation and binds it to the successors', async (t) => {
   const spanAndDrawBuffers = [];
   const config = defineThreeConfig({ capacity: { size: 2, policy: 'grow' } });
   const three = await createThreeTestHandle(t, {
@@ -4699,6 +4699,7 @@ test('Three retires materials bound to a replaced buffer generation', async (t) 
   scene.updateMatrixWorld();
   const initialMaterial = rootDraws(scene)[0]?.material;
   assert.equal(initialMaterial, materials[0]);
+  const initialAttributes = new Set(Object.values(rootDraws(scene)[0].geometry.attributes));
   const initialBuffer = spanAndDrawBuffers.at(-1)?.drawBuffer;
   assert.ok(initialBuffer);
   assert.equal(spanAndDrawBuffers.at(-1).spanBuffer, initialBuffer);
@@ -4713,8 +4714,33 @@ test('Three retires materials bound to a replaced buffer generation', async (t) 
     grownBuffers.drawBuffer,
     'the span binds the new generation before draw lookup',
   );
-  assert.ok(materials.length > 1, 'growing physical buffers must realize a material for the new generation');
-  assert.ok(disposed.has(initialMaterial), 'the material retaining the retired generation must be disposed');
+  // Capacity growth must not rebuild the shader graph: the same material reads the successor buffers.
+  const grownDraw = rootDraws(scene)[0];
+  assert.equal(materials.length, 1, 'growing physical buffers realizes no new material');
+  assert.equal(grownDraw.material, initialMaterial, 'the grown draw renders with the material it had');
+  assert.equal(disposed.size, 0, 'the surviving material is not retired with the buffers it used to read');
+  const storageNodes = [];
+  const seen = new Set();
+  const visit = (node) => {
+    if (node === null || typeof node !== 'object' || seen.has(node)) return;
+    seen.add(node);
+    if (node.isStorageBufferNode === true) storageNodes.push(node);
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) value.forEach(visit);
+      else if (value?.isNode === true) visit(value);
+    }
+  };
+  for (const root of [initialMaterial.positionNode, initialMaterial.colorNode, initialMaterial.opacityNode])
+    visit(root);
+  assert.ok(storageNodes.length > 0, 'the material graph reads instance storage');
+  const drawn = new Set(Object.values(grownDraw.geometry.attributes));
+  assert.ok(
+    storageNodes.some((node) => drawn.has(node.value) && !initialAttributes.has(node.value)),
+    'storage nodes read the successor buffers',
+  );
+  for (const node of storageNodes) {
+    assert.ok(drawn.has(node.value) || !initialAttributes.has(node.value), 'no storage node reads a retired buffer');
+  }
 
   group.dispose();
   label.dispose();

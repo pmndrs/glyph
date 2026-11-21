@@ -8,8 +8,15 @@ try {
   const shots = [];
   let memory;
   for (const lib of [before, after]) {
-    const session = await open(browser, lib, 'para', { shot: '1', instr: '1' });
+    const session = await open(browser, lib, 'para', {
+      shot: '1',
+      instr: '1',
+      ...(process.env.WEBGL ? { webgl: '1' } : {}),
+    });
     for (let index = 0; index < 30; index += 1) await session.page.evaluate((i) => window.bench.editNew(i), index);
+    // Capacity growth: lengthen the paragraph across several buffer reallocations, then shrink it again.
+    for (const extra of process.env.CAPACITY ? [200, 900, 1700, 2600, 3300, 40] : [])
+      await session.page.evaluate((n) => window.bench.grow(n), extra);
     await session.page.evaluate(() => window.bench.settle());
     const file = `screenshots/fx/grow-${lib}.png`;
     await session.page.screenshot({ path: file, clip: { x: 800, y: 0, width: 800, height: 600 } });
