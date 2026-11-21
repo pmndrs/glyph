@@ -182,6 +182,7 @@ impl RowLanes {
         }
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     fn view(&self) -> RunLocalLanes<'_> {
         RunLocalLanes {
             inline_origin: &self.inline_origin,
@@ -1478,5 +1479,114 @@ mod tests {
         assert_eq!(old.source_range_counts(64, 3), Some((2, 1)));
         assert_eq!(old.same_outline_pattern(63, &shifted, 64, 3), Some(true));
         assert_eq!(old.same_outline_pattern(63, &changed, 64, 3), Some(false));
+    }
+
+    #[test]
+    fn a_reversed_run_over_borrowed_lanes_equals_the_same_clusters_staged_in_visit_order() {
+        // Three clusters owning glyphs 0..2, 2..3 and 3..5, visited last to first.
+        let advances = [300, -200, 500, 250, 125];
+        let offsets = [10, -20, 0, 5, -5];
+        let rises = [0, 40, -30, 0, 15];
+        let ink = [
+            [5, -10, 280, 600],
+            [0; 4],
+            [-20, -200, 480, 700],
+            [0, 0, 240, 500],
+            [0; 4],
+        ];
+        let (starts, counts) = ([0, 2, 3], [2, 1, 2]);
+        let cluster_advances = [12.5, 31.25, 23.0];
+        let spans = [
+            ScaleSpan {
+                glyph_end: 3,
+                scale: 23.7 / 1000.0,
+                baseline_shift: 1.5,
+            },
+            ScaleSpan {
+                glyph_end: 5,
+                scale: 11.0 / 2048.0,
+                baseline_shift: 0.0,
+            },
+        ];
+        let mut borrowed = RunLocalArena::default();
+        borrowed.rows.grow(5).unwrap();
+        let span = layout_run(
+            &mut borrowed.index,
+            &mut borrowed.rows,
+            &mut borrowed.scratch,
+            &RunInput {
+                units: GlyphUnits {
+                    inline_advance: &advances,
+                    inline_offset: &offsets,
+                    block_offset: &rises,
+                    ink: &ink,
+                },
+                spans: &spans,
+                clusters: ClusterLanes {
+                    glyph_starts: &starts,
+                    glyph_counts: &counts,
+                    flags: &[0; 3],
+                    detached_mask: 1,
+                    end: ClusterEnd::Resync(&cluster_advances),
+                },
+                cluster_start: 0,
+                cluster_end: 3,
+                reverse: true,
+                cut: LAYOUT_CUT,
+            },
+        )
+        .unwrap();
+        borrowed.cover_blocks(0).unwrap();
+
+        let mut staged = RunLocalArena::default();
+        let mut writer = staged.begin_run();
+        for cluster in (0..3).rev() {
+            writer.begin_cluster().unwrap();
+            for glyph in starts[cluster]..starts[cluster] + counts[cluster] {
+                let span = spans[usize::from(glyph >= 3)];
+                let [x_min, y_min, x_max, y_max] = ink[glyph as usize].map(i32::from);
+                writer
+                    .push_glyph(RunLocalGlyphInput {
+                        source_glyph: glyph,
+                        x_advance: advances[glyph as usize],
+                        x_offset: offsets[glyph as usize],
+                        y_offset: rises[glyph as usize],
+                        baseline_shift: span.baseline_shift as f32,
+                        scale: span.scale,
+                        outline: (ink[glyph as usize] != [0; 4]).then_some(FontGlyphExtents {
+                            x_min,
+                            y_min,
+                            x_max,
+                            y_max,
+                        }),
+                    })
+                    .unwrap();
+            }
+            writer
+                .finish_cluster(ClusterFinish::Resync(cluster_advances[cluster]))
+                .unwrap();
+        }
+        assert_eq!(writer.finish().unwrap(), span);
+
+        assert_eq!(borrowed.blocks(), staged.blocks());
+        assert_eq!(borrowed.blocks()[0].source_glyph_count, 5);
+        assert_eq!(borrowed.cluster_prefixes(), staged.cluster_prefixes());
+        assert_eq!(borrowed.cluster_prefixes(), [0.0, 23.0, 54.25]);
+        assert_eq!(borrowed.index.row_order, [3, 4, 2, 0, 1]);
+        assert_eq!(borrowed.index.row_order, staged.index.row_order);
+        let lanes = borrowed.lanes();
+        for glyph in 0..5 {
+            let mut row = borrowed.row_for_source_glyph(glyph).unwrap();
+            let staged_row = staged.row_for_source_glyph(glyph).unwrap();
+            // Borrowed ink lanes carry no outline bit; the paragraph adds it when it finishes.
+            row.has_outline = staged_row.has_outline;
+            assert_eq!(
+                format!("{row:?}"),
+                format!("{staged_row:?}"),
+                "glyph {glyph}"
+            );
+            assert_eq!(lanes.inline_origin[glyph as usize], row.inline_origin);
+            assert_eq!(lanes.ink_block_extent[glyph as usize], row.ink_block_extent);
+        }
     }
 }

@@ -123,6 +123,8 @@ pub fn command(library: &FontLibrary, fields: &[&str]) -> Result<String, String>
     }
 }
 
+type Restyle = fn(&mut RootStyle);
+
 fn paragraph(
     library: &FontLibrary,
     font: &str,
@@ -139,7 +141,7 @@ fn paragraph(
         layout: Layout::default(),
         ..Model::default()
     };
-    let restyled = |change: fn(&mut RootStyle)| {
+    let restyled = |change: Restyle| {
         let mut next = base.clone();
         change(&mut next.root);
         next
@@ -177,7 +179,7 @@ fn paragraph(
     row(&mut report, "op.cold", &mut cold, glyphs);
 
     // 23.7 over a 1000- or 2048-unit em is not a dyadic scale.
-    let changes: [(&str, fn(&mut RootStyle)); 3] = [
+    let changes: [(&str, Restyle); 3] = [
         ("op.font_size", |root| root.font_size = 23.7),
         ("op.letter_spacing", |root| root.letter_spacing = 0.35),
         ("op.line_height", |root| root.line_height = 1.45),
