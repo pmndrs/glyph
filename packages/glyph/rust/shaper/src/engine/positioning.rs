@@ -1865,6 +1865,56 @@ impl PositionedGlyphArena {
     ) -> Result<(), EngineError> {
         #[cfg(feature = "stage-bench")]
         let _clock = super::state::oracle::stage_bench::clock::POSITIONING.guard();
+        // The callbacks are read per line, per decoration and per island glyph, never per
+        // body glyph, so every caller shares one copy of the build behind trait objects.
+        let typography_for: &dyn Fn(u32) -> ThreadTypography = &typography_for;
+        let retained_typography_for: &dyn Fn(u32) -> ThreadTypography = &retained_typography_for;
+        let metrics_for: &dyn Fn(u32) -> Option<FontMetrics> = &metrics_for;
+        let extents_for: &dyn Fn(u32, u32) -> Option<FontGlyphExtents> = &extents_for;
+        self.build_lines(
+            previous,
+            flow,
+            retained_flow,
+            recomposed_lines,
+            text,
+            clusters,
+            previous_clusters,
+            runs,
+            previous_runs,
+            boundary_shape,
+            previous_boundary_shape,
+            styles,
+            bidi,
+            next_run_canonical_revision,
+            typography_for,
+            retained_typography_for,
+            metrics_for,
+            extents_for,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn build_lines(
+        &mut self,
+        previous: &Self,
+        flow: &FlowLayoutArena,
+        retained_flow: Option<&FlowLayoutArena>,
+        recomposed_lines: Option<&[core::ops::Range<usize>]>,
+        text: &[u16],
+        clusters: &ClusterArena,
+        previous_clusters: &ClusterArena,
+        runs: &[ShapingRun],
+        previous_runs: &[ShapingRun],
+        boundary_shape: &BoundaryShapeArena,
+        previous_boundary_shape: &BoundaryShapeArena,
+        styles: &[StyleSegment],
+        bidi: &BidiAnalysis,
+        next_run_canonical_revision: &mut u32,
+        typography_for: impl Fn(u32) -> ThreadTypography + Copy,
+        retained_typography_for: impl Fn(u32) -> ThreadTypography + Copy,
+        metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
+        extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
+    ) -> Result<(), EngineError> {
         self.clear();
         self.rebuild_replacement_runs(
             previous,
