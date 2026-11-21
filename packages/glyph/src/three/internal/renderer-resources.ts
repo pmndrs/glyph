@@ -5,6 +5,7 @@ import type { CodecIdFactory } from '../../config/codec.js';
 import type { PortableResourceGroupPayload, PortableTextureArrayPayload } from '../../config/resources.js';
 import type { TslSlugPageResources } from '../../shaders/tsl/index.js';
 import type { ThreeShaderSet } from './shader-set.js';
+import type { SlugGlyphTable } from './slug-glyph-table.js';
 import type { ThreeCodec } from '../schema.js';
 import type { ThreeTextMaterial } from '../material.js';
 import {
@@ -28,7 +29,14 @@ export interface ThreeRenderResourceLease<Resource extends DisposableThreeRender
 }
 
 export interface RetainedSlugPage extends TslSlugPageResources {
+  /** One row of per-glyph constants per glyph the page draws; instances carry only the row. */
+  readonly glyphTable: SlugGlyphTable;
   readonly byteLength: number;
+  /**
+   * Makes the band curves of the glyph rows in `lane` resident. `lane` holds `stride` words per instance with the
+   * glyph table row first; `start` and `end` are instance indices.
+   */
+  use(lane: Uint32Array, start: number, end: number, stride: number): void;
   dispose(): void;
 }
 

@@ -92,6 +92,8 @@ export function createThreeConfig(options: ThreeConfigOptions, shaders: ThreeSha
           defaultRenderer: root.renderer,
           shape: {
             prepare: () => root.prepareShape(),
+            prepared: () => root.resolvePreparedAnchors(),
+            unchanged: () => root.acceptShape(),
             accepted: () => root.acceptShape(),
             rejected: (error) => root.rejectShape(error),
           },

@@ -7,16 +7,13 @@ export {
   type SlugShaderPage,
 } from './slug-render.js';
 export {
-  loadCurve,
+  loadBandCurve,
   loadHeader,
-  loadReference,
   SlugShaderCurve,
-  slugCurveTexelSlot,
-  slugCurveWidthAccessor,
+  slugBandCurveTexelSlot,
+  slugBandCurveWidthAccessor,
   slugHeaderTexelSlot,
   slugHeaderWidthAccessor,
-  slugReferenceTexelSlot,
-  slugReferenceWidthAccessor,
 } from './slug-texture.js';
 export {
   slugBandCurveCount,
@@ -24,7 +21,6 @@ export {
   slugBandReferenceOffset,
   slugHorizontalCurveContribution,
   slugPixelsPerEm,
-  slugReferenceFromPair,
   slugThickenFactor,
   slugVerticalCurveContribution,
 } from './core/band.js';

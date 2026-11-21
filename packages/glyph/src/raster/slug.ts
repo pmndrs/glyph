@@ -78,14 +78,27 @@ import { registerGlyphRasterCodec } from '../internal/raster-codec-registry.js';
 import { defineTechniqueSchema, type TechniqueSchema } from '../config/schema.js';
 
 const SLUG_RECT_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/rect');
-const SLUG_PLANE_RECT_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/plane-rect');
-const SLUG_BAND_TRANSFORM_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/band-transform');
 const SLUG_COLOR_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/color');
-const SLUG_INVERSE_FONT_SIZE_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/inverse-font-size');
-const SLUG_TABLE_STARTS_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/table-starts');
-const SLUG_BAND_COUNTS_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/band-counts');
+const SLUG_GLYPH_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.slug/glyph');
 
-/** The authoritative physical shape of the Slug format. */
+/** `u32` words per glyph in a page's `glyphs` table. */
+export const SLUG_GLYPH_TABLE_STRIDE = 16;
+
+/**
+ * The authoritative physical shape of the Slug format.
+ *
+ * An instance carries what differs between two drawings of one glyph: where it is, how large, how it is painted, and
+ * which glyph it is. What every drawing of a glyph shares lives once per glyph in its page's `glyphs` table, addressed
+ * by the `glyph` lane. A row is sixteen little-endian words: the em-space quad `[left, top, width, height]` and the
+ * band transform `[scaleX, scaleY, offsetX, offsetY]` as `f32` bits, then `[curveBase, horizontalHeaderBase,
+ * verticalHeaderBase, referenceBase]` and `[horizontalBands, verticalBands, entryCount, 0]` as `u32`. The second `glyph` lane
+ * is free for the host: the Three renderer stores the placement slot there.
+ *
+ * A page holds the band headers (`(count << 16) | offset`, as baked), which a renderer uploads, and the baked curves
+ * (`rgba16float` texels) and glyph-local references (`u16`), which stay on the CPU: a renderer resolves each band
+ * entry's curve into its own band-curve texture when a glyph is first drawn (see `SlugBandResidency`) and points the
+ * row's `referenceBase` there. The row's third `u32` vector holds the glyph's entry count in its third word.
+ */
 export const slugSchema: TechniqueSchema<
   {
     readonly rect: {
@@ -93,65 +106,30 @@ export const slugSchema: TechniqueSchema<
       readonly scalar: 'f32';
       readonly lanes: readonly ['left', 'top', 'width', 'height'];
     };
-    readonly planeRect: {
-      readonly id: typeof SLUG_PLANE_RECT_BUFFER_ID;
-      readonly scalar: 'f32';
-      readonly lanes: readonly ['left', 'top', 'width', 'height'];
-    };
-    readonly bandTransform: {
-      readonly id: typeof SLUG_BAND_TRANSFORM_BUFFER_ID;
-      readonly scalar: 'f32';
-      readonly lanes: readonly ['scaleX', 'scaleY', 'offsetX', 'offsetY'];
-    };
     readonly color: {
       readonly id: typeof SLUG_COLOR_BUFFER_ID;
       readonly scalar: 'f32';
       readonly lanes: readonly ['red', 'green', 'blue', 'alpha'];
     };
-    readonly inverseFontSize: {
-      readonly id: typeof SLUG_INVERSE_FONT_SIZE_BUFFER_ID;
-      readonly scalar: 'f32';
-      readonly lanes: readonly ['inverseFontSize', 'unused1', 'unused2', 'unused3'];
-    };
-    readonly tableStarts: {
-      readonly id: typeof SLUG_TABLE_STARTS_BUFFER_ID;
+    readonly glyph: {
+      readonly id: typeof SLUG_GLYPH_BUFFER_ID;
       readonly scalar: 'u32';
-      readonly lanes: readonly ['curveBase', 'horizontalHeaderBase', 'verticalHeaderBase', 'referenceBase'];
-    };
-    readonly bandCounts: {
-      readonly id: typeof SLUG_BAND_COUNTS_BUFFER_ID;
-      readonly scalar: 'u32';
-      readonly lanes: readonly ['horizontalBands', 'verticalBands', 'unused2', 'unused3'];
+      readonly lanes: readonly ['glyph', 'unused1'];
     };
   },
   {
-    readonly f32: readonly [
-      'bearingX',
-      'bearingY',
-      'width',
-      'height',
-      'bandScaleX',
-      'bandScaleY',
-      'bandOffsetX',
-      'bandOffsetY',
-    ];
-    readonly u32: readonly [
-      'curveBase',
-      'horizontalHeaderBase',
-      'verticalHeaderBase',
-      'referenceBase',
-      'horizontalBands',
-      'verticalBands',
-    ];
+    readonly f32: readonly ['bearingX', 'bearingY', 'width', 'height'];
+    readonly u32: readonly ['glyph'];
   },
   {
     readonly page: {
       readonly kind: 'group';
       readonly cardinality: 'many';
       readonly members: {
-        readonly curves: { readonly kind: 'texture'; readonly format: 'rgba16float' };
         readonly headers: { readonly kind: 'texture'; readonly format: 'r32uint' };
-        readonly references: { readonly kind: 'texture'; readonly format: 'r32uint' };
+        readonly curves: { readonly kind: 'buffer' };
+        readonly references: { readonly kind: 'buffer' };
+        readonly glyphs: { readonly kind: 'buffer' };
       };
     };
   },
@@ -161,49 +139,23 @@ export const slugSchema: TechniqueSchema<
   scope: 'glyph',
   glyphOrigin: { buffer: 'rect' },
   binding: {
-    f32: ['bearingX', 'bearingY', 'width', 'height', 'bandScaleX', 'bandScaleY', 'bandOffsetX', 'bandOffsetY'],
-    u32: [
-      'curveBase',
-      'horizontalHeaderBase',
-      'verticalHeaderBase',
-      'referenceBase',
-      'horizontalBands',
-      'verticalBands',
-    ],
+    f32: ['bearingX', 'bearingY', 'width', 'height'],
+    u32: ['glyph'],
   },
   buffers: {
     rect: { id: SLUG_RECT_BUFFER_ID, scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
-    planeRect: { id: SLUG_PLANE_RECT_BUFFER_ID, scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
-    bandTransform: {
-      id: SLUG_BAND_TRANSFORM_BUFFER_ID,
-      scalar: 'f32',
-      lanes: ['scaleX', 'scaleY', 'offsetX', 'offsetY'],
-    },
     color: { id: SLUG_COLOR_BUFFER_ID, scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
-    inverseFontSize: {
-      id: SLUG_INVERSE_FONT_SIZE_BUFFER_ID,
-      scalar: 'f32',
-      lanes: ['inverseFontSize', 'unused1', 'unused2', 'unused3'],
-    },
-    tableStarts: {
-      id: SLUG_TABLE_STARTS_BUFFER_ID,
-      scalar: 'u32',
-      lanes: ['curveBase', 'horizontalHeaderBase', 'verticalHeaderBase', 'referenceBase'],
-    },
-    bandCounts: {
-      id: SLUG_BAND_COUNTS_BUFFER_ID,
-      scalar: 'u32',
-      lanes: ['horizontalBands', 'verticalBands', 'unused2', 'unused3'],
-    },
+    glyph: { id: SLUG_GLYPH_BUFFER_ID, scalar: 'u32', lanes: ['glyph', 'unused1'] },
   },
   resources: {
     page: {
       kind: 'group',
       cardinality: 'many',
       members: {
-        curves: { kind: 'texture', format: 'rgba16float' },
         headers: { kind: 'texture', format: 'r32uint' },
-        references: { kind: 'texture', format: 'r32uint' },
+        curves: { kind: 'buffer' },
+        references: { kind: 'buffer' },
+        glyphs: { kind: 'buffer' },
       },
     },
   },
@@ -214,27 +166,9 @@ export const slugCodec: RasterCodec<typeof slug, typeof slugSchema> = registerGl
   raster: slug,
   schema: slugSchema,
   codecBody() {
-    const p = techniqueProgram(slugSchema, { inverseFontSize: true });
-    const { inlineOrigin, blockOrigin, fontSize, color, inverseFontSize } = p.semantics;
-    if (inverseFontSize === undefined) throw new TypeError('the Slug program declares inverseFontSize');
-    const {
-      bearingX,
-      bearingY,
-      width,
-      height,
-      bandScaleX,
-      bandScaleY,
-      bandOffsetX,
-      bandOffsetY,
-      curveBase,
-      horizontalHeaderBase,
-      verticalHeaderBase,
-      referenceBase,
-      horizontalBands,
-      verticalBands,
-    } = p.binding;
-    const zeroF32 = f32.const(0);
-    const zeroU32 = u32.const(0);
+    const p = techniqueProgram(slugSchema);
+    const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
+    const { bearingX, bearingY, width, height, glyph } = p.binding;
     return p.compile({
       rect: [
         f32.add(inlineOrigin, f32.mul(bearingX, fontSize)),
@@ -242,31 +176,21 @@ export const slugCodec: RasterCodec<typeof slug, typeof slugSchema> = registerGl
         f32.mul(width, fontSize),
         f32.mul(height, fontSize),
       ],
-      planeRect: [bearingX, bearingY, width, height],
-      bandTransform: [bandScaleX, bandScaleY, bandOffsetX, bandOffsetY],
       color: [color.red, color.green, color.blue, color.alpha],
-      inverseFontSize: [inverseFontSize, zeroF32, zeroF32, zeroF32],
-      tableStarts: [curveBase, horizontalHeaderBase, verticalHeaderBase, referenceBase],
-      bandCounts: [horizontalBands, verticalBands, zeroU32, zeroU32],
+      glyph: [glyph, u32.const(0)],
     });
   },
   compileFont(compiler) {
     const data = compiler.font.data;
-    const usedCurveRows = slugUsedCurveRows(data);
+    const tables = slugGlyphTables(data);
     for (const [index, page] of data.pages.entries()) {
-      compiler.retain('page', page.resource, slugPagePayload(page, usedCurveRows[index]!));
+      compiler.retain('page', page.resource, slugPagePayload(page, tables.pages[index]!));
     }
     const view = new DataView(data.records.buffer, data.records.byteOffset);
     const record = (row: number) => row * SLUG_GLYPH_RECORD_STRIDE;
     const page = (row: number) => view.getUint16(record(row) + 8, true);
     const normalized = (row: number, offset: number) =>
       view.getInt16(record(row) + offset, true) / data.planeUnitsPerEm;
-    const width = (row: number) => normalized(row, 4) - normalized(row, 0);
-    const height = (row: number) => normalized(row, 6) - normalized(row, 2);
-    const horizontalBands = (row: number) => view.getUint16(record(row) + 10, true);
-    const verticalBands = (row: number) => view.getUint16(record(row) + 12, true);
-    const bandScaleX = (row: number) => (width(row) === 0 ? 0 : verticalBands(row) / width(row));
-    const bandScaleY = (row: number) => (height(row) === 0 ? 0 : horizontalBands(row) / height(row));
     return compiler.compile({
       strikes: [0],
       resource: (glyph) => {
@@ -276,55 +200,75 @@ export const slugCodec: RasterCodec<typeof slug, typeof slugSchema> = registerGl
       f32: {
         bearingX: (row) => normalized(row, 0),
         bearingY: (row) => normalized(row, 6),
-        width,
-        height,
-        bandScaleX,
-        bandScaleY,
-        bandOffsetX: (row) => -normalized(row, 0) * bandScaleX(row),
-        bandOffsetY: (row) => -normalized(row, 2) * bandScaleY(row),
+        width: (row) => normalized(row, 4) - normalized(row, 0),
+        height: (row) => normalized(row, 6) - normalized(row, 2),
       },
-      u32: {
-        curveBase: (row) => view.getUint32(record(row) + 16, true),
-        horizontalHeaderBase: (row) => view.getUint32(record(row) + 24, true),
-        verticalHeaderBase: (row) => view.getUint32(record(row) + 28, true),
-        referenceBase: (row) => view.getUint32(record(row) + 32, true),
-        horizontalBands,
-        verticalBands,
-      },
+      u32: { glyph: (row) => tables.rows[row]! },
     });
   },
 });
 
 /**
- * Rows of each page's curve texture that glyph records address. The baker sizes the texture from an upper estimate
- * rounded up to a power of two, so about half of a typical page is zero rows no glyph reads; they are not uploaded.
+ * One table per page, holding a row for each glyph the page draws, and each glyph's row in its page's table. Rows are
+ * page-local so a font of many pages does not repeat every glyph in every table.
  */
-function slugUsedCurveRows(data: SlugData): number[] {
+function slugGlyphTables(data: SlugData): { readonly pages: Uint8Array[]; readonly rows: Uint32Array } {
   const view = new DataView(data.records.buffer, data.records.byteOffset, data.records.byteLength);
-  const texels = data.pages.map(() => 0);
-  for (let record = 0; record < data.records.byteLength; record += SLUG_GLYPH_RECORD_STRIDE) {
+  const glyphCount = data.records.byteLength / SLUG_GLYPH_RECORD_STRIDE;
+  const rows = new Uint32Array(glyphCount);
+  const counts = data.pages.map(() => 0);
+  for (let glyph = 0; glyph < glyphCount; glyph += 1) {
+    const page = view.getUint16(glyph * SLUG_GLYPH_RECORD_STRIDE + 8, true);
+    if (page === ABSENT_PAGE) continue;
+    rows[glyph] = counts[page]!;
+    counts[page] = counts[page]! + 1;
+  }
+  const pages = counts.map((count) => new Uint8Array(Math.max(1, count) * SLUG_GLYPH_TABLE_STRIDE * 4));
+  const tables = pages.map((bytes) => new DataView(bytes.buffer));
+  for (let glyph = 0; glyph < glyphCount; glyph += 1) {
+    const record = glyph * SLUG_GLYPH_RECORD_STRIDE;
     const page = view.getUint16(record + 8, true);
     if (page === ABSENT_PAGE) continue;
-    texels[page] = Math.max(texels[page]!, view.getUint32(record + 16, true) + view.getUint32(record + 20, true));
+    writeSlugGlyphRow(tables[page]!, rows[glyph]! * SLUG_GLYPH_TABLE_STRIDE * 4, view, record, data.planeUnitsPerEm);
   }
-  return texels.map((used, index) => {
-    const page = data.pages[index]!;
-    return Math.min(page.curveHeight, Math.max(1, Math.ceil(used / page.curveWidth)));
-  });
+  return { pages, rows };
 }
 
-function slugPagePayload(page: SlugPageData, curveRows: number) {
-  const references = packSlugReferences(page.referenceBytes, page.referenceWidth);
+/** Writes one table row from a baked glyph record: the em quad, the band transform, the table bases, the band counts. */
+function writeSlugGlyphRow(table: DataView, target: number, records: DataView, record: number, unitsPerEm: number) {
+  const left = records.getInt16(record, true) / unitsPerEm;
+  const bottom = records.getInt16(record + 2, true) / unitsPerEm;
+  const width = records.getInt16(record + 4, true) / unitsPerEm - left;
+  const top = records.getInt16(record + 6, true) / unitsPerEm;
+  const height = top - bottom;
+  const horizontalBands = records.getUint16(record + 10, true);
+  const verticalBands = records.getUint16(record + 12, true);
+  const bandScaleX = width === 0 ? 0 : verticalBands / width;
+  const bandScaleY = height === 0 ? 0 : horizontalBands / height;
+  const floats = [left, top, width, height, bandScaleX, bandScaleY, -left * bandScaleX, -bottom * bandScaleY];
+  for (const [index, value] of floats.entries()) table.setFloat32(target + index * 4, value, true);
+  // Record offset 20 is the curve count, which the table does not need.
+  const curveBase = records.getUint32(record + 16, true);
+  const horizontalHeaderBase = records.getUint32(record + 24, true);
+  const verticalHeaderBase = records.getUint32(record + 28, true);
+  const referenceBase = records.getUint32(record + 32, true);
+  const entryCount = records.getUint32(record + 36, true);
+  const words = [
+    curveBase,
+    horizontalHeaderBase,
+    verticalHeaderBase,
+    referenceBase,
+    horizontalBands,
+    verticalBands,
+    entryCount,
+  ];
+  for (const [index, value] of words.entries()) table.setUint32(target + 32 + index * 4, value, true);
+}
+
+function slugPagePayload(page: SlugPageData, glyphs: Uint8Array) {
   return {
     kind: 'group' as const,
     members: {
-      curves: {
-        kind: 'texture' as const,
-        format: 'rgba16float' as const,
-        width: page.curveWidth,
-        height: curveRows,
-        bytes: page.curveBytes.subarray(0, page.curveWidth * curveRows * 8),
-      },
       headers: {
         kind: 'texture' as const,
         format: 'r32uint' as const,
@@ -332,26 +276,9 @@ function slugPagePayload(page: SlugPageData, curveRows: number) {
         height: page.headerHeight,
         bytes: page.headerBytes,
       },
-      references: {
-        kind: 'texture' as const,
-        format: 'r32uint' as const,
-        width: references.width,
-        height: references.height,
-        bytes: new Uint8Array(references.data.buffer),
-      },
+      curves: { kind: 'buffer' as const, bytes: page.curveBytes, stride: 8 },
+      references: { kind: 'buffer' as const, bytes: page.referenceBytes, stride: 2 },
+      glyphs: { kind: 'buffer' as const, bytes: glyphs, stride: SLUG_GLYPH_TABLE_STRIDE * 4 },
     },
   };
-}
-
-function packSlugReferences(bytes: Uint8Array, preferredWidth: number) {
-  const copied = bytes.slice();
-  const references = new Uint16Array(copied.buffer, copied.byteOffset, copied.byteLength / 2);
-  const texelCount = Math.ceil(references.length / 2);
-  const width = Math.min(preferredWidth, texelCount);
-  const height = Math.ceil(texelCount / width);
-  const data = new Uint32Array(width * height);
-  for (let index = 0; index < references.length; index += 1) {
-    data[index >> 1] = (data[index >> 1] ?? 0) | (references[index]! << ((index & 1) * 16));
-  }
-  return { data, width, height };
 }

@@ -10,6 +10,7 @@ import {
   greaterThan,
   lessThan,
   max,
+  min,
   mul,
   saturate,
   select,
@@ -18,15 +19,8 @@ import {
 } from 'three/tsl';
 import { calcRootCode } from './calc-root-code.js';
 import { solveHorizontalPolynomial, solveVerticalPolynomial } from './solve-quadratic.js';
-import {
-  bandCount,
-  bandReferenceOffset,
-  loadCurve,
-  loadHeader,
-  loadReference,
-  type SlugShaderPage,
-} from './slug-texture.js';
-import { intLessThan, uintAdd, uintBitAnd, vec2Sub, whileLoop } from './internal/three-compat.js';
+import { bandCount, bandReferenceOffset, loadBandCurve, loadHeader, type SlugShaderPage } from './slug-texture.js';
+import { intLessThan, uintAdd, uintBitAnd, uintShiftRight, vec2Sub, whileLoop } from './internal/three-compat.js';
 
 export interface SlugShaderGlyph {
   readonly curveBaseTexel: Node<'uint'>;
@@ -77,7 +71,17 @@ function accumulateCurveRoots(
     calcRootCode(polynomial0, polynomial1, polynomial2),
     `${namePrefix}RootCode`,
   );
-  If(greaterThan(float(rootCode), 0), () => {
+  // A curve wholly beyond the fragment's half-pixel window crosses the ray at full coverage with zero weight; its roots
+  // lie within its control points' hull, so the solve is skipped with no change in either.
+  const nearest: Node<'float'> = mul(
+    axis === 'horizontal' ? min(min(p0.x, p1.x), p2.x) : min(min(p0.y, p1.y), p2.y),
+    pixelsPerEm,
+  );
+  const beyond: Node<'bool'> = greaterThan(min(nearest, mul(nearest, thickenFactor)), 0.5);
+  const crossing = (shift: number): Node<'float'> => float(uintBitAnd(uintShiftRight(rootCode, uint(shift)), uint(1)));
+  If(beyond, () => {
+    coverage.addAssign(axis === 'horizontal' ? sub(crossing(0), crossing(8)) : sub(crossing(8), crossing(0)));
+  }).ElseIf(greaterThan(float(rootCode), 0), () => {
     const roots = axis === 'horizontal' ? solveHorizontalPolynomial(p0, p1, p2) : solveVerticalPolynomial(p0, p1, p2);
     const firstRoot: Node<'float'> = namedFloat(mul(roots.x, pixelsPerEm), `${namePrefix}Root1`);
     const secondRoot: Node<'float'> = namedFloat(mul(roots.y, pixelsPerEm), `${namePrefix}Root2`);
@@ -121,10 +125,8 @@ function evaluateBandCurve(
   coverage: Node<'float'>,
   weight: Node<'float'>,
 ): void {
-  const referenceIndex: Node<'uint'> = uintAdd(uintAdd(glyph.referenceBase, localReferenceOffset), uint(index));
-  const curveReference: Node<'uint'> = loadReference(page, referenceIndex, axis);
-  const curveTexel: Node<'uint'> = uintAdd(glyph.curveBaseTexel, curveReference);
-  const curve = loadCurve(page, curveTexel);
+  const entry: Node<'uint'> = uintAdd(uintAdd(glyph.referenceBase, localReferenceOffset), uint(index));
+  const curve = loadBandCurve(page, entry);
   const namePrefix = axis === 'horizontal' ? 'slugHorizontal' : 'slugVertical';
   const p0: Node<'vec2'> = namedVec2(vec2Sub(curve.p0, renderCoordinate), `${namePrefix}P0`);
   const p1: Node<'vec2'> = namedVec2(vec2Sub(curve.p1, renderCoordinate), `${namePrefix}P1`);

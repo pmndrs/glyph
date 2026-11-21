@@ -1,3 +1,4 @@
+// Labs selects bench files by the tag text they contain; the three-span rows here carry @prepare-spans.
 import { assert, bench, group } from '@pmndrs/labs';
 
 import {
@@ -8,6 +9,15 @@ import {
   fredokaTextForGlyphs,
   paragraphTextForGlyphs,
 } from './fixture.ts';
+import {
+  assertSpanLayout,
+  coldParagraphLayout,
+  finishSpan,
+  prepareSpans,
+  selfTimed,
+  spanBench,
+  spanRowName,
+} from './prepare-spans.ts';
 
 const inter = paragraphTextForGlyphs(4_000);
 const fredoka = fredokaTextForGlyphs(4_000);
@@ -34,6 +44,7 @@ group('typing into a long paragraph @edit', () => {
       return created.paragraph.measure().glyphCount;
     };
     assert(glyphCount > 0 && Math.abs(glyphCount - expected) <= 1, 'one keystroke must change one glyph');
+    assertSpanLayout('read', [created.paragraph], [coldParagraphLayout(created.paragraph.text)]);
     disposeParagraph(created);
   });
 
@@ -47,6 +58,7 @@ group('typing into a long paragraph @edit', () => {
       return created.paragraph.measure().glyphCount;
     };
     assert(glyphCount > 0 && Math.abs(glyphCount - expected) <= 1, 'one keystroke must change one glyph');
+    assertSpanLayout('read', [created.paragraph], [coldParagraphLayout(created.paragraph.text, 600, fredokaFont)]);
     disposeParagraph(created);
   });
 
@@ -63,6 +75,49 @@ group('typing into a long paragraph @edit', () => {
     publish();
     const status = yield publish;
     assert.equal(status, 'committed');
+    assertSpanLayout('frame', [created.paragraph], [coldParagraphLayout(created.paragraph.text)]);
     disposeParagraph(created);
   });
+});
+
+// The rows above alternate an insertion with its removal, so each reports a blend of the two. These time one
+// direction alone: before every timed call the paragraph is put back, published and measured, all untimed.
+group('one keystroke in one direction @edit @typing-direction', () => {
+  for (const [paragraph, text, fontFace] of [
+    ['long paragraph', inter, undefined],
+    ['long Fredoka paragraph', fredoka, fredokaFont],
+  ] as const) {
+    const middle = text.length >> 1;
+    const typed = `${text.slice(0, middle)}x${text.slice(middle)}`;
+    for (const [direction, from, to] of [
+      ['insert one character into', text, typed],
+      ['restore one character in', typed, text],
+    ] as const) {
+      for (const span of prepareSpans) {
+        spanBench(spanRowName(`${direction} a ${paragraph}`, span), function* () {
+          const cold = coldParagraphLayout(to, 600, fontFace);
+          const created = createParagraph(from, 600, fontFace);
+          const changed = [created.paragraph];
+          const frame = () => {
+            created.scene.updateMatrixWorld(true);
+            if (created.textGroup.error !== undefined) throw created.textGroup.error;
+          };
+          yield selfTimed(
+            () => {
+              created.paragraph.text = from;
+              frame();
+              created.paragraph.measure();
+            },
+            () => {
+              created.paragraph.text = to;
+              finishSpan(span, changed, frame);
+            },
+          );
+          assert.equal(created.paragraph.text, to);
+          assertSpanLayout(span, changed, [cold]);
+          disposeParagraph(created);
+        });
+      }
+    }
+  }
 });

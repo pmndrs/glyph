@@ -1334,30 +1334,35 @@ export class PlanTransport {
     if (memoryBuffer !== this.#exports.memory.buffer) {
       throw new Error('text update batch supplied stale Wasm memory');
     }
-    if (resultPointer === 0) {
-      throw engineStatusError('publish text update', textShaperAbi.status.resultTooLarge);
-    }
-    const layout = textShaperAbi.layouts.engineResult;
-    if (resultPointer + layout.size > memoryBuffer.byteLength) {
-      throw new RangeError('text engine returned an out-of-bounds result header');
-    }
-    const header = this.#boundResultHeader(memoryBuffer, resultPointer, layout.size);
-    const status = header.getUint32(layout.status, true);
-    this.#lastFailureInvalidatedRoot =
-      (header.getUint32(layout.flags, true) & textShaperAbi.engine.resultFlags.rootInvalidated) !== 0;
-    if (status !== textShaperAbi.status.ok) {
-      throw engineStatusError(
-        'publish text update',
-        status,
-        header.getUint32(layout.requiredRequestCapacity, true),
-        header.getUint32(layout.requiredResultCapacity, true),
-        headerFault(header),
-      );
-    }
+    const header = this.#acceptedResultHeader(resultPointer, memoryBuffer, 'publish text update');
     // Rust has committed this candidate. Keep it marked unadopted until the planner has decoded
     // and installed the publication into its accepted TypeScript state.
     this.#preparedMutationUnadopted = true;
     return this.#decodeResult(header, resultPointer, memoryBuffer, staged.initialMemoryBuffer);
+  }
+
+  /**
+   * @internal Read the answer to a staged batch preparation. `consume` sees the requested semantic
+   * views synchronously; without it only the result extent is recorded.
+   */
+  consumeStagedPreparation(
+    resultPointer: number,
+    memoryBuffer: ArrayBuffer,
+    consume?: (publication: PlanPublication) => void,
+  ): void {
+    if (this.#disposed) throw new Error('plan transport is disposed');
+    const staged = this.#stagedUpdate;
+    if (staged === undefined) throw new Error('no text preparation request is staged');
+    this.#stagedUpdate = undefined;
+    // From here an error may follow Rust preparation writes; the owner rebuilds rather than retries.
+    this.#preparedMutationUnadopted = true;
+    this.#lastFailureInvalidatedRoot = true;
+    if (memoryBuffer !== this.#exports.memory.buffer) {
+      throw new Error('text preparation batch supplied stale Wasm memory');
+    }
+    const header = this.#preparedResultHeader(resultPointer, memoryBuffer, 'prepare text');
+    if (consume === undefined) this.#recordResultExtent(header, resultPointer, memoryBuffer);
+    else consume(this.#decodeResult(header, resultPointer, memoryBuffer, staged.initialMemoryBuffer));
   }
 
   /** @internal Whether the last rejected engine result invalidated Rust's derived root. */
@@ -1389,7 +1394,20 @@ export class PlanTransport {
     this.#lastFailureInvalidatedRoot = true;
     const resultPointer = this.#exports.measureParagraph(this.#handle, requestPointer, requestLength, paragraphId);
     const memoryBuffer = this.#exports.memory.buffer;
-    if (resultPointer === 0) throw engineStatusError('measure paragraph', textShaperAbi.status.resultTooLarge);
+    const header = this.#preparedResultHeader(resultPointer, memoryBuffer, 'measure paragraph');
+    if (consumePublication === undefined) {
+      this.#recordResultExtent(header, resultPointer, memoryBuffer);
+    } else {
+      consumePublication(this.#decodeResult(header, resultPointer, memoryBuffer, initialMemoryBuffer));
+    }
+  }
+
+  /**
+   * Binds the header of an engine answer and throws the engine's status when it is a rejection, after recording
+   * whether that rejection invalidated the derived root.
+   */
+  #acceptedResultHeader(resultPointer: number, memoryBuffer: ArrayBuffer, operation: string): DataView {
+    if (resultPointer === 0) throw engineStatusError(operation, textShaperAbi.status.resultTooLarge);
     const layout = textShaperAbi.layouts.engineResult;
     if (resultPointer + layout.size > memoryBuffer.byteLength) {
       throw new RangeError('text engine returned an out-of-bounds result header');
@@ -1398,21 +1416,25 @@ export class PlanTransport {
     const status = header.getUint32(layout.status, true);
     this.#lastFailureInvalidatedRoot =
       (header.getUint32(layout.flags, true) & textShaperAbi.engine.resultFlags.rootInvalidated) !== 0;
-    const requiredResultCapacity = header.getUint32(layout.requiredResultCapacity, true);
     if (status !== textShaperAbi.status.ok) {
-      this.#preparedMutationUnadopted = this.#lastFailureInvalidatedRoot;
       throw engineStatusError(
-        'measure paragraph',
+        operation,
         status,
         header.getUint32(layout.requiredRequestCapacity, true),
-        requiredResultCapacity,
+        header.getUint32(layout.requiredResultCapacity, true),
         headerFault(header),
       );
     }
-    if (consumePublication === undefined) {
-      this.#recordResultExtent(header, resultPointer, memoryBuffer);
-    } else {
-      consumePublication(this.#decodeResult(header, resultPointer, memoryBuffer, initialMemoryBuffer));
+    return header;
+  }
+
+  /** As {@link #acceptedResultHeader}, for a preparation: a rejection that kept the root leaves nothing unadopted. */
+  #preparedResultHeader(resultPointer: number, memoryBuffer: ArrayBuffer, operation: string): DataView {
+    try {
+      return this.#acceptedResultHeader(resultPointer, memoryBuffer, operation);
+    } catch (error) {
+      if (resultPointer !== 0) this.#preparedMutationUnadopted = this.#lastFailureInvalidatedRoot;
+      throw error;
     }
   }
 

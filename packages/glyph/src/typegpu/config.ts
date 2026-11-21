@@ -7,7 +7,7 @@ import { slug } from '../raster/slug.js';
 import { schema } from './internal/bindings.js';
 import { codecDescriptor } from './internal/codec.js';
 import { createResource } from './internal/resources.js';
-import { Renderer, type TypeGpuTransform } from './internal/renderer.js';
+import { Renderer, TypeGpuTransform } from './internal/renderer.js';
 import {
   createText,
   type TypeGpuFontSelection,
@@ -42,6 +42,12 @@ export interface TypeGpuConfigOptions {
   /** Optional 'use gpu' function transforming the final fragment color. Fixed for this config's lifetime. */
   readonly transformColor?: TypeGpuColorTransform;
   readonly defaultFontFormat?: 'bitmap' | 'msdf' | 'slug';
+  /**
+   * What the GPU atlas keeps of an MSDF font. `'msdf'` (default) keeps all four channels. `'sdf'` keeps only the
+   * true distance: a quarter of the atlas memory, with corners rounded where the multi-channel field keeps them
+   * sharp (visible at large sizes). Either way only glyphs that have been drawn are resident.
+   */
+  readonly msdfAtlas?: 'msdf' | 'sdf';
 }
 export interface TypeGpuFontFormats {
   readonly bitmap: typeof bitmap;
@@ -77,6 +83,9 @@ function createDraw(renderer: Renderer, bindGroups: readonly TgpuBindGroup[]): T
 
 /** A renderer integration using the shared bitmap, MSDF, and Slug shader functions. */
 export function defineTypeGpuConfig(options: TypeGpuConfigOptions): TypeGpuGlyphConfig {
+  if (options.msdfAtlas !== undefined && options.msdfAtlas !== 'msdf' && options.msdfAtlas !== 'sdf') {
+    throw new TypeError('TypeGPU config msdfAtlas must be "msdf" or "sdf"');
+  }
   return defineGlyphConfig({
     schema,
     fonts: { default: options.defaultFontFormat ?? 'msdf', formats: { bitmap, msdf, slug } },
@@ -93,17 +102,12 @@ export function defineTypeGpuConfig(options: TypeGpuConfigOptions): TypeGpuGlyph
       create(context) {
         const renderer = new Renderer(options.root);
         const texts = new Map<TypeGpuText, TypeGpuTextPublication>();
-        const transforms = new Set<TypeGpuTransform>();
-        const retired = new Set<TypeGpuTransform>();
         let disposed = false;
         const dispose = (): void => {
           if (disposed) return;
           disposed = true;
           for (const text of texts.keys()) text.dispose();
-          for (const transform of transforms) transform.position.buffer.destroy();
           texts.clear();
-          transforms.clear();
-          retired.clear();
           renderer.dispose();
         };
         try {
@@ -113,20 +117,14 @@ export function defineTypeGpuConfig(options: TypeGpuConfigOptions): TypeGpuGlyph
                 textOptions: TypeGpuTextOptions<Selection>,
               ): TypeGpuText<Selection> {
                 if (disposed) throw new Error('TypeGPU root is disposed');
-                const transform = { position: options.root.createUniform(d.vec2f) };
+                // A CPU-side offset: the renderer uploads it when it next draws, so moving a Text needs no shape().
+                const transform = new TypeGpuTransform(renderer.transformChanged);
                 let text: TypeGpuText<Selection>;
-                try {
-                  const publication = createText(context.fonts!, context.services, transform, textOptions, () => {
-                    texts.delete(text);
-                    retired.add(transform);
-                  });
-                  text = publication.text;
-                  texts.set(text, publication);
-                } catch (error) {
-                  transform.position.buffer.destroy();
-                  throw error;
-                }
-                transforms.add(transform);
+                const publication = createText(context.fonts!, context.services, transform, textOptions, () => {
+                  texts.delete(text);
+                });
+                text = publication.text;
+                texts.set(text, publication);
                 return text;
               },
               ...createDraw(renderer, []),
@@ -136,8 +134,11 @@ export function defineTypeGpuConfig(options: TypeGpuConfigOptions): TypeGpuGlyph
               defaultRenderer: renderer,
               dispose,
               shape: {
-                prepare: () => {
+                prepared: () => {
                   for (const text of texts.values()) text.prepare();
+                },
+                unchanged: () => {
+                  for (const text of texts.values()) text.accepted();
                 },
                 rejected: () => {
                   for (const text of texts.values()) text.rejected();
@@ -149,20 +150,6 @@ export function defineTypeGpuConfig(options: TypeGpuConfigOptions): TypeGpuGlyph
                       text.accepted();
                     } catch (error) {
                       (errors ??= new Set()).add(error);
-                    }
-                  }
-                  for (const transform of retired) {
-                    try {
-                      transform.position.buffer.destroy();
-                      retired.delete(transform);
-                      transforms.delete(transform);
-                    } catch (error) {
-                      (errors ??= new Set()).add(error);
-                      try {
-                        context.services.invalidate();
-                      } catch (retryError) {
-                        (errors ??= new Set()).add(retryError);
-                      }
                     }
                   }
                   if (errors?.size === 1) throw errors.values().next().value;

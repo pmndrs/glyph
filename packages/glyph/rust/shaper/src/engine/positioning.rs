@@ -1761,8 +1761,6 @@ impl PositionedGlyphArena {
             .ok_or(EngineError::InvalidRequest)
     }
 
-    // The column gather reads this once it drops its `following_walk` workaround.
-    #[allow(dead_code)]
     pub(crate) fn occurrence_spans(&self) -> &[OccurrenceSpan] {
         &self.occurrence_spans
     }
@@ -2959,6 +2957,13 @@ impl PositionedGlyphArena {
     pub(crate) fn unpublished_source_intervals(&self) -> Option<&[core::ops::Range<usize>]> {
         self.recomposed_glyphs_retained
             .then_some(self.recomposed_glyphs.as_slice())
+    }
+
+    /// Declares every source row unpublished without repositioning any: a paint-only change
+    /// alters what a row projects, not where it sits.
+    pub(crate) fn mark_unpublished(&mut self) {
+        self.recomposed_glyphs.clear();
+        self.recomposed_glyphs_retained = false;
     }
 
     #[allow(clippy::too_many_arguments)]

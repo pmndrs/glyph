@@ -252,13 +252,13 @@ eec71af30c3ae0d6 label-latin-12-start
 d02c1267054c7081 label-latin-128-start
 a4e199911c7ad3ab label-latin-256-center
 987669125917e51b label-latin-256-end
-aaf9b0e9524ba198 label-latin-256-start
+437904af236fcba1 label-latin-256-start
 67e53c097a9ea395 label-latin-48-center
 b96dcc69bedb9457 label-latin-48-end
 980f70faf191f7a3 label-latin-48-start
 c6ef92c9454ea6da label-latin-64-center
 f90a79c2c36996e6 label-latin-64-end
-e21b3d59ffbc67f8 label-latin-64-start
+4118104856095f99 label-latin-64-start
 2c5c40a728384775 label-latin-80-center
 1b6542a545e76e23 label-latin-80-end
 17cfa84a1875bc8c label-latin-80-start
@@ -421,4 +421,4 @@ dbfa647af486795c para-thai-center
 89b3058ed18cbbc8 para-thai-end
 65f057722f690161 para-thai-justify
 626d2b6d7e6ba2d8 para-thai-start
-d8e1146486189b8b set
+126c1d9ef4c23603 set

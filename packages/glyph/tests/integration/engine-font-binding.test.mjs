@@ -2,8 +2,6 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { GlyphEngineStatusError } from '@pmndrs/glyph';
-
 import { techniqueProgram } from '../../dist/config/codec-program.js';
 import { id } from '../../dist/config/codec.js';
 import { defineRasterFormat, defineRasterResourceId } from '../../dist/config/raster-format.js';
@@ -14,7 +12,11 @@ import { getRegisteredFontData } from '../../dist/internal/registered-font.js';
 import { GlyphIdScope } from '../../dist/internal/glyph-id.js';
 import { createFontStack, immutableFontResources } from '../../dist/loaded-font.js';
 import { loadFont } from '../../dist/loader.js';
-import { observeRenderPlannerDirty, stageRenderPlanner } from '../../dist/internal/render-planner.js';
+import {
+  observeRenderPlannerDirty,
+  stageRenderPlanner,
+  stageRenderPlannerPreparation,
+} from '../../dist/internal/render-planner.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 import { threeCodecCapabilitySet, threeCodecDescriptor, threeSystemBuffers } from '../../dist/three/codec.js';
 import {
@@ -87,24 +89,40 @@ async function fixtureEngine() {
   return createGlyphEngine({ wasm: await readFile(wasmUrl) });
 }
 
-test('shape registration queue membership ends at staging, including deferral and rejection', async () => {
+test('shape registration queue membership ends before preparation, including deferral and rejection', async () => {
   const engine = await fixtureEngine();
   const failure = new Error('deliberate stage rejection');
+  const preparationFailure = new Error('deliberate preparation rejection');
   let reject = false;
-  let stages = 0;
-  let rejected = 0;
+  let rejectPreparation = false;
+  const calls = [];
+  const rejections = [];
   const registration = registerGlyphShapeParticipant(engine, {
+    prepare(measureAll) {
+      calls.push('prepare');
+      assert.equal(measureAll, false, 'a frame asks for no summaries nobody read');
+      assert.equal(registration.queued, false, 'the engine consumes the queue before entering prepare hooks');
+      assert.throws(() => shapeGlyphEngine(engine), /cannot be reentered/u);
+      if (rejectPreparation) throw preparationFailure;
+      return undefined;
+    },
+    prepared() {
+      calls.push('prepared');
+      assert.equal(registration.queued, false);
+    },
     stage() {
-      stages += 1;
+      calls.push('stage');
       assert.equal(registration.queued, false, 'the engine consumes the queue before entering stage hooks');
       assert.throws(() => shapeGlyphEngine(engine), /cannot be reentered/u);
       if (reject) throw failure;
       return undefined;
     },
-    accepted() {},
+    accepted() {
+      calls.push('accepted');
+    },
     rejected(error) {
-      assert.equal(error, failure);
-      rejected += 1;
+      calls.push('rejected');
+      rejections.push(error);
     },
   });
   try {
@@ -115,7 +133,8 @@ test('shape registration queue membership ends at staging, including deferral an
     shapeGlyphEngine(engine);
     assert.equal(registration.queued, false, 'a deferred root must not remain implicitly queued');
     shapeGlyphEngine(engine);
-    assert.equal(stages, 1);
+    assert.deepEqual(calls, ['prepare', 'prepared', 'stage'], 'one shape prepares, then stages, exactly once');
+    calls.length = 0;
     reject = true;
     registration.invalidate();
     assert.throws(
@@ -124,8 +143,20 @@ test('shape registration queue membership ends at staging, including deferral an
     );
     assert.equal(registration.queued, false, 'rejection must not create an implicit retry');
     shapeGlyphEngine(engine);
-    assert.equal(stages, 2);
-    assert.equal(rejected, 1);
+    assert.deepEqual(calls, ['prepare', 'prepared', 'stage', 'rejected']);
+    assert.deepEqual(rejections, [failure]);
+    calls.length = 0;
+    reject = false;
+    rejectPreparation = true;
+    registration.invalidate();
+    assert.throws(
+      () => shapeGlyphEngine(engine),
+      (error) => error === preparationFailure,
+    );
+    assert.equal(registration.queued, false, 'a preparation rejection must not create an implicit retry');
+    shapeGlyphEngine(engine);
+    assert.deepEqual(calls, ['prepare', 'rejected'], 'a root whose preparation failed is neither settled nor staged');
+    assert.deepEqual(rejections, [failure, preparationFailure]);
     registration.invalidate();
     registration.dispose();
     assert.equal(registration.queued, false, 'disposal removes the existing queued registration');
@@ -135,20 +166,40 @@ test('shape registration queue membership ends at staging, including deferral an
   }
 });
 
-function captureNextMeasureRequest() {
+/**
+ * Records the requests of the two preparation crossings of the next shaper instance: a read's
+ * `measureParagraph` and the frame's `prepareBatch`. A setter makes neither.
+ */
+function capturePreparationRequests() {
   const originalInstantiate = WebAssembly.instantiate;
   let latestRequest;
+  let latestBatch;
   let measurementRequests = 0;
+  let batchRequests = 0;
   WebAssembly.instantiate = async (source, imports) => {
     const instance = await originalInstantiate(source, imports);
     const exports = { ...instance.exports };
     const measure = exports[textShaperAbi.functions.measureParagraph];
+    const prepareBatch = exports[textShaperAbi.functions.prepareBatch];
+    const requestPointer = exports[textShaperAbi.functions.requestPointer];
     assert.equal(typeof measure, 'function', 'instrumented shaper must export measure_paragraph');
+    assert.equal(typeof prepareBatch, 'function', 'instrumented shaper must export prepare_batch');
     exports[textShaperAbi.functions.measureParagraph] = (...arguments_) => {
       const [, pointer, length] = arguments_;
       measurementRequests += 1;
       latestRequest = new Uint8Array(exports.memory.buffer, pointer, length).slice();
       return measure(...arguments_);
+    };
+    exports[textShaperAbi.functions.prepareBatch] = (entriesPointer, count) => {
+      const entry = textShaperAbi.layouts.engineUpdateBatchEntry;
+      const entries = new DataView(exports.memory.buffer, entriesPointer, count * entry.size);
+      batchRequests += 1;
+      latestBatch = Array.from({ length: count }, (_value, index) => {
+        const rootId = entries.getUint32(index * entry.size + entry.rootId, true);
+        const length = entries.getUint32(index * entry.size + entry.requestLength, true);
+        return new Uint8Array(exports.memory.buffer, requestPointer(rootId), length).slice();
+      });
+      return prepareBatch(entriesPointer, count);
     };
     return { exports };
   };
@@ -156,12 +207,23 @@ function captureNextMeasureRequest() {
     restore() {
       WebAssembly.instantiate = originalInstantiate;
     },
+    /** The request of the most recent read that entered the engine. */
     bytes() {
       assert.ok(latestRequest, 'a paragraph measurement request must have been captured');
       return latestRequest;
     },
+    /** The single root request of the most recent batch preparation. */
+    batchBytes() {
+      assert.equal(latestBatch?.length, 1, 'a one-root batch preparation must have been captured');
+      return latestBatch[0];
+    },
+    /** How many reads entered the engine. */
     get count() {
       return measurementRequests;
+    },
+    /** How many frames batch-prepared. */
+    get batchCount() {
+      return batchRequests;
     },
   };
 }
@@ -425,7 +487,7 @@ test('a glyph-engine-owned handle state binds immutable font stacks and retains 
 
 test('the retained planner publishes canonical styles, flow, exclusions, and inline objects', async () => {
   const font = await fixtureFont();
-  const capture = captureNextMeasureRequest();
+  const capture = capturePreparationRequests();
   let glyphEngine;
   try {
     glyphEngine = await fixtureEngine();
@@ -473,6 +535,8 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
     textCapacity: 1_024,
   });
   const registration = registerGlyphShapeParticipant(glyphEngine, {
+    prepare: (measureAll) => stageRenderPlannerPreparation(planner, measureAll),
+    prepared() {},
     stage: () => stageRenderPlanner(planner),
     accepted() {},
     rejected(error) {
@@ -590,9 +654,25 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
   const text = planner.createText(options);
 
   try {
-    const setterBytes = capture.bytes();
-    assert.equal(text.measure().lineCount > 0, true);
-    const bytes = setterBytes;
+    assert.equal(capture.count, 0, 'creation validates and marks dirty without entering the engine');
+    /** The request of the one preparation the next read makes for what setters left dirty. */
+    const requestOfNextRead = () => {
+      const reads = capture.count;
+      const batches = capture.batchCount;
+      assert.equal(text.measure().lineCount > 0, true);
+      assert.equal(capture.count, reads + 1, 'a read after a setter prepares its paragraph once');
+      assert.equal(capture.batchCount, batches, 'a read does not batch-prepare');
+      return capture.bytes();
+    };
+    /** Runs setters and proves none of them entered the engine. */
+    const withoutEngineCall = (setters) => {
+      const reads = capture.count;
+      const batches = capture.batchCount;
+      setters();
+      assert.equal(capture.count, reads, 'a setter makes no read crossing');
+      assert.equal(capture.batchCount, batches, 'a setter makes no batch crossing');
+    };
+    const bytes = requestOfNextRead();
     assert.equal(text.glyphs().glyphCount > 0, true, 'explicit glyph inspection remains available after measurement');
     const request = textShaperAbi.layouts.engineUpdateRequest;
     const readRecords = (requestBytes, offsetField, countField, record) => {
@@ -822,15 +902,16 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
       features: [{ tag: 'liga' }],
       color: '#3366cc',
     };
-    text.update({
-      text: {
-        text: sourceText,
-        spans: [{ start: 1, end: 4, style: changedSpanStyle }],
-      },
-    });
+    withoutEngineCall(() =>
+      text.update({
+        text: {
+          text: sourceText,
+          spans: [{ start: 1, end: 4, style: changedSpanStyle }],
+        },
+      }),
+    );
     changedSpanStyle.color = '#ff0000';
-    assert.equal(text.measure().lineCount > 0, true);
-    const sparseStyleBytes = capture.bytes();
+    const sparseStyleBytes = requestOfNextRead();
     const sparseStyles = readRecords(
       sparseStyleBytes,
       request.styleMutationsOffset,
@@ -839,8 +920,10 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
     );
     assert.equal(sparseStyles.length, 1, 'one changed span emits one retained style upsert');
     assert.equal(sparseStyles[0].getUint32(style.foregroundRgba, true), 0xffcc_6633, 'caller mutation is isolated');
+    const batchesBeforeReadPreparedFrame = capture.batchCount;
     shapeGlyphEngine(glyphEngine);
     assert.equal(acceptedPublications, 2);
+    assert.equal(capture.batchCount, batchesBeforeReadPreparedFrame, 'the frame prepares nothing a read prepared');
     const sparseMeasurement = text.measure();
     const requestsBeforeEqualUpdate = capture.count;
 
@@ -860,17 +943,19 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
     assert.equal(capture.count, requestsBeforeEqualUpdate, 'an equal normalized batch does not reprepare Rust state');
     shapeGlyphEngine(glyphEngine);
     assert.equal(acceptedPublications, 3);
+    assert.equal(capture.batchCount, batchesBeforeReadPreparedFrame, 'an equal normalized batch prepares nothing');
 
-    text.update({
-      flow: {
-        regions: [
-          { region: region('left', transforms[0], 0, 80), exclusions: [exclusion('left-hole', 24, 34)] },
-          { region: region('right', transforms[1], 80, 160), exclusions: [exclusion('right-hole', 100, 110)] },
-        ],
-      },
-    });
-    assert.equal(text.measure().lineCount > 0, true);
-    const movedBytes = capture.bytes();
+    withoutEngineCall(() =>
+      text.update({
+        flow: {
+          regions: [
+            { region: region('left', transforms[0], 0, 80), exclusions: [exclusion('left-hole', 24, 34)] },
+            { region: region('right', transforms[1], 80, 160), exclusions: [exclusion('right-hole', 100, 110)] },
+          ],
+        },
+      }),
+    );
+    const movedBytes = requestOfNextRead();
     const movedRegions = readRecords(
       movedBytes,
       request.regionsOffset,
@@ -907,16 +992,17 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
     assert.equal(acceptedPublications, 4);
     assert.equal(transformTables[3], transformTables[0], 'paint and exclusion edits reuse the complete table');
     assert.equal(Object.isFrozen(transformTables[0]), true);
-    text.update({
-      flow: {
-        regions: [
-          { region: region('right', transforms[1], 80, 160), exclusions: [exclusion('right-hole', 100, 110)] },
-          { region: region('left', transforms[0], 0, 80), exclusions: [exclusion('left-hole', 24, 34)] },
-        ],
-      },
-    });
-    assert.equal(text.measure().lineCount > 0, true);
-    const reorderedBytes = capture.bytes();
+    withoutEngineCall(() =>
+      text.update({
+        flow: {
+          regions: [
+            { region: region('right', transforms[1], 80, 160), exclusions: [exclusion('right-hole', 100, 110)] },
+            { region: region('left', transforms[0], 0, 80), exclusions: [exclusion('left-hole', 24, 34)] },
+          ],
+        },
+      }),
+    );
+    const reorderedBytes = requestOfNextRead();
     const reorderedRegions = readRecords(
       reorderedBytes,
       request.regionsOffset,
@@ -965,8 +1051,8 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
         { region: region('left', transforms[0], 0, 80), exclusions: [exclusion('left-hole', 24, 34)] },
       ],
     };
-    text.update({ flow: { regions: [reorderedFlow.regions[0]] } });
-    const oneRegionBytes = capture.bytes();
+    withoutEngineCall(() => text.update({ flow: { regions: [reorderedFlow.regions[0]] } }));
+    const oneRegionBytes = requestOfNextRead();
     const oneRegion = readRecords(
       oneRegionBytes,
       request.regionsOffset,
@@ -993,20 +1079,20 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
       true,
     );
     const acceptedOneRegion = text.measure();
+    const requestsBeforeRejectedFlow = capture.count;
     assert.throws(
-      () => text.update({ text: 'bad\ud800text', flow: reorderedFlow }),
-      (error) => error instanceof GlyphEngineStatusError && error.statusCode === 'invalid-request',
-      'a failed semantic preparation cannot commit the expanded flow maps',
+      () => text.update({ style: { fontSize: -1 }, flow: reorderedFlow }),
+      /fontSize/u,
+      'a setter rejected for invalid input cannot commit the expanded flow maps',
     );
-    const requestsAfterRejectedFlow = capture.count;
-    assert.deepEqual(text.measure(), acceptedOneRegion, 'preflight rejection preserves the accepted one-region layout');
+    assert.deepEqual(text.measure(), acceptedOneRegion, 'setter rejection preserves the prepared one-region layout');
     assert.equal(
       capture.count,
-      requestsAfterRejectedFlow,
-      'cached measurement needs no request after preflight rejection',
+      requestsBeforeRejectedFlow,
+      'neither the rejected setter nor the read after it needs a request',
     );
-    text.update({ flow: reorderedFlow });
-    const regrownBytes = capture.bytes();
+    withoutEngineCall(() => text.update({ flow: reorderedFlow }));
+    const regrownBytes = requestOfNextRead();
     const regrownRegions = readRecords(
       regrownBytes,
       request.regionsOffset,
@@ -1053,9 +1139,21 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
       fresh.dispose();
     }
     shapeGlyphEngine(glyphEngine);
-    text.update({ flow: undefined });
-    text.update({ flow: reorderedFlow });
-    const restoredBytes = capture.bytes();
+    const regrownMeasurement = text.measure();
+    withoutEngineCall(() => {
+      text.update({ flow: undefined });
+      text.update({ flow: reorderedFlow });
+    });
+    assert.deepEqual(
+      text.measure(),
+      regrownMeasurement,
+      'a flow removed and restored before any read leaves the prepared layout',
+    );
+    shapeGlyphEngine(glyphEngine);
+    withoutEngineCall(() => text.update({ flow: undefined }));
+    requestOfNextRead();
+    withoutEngineCall(() => text.update({ flow: reorderedFlow }));
+    const restoredBytes = requestOfNextRead();
     const restoredRegions = readRecords(
       restoredBytes,
       request.regionsOffset,
@@ -1083,13 +1181,9 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
       true,
       'ordinary geometry clears flow exclusion ownership before the keyed exclusion returns',
     );
-    text.update({ text: sourceText });
-    const removalBytes = capture.bytes();
-    assert.equal(
-      text.measure().lineCount > 0,
-      true,
-      'the package-authored style removal passes Wasm and returns a measurement',
-    );
+    withoutEngineCall(() => text.update({ text: sourceText }));
+    // The package-authored style removal passes Wasm and returns a measurement.
+    const removalBytes = requestOfNextRead();
     const removalStyles = readRecords(removalBytes, request.styleMutationsOffset, request.styleMutationCount, style);
     assert.equal(removalStyles.length, 1);
     assert.equal(removalStyles[0].getUint8(style.opcode), textShaperAbi.engine.styleMutationOpcodes.remove);
@@ -1110,9 +1204,9 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
       fontSize: 18,
       features: [{ tag: 'kern', value: 2, start: 0, end: sourceText.length }],
     };
-    text.update({ style: mutableStyle });
+    withoutEngineCall(() => text.update({ style: mutableStyle }));
     mutableStyle.features[0].value = 7;
-    const ownedStyleBytes = capture.bytes();
+    const ownedStyleBytes = requestOfNextRead();
     const ownedStyle = readRecords(ownedStyleBytes, request.styleMutationsOffset, request.styleMutationCount, style)[0];
     assert.equal(
       new DataView(
@@ -1124,9 +1218,12 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
       'later feature mutation cannot change the prepared style bytes',
     );
     const requestsBeforeEqualStyle = capture.count;
+    const batchesBeforeEqualStyle = capture.batchCount;
     text.update({ style: { fontSize: 18, features: [{ tag: 'kern', value: 2, start: 0, end: sourceText.length }] } });
-    assert.equal(capture.count, requestsBeforeEqualStyle, 'caller mutation cannot change the retained style snapshot');
+    assert.equal(text.measure().lineCount > 0, true);
     shapeGlyphEngine(glyphEngine);
+    assert.equal(capture.count, requestsBeforeEqualStyle, 'caller mutation cannot change the retained style snapshot');
+    assert.equal(capture.batchCount, batchesBeforeEqualStyle, 'the frame has nothing left to prepare');
     const inheritedInvalidStyle = Object.create({ features: [{ tag: 'bad' }] });
     assert.throws(() => text.update({ style: inheritedInvalidStyle }), /feature 0 tag/u);
     let colorReads = 0;
@@ -1139,7 +1236,17 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
       },
     });
     assert.equal(colorReads > 0, true, 'the authored style getter is evaluated during validation and ownership');
-    const getterStyleBytes = capture.bytes();
+    const colorReadsAtSetter = colorReads;
+    const requestsBeforeGetterFrame = capture.count;
+    shapeGlyphEngine(glyphEngine);
+    assert.equal(capture.batchCount, batchesBeforeEqualStyle + 1, 'an unread setter is prepared by the frame batch');
+    assert.equal(capture.count, requestsBeforeGetterFrame, 'the frame prepares through its batch alone');
+    assert.equal(
+      colorReads,
+      colorReadsAtSetter,
+      'deferred preparation reads the owned snapshot, not the caller getter',
+    );
+    const getterStyleBytes = capture.batchBytes();
     const getterStyle = readRecords(
       getterStyleBytes,
       request.styleMutationsOffset,
@@ -1185,7 +1292,8 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
       });
       assert.deepEqual(materialAcquisitions, [sharedMaterial], 'one source binding acquires one resolved lease');
       const publicationsBeforeSharedMaterial = acceptedPublications;
-      const repeatedBytes = capture.bytes();
+      const repeatedBytes = requestOfNextRead();
+      assert.deepEqual(materialAcquisitions, [sharedMaterial], 'preparation acquires no further lease');
       const repeatedStyles = readRecords(
         repeatedBytes,
         request.styleMutationsOffset,
@@ -1290,7 +1398,7 @@ test(
     let nextOwner;
     let styleMints = 0;
     try {
-      capture = captureNextMeasureRequest();
+      capture = capturePreparationRequests();
       try {
         glyphEngine = await fixtureEngine();
       } finally {
@@ -1329,13 +1437,41 @@ test(
         textCapacity: 1_024,
       });
       registration = registerGlyphShapeParticipant(glyphEngine, {
+        prepare: (measureAll) => stageRenderPlannerPreparation(planner, measureAll),
+        prepared() {},
         stage: () => stageRenderPlanner(planner),
         accepted() {},
         rejected() {},
       });
       stopObservingDirty = observeRenderPlannerDirty(planner, () => registration.invalidate());
-      const readStyleMutations = () => {
-        const bytes = capture.bytes();
+      /** The request of the one preparation a read makes for what setters left dirty. */
+      const preparedByRead = (subject = text) => {
+        const reads = capture.count;
+        const batches = capture.batchCount;
+        subject.measure();
+        assert.deepEqual(
+          [capture.count, capture.batchCount],
+          [reads + 1, batches],
+          'a read prepares its paragraph once',
+        );
+        return capture.bytes();
+      };
+      /** The request of the one batch preparation a frame makes for what setters left dirty and unread. */
+      const preparedByFrame = () => {
+        const reads = capture.count;
+        const batches = capture.batchCount;
+        shapeGlyphEngine(glyphEngine);
+        assert.deepEqual([capture.count, capture.batchCount], [reads, batches + 1], 'a frame prepares in one batch');
+        return capture.batchBytes();
+      };
+      /** Runs a setter and proves it did not enter the engine. */
+      const set = (update) => {
+        const reads = capture.count;
+        const batches = capture.batchCount;
+        text.update(update);
+        assert.deepEqual([capture.count, capture.batchCount], [reads, batches], 'a setter does not enter the engine');
+      };
+      const readStyleMutations = (bytes) => {
         const request = textShaperAbi.layouts.engineUpdateRequest;
         const record = textShaperAbi.layouts.engineStyleMutation;
         const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -1349,8 +1485,7 @@ test(
           };
         });
       };
-      const readStyleForegrounds = () => {
-        const bytes = capture.bytes();
+      const readStyleForegrounds = (bytes) => {
         const request = textShaperAbi.layouts.engineUpdateRequest;
         const record = textShaperAbi.layouts.engineStyleMutation;
         const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -1372,10 +1507,16 @@ test(
       };
       text = planner.createText({ font: fontBinding, text: { text: 'abcd', spans: initialSpans } });
       initialSpans[0].style.color = '#ff00ff';
-      const initial = readStyleMutations();
+      assert.deepEqual([capture.count, capture.batchCount], [0, 0], 'creation does not enter the engine');
+      const initialBytes = preparedByRead();
+      const initial = readStyleMutations(initialBytes);
       const styleIds = initial.map(({ styleId }) => styleId);
       assert.equal(styleMints, 3, 'root and two non-empty span identities are minted once');
-      assert.equal(readStyleForegrounds()[1], 0xff00_00aa, 'nested caller mutation cannot change retained RGBA bytes');
+      assert.equal(
+        readStyleForegrounds(initialBytes)[1],
+        0xff00_00aa,
+        'a caller mutation between the setter and its deferred preparation cannot change retained RGBA bytes',
+      );
       assert.deepEqual(
         initial.map(({ opcode }) => opcode),
         [
@@ -1388,36 +1529,34 @@ test(
       initialSpans[0].style.color = '#aa0000';
       shapeGlyphEngine(glyphEngine);
 
-      text.update({ text: { text: 'abcd', spans: [span(0, 2, '#0000aa'), initialSpans[1]] } });
-      assert.deepEqual(readStyleMutations(), [
+      set({ text: { text: 'abcd', spans: [span(0, 2, '#0000aa'), initialSpans[1]] } });
+      assert.deepEqual(readStyleMutations(preparedByFrame()), [
         { opcode: textShaperAbi.engine.styleMutationOpcodes.upsert, styleId: styleIds[1] },
       ]);
       assert.equal(styleMints, 3, 'restyling reuses its retained canonical identity');
       assert.deepEqual(text.measure(), initialMeasurement, 'paint-only restyling preserves shaped metrics');
-      shapeGlyphEngine(glyphEngine);
 
-      text.update({ text: { text: 'abcd', spans: [span(0, 2, '#0000aa')] } });
-      assert.deepEqual(readStyleMutations(), [
+      set({ text: { text: 'abcd', spans: [span(0, 2, '#0000aa')] } });
+      assert.deepEqual(readStyleMutations(preparedByRead()), [
         { opcode: textShaperAbi.engine.styleMutationOpcodes.remove, styleId: styleIds[2] },
       ]);
       assert.equal(styleMints, 3, 'shrink removes the retained high-water identity without reminting');
       shapeGlyphEngine(glyphEngine);
 
-      text.update({ text: { text: 'abcd', spans: [span(0, 2, '#0000aa'), span(2, 4, '#00aa00')] } });
-      assert.deepEqual(readStyleMutations(), [
+      set({ text: { text: 'abcd', spans: [span(0, 2, '#0000aa'), span(2, 4, '#00aa00')] } });
+      assert.deepEqual(readStyleMutations(preparedByFrame()), [
         { opcode: textShaperAbi.engine.styleMutationOpcodes.upsert, styleId: styleIds[2] },
       ]);
       assert.equal(styleMints, 3, 'regrowth restores the same style identity');
-      shapeGlyphEngine(glyphEngine);
 
-      text.update({
+      set({
         text: {
           text: 'abcd',
           spans: [span(0, 2, '#0000aa'), { start: 2, end: 2, style: { color: '#ffffff' } }, span(2, 4, '#00aa00')],
         },
       });
       assert.equal(
-        readStyleMutations().every(
+        readStyleMutations(preparedByRead()).every(
           ({ opcode, styleId }) =>
             opcode !== textShaperAbi.engine.styleMutationOpcodes.upsert || styleIds.includes(styleId),
         ),
@@ -1428,13 +1567,13 @@ test(
       assert.deepEqual(text.measure(), initialMeasurement, 'empty spans preserve the prepared measurement');
       shapeGlyphEngine(glyphEngine);
 
-      text.update({
+      set({
         text: {
           text: 'abcd',
           spans: [span(0, 2, '#0000aa'), span(2, 3, '#00aa00'), span(3, 4, '#aa00aa')],
         },
       });
-      const grownStyleMutations = readStyleMutations();
+      const grownStyleMutations = readStyleMutations(preparedByFrame());
       assert.equal(grownStyleMutations.length, 2, 'the new high-water slot emits one additional style mutation');
       const newSlotId = grownStyleMutations[1].styleId;
       assert.deepEqual(
@@ -1444,31 +1583,34 @@ test(
       );
       assert.equal(styleMints, 4, 'growth into one unused style slot mints exactly one identity');
       assert.equal(styleIds.includes(newSlotId), false, 'the new slot identity was not used by an earlier style');
-      shapeGlyphEngine(glyphEngine);
 
       rejectNext = true;
-      text.update({
+      set({
         text: {
           text: 'abcd',
           spans: [span(0, 2, '#0000aa'), span(2, 3, '#00aa00'), span(3, 4, '#bb00bb')],
         },
       });
-      assert.deepEqual(readStyleMutations(), [
+      assert.deepEqual(readStyleMutations(preparedByRead()), [
         { opcode: textShaperAbi.engine.styleMutationOpcodes.upsert, styleId: newSlotId },
       ]);
       assert.throws(() => shapeGlyphEngine(glyphEngine), /deliberate retained style replay/u);
-      text.update({ style: { color: '#223344' } });
+      set({ style: { color: '#223344' } });
       assert.equal(styleMints, 4, 'replay reuses the newly grown slot and all earlier style identities');
       assert.deepEqual(text.measure(), initialMeasurement, 'replay preserves the prepared layout');
       shapeGlyphEngine(glyphEngine);
 
-      text.update({
+      set({
         text: {
           text: 'wxyz',
           spans: [span(0, 2, '#0000aa'), span(2, 3, '#00aa00'), span(3, 4, '#bb00bb')],
         },
       });
-      assert.deepEqual(readStyleMutations(), [], 'text changes reuse unchanged style slots across the new text value');
+      assert.deepEqual(
+        readStyleMutations(preparedByRead()),
+        [],
+        'text changes reuse unchanged style slots across the new text value',
+      );
       const changedTextMeasurement = text.measure();
       shapeGlyphEngine(glyphEngine);
       assert.deepEqual(
@@ -1492,7 +1634,8 @@ test(
 
       text.dispose();
       nextOwner = planner.createText({ font: fontBinding, text: { text: 'xy', spans: [span(0, 2, '#445566')] } });
-      const newOwnerIds = readStyleMutations().map(({ styleId }) => styleId);
+      assert.equal(styleMints, 4, 'creating an owner mints nothing before it is prepared');
+      const newOwnerIds = readStyleMutations(preparedByRead(nextOwner)).map(({ styleId }) => styleId);
       assert.equal(styleMints, 6, 'a distinct retained owner mints only its root and first span identities');
       assert.equal(new Set([...styleIds, newSlotId, ...newOwnerIds]).size, 6, 'style IDs remain paragraph-scoped');
       shapeGlyphEngine(glyphEngine);
@@ -1512,9 +1655,15 @@ test(
   },
 );
 
-test('style-clean text edits do not consume the setter preparation style-mutation limit', async () => {
+test('style-clean text edits add no style record to a batch preparation at its style-mutation limit', async () => {
   const font = await fixtureFont();
-  const glyphEngine = await fixtureEngine();
+  const capture = capturePreparationRequests();
+  let glyphEngine;
+  try {
+    glyphEngine = await fixtureEngine();
+  } finally {
+    capture.restore();
+  }
   const handleState = createGlyphHandleState(glyphEngine, { integration: 'test.render-planner-style-limits' });
   const codec = handleState.installCodec(threeCodecDescriptor);
   const fontBinding = handleState.bindFontStack(createFontStack(font));
@@ -1557,6 +1706,8 @@ test('style-clean text edits do not consume the setter preparation style-mutatio
     textCapacity: 64,
   });
   const registration = registerGlyphShapeParticipant(glyphEngine, {
+    prepare: (measureAll) => stageRenderPlannerPreparation(planner, measureAll),
+    prepared() {},
     stage: () => stageRenderPlanner(planner),
     accepted() {},
     rejected(error) {
@@ -1581,22 +1732,30 @@ test('style-clean text edits do not consume the setter preparation style-mutatio
     shapeGlyphEngine(glyphEngine);
     assert.equal(acceptedPublications, 1);
 
-    // Two span removals and this root paint update consume three slots in this setter preparation.
+    // Two span removals and this root paint update put three style records into the frame's batch.
     first.update({ text: 'abc', style: { color: '#ff0000' } });
     second.update({
-      // This independent setter preparation carries one root update and one span upsert.
+      // One root update and one span upsert fill the batch to limits.maxClusters.
       style: { color: '#00ff00' },
       text: {
         text: 'd',
         spans: [{ start: 0, end: 1, style: { color: '#0000ff' } }],
       },
     });
-    assert.doesNotThrow(
-      () => third.update({ text: 'f' }),
-      'a text-only edit emits no style record in its setter preparation',
-    );
+    assert.doesNotThrow(() => third.update({ text: 'f' }));
+    assert.deepEqual([capture.count, capture.batchCount], [0, 1], 'setters do not enter the engine');
     shapeGlyphEngine(glyphEngine);
     assert.equal(acceptedPublications, 2);
+    assert.deepEqual([capture.count, capture.batchCount], [0, 2], 'the frame prepares all three texts in one batch');
+    const batch = capture.batchBytes();
+    const header = new DataView(batch.buffer, batch.byteOffset, batch.byteLength);
+    const request = textShaperAbi.layouts.engineUpdateRequest;
+    assert.equal(
+      header.getUint32(request.styleMutationCount, true),
+      5,
+      'a text-only edit emits no style record, so the batch stays at the style-mutation limit',
+    );
+    assert.equal(header.getUint32(request.textMutationCount, true), 1, 'only the text-only edit changes text');
     assert.equal(transformTables[1], transformTables[0], 'ordinary edits retain the complete transform table');
     first.update({ transform: sharedTransform });
     third.update({ transform: sharedTransform });
@@ -1655,6 +1814,82 @@ test('style-clean text edits do not consume the setter preparation style-mutatio
   }
 });
 
+// Known failure, kept red on purpose: the batch concatenates every dirty paragraph's style records and the
+// engine bounds one request by limits.maxClusters, while the setter bounds only each text's own pending records.
+test('setters that each respect the style-mutation limit are prepared together by the frame', async () => {
+  const font = await fixtureFont();
+  const glyphEngine = await fixtureEngine();
+  const handleState = createGlyphHandleState(glyphEngine, { integration: 'test.render-planner-batch-style-limit' });
+  const codec = handleState.installCodec(threeCodecDescriptor);
+  const fontBinding = handleState.bindFontStack(createFontStack(font));
+  let acceptedPublications = 0;
+  const planner = handleState.createRootPlanner({
+    codec,
+    capabilitySetIndex: 0,
+    target: () => ({
+      delivery: 'borrowed',
+      accept: () => {
+        acceptedPublications += 1;
+        return { accepted: true };
+      },
+      dispose() {},
+    }),
+    limits: {
+      maxParagraphs: 3,
+      maxClusters: 5,
+      maxLines: 5,
+      maxRegions: 3,
+      maxExclusions: 1,
+      maxInlineObjects: 1,
+      maxSlotsPerBand: 1,
+      maxOutputBytes: 1_048_576,
+    },
+    requestCapacity: 65_536,
+    resultCapacity: 1_048_576,
+    textCapacity: 64,
+  });
+  const registration = registerGlyphShapeParticipant(glyphEngine, {
+    prepare: (measureAll) => stageRenderPlannerPreparation(planner, measureAll),
+    prepared() {},
+    stage: () => stageRenderPlanner(planner),
+    accepted() {},
+    rejected() {},
+  });
+  const stopObservingDirty = observeRenderPlannerDirty(planner, () => registration.invalidate());
+  const spanned = (text, color) => ({ text, spans: [{ start: 0, end: 1, style: { color } }] });
+  // Five live styles, the limit: a root and one span, a root and one span, and a root.
+  const first = planner.createText({ font: fontBinding, text: spanned('abc', '#ff0000') });
+  const second = planner.createText({ font: fontBinding, text: spanned('d', '#00ff00') });
+  const third = planner.createText({ font: fontBinding, text: 'e' });
+  try {
+    shapeGlyphEngine(glyphEngine);
+    assert.equal(acceptedPublications, 1);
+
+    // Each setter states two style records (a root update and a span removal or upsert) and leaves four live styles.
+    first.update({ text: 'abc', style: { color: '#ff0001' } });
+    second.update({ text: 'd', style: { color: '#00ff01' } });
+    third.update({ text: spanned('e', '#0000ff'), style: { color: '#123456' } });
+    assert.doesNotThrow(
+      () => shapeGlyphEngine(glyphEngine),
+      'three accepted setters cannot make the frame fail: preparation has no failure of its own',
+    );
+    assert.equal(acceptedPublications, 2);
+    assert.equal(third.measure().glyphCount, 1);
+  } finally {
+    stopObservingDirty();
+    registration.dispose();
+    first.dispose();
+    second.dispose();
+    third.dispose();
+    planner.dispose();
+    fontBinding.dispose();
+    codec.dispose();
+    handleState.dispose();
+    glyphEngine.dispose();
+    font.dispose();
+  }
+});
+
 test('base-order publication admits swaps and preserves pending order across semantic preparation', async () => {
   const font = await fixtureFont();
   const glyphEngine = await fixtureEngine();
@@ -1688,6 +1923,8 @@ test('base-order publication admits swaps and preserves pending order across sem
     textCapacity: 64,
   });
   const registration = registerGlyphShapeParticipant(glyphEngine, {
+    prepare: (measureAll) => stageRenderPlannerPreparation(planner, measureAll),
+    prepared() {},
     stage: () => stageRenderPlanner(planner),
     accepted() {},
     rejected(error) {
@@ -1708,7 +1945,7 @@ test('base-order publication admits swaps and preserves pending order across sem
     first.updateOrder(20, 0, 0);
     first.update({ text: 'alpha moved' });
     second.updateOrder(10, 0, 0);
-    assert.equal(first.measure().glyphCount, 11, 'the semantic setter prepares before the order swap publishes');
+    assert.equal(first.measure().glyphCount, 11, 'a read prepares the semantic edit before the order swap publishes');
     shapeGlyphEngine(glyphEngine);
     assert.equal(acceptedPublications, 2, 'the complete unique swap publishes as one transaction');
 
@@ -1746,18 +1983,27 @@ test('base-order publication admits swaps and preserves pending order across sem
     assert.equal(acceptedPublications, 4);
 
     replacement.updateOrder(60, 0, 0);
-    const beforeRejectedPreparation = replacement.measure();
-    assert.throws(
-      () => replacement.update({ text: 'bad\ud800text' }),
-      (error) => error instanceof GlyphEngineStatusError && error.statusCode === 'invalid-request',
-    );
+    const beforeRejectedSetter = replacement.measure();
+    assert.throws(() => replacement.update({ text: 'rejected', style: { fontSize: -1 } }), /fontSize/u);
     assert.equal(
       replacement.measure(),
-      beforeRejectedPreparation,
-      'a rejected preparation retains both measurement and pending order intent',
+      beforeRejectedSetter,
+      'a rejected setter retains both measurement and pending order intent',
+    );
+    replacement.update({ text: 'bad\ud800text' });
+    assert.equal(
+      replacement.measure().glyphCount,
+      8,
+      'a lone surrogate is repaired to one replacement character instead of rejecting the edit',
+    );
+    replacement.update({ text: 'replacement moved' });
+    assert.deepEqual(
+      replacement.measure(),
+      beforeRejectedSetter,
+      'restoring the text restores its measurement while the order is still pending',
     );
     shapeGlyphEngine(glyphEngine);
-    assert.equal(acceptedPublications, 5, 'the pending order publishes after preparation rollback');
+    assert.equal(acceptedPublications, 5, 'the pending order publishes after the rejected setter');
 
     formerOrderReuse = planner.createText({ font: fontBinding, order: 30, text: 'former order reused' });
     assert.equal(formerOrderReuse.measure().glyphCount, 19, 'the former order prepares after the pending move commits');

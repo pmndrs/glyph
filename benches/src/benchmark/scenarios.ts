@@ -186,9 +186,10 @@ function slugTextValidation(values: readonly import('./contracts').BenchmarkMeas
       !finitePositive(metrics.slugHeaderBytes) ||
       !finitePositive(metrics.slugReferenceBytes) ||
       !finitePositive(metrics.slugResourceBytes) ||
-      // GPU bytes below the decoded resource total means the renderer dropped a page rather than repacking one.
+      // The header grid is uploaded whole; band curves become resident as glyphs are drawn, so GPU bytes below the
+      // headers mean the renderer dropped a page.
       !finitePositive(metrics.slugGpuBytes) ||
-      metrics.slugGpuBytes < metrics.slugResourceBytes ||
+      metrics.slugGpuBytes < metrics.slugHeaderBytes ||
       metrics.renderTargetGpuBytes !== value.outputBytes ||
       !finiteNonnegative(metrics.fontLoadMs) ||
       !finiteNonnegative(metrics.firstDrawMs) ||

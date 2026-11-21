@@ -1,6 +1,6 @@
 import type { DataTexture, Node } from 'three/webgpu';
-import { float, int, ivec2, min, textureLoad, uint, vec2 } from 'three/tsl';
-import { intDiv, intMod, loadUvec4, uintAdd, uintBitAnd, uintMul, uintShiftRight } from './internal/three-compat.js';
+import { float, int, ivec2, min, textureLoad, uint, unpackHalf2x16 } from 'three/tsl';
+import { loadUvec4, uintBitAnd, uintShiftRight } from './internal/three-compat.js';
 
 const HEADER_REFERENCE_MASK = 0xffff;
 const HEADER_COUNT_SHIFT = 16;
@@ -9,12 +9,11 @@ const HEADER_COUNT_SHIFT = 16;
 export const MAX_SAFE_SLUG_BAND_CURVES = 512;
 
 export interface SlugShaderPage {
-  readonly curveTexture: DataTexture;
-  readonly curveWidth: number;
   readonly headerTexture: DataTexture;
   readonly headerWidth: number;
-  readonly referenceTexture: DataTexture;
-  readonly referenceWidth: number;
+  /** One `rgba32uint` texel per band entry: the curve's control points as `pack2x16float` words `[p0, p1, p2, 0]`. */
+  readonly bandCurveTexture: DataTexture;
+  readonly bandCurveWidth: number;
 }
 
 export interface SlugShaderCurve {
@@ -23,10 +22,9 @@ export interface SlugShaderCurve {
   readonly p2: Node<'vec2'>;
 }
 
+/** Unsigned division by a literal width, which compiles to a shift and a mask when the width is a power of two. */
 function gridCoordinate(index: Node<'uint'>, width: number): Node<'ivec2'> {
-  const integerIndex: Node<'int'> = int(index);
-  const integerWidth: Node<'int'> = int(width);
-  return ivec2(intMod(integerIndex, integerWidth), intDiv(integerIndex, integerWidth));
+  return ivec2(int(index.mod(uint(width))), int(index.div(uint(width))));
 }
 
 function namedUint(node: Node<'uint'>, name: string): Node<'uint'> {
@@ -43,31 +41,11 @@ export function loadHeader(
   return namedUint(uint(texel.x), `${namePrefix}Header`);
 }
 
-export function loadReference(
-  page: SlugShaderPage,
-  index: Node<'uint'>,
-  axis: 'horizontal' | 'vertical',
-  namePrefix: string = axis === 'horizontal' ? 'slugHorizontal' : 'slugVertical',
-): Node<'uint'> {
-  const texel = loadUvec4(page.referenceTexture, gridCoordinate(uintShiftRight(index, uint(1)), page.referenceWidth));
-  const bitOffset = uintMul(uintBitAnd(index, uint(1)), uint(16));
-  return namedUint(
-    uintBitAnd(uintShiftRight(texel.x, bitOffset), uint(HEADER_REFERENCE_MASK)),
-    `${namePrefix}Reference`,
-  );
-}
-
-export function loadCurve(page: SlugShaderPage, texelIndex: Node<'uint'>): SlugShaderCurve {
-  const first: Node<'vec4'> = textureLoad(page.curveTexture, gridCoordinate(texelIndex, page.curveWidth));
-  const second: Node<'vec4'> = textureLoad(
-    page.curveTexture,
-    gridCoordinate(uintAdd(texelIndex, uint(1)), page.curveWidth),
-  );
-  return {
-    p0: vec2(first.x, first.y),
-    p1: vec2(first.z, first.w),
-    p2: vec2(second.x, second.y),
-  };
+/** One band entry's curve, in one load. */
+export function loadBandCurve(page: SlugShaderPage, entry: Node<'uint'>): SlugShaderCurve {
+  const texel = loadUvec4(page.bandCurveTexture, gridCoordinate(entry, page.bandCurveWidth));
+  const half = (word: Node<'uint'>) => unpackHalf2x16(word) as unknown as Node<'vec2'>;
+  return { p0: half(texel.x), p1: half(texel.y), p2: half(texel.z) };
 }
 
 export function bandCount(header: Node<'uint'>): Node<'uint'> {

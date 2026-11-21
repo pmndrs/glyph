@@ -1,3 +1,13 @@
+---
+type: Log
+title: 'Stale process guidance removed'
+description: 'List of process guidance removed from planning documents on 2026-11-21.'
+status: draft
+generated:
+  by: anthropic/claude-fable-5-2
+  at: '2026-11-21T12:00:00Z'
+---
+
 # Stale process guidance removed, 2026-11-21
 
 Removed because it conflicts with the branch rules in `AGENTS.md` (large units, benchmarks as spikes, no gates,

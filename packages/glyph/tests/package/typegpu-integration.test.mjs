@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { recordingHost } from '../support/typegpu-recording-host.mjs';
 import { bitmap, glyph, msdf } from '@pmndrs/glyph';
-import { defineTypeGpuConfig } from '@pmndrs/glyph/typegpu';
-import { resourceLease, id, bitmapSchema, msdfSchema, slugSchema } from '@pmndrs/glyph/core';
-import { codecDescriptor, TYPEGPU_PLACEMENT_SLOT_BUFFER_ID } from '../../dist/typegpu/internal/codec.js';
+import { id, bitmapSchema, msdfSchema, slugSchema } from '@pmndrs/glyph/core';
+import {
+  codecDescriptor,
+  TYPEGPU_PLACEMENT_SLOT_BUFFER_ID,
+  TYPEGPU_TRANSFORM_INDEX_BUFFER_ID,
+} from '../../dist/typegpu/internal/codec.js';
 
 const fontBytes = await readFile(
   new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url),
@@ -12,195 +16,27 @@ const fontBytes = await readFile(
 globalThis.GPUBufferUsage ??= { VERTEX: 32, COPY_DST: 8, STORAGE: 128 };
 await glyph.init();
 
-test('TypeGPU Slug packs placement into its existing eighth-buffer program', () => {
+test('every first-party TypeGPU program reads its Text offset from the transform table', () => {
   const descriptor = codecDescriptor(id);
-  assert.equal(descriptor.capabilitySets[0].maxBuffersPerDraw, 8);
-  const program = descriptor.programs.find((candidate) =>
-    candidate.buffers.some((buffer) => buffer.id === slugSchema.buffers.bandCounts.id),
-  );
-  assert.ok(program);
-  assert.equal(program.buffers.length, 8);
-  assert.equal(
-    program.buffers.some((buffer) => buffer.id === TYPEGPU_PLACEMENT_SLOT_BUFFER_ID),
-    false,
-  );
-  assert.ok(
-    program.operations.some(
-      (operation) => operation.immediate0 === slugSchema.buffers.bandCounts.id && operation.operand1 === 2,
-    ),
-  );
-});
-
-// A recording host at the public config seam. The real engine authors all commands and bytes.
-function recordingHost(rasterSchema = msdfSchema) {
-  const allocations = new Set();
-  const recorded = [];
-  const uploads = [];
-  const projectedBuffers = [];
-  const uniforms = [];
-  const codecIdByGpu = new WeakMap();
-  const stats = { allocations: 0, preparations: 0, publications: 0, uniformWrites: 0, reject: false };
-  function buffer(size, usage = 0) {
-    const value = {
-      bytes: new Uint8Array(size),
-      usage,
-      destroyed: false,
-      destroy() {
-        this.destroyed = true;
-        allocations.delete(this);
-      },
-    };
-    allocations.add(value);
-    return value;
+  assert.equal(descriptor.capabilitySets[0].maxBuffersPerDraw, 9);
+  for (const schema of [bitmapSchema, msdfSchema, slugSchema]) {
+    const program = descriptor.programs.find((candidate) =>
+      candidate.buffers.some((buffer) => buffer.id === Object.values(schema.buffers)[0].id),
+    );
+    assert.ok(program, schema.technique);
+    for (const system of [TYPEGPU_PLACEMENT_SLOT_BUFFER_ID, TYPEGPU_TRANSFORM_INDEX_BUFFER_ID]) {
+      assert.ok(
+        program.buffers.some((buffer) => buffer.id === system),
+        `${schema.technique} carries system lane ${system}`,
+      );
+    }
   }
-  const root = {
-    createUniform() {
-      const allocation = buffer(8);
-      const uniform = {
-        buffer: allocation,
-        value: [0, 0],
-        failNextWrite: false,
-        writes: 0,
-        write(value) {
-          stats.uniformWrites++;
-          this.writes++;
-          if (this.failNextWrite) {
-            this.failNextWrite = false;
-            throw new Error('Injected uniform write failure');
-          }
-          this.value = [...value];
-        },
-      };
-      uniforms.push(uniform);
-      return uniform;
-    },
-    device: {
-      createBuffer({ size, usage }) {
-        stats.allocations++;
-        return buffer(size, usage);
-      },
-      queue: {
-        writeBuffer(target, offset, bytes) {
-          uploads.push({
-            codecId: codecIdByGpu.get(target),
-            offset,
-            length: bytes.byteLength,
-            capacity: target.bytes.byteLength,
-            usage: target.usage,
-          });
-          target.bytes.set(bytes, offset);
-        },
-      },
-    },
-  };
-  const base = defineTypeGpuConfig({ root, format: 'rgba8unorm' });
-  const config = {
-    ...base,
-    renderer: ({ defaultRenderer }) => ({
-      decode(frame) {
-        stats.publications++;
-        projectedBuffers.push({
-          updates: Array.from(frame.updates.buffers, (command) => command.buffer),
-          retirements: Array.from(frame.updates.retirements)
-            .filter((command) => command.kind === 'buffer')
-            .map((command) => command.buffer),
-        });
-        const prepared = defaultRenderer.decode(frame);
-        if (stats.reject) {
-          prepared.discard();
-          throw new Error('Injected renderer rejection');
-        }
-        return prepared;
-      },
-      syncTransforms: () => defaultRenderer.syncTransforms(),
-      dispose: () => defaultRenderer.dispose(),
-    }),
-    resolve: () =>
-      resourceLease(
-        {
-          prepare(buffers, placementTable, viewport, position, start, count) {
-            stats.preparations++;
-            for (const [codecId, gpu] of buffers) codecIdByGpu.set(gpu, codecId);
-            return {
-              draw() {
-                const placementSlots = buffers
-                  .get(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID)
-                  .bytes.slice(start * 4, (start + count) * 4);
-                const placementTableBytes = placementTable.bytes.slice();
-                const slotView = new DataView(
-                  placementSlots.buffer,
-                  placementSlots.byteOffset,
-                  placementSlots.byteLength,
-                );
-                const tableView = new DataView(
-                  placementTableBytes.buffer,
-                  placementTableBytes.byteOffset,
-                  placementTableBytes.byteLength,
-                );
-                recorded.push({
-                  // Compare raster inputs, not lifecycle-specific stable glyph identities.
-                  buffers: Object.values(rasterSchema.buffers).map((declaration) => {
-                    const stride = declaration.lanes.length * 4;
-                    return buffers.get(declaration.id).bytes.slice(start * stride, (start + count) * stride);
-                  }),
-                  placementSlots,
-                  placementTable: placementTableBytes,
-                  resolvedPlacement: Array.from({ length: count }, (_, index) => {
-                    const slot = slotView.getUint32(index * 4, true);
-                    return [tableView.getFloat32(slot * 8, true), tableView.getFloat32(slot * 8 + 4, true)];
-                  }),
-                  position: [...position.value],
-                  viewport: [...viewport.value],
-                  start,
-                  count,
-                });
-              },
-            };
-          },
-        },
-        () => {},
-      ),
-    root: {
-      create(context) {
-        const selected = base.root.create(context);
-        selected.createCoreText = (selection, options) => {
-          const font = context.fonts.acquire(selection);
-          const transform = { position: root.createUniform() };
-          let state = { ...options, font, transform };
-          let controller;
-          let disposed = false;
-          try {
-            controller = context.services.createText(state);
-          } catch (error) {
-            transform.position.buffer.destroy();
-            font.dispose();
-            throw error;
-          }
-          return {
-            update(update) {
-              if (disposed) throw new Error('core test text is disposed');
-              const next = { ...state, ...update, font, transform };
-              controller.update(next);
-              state = next;
-            },
-            dispose() {
-              if (disposed) return;
-              disposed = true;
-              try {
-                controller.dispose();
-              } finally {
-                transform.position.buffer.destroy();
-                font.dispose();
-              }
-            },
-          };
-        };
-        return selected;
-      },
-    },
-  };
-  return { config, allocations, recorded, uploads, projectedBuffers, uniforms, stats };
-}
+  const slugProgram = descriptor.programs.find((candidate) =>
+    candidate.buffers.some((buffer) => buffer.id === slugSchema.buffers.glyph.id),
+  );
+  // rect, color and glyph, plus the stable glyph id, placement slot and transform index.
+  assert.equal(slugProgram.buffers.length, 6);
+});
 
 function renderedState(draws) {
   return draws.map(({ placementSlots: _slots, placementTable: _table, resolvedPlacement, ...draw }) => {
@@ -472,31 +308,27 @@ test('TypeGPU roots consume real engine output, retain idle draws and isolate na
     assert.deepEqual(host.recorded[0].position, [100, 80]);
     host.recorded.length = 0;
     const publicationCount = host.stats.publications;
-    const uniformWriteCount = host.stats.uniformWrites;
+    const transformWriteCount = host.stats.transformWrites;
     host.stats.reject = true;
     text.update({ position: [36, 48] });
-    assert.equal(host.stats.uniformWrites, uniformWriteCount + 1);
     text.update({ position: [36, 48] });
     text.update({});
-    assert.equal(host.stats.uniformWrites, uniformWriteCount + 1, 'unchanged positions do not touch the uniform');
     assert.doesNotThrow(() => glyph.shape(), 'position-only updates must not enter semantic publication');
     assert.equal(host.stats.publications, publicationCount, 'position-only updates leave the semantic root idle');
     handle.draw({}, { width: 640, height: 240 });
+    assert.equal(host.stats.transformWrites, transformWriteCount + 1, 'a move uploads its one table record at draw');
     assert.deepEqual(host.recorded[0].position, [36, 48]);
+    handle.draw({}, { width: 640, height: 240 });
+    assert.equal(host.stats.transformWrites, transformWriteCount + 1, 'an unmoved Text uploads nothing');
+    host.recorded.splice(host.recorded.length / 2);
     const moved = host.recorded.splice(0);
     host.stats.reject = false;
     glyph.shape();
     handle.draw({}, { width: 640, height: 240 });
     assert.deepEqual(host.recorded.splice(0), moved);
-    const writesBeforeRejectedUpdate = host.stats.uniformWrites;
     assert.throws(
       () => text.update({ constraints: { width: { mode: 'at-most', size: NaN } }, position: [72, 96] }),
       /width/i,
-    );
-    assert.equal(
-      host.stats.uniformWrites,
-      writesBeforeRejectedUpdate,
-      'failed semantic updates cannot move accepted text',
     );
     assert.throws(() => text.update({ constraints: { width: { mode: 'at-most', size: NaN } } }), /width/i);
     assert.throws(() => text.update({ position: [NaN, 0] }), /position/);
@@ -851,9 +683,9 @@ test('TypeGPU keeps accepted placement when reused mutable layout and constraint
   assert.equal(host.allocations.size, 0);
 });
 
-test('TypeGPU retries accepted host placement after one uniform write fails', async () => {
+test('TypeGPU settles every accepted anchor and a removal in one shape, rewriting only moved records', async () => {
   const host = recordingHost();
-  const handle = glyph.handle('typegpu:anchor-write-recovery', host.config);
+  const handle = glyph.handle('typegpu:anchor-settlement', host.config);
   const font = glyph.fontFace(new Blob([fontBytes]), { format: msdf });
   const snapshot = () => {
     handle.draw({}, { width: 640, height: 240 });
@@ -867,16 +699,13 @@ test('TypeGPU retries accepted host placement after one uniform write fails', as
       position: [100, 80],
       constraints: { anchor: { x: 'center', y: 'first-baseline' } },
     });
-    const firstUniform = host.uniforms.at(-1);
     const second = handle.createText({
       font,
       text: 'Second',
       position: [200, 80],
       constraints: { anchor: { x: 'center', y: 'first-baseline' } },
     });
-    const secondUniform = host.uniforms.at(-1);
     const removed = handle.createText({ font, text: 'Removed' });
-    const retiredBuffer = host.uniforms.at(-1).buffer;
     glyph.shape();
     const before = snapshot();
     assert.equal(before.length, 3);
@@ -886,20 +715,18 @@ test('TypeGPU retries accepted host placement after one uniform write fails', as
     const firstAnchor = first.measure().anchorOffset;
     const secondAnchor = second.measure().anchorOffset;
     removed.dispose();
-    firstUniform.failNextWrite = true;
-    assert.throws(() => glyph.shape(), /Injected uniform write failure/);
-    const partiallySettled = snapshot();
-    assert.equal(partiallySettled.length, 2, 'renderer accepted the new text and the removal');
-    assert.deepEqual(partiallySettled[0].position, before[0].position, 'failed placement keeps the old host origin');
-    assert.deepEqual(partiallySettled[1].position, [200 + secondAnchor.x, 80 + secondAnchor.y]);
-    assert.equal(retiredBuffer.destroyed, true, 'retired transform is released despite another text failing');
-    const secondWrites = secondUniform.writes;
-
     glyph.shape();
-    const recovered = snapshot();
-    assert.deepEqual(recovered[0].position, [100 + firstAnchor.x, 80 + firstAnchor.y]);
-    assert.deepEqual(recovered[1].position, partiallySettled[1].position);
-    assert.equal(secondUniform.writes, secondWrites, 'settled text is not rewritten on the recovery shape');
+    const settled = snapshot();
+    assert.equal(settled.length, 2, 'the removal leaves two Texts');
+    assert.deepEqual(settled[0].position, [100 + firstAnchor.x, 80 + firstAnchor.y]);
+    assert.deepEqual(settled[1].position, [200 + secondAnchor.x, 80 + secondAnchor.y]);
+
+    const writes = host.stats.transformWrites;
+    second.update({ position: [220, 90] });
+    const moved = snapshot();
+    assert.deepEqual(moved[0].position, settled[0].position);
+    assert.deepEqual(moved[1].position, [220 + secondAnchor.x, 90 + secondAnchor.y]);
+    assert.equal(host.stats.transformWrites, writes + 1, 'only the moved Text record is rewritten');
   } finally {
     handle.dispose();
     font.dispose();

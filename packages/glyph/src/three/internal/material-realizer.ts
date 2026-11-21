@@ -10,6 +10,8 @@ import { slugSchema } from '../../raster/slug.js';
 import { slug } from '../../raster/slug.js';
 import type { RetainedSlugPage, ThreeRendererResources } from './renderer-resources.js';
 import { createMsdfAtlas, type RetainedMsdfAtlas } from './msdf-atlas.js';
+import { slugGlyphRow } from './slug-glyph-table.js';
+import { createSlugPage, registerSlugPageUse } from './slug-residency.js';
 import { registerMsdfAtlasUse, registerMsdfEffectVariants } from './msdf-draws.js';
 import type { TslMsdfEffects } from '../../shaders/tsl/index.js';
 import { atlasTextureArray } from './portable-resource.js';
@@ -18,14 +20,7 @@ import type { ThreeRasterProgramBuffer } from '../raster-program.js';
 import { decorationSchema, threeSystemBuffers } from '../codec.js';
 import type { ThreeBufferBinding, ThreeResolvedMaterialBinding, ThreeResolvedResourceBinding } from '../schema.js';
 import type { RetainedBuffer, ThreeBufferBindingId } from './host-buffer.js';
-import {
-  dataTexture,
-  ownedUint16,
-  ownedUint32,
-  resourceGroup,
-  textureArrayResource,
-  textureMember,
-} from './portable-resource.js';
+import { resourceGroup, textureArrayResource } from './portable-resource.js';
 import type {
   MaterialRealization,
   MaterialStorageNode,
@@ -277,15 +272,7 @@ export class ThreeMaterialRealizer {
     transform: TransformRealization,
   ): THREE.NodeMaterial {
     const part = schemaDrawBuffers(slugSchema, buffers, 'Slug');
-    const required = [
-      part.rect,
-      part.planeRect,
-      part.bandTransform,
-      part.color,
-      part.inverseFontSize,
-      part.tableStarts,
-      part.bandCounts,
-    ];
+    const required = [part.rect, part.color, part.glyph];
     const placementTable = this.#placementTable();
     const retained = [...required, placementTable];
     const lanes = materialBuffers(retained, transform);
@@ -293,14 +280,20 @@ export class ThreeMaterialRealizer {
     const shape = this.#cacheShape('slug', resource, selection, retained, buffers, transform);
     const cached = this.#cached(key, shape, lanes);
     if (cached !== undefined) return cached;
-    const page = resourceGroup(resource.resolved, 'page', 'Slug');
+    const page = this.#slugPage(resource.binding, resourceGroup(resource.resolved, 'page', 'Slug'));
     const instance = runInstance();
-    const field = (buffer: RetainedBuffer) => storageVec4(buffer, instance);
-    const rect = field(part.rect);
-    const planeRect = field(part.planeRect);
-    const addresses = storageUvec4(part.tableStarts, instance);
-    const counts = storageUvec4(part.bandCounts, instance);
-    const placementOffset = storageVec2(placementTable, counts.z);
+    const rect = storageVec4(part.rect, instance);
+    const glyph = storageUvec2(part.glyph, instance);
+    const placementOffset = storageVec2(placementTable, glyph.y);
+    // What every drawing of a glyph shares is read once per vertex from the page's glyph table; the fragment receives
+    // it as varyings and reads no instance storage.
+    const row = slugGlyphRow(page.glyphTable, glyph.x);
+    const emSize = row.quad.zw;
+    // Em units per layout unit. The quad is the em quad scaled by the font size, so either axis gives it; their sum
+    // keeps a quad that is flat on one axis exact.
+    const inverseScale = emSize.x.add(emSize.y).div(TSL.max(rect.z.add(rect.w), 1e-30));
+    const starts = TSL.varying(row.starts);
+    const counts = TSL.varying(row.counts);
     const indexed =
       transform.kind === 'indexed'
         ? indexedTransformNodes(transform.indices, this.#context.transformAttribute, instance)
@@ -316,19 +309,19 @@ export class ThreeMaterialRealizer {
       {
         origin: rect.xy.add(placementOffset),
         size: rect.zw,
-        emOrigin: planeRect.xy,
-        emSize: planeRect.zw,
-        bandTransform: field(part.bandTransform),
-        color: field(part.color),
-        inverseScale: field(part.inverseFontSize).x,
-        curveBaseTexel: addresses.x,
-        horizontalHeaderBase: addresses.y,
-        verticalHeaderBase: addresses.z,
-        referenceBase: addresses.w,
+        emOrigin: row.quad.xy,
+        emSize,
+        bandTransform: TSL.varying(row.band),
+        color: TSL.varying(storageVec4(part.color, instance)),
+        inverseScale,
+        curveBaseTexel: starts.x,
+        horizontalHeaderBase: starts.y,
+        verticalHeaderBase: starts.z,
+        referenceBase: starts.w,
         horizontalBandCount: counts.x,
         verticalBandCount: counts.y,
       },
-      { page: this.#slugPage(resource.binding, page), viewport, modelViewProjection },
+      { page, viewport, modelViewProjection },
     );
     const glyphPosition = this.#glyphPosition(shader.position, instance, buffers);
     const position = indexed?.position(glyphPosition) ?? glyphPosition;
@@ -340,6 +333,7 @@ export class ThreeMaterialRealizer {
       position,
       createDefaultMaterial: () => coverageMaterial(shader, position),
     });
+    registerSlugPageUse(material, page);
     this.#retain(key, material, resource, lanes, transform.kind, shape);
     return material;
   }
@@ -558,43 +552,7 @@ export class ThreeMaterialRealizer {
   #slugPage(binding: ThreeResolvedResourceBinding, data: PortableResourceGroupPayload): RetainedSlugPage {
     let lease = this.#context.slugPages.get(binding);
     if (lease !== undefined) return lease.resource;
-    lease = this.#coordinator.acquireSlugPageResource(data, () => {
-      const curves = textureMember(data, 'curves', 'rgba16float', 'Slug');
-      const headers = textureMember(data, 'headers', 'r32uint', 'Slug');
-      const references = textureMember(data, 'references', 'r32uint', 'Slug');
-      const curveBytes = ownedUint16(curves.bytes);
-      const headerBytes = ownedUint32(headers.bytes);
-      const referenceBytes = ownedUint32(references.bytes);
-      const curveTexture = dataTexture(curveBytes, curves.width, curves.height, THREE.RGBAFormat, THREE.HalfFloatType);
-      const headerTexture = dataTexture(
-        headerBytes,
-        headers.width,
-        headers.height,
-        THREE.RedIntegerFormat,
-        THREE.UnsignedIntType,
-      );
-      const referenceTexture = dataTexture(
-        referenceBytes,
-        references.width,
-        references.height,
-        THREE.RedIntegerFormat,
-        THREE.UnsignedIntType,
-      );
-      return {
-        curveTexture,
-        curveWidth: curves.width,
-        headerTexture,
-        headerWidth: headers.width,
-        referenceTexture,
-        referenceWidth: references.width,
-        byteLength: curveBytes.byteLength + headerBytes.byteLength + referenceBytes.byteLength,
-        dispose() {
-          curveTexture.dispose();
-          headerTexture.dispose();
-          referenceTexture.dispose();
-        },
-      };
-    });
+    lease = this.#coordinator.acquireSlugPageResource(data, () => createSlugPage(data));
     this.#context.newTextures.add(lease);
     this.#context.slugPages.set(binding, lease);
     return lease.resource;
@@ -691,7 +649,7 @@ function takeStorageNodes(): readonly MaterialStorageNode[] {
   return taken;
 }
 
-function storageLane<Type extends 'vec2' | 'vec4' | 'uvec2' | 'uvec4' | 'uint'>(buffer: RetainedBuffer, type: Type) {
+function storageLane<Type extends 'vec2' | 'vec4' | 'uvec2' | 'uint'>(buffer: RetainedBuffer, type: Type) {
   const node = TSL.storage(buffer.attribute, type, buffer.attribute.count).setPBO(true);
   createdStorageNodes.push({ node, lane: buffer.codecBufferId });
   return node;
@@ -720,8 +678,6 @@ const storageVec4 = (buffer: RetainedBuffer, instance: THREE.Node<'uint'>): THRE
   storageLane(buffer, 'vec4').element(instance);
 const storageUvec2 = (buffer: RetainedBuffer, instance: THREE.Node<'uint'>): THREE.Node<'uvec2'> =>
   storageLane(buffer, 'uvec2').element(instance);
-const storageUvec4 = (buffer: RetainedBuffer, instance: THREE.Node<'uint'>): THREE.Node<'uvec4'> =>
-  storageLane(buffer, 'uvec4').element(instance);
 const storageUint = (buffer: RetainedBuffer, instance: THREE.Node<'uint'>): THREE.Node<'uint'> =>
   storageLane(buffer, 'uint').element(instance);
 

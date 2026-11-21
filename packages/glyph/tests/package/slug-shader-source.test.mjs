@@ -15,7 +15,6 @@ const CORE_FUNCTIONS = {
     'slugBandIndex',
     'slugBandReferenceOffset',
     'slugBandCurveCount',
-    'slugReferenceFromPair',
     'calcRootCode',
     'stableRoots',
     'solveHorizontalPolynomial',
@@ -30,7 +29,7 @@ const CORE_FUNCTIONS = {
  * WGSL builtins with no GLSL equivalent. A core function reaching for one compiles on
  * WebGPU and fails to link on WebGL2, so the portable core must not emit them.
  */
-const WGSL_ONLY_BUILTINS = ['countLeadingZeros', 'countTrailingZeros', 'extractBits', 'insertBits'];
+const WGSL_ONLY_BUILTINS = ['countLeadingZeros', 'countTrailingZeros', 'extractBits', 'insertBits', 'unpack2x16float'];
 
 test('the Slug material compiles on both backends and calls the portable core once per algorithm step', () => {
   withSlugFillMesh((fillMesh) => {
@@ -77,9 +76,8 @@ test('the portable core emits no WGSL-only builtin into the WebGL2 shader', () =
 });
 
 function withSlugFillMesh(body) {
-  const curveTexture = dataTexture(new Uint16Array(4 * 4 * 4), THREE.RGBAFormat, THREE.HalfFloatType);
   const headerTexture = dataTexture(new Uint32Array(16), THREE.RedIntegerFormat, THREE.UnsignedIntType);
-  const referenceTexture = dataTexture(new Uint32Array(16), THREE.RedIntegerFormat, THREE.UnsignedIntType);
+  const bandCurveTexture = dataTexture(new Uint32Array(4 * 16), THREE.RGBAIntegerFormat, THREE.UnsignedIntType);
   const output = slugShader(
     {
       origin: TSL.vec2(0),
@@ -98,12 +96,10 @@ function withSlugFillMesh(body) {
     },
     {
       page: {
-        curveTexture,
-        curveWidth: 4,
         headerTexture,
         headerWidth: 4,
-        referenceTexture,
-        referenceWidth: 4,
+        bandCurveTexture,
+        bandCurveWidth: 4,
       },
       viewport: TSL.vec2(64),
       modelViewProjectionRow0: TSL.vec4(1, 0, 0, 0),
@@ -122,9 +118,8 @@ function withSlugFillMesh(body) {
   } finally {
     geometry.dispose();
     material.dispose();
-    curveTexture.dispose();
     headerTexture.dispose();
-    referenceTexture.dispose();
+    bandCurveTexture.dispose();
   }
 }
 

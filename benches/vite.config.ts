@@ -38,6 +38,10 @@ export default defineConfig({
     },
   ],
   build: { target: 'es2022' },
+  // Scan only the benchmark pages. The default `**/*.html` also crawls any untracked directory left
+  // under benches/, and a copied `node_modules/@pmndrs/glyph` there is pre-bundled as a second
+  // Glyph (and Three) instance that outlives the directory in the dependency cache.
+  optimizeDeps: { entries: ['*.html'] },
   preview: { headers: CROSS_ORIGIN_ISOLATION_HEADERS },
   server: { headers: CROSS_ORIGIN_ISOLATION_HEADERS },
 });

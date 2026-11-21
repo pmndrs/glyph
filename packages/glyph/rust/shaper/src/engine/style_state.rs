@@ -150,8 +150,34 @@ pub(crate) struct StyleInvalidation {
     pub bidi: bool,
     pub shaping: bool,
     pub metrics: bool,
+    /// Font size, letter or word spacing or baseline shift changed (or shaping did): cluster
+    /// advances and run-local geometry are stale. `metrics` without it is line height alone.
+    pub run_geometry: bool,
     pub positioning: bool,
     pub cluster_mapping: bool,
+    /// Colour, opacity or material differs. Also sets `positioning`.
+    pub paint: bool,
+    /// An effect extent, decoration geometry or raster ratio differs. Also sets `positioning`.
+    pub effects: bool,
+    /// The UTF-16 range whose resolved style differs.
+    pub changed: super::state::DirtyInterval,
+}
+
+impl StyleInvalidation {
+    pub(crate) fn any(self) -> bool {
+        self.bidi || self.shaping || self.metrics || self.positioning || self.cluster_mapping
+    }
+
+    /// Whether the only difference is paint: no glyph moves, no extent changes, no span boundary
+    /// moves, so retained shaping, lines and positions all still answer.
+    pub(crate) fn paint_only(self) -> bool {
+        self.paint
+            && !self.effects
+            && !self.metrics
+            && !self.cluster_mapping
+            && !self.shaping
+            && !self.bidi
+    }
 }
 
 #[derive(Default)]
@@ -254,8 +280,12 @@ impl ResolvedStyleArena {
                 bidi: true,
                 shaping: true,
                 metrics: true,
+                run_geometry: true,
                 positioning: true,
                 cluster_mapping: true,
+                paint: true,
+                effects: true,
+                changed: super::state::DirtyInterval::ALL,
             };
         }
         let mut invalidation = StyleInvalidation::default();
@@ -275,29 +305,54 @@ impl ResolvedStyleArena {
                 || old.font_stack_handle != new.font_stack_handle
                 || previous_storage.resolved_language(old) != next_storage.resolved_language(new)
                 || previous_storage.resolved_features(old) != next_storage.resolved_features(new);
-            invalidation.metrics |= invalidation.shaping
+            invalidation.run_geometry |= invalidation.shaping
                 || old.font_size.to_bits() != new.font_size.to_bits()
-                || old.line_height.to_bits() != new.line_height.to_bits()
-                || old.has_line_height != new.has_line_height
                 || old.letter_spacing.to_bits() != new.letter_spacing.to_bits()
                 || old.word_spacing.to_bits() != new.word_spacing.to_bits()
                 || old.baseline_shift.to_bits() != new.baseline_shift.to_bits();
-            invalidation.positioning |= invalidation.metrics
-                || invalidation.cluster_mapping
-                || old.material_id != new.material_id
-                || old.raster_pixel_ratio.to_bits() != new.raster_pixel_ratio.to_bits()
+            invalidation.metrics |= invalidation.run_geometry
+                || old.line_height.to_bits() != new.line_height.to_bits()
+                || old.has_line_height != new.has_line_height;
+            let paint = old.material_id != new.material_id
                 || old.foreground_rgba != new.foreground_rgba
                 || old.opacity.to_bits() != new.opacity.to_bits()
                 || old.outline_rgba != new.outline_rgba
-                || old.outline_width.to_bits() != new.outline_width.to_bits()
                 || old.shadow_rgba != new.shadow_rgba
+                || old.decoration_rgba != new.decoration_rgba;
+            // Positioning bakes each decoration record's colour and material, and decides once per
+            // paragraph whether its rows carry outline and shadow. A paint change that reaches
+            // either is not paint-only: the paint-only preparation keeps those positioned facts.
+            let decorated = (old.decoration_flags | new.decoration_flags) != 0;
+            let effects = (decorated
+                && (old.material_id != new.material_id
+                    || old.decoration_rgba != new.decoration_rgba))
+                || super::positioning::style_has_text_effects(old)
+                    != super::positioning::style_has_text_effects(new)
+                || old.raster_pixel_ratio.to_bits() != new.raster_pixel_ratio.to_bits()
+                || old.outline_width.to_bits() != new.outline_width.to_bits()
                 || old.shadow_offset_x.to_bits() != new.shadow_offset_x.to_bits()
                 || old.shadow_offset_y.to_bits() != new.shadow_offset_y.to_bits()
-                || old.decoration_rgba != new.decoration_rgba
                 || old.decoration_flags != new.decoration_flags
                 || old.decoration_style != new.decoration_style
                 || old.decoration_thickness.to_bits() != new.decoration_thickness.to_bits()
                 || old.decoration_offset.to_bits() != new.decoration_offset.to_bits();
+            let before = invalidation;
+            invalidation.paint |= paint;
+            invalidation.effects |= effects;
+            invalidation.positioning |=
+                invalidation.metrics || invalidation.cluster_mapping || paint || effects;
+            if invalidation != before || paint || effects {
+                invalidation.changed = super::state::DirtyInterval {
+                    start: invalidation
+                        .changed
+                        .start
+                        .min(previous.text_start.max(next.text_start)),
+                    end: invalidation
+                        .changed
+                        .end
+                        .max(previous.text_end.min(next.text_end)),
+                };
+            }
             if previous.text_end <= next.text_end {
                 old_index += 1;
             }
@@ -1731,44 +1786,127 @@ mod tests {
             font_size: 24.0,
             ..ResolvedStyle::default()
         };
+        let metrics = previous.invalidation_against(&storage, &resolved(font_size), &storage);
         assert_eq!(
-            previous.invalidation_against(&storage, &resolved(font_size), &storage),
+            metrics,
+            StyleInvalidation {
+                metrics: true,
+                run_geometry: true,
+                positioning: true,
+                changed: metrics.changed,
+                ..StyleInvalidation::default()
+            },
+        );
+
+        let line_height = ResolvedStyle {
+            line_height: 2.0,
+            ..ResolvedStyle::default()
+        };
+        assert_eq!(
+            previous.invalidation_against(&storage, &resolved(line_height), &storage),
             StyleInvalidation {
                 bidi: false,
                 shaping: false,
                 metrics: true,
+                run_geometry: false,
                 positioning: true,
-                cluster_mapping: false,
+                changed: metrics.changed,
+                ..StyleInvalidation::default()
             },
         );
+        assert!(!metrics.paint_only());
 
         let foreground = ResolvedStyle {
             foreground_rgba: 0xff00_00ff,
             ..ResolvedStyle::default()
         };
+        let paint = previous.invalidation_against(&storage, &resolved(foreground), &storage);
         assert_eq!(
-            previous.invalidation_against(&storage, &resolved(foreground), &storage),
+            paint,
             StyleInvalidation {
-                bidi: false,
-                shaping: false,
-                metrics: false,
                 positioning: true,
-                cluster_mapping: false,
+                paint: true,
+                changed: paint.changed,
+                ..StyleInvalidation::default()
             },
+        );
+        assert!(paint.paint_only());
+        assert!(!paint.changed.is_empty());
+
+        let outline_width = ResolvedStyle {
+            outline_width: 2.0,
+            ..ResolvedStyle::default()
+        };
+        let effects = previous.invalidation_against(&storage, &resolved(outline_width), &storage);
+        assert!(effects.effects && effects.positioning && !effects.paint_only());
+
+        // Material on undecorated text is paint; on decorated text it is baked into the
+        // positioned decoration records, as is the decoration colour.
+        let material = ResolvedStyle {
+            material_id: 9,
+            ..ResolvedStyle::default()
+        };
+        assert!(
+            previous
+                .invalidation_against(&storage, &resolved(material), &storage)
+                .paint_only()
+        );
+        let underlined = ResolvedStyle {
+            decoration_flags: super::super::frame::DECORATION_UNDERLINE,
+            ..ResolvedStyle::default()
+        };
+        let decorated = resolved(underlined);
+        for changed in [
+            ResolvedStyle {
+                material_id: 9,
+                ..underlined
+            },
+            ResolvedStyle {
+                decoration_rgba: 0xff00_00ff,
+                ..underlined
+            },
+        ] {
+            let invalidation =
+                decorated.invalidation_against(&storage, &resolved(changed), &storage);
+            assert!(invalidation.paint && invalidation.effects && !invalidation.paint_only());
+        }
+
+        // Positioning decides once whether rows carry outline and shadow; a colour that turns them
+        // on or off is not paint-only, a colour that only changes them is.
+        let outlined = ResolvedStyle {
+            outline_rgba: 0x0000_ffff,
+            ..ResolvedStyle::default()
+        };
+        assert!(
+            !previous
+                .invalidation_against(&storage, &resolved(outlined), &storage)
+                .paint_only()
+        );
+        let recoloured = ResolvedStyle {
+            outline_rgba: 0x00ff_00ff,
+            ..ResolvedStyle::default()
+        };
+        assert!(
+            resolved(outlined)
+                .invalidation_against(&storage, &resolved(recoloured), &storage)
+                .paint_only()
         );
 
         let direction = ResolvedStyle {
             direction: 2,
             ..ResolvedStyle::default()
         };
+        let bidi = previous.invalidation_against(&storage, &resolved(direction), &storage);
         assert_eq!(
-            previous.invalidation_against(&storage, &resolved(direction), &storage),
+            bidi,
             StyleInvalidation {
                 bidi: true,
                 shaping: true,
                 metrics: true,
+                run_geometry: true,
                 positioning: true,
-                cluster_mapping: false,
+                changed: bidi.changed,
+                ..StyleInvalidation::default()
             },
         );
     }

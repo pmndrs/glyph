@@ -60,44 +60,27 @@ function slugProof(abi, raster) {
   const bottom = normalized(2);
   const right = normalized(4);
   const top = normalized(6);
-  const width = left.map((value, index) => right[index] - value);
-  const height = bottom.map((value, index) => top[index] - value);
-  const horizontalBands = field(raster.glyphCount, (record) => view.getUint16(record + 10, true), 40);
-  const verticalBands = field(raster.glyphCount, (record) => view.getUint16(record + 12, true), 40);
-  const bandScaleX = width.map((value, index) => (value === 0 ? 0 : verticalBands[index] / value));
-  const bandScaleY = height.map((value, index) => (value === 0 ? 0 : horizontalBands[index] / value));
-  const fields = [
-    left,
-    top,
-    width,
-    height,
-    bandScaleX,
-    bandScaleY,
-    left.map((value, index) => -value * bandScaleX[index]),
-    bottom.map((value, index) => -value * bandScaleY[index]),
-  ];
-  const integers = [
-    field(raster.glyphCount, (record) => view.getUint32(record + 16, true), 40),
-    field(raster.glyphCount, (record) => view.getUint32(record + 24, true), 40),
-    field(raster.glyphCount, (record) => view.getUint32(record + 28, true), 40),
-    field(raster.glyphCount, (record) => view.getUint32(record + 32, true), 40),
-    horizontalBands,
-    verticalBands,
-  ];
+  const pages = field(raster.glyphCount, (record) => view.getUint16(record + 8, true), 40);
+  // Per-glyph constants live in each page's glyph table; the binding carries the glyph's page-local row.
+  const used = new Map();
+  const rows = pages.map((page) => {
+    if (page === ABSENT_PAGE) return 0;
+    const row = used.get(page) ?? 0;
+    used.set(page, row + 1);
+    return row;
+  });
   return proof(abi, slugProgram(abi), {
     glyphCount: raster.glyphCount,
     strikes: [0],
     resources: raster.pages.map(resource),
-    resourceIndices: field(
-      raster.glyphCount,
-      (record) => {
-        const page = view.getUint16(record + 8, true);
-        return page === ABSENT_PAGE ? MISSING_RESOURCE : page;
-      },
-      40,
-    ),
-    glyphF32: fields,
-    glyphU32: integers,
+    resourceIndices: pages.map((page) => (page === ABSENT_PAGE ? MISSING_RESOURCE : page)),
+    glyphF32: [
+      left,
+      top,
+      left.map((value, index) => right[index] - value),
+      bottom.map((value, index) => top[index] - value),
+    ],
+    glyphU32: [rows],
   });
 }
 
@@ -221,40 +204,31 @@ function mtsdfProgram(abi) {
 }
 
 function slugProgram(abi) {
-  const context = programContext(abi, 'glyph', 8, 6, true);
-  const { loadF32, loadU32, binary, constantF32, constantU32, storeF32, storeU32 } = context;
+  const context = programContext(abi, 'glyph', 4, 1);
+  const { loadF32, loadU32, binary, storeF32, storeU32 } = context;
   loadF32(context.f32InputCount);
-  loadU32(30, context.placementU32Input);
-  for (let fieldIndex = 0; fieldIndex < 6; fieldIndex += 1) {
-    loadU32(21 + fieldIndex, context.bindingU32Start + fieldIndex);
-  }
-  binary('multiplyF32', 16, 8, 2);
-  binary('addF32', 17, 0, 16);
-  binary('multiplyF32', 18, 9, 2);
-  binary('subtractF32', 19, 1, 18);
-  binary('multiplyF32', 20, 10, 2);
-  binary('multiplyF32', 27, 11, 2);
-  constantF32(28, 0);
-  constantU32(29, 0);
+  loadU32(18, context.placementU32Input);
+  loadU32(19, context.bindingU32Start);
+  binary('multiplyF32', 11, 7, 2);
+  binary('addF32', 12, 0, 11);
+  binary('multiplyF32', 13, 8, 2);
+  binary('subtractF32', 14, 1, 13);
+  binary('multiplyF32', 15, 9, 2);
+  binary('multiplyF32', 16, 10, 2);
   stores(storeF32, [
-    [1, [17, 19, 20, 27]],
-    [2, [8, 9, 10, 11]],
-    [3, [12, 13, 14, 15]],
-    [4, [3, 4, 5, 6]],
-    [5, [7, 28, 28, 28]],
+    [1, [12, 14, 15, 16]],
+    [2, [3, 4, 5, 6]],
   ]);
-  stores(storeU32, [
-    [6, [21, 22, 23, 24]],
-    [7, [25, 26, 30, 29]],
-  ]);
-  return program(context, [...floatBuffers(abi, [4, 4, 4, 4, 4]), ...uintBuffers(abi, [4, 4], 6)]);
+  // The host's placement slot rides in the glyph buffer's second lane.
+  stores(storeU32, [[3, [19, 18]]]);
+  return program(context, [...floatBuffers(abi, [4, 4]), ...uintBuffers(abi, [2], 3)]);
 }
 
-function programContext(abi, bindingScope, bindingF32Count, bindingU32Count, inverseFontSize = false) {
+function programContext(abi, bindingScope, bindingF32Count, bindingU32Count) {
   const operations = [];
   const semantic = abi.engine.semanticF32Fields;
   const semanticU32 = abi.engine.semanticU32Fields;
-  const f32InputCount = 7 + (inverseFontSize ? 1 : 0) + bindingF32Count;
+  const f32InputCount = 7 + bindingF32Count;
   const inputs = [
     { scope: 'semantic', field: semantic.inlineOrigin },
     { scope: 'semantic', field: semantic.blockOrigin },
@@ -263,7 +237,6 @@ function programContext(abi, bindingScope, bindingF32Count, bindingU32Count, inv
     { scope: 'semantic', field: semantic.foregroundGreen },
     { scope: 'semantic', field: semantic.foregroundBlue },
     { scope: 'semantic', field: semantic.foregroundAlpha },
-    ...(inverseFontSize ? [{ scope: 'semantic', field: semantic.inverseFontSize }] : []),
     ...Array.from({ length: bindingF32Count }, (_, fieldIndex) => ({ scope: bindingScope, field: fieldIndex })),
     { scope: 'semantic', field: semanticU32.placementSlot },
     ...Array.from({ length: bindingU32Count }, (_, fieldIndex) => ({ scope: bindingScope, field: fieldIndex })),
@@ -281,12 +254,6 @@ function programContext(abi, bindingScope, bindingF32Count, bindingU32Count, inv
     },
     binary(name, target, left, right) {
       operations.push({ opcode: abi.codec.opcodes[name], target, operand0: left, operand1: right });
-    },
-    constantF32(target, value) {
-      operations.push({ opcode: abi.codec.opcodes.constantF32, target, immediate0: f32Bits(value) });
-    },
-    constantU32(target, value) {
-      operations.push({ opcode: abi.codec.opcodes.constantU32, target, immediate0: value });
     },
     storeF32(buffer, lane, register) {
       operations.push({
@@ -390,10 +357,4 @@ function resource(_, index) {
 
 function scalarBytes(abi, scalar) {
   return scalar === abi.codec.scalarTypes.u16 ? 2 : 4;
-}
-
-function f32Bits(value) {
-  const bytes = new ArrayBuffer(4);
-  new DataView(bytes).setFloat32(0, value, true);
-  return new DataView(bytes).getUint32(0, true);
 }

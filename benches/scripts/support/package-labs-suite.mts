@@ -16,6 +16,7 @@ export const PACKAGE_LABS_SUITES = [
   'multi-owner',
   'bulk-1024-profile',
   'frontier',
+  'prepare-spans',
   'full',
 ] as const;
 

@@ -220,7 +220,7 @@ test('full suite enforces exact declared baseline identities, including publishe
     groupName: string;
     alias: string;
     runs: { name: string; args: Record<string, unknown>; error?: string }[];
-  }[] = Array.from({ length: 143 }, (_, index) => ({
+  }[] = Array.from({ length: 220 }, (_, index) => ({
     file: 'fixture.bench.ts',
     groupName: 'fixture',
     alias: `workload ${String(index)}`,
@@ -261,7 +261,7 @@ test('full suite enforces exact declared baseline identities, including publishe
   );
   assert.throws(
     () => assertFullLabsCoverage(result([...ordinary.slice(1), ...outlines]), full, 'complete'),
-    /145 distinct/u,
+    /222 distinct/u,
   );
   const wrongOutlines = result([...ordinary, outlines[0]!]);
   assert.throws(() => assertFullLabsCoverage(candidate, wrongOutlines, 'published-no-outlines'), /coverage mismatch/u);

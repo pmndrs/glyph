@@ -100,24 +100,15 @@ pub fn analyze_into(
     output.clear();
     reserve(&mut output.levels, text.len())?;
     reserve(&mut output.classes, text.len())?;
-    let mut counts = BidiParagraphCounts::default();
     let mut start = 0usize;
-    let mut index = 0usize;
-    while index < text.len() {
-        let (class, length) = unit_class(text, index);
-        for _ in 0..length {
-            output.classes.push(class);
-            counts.include(class);
-        }
-        index += length;
-        if class == CLASS_PARAGRAPH_SEPARATOR {
-            output.finish_paragraph(text, start, index, counts, default_level)?;
-            counts = BidiParagraphCounts::default();
-            start = index;
-        }
+    while start < text.len() {
+        // Every Bidi_Class B character is a single BMP unit, so the paragraph end needs no table.
+        let end = paragraph_end(text, start);
+        output.finish_paragraph(text, start, end, default_level)?;
+        start = end;
     }
-    if start < text.len() || text.is_empty() {
-        output.finish_paragraph(text, start, text.len(), counts, default_level)?;
+    if text.is_empty() {
+        output.finish_paragraph(text, 0, 0, default_level)?;
     }
     output.build_runs()
 }
@@ -165,6 +156,36 @@ fn default_level(direction: u8) -> Result<Option<unicode_bidi::Level>, BidiError
         DIRECTION_RTL => Ok(Some(RTL_LEVEL)),
         _ => Err(BidiError::InvalidDirection),
     }
+}
+
+/// The units of Bidi_Class B; `paragraph_separators_are_these_units` checks it against the table.
+/// Written as non-short-circuit compares so the fold in `paragraph_end` vectorizes.
+fn is_paragraph_separator(unit: u16) -> bool {
+    (unit == 0x0a)
+        | (unit == 0x0d)
+        | (unit.wrapping_sub(0x1c) < 3)
+        | (unit == 0x85)
+        | (unit == 0x2029)
+}
+
+/// One past the first paragraph separator at or after `start`, or the end of the text.
+fn paragraph_end(text: &[u16], start: usize) -> usize {
+    let mut index = start;
+    // Fold compare over 32 units, then locate inside the chunk that has one.
+    while let Some(chunk) = text.get(index..index + 32) {
+        let mut found = false;
+        for unit in chunk {
+            found |= is_paragraph_separator(*unit);
+        }
+        if found {
+            break;
+        }
+        index += 32;
+    }
+    text[index..]
+        .iter()
+        .position(|unit| is_paragraph_separator(*unit))
+        .map_or(text.len(), |offset| index + offset + 1)
 }
 
 fn is_low_surrogate(unit: u16) -> bool {
@@ -237,12 +258,14 @@ impl BidiAnalysis {
     }
 
     /// Records the paragraph `[start, end)` and resolves its levels.
+    ///
+    /// The class scan stops at the first character that needs the full algorithm, so a paragraph
+    /// with RTL text is classified once, by `unicode-bidi`, as before.
     fn finish_paragraph(
         &mut self,
         text: &[u16],
         start: usize,
         end: usize,
-        counts: BidiParagraphCounts,
         default_level: Option<unicode_bidi::Level>,
     ) -> Result<(), BidiError> {
         grow(&mut self.paragraph_starts)?;
@@ -252,13 +275,29 @@ impl BidiAnalysis {
             .push(u32::try_from(start).map_err(|_| BidiError::ResultTooLarge)?);
         self.paragraph_ends
             .push(u32::try_from(end).map_err(|_| BidiError::ResultTooLarge)?);
-        if counts.is_zero() && default_level != Some(RTL_LEVEL) {
+        let mut plain = default_level != Some(RTL_LEVEL);
+        let mut index = start;
+        while plain && index < end {
+            let (class, length) = unit_class(text, index);
+            let mut counts = BidiParagraphCounts::default();
+            counts.include(class);
+            if counts.is_zero() {
+                for _ in 0..length {
+                    self.classes.push(class);
+                }
+                index += length;
+            } else {
+                plain = false;
+            }
+        }
+        if plain {
             // No R, AL, AN, embedding, isolate or override, and the base level is 0 (P3, or an
             // explicit LTR direction): every level is 0 and the classes are the original ones.
             self.paragraph_levels.push(0);
             self.levels.resize(end, 0);
             return Ok(());
         }
+        self.classes.truncate(start);
         let info =
             BidiInfo::new_with_data_source(&Unicode17BidiData, &text[start..end], default_level);
         self.paragraph_levels.push(
@@ -272,12 +311,8 @@ impl BidiAnalysis {
         self.levels
             .extend(info.levels.iter().map(|level| level.number()));
         // FSI resolves to LRI or RLI in the original classes (X5c).
-        for (slot, class) in self.classes[start..end]
-            .iter_mut()
-            .zip(&info.original_classes)
-        {
-            *slot = class_code(*class);
-        }
+        self.classes
+            .extend(info.original_classes.iter().copied().map(class_code));
         Ok(())
     }
 
@@ -323,28 +358,31 @@ pub struct Unicode17BidiData;
 
 impl BidiDataSource for Unicode17BidiData {
     fn bidi_class(&self, character: char) -> BidiClass {
-        // Deliberate: bigger raw, smaller gzip, faster per call. Do not "optimize" this back
-        // to a range table to save raw bytes.
-        // Two-stage trie, the shape ICU calls UTrie2: stage 1 maps the code point's high bits to a
-        // deduplicated block, and the low bits index inside it. Two reads and no search, against a
-        // binary probe per call before — this runs once per character on every bidi analysis.
-        // `char` is a scalar value, so both indices are in range by construction.
-        const SHIFT: usize = generated::BIDI_CLASS_BLOCK_SHIFT;
-        let code_point = character as usize;
-        let block = usize::from(generated::BIDI_CLASS_STAGE1[code_point >> SHIFT]);
-        let slot = (block << SHIFT) | (code_point & ((1 << SHIFT) - 1));
-        generated::BIDI_CLASS_VALUES[usize::from(generated::BIDI_CLASS_STAGE2[slot])]
+        // Deliberate: a trie, not a range table. Three reads and no search, against a binary
+        // probe per call — this runs once per character on every bidi analysis. Do not
+        // "optimize" this back to a range table to save raw bytes.
+        // `char` is a scalar value, so every index is in range by construction.
+        let index = crate::unicode::trie::lookup(
+            generated::BIDI_CLASS_ROOT,
+            generated::BIDI_CLASS_MIDDLE,
+            generated::BIDI_CLASS_LEAVES,
+            generated::BIDI_CLASS_LEAF_SHIFT,
+            generated::BIDI_CLASS_MIDDLE_SHIFT,
+            character as u32,
+        );
+        generated::BIDI_CLASS_VALUES[usize::from(index)]
     }
 
     fn bidi_matched_opening_bracket(&self, character: char) -> Option<BidiMatchedOpeningBracket> {
-        let code_point = character as u32;
+        // Every paired bracket is in the BMP.
+        let code_point = u16::try_from(character as u32).ok()?;
         generated::BIDI_BRACKETS
             .binary_search_by_key(&code_point, |entry| entry.0)
             .ok()
             .and_then(|index| {
                 let (_, opening, is_open) = generated::BIDI_BRACKETS[index];
                 Some(BidiMatchedOpeningBracket {
-                    opening: char::from_u32(opening)?,
+                    opening: char::from_u32(u32::from(opening))?,
                     is_open,
                 })
             })
@@ -482,6 +520,20 @@ mod tests {
             analyze_whole_into(units, DIRECTION_AUTO, &mut whole).unwrap();
             assert_eq!(dense.levels, whole.levels);
             assert_eq!(dense.classes, whole.classes);
+        }
+    }
+
+    #[test]
+    fn paragraph_separators_are_these_units() {
+        for scalar in (0..=0x10_ffffu32).filter_map(char::from_u32) {
+            let separator = Unicode17BidiData.bidi_class(scalar) == BidiClass::B;
+            let unit = u16::try_from(scalar as u32).ok();
+            assert_eq!(
+                separator,
+                unit.is_some_and(is_paragraph_separator),
+                "U+{:04X}",
+                scalar as u32
+            );
         }
     }
 

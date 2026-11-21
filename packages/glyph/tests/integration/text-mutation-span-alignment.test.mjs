@@ -145,110 +145,142 @@ test('a rejected authored mutation leaves the accepted planner usable for the ne
   }
 });
 
-test('bound edits prepare once and reads plus renderer publication reuse that revision', { timeout }, async () => {
-  const font = await fonts.load('inter');
-  const first = { constraints, layout, style, text: 'A' };
-  const second = { constraints, layout, style, text: 'sibling' };
-  const mounted = mount(font, [{ properties: first }, { properties: second }]);
-  const originalPrepare = PlanTransport.prototype.prepareParagraph;
-  const originalPublish = PlanTransport.prototype.consumeStagedUpdate;
-  let preparations = 0;
-  let queryMaterializations = 0;
-  let publications = 0;
-  let split;
-  let overwrittenSplit;
-  function recordPreparation(request, ...args) {
-    if (hasSemanticMutations(request)) preparations += 1;
-    else queryMaterializations += 1;
-    return originalPrepare.call(this, request, ...args);
-  }
-  try {
-    PlanTransport.prototype.prepareParagraph = recordPreparation;
-    PlanTransport.prototype.consumeStagedUpdate = function (...args) {
-      publications += 1;
-      return originalPublish.apply(this, args);
-    };
-
-    mounted.nodes[0].set({ text: 'AB' });
-    assert.equal(preparations, 1, 'one changed bound set crosses the Rust preparation boundary once');
-    assert.equal(queryMaterializations, 0, 'the changed set does not count as summary materialization');
-    mounted.nodes[0].set({ text: 'AB' });
-    assert.equal(preparations, 1, 'setting the existing value reuses the prepared revision');
-
-    const measurement = mounted.nodes[0].measure();
-    assert.equal(queryMaterializations, 1, 'the first measurement materializes the requested summary once');
-    const inspection = mounted.nodes[0].glyphs();
-    assert.equal(measurement.glyphCount, 2);
-    assert.equal(inspection.glyphCount, 2);
-    assert.equal(mounted.nodes[0].measure().glyphCount, 2, 'repeated measurement reads the same prepared value');
-    assert.equal(mounted.nodes[0].caretForOffset(2)?.offset, 2);
-    assert.ok(mounted.nodes[0].selectionRects(0, 2)?.length);
-    split = mounted.nodes[0].split()[0];
-    assert.equal(split.count, 2);
-    assert.equal(preparations, 1, 'measurement, inspection, caret, selection, and split do not reprepare');
-    assert.equal(queryMaterializations, 1, 'subsequent reads reuse the materialized summary');
-
-    mounted.nodes[0].set({ text: 'C' });
-    assert.equal(preparations, 2, 'overwriting before publication prepares the replacement once');
-    assert.equal(mounted.nodes[0].measure().glyphCount, 1);
-    assert.equal(mounted.nodes[0].glyphs().glyphCount, 1);
-    overwrittenSplit = mounted.nodes[0].split()[0];
-    assert.equal(overwrittenSplit.count, 1);
-    assert.equal(preparations, 2, 'reads after the overwrite reuse its prepared revision');
-    assert.equal(queryMaterializations, 1, 'the overwritten value uses already requested summaries');
-
-    mounted.scene.updateMatrixWorld(true);
-    assert.equal(publications, 1, 'the batch publishes its accumulated dirty records once');
-    assert.equal(preparations, 2, 'renderer publication does not repeat retained layout preparation');
-    assert.equal(queryMaterializations, 1, 'renderer publication does not request another summary');
-    assert.equal(mounted.nodes[0].commitState().status, 'committed');
-
-    PlanTransport.prototype.prepareParagraph = originalPrepare;
-    PlanTransport.prototype.consumeStagedUpdate = originalPublish;
+test(
+  'bound edits prepare at their first read and later reads plus publication reuse that revision',
+  { timeout },
+  async () => {
+    const font = await fonts.load('inter');
+    const first = { constraints, layout, style, text: 'A' };
+    const second = { constraints, layout, style, text: 'sibling' };
+    const mounted = mount(font, [{ properties: first }, { properties: second }]);
+    const originalPrepare = PlanTransport.prototype.prepareParagraph;
+    const originalPublish = PlanTransport.prototype.consumeStagedUpdate;
+    const originalBatch = PlanTransport.prototype.consumeStagedPreparation;
+    let batchPreparations = 0;
+    let preparations = 0;
+    let queryMaterializations = 0;
+    let publications = 0;
+    let split;
+    let overwrittenSplit;
+    function recordPreparation(request, ...args) {
+      if (hasSemanticMutations(request)) preparations += 1;
+      else queryMaterializations += 1;
+      return originalPrepare.call(this, request, ...args);
+    }
     try {
-      assertMatchesFreshBuild(
-        font,
-        mounted,
-        [{ properties: { ...first, text: 'C' } }, { properties: second }],
-        'edited batched publication',
-      );
-    } finally {
       PlanTransport.prototype.prepareParagraph = recordPreparation;
       PlanTransport.prototype.consumeStagedUpdate = function (...args) {
         publications += 1;
         return originalPublish.apply(this, args);
       };
+      PlanTransport.prototype.consumeStagedPreparation = function (...args) {
+        batchPreparations += 1;
+        return originalBatch.apply(this, args);
+      };
+
+      mounted.nodes[0].set({ text: 'AB' });
+      mounted.nodes[0].set({ text: 'AB' });
+      assert.equal(preparations, 0, 'a changed bound set does not cross the Rust preparation boundary');
+      assert.equal(queryMaterializations, 0, 'a setter materializes no summary');
+
+      const measurement = mounted.nodes[0].measure();
+      assert.equal(preparations, 1, 'the first read crosses the Rust preparation boundary once');
+      assert.equal(queryMaterializations, 0, 'the preparing read returns its summary from the same call');
+      mounted.nodes[0].set({ text: 'AB' });
+      mounted.nodes[0].measure();
+      assert.equal(preparations, 1, 'setting the prepared value again reuses the prepared revision');
+      const inspection = mounted.nodes[0].glyphs();
+      assert.equal(measurement.glyphCount, 2);
+      assert.equal(inspection.glyphCount, 2);
+      assert.equal(mounted.nodes[0].measure().glyphCount, 2, 'repeated measurement reads the same prepared value');
+      assert.equal(mounted.nodes[0].caretForOffset(2)?.offset, 2);
+      assert.ok(mounted.nodes[0].selectionRects(0, 2)?.length);
+      split = mounted.nodes[0].split()[0];
+      assert.equal(split.count, 2);
+      assert.equal(preparations, 1, 'measurement, inspection, caret, selection, and split do not reprepare');
+      assert.equal(queryMaterializations, 0, 'subsequent reads reuse the materialized summary');
+
+      mounted.nodes[0].set({ text: 'overwritten before any read' });
+      mounted.nodes[0].set({ text: 'C' });
+      assert.equal(preparations, 1, 'overwriting before publication prepares nothing at the setter');
+      assert.equal(mounted.nodes[0].measure().glyphCount, 1);
+      assert.equal(preparations, 2, 'the read after the overwrite prepares the replacement once');
+      assert.equal(mounted.nodes[0].glyphs().glyphCount, 1);
+      overwrittenSplit = mounted.nodes[0].split()[0];
+      assert.equal(overwrittenSplit.count, 1);
+      assert.equal(preparations, 2, 'reads after the overwrite reuse its prepared revision');
+      assert.equal(queryMaterializations, 0, 'the overwritten value uses already requested summaries');
+
+      mounted.scene.updateMatrixWorld(true);
+      assert.equal(publications, 1, 'the batch publishes its accumulated dirty records once');
+      assert.equal(preparations, 2, 'renderer publication does not repeat retained layout preparation');
+      assert.equal(queryMaterializations, 0, 'renderer publication does not request another summary');
+      assert.equal(batchPreparations, 0, 'the frame batch-prepares nothing a read already prepared');
+      assert.equal(mounted.nodes[0].commitState().status, 'committed');
+
+      PlanTransport.prototype.prepareParagraph = originalPrepare;
+      PlanTransport.prototype.consumeStagedUpdate = originalPublish;
+      PlanTransport.prototype.consumeStagedPreparation = originalBatch;
+      try {
+        assertMatchesFreshBuild(
+          font,
+          mounted,
+          [{ properties: { ...first, text: 'C' } }, { properties: second }],
+          'edited batched publication',
+        );
+      } finally {
+        PlanTransport.prototype.prepareParagraph = recordPreparation;
+        PlanTransport.prototype.consumeStagedUpdate = function (...args) {
+          publications += 1;
+          return originalPublish.apply(this, args);
+        };
+        PlanTransport.prototype.consumeStagedPreparation = function (...args) {
+          batchPreparations += 1;
+          return originalBatch.apply(this, args);
+        };
+      }
+
+      mounted.nodes[0].renderOrder = 10;
+      mounted.scene.updateMatrixWorld(true);
+      assert.equal(preparations, 2, 'an order-only update leaves retained layout preparation intact');
+      assert.equal(queryMaterializations, 0, 'an order-only update does not materialize text summaries');
+      assert.equal(batchPreparations, 0, 'an order-only update is not a preparation');
+      assert.equal(publications, 2, 'an order-only rank change crosses the renderer publication boundary once');
+
+      mounted.nodes[0].set({ text: 'unread' });
+      mounted.nodes[1].set({ text: 'unread sibling' });
+      mounted.scene.updateMatrixWorld(true);
+      assert.equal(preparations, 2, 'unread edits are not prepared one paragraph at a time');
+      assert.equal(batchPreparations, 1, 'the frame prepares every unread edit of the root in one batch');
+      assert.equal(publications, 3);
+      assert.equal(mounted.nodes[0].commitState().status, 'committed');
+      assert.equal(mounted.nodes[1].commitState().status, 'committed');
+    } finally {
+      PlanTransport.prototype.prepareParagraph = originalPrepare;
+      PlanTransport.prototype.consumeStagedUpdate = originalPublish;
+      PlanTransport.prototype.consumeStagedPreparation = originalBatch;
+      split?.dispose();
+      overwrittenSplit?.dispose();
+      unmount(mounted);
     }
 
-    mounted.nodes[0].renderOrder = 10;
-    mounted.scene.updateMatrixWorld(true);
-    assert.equal(preparations, 2, 'an order-only update leaves retained layout preparation intact');
-    assert.equal(queryMaterializations, 1, 'an order-only update does not materialize text summaries');
-    assert.equal(publications, 2, 'an order-only rank change crosses the renderer publication boundary once');
-  } finally {
-    PlanTransport.prototype.prepareParagraph = originalPrepare;
-    PlanTransport.prototype.consumeStagedUpdate = originalPublish;
-    split?.dispose();
-    overwrittenSplit?.dispose();
-    unmount(mounted);
-  }
-
-  const standalone = mount(font, [{ properties: first }]);
-  try {
-    standalone.nodes[0].set({ text: 'AB' });
-    standalone.nodes[0].set({ text: 'C' });
-    assert.equal(standalone.nodes[0].measure().glyphCount, 1);
-    standalone.scene.updateMatrixWorld(true);
-    assertMatchesFreshBuild(
-      font,
-      standalone,
-      [{ properties: { ...first, text: 'C' } }],
-      'standalone retained publication',
-    );
-  } finally {
-    unmount(standalone);
-  }
-});
+    const standalone = mount(font, [{ properties: first }]);
+    try {
+      standalone.nodes[0].set({ text: 'AB' });
+      standalone.nodes[0].set({ text: 'C' });
+      assert.equal(standalone.nodes[0].measure().glyphCount, 1);
+      standalone.scene.updateMatrixWorld(true);
+      assertMatchesFreshBuild(
+        font,
+        standalone,
+        [{ properties: { ...first, text: 'C' } }],
+        'standalone retained publication',
+      );
+    } finally {
+      unmount(standalone);
+    }
+  },
+);
 
 test('same-length bound roundtrip keeps each prepared read and the first split independent', { timeout }, async () => {
   const font = await fonts.load('inter');
@@ -336,153 +368,227 @@ test('same-length bound roundtrip keeps each prepared read and the first split i
 });
 
 test(
-  'a post-commit preparation failure invalidates Rust and rebuilds accepted authored text',
+  'a read failing after the Rust preparation commit invalidates Rust and the next read restates the authored text',
   { timeout },
   async () => {
     const font = await fonts.load('inter');
     const properties = { constraints, layout, style, text: 'A' };
     const mounted = mount(font, [{ properties }]);
     const original = PlanTransport.prototype.prepareParagraph;
+    const originalReset = PlanTransport.prototype.resetDerivedRoot;
     const injected = new Error('injected failure after Rust preparation commit');
-    let committedCandidate = false;
+    let committedCandidates = 0;
+    let resetCount = 0;
     try {
       mounted.scene.updateMatrixWorld(true);
       const rendererBefore = rendererBytes(mounted);
       PlanTransport.prototype.prepareParagraph = function (...args) {
         original.apply(this, args);
-        committedCandidate = true;
+        committedCandidates += 1;
         throw injected;
       };
+      PlanTransport.prototype.resetDerivedRoot = function (...args) {
+        resetCount += 1;
+        return originalReset.apply(this, args);
+      };
+      mounted.nodes[0].set({ text: 'BBB' });
+      assert.equal(committedCandidates, 0, 'the setter does not prepare, so it cannot fail for an engine reason');
       assert.throws(
-        () => mounted.nodes[0].set({ text: 'BBB' }),
+        () => mounted.nodes[0].measure(),
         (error) => error === injected,
+        'the read that prepares reports the failure',
       );
-      assert.equal(committedCandidate, true, 'the real shaping and Rust preparation commit completed');
-      assert.equal(mounted.nodes[0].text, 'A', 'TypeScript-authored accepted text remains A');
+      assert.equal(committedCandidates, 1, 'the real shaping and Rust preparation commit completed');
+      assert.equal(mounted.nodes[0].text, 'BBB', 'the failed read keeps the authored text the setter accepted');
       assert.deepEqual(rendererBytes(mounted), rendererBefore, 'renderer-owned in-flight bytes remain untouched');
-      PlanTransport.prototype.prepareParagraph = original;
+      PlanTransport.prototype.prepareParagraph = function (...args) {
+        committedCandidates += 1;
+        return original.apply(this, args);
+      };
 
       const recovered = mounted.nodes[0].measure();
-      assert.equal(recovered.glyphCount, 1, 'next explicit read rebuilt A instead of retaining BBB');
-      assert.equal(mounted.nodes[0].text, 'A');
+      assert.equal(committedCandidates, 2, 'recovery is one restatement of the paragraph that was read');
+      assert.equal(resetCount, 1, 'the late failure discards the derived Rust root exactly once');
+      assert.equal(recovered.glyphCount, 3, 'the next read restates the current authored BBB');
+      assert.equal(mounted.nodes[0].text, 'BBB');
+      assert.deepEqual(rendererBytes(mounted), rendererBefore, 'a recovery read does not publish renderer bytes');
       mounted.scene.updateMatrixWorld(true);
-      assertMatchesFreshBuild(font, mounted, [{ properties }], 'late preparation failure recovery');
+      assert.equal(mounted.nodes[0].commitState().status, 'committed');
+      assertMatchesFreshBuild(
+        font,
+        mounted,
+        [{ properties: { ...properties, text: 'BBB' } }],
+        'late preparation failure recovery',
+      );
+
+      mounted.nodes[0].set({ text: 'A' });
+      mounted.scene.updateMatrixWorld(true);
+      assertMatchesFreshBuild(font, mounted, [{ properties }], 'a later setter after recovery');
     } finally {
       PlanTransport.prototype.prepareParagraph = original;
+      PlanTransport.prototype.resetDerivedRoot = originalReset;
       unmount(mounted);
     }
   },
 );
 
-test('a failed create preparation leaves no accepted text and rebuilds the existing root', { timeout }, async () => {
-  const font = await fonts.load('inter');
-  const properties = { constraints, layout, style, text: 'A' };
-  const mounted = mount(font, [{ properties }]);
-  const original = PlanTransport.prototype.prepareParagraph;
-  const injected = new Error('injected failure after Rust create preparation commit');
-  let committedCandidate = false;
-  try {
-    const rendererBefore = rendererBytes(mounted);
-    PlanTransport.prototype.prepareParagraph = function (...args) {
-      original.apply(this, args);
-      committedCandidate = true;
-      throw injected;
-    };
-    assert.throws(
-      () => mounted.handle.createText({ font, constraints, layout, style, text: 'BBB' }),
-      (error) => error === injected,
+test(
+  'a failed first read of a created text keeps the text restatable and leaves the existing root intact',
+  { timeout },
+  async () => {
+    const font = await fonts.load('inter');
+    const properties = { constraints, layout, style, text: 'A' };
+    const mounted = mount(font, [{ properties }]);
+    const original = PlanTransport.prototype.prepareParagraph;
+    const injected = new Error('injected failure after Rust create preparation commit');
+    let committedCandidates = 0;
+    let created;
+    try {
+      const rendererBefore = rendererBytes(mounted);
+      const acceptedMeasurement = mounted.nodes[0].measure();
+      PlanTransport.prototype.prepareParagraph = function (...args) {
+        original.apply(this, args);
+        committedCandidates += 1;
+        throw injected;
+      };
+      created = mounted.handle.createText({ font, constraints, layout, style, text: 'BBB' });
+      assert.equal(committedCandidates, 0, 'creation does not prepare, so it cannot fail for an engine reason');
+      assert.throws(
+        () => created.measure(),
+        (error) => error === injected,
+        'the first read of the created text reports the failure',
+      );
+      assert.equal(committedCandidates, 1, 'the real Rust create preparation completed');
+      assert.equal(created.text, 'BBB');
+      assert.equal(mounted.nodes[0].text, 'A');
+      assert.deepEqual(rendererBytes(mounted), rendererBefore, 'the failed create did not touch renderer-owned bytes');
+      PlanTransport.prototype.prepareParagraph = original;
+
+      assert.deepEqual(mounted.nodes[0].measure(), acceptedMeasurement, 'the published A stays readable');
+      assert.equal(created.measure().glyphCount, 3, 'the next read restates the created text');
+      assert.deepEqual(rendererBytes(mounted), rendererBefore, 'recovery reads do not publish renderer bytes');
+      created.dispose();
+      created = undefined;
+      mounted.scene.updateMatrixWorld(true);
+      assertMatchesFreshBuild(font, mounted, [{ properties }], 'failed create preparation recovery');
+    } finally {
+      PlanTransport.prototype.prepareParagraph = original;
+      created?.dispose();
+      unmount(mounted);
+    }
+  },
+);
+
+test(
+  'a failed multi-text recovery restates each text at its own next read, never its siblings',
+  { timeout },
+  async () => {
+    const font = await fonts.load('inter');
+    const properties = [
+      { constraints, layout, style, text: 'A' },
+      { constraints, layout, style, text: 'B' },
+    ];
+    const mounted = mount(
+      font,
+      properties.map((value) => ({ properties: value })),
     );
-    assert.equal(committedCandidate, true, 'the real Rust create preparation completed');
-    assert.equal(mounted.nodes[0].text, 'A');
-    assert.deepEqual(rendererBytes(mounted), rendererBefore, 'the failed create did not touch renderer-owned bytes');
-    PlanTransport.prototype.prepareParagraph = original;
+    const originalReset = PlanTransport.prototype.resetDerivedRoot;
+    const originalPrepare = PlanTransport.prototype.prepareParagraph;
+    const preparationFailure = new Error('injected failure after Rust preparation commit');
+    const restatementFailure = new Error('injected restatement failure');
+    let preparationFailed = false;
+    let resetCount = 0;
+    let restatementCount = 0;
+    let restatementQueryCount = 0;
+    let failedRestatement = false;
+    try {
+      const rendererBefore = rendererBytes(mounted);
+      mounted.nodes[0].set({ text: 'AA' });
+      assert.equal(mounted.nodes[0].measure().glyphCount, 2);
+      mounted.nodes[0].set({ text: 'AAA' });
+      PlanTransport.prototype.prepareParagraph = function (...args) {
+        originalPrepare.apply(this, args);
+        preparationFailed = true;
+        throw preparationFailure;
+      };
+      assert.throws(
+        () => mounted.nodes[0].measure(),
+        (error) => error === preparationFailure,
+      );
+      assert.equal(preparationFailed, true, 'the real preparation completed before its result was discarded');
+      assert.equal(mounted.nodes[0].text, 'AAA', 'the failed read keeps the authored edit');
+      PlanTransport.prototype.prepareParagraph = originalPrepare;
 
-    assert.equal(mounted.nodes[0].measure().glyphCount, 1, 'the next read rebuilt the previously accepted A');
-    mounted.scene.updateMatrixWorld(true);
-    assertMatchesFreshBuild(font, mounted, [{ properties }], 'failed create preparation recovery');
-  } finally {
-    PlanTransport.prototype.prepareParagraph = original;
-    unmount(mounted);
-  }
-});
+      PlanTransport.prototype.resetDerivedRoot = function (...args) {
+        resetCount += 1;
+        return originalReset.apply(this, args);
+      };
+      PlanTransport.prototype.prepareParagraph = function (request, ...args) {
+        const semantic = hasSemanticMutations(request);
+        const result = originalPrepare.call(this, request, ...args);
+        if (semantic) restatementCount += 1;
+        else restatementQueryCount += 1;
+        if (semantic && restatementCount === 1) {
+          failedRestatement = true;
+          throw restatementFailure;
+        }
+        return result;
+      };
 
-test('a failed multi-text recovery replays the full accepted root on the next read', { timeout }, async () => {
-  const font = await fonts.load('inter');
-  const properties = [
-    { constraints, layout, style, text: 'A' },
-    { constraints, layout, style, text: 'B' },
-  ];
-  const mounted = mount(
-    font,
-    properties.map((value) => ({ properties: value })),
-  );
-  const originalReset = PlanTransport.prototype.resetDerivedRoot;
-  const originalPrepare = PlanTransport.prototype.prepareParagraph;
-  const preparationFailure = new Error('injected failure after Rust preparation commit');
-  const replayFailure = new Error('injected second-text replay failure');
-  let preparationFailed = false;
-  let resetCount = 0;
-  let replayPrepareCount = 0;
-  let replayQueryCount = 0;
-  let failedSecondReplay = false;
-  try {
-    const rendererBefore = rendererBytes(mounted);
-    mounted.nodes[0].set({ text: 'AA' });
-    PlanTransport.prototype.prepareParagraph = function (...args) {
-      originalPrepare.apply(this, args);
-      preparationFailed = true;
-      throw preparationFailure;
-    };
-    assert.throws(
-      () => mounted.nodes[0].set({ text: 'AAA' }),
-      (error) => error === preparationFailure,
-    );
-    assert.equal(preparationFailed, true, 'the real preparation completed before its result was discarded');
-    assert.equal(mounted.nodes[0].text, 'AA', 'the prior authored edit remains accepted');
-    PlanTransport.prototype.prepareParagraph = originalPrepare;
+      assert.throws(
+        () => mounted.nodes[0].measure(),
+        (error) => error === restatementFailure,
+      );
+      assert.equal(failedRestatement, true, 'the restatement failed after its preparation committed');
+      assert.equal(resetCount, 1);
+      assert.equal(restatementCount, 1, 'the failed recovery read restated only the paragraph it read');
+      assert.equal(restatementQueryCount, 0);
+      assert.deepEqual(
+        rendererBytes(mounted),
+        rendererBefore,
+        'partial derived recovery leaves the in-flight frame untouched',
+      );
 
-    PlanTransport.prototype.resetDerivedRoot = function (...args) {
-      resetCount += 1;
-      return originalReset.apply(this, args);
-    };
-    PlanTransport.prototype.prepareParagraph = function (request, ...args) {
-      const semantic = hasSemanticMutations(request);
-      const result = originalPrepare.call(this, request, ...args);
-      if (resetCount > 0 && semantic) replayPrepareCount += 1;
-      else if (resetCount > 0) replayQueryCount += 1;
-      if (resetCount === 1 && semantic && replayPrepareCount === 2) {
-        failedSecondReplay = true;
-        throw replayFailure;
+      assert.equal(mounted.nodes[0].measure().glyphCount, 3, 'retry restates the current first text');
+      assert.equal(resetCount, 2, 'the next read resets the derived root again after the second late failure');
+      assert.equal(restatementCount, 2, 'the retry restates the first text alone, not its sibling');
+      assert.equal(mounted.nodes[1].measure().glyphCount, 1, 'the sibling is restated by its own read');
+      assert.equal(restatementCount, 3, 'the sibling read restates the sibling once');
+      assert.equal(mounted.nodes[0].measure().glyphCount, 3);
+      assert.equal(mounted.nodes[1].measure().glyphCount, 1);
+      assert.equal(resetCount, 2, 'restated texts need no further reset');
+      assert.equal(restatementCount, 3, 'restated texts are not prepared again');
+      assert.equal(restatementQueryCount, 0, 'each restatement returned its summary in the same call');
+      assert.deepEqual(rendererBytes(mounted), rendererBefore, 'measurement recovery does not publish renderer bytes');
+
+      let batchPreparations = 0;
+      const originalBatch = PlanTransport.prototype.consumeStagedPreparation;
+      PlanTransport.prototype.consumeStagedPreparation = function (...args) {
+        batchPreparations += 1;
+        return originalBatch.apply(this, args);
+      };
+      try {
+        mounted.scene.updateMatrixWorld(true);
+      } finally {
+        PlanTransport.prototype.consumeStagedPreparation = originalBatch;
       }
-      return result;
-    };
-
-    assert.throws(
-      () => mounted.nodes[0].measure(),
-      (error) => error === replayFailure,
-    );
-    assert.equal(failedSecondReplay, true, 'the second text failed after its replay preparation committed');
-    assert.equal(resetCount, 1);
-    assert.equal(replayPrepareCount, 2);
-    assert.equal(replayQueryCount, 0, 'the failed replay has not materialized query-only summaries');
-    assert.deepEqual(
-      rendererBytes(mounted),
-      rendererBefore,
-      'partial derived recovery leaves the in-flight frame untouched',
-    );
-
-    assert.equal(mounted.nodes[0].measure().glyphCount, 2, 'retry restores the accepted first text');
-    assert.equal(mounted.nodes[1].measure().glyphCount, 1, 'retry restores the accepted second text');
-    assert.equal(resetCount, 2, 'the next explicit read resets and replays the entire root');
-    assert.equal(replayPrepareCount, 4, 'both texts are prepared again after the partial replay failure');
-    assert.equal(replayQueryCount, 2, 'retry materializes both summaries with zero-mutation frames');
-    assert.deepEqual(rendererBytes(mounted), rendererBefore, 'measurement recovery does not publish renderer bytes');
-  } finally {
-    PlanTransport.prototype.resetDerivedRoot = originalReset;
-    PlanTransport.prototype.prepareParagraph = originalPrepare;
-    unmount(mounted);
-  }
-});
+      assert.equal(batchPreparations, 0, 'the frame prepares nothing the recovery reads restated');
+      assert.equal(restatementCount, 3);
+      assert.equal(mounted.nodes[0].commitState().status, 'committed');
+      assert.equal(mounted.nodes[1].commitState().status, 'committed');
+      assertMatchesFreshBuild(
+        font,
+        mounted,
+        [{ properties: { ...properties[0], text: 'AAA' } }, { properties: properties[1] }],
+        'multi-text recovery publication',
+      );
+    } finally {
+      PlanTransport.prototype.resetDerivedRoot = originalReset;
+      PlanTransport.prototype.prepareParagraph = originalPrepare;
+      unmount(mounted);
+    }
+  },
+);
 
 test('post-write recovery keeps flow revisions monotonic and restores keyed count changes', { timeout }, async () => {
   const font = await fonts.load('inter');
@@ -497,6 +603,24 @@ test('post-write recovery keeps flow revisions monotonic and restores keyed coun
     text: 'A',
     flow: { regions: [region(inlineEnd)] },
   });
+  const expandedFlow = {
+    regions: [
+      {
+        ...region(120),
+        exclusions: [{ key: 'body-hole', shape: { kind: 'rectangle', bounds: [24, 0, 34, 80] } }],
+      },
+      {
+        key: 'aside',
+        shape: { kind: 'rectangle', bounds: [120, 0, 220, 80] },
+        exclusions: [{ key: 'aside-hole', shape: { kind: 'rectangle', bounds: [150, 0, 160, 80] } }],
+      },
+    ],
+  };
+  const freshProperties = { ...properties(120), text: 'CCCC', flow: expandedFlow };
+  // A cold mount runs a frame for every root, so the oracle is read before the subject has anything pending.
+  const fresh = mount(font, [{ properties: freshProperties }]);
+  const freshMeasurement = fresh.nodes[0].measure();
+  unmount(fresh);
   const mounted = mount(font, [{ properties: properties(100) }]);
   const originalPrepare = PlanTransport.prototype.prepareParagraph;
   const originalReset = PlanTransport.prototype.resetDerivedRoot;
@@ -531,40 +655,32 @@ test('post-write recovery keeps flow revisions monotonic and restores keyed coun
       return originalReset.apply(this, args);
     };
     mounted.nodes[0].set({ flow: { regions: [region(120)] } });
+    assert.equal(mounted.nodes[0].measure().glyphCount, 1);
+    mounted.nodes[0].set({ text: 'BBB' });
+    assert.equal(completedRequests.length, 1, 'setters do not prepare');
     failPreparation = true;
     assert.throws(
-      () => mounted.nodes[0].set({ text: 'BBB' }),
+      () => mounted.nodes[0].measure(),
       (error) => error === preparationFailure,
     );
-    assert.equal(mounted.nodes[0].text, 'A', 'the failed preparation preserves accepted authored text');
+    assert.equal(mounted.nodes[0].text, 'BBB', 'the failed read keeps the authored text the setter accepted');
 
     mounted.nodes[0].set({ text: 'CCCC' });
     assert.equal(mounted.nodes[0].measure().glyphCount, 4);
+    assert.equal(resetCount, 1, 'the read after the late failure resets the derived root once');
     assert.deepEqual(
-      revisions.slice(-2),
-      [3, 4],
-      'the valid set uses flow revisions rebuilt from accepted geometry, without regressing them',
+      revisions,
+      [2, 3],
+      'the restatement after the reset carries a later flow revision than the one the engine had prepared',
     );
     mounted.scene.updateMatrixWorld(true);
     const acceptedMeasurement = mounted.nodes[0].measure();
     const rendererBeforeCountChange = rendererBytes(mounted);
     assert.equal(rendererBeforeCountChange.length > 0, true, 'the accepted flow has renderer-owned draw bytes');
-    const expandedFlow = {
-      regions: [
-        {
-          ...region(120),
-          exclusions: [{ key: 'body-hole', shape: { kind: 'rectangle', bounds: [24, 0, 34, 80] } }],
-        },
-        {
-          key: 'aside',
-          shape: { kind: 'rectangle', bounds: [120, 0, 220, 80] },
-          exclusions: [{ key: 'aside-hole', shape: { kind: 'rectangle', bounds: [150, 0, 160, 80] } }],
-        },
-      ],
-    };
+    mounted.nodes[0].set({ flow: expandedFlow });
     failPreparation = true;
     assert.throws(
-      () => mounted.nodes[0].set({ flow: expandedFlow }),
+      () => mounted.nodes[0].measure(),
       (error) => error === preparationFailure,
     );
     assert.deepEqual(
@@ -577,7 +693,7 @@ test('post-write recovery keeps flow revisions monotonic and restores keyed coun
       failedCountChange.regions.map(({ id }) => id),
       'each candidate exclusion belongs to its keyed region',
     );
-    assert.equal(mounted.nodes[0].text, 'CCCC', 'the failed flow did not replace accepted authored text');
+    assert.equal(mounted.nodes[0].text, 'CCCC', 'the failed flow read did not disturb authored text');
     assert.deepEqual(
       rendererBytes(mounted),
       rendererBeforeCountChange,
@@ -588,42 +704,73 @@ test('post-write recovery keeps flow revisions monotonic and restores keyed coun
     const requestsBeforeRecovery = completedRequests.length;
     assert.deepEqual(
       mounted.nodes[0].measure(),
-      acceptedMeasurement,
-      'the next read restores accepted one-region flow',
+      freshMeasurement,
+      'the next read restates the current two-region flow as a fresh build lays it out',
     );
     assert.equal(resetCount, resetsBeforeRecovery + 1, 'the next read resets the derived root after the late failure');
     const recoveryRequests = completedRequests.slice(requestsBeforeRecovery);
-    const restoredFlow = recoveryRequests.find(
-      ({ regions, exclusions }) => regions.length === 1 && exclusions.length === 0,
+    assert.equal(recoveryRequests.length, 1, 'recovery is one restatement of the paragraph that was read');
+    assert.deepEqual(
+      recoveryRequests[0].regions.map(({ id }) => id),
+      failedCountChange.regions.map(({ id }) => id),
+      'the restatement keeps both keyed region identities',
     );
-    assert.equal(restoredFlow?.regions[0].id, failedCountChange.regions[0].id);
+    assert.deepEqual(
+      recoveryRequests[0].exclusions.map(({ id, regionId }) => ({ id, regionId })),
+      failedCountChange.exclusions.map(({ id, regionId }) => ({ id, regionId })),
+      'the restatement keeps both keyed exclusion identities and their regions',
+    );
     assert.deepEqual(
       rendererBytes(mounted),
       rendererBeforeCountChange,
       'recovery read does not publish renderer bytes',
     );
 
+    mounted.nodes[0].set({ flow: { regions: [region(120)] } });
+    assert.deepEqual(
+      mounted.nodes[0].measure(),
+      acceptedMeasurement,
+      'a keyed count decrease after recovery restores the one-region layout',
+    );
+    const restoredFlow = completedRequests.at(-1);
+    assert.deepEqual(
+      [restoredFlow.regions.map(({ id }) => id), restoredFlow.exclusions],
+      [[failedCountChange.regions[0].id], []],
+      'the surviving region keeps its keyed identity',
+    );
+    assert.deepEqual(
+      rendererBytes(mounted),
+      rendererBeforeCountChange,
+      'reads of unpublished flow do not publish renderer bytes',
+    );
+
     mounted.nodes[0].set({ flow: expandedFlow });
+    assert.equal(completedRequests.at(-1), restoredFlow, 'the setter does not prepare');
+    assert.deepEqual(mounted.nodes[0].measure(), freshMeasurement);
     const acceptedExpandedFlow = completedRequests.at(-1);
     assert.deepEqual(
-      acceptedExpandedFlow?.regions.map(({ id }) => id),
+      acceptedExpandedFlow.regions.map(({ id }) => id),
       failedCountChange.regions.map(({ id }) => id),
       'the valid update keeps both keyed region identities',
     );
     assert.deepEqual(
-      acceptedExpandedFlow?.exclusions.map(({ id }) => id),
+      acceptedExpandedFlow.exclusions.map(({ id }) => id),
       failedCountChange.exclusions.map(({ id }) => id),
       'the valid update keeps both keyed exclusion identities',
     );
-    assert.equal(mounted.nodes[0].measure().glyphCount, 4);
-    mounted.scene.updateMatrixWorld(true);
-    const freshProperties = { ...properties(120), text: 'CCCC', flow: expandedFlow };
-    const fresh = mount(font, [{ properties: freshProperties }]);
-    try {
-      assert.deepEqual(mounted.nodes[0].measure(), fresh.nodes[0].measure(), 'warm measurement matches fresh flow');
-    } finally {
-      unmount(fresh);
+    const latestRevision = new Map();
+    for (const { regions, exclusions } of completedRequests) {
+      for (const { id, geometryRevision } of [...regions, ...exclusions]) {
+        assert.ok(
+          geometryRevision >= (latestRevision.get(id) ?? 0),
+          `flow record ${String(id)} regressed to revision ${String(geometryRevision)}`,
+        );
+        latestRevision.set(id, geometryRevision);
+      }
     }
+    mounted.scene.updateMatrixWorld(true);
+    assert.equal(mounted.nodes[0].commitState().status, 'committed');
+    assert.deepEqual(mounted.nodes[0].measure(), freshMeasurement, 'warm measurement matches fresh flow');
     assertMatchesFreshBuild(
       font,
       mounted,
@@ -724,7 +871,16 @@ test('raw span updates do not run JavaScript grapheme segmentation', { timeout }
     const descriptor = Object.getOwnPropertyDescriptor(String.prototype, 'isWellFormed');
     assert.ok(descriptor);
     let wellFormedChecks = 0;
-    // Test instrumentation: an unchanged text value must not be segmented in the JS adapter.
+    let segmenters = 0;
+    const Segmenter = Intl.Segmenter;
+    // Test instrumentation: span boundaries are resolved in Rust, so no setter, read or frame may segment in JS.
+    Intl.Segmenter = class extends Segmenter {
+      constructor(...arguments_) {
+        super(...arguments_);
+        segmenters += 1;
+      }
+    };
+    // Test instrumentation: the lone-surrogate repair is the only scan of text a setter may make.
     // oxlint-disable-next-line no-extend-native
     Object.defineProperty(String.prototype, 'isWellFormed', {
       ...descriptor,
@@ -750,8 +906,9 @@ test('raw span updates do not run JavaScript grapheme segmentation', { timeout }
         0,
         'Three snapshots the changed plain caller style without entering the structured-clone serializer',
       );
-      assert.equal(wellFormedChecks, 0, 'a paint-only update must not scan or segment unchanged text in JS');
+      assert.equal(wellFormedChecks, 0, 'a paint-only update does not scan its unchanged text');
       assert.deepEqual(node.measure(), accepted, 'a paint-only update preserves shaping and placement');
+      assert.equal(wellFormedChecks, 0, 'a read does not scan text in JS');
       assert.throws(
         () =>
           node.set({
@@ -775,14 +932,26 @@ test('raw span updates do not run JavaScript grapheme segmentation', { timeout }
           ],
         },
       });
+      // oxlint-disable-next-line no-extend-native
+      Object.defineProperty(String.prototype, 'isWellFormed', descriptor);
+      const edited = { ...formatted('#2f7fff'), text: `b${ACUTE}fi` };
+      node.set({ text: edited });
+      assert.ok(node.measure().glyphCount > 0);
+      mounted.scene.updateMatrixWorld(true);
+      assert.equal(node.error, undefined);
+      assert.equal(node.text, `b${ACUTE}fi`, 'Rust re-resolves retained authored ranges after a text edit');
+      assert.equal(segmenters, 0, 'no setter, read or frame constructed a JavaScript segmenter');
+      assertMatchesFreshBuild(
+        font,
+        mounted,
+        [{ properties: { constraints, layout, style, text: edited } }],
+        'ranges re-resolved in Rust after a text edit',
+      );
     } finally {
+      Intl.Segmenter = Segmenter;
       // oxlint-disable-next-line no-extend-native
       Object.defineProperty(String.prototype, 'isWellFormed', descriptor);
     }
-    node.set({ text: { ...formatted('#2f7fff'), text: `b${ACUTE}fi` } });
-    mounted.scene.updateMatrixWorld(true);
-    assert.equal(node.error, undefined);
-    assert.equal(node.text, `b${ACUTE}fi`, 'Rust re-resolves retained authored ranges after a text edit');
   } finally {
     unmount(mounted);
   }

@@ -1,4 +1,10 @@
-import { createGlyphEngine, shapeGlyphEngine, type GlyphEngine, type GlyphEngineOptions } from './glyph-engine.js';
+import {
+  createGlyphEngine,
+  prepareGlyphEngine,
+  shapeGlyphEngine,
+  type GlyphEngine,
+  type GlyphEngineOptions,
+} from './glyph-engine.js';
 import type { Codec, GlyphBindingSet, GlyphConfig, GlyphHandle, GlyphRoot } from './config/glyph.js';
 import { createConfiguredGlyphHandle } from './internal/configured-handle.js';
 
@@ -17,6 +23,13 @@ import { glyphFontLibrary as processFontLibrary, type FontLibrary } from './load
 export interface Glyph {
   readonly initialized: boolean;
   init(options?: GlyphEngineOptions): Promise<void>;
+  /**
+   * Prepares every text a setter left dirty, across all handles, in one engine call, without publishing, and
+   * keeps each one's measurement so a following `measure()` does not enter the engine again. Call it before
+   * reading many texts between frames; `shape()` and every read prepare on their own otherwise.
+   */
+  prepare(): void;
+  /** Prepares whatever is still dirty, then publishes every dirty root to its renderer. */
   shape(): void;
   handle<
     Root extends GlyphRoot,
@@ -126,6 +139,12 @@ class GlyphRuntime implements Glyph {
     })();
     this.#handles.set(name, handle);
     return handle;
+  }
+
+  prepare(): void {
+    const engine = this.#engine;
+    if (engine === undefined) throw new Error('await glyph.init() before calling glyph.prepare()');
+    prepareGlyphEngine(engine);
   }
 
   shape(): void {

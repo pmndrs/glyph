@@ -65,6 +65,7 @@ export interface ShaperExports {
   readonly textUpdate: (handle: number, pointer: number, length: number) => number;
   readonly textUpdateBatch: (entriesPointer: number, count: number) => number;
   readonly measureParagraph: (handle: number, pointer: number, length: number, paragraphId: number) => number;
+  readonly prepareBatch: (entriesPointer: number, count: number) => number;
   readonly borrowParagraphLayout: (handle: number, paragraphId: number) => number;
   readonly borrowParagraphGlyphs: (
     handle: number,
@@ -160,6 +161,7 @@ export function readModule(instance: WebAssembly.Instance): ShaperModule {
       textUpdate: exportedFunction(instance, functions.textUpdate),
       textUpdateBatch: exportedFunction(instance, functions.textUpdateBatch),
       measureParagraph: exportedFunction(instance, functions.measureParagraph),
+      prepareBatch: exportedFunction(instance, functions.prepareBatch),
       borrowParagraphLayout: exportedFunction(instance, functions.borrowParagraphLayout),
       borrowParagraphGlyphs: exportedFunction(instance, functions.borrowParagraphGlyphs),
       copyGlyphs: exportedFunction(instance, functions.copyGlyphs),

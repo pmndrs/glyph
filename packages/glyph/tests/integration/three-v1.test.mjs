@@ -1258,13 +1258,16 @@ async function assertStagedPublicDisposalRollback(t, target) {
   const coldScene = new THREE.Scene();
   const first = rootA.createText({ font, text: 'first accepted' });
   const survivor = rootA.createText({ font, text: 'survivor accepted' });
+  // Left unread before the frame, so the frame stages root A's preparation ahead of the later root's hook.
+  const unread = rootA.createText({ font, text: 'unread accepted' });
   const trigger = rootB.createText({ font, text: 'later root' });
   const sibling = selectedSiblingRoot.createText({ font, text: 'unstaged sibling' });
   const coldFirst = coldRootA.createText({ font, text: 'first accepted' });
   const coldSurvivor = coldRootA.createText({ font, text: 'survivor accepted' });
+  const coldUnread = coldRootA.createText({ font, text: 'unread accepted' });
   const coldSibling = coldSiblingRoot.createText({ font, text: 'unstaged sibling' });
-  scene.add(first, survivor, trigger, sibling);
-  coldScene.add(coldFirst, coldSurvivor, coldSibling);
+  scene.add(first, survivor, unread, trigger, sibling);
+  coldScene.add(coldFirst, coldSurvivor, coldUnread, coldSibling);
   scene.updateMatrixWorld(true);
   coldScene.updateMatrixWorld(true);
 
@@ -1293,6 +1296,7 @@ async function assertStagedPublicDisposalRollback(t, target) {
     );
     assertPublicSemanticLayoutEqual(first, coldFirst, `${context} first`);
     assertPublicSemanticLayoutEqual(survivor, coldSurvivor, `${context} survivor`);
+    assertPublicSemanticLayoutEqual(unread, coldUnread, `${context} unread`);
     assertPublicSemanticLayoutEqual(sibling, coldSibling, `${context} unstaged sibling`);
   };
 
@@ -1304,6 +1308,8 @@ async function assertStagedPublicDisposalRollback(t, target) {
     survivor.text = 'survivor prepared replacement';
     coldFirst.text = 'first prepared replacement';
     coldSurvivor.text = 'survivor prepared replacement';
+    unread.text = 'unread staged replacement';
+    coldUnread.text = 'unread staged replacement';
     trigger.text = 'later root disposal trigger';
     const firstMeasurement = first.measure();
     const survivorMeasurement = survivor.measure();
@@ -1347,6 +1353,11 @@ async function assertStagedPublicDisposalRollback(t, target) {
     );
     assert.equal(fontStackDisposals, disposalsBeforeAttempt, 'rejected disposal releases no root font-stack lease');
     assert.equal(font.disposed, false, 'rejected disposal preserves the caller-owned font lease');
+    assert.equal(
+      unread.commitState().status,
+      'committed',
+      'the frame that rejected disposal still prepares and publishes the staged paragraph',
+    );
     onLaterRootPrepare = undefined;
     assertLiveAgainstCold(`staged ${target} disposal rollback`);
 
@@ -1377,10 +1388,12 @@ async function assertStagedPublicDisposalRollback(t, target) {
     onLaterRootPrepare = undefined;
     first.dispose();
     survivor.dispose();
+    unread.dispose();
     trigger.dispose();
     sibling.dispose();
     coldFirst.dispose();
     coldSurvivor.dispose();
+    coldUnread.dispose();
     coldSibling.dispose();
   }
 }
@@ -1706,6 +1719,11 @@ test('Rust ranks interleaved TextGroup scopes only within their stable root slot
   instrumentedGlyph.reset();
   firstA.text = 'E';
   firstB.text = 'F';
+  assert.deepEqual(
+    [instrumentedGlyph.measureCrossings, instrumentedGlyph.prepareBatchCrossings, instrumentedGlyph.crossings],
+    [0, 0, 0],
+    'content setters only mark their paragraphs dirty',
+  );
   scene.updateMatrixWorld(true);
   assert.equal(firstGroup.error, undefined);
   assert.deepEqual(
@@ -1725,9 +1743,38 @@ test('Rust ranks interleaved TextGroup scopes only within their stable root slot
       exclusion: 0,
       inlineObject: 0,
     },
-    'content publication consumes both setter preparations without replaying semantic input',
+    'content publication consumes the batch preparation without replaying semantic input',
   );
-  assert.equal(instrumentedGlyph.measureCrossings, 2, 'each content setter prepares synchronously');
+  assert.deepEqual(
+    [instrumentedGlyph.measureCrossings, instrumentedGlyph.prepareBatchCrossings, instrumentedGlyph.crossings],
+    [0, 1, 1],
+    'the frame prepares both dirty paragraphs in one batch crossing and publishes in one more',
+  );
+  assert.deepEqual(
+    instrumentedGlyph.latestPreparationRequestCounts(),
+    {
+      paragraph: 0,
+      paragraphOrder: 0,
+      text: 2,
+      style: 1,
+      constraint: 0,
+      region: 0,
+      exclusion: 0,
+      inlineObject: 0,
+    },
+    'the batch preparation carries the two content edits and the one style range whose length changed',
+  );
+  assert.deepEqual(
+    instrumentedGlyph.latestPreparationTextMutations().sort((left, right) => left.insert.localeCompare(right.insert)),
+    [
+      { start: 0, deleteCount: 2, insert: 'E' },
+      { start: 0, deleteCount: 1, insert: 'F' },
+    ],
+    'each edit is one range replacement against the prepared text',
+  );
+  const preparedParagraphIds = instrumentedGlyph.latestPreparationTextMutationParagraphIds();
+  assert.equal(preparedParagraphIds.length, 2);
+  assert.ok(preparedParagraphIds[0] < preparedParagraphIds[1], 'the batch request orders records by paragraph id');
   assert.deepEqual(
     sequence(),
     [authored[2], authored[1], authored[0], authored[3]],
@@ -2654,6 +2701,7 @@ test('public 2D flow accepts keyed polygons and composes around multiple exclusi
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   t.after(() => font.dispose());
+  instrumentedGlyph.reset();
   const text = three.createText({
     font,
     text: 'iiiiiiiiiiiiiiiiiiii',
@@ -2685,9 +2733,15 @@ test('public 2D flow accepts keyed polygons and composes around multiple exclusi
   });
   t.after(() => text.dispose());
 
-  const setterCounts = instrumentedGlyph.latestMeasurementRequestCounts();
   assert.deepEqual(
-    setterCounts,
+    [instrumentedGlyph.measureCrossings, instrumentedGlyph.prepareBatchCrossings, instrumentedGlyph.crossings],
+    [0, 0, 0],
+    'construction validates the flow configuration without entering the engine',
+  );
+  const layout = text.glyphs();
+  assert.equal(instrumentedGlyph.measureCrossings, 1, 'the first read prepares the paragraph in one crossing');
+  assert.deepEqual(
+    instrumentedGlyph.latestMeasurementRequestCounts(),
     {
       paragraph: 1,
       paragraphOrder: 0,
@@ -2698,19 +2752,10 @@ test('public 2D flow accepts keyed polygons and composes around multiple exclusi
       exclusion: 2,
       inlineObject: 0,
     },
-    'the setter request carries the authored flow configuration',
+    'the read request carries the authored flow configuration',
   );
-  const layout = text.glyphs();
-  assert.deepEqual(instrumentedGlyph.latestMeasurementRequestCounts(), {
-    paragraph: 0,
-    paragraphOrder: 0,
-    text: 0,
-    style: 0,
-    constraint: 0,
-    region: 0,
-    exclusion: 0,
-    inlineObject: 0,
-  });
+  assert.deepEqual(text.glyphs(), layout, 'a second read of the prepared paragraph answers the same columns');
+  assert.equal(instrumentedGlyph.measureCrossings, 1, 'a second read replays no flow configuration');
   assert.equal(layout.lineCount, 1, 'the three disjoint slots remain one logical line');
   const inlineJumps = [...layout.x]
     .slice(1)
@@ -4516,7 +4561,7 @@ test('material preparation rejection preserves the last accepted Three branch an
   font.dispose();
 });
 
-test('a rejected fixed-capacity candidate releases its prepared font-stack lease after removal publication', async (t) => {
+test('a rejected fixed-capacity candidate holds its font-stack lease past disposal only once a read prepared it', async (t) => {
   const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 1, policy: 'fixed' } }));
   const registerFontStack = GlyphHandleState.prototype.registerFontStack;
   const disposeFontStack = GlyphHandleState.prototype.disposeFontStack;
@@ -4539,12 +4584,37 @@ test('a rejected fixed-capacity candidate releases its prepared font-stack lease
   const font = await fontDomain.loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
   const label = three.createText({ font, text: 'over budget' });
+  let prepared;
   try {
+    const engineCrossings = () => [
+      instrumentedGlyph.measureCrossings,
+      instrumentedGlyph.prepareBatchCrossings,
+      instrumentedGlyph.crossings,
+    ];
+    instrumentedGlyph.reset();
     scene.add(label);
     scene.updateMatrixWorld();
     assert.deepEqual(label.commitState(), { status: 'pending' });
+    assert.equal(registrations, 1, 'the rejected candidate holds one font-stack registration');
+    assert.deepEqual(engineCrossings(), [0, 0, 0], 'a candidate the adapter rejects is never prepared or published');
     label.dispose();
-    assert.equal(disposals, 0, 'the prepared paragraph protects its stack until Rust consumes removal');
+    assert.equal(disposals, registrations, 'a paragraph the engine never prepared releases its stack on disposal');
+    glyph.shape();
+    assert.deepEqual(engineCrossings(), [0, 0, 0], 'removing a never-prepared paragraph sends the engine nothing');
+
+    prepared = three.createText({ font, text: 'over budget' });
+    scene.add(prepared);
+    scene.updateMatrixWorld();
+    assert.deepEqual(prepared.commitState(), { status: 'pending' });
+    assert.ok(prepared.measure().glyphCount > 0, 'a rejected candidate still answers reads');
+    assert.deepEqual(engineCrossings(), [1, 0, 0], 'the read prepares the rejected candidate in one crossing');
+    const disposalsBeforePreparedRemoval = disposals;
+    prepared.dispose();
+    assert.equal(
+      disposals,
+      disposalsBeforePreparedRemoval,
+      'the prepared paragraph protects its stack until Rust consumes removal',
+    );
     glyph.shape();
     assert.equal(disposals, registrations, 'empty publication retires the rejected candidate stack');
     const replacement = three.createText({ font, text: 'A' });
@@ -4575,6 +4645,7 @@ test('a rejected fixed-capacity candidate releases its prepared font-stack lease
     }
   } finally {
     label.dispose();
+    prepared?.dispose();
     font.dispose();
     fontDomain.dispose();
   }
@@ -6254,14 +6325,14 @@ test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async (t)
       .map(
         (draw) =>
           draw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.size.id)) ??
-          draw.geometry.getAttribute(glyphAttribute(slugSchema.buffers.planeRect.id)),
+          draw.geometry.getAttribute(glyphAttribute(slugSchema.buffers.rect.id)),
       )
       .map((attribute) => attribute.itemSize)
       .sort(),
     [2, 4],
     'Bitmap vec2 and Slug vec4 records must coexist without a user technique selector',
   );
-  const slugDraw = draws.find((draw) => draw.geometry.getAttribute(glyphAttribute(slugSchema.buffers.planeRect.id)));
+  const slugDraw = draws.find((draw) => draw.geometry.getAttribute(glyphAttribute(slugSchema.buffers.rect.id)));
   assert.ok(slugDraw);
   const slugVertex = compileNodeMaterial(slugDraw).vertex;
   const slugStorageBindings = slugVertex.match(/var<storage/g) ?? [];
@@ -6277,7 +6348,7 @@ test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async (t)
   const detachedDraws = detached.children.filter((child) => child.isMesh);
   assert.equal(detachedDraws.length, 2, 'the detached copy must preserve both renderer-program batches');
   const detachedSlugDraw = detachedDraws.find((draw) =>
-    draw.geometry.getAttribute(glyphAttribute(slugSchema.buffers.planeRect.id)),
+    draw.geometry.getAttribute(glyphAttribute(slugSchema.buffers.rect.id)),
   );
   assert.ok(detachedSlugDraw);
   const detachedSlugVertex = compileNodeMaterial(detachedSlugDraw).vertex;
@@ -6404,9 +6475,24 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   right.position.x = 5;
   group.add(left, right);
   scene.add(group);
+  const engineCrossings = () => ({
+    read: instrumented.measureCrossings,
+    batch: instrumented.prepareBatchCrossings,
+    publish: instrumented.crossings,
+  });
+  assert.deepEqual(
+    engineCrossings(),
+    { read: 0, batch: 0, publish: 0 },
+    'construction, grouping, and attachment only mark paragraphs dirty',
+  );
   scene.updateMatrixWorld();
 
   assert.equal(group.error, undefined);
+  assert.deepEqual(
+    engineCrossings(),
+    { read: 0, batch: 1, publish: 1 },
+    'the first frame prepares both paragraphs in one batch crossing and publishes them in one more',
+  );
   assert.deepEqual(
     instrumented.latestRequestCounts(),
     {
@@ -6419,21 +6505,21 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
       exclusion: 0,
       inlineObject: 0,
     },
-    'publication consumes the setter-owned preparations without replaying semantic input; grouping supplies two order records',
+    'publication consumes the batch preparation without replaying semantic input; grouping supplies two order records',
   );
   assert.deepEqual(
-    instrumented.latestMeasurementRequestCounts(),
+    instrumented.latestPreparationRequestCounts(),
     {
-      paragraph: 0,
+      paragraph: 2,
       paragraphOrder: 0,
-      text: 0,
-      style: 1,
-      constraint: 0,
-      region: 0,
+      text: 2,
+      style: 2,
+      constraint: 2,
+      region: 3,
       exclusion: 0,
       inlineObject: 0,
     },
-    'attachment updates presentation without replaying already prepared text, geometry, or lifecycle',
+    'one batch request states both paragraphs once: lifecycle, text, style, and geometry with the two column regions',
   );
   const draws = rootDraws(scene);
   assert.equal(draws.length, 1, 'compatible paragraphs must batch in Rust before Three sees the plan');
@@ -6495,11 +6581,14 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   assert.equal(instrumented.crossings, 0, 'equivalent normalized properties must not cross into Rust');
   assert.deepEqual(left.commitState(), unchangedCommit, 'a semantic no-op must preserve the committed revision');
 
-  // Assigning `text` synchronously sends the complete authored string. Rust discovers the
-  // scalar-safe retained range before this setter returns; publication replays no text input.
+  // Assigning `text` only marks the paragraph dirty. The frame's batch preparation sends one minimal
+  // range replacement against the text the engine last prepared; publication replays no text input.
+  instrumented.reset();
   left.text = 'A';
-  assert.deepEqual(instrumented.latestPreparationTextMutations(), [{ start: 0, deleteCount: 2, insert: 'A' }]);
+  assert.deepEqual(engineCrossings(), { read: 0, batch: 0, publish: 0 }, 'a text setter does not enter the engine');
   scene.updateMatrixWorld();
+  assert.deepEqual(engineCrossings(), { read: 0, batch: 1, publish: 1 });
+  assert.deepEqual(instrumented.latestPreparationTextMutations(), [{ start: 1, deleteCount: 1, insert: '' }]);
   assert.deepEqual(instrumented.latestTextMutations(), []);
   assert.equal(left.text, 'A');
   assert.deepEqual(
@@ -6510,19 +6599,20 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   assert.equal(right.measure(), initialRightMeasurement, 'settlement preserves the clean sibling measurement identity');
 
   left.text = 'AB';
-  assert.deepEqual(instrumented.latestPreparationTextMutations(), [{ start: 0, deleteCount: 1, insert: 'AB' }]);
   scene.updateMatrixWorld();
+  assert.deepEqual(instrumented.latestPreparationTextMutations(), [{ start: 1, deleteCount: 0, insert: 'B' }]);
   assert.deepEqual(instrumented.latestTextMutations(), []);
   assert.equal(left.text, 'AB');
 
   left.text = 'AY';
+  scene.updateMatrixWorld();
   assert.deepEqual(
     instrumented.latestPreparationTextMutations(),
-    [{ start: 0, deleteCount: 2, insert: 'AY' }],
-    'declarative assignment sends full input while Rust owns scalar-safe changed-range discovery',
+    [{ start: 1, deleteCount: 1, insert: 'Y' }],
+    'declarative assignment sends only the range that differs from the prepared text',
   );
   assert.deepEqual(
-    instrumented.latestMeasurementRequestCounts(),
+    instrumented.latestPreparationRequestCounts(),
     {
       paragraph: 0,
       paragraphOrder: 0,
@@ -6533,30 +6623,42 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
       exclusion: 0,
       inlineObject: 0,
     },
-    'the full Three setter encodes changed text while Rust retains the current geometry',
+    'the batch preparation encodes changed text while Rust retains the current geometry',
   );
-  scene.updateMatrixWorld();
   assert.deepEqual(instrumented.latestTextMutations(), []);
 
+  instrumented.reset();
   left.text = 'AZ';
   left.text = 'Z';
   left.text = 'AZ';
+  scene.updateMatrixWorld();
+  assert.deepEqual(
+    engineCrossings(),
+    { read: 0, batch: 1, publish: 1 },
+    'three setters before one frame cost one preparation and one publication',
+  );
   assert.deepEqual(
     instrumented.latestPreparationTextMutations(),
-    [{ start: 0, deleteCount: 1, insert: 'AZ' }],
-    'each setter prepares immediately instead of coalescing edits until publication',
+    [{ start: 1, deleteCount: 1, insert: 'Z' }],
+    'values overwritten before the frame never reach the engine: only the final text is diffed against the prepared one',
   );
-  scene.updateMatrixWorld();
   assert.deepEqual(instrumented.latestTextMutations(), []);
   assert.equal(left.text, 'AZ');
 
-  // The host sends UTF-16 for the full assignment. Rust aligns its retained discovery around the
-  // surrogate pair; no JavaScript scalar prefix/suffix scan participates.
+  // The replacement is derived in UTF-16 units and never splits a surrogate pair.
   left.text = '🌍';
-  assert.deepEqual(instrumented.latestPreparationTextMutations(), [{ start: 0, deleteCount: 2, insert: '🌍' }]);
   scene.updateMatrixWorld();
+  assert.deepEqual(instrumented.latestPreparationTextMutations(), [{ start: 0, deleteCount: 2, insert: '🌍' }]);
   assert.deepEqual(instrumented.latestTextMutations(), []);
   assert.equal(left.text, '🌍');
+  left.text = '🌎';
+  scene.updateMatrixWorld();
+  assert.deepEqual(
+    instrumented.latestPreparationTextMutations(),
+    [{ start: 0, deleteCount: 2, insert: '🌎' }],
+    'two astral scalars sharing a high surrogate are replaced whole',
+  );
+  assert.equal(left.text, '🌎');
   left.text = 'AB';
   scene.updateMatrixWorld();
 
@@ -6572,12 +6674,11 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
     'one requested semantic publication must populate every retained paragraph',
   );
   scene.updateMatrixWorld();
-  assert.equal(
-    instrumented.measureCrossings,
-    3,
-    'each assignment prepares its own revision, and the summary nobody read between them is produced by the read',
+  assert.deepEqual(
+    engineCrossings(),
+    { read: 1, batch: 0, publish: 1 },
+    'the read prepares both assignments in one crossing, the clean sibling answers from cache, and the frame only publishes',
   );
-  assert.equal(instrumented.crossings, 1, 'render traversal publishes the last prepared revision once');
 
   const version = transforms.version;
   let forcedTextWorldUpdates = 0;
@@ -6639,7 +6740,7 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
     'paint-only publication replays no semantic input',
   );
   assert.deepEqual(
-    instrumented.latestMeasurementRequestCounts(),
+    instrumented.latestPreparationRequestCounts(),
     {
       paragraph: 0,
       paragraphOrder: 0,
@@ -6650,14 +6751,16 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
       exclusion: 0,
       inlineObject: 0,
     },
-    'the full Three paint setter prepares synchronously without resending geometry',
+    'the frame prepares the paint assignment as one style record without resending geometry',
   );
+  assert.deepEqual(engineCrossings(), { read: 0, batch: 1, publish: 1 });
 
   instrumented.reset();
   right.style = { ...right.style, fontSize: 20 };
   scene.updateMatrixWorld();
-  // Captured before the read below, which now produces the summary nobody had asked this revision for.
-  const fontSizeSetterRequest = instrumented.latestMeasurementRequestCounts();
+  // Captured before the read below, which produces the summary nobody had asked this revision for.
+  const fontSizeSetterRequest = instrumented.latestPreparationRequestCounts();
+  assert.deepEqual(engineCrossings(), { read: 0, batch: 1, publish: 1 });
   assert.equal(right.glyphs().glyphFontSizes[0], 20);
   assert.deepEqual(
     instrumented.latestRequestCounts(),
@@ -6685,7 +6788,7 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
       exclusion: 0,
       inlineObject: 0,
     },
-    'Rust derives shaping and layout invalidation during the font-size setter',
+    'Rust derives shaping and layout invalidation from the one style record the frame prepares',
   );
 
   const mutableWidth = { mode: 'exact', size: 120 };
@@ -6728,16 +6831,32 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
       exclusion: 0,
       inlineObject: 0,
     },
-    'the nested constraint snapshot is prepared during assignment',
+    'the read prepares the nested constraint snapshot taken at assignment',
   );
+  assert.deepEqual(engineCrossings(), { read: 1, batch: 0, publish: 1 });
 
   mutableWidth.size = 300;
   assert.throws(() => right.set({ constraints: { width: { mode: 'exact', size: NaN } } }), RangeError);
+  instrumented.reset();
   right.text = 'DC';
-  assert.equal(instrumented.latestMeasurementRequestCounts().constraint, 0, 'text retains the owned width snapshot');
   right.style = { ...right.style, fontSize: 21 };
-  assert.equal(instrumented.latestMeasurementRequestCounts().region, 0, 'metrics reflow uses retained column regions');
+  assert.deepEqual(engineCrossings(), { read: 0, batch: 0, publish: 0 });
   const retainedColumns = right.glyphs();
+  assert.deepEqual(engineCrossings(), { read: 1, batch: 0, publish: 0 }, 'one read prepares both assignments');
+  assert.deepEqual(
+    instrumented.latestMeasurementRequestCounts(),
+    {
+      paragraph: 0,
+      paragraphOrder: 0,
+      text: 1,
+      style: 1,
+      constraint: 0,
+      region: 0,
+      exclusion: 0,
+      inlineObject: 0,
+    },
+    'text retains the owned width snapshot and metrics reflow uses retained column regions',
+  );
   const coldRoot = await createThreeTestHandle(t);
   const coldColumns = coldRoot.createText({
     font,
@@ -6766,8 +6885,11 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   const replacedMeasurement = left.measure();
   assert.equal(replacedMeasurement?.glyphCount, 3);
   scene.updateMatrixWorld();
-  assert.equal(instrumented.measureCrossings, 1, 'the text setter owns the only preparation crossing');
-  assert.equal(instrumented.crossings, 1, 'the render traversal publishes that preparation once');
+  assert.deepEqual(
+    engineCrossings(),
+    { read: 1, batch: 0, publish: 1 },
+    'the read owns the only preparation crossing and the render traversal publishes that preparation once',
+  );
   const replacedDraws = rootDraws(scene);
   assert.equal(replacedDraws.length, 1);
   assert.equal(replacedDraws[0].geometry.instanceCount, 5, 'the published command buffer must include the new glyph');
@@ -6805,7 +6927,7 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   font.dispose();
 });
 
-test('full assignments prepare one complete replacement while Rust discovers distant edits', async (t) => {
+test('a full assignment prepares one range replacement spanning its distant edits', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   t.after(() => font.dispose());
@@ -6813,14 +6935,38 @@ test('full assignments prepare one complete replacement while Rust discovers dis
   const text = three.createText({ font, text: 'alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|juliet' });
   scene.add(text);
   scene.updateMatrixWorld();
+  instrumentedGlyph.reset();
   text.set({ text: 'Alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|JulieT' });
-  assert.deepEqual(instrumentedGlyph.latestPreparationTextMutations(), [
-    { start: 0, deleteCount: 62, insert: 'Alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|JulieT' },
-  ]);
-  assert.equal(text.measure().glyphCount, 62, 'the prepared revision is readable before publication');
+  assert.equal(instrumentedGlyph.measureCrossings, 0, 'the assignment does not enter the engine');
+  assert.equal(text.measure().glyphCount, 62, 'the read prepares the assigned revision before publication');
+  assert.equal(instrumentedGlyph.measureCrossings, 1, 'the read prepares in one crossing');
+  assert.deepEqual(
+    instrumentedGlyph.latestPreparationTextMutations(),
+    [{ start: 0, deleteCount: 62, insert: 'Alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|JulieT' }],
+    'edits at both ends leave no common prefix or suffix, so one replacement spans the whole text',
+  );
   scene.updateMatrixWorld();
   assert.equal(text.commitState().status, 'committed');
   assert.deepEqual(instrumentedGlyph.latestTextMutations(), [], 'publication does not replay the assignment');
+  assert.equal(instrumentedGlyph.prepareBatchCrossings, 0, 'the frame prepares nothing the read prepared');
+
+  text.set({ text: 'Alpha|Bravo|charlie|delta|echo|foxtrot|golf|hotel|indiA|JulieT' });
+  scene.updateMatrixWorld();
+  assert.deepEqual(
+    [instrumentedGlyph.measureCrossings, instrumentedGlyph.prepareBatchCrossings],
+    [1, 1],
+    'an unread assignment is prepared by the frame batch',
+  );
+  assert.deepEqual(
+    instrumentedGlyph.latestPreparationTextMutations(),
+    [{ start: 6, deleteCount: 49, insert: 'Bravo|charlie|delta|echo|foxtrot|golf|hotel|indiA' }],
+    'the common prefix and suffix are stripped; Rust discovers the unchanged middle between the distant edits',
+  );
+  assert.equal(text.commitState().status, 'committed');
+  assert.deepEqual(instrumentedGlyph.latestTextMutations(), [], 'publication does not replay the assignment');
+  const cold = three.createText({ font, text: text.text });
+  t.after(() => cold.dispose());
+  assertPublicSemanticLayoutEqual(text, cold, 'range replacements leave the cold layout');
 });
 
 test('sibling measurement terminates after expansion sparse replacement and shrink assignments', async (t) => {
@@ -6877,9 +7023,12 @@ function instrumentNextGlyphEngine() {
   const originalInstantiate = WebAssembly.instantiate;
   let crossings = 0;
   let measureCrossings = 0;
+  let prepareBatchCrossings = 0;
   let arenaQueries = 0;
   let latestRequest;
   let latestMeasurementRequest;
+  // The request of the latest preparation by either route: one read, or the last root of a frame's batch.
+  let latestPreparationRequest;
   let latestUpdateFlags = 0;
   let latestUpdateGeneration = 0;
   let latestSemanticByteLength = 0;
@@ -6965,12 +7114,27 @@ function instrumentNextGlyphEngine() {
       }
       return status;
     };
+    const prepareBatch = exports[abi.functions.prepareBatch];
+    assert.equal(typeof prepareBatch, 'function', 'instrumented shaper must export prepare_batch');
+    exports[abi.functions.prepareBatch] = (pointer, count) => {
+      prepareBatchCrossings += 1;
+      const entry = abi.layouts.engineUpdateBatchEntry;
+      const entries = new DataView(exports.memory.buffer, pointer, count * entry.size);
+      for (let index = 0; index < count; index += 1) {
+        const offset = index * entry.size;
+        const rootId = entries.getUint32(offset + entry.rootId, true);
+        const length = entries.getUint32(offset + entry.requestLength, true);
+        latestPreparationRequest = new Uint8Array(exports.memory.buffer, requestPointer(rootId), length).slice();
+      }
+      return prepareBatch(pointer, count);
+    };
     const measure = exports[abi.functions.measureParagraph];
     if (typeof measure === 'function') {
       exports[abi.functions.measureParagraph] = (...arguments_) => {
         measureCrossings += 1;
         const [, pointer, length] = arguments_;
         latestMeasurementRequest = new Uint8Array(exports.memory.buffer, pointer, length).slice();
+        latestPreparationRequest = latestMeasurementRequest;
         const resultPointer = measure(...arguments_);
         if (resultPointer !== 0) captureResult(resultPointer);
         return resultPointer;
@@ -7015,6 +7179,10 @@ function instrumentNextGlyphEngine() {
     get measureCrossings() {
       return measureCrossings;
     },
+    /** Calls to `prepare_batch`: one per frame or `glyph.prepare()` that found a dirty paragraph. */
+    get prepareBatchCrossings() {
+      return prepareBatchCrossings;
+    },
     get arenaQueries() {
       return arenaQueries;
     },
@@ -7047,6 +7215,16 @@ function instrumentNextGlyphEngine() {
         latestMeasurementRequest.buffer,
         latestMeasurementRequest.byteOffset,
         latestMeasurementRequest.byteLength,
+      ).getUint32(request.semanticViewMask, true);
+    },
+    /** The semantic view mask of the latest preparation request, from a read or from a frame's batch. */
+    get latestPreparationRequestSemanticViewMask() {
+      assert.ok(latestPreparationRequest, 'a paragraph preparation request must have been captured');
+      const request = abi.layouts.engineUpdateRequest;
+      return new DataView(
+        latestPreparationRequest.buffer,
+        latestPreparationRequest.byteOffset,
+        latestPreparationRequest.byteLength,
       ).getUint32(request.semanticViewMask, true);
     },
     get latestSemanticByteLength() {
@@ -7127,15 +7305,37 @@ function instrumentNextGlyphEngine() {
         inlineObject: view.getUint32(request.inlineObjectCount, true),
       };
     },
+    /** Record counts of the latest preparation request, from a read or from a frame's batch. */
+    latestPreparationRequestCounts() {
+      assert.ok(latestPreparationRequest, 'a paragraph preparation request must have been captured');
+      const request = abi.layouts.engineUpdateRequest;
+      const view = new DataView(
+        latestPreparationRequest.buffer,
+        latestPreparationRequest.byteOffset,
+        latestPreparationRequest.byteLength,
+      );
+      return {
+        paragraph: view.getUint32(request.paragraphMutationCount, true),
+        paragraphOrder: view.getUint32(request.paragraphOrderMutationCount, true),
+        text: view.getUint32(request.textMutationCount, true),
+        style: view.getUint32(request.styleMutationCount, true),
+        constraint: view.getUint32(request.constraintCount, true),
+        region: view.getUint32(request.regionCount, true),
+        exclusion: view.getUint32(request.exclusionCount, true),
+        inlineObject: view.getUint32(request.inlineObjectCount, true),
+      };
+    },
     reset() {
       crossings = 0;
       measureCrossings = 0;
+      prepareBatchCrossings = 0;
       arenaQueries = 0;
       borrowedGlyphRangeCalls = 0;
       borrowedLayoutCalls = 0;
       borrowedGlyphRangeCounts = [];
       latestBatchRootIds = [];
       latestMeasurementRequest = undefined;
+      latestPreparationRequest = undefined;
     },
     latestParagraphMutations() {
       assert.ok(latestRequest, 'a text update request must have been captured');
@@ -7245,14 +7445,30 @@ function instrumentNextGlyphEngine() {
         };
       });
     },
-    latestPreparationTextMutations() {
-      assert.ok(latestMeasurementRequest, 'a paragraph preparation request must have been captured');
+    /** Paragraph ids of the text records of the latest preparation request, in wire order. */
+    latestPreparationTextMutationParagraphIds() {
+      assert.ok(latestPreparationRequest, 'a paragraph preparation request must have been captured');
       const request = abi.layouts.engineUpdateRequest;
       const mutation = abi.layouts.engineTextMutation;
       const view = new DataView(
-        latestMeasurementRequest.buffer,
-        latestMeasurementRequest.byteOffset,
-        latestMeasurementRequest.byteLength,
+        latestPreparationRequest.buffer,
+        latestPreparationRequest.byteOffset,
+        latestPreparationRequest.byteLength,
+      );
+      const offset = view.getUint32(request.textMutationsOffset, true);
+      const count = view.getUint32(request.textMutationCount, true);
+      return Array.from({ length: count }, (_recordValue, index) =>
+        view.getUint32(offset + index * mutation.size + mutation.paragraphId, true),
+      );
+    },
+    latestPreparationTextMutations() {
+      assert.ok(latestPreparationRequest, 'a paragraph preparation request must have been captured');
+      const request = abi.layouts.engineUpdateRequest;
+      const mutation = abi.layouts.engineTextMutation;
+      const view = new DataView(
+        latestPreparationRequest.buffer,
+        latestPreparationRequest.byteOffset,
+        latestPreparationRequest.byteLength,
       );
       const offset = view.getUint32(request.textMutationsOffset, true);
       const count = view.getUint32(request.textMutationCount, true);
@@ -7648,9 +7864,14 @@ test('Text.measure answers attached first-frame state without traversing matrice
   const secondMeasurement = second.measure();
   assert.ok(firstMeasurement.lineCount > 0);
   assert.ok(secondMeasurement.glyphCount > 0);
-  assert.ok(firstMeasurement.inkBounds, 'setter-first measurement includes authoritative positioned ink');
+  assert.ok(firstMeasurement.inkBounds, 'read-first measurement includes authoritative positioned ink');
   assert.equal(instrumentedGlyph.crossings, 0, 'measurement must not publish a full engine frame');
-  assert.equal(instrumentedGlyph.measureCrossings, 1, 'the unqueried sibling materializes its summary on first read');
+  assert.equal(
+    instrumentedGlyph.measureCrossings,
+    1,
+    'attachment leaves the detached read current, so only the unread sibling is prepared by its first read',
+  );
+  assert.equal(instrumentedGlyph.prepareBatchCrossings, 0, 'reads prepare one paragraph each, never a batch');
   assert.equal(group.gpuBytes, 0, 'measurement must not realize renderer buffers');
   assert.equal(group.children.length, 2, 'measurement must not add renderer draw objects');
   for (const [index, object] of [first, second, group, scene].entries()) {
@@ -7667,10 +7888,31 @@ test('Text.measure answers attached first-frame state without traversing matrice
     textShaperAbi.engine.resultFlags.checkpoint,
     "the planner's first render plan is necessarily its initial checkpoint",
   );
+  assert.deepEqual(
+    [instrumentedGlyph.measureCrossings, instrumentedGlyph.prepareBatchCrossings],
+    [1, 1],
+    'the frame restates both paragraphs in one batch crossing and no read crossing',
+  );
+  assert.deepEqual(
+    instrumentedGlyph.latestPreparationRequestCounts(),
+    {
+      paragraph: 0,
+      paragraphOrder: 0,
+      text: 0,
+      style: 2,
+      constraint: 0,
+      region: 0,
+      exclusion: 0,
+      inlineObject: 0,
+    },
+    'attachment updates presentation without replaying already prepared text, geometry, or lifecycle',
+  );
+  assert.deepEqual(first.measure(), firstMeasurement, 'the requested summary remains current through publication');
+  assert.deepEqual(second.measure(), secondMeasurement, 'the sibling summary remains current through publication');
   assert.equal(
     instrumentedGlyph.measureCrossings,
-    3,
-    'requested summaries and positioned bounds remain current through publication',
+    1,
+    'the batch returns the summaries their callers had read, so reading them again costs no crossing',
   );
   assert.equal(first.commitState().status, 'committed');
   assert.equal(second.commitState().status, 'committed');
@@ -7679,8 +7921,8 @@ test('Text.measure answers attached first-frame state without traversing matrice
   assert.ok(first.boundingBox.max.y > first.boundingBox.min.y);
   assert.equal(
     instrumentedGlyph.measureCrossings,
-    3,
-    'the first explicit bounds read materializes positioned ink once',
+    1,
+    'the bounds read answers from the summary the first read produced',
   );
 
   group.dispose();
@@ -7703,15 +7945,27 @@ test('unqueried text omits summary records and the first query materializes a re
     constraints: { width: { mode: 'exact', size: 180 } },
   });
 
-  assert.equal(
-    instrumentedGlyph.latestMeasurementRequestSemanticViewMask,
-    0,
-    'setter preparation does not request measurement records',
+  const summaryMask =
+    textShaperAbi.engine.semanticViewMasks.measurement | textShaperAbi.engine.semanticViewMasks.borrowedLayout;
+  assert.deepEqual(
+    [instrumentedGlyph.measureCrossings, instrumentedGlyph.prepareBatchCrossings],
+    [0, 0],
+    'construction does not enter the engine',
   );
   assert.deepEqual(label.commitState(), { status: 'unbound' });
   group.add(label);
   scene.add(group);
   scene.updateMatrixWorld(true);
+  assert.deepEqual(
+    [instrumentedGlyph.measureCrossings, instrumentedGlyph.prepareBatchCrossings],
+    [0, 1],
+    'the first frame prepares the unread paragraph in its batch',
+  );
+  assert.equal(
+    instrumentedGlyph.latestPreparationRequestSemanticViewMask,
+    0,
+    'batch preparation of unqueried text does not request measurement records',
+  );
   assert.equal(
     instrumentedGlyph.latestRequestSemanticViewMask,
     0,
@@ -7725,8 +7979,22 @@ test('unqueried text omits summary records and the first query materializes a re
   assert.ok(measurement.inkBounds);
   assert.equal(
     instrumentedGlyph.latestMeasurementRequestSemanticViewMask,
-    textShaperAbi.engine.semanticViewMasks.measurement | textShaperAbi.engine.semanticViewMasks.borrowedLayout,
+    summaryMask,
     'the first explicit query requests current measurement and borrowed-layout records',
+  );
+  assert.deepEqual(
+    instrumentedGlyph.latestMeasurementRequestCounts(),
+    {
+      paragraph: 0,
+      paragraphOrder: 0,
+      text: 0,
+      style: 0,
+      constraint: 0,
+      region: 0,
+      exclusion: 0,
+      inlineObject: 0,
+    },
+    'the query only serializes the summary of the already prepared paragraph',
   );
   const crossingsAfterQuery = instrumentedGlyph.measureCrossings;
   assert.equal(crossingsAfterQuery - crossingsBeforeQuery, 1, 'the first query materializes the missing summary once');
@@ -7739,12 +8007,18 @@ test('unqueried text omits summary records and the first query materializes a re
 
   const previousGlyphCount = measurement.glyphCount;
   label.text = 'tiny';
+  assert.equal(instrumentedGlyph.measureCrossings, crossingsAfterQuery, 'the edit does not enter the engine');
+  const batchesBeforeEdit = instrumentedGlyph.prepareBatchCrossings;
+  scene.updateMatrixWorld(true);
+  assert.equal(label.commitState().status, 'committed');
+  assert.equal(instrumentedGlyph.prepareBatchCrossings, batchesBeforeEdit + 1, 'the frame prepares the unread edit');
   assert.equal(
-    instrumentedGlyph.latestMeasurementRequestSemanticViewMask,
-    textShaperAbi.engine.semanticViewMasks.measurement | textShaperAbi.engine.semanticViewMasks.borrowedLayout,
-    'a previously requested summary stays eager and current after edits',
+    instrumentedGlyph.latestPreparationRequestSemanticViewMask,
+    summaryMask,
+    'a previously requested summary stays current: the batch requests it for the caller that read the last one',
   );
   const crossingsAfterEdit = instrumentedGlyph.measureCrossings;
+  assert.equal(crossingsAfterEdit, crossingsAfterQuery, 'the frame makes no read crossing');
   const editedMeasurement = label.measure();
   const editedGlyphCount = label.glyphs().glyphCount;
   assert.equal(editedMeasurement.glyphCount, editedGlyphCount, 'the edited summary matches current positioned glyphs');
@@ -7753,18 +8027,29 @@ test('unqueried text omits summary records and the first query materializes a re
   assert.equal(
     instrumentedGlyph.measureCrossings,
     crossingsAfterEdit,
-    'reading the eagerly refreshed summary performs no crossing',
+    'reading the summary the batch refreshed performs no crossing',
   );
 
+  label.text = 'tiny again';
+  const rereadMeasurement = label.measure();
+  assert.equal(
+    instrumentedGlyph.measureCrossings,
+    crossingsAfterEdit + 1,
+    'a read of an unprepared edit prepares it and returns its summary in one crossing',
+  );
+  assert.equal(instrumentedGlyph.latestMeasurementRequestSemanticViewMask, summaryMask);
+  assert.notEqual(rereadMeasurement.glyphCount, editedGlyphCount, 'the read answers for the new value');
+  const batchesBeforePublication = instrumentedGlyph.prepareBatchCrossings;
   scene.updateMatrixWorld(true);
   assert.equal(label.commitState().status, 'committed');
   assert.equal(
-    instrumentedGlyph.measureCrossings,
-    crossingsAfterEdit,
-    'publication reuses the current requested summary',
+    instrumentedGlyph.prepareBatchCrossings,
+    batchesBeforePublication,
+    'publication prepares nothing the read prepared',
   );
+  assert.strictEqual(label.measure(), rereadMeasurement, 'publication reuses the current requested summary');
   assert.equal(label.boundingBox.isEmpty(), false, 'publication preserves requested ink bounds');
-  assert.equal(instrumentedGlyph.measureCrossings, crossingsAfterEdit, 'accepted bounds are already current');
+  assert.equal(instrumentedGlyph.measureCrossings, crossingsAfterEdit + 1, 'accepted bounds are already current');
 
   group.dispose();
   label.dispose();
@@ -7785,11 +8070,13 @@ test('Text.measure retains unpublished lifecycle but skips published paragraph u
 
   instrumentedGlyph.reset();
   first.text = 'first unchanged-order preparation';
-  const semanticPreparationCounts = instrumentedGlyph.latestMeasurementRequestCounts();
+  assert.equal(instrumentedGlyph.measureCrossings, 0, 'the setter does not enter the engine');
   assert.ok(first.measure().glyphCount > 0);
+  const semanticPreparationCounts = instrumentedGlyph.latestMeasurementRequestCounts();
+  assert.equal(semanticPreparationCounts.text, 1, 'the read carries the edit the setter left dirty');
   assert.equal(semanticPreparationCounts.paragraph, 0, 'a published target needs no repeated paragraph lifecycle rows');
   assert.equal(semanticPreparationCounts.paragraphOrder, 0, 'semantic preparation does not resend stable rank rows');
-  assert.equal(instrumentedGlyph.measureCrossings, 2, 'the following measure materializes the setter-prepared summary');
+  assert.equal(instrumentedGlyph.measureCrossings, 1, 'the read prepares and returns the summary in one crossing');
 
   first.renderOrder = 2;
   second.renderOrder = 1;
@@ -7801,16 +8088,46 @@ test('Text.measure retains unpublished lifecycle but skips published paragraph u
   assert.deepEqual(
     instrumentedGlyph.latestMeasurementParagraphOrderMutations().map(({ orderRank }) => orderRank),
     [],
-    'setter preparation leaves renderer rank changes for publication',
+    'read preparation leaves renderer rank changes for publication',
   );
   assert.equal(instrumentedGlyph.crossings, 0, 'preparation and reads do not publish a full frame');
+  assert.equal(instrumentedGlyph.measureCrossings, 2, 'each changed Text is prepared by its own read, once');
+
+  const unpublished = three.createText({ font, text: 'unpublished preparation' });
+  group.add(unpublished);
+  assert.ok(unpublished.measure().glyphCount > 0);
+  assert.equal(instrumentedGlyph.measureCrossings, 3);
   assert.equal(
-    instrumentedGlyph.measureCrossings,
-    3,
-    'the changed Texts materialize their summaries after setter preparation',
+    instrumentedGlyph.latestMeasurementRequestCounts().paragraph,
+    1,
+    'the first read of an unpublished paragraph states its lifecycle to the engine',
+  );
+  unpublished.text = 'unpublished preparation, edited';
+  assert.ok(unpublished.measure().glyphCount > 0);
+  assert.equal(instrumentedGlyph.measureCrossings, 4);
+  assert.equal(
+    instrumentedGlyph.latestMeasurementRequestCounts().paragraph,
+    0,
+    'a prepared paragraph is not upserted again before it is published',
   );
 
   scene.updateMatrixWorld(true);
+  assert.equal(instrumentedGlyph.crossings, 1);
+  assert.equal(
+    instrumentedGlyph.latestRequestCounts().paragraph,
+    0,
+    'publication replays no lifecycle row a read already stated',
+  );
+  assert.deepEqual(
+    instrumentedGlyph
+      .latestParagraphOrderMutations()
+      .map(({ orderRank }) => orderRank)
+      .sort(),
+    [0, 1, 2],
+    'publication carries the rank changes the reads left behind and the rank of the new paragraph',
+  );
+  assert.equal(unpublished.commitState().status, 'committed');
+  unpublished.dispose();
   group.dispose();
   first.dispose();
   second.dispose();
@@ -7895,7 +8212,7 @@ test('Text.readGlyphs demand-reads scalar records only inside one synchronous bo
   font.dispose();
 });
 
-test('Text.readGlyphs reuses setter preparation without a query-side promotion pass', async (t) => {
+test('Text.readGlyphs prepares an edit once and later borrows reuse it without a promotion pass', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
@@ -7927,12 +8244,12 @@ test('Text.readGlyphs reuses setter preparation without a query-side promotion p
 
   instrumentedGlyph.reset();
   label.text = 'Dirty';
-  assert.equal(instrumentedGlyph.measureCrossings, 1, 'the setter performs the revision preparation');
+  assert.equal(instrumentedGlyph.measureCrossings, 0, 'the setter only marks the paragraph dirty');
   assert.equal(
     label.readGlyphs((layout) => layout.glyphCount),
     5,
   );
-  assert.equal(instrumentedGlyph.measureCrossings, 1, 'the first borrow after an edit reuses preparation');
+  assert.equal(instrumentedGlyph.measureCrossings, 1, 'the first borrow after an edit prepares the revision once');
   assert.equal(
     label.readGlyphs((layout) => layout.glyphCount),
     5,
@@ -7942,11 +8259,19 @@ test('Text.readGlyphs reuses setter preparation without a query-side promotion p
     label.readGlyphs((layout) => layout.glyphCount),
     5,
   );
-  assert.equal(instrumentedGlyph.measureCrossings, 1, 'all unchanged reads consume one setter-owned revision');
+  assert.equal(instrumentedGlyph.measureCrossings, 1, 'all unchanged reads consume one read-owned revision');
 
   const measurement = label.measure();
   assert.equal(measurement.x, undefined, 'measure does not expose the canonical inspection columns');
   assert.equal(measurement.glyphIds, undefined, 'measure cannot mutate the private glyph cache');
+  assert.equal(instrumentedGlyph.measureCrossings, 1, 'measure reuses the summary the borrow produced');
+  scene.updateMatrixWorld(true);
+  assert.deepEqual(
+    [instrumentedGlyph.prepareBatchCrossings, instrumentedGlyph.crossings],
+    [0, 1],
+    'the frame publishes the revision the borrow prepared without preparing it again',
+  );
+  assert.equal(label.commitState().status, 'committed');
 
   label.renderOrder = 7;
   instrumentedGlyph.reset();
@@ -8132,10 +8457,23 @@ test('a setter crosses into the engine once and reuses its request arena views',
   }
 });
 
-test('a setter keeps the summary current only for a caller that read the previous one', async (t) => {
+test('a frame keeps the summary current only for a caller that read the previous one', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
   const label = three.createText({ font, text: 'first' });
+  const scene = new THREE.Scene();
+  const summaryMask =
+    textShaperAbi.engine.semanticViewMasks.measurement | textShaperAbi.engine.semanticViewMasks.borrowedLayout;
+  const emptyRequest = {
+    paragraph: 0,
+    paragraphOrder: 0,
+    text: 0,
+    style: 0,
+    constraint: 0,
+    region: 0,
+    exclusion: 0,
+    inlineObject: 0,
+  };
   try {
     label.measure();
     instrumentedGlyph.reset();
@@ -8147,11 +8485,47 @@ test('a setter keeps the summary current only for a caller that read the previou
 
     instrumentedGlyph.reset();
     for (const text of ['four', 'five', 'six', 'seven']) label.text = text;
-    assert.equal(instrumentedGlyph.measureCrossings, 4);
-    assert.equal(label.measure().glyphCount, 5, 'the unread summaries were not kept, so the read produces one');
-    assert.equal(instrumentedGlyph.measureCrossings, 5);
+    assert.equal(instrumentedGlyph.measureCrossings, 0, 'setters nobody reads between do not enter the engine');
+    assert.equal(label.measure().glyphCount, 5, 'the read prepares the final value');
+    assert.equal(instrumentedGlyph.measureCrossings, 1);
+    assert.deepEqual(
+      instrumentedGlyph.latestPreparationTextMutations(),
+      [{ start: 0, deleteCount: 5, insert: 'seven' }],
+      'the overwritten values never reach the engine',
+    );
     assert.equal(label.measure().glyphCount, 5);
-    assert.equal(instrumentedGlyph.measureCrossings, 5, 'the produced summary is cached');
+    assert.equal(instrumentedGlyph.measureCrossings, 1, 'the produced summary is cached');
+
+    scene.add(label);
+    scene.updateMatrixWorld(true);
+    assert.equal(label.measure().glyphCount, 5, 'the caller reads the published summary');
+    instrumentedGlyph.reset();
+    label.text = 'eight';
+    scene.updateMatrixWorld(true);
+    assert.deepEqual([instrumentedGlyph.prepareBatchCrossings, instrumentedGlyph.crossings], [1, 1]);
+    assert.equal(
+      instrumentedGlyph.latestPreparationRequestSemanticViewMask,
+      summaryMask,
+      'the batch returns the summary of a text whose previous summary was read',
+    );
+    label.text = 'nine';
+    scene.updateMatrixWorld(true);
+    assert.deepEqual([instrumentedGlyph.prepareBatchCrossings, instrumentedGlyph.crossings], [2, 2]);
+    assert.equal(
+      instrumentedGlyph.latestPreparationRequestSemanticViewMask,
+      0,
+      'the batch stops returning a summary nobody read',
+    );
+    assert.equal(instrumentedGlyph.measureCrossings, 0, 'neither frame makes a read crossing');
+    assert.equal(label.measure().glyphCount, 4, 'the read after the frame answers for the published value');
+    assert.equal(instrumentedGlyph.measureCrossings, 1, 'the unkept summary costs one crossing');
+    assert.deepEqual(
+      instrumentedGlyph.latestMeasurementRequestCounts(),
+      emptyRequest,
+      'that crossing only serializes the summary of the already prepared paragraph',
+    );
+    assert.equal(label.measure().glyphCount, 4);
+    assert.equal(instrumentedGlyph.measureCrossings, 1, 'the produced summary is cached');
   } finally {
     label.dispose();
     font.dispose();
@@ -8923,9 +9297,10 @@ test('repeated layout under changing constraints stays on the paragraph preparat
   assert.equal(instrumentedGlyph.crossings, 0, 'measurement never drives a full engine update');
   assert.equal(
     instrumentedGlyph.measureCrossings,
-    widths.length + 1,
-    'the first constraint query materializes the missing summary',
+    widths.length,
+    'each constraint query prepares its assignment and returns the summary in one crossing',
   );
+  assert.equal(instrumentedGlyph.prepareBatchCrossings, 0, 'queries prepare one paragraph, never a batch');
   assert.equal(
     instrumentedGlyph.latestUpdateGeneration,
     committedGeneration,
@@ -8935,6 +9310,11 @@ test('repeated layout under changing constraints stays on the paragraph preparat
   scene.updateMatrixWorld(true);
   assert.equal(label.error, undefined);
   assert.equal(instrumentedGlyph.crossings, 1, 'one ordinary frame commits the final constraint');
+  assert.deepEqual(
+    [instrumentedGlyph.measureCrossings, instrumentedGlyph.prepareBatchCrossings],
+    [widths.length, 0],
+    'the committing frame prepares nothing the last query prepared',
+  );
   assert.equal(
     instrumentedGlyph.latestUpdateFlags & abi.engine.resultFlags.checkpoint,
     0,

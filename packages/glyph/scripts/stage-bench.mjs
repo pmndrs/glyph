@@ -1,4 +1,4 @@
-/* @workflow { "name": "glyph:stage-bench", "summary": "Time the run-local geometry, positioning and measurement stages and the engine steps around them inside the optimized wasm32+simd128 oracle probe.", "requirements": "Pinned Rust through mise and installed package dependencies for wasm-opt. Evidence for a rewrite, not a benchmark protocol: run one at a time on a quiet machine.", "writes": "packages/glyph/rust/shaper/target/stage-bench-wasm; never dist." } */
+/* @workflow { "name": "glyph:stage-bench", "summary": "Time the run-local geometry stage, the cluster build, positioning and measurement and the engine steps around them inside the optimized wasm32+simd128 oracle probe.", "requirements": "Pinned Rust through mise and installed package dependencies for wasm-opt. Evidence for a rewrite, not a benchmark protocol: run one at a time on a quiet machine.", "writes": "packages/glyph/rust/shaper/target/stage-bench-wasm; never dist." } */
 // Usage:
 //   node scripts/stage-bench.mjs [--iterations N] [--rounds N] [--only SUBSTRING] [--save FILE]
 //                                [--suite stage|layout] [--probe LABEL=FILE]...
@@ -29,6 +29,8 @@ const fonts = [
   ['amiri', 'arabic'],
   ['devanagari', 'devanagari'],
   ['cjk-jp', 'cjk'],
+  // A fallback stack: Inter has no Arabic, so every Arabic run shapes in the second font.
+  ['inter+amiri', 'arabic'],
 ];
 const sizes = [1000, 15000, 22000];
 const layoutFixtures = ['inter', 'fredoka', 'amiri', 'bidi', 'cjk', 'dropcap', 'exclusion'];

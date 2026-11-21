@@ -291,6 +291,7 @@ export const textShaperAbi = {
     "glyphOutlinePointer": "pmndrs_glyph_shaper_glyph_outline_ptr",
     "initialize": "pmndrs_glyph_shaper_initialize",
     "measureParagraph": "pmndrs_glyph_engine_measure_paragraph",
+    "prepareBatch": "pmndrs_glyph_engine_prepare_batch",
     "registerCodec": "pmndrs_glyph_engine_register_codec",
     "registerFont": "pmndrs_glyph_shaper_register_font",
     "registerFontBinding": "pmndrs_glyph_engine_register_font_binding",

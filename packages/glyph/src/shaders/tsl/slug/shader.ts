@@ -27,14 +27,13 @@ export interface TslSlugInstanceNodes {
   readonly verticalBandCount: Node<'uint'>;
 }
 
-/** The three integer textures one decoded Slug page publishes, plus the row widths that address them. */
+/** The two integer textures one Slug page publishes (band headers and band curves), plus the row widths that address them. */
 export interface TslSlugPageResources {
-  readonly curveTexture: DataTexture;
-  readonly curveWidth: number;
   readonly headerTexture: DataTexture;
   readonly headerWidth: number;
-  readonly referenceTexture: DataTexture;
-  readonly referenceWidth: number;
+  /** One `rgba32uint` texel per band entry: the curve's control points as `pack2x16float` words `[p0, p1, p2, 0]`. */
+  readonly bandCurveTexture: DataTexture;
+  readonly bandCurveWidth: number;
 }
 
 /** Optional coverage controls. Omitted fields keep the canonical non-zero winding rule with no weight compensation. */

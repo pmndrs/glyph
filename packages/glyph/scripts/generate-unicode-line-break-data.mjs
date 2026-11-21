@@ -5,7 +5,7 @@ import { EastAsianWidth } from '@cto.af/linebreak';
 import { LineBreak, names } from '@cto.af/linebreak/lib/LineBreak.js';
 import { resolve } from '@cto.af/linebreak/lib/state.js';
 
-import { emitCodePointTrie } from './support/code-point-trie.mjs';
+import { emitThreeStageTrie } from './support/code-point-trie.mjs';
 
 const require = createRequire(import.meta.url);
 const output = new URL('../rust/shaper/src/generated/line_break_data.rs', import.meta.url);
@@ -27,13 +27,15 @@ for (let codePoint = 0; codePoint < values.length; codePoint += 1) {
     (extendedPictographic.has(codePoint) && unassigned.has(codePoint) ? 1 << 11 : 0);
 }
 
-// Two-stage trie rather than sorted ranges: `properties` is called per character on every
-// analysis, and this is deliberately larger raw and smaller over the wire. See D-341.
-const trie = emitCodePointTrie({
+if (values.some((value) => value > 0xffff)) throw new Error('line-break property bits no longer fit u16');
+// Three-stage trie rather than sorted ranges: `properties` is called per character on every
+// scalar line-break pass. See D-341.
+const trie = emitThreeStageTrie({
   prefix: 'LINE_BREAK',
   valueAt: (codePoint) => values[codePoint],
-  shift: 8,
-  valueType: 'u32',
+  leafShift: 6,
+  middleShift: 5,
+  valueType: 'u16',
   describe: 'Line-break property bits.',
 });
 
