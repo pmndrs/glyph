@@ -319,3 +319,14 @@ Updated in place; the history of each change is in the log below.
 - **New breaking surfaces (renderer).** MSDF atlas resource group: `texture` replaced by a `pages` token plus
   a `glyphs` table (an external renderer must exchange the token in-process); materials survive buffer growth
   on WebGPU; decoded atlas pages alias the loaded file's bytes.
+- **Stopped: all six running lanes hit the account's weekly usage limit** on the top model (resets
+  2026-11-23 15:00 America/Detroit). Nothing was lost; each lane's worktree holds its state:
+  geometry (`glyph-wt-geometry`): stage clocks committed, the dense kernel and paragraph files written but
+  uncommitted and unproven; Unicode (`glyph-wt-unicode`): dense kernel over the property closure committed,
+  generator changes uncommitted, oracle tiers not yet run; cluster (`glyph-wt-cluster`): divergence fixes in
+  progress, uncommitted, with a new regression test file; preparation (`glyph-wt-prepare`): stage 0 guards
+  (crossing budget) committed, the flip not started; Slug (`glyph-wt-render`): clippy allows and early
+  glyph-table edits uncommitted; TypeGPU (`glyph-wt-typegpu`): real-device parity harness committed, no
+  renderer change yet. None of this is merged. The integration branch is unaffected at `sil-green-4`.
+- **Cause.** Every lane, profile and review ran on the top model. Mechanical work (profiles, font fetching,
+  harness building, merges, log upkeep) did not need it.
