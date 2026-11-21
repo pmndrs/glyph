@@ -10,6 +10,9 @@ mod generated {
 #[path = "unicode_kernel.rs"]
 pub(crate) mod kernel;
 
+#[path = "unicode_resync.rs"]
+pub mod resync;
+
 pub use generated::UNICODE_VERSION;
 pub use kernel::KernelCoverage;
 
@@ -309,19 +312,24 @@ impl UnicodeAnalysis {
                 index = run_end;
                 continue;
             }
+            let (start, end) = (index as u32, index as u32 + 1);
             if id == 0 {
-                self.feed_script(index as u32, index as u32 + 1, COMMON_SCRIPT, false);
+                self.feed_script(start, end, COMMON_SCRIPT, &[]);
             } else if id == kernel::KERNEL_SCRIPT_COMPLEX {
                 let (preferred, has_candidates) =
                     grapheme_script_atom(text, index, index + 1, &mut self.candidate_scratch)?;
-                self.feed_script(index as u32, index as u32 + 1, preferred, has_candidates);
+                self.feed_scratch_script(start, end, preferred, has_candidates);
+            } else if id >= kernel::KERNEL_SCRIPT_SET_BASE {
+                self.feed_script(start, end, COMMON_SCRIPT, kernel::script_set(id));
             } else {
-                self.feed_script(
-                    index as u32,
-                    index as u32 + 1,
-                    kernel::KERNEL_SCRIPT_TAGS[usize::from(id)],
-                    false,
-                );
+                let script = kernel::KERNEL_SCRIPT_TAGS[usize::from(id)];
+                if self.deferred_scripts.is_empty() {
+                    // A script switch with nothing waiting: the new item starts here.
+                    self.previous_script = script;
+                    self.push_script_item(start, end, script);
+                } else {
+                    self.feed_script(start, end, script, &[]);
+                }
                 self.previous_script_id = id;
             }
             index += 1;
@@ -357,7 +365,7 @@ impl UnicodeAnalysis {
                 grapheme_end,
                 &mut self.candidate_scratch,
             )?;
-            self.feed_script(
+            self.feed_scratch_script(
                 grapheme_start as u32,
                 grapheme_end as u32,
                 preferred,
@@ -369,10 +377,18 @@ impl UnicodeAnalysis {
         Ok(())
     }
 
+    /// `feed_script` with the candidates `grapheme_script_atom` left in the scratch buffer.
+    fn feed_scratch_script(&mut self, text_start: u32, text_end: u32, preferred: u32, has: bool) {
+        let scratch = core::mem::take(&mut self.candidate_scratch);
+        let candidates = if has { scratch.as_slice() } else { &[] };
+        self.feed_script(text_start, text_end, preferred, candidates);
+        self.candidate_scratch = scratch;
+    }
+
     /// Streams one grapheme into the script items; equal to the two-pass neutral resolution.
     ///
-    /// `candidates` says `candidate_scratch` holds the Script_Extensions the grapheme accepts.
-    fn feed_script(&mut self, text_start: u32, text_end: u32, preferred: u32, candidates: bool) {
+    /// `candidates` are the Script_Extensions a neutral grapheme accepts; empty accepts any.
+    fn feed_script(&mut self, text_start: u32, text_end: u32, preferred: u32, candidates: &[u32]) {
         if !is_neutral_script(preferred) {
             self.flush_deferred_scripts(preferred);
             self.previous_script = preferred;
@@ -381,16 +397,13 @@ impl UnicodeAnalysis {
             return;
         }
         let accepts_previous = !is_neutral_script(self.previous_script)
-            && (!candidates || self.candidate_scratch.contains(&self.previous_script));
+            && (candidates.is_empty() || candidates.contains(&self.previous_script));
         if accepts_previous && self.deferred_scripts.is_empty() {
             self.push_script_item(text_start, text_end, self.previous_script);
             return;
         }
         let candidates_start = self.deferred_tags.len() as u32;
-        if candidates {
-            self.deferred_tags
-                .extend_from_slice(&self.candidate_scratch);
-        }
+        self.deferred_tags.extend_from_slice(candidates);
         self.deferred_scripts.push(DeferredScript {
             text_start,
             text_end,
