@@ -594,6 +594,8 @@ pub(crate) struct Window {
 
 /// `edit` and `AsciiUse` are authoritative prepared producer facts. This
 /// function reads bounded old/new units only at the proposed anchors.
+// Scheduled for deletion with the ASCII-anchor path; not worth a parameter struct.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn fixed_window(
     screen: &FontScreen,
     old: &[u16],
@@ -655,6 +657,8 @@ pub(crate) fn fixed_window(
     }
     let mut right = [None; 2];
     let mut right_found = 0;
+    // Scheduled for deletion with the ASCII-anchor path; the index also feeds `translated`.
+    #[allow(clippy::needless_range_loop)]
     for old_index in old_end..old.len().min(old_end.saturating_add(ANCHOR_SIDE_UNITS_MAX)) {
         probes += 2;
         if probes > NOMINAL_PROBES_MAX {
