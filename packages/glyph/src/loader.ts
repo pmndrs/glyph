@@ -9,6 +9,7 @@ import { GlyphError } from './glyph-error.js';
 import {
   createImmutableFontBacking,
   createImmutableFontLease,
+  precompileImmutableFontVariant,
   createImmutableFontVariant,
   observeImmutableFontDispose,
   releaseImmutableFontVariant,
@@ -1543,6 +1544,7 @@ async function runtimeBakeFormat<
 function closeImmutableFontVariant<Format extends RasterFormatMetadata>(
   variant: ImmutableFontVariant<Format>,
 ): ClosedFontVariant {
+  precompileImmutableFontVariant(variant);
   return {
     format: variant.format,
     acquire: () => createImmutableFontLease(variant),

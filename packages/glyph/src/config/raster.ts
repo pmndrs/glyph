@@ -168,6 +168,8 @@ export function createRasterCodecProgram<Format extends RasterFormatMetadata, Sc
 const compiledRasterFonts = new WeakSet<object>();
 const compiledFonts = new WeakMap<object, CompiledRasterFont>();
 const MISSING_RESOURCE = 0xffff_ffff;
+// Installed when this module loads, not at the first compile, so a font loaded afterwards compiles its binding at load.
+installRasterCodecFontCompiler(compileRegisteredRasterFont);
 /** Register one portable raster Codec by its RasterFormat id. */
 export function registerRasterCodec<
   const Format extends RasterFormatMetadata,
@@ -191,7 +193,6 @@ export function compileRasterFont<Format extends RasterFormatMetadata>(
   ids: CodecIdFactory = new CodecIdScope(),
 ): CompiledRasterFont | undefined {
   assertCodecIdFactory(ids, 'raster font compiler ids');
-  installRasterCodecFontCompiler(compileRegisteredRasterFont);
   const resources = immutableFontResources(font);
   return compileImmutableFontRaster(font, {
     cacheKey: immutableFontVariantIdentity(font),

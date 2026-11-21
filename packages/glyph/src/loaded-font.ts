@@ -10,6 +10,8 @@ import {
   type RasterFontCompileInput,
   type RasterFormatCompilerWitness,
 } from './internal/raster-format-compiler.js';
+import { rasterCodecFontCompilerInstalled } from './internal/raster-codec-registry.js';
+import { CodecIdScope } from './internal/render-id.js';
 
 /** Portable application selection accepted by renderer-neutral text APIs. */
 export type FontSelection<Format extends RasterFormatMetadata> = Font<Format> | FontStack<Format, Font<Format>>;
@@ -198,6 +200,28 @@ export function createImmutableFontVariant<Format extends RasterFormatMetadata>(
     leases: 0,
     released: false,
   };
+}
+
+/**
+ * @internal Compile a new variant's font binding once, at load, into the per-variant cache the first bind reads, so
+ * the first text that draws the font does not pay for it. Wire ids are content hashes, so the bytes equal what a
+ * handle's own id scope would compile. Without a registered codec, or before the generic compiler module has loaded,
+ * the variant stays lazy. A failure is not reported here: nothing is cached, and the first bind compiles again and
+ * throws to the caller that drew with the font, as it did before.
+ */
+export function precompileImmutableFontVariant<Format extends RasterFormatMetadata>(
+  variant: ImmutableFontVariant<Format>,
+): void {
+  if (!rasterCodecFontCompilerInstalled()) return;
+  try {
+    variant.compileRaster({
+      cacheKey: variant,
+      glyphCount: variant.backing.font.glyphCount,
+      identities: new CodecIdScope(),
+    });
+  } catch {
+    // Deferred to the first bind; see above.
+  }
 }
 
 /** @internal Return an independent application lease. */
