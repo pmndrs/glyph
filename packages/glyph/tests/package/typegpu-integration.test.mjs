@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { bitmap, glyph, msdf } from '@pmndrs/glyph';
-import { id, bitmapSchema, slugSchema } from '@pmndrs/glyph/core';
 import { recordingHost } from '../support/typegpu-recording-host.mjs';
-import { codecDescriptor, TYPEGPU_PLACEMENT_SLOT_BUFFER_ID } from '../../dist/typegpu/internal/codec.js';
+import { bitmap, glyph, msdf } from '@pmndrs/glyph';
+import { id, bitmapSchema, msdfSchema, slugSchema } from '@pmndrs/glyph/core';
+import {
+  codecDescriptor,
+  TYPEGPU_PLACEMENT_SLOT_BUFFER_ID,
+  TYPEGPU_TRANSFORM_INDEX_BUFFER_ID,
+} from '../../dist/typegpu/internal/codec.js';
 
 const fontBytes = await readFile(
   new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url),
@@ -12,21 +16,35 @@ const fontBytes = await readFile(
 globalThis.GPUBufferUsage ??= { VERTEX: 32, COPY_DST: 8, STORAGE: 128 };
 await glyph.init();
 
-test('TypeGPU Slug packs placement into its existing eighth-buffer program', () => {
+test('TypeGPU Slug packs placement into the glyph lane and keeps a direct transform', () => {
   const descriptor = codecDescriptor(id);
-  assert.equal(descriptor.capabilitySets[0].maxBuffersPerDraw, 8);
+  assert.equal(descriptor.capabilitySets[0].maxBuffersPerDraw, 9);
   const program = descriptor.programs.find((candidate) =>
-    candidate.buffers.some((buffer) => buffer.id === slugSchema.buffers.bandCounts.id),
+    candidate.buffers.some((buffer) => buffer.id === slugSchema.buffers.glyph.id),
   );
   assert.ok(program);
-  assert.equal(program.buffers.length, 8);
+  // rect, color and glyph, plus the stable glyph id every TypeGPU program carries.
+  assert.equal(program.buffers.length, 4);
   assert.equal(
     program.buffers.some((buffer) => buffer.id === TYPEGPU_PLACEMENT_SLOT_BUFFER_ID),
     false,
   );
+  assert.equal(
+    program.buffers.some((buffer) => buffer.id === TYPEGPU_TRANSFORM_INDEX_BUFFER_ID),
+    false,
+  );
+  for (const schema of [bitmapSchema, msdfSchema]) {
+    const batched = descriptor.programs.find((candidate) =>
+      candidate.buffers.some((buffer) => buffer.id === Object.values(schema.buffers)[0].id),
+    );
+    assert.ok(
+      batched.buffers.some((buffer) => buffer.id === TYPEGPU_TRANSFORM_INDEX_BUFFER_ID),
+      `${schema.technique} reads its Text offset from the transform table`,
+    );
+  }
   assert.ok(
     program.operations.some(
-      (operation) => operation.immediate0 === slugSchema.buffers.bandCounts.id && operation.operand1 === 2,
+      (operation) => operation.immediate0 === slugSchema.buffers.glyph.id && operation.operand1 === 1,
     ),
   );
 });
@@ -301,31 +319,27 @@ test('TypeGPU roots consume real engine output, retain idle draws and isolate na
     assert.deepEqual(host.recorded[0].position, [100, 80]);
     host.recorded.length = 0;
     const publicationCount = host.stats.publications;
-    const uniformWriteCount = host.stats.uniformWrites;
+    const transformWriteCount = host.stats.transformWrites;
     host.stats.reject = true;
     text.update({ position: [36, 48] });
-    assert.equal(host.stats.uniformWrites, uniformWriteCount + 1);
     text.update({ position: [36, 48] });
     text.update({});
-    assert.equal(host.stats.uniformWrites, uniformWriteCount + 1, 'unchanged positions do not touch the uniform');
     assert.doesNotThrow(() => glyph.shape(), 'position-only updates must not enter semantic publication');
     assert.equal(host.stats.publications, publicationCount, 'position-only updates leave the semantic root idle');
     handle.draw({}, { width: 640, height: 240 });
+    assert.equal(host.stats.transformWrites, transformWriteCount + 1, 'a move uploads its one table record at draw');
     assert.deepEqual(host.recorded[0].position, [36, 48]);
+    handle.draw({}, { width: 640, height: 240 });
+    assert.equal(host.stats.transformWrites, transformWriteCount + 1, 'an unmoved Text uploads nothing');
+    host.recorded.splice(host.recorded.length / 2);
     const moved = host.recorded.splice(0);
     host.stats.reject = false;
     glyph.shape();
     handle.draw({}, { width: 640, height: 240 });
     assert.deepEqual(host.recorded.splice(0), moved);
-    const writesBeforeRejectedUpdate = host.stats.uniformWrites;
     assert.throws(
       () => text.update({ constraints: { width: { mode: 'at-most', size: NaN } }, position: [72, 96] }),
       /width/i,
-    );
-    assert.equal(
-      host.stats.uniformWrites,
-      writesBeforeRejectedUpdate,
-      'failed semantic updates cannot move accepted text',
     );
     assert.throws(() => text.update({ constraints: { width: { mode: 'at-most', size: NaN } } }), /width/i);
     assert.throws(() => text.update({ position: [NaN, 0] }), /position/);
@@ -680,9 +694,9 @@ test('TypeGPU keeps accepted placement when reused mutable layout and constraint
   assert.equal(host.allocations.size, 0);
 });
 
-test('TypeGPU retries accepted host placement after one uniform write fails', async () => {
+test('TypeGPU settles every accepted anchor and a removal in one shape, rewriting only moved records', async () => {
   const host = recordingHost();
-  const handle = glyph.handle('typegpu:anchor-write-recovery', host.config);
+  const handle = glyph.handle('typegpu:anchor-settlement', host.config);
   const font = glyph.fontFace(new Blob([fontBytes]), { format: msdf });
   const snapshot = () => {
     handle.draw({}, { width: 640, height: 240 });
@@ -696,16 +710,13 @@ test('TypeGPU retries accepted host placement after one uniform write fails', as
       position: [100, 80],
       constraints: { anchor: { x: 'center', y: 'first-baseline' } },
     });
-    const firstUniform = host.uniforms.at(-1);
     const second = handle.createText({
       font,
       text: 'Second',
       position: [200, 80],
       constraints: { anchor: { x: 'center', y: 'first-baseline' } },
     });
-    const secondUniform = host.uniforms.at(-1);
     const removed = handle.createText({ font, text: 'Removed' });
-    const retiredBuffer = host.uniforms.at(-1).buffer;
     glyph.shape();
     const before = snapshot();
     assert.equal(before.length, 3);
@@ -715,20 +726,18 @@ test('TypeGPU retries accepted host placement after one uniform write fails', as
     const firstAnchor = first.measure().anchorOffset;
     const secondAnchor = second.measure().anchorOffset;
     removed.dispose();
-    firstUniform.failNextWrite = true;
-    assert.throws(() => glyph.shape(), /Injected uniform write failure/);
-    const partiallySettled = snapshot();
-    assert.equal(partiallySettled.length, 2, 'renderer accepted the new text and the removal');
-    assert.deepEqual(partiallySettled[0].position, before[0].position, 'failed placement keeps the old host origin');
-    assert.deepEqual(partiallySettled[1].position, [200 + secondAnchor.x, 80 + secondAnchor.y]);
-    assert.equal(retiredBuffer.destroyed, true, 'retired transform is released despite another text failing');
-    const secondWrites = secondUniform.writes;
-
     glyph.shape();
-    const recovered = snapshot();
-    assert.deepEqual(recovered[0].position, [100 + firstAnchor.x, 80 + firstAnchor.y]);
-    assert.deepEqual(recovered[1].position, partiallySettled[1].position);
-    assert.equal(secondUniform.writes, secondWrites, 'settled text is not rewritten on the recovery shape');
+    const settled = snapshot();
+    assert.equal(settled.length, 2, 'the removal leaves two Texts');
+    assert.deepEqual(settled[0].position, [100 + firstAnchor.x, 80 + firstAnchor.y]);
+    assert.deepEqual(settled[1].position, [200 + secondAnchor.x, 80 + secondAnchor.y]);
+
+    const writes = host.stats.transformWrites;
+    second.update({ position: [220, 90] });
+    const moved = snapshot();
+    assert.deepEqual(moved[0].position, settled[0].position);
+    assert.deepEqual(moved[1].position, [220 + secondAnchor.x, 90 + secondAnchor.y]);
+    assert.equal(host.stats.transformWrites, writes + 1, 'only the moved Text record is rewritten');
   } finally {
     handle.dispose();
     font.dispose();

@@ -6325,14 +6325,14 @@ test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async (t)
       .map(
         (draw) =>
           draw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.size.id)) ??
-          draw.geometry.getAttribute(glyphAttribute(slugSchema.buffers.planeRect.id)),
+          draw.geometry.getAttribute(glyphAttribute(slugSchema.buffers.rect.id)),
       )
       .map((attribute) => attribute.itemSize)
       .sort(),
     [2, 4],
     'Bitmap vec2 and Slug vec4 records must coexist without a user technique selector',
   );
-  const slugDraw = draws.find((draw) => draw.geometry.getAttribute(glyphAttribute(slugSchema.buffers.planeRect.id)));
+  const slugDraw = draws.find((draw) => draw.geometry.getAttribute(glyphAttribute(slugSchema.buffers.rect.id)));
   assert.ok(slugDraw);
   const slugVertex = compileNodeMaterial(slugDraw).vertex;
   const slugStorageBindings = slugVertex.match(/var<storage/g) ?? [];
@@ -6348,7 +6348,7 @@ test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async (t)
   const detachedDraws = detached.children.filter((child) => child.isMesh);
   assert.equal(detachedDraws.length, 2, 'the detached copy must preserve both renderer-program batches');
   const detachedSlugDraw = detachedDraws.find((draw) =>
-    draw.geometry.getAttribute(glyphAttribute(slugSchema.buffers.planeRect.id)),
+    draw.geometry.getAttribute(glyphAttribute(slugSchema.buffers.rect.id)),
   );
   assert.ok(detachedSlugDraw);
   const detachedSlugVertex = compileNodeMaterial(detachedSlugDraw).vertex;

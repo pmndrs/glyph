@@ -150,6 +150,9 @@ pub(crate) struct StyleInvalidation {
     pub bidi: bool,
     pub shaping: bool,
     pub metrics: bool,
+    /// Font size, letter or word spacing or baseline shift changed (or shaping did): cluster
+    /// advances and run-local geometry are stale. `metrics` without it is line height alone.
+    pub run_geometry: bool,
     pub positioning: bool,
     pub cluster_mapping: bool,
     /// Colour, opacity or material differs. Also sets `positioning`.
@@ -277,6 +280,7 @@ impl ResolvedStyleArena {
                 bidi: true,
                 shaping: true,
                 metrics: true,
+                run_geometry: true,
                 positioning: true,
                 cluster_mapping: true,
                 paint: true,
@@ -301,13 +305,14 @@ impl ResolvedStyleArena {
                 || old.font_stack_handle != new.font_stack_handle
                 || previous_storage.resolved_language(old) != next_storage.resolved_language(new)
                 || previous_storage.resolved_features(old) != next_storage.resolved_features(new);
-            invalidation.metrics |= invalidation.shaping
+            invalidation.run_geometry |= invalidation.shaping
                 || old.font_size.to_bits() != new.font_size.to_bits()
-                || old.line_height.to_bits() != new.line_height.to_bits()
-                || old.has_line_height != new.has_line_height
                 || old.letter_spacing.to_bits() != new.letter_spacing.to_bits()
                 || old.word_spacing.to_bits() != new.word_spacing.to_bits()
                 || old.baseline_shift.to_bits() != new.baseline_shift.to_bits();
+            invalidation.metrics |= invalidation.run_geometry
+                || old.line_height.to_bits() != new.line_height.to_bits()
+                || old.has_line_height != new.has_line_height;
             let paint = old.material_id != new.material_id
                 || old.foreground_rgba != new.foreground_rgba
                 || old.opacity.to_bits() != new.opacity.to_bits()
@@ -1777,6 +1782,24 @@ mod tests {
             metrics,
             StyleInvalidation {
                 metrics: true,
+                run_geometry: true,
+                positioning: true,
+                changed: metrics.changed,
+                ..StyleInvalidation::default()
+            },
+        );
+
+        let line_height = ResolvedStyle {
+            line_height: 2.0,
+            ..ResolvedStyle::default()
+        };
+        assert_eq!(
+            previous.invalidation_against(&storage, &resolved(line_height), &storage),
+            StyleInvalidation {
+                bidi: false,
+                shaping: false,
+                metrics: true,
+                run_geometry: false,
                 positioning: true,
                 changed: metrics.changed,
                 ..StyleInvalidation::default()
@@ -1819,6 +1842,7 @@ mod tests {
                 bidi: true,
                 shaping: true,
                 metrics: true,
+                run_geometry: true,
                 positioning: true,
                 changed: bidi.changed,
                 ..StyleInvalidation::default()

@@ -7,7 +7,14 @@ mod generated {
     include!("generated/script_data.rs");
 }
 
+#[path = "unicode_kernel.rs"]
+pub(crate) mod kernel;
+
+#[path = "unicode_resync.rs"]
+pub mod resync;
+
 pub use generated::UNICODE_VERSION;
+pub use kernel::KernelCoverage;
 
 pub const COMMON_SCRIPT: u32 = generated::COMMON_SCRIPT;
 pub const INHERITED_SCRIPT: u32 = generated::INHERITED_SCRIPT;
@@ -61,17 +68,35 @@ impl PrintableAsciiFacts {
     }
 }
 
+/// A neutral grapheme whose script waits for the next explicit script.
+#[derive(Clone, Copy)]
+struct DeferredScript {
+    text_start: u32,
+    text_end: u32,
+    /// The script the forward pass gave it, or `COMMON_SCRIPT` while it still waits.
+    forward: u32,
+    candidates_start: u32,
+    candidates_end: u32,
+}
+
 #[derive(Default)]
 pub struct UnicodeAnalysis {
     utf8: String,
     printable_ascii: PrintableAsciiFacts,
+    kernel: kernel::Kernel,
+    /// The scalar line breaker: the whole text on the scalar path, one window at a time otherwise.
     line_breaks: LineBreakAnalysis,
+    breaks: Vec<LineBreak>,
     grapheme_boundaries: Vec<u32>,
     grapheme_scripts: Vec<u32>,
     candidate_offsets: Vec<u32>,
     candidate_tags: Vec<u32>,
     candidate_scratch: Vec<u32>,
     script_items: Vec<ScriptItem>,
+    deferred_scripts: Vec<DeferredScript>,
+    deferred_tags: Vec<u32>,
+    previous_script: u32,
+    previous_script_id: u8,
     #[cfg(test)]
     analysis_count: usize,
 }
@@ -82,19 +107,14 @@ impl UnicodeAnalysis {
             &mut self.grapheme_boundaries,
             utf16_capacity.saturating_add(1),
         )?;
-        reserve(&mut self.grapheme_scripts, utf16_capacity)?;
-        reserve(
-            &mut self.candidate_offsets,
-            utf16_capacity.saturating_add(1),
-        )?;
-        reserve(&mut self.candidate_tags, utf16_capacity)?;
-        reserve(&mut self.script_items, utf16_capacity)?;
-        self.line_breaks.reserve(utf16_capacity)?;
-        self.utf8
-            .try_reserve(utf16_capacity.saturating_mul(3))
-            .map_err(|_| UnicodeError::ResultTooLarge)
+        reserve(&mut self.breaks, utf16_capacity.saturating_add(1))?;
+        self.kernel
+            .reserve(utf16_capacity)
+            .map_err(|()| UnicodeError::ResultTooLarge)
     }
 
+    /// Analyses `text`: the dense kernel decides every closure unit and the scalar analysis decides
+    /// the windows around everything else. The result equals `analyze_scalar` for every text.
     pub fn analyze(&mut self, text: &[u16]) -> Result<(), UnicodeError> {
         #[cfg(test)]
         {
@@ -102,13 +122,58 @@ impl UnicodeAnalysis {
         }
         self.clear();
         self.reserve(text.len())?;
+        self.kernel.run(text);
+        self.printable_ascii = self.kernel_ascii_facts();
+        self.grapheme_boundaries.push(0);
+        self.previous_script = COMMON_SCRIPT;
+        self.previous_script_id = 0;
+        let mut position = 0usize;
+        for index in 0..self.kernel.windows.len() {
+            let (start, end) = self.kernel.windows[index];
+            let (start, end) = (start as usize, end as usize);
+            self.emit_stretch(text, position, start)?;
+            self.emit_window(text, start, end)?;
+            position = end;
+        }
+        self.emit_stretch(text, position, text.len())?;
+        let ends_in_window = self
+            .kernel
+            .windows
+            .last()
+            .is_some_and(|window| window.1 as usize == text.len());
+        if !ends_in_window || text.is_empty() {
+            self.breaks.push(LineBreak {
+                position: u32::try_from(text.len()).map_err(|_| UnicodeError::ResultTooLarge)?,
+                required: true,
+            });
+        }
+        self.flush_deferred_scripts(COMMON_SCRIPT);
+        Ok(())
+    }
+
+    /// The conformance-tested scalar analysis of the whole text: the reference the kernel equals.
+    pub fn analyze_scalar(&mut self, text: &[u16]) -> Result<(), UnicodeError> {
+        self.clear();
+        reserve(&mut self.grapheme_boundaries, text.len().saturating_add(1))?;
+        reserve(&mut self.grapheme_scripts, text.len())?;
+        reserve(&mut self.candidate_offsets, text.len().saturating_add(1))?;
         encode_utf16(text, &mut self.utf8, &mut self.printable_ascii)?;
         self.line_breaks.analyze(text)?;
+        self.breaks.extend_from_slice(self.line_breaks.breaks());
         self.segment_graphemes()?;
         self.resolve_grapheme_scripts(text)?;
         self.resolve_neutral_scripts();
         self.itemize_scripts()?;
         Ok(())
+    }
+
+    /// How much of the last `analyze` the kernel decided, for measurement.
+    pub fn kernel_coverage(&self) -> KernelCoverage {
+        self.kernel.coverage(
+            self.grapheme_boundaries
+                .last()
+                .map_or(0, |end| *end as usize),
+        )
     }
 
     pub fn grapheme_boundaries(&self) -> &[u32] {
@@ -133,7 +198,7 @@ impl UnicodeAnalysis {
     }
 
     pub fn line_breaks(&self) -> &[LineBreak] {
-        self.line_breaks.breaks()
+        &self.breaks
     }
 
     #[cfg(test)]
@@ -190,12 +255,208 @@ impl UnicodeAnalysis {
         self.utf8.clear();
         self.printable_ascii = PrintableAsciiFacts::default();
         self.line_breaks.clear();
+        self.breaks.clear();
         self.grapheme_boundaries.clear();
         self.grapheme_scripts.clear();
         self.candidate_offsets.clear();
         self.candidate_tags.clear();
         self.candidate_scratch.clear();
         self.script_items.clear();
+        self.deferred_scripts.clear();
+        self.deferred_tags.clear();
+    }
+
+    fn kernel_ascii_facts(&self) -> PrintableAsciiFacts {
+        let seen = &self.kernel.ascii_seen;
+        let mut facts = PrintableAsciiFacts::default();
+        let control = seen[..0x20].iter().fold(seen[0x7f], |any, unit| any | unit);
+        facts.printable = !self.kernel.non_ascii && control == 0;
+        for (index, unit) in seen[0x20..0x7f].iter().enumerate() {
+            facts.used[index / 8] |= unit << (index % 8);
+        }
+        facts
+    }
+
+    /// Emits the kernel's results for closure units `[start, end)` and the boundary at `end`.
+    fn emit_stretch(&mut self, text: &[u16], start: usize, end: usize) -> Result<(), UnicodeError> {
+        let breaks = &mut self.breaks;
+        self.kernel
+            .for_each_break(start, end, |position, required| {
+                breaks.push(LineBreak { position, required });
+            });
+        self.grapheme_boundaries
+            .extend((start + 1..=end).map(|boundary| boundary as u32));
+        self.emit_stretch_scripts(text, start, end)
+    }
+
+    /// Streams the script bytes of closure units `[start, end)` into the script items.
+    fn emit_stretch_scripts(
+        &mut self,
+        text: &[u16],
+        start: usize,
+        end: usize,
+    ) -> Result<(), UnicodeError> {
+        let mut index = start;
+        while index < end {
+            let id = self.kernel.scripts[index];
+            // The common case: the open item absorbs neutral units and units of its own script.
+            if self.deferred_scripts.is_empty()
+                && self.previous_script != COMMON_SCRIPT
+                && (id == 0 || id == self.previous_script_id)
+            {
+                let run_end =
+                    same_script_run(&self.kernel.scripts[..end], index, self.previous_script_id);
+                if let Some(item) = self.script_items.last_mut() {
+                    item.text_end = run_end as u32;
+                }
+                index = run_end;
+                continue;
+            }
+            let (start, end) = (index as u32, index as u32 + 1);
+            if id == 0 {
+                self.feed_script(start, end, COMMON_SCRIPT, &[]);
+            } else if id == kernel::KERNEL_SCRIPT_COMPLEX {
+                let (preferred, has_candidates) =
+                    grapheme_script_atom(text, index, index + 1, &mut self.candidate_scratch)?;
+                self.feed_scratch_script(start, end, preferred, has_candidates);
+            } else if id >= kernel::KERNEL_SCRIPT_SET_BASE {
+                self.feed_script(start, end, COMMON_SCRIPT, kernel::script_set(id));
+            } else {
+                let script = kernel::KERNEL_SCRIPT_TAGS[usize::from(id)];
+                if self.deferred_scripts.is_empty() {
+                    // A script switch with nothing waiting: the new item starts here.
+                    self.previous_script = script;
+                    self.push_script_item(start, end, script);
+                } else {
+                    self.feed_script(start, end, script, &[]);
+                }
+                self.previous_script_id = id;
+            }
+            index += 1;
+        }
+        Ok(())
+    }
+
+    /// Runs the scalar analysis on `text[start..end)` as an independent string.
+    fn emit_window(&mut self, text: &[u16], start: usize, end: usize) -> Result<(), UnicodeError> {
+        let window = &text[start..end];
+        self.line_breaks.analyze(window)?;
+        for line_break in self.line_breaks.breaks() {
+            // The window's own end-of-text break stands only when the window ends the text.
+            if line_break.position as usize == window.len() && end != text.len() {
+                continue;
+            }
+            self.breaks.push(LineBreak {
+                position: line_break.position + start as u32,
+                required: line_break.required,
+            });
+        }
+        self.utf8.clear();
+        encode_utf16(window, &mut self.utf8, &mut PrintableAsciiFacts::default())?;
+        let mut grapheme_start = start;
+        let utf8 = core::mem::take(&mut self.utf8);
+        for grapheme in utf8.graphemes(true) {
+            let grapheme_end =
+                grapheme_start + grapheme.chars().map(char::len_utf16).sum::<usize>();
+            self.grapheme_boundaries.push(grapheme_end as u32);
+            let (preferred, has_candidates) = grapheme_script_atom(
+                text,
+                grapheme_start,
+                grapheme_end,
+                &mut self.candidate_scratch,
+            )?;
+            self.feed_scratch_script(
+                grapheme_start as u32,
+                grapheme_end as u32,
+                preferred,
+                has_candidates,
+            );
+            grapheme_start = grapheme_end;
+        }
+        self.utf8 = utf8;
+        Ok(())
+    }
+
+    /// `feed_script` with the candidates `grapheme_script_atom` left in the scratch buffer.
+    fn feed_scratch_script(&mut self, text_start: u32, text_end: u32, preferred: u32, has: bool) {
+        let scratch = core::mem::take(&mut self.candidate_scratch);
+        let candidates = if has { scratch.as_slice() } else { &[] };
+        self.feed_script(text_start, text_end, preferred, candidates);
+        self.candidate_scratch = scratch;
+    }
+
+    /// Streams one grapheme into the script items; equal to the two-pass neutral resolution.
+    ///
+    /// `candidates` are the Script_Extensions a neutral grapheme accepts; empty accepts any.
+    fn feed_script(&mut self, text_start: u32, text_end: u32, preferred: u32, candidates: &[u32]) {
+        if !is_neutral_script(preferred) {
+            self.flush_deferred_scripts(preferred);
+            self.previous_script = preferred;
+            self.previous_script_id = 0;
+            self.push_script_item(text_start, text_end, preferred);
+            return;
+        }
+        let accepts_previous = !is_neutral_script(self.previous_script)
+            && (candidates.is_empty() || candidates.contains(&self.previous_script));
+        if accepts_previous && self.deferred_scripts.is_empty() {
+            self.push_script_item(text_start, text_end, self.previous_script);
+            return;
+        }
+        let candidates_start = self.deferred_tags.len() as u32;
+        self.deferred_tags.extend_from_slice(candidates);
+        self.deferred_scripts.push(DeferredScript {
+            text_start,
+            text_end,
+            forward: if accepts_previous {
+                self.previous_script
+            } else {
+                COMMON_SCRIPT
+            },
+            candidates_start,
+            candidates_end: self.deferred_tags.len() as u32,
+        });
+    }
+
+    /// Resolves the waiting neutral graphemes against `next`, the explicit script that follows
+    /// them (`COMMON_SCRIPT` at the end of the text), exactly as the backward pass does: a
+    /// grapheme the forward pass resolved shadows `next` for the graphemes before it.
+    fn flush_deferred_scripts(&mut self, next: u32) {
+        let mut context = next;
+        for index in (0..self.deferred_scripts.len()).rev() {
+            let deferred = self.deferred_scripts[index];
+            if !is_neutral_script(deferred.forward) {
+                context = deferred.forward;
+                continue;
+            }
+            let candidates = &self.deferred_tags
+                [deferred.candidates_start as usize..deferred.candidates_end as usize];
+            if !is_neutral_script(context)
+                && (candidates.is_empty() || candidates.contains(&context))
+            {
+                self.deferred_scripts[index].forward = context;
+            }
+        }
+        for index in 0..self.deferred_scripts.len() {
+            let deferred = self.deferred_scripts[index];
+            self.push_script_item(deferred.text_start, deferred.text_end, deferred.forward);
+        }
+        self.deferred_scripts.clear();
+        self.deferred_tags.clear();
+    }
+
+    fn push_script_item(&mut self, text_start: u32, text_end: u32, script: u32) {
+        if let Some(previous) = self.script_items.last_mut()
+            && previous.text_end == text_start
+            && previous.script == script
+        {
+            previous.text_end = text_end;
+        } else {
+            self.script_items.push(ScriptItem {
+                text_start,
+                text_end,
+                script,
+            });
+        }
     }
 
     fn segment_graphemes(&mut self) -> Result<(), UnicodeError> {
@@ -213,47 +474,13 @@ impl UnicodeAnalysis {
 
     fn resolve_grapheme_scripts(&mut self, text: &[u16]) -> Result<(), UnicodeError> {
         self.candidate_offsets.push(0);
-        for boundary in self.grapheme_boundaries.windows(2) {
-            let start = usize::try_from(boundary[0]).map_err(|_| UnicodeError::ResultTooLarge)?;
-            let end = usize::try_from(boundary[1]).map_err(|_| UnicodeError::ResultTooLarge)?;
-            let mut preferred = COMMON_SCRIPT;
-            let mut intersected = false;
-            self.candidate_scratch.clear();
-            let mut index = start;
-            while index < end {
-                let (character, consumed) = decode_scalar(text, index)?;
-                index += consumed;
-                let primary = script(character as u32).ok_or(UnicodeError::InvalidUtf16)?;
-                if !is_neutral_script(primary) && preferred == COMMON_SCRIPT {
-                    preferred = primary;
-                }
-                let extensions =
-                    script_extensions(character as u32).ok_or(UnicodeError::InvalidUtf16)?;
-                if !extensions
-                    .iter()
-                    .copied()
-                    .any(|tag| !is_neutral_script(tag))
-                {
-                    continue;
-                }
-                if !intersected {
-                    intersected = true;
-                    self.candidate_scratch.extend(
-                        extensions
-                            .iter()
-                            .copied()
-                            .filter(|tag| !is_neutral_script(*tag)),
-                    );
-                } else {
-                    self.candidate_scratch
-                        .retain(|tag| extensions.contains(tag));
-                }
-            }
+        for index in 0..self.grapheme_boundaries.len().saturating_sub(1) {
+            let start = self.grapheme_boundaries[index] as usize;
+            let end = self.grapheme_boundaries[index + 1] as usize;
+            let (preferred, has_candidates) =
+                grapheme_script_atom(text, start, end, &mut self.candidate_scratch)?;
             self.grapheme_scripts.push(preferred);
-            if intersected
-                && !self.candidate_scratch.is_empty()
-                && !self.candidate_scratch.contains(&preferred)
-            {
+            if has_candidates {
                 self.candidate_tags
                     .extend_from_slice(&self.candidate_scratch);
             }
@@ -320,6 +547,72 @@ impl UnicodeAnalysis {
         }
         Ok(())
     }
+}
+
+/// The script a grapheme prefers and, in `scratch`, the Script_Extensions it accepts.
+///
+/// Returns `(preferred, has_candidates)`; candidates count only when they exclude `preferred`.
+fn grapheme_script_atom(
+    text: &[u16],
+    start: usize,
+    end: usize,
+    scratch: &mut Vec<u32>,
+) -> Result<(u32, bool), UnicodeError> {
+    let mut preferred = COMMON_SCRIPT;
+    let mut intersected = false;
+    scratch.clear();
+    let mut index = start;
+    while index < end {
+        let (character, consumed) = decode_scalar(text, index)?;
+        index += consumed;
+        let primary = script(character as u32).ok_or(UnicodeError::InvalidUtf16)?;
+        if !is_neutral_script(primary) && preferred == COMMON_SCRIPT {
+            preferred = primary;
+        }
+        let extensions = script_extensions(character as u32).ok_or(UnicodeError::InvalidUtf16)?;
+        if !extensions
+            .iter()
+            .copied()
+            .any(|tag| !is_neutral_script(tag))
+        {
+            continue;
+        }
+        if !intersected {
+            intersected = true;
+            scratch.extend(
+                extensions
+                    .iter()
+                    .copied()
+                    .filter(|tag| !is_neutral_script(*tag)),
+            );
+        } else {
+            scratch.retain(|tag| extensions.contains(tag));
+        }
+    }
+    Ok((
+        preferred,
+        intersected && !scratch.is_empty() && !scratch.contains(&preferred),
+    ))
+}
+
+/// The end of the run from `start` whose script bytes are neutral or `script`.
+fn same_script_run(scripts: &[u8], start: usize, script: u8) -> usize {
+    let mut index = start;
+    // Fold compare over sixteen bytes, then a scalar tail: no early exit inside the chunk.
+    while let Some(chunk) = scripts.get(index..index + 16) {
+        let mut other = 0u8;
+        for byte in chunk {
+            other |= u8::from(*byte != 0) & u8::from(*byte != script);
+        }
+        if other != 0 {
+            break;
+        }
+        index += 16;
+    }
+    while index < scripts.len() && (scripts[index] == 0 || scripts[index] == script) {
+        index += 1;
+    }
+    index
 }
 
 pub fn script(code_point: u32) -> Option<u32> {
@@ -422,6 +715,10 @@ fn is_neutral_script(script: u32) -> bool {
 fn is_ascii_letter(unit: u16) -> bool {
     matches!(unit, 0x41..=0x5a | 0x61..=0x7a)
 }
+
+#[cfg(test)]
+#[path = "unicode_kernel_tests.rs"]
+mod kernel_tests;
 
 #[cfg(test)]
 mod tests {

@@ -314,17 +314,9 @@ function validatePosition(position: readonly [number, number] = [0, 0]): void {
 }
 
 function writePosition(transform: TypeGpuTransform, value: [number, number], x: number, y: number): void {
-  const previousX = value[0];
-  const previousY = value[1];
   value[0] = x;
   value[1] = y;
-  try {
-    transform.position.write(value);
-  } catch (error) {
-    value[0] = previousX;
-    value[1] = previousY;
-    throw error;
-  }
+  transform.position.write(value);
 }
 
 function hasSemanticUpdate<Selection extends TypeGpuFontSelection>(update: TypeGpuTextUpdate<Selection>): boolean {

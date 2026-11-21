@@ -40,6 +40,8 @@ diagnostic-live-memory = []
 # The layout correctness oracle: lane capture, fixture matrix and the seeded differential
 # driver. Off in every shipped artifact.
 oracle = []
+# Stage clocks for the oracle probe (`scripts/stage-bench.mjs`). Off in every shipped artifact.
+stage-bench = ["oracle"]
 
 [dependencies]
 harfrust = { version = "0.12.0", default-features = false, features = ["libm"] }

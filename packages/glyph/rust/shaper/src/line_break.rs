@@ -238,7 +238,9 @@ impl<'a> BreakState<'a> {
             && self.current.has(INITIAL_PUNCTUATION)
             && cur == i16::from(QU)
         {
-            self.spaces = true;
+            // LB15a forbids a break after the quote and after the spaces that follow it, and
+            // nothing more: the flag is set only when a space run starts here.
+            self.spaces = next == i16::from(SP);
             return None;
         }
         if self.next.has(FINAL_PUNCTUATION) && next == i16::from(QU) {
@@ -443,6 +445,12 @@ impl<'a> BreakState<'a> {
     }
 
     fn emit(&mut self, required: bool) -> Option<LineBreak> {
+        if required {
+            // LB4-LB6: a required break ends every `SP*` context (LB8, LB14-LB17), so neither
+            // flag may reach the next line.
+            self.spaces = false;
+            self.lb8 = false;
+        }
         let position = self.current.end;
         self.previous_chunk = position;
         Some(LineBreak { position, required })
@@ -543,6 +551,41 @@ fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), UnicodeError> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn positions(text: &str) -> Vec<u32> {
+        let mut analysis = LineBreakAnalysis::default();
+        analysis
+            .analyze(&text.encode_utf16().collect::<Vec<_>>())
+            .unwrap();
+        analysis
+            .breaks()
+            .iter()
+            .map(|line_break| line_break.position)
+            .collect()
+    }
+
+    /// UAX #14 LB15a is `(sot | BK | CR | LF | NL | OP | QU | GL | SP | ZW) [\p{Pi}&QU] SP* ×`:
+    /// it suppresses the break after the quote and its spaces, not the next opportunity.
+    #[test]
+    fn lb15a_does_not_reach_past_the_unit_after_an_initial_quote() {
+        // LB18 breaks after the space; LB15a ended at `a`.
+        assert_eq!(positions("«a b"), [3, 4]);
+        assert_eq!(positions("\u{201c}A dog"), [3, 6]);
+        // LB31 breaks between ideographs; only `«` × `字` is forbidden.
+        assert_eq!(positions("«字字字"), [2, 3, 4]);
+        // The rule itself still holds, with and without spaces.
+        assert_eq!(positions("« a b"), [4, 5]);
+        assert_eq!(positions("a «b"), [2, 4]);
+    }
+
+    /// LB4-LB6 end the line, so LB14's `OP SP* ×` and LB8's `ZW SP* ÷` stop at a required break.
+    #[test]
+    fn space_run_contexts_do_not_survive_a_required_break() {
+        assert_eq!(positions("( \n字字字"), [3, 4, 5, 6]);
+        assert_eq!(positions("\u{201c} \nab cd"), [3, 6, 8]);
+        // Without the reset LB8 forced a break between `a` and `b` on the next line.
+        assert_eq!(positions("a\u{200b} \nab"), [4, 6]);
+    }
 
     #[test]
     fn finds_required_and_allowed_utf16_breaks() {

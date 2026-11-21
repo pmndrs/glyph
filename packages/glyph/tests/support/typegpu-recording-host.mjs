@@ -1,6 +1,10 @@
 import { defineTypeGpuConfig } from '@pmndrs/glyph/typegpu';
 import { resourceLease, msdfSchema } from '@pmndrs/glyph/core';
-import { TYPEGPU_PLACEMENT_SLOT_BUFFER_ID } from '../../dist/typegpu/internal/codec.js';
+import {
+  TYPEGPU_PLACEMENT_SLOT_BUFFER_ID,
+  TYPEGPU_TRANSFORM_INDEX_BUFFER_ID,
+} from '../../dist/typegpu/internal/codec.js';
+import { TypeGpuTransform } from '../../dist/typegpu/internal/renderer.js';
 
 globalThis.GPUBufferUsage ??= { VERTEX: 32, COPY_DST: 8, STORAGE: 128 };
 
@@ -10,9 +14,9 @@ export function recordingHost(rasterSchema = msdfSchema) {
   const recorded = [];
   const uploads = [];
   const projectedBuffers = [];
-  const uniforms = [];
   const codecIdByGpu = new WeakMap();
-  const stats = { allocations: 0, preparations: 0, publications: 0, uniformWrites: 0, reject: false };
+  const transformTables = new WeakSet();
+  const stats = { allocations: 0, preparations: 0, publications: 0, transformWrites: 0, reject: false };
   function buffer(size, usage = 0) {
     const value = {
       bytes: new Uint8Array(size),
@@ -28,24 +32,13 @@ export function recordingHost(rasterSchema = msdfSchema) {
   }
   const root = {
     createUniform() {
-      const allocation = buffer(8);
-      const uniform = {
-        buffer: allocation,
+      return {
+        buffer: buffer(8),
         value: [0, 0],
-        failNextWrite: false,
-        writes: 0,
         write(value) {
-          stats.uniformWrites++;
-          this.writes++;
-          if (this.failNextWrite) {
-            this.failNextWrite = false;
-            throw new Error('Injected uniform write failure');
-          }
           this.value = [...value];
         },
       };
-      uniforms.push(uniform);
-      return uniform;
     },
     device: {
       createBuffer({ size, usage }) {
@@ -54,6 +47,7 @@ export function recordingHost(rasterSchema = msdfSchema) {
       },
       queue: {
         writeBuffer(target, offset, bytes) {
+          if (transformTables.has(target)) stats.transformWrites++;
           uploads.push({
             codecId: codecIdByGpu.get(target),
             offset,
@@ -61,7 +55,7 @@ export function recordingHost(rasterSchema = msdfSchema) {
             capacity: target.bytes.byteLength,
             usage: target.usage,
           });
-          target.bytes.set(bytes, offset);
+          target.bytes.set(new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength), offset);
         },
       },
     },
@@ -91,42 +85,32 @@ export function recordingHost(rasterSchema = msdfSchema) {
     resolve: () =>
       resourceLease(
         {
-          prepare(buffers, placementTable, viewport, position, start, count) {
+          // MSDF and bitmap draws are batched: one draw covers consecutive Texts. It is recorded as one entry per
+          // Text (per run of one transform record), with that Text's offset read back from the transform table.
+          bind(lanes) {
             stats.preparations++;
+            const { buffers, placementTable, transformTable, viewport } = lanes;
+            transformTables.add(transformTable);
             for (const [codecId, gpu] of buffers) codecIdByGpu.set(gpu, codecId);
             return {
-              draw() {
-                const placementSlots = buffers
-                  .get(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID)
-                  .bytes.slice(start * 4, (start + count) * 4);
-                const placementTableBytes = placementTable.bytes.slice();
-                const slotView = new DataView(
-                  placementSlots.buffer,
-                  placementSlots.byteOffset,
-                  placementSlots.byteLength,
-                );
-                const tableView = new DataView(
-                  placementTableBytes.buffer,
-                  placementTableBytes.byteOffset,
-                  placementTableBytes.byteLength,
-                );
-                recorded.push({
-                  // Compare raster inputs, not lifecycle-specific stable glyph identities.
-                  buffers: Object.values(rasterSchema.buffers).map((declaration) => {
-                    const stride = declaration.lanes.length * 4;
-                    return buffers.get(declaration.id).bytes.slice(start * stride, (start + count) * stride);
-                  }),
-                  placementSlots,
-                  placementTable: placementTableBytes,
-                  resolvedPlacement: Array.from({ length: count }, (_, index) => {
-                    const slot = slotView.getUint32(index * 4, true);
-                    return [tableView.getFloat32(slot * 8, true), tableView.getFloat32(slot * 8 + 4, true)];
-                  }),
-                  position: [...position.value],
-                  viewport: [...viewport.value],
-                  start,
-                  count,
-                });
+              watchedLanes: [],
+              variant: () => 0,
+              draw(_pass, _bindGroups, _variant, first, count) {
+                const indices = new DataView(buffers.get(TYPEGPU_TRANSFORM_INDEX_BUFFER_ID).bytes.buffer);
+                const table = new DataView(transformTable.bytes.buffer);
+                let start = first;
+                while (start < first + count) {
+                  const record = indices.getUint32(start * 4, true);
+                  let end = start + 1;
+                  while (end < first + count && indices.getUint32(end * 4, true) === record) end++;
+                  recorded.push(
+                    recordedDraw(buffers, placementTable, viewport, start, end - start, [
+                      table.getFloat32(record * 8, true),
+                      table.getFloat32(record * 8 + 4, true),
+                    ]),
+                  );
+                  start = end;
+                }
               },
             };
           },
@@ -138,14 +122,13 @@ export function recordingHost(rasterSchema = msdfSchema) {
         const selected = base.root.create(context);
         selected.createCoreText = (selection, options) => {
           const font = context.fonts.acquire(selection);
-          const transform = { position: root.createUniform() };
+          const transform = new TypeGpuTransform(() => {});
           let state = { ...options, font, transform };
           let controller;
           let disposed = false;
           try {
             controller = context.services.createText(state);
           } catch (error) {
-            transform.position.buffer.destroy();
             font.dispose();
             throw error;
           }
@@ -162,7 +145,6 @@ export function recordingHost(rasterSchema = msdfSchema) {
               try {
                 controller.dispose();
               } finally {
-                transform.position.buffer.destroy();
                 font.dispose();
               }
             },
@@ -172,5 +154,32 @@ export function recordingHost(rasterSchema = msdfSchema) {
       },
     },
   };
-  return { config, allocations, recorded, uploads, projectedBuffers, uniforms, stats };
+  function recordedDraw(buffers, placementTable, viewport, start, count, position) {
+    const placementSlots = buffers.get(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID).bytes.slice(start * 4, (start + count) * 4);
+    const placementTableBytes = placementTable.bytes.slice();
+    const slotView = new DataView(placementSlots.buffer, placementSlots.byteOffset, placementSlots.byteLength);
+    const tableView = new DataView(
+      placementTableBytes.buffer,
+      placementTableBytes.byteOffset,
+      placementTableBytes.byteLength,
+    );
+    return {
+      // Compare raster inputs, not lifecycle-specific stable glyph identities.
+      buffers: Object.values(rasterSchema.buffers).map((declaration) => {
+        const stride = declaration.lanes.length * 4;
+        return buffers.get(declaration.id).bytes.slice(start * stride, (start + count) * stride);
+      }),
+      placementSlots,
+      placementTable: placementTableBytes,
+      resolvedPlacement: Array.from({ length: count }, (_, index) => {
+        const slot = slotView.getUint32(index * 4, true);
+        return [tableView.getFloat32(slot * 8, true), tableView.getFloat32(slot * 8 + 4, true)];
+      }),
+      position,
+      viewport: [...viewport.value],
+      start,
+      count,
+    };
+  }
+  return { config, allocations, recorded, uploads, projectedBuffers, stats };
 }
