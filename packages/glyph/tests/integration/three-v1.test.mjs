@@ -3690,7 +3690,7 @@ test('Three carries supported text effects into MSDF lanes and rejects them for 
     const draw = rootDraws(scene)[0];
     assert.ok(draw, 'MSDF effect text must publish a draw');
     const effects = draw.geometry.getAttribute(glyphAttribute(msdfSchema.buffers.effectColor.id)).array;
-    const page = draw.geometry.getAttribute(glyphAttribute(msdfSchema.buffers.page.id)).array;
+    const page = draw.geometry.getAttribute(glyphAttribute(msdfSchema.buffers.effect.id)).array;
     const color = draw.geometry.getAttribute(glyphAttribute(msdfSchema.buffers.color.id)).array;
     assert.deepEqual([...color.slice(0, 3)], [0, 1, 0], 'a typography-only span must inherit foreground');
     assert.deepEqual([...effects.slice(0, 2)], [0x400000ff, 0x40ff0000]);
@@ -3712,6 +3712,25 @@ test('Three carries supported text effects into MSDF lanes and rejects them for 
       [0x40ffff00, 0x40ff0000],
       'a retained color-only edit must rewrite the packed effect buffer',
     );
+    assert.ok(Number.isInteger(page[3]) && page[3] > 0, 'the fourth effect lane addresses the glyph table row');
+
+    // A draw renders with the graph that composes exactly the effects its instances use.
+    const complete = rootDraws(scene)[0].material;
+    label.style = { fontSize: 32, color: '#00ff00' };
+    scene.updateMatrixWorld(true);
+    const fillOnly = rootDraws(scene)[0].material;
+    assert.notEqual(fillOnly, complete, 'text without effects leaves the outline-and-shadow graph');
+    label.style = { fontSize: 32, color: '#00ff00', shadow: { color: '#0000ff80', offset: [3, 4] } };
+    scene.updateMatrixWorld(true);
+    const shadowed = rootDraws(scene)[0].material;
+    assert.notEqual(shadowed, fillOnly, 'a paint change that adds a shadow selects a graph that composes it');
+    assert.notEqual(shadowed, complete, 'a shadow alone does not compose an outline');
+    label.style = { fontSize: 32, color: '#00ff00' };
+    scene.updateMatrixWorld(true);
+    assert.equal(rootDraws(scene)[0].material, fillOnly, 'each effect combination keeps one material');
+    label.style = effectStyle;
+    scene.updateMatrixWorld(true);
+    assert.equal(rootDraws(scene)[0].material, complete, 'both effects return to the complete graph');
   } finally {
     group.dispose();
     label.dispose();

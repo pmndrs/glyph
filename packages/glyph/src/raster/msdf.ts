@@ -80,29 +80,28 @@ import { registerGlyphRasterCodec } from '../internal/raster-codec-registry.js';
 import { defineTechniqueSchema, type TechniqueSchema } from '../config/schema.js';
 
 const MSDF_RECT_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/rect');
-const MSDF_UV_RECT_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/uv-rect');
-const MSDF_UV_BOUNDS_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/uv-bounds');
 const MSDF_COLOR_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/color');
 const MSDF_EFFECT_COLOR_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/effect-color');
-const MSDF_PAGE_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/page');
+const MSDF_EFFECT_BUFFER_ID: CodecBufferId = id.buffer('pmndrs.msdf/effect');
 
-/** The authoritative physical shape of the MSDF technique. */
+/** `f32` values per glyph in the atlas `glyphs` table. */
+export const MSDF_GLYPH_TABLE_STRIDE = 4;
+/** The fourth table value is `height + layer * MSDF_GLYPH_TABLE_LAYER_STEP`; both stay exact in an `f32`. */
+export const MSDF_GLYPH_TABLE_LAYER_STEP = 4096;
+
+/**
+ * The authoritative physical shape of the MSDF technique.
+ *
+ * An instance carries what differs between two drawings of one glyph: where it is, how large, and how it is painted.
+ * What every drawing of a glyph shares (its atlas cell and layer) lives once per glyph in the atlas `glyphs` table,
+ * addressed by the `glyph` lane: `[left, top, width, height + layer * 4096]` in atlas texels.
+ */
 export const msdfSchema: TechniqueSchema<
   {
     readonly rect: {
       readonly id: typeof MSDF_RECT_BUFFER_ID;
       readonly scalar: 'f32';
       readonly lanes: readonly ['left', 'top', 'width', 'height'];
-    };
-    readonly uvRect: {
-      readonly id: typeof MSDF_UV_RECT_BUFFER_ID;
-      readonly scalar: 'f32';
-      readonly lanes: readonly ['u0', 'v0', 'uSpan', 'vSpan'];
-    };
-    readonly uvBounds: {
-      readonly id: typeof MSDF_UV_BOUNDS_BUFFER_ID;
-      readonly scalar: 'f32';
-      readonly lanes: readonly ['u0', 'v0', 'uMax', 'vMax'];
     };
     readonly color: {
       readonly id: typeof MSDF_COLOR_BUFFER_ID;
@@ -114,26 +113,15 @@ export const msdfSchema: TechniqueSchema<
       readonly scalar: 'u32';
       readonly lanes: readonly ['outline', 'shadow'];
     };
-    readonly page: {
-      readonly id: typeof MSDF_PAGE_BUFFER_ID;
+    readonly effect: {
+      readonly id: typeof MSDF_EFFECT_BUFFER_ID;
       readonly scalar: 'f32';
-      readonly lanes: readonly ['x', 'y', 'z', 'page'];
+      readonly lanes: readonly ['shadowX', 'shadowY', 'outlineWidth', 'glyph'];
     };
   },
   {
-    readonly f32: readonly [
-      'bearingX',
-      'bearingY',
-      'width',
-      'height',
-      'uvOriginX',
-      'uvOriginY',
-      'uvSizeX',
-      'uvSizeY',
-      'uvMaxX',
-      'uvMaxY',
-    ];
-    readonly u32: readonly ['page'];
+    readonly f32: readonly ['bearingX', 'bearingY', 'width', 'height'];
+    readonly u32: readonly ['glyph'];
   },
   {
     readonly atlas: {
@@ -142,6 +130,7 @@ export const msdfSchema: TechniqueSchema<
         readonly texture: { readonly kind: 'texture-array'; readonly format: 'rgba8unorm' };
         readonly pixelRange: { readonly kind: 'buffer' };
         readonly effectScale: { readonly kind: 'buffer' };
+        readonly glyphs: { readonly kind: 'buffer' };
       };
     };
   },
@@ -151,27 +140,14 @@ export const msdfSchema: TechniqueSchema<
   scope: 'glyph',
   glyphOrigin: { buffer: 'rect' },
   binding: {
-    f32: [
-      'bearingX',
-      'bearingY',
-      'width',
-      'height',
-      'uvOriginX',
-      'uvOriginY',
-      'uvSizeX',
-      'uvSizeY',
-      'uvMaxX',
-      'uvMaxY',
-    ],
-    u32: ['page'],
+    f32: ['bearingX', 'bearingY', 'width', 'height'],
+    u32: ['glyph'],
   },
   buffers: {
     rect: { id: MSDF_RECT_BUFFER_ID, scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
-    uvRect: { id: MSDF_UV_RECT_BUFFER_ID, scalar: 'f32', lanes: ['u0', 'v0', 'uSpan', 'vSpan'] },
-    uvBounds: { id: MSDF_UV_BOUNDS_BUFFER_ID, scalar: 'f32', lanes: ['u0', 'v0', 'uMax', 'vMax'] },
     color: { id: MSDF_COLOR_BUFFER_ID, scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
     effectColor: { id: MSDF_EFFECT_COLOR_BUFFER_ID, scalar: 'u32', lanes: ['outline', 'shadow'] },
-    page: { id: MSDF_PAGE_BUFFER_ID, scalar: 'f32', lanes: ['x', 'y', 'z', 'page'] },
+    effect: { id: MSDF_EFFECT_BUFFER_ID, scalar: 'f32', lanes: ['shadowX', 'shadowY', 'outlineWidth', 'glyph'] },
   },
   resources: {
     atlas: {
@@ -180,6 +156,7 @@ export const msdfSchema: TechniqueSchema<
         texture: { kind: 'texture-array', format: 'rgba8unorm' },
         pixelRange: { kind: 'buffer' },
         effectScale: { kind: 'buffer' },
+        glyphs: { kind: 'buffer' },
       },
     },
   },
@@ -195,8 +172,7 @@ export const msdfCodec: RasterCodec<typeof msdf, typeof msdfSchema> = registerGl
     if (outline === undefined || shadow === undefined) {
       throw new Error('MSDF text effects are not configured');
     }
-    const { bearingX, bearingY, width, height, uvOriginX, uvOriginY, uvSizeX, uvSizeY, uvMaxX, uvMaxY, page } =
-      p.binding;
+    const { bearingX, bearingY, width, height, glyph } = p.binding;
     return p.compile({
       rect: [
         f32.add(inlineOrigin, f32.mul(bearingX, fontSize)),
@@ -204,11 +180,9 @@ export const msdfCodec: RasterCodec<typeof msdf, typeof msdfSchema> = registerGl
         f32.mul(width, fontSize),
         f32.mul(height, fontSize),
       ],
-      uvRect: [uvOriginX, uvOriginY, uvSizeX, uvSizeY],
-      uvBounds: [uvOriginX, uvOriginY, uvMaxX, uvMaxY],
       color: [color.red, color.green, color.blue, color.alpha],
       effectColor: [outline.color, shadow.color],
-      page: [shadow.offsetXEm, shadow.offsetYEm, outline.widthEm, u32.toF32(page)],
+      effect: [shadow.offsetXEm, shadow.offsetYEm, outline.widthEm, u32.toF32(glyph)],
     });
   },
   compileFont(compiler) {
@@ -228,17 +202,11 @@ export const msdfCodec: RasterCodec<typeof msdf, typeof msdfSchema> = registerGl
           ),
           stride: 12,
         },
+        glyphs: { kind: 'buffer', bytes: msdfGlyphTable(data), stride: MSDF_GLYPH_TABLE_STRIDE * 4 },
       },
     });
     const record = (row: number) => row * RECORD_STRIDE;
     const page = (row: number) => view.getUint16(record(row) + 16, true);
-    const atlas = (row: number, offset: number, dimension: 'width' | 'height') =>
-      page(row) === 0xffff ? 0 : view.getUint16(record(row) + offset, true) / data.binding[dimension];
-    const span = (row: number, start: number, end: number, dimension: 'width' | 'height') =>
-      page(row) === 0xffff
-        ? 0
-        : (view.getUint16(record(row) + end, true) - view.getUint16(record(row) + start, true)) /
-          data.binding[dimension];
     return compiler.compile({
       strikes: [0],
       resource: (glyph) => (page(glyph) === 0xffff ? undefined : data.resource),
@@ -249,17 +217,32 @@ export const msdfCodec: RasterCodec<typeof msdf, typeof msdfSchema> = registerGl
           (view.getInt16(record(row) + 4, true) - view.getInt16(record(row), true)) / data.planeUnitsPerEm,
         height: (row) =>
           (view.getInt16(record(row) + 6, true) - view.getInt16(record(row) + 2, true)) / data.planeUnitsPerEm,
-        uvOriginX: (row) => atlas(row, 8, 'width'),
-        uvOriginY: (row) => atlas(row, 10, 'height'),
-        uvSizeX: (row) => span(row, 8, 12, 'width'),
-        uvSizeY: (row) => span(row, 10, 14, 'height'),
-        uvMaxX: (row) => atlas(row, 12, 'width'),
-        uvMaxY: (row) => atlas(row, 14, 'height'),
       },
-      u32: { page },
+      u32: { glyph: (row) => row },
     });
   },
 });
+
+/** One row per baked glyph record: its atlas cell in texels and its layer; an absent glyph is an empty cell. */
+function msdfGlyphTable(data: MsdfData): Uint8Array {
+  const view = new DataView(data.records.buffer, data.records.byteOffset, data.records.byteLength);
+  const rows = data.records.byteLength / RECORD_STRIDE;
+  const bytes = new Uint8Array(rows * MSDF_GLYPH_TABLE_STRIDE * 4);
+  const table = new DataView(bytes.buffer);
+  for (let row = 0; row < rows; row += 1) {
+    const record = row * RECORD_STRIDE;
+    const page = view.getUint16(record + 16, true);
+    if (page === 0xffff) continue;
+    const left = view.getUint16(record + 8, true);
+    const top = view.getUint16(record + 10, true);
+    const target = row * MSDF_GLYPH_TABLE_STRIDE * 4;
+    table.setFloat32(target, left, true);
+    table.setFloat32(target + 4, top, true);
+    table.setFloat32(target + 8, view.getUint16(record + 12, true) - left, true);
+    table.setFloat32(target + 12, view.getUint16(record + 14, true) - top + page * MSDF_GLYPH_TABLE_LAYER_STEP, true);
+  }
+  return bytes;
+}
 
 function msdfAtlas(data: MsdfData) {
   const bytes = new Uint8Array(data.binding.width * data.binding.height * data.binding.layers * 4);

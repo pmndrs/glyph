@@ -94,6 +94,26 @@ export function dataTexture(
   return texture;
 }
 
+/** A filtered, single-level layered atlas over bytes the caller keeps alive. */
+export function atlasTextureArray(
+  bytes: Uint8Array,
+  width: number,
+  height: number,
+  layers: number,
+  format: THREE.PixelFormat,
+): THREE.DataArrayTexture {
+  const texture = new THREE.DataArrayTexture(bytes, width, height, layers);
+  texture.format = format;
+  texture.type = THREE.UnsignedByteType;
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearFilter;
+  texture.generateMipmaps = false;
+  texture.flipY = false;
+  texture.needsUpdate = true;
+  return texture;
+}
+
 export function ownedUint16(bytes: Uint8Array): Uint16Array {
   const copy = bytes.slice();
   return new Uint16Array(copy.buffer, copy.byteOffset, copy.byteLength / 2);

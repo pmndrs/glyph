@@ -1,6 +1,11 @@
 import type * as THREE from 'three/webgpu';
 
-import type { RetainedSlugPage, ThreeRenderResourceLease, ThreeRendererResources } from './renderer-resources.js';
+import type {
+  RetainedMsdfAtlas,
+  RetainedSlugPage,
+  ThreeRenderResourceLease,
+  ThreeRendererResources,
+} from './renderer-resources.js';
 import type { ThreeGlyphGeometrySource } from '../glyph-measurement.js';
 import type { ThreeBufferBinding, ThreeResolvedResourceBinding } from '../schema.js';
 import type { RetainedBuffer, StagedBufferMutations } from './host-buffer.js';
@@ -15,7 +20,8 @@ export interface RetainedResource {
 
 export type RetainedTextureLease = ThreeRenderResourceLease<THREE.DataArrayTexture>;
 export type RetainedSlugPageLease = ThreeRenderResourceLease<RetainedSlugPage>;
-export type RetainedGpuResourceLease = RetainedTextureLease | RetainedSlugPageLease;
+export type RetainedMsdfAtlasLease = ThreeRenderResourceLease<RetainedMsdfAtlas>;
+export type RetainedGpuResourceLease = RetainedTextureLease | RetainedSlugPageLease | RetainedMsdfAtlasLease;
 
 export interface MaterialRealization {
   readonly material: THREE.NodeMaterial;
@@ -91,7 +97,7 @@ export interface PreparationContext {
   placementTable: RetainedBuffer | undefined;
   readonly resources: Map<ThreeResolvedResourceBinding, RetainedResource>;
   readonly bitmapTextures: Map<ThreeResolvedResourceBinding, RetainedTextureLease>;
-  readonly msdfAtlases: Map<ThreeResolvedResourceBinding, RetainedTextureLease>;
+  readonly msdfAtlases: Map<ThreeResolvedResourceBinding, RetainedMsdfAtlasLease>;
   readonly slugPages: Map<ThreeResolvedResourceBinding, RetainedSlugPageLease>;
   readonly materials: Map<string, MaterialRealization>;
   readonly newMaterials: Set<THREE.NodeMaterial>;

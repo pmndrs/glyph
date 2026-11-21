@@ -1,0 +1,18 @@
+Renderer pixel reference for the layout refactor's renderer lane.
+
+branch-start/*.png are 800x600 captures of the branch-start build (tarball
+glyph-baselines-2026-11-21/tarballs/branch-start) in Chrome 157 headless, WebGPU on Metal, three 0.187.
+
+harness/ holds the files added to or changed in a copy of glyph-competitor-bench to produce them:
+  src/main.js                 ?persp perspective camera
+  src/adapters/glyph-factory.js   the `fx` scene: plain, outline (maximum and thin), shadow (inside and beyond the
+                              field padding), both, at 6-64 px, rotated about every axis and seen from behind;
+                              ?only=plain|outline|shadow isolates one effect so each specialized graph is drawn
+  scripts/fx.mjs              node scripts/fx.mjs <before> <after> [tag]: captures both contenders for every variant
+                              (x1 minified, x4 1:1, x16 magnified, perspective) plus para, labels, kern and arabic,
+                              and prints differing pixels, pixels over 8/255, pixels that fell to background, and
+                              the largest channel difference
+  scripts/quick.mjs           steady-frame probe;  scripts/area.mjs  covered-pixel count;  scripts/wgsl.mjs  WGSL dump
+
+Tolerance used by the renderer lane: no pixel over 8/255 in orthographic views; under perspective at 8x
+magnification a handful of edge pixels reach 13/255 (vertex positions of a trimmed quad snap to a different subpixel).

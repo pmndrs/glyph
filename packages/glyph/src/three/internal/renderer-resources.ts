@@ -32,6 +32,18 @@ export interface RetainedSlugPage extends TslSlugPageResources {
   dispose(): void;
 }
 
+/** One MSDF font's GPU state: the distance-field atlas and the per-glyph table that addresses it. */
+export interface RetainedMsdfAtlas {
+  readonly texture: THREE.DataArrayTexture;
+  /** `rgba32float`, one texel per baked glyph record: `[left, top, width, height + layer * 4096]` in atlas texels. */
+  readonly glyphs: THREE.DataTexture;
+  readonly glyphsWidth: number;
+  /** `(atlas width, atlas height, field range in texels, plane units per em over field range)`. */
+  readonly metrics: THREE.Vector4;
+  readonly byteLength: number;
+  dispose(): void;
+}
+
 interface ThreeCodecState {
   readonly programs: ReadonlyMap<string, CompiledThreeRasterProgram>;
   readonly resources: ThreeRendererResources;
@@ -81,6 +93,7 @@ export class ThreeRendererResources {
   readonly material: ThreeTextMaterial | undefined;
   readonly #textureArrays = new Map<PortableTextureArrayPayload, RetainedThreeRenderResource<THREE.DataArrayTexture>>();
   readonly #slugPages = new Map<PortableResourceGroupPayload, RetainedThreeRenderResource<RetainedSlugPage>>();
+  readonly #msdfAtlases = new Map<PortableResourceGroupPayload, RetainedThreeRenderResource<RetainedMsdfAtlas>>();
   #disposed = false;
 
   constructor(
@@ -112,8 +125,16 @@ export class ThreeRendererResources {
     return acquireRenderResource(this.#slugPages, key, create);
   }
 
+  acquireMsdfAtlasResource(
+    key: PortableResourceGroupPayload,
+    create: () => RetainedMsdfAtlas,
+  ): ThreeRenderResourceLease<RetainedMsdfAtlas> {
+    this.#assertActive();
+    return acquireRenderResource(this.#msdfAtlases, key, create);
+  }
+
   get sharedRenderResourceCount(): number {
-    return this.#textureArrays.size + this.#slugPages.size;
+    return this.#textureArrays.size + this.#slugPages.size + this.#msdfAtlases.size;
   }
 
   dispose(): void {
@@ -121,7 +142,8 @@ export class ThreeRendererResources {
     this.#disposed = true;
     const textureFailure = disposeRenderResources(this.#textureArrays);
     const slugFailure = disposeRenderResources(this.#slugPages);
-    const failure = textureFailure ?? slugFailure;
+    const msdfFailure = disposeRenderResources(this.#msdfAtlases);
+    const failure = textureFailure ?? slugFailure ?? msdfFailure;
     if (failure !== undefined) throw failure;
   }
 

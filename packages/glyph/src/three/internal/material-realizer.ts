@@ -4,11 +4,15 @@ import * as THREE from 'three/webgpu';
 import type { CodecBufferDeclaration, CodecBufferDeclarations, TechniqueSchemaMetadata } from '../../config/schema.js';
 import type { PortableResourceGroupPayload, PortableTextureArrayPayload } from '../../config/resources.js';
 import { bitmapSchema, bitmap } from '../../raster/bitmap.js';
-import { msdfSchema } from '../../raster/msdf.js';
+import { MSDF_GLYPH_TABLE_LAYER_STEP, msdfSchema } from '../../raster/msdf.js';
 import { msdf } from '../../raster/msdf.js';
 import { slugSchema } from '../../raster/slug.js';
 import { slug } from '../../raster/slug.js';
 import type { RetainedSlugPage, ThreeRendererResources } from './renderer-resources.js';
+import { createMsdfAtlas, type RetainedMsdfAtlas } from './msdf-atlas.js';
+import { registerMsdfEffectVariants } from './msdf-effect-variants.js';
+import type { TslMsdfEffects } from '../../shaders/tsl/index.js';
+import { atlasTextureArray } from './portable-resource.js';
 import type { ThreeRootContext, ThreeTextMaterialContext } from '../material.js';
 import type { ThreeRasterProgramBuffer } from '../raster-program.js';
 import { decorationSchema, threeSystemBuffers } from '../codec.js';
@@ -16,12 +20,9 @@ import type { ThreeResolvedMaterialBinding, ThreeResolvedResourceBinding } from 
 import type { RetainedBuffer, ThreeBufferBindingId } from './host-buffer.js';
 import {
   dataTexture,
-  f32BufferMember,
-  f32x3BufferMember,
   ownedUint16,
   ownedUint32,
   resourceGroup,
-  textureArrayMember,
   textureArrayResource,
   textureMember,
 } from './portable-resource.js';
@@ -139,7 +140,7 @@ export class ThreeMaterialRealizer {
     const atlas = textureArrayResource(resource.resolved, 'atlas', 'r8unorm', 'Bitmap');
     const instance = runInstance();
     const placementOffset = this.#placementOffset(instance, placement);
-    const texture = this.#textureArray(resource.binding, atlas, 'bitmap');
+    const texture = this.#bitmapPages(resource.binding, atlas);
     const shader = this.#coordinator.shaders.bitmapShader(
       {
         origin: storageVec2(part.origin, instance).add(placementOffset),
@@ -172,41 +173,55 @@ export class ThreeMaterialRealizer {
     transform: TransformRealization,
   ): THREE.NodeMaterial {
     const part = schemaDrawBuffers(msdfSchema, buffers, 'MSDF');
-    const required = [part.rect, part.uvRect, part.uvBounds, part.color, part.effectColor, part.page];
+    const required = [part.rect, part.color, part.effectColor, part.effect];
     const placement = this.#placementSources(buffers);
     const retained = [...required, ...placement.buffers];
     const key = this.#cacheKey('msdf', resource, selection, retained, buffers, transform);
     const cached = this.#context.materials.get(key);
     if (cached !== undefined) return cached.material;
-    const atlas = resourceGroup(resource.resolved, 'atlas', 'MSDF');
-    const data = textureArrayMember(atlas, 'texture', 'rgba8unorm', 'MSDF');
+    const atlas = this.#msdfAtlas(resource.binding, resourceGroup(resource.resolved, 'atlas', 'MSDF'));
     const instance = runInstance();
     const placementOffset = this.#placementOffset(instance, placement);
-    const field = (buffer: RetainedBuffer) => storageVec4(buffer, instance);
-    const rect = field(part.rect);
-    const uvRect = field(part.uvRect);
-    const page = field(part.page);
-    const shader = this.#coordinator.shaders.msdfShader(
-      {
-        origin: rect.xy.add(placementOffset),
-        size: rect.zw,
-        uvOrigin: uvRect.xy,
-        uvSize: uvRect.zw,
-        uvBounds: field(part.uvBounds),
-        fillColor: field(part.color),
-        effectColor: storageUvec2(part.effectColor, instance),
-        shadowOffset: page.xy.mul(TSL.vec2(...f32x3BufferMember(atlas, 'effectScale', 'MSDF').slice(0, 2))),
-        outlineWidth: page.z.mul(f32x3BufferMember(atlas, 'effectScale', 'MSDF')[2]),
-        pageIndex: page.w,
-      },
-      {
-        atlas: this.#textureArray(resource.binding, data, 'msdf'),
-        atlasWidth: data.width,
-        atlasHeight: data.height,
-        pixelRange: f32BufferMember(atlas, 'pixelRange', 'MSDF'),
-      },
+    const rect = storageVec4(part.rect, instance);
+    const effect = storageVec4(part.effect, instance);
+    // Atlas extent and field range are uniforms, not literals, so every MSDF font compiles to the same program.
+    const metrics = TSL.uniform(atlas.metrics);
+    const atlasSize = metrics.xy;
+    // What every drawing of a glyph shares is read once per vertex from the font's glyph table.
+    const glyph = TSL.int(effect.w);
+    const cell = TSL.textureLoad(
+      atlas.glyphs,
+      TSL.ivec2(glyph.mod(TSL.int(atlas.glyphsWidth)), glyph.div(TSL.int(atlas.glyphsWidth))),
     );
-    const position = this.#position(shader.position, instance, buffers, transform);
+    const layer = TSL.floor(cell.w.div(MSDF_GLYPH_TABLE_LAYER_STEP));
+    const uvOrigin = cell.xy.div(atlasSize);
+    const uvSize = TSL.vec2(cell.z, cell.w.sub(layer.mul(MSDF_GLYPH_TABLE_LAYER_STEP))).div(atlasSize);
+    const place = this.#positionTransform(instance, buffers, transform);
+    const modelViewProjection = TSL.cameraProjectionMatrix.mul(TSL.modelViewMatrix);
+    const instanceNodes = {
+      origin: rect.xy.add(placementOffset),
+      size: rect.zw,
+      uvOrigin,
+      uvSize,
+      uvBounds: TSL.vec4(uvOrigin, uvOrigin.add(uvSize)),
+      fillColor: storageVec4(part.color, instance),
+      effectColor: storageUvec2(part.effectColor, instance),
+      shadowOffset: effect.xy.mul(metrics.w).mul(metrics.z).div(atlasSize),
+      outlineWidth: effect.z.mul(metrics.w),
+      pageIndex: layer,
+    };
+    const graph = (effects: TslMsdfEffects) => {
+      const shader = this.#coordinator.shaders.msdfShader(instanceNodes, {
+        atlas: atlas.texture,
+        atlasWidth: metrics.x,
+        atlasHeight: metrics.y,
+        pixelRange: metrics.z,
+        trim: { project: (position) => modelViewProjection.mul(TSL.vec4(place(position), 1)) },
+        effects,
+      });
+      return { shader, position: place(shader.position) };
+    };
+    const { shader, position } = graph({ outline: true, shadow: true });
     const material = this.#createMaterial(selection, {
       root: this.#root(selection),
       kind: 'glyph',
@@ -215,6 +230,14 @@ export class ThreeMaterialRealizer {
       position,
       createDefaultMaterial: () => coverageMaterial(shader, position),
     });
+    // A caller's material or a detached branch exposes its material instances, so only the default path may
+    // exchange them for effect specializations.
+    if (selection?.material === undefined && this.#owner.glyphStorage === undefined) {
+      registerMsdfEffectVariants(material, part.effectColor, (effects) => {
+        const variant = graph(effects);
+        return coverageMaterial(variant.shader, variant.position);
+      });
+    }
     this.#retain(key, material, resource, materialBuffers(retained, transform), transform.kind);
     return material;
   }
@@ -362,12 +385,24 @@ export class ThreeMaterialRealizer {
     buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
     transform: TransformRealization,
   ): THREE.Node<'vec3'> {
-    const glyphPosition = this.#glyphPosition(position, instance, buffers);
-    return transform.kind === 'indexed'
-      ? indexedTransformNodes(transform.indices.attribute, this.#context.transformAttribute, instance).position(
-          glyphPosition,
-        )
-      : glyphPosition;
+    return this.#positionTransform(instance, buffers, transform)(position);
+  }
+
+  /** The glyph-local to object-local map of one draw; every use shares the same storage reads. */
+  #positionTransform(
+    instance: THREE.Node<'uint'>,
+    buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
+    transform: TransformRealization,
+  ): (position: THREE.Node<'vec3'>) => THREE.Node<'vec3'> {
+    const glyph = this.#glyphTransform(instance, buffers);
+    const indexed =
+      transform.kind === 'indexed'
+        ? indexedTransformNodes(transform.indices.attribute, this.#context.transformAttribute, instance)
+        : undefined;
+    return (position) => {
+      const placed = glyph === undefined ? position : glyph(position);
+      return indexed === undefined ? placed : indexed.position(placed);
+    };
   }
 
   #placementSources(
@@ -401,41 +436,36 @@ export class ThreeMaterialRealizer {
     instance: THREE.Node<'uint'>,
     buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
   ): THREE.Node<'vec3'> {
-    const stableIds = buffers.get(threeSystemBuffers.stableGlyphId.id);
-    const retained = stableIds === undefined ? undefined : this.#owner.glyphStorage?.(glyphStorageKey(stableIds));
-    if (retained === undefined) return position;
-    const table = TSL.storage(retained.transforms, 'vec4', retained.transforms.count).setPBO(true);
-    const firstColumn = instance.mul(4);
-    const column0 = table.element(firstColumn);
-    const column1 = table.element(firstColumn.add(1));
-    const column2 = table.element(firstColumn.add(2));
-    const column3 = table.element(firstColumn.add(3));
-    const local = TSL.vec4(position, 1);
-    return column0.mul(local.x).add(column1.mul(local.y)).add(column2.mul(local.z)).add(column3.mul(local.w)).xyz;
+    return this.#glyphTransform(instance, buffers)?.(position) ?? position;
   }
 
-  #textureArray(
-    binding: ThreeResolvedResourceBinding,
-    data: PortableTextureArrayPayload,
-    kind: 'bitmap' | 'msdf',
-  ): THREE.DataArrayTexture {
-    const textures = kind === 'bitmap' ? this.#context.bitmapTextures : this.#context.msdfAtlases;
-    let lease = textures.get(binding);
+  #glyphTransform(
+    instance: THREE.Node<'uint'>,
+    buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
+  ): ((position: THREE.Node<'vec3'>) => THREE.Node<'vec3'>) | undefined {
+    const stableIds = buffers.get(threeSystemBuffers.stableGlyphId.id);
+    const retained = stableIds === undefined ? undefined : this.#owner.glyphStorage?.(glyphStorageKey(stableIds));
+    if (retained === undefined) return undefined;
+    return affineColumns(retained.transforms, instance.mul(4)).position;
+  }
+
+  #bitmapPages(binding: ThreeResolvedResourceBinding, data: PortableTextureArrayPayload): THREE.DataArrayTexture {
+    let lease = this.#context.bitmapTextures.get(binding);
     if (lease !== undefined) return lease.resource;
-    lease = this.#coordinator.acquireTextureArrayResource(data, () => {
-      const texture = new THREE.DataArrayTexture(data.bytes, data.width, data.height, data.layers);
-      texture.format = kind === 'bitmap' ? THREE.RedFormat : THREE.RGBAFormat;
-      texture.type = THREE.UnsignedByteType;
-      texture.colorSpace = THREE.NoColorSpace;
-      texture.magFilter = THREE.LinearFilter;
-      texture.minFilter = THREE.LinearFilter;
-      texture.generateMipmaps = false;
-      texture.flipY = false;
-      texture.needsUpdate = true;
-      return texture;
-    });
+    lease = this.#coordinator.acquireTextureArrayResource(data, () =>
+      atlasTextureArray(data.bytes, data.width, data.height, data.layers, THREE.RedFormat),
+    );
     this.#context.newTextures.add(lease);
-    textures.set(binding, lease);
+    this.#context.bitmapTextures.set(binding, lease);
+    return lease.resource;
+  }
+
+  #msdfAtlas(binding: ThreeResolvedResourceBinding, group: PortableResourceGroupPayload): RetainedMsdfAtlas {
+    let lease = this.#context.msdfAtlases.get(binding);
+    if (lease !== undefined) return lease.resource;
+    lease = this.#coordinator.acquireMsdfAtlasResource(group, () => createMsdfAtlas(group));
+    this.#context.newTextures.add(lease);
+    this.#context.msdfAtlases.set(binding, lease);
     return lease.resource;
   }
 
@@ -594,7 +624,11 @@ function indexedTransformNodes(
   instance: THREE.Node<'uint'>,
 ) {
   const transformIndex = TSL.storage(indexAttribute, 'uint', indexAttribute.count).setPBO(true).element(instance);
-  const firstColumn = transformIndex.mul(4);
+  return affineColumns(transforms, transformIndex.mul(4));
+}
+
+/** One column-major 4x4 stored as four consecutive vec4 records. */
+function affineColumns(transforms: THREE.StorageInstancedBufferAttribute, firstColumn: THREE.Node<'uint'>) {
   const table = TSL.storage(transforms, 'vec4', transforms.count).setPBO(true);
   const column0 = table.element(firstColumn);
   const column1 = table.element(firstColumn.add(1));
@@ -602,7 +636,7 @@ function indexedTransformNodes(
   const column3 = table.element(firstColumn.add(3));
   return {
     matrix: TSL.mat4(column0, column1, column2, column3),
-    position(position: THREE.Node<'vec3'>) {
+    position(position: THREE.Node<'vec3'>): THREE.Node<'vec3'> {
       const local = TSL.vec4(position, 1);
       return column0.mul(local.x).add(column1.mul(local.y)).add(column2.mul(local.z)).add(column3.mul(local.w)).xyz;
     },

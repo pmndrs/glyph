@@ -13,6 +13,7 @@ import type { ThreeGlyphGeometrySource } from './glyph-measurement.js';
 import type { ThreeBindings, ThreeBufferBinding, ThreeResolvedResourceBinding } from './schema.js';
 import type { ThreeRendererResources } from './internal/renderer-resources.js';
 import type { ThreeRootContext } from './material.js';
+import { selectMsdfEffectVariants } from './internal/msdf-effect-variants.js';
 import { ThreeTransformSynchronizer, type ThreeTransformState } from './transform-synchronizer.js';
 import {
   commitBufferMutations,
@@ -39,6 +40,7 @@ import type {
   PreparedTransforms,
   PreparedTransformUpdate,
   RetainedGpuResourceLease,
+  RetainedMsdfAtlasLease,
   RetainedResource,
   RetainedSlugPageLease,
   RetainedTextureLease,
@@ -76,7 +78,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
   #buffers = new Map<ThreeBufferBinding, RetainedBuffer>();
   #resources = new Map<ThreeResolvedResourceBinding, RetainedResource>();
   #bitmapTextures = new Map<ThreeResolvedResourceBinding, RetainedTextureLease>();
-  #msdfAtlases = new Map<ThreeResolvedResourceBinding, RetainedTextureLease>();
+  #msdfAtlases = new Map<ThreeResolvedResourceBinding, RetainedMsdfAtlasLease>();
   #slugPages = new Map<ThreeResolvedResourceBinding, RetainedSlugPageLease>();
   #materials = new Map<string, MaterialRealization>();
   readonly #ownedMaterials = new WeakSet<THREE.NodeMaterial>();
@@ -135,10 +137,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       const data = texture.image.data as ArrayBufferView | undefined;
       bytes += data?.byteLength ?? 0;
     }
-    for (const { resource: atlas } of this.#msdfAtlases.values()) {
-      const data = atlas.image.data as ArrayBufferView | undefined;
-      bytes += data?.byteLength ?? 0;
-    }
+    for (const { resource: atlas } of this.#msdfAtlases.values()) bytes += atlas.byteLength;
     for (const { resource: page } of this.#slugPages.values()) bytes += page.byteLength;
     return bytes;
   }
@@ -423,6 +422,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     if (prepared.draws.changed) {
       for (const update of prepared.draws.reusedUpdates) applyReusedDrawUpdate(update);
     }
+    selectMsdfEffectVariants(prepared.draws.changed ? prepared.draws.draws : this.#draws, prepared);
     if (prepared.transforms !== undefined) {
       commitTransforms(prepared.context.transformAttribute, prepared.transforms);
       for (const update of prepared.transforms.direct) applyTransformUpdate(update);
