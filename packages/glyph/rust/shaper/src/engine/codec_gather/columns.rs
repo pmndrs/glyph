@@ -7,6 +7,7 @@
 //! assembled and no field is interpreted per glyph.
 
 use super::super::{
+    cluster_state::ClusterArena,
     codec::{InputSource, MAX_REGISTERS},
     font_binding::MISSING_RESOURCE_INDEX,
     frame::{
@@ -15,6 +16,7 @@ use super::super::{
         SEMANTIC_U32_CLUSTER_ID, SEMANTIC_U32_FLOW_THREAD_ID, SEMANTIC_U32_REGION_ID,
         SEMANTIC_U32_STABLE_GLYPH_ID, SEMANTIC_U32_TRANSFORM_INDEX,
     },
+    inline_leaf::LeafCluster,
     placement_state::GlyphSource,
     positioning::{ClusterOrder, OccurrenceSpan, SourceLineFacts},
 };
@@ -169,6 +171,14 @@ impl SourceChunk {
         self.len = 0;
         self.spans.len = 0;
         self.styles.len = 0;
+    }
+
+    /// A chunk holds the glyphs of one font binding: the first glyph names it.
+    fn admits_binding(&mut self, handle: u32) -> bool {
+        if self.len == 0 {
+            self.binding_handle = handle;
+        }
+        self.binding_handle == handle
     }
 
     fn push_span(&mut self, span: SpanFacts) {
@@ -587,51 +597,24 @@ impl<'a> ProjectedRows<'a> {
         self.seek(start);
         let mut ranges = ChunkRanges::default();
         while chunk.len < limit {
-            if self.walk.is_some() {
-                if !self.fill_walk(chunk, &mut ranges, limit)? {
+            if let Some(walk) = self.walk.take() {
+                if !chunk.admits_binding(walk.span.binding_handle) {
+                    self.walk = Some(walk);
                     break;
                 }
+                self.walk = self.fill_walk(chunk, &mut ranges, walk, limit)?;
                 continue;
             }
             let Some(mark) = self.next_mark()? else {
                 break;
             };
-            let span = match self.span {
-                Some((index, span)) if index == mark.span_index => span,
-                _ => {
-                    let input = self.input;
-                    let span = input
-                        .positioned
-                        .project_outlined_mark(mark, input.context.clusters, input.boundary)
-                        .map_err(|_| GatherError::InvalidSemanticShape)?
-                        .span;
-                    self.span = Some((mark.span_index, span));
-                    span
-                }
-            };
-            if chunk.len == 0 {
-                chunk.binding_handle = span.binding_handle;
-            } else if span.binding_handle != chunk.binding_handle {
+            let span = self.span_of(mark)?;
+            if !chunk.admits_binding(span.binding_handle) {
                 self.pending = Some(mark);
                 break;
             }
             if span.source == GlyphSource::LayoutRun && self.input.selection.is_none() {
-                self.walk = Some(SpanWalk {
-                    span_index: mark.span_index,
-                    span,
-                    cluster_offset: match span.cluster_order {
-                        ClusterOrder::Single => 0,
-                        ClusterOrder::Forward => {
-                            mark.owner_cluster.wrapping_sub(span.owner_cluster)
-                        }
-                        ClusterOrder::Reverse => {
-                            span.owner_cluster.wrapping_sub(mark.owner_cluster)
-                        }
-                    },
-                    source_next: Some(mark.source_glyph),
-                    remaining: (span.outlined_start as usize + span.outlined_count as usize)
-                        .saturating_sub(self.next_index),
-                });
+                self.walk = Some(SpanWalk::at(mark, span, self.next_index));
                 self.cursor_stale = true;
                 continue;
             }
@@ -639,6 +622,23 @@ impl<'a> ProjectedRows<'a> {
             self.next_index += 1;
         }
         Ok(())
+    }
+
+    /// The span a mark names. Positioning hands a span out with a projected occurrence.
+    fn span_of(&mut self, mark: OutlinedOccurrenceMark) -> Result<&'a OccurrenceSpan, GatherError> {
+        if let Some((index, span)) = self.span
+            && index == mark.span_index
+        {
+            return Ok(span);
+        }
+        let input = self.input;
+        let span = input
+            .positioned
+            .project_outlined_mark(mark, input.context.clusters, input.boundary)
+            .map_err(|_| GatherError::InvalidSemanticShape)?
+            .span;
+        self.span = Some((mark.span_index, span));
+        Ok(span)
     }
 
     /// One glyph named by a cursor or selection mark.
@@ -650,13 +650,7 @@ impl<'a> ProjectedRows<'a> {
         mark: OutlinedOccurrenceMark,
     ) -> Result<(), GatherError> {
         let clusters = self.input.context.clusters;
-        let owner_cluster = mark.owner_cluster as usize;
-        let (Some(&style_index), Some(&stable_cluster)) = (
-            clusters.style_indexes.get(owner_cluster),
-            clusters.stable_ids.get(owner_cluster),
-        ) else {
-            return Err(GatherError::InvalidSemanticShape);
-        };
+        let (style_index, stable_cluster) = cluster_facts(clusters, mark.owner_cluster)?;
         let boundary = self.open_ranges(chunk, ranges, span, mark, style_index)?;
         if let Some(semantic) = boundary.filter(|_| span.source == GlyphSource::Boundary) {
             chunk.push_glyph(GlyphLanes::positioned(semantic, stable_cluster));
@@ -665,101 +659,74 @@ impl<'a> ProjectedRows<'a> {
         push_run_glyph(chunk, clusters, mark.source_glyph, stable_cluster)
     }
 
-    /// Continues the span walk and moves to the next paragraph-run span when this one is
-    /// read. `false` ends the chunk at a binding change.
+    /// Reads the walked span cluster by cluster until the chunk is full or the span is
+    /// read, and returns the walk that continues: the rest of this span, the next
+    /// paragraph-run span, or none when the cursor has to take over.
     fn fill_walk(
         &mut self,
         chunk: &mut SourceChunk,
         ranges: &mut ChunkRanges,
+        mut walk: SpanWalk<'a>,
         limit: usize,
-    ) -> Result<bool, GatherError> {
-        let Some(mut walk) = self.walk.take() else {
-            return Ok(true);
-        };
-        let span = walk.span;
-        if chunk.len == 0 {
-            chunk.binding_handle = span.binding_handle;
-        } else if span.binding_handle != chunk.binding_handle {
-            self.walk = Some(walk);
-            return Ok(false);
-        }
-        self.open_span(chunk, ranges, walk.span_index, span)?;
-        let clusters = self.input.context.clusters;
-        let local = clusters.run_local();
-        let span_end = span
-            .source_glyph_start
-            .wrapping_add(span.source_glyph_count);
-        let mut last_source = span.source_glyph_start;
+    ) -> Result<Option<SpanWalk<'a>>, GatherError> {
+        self.open_span(chunk, ranges, walk.span_index, walk.span)?;
+        let mut last_source = walk.span.source_glyph_start;
         while chunk.len < limit && walk.remaining != 0 {
-            if walk.cluster_offset >= span.cluster_count {
-                return Err(GatherError::InvalidSemanticShape);
-            }
-            let cluster = match span.cluster_order {
-                ClusterOrder::Single => span.owner_cluster,
-                ClusterOrder::Forward => span.owner_cluster.wrapping_add(walk.cluster_offset),
-                ClusterOrder::Reverse => span.owner_cluster.wrapping_sub(walk.cluster_offset),
-            };
-            let owner_cluster = cluster as usize;
-            let (start, end) = if span.cluster_order == ClusterOrder::Single {
-                (span.source_glyph_start, span_end)
-            } else {
-                let (Some(&start), Some(&count)) = (
-                    clusters.glyph_starts.get(owner_cluster),
-                    clusters.glyph_counts.get(owner_cluster),
-                ) else {
-                    return Err(GatherError::InvalidSemanticShape);
-                };
-                (start, start.wrapping_add(count))
-            };
-            let mut source_next = walk.source_next.unwrap_or(start);
-            let (Some(&style_index), Some(&stable_cluster)) = (
-                clusters.style_indexes.get(owner_cluster),
-                clusters.stable_ids.get(owner_cluster),
-            ) else {
-                return Err(GatherError::InvalidSemanticShape);
-            };
-            let mut cluster_done = true;
-            // One style covers a cluster, so only its first glyph can open a style range.
-            let mut style_open = ranges.style == Some(style_index);
-            while let Some(source) = local.next_outlined_source(source_next, end) {
-                if chunk.len >= limit || walk.remaining == 0 {
-                    cluster_done = false;
-                    break;
-                }
-                if !style_open {
-                    self.open_ranges(
-                        chunk,
-                        ranges,
-                        span,
-                        OutlinedOccurrenceMark {
-                            span_index: walk.span_index,
-                            source_glyph: source,
-                            owner_cluster: cluster,
-                            semantic_index: 0,
-                        },
-                        style_index,
-                    )?;
-                    style_open = true;
-                }
-                push_run_glyph(chunk, clusters, source, stable_cluster)?;
-                self.next_index += 1;
-                walk.remaining -= 1;
-                last_source = source;
-                source_next = source.wrapping_add(1);
-            }
-            if cluster_done {
-                walk.cluster_offset += 1;
-                walk.source_next = None;
-            } else {
-                walk.source_next = Some(source_next);
-            }
+            let cluster = walk.cluster(self.input.context.clusters)?;
+            let read = self.fill_cluster(chunk, ranges, &mut walk, cluster, limit)?;
+            last_source = read.unwrap_or(last_source);
         }
-        self.walk = if walk.remaining != 0 {
+        Ok(if walk.remaining != 0 {
             Some(walk)
         } else {
             self.following_walk(walk.span_index, last_source)
-        };
-        Ok(true)
+        })
+    }
+
+    /// Reads the outlined glyphs of one cluster in source order and returns the last one.
+    fn fill_cluster(
+        &mut self,
+        chunk: &mut SourceChunk,
+        ranges: &mut ChunkRanges,
+        walk: &mut SpanWalk<'a>,
+        cluster: WalkCluster,
+        limit: usize,
+    ) -> Result<Option<u32>, GatherError> {
+        let clusters = self.input.context.clusters;
+        let local = clusters.run_local();
+        let mut source_next = walk.source_next.unwrap_or(cluster.start);
+        let mut last_source = None;
+        // One style covers a cluster, so only its first glyph can open a style range.
+        let mut style_open = ranges.style == Some(cluster.style_index);
+        while let Some(source) = local.next_outlined_source(source_next, cluster.end) {
+            if chunk.len >= limit || walk.remaining == 0 {
+                // The chunk ends inside this cluster; the next chunk resumes here.
+                walk.source_next = Some(source_next);
+                return Ok(last_source);
+            }
+            if !style_open {
+                let mark = OutlinedOccurrenceMark {
+                    span_index: walk.span_index,
+                    source_glyph: source,
+                    owner_cluster: cluster.index,
+                    semantic_index: 0,
+                };
+                self.open_ranges(chunk, ranges, walk.span, mark, cluster.style_index)?;
+                style_open = true;
+            }
+            push_run_glyph(chunk, clusters, source, cluster.stable_id)?;
+            self.next_index += 1;
+            walk.remaining -= 1;
+            last_source = Some(source);
+            source_next = source.wrapping_add(1);
+            if source_next >= cluster.end {
+                // The cluster's last glyph: no second scan to learn that it ended.
+                break;
+            }
+        }
+        walk.cluster_offset += 1;
+        walk.source_next = None;
+        Ok(last_source)
     }
 
     /// The paragraph-run span after `span_index`, if the walk can continue without the
@@ -803,10 +770,81 @@ impl<'a> ProjectedRows<'a> {
     }
 }
 
+/// One cluster of a walked span: its source glyph range and the facts its glyphs share.
+struct WalkCluster {
+    index: u32,
+    start: u32,
+    end: u32,
+    style_index: u32,
+    stable_id: u32,
+}
+
+impl<'a> SpanWalk<'a> {
+    /// A walk that starts at the glyph a cursor mark names.
+    fn at(mark: OutlinedOccurrenceMark, span: &'a OccurrenceSpan, next_index: usize) -> Self {
+        Self {
+            span_index: mark.span_index,
+            span,
+            cluster_offset: match span.cluster_order {
+                ClusterOrder::Single => 0,
+                ClusterOrder::Forward => mark.owner_cluster.wrapping_sub(span.owner_cluster),
+                ClusterOrder::Reverse => span.owner_cluster.wrapping_sub(mark.owner_cluster),
+            },
+            source_next: Some(mark.source_glyph),
+            remaining: (span.outlined_start as usize + span.outlined_count as usize)
+                .saturating_sub(next_index),
+        }
+    }
+
+    /// The cluster the walk stands in, in the span's visual order. A span that is one
+    /// cluster owns its whole source range.
+    fn cluster(&self, clusters: &ClusterArena) -> Result<WalkCluster, GatherError> {
+        let span = self.span;
+        if self.cluster_offset >= span.cluster_count {
+            return Err(GatherError::InvalidSemanticShape);
+        }
+        let index = match span.cluster_order {
+            ClusterOrder::Single => span.owner_cluster,
+            ClusterOrder::Forward => span.owner_cluster.wrapping_add(self.cluster_offset),
+            ClusterOrder::Reverse => span.owner_cluster.wrapping_sub(self.cluster_offset),
+        };
+        let (start, count) = if span.cluster_order == ClusterOrder::Single {
+            (span.source_glyph_start, span.source_glyph_count)
+        } else {
+            let (Some(&start), Some(&count)) = (
+                clusters.glyph_starts.get(index as usize),
+                clusters.glyph_counts.get(index as usize),
+            ) else {
+                return Err(GatherError::InvalidSemanticShape);
+            };
+            (start, count)
+        };
+        let (style_index, stable_id) = cluster_facts(clusters, index)?;
+        Ok(WalkCluster {
+            index,
+            start,
+            end: start.wrapping_add(count),
+            style_index,
+            stable_id,
+        })
+    }
+}
+
+/// The style range and stable identity of one cluster.
+fn cluster_facts(clusters: &ClusterArena, cluster: u32) -> Result<(u32, u32), GatherError> {
+    match (
+        clusters.style_indexes.get(cluster as usize),
+        clusters.stable_ids.get(cluster as usize),
+    ) {
+        (Some(&style_index), Some(&stable_id)) => Ok((style_index, stable_id)),
+        _ => Err(GatherError::InvalidSemanticShape),
+    }
+}
+
 /// A paragraph-run glyph reads the cluster-order lanes directly.
 fn push_run_glyph(
     chunk: &mut SourceChunk,
-    clusters: &super::super::cluster_state::ClusterArena,
+    clusters: &ClusterArena,
     source_glyph: u32,
     stable_cluster: u32,
 ) -> Result<(), GatherError> {
@@ -856,6 +894,14 @@ impl InlineRows<'_> {
         self.next_index = index;
     }
 
+    /// The source glyph at the next outlined ordinal, without consuming it.
+    fn next_source(&self) -> Option<u32> {
+        match self.input.selection {
+            Some(selection) => selection.get(self.next_index).copied(),
+            None => (self.remaining != 0).then(|| self.remaining.trailing_zeros()),
+        }
+    }
+
     fn fill(
         &mut self,
         chunk: &mut SourceChunk,
@@ -863,105 +909,118 @@ impl InlineRows<'_> {
         limit: usize,
     ) -> Result<(), GatherError> {
         self.seek(start);
-        let input = self.input;
-        let leaf = input.leaf;
-        let mut chunk_span = None;
-        let mut chunk_style = None;
+        let leaf = self.input.leaf;
+        let mut ranges = InlineRanges::default();
         let mut cluster_index = 0;
         while chunk.len < limit {
-            let source = match input.selection {
-                Some(selection) => match selection.get(self.next_index) {
-                    Some(&source) => source,
-                    None => break,
-                },
-                None if self.remaining == 0 => break,
-                None => self.remaining.trailing_zeros(),
+            let Some(source) = self.next_source() else {
+                break;
             };
-            let row = leaf
+            let semantic = leaf
                 .rows
                 .row_for_source_glyph(source)
                 .filter(|row| row.has_outline)
-                .ok_or(GatherError::InvalidSemanticShape)?;
-            let semantic = row.semantic;
-            // Sources ascend within a leaf, so the owning cluster only moves forward.
-            if leaf
-                .clusters
-                .get(cluster_index)
-                .is_none_or(|cluster| source < cluster.glyph_start)
-            {
-                cluster_index = 0;
-            }
-            while leaf
-                .clusters
-                .get(cluster_index)
-                .is_some_and(|cluster| cluster.glyph_start + cluster.glyph_count <= source)
-            {
-                cluster_index += 1;
-            }
-            let cluster = leaf
-                .clusters
-                .get(cluster_index)
-                .filter(|cluster| source >= cluster.glyph_start)
-                .ok_or(GatherError::InvalidSemanticShape)?;
-            if chunk.len == 0 {
-                chunk.binding_handle = cluster.binding_handle;
-            } else if cluster.binding_handle != chunk.binding_handle {
+                .ok_or(GatherError::InvalidSemanticShape)?
+                .semantic;
+            let cluster = owning_cluster(&leaf.clusters, source, &mut cluster_index)?;
+            if !chunk.admits_binding(cluster.binding_handle) {
                 break;
             }
-            let span_key = (semantic.placement_segment, semantic.font_size.to_bits());
-            let new_span = chunk_span != Some(span_key);
-            let new_style = chunk_style != Some(cluster.style_index);
-            if new_span || new_style {
-                let slot = if let Some(segments) = input.copied_placement_segments {
-                    u32::try_from(
-                        segments
-                            .binary_search(&semantic.placement_segment)
-                            .map_err(|_| GatherError::InvalidSemanticShape)?,
-                    )
-                    .map_err(|_| GatherError::AllocationFailed)?
-                } else {
-                    leaf.placement_handle(semantic.placement_segment as usize)
-                        .ok_or(GatherError::InvalidSemanticShape)?
-                        .slot()
-                        .get()
-                };
-                // Inline admission proves LTR source order equals semantic occurrence order.
-                let projected = leaf
-                    .projected_source_row(source, source, slot, input.styles)
-                    .map_err(|_| GatherError::InvalidSemanticShape)?;
-                if new_span {
-                    chunk.push_span(SpanFacts {
-                        font_size: projected.glyph.font_size,
-                        placement_slot: slot,
-                        translation: leaf
-                            .placement_translations()
-                            .get(semantic.placement_segment as usize)
-                            .copied(),
-                        line: SourceLineFacts {
-                            clip_id: projected.glyph.clip_id,
-                            region_id: projected_u32(&projected, SEMANTIC_U32_REGION_ID)?,
-                            flow_thread_id: projected_u32(&projected, SEMANTIC_U32_FLOW_THREAD_ID)?,
-                            transform_index: projected_u32(
-                                &projected,
-                                SEMANTIC_U32_TRANSFORM_INDEX,
-                            )?,
-                        },
-                    });
-                    chunk_span = Some(span_key);
-                }
-                if new_style {
-                    chunk.push_style(&projected)?;
-                    chunk_style = Some(cluster.style_index);
-                }
-            }
+            self.open_ranges(chunk, &mut ranges, source, semantic, cluster.style_index)?;
             chunk.push_glyph(GlyphLanes::positioned(semantic, cluster.stable_text_id));
-            if input.selection.is_none() {
-                self.remaining &= self.remaining - 1;
-            }
+            self.remaining &= self.remaining.wrapping_sub(1);
             self.next_index += 1;
         }
         Ok(())
     }
+
+    /// Opens the span and style ranges a glyph starts, both from the leaf's canonical row
+    /// projection of that glyph.
+    fn open_ranges(
+        &self,
+        chunk: &mut SourceChunk,
+        ranges: &mut InlineRanges,
+        source: u32,
+        semantic: PositionedSemanticGlyph,
+        style_index: u32,
+    ) -> Result<(), GatherError> {
+        let span = (semantic.placement_segment, semantic.font_size.to_bits());
+        let new_span = ranges.span != Some(span);
+        let new_style = ranges.style != Some(style_index);
+        if !new_span && !new_style {
+            return Ok(());
+        }
+        let leaf = self.input.leaf;
+        let segment = semantic.placement_segment as usize;
+        let placement_slot = if let Some(segments) = self.input.copied_placement_segments {
+            u32::try_from(
+                segments
+                    .binary_search(&semantic.placement_segment)
+                    .map_err(|_| GatherError::InvalidSemanticShape)?,
+            )
+            .map_err(|_| GatherError::AllocationFailed)?
+        } else {
+            leaf.placement_handle(segment)
+                .ok_or(GatherError::InvalidSemanticShape)?
+                .slot()
+                .get()
+        };
+        // Inline admission proves LTR source order equals semantic occurrence order.
+        let projected = leaf
+            .projected_source_row(source, source, placement_slot, self.input.styles)
+            .map_err(|_| GatherError::InvalidSemanticShape)?;
+        if new_span {
+            chunk.push_span(SpanFacts {
+                font_size: projected.glyph.font_size,
+                placement_slot,
+                translation: leaf.placement_translations().get(segment).copied(),
+                line: SourceLineFacts {
+                    clip_id: projected.glyph.clip_id,
+                    region_id: projected_u32(&projected, SEMANTIC_U32_REGION_ID)?,
+                    flow_thread_id: projected_u32(&projected, SEMANTIC_U32_FLOW_THREAD_ID)?,
+                    transform_index: projected_u32(&projected, SEMANTIC_U32_TRANSFORM_INDEX)?,
+                },
+            });
+            ranges.span = Some(span);
+        }
+        if new_style {
+            chunk.push_style(&projected)?;
+            ranges.style = Some(style_index);
+        }
+        Ok(())
+    }
+}
+
+/// The placement segment and size, and the style, last pushed into the chunk being filled.
+#[derive(Default)]
+struct InlineRanges {
+    span: Option<(u32, u32)>,
+    style: Option<u32>,
+}
+
+/// The leaf cluster that owns a source glyph. Sources ascend within a leaf, so the search
+/// resumes from the cluster the previous glyph used.
+fn owning_cluster<'a>(
+    clusters: &'a [LeafCluster],
+    source: u32,
+    index: &mut usize,
+) -> Result<&'a LeafCluster, GatherError> {
+    if clusters
+        .get(*index)
+        .is_none_or(|cluster| source < cluster.glyph_start)
+    {
+        *index = 0;
+    }
+    while clusters
+        .get(*index)
+        .is_some_and(|cluster| cluster.glyph_start + cluster.glyph_count <= source)
+    {
+        *index += 1;
+    }
+    clusters
+        .get(*index)
+        .filter(|cluster| source >= cluster.glyph_start)
+        .ok_or(GatherError::InvalidSemanticShape)
 }
 
 /// Where one F32 codec input comes from, decided once per program and binding.
@@ -1180,6 +1239,7 @@ impl<'a> Rows<'a> {
 }
 
 /// Copies one per-glyph lane for the selected rows.
+#[inline(never)]
 fn copy_lane<T: Copy>(lane: &[T; CHUNK], rows: Rows<'_>, out: &mut [T]) {
     if rows.dense {
         out.copy_from_slice(&lane[..out.len()]);
@@ -1192,6 +1252,7 @@ fn copy_lane<T: Copy>(lane: &[T; CHUNK], rows: Rows<'_>, out: &mut [T]) {
 
 /// Reads a span or style table through the per-glyph range index. A chunk inside one
 /// range is a fill.
+#[inline(never)]
 fn table_lane<T: Copy>(
     table: &[T; CHUNK],
     table_len: usize,
@@ -1214,6 +1275,7 @@ fn table_lane<T: Copy>(
 
 /// Reads a binding table by a per-glyph key. A selected glyph's key is in range by the
 /// binding's construction; the fold reports a table that is shorter than that.
+#[inline(never)]
 fn binding_lane<T: Copy + Default>(
     table: &[T],
     keys: &[u32; CHUNK],
@@ -1309,34 +1371,36 @@ fn u32_column(source: U32Source<'_>, chunk: &SourceChunk, rows: Rows<'_>, out: &
     true
 }
 
-/// Stores `next` over the accepted lane and ORs `dependency` into the mask of every row
-/// whose bits changed. The store is unconditional: an equal value rewrites equal bits.
-pub(super) fn store_f32_changes(
-    accepted: &mut [f32],
-    next: &[f32],
-    dependency: u16,
-    masks: &mut [u16],
-) -> usize {
-    let mut changed = 0;
-    for ((accepted, &next), mask) in accepted.iter_mut().zip(next).zip(masks) {
-        let differs = accepted.to_bits() != next.to_bits();
-        *mask |= if differs { dependency } else { 0 };
-        changed += usize::from(differs);
-        *accepted = next;
-    }
-    changed
+/// A 32-bit codec scalar compared by its bits, so `-0.0` and `0.0` differ and a NaN
+/// equals itself.
+pub(super) trait Scalar: Copy {
+    fn bits(self) -> u32;
 }
 
-/// The U32 twin of [`store_f32_changes`].
-pub(super) fn store_u32_changes(
-    accepted: &mut [u32],
-    next: &[u32],
+impl Scalar for f32 {
+    fn bits(self) -> u32 {
+        self.to_bits()
+    }
+}
+
+impl Scalar for u32 {
+    fn bits(self) -> u32 {
+        self
+    }
+}
+
+/// Stores `next` over the accepted lane and ORs `dependency` into the mask of every row
+/// whose bits changed; returns how many did. The store is unconditional: an equal value
+/// rewrites equal bits.
+pub(super) fn store_changes<T: Scalar>(
+    accepted: &mut [T],
+    next: &[T],
     dependency: u16,
     masks: &mut [u16],
 ) -> usize {
     let mut changed = 0;
     for ((accepted, &next), mask) in accepted.iter_mut().zip(next).zip(masks) {
-        let differs = *accepted != next;
+        let differs = accepted.bits() != next.bits();
         *mask |= if differs { dependency } else { 0 };
         changed += usize::from(differs);
         *accepted = next;

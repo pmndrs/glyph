@@ -679,6 +679,11 @@ struct ColumnScratch {
     sources: [GatherSource; CHUNK],
 }
 
+/// How a gather resolves a font binding handle. The lookup runs once per binding change,
+/// so the gather's inner functions take it by reference instead of being instantiated
+/// once per caller's closure.
+type BindingLookup<'a, 'binding> = dyn FnMut(u32) -> Option<&'binding FontRenderBinding> + 'a;
+
 /// The binding and classified program of the chunk being gathered. The program is
 /// resolved by the first record that needs it, as a recordless run needs none.
 struct ColumnBinding<'codec, 'binding> {
@@ -691,7 +696,7 @@ impl<'codec, 'binding> ColumnBinding<'codec, 'binding> {
     fn resolve<'cache>(
         cache: &'cache mut Option<Self>,
         handle: u32,
-        binding_for_font: &mut impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
+        binding_for_font: &mut BindingLookup<'_, 'binding>,
     ) -> Result<&'cache mut Self, GatherError> {
         if cache.as_ref().is_none_or(|bound| bound.handle != handle) {
             *cache = Some(Self {
@@ -1078,7 +1083,7 @@ impl CodecGatherWorkspace {
         codec: &ValidatedCodec,
         capability_set: CapabilitySetId,
         owners: impl Iterator<Item = Result<RetainedGatherOwner<'owner>, GatherError>>,
-        binding_for_font: &mut impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
+        binding_for_font: &mut BindingLookup<'_, 'binding>,
         scratch: &mut [ColumnScratch],
     ) -> Result<Option<RetainedGatherStop>, GatherError> {
         let scratch = scratch.first_mut().ok_or(GatherError::AllocationFailed)?;
@@ -1110,8 +1115,8 @@ impl CodecGatherWorkspace {
                 });
             }
             let source_count = owner.input.len();
-            let whole = [0..source_count];
-            let intervals = owner.intervals.unwrap_or(&whole);
+            let whole = 0..source_count;
+            let intervals = owner.intervals.unwrap_or(core::slice::from_ref(&whole));
             let reserve = intervals
                 .iter()
                 .try_fold(0usize, |count, range| {
@@ -1211,7 +1216,7 @@ impl CodecGatherWorkspace {
         range: Range<usize>,
         state: &mut RetainedGatherCursor<'codec, 'binding>,
         bound: &mut Option<ColumnBinding<'codec, 'binding>>,
-        binding_for_font: &mut impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
+        binding_for_font: &mut BindingLookup<'_, 'binding>,
         scratch: &mut ColumnScratch,
     ) -> Result<(), GatherError> {
         let mut cursor = range.start;
@@ -1337,7 +1342,7 @@ impl CodecGatherWorkspace {
                 .and_then(|lane| lane.as_mut_slice().get_mut(record..record + count))
                 .ok_or(GatherError::InvalidSemanticShape)?;
             let _changed =
-                columns::store_f32_changes(accepted, values, plan.f32_dependency(field), masks);
+                columns::store_changes(accepted, values, plan.f32_dependency(field), masks);
             #[cfg(test)]
             {
                 changed.0 += _changed;
@@ -1354,7 +1359,7 @@ impl CodecGatherWorkspace {
                 .and_then(|lane| lane.as_mut_slice().get_mut(record..record + count))
                 .ok_or(GatherError::InvalidSemanticShape)?;
             let _changed =
-                columns::store_u32_changes(accepted, values, plan.u32_dependency(field), masks);
+                columns::store_changes(accepted, values, plan.u32_dependency(field), masks);
             #[cfg(test)]
             {
                 changed.1 += _changed;
@@ -1402,31 +1407,14 @@ impl CodecGatherWorkspace {
             // Pairing proved the storage topology equal: only identity and bounds can move.
             let next = scratch.chunk.record_geometry(row)?;
             let slot = scratch.chunk.placement_slot(row);
-            let moved = previous.semantic_id != next.semantic_id
-                || previous.inline_start.to_bits() != next.inline_start.to_bits()
-                || previous.block_start.to_bits() != next.block_start.to_bits()
-                || previous.inline_extent.to_bits() != next.inline_extent.to_bits()
-                || previous.block_extent.to_bits() != next.block_extent.to_bits();
+            let (changes, moved) = retained_record_changes(
+                previous,
+                &next,
+                scratch.masks[offset % CHUNK],
+                *accepted_slot != slot,
+            );
+            #[cfg(test)]
             let identity_changed = previous.stable_id != next.stable_id;
-            let mut changes = scratch.masks[offset % CHUNK];
-            if previous.inline_start.to_bits() != next.inline_start.to_bits() {
-                changes |= 1 << 6;
-            }
-            if previous.block_start.to_bits() != next.block_start.to_bits() {
-                changes |= 1 << 7;
-            }
-            if *accepted_slot != slot {
-                changes |= SEMANTIC_PLACEMENT_SLOT_CHANGE;
-            }
-            if moved || identity_changed {
-                changes |= super::positioning::SEMANTIC_EFFECTS_CHANGE;
-            }
-            if identity_changed {
-                // The accepted slot belonged to another identity. Every declared input was
-                // compared above; a new revision and full semantic dirt also retire old
-                // plan bindings when the values happen to be bitwise equal.
-                changes = ALL_SEMANTIC_CHANGES;
-            }
             if changes == 0 {
                 if let Some(start) = changed_from.take() {
                     merge_changed_outputs(&mut self.dirty_mask_ranges, start..record + offset);
@@ -2291,7 +2279,7 @@ impl CodecGatherWorkspace {
         input: GatherInput<'_>,
         rows: &mut RowSource<'_>,
         source_start: usize,
-        binding_for_font: &mut impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
+        binding_for_font: &mut BindingLookup<'_, 'binding>,
         scratch: &mut [ColumnScratch],
     ) -> Result<(), GatherError> {
         let scratch = scratch.first_mut().ok_or(GatherError::AllocationFailed)?;
@@ -2402,7 +2390,7 @@ impl CodecGatherWorkspace {
         capability_set: CapabilitySetId,
         input: LayoutPlanInput<'_>,
         source_start: usize,
-        binding_for_font: &mut impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
+        binding_for_font: &mut BindingLookup<'_, 'binding>,
     ) -> Result<(), GatherError> {
         let mut source_chunk = [GatherSource::new(0, None); LEAF_CAPACITY];
         let mut source_chunk_len = 0;
@@ -2790,6 +2778,40 @@ impl CodecGatherWorkspace {
             field.clear();
         }
     }
+}
+
+/// The semantic change mask of a retained record and whether its bounds moved. `staged`
+/// holds the inputs whose lanes changed; pairing proved the storage topology equal, so
+/// the record itself can differ only in identity, origin and extent.
+fn retained_record_changes(
+    previous: &PlanGlyph,
+    next: &columns::RecordGeometry,
+    staged: u16,
+    slot_changed: bool,
+) -> (u16, bool) {
+    let inline_moved = previous.inline_start.to_bits() != next.inline_start.to_bits();
+    let block_moved = previous.block_start.to_bits() != next.block_start.to_bits();
+    let moved = inline_moved
+        || block_moved
+        || previous.semantic_id != next.semantic_id
+        || previous.inline_extent.to_bits() != next.inline_extent.to_bits()
+        || previous.block_extent.to_bits() != next.block_extent.to_bits();
+    if previous.stable_id != next.stable_id {
+        // The accepted slot belonged to another identity. Every declared input was
+        // compared; a new revision and full semantic dirt also retire old plan bindings
+        // when the values happen to be bitwise equal.
+        return (ALL_SEMANTIC_CHANGES, moved);
+    }
+    let mut changes = staged;
+    changes |= u16::from(inline_moved) << 6;
+    changes |= u16::from(block_moved) << 7;
+    if slot_changed {
+        changes |= SEMANTIC_PLACEMENT_SLOT_CHANGE;
+    }
+    if moved {
+        changes |= super::positioning::SEMANTIC_EFFECTS_CHANGE;
+    }
+    (changes, moved)
 }
 
 /// Changed records arrive in ascending order; touching runs share one interval.
