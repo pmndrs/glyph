@@ -352,3 +352,11 @@ Updated in place; the history of each change is in the log below.
   geometry (1a), Unicode (1d), preparation model (unit 3). Opus, fresh: Slug; pure TypeGPU path; font binding
   at load. Sonnet: stale-guidance deletion; salvage. Integration (merge, full oracle tier, tests, this log)
   stays with the coordinator and is kept small.
+- **Done: stale process guidance removed** (`038690bb1`). Removed from `publication-frontier.md`: "Roles and
+  bounded context" (model and effort tiers per step), "Execution and completion gates", and the checkbox list
+  of remaining acceptance gates. Removed from `decisions/retained-prepare-publish.md`: the per-wave
+  measurement and size requirements; a supersession line now points to the new preparation decision.
+  `session-handoff.md` had no such process section, so nothing was removed there. Candidates left alone
+  because process text is interleaved with measurements or design: several chronological passages in
+  `publication-frontier.md`, two in `retained-text-assignment.md`, and acceptance gates for unrelated
+  features. Full list: `stale-guidance-removed-2026-11-21.md`.
