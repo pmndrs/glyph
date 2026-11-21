@@ -67,9 +67,8 @@ warning too; cargo hides it for registry dependencies and shows it for a path de
 ## Checks
 
 ```sh
-# the fork against the crates.io release, in the configuration glyph uses, then upstream's
-cargo test --release --manifest-path vendor/harfrust-parity/Cargo.toml
-cargo test --release --manifest-path vendor/harfrust-parity/Cargo.toml --features fork-default-features
+# the fork against the crates.io release, as glyph consumes it and as upstream would ship it
+mise exec -- pnpm scripts run glyph:harfrust-fork-tests
 
 # every feature combination builds with no warning
 for features in libm libm,aat libm,rand std std,aat std,rand std,aat,rand,experimental_font_api; do
@@ -77,10 +76,11 @@ for features in libm libm,aat libm,rand std std,aat std,rand std,aat,rand,experi
 done
 ```
 
-`vendor/harfrust-parity` shapes its fixtures and the repository's shaping corpus through both
-crates and compares every glyph ID, cluster, flag, advance and offset. Its fixtures have no AAT
-tables, so it does not exercise `morx`, `kerx` or `trak` in either configuration; upstream's own
-test suite is not part of the published crate and is not vendored.
+The package test (`pnpm --filter @pmndrs/glyph test`) runs the first command. `vendor/harfrust-parity`
+shapes its fixtures and the repository's shaping corpus through both crates and compares every
+glyph ID, cluster, flag, advance and offset. Its fixtures have no AAT tables, so it does not
+exercise `morx`, `kerx` or `trak` in either configuration; upstream's own test suite is not part of
+the published crate and is not vendored.
 
 ## Cutting an upstream pull request
 
