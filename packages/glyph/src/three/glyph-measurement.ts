@@ -62,8 +62,8 @@ export function measureGlyphPlacements(
 }
 
 /**
- * Builds the same measurements as {@link measureGlyphPlacements} straight from inspection columns and drawn origins,
- * without the placement, word and line objects a caret or selection query needs.
+ * @internal Builds the same measurements as {@link measureGlyphPlacements} straight from inspection columns and
+ * drawn origins, without the placement, word and line objects a caret or selection query needs.
  */
 export function measureGlyphLayout(
   layout: GlyphLayoutColumns,
