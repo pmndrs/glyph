@@ -437,6 +437,13 @@ fn layout(
         .glyph_ids
         .len();
     let base_breaks = breaks(&mut session)?;
+    let (segments, spans) = {
+        let positioned = paragraph_state(&mut session)?.positioned.committed();
+        (
+            positioned.placement_segments().len(),
+            positioned.occurrence_spans().len(),
+        )
+    };
 
     // The widest step that keeps every break, so the row times a pure origin change.
     let mut same = None;
@@ -461,7 +468,7 @@ fn layout(
         .count()
         + base_breaks.len().abs_diff(moved_breaks.len());
     report.push_str(&format!(
-        "shape\tglyphs {glyphs}\tfragments {}\tmoved {moved_lines}\tsame-breaks {}\n",
+        "shape\tglyphs {glyphs}\tsegments {segments}\tspans {spans}\tfragments {}\tmoved {moved_lines}\tsame-breaks {}\n",
         base_breaks.len(),
         same.is_some()
     ));
