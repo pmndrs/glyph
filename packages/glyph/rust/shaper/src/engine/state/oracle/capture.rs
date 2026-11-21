@@ -72,7 +72,8 @@ pub fn capture(session: &Session, output: &StepOutput) -> Result<Capture, String
     views(&mut capture, output);
     gather(&mut capture, session);
     host_buffers(&mut capture, session, planner)?;
-    document(&mut capture, planner);
+    let explicit = session.document().is_some_and(|document| document.explicit);
+    document(&mut capture, planner, explicit);
     Ok(capture)
 }
 
@@ -86,7 +87,8 @@ pub fn paragraph_prefix(id: u32) -> String {
 }
 
 /// The root's paragraphs: which are live, and the order the renderer draws them in.
-fn document(capture: &mut Capture, planner: &PlannerState) {
+fn document(capture: &mut Capture, planner: &PlannerState, explicit: bool) {
+    capture.bools("doc.explicit", Value, [explicit]);
     capture.u32s(
         "doc.paragraph.id",
         Value,

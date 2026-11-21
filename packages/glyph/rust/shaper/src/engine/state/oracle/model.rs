@@ -264,6 +264,8 @@ pub struct Document {
     /// Whether paragraphs are created, ordered and removed by lifecycle records. A document
     /// that is not is the single implicit paragraph every case frozen before documents has.
     pub explicit: bool,
+    /// The highest paragraph id the document has ever held: a host never reuses an identity.
+    pub minted: u32,
 }
 
 impl Document {
@@ -278,6 +280,7 @@ impl Document {
                 model,
             }],
             explicit: false,
+            minted: PARAGRAPH_ID,
         }
     }
 
@@ -363,6 +366,19 @@ impl Limits {
                     .count(),
             ),
             inline_objects: count(models().map(|model| model.inline_objects.len()).sum()),
+        }
+    }
+
+    /// Bounds that hold for both documents of a step: the host's limits cover the texts that
+    /// are live while the request is written, the ones it is about to remove included.
+    pub fn covering(self, other: Self) -> Self {
+        Self {
+            paragraphs: self.paragraphs.max(other.paragraphs),
+            text: self.text.max(other.text),
+            longest: self.longest.max(other.longest),
+            regions: self.regions.max(other.regions),
+            exclusions: self.exclusions.max(other.exclusions),
+            inline_objects: self.inline_objects.max(other.inline_objects),
         }
     }
 }

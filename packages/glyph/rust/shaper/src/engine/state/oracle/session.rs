@@ -50,7 +50,7 @@ use super::{
     fonts::{FontLibrary, PreparedFont},
     model::{
         CODEC_HANDLE, Change, Document, FIRST_STACK_HANDLE, Lifecycle, Limits, Model, PARAGRAPH_ID,
-        ROOT_ID, RequestHeader, TextEdit, request,
+        Paragraph, ROOT_ID, RequestHeader, TextEdit, request,
     },
 };
 
@@ -137,6 +137,51 @@ struct Plan<'a> {
     ranked: Vec<(u32, u32, f64)>,
 }
 
+impl Plan<'_> {
+    /// Records where `paragraph` sorts if that is new or has changed.
+    fn place(&mut self, paragraph: &Paragraph, sent: Option<&Paragraph>) {
+        match sent {
+            None => self.created.push((paragraph.id, paragraph.order)),
+            Some(sent) if sent.order != paragraph.order => {
+                self.reordered.push((paragraph.id, paragraph.order));
+            }
+            Some(_) => {}
+        }
+        let ranked = sent.map_or((0, 0.0), |sent| (sent.scope, sent.rank));
+        if (paragraph.scope, paragraph.rank.to_bits()) != (ranked.0, ranked.1.to_bits()) {
+            self.ranked
+                .push((paragraph.id, paragraph.scope, paragraph.rank));
+        }
+    }
+
+    /// The order a new paragraph is created at by a preparation request. Its own order may
+    /// still belong to a paragraph the publication is about to move or remove, so it is
+    /// created at a temporary one counted down from the top, as the host does, and the
+    /// publication restates it.
+    fn preparation_order(&self, previous: Option<&Document>, id: u32, order: u32) -> u32 {
+        let held = previous.is_some_and(|previous| {
+            previous
+                .paragraphs
+                .iter()
+                .any(|sent| sent.order == order && !self.removed.contains(&sent.id))
+        });
+        if !held {
+            return order;
+        }
+        let index = self.created.iter().position(|(created, _)| *created == id);
+        u32::MAX - index.unwrap_or(0) as u32
+    }
+
+    /// New paragraphs that a preparation created away from their own order.
+    fn displaced(&self, previous: Option<&Document>) -> Vec<(u32, u32)> {
+        self.created
+            .iter()
+            .copied()
+            .filter(|(id, order)| self.preparation_order(previous, *id, *order) != *order)
+            .collect()
+    }
+}
+
 impl Session {
     /// `stacks` lists font keys per font stack; a style names a stack by index.
     pub fn new(library: &FontLibrary, stacks: &[&[&str]]) -> Result<Self, String> {
@@ -218,16 +263,24 @@ impl Session {
         }
         self.advance_geometry(previous.as_ref(), next);
         let plan = self.plan(previous.as_ref(), next, edits);
-        let limits = Limits::of(next);
+        // A single implicit paragraph declares the bounds of the text it is given, as it
+        // always has; a document declares bounds that also cover what the step removes.
+        let limits = match (&previous, next.explicit) {
+            (Some(previous), true) => Limits::of(next).covering(Limits::of(previous)),
+            _ => Limits::of(next),
+        };
         let mut output = StepOutput::default();
         // The engine holds `next` from the first request that carries it, whatever follows.
         let sent = (|| {
             if route.measure_first {
-                for (bytes, target) in self.preparations(&plan, limits, next, route.split) {
+                for (bytes, target) in
+                    self.preparations(&plan, limits, (previous.as_ref(), next), route.split)
+                {
                     output.measured_first.extend(self.measure(&bytes, target)?);
                 }
+                // A paragraph created at a temporary order is restated at its own here.
                 let lifecycle = Lifecycle {
-                    upserts: plan.reordered.clone(),
+                    upserts: [plan.reordered.clone(), plan.displaced(previous.as_ref())].concat(),
                     orders: plan.ranked.clone(),
                     ..Lifecycle::default()
                 };
@@ -316,19 +369,8 @@ impl Session {
                     geometry_revision: self.geometry_revisions.get(&id).copied().unwrap_or(1),
                 });
             }
-            if !next.explicit {
-                continue;
-            }
-            match sent {
-                None => plan.created.push((id, paragraph.order)),
-                Some(sent) if sent.order != paragraph.order => {
-                    plan.reordered.push((id, paragraph.order));
-                }
-                Some(_) => {}
-            }
-            let ranked = sent.map_or((0, 0.0), |sent| (sent.scope, sent.rank));
-            if (paragraph.scope, paragraph.rank.to_bits()) != (ranked.0, ranked.1.to_bits()) {
-                plan.ranked.push((id, paragraph.scope, paragraph.rank));
+            if next.explicit {
+                plan.place(paragraph, sent);
             }
         }
         if let (true, Some(previous)) = (next.explicit, previous) {
@@ -348,12 +390,18 @@ impl Session {
         &self,
         plan: &Plan<'_>,
         limits: Limits,
-        next: &Document,
+        (previous, next): (Option<&Document>, &Document),
         split: Split,
     ) -> Vec<(Vec<u8>, Option<u32>)> {
         let groups: Vec<(&[Change<'_>], Option<u32>)> = match (split, plan.changes.as_slice()) {
-            // Nothing changed: the host still reads, and reads the first paragraph.
-            (_, []) => alloc::vec![(&[][..], next.ids().first().copied())],
+            // Nothing changed: the host still reads, and reads the first paragraph. A root
+            // with no paragraph has nothing to read.
+            (_, []) => next
+                .ids()
+                .first()
+                .map(|first| (&[][..], Some(*first)))
+                .into_iter()
+                .collect(),
             (Split::Batch, changes) => alloc::vec![(changes, None)],
             (Split::Each, changes) => changes
                 .chunks(1)
@@ -381,8 +429,8 @@ impl Session {
                     upserts: plan
                         .created
                         .iter()
-                        .copied()
                         .filter(|(id, _)| changes.iter().any(|change| change.id == *id))
+                        .map(|(id, order)| (*id, plan.preparation_order(previous, *id, *order)))
                         .collect(),
                     orders: Vec::new(),
                 };

@@ -20,3 +20,54 @@ step rg-clipped-noop-borrowed-layout 03 a no-change publication with no views af
 seed rg-columns-3-cjk-full 4 6 public.glyph.font_handle | align 4 (already 4: nothing changes), published with no views; 510 glyphs against 10 cold
 seed rg-columns-2-drop-cap-latin-full 4 37 public.glyph.font_handle | regions set to what they already are, published with no views; 784 glyphs against 520 cold
 seed rg-boxes-latin-full 3 20 public.glyph.font_handle | align 1 (already 1), published with every view; 432 glyphs against 1041 cold
+
+# Found when cases with several paragraphs in one root were added.
+#
+# Scoped rank. Within a scope, members trade places in the paragraph order by rank. The retained
+# order keeps the places they traded into when the scope's membership or a member's rank or
+# scope changes later, where a cold layout of the same document gives each paragraph its own
+# place. The draw order of whole paragraphs differs (`doc.order.id`, and every gathered, drawn
+# and published lane that follows that order); each paragraph's own layout is equal.
+step doc-ranked-scope-member-removed 02 paragraphs 2 and 4 ranked in one scope, then paragraph 2 removed: paragraph 4 keeps the place it took from 2
+#
+# Emptied root. Removing every paragraph of a root publishes an empty plan: no draw structure,
+# no retirement. A renderer applying publications therefore still holds the removed paragraphs'
+# draws and buffers, and the engine's gather still holds their glyphs. The next request on the
+# emptied root is rejected with InvalidRequest, where a root that never had a paragraph accepts
+# the same request.
+step doc-emptied-and-refilled 01 every paragraph removed: gather, gpu.drawn and plan lanes still hold the removed paragraphs' 317 glyphs
+step doc-emptied-and-refilled 02 a request that changes nothing on the emptied root: rejected incrementally (prepare: InvalidRequest), accepted cold
+#
+# Seeded requests of the scoped-rank class (full tier, seeds 1-4, 60 requests), same format as
+# above.
+seed doc-four-long-batch 3 21 gather.glyph.transform_id | paragraph 1: add span 277..309 + delete 7 at 77 + flip case at 205 + insert Bidi (1 units) at 210 + rank paragraph 3 3/-2 + paragraph 4: delete 7 at 418 (reprod
+seed doc-four-long-batch 3 22 gather.glyph.transform_id | rank paragraph 6 0/1.5 (reproduces from a cold layout after step 22)
+seed doc-four-long-batch 3 26 gather.glyph.transform_id | add paragraph 7 + remove paragraph 4 (reproduces from a cold layout after step 26)
+seed doc-four-long-publish 1 15 view.published.kind | paragraph 4: insert Mark (1 units) at 0 + rank paragraph 5 0/0 (reproduces from a cold layout after step 15)
+seed doc-four-long-publish 1 39 gather.glyph.transform_id | add paragraph 9 (reproduces from a cold layout after step 37)
+seed doc-four-long-publish 3 59 gather.glyph.transform_id | rank paragraph 9 0/0 (reproduces from a cold layout after step 59)
+seed doc-four-short-batch 3 53 view.published.kind | paragraph 7: width 1 + paragraph 8: direction 0 + paragraph 9: delete 1 at 1 + paragraph 10: delete 1 at 0 + paragraph 11: max lines 0 + paragraph 12: delete 8 
+seed doc-four-short-batch 3 54 gather.glyph.transform_id | rank paragraph 11 0/1.5 (reproduces from a cold layout after step 54)
+seed doc-four-short-batch 4 26 view.published.text_start | paragraph 10: insert Mark (1 units) at 43 + order paragraph 9 at 99 + rank paragraph 1 0/1.5 (reproduces from a cold layout after step 26)
+seed doc-four-short-publish 3 33 gather.glyph.transform_id | paragraph 9: replace 3 at 17 + width 640 + order paragraph 7 at 699 (reproduces from a cold layout after step 17)
+seed doc-mount-labels-24-publish 1 42 view.published.kind | rank paragraph 20 3/4 + paragraph 7: align 2 + delete 4 at 43 + width 1 + replace 2 at 30 + paragraph 4: replace 2 at 242 (reproduces from a cold layout after s
+seed doc-mount-labels-24-publish 1 43 view.published.kind | paragraph 2: insert HardBreak (204 units) at 2 + paragraph 12: flip case at 35 + rank paragraph 10 3/4 (reproduces from a cold layout after step 43)
+seed doc-mount-labels-24-publish 1 48 view.published.kind | paragraph 7: insert HardBreak (217 units) at 0 + order paragraph 11 at 98 + paragraph 21: direction 0 (reproduces from a cold layout after step 48)
+seed doc-mount-labels-24-publish 1 57 gather.glyph.transform_id | remove paragraph 4 + remove paragraph 23 + rank paragraph 7 0/1.5 (reproduces from a cold layout after step 57)
+seed doc-mount-labels-24-publish 2 40 gather.glyph.transform_id | paragraph 20: delete 2 at 0 + paragraph 2: direction 0 + remove paragraph 19 (reproduces from a cold layout after step 40)
+seed doc-mount-labels-24-publish 3 35 gather.glyph.transform_id | remove paragraph 9 + remove paragraph 12 (reproduces from a cold layout after step 35)
+seed doc-mount-labels-24-publish 4 44 view.published.kind | paragraph 4: delete 6 at 0 + order paragraph 19 at 94 (reproduces from a cold layout after step 44)
+seed doc-mount-labels-24-publish 4 54 gather.glyph.transform_id | rank paragraph 24 3/-2 (reproduces from a cold layout after step 54)
+seed doc-mount-labels-64-publish 1 38 view.published.kind | rank paragraph 46 3/-2 + paragraph 23: insert Foreign (7 units) at 38 + paragraph 17: width 1 (reproduces from a cold layout after step 38)
+seed doc-mount-labels-64-publish 1 55 gather.glyph.transform_id | paragraph 21: replace 5 at 29 + width 243.75 + delete 1 at 32 + direction 1 + paragraph 30: add span 71..93 + order paragraph 46 at 98 (reproduces from a cold l
+seed doc-mount-labels-64-publish 1 57 view.published.kind | paragraph 1: insert Bidi (1 units) at 91 + paragraph 2: insert Foreign (8 units) at 6 + max lines 3 + insert Space (1 units) at 18 + paragraph 3: width 662.25 +
+seed doc-mount-labels-64-publish 2 48 gather.glyph.transform_id | paragraph 24: align 1 + replace 5 at 8 + paragraph 46: width 93.75 + order paragraph 35 at 94 (reproduces from a cold layout after step 48)
+seed doc-mount-labels-64-publish 3 22 view.published.kind | rank paragraph 25 3/4 + paragraph 1: width 127 + replace 1 at 20 + max lines 3 + paragraph 2: replace 6 at 0 + replace 3 at 7 + paragraph 3: insert HardBreak (1
+seed doc-mount-labels-64-publish 3 32 gather.glyph.transform_id | rank paragraph 58 3/-2 + paragraph 40: replace 3 at 22 + paragraph 19:  (reproduces from a cold layout after step 32)
+seed doc-mount-labels-64-publish 3 40 gather.glyph.transform_id | rank paragraph 19 0/1.5 + order paragraph 25 at 6700 (reproduces from a cold layout after step 40)
+seed doc-mount-seven-publish 2 35 gather.glyph.transform_id | paragraph 9: align 3 + metrics size 16 spacing 0.5 line 1.2 word 0 + paragraph 6: direction 2 + add span 37..45 + replace 3 at 75 + insert SpacedWord (9 units) 
+seed doc-mount-seven-publish 2 36 gather.glyph.transform_id | order paragraph 9 at 1100 + paragraph 6: align 1 + paragraph 1: insert Bidi (1 units) at 3 (reproduces from a cold layout after step 36)
+seed doc-mount-seven-publish 2 40 gather.glyph.transform_id | paragraph 10: metrics size 16 spacing 0 line 1.2 word 0 + remove paragraph 3 (reproduces from a cold layout after step 40)
+seed doc-mount-seven-publish 2 59 gather.glyph.transform_id | rank paragraph 1 0/1.5 (reproduces from a cold layout after step 59)
+seed doc-mount-seven-publish 3 50 gather.glyph.transform_id | paragraph 11: add span 0..10 + paragraph 12: insert HardBreak (1 units) at 1 + width 58.5 + paragraph 17: add span 173..189 + paragraph 18: width 562.2656 + ran
+seed doc-mount-two-publish 1 24 view.published.kind | remove paragraph 6 + paragraph 3: direction 2 + paragraph 4: metrics size 24 spacing 0 line 1.2 word 0 + delete 1 at 65 + replace 5 at 58 + max lines 12 + parag

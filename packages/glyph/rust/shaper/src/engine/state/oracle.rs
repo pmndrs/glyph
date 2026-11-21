@@ -14,6 +14,7 @@
 
 pub mod capture;
 pub mod corpus;
+mod documents;
 mod effects;
 pub mod fonts;
 pub mod fuzz;

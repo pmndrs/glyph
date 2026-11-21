@@ -47,8 +47,11 @@ pub struct Step {
     pub route: Option<Route>,
     /// The paragraph the fields above change; the first when unset.
     pub paragraph: Option<u32>,
-    /// The whole document after the step, for a step that creates, removes or reorders
-    /// paragraphs. The fields above then apply on top of it.
+    /// Text edits to other paragraphs in the same step.
+    pub more_edits: Vec<(u32, Vec<TextEdit>)>,
+    /// Which paragraphs exist after the step and where they sort, for a step that creates,
+    /// removes or reorders them. A paragraph that already exists keeps its content; the
+    /// fields above then apply on top.
     pub document: Option<Document>,
 }
 
@@ -197,6 +200,7 @@ pub fn cases() -> Vec<Case> {
     super::inline_objects::cases(&mut cases);
     super::regions::cases(&mut cases);
     super::regions::clipped_noop(&mut cases);
+    super::documents::cases(&mut cases);
     cases
 }
 

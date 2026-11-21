@@ -24,14 +24,14 @@ use crate::{
 };
 
 use super::{
-    capture::capture,
+    capture::{capture, paragraph_prefix},
     corpus::{self, FRAGMENTS, Script},
     fonts::FontLibrary,
     lanes::{Capture, LaneClass, LaneDifference, cache_differences, differences},
     matrix::{Case, Extras},
     model::{
-        Decoration, Document, InlineObject, Model, PARAGRAPH_ID, RegionBox, Regions, Span,
-        SpanStyle, TextEdit,
+        Decoration, Document, InlineObject, Model, PARAGRAPH_ID, Paragraph, RegionBox, Regions,
+        Span, SpanStyle, TextEdit,
     },
     rng::Rng,
     session::{ALL_VIEWS, Route, Session, Split},
@@ -102,6 +102,9 @@ struct Planner<'a> {
 /// after the previous step. With no capture (a sequence planned with no engine in the loop)
 /// offsets are uniform.
 fn plan(case: &Case, document: &Document, last: Option<&Capture>, rng: &mut Rng) -> Planned {
+    if document.explicit {
+        return plan_document(case, document, last, rng);
+    }
     let model = document
         .paragraph(PARAGRAPH_ID)
         .map(|paragraph| paragraph.model.clone())
@@ -113,6 +116,137 @@ fn plan(case: &Case, document: &Document, last: Option<&Capture>, rng: &mut Rng)
         next: Document::single(next),
         edits: alloc::vec![(PARAGRAPH_ID, edits)],
         route,
+    }
+}
+
+/// Plans one step against a document of several paragraphs: edits to one or to all of them,
+/// a paragraph added, removed or reordered, and the way the step is split between reads, the
+/// batch preparation and the publication.
+fn plan_document(
+    case: &Case,
+    document: &Document,
+    last: Option<&Capture>,
+    rng: &mut Rng,
+) -> Planned {
+    let mut planner = DocumentPlanner {
+        case,
+        last,
+        next: document.clone(),
+        edits: Vec::new(),
+        labels: Vec::new(),
+    };
+    for _ in 0..1 + rng.below(3) {
+        planner.change(rng);
+    }
+    let route = Route {
+        view_mask: *rng
+            .pick(&[ALL_VIEWS, SEMANTIC_VIEW_MEASUREMENT, 0])
+            .unwrap_or(&ALL_VIEWS),
+        measure_first: rng.chance(2, 3),
+        measure_after: rng.chance(1, 2),
+        split: [Split::Batch, Split::Each, Split::OneThenBatch][rng.below(3)],
+    };
+    Planned {
+        label: planner.labels.join(" + "),
+        next: planner.next,
+        edits: planner.edits,
+        route,
+    }
+}
+
+struct DocumentPlanner<'a> {
+    case: &'a Case,
+    last: Option<&'a Capture>,
+    next: Document,
+    edits: Vec<(u32, Vec<TextEdit>)>,
+    labels: Vec<String>,
+}
+
+impl DocumentPlanner<'_> {
+    fn change(&mut self, rng: &mut Rng) {
+        let ids = self.next.ids();
+        let pick = ids.get(rng.below(ids.len())).copied();
+        match (rng.below(10), pick) {
+            (0..=4, Some(id)) => self.edit(id, rng),
+            (5, _) if ids.len() < 6 => self.add(rng),
+            (6, Some(id)) if ids.len() > 1 => {
+                self.next.paragraphs.retain(|paragraph| paragraph.id != id);
+                self.edits.retain(|(edited, _)| *edited != id);
+                self.labels.push(format!("remove paragraph {id}"));
+            }
+            (7, Some(id)) => self.reorder(id, rng),
+            (8, Some(id)) => {
+                let (scope, rank) = [(0, 0.0), (0, 1.5), (3, -2.0), (3, 4.0)][rng.below(4)];
+                if let Some(paragraph) = self.next.paragraph_mut(id) {
+                    paragraph.scope = scope;
+                    paragraph.rank = rank;
+                }
+                self.labels
+                    .push(format!("rank paragraph {id} {scope}/{rank}"));
+            }
+            // Every paragraph dirty in one step: what the batch preparation exists for.
+            _ => {
+                for id in ids {
+                    self.edit(id, rng);
+                }
+            }
+        }
+    }
+
+    /// Changes one paragraph the way the single-paragraph planner does.
+    fn edit(&mut self, id: u32, rng: &mut Rng) {
+        // Offsets read from the capture are stale once this step has edited the paragraph.
+        let fresh = !self.edits.iter().any(|(edited, _)| *edited == id);
+        let Some(paragraph) = self.next.paragraph_mut(id) else {
+            return;
+        };
+        let hints = match self.last {
+            Some(last) if fresh => Hints::new(last, &paragraph_prefix(id), &paragraph.model.text),
+            _ => Hints::default(),
+        };
+        let (label, model, more, _) = plan_paragraph(self.case, &paragraph.model, &hints, rng);
+        paragraph.model = model;
+        self.labels.push(format!("paragraph {id}: {label}"));
+        match self.edits.iter_mut().find(|(edited, _)| *edited == id) {
+            Some((_, list)) => list.extend(more),
+            None => self.edits.push((id, more)),
+        }
+    }
+
+    fn add(&mut self, rng: &mut Rng) {
+        let id = self.next.minted + 1;
+        let which = rng.below(self.case.stacks.len().min(3));
+        let script = [Script::Latin, Script::Arabic, Script::Cjk][which];
+        let text = corpus::paragraph(script, rng.next_u64(), 20 + rng.below(160));
+        let last = self.next.paragraphs.iter().map(|p| p.order).max();
+        let layout = self
+            .next
+            .paragraphs
+            .first()
+            .map(|first| first.model.layout)
+            .unwrap_or_default();
+        self.next.paragraphs.push(Paragraph {
+            order: last.unwrap_or(0) + 100,
+            ..super::documents::paragraph(id, text, which as u32, layout)
+        });
+        self.next.minted = id;
+        self.labels.push(format!("add paragraph {id}"));
+    }
+
+    /// Moves a paragraph to an order no live paragraph holds: before the first or past the
+    /// last.
+    fn reorder(&mut self, id: u32, rng: &mut Rng) {
+        let orders = || self.next.paragraphs.iter().map(|paragraph| paragraph.order);
+        let (low, high) = (orders().min().unwrap_or(1), orders().max().unwrap_or(0));
+        let order = if rng.chance(1, 2) && low > 0 {
+            low - 1
+        } else {
+            high + 100
+        };
+        if let Some(paragraph) = self.next.paragraph_mut(id) {
+            paragraph.order = order;
+        }
+        self.labels.push(format!("order paragraph {id} at {order}"));
     }
 }
 
@@ -673,28 +807,54 @@ impl Failure {
 
 /// Lanes a host can read back; the only ones compared when the two sides chose different
 /// owners, which keep different internals by design.
-const PUBLIC_PREFIXES: [&str; 8] = [
-    "public.", "view.", "gather.", "gpu.", "text.", "unicode.", "bidi.", "style.",
+const PUBLIC_PREFIXES: [&str; 10] = [
+    "public.", "view.", "gather.", "gpu.", "text.", "unicode.", "bidi.", "style.", "plan.", "doc.",
 ];
 
+/// A lane's name without the paragraph it belongs to.
+fn bare(lane: &str) -> &str {
+    match lane.split_once(':') {
+        Some((paragraph, rest)) if paragraph.starts_with('p') => rest,
+        _ => lane,
+    }
+}
+
 /// The lanes that must agree between an edit history and a cold layout, as differences, and
-/// whether both sides used the same owner.
+/// whether every paragraph used the same owner on both sides.
 pub fn incremental_differences(warm: &Capture, cold: &Capture) -> (Vec<LaneDifference>, bool) {
-    let same_owner = warm.lane("owner.inline") == cold.lane("owner.inline");
+    let same_owner = warm
+        .lanes
+        .iter()
+        .filter(|lane| bare(&lane.name) == "owner.inline")
+        .all(|lane| cold.lane(&lane.name) == Some(lane));
+    let rows = |capture: &Capture, lane: &str| capture.lane(lane).map_or(0, |lane| lane.rows());
     // A publication returns semantic views only for what it prepared. A request that changes
     // nothing returns none, and the measurement lanes carry that comparison instead.
-    let unprepared = warm
-        .lane("view.published.kind")
-        .is_none_or(|lane| lane.rows() == 0);
+    let unprepared = rows(warm, "view.published.kind") == 0;
+    // With several paragraphs an edit history prepares the changed ones and a cold layout
+    // prepares all of them, so the records a preparation or publication returns cover
+    // different paragraphs. They are compared when they cover the same number of records;
+    // the read of every paragraph after the step is compared always.
+    let several = warm
+        .lane("doc.explicit")
+        .is_some_and(|lane| lane.bytes == [1]);
+    let partial = |view: &str| {
+        let kind = format!("{view}kind");
+        several && rows(warm, &kind) != rows(cold, &kind)
+    };
+    let skipped: Vec<&str> = ["view.published.", "view.measured_first."]
+        .into_iter()
+        .filter(|view| partial(view) || (unprepared && *view == "view.published."))
+        .collect();
     let mut found: Vec<LaneDifference> = differences(warm, cold, LaneClass::history_independent)
         .into_iter()
         .filter(|difference| {
             same_owner
                 || PUBLIC_PREFIXES
                     .iter()
-                    .any(|prefix| difference.lane.starts_with(prefix))
+                    .any(|prefix| bare(&difference.lane).starts_with(prefix))
         })
-        .filter(|difference| !(unprepared && difference.lane.starts_with("view.published.")))
+        .filter(|difference| !skipped.iter().any(|view| difference.lane.starts_with(view)))
         .collect();
     found.extend(cache_differences(warm, cold));
     (found, same_owner)
@@ -861,7 +1021,19 @@ impl Run<'_> {
                 Ok(())
             }
             Outcome::Rejected(reason) => {
-                push_unique(&mut self.report.rejections, reason);
+                // The first request rejected for each reason is kept with what it did.
+                if !self
+                    .report
+                    .rejections
+                    .iter()
+                    .any(|known| known.starts_with(&reason))
+                {
+                    let route = planned.route;
+                    self.report.rejections.push(format!(
+                        "{reason} (step {step}: {}; {route:?})",
+                        planned.label
+                    ));
+                }
                 self.report.rejected += 1;
                 // A rejected request leaves the root unusable; a host replays its accepted
                 // values, which is a cold layout of the model before the step.

@@ -15,7 +15,7 @@ use super::{
     fuzz::{self, Planned, incremental_differences, remap_spans},
     lanes::{Capture, LaneClass, LaneDifference, digest, golden_differences, golden_line_lane},
     matrix::{self, Case, Step, Tier},
-    model::{Document, PARAGRAPH_ID},
+    model::{Document, Model, PARAGRAPH_ID, TextEdit},
     session::{Route, Session},
     tier::{self, Files},
 };
@@ -35,32 +35,55 @@ pub struct Reference {
 }
 
 fn planned_from_step(document: &Document, step: &Step) -> Planned {
+    // A step's document says which paragraphs exist and where they sort. A paragraph that
+    // already exists keeps the content earlier steps gave it.
     let mut next = step.document.clone().unwrap_or_else(|| document.clone());
+    for paragraph in &mut next.paragraphs {
+        if let Some(current) = document.paragraph(paragraph.id) {
+            paragraph.model.clone_from(&current.model);
+        }
+    }
     let id = step.paragraph.unwrap_or(PARAGRAPH_ID);
+    let mut edits = Vec::new();
+    let own = (id, step.edits.clone());
+    for (edited, list) in core::iter::once(&own).chain(&step.more_edits) {
+        let Some(paragraph) = next.paragraph_mut(*edited) else {
+            continue;
+        };
+        apply_edits(&mut paragraph.model, list);
+        edits.push((*edited, list.clone()));
+    }
     if let Some(paragraph) = next.paragraph_mut(id) {
-        let model = &mut paragraph.model;
-        for edit in &step.edits {
-            edit.apply(&mut model.text);
-            remap_spans(&mut model.spans, edit, &model.text);
-        }
-        if let Some(layout) = step.layout {
-            model.layout = layout;
-        }
-        if let Some(root) = step.root {
-            model.root = root;
-        }
-        if let Some(spans) = &step.spans {
-            model.spans.clone_from(spans);
-        }
-        if let Some(objects) = &step.inline_objects {
-            model.inline_objects.clone_from(objects);
-        }
+        apply_fields(&mut paragraph.model, step);
     }
     Planned {
         label: step.label.clone(),
         next,
-        edits: alloc::vec![(id, step.edits.clone())],
+        edits,
         route: step.route.unwrap_or(Route::FULL),
+    }
+}
+
+fn apply_edits(model: &mut Model, edits: &[TextEdit]) {
+    for edit in edits {
+        edit.apply(&mut model.text);
+        remap_spans(&mut model.spans, edit, &model.text);
+    }
+}
+
+/// The parts of a step that replace a paragraph's input outright.
+fn apply_fields(model: &mut Model, step: &Step) {
+    if let Some(layout) = step.layout {
+        model.layout = layout;
+    }
+    if let Some(root) = step.root {
+        model.root = root;
+    }
+    if let Some(spans) = &step.spans {
+        model.spans.clone_from(spans);
+    }
+    if let Some(objects) = &step.inline_objects {
+        model.inline_objects.clone_from(objects);
     }
 }
 
