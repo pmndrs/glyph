@@ -79,6 +79,8 @@ async function render(): Promise<TargetV1MtsdfResult> {
       camera,
       target,
       text,
+      // The tolerance the distance-material comparison below already grants separately compiled MSDF graphs.
+      { channelDelta: 1, sparseChannels: text.measure().glyphCount * 3 },
     );
     const firstDraw = v1GlyphDraw(rootDraws(scene));
     if (firstDraw === undefined) throw new Error('target-v1 MTSDF created no draw');
