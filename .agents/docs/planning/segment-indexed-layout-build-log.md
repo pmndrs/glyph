@@ -65,8 +65,8 @@ Updated in place; the history of each change is in the log below.
 | Metric changes: keep island shapes, dense rescale                                                                                                                                                                             | held     | —                                                   | Needs 1a                                                                                           |
 | Unit 3 stages 0–2: guards, batch `prepare()`, the setter flip, paint-only path, minimal mutation, change class                                                                                                                | merged   | tag `sil-green-13`                                  | 200-label mount 401 → 2 engine calls; setters make none                                            |
 | Unit 3 stage 4 (ship gate): paragraph-local failure, trap recovery, `maxTextUnits`, failed-frame retry; linear engine mount; per-paragraph measurement interest                                                               | merged   | tag `sil-green-17`                                  | No memory cap leaves a root dead; 4,000-label frame 3.4 s → 109 ms                                 |
-| Unit 3 stages 5–6 (ship gate): publication hold, nested renders, on-demand loops, `onLayout`, root `onError`, error boundary; remove `replacedSurrogates`; API docs and migration note                                        | building | `experiments/sil-prepare`                           |                                                                                                    |
-| Unit 3 leftovers: publication failures still discard the root; failure inventory; interleaving fuzz                                                                                                                           | held     | —                                                   | After stages 5–6                                                                                   |
+| Unit 3 stages 5–6 (ship gate): publication hold, nested renders, on-demand loops, `onLayout`, error surfaces, exact first frame without `attach`, failure inventory and fuzz, API docs and migration note                     | merged   | tag `sil-green-21`                                  | First frame exact in plain Three and in R3F in a real browser canvas                               |
+| Engine still discards the root when a prepared publication cannot be delivered (the host now withholds the largest paragraph so siblings commit)                                                                              | held     | —                                                   | Needs a staged-lifecycle rollback in the gather and plan; after ship                               |
 | Unit 4: publication (retained topology, `PATCH_COPY`, multi-range uploads)                                                                                                                                                    | held     | —                                                   | After unit 3                                                                                       |
 | Many-label updates and paint-only changes                                                                                                                                                                                     | held     | —                                                   | Needs its profile and unit 3                                                                       |
 | Editing support (ship gate): offset map, carets, affinity, ligature carets, IME ranges, edit session                                                                                                                          | held     | —                                                   | Waits on the owner's API review and the positioning merge                                          |
@@ -738,3 +738,25 @@ Updated in place; the history of each change is in the log below.
   with the positions preset) and for react-three-fiber in a real browser canvas (callback before traversal;
   frame 1 carries the callback position; on-demand loop renders only after a setter). Cost: one extra matrix
   pass in a frame where a callback fired late.
+- **Merged: preparation lane, final ship-gate unit** (tag `sil-green-21`, pushed). Proof on the lane's branch
+  at the same code: oracle full tier native and wasm (588 equal, 0 unlisted divergences), 1,303 Node tests,
+  conformance across four integrations, full repository check exit 0 including the new R3F browser probe,
+  PixiJS 3D package check and parity suite; full native oracle tier re-run on the integration tree after the
+  merge. Contents: exact first frame without `root.attach(scene)`; a publication that does not fit no longer
+  fails its siblings (the planner withholds the largest paragraph from the rebuilt root; the victim reports
+  the error and draws nothing until its input changes); a scripted failure inventory (9 scripted failures
+  asserting who is told, what state remains and how it recovers; 14-row table in `failure-inventory.md`); a
+  seeded interleaving fuzz (64 seeds × 200 steps by default; 400 × 400 once) asserting no engine call returns
+  an error, no read or frame throws, the engine is never replaced, and final glyphs equal a cold text;
+  `api-summary-for-review.md` updated to what was built.
+- **Found by the fuzz:** after a font is disposed while a text still names it, the next setter threw a plain
+  error attributed to whatever property was written; it now reports a `GlyphInputError` at `['font']`.
+- **Not done, held until after ship:** the Rust engine still discards the root when a prepared publication
+  cannot be delivered, so the recovery frame lays the other paragraphs out again; a discard-free path needs a
+  staged-lifecycle rollback through the gather and plan. The failing frame reports the error on every text of
+  the root, not only the one later withheld. GPU device loss is not detected.
+- **Building: editing exports.** The five query exports and ABI version 2 are committed on the editing
+  branch; `replace` and the host methods are written, not yet committed. Shaper wasm 606 → 651 kB gzip with
+  the exports (+23 kB word and sentence segmentation, +22 kB queries); size rides until after ship. Integrator
+  decision: `replace` carries its explicit range into the engine instead of relying on the whole-string diff,
+  because the diff can attribute an ambiguous insert to a different position and so a different style span.

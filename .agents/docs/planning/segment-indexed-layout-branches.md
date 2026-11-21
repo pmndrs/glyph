@@ -45,15 +45,15 @@ Based on `8176a24e0` (tip of `experiments/held-rope-ascii-anchor-wip`).
 | `sil-green-18`      | PixiJS 3D renderer package `@pmndrs/glyph-pixi3d` on the official release, with a parity suite                                                                                                                                | `experiments/sil-pixi3d` (deleted)                                                     |
 | `sil-green-19`      | Oracle coverage: decorated text and effects, several paragraphs per root, columns and regions, inline objects                                                                                                                 | `experiments/sil-oracle` (kept: two divergence fixes are next)                         |
 | `sil-green-20`      | Ranked paragraph order fix; frame integration, `onLayout`, error surfaces, migration note (unit 3 stages 5–6)                                                                                                                 | `experiments/sil-oracle` (deleted), `experiments/sil-prepare` (kept)                   |
+| `sil-green-21`      | Exact first frame without `attach`; a publication that does not fit no longer fails siblings; failure inventory and interleaving fuzz                                                                                         | `experiments/sil-prepare` (deleted)                                                    |
 | after `sil-green-4` | Stale process guidance removed; plan, decisions, build log and this map                                                                                                                                                       | integration branch                                                                     |
 
 ## Open lane branches
 
-| Branch                          | Worktree           | Feature in progress                                                                                                          | On `origin` | State    |
-| ------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ----------- | -------- |
-| `experiments/sil-prepare`       | `glyph-wt-prepare` | Ship gate: exact first frame without `root.attach`; publication failures not discarding the root; failure inventory and fuzz | yes         | building |
-| `experiments/sil-editing`       | `glyph-wt-editing` | Ship gate: editing support — engine queries done; now wasm exports, `replace`, host methods on Three and TypeGPU             | yes         | building |
-| `experiments/sil-layout-faults` | `glyph-wt-faults`  | Ship gate: four cold-layout faults (ellipsis glyph placement, RTL ellipsis side, RTL exclusion slot order, empty-text line)  | no          | building |
+| Branch                          | Worktree           | Feature in progress                                                                                                         | On `origin` | State    |
+| ------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------- | ----------- | -------- |
+| `experiments/sil-editing`       | `glyph-wt-editing` | Ship gate: editing support — engine queries done; now wasm exports, `replace`, host methods on Three and TypeGPU            | yes         | building |
+| `experiments/sil-layout-faults` | `glyph-wt-faults`  | Ship gate: four cold-layout faults (ellipsis glyph placement, RTL ellipsis side, RTL exclusion slot order, empty-text line) | no          | building |
 
 ## Not on any branch yet
 
