@@ -23,4 +23,6 @@ pub mod model;
 pub mod rng;
 pub mod run;
 pub mod session;
+#[cfg(feature = "stage-bench")]
+pub mod stage_bench;
 pub mod tier;
