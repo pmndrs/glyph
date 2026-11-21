@@ -1,4 +1,4 @@
-use alloc::{string::String, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::line_break::{LineBreak, LineBreakAnalysis};
@@ -13,6 +13,16 @@ pub(crate) mod kernel;
 #[path = "unicode_resync.rs"]
 pub mod resync;
 
+#[path = "unicode_boundaries.rs"]
+pub mod boundaries;
+
+#[path = "unicode_trie.rs"]
+pub(crate) mod trie;
+
+pub use boundaries::{
+    BoundaryLanes, BreakSource, GRAPHEME_BOUNDARY, SENTENCE_BOUNDARY, Segmentation,
+    Uax29BreakSource, WORD_BOUNDARY,
+};
 pub use generated::UNICODE_VERSION;
 pub use kernel::KernelCoverage;
 
@@ -97,6 +107,9 @@ pub struct UnicodeAnalysis {
     deferred_tags: Vec<u32>,
     previous_script: u32,
     previous_script_id: u8,
+    /// Grapheme, word and sentence bits for editing, computed on first query, never by `analyze`.
+    /// Boxed on first use, so an analysis nobody queries carries one null pointer.
+    boundaries: Option<Box<BoundaryLanes>>,
     #[cfg(test)]
     analysis_count: usize,
 }
@@ -165,6 +178,49 @@ impl UnicodeAnalysis {
         self.resolve_neutral_scripts();
         self.itemize_scripts()?;
         Ok(())
+    }
+
+    /// Analyses `text`, the previous text with units `[start, start + removed)` replaced by
+    /// `inserted` units, and keeps the boundary lanes already computed outside the edit: they
+    /// recompute only the window around it, and only when next queried.
+    pub fn analyze_edit(
+        &mut self,
+        text: &[u16],
+        start: usize,
+        removed: usize,
+        inserted: usize,
+    ) -> Result<(), UnicodeError> {
+        let mut lanes = self.boundaries.take();
+        let analysed = self.analyze(text);
+        if let Some(lanes) = &mut lanes {
+            lanes.splice(start, removed, inserted);
+            if analysed.is_err() {
+                lanes.invalidate();
+            }
+        }
+        self.boundaries = lanes;
+        analysed
+    }
+
+    /// The boundary lane of `text`, which must be the text of the last `analyze`: one byte per
+    /// UTF-16 offset, `text.len() + 1` entries, with every kind in `kinds` (`GRAPHEME_BOUNDARY`,
+    /// `WORD_BOUNDARY`, `SENTENCE_BOUNDARY`) current. Word and sentence bits are computed here on
+    /// first query, and after an `analyze_edit` only around the edit.
+    pub fn boundary_lane(&mut self, text: &[u16], kinds: u8) -> Result<&[u8], UnicodeError> {
+        debug_assert_eq!(
+            self.grapheme_boundaries.last().copied(),
+            Some(text.len() as u32),
+            "boundary_lane asks about a text other than the analysed one"
+        );
+        self.boundaries
+            .get_or_insert_default()
+            .ensure(text, &self.grapheme_boundaries, kinds)
+    }
+
+    /// The paragraph's boundary lanes: to install another `BreakSource`, or to move computed lanes
+    /// to the analysis of the edited text before `BoundaryLanes::splice`.
+    pub fn boundary_lanes_mut(&mut self) -> &mut BoundaryLanes {
+        self.boundaries.get_or_insert_default()
     }
 
     /// How much of the last `analyze` the kernel decided, for measurement.
@@ -264,6 +320,9 @@ impl UnicodeAnalysis {
         self.script_items.clear();
         self.deferred_scripts.clear();
         self.deferred_tags.clear();
+        if let Some(lanes) = &mut self.boundaries {
+            lanes.invalidate();
+        }
     }
 
     fn kernel_ascii_facts(&self) -> PrintableAsciiFacts {
@@ -616,46 +675,42 @@ fn same_script_run(scripts: &[u8], start: usize, script: u8) -> usize {
 }
 
 pub fn script(code_point: u32) -> Option<u32> {
-    // Two-stage trie: two reads instead of a binary probe per call. `script` runs per character on
-    // every analysis, and the tables are deliberately larger raw for it. See D-341.
+    // A trie: three reads instead of a binary probe per call. `script` runs per character in the
+    // scalar analysis. See D-341.
+    script_index(code_point).map(|index| generated::SCRIPT_VALUES[index])
+}
+
+fn script_index(code_point: u32) -> Option<usize> {
     if code_point > 0x10_ffff {
         return None;
     }
-    const SHIFT: usize = generated::SCRIPT_BLOCK_SHIFT;
-    let code_point = code_point as usize;
-    let block = usize::from(generated::SCRIPT_STAGE1[code_point >> SHIFT]);
-    let slot = (block << SHIFT) | (code_point & ((1 << SHIFT) - 1));
-    Some(generated::SCRIPT_VALUES[usize::from(generated::SCRIPT_STAGE2[slot])])
+    Some(usize::from(trie::lookup(
+        generated::SCRIPT_ROOT,
+        generated::SCRIPT_MIDDLE,
+        generated::SCRIPT_LEAVES,
+        generated::SCRIPT_LEAF_SHIFT,
+        generated::SCRIPT_MIDDLE_SHIFT,
+        code_point,
+    )))
 }
 
 pub fn script_extensions(code_point: u32) -> Option<&'static [u32]> {
-    let set = usize::try_from(lookup_partition(
-        generated::SCRIPT_EXTENSION_END_VALUES,
+    let index = script_index(code_point)?;
+    let set = usize::from(trie::lookup(
+        generated::SCRIPT_EXTENSION_ROOT,
+        generated::SCRIPT_EXTENSION_MIDDLE,
+        generated::SCRIPT_EXTENSION_LEAVES,
+        generated::SCRIPT_EXTENSION_LEAF_SHIFT,
+        generated::SCRIPT_EXTENSION_MIDDLE_SHIFT,
         code_point,
-    )?)
-    .ok()?;
-    let start = usize::try_from(*generated::SCRIPT_EXTENSION_OFFSETS.get(set)?).ok()?;
-    let end = usize::try_from(*generated::SCRIPT_EXTENSION_OFFSETS.get(set + 1)?).ok()?;
-    generated::SCRIPT_EXTENSION_TAGS.get(start..end)
-}
-
-fn lookup_partition(end_values: &[u32], code_point: u32) -> Option<u32> {
-    if code_point > 0x10_ffff {
-        return None;
+    ));
+    if set == 0 {
+        // The extensions are the code point's own script alone.
+        return Some(core::slice::from_ref(&generated::SCRIPT_VALUES[index]));
     }
-    let mut low = 0;
-    let mut high = end_values.len() / 2;
-    while low < high {
-        let middle = low + (high - low) / 2;
-        let offset = middle * 2;
-        let end = end_values[offset];
-        if code_point >= end {
-            low = middle + 1;
-        } else {
-            high = middle;
-        }
-    }
-    end_values.get(low.checked_mul(2)?.checked_add(1)?).copied()
+    let start = usize::from(generated::SCRIPT_EXTENSION_OFFSETS[set - 1]);
+    let end = usize::from(generated::SCRIPT_EXTENSION_OFFSETS[set]);
+    Some(&generated::SCRIPT_EXTENSION_TAGS[start..end])
 }
 
 fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), UnicodeError> {

@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 
-import { emitCodePointTrie, planeFromRanges } from './support/code-point-trie.mjs';
+import { emitThreeStageTrie, planeFromRanges } from './support/code-point-trie.mjs';
 
 const require = createRequire(import.meta.url);
 const unicode = require('@unicode/unicode-17.0.0');
@@ -73,21 +73,50 @@ for (let index = 0; index < positions.length; index += 1) {
 }
 assertCoverage(extensionRanges, 'Script_Extensions');
 
+// Script_Extensions as a sparse trie beside the script trie: 0 where the extensions are exactly the
+// code point's own script, otherwise one plus the index of a set that differs. Most code points
+// are 0, so the trie is small and the lookup needs no search.
+const extensionPlane = new Uint8Array(0x11_0000);
+const otherSets = [];
+const otherSetIndexes = new Map();
+for (const [begin, end, setIndex] of extensionRanges) {
+  const values = extensionSets[setIndex];
+  for (let codePoint = begin; codePoint < end; codePoint += 1) {
+    if (values.length === 1 && values[0] === scriptPlane[codePoint]) continue;
+    const key = values.join(',');
+    let other = otherSetIndexes.get(key);
+    if (other === undefined) {
+      other = otherSets.length + 1;
+      otherSetIndexes.set(key, other);
+      otherSets.push(values);
+    }
+    extensionPlane[codePoint] = other;
+  }
+}
 const extensionOffsets = [0];
 const extensionTags = [];
-for (const values of extensionSets) {
+for (const values of otherSets) {
   extensionTags.push(...values);
   extensionOffsets.push(extensionTags.length);
 }
 
-// Two-stage trie rather than sorted ranges: `script` is called per character on every analysis,
-// and this is deliberately larger raw and smaller over the wire. See D-341.
-const scriptTrie = emitCodePointTrie({
+// Three-stage tries rather than sorted ranges: `script` and `script_extensions` are called per
+// character in the scalar analysis. Three stages share the selector blocks of the mostly empty
+// supplementary planes, which two stages repeat. See D-341.
+const scriptTrie = emitThreeStageTrie({
   prefix: 'SCRIPT',
   valueAt: (codePoint) => scriptPlane[codePoint],
-  shift: 8,
+  leafShift: 6,
+  middleShift: 5,
   valueType: 'u32',
   describe: 'ISO 15924 script tags packed as big-endian u32.',
+});
+const extensionTrie = emitThreeStageTrie({
+  prefix: 'SCRIPT_EXTENSION',
+  valueAt: (codePoint) => extensionPlane[codePoint],
+  leafShift: 6,
+  middleShift: 6,
+  indexed: true,
 });
 
 function rustSource() {
@@ -101,8 +130,11 @@ pub const INHERITED_SCRIPT: u32 = ${tagToUint32('Zinh')};
 pub const UNKNOWN_SCRIPT: u32 = ${tagToUint32('Zzzz')};
 
 ${scriptTrie}
-pub static SCRIPT_EXTENSION_END_VALUES: &[u32] = &${rustNumbers(compactPartition(extensionRanges))};
-pub static SCRIPT_EXTENSION_OFFSETS: &[u32] = &${rustNumbers(extensionOffsets)};
+
+/// Script_Extensions: a \`SCRIPT_EXTENSION\` leaf of 0 means the code point's own script alone;
+/// \`n\` means \`SCRIPT_EXTENSION_TAGS[SCRIPT_EXTENSION_OFFSETS[n - 1]..SCRIPT_EXTENSION_OFFSETS[n]]\`.
+${extensionTrie}
+pub static SCRIPT_EXTENSION_OFFSETS: &[u16] = &${rustNumbers(extensionOffsets)};
 pub static SCRIPT_EXTENSION_TAGS: &[u32] = &${rustNumbers(extensionTags)};
 `;
 }
@@ -176,8 +208,4 @@ function rustNumbers(values) {
     rows.push(`    ${values.slice(index, index + 24).join(', ')}`);
   }
   return `[\n${rows.join(',\n')}\n]`;
-}
-
-function compactPartition(ranges) {
-  return ranges.flatMap(([, end, value]) => [end, value]);
 }
