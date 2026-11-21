@@ -4,7 +4,9 @@ use core::{
     num::NonZeroU32,
 };
 
-use crate::{FontGlyphExtents, FontMetrics, unicode::UnicodeAnalysis};
+use crate::{FontGlyphExtents, FontInkTable, FontMetrics, unicode::UnicodeAnalysis};
+
+mod build;
 
 use super::{
     EngineError, FrameFault,
@@ -43,6 +45,19 @@ use super::shaping_state::GLYPH_FLAG_UNSAFE_TO_BREAK as GLYPH_UNSAFE_TO_BREAK;
 pub(crate) struct IntrinsicWidths {
     pub min_content_width: f64,
     pub max_content_width: f64,
+}
+
+/// Times one cluster-stage entry point for the stage bench; nothing without the feature.
+#[cfg(feature = "stage-bench")]
+use super::oracle::stage_bench::ClusterStageClock as StageClock;
+#[cfg(not(feature = "stage-bench"))]
+struct StageClock;
+#[cfg(not(feature = "stage-bench"))]
+impl StageClock {
+    #[inline(always)]
+    const fn start() -> Self {
+        Self
+    }
 }
 
 const NO_SOURCE_RUN: u32 = u32::MAX;
@@ -534,6 +549,8 @@ pub(crate) struct ClusterArena {
     pub(super) ltr: bool,
     pub(super) layout_runs: LayoutRunArena,
     pub(super) run_local: RunLocalArena,
+    /// Build scratch: what each shaped run scales its clusters by.
+    pub(super) run_scales: Vec<build::RunScale>,
 }
 
 impl CanonicalClusterView for ClusterArena {
@@ -739,11 +756,27 @@ impl ClusterArena {
         slots.flatten().for_each(|slot| slot.set(None));
     }
 
+    /// Builds every lane from the shaped paragraph. Run-local ink is left to the next
+    /// geometry rebuild; `build_with_ink`, which the engine calls, fills it here.
+    #[cfg(test)]
     pub(crate) fn build(
         &mut self,
         input: ClusterBuildInput<'_>,
         metrics_for: impl Fn(u32) -> Option<FontMetrics>,
     ) -> Result<(), EngineError> {
+        self.build_with_ink(input, metrics_for, |_| None)
+    }
+
+    /// `build`, and the font-unit ink of every glyph beside the glyph stream, so the geometry
+    /// rebuild that follows asks no font. `ink_for` is asked once per stretch of clusters one
+    /// font owns.
+    pub(crate) fn build_with_ink<'ink>(
+        &mut self,
+        input: ClusterBuildInput<'_>,
+        metrics_for: impl Fn(u32) -> Option<FontMetrics>,
+        ink_for: impl Fn(u32) -> Option<FontInkTable<'ink>>,
+    ) -> Result<(), EngineError> {
+        let _clock = StageClock::start();
         let ClusterBuildInput {
             text,
             text_unit_ids,
@@ -760,56 +793,9 @@ impl ClusterArena {
         let boundaries = unicode.grapheme_boundaries();
         let count = boundaries.len().saturating_sub(1);
         self.reserve(text.len().max(count))?;
-        let mut style_index = 0usize;
-        for boundaries in boundaries.windows(2) {
-            let start = boundaries[0];
-            let end = boundaries[1];
-            while styles
-                .get(style_index)
-                .is_some_and(|style| style.text_end <= start)
-            {
-                style_index += 1;
-            }
-            let style = styles.get(style_index).ok_or(EngineError::InvalidRequest)?;
-            // A resolved segment is the merge of every style covering the same run of text, so no
-            // single style id owns the boundary that lands inside this cluster. The paragraph the
-            // per-paragraph loop attaches is the whole attribution this cause carries.
-            if style.text_start > start || style.text_end < end {
-                return Err(EngineError::StyleSplitsCluster(FrameFault::default()));
-            }
-            let hard_break = is_hard_break(text, start)?;
-            let space = text.get(start as usize) == Some(&0x20);
-            let word_spacing = if space { style.style.word_spacing } else { 0.0 };
-            self.starts.push(start);
-            self.ends.push(end);
-            self.advances.push(if hard_break {
-                0.0
-            } else {
-                f64::from(style.style.letter_spacing + word_spacing)
-            });
-            self.flags.push(match (hard_break, space) {
-                (true, _) => CLUSTER_HARD_BREAK,
-                (false, true) => CLUSTER_SPACE,
-                (false, false) => 0,
-            });
-            self.units_per_em.push(0.0);
-            self.style_indexes
-                .push(u32::try_from(style_index).map_err(|_| EngineError::ResultTooLarge)?);
-            self.source_runs.push(NO_SOURCE_RUN);
-            self.binding_handles.push(0);
-            self.font_handles.push(0);
-            self.stable_ids.push(
-                *text_unit_ids
-                    .get(usize::try_from(start).map_err(|_| EngineError::InvalidRequest)?)
-                    .ok_or(EngineError::InvalidRequest)?,
-            );
-            self.glyph_starts.push(0);
-            self.glyph_counts.push(0);
-            self.shaped.push(0);
-            self.unsafe_before.push(0);
-        }
+        self.build_headers(text, text_unit_ids, boundaries, styles)?;
         self.build_index(text.len())?;
-        self.aggregate_shape(runs, shape, metrics_for)?;
+        self.aggregate_shape(runs, shape, metrics_for, ink_for)?;
         self.rebuild_layout_runs_for_shaping(runs)?;
         self.apply_break_flags(unicode)?;
         self.refresh_layout_units()?;
@@ -826,6 +812,7 @@ impl ClusterArena {
         styles_changed: bool,
         metrics_for: impl Fn(u32) -> Option<FontMetrics>,
     ) -> Result<Option<(usize, usize)>, EngineError> {
+        let _clock = StageClock::start();
         let ClusterBuildInput {
             text,
             text_unit_ids,
@@ -1380,6 +1367,7 @@ impl ClusterArena {
         runs: &[ShapingRun],
         metrics_changed: bool,
     ) -> Result<Option<()>, EngineError> {
+        let _clock = StageClock::start();
         self.copy_from(previous, !metrics_changed)?;
         let stream_len = self.glyph_ids.len();
         if self.glyph_x_advances.len() != stream_len {
@@ -1473,6 +1461,7 @@ impl ClusterArena {
         index: &mut IdentityIndex,
         next_id: &mut u32,
     ) -> Result<(), EngineError> {
+        let _clock = StageClock::start();
         index
             .prepare(cluster_end.saturating_sub(cluster_start))
             .map_err(identity_index_error)?;
@@ -1522,6 +1511,7 @@ impl ClusterArena {
         index: &mut IdentityIndex,
         next_id: &mut u32,
     ) -> Result<(), EngineError> {
+        let _clock = StageClock::start();
         reserve(&mut self.glyph_stable_ids, self.glyph_ids.len())?;
         self.glyph_stable_ids.resize(self.glyph_ids.len(), 0);
         assign_stable_glyph_ids_from_view(
@@ -1551,6 +1541,7 @@ impl ClusterArena {
         next_revision: &mut u32,
         layout_dirty: Option<(&mut LayoutDirtyRanges, bool)>,
     ) -> Result<(), EngineError> {
+        let _clock = StageClock::start();
         let styles_unchanged = layout_dirty.as_ref().is_some_and(|(_, proven)| *proven);
         let mut layout_dirty = layout_dirty.map(|(dirty, _)| dirty);
         if let Some(dirty) = layout_dirty.as_deref_mut() {
@@ -1812,11 +1803,23 @@ impl ClusterArena {
         while cluster_start < self.starts.len() {
             let source_run = self.source_runs[cluster_start];
             let font_handle = self.font_handles[cluster_start];
+            // Owner lanes are constant over long stretches, so the compatibility of two source
+            // runs is asked once per stretch, not once per cluster.
+            let mut stretch_source = source_run;
             let mut cluster_end = cluster_start + 1;
-            while cluster_end < self.starts.len()
-                && compatible_source_runs(source_run, self.source_runs[cluster_end])
-                && self.font_handles[cluster_end] == font_handle
-            {
+            loop {
+                cluster_end += self.source_runs[cluster_end..]
+                    .iter()
+                    .zip(&self.font_handles[cluster_end..])
+                    .position(|(source, font)| *source != stretch_source || *font != font_handle)
+                    .unwrap_or(self.starts.len() - cluster_end);
+                if cluster_end == self.starts.len()
+                    || self.font_handles[cluster_end] != font_handle
+                    || !compatible_source_runs(source_run, self.source_runs[cluster_end])
+                {
+                    break;
+                }
+                stretch_source = self.source_runs[cluster_end];
                 cluster_end += 1;
             }
             let glyph_start = self.glyph_starts[cluster_start];
@@ -1839,185 +1842,6 @@ impl ClusterArena {
                 canonical_revision: None,
             })?;
             cluster_start = cluster_end;
-        }
-        Ok(())
-    }
-
-    fn build_index(&mut self, text_length: usize) -> Result<(), EngineError> {
-        let mut cluster = 0usize;
-        for offset in 0..=text_length {
-            while self
-                .ends
-                .get(cluster)
-                .is_some_and(|end| *end <= offset as u32)
-            {
-                cluster += 1;
-            }
-            self.index_at
-                .push(u32::try_from(cluster).map_err(|_| EngineError::ResultTooLarge)?);
-        }
-        Ok(())
-    }
-
-    fn aggregate_shape(
-        &mut self,
-        runs: &[ShapingRun],
-        shape: &ShapeArena,
-        metrics_for: impl Fn(u32) -> Option<FontMetrics>,
-    ) -> Result<(), EngineError> {
-        if [
-            shape.clusters.len(),
-            shape.x_advances.len(),
-            shape.x_offsets.len(),
-            shape.y_offsets.len(),
-            shape.glyph_flags.len(),
-        ]
-        .iter()
-        .any(|length| *length != shape.glyph_ids.len())
-        {
-            return Err(EngineError::InvalidRequest);
-        }
-        let stream_len = shape.glyph_ids.len();
-        reserve(&mut self.glyph_ids, stream_len)?;
-        reserve(&mut self.glyph_clusters, stream_len)?;
-        reserve(&mut self.glyph_x_advances, stream_len)?;
-        reserve(&mut self.glyph_x_offsets, stream_len)?;
-        reserve(&mut self.glyph_y_offsets, stream_len)?;
-        reserve(&mut self.glyph_shape_flags, stream_len)?;
-        self.glyph_ids.resize(stream_len, 0);
-        self.glyph_clusters.resize(stream_len, 0);
-        self.glyph_x_advances.resize(stream_len, 0);
-        self.glyph_x_offsets.resize(stream_len, 0);
-        self.glyph_y_offsets.resize(stream_len, 0);
-        self.glyph_shape_flags.resize(stream_len, 0);
-        for shaped_run in &shape.runs {
-            let source_index =
-                usize::try_from(shaped_run.source_run).map_err(|_| EngineError::InvalidRequest)?;
-            let source = runs.get(source_index).ok_or(EngineError::InvalidRequest)?;
-            let metrics = metrics_for(shaped_run.font_handle)
-                .ok_or(EngineError::FontMetricsMissing(FrameFault::default()))?;
-            if metrics.units_per_em == 0 {
-                return Err(EngineError::InvalidRequest);
-            }
-            let scale = f64::from(source.style.font_size) / f64::from(metrics.units_per_em);
-            let start =
-                usize::try_from(shaped_run.glyph_start).map_err(|_| EngineError::InvalidRequest)?;
-            let end = start
-                .checked_add(
-                    usize::try_from(shaped_run.glyph_count)
-                        .map_err(|_| EngineError::InvalidRequest)?,
-                )
-                .ok_or(EngineError::InvalidRequest)?;
-            for glyph in start..end {
-                #[cfg(test)]
-                super::work_attribution::record(|work| work.cluster_full_glyph_visits += 1);
-                let cluster = *shape
-                    .clusters
-                    .get(glyph)
-                    .ok_or(EngineError::InvalidRequest)?;
-                let cluster_index = self.cluster_at(cluster)?;
-                self.assign_cluster_ownership(cluster_index, *shaped_run)?;
-                self.shaped[cluster_index] = 1;
-                self.glyph_counts[cluster_index] = self.glyph_counts[cluster_index]
-                    .checked_add(1)
-                    .ok_or(EngineError::ResultTooLarge)?;
-                self.unsafe_before[cluster_index] |= u8::from(
-                    shape
-                        .glyph_flags
-                        .get(glyph)
-                        .is_some_and(|flags| flags & GLYPH_UNSAFE_TO_BREAK != 0),
-                );
-                self.advances[cluster_index] += f64::from(
-                    shape
-                        .x_advances
-                        .get(glyph)
-                        .copied()
-                        .ok_or(EngineError::InvalidRequest)?
-                        .unsigned_abs(),
-                ) * scale;
-                self.units_per_em[cluster_index] = f64::from(metrics.units_per_em);
-            }
-        }
-        for shaped_run in &shape.runs {
-            let metrics = metrics_for(shaped_run.font_handle)
-                .ok_or(EngineError::FontMetricsMissing(FrameFault::default()))?;
-            self.fill_glyphless_run_ownership(
-                runs,
-                *shaped_run,
-                f64::from(metrics.units_per_em),
-                0,
-                self.starts.len(),
-            )?;
-        }
-        let mut glyph_start = 0_u32;
-        for index in 0..self.glyph_starts.len() {
-            self.glyph_starts[index] = glyph_start;
-            glyph_start = glyph_start
-                .checked_add(self.glyph_counts[index])
-                .ok_or(EngineError::ResultTooLarge)?;
-            self.glyph_counts[index] = 0;
-        }
-        if usize::try_from(glyph_start).ok() != Some(shape.glyph_ids.len()) {
-            return Err(EngineError::InvalidRequest);
-        }
-        if scatter_is_identity(shape) {
-            // The common simple-script shape leaves glyphs already in cluster
-            // order — the scatter permutation is the identity — so the payload
-            // columns fill by bulk copy and the counts recover from the prefix
-            // sums the starts pass just produced.
-            self.glyph_ids.copy_from_slice(&shape.glyph_ids);
-            self.glyph_clusters.copy_from_slice(&shape.clusters);
-            self.glyph_x_advances.copy_from_slice(&shape.x_advances);
-            self.glyph_x_offsets.copy_from_slice(&shape.x_offsets);
-            self.glyph_y_offsets.copy_from_slice(&shape.y_offsets);
-            self.glyph_shape_flags.copy_from_slice(&shape.glyph_flags);
-            for index in 0..self.glyph_starts.len() {
-                let next = self
-                    .glyph_starts
-                    .get(index + 1)
-                    .copied()
-                    .unwrap_or(glyph_start);
-                self.glyph_counts[index] = next - self.glyph_starts[index];
-            }
-        } else {
-            for shaped_run in &shape.runs {
-                let start = usize::try_from(shaped_run.glyph_start)
-                    .map_err(|_| EngineError::InvalidRequest)?;
-                let end = start
-                    .checked_add(
-                        usize::try_from(shaped_run.glyph_count)
-                            .map_err(|_| EngineError::InvalidRequest)?,
-                    )
-                    .ok_or(EngineError::InvalidRequest)?;
-                for glyph in start..end {
-                    let cluster = *shape
-                        .clusters
-                        .get(glyph)
-                        .ok_or(EngineError::InvalidRequest)?;
-                    let cluster_index = self.cluster_at(cluster)?;
-                    let ordinal = self.glyph_counts[cluster_index];
-                    let destination = self.glyph_starts[cluster_index]
-                        .checked_add(ordinal)
-                        .and_then(|value| usize::try_from(value).ok())
-                        .ok_or(EngineError::ResultTooLarge)?;
-                    if destination >= self.glyph_ids.len() {
-                        return Err(EngineError::InvalidRequest);
-                    }
-                    self.glyph_ids[destination] = shape.glyph_ids[glyph];
-                    self.glyph_clusters[destination] = shape.clusters[glyph];
-                    self.glyph_x_advances[destination] = shape.x_advances[glyph];
-                    self.glyph_x_offsets[destination] = shape.x_offsets[glyph];
-                    self.glyph_y_offsets[destination] = shape.y_offsets[glyph];
-                    self.glyph_shape_flags[destination] = shape.glyph_flags[glyph];
-                    self.glyph_counts[cluster_index] =
-                        ordinal.checked_add(1).ok_or(EngineError::ResultTooLarge)?;
-                }
-            }
-        }
-        for index in 0..self.starts.len() {
-            if self.shaped[index] != 0 && self.unsafe_before[index] == 0 {
-                self.flags[index] |= CLUSTER_SAFE_BEFORE;
-            }
         }
         Ok(())
     }
@@ -2141,12 +1965,16 @@ impl ClusterArena {
     /// would manufacture a break UAX #14 never offered. A REQUIRED break must never be dropped, so
     /// it acts on the cluster that contains it.
     ///
-    /// `ends` is strictly increasing, so `partition_point` names the cluster ending at the offset
-    /// when the offset is a boundary and the cluster containing it otherwise. Both consumers of
+    /// `index_at` names the cluster ending at the offset when the offset is a boundary and the
+    /// cluster containing it otherwise. Both consumers of
     /// `line_breaks()` route through here; writing the rule twice let them disagree about whether
     /// an interior required break survives.
     fn break_target(&self, position: u32, required: bool) -> Option<usize> {
-        let index = self.ends.partition_point(|end| *end < position);
+        // The cluster holding the unit before the offset is the first whose end reaches it.
+        let index = match position.checked_sub(1) {
+            Some(before) => *self.index_at.get(before as usize)? as usize,
+            None => 0,
+        };
         let target = self.ends.get(index)?;
         (*target == position || required).then_some(index)
     }

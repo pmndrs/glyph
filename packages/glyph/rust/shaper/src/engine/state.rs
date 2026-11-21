@@ -6296,9 +6296,11 @@ impl ParagraphState {
             }
             return self.finish_cluster_preparation(shaper).map(|()| true);
         }
-        self.clusters
-            .pending_mut()
-            .build(build_input(), |handle| shaper.font_metrics(handle))?;
+        self.clusters.pending_mut().build_with_ink(
+            build_input(),
+            |handle| shaper.font_metrics(handle),
+            |handle| shaper.font_ink_table(handle),
+        )?;
         let (pending_clusters, committed_clusters) = self.clusters.derive_mut();
         let previous: &dyn CanonicalClusterView = match self.prepared_layout.committed() {
             PreparedLayout::Inline(leaf) => leaf,

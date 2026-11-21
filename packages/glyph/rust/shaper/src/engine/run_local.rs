@@ -274,6 +274,12 @@ impl InkUnitLanes {
     pub(crate) fn units(&self) -> &[[i16; 4]] {
         &self.units
     }
+
+    /// The ink lane and the outlined bitset, for a producer that fills whole glyph ranges after
+    /// `reset`.
+    pub(crate) fn lanes_mut(&mut self) -> (&mut [[i16; 4]], &mut [u64]) {
+        (&mut self.units, &mut self.outlined)
+    }
 }
 
 pub(crate) fn ink_units(extents: FontGlyphExtents) -> Result<[i16; 4], RunLocalBuildError> {
@@ -337,6 +343,12 @@ impl RunLocalArena {
         self.clear_geometry();
         self.ink.clear();
         self.inherited = None;
+    }
+
+    /// Records that the producer of the glyph stream filled `ink` for it, so the next rebuild
+    /// reads no font.
+    pub(super) fn keep_ink(&mut self) {
+        self.inherited = Some(Inherited::Ink);
     }
 
     /// Takes the inheritance recorded by `inherit`, so it serves exactly one rebuild.

@@ -366,6 +366,15 @@ impl ShaperRegistry {
         .raw_extent_for_glyph(usize::try_from(glyph).ok()?)
     }
 
+    /// The font's ink boxes as one table, for a caller that reads many glyphs of one font.
+    pub(crate) fn font_ink_table(&self, handle: u32) -> Option<FontInkTable<'_>> {
+        let font = &self.fonts[self.font_index(handle)?];
+        Some(FontInkTable {
+            records: &font.extents,
+            availability: &font.availability,
+        })
+    }
+
     pub fn dispose_font(&mut self, handle: u32) -> u32 {
         match self.font_handles.binary_search(&handle) {
             Ok(index) => {
@@ -648,6 +657,38 @@ fn shape_features(
         }
     }));
     Ok(())
+}
+
+/// A registered font's glyph ink boxes: eight bytes per glyph and one availability bit.
+#[derive(Clone, Copy)]
+pub(crate) struct FontInkTable<'a> {
+    records: &'a [u8],
+    availability: &'a [u8],
+}
+
+impl FontInkTable<'_> {
+    /// `[x_min, y_min, x_max, y_max]` in font units and whether the glyph has an outline; zeros
+    /// and `false` for a glyph the font has no outline for.
+    #[inline]
+    pub(crate) fn units(&self, glyph: u16) -> ([i16; 4], bool) {
+        let glyph = usize::from(glyph);
+        let available = self
+            .availability
+            .get(glyph >> 3)
+            .is_some_and(|byte| byte & (1 << (glyph & 7)) != 0);
+        match self.records.get(glyph * 8..glyph * 8 + 8) {
+            Some(record) if available => (
+                [
+                    i16::from_le_bytes([record[0], record[1]]),
+                    i16::from_le_bytes([record[2], record[3]]),
+                    i16::from_le_bytes([record[4], record[5]]),
+                    i16::from_le_bytes([record[6], record[7]]),
+                ],
+                true,
+            ),
+            _ => ([0; 4], false),
+        }
+    }
 }
 
 struct FlatExtents<'a> {
