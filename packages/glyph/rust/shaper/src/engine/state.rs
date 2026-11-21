@@ -6100,7 +6100,7 @@ impl ParagraphState {
         let unicode = self.unicode.active();
         let styles = self.styles.active().resolved.segments();
         let runs = self.shaping_runs.active().runs();
-        if runs.is_empty() {
+        if runs.is_empty() && styles.is_empty() {
             self.clusters.pending_mut().clear();
             return self.finish_cluster_preparation(shaper).map(|()| true);
         }
@@ -6384,13 +6384,7 @@ impl ParagraphState {
         let max_slots_per_band =
             usize::try_from(max_slots_per_band).map_err(|_| EngineError::ResultTooLarge)?;
         let max_lines = usize::try_from(max_lines).map_err(|_| EngineError::ResultTooLarge)?;
-        let paragraph_level = self
-            .bidi
-            .active()
-            .paragraph_levels
-            .first()
-            .copied()
-            .unwrap_or(0);
+        let bidi = self.bidi.active();
         let shaper_cell = RefCell::new(&mut *shaper);
         let metrics_for = |handle| shaper_cell.borrow().font_metrics(handle);
         let mut corrections = ShapedBreakCorrections {
@@ -6431,7 +6425,7 @@ impl ParagraphState {
                     styles,
                     &mut self.flow_slot_scratch,
                     dirty,
-                    paragraph_level,
+                    (bidi, self.bidi.committed()),
                     max_lines,
                     max_slots_per_band,
                     metrics_for,
@@ -6482,7 +6476,7 @@ impl ParagraphState {
                     styles,
                     &mut self.flow_slot_scratch,
                     self.layout_dirty.ranges.iter().cloned(),
-                    paragraph_level,
+                    (bidi, self.bidi.committed()),
                     max_lines,
                     max_slots_per_band,
                     metrics_for,
@@ -6500,7 +6494,7 @@ impl ParagraphState {
             runs,
             styles,
             &mut self.flow_slot_scratch,
-            paragraph_level,
+            bidi,
             max_lines,
             max_slots_per_band,
             metrics_for,
@@ -6713,7 +6707,7 @@ impl ParagraphState {
                 &[],
                 styles,
                 &mut self.intrinsic_flow_slot_scratch,
-                0,
+                self.bidi.active(),
                 usize::try_from(max_lines).map_err(|_| EngineError::ResultTooLarge)?,
                 usize::try_from(max_slots_per_band).map_err(|_| EngineError::ResultTooLarge)?,
                 |handle| shaper.borrow().font_metrics(handle),

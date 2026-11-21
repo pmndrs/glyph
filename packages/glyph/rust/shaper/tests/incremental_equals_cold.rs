@@ -367,6 +367,107 @@ fn metric_and_line_height_changes_equal_a_cold_layout_at_the_new_metrics() {
 }
 
 /// Four explicit paragraphs in authored order 100, 200, 300, 400.
+/// A lane of `f64` rows.
+fn f64_rows(capture: &Capture, name: &str) -> Vec<f64> {
+    capture
+        .lane(name)
+        .unwrap_or_else(|| panic!("no lane {name}"))
+        .bytes
+        .chunks_exact(8)
+        .map(|row| f64::from_le_bytes(row.try_into().expect("eight bytes")))
+        .collect()
+}
+
+/// An empty paragraph is one line and each hard break ends one: `""` has one line, `"\n"` two,
+/// `"\n\n"` three, each zero wide with the font's line box, so a measurement has a height and
+/// a caret has a line to be on. Inter's em is 2048 units with an ascender of 1984 and a
+/// descender of 494: at 16 px that is 15.5 above the baseline and 3.859375 below, and the
+/// default line height of 1.2 makes each line 19.2 tall with the difference shared out as
+/// half-leading on either side. Typing the breaks one by one must land on the same lines.
+#[test]
+fn empty_and_newline_only_text_have_one_line_per_paragraph() {
+    let height = f64::from(16.0_f32 * 1.2_f32);
+    let (ascent, descent) = (1984.0 / 2048.0 * 16.0, 494.0 / 2048.0 * 16.0);
+    let baseline = ascent + (height - ascent - descent) / 2.0;
+    let text = |text: &str| Model {
+        text: utf16(text),
+        ..Model::default()
+    };
+    let typed = |from: &str, start: u32, delete: u32, insert: &str| {
+        let edits = vec![replace(start, delete, insert)];
+        Change {
+            next: edited(&text(from), &edits),
+            edits,
+            route: Route::FULL,
+        }
+    };
+    for (content, lines) in [("", 1_usize), ("\n", 2), ("\n\n", 3)] {
+        let capture = assert_changes_equal_cold(&["inter"], &text(content), &[]);
+        assert_eq!(
+            f64_rows(&capture, "flow.line.height"),
+            vec![height; lines],
+            "{content:?}"
+        );
+        assert_eq!(
+            f64_rows(&capture, "flow.line.baseline"),
+            vec![baseline; lines],
+            "{content:?}"
+        );
+        assert_eq!(
+            f64_rows(&capture, "flow.line.block_start"),
+            (0..lines)
+                .map(|line| line as f64 * height)
+                .collect::<Vec<_>>(),
+            "{content:?}"
+        );
+        assert_eq!(
+            f64_rows(&capture, "flow.line.typography_ascent"),
+            vec![ascent; lines]
+        );
+        assert_eq!(
+            f64_rows(&capture, "flow.line.typography_descent"),
+            vec![descent; lines]
+        );
+        assert_eq!(
+            f64_rows(&capture, "flow.fragment.advance"),
+            vec![0.0; lines]
+        );
+        assert_eq!(
+            f64_rows(&capture, "positioned.line.inline_extent"),
+            vec![0.0; lines]
+        );
+        assert_eq!(
+            capture.u32_rows("positioned.line.glyph_count"),
+            vec![0; lines]
+        );
+        // The measured paragraph: zero wide, as tall as its lines.
+        let measured = |name: &str| {
+            let lane = capture
+                .lane(&format!("view.measured_after.{name}"))
+                .expect("the measured view");
+            f32::from_le_bytes(lane.bytes[..4].try_into().expect("four bytes"))
+        };
+        assert_eq!(measured("inline_extent"), 0.0, "{content:?}");
+        assert_eq!(
+            measured("block_extent"),
+            (lines as f64 * height) as f32,
+            "{content:?}"
+        );
+    }
+    // Emptied, broken, broken again, and filled: every step is the cold layout.
+    assert_changes_equal_cold(
+        &["inter"],
+        &text("a"),
+        &[
+            typed("a", 0, 1, ""),
+            typed("", 0, 0, "\n"),
+            typed("\n", 1, 0, "\n"),
+            typed("\n\n", 0, 0, "b"),
+            typed("b\n\n", 0, 3, ""),
+        ],
+    );
+}
+
 fn four_paragraphs() -> Document {
     Document {
         paragraphs: (1..=4)
