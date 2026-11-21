@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use core::ops::Range;
 
-use crate::FontMetrics;
+use crate::{FontMetrics, bidi::BidiAnalysis};
 
 use super::{
     EngineError, FrameFault,
@@ -18,6 +18,7 @@ use super::{
     line_composition::{
         BreakCorrections, ComposedLine, Correction, LineCursor, layout_next_line_integer,
     },
+    positioning::paragraph_level_at,
     retained_rope::{
         RetainedRope, RopeCursorRange, RopeEditError, RopeRange, RopeRecord, RopeSummary,
     },
@@ -563,7 +564,7 @@ impl FlowLayoutArena {
             &[],
             styles,
             slots,
-            0,
+            &BidiAnalysis::default(),
             max_lines,
             max_slots_per_band,
             metrics_for,
@@ -580,13 +581,14 @@ impl FlowLayoutArena {
         runs: &[ShapingRun],
         styles: &[StyleSegment],
         slots: &mut InlineSlotArena,
-        paragraph_level: u8,
+        bidi: &BidiAnalysis,
         max_lines: usize,
         max_slots_per_band: usize,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
         corrections: &mut impl BreakCorrections,
     ) -> Result<(), EngineError> {
+        let paragraph_level = first_paragraph_level(bidi);
         self.clear();
         if clusters.starts.is_empty() || geometry.constraints.is_empty() {
             return Ok(());
@@ -692,6 +694,7 @@ impl FlowLayoutArena {
                             0
                         },
                         clusters,
+                        bidi,
                         styles,
                         slots,
                         &mut cursor,
@@ -852,14 +855,18 @@ impl FlowLayoutArena {
         styles: &[StyleSegment],
         slots: &mut InlineSlotArena,
         dirty_ranges: impl IntoIterator<Item = Range<u32>>,
-        paragraph_level: u8,
+        (bidi, previous_bidi): (&BidiAnalysis, &BidiAnalysis),
         max_lines: usize,
         max_slots_per_band: usize,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
         corrections: &mut impl BreakCorrections,
     ) -> Result<bool, EngineError> {
+        let paragraph_level = first_paragraph_level(bidi);
         self.clear();
+        if !reading_order_retained(geometry, previous_bidi, bidi) {
+            return Ok(false);
+        }
         if !Self::supports_local_convergence(previous, max_lines, max_slots_per_band)
             || previous_clusters.starts.len() != clusters.starts.len()
         {
@@ -1007,6 +1014,7 @@ impl FlowLayoutArena {
                     old_line.transform_index,
                     old_line.clip_id,
                     clusters,
+                    bidi,
                     styles,
                     slots,
                     &mut cursor,
@@ -1173,14 +1181,18 @@ impl FlowLayoutArena {
         styles: &[StyleSegment],
         slots: &mut InlineSlotArena,
         dirty: ExclusionDirtyBand,
-        paragraph_level: u8,
+        (bidi, previous_bidi): (&BidiAnalysis, &BidiAnalysis),
         max_lines: usize,
         max_slots_per_band: usize,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
         corrections: &mut impl BreakCorrections,
     ) -> Result<bool, EngineError> {
+        let paragraph_level = first_paragraph_level(bidi);
         self.clear();
+        if !reading_order_retained(geometry, previous_bidi, bidi) {
+            return Ok(false);
+        }
         if !Self::supports_local_convergence(previous, max_lines, max_slots_per_band) {
             return Ok(false);
         }
@@ -1363,6 +1375,7 @@ impl FlowLayoutArena {
                     0
                 },
                 clusters,
+                bidi,
                 styles,
                 slots,
                 &mut cursor,
@@ -1506,6 +1519,7 @@ impl FlowLayoutArena {
         transform_index: u32,
         clip_id: u32,
         clusters: &ClusterArena,
+        bidi: &BidiAnalysis,
         styles: &[StyleSegment],
         slot_arena: &mut InlineSlotArena,
         cursor: &mut LineCursor,
@@ -1564,7 +1578,16 @@ impl FlowLayoutArena {
                 ..initial_extents
             };
             let mut composed = false;
-            for slot in available.iter().copied() {
+            // A line fills its slots in reading order: from the left in a left-to-right
+            // paragraph, from the right in a right-to-left one. The paragraph is the one
+            // the line begins in; the direction of the text inside it does not matter.
+            let from_right = paragraph_level_at(bidi, line_text_start(clusters, *cursor)) & 1 != 0;
+            for ordinal in 0..available.len() {
+                let slot = available[if from_right {
+                    available.len() - 1 - ordinal
+                } else {
+                    ordinal
+                }];
                 // The paragraph's first line composes against an indented width;
                 // positioning shifts the pen by the same amount on the
                 // paragraph-direction side.
@@ -1932,6 +1955,44 @@ impl FlowLayoutArena {
             text_end,
         }))
     }
+}
+
+/// The level of the text's first paragraph: the side a drop cap's inline start is on.
+fn first_paragraph_level(bidi: &BidiAnalysis) -> u8 {
+    bidi.paragraph_levels.first().copied().unwrap_or(0)
+}
+
+/// Whether every line `previous_bidi` ordered still fills its slots in the order `bidi` asks
+/// for, so a retained line needs no recomposition on that account. A band has more than one
+/// slot only around an exclusion or a drop cap; there, lines are retained only while every
+/// paragraph, before and after, reads the same way.
+fn reading_order_retained(
+    geometry: &FlowGeometryArena,
+    previous_bidi: &BidiAnalysis,
+    bidi: &BidiAnalysis,
+) -> bool {
+    let from_right = |bidi: &BidiAnalysis| {
+        let mut levels = bidi.paragraph_levels.iter().map(|level| level & 1 != 0);
+        let first = levels.next().unwrap_or(false);
+        levels.all(|level| level == first).then_some(first)
+    };
+    let one_slot_bands = geometry.exclusions.is_empty()
+        && geometry
+            .constraints
+            .iter()
+            .all(|constraint| constraint.drop_cap_lines == 0);
+    one_slot_bands || from_right(bidi).is_some_and(|side| from_right(previous_bidi) == Some(side))
+}
+
+/// The text offset the line at `cursor` begins at; the end of the text for the empty line
+/// after a final hard break.
+fn line_text_start(clusters: &ClusterArena, cursor: LineCursor) -> u32 {
+    clusters
+        .starts
+        .get(cursor.cluster())
+        .or(clusters.ends.last())
+        .copied()
+        .unwrap_or(0)
 }
 
 fn wrapping_for_flow_thread(
@@ -2615,7 +2676,7 @@ mod tests {
                 &runs,
                 &styles,
                 &mut InlineSlotArena::default(),
-                0,
+                &BidiAnalysis::default(),
                 8,
                 4,
                 fixture_metrics,
@@ -2784,7 +2845,7 @@ mod tests {
                 &runs,
                 &styles,
                 &mut InlineSlotArena::default(),
-                0,
+                &BidiAnalysis::default(),
                 8,
                 4,
                 fixture_metrics,
@@ -3025,6 +3086,112 @@ mod tests {
         assert_eq!(layout.fragments[0].line.cluster_end, 2);
         assert_eq!(layout.fragments[1].slot_start, 6.0);
         assert_eq!(layout.fragments[1].line.cluster_end, 4);
+    }
+
+    /// A hole from 4 to 6 leaves two slots, 0..4 and 6..10, and four clusters of advance 2
+    /// fill them two apiece. Reading order is the paragraph's: a left-to-right paragraph
+    /// begins in the left slot and a right-to-left one in the right slot, whatever the
+    /// direction of the text inside it. Each line asks the paragraph it begins in.
+    #[test]
+    fn a_line_fills_the_slots_around_a_hole_in_its_paragraphs_reading_order() {
+        fn slots_in_reading_order(bidi: &BidiAnalysis) -> Vec<(f64, f64, u32, u32)> {
+            // Eight clusters in two paragraphs of four; the fourth is a hard break.
+            let mut flags = vec![CLUSTER_SAFE_BEFORE; 8];
+            flags[3] |= CLUSTER_HARD_BREAK | super::super::cluster_state::CLUSTER_REQUIRED_BREAK;
+            let mut advances = vec![2.0; 8];
+            advances[3] = 0.0;
+            let clusters = quantized(ClusterArena {
+                starts: (0..8).collect(),
+                ends: (1..=8).collect(),
+                advances,
+                flags,
+                style_indexes: vec![0; 8],
+                source_runs: vec![0; 8],
+                font_handles: vec![1; 8],
+                index_at: (0..=8).collect(),
+                ..ClusterArena::default()
+            });
+            let styles = [uniform_style(8)];
+            let geometry = FlowGeometryArena {
+                constraints: vec![constraint()],
+                regions: vec![RetainedRegion {
+                    record: region(),
+                    vertex_start: 0,
+                }],
+                exclusions: vec![RetainedExclusion {
+                    record: exclusion(),
+                    vertex_start: 0,
+                }],
+                vertices: vec![],
+            };
+            let mut layout = FlowLayoutArena::default();
+            layout
+                .build_with_drop_cap_context(
+                    &geometry,
+                    &clusters,
+                    &[],
+                    &styles,
+                    &mut InlineSlotArena::default(),
+                    bidi,
+                    8,
+                    4,
+                    fixture_metrics,
+                    |_| Some(1),
+                    &mut super::super::line_composition::NoCorrections,
+                )
+                .unwrap();
+            assert_eq!(
+                layout
+                    .lines
+                    .iter()
+                    .map(|line| line.fragment_count)
+                    .collect::<Vec<_>>(),
+                [2, 2]
+            );
+            layout
+                .fragments
+                .iter()
+                .map(|fragment| {
+                    (
+                        fragment.slot_start,
+                        fragment.slot_end,
+                        fragment.line.cluster_start,
+                        fragment.line.cluster_end,
+                    )
+                })
+                .collect()
+        }
+        let paragraphs = |levels: [u8; 2]| BidiAnalysis {
+            paragraph_starts: vec![0, 4],
+            paragraph_ends: vec![4, 8],
+            paragraph_levels: levels.to_vec(),
+            ..BidiAnalysis::default()
+        };
+        let (left, right) = ((0.0, 4.0), (6.0, 10.0));
+        let line = |first: (f64, f64), second: (f64, f64), start: u32, middle: u32, end: u32| {
+            [
+                (first.0, first.1, start, middle),
+                (second.0, second.1, middle, end),
+            ]
+        };
+        // The first paragraph's line holds clusters 0..2 and 2..4, ending at the break; the
+        // second paragraph's holds 4..6 and 6..8.
+        assert_eq!(
+            slots_in_reading_order(&paragraphs([0, 0])),
+            [line(left, right, 0, 2, 4), line(left, right, 4, 6, 8)].concat()
+        );
+        assert_eq!(
+            slots_in_reading_order(&paragraphs([1, 1])),
+            [line(right, left, 0, 2, 4), line(right, left, 4, 6, 8)].concat()
+        );
+        assert_eq!(
+            slots_in_reading_order(&paragraphs([0, 1])),
+            [line(left, right, 0, 2, 4), line(right, left, 4, 6, 8)].concat()
+        );
+        assert_eq!(
+            slots_in_reading_order(&paragraphs([1, 0])),
+            [line(right, left, 0, 2, 4), line(left, right, 4, 6, 8)].concat()
+        );
     }
 
     #[test]
@@ -3562,7 +3729,7 @@ mod tests {
                     &styles,
                     &mut InlineSlotArena::default(),
                     core::iter::once(2..3),
-                    0,
+                    (&BidiAnalysis::default(), &BidiAnalysis::default()),
                     8,
                     1,
                     metrics,
@@ -3637,7 +3804,7 @@ mod tests {
                     &reference_styles,
                     &mut InlineSlotArena::default(),
                     core::iter::once(2..3),
-                    0,
+                    (&BidiAnalysis::default(), &BidiAnalysis::default()),
                     8,
                     1,
                     reference_metrics,
@@ -3712,7 +3879,7 @@ mod tests {
                     &styles,
                     &mut InlineSlotArena::default(),
                     core::iter::once(4..5),
-                    0,
+                    (&BidiAnalysis::default(), &BidiAnalysis::default()),
                     2_048,
                     1,
                     fixture_metrics,
@@ -3804,7 +3971,7 @@ mod tests {
                         let start = u32::try_from(cluster).unwrap();
                         start..start + 1
                     }),
-                    0,
+                    (&BidiAnalysis::default(), &BidiAnalysis::default()),
                     2_048,
                     1,
                     fixture_metrics,
@@ -3954,7 +4121,7 @@ mod tests {
                     &styles,
                     &mut InlineSlotArena::default(),
                     dirty,
-                    0,
+                    (&BidiAnalysis::default(), &BidiAnalysis::default()),
                     512,
                     1,
                     fixture_metrics,
@@ -4063,7 +4230,7 @@ mod tests {
                     &runs,
                     &styles,
                     &mut InlineSlotArena::default(),
-                    0,
+                    &BidiAnalysis::default(),
                     8,
                     4,
                     fixture_metrics,
@@ -4087,7 +4254,7 @@ mod tests {
                     &styles,
                     &mut InlineSlotArena::default(),
                     core::iter::once(0..1),
-                    0,
+                    (&BidiAnalysis::default(), &BidiAnalysis::default()),
                     8,
                     4,
                     fixture_metrics,
@@ -4206,7 +4373,7 @@ mod tests {
                     &styles,
                     &mut InlineSlotArena::default(),
                     core::iter::once(3..7),
-                    0,
+                    (&BidiAnalysis::default(), &BidiAnalysis::default()),
                     8,
                     1,
                     metrics,
@@ -4308,7 +4475,7 @@ mod tests {
                     &styles,
                     &mut InlineSlotArena::default(),
                     core::iter::once(2..3),
-                    0,
+                    (&BidiAnalysis::default(), &BidiAnalysis::default()),
                     8,
                     1,
                     metrics,
@@ -4415,7 +4582,7 @@ mod tests {
                     &styles,
                     &mut InlineSlotArena::default(),
                     dirty,
-                    0,
+                    (&BidiAnalysis::default(), &BidiAnalysis::default()),
                     16,
                     4,
                     metrics,
@@ -4444,6 +4611,113 @@ mod tests {
             incremental.recomposed_line_ranges(),
             Some(core::slice::from_ref(&(1..4)))
         );
+    }
+
+    /// Lines kept across a localized recomposition were composed in the old reading order.
+    /// Where a band can hold several slots they are kept only while every paragraph reads
+    /// the way it did; otherwise the caller composes the flow whole.
+    #[test]
+    fn a_changed_reading_order_recomposes_a_flow_with_exclusions_whole() {
+        let clusters = uniform_clusters(30, 2.0);
+        let styles = [uniform_style(30)];
+        let geometry_at = |block_start: f32, revision: u32| {
+            let mut record = exclusion();
+            record.geometry_revision = revision;
+            record.block_start = block_start;
+            record.block_end = block_start + 10.0;
+            FlowGeometryArena {
+                constraints: vec![constraint()],
+                regions: vec![RetainedRegion {
+                    record: region(),
+                    vertex_start: 0,
+                }],
+                exclusions: vec![RetainedExclusion {
+                    record,
+                    vertex_start: 0,
+                }],
+                vertices: vec![],
+            }
+        };
+        let previous_geometry = geometry_at(10.0, 1);
+        let next_geometry = geometry_at(20.0, 2);
+        let LocalizedGeometryChange::ExclusionBand(dirty) = next_geometry
+            .localized_change_from(&previous_geometry)
+            .unwrap()
+        else {
+            panic!("moving one retained exclusion must yield one dirty band");
+        };
+        let paragraph = |level: u8| BidiAnalysis {
+            paragraph_starts: vec![0],
+            paragraph_ends: vec![30],
+            paragraph_levels: vec![level],
+            ..BidiAnalysis::default()
+        };
+        let cold = |geometry: &FlowGeometryArena, bidi: &BidiAnalysis| {
+            let mut flow = FlowLayoutArena::default();
+            flow.build_with_drop_cap_context(
+                geometry,
+                &clusters,
+                &[],
+                &styles,
+                &mut InlineSlotArena::default(),
+                bidi,
+                16,
+                4,
+                fixture_metrics,
+                |_| Some(1),
+                &mut NoCorrections,
+            )
+            .unwrap();
+            flow
+        };
+        let incremental = |previous: &FlowLayoutArena, bidi: (&BidiAnalysis, &BidiAnalysis)| {
+            let mut flow = FlowLayoutArena::default();
+            let converged = flow
+                .rebuild_after_exclusion_change_until_state_converges(
+                    previous,
+                    &next_geometry,
+                    &clusters,
+                    &[],
+                    &styles,
+                    &mut InlineSlotArena::default(),
+                    dirty,
+                    bidi,
+                    16,
+                    4,
+                    fixture_metrics,
+                    |_| Some(1),
+                    &mut NoCorrections,
+                )
+                .unwrap();
+            (converged, flow)
+        };
+        let (ltr, rtl) = (paragraph(0), paragraph(1));
+
+        // Right-to-left before and after: the kept lines are right-first, as cold composes them.
+        let previous = cold(&previous_geometry, &rtl);
+        let (converged, flow) = incremental(&previous, (&rtl, &rtl));
+        assert!(converged);
+        let expected = cold(&next_geometry, &rtl);
+        assert_eq!(flow.lines, expected.lines);
+        assert_eq!(flow.fragments, expected.fragments);
+        assert!(
+            flow.fragments
+                .iter()
+                .any(|fragment| fragment.slot_start == 6.0 && fragment.line.cluster_start == 5),
+            "the first line beside the hole begins in the right slot"
+        );
+
+        // The base direction changed under the kept lines: nothing is reused.
+        let (converged, flow) = incremental(&previous, (&ltr, &rtl));
+        assert!(!converged);
+        assert!(flow.lines.is_empty());
+        let mixed = BidiAnalysis {
+            paragraph_starts: vec![0, 10],
+            paragraph_ends: vec![10, 30],
+            paragraph_levels: vec![1, 0],
+            ..BidiAnalysis::default()
+        };
+        assert!(!incremental(&previous, (&mixed, &mixed)).0);
     }
 
     #[test]
@@ -4520,7 +4794,7 @@ mod tests {
                 &runs,
                 &styles,
                 &mut InlineSlotArena::default(),
-                0,
+                &BidiAnalysis::default(),
                 64,
                 4,
                 fixture_metrics,
@@ -4542,7 +4816,7 @@ mod tests {
                 &styles,
                 &mut InlineSlotArena::default(),
                 dirty,
-                0,
+                (&BidiAnalysis::default(), &BidiAnalysis::default()),
                 64,
                 4,
                 fixture_metrics,

@@ -5282,7 +5282,7 @@ pub(crate) fn flow_positioning_equivalent(
     Ok(true)
 }
 
-fn paragraph_level_at(bidi: &BidiAnalysis, offset: u32) -> u8 {
+pub(super) fn paragraph_level_at(bidi: &BidiAnalysis, offset: u32) -> u8 {
     // Paragraphs are pushed in text order and do not overlap, so the last one starting at or
     // before the offset is the only one that can hold it.
     if let Some(index) = bidi
