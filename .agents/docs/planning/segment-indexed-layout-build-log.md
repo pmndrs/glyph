@@ -695,3 +695,36 @@ Updated in place; the history of each change is in the log below.
   borrowed-glyph read after a no-op on a clipped paragraph is stale (lead: `append_paragraph_measurement`
   keeps the previous clipped-inspection mode when nothing is pending, regardless of the views requested).
   Both leads come from reading the code, not from a fix. A fix lane has started.
+- **Decision (owner): the editing API is the minimum for building an editable text field.** Six methods and
+  one error type: `caret`, `hitTest`, `move`, `boundary`, `rangeRects`, `replace(start, end, insert)`, and
+  `TextOffsetError`. Dropped from the approved shape: `setMarkedText`, `markedRange`, `unmark` and the session
+  object (`text.edit()`, `dispose()`); an application tracks its own composition range and draws it with
+  `rangeRects`. Word and sentence lane maintenance is automatic rather than switched on by a session. Not in
+  scope and never planned: caret or selection rendering, selection state, clipboard, undo, keyboard or
+  pointer handling. The old `caretAt`, `caretForOffset` and `selectionRects` are removed in this release.
+- **Tested, not merged: editing support, engine half** (`experiments/sil-editing`, `252220fe3`, pushed).
+  Offset validation, carets, hit testing, movement, unit boundaries and selection rectangles as Rust queries
+  over prepared layout; nothing runs at layout or edit time. Six properties hold on all 423 fixtures of the
+  oracle corpus at the time, across 14 scripts (round trip of hit test and caret; forward then backward;
+  visual walks visit every stop once; unit ranges tile the text; selection rectangles never overlap and cover
+  the advances drawn; carets after an incremental edit equal a cold layout), plus 25 hand-written cases. Wasm
+  unchanged (nothing exported yet). Fixed in passing: a same-length letter edit left the sentence lane stale.
+  Not proven on a real font: conjunct handling and right-to-left ligature carets. Caret result gains
+  `secondary` (split caret at a bidi boundary) and `clipped`; pending owner approval. Twenty-two judgement
+  calls are listed in the lane's report (word movement follows the macOS convention, and so on).
+- **Found by the editing lane: four layout faults in the engine's cold layout,** all frozen in the oracle
+  reference as if correct: glyphs before an ellipsis drawn 288 units left of their pen (four fixtures); the
+  ellipsis on the wrong side of a right-to-left line; a right-to-left line filling the left exclusion slot
+  first; empty and newline-only text getting no line. A fix lane (`experiments/sil-layout-faults`) has
+  started; the affected cold references will be re-frozen only after checking that just the faulty lines move.
+- **Merged, tag pending verification:** the ranked-order fix (a ranked paragraph's authored order now travels
+  with its id; reachable through `renderOrder` in a `TextGroup`) and unit 3 stages 5–6 (publication hold,
+  nested renders, R3F scheduler job, on-demand invalidation, `onLayout` on all four integrations, root
+  `onError`, per-text errors on TypeGPU-direct, `<GlyphErrorBoundary>`, typed input error, removal of
+  `Text.replacedSurrogates`, API docs, `migration-from-0.1.0.md`). The second reported divergence (stale
+  borrowed glyphs after a no-op on a clipped paragraph) was investigated and is not an engine bug: the
+  incremental result is the documented one; the oracle compares against a cold layout that never demanded
+  the inspection. Its entry stays listed as an oracle-contract finding.
+- **Known limit, being worked:** without `root.attach(scene)` the first frame prepares and publishes together,
+  so `onLayout` cannot position before frame 1. The preparation lane is making the first frame exact without
+  `attach`, or adding a loud warning if that cannot be done soundly.

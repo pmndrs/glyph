@@ -48,11 +48,11 @@ Based on `8176a24e0` (tip of `experiments/held-rope-ascii-anchor-wip`).
 
 ## Open lane branches
 
-| Branch                    | Worktree           | Feature in progress                                                                               | On `origin` | State    |
-| ------------------------- | ------------------ | ------------------------------------------------------------------------------------------------- | ----------- | -------- |
-| `experiments/sil-prepare` | `glyph-wt-prepare` | Ship gate: publication hold, `onLayout`, error surfaces; API docs and migration note              | yes         | building |
-| `experiments/sil-oracle`  | `glyph-wt-oracle`  | Ship gate: fix the two engine divergences the new coverage found                                  | no          | building |
-| `experiments/sil-editing` | `glyph-wt-editing` | Ship gate: editing support, engine half (offset map, carets, hit test, movement, selection rects) | no          | building |
+| Branch                          | Worktree           | Feature in progress                                                                                                          | On `origin` | State    |
+| ------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ----------- | -------- |
+| `experiments/sil-prepare`       | `glyph-wt-prepare` | Ship gate: exact first frame without `root.attach`; publication failures not discarding the root; failure inventory and fuzz | yes         | building |
+| `experiments/sil-editing`       | `glyph-wt-editing` | Ship gate: editing support — engine queries done; now wasm exports, `replace`, host methods on Three and TypeGPU             | yes         | building |
+| `experiments/sil-layout-faults` | `glyph-wt-faults`  | Ship gate: four cold-layout faults (ellipsis glyph placement, RTL ellipsis side, RTL exclusion slot order, empty-text line)  | no          | building |
 
 ## Not on any branch yet
 
