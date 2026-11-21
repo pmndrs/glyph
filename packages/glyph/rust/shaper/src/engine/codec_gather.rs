@@ -74,6 +74,12 @@ const SRGB8_TO_LINEAR_BITS: [u32; 256] = [
     0x3f704db5, 0x3f7282ae, 0x3f74baab, 0x3f76f5ae, 0x3f7933b6, 0x3f7b74c6, 0x3f7db8de, 0x3f800000,
 ];
 
+/// The linear value the gather publishes for one sRGB byte, for row-projection oracles.
+#[cfg(test)]
+pub(crate) fn srgb8_to_linear(channel: u8) -> f32 {
+    f32::from_bits(SRGB8_TO_LINEAR_BITS[usize::from(channel)])
+}
+
 pub const DEFAULT_GATHER_RECORD_CAPACITY: usize = 32_768;
 
 /// Canonical paint layers emitted into the renderer-neutral display list. Independent
@@ -633,6 +639,33 @@ pub struct CodecGatherWorkspace {
     projected_revision_cursor: u32,
     /// Chunk lanes for the column gather, allocated once and reused by every owner.
     column_scratch: Vec<ColumnScratch>,
+    /// Source rows whose record took a new identity during the current retained stream.
+    source_identities: Vec<(usize, GatherSource)>,
+}
+
+/// Maximal runs of consecutive staged source rows, as the ordered ranges of one rope edit.
+struct StagedSourceRanges<'a> {
+    identities: &'a [(usize, GatherSource)],
+    cursor: usize,
+}
+
+impl Iterator for StagedSourceRanges<'_> {
+    type Item = Result<Range<usize>, GatherError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let start = self.identities.get(self.cursor)?.0;
+        let mut end = start + 1;
+        self.cursor += 1;
+        while self
+            .identities
+            .get(self.cursor)
+            .is_some_and(|identity| identity.0 == end)
+        {
+            end += 1;
+            self.cursor += 1;
+        }
+        Some(Ok(start..end))
+    }
 }
 
 /// One chunk of source lanes plus the per-chunk staging the retained comparison needs.
@@ -1049,6 +1082,8 @@ impl CodecGatherWorkspace {
         scratch: &mut [ColumnScratch],
     ) -> Result<Option<RetainedGatherStop>, GatherError> {
         let scratch = scratch.first_mut().ok_or(GatherError::AllocationFailed)?;
+        // A stream that failed part-way left rows staged for a gather that was discarded.
+        self.source_identities.clear();
         let mut state = RetainedGatherCursor {
             source_cursor: self.retained_source_cursor,
             record_cursor: self.retained_cursor,
@@ -1133,6 +1168,7 @@ impl CodecGatherWorkspace {
         }
         self.retained_cursor = state.record_cursor;
         self.retained_source_cursor = state.source_cursor;
+        self.adopt_source_identities()?;
         Ok(state
             .rebuild
             .map(|source_index| RetainedGatherStop { source_index }))
@@ -1205,9 +1241,7 @@ impl CodecGatherWorkspace {
                 self.compare_retained_columns(plan, state.record_cursor, selected, scratch)?;
                 self.adopt_retained_changes(state.record_cursor, selected, scratch)?;
             }
-            if replaced {
-                self.replace_retained_sources(state.source_cursor, accepted, &scratch.chunk)?;
-            }
+            self.stage_source_identities(state.source_cursor, replaced, &scratch.chunk)?;
             state.source_cursor += accepted;
             state.record_cursor += selected;
             cursor += accepted;
@@ -1220,7 +1254,7 @@ impl CodecGatherWorkspace {
     }
 
     /// Pairs chunk rows with the accepted source rows and records. Returns how many source
-    /// rows keep their pairing, how many of those own a record, and whether a record took
+    /// rows keep their pairing, how many of those own a record, and which chunk rows took
     /// a new identity. The first row that breaks the pairing ends the retained walk.
     fn pair_retained_chunk<'codec, 'binding>(
         &self,
@@ -1230,7 +1264,7 @@ impl CodecGatherWorkspace {
         state: &RetainedGatherCursor<'codec, 'binding>,
         bound: &mut ColumnBinding<'codec, 'binding>,
         scratch: &mut ColumnScratch,
-    ) -> Result<(usize, usize, bool), GatherError> {
+    ) -> Result<(usize, usize, u64), GatherError> {
         let chunk = &scratch.chunk;
         let previous = self
             .sources
@@ -1238,7 +1272,7 @@ impl CodecGatherWorkspace {
             .ok_or(GatherError::InvalidSemanticShape)?;
         let mut accepted = 0;
         let mut selected = 0;
-        let mut replaced = false;
+        let mut replaced = 0_u64;
         for (index, previous) in previous.iter().enumerate() {
             let is_selected = chunk.selected(index);
             if is_selected != previous.selected() {
@@ -1271,7 +1305,7 @@ impl CodecGatherWorkspace {
                 break;
             }
             scratch.rows[selected % CHUNK] = index as u8;
-            replaced |= identity_changed;
+            replaced |= u64::from(identity_changed) << (index % CHUNK);
             selected += 1;
             accepted += 1;
         }
@@ -1441,31 +1475,54 @@ impl CodecGatherWorkspace {
     }
 
     /// A record retained in place under a new identity moves its source row with it, or
-    /// the next retained walk would pair against a glyph this one already replaced.
-    fn replace_retained_sources(
+    /// the next retained walk would pair against a glyph this one already replaced. The
+    /// rows are staged in source order and adopted by one rope traversal per stream.
+    fn stage_source_identities(
         &mut self,
         source: usize,
-        count: usize,
+        mut replaced: u64,
         chunk: &SourceChunk,
     ) -> Result<(), GatherError> {
-        self.sources
-            .update_ordered(source..source + count, |index, previous| {
-                let row = index - source;
-                let next = GatherSource {
+        self.source_identities
+            .try_reserve(replaced.count_ones() as usize)
+            .map_err(|_| GatherError::AllocationFailed)?;
+        while replaced != 0 {
+            let row = replaced.trailing_zeros() as usize;
+            replaced &= replaced - 1;
+            self.source_identities.push((
+                source + row,
+                GatherSource {
                     stable_id: chunk.stable_id[row % CHUNK],
                     selection: chunk.selection[row % CHUNK],
-                };
-                Ok::<_, GatherError>(if previous.selected() && next != *previous {
-                    RopeUpdate::Replace(next)
-                } else {
-                    RopeUpdate::Keep
-                })
-            })
-            .map(|_| ())
-            .map_err(|error| match error {
-                super::retained_rope::RopeEditError::Storage => GatherError::AllocationFailed,
-                super::retained_rope::RopeEditError::Callback(error) => error,
-            })
+                },
+            ));
+        }
+        Ok(())
+    }
+
+    fn adopt_source_identities(&mut self) -> Result<(), GatherError> {
+        if self.source_identities.is_empty() {
+            return Ok(());
+        }
+        let identities = core::mem::take(&mut self.source_identities);
+        let mut staged = identities.iter();
+        let result = self.sources.update_ordered_ranges(
+            StagedSourceRanges {
+                identities: &identities,
+                cursor: 0,
+            },
+            |index, _| match staged.next() {
+                Some(&(source, identity)) if source == index => Ok(RopeUpdate::Replace(identity)),
+                _ => Err(GatherError::InvalidSemanticShape),
+            },
+        );
+        self.source_identities = identities;
+        self.source_identities.clear();
+        match result {
+            Ok(_) => Ok(()),
+            Err(super::retained_rope::RopeEditError::Storage) => Err(GatherError::AllocationFailed),
+            Err(super::retained_rope::RopeEditError::Callback(error)) => Err(error),
+        }
     }
 
     fn take_column_scratch(&mut self) -> Result<Vec<ColumnScratch>, GatherError> {

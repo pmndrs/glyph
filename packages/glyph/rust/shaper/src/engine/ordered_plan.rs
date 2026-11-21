@@ -2798,42 +2798,34 @@ fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), OrderedPlanE
         .map_err(|_| OrderedPlanError::AllocationFailed)
 }
 
+/// A host model for tests: it replays the emitted patch protocol only, independently of
+/// the compiler's CPU mirrors, so a publication is judged by the bytes a host would hold.
 #[cfg(test)]
-mod tests {
+pub(crate) mod replay {
     use super::*;
-    use crate::engine::codec::{
-        BATCH_MATERIAL, BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BATCH_TECHNIQUE,
-        BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE, BufferId, CAP_ORDERED_DIRECT, CapabilitySet,
-        CodecDescriptor, Operation, ProgramCapabilities, ProgramDescriptor, ProgramId, ScalarType,
-    };
-    use crate::engine::plan_input::PlanGlyph;
-    use crate::engine::render_plan_wire::plan_layout;
     use alloc::vec;
-
-    const CAPABILITY: CapabilitySetId = CapabilitySetId(1);
-    const TECHNIQUE: TechniqueId = TechniqueId(1);
 
     /// Replays only the emitted patch protocol, independently of the compiler's CPU mirrors.
     #[derive(Default)]
-    struct TestHost {
-        bytes: alloc::collections::BTreeMap<(u32, u32), Vec<u8>>,
-        resources: Vec<ResourceRecord>,
-        bindings: Vec<BufferRecord>,
-        primitives: Vec<PrimitiveRecord>,
-        draws: Vec<DrawRecord>,
+    pub(crate) struct TestHost {
+        pub(crate) bytes: alloc::collections::BTreeMap<(u32, u32), Vec<u8>>,
+        pub(crate) resources: Vec<ResourceRecord>,
+        pub(crate) bindings: Vec<BufferRecord>,
+        pub(crate) primitives: Vec<PrimitiveRecord>,
+        pub(crate) draws: Vec<DrawRecord>,
     }
 
     #[derive(Debug, PartialEq)]
-    struct TestSnapshot {
-        resources: Vec<ResourceRecord>,
-        bindings: Vec<BufferRecord>,
-        active_bytes: Vec<Vec<u8>>,
-        primitives: Vec<PrimitiveRecord>,
-        draws: Vec<DrawRecord>,
+    pub(crate) struct TestSnapshot {
+        pub(crate) resources: Vec<ResourceRecord>,
+        pub(crate) bindings: Vec<BufferRecord>,
+        pub(crate) active_bytes: Vec<Vec<u8>>,
+        pub(crate) primitives: Vec<PrimitiveRecord>,
+        pub(crate) draws: Vec<DrawRecord>,
     }
 
     impl TestHost {
-        fn accept(&mut self, plan: RenderPlanView<'_>, replace_bindings: bool) {
+        pub(crate) fn accept(&mut self, plan: RenderPlanView<'_>, replace_bindings: bool) {
             for patch in plan.patches {
                 match patch.opcode {
                     PATCH_ALLOCATE_OR_RESIZE => {
@@ -2874,7 +2866,7 @@ mod tests {
             }
         }
 
-        fn snapshot(&self) -> TestSnapshot {
+        pub(crate) fn snapshot(&self) -> TestSnapshot {
             let mut bindings = self.bindings.clone();
             let mut active_bytes = Vec::with_capacity(bindings.len());
             for (index, binding) in bindings.iter_mut().enumerate() {
@@ -2909,6 +2901,24 @@ mod tests {
             }
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::codec::{
+        BATCH_MATERIAL, BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BATCH_TECHNIQUE,
+        BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE, BufferId, CAP_ORDERED_DIRECT, CapabilitySet,
+        CodecDescriptor, Operation, ProgramCapabilities, ProgramDescriptor, ProgramId, ScalarType,
+    };
+    use crate::engine::plan_input::PlanGlyph;
+    use crate::engine::render_plan_wire::plan_layout;
+    use alloc::vec;
+
+    const CAPABILITY: CapabilitySetId = CapabilitySetId(1);
+    const TECHNIQUE: TechniqueId = TechniqueId(1);
+
+    use super::replay::TestHost;
 
     #[test]
     fn draw_aggregation_preserves_bounds_semantics_and_split_edges() {

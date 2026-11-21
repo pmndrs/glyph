@@ -22354,4 +22354,5 @@ mod tests {
     include!("state_ascii_anchor_acceptance_tests.rs");
     include!("state_ascii_anchor_policy_tests.rs");
     include!("state_ascii_anchor_adversarial.rs");
+    include!("state_gather_equivalence_tests.rs");
 }
