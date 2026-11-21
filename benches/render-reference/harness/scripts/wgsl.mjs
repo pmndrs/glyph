@@ -16,7 +16,7 @@ try {
       return original.call(this, descriptor);
     };
   });
-  await page.goto(url(lib, scene));
+  await page.goto(url(lib, scene, Object.fromEntries(new URLSearchParams(process.env.EXTRA ?? ''))));
   const first = await page.evaluate(() => window.benchReady);
   if (first.error) throw new Error(first.error);
   const modules = await page.evaluate(() => window.wgslModules);

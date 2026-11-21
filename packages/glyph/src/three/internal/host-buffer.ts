@@ -46,8 +46,11 @@ export type StagedBufferOperation =
 
 export interface StagedBufferUpload {
   readonly buffer: RetainedBuffer;
+  /** Envelope of every written byte. */
   start: number;
   end: number;
+  /** The written byte ranges, disjoint and unordered; absent until the first write is staged. */
+  ranges?: { start: number; end: number }[];
 }
 
 export interface StagedBufferMutations {
@@ -56,6 +59,10 @@ export interface StagedBufferMutations {
 }
 
 const MAX_UPDATE_RANGES = 32;
+/** Mirrors the Codec capability set: gaps under 128 bytes are not worth a separate upload call. */
+const UPLOAD_COALESCE_GAP_BYTES = 128;
+/** The engine emits at most eight ranges per buffer; more than that means overlapping patches. */
+const MAX_UPLOAD_RANGES = 8;
 
 export function scalarArray(scalarType: CodecScalarType, byteLength: number): ScalarArray {
   if (scalarType === 'f32' || scalarType === 'u32') {
@@ -80,6 +87,20 @@ export function includeMutationRange(upload: StagedBufferUpload, byteOffset: num
   if (byteLength === 0) return;
   upload.start = Math.min(upload.start, byteOffset);
   upload.end = Math.max(upload.end, byteOffset + byteLength);
+  const ranges = (upload.ranges ??= []);
+  let start = byteOffset;
+  let end = byteOffset + byteLength;
+  // Ranges closer than the gap are uploaded as one: a second submission costs more than the bytes between them.
+  for (let index = ranges.length - 1; index >= 0; index -= 1) {
+    const range = ranges[index]!;
+    if (range.end + UPLOAD_COALESCE_GAP_BYTES < start || end + UPLOAD_COALESCE_GAP_BYTES < range.start) continue;
+    start = Math.min(start, range.start);
+    end = Math.max(end, range.end);
+    ranges.splice(index, 1);
+  }
+  ranges.push({ start, end });
+  // Past the budget a fragmented edit is cheaper as one envelope.
+  if (ranges.length > MAX_UPLOAD_RANGES) ranges.splice(0, ranges.length, { start: upload.start, end: upload.end });
 }
 
 export function commitBufferMutations(staged: StagedBufferMutations): void {
@@ -150,9 +171,13 @@ function commitBufferOperation(operation: StagedBufferOperation): void {
   }
 }
 
-function commitBufferUpload(uploadRange: StagedBufferUpload): void {
-  const { buffer, start, end } = uploadRange;
+function commitBufferUpload(upload: StagedBufferUpload): void {
+  for (const range of upload.ranges ?? [upload]) commitBufferRange(upload.buffer, range.start, range.end);
+}
+
+function commitBufferRange(buffer: RetainedBuffer, start: number, end: number): void {
   const byteLength = end - start;
+  if (byteLength <= 0) return;
   const source = scalarBytes(buffer.array).subarray(start, end);
   const upload = buffer.attribute.array;
   if (upload !== buffer.array) {
