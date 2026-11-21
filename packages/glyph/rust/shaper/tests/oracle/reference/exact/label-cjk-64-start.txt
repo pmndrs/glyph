@@ -1,0 +1,49 @@
+# glyph layout oracle reference v1
+case label-cjk-64-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 04ea1f5778b49cd3
+stage text identity 1 334bfc3c233cd822
+stage unicode value 6 36440ca2e1618ddf
+stage bidi value 8 a164fb6d2cd08f7b
+stage style value 26 a53cf14e3aab389f
+stage shaping_run value 5 8d2e792cb2a65f3f
+stage shape value 14 9801fee206222697
+stage cluster value 29 5965b4c233d7eccc
+stage cluster identity 4 06ac722e3da46115
+stage cluster repr 8 224391bda0805421
+stage cluster cache 5 0aa8e5808d0976b4
+stage run_local repr 16 c70d5989d1b7fb3b
+stage flow value 35 9b9c7b9dd6d05347
+stage boundary value 28 892d10e18d85891a
+stage boundary identity 1 de1363ca1a70290f
+stage positioned identity 4 804c30f82cc14527
+stage positioned value 20 da297c01bca9c073
+stage positioned repr 37 8f6275a63e01f04b
+stage public value 13 53ff24b2ae6d3f63
+stage public identity 1 9d68d73513c4527d
+stage view identity 4 d69cd6a1081e6c61
+stage view value 40 6faa7e7cae84f06b
+stage wire wire 1 b2b5844cb4e98a25
+stage gather identity 7 7c3ff1709621b86a
+stage gather value 36 13058fe79bcf3575
+stage gpu identity 2 e1c6d3eaac306965
+stage gpu value 3 fee540a3a73630ce
+step 01 insert Foreign (5 units) at 33
+class value 265 91a7f6b2abee8c82
+class identity 24 b02198d0a88e0350
+class repr 61 24823b7085aa1cba
+class cache 5 0cf5e956841543fd
+class wire 1 280a8b152e081001
+step 02 max lines 0
+class value 245 dc702eb57cc33194
+class identity 22 cdd2182e88bf58c5
+class repr 61 24823b7085aa1cba
+class cache 5 0cf5e956841543fd
+class wire 1 a936ab69eca40f59
+step 03 add span 12..48
+class value 277 72636fbe26fe4c3c
+class identity 24 821c553bab50e25e
+class repr 61 24823b7085aa1cba
+class cache 5 0cf5e956841543fd
+class wire 1 a26b23086d05f4e0

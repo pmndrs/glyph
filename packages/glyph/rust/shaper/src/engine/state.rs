@@ -9341,6 +9341,9 @@ fn gather_error(error: GatherError) -> EngineError {
     }
 }
 
+#[cfg(feature = "oracle")]
+pub mod oracle;
+
 #[cfg(test)]
 mod unsafe_break_tests;
 

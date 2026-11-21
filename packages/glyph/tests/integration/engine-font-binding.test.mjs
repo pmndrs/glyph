@@ -996,12 +996,12 @@ test('the retained planner publishes canonical styles, flow, exclusions, and inl
       'ordinary geometry clears flow exclusion ownership before the keyed exclusion returns',
     );
     text.update({ text: sourceText });
+    const removalBytes = capture.bytes();
     assert.equal(
       text.measure().lineCount > 0,
       true,
       'the package-authored style removal passes Wasm and returns a measurement',
     );
-    const removalBytes = capture.bytes();
     const removalStyles = readRecords(removalBytes, request.styleMutationsOffset, request.styleMutationCount, style);
     assert.equal(removalStyles.length, 1);
     assert.equal(removalStyles[0].getUint8(style.opcode), textShaperAbi.engine.styleMutationOpcodes.remove);

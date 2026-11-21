@@ -1,0 +1,34 @@
+# glyph layout oracle reference v1
+case degenerate-one-space
+step cold
+stage owner value 1 07e27e8ffd8af189
+stage text value 1 3965a1217a336eb5
+stage text identity 1 8b4193d3cf71402e
+stage unicode value 6 e3561f08f0b70385
+stage bidi value 8 fb4fe6a99245826e
+stage style value 26 2d413f846c34624c
+stage shaping_run value 5 45d0a925e82e74d5
+stage inline value 81 5ad25cedb17d9f73
+stage inline identity 5 59c53ad6cefec835
+stage inline repr 21 aeba797d00af0f89
+stage public value 13 677729ad5fdb85ee
+stage public identity 1 b14cb9f4279e7fe2
+stage view identity 4 8ae554fe3de14028
+stage view value 40 670b7ca80572a461
+stage wire wire 1 e879417f4c3f0c22
+stage gpu identity 1 a015b8bb85bbe492
+step 01 
+class value 161 f5ca42afc440bead
+class identity 10 dbbe9b78366753a7
+class repr 21 aeba797d00af0f89
+class wire 1 f72166e21bcf4e04
+step 02 
+class value 161 f5ca42afc440bead
+class identity 10 dbbe9b78366753a7
+class repr 21 aeba797d00af0f89
+class wire 1 a936ab69eca40f59
+step 03 insert Word (8 units) at 1 + insert Space (1 units) at 5
+class value 220 ec6af73239e9d0c5
+class identity 20 9ddd04bdf7366ab0
+class repr 21 4c912bfbd47d1cf9
+class wire 1 e730d34fcd27e2b2

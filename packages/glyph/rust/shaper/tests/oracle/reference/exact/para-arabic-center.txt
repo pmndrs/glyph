@@ -1,0 +1,48 @@
+# glyph layout oracle reference v1
+case para-arabic-center
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 5b3a111553d413f4
+stage text identity 1 39af7160bee6b18c
+stage unicode value 6 ef3a10f4e434595d
+stage bidi value 8 af0e549dc355ed1f
+stage style value 26 97310a081f23d310
+stage shaping_run value 5 2a2ab56d69b0ec95
+stage shape value 14 ccc84c9d892ecf3f
+stage cluster value 29 05e90e5e3e7fcd97
+stage cluster identity 4 4a4d1c81be2f2d3b
+stage cluster repr 11 335a15ce5aa3ef4d
+stage run_local repr 16 01f1c13c9fd9e69e
+stage flow value 35 677a1edf8b404335
+stage positioned identity 3 2d8b50d5d832fa01
+stage positioned value 13 4d2239848a29f3d6
+stage positioned repr 17 98d32b9f057dc781
+stage public value 13 8ade152763c05cf6
+stage public identity 1 37cc247c9fb347fc
+stage view identity 4 b2885d4e83914ce3
+stage view value 40 921cc4fb24ae20a4
+stage wire wire 1 c7ca0198eb91b344
+stage gather identity 7 5678f2573d85077d
+stage gather value 36 461c989b27c2b22f
+stage gpu identity 2 7e181cd2273d6f25
+stage gpu value 3 8892af207ad91d4b
+step 01 width 417
+class value 230 9b29ef1d57d1d5be
+class identity 22 9f40f10e77d2ce6c
+class repr 44 7f510d06faf25df1
+class wire 1 50540312b8509d4e
+step 02 width 418
+class value 230 5866e5311ad6e02f
+class identity 22 608c5d6645ec0e3f
+class repr 44 f435ab4955266fb5
+class wire 1 dd151789b00437fc
+step 03 width 233.5
+class value 230 df9b290433652b4c
+class identity 22 8a301cacfa5bc217
+class repr 44 d668ef98a93f3dd7
+class wire 1 52e4e0695eebf642
+step 04 width 600
+class value 230 83f73d75e471bb65
+class identity 22 2e2b44b5e2182509
+class repr 44 d174ac9b1c9981ed
+class wire 1 b3bb58c5ca336909

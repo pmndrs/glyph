@@ -1,4 +1,5 @@
 import { isMainModule, runCargo, runNode, runNodeTests } from './support/command.mts';
+import { runHarfrustForkTests } from './test-harfrust-fork.mts';
 
 const completeRustTargets = [
   { manifest: 'rust/bitmap-baker/Cargo.toml' },
@@ -37,6 +38,7 @@ export async function runGlyphTest(): Promise<void> {
   for (const manifest of libraryRustManifests) {
     await runCargo(['test', '--manifest-path', manifest, '--lib', '--locked']);
   }
+  await runHarfrustForkTests();
   await runNode('scripts/test-mtsdf-core-wasm.mjs');
   await runNode('scripts/generate-mtsdf-oracle-evidence.mjs', ['--check']);
   await runNode('scripts/repin-font-manifests.mjs', ['--check']);

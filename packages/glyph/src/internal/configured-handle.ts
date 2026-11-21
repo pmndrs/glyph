@@ -28,6 +28,7 @@ import type {
   GlyphRoot,
   GlyphRootCreateOptions,
   GlyphRootServices,
+  TransformUpdate,
   GlyphRenderer,
   GlyphSchema,
   RendererContext,
@@ -537,9 +538,9 @@ class ConfiguredRootServices<
     this.#shapeRegistration!.invalidate();
   }
 
-  syncTransforms(): void {
+  syncTransforms(updates?: readonly TransformUpdate<Bindings['transform']>[]): void {
     this.#requiredPlanner();
-    this.#target!.syncTransforms();
+    this.#target!.syncTransforms(updates);
   }
 
   copy<Format extends RasterFormatMetadata>(

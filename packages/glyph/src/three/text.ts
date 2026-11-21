@@ -10,6 +10,7 @@ import {
   type BorrowedGlyphLayout,
   type LayoutBox,
   type LayoutPoint,
+  type GlyphLayoutColumns,
   type GlyphLayoutInspection,
   type ParagraphLayoutSummary,
 } from '../layout.js';
@@ -35,7 +36,7 @@ import {
   normalizeTextFlow,
 } from '../text-properties.js';
 import { assertTextEffectsSupported, normalizedColumns, replacedContent } from '../engine-encoding.js';
-import type { GlyphCopy, GlyphRoot, GlyphRootServices, GlyphTextController } from '../config/glyph.js';
+import type { GlyphCopy, GlyphRoot, GlyphRootServices, GlyphTextController, TransformUpdate } from '../config/glyph.js';
 import {
   equalTextPropertySnapshots,
   isOwnedTextPropertySnapshot,
@@ -49,11 +50,7 @@ import { setThreeBatchScope } from './internal/batch-scope.js';
 import { mapTextSpanBindings, ownTextSpanRecords } from '../config/text-span-owner.js';
 import type { ThreePublicationBoundary } from './internal/publication-boundary.js';
 import type { ThreeRendererResources } from './internal/renderer-resources.js';
-import {
-  measureGlyphPlacements,
-  type ThreeGlyphGeometrySource,
-  type ThreeGlyphMeasurement,
-} from './glyph-measurement.js';
+import { measureGlyphLayout, type ThreeGlyphGeometrySource, type ThreeGlyphMeasurement } from './glyph-measurement.js';
 import { createGlyphs, setGlyphDrawOrder, type Glyphs } from './glyphs.js';
 import { createDecorations, decorationDraws, type Decorations } from './decorations.js';
 import { PostCommitError } from '../glyph-error.js';
@@ -134,6 +131,15 @@ interface DesiredTextState<Format extends RasterFormatMetadata> {
 }
 
 const emptyTextSpans: readonly never[] = Object.freeze([]);
+const noIncompleteGlyphs: readonly number[] = Object.freeze([]);
+
+/** Desired inspection columns with the origin each glyph is currently drawn at. */
+interface GlyphOrigins {
+  readonly layout: GlyphLayoutInspection;
+  readonly drawnX: Float32Array;
+  readonly drawnY: Float32Array;
+  readonly incomplete: readonly number[];
+}
 
 type AttributedErrorState =
   | Readonly<{ present: false }>
@@ -142,6 +148,8 @@ type AttributedErrorState =
 type PublicationFailure = Readonly<{ error: unknown }>;
 
 const noAttributedError: AttributedErrorState = Object.freeze({ present: false });
+const unstagedUpdate = Object.freeze({ staged: false, failure: undefined });
+const stagedUpdate = Object.freeze({ staged: true, failure: undefined });
 
 interface TextReconciler {
   desired<Format extends RasterFormatMetadata>(text: Text<Format>): DesiredTextState<Format>;
@@ -156,9 +164,20 @@ interface TextReconciler {
   setError(text: Text<RasterFormatMetadata>, error: unknown, publicationAccepted: boolean): boolean;
   notifyError(text: Text<RasterFormatMetadata>, error: unknown): void;
   clearError(text: Text<RasterFormatMetadata>): void;
+  transformFlushed(text: THREE.Object3D): void;
+  transformSynchronized(text: Text<RasterFormatMetadata>): void;
 }
 
 let reconciler!: TextReconciler;
+
+/** One registered Text or ancestor, resolved when root membership was last read. */
+interface TrackedNode {
+  readonly node: THREE.Object3D;
+  readonly scene: THREE.Scene | undefined;
+  /** Last `visible` value the transform table was synchronized against; polled only for ancestors. */
+  visible: boolean;
+  ancestor: boolean;
+}
 
 interface TextGroupErrorReconciler {
   state(group: TextGroup): AttributedErrorState;
@@ -170,16 +189,16 @@ interface TextGroupErrorReconciler {
 let textGroupErrors!: TextGroupErrorReconciler;
 
 class ThreePublicationObject extends THREE.Object3D {
-  readonly #commit: (worldMatricesCurrent: boolean) => void;
+  readonly #commit: () => void;
 
-  constructor(commit: (worldMatricesCurrent: boolean) => void) {
+  constructor(commit: () => void) {
     super();
     this.#commit = commit;
   }
 
   override updateMatrixWorld(force?: boolean): void {
     super.updateMatrixWorld(force);
-    this.#commit(true);
+    this.#commit();
   }
 
   updateMatrixWorldWithoutCommit(force?: boolean): void {
@@ -288,7 +307,33 @@ export class ThreeRootHost {
   #publicationCycleActive = false;
   #deferredTraversalFailure: PublicationFailure | undefined;
   #errorAttributionActive = false;
-  readonly #renderMemberScratch: Text<RasterFormatMetadata>[] = [];
+  /** Registered members currently attached to a Scene, in registration order; rebuilt only after a tree change. */
+  #renderMemberCache: readonly Text<RasterFormatMetadata>[] = [];
+  /** Every registered Text and each of its ancestors, with the nearest Scene resolved when membership was read. */
+  #tracked = new Map<THREE.Object3D, TrackedNode>();
+  /** Proper ancestors whose `visible` flag Three exposes only as a plain property. */
+  #trackedAncestors: TrackedNode[] = [];
+  #memberScene: THREE.Scene | undefined;
+  #memberSceneConflict = false;
+  /** Registration or ancestry changed since members were last read. */
+  #membersDirty = true;
+  /** A reconciliation input changed since the last traversal that found the binding current. */
+  #reconcileDirty = true;
+  readonly #dirtyTransforms: THREE.Object3D[] = [];
+  #fullTransformSync = true;
+  /** The publication object is not the last child of its Scene, so some Texts are traversed after it. */
+  #publishesBeforeLateTexts = false;
+  /**
+   * A Scene traversal has reached the publication object, so every member traversed before it has reported its
+   * current world matrix and every member after it will; outside that window a publication recomputes each row.
+   */
+  #traversalPublishing = false;
+  readonly #renderObjectWorld = new Float64Array(16);
+  readonly #attributedErrorTexts = new Set<Text<RasterFormatMetadata>>();
+  readonly #onTreeChange = (): void => {
+    this.#membersDirty = true;
+    this.#reconcileDirty = true;
+  };
   readonly #attributedErrorGroups = new Set<TextGroup>();
   #capacity: GlyphBufferCapacity;
   #material: ThreeTextMaterial | undefined;
@@ -319,11 +364,10 @@ export class ThreeRootHost {
       options.capacity ?? { size: 4_096, policy: 'chunk' },
       'Three root capacity',
     );
-    this.#renderObject = new ThreePublicationObject((worldMatricesCurrent) =>
-      this.#commitTraversal(worldMatricesCurrent),
-    );
+    this.#renderObject = new ThreePublicationObject(() => this.#commitTraversal(true, true));
     this.#renderObject.name = name === undefined ? '@pmndrs/glyph:anonymous' : `@pmndrs/glyph:${name}`;
     this.#renderObject.matrixAutoUpdate = false;
+    this.#renderObject.addEventListener('removed', this.#onTreeChange);
     const implementation = this;
     this.#materialRootContext = Object.freeze({
       name,
@@ -338,6 +382,9 @@ export class ThreeRootHost {
       root: this,
       visibleObject: (object) => this.visible(object),
       anchorOffset: (object, preparing) => this.#binding?.anchorOffset(object, preparing),
+      get retainsSynchronizedTransforms(): boolean {
+        return implementation.#traversalPublishing;
+      },
     });
   }
 
@@ -365,7 +412,7 @@ export class ThreeRootHost {
     if (this.#material === value) return;
     this.assertMutationAllowed();
     this.#material = value;
-    this.#binding?.invalidateMaterial();
+    this.invalidateMaterial();
   }
 
   createText<Format extends RasterFormatMetadata>(
@@ -413,7 +460,10 @@ export class ThreeRootHost {
       this.#binding = undefined;
     } finally {
       this.#clearAttributedErrorGroups();
+      this.#attributedErrorTexts.clear();
       threeRootHosts.delete(this);
+      this.#renderObject.removeEventListener('removed', this.#onTreeChange);
+      this.#untrackAll();
       this.#renderObject.removeFromParent();
       this.#scene = undefined;
     }
@@ -485,8 +535,11 @@ export class ThreeRootHost {
     this.#assertActive();
     this.assertMutationAllowed();
     this.#texts.add(text);
+    this.#onTreeChange();
     try {
-      this.#rootBinding().reconcile(this.members());
+      // Later members keep their staged order: the reconcile every publication runs first restates the whole
+      // render order, so mounting stages only the entering Text instead of rescanning every member.
+      if (text instanceof Text) this.#rootBinding().appendText(text, this.#texts.size - 1);
     } catch (error) {
       this.#texts.delete(text);
       if (this.#texts.size === 0) {
@@ -500,8 +553,13 @@ export class ThreeRootHost {
   /** @internal Remove one retained leaf from this publication root. */
   unregister(text: THREE.Object3D): void {
     if (!this.#disposed) this.preflightLifecycleMutation();
-    if (text instanceof Text) this.#binding?.removeText(text);
+    if (text instanceof Text) {
+      this.#binding?.removeText(text);
+      this.#attributedErrorTexts.delete(text);
+    }
     this.#texts.delete(text);
+    this.#onTreeChange();
+    if (this.#texts.size === 0) this.#untrackAll();
     if (this.#texts.size !== 0 || this.#binding === undefined) return;
     // Keep the root publisher alive until its queued Rust removals can settle.
     // The empty adapter is reusable; root teardown remains its terminal owner.
@@ -511,6 +569,7 @@ export class ThreeRootHost {
 
   /** @internal Invalidate inherited material state after a TextGroup change. */
   invalidateMaterial(): void {
+    this.#reconcileDirty = true;
     this.#binding?.invalidateMaterial();
   }
 
@@ -552,6 +611,13 @@ export class ThreeRootHost {
     return this.#rootBinding().glyphPlacements(text);
   }
 
+  /** @internal Query desired columns and their drawn origins without building placement objects. */
+  glyphOrigins(text: THREE.Object3D): GlyphOrigins | undefined {
+    if (this.#disposed) return undefined;
+    this.#assertMember(text);
+    return this.#rootBinding().glyphOrigins(text);
+  }
+
   /** @internal Borrow one root member's positioned layout for a synchronous callback. */
   readGlyphs<Result>(text: THREE.Object3D, read: (glyphs: BorrowedGlyphLayout) => Result): Result {
     this.#assertMember(text);
@@ -570,8 +636,50 @@ export class ThreeRootHost {
     const scene = nearestScene(text);
     if (scene === this.#scene && (scene === undefined || this.#renderObject.parent === scene)) return;
     this.#services.invalidate();
-    const texts = this.#renderMembers();
-    if (this.#bindScene(texts)) this.#commitTraversal(false);
+    if (this.#bindScene()) this.#commitTraversal(false);
+  }
+
+  /** @internal Whether a traversed Text must re-observe its host tree before the next publication. */
+  get reconcileDirty(): boolean {
+    return this.#reconcileDirty;
+  }
+
+  /** @internal A reconciliation input that Three exposes only as a plain property changed. */
+  markReconcileDirty(): void {
+    this.#reconcileDirty = true;
+  }
+
+  /** @internal A Text or one of its ancestors was reparented without a registration change. */
+  markTreeDirty(): void {
+    this.#onTreeChange();
+  }
+
+  /** @internal A committed placement moved one Text without a renderer publication of its transform. */
+  queueTransform(text: THREE.Object3D): void {
+    if (this.#scene === undefined) this.#fullTransformSync = true;
+    else this.#dirtyTransforms.push(text);
+  }
+
+  /** @internal One traversed Text observed a new world matrix or own visibility. */
+  transformChanged(text: THREE.Object3D): void {
+    if (this.#scene === undefined) {
+      // No traversal will flush a list; the next bound publication synchronizes every transform.
+      this.#fullTransformSync = true;
+      reconciler.transformFlushed(text);
+      return;
+    }
+    if (!this.#publishesBeforeLateTexts) {
+      this.#dirtyTransforms.push(text);
+      return;
+    }
+    // This Text may be traversed after the publication object, whose flush has then already run this frame.
+    reconciler.transformFlushed(text);
+    try {
+      this.#binding?.syncTransforms(true, [{ transform: text }]);
+    } catch {
+      // The next traversal repeats the synchronization for every member and attributes its failure.
+      this.#fullTransformSync = true;
+    }
   }
 
   /** @internal Publish directly observed TextGroup presentation and synchronize its retained draw scope. */
@@ -597,7 +705,7 @@ export class ThreeRootHost {
   /** @internal Render-active members plus the one Text whose detached layout is being queried. */
   queryMembers(text: Text<RasterFormatMetadata>): readonly Text<RasterFormatMetadata>[] {
     // Queries may reenter from synchronous Three event listeners while a live traversal borrows the shared scratch.
-    const members = this.#renderMembers([]);
+    const members = [...this.#renderMembers()];
     if (nearestScene(text) === undefined) members.push(text);
     return members;
   }
@@ -608,16 +716,19 @@ export class ThreeRootHost {
     this.#publicationCycleActive = true;
     this.#deferredTraversalFailure = undefined;
     const texts = this.#renderMembers();
-    this.#needsInitialTransformSync ||= this.#bindScene(texts);
+    this.#needsInitialTransformSync ||= this.#bindScene();
     if (texts.length === 0) {
       if (this.#binding === undefined) {
         this.#finishPublicationCycle();
         return false;
       }
-      this.#binding.reconcile([]);
-    } else {
+      if (this.#reconcileDirty) this.#binding.reconcile([]);
+    } else if (this.#reconcileDirty || this.#binding === undefined) {
+      // A clean root already staged every member through its setter; only a changed input needs the full pass.
       this.#rootBinding().reconcile(texts);
     }
+    // The binding now restates every input this pass observed; a later change marks the root again.
+    this.#reconcileDirty = false;
     const prepared = this.#binding?.prepareShape() ?? false;
     if (prepared === false) this.#finishPublicationCycle();
     return prepared;
@@ -629,7 +740,7 @@ export class ThreeRootHost {
       this.#binding?.acceptShape();
       const texts = this.#renderMembers();
       const publicationFailure = this.#renderer.takePublicationFailure() ?? this.#deferredTraversalFailure;
-      if (publicationFailure === undefined) this.#clearErrors(texts);
+      if (publicationFailure === undefined) this.#clearErrors();
       else this.#reportError(publicationFailure.error, texts, true);
       if (this.#needsInitialTransformSync) {
         try {
@@ -657,10 +768,12 @@ export class ThreeRootHost {
     }
   }
 
+  /** Synchronizes every retained transform; the per-frame path is {@link #flushTransforms}. */
   #syncTransforms(
     worldMatricesCurrent: boolean,
     texts: readonly Text<RasterFormatMetadata>[] = this.#renderMembers(),
   ): void {
+    this.#fullTransformSync = true;
     const traversalParent = worldMatricesCurrent ? this.#renderObject.parent : null;
     const pendingBranches =
       traversalParent === null ? undefined : followingSiblingBranches(this.#renderObject, traversalParent);
@@ -676,26 +789,81 @@ export class ThreeRootHost {
     }
     this.#renderObject.updateMatrixWorldWithoutCommit(true);
     this.#binding?.syncTransforms(worldMatricesCurrent);
+    this.#clearDirtyTransforms();
+    // Every member was just synchronized from its current world matrix, so its next visit has nothing to report.
+    for (let index = 0; index < texts.length; index += 1) reconciler.transformSynchronized(texts[index]!);
+    this.#fullTransformSync = false;
   }
 
-  #commitTraversal(worldMatricesCurrent: boolean): void {
-    if (this.#disposed) return;
-    const texts = this.#renderMembers();
-    try {
-      if (!this.#services._isShapeQueued() && this.#binding?.needsReconcile(texts) === true) {
-        this.#services.invalidate();
-      }
-    } catch (error) {
-      if (!this.#ownsTraversalFailure(error)) this.#reportError(error, texts);
+  /** Synchronizes only what a traversal observed changing; an unchanged frame touches no Text. */
+  #flushTransforms(worldMatricesCurrent: boolean, texts: readonly Text<RasterFormatMetadata>[]): void {
+    const ancestorsChanged = this.#observeAncestors();
+    const binding = this.#binding;
+    if (worldMatricesCurrent) {
+      const parent = this.#renderObject.parent;
+      this.#publishesBeforeLateTexts =
+        parent !== null && parent.children[parent.children.length - 1] !== this.#renderObject;
+    }
+    if (!worldMatricesCurrent || this.#fullTransformSync || ancestorsChanged || binding?.pollsTransforms === true) {
+      this.#syncTransforms(worldMatricesCurrent, texts);
       return;
     }
+    const dirty = this.#dirtyTransforms;
+    if (dirty.length === 0) return;
+    this.#fullTransformSync = true;
+    binding?.syncTransforms(
+      true,
+      dirty.map((transform) => ({ transform })),
+    );
+    this.#clearDirtyTransforms();
+    this.#fullTransformSync = false;
+  }
+
+  #clearDirtyTransforms(): void {
+    const dirty = this.#dirtyTransforms;
+    for (let index = 0; index < dirty.length; index += 1) reconciler.transformFlushed(dirty[index]!);
+    dirty.length = 0;
+  }
+
+  /** Polls the plain-property inputs shared by every member: ancestor visibility and the publication frame. */
+  #observeAncestors(): boolean {
+    let changed = false;
+    const ancestors = this.#trackedAncestors;
+    for (let index = 0; index < ancestors.length; index += 1) {
+      const tracked = ancestors[index]!;
+      const visible = tracked.node.visible;
+      if (tracked.visible === visible) continue;
+      tracked.visible = visible;
+      changed = true;
+    }
+    return observeMatrix(this.#renderObject.matrixWorld.elements, this.#renderObjectWorld) || changed;
+  }
+
+  #commitTraversal(worldMatricesCurrent: boolean, sceneTraversal = false): void {
+    if (this.#disposed) return;
+    const texts = this.#renderMembers();
+    if (this.#reconcileDirty) {
+      try {
+        if (!this.#services._isShapeQueued()) {
+          if (this.#binding?.needsReconcile(texts) === true) this.#services.invalidate();
+          // The binding matches every observed input; later traversals skip the scan until one changes.
+          else this.#reconcileDirty = this.#membersDirty;
+        }
+      } catch (error) {
+        if (!this.#ownsTraversalFailure(error)) this.#reportError(error, texts);
+        return;
+      }
+    }
+    this.#traversalPublishing = sceneTraversal;
     try {
       glyph.shape();
     } catch {
       // Every participating root received its attributed error before the global call threw.
+    } finally {
+      this.#traversalPublishing = false;
     }
     try {
-      this.#syncTransforms(worldMatricesCurrent, texts);
+      this.#flushTransforms(worldMatricesCurrent, texts);
     } catch (error) {
       if (!this.#ownsTraversalFailure(error)) this.#reportError(error, texts);
     }
@@ -727,6 +895,7 @@ export class ThreeRootHost {
       for (const group of this.#attributedErrorGroups) {
         if (!groups.has(group)) textGroupErrors.clearError(group);
       }
+      for (const text of participants) this.#attributedErrorTexts.add(text);
       const textNotifications = participants.filter((text) => reconciler.setError(text, error, publicationAccepted));
       const groupNotifications = [...groups].filter((group) =>
         textGroupErrors.setError(group, error, publicationAccepted),
@@ -752,8 +921,13 @@ export class ThreeRootHost {
     }
   }
 
-  #clearErrors(texts: readonly Text<RasterFormatMetadata>[]): void {
-    for (const text of texts) reconciler.clearError(text);
+  /** Clears the errors of current render members; a Text outside the Scene keeps its error until it returns. */
+  #clearErrors(): void {
+    for (const text of this.#attributedErrorTexts) {
+      if (this.#tracked.get(text)?.scene === undefined) continue;
+      reconciler.clearError(text);
+      this.#attributedErrorTexts.delete(text);
+    }
     this.#clearAttributedErrorGroups();
   }
 
@@ -789,33 +963,82 @@ export class ThreeRootHost {
     return current === scene && scene.visible;
   }
 
-  #bindScene(texts: readonly Text<RasterFormatMetadata>[]): boolean {
-    let scene: THREE.Scene | undefined;
-    for (const text of texts) {
-      const candidate = nearestScene(text);
-      if (candidate === undefined) continue;
-      if (scene !== undefined && candidate !== scene) {
-        throw new Error(
-          `Three root ${JSON.stringify(this.name)} spans more than one Scene; select a different handle root for each Scene`,
-        );
-      }
-      scene = candidate;
+  #bindScene(): boolean {
+    this.#renderMembers();
+    if (this.#memberSceneConflict) {
+      throw new Error(
+        `Three root ${JSON.stringify(this.name)} spans more than one Scene; select a different handle root for each Scene`,
+      );
     }
+    const scene = this.#memberScene;
     if (scene === this.#scene && (scene === undefined || this.#renderObject.parent === scene)) return false;
+    // Moving the private publication object is not a member change.
+    const membersDirty = this.#membersDirty;
     this.#renderObject.removeFromParent();
     this.#scene = scene;
     if (scene !== undefined) {
       scene.add(this.#renderObject);
     }
+    this.#membersDirty = membersDirty;
     return scene !== undefined;
   }
 
-  #renderMembers(members: Text<RasterFormatMetadata>[] = this.#renderMemberScratch): Text<RasterFormatMetadata>[] {
-    members.length = 0;
+  #renderMembers(): readonly Text<RasterFormatMetadata>[] {
+    if (this.#membersDirty) this.#refreshMembers();
+    return this.#renderMemberCache;
+  }
+
+  /**
+   * Re-reads which registered Texts sit beneath a Scene and listens on every node of their ancestor chains.
+   * Three reports each reparenting as `added`/`removed` on the moved node, so a quiet tree keeps this result.
+   */
+  #refreshMembers(): void {
+    const previous = this.#tracked;
+    const tracked = new Map<THREE.Object3D, TrackedNode>();
+    const ancestors: TrackedNode[] = [];
+    const members: Text<RasterFormatMetadata>[] = [];
+    let scene: THREE.Scene | undefined;
+    let conflict = false;
     for (const text of this.#texts) {
-      if (text instanceof Text && !text.disposed && nearestScene(text) !== undefined) members.push(text);
+      if (!(text instanceof Text) || text.disposed) continue;
+      const memberScene = trackAncestry(text, tracked, ancestors);
+      if (memberScene === undefined) continue;
+      members.push(text);
+      if (scene !== undefined && memberScene !== scene) conflict = true;
+      scene = memberScene;
     }
-    return members;
+    for (const node of tracked.keys()) {
+      if (previous.has(node)) continue;
+      node.addEventListener('added', this.#onTreeChange);
+      node.addEventListener('removed', this.#onTreeChange);
+    }
+    for (const node of previous.keys()) {
+      if (!tracked.has(node)) this.#unlisten(node);
+    }
+    this.#tracked = tracked;
+    this.#trackedAncestors = ancestors;
+    this.#renderMemberCache = members;
+    this.#memberScene = scene;
+    this.#memberSceneConflict = conflict;
+    this.#membersDirty = false;
+    // Visibility baselines restart with the new chains.
+    this.#fullTransformSync = true;
+  }
+
+  #unlisten(node: THREE.Object3D): void {
+    node.removeEventListener('added', this.#onTreeChange);
+    node.removeEventListener('removed', this.#onTreeChange);
+  }
+
+  #untrackAll(): void {
+    for (const node of this.#tracked.keys()) this.#unlisten(node);
+    this.#tracked = new Map();
+    this.#trackedAncestors = [];
+    this.#renderMemberCache = [];
+    this.#memberScene = undefined;
+    this.#memberSceneConflict = false;
+    this.#clearDirtyTransforms();
+    this.#membersDirty = true;
   }
 
   #assertMember(text: THREE.Object3D): asserts text is Text<RasterFormatMetadata> {
@@ -848,12 +1071,22 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       root: (text) => text.#root,
       markCommitted: (text, revision) => text.#markCommitted(revision),
       boundsRequested: (text) => text.#boundingBoxState !== 'unrequested',
-      publishMeasurement: (text, measurement) => text.#setBoundingBox(measurement),
+      publishMeasurement: (text, measurement) => {
+        // Only a Text whose bounding box was read keeps it current; measuring alone does not ask for bounds.
+        if (text.#boundingBoxState !== 'unrequested') text.#setBoundingBox(measurement);
+      },
       bind: (text, binding, group) => text.#bind(binding, group),
       unbindFrom: (text, binding) => text.#unbindFrom(binding),
       setError: (text, error, publicationAccepted) => text.#setError(error, publicationAccepted),
       notifyError: (text, error) => text.#notifyError(error),
       clearError: (text) => text.#clearError(),
+      transformFlushed: (text) => {
+        if (#transformQueued in text) text.#transformQueued = false;
+      },
+      transformSynchronized: (text) => {
+        observeMatrix(text.matrixWorld.elements, text.#observedWorld);
+        text.#observedVisible = text.visible;
+      },
     };
   }
 
@@ -869,6 +1102,12 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   #boundingBoxState: 'unrequested' | 'dirty' | 'current' = 'unrequested';
   #disposed = false;
   #errorState: AttributedErrorState = noAttributedError;
+  /** World matrix, own visibility, parent and render order as of the last traversal that reported them. */
+  readonly #observedWorld = new Float64Array(16);
+  #observedVisible = true;
+  #observedParent: THREE.Object3D | null = null;
+  #observedRenderOrder = 0;
+  #transformQueued = false;
   onError: ((error: unknown) => void) | undefined;
 
   /** Ordinary applications construct Text through `handle.createText()`. */
@@ -1006,9 +1245,12 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       return false;
     }
     const nextRevision = checkedNextRevision(this.#desiredRevision);
-    const failure = this.#binding?.stageUpdate(this.#root.member(this), next, nextRevision);
+    const staged = this.#binding?.stageUpdate(this.#root.member(this), next, nextRevision);
+    const failure = staged?.failure;
     this.#desired = next;
     this.#desiredRevision = nextRevision;
+    // An update its binding did not stage waits for the next reconciliation.
+    if (staged?.staged !== true) this.#root.markReconcileDirty();
     this.#boundingBox.makeEmpty();
     if (this.#boundingBoxState !== 'unrequested') this.#boundingBoxState = 'dirty';
     if (failure !== undefined) throw failure.error;
@@ -1056,9 +1298,11 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
 
   /** Synchronously measures desired glyphs in Text-local Three coordinates (+X right, +Y up), anchor included. Uses accepted source geometry when current. */
   measureGlyphs(): readonly ThreeGlyphMeasurement[] | undefined {
-    const placements = this.#glyphPlacements();
-    if (placements === undefined) return undefined;
-    return measureGlyphPlacements(placements, this.#glyphGeometry(placements), placements.layout.anchorOffset);
+    this.#assertActive();
+    const origins = this.#root.glyphOrigins(this);
+    if (origins === undefined) return undefined;
+    const { layout } = origins;
+    return measureGlyphLayout(layout, origins.drawnX, origins.drawnY, this.#glyphGeometry(layout), layout.anchorOffset);
   }
 
   /** Independently copies desired drawable content (excluding blanks) into the same Text-local Three frame (+X right, +Y up), anchor included once. Detached roots keep this object's local transform/pivot. */
@@ -1120,13 +1364,13 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     }
   }
 
-  #glyphGeometry(placements: GlyphPlacements): ReadonlyMap<number, ThreeGlyphGeometrySource> {
+  #glyphGeometry(layout: GlyphLayoutColumns): ReadonlyMap<number, ThreeGlyphGeometrySource> {
     if (this.commitState().status !== 'committed') return new Map();
-    const sourceByStableId = this.#binding?.glyphGeometry(placements.layout.glyphStableIds);
-    if (sourceByStableId === undefined) return new Map();
+    const sourceByStableId = this.#binding?.glyphGeometry(layout.glyphStableIds);
+    if (sourceByStableId === undefined || sourceByStableId.size === 0) return new Map();
     const sourceByIndex = new Map<number, ThreeGlyphGeometrySource>();
-    for (let index = 0; index < placements.glyphs.length; index += 1) {
-      const stableId = placements.layout.glyphStableIds[index];
+    for (let index = 0; index < layout.glyphCount; index += 1) {
+      const stableId = layout.glyphStableIds[index];
       const source = stableId === undefined ? undefined : sourceByStableId.get(stableId);
       if (source !== undefined) sourceByIndex.set(index, source);
     }
@@ -1159,10 +1403,30 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
         );
   }
 
+  /**
+   * Three visits every scene object once per frame, so this is where a Text reports what changed since its last
+   * visit; an unchanged Text does a fixed number of comparisons and no tree walk.
+   */
   override updateMatrixWorld(force?: boolean): void {
     super.updateMatrixWorld(force);
     if (this.#disposed) return;
-    this.#root.observeHostTree(this);
+    const root = this.#root;
+    if (this.parent !== this.#observedParent) {
+      this.#observedParent = this.parent;
+      root.markTreeDirty();
+    }
+    if (this.renderOrder !== this.#observedRenderOrder) {
+      this.#observedRenderOrder = this.renderOrder;
+      root.markReconcileDirty();
+    }
+    if (root.reconcileDirty) root.observeHostTree(this);
+    const visible = this.visible;
+    if (observeMatrix(this.matrixWorld.elements, this.#observedWorld) || visible !== this.#observedVisible) {
+      this.#observedVisible = visible;
+      if (this.#transformQueued) return;
+      this.#transformQueued = true;
+      root.transformChanged(this);
+    }
   }
 
   dispose(): void {
@@ -1403,6 +1667,8 @@ export class TextGroup extends THREE.Object3D {
 interface BoundTextEntry {
   readonly handle: GlyphTextController<RasterFormatMetadata, ThreeMaterialBinding, THREE.Object3D>;
   textUnits: number;
+  /** Whether the staged state carries flow regions, whose transform objects are polled rather than observed. */
+  flows: boolean;
   stagedRevision: number;
   preparedRevision: number | undefined;
   stagedOrder: number;
@@ -1447,6 +1713,8 @@ class ThreeRootPublication {
   #capacityExceeded: { readonly required: number; readonly size: number } | undefined;
   #materialInvalidated = false;
   readonly #pendingMeasurements = new Set<Text<RasterFormatMetadata>>();
+  /** Entries whose flow regions bring transform objects no Text traversal observes. */
+  #flowEntryCount = 0;
   #detachedQuery: Text<RasterFormatMetadata> | undefined;
   #detachedQueryCache: DetachedQueryEntry | undefined;
   #disposed = false;
@@ -1480,11 +1748,33 @@ class ThreeRootPublication {
     this.#materialInvalidated = true;
   }
 
+  /** Whether every retained transform must be compared each frame instead of only the Texts that reported a change. */
+  get pollsTransforms(): boolean {
+    return this.#flowEntryCount !== 0;
+  }
+
   reconcile(texts: readonly Text<RasterFormatMetadata>[]): void {
     this.#assertActive();
     this.#evictDetachedQueryCache();
     this.#detachedQuery = undefined;
     this.#reconcileEntries(texts);
+  }
+
+  /** Stages one entering Text after the current members without restating their order. */
+  appendText(text: Text<RasterFormatMetadata>, order: number): void {
+    this.#assertActive();
+    const presentation = resolveTextPresentation(text);
+    const orderScope = presentation.group;
+    this.#stage(
+      text,
+      reconciler.desired(text),
+      reconciler.desiredRevision(text),
+      order,
+      orderScope,
+      orderScope === undefined ? 0 : paragraphOrderRank(text),
+      presentation,
+    );
+    reconciler.bind(text, this, presentation.group);
   }
 
   #reconcileEntries(
@@ -1568,13 +1858,13 @@ class ThreeRootPublication {
     text: Text<RasterFormatMetadata>,
     desired: DesiredTextState<RasterFormatMetadata>,
     revision: number,
-  ): { error: unknown } | undefined {
+  ): Readonly<{ staged: boolean; failure: { error: unknown } | undefined }> {
     this.#assertActive();
     const entry = this.#entries.get(text);
-    if (entry === undefined) return undefined;
+    if (entry === undefined) return unstagedUpdate;
     const presentation = resolveTextPresentation(text);
     const orderScope = presentation.group;
-    return this.#stage(
+    const failure = this.#stage(
       text,
       desired,
       revision,
@@ -1584,6 +1874,7 @@ class ThreeRootPublication {
       presentation,
       true,
     );
+    return failure === undefined ? stagedUpdate : { staged: true, failure };
   }
 
   removeText(text: Text<RasterFormatMetadata>): void {
@@ -1607,6 +1898,7 @@ class ThreeRootPublication {
     this.#pendingMeasurements.delete(text);
     this.#entries.delete(text);
     this.#textUnits -= entry.textUnits;
+    this.#flowEntryCount -= Number(entry.flows);
     reconciler.unbindFrom(text, this);
   }
 
@@ -1672,6 +1964,8 @@ class ThreeRootPublication {
   }
 
   #reconcileQuery(texts: readonly Text<RasterFormatMetadata>[], text: Text<RasterFormatMetadata>): void {
+    // A query-time reconcile can retain a detached entry the next publication has to restate.
+    this.#root.markReconcileDirty();
     const desired = new Set(texts);
     if (nearestScene(text) !== undefined) {
       this.#evictDetachedQueryCache();
@@ -1684,6 +1978,7 @@ class ThreeRootPublication {
       this.#detachedQueryCache = undefined;
       this.#entries.set(text, cached.entry);
       this.#textUnits += cached.entry.textUnits;
+      this.#flowEntryCount += Number(cached.entry.flows);
       if (cached.pendingMeasurement) this.#pendingMeasurements.add(text);
     }
     const previous = this.#detachedQuery;
@@ -1702,6 +1997,7 @@ class ThreeRootPublication {
       entry.stagedOrder = detachedQueryOrder;
       this.#entries.delete(retired);
       this.#textUnits -= entry.textUnits;
+      this.#flowEntryCount -= Number(entry.flows);
       const pendingMeasurement = this.#pendingMeasurements.delete(retired);
       reconciler.unbindFrom(retired, this);
       this.#detachedQueryCache = { text: retired, entry, pendingMeasurement };
@@ -1717,16 +2013,20 @@ class ThreeRootPublication {
     this.#pendingMeasurements.delete(cached.text);
   }
 
-  glyphPlacements(text: Text<RasterFormatMetadata>): GlyphPlacements | undefined {
+  glyphPlacements(text: Text<RasterFormatMetadata>): GlyphPlacements {
+    const { layout, drawnX, drawnY, incomplete } = this.glyphOrigins(text);
+    return createGlyphPlacements(layout, text.text, drawnX, drawnY, incomplete);
+  }
+
+  glyphOrigins(text: Text<RasterFormatMetadata>): GlyphOrigins {
     const entry = this.#queryEntry(text);
     const inspection = configuredTextInspection(entry.handle);
     const layout = inspection.columns;
     const drawn =
       inspection.readyToDraw && !this.#rendererUpdateRejected
         ? this.#target.snapshotGlyphOrigins(layout.glyphStableIds, layout.x, layout.y)
-        : { drawnX: layout.x, drawnY: layout.y, incomplete: [] };
-    const placements = createGlyphPlacements(layout, text.text, drawn.drawnX, drawn.drawnY, drawn.incomplete);
-    return placements;
+        : { drawnX: layout.x, drawnY: layout.y, incomplete: noIncompleteGlyphs };
+    return { layout, drawnX: drawn.drawnX, drawnY: drawn.drawnY, incomplete: drawn.incomplete };
   }
 
   glyphGeometry(stableIds: Uint32Array): ReadonlyMap<number, ThreeGlyphGeometrySource> {
@@ -1797,6 +2097,7 @@ class ThreeRootPublication {
       entry.committedOrder = entry.stagedOrder;
       entry.committedOrderScope = entry.stagedOrderScope;
       entry.committedOrderRank = entry.stagedOrderRank;
+      if (!sameAnchorOffset(entry.committedAnchorOffset, entry.stagedAnchorOffset)) this.#root.queueTransform(text);
       entry.committedAnchorOffset = entry.stagedAnchorOffset;
       reconciler.markCommitted(text, acceptedRevision);
       if (
@@ -1815,9 +2116,10 @@ class ThreeRootPublication {
     for (const text of this.#pendingMeasurements) this.#entries.get(text)!.preparedRevision = undefined;
   }
 
-  syncTransforms(worldMatricesCurrent: boolean): void {
+  /** Synchronizes the given Texts' transforms, or every retained transform when none are named. */
+  syncTransforms(worldMatricesCurrent: boolean, updates?: readonly TransformUpdate<THREE.Object3D>[]): void {
     this.#assertActive();
-    this.#target.synchronizeTransforms(worldMatricesCurrent, () => this.#services.syncTransforms());
+    this.#target.synchronizeTransforms(worldMatricesCurrent, () => this.#services.syncTransforms(updates));
   }
 
   dispose(): void {
@@ -1851,6 +2153,7 @@ class ThreeRootPublication {
     }
     this.#entries.clear();
     this.#textUnits = 0;
+    this.#flowEntryCount = 0;
     this.#pendingMeasurements.clear();
     if (failurePresent) throw failure;
   }
@@ -1902,6 +2205,7 @@ class ThreeRootPublication {
       this.#entries.set(text, {
         handle,
         textUnits: desired.text.length,
+        flows: desired.flow !== undefined,
         stagedRevision: revision,
         preparedRevision: undefined,
         stagedOrder: order,
@@ -1919,6 +2223,7 @@ class ThreeRootPublication {
         committedAnchorOffset: undefined,
       });
       this.#textUnits += desired.text.length;
+      this.#flowEntryCount += Number(desired.flow !== undefined);
     } else {
       const scopedOrderChanged =
         previous.stagedOrderScope !== orderScope || !Object.is(previous.stagedOrderRank, orderRank);
@@ -1932,6 +2237,8 @@ class ThreeRootPublication {
       if (scopedOrderChanged) previous.handle.updateParagraphOrder(order, orderScope, orderRank);
       this.#textUnits += desired.text.length - previous.textUnits;
       previous.textUnits = desired.text.length;
+      this.#flowEntryCount += Number(desired.flow !== undefined) - Number(previous.flows);
+      previous.flows = desired.flow !== undefined;
       previous.stagedRevision = revision;
       previous.stagedOrder = order;
       previous.stagedOrderScope = orderScope;
@@ -1946,6 +2253,7 @@ class ThreeRootPublication {
       desired.constraints.anchor === undefined ? undefined : entry.handle.measure().anchorOffset;
     if (placementOnly) {
       entry.committedAnchorOffset = entry.stagedAnchorOffset;
+      this.#root.queueTransform(text);
       entry.committedRevision = revision;
       reconciler.markCommitted(text, revision);
       this.#pendingMeasurements.delete(text);
@@ -2315,6 +2623,48 @@ function normalizeTextGroupBatching(value: TextGroupBatching | undefined): TextG
   throw new TypeError('TextGroup batching must be "auto", "shared", or "group"');
 }
 
+/** Records every untracked node from a Text to its tree root and returns the Text's nearest Scene. */
+function trackAncestry(
+  text: THREE.Object3D,
+  tracked: Map<THREE.Object3D, TrackedNode>,
+  ancestors: TrackedNode[],
+): THREE.Scene | undefined {
+  const path: THREE.Object3D[] = [];
+  let node: THREE.Object3D | null = text;
+  let resolved: TrackedNode | undefined;
+  while (node !== null) {
+    resolved = tracked.get(node);
+    if (resolved !== undefined) break;
+    path.push(node);
+    node = node.parent;
+  }
+  if (resolved !== undefined && !resolved.ancestor && path.length !== 0) {
+    resolved.ancestor = true;
+    ancestors.push(resolved);
+  }
+  let scene = resolved?.scene;
+  for (let index = path.length - 1; index >= 0; index -= 1) {
+    const current = path[index]!;
+    if ((current as THREE.Scene).isScene === true) scene = current as THREE.Scene;
+    const record: TrackedNode = { node: current, scene, visible: current.visible, ancestor: index !== 0 };
+    tracked.set(current, record);
+    if (index !== 0) ancestors.push(record);
+  }
+  return scene;
+}
+
+/** Copies `elements` into `observed` and reports whether any of the sixteen values differed. */
+function observeMatrix(elements: ArrayLike<number>, observed: Float64Array): boolean {
+  let changed = false;
+  for (let index = 0; index < 16; index += 1) {
+    const value = elements[index]!;
+    if (observed[index] === value) continue;
+    observed[index] = value;
+    changed = true;
+  }
+  return changed;
+}
+
 function nearestScene(object: THREE.Object3D): THREE.Scene | undefined {
   let current: THREE.Object3D | null = object;
   while (current !== null) {
@@ -2436,6 +2786,8 @@ function observeTextGroupRenderOrder(
   if (!Number.isFinite(group.renderOrder)) throw new RangeError('TextGroup renderOrder must be finite');
   state.observed = group.renderOrder;
   state.stated = group.renderOrder;
+  // Whichever reader observes the change first, the next publication must restate the group's members.
+  textGroupRoots.get(group)?.markReconcileDirty();
   return true;
 }
 
@@ -2474,6 +2826,10 @@ function validateTextDomains(texts: readonly Text<RasterFormatMetadata>[]): void
     }
     root = candidate;
   }
+}
+
+function sameAnchorOffset(left: LayoutPoint | undefined, right: LayoutPoint | undefined): boolean {
+  return left === right || (left !== undefined && right !== undefined && left.x === right.x && left.y === right.y);
 }
 
 function checkedNextRevision(current: number): number {

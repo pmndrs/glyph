@@ -1,0 +1,43 @@
+# glyph layout oracle reference v1
+case label-thai-64-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 0c0668959f14563f
+stage text identity 1 f9817849b3319e70
+stage unicode value 6 b5aa994b32f173f2
+stage bidi value 8 c84f13cce6dff8b1
+stage style value 26 969393f6d2f2ece5
+stage shaping_run value 5 7fc0ff158c44a201
+stage shape value 14 ee07457a5078cbb1
+stage cluster value 29 3d759f82866a85d9
+stage cluster identity 4 72f408187ff9a771
+stage cluster repr 8 ab7853492fa6313f
+stage run_local repr 16 79d9936fee244c41
+stage flow value 35 cfa28260938fca95
+stage positioned identity 3 14df51aa5727bb1c
+stage positioned value 13 f5cb46b8f22933d2
+stage positioned repr 17 747277296afd28b5
+stage public value 13 fd9261d8db9e4e45
+stage public identity 1 8001a18f9dd7cb7f
+stage view identity 4 5c192689d38e75ce
+stage view value 40 2ecddad19408212d
+stage wire wire 1 bf617a2603f0b891
+stage gather identity 7 06bb534166cce180
+stage gather value 36 dabf733b34e928d2
+stage gpu identity 2 f167a98df0cf16b7
+stage gpu value 3 391f5991b1b838d6
+step 01 insert Space (1 units) at 57
+class value 230 16a28ff71c561381
+class identity 22 b8875bc5920afa8b
+class repr 41 c69f61888a7a4e90
+class wire 1 1fad4a22728b2287
+step 02 insert Mark (1 units) at 4
+class value 230 68362f355c12554f
+class identity 22 94cd482ec3b10687
+class repr 41 a92cc9c26c8ce6c6
+class wire 1 4089929a08c319e9
+step 03 
+class value 210 ebf20c4715c6d282
+class identity 20 352b1166e939bcb1
+class repr 41 a92cc9c26c8ce6c6
+class wire 1 e3e5eaecf105ce0b

@@ -1,0 +1,63 @@
+# glyph layout oracle reference v1
+case para-hangul-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 8cc5cadda767108c
+stage text identity 1 cf466a656405983b
+stage unicode value 6 c2799f92dda5a0c4
+stage bidi value 8 ae4b148906b73202
+stage style value 26 1893a8580ca39a27
+stage shaping_run value 5 758e444f265dea0b
+stage shape value 14 5a14f44670156bae
+stage cluster value 29 c01bed923c1d96a6
+stage cluster identity 4 faec950c063b4710
+stage cluster repr 8 187677fa11b26a4b
+stage run_local repr 16 f1cbd8ef6e13a9fe
+stage flow value 35 425e5dc05ab32da3
+stage positioned identity 3 a4a3ccaa1e10e3ae
+stage positioned value 13 959ca31cf5d570b4
+stage positioned repr 17 6104b1a5554cb516
+stage public value 13 5ddc6f4d45a96fb5
+stage public identity 1 f1e06267f1cef39c
+stage view identity 4 72ed8d59fb4fa932
+stage view value 40 377a8bdb0600bac0
+stage wire wire 1 0589ca4a7e5b3ac9
+stage gather identity 7 4a3b0b5dbc9d0e6f
+stage gather value 36 c71aedb3f57ca5a2
+stage gpu identity 2 6598740dd79bee5a
+stage gpu value 3 761a6f73f88cd6bb
+step 01 width 417
+class value 230 b274ebcf90cd7353
+class identity 22 7db98fa2a84999b5
+class repr 41 91370bbc4486368e
+class wire 1 b1a11d37ea8c10c6
+step 02 width 418
+class value 230 3b42d410c14833a1
+class identity 22 a0021d5e9aa426a3
+class repr 41 a52a9735085f2b42
+class wire 1 8d53afd182f41f32
+step 03 width 233.5
+class value 230 db45e156738d36a6
+class identity 22 e9b873bbdfe2ae55
+class repr 41 3a3ed40b5307ba63
+class wire 1 94eef560dfc03790
+step 04 width 600
+class value 230 a4f9657c26949a20
+class identity 22 75a7920139a430b6
+class repr 41 9b8fc43b219fe016
+class wire 1 93b474e8ec44b502
+step 05 replace 1 at 453
+class value 230 a4f9657c26949a20
+class identity 22 75a7920139a430b6
+class repr 41 9b8fc43b219fe016
+class wire 1 b7c54de82cd06c84
+step 06 width 567
+class value 230 3ac15ba08dc25234
+class identity 22 3c17d425617564c9
+class repr 41 eb57f5ed6a91f2e9
+class wire 1 5ec253945a581c07
+step 07 add span 1541..1556
+class value 242 b55b1bd4acf0914f
+class identity 22 439c53bf4ab4b0b2
+class repr 41 eb57f5ed6a91f2e9
+class wire 1 d5d7da819619bdb7

@@ -1245,7 +1245,10 @@ export class PlanTransport {
   #preparedMutationUnadopted = false;
   #lastFailureInvalidatedRoot = false;
   readonly #frameScratch = createPlannerFrameScratch();
+  /** Views over the whole request arena; they outlive a request and are rebuilt only when the arena or memory moves. */
   #requestView: { readonly bytes: Uint8Array; readonly view: DataView } | undefined;
+  /** The request arena's address, which only `reserve` can move; zero until first resolved. */
+  #requestPointer = 0;
   #resultHeader: DataView | undefined;
 
   /** @internal Plan transports are created by the render-planner implementation. */
@@ -1301,6 +1304,8 @@ export class PlanTransport {
     resultCapacity = uint32(resultCapacity, 'result capacity');
     textCapacity = uint32(textCapacity, 'text capacity');
     this.#invalidate();
+    this.#requestPointer = 0;
+    this.#requestView = undefined;
     requireStatus(
       this.#exports.reserveRoot(this.#handle, requestCapacity, resultCapacity, textCapacity),
       'reserve render planner',
@@ -1428,6 +1433,8 @@ export class PlanTransport {
   /** @internal Clears all derived root state while preserving its renderer publication fence. */
   resetDerivedRoot(): void {
     requireStatus(this.#exports.resetRoot(this.#handle), 'reset render planner state');
+    this.#requestPointer = 0;
+    this.#requestView = undefined;
     this.#preparedMutationUnadopted = false;
     this.#stagedUpdate = undefined;
     this.#invalidate();
@@ -1457,16 +1464,16 @@ export class PlanTransport {
     return publication;
   }
 
-  /** @internal Returns one record through the same bounded range borrow used by owned inspection. */
-  borrowParagraphGlyph(layout: BorrowedLayoutPublication, index: number): DataView {
-    return this.borrowParagraphGlyphs(layout, index, 1);
+  /** @internal Throws once another answer, memory growth, or disposal has ended this layout borrow. */
+  assertLayoutBorrowed(layout: BorrowedLayoutPublication): void {
+    if (layout.rootId !== this.#handle || this.#disposed || this.#issuedLayouts.get(layout) !== this.#epoch) {
+      throw new Error('borrowed glyph layout has expired');
+    }
   }
 
   /** @internal Returns a bounded scratch range during an active layout borrow, over current Wasm memory. */
   borrowParagraphGlyphs(layout: BorrowedLayoutPublication, start: number, count: number): DataView {
-    if (layout.rootId !== this.#handle || this.#disposed || this.#issuedLayouts.get(layout) !== this.#epoch) {
-      throw new Error('borrowed glyph layout has expired');
-    }
+    this.assertLayoutBorrowed(layout);
     if (
       !Number.isSafeInteger(start) ||
       start < 0 ||
@@ -1663,21 +1670,22 @@ export class PlanTransport {
       this.#invalidate();
       const requestLength = uint32(request.byteLength, lengthLabel);
       const initialMemoryBuffer = this.#exports.memory.buffer;
-      if (requestLength > this.#requestCapacity || requestLength > this.#exports.requestCapacity(this.#handle)) {
-        this.reserve(requestLength, this.#resultCapacity);
+      // The recorded capacity never exceeds the arena's, so a request that fits it needs no engine query.
+      if (requestLength > this.#requestCapacity) this.reserve(requestLength, this.#resultCapacity);
+      let requestPointer = this.#requestPointer;
+      if (requestPointer === 0) {
+        requestPointer = this.#exports.requestPointer(this.#handle);
+        if (requestPointer === 0) {
+          throw engineStatusError('resolve text request arena', textShaperAbi.status.rootMissing);
+        }
+        this.#requestPointer = requestPointer;
       }
-      const requestPointer = this.#exports.requestPointer(this.#handle);
-      if (requestPointer === 0) throw engineStatusError('resolve text request arena', textShaperAbi.status.rootMissing);
       const memoryBuffer = this.#exports.memory.buffer;
       let target = this.#requestView;
-      if (
-        target === undefined ||
-        target.bytes.buffer !== memoryBuffer ||
-        target.bytes.byteOffset !== requestPointer ||
-        target.bytes.byteLength !== requestLength
-      ) {
-        const bytes = new Uint8Array(memoryBuffer, requestPointer, requestLength);
-        target = { bytes, view: new DataView(memoryBuffer, requestPointer, requestLength) };
+      if (target === undefined || target.bytes.buffer !== memoryBuffer || target.bytes.byteLength < requestLength) {
+        const capacity = this.#requestCapacity;
+        const bytes = new Uint8Array(memoryBuffer, requestPointer, capacity);
+        target = { bytes, view: new DataView(memoryBuffer, requestPointer, capacity) };
         this.#requestView = target;
       }
       writePreparedPlannerFrameUpdate(request, target.bytes, target.view);

@@ -1,0 +1,4 @@
+# Stated, enumerated differences from this reference set: `<case prefix or *> <group prefix> <reason>`.
+# The group is a stage name on a cold line (`stage run_local repr …` is waived by `run_local`) and
+# a class name on a step line (`class repr …` is waived by `repr`). A waived line is reported on
+# every run and never counted as equal. Empty at the reference commit.

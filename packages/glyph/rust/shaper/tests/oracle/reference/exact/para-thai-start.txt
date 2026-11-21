@@ -1,0 +1,63 @@
+# glyph layout oracle reference v1
+case para-thai-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 4c583253b79a873e
+stage text identity 1 0c042bb082581c95
+stage unicode value 6 1678add4a50c632a
+stage bidi value 8 c011bbdf50fe142b
+stage style value 26 e71d459fb3a0cf55
+stage shaping_run value 5 ea5289b26bc0afc7
+stage shape value 14 05d8bffe07d7278a
+stage cluster value 29 a051eccb554124e7
+stage cluster identity 4 deb79373acd61c4a
+stage cluster repr 11 6306e567f25fdb1b
+stage run_local repr 16 995f89bc0d40a4cf
+stage flow value 35 331f5007cee02f9e
+stage positioned identity 3 6a0fd73524650d6b
+stage positioned value 13 9462840e1e1131c8
+stage positioned repr 17 f687676671b7037c
+stage public value 13 389f1663aec43d46
+stage public identity 1 6ac9f39dd39f5caf
+stage view identity 4 9f0f706bf5028c80
+stage view value 40 8f9be4d9e83e1aaf
+stage wire wire 1 c9427e1a4b2e0291
+stage gather identity 7 57f36af1c1d0bccc
+stage gather value 36 4a82f7ccb0e13716
+stage gpu identity 2 90b551cf3587bfad
+stage gpu value 3 9ce5fb6fbd1cf931
+step 01 width 417
+class value 230 359ced225beb25be
+class identity 22 206d059b2fe6d3cd
+class repr 44 418e5e9c4dc440cf
+class wire 1 4a3b656598752990
+step 02 width 418
+class value 230 c5a76ca6c110e208
+class identity 22 206d059b2fe6d3cd
+class repr 44 418e5e9c4dc440cf
+class wire 1 2fc8f78c1c8f3624
+step 03 width 233.5
+class value 230 f633281478a06a10
+class identity 22 5df0c3db791f8f98
+class repr 44 304f2ebfa7331806
+class wire 1 254b4f7a3860a260
+step 04 width 600
+class value 230 a2a4ce78f4ba976d
+class identity 22 06eee11d330d9948
+class repr 44 936a915a09701a2d
+class wire 1 51fc5e41c9b03c50
+step 05 delete 3 at 784
+class value 230 9e094ec4729e1372
+class identity 22 7bb5721d861987eb
+class repr 44 cd93c1f5b5d2b829
+class wire 1 00da7a2204cacafb
+step 06 insert SpacedWord (11 units) at 2666
+class value 230 63c62f3fbd86b20b
+class identity 22 3765968b9e269ac9
+class repr 44 d96f0de5a3421d71
+class wire 1 a8fa50c5c038c73a
+step 07 insert HardBreak (1 units) at 1668
+class value 230 7eaece86b118cf69
+class identity 22 5095f4cd385977a0
+class repr 44 a4f5029733eb8e89
+class wire 1 6fa133a11afb09c1

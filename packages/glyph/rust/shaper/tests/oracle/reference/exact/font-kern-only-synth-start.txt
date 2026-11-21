@@ -1,0 +1,63 @@
+# glyph layout oracle reference v1
+case font-kern-only-synth-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 a745ff56de2b4fa5
+stage text identity 1 06066976dde5f69e
+stage unicode value 6 8cda633f45c4d6e6
+stage bidi value 8 7062e55c691117db
+stage style value 26 57dd8e5a7d04299d
+stage shaping_run value 5 548cbad69f4d75d4
+stage shape value 14 000c0c3d8911d6b2
+stage cluster value 29 35c8f55f7fc4c10c
+stage cluster identity 4 cdd8f8d1245a330b
+stage cluster repr 11 7d7f4a2ba95b0eef
+stage run_local repr 16 12edc149ec8eb060
+stage flow value 35 8fdc58c188aadf32
+stage positioned identity 3 5cf5b4344254b95a
+stage positioned value 13 fd42fc0a355cf337
+stage positioned repr 17 52a597a452ba8e57
+stage public value 13 a038a95f03d8e1c7
+stage public identity 1 3fc56f88fc243bf4
+stage view identity 4 8de26fb7f3732f5f
+stage view value 40 f247e2c7647f10e8
+stage wire wire 1 8febc9d7eb12adc7
+stage gather identity 7 9f1faba5b00e8222
+stage gather value 36 3202fcd02dcb5435
+stage gpu identity 2 9a7568df867f386e
+stage gpu value 3 d6df7718bbd05e0a
+step 01 width 417
+class value 230 a05f7fd5b52a6bec
+class identity 22 c3cca16ab28cf928
+class repr 44 e11c9ef0c61899e9
+class wire 1 99ede6c0e1f451ae
+step 02 width 418
+class value 230 82d33299d23ee35f
+class identity 22 c3cca16ab28cf928
+class repr 44 e11c9ef0c61899e9
+class wire 1 ae480763a90e0202
+step 03 width 233.5
+class value 230 ba5a539553a9b212
+class identity 22 5218ef45ac07097b
+class repr 44 f4d17f93b4415818
+class wire 1 4ebc6dd3d511412d
+step 04 width 600
+class value 230 3acb744c5b0e9b9e
+class identity 22 288021ed65714935
+class repr 44 465341cb30e9a6e5
+class wire 1 662200cf3bf5cc53
+step 05 insert Bidi (1 units) at 0
+class value 230 a2454cf25115b278
+class identity 22 30315dd836a68e0d
+class repr 44 9a6a687244a36509
+class wire 1 8dfcefccca365666
+step 06 replace 2 at 538
+class value 230 c7c99d80ea59b230
+class identity 22 fbb10d155ffd2f6a
+class repr 44 5ff8949a29dca73a
+class wire 1 a3819eeb74706d1b
+step 07 insert Word (1 units) at 149 + width 73 + metrics size 16 spacing 0 line 1.2 word 3 + replace 2 at 1483
+class value 230 380db0d9be4474cd
+class identity 22 a878200077500150
+class repr 44 94eddc2caebd2aca
+class wire 1 5ee1da956cf3136e

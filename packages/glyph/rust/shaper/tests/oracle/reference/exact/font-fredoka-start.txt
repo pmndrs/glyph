@@ -1,0 +1,73 @@
+# glyph layout oracle reference v1
+case font-fredoka-start
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 a745ff56de2b4fa5
+stage text identity 1 06066976dde5f69e
+stage unicode value 6 8cda633f45c4d6e6
+stage bidi value 8 7062e55c691117db
+stage style value 26 57dd8e5a7d04299d
+stage shaping_run value 5 548cbad69f4d75d4
+stage shape value 14 d61a9f6e2de17b92
+stage cluster value 29 3a2cf65230f8161f
+stage cluster identity 4 80d1547dbea9946d
+stage cluster repr 11 fe00aad15b100f67
+stage cluster cache 5 004b23df7958b0ea
+stage run_local repr 16 74092203f37787f3
+stage flow value 35 49e8bba2a80bac34
+stage boundary value 28 abfcef9ff4c3b753
+stage boundary identity 1 780811fbc47d1e29
+stage positioned identity 4 547d522ff530d68f
+stage positioned value 20 3382bc7e8245d7c3
+stage positioned repr 37 43b11612a5150217
+stage public value 13 c6479d2918e6b4dc
+stage public identity 1 6a5652474d0830d8
+stage view identity 4 4b7d322ca94e7035
+stage view value 40 3b7191a5b08af1c1
+stage wire wire 1 da4b0d25815edd6f
+stage gather identity 7 e8908d35134e9d7a
+stage gather value 36 bc136e9aa96ea884
+stage gpu identity 2 f96f80d81c87d9eb
+stage gpu value 3 ebd49802ac17d1a8
+step 01 width 417
+class value 265 8d2aed90ab19da0b
+class identity 24 3105c4e9e36cc41c
+class repr 64 2836db086d0a0ac8
+class cache 5 fcadc1e07c753bdf
+class wire 1 a4d2d1a3da886b58
+step 02 width 418
+class value 265 22f3b1ea2ff83d40
+class identity 24 87d6656055996a09
+class repr 64 2836db086d0a0ac8
+class cache 5 fcadc1e07c753bdf
+class wire 1 1be0b63f0be83dd6
+step 03 width 233.5
+class value 265 7113eadc6ceff4b9
+class identity 24 18c69a00572ed391
+class repr 64 1d045a2b6a89224e
+class cache 5 6a0372cfe861e6f9
+class wire 1 1e45aeaaee1894e2
+step 04 width 600
+class value 265 67c0c67f628faab4
+class identity 24 d687b777a56f9d9a
+class repr 64 5e12b226063dab9b
+class cache 5 6a0372cfe861e6f9
+class wire 1 cf38cf8f369fd8d1
+step 05 delete 1525 at 939 + delete 200 at 423
+class value 265 1df99de6e5b113d3
+class identity 24 a589e1e9a709ab10
+class repr 64 1dba21a74bd5a22b
+class cache 5 a0afe7adda370637
+class wire 1 c7992252fc43cfad
+step 06 width 230.25
+class value 265 352e1417ab8b2952
+class identity 24 35a06487f80b3172
+class repr 64 7b4e5ae63415ead8
+class cache 5 2c8deed10ced2dd0
+class wire 1 e778f1a99f01ddfd
+step 07 max lines 0
+class value 245 251f320748ad5d8f
+class identity 22 7326470644a87d7c
+class repr 64 7b4e5ae63415ead8
+class cache 5 2c8deed10ced2dd0
+class wire 1 7744283f1e0c8120
