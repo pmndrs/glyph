@@ -61,7 +61,8 @@ Updated in place; the history of each change is in the log below.
 | Unit 1e part 2: gather by change class (colour-only columns, origin-only columns, line height)                                                                                                                                | held     | —                                                   | Needs an accumulated per-paragraph change class in `state.rs`; scheduled after unit 3                                                                    |
 | Unit 2: local edits                                                                                                                                                                                                           | held     | —                                                   | Needs 1b, 1c                                                                                                                                             |
 | Metric changes: keep island shapes, dense rescale                                                                                                                                                                             | held     | —                                                   | Needs 1a                                                                                                                                                 |
-| Unit 3: preparation and error model, `onLayout`, minimal mutations, linear engine mount, out-of-memory and trap policy                                                                                                        | building | `experiments/sil-prepare`                           |                                                                                                                                                          |
+| Unit 3 stages 0–2: guards, batch `prepare()`, the setter flip, paint-only path, minimal mutation, change class                                                                                                                | tested   | `experiments/sil-prepare` (`5e48cbb2f`)             | Proven on `sil-green-5`; lane is merging `sil-green-12` and re-proving before it lands                                                                   |
+| Unit 3 stages 3–6: linear engine mount, cannot-fail and trap gateway, Three two-step, `onLayout`; edit-proportional validation                                                                                                | held     | —                                                   | After stages 0–2 merge                                                                                                                                   |
 | Unit 4: publication (retained topology, `PATCH_COPY`, multi-range uploads)                                                                                                                                                    | held     | —                                                   | After unit 3                                                                                                                                             |
 | Many-label updates and paint-only changes                                                                                                                                                                                     | held     | —                                                   | Needs its profile and unit 3                                                                                                                             |
 | Editing support (offset map, boundaries, carets, affinity, ligature carets, IME ranges)                                                                                                                                       | held     | —                                                   | Needs 1d, 2 and an API design                                                                                                                            |
@@ -535,3 +536,29 @@ Updated in place; the history of each change is in the log below.
 - **Slug batching** matches the old per-text output except one pixel by 1/255; against Three the Slug scenes
   have 2–5 pixels over tolerance that predate batching and were budgeted in the parity script with a comment.
   Its merge conflicts with the TypeGPU atlas merge in two files; the lane is resolving it.
+- **Tested, not merged: unit 3 stages 0–2, the preparation model** (`experiments/sil-prepare`). Setters now
+  validate and mark dirty with zero engine calls; a read prepares that one paragraph; the frame prepares
+  everything dirty in one call, then publishes. Engine calls for 200 labels: mount plus first frame 401 → 2;
+  200 setters 200 → 0; 400 overwriting setters plus a frame 401 → 2; restoring the published value plus a
+  frame 3 → 0; `createText` 1 → 0. A colour change no longer runs layout (asserted in Rust). A keystroke in
+  a 4,950-unit paragraph sends under 512 bytes instead of 10 kB. Lone surrogates become U+FFFD and are
+  counted. A per-paragraph change class since the last publication (none, paint, origin, metric, content,
+  with dirty unit and line intervals) is exposed for gather. Proof on its base: full oracle tier native and
+  wasm, 1,175 Node tests including React and Vue, a crossing-budget test and a conformance suite run against
+  Three, react-three-fiber, Vue and TypeGPU-direct. Benchmark rows that ended at a setter are split into
+  setter, setter + read and setter + frame, each asserting a layout digest.
+- **Numbers (loaded machine; read the shape).** Setter spans drop to main's level or below (first set at
+  1,000 labels 15.4 → 4.2 µs, main 12.0; overwrite at 1,000 labels setter + frame 775 → 151 µs, main 1,150).
+  Mount plus frame at 2,000 labels 384 → 113 ms (main 564). Interleaved edit-read-publish stays a win (11.7
+  ms, main 133.7).
+- **What the flip did not fix, stated by the lane.** Typing one character is not faster end to end (insert
+  plus read 2.03 ms, main 1.69): the smaller request did not move it, so the cost is in the Rust stages and
+  validation. Dense rewrite plus frame is still 20–38% behind main (rewrite 64: 0.82 against 0.59 ms): that
+  is per-label engine cost. Colour-only frames still grow with root size because gather re-reads the whole
+  paragraph. Mount plus read is still superlinear (stage 3). Edit-proportional validation in Rust was not
+  done.
+- **Defects the rewrite of old tests surfaced, both fixed:** a frame batch could exceed a per-request style
+  limit each setter had respected; a prepared lease leaked when a removal committed.
+- **Breaking changes recorded** (the owner accepted a breaking release): a setter no longer prepares and
+  cannot throw an engine status; lone surrogates no longer throw; `commitState()` `pending` also means "not
+  yet prepared"; a failed preparation surfaces at the read or the frame.
