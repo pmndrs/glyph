@@ -1071,7 +1071,10 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       root: (text) => text.#root,
       markCommitted: (text, revision) => text.#markCommitted(revision),
       boundsRequested: (text) => text.#boundingBoxState !== 'unrequested',
-      publishMeasurement: (text, measurement) => text.#setBoundingBox(measurement),
+      publishMeasurement: (text, measurement) => {
+        // Only a Text whose bounding box was read keeps it current; measuring alone does not ask for bounds.
+        if (text.#boundingBoxState !== 'unrequested') text.#setBoundingBox(measurement);
+      },
       bind: (text, binding, group) => text.#bind(binding, group),
       unbindFrom: (text, binding) => text.#unbindFrom(binding),
       setError: (text, error, publicationAccepted) => text.#setError(error, publicationAccepted),

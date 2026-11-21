@@ -6590,6 +6590,8 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   instrumented.reset();
   right.style = { ...right.style, fontSize: 20 };
   scene.updateMatrixWorld();
+  // Captured before the read below, which now produces the summary nobody had asked this revision for.
+  const fontSizeSetterRequest = instrumented.latestMeasurementRequestCounts();
   assert.equal(right.glyphs().glyphFontSizes[0], 20);
   assert.deepEqual(
     instrumented.latestRequestCounts(),
@@ -6606,7 +6608,7 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
     'font-size publication replays no semantic input',
   );
   assert.deepEqual(
-    instrumented.latestMeasurementRequestCounts(),
+    fontSizeSetterRequest,
     {
       paragraph: 0,
       paragraphOrder: 0,
