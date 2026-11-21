@@ -196,6 +196,54 @@ export function createLabels(count = 100) {
   return { labels, root, scene, textGroup };
 }
 
+interface LabelSetOptions {
+  /** `false` leaves the labels constructed and parented but never read or published. */
+  readonly frame?: boolean;
+  readonly style?: { readonly fontSize: number; readonly color?: string };
+  readonly layout?: { readonly wrap: 'word' };
+}
+
+/** `createLabels` with authored content: one label per entry of `texts`, each created holding its final text. */
+export function createLabelsHolding(texts: readonly string[], options: LabelSetOptions = {}) {
+  const root = glyph.handle(
+    `labs:label-set:${String(nextHandle++)}`,
+    defineThreeConfig({ capacity: { size: Math.max(1, texts.length) * 24, policy: 'grow' } }),
+  );
+  const textGroup = root.createTextGroup();
+  const scene = new THREE.Scene();
+  const labels = texts.map((text) => createLabel(root, text, options));
+  textGroup.add(...labels);
+  scene.add(textGroup);
+  if (options.frame !== false) {
+    scene.updateMatrixWorld(true);
+    if (textGroup.error !== undefined) throw textGroup.error;
+  }
+  return { labels, root, scene, textGroup };
+}
+
+function createLabel(
+  root: ReturnType<typeof createLabels>['root'],
+  text: string,
+  options: Pick<LabelSetOptions, 'layout' | 'style'>,
+) {
+  return root.createText({
+    font,
+    text,
+    style: options.style ?? { fontSize: 16 },
+    ...(options.layout === undefined ? {} : { layout: options.layout }),
+    constraints: { width: { mode: 'exact', size: 160 } },
+  });
+}
+
+/** Disposes every label of a mounted set and creates one new label per entry of `texts` in the same group. */
+export function replaceLabels(created: ReturnType<typeof createLabels>, texts: readonly string[]): void {
+  created.textGroup.remove(...created.labels);
+  for (const label of created.labels) label.dispose();
+  created.labels.length = 0;
+  for (const text of texts) created.labels.push(createLabel(created.root, text, {}));
+  created.textGroup.add(...created.labels);
+}
+
 export function multiOwnerTexts(balanced: boolean) {
   return balanced
     ? ([

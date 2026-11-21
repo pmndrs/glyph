@@ -8,6 +8,14 @@ import {
   disposeTextBatch,
   inspectDraws,
 } from './fixture.ts';
+import {
+  assertSpanLayout,
+  coldLabelLayouts,
+  finishSpan,
+  prepareSpans,
+  spanBench,
+  splitRowName,
+} from './prepare-spans.ts';
 
 group('1,000-label stress @stress', () => {
   bench('toggle one group containing 1000 retained labels @batch @visibility @publication', function* () {
@@ -120,24 +128,34 @@ group('1,000-label stress @stress', () => {
     disposeLabels(created);
   });
 
-  bench('publish 1024 retained Text instances @batch @publication @bulk-1024-profile @frontier', function* () {
-    const created = createTextBatch(1_024);
-    let alternate = false;
-    const textCount = yield () => {
-      alternate = !alternate;
-      const prefix = alternate ? 'bravo' : 'alpha';
-      for (const [index, text] of created.texts.entries()) {
-        text.text = `${prefix} ${String(index).padStart(4, '0')}`;
+  for (const span of prepareSpans) {
+    const tags = span === 'frame' ? '@batch @publication @bulk-1024-profile @frontier' : '@batch';
+    spanBench(splitRowName('publish 1024 retained Text instances', span, tags), function* () {
+      const cold = (['alpha', 'bravo'] as const).map((prefix) =>
+        coldLabelLayouts(Array.from({ length: 1_024 }, (_, index) => `${prefix} ${String(index).padStart(4, '0')}`)),
+      );
+      const created = createTextBatch(1_024);
+      const frame = () => created.scene.updateMatrixWorld(true);
+      let alternate = false;
+      const textCount = yield () => {
+        alternate = !alternate;
+        const prefix = alternate ? 'bravo' : 'alpha';
+        for (const [index, text] of created.texts.entries()) {
+          text.text = `${prefix} ${String(index).padStart(4, '0')}`;
+        }
+        finishSpan(span, created.texts, frame);
+        if (created.textGroup.error !== undefined) throw created.textGroup.error;
+        return created.textGroup.textCount;
+      };
+      assert.equal(textCount, created.texts.length);
+      if (span === 'frame') {
+        assert(
+          created.texts.every((text) => text.commitState().status === 'committed'),
+          'every retained Text must complete publication',
+        );
       }
-      created.scene.updateMatrixWorld(true);
-      if (created.textGroup.error !== undefined) throw created.textGroup.error;
-      return created.textGroup.textCount;
-    };
-    assert.equal(textCount, created.texts.length);
-    assert(
-      created.texts.every((text) => text.commitState().status === 'committed'),
-      'every retained Text must complete publication',
-    );
-    disposeTextBatch(created);
-  });
+      assertSpanLayout(span, created.texts, cold[alternate ? 1 : 0]!);
+      disposeTextBatch(created);
+    });
+  }
 });

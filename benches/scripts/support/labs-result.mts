@@ -30,9 +30,9 @@ export function assertFullLabsCoverage(
   availability: LabsBaselineAvailability,
 ): void {
   const candidateIdentities = labsIdentitySet(candidate);
-  if (candidateIdentities.size !== 145) {
+  if (candidateIdentities.size !== 222) {
     throw new Error(
-      `Full Labs candidate must contain 145 distinct identities; found ${String(candidateIdentities.size)}`,
+      `Full Labs candidate must contain 222 distinct identities; found ${String(candidateIdentities.size)}`,
     );
   }
   if (baseline === undefined) return;
