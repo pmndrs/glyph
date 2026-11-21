@@ -498,6 +498,8 @@ fn append_measurement_from_occurrences_source(
     include_glyph_spans: bool,
     include_glyphs: bool,
 ) -> Result<(), EngineError> {
+    #[cfg(feature = "stage-bench")]
+    let _clock = super::state::oracle::stage_bench::clock::MEASUREMENT.guard();
     let constraint = geometry
         .constraints
         .first()

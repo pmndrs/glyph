@@ -1758,6 +1758,8 @@ impl PositionedGlyphArena {
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
     ) -> Result<(), EngineError> {
+        #[cfg(feature = "stage-bench")]
+        let _clock = super::state::oracle::stage_bench::clock::POSITIONING.guard();
         self.clear();
         self.rebuild_replacement_runs(
             previous,
