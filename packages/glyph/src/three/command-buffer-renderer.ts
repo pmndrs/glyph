@@ -14,6 +14,7 @@ import type { ThreeBindings, ThreeBufferBinding, ThreeResolvedResourceBinding } 
 import type { ThreeRendererResources } from './internal/renderer-resources.js';
 import type { ThreeRootContext } from './material.js';
 import { syncMsdfDraws } from './internal/msdf-draws.js';
+import { syncSlugDraws } from './internal/slug-residency.js';
 import { ThreeTransformSynchronizer, type ThreeTransformState } from './transform-synchronizer.js';
 import {
   commitBufferMutations,
@@ -431,6 +432,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       for (const update of prepared.draws.reusedUpdates) applyReusedDrawUpdate(update);
     }
     syncMsdfDraws(prepared.draws.draws, prepared);
+    syncSlugDraws(prepared.draws.draws, prepared);
     if (prepared.transforms !== undefined) {
       commitTransforms(prepared.context.transformAttribute, prepared.transforms);
       for (const update of prepared.transforms.direct) applyTransformUpdate(update);

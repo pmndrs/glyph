@@ -91,12 +91,13 @@ export const SLUG_GLYPH_TABLE_STRIDE = 16;
  * which glyph it is. What every drawing of a glyph shares lives once per glyph in its page's `glyphs` table, addressed
  * by the `glyph` lane. A row is sixteen little-endian words: the em-space quad `[left, top, width, height]` and the
  * band transform `[scaleX, scaleY, offsetX, offsetY]` as `f32` bits, then `[curveBase, horizontalHeaderBase,
- * verticalHeaderBase, referenceBase]` and `[horizontalBands, verticalBands, 0, 0]` as `u32`. The second `glyph` lane
+ * verticalHeaderBase, referenceBase]` and `[horizontalBands, verticalBands, entryCount, 0]` as `u32`. The second `glyph` lane
  * is free for the host: the Three renderer stores the placement slot there.
  *
- * A page holds the band headers (`(count << 16) | offset`, as baked) and `bandCurves`: one `rgba32uint` texel per band
- * entry with the entry's curve control points packed as `pack2x16float` words `[p0, p1, p2, 0]`. A band's curves are
- * the entries `referenceBase + offset + i`; the table's `curveBase` is the baked curve base and no shader reads it.
+ * A page holds the band headers (`(count << 16) | offset`, as baked), which a renderer uploads, and the baked curves
+ * (`rgba16float` texels) and glyph-local references (`u16`), which stay on the CPU: a renderer resolves each band
+ * entry's curve into its own band-curve texture when a glyph is first drawn (see `SlugBandResidency`) and points the
+ * row's `referenceBase` there. The row's third `u32` vector holds the glyph's entry count in its third word.
  */
 export const slugSchema: TechniqueSchema<
   {
@@ -126,7 +127,8 @@ export const slugSchema: TechniqueSchema<
       readonly cardinality: 'many';
       readonly members: {
         readonly headers: { readonly kind: 'texture'; readonly format: 'r32uint' };
-        readonly bandCurves: { readonly kind: 'texture'; readonly format: 'rgba32uint' };
+        readonly curves: { readonly kind: 'buffer' };
+        readonly references: { readonly kind: 'buffer' };
         readonly glyphs: { readonly kind: 'buffer' };
       };
     };
@@ -151,7 +153,8 @@ export const slugSchema: TechniqueSchema<
       cardinality: 'many',
       members: {
         headers: { kind: 'texture', format: 'r32uint' },
-        bandCurves: { kind: 'texture', format: 'rgba32uint' },
+        curves: { kind: 'buffer' },
+        references: { kind: 'buffer' },
         glyphs: { kind: 'buffer' },
       },
     },
@@ -180,9 +183,8 @@ export const slugCodec: RasterCodec<typeof slug, typeof slugSchema> = registerGl
   compileFont(compiler) {
     const data = compiler.font.data;
     const tables = slugGlyphTables(data);
-    const bandCurves = slugBandCurves(data);
     for (const [index, page] of data.pages.entries()) {
-      compiler.retain('page', page.resource, slugPagePayload(page, bandCurves[index]!, tables.pages[index]!));
+      compiler.retain('page', page.resource, slugPagePayload(page, tables.pages[index]!));
     }
     const view = new DataView(data.records.buffer, data.records.byteOffset);
     const record = (row: number) => row * SLUG_GLYPH_RECORD_STRIDE;
@@ -250,53 +252,20 @@ function writeSlugGlyphRow(table: DataView, target: number, records: DataView, r
   const horizontalHeaderBase = records.getUint32(record + 24, true);
   const verticalHeaderBase = records.getUint32(record + 28, true);
   const referenceBase = records.getUint32(record + 32, true);
-  const words = [curveBase, horizontalHeaderBase, verticalHeaderBase, referenceBase, horizontalBands, verticalBands];
+  const entryCount = records.getUint32(record + 36, true);
+  const words = [
+    curveBase,
+    horizontalHeaderBase,
+    verticalHeaderBase,
+    referenceBase,
+    horizontalBands,
+    verticalBands,
+    entryCount,
+  ];
   for (const [index, value] of words.entries()) table.setUint32(target + 32 + index * 4, value, true);
 }
 
-/** Texels per row of a page's `bandCurves` texture. */
-const SLUG_BAND_CURVE_WIDTH = 4096;
-
-/**
- * Each page's band entries with their curves resolved: entry `k` holds the control points of the curve the baked
- * reference `k` names, as three `pack2x16float` words `[p0, p1, p2]` and a zero. A band's curves are then contiguous
- * (the header's reference offset addresses them directly) and a fragment visits each with one load instead of a
- * reference load followed by two curve loads. Curves shared by several bands are repeated, once per entry.
- */
-function slugBandCurves(data: SlugData): Uint32Array[] {
-  const records = new DataView(data.records.buffer, data.records.byteOffset, data.records.byteLength);
-  const entries = data.pages.map((page) => new Uint32Array(Math.max(1, page.referenceCount) * 4));
-  for (let record = 0; record < data.records.byteLength; record += SLUG_GLYPH_RECORD_STRIDE) {
-    const pageIndex = records.getUint16(record + 8, true);
-    if (pageIndex === ABSENT_PAGE) continue;
-    const page = data.pages[pageIndex]!;
-    const curves = new DataView(page.curveBytes.buffer, page.curveBytes.byteOffset, page.curveBytes.byteLength);
-    const references = new DataView(
-      page.referenceBytes.buffer,
-      page.referenceBytes.byteOffset,
-      page.referenceBytes.byteLength,
-    );
-    const target = entries[pageIndex]!;
-    const curveBase = records.getUint32(record + 16, true);
-    const referenceBase = records.getUint32(record + 32, true);
-    const referenceCount = records.getUint32(record + 36, true);
-    for (let entry = referenceBase; entry < referenceBase + referenceCount; entry += 1) {
-      // A curve is texel `t` (p0, p1) and the first half of texel `t + 1` (p2), four halves per texel.
-      const texel = (curveBase + references.getUint16(entry * 2, true)) * 8;
-      target[entry * 4] = curves.getUint32(texel, true);
-      target[entry * 4 + 1] = curves.getUint32(texel + 4, true);
-      target[entry * 4 + 2] = curves.getUint32(texel + 8, true);
-    }
-  }
-  return entries;
-}
-
-function slugPagePayload(page: SlugPageData, bandCurves: Uint32Array, glyphs: Uint8Array) {
-  const texels = bandCurves.length / 4;
-  const width = Math.min(SLUG_BAND_CURVE_WIDTH, texels);
-  const height = Math.ceil(texels / width);
-  const padded = new Uint32Array(width * height * 4);
-  padded.set(bandCurves);
+function slugPagePayload(page: SlugPageData, glyphs: Uint8Array) {
   return {
     kind: 'group' as const,
     members: {
@@ -307,13 +276,8 @@ function slugPagePayload(page: SlugPageData, bandCurves: Uint32Array, glyphs: Ui
         height: page.headerHeight,
         bytes: page.headerBytes,
       },
-      bandCurves: {
-        kind: 'texture' as const,
-        format: 'rgba32uint' as const,
-        width,
-        height,
-        bytes: new Uint8Array(padded.buffer),
-      },
+      curves: { kind: 'buffer' as const, bytes: page.curveBytes, stride: 8 },
+      references: { kind: 'buffer' as const, bytes: page.referenceBytes, stride: 2 },
       glyphs: { kind: 'buffer' as const, bytes: glyphs, stride: SLUG_GLYPH_TABLE_STRIDE * 4 },
     },
   };

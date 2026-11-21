@@ -184,14 +184,7 @@ export function compiledSlugData(font: Font<typeof slug>): SlugCpuReferenceData 
     glyphs.referenceBase[glyph] = table.getUint32(row + 44, true);
     glyphs.horizontalBands[glyph] = u16(table.getUint32(row + 48, true), 'Slug horizontal bands');
     glyphs.verticalBands[glyph] = u16(table.getUint32(row + 52, true), 'Slug vertical bands');
-    // The page's band curves are resolved per entry; the rebuilt curve grid stores entry k at texels 2k and 2k + 1.
-    glyphs.curveBase[glyph] = glyphs.referenceBase[glyph]! * 2;
-    assignSlugReferences(
-      pages[selectedPage]!,
-      [glyphs.horizontalHeaderBase[glyph]!, glyphs.verticalHeaderBase[glyph]!],
-      [glyphs.horizontalBands[glyph]!, glyphs.verticalBands[glyph]!],
-      glyphs.referenceBase[glyph]!,
-    );
+    glyphs.curveBase[glyph] = table.getUint32(row + 32, true);
   }
   return { planeUnitsPerEm: SLUG_PLANE_UNITS_PER_EM, glyphs, pages };
 }
@@ -301,77 +294,36 @@ function slugGlyphTable(resource: CompiledRasterFontResource): DataView {
   return new DataView(table.bytes.buffer, table.bytes.byteOffset, table.bytes.byteLength);
 }
 
-/**
- * Rebuilds the reference-and-curve layout the CPU oracle reads from the renderer's band curves: band entry `k` becomes
- * curve texels `2k` (p0, p1) and `2k + 1` (p2), and its reference is `2(k - referenceBase)` from a curve base of
- * `2 * referenceBase`, which names the same control points the GPU reads for that entry.
- */
+/** The page as baked: the header grid the renderer uploads, and the curves and references it resolves on demand. */
 function slugPage(resource: CompiledRasterFontResource): SlugPageData {
   const group = resourceGroup(resource, 'Slug page');
   const headers = groupTexture(group, 'headers', 'Slug headers');
-  const bandCurves = groupTexture(group, 'bandCurves', 'Slug band curves');
-  const entries = new Uint32Array(
-    bandCurves.bytes.buffer,
-    bandCurves.bytes.byteOffset,
-    bandCurves.bytes.byteLength / 4,
-  );
-  const entryCount = entries.length / 4;
-  const curveWidth = 2 * bandCurves.width;
-  const curveWords = new Uint32Array(entryCount * 4);
-  for (let entry = 0; entry < entryCount; entry += 1) {
-    curveWords[entry * 4] = entries[entry * 4]!;
-    curveWords[entry * 4 + 1] = entries[entry * 4 + 1]!;
-    curveWords[entry * 4 + 2] = entries[entry * 4 + 2]!;
+  const curves = group.members.curves;
+  const references = group.members.references;
+  if (curves?.kind !== 'buffer' || references?.kind !== 'buffer') {
+    throw new TypeError('Slug page curves and references must be buffers');
   }
-  // Filled per glyph by `assignSlugReferences`, which knows which entries each glyph's bands name.
-  const references = new Uint16Array(entryCount);
+  // Curves are linear rgba16float texels; any row width addresses them the same way.
+  const curveTexels = curves.bytes.byteLength / 8;
+  const curveWidth = Math.min(4096, Math.max(1, curveTexels));
+  const curveHeight = Math.ceil(curveTexels / curveWidth);
+  const curveBytes = new Uint8Array(curveWidth * curveHeight * 8);
+  curveBytes.set(curves.bytes);
+  const referenceCount = references.bytes.byteLength / 2;
   return {
     resource: resource.key,
     curveWidth,
-    curveHeight: Math.ceil((entryCount * 2) / curveWidth),
-    curveBytes: new Uint8Array(curveWords.buffer),
+    curveHeight,
+    curveBytes,
     headerCount: headers.width * headers.height,
     headerWidth: headers.width,
     headerHeight: headers.height,
     headerBytes: headers.bytes,
-    referenceCount: references.length,
-    referenceWidth: references.length,
+    referenceCount,
+    referenceWidth: referenceCount,
     referenceHeight: 1,
-    referenceBytes: new Uint8Array(references.buffer),
+    referenceBytes: references.bytes,
   };
-}
-
-/**
- * Points each of a glyph's band entries at a rebuilt curve: entry `k` at reference `2(k - referenceBase)`, except that
- * an entry repeating a curve an earlier entry of the glyph already holds names that earlier one, so a glyph's distinct
- * references are its distinct curves, as baked.
- */
-function assignSlugReferences(
-  page: SlugPageData,
-  headerBases: readonly number[],
-  bandCounts: readonly number[],
-  referenceBase: number,
-) {
-  const headers = new DataView(page.headerBytes.buffer, page.headerBytes.byteOffset, page.headerBytes.byteLength);
-  const curves = new DataView(page.curveBytes.buffer, page.curveBytes.byteOffset, page.curveBytes.byteLength);
-  const references = new Uint16Array(
-    page.referenceBytes.buffer,
-    page.referenceBytes.byteOffset,
-    page.referenceBytes.byteLength / 2,
-  );
-  const seen = new Map<string, number>();
-  for (const [axis, headerBase] of headerBases.entries()) {
-    for (let band = 0; band < bandCounts[axis]!; band += 1) {
-      const header = headers.getUint32((headerBase + band) * 4, true);
-      const first = referenceBase + (header & 0xffff);
-      for (let entry = first; entry < first + (header >>> 16); entry += 1) {
-        const key = [0, 4, 8].map((offset) => curves.getUint32(entry * 16 + offset, true)).join(',');
-        const own = u16((entry - referenceBase) * 2, 'rebuilt Slug reference');
-        references[entry] = seen.get(key) ?? own;
-        if (!seen.has(key)) seen.set(key, own);
-      }
-    }
-  }
 }
 
 function planeValue(value: number, planeUnitsPerEm: number, label: string): number {

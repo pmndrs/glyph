@@ -14,6 +14,8 @@ export interface SlugGlyphTable {
   readonly texture: THREE.DataTexture;
   readonly rowsPerLine: number;
   readonly byteLength: number;
+  /** Copies row `row` of `table` into the texture and schedules its upload. */
+  write(table: Uint32Array, row: number): void;
 }
 
 /** The per-glyph constants of one table row, resolved to nodes. */
@@ -28,13 +30,13 @@ export interface SlugGlyphRow {
   readonly counts: THREE.Node<'uvec2'>;
 }
 
-/** Realizes a page's `glyphs` table, the codec's rows of sixteen little-endian words. */
-export function slugGlyphTable(bytes: Uint8Array): SlugGlyphTable {
-  const rows = bytes.byteLength / (SLUG_GLYPH_TABLE_STRIDE * 4);
+/** Realizes a page's glyph table from its rows of sixteen words. */
+export function slugGlyphTable(table: Uint32Array): SlugGlyphTable {
+  const rows = table.length / SLUG_GLYPH_TABLE_STRIDE;
   const rowsPerLine = Math.min(ROWS_PER_LINE, Math.max(1, rows));
   const lines = Math.max(1, Math.ceil(rows / rowsPerLine));
   const words = new Uint32Array(rowsPerLine * lines * SLUG_GLYPH_TABLE_STRIDE);
-  new Uint8Array(words.buffer).set(bytes);
+  words.set(table);
   const texture = dataTexture(
     words,
     rowsPerLine * TEXELS_PER_ROW,
@@ -42,7 +44,16 @@ export function slugGlyphTable(bytes: Uint8Array): SlugGlyphTable {
     THREE.RGBAIntegerFormat,
     THREE.UnsignedIntType,
   );
-  return { texture, rowsPerLine, byteLength: words.byteLength };
+  return {
+    texture,
+    rowsPerLine,
+    byteLength: words.byteLength,
+    write(source, row) {
+      const start = row * SLUG_GLYPH_TABLE_STRIDE;
+      words.set(source.subarray(start, start + SLUG_GLYPH_TABLE_STRIDE), start);
+      texture.needsUpdate = true;
+    },
+  };
 }
 
 /** Reads one glyph's row; meant for the vertex stage, whose outputs the fragment receives as varyings. */

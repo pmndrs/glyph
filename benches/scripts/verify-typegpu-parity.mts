@@ -29,6 +29,9 @@ const threeBudget: Readonly<Record<string, number | undefined>> = {
   slug: 5,
   'slug-labels': 2,
   'slug-labels-grown': 4,
+  // Large sizes (up to 48 px): identical between arriving over six frames and drawn in one.
+  'slug-arriving': 47,
+  'slug-arrived': 47,
 };
 
 interface Difference {

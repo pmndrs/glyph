@@ -14,6 +14,7 @@ import { transformAttribute, type RetainedBuffer, type ThreeBufferBindingId } fr
 import { glyphOriginBuffer, glyphStorageKey, ThreeMaterialRealizer, transformProgramKey } from './material-realizer.js';
 import { threeBatchScope } from './batch-scope.js';
 import { attachMsdfDrawState } from './msdf-draws.js';
+import { attachSlugDrawState } from './slug-residency.js';
 import type {
   OriginSegment,
   PreparationContext,
@@ -177,6 +178,7 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
           if (transform.kind === 'indexed') geometry.setAttribute('_pmndrsGlyphTransforms', context.transformAttribute);
           mesh = new THREE.Mesh(geometry, material);
           attachMsdfDrawState(mesh, material, byCodecId);
+          attachSlugDrawState(mesh, material, byCodecId);
           mesh.userData.pmndrsGlyphRunStart = span.recordIndex;
           mesh.userData.pmndrsGlyphPrimitiveKind = decoration ? 'decoration' : 'glyph';
           mesh.userData.pmndrsGlyphDepthKey = draw.depthKey;

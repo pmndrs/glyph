@@ -208,7 +208,7 @@ function mixedLabelScene(): Scene {
 }
 
 /** Every printable ASCII glyph in two fonts at several sizes and effects, revealed over several frames. */
-function arrivingScene(): Scene {
+function arrivingScene(font: (index: number) => FontName = (index) => (index % 2 === 0 ? 'inter' : 'dancing')): Scene {
   const lines = [
     'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
     'abcdefghijklmnopqrstuvwxyz',
@@ -218,16 +218,17 @@ function arrivingScene(): Scene {
   let y = 6;
   for (const [index, size] of [14, 22, 34, 48].entries()) {
     for (const text of lines) {
+      const effects = font(index) !== 'slug';
       items.push({
-        font: index % 2 === 0 ? 'inter' : 'dancing',
+        font: font(index),
         text,
         x: 8,
         y,
         style: {
           fontSize: size,
           color: '#ffffff',
-          ...(index === 2 ? { outline: { color: '#ff3030', width: size / 24 } } : {}),
-          ...(index === 3 ? { shadow: { color: '#3060ff', offset: [size / 20, size / 20] as const } } : {}),
+          ...(effects && index === 2 ? { outline: { color: '#ff3030', width: size / 24 } } : {}),
+          ...(effects && index === 3 ? { shadow: { color: '#3060ff', offset: [size / 20, size / 20] as const } } : {}),
         },
       });
       y += size * 1.2 + 2;
@@ -291,6 +292,11 @@ const scenes: Readonly<Record<string, Scene>> = {
       ...labelScene(200, 'slug').items.map((item) => ({ ...item, y: item.y + 200 })),
     ],
   },
+  // Glyphs arrive over six frames, fill only (Slug draws no effects): band curves become resident across frames and grow past several
+  // doublings of the resident texture.
+  'slug-arriving': arrivingScene(() => 'slug'),
+  // The same text drawn in one frame, so the arriving capture can be compared with it.
+  'slug-arrived': { items: arrivingScene(() => 'slug').items },
   'slug-labels': labelScene(1000, 'slug'),
   'slug-labels-grown': {
     items: [
