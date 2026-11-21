@@ -91,9 +91,18 @@ impl ParagraphChange {
 impl ParagraphState {
     /// Classifies the preparation that just staged its candidates. Call before they commit.
     fn staged_change(&self) -> ParagraphChange {
+        let class = self.staged_class();
+        ParagraphChange {
+            class,
+            units: self.staged_units(class),
+            lines: self.staged_lines(class),
+        }
+    }
+
+    /// Classifies by cause, not by which stages ran: a size change re-derives clusters and runs
+    /// without changing which glyphs they hold.
+    fn staged_class(&self) -> ChangeClass {
         let style = self.style_invalidation;
-        // Classify by cause, not by which stages ran: a size change re-derives clusters and runs
-        // without changing which glyphs they hold.
         let content = self.text.is_prepared()
             || self.unicode.is_prepared()
             || style.bidi
@@ -107,7 +116,7 @@ impl ParagraphState {
             || self.flow_layout.is_prepared()
             || self.positioned.is_prepared()
             || self.prepared_layout.is_prepared();
-        let class = if content {
+        if content {
             ChangeClass::Content
         } else if style.metrics || style.effects {
             ChangeClass::Metric
@@ -117,36 +126,40 @@ impl ParagraphState {
             ChangeClass::Paint
         } else {
             ChangeClass::None
-        };
-        let units = match class {
+        }
+    }
+
+    fn staged_units(&self, class: ChangeClass) -> DirtyInterval {
+        match class {
             ChangeClass::None => DirtyInterval::EMPTY,
-            ChangeClass::Paint => style.changed,
-            ChangeClass::Content if !self.text_edits.is_empty() && !style.any() => self
-                .text_edits
-                .iter()
-                .fold(DirtyInterval::EMPTY, |units, edit| {
-                    units.join(DirtyInterval::of(edit.new_start, edit.new_end))
-                }),
-            _ => DirtyInterval::ALL,
-        };
-        let lines = match class {
-            ChangeClass::None | ChangeClass::Paint => DirtyInterval::EMPTY,
-            _ => match self
-                .flow_layout
-                .is_prepared()
-                .then(|| self.flow_layout.pending().recomposed_line_ranges())
-                .flatten()
+            ChangeClass::Paint => self.style_invalidation.changed,
+            ChangeClass::Content
+                if !self.text_edits.is_empty() && !self.style_invalidation.any() =>
             {
-                Some(ranges) => ranges.iter().fold(DirtyInterval::EMPTY, |lines, range| {
-                    lines.join(DirtyInterval::of(range.start, range.end))
-                }),
-                None => DirtyInterval::ALL,
-            },
-        };
-        ParagraphChange {
-            class,
-            units,
-            lines,
+                self.text_edits
+                    .iter()
+                    .fold(DirtyInterval::EMPTY, |units, edit| {
+                        units.join(DirtyInterval::of(edit.new_start, edit.new_end))
+                    })
+            }
+            _ => DirtyInterval::ALL,
+        }
+    }
+
+    fn staged_lines(&self, class: ChangeClass) -> DirtyInterval {
+        if matches!(class, ChangeClass::None | ChangeClass::Paint) {
+            return DirtyInterval::EMPTY;
+        }
+        let recomposed = self
+            .flow_layout
+            .is_prepared()
+            .then(|| self.flow_layout.pending().recomposed_line_ranges())
+            .flatten();
+        match recomposed {
+            Some(ranges) => ranges.iter().fold(DirtyInterval::EMPTY, |lines, range| {
+                lines.join(DirtyInterval::of(range.start, range.end))
+            }),
+            None => DirtyInterval::ALL,
         }
     }
 

@@ -4590,7 +4590,6 @@ impl ParagraphState {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[allow(clippy::too_many_arguments)]
     fn prepare(
         &mut self,
         shaper: Option<&mut ShaperRegistry>,
@@ -4620,6 +4619,7 @@ impl ParagraphState {
         Ok(positioned_changed)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn prepare_stages(
         &mut self,
         mut shaper: Option<&mut ShaperRegistry>,

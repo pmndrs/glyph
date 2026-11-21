@@ -870,7 +870,7 @@ test('sibling preparation refreshes split identities before and after publicatio
   }
 });
 
-test('warm sibling placements recover after preparation commits but its result is rejected', async (t) => {
+test('warm sibling placements recover after a read prepares but its result is rejected', async (t) => {
   for (const publishBeforeSplit of [false, true]) {
     await t.test(publishBeforeSplit ? 'after recovery publication' : 'before recovery publication', async (subtest) => {
       const three = await createThreeTestHandle(subtest);
@@ -879,10 +879,13 @@ test('warm sibling placements recover after preparation commits but its result i
       const a = three.createText({ font, style: { fontSize: 16 }, text: 'A ' });
       const b = three.createText({ font, style: { fontSize: 16 }, text: 'B' });
       const cold = await mount(subtest, font, 'A ', { style: { fontSize: 16 } });
+      const coldEdited = await mount(subtest, font, 'BB', { style: { fontSize: 16 } });
       scene.add(a, b);
       let beforeRecovery;
       let afterPublication;
       let coldCopy;
+      let editedCopy;
+      let coldEditedCopy;
       try {
         scene.updateMatrixWorld(true);
         assert.equal(a.measureGlyphs().length, 2, 'warm the unchanged sibling placement query, including its blank');
@@ -890,39 +893,64 @@ test('warm sibling placements recover after preparation commits but its result i
         const acceptedRendererBytes = rendererBytes(scene);
         const originalPrepare = PlanTransport.prototype.prepareParagraph;
         const preparationFailure = new Error('injected failure after real paragraph preparation');
-        let failed = false;
+        let preparations = 0;
         PlanTransport.prototype.prepareParagraph = function (...args) {
           const result = originalPrepare.apply(this, args);
-          if (!failed) {
-            failed = true;
-            throw preparationFailure;
-          }
+          preparations += 1;
+          if (preparations === 1) throw preparationFailure;
           return result;
         };
         try {
+          b.set({ text: 'BB' });
+          assert.equal(preparations, 0, 'the setter does not prepare, so it cannot fail for an engine reason');
+          assert.equal(b.text, 'BB');
           assert.throws(
-            () => b.set({ text: 'BB' }),
+            () => b.measure(),
             (error) => error === preparationFailure,
+            'the read that prepares reports the failure',
           );
+          assert.equal(preparations, 1, 'the real preparation completed before its result was rejected');
+          assert.equal(b.text, 'BB', 'the failed read keeps the authored value the setter accepted');
+          assert.deepEqual(
+            rendererBytes(scene),
+            acceptedRendererBytes,
+            'failed preparation cannot change renderer bytes',
+          );
+
+          if (publishBeforeSplit) {
+            scene.updateMatrixWorld(true);
+            assert.equal(b.commitState().status, 'committed', 'the frame restates the edit whose read failed');
+          }
+          const bytesBeforeSiblingRead = rendererBytes(scene);
+          const preparationsBeforeSiblingRead = preparations;
+          beforeRecovery = a.split()[0];
+          assert.equal(
+            preparations - preparationsBeforeSiblingRead,
+            1,
+            'the sibling read enters the engine once, for its own paragraph only',
+          );
+          assert.equal(beforeRecovery.count, 1);
+          assert.equal(a.glyphs().glyphCount, 2, 'recovery preserves non-drawable blank glyphs');
+          assert.deepEqual(
+            rendererBytes(scene),
+            bytesBeforeSiblingRead,
+            'recovery reads do not publish renderer bytes',
+          );
+          if (!publishBeforeSplit) {
+            assert.deepEqual(bytesBeforeSiblingRead, acceptedRendererBytes);
+            assert.equal(b.commitState().status, 'pending', 'a sibling read does not restate the failed edit');
+          }
         } finally {
           PlanTransport.prototype.prepareParagraph = originalPrepare;
         }
-        assert.equal(failed, true, 'the real preparation completed before its result was rejected');
-        assert.equal(b.text, 'B', 'the rejected edit does not replace the accepted authored text');
-        assert.deepEqual(
-          rendererBytes(scene),
-          acceptedRendererBytes,
-          'failed preparation cannot change renderer bytes',
-        );
-
-        if (publishBeforeSplit) scene.updateMatrixWorld(true);
-        beforeRecovery = a.split()[0];
-        assert.equal(beforeRecovery.count, 1);
-        assert.equal(a.glyphs().glyphCount, 2, 'recovery preserves non-drawable blank glyphs');
-        assert.deepEqual(rendererBytes(scene), acceptedRendererBytes, 'recovery reads do not publish renderer bytes');
 
         scene.updateMatrixWorld(true);
         assert.equal(a.commitState().status, 'committed');
+        assert.equal(b.commitState().status, 'committed', 'the frame restates the edit whose read failed');
+        assert.equal(b.text, 'BB');
+        editedCopy = b.split()[0];
+        coldEditedCopy = coldEdited.node.split()[0];
+        assert.deepEqual(copySnapshot(editedCopy), copySnapshot(coldEditedCopy), 'the restated edit is a cold layout');
         afterPublication = a.split()[0];
         coldCopy = cold.node.split()[0];
         assert.deepEqual(copySnapshot(beforeRecovery), copySnapshot(afterPublication));
@@ -942,15 +970,95 @@ test('warm sibling placements recover after preparation commits but its result i
           -1000,
           'placement queries remain isolated from public mutation',
         );
+
+        b.text = 'B';
+        scene.updateMatrixWorld(true);
+        assert.equal(b.commitState().status, 'committed', 'a later setter publishes normally after recovery');
+        assert.equal(b.measureGlyphs().length, 1);
+        assert.deepEqual(
+          rendererBytes(scene).map((draw) => draw.instanceCount),
+          acceptedRendererBytes.map((draw) => draw.instanceCount),
+          'restoring the text restores the drawn instances',
+        );
       } finally {
         beforeRecovery?.dispose();
         afterPublication?.dispose();
         coldCopy?.dispose();
+        editedCopy?.dispose();
+        coldEditedCopy?.dispose();
         a.dispose();
         b.dispose();
         unmount(cold);
+        unmount(coldEdited);
       }
     });
+  }
+});
+
+test('warm sibling placements recover after the frame batch prepares but its result is rejected', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont();
+  const scene = new THREE.Scene();
+  const a = three.createText({ font, style: { fontSize: 16 }, text: 'A ' });
+  const b = three.createText({ font, style: { fontSize: 16 }, text: 'B' });
+  const cold = await mount(t, font, 'A ', { style: { fontSize: 16 } });
+  const coldEdited = await mount(t, font, 'BB', { style: { fontSize: 16 } });
+  scene.add(a, b);
+  const copies = [];
+  const split = (node) => {
+    const [copy] = node.split();
+    copies.push(copy);
+    return copy;
+  };
+  try {
+    scene.updateMatrixWorld(true);
+    assert.equal(a.measureGlyphs().length, 2, 'warm the unchanged sibling placement query, including its blank');
+    const acceptedRendererBytes = rendererBytes(scene);
+    const originalConsume = PlanTransport.prototype.consumeStagedPreparation;
+    const preparationFailure = new Error('injected failure after real batch preparation');
+    let batches = 0;
+    PlanTransport.prototype.consumeStagedPreparation = function (...args) {
+      const result = originalConsume.apply(this, args);
+      batches += 1;
+      if (batches === 1) throw preparationFailure;
+      return result;
+    };
+    try {
+      b.set({ text: 'BB' });
+      assert.equal(batches, 0, 'the setter does not prepare');
+      assert.doesNotThrow(() => scene.updateMatrixWorld(true), 'a traversal reports through commit state');
+      assert.equal(batches, 1, 'the real batch preparation completed before its result was rejected');
+      assert.deepEqual(b.commitState(), { status: 'failed', error: preparationFailure });
+      assert.equal(b.text, 'BB', 'the failed frame keeps the authored value the setter accepted');
+      assert.deepEqual(rendererBytes(scene), acceptedRendererBytes, 'failed preparation cannot change renderer bytes');
+
+      const beforeRecovery = split(a);
+      assert.equal(beforeRecovery.count, 1);
+      assert.equal(a.glyphs().glyphCount, 2, 'recovery preserves non-drawable blank glyphs');
+      assert.deepEqual(rendererBytes(scene), acceptedRendererBytes, 'recovery reads do not publish renderer bytes');
+      assert.equal(batches, 1, 'a read restates its own paragraph without a batch');
+
+      b.set({ style: { fontSize: 16, color: '#ff0000' } });
+      scene.updateMatrixWorld(true);
+      assert.equal(batches, 2, 'the frame after a later setter restates what is still unprepared in one batch');
+      assert.equal(a.commitState().status, 'committed');
+      assert.equal(b.commitState().status, 'committed');
+      assert.deepEqual(copySnapshot(beforeRecovery), copySnapshot(split(a)));
+      assert.deepEqual(copySnapshot(split(a)), copySnapshot(split(cold.node)));
+      assert.deepEqual(
+        copySnapshot(split(b)).measurements,
+        copySnapshot(split(coldEdited.node)).measurements,
+        'the restated edit has the geometry of a cold layout',
+      );
+    } finally {
+      PlanTransport.prototype.consumeStagedPreparation = originalConsume;
+    }
+  } finally {
+    for (const copy of copies) copy.dispose();
+    a.dispose();
+    b.dispose();
+    unmount(cold);
+    unmount(coldEdited);
   }
 });
 

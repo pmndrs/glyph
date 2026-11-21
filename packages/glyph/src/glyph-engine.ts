@@ -486,27 +486,7 @@ class GlyphEngineImpl implements GlyphEngine {
           outcomes[index] = shapeFailure(error);
         }
       }
-      if (staged.length !== 0) {
-        try {
-          const exports = runtimeShaperEngineExports(this.#shaper);
-          const results = this.#callBatch(staged, exports.prepareBatch, 'prepare Glyph batch');
-          const layout = textShaperAbi.layouts.engineUpdateBatchEntry;
-          for (let stagedIndex = 0; stagedIndex < staged.length; stagedIndex += 1) {
-            const offset = stagedIndex * layout.size;
-            const status = results.view.getUint32(offset + layout.status, true);
-            const resultPointer = results.view.getUint32(offset + layout.resultPointer, true);
-            try {
-              if (resultPointer === 0) requireEngineStatus(status, 'prepare Glyph root');
-              staged[stagedIndex]!.adoptPreparation(resultPointer, results.memory);
-            } catch (error) {
-              outcomes[stagedRegistrationIndices[stagedIndex]!] = shapeFailure(error);
-            }
-          }
-        } catch (error) {
-          const batchError = shapeFailure(error);
-          for (const index of stagedRegistrationIndices) outcomes[index] ??= batchError;
-        }
-      }
+      if (staged.length !== 0) this.#adoptPreparationBatch(staged, stagedRegistrationIndices, outcomes);
     } finally {
       for (const preparation of staged) {
         try {
@@ -524,6 +504,33 @@ class GlyphEngineImpl implements GlyphEngine {
       } catch (error) {
         outcomes[index] = shapeFailure(error);
       }
+    }
+  }
+
+  /** Makes the one batch-preparation call and hands each root its own answer; a root's failure stays its own. */
+  #adoptPreparationBatch(
+    staged: readonly StagedPlannerPreparation[],
+    stagedRegistrationIndices: readonly number[],
+    outcomes: ShapeOutcome[],
+  ): void {
+    try {
+      const exports = runtimeShaperEngineExports(this.#shaper);
+      const results = this.#callBatch(staged, exports.prepareBatch, 'prepare Glyph batch');
+      const layout = textShaperAbi.layouts.engineUpdateBatchEntry;
+      for (let stagedIndex = 0; stagedIndex < staged.length; stagedIndex += 1) {
+        const offset = stagedIndex * layout.size;
+        const status = results.view.getUint32(offset + layout.status, true);
+        const resultPointer = results.view.getUint32(offset + layout.resultPointer, true);
+        try {
+          if (resultPointer === 0) requireEngineStatus(status, 'prepare Glyph root');
+          staged[stagedIndex]!.adoptPreparation(resultPointer, results.memory);
+        } catch (error) {
+          outcomes[stagedRegistrationIndices[stagedIndex]!] = shapeFailure(error);
+        }
+      }
+    } catch (error) {
+      const batchError = shapeFailure(error);
+      for (const index of stagedRegistrationIndices) outcomes[index] ??= batchError;
     }
   }
 

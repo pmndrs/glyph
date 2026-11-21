@@ -301,13 +301,20 @@ test('invalid authored properties reject atomically while unknown properties are
   }
 });
 
-test('an unpaired surrogate throws where the caller wrote it', { timeout }, async (t) => {
+test('an unpaired surrogate is replaced and counted where the caller wrote it', { timeout }, async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await fonts.load('inter');
-  assert.throws(
-    () => three.createText({ font, constraints, layout, style: [latin, paint], text: 'ab\ud800cd' }),
-    (error) => error instanceof RangeError && /text offset 2 is an unpaired high surrogate/.test(error.message),
-  );
+  const node = three.createText({ font, constraints, layout, style: [latin, paint], text: 'ab\ud800cd' });
+  const repaired = three.createText({ font, constraints, layout, style: [latin, paint], text: 'ab\ufffdcd' });
+  try {
+    assert.equal(node.text, 'ab\ufffdcd');
+    assert.equal(node.replacedSurrogates, 1);
+    assert.equal(repaired.replacedSurrogates, 0);
+    assert.deepEqual(node.measure(), repaired.measure(), 'the repaired text lays out as U+FFFD does');
+  } finally {
+    node.dispose();
+    repaired.dispose();
+  }
 });
 
 test('a malformed feature range throws while constructing its structural span', { timeout }, () => {

@@ -154,7 +154,7 @@ test('a published text re-measures while a sibling removal waits for the next pu
   root.dispose();
 });
 
-test('canceling an unqueried creation leaves later copy queries free of lifecycle rows', (t) => {
+test('a canceled unprepared creation never adds lifecycle rows to a copy, a read or a frame', (t) => {
   const root = handle('removal-lifecycle:canceled-creation');
   const source = root.services.createText(textState(font, 'retained', unconstrained));
   const destination = () => ({
@@ -171,25 +171,25 @@ test('canceling an unqueried creation leaves later copy queries free of lifecycl
     const inspection = source.inspect();
     const canceled = root.services.createText(textState(font, 'canceled', unconstrained));
     canceled.dispose();
-    const lifecycleCounts = [];
-    let publications = 0;
+    const preparations = [];
+    const staged = [];
     const prepareParagraph = PlanTransport.prototype.prepareParagraph;
     const stageUpdate = PlanTransport.prototype.stageUpdate;
     PlanTransport.prototype.prepareParagraph = function (request, ...rest) {
-      lifecycleCounts.push(request.paragraphMutations.length);
+      preparations.push(request.paragraphMutations.map((mutation) => mutation.opcode));
       return prepareParagraph.call(this, request, ...rest);
     };
-    PlanTransport.prototype.stageUpdate = function (...arguments_) {
-      publications += 1;
-      return stageUpdate.apply(this, arguments_);
+    PlanTransport.prototype.stageUpdate = function (frame, ...rest) {
+      staged.push(frame.paragraphMutations.map((mutation) => mutation.opcode));
+      return stageUpdate.call(this, frame, ...rest);
     };
     t.after(() => {
       PlanTransport.prototype.prepareParagraph = prepareParagraph;
       PlanTransport.prototype.stageUpdate = stageUpdate;
     });
     copy = root.services.copy(source, { kind: 'glyphs', stableIds: inspection.glyphStableIds }, destination());
-    assert.deepEqual(lifecycleCounts, [], 'copy consumes durable preparation without another lifecycle request');
-    assert.equal(publications, 0, 'copying cannot publish the source');
+    assert.deepEqual(preparations, [], 'copy consumes durable preparation without another lifecycle request');
+    assert.deepEqual(staged, [], 'copying cannot publish the source');
     assert.deepEqual(source.inspect().glyphStableIds, inspection.glyphStableIds);
     copy.dispose();
     const retained = root.services.createText(textState(font, 'retained sibling', unconstrained));
@@ -197,8 +197,42 @@ test('canceling an unqueried creation leaves later copy queries free of lifecycl
     anotherCanceled.dispose();
     try {
       copy = root.services.copy(source, { kind: 'glyphs', stableIds: inspection.glyphStableIds }, destination());
-      assert.deepEqual(lifecycleCounts, [2, 1], 'setters carry the canceled removal and new creation exactly once');
-      assert.equal(publications, 0);
+      assert.deepEqual(preparations, [], 'creating and canceling siblings sends the engine nothing before a read');
+      assert.deepEqual(staged, []);
+      assert.deepEqual(source.inspect().glyphStableIds, inspection.glyphStableIds);
+      assert.equal(retained.measure().glyphCount, 'retained sibling'.length);
+      assert.deepEqual(
+        preparations,
+        [['upsert']],
+        'the first read creates only the text it reads; neither canceled sibling leaves a row',
+      );
+      assert.deepEqual(staged, [], 'a read cannot publish');
+      copy.dispose();
+      copy = root.services.copy(source, { kind: 'glyphs', stableIds: inspection.glyphStableIds }, destination());
+      assert.deepEqual(preparations, [['upsert']], 'a later copy still sends no lifecycle request');
+      const framed = root.services.createText(textState(font, 'prepared by the frame', unconstrained));
+      const canceledBeforeFrame = root.services.createText(textState(font, 'canceled before the frame', unconstrained));
+      canceledBeforeFrame.dispose();
+      try {
+        glyph.shape();
+        assert.deepEqual(
+          staged,
+          [['upsert'], []],
+          'the frame batch creates only the surviving unread text, and publication carries no lifecycle row',
+        );
+        assert.deepEqual(preparations, [['upsert']], 'the frame prepares through its batch, not per paragraph');
+        assert.equal(framed.measure().glyphCount, 'prepared by the frame'.length);
+        assert.deepEqual(
+          preparations,
+          [['upsert'], []],
+          'a read after the frame only serializes the summary the batch was not asked for',
+        );
+        framed.measure();
+        assert.deepEqual(preparations, [['upsert'], []], 'a repeated read sends nothing');
+        assert.deepEqual(source.inspect().glyphStableIds, inspection.glyphStableIds);
+      } finally {
+        framed.dispose();
+      }
     } finally {
       retained.dispose();
     }

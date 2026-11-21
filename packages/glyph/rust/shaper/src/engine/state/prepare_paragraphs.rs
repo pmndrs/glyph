@@ -123,32 +123,8 @@ impl TextEngine {
                 PreparationTarget::Dirty => planner.semantic_input_spans.len(),
             };
             for index in 0..count {
-                let (paragraph_id, text, styles, geometry) = match target {
-                    PreparationTarget::One(paragraph_id) => (
-                        paragraph_id,
-                        request.text_mutations,
-                        request.style_mutations,
-                        request.geometry,
-                    ),
-                    PreparationTarget::Dirty => {
-                        let spans = planner.semantic_input_spans[index];
-                        (
-                            spans.id,
-                            request
-                                .text_mutations
-                                .span(spans.text)
-                                .map_err(|_| EngineError::InvalidRequest)?,
-                            request
-                                .style_mutations
-                                .span(spans.styles)
-                                .map_err(|_| EngineError::InvalidRequest)?,
-                            request
-                                .geometry
-                                .spans(spans.constraints, spans.inline_objects)
-                                .map_err(|_| EngineError::InvalidRequest)?,
-                        )
-                    }
-                };
+                let (paragraph_id, text, styles, geometry) =
+                    paragraph_input(planner, request, target, index)?;
                 // Reserve ownership before any semantic stage mutates its candidate state. Each
                 // successful preparation is accepted before the call returns.
                 admit_preparation_owner(
@@ -225,6 +201,47 @@ impl TextEngine {
             codec_fingerprint,
         })
     }
+}
+
+type ParagraphInput<'request> = (
+    u32,
+    super::super::semantic_wire::TextMutationBatch<'request>,
+    super::super::semantic_wire::StyleMutationBatch<'request>,
+    super::super::semantic_wire::GeometryBatch<'request>,
+);
+
+/// The records one paragraph of the request owns: all of them for a read, its routed spans for
+/// the `index`-th paragraph of a batch.
+fn paragraph_input<'request>(
+    planner: &PlannerState,
+    request: UpdateRequest<'request>,
+    target: PreparationTarget,
+    index: usize,
+) -> Result<ParagraphInput<'request>, EngineError> {
+    let PreparationTarget::One(paragraph_id) = target else {
+        let spans = planner.semantic_input_spans[index];
+        return Ok((
+            spans.id,
+            request
+                .text_mutations
+                .span(spans.text)
+                .map_err(|_| EngineError::InvalidRequest)?,
+            request
+                .style_mutations
+                .span(spans.styles)
+                .map_err(|_| EngineError::InvalidRequest)?,
+            request
+                .geometry
+                .spans(spans.constraints, spans.inline_objects)
+                .map_err(|_| EngineError::InvalidRequest)?,
+        ));
+    };
+    Ok((
+        paragraph_id,
+        request.text_mutations,
+        request.style_mutations,
+        request.geometry,
+    ))
 }
 
 /// A read names a paragraph the request leaves alive: one the committed plan retains, or one this
