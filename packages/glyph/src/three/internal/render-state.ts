@@ -67,9 +67,9 @@ export interface PreparedTransformUpdate {
 }
 
 export interface PreparedTransforms {
-  readonly contents: Float32Array;
-  readonly start: number;
-  readonly end: number;
+  /** Transform identities whose table rows are replaced, parallel to sixteen `values` each. */
+  readonly rows: readonly number[];
+  readonly values: Float32Array;
   readonly direct: readonly PreparedTransformUpdate[];
 }
 

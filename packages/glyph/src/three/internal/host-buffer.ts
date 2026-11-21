@@ -89,12 +89,20 @@ export function commitBufferMutations(staged: StagedBufferMutations): void {
 
 export function commitTransforms(
   attribute: THREE.StorageInstancedBufferAttribute,
-  prepared: Readonly<{ contents: Float32Array; start: number; end: number }>,
+  prepared: Readonly<{ rows: readonly number[]; values: Float32Array }>,
 ): void {
-  if (prepared.end <= prepared.start) return;
+  const { rows, values } = prepared;
+  if (rows.length === 0) return;
   const target = attribute.array as Float32Array;
-  target.set(prepared.contents.subarray(prepared.start, prepared.end), prepared.start);
-  markStorageAttributeUpdated(attribute, prepared.start, prepared.end - prepared.start);
+  let start = target.length;
+  let end = 0;
+  for (let index = 0; index < rows.length; index += 1) {
+    const offset = rows[index]! * 16;
+    target.set(values.subarray(index * 16, index * 16 + 16), offset);
+    start = Math.min(start, offset);
+    end = Math.max(end, offset + 16);
+  }
+  markStorageAttributeUpdated(attribute, start, end - start);
 }
 
 /** @internal Marks one storage-attribute span for both WebGPU and WebGL2/PBO uploads. */

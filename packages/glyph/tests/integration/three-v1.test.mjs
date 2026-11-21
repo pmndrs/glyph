@@ -4236,14 +4236,14 @@ test('an already queued Three root observes presentation only during preparation
     readsBeforePrepare = undefined;
     scene.updateMatrixWorld(true);
     assert.equal(readsBeforePrepare, 0, 'a queued root must not repeat presentation preflight before preparation');
-    assert.ok(materialReads > 0, 'preparation still observes the complete ancestor presentation');
+    assert.equal(materialReads, 0, 'the setter already staged this presentation, so preparation does not re-read it');
     assert.equal(services._isShapeQueued(), false);
     assert.equal(label.commitState().status, 'committed');
 
     const crossings = instrumentedGlyph.crossings;
     materialReads = 0;
     scene.updateMatrixWorld(true);
-    assert.ok(materialReads > 0, 'an unqueued traversal still checks raw hierarchy and presentation changes');
+    assert.equal(materialReads, 0, 'an unchanged unqueued traversal resolves no presentation');
     assert.equal(instrumentedGlyph.crossings, crossings, 'an unchanged unqueued traversal must not publish');
     group.renderOrder = 8;
     scene.updateMatrixWorld(true);

@@ -53,6 +53,11 @@ export interface ThreeRendererHost {
   readonly renderOrderBase?: number;
   /** Resolves retained visibility when transforms are not descendants of the private publication object. */
   visibleObject?(object: THREE.Object3D): boolean;
+  /**
+   * The owner re-synchronizes a retained transform whenever its object moves or changes visibility, so a
+   * publication may keep the committed row of an object that stays at the same transform identity.
+   */
+  readonly retainsSynchronizedTransforms?: boolean;
   /** Placement-only paragraph translation; candidate state is used transactionally during decode. */
   anchorOffset?(object: THREE.Object3D, preparing: boolean): LayoutPoint | undefined;
   /** Optional transform remapping used when a copied plan is imported beneath a detached root. */
@@ -647,27 +652,32 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
     ].filter((texture) => !retained.has(texture));
   }
 
+  /**
+   * Stages one row per transform whose table entry is not already current. An owner that keeps retained rows
+   * synchronized as its objects move lets a publication skip every row it did not introduce or re-anchor.
+   */
   #prepareTransforms(draws: PreparedDrawReplacement): PreparedTransforms {
     const attribute = this.#preparation?.transformAttribute ?? this.#transformAttribute;
-    const contents = (attribute.array as Float32Array).slice();
-    const direct: PreparedTransformUpdate[] = [];
-    let start = contents.length;
-    let end = 0;
-    const transformIds = new Set<number>();
     const transforms = this.#preparation?.transforms ?? this.#transforms;
-    for (const transformId of transforms.keys()) {
-      if (draws.activeTransformIndices.has(transformId) || draws.directDrawsByTransform.has(transformId)) {
-        transformIds.add(transformId);
-      }
+    const rowsRetained = this.#owner.retainsSynchronizedTransforms === true && attribute === this.#transformAttribute;
+    const pending: number[] = [];
+    for (const [transformId, object] of transforms) {
+      const indexed = draws.activeTransformIndices.has(transformId);
+      const direct = draws.directDrawsByTransform.has(transformId);
+      if (!indexed && !direct) continue;
+      if (rowsRetained && !direct && this.#retainsSynchronizedRow(transformId, object)) continue;
+      pending.push(transformId);
     }
-    if (transformIds.size === 0) return { contents, start: 0, end: 0, direct };
+    const rows: number[] = [];
+    const values = new Float32Array(pending.length * 16);
+    const direct: PreparedTransformUpdate[] = [];
+    if (pending.length === 0) return { rows, values, direct };
     draws.root.updateWorldMatrix(true, false, true);
     const rootInverse = new THREE.Matrix4().copy(draws.root.matrixWorld).invert();
     const relative = new THREE.Matrix4();
-    for (const transformId of transformIds) {
-      const object = transforms.get(transformId);
-      if (object === undefined)
-        throw new Error(`Three command-buffer renderer has no candidate transform ${transformId}`);
+    const capacity = (attribute.array as Float32Array).length;
+    for (const transformId of pending) {
+      const object = transforms.get(transformId)!;
       object.updateWorldMatrix(true, false, true);
       if (object === draws.root) relative.identity();
       else relative.multiplyMatrices(rootInverse, object.matrixWorld);
@@ -677,18 +687,24 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       }
       const visible = this.#owner.visibleObject?.(object) ?? visibleBelowRoot(object, draws.root);
       if (draws.activeTransformIndices.has(transformId)) {
-        const offset = transformId * 16;
-        if (offset > contents.length - 16) throw new RangeError('transform identity exceeds its prepared table');
-        if (visible) contents.set(relative.elements, offset);
-        else contents.fill(0, offset, offset + 16);
-        start = Math.min(start, offset);
-        end = Math.max(end, offset + 16);
+        if (transformId * 16 > capacity - 16) throw new RangeError('transform identity exceeds its prepared table');
+        // Rows start zeroed, which is also the hidden encoding.
+        if (visible) values.set(relative.elements, rows.length * 16);
+        rows.push(transformId);
       }
       for (const mesh of draws.directDrawsByTransform.get(transformId) ?? []) {
         direct.push({ mesh, matrix: relative.clone(), visible });
       }
     }
-    return { contents, start: end > start ? start : 0, end, direct };
+    return { rows, values, direct };
+  }
+
+  /** Whether the committed table row already belongs to this object under an unchanged placement anchor. */
+  #retainsSynchronizedRow(transformId: number, object: THREE.Object3D): boolean {
+    if (this.#transforms.get(transformId) !== object || !this.#activeTransformIndices.has(transformId)) return false;
+    const staged = this.#owner.anchorOffset?.(object, true);
+    const committed = this.#owner.anchorOffset?.(object, false);
+    return (staged?.x ?? 0) === (committed?.x ?? 0) && (staged?.y ?? 0) === (committed?.y ?? 0);
   }
 
   #discardPreparation(context: PreparationContext, draws: PreparedDrawReplacement | undefined): void {
