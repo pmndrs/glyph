@@ -39,7 +39,9 @@ Updated in place; the history of each change is in the log below.
 | Unit 1b: dense positioning and per-line ink                                                                                                                                                                                   | held     | —                                                   | Needs oracle, 1a                                                                                   |
 | Existing-engine divergence fixes (all seven families)                                                                                                                                                                         | merged   | tag `sil-green-5`                                   | `KNOWN-DIVERGENCES` is empty; 43,680 seeded requests all equal cold                                |
 | Unit 1c: dense cluster build with dirty-range output                                                                                                                                                                          | held     | —                                                   | Starts after geometry (1a) merges; both touch `cluster_state.rs`                                   |
-| Unit 1d: Unicode class closure, bitmap kernels, per-paragraph bidi, resync predicate, word and sentence lanes                                                                                                                 | building | `experiments/sil-unicode`                           |                                                                                                    |
+| Unit 1d part 1: Unicode property closure, dense line-break/grapheme/script kernel, per-paragraph bidi                                                                                                                         | merged   | tag `sil-green-7`                                   | Unicode stage 18–25× faster for Latin, Cyrillic, Arabic; 5.8× CJK; no gain for Indic or Thai       |
+| Unit 1d part 2: UAX #14 scalar bug fix, bidi double classification, resync predicate, word and sentence lanes, table re-encoding                                                                                              | building | `experiments/sil-unicode`                           |                                                                                                    |
+| Font binding compiled at font load                                                                                                                                                                                            | merged   | tag `sil-green-7`                                   | First `createText` 16.2 → 12.7 ms with a full font                                                 |
 | Unit 1e part 1: column gather for prepared owners                                                                                                                                                                             | merged   | tag `sil-green-3`                                   | Gather 3.40 → 0.98 ms on a 25.9k font-size publication (main 1.20)                                 |
 | Unit 1e part 2: gather by change class (colour-only columns, origin-only columns, line height)                                                                                                                                | held     | —                                                   | Needs an accumulated per-paragraph change class in `state.rs`; scheduled after unit 3              |
 | Unit 2: local edits                                                                                                                                                                                                           | held     | —                                                   | Needs 1b, 1c                                                                                       |
@@ -398,3 +400,25 @@ Updated in place; the history of each change is in the log below.
   buffer slot.
 - **New behaviour to note.** On TypeGPU the first appearance of an outline or shadow compiles its pipeline in
   that frame; a custom colour transform no longer sees the empty part of a glyph cell.
+- **Merged: unit 1d part 1, dense Unicode analysis** (tag `sil-green-7`, pushed; full oracle tier green,
+  native and wasm). Fast-path membership is generated from the Unicode database as a property closure, not a
+  script list. Unicode stage self-time in wasm at 22k units (before → after, µs): Latin 1,208 → 50; Cyrillic
+  1,429 → 60; Arabic 1,319 → 69; CJK 1,554 → 261; Devanagari 1,325 → 1,357; Thai unchanged. Proven by an
+  exhaustive kernel-versus-scalar comparison over 82.8 million strings, a 400,000-string fuzz, and all UAX
+  conformance files through both paths. Bidi is now classified per bidi paragraph with counts exposed.
+- **Costs and gaps of part 1.** Wasm grew by 8.8 kB gzip (the new table and kernel; the table re-encoding
+  meant to offset it is not done). Bidi is about 25% slower on paragraphs with right-to-left text because
+  they are classified twice. Indic and Thai text gain nothing (all residue). Whole-operation edit time
+  against main was not measured.
+- **Finding: the existing line breaker has UAX #14 bugs** not covered by the official test file (inherited
+  from the library it was ported from): after an opening quote the break after the following unit is
+  suppressed (`“A dog` has no break after the space; `«字字字` no break between the first two ideographs), and
+  two state flags survive a required line break. The kernel reproduces the current behaviour bit for bit.
+  **Default taken:** fix it, since correct multilingual line breaking is a stated requirement; it changes
+  line breaks against main for text with opening quotes and changes cold references for the affected oracle
+  cases, which will be listed and re-frozen as a separate commit that is easy to revert. Assigned to part 2.
+- **Merged: font binding compiled at font load** (tag `sil-green-7`). The first `createText` no longer
+  compiles the binding: 16.2 → 12.7 ms with a full 55 MB font in the browser, first frame 39.7 → 35.9 ms.
+  Smaller than the 12 ms the profile suggested, because most of that figure was the atlas re-pack at first
+  draw, which did not move. Total time from font load to first frame did not measurably change. Cost for a
+  font loaded and never drawn: 3–8 ms of CPU at load and 0.3–4.4 MiB held until release.
