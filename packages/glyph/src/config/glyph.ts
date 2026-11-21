@@ -470,6 +470,20 @@ export interface GlyphTextController<Format extends RasterFormatMetadata, Materi
   update(state: GlyphTextState<Format, MaterialInput, TransformInput>): void;
   /** Changes only this paragraph's root slot and scoped rank; shaping, layout, and measurement remain reusable. */
   updateParagraphOrder(order: number, scope: object | undefined, rank: number): void;
+  /**
+   * The error that refused this text's last preparation, or `undefined`. A refusal is local to the text: it
+   * draws nothing and its siblings are unaffected until its input changes or it is disposed.
+   */
+  readonly refusal: unknown;
+  /** Whether every batch preparation returns this text's summary; an adapter sets it for a layout callback. */
+  keepMeasured: boolean;
+  /**
+   * Whether this text's current value is still to be prepared. After a frame's preparation that is a text held
+   * for the next frame's layout phase: its owner neither reads it nor counts it as published.
+   */
+  readonly awaitsPreparation: boolean;
+  /** The current summary if the last preparation returned one, without preparing or entering the engine. */
+  preparedMeasurement(): ParagraphLayoutSummary | undefined;
   measure(): ParagraphLayoutSummary;
   /** Returns aggregate metrics after positioning glyphs so ink bounds are authoritative. */
   measureInk(): ParagraphLayoutSummary;
@@ -488,10 +502,14 @@ export interface GlyphShapeOptions {
 export interface GlyphRootServices<Bindings extends GlyphBindingSet, RendererResult, Boundary = unknown> {
   /** @internal Throws before host state changes when this root owns a staged publication. */
   assertMutationAllowed(): void;
+  /** @internal Whether layout callbacks are running: a host refuses a layout-input write it has not staged yet. */
+  readonly layoutPhaseActive: boolean;
   /** @internal Reject lifecycle mutation while this root belongs to an active engine publication or settlement. */
   _preflightLifecycleMutation(): void;
   /** @internal Whether this root is already queued for the next engine shape transaction. */
   _isShapeQueued(): boolean;
+  /** Throws when `text` holds more UTF-16 units than one text of this root accepts, so an adapter can refuse it in its own setter. */
+  assertTextUnits(text: string): void;
   createText<Format extends RasterFormatMetadata>(
     state: GlyphTextState<Format, Bindings['materialInput'], Bindings['transformInput']>,
   ): GlyphTextController<Format, Bindings['materialInput'], Bindings['transformInput']>;
@@ -517,6 +535,13 @@ export interface GlyphRootShapeHooks<RendererResult> {
   prepared?(): void;
   /** Runs instead of `accepted` when the renderer already draws this root's desired state. */
   unchanged?(): void;
+  /**
+   * Runs the root's layout callbacks, after every dirty root is prepared and before any is published. The adapter
+   * contains each callback's exception; while callbacks run, a write to a layout input of any text throws.
+   */
+  layout?(): void;
+  /** Runs when a setter leaves this root needing a frame, so a host with an on-demand loop can request one. */
+  invalidated?(): void;
   /** Runs after the renderer accepted this root and the borrowed command buffer expired. */
   accepted?(result: RendererResult): void;
   /** Runs after this root failed without changing its last accepted renderer state. */
@@ -557,6 +582,11 @@ export interface GlyphCommandCapacity {
   readonly requestBytes: number;
   readonly resultBytes: number;
   readonly textUnits: number;
+  /**
+   * The most UTF-16 units one text may hold. A setter that exceeds it throws, so the limit an author meets is
+   * this number and not however much memory the device happens to have. Defaults to 65,536.
+   */
+  readonly maxTextUnits?: number;
 }
 
 /** Adapter-provided host boundary used to finish one core-owned publication root. */

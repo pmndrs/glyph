@@ -39,24 +39,69 @@ impl<S: LayoutSource> Editing<S> {
                 }
             }
         }
-        let mut nearest = (0, f64::INFINITY);
-        for line in 0..count {
+        // The nearest line by y. Lines of side-by-side columns share a y: among those equally
+        // near, the one nearest in x.
+        let vertical = |line: usize| -> Result<f64, EditingError> {
             let facts = self.source.line(line).ok_or(EditingError::Layout)?;
-            let distance = if y < facts.top {
+            Ok(if y < facts.top {
                 facts.top - y
             } else if y >= facts.top + facts.height {
                 y - (facts.top + facts.height)
             } else {
                 0.0
-            };
-            if distance < nearest.1 {
-                nearest = (line, distance);
-                if distance == 0.0 {
-                    break;
-                }
+            })
+        };
+        let mut nearest = f64::INFINITY;
+        for line in 0..count {
+            nearest = nearest.min(vertical(line)?);
+        }
+        let mut chosen: Option<(usize, f64)> = None;
+        let mut tied = 0;
+        for line in 0..count {
+            if vertical(line)? != nearest {
+                continue;
+            }
+            tied += 1;
+            if tied == 1 {
+                chosen = Some((line, f64::INFINITY));
+                continue;
+            }
+            // Only a tie pays for the lines' extents.
+            if let Some((first, distance)) = chosen
+                && distance == f64::INFINITY
+            {
+                chosen = Some((first, self.horizontal_distance(&mut cache, first, x)?));
+            }
+            let distance = self.horizontal_distance(&mut cache, line, x)?;
+            if chosen.is_none_or(|(_, best)| distance < best) {
+                chosen = Some((line, distance));
             }
         }
-        self.hit_line(&mut cache, nearest.0, x)
+        let (line, _) = chosen.ok_or(EditingError::Layout)?;
+        self.hit_line(&mut cache, line, x)
+    }
+
+    /// How far `x` is from everything a line draws.
+    fn horizontal_distance(
+        &self,
+        cache: &mut LineCache,
+        line: usize,
+        x: f64,
+    ) -> Result<f64, EditingError> {
+        let boxes = self.line_boxes(cache, line)?;
+        Ok(boxes
+            .iter()
+            .map(|line_box| {
+                let (left, right) = line_box.extent();
+                if x < left {
+                    left - x
+                } else if x > right {
+                    x - right
+                } else {
+                    0.0
+                }
+            })
+            .fold(f64::INFINITY, f64::min))
     }
 
     /// The stop of one line nearest `x`.

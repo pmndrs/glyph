@@ -11,7 +11,7 @@ mod editing;
 
 use std::collections::BTreeMap;
 
-use editing::{adversarial_root, editing, prepare_lanes, session, try_library};
+use editing::{adversarial_root, editing_at, prepare_lanes, session_document, try_library};
 use pmndrs_glyph_shaper::engine::{
     ParagraphSource,
     editing::{
@@ -22,6 +22,7 @@ use pmndrs_glyph_shaper::engine::{
         fonts::{FONTS, FontLibrary},
         fuzz::scripted,
         matrix::{Case, cases},
+        model::{Document, Model},
         session::Session,
     },
 };
@@ -34,6 +35,8 @@ const ALIGN_JUSTIFY: u8 = 4;
 #[derive(Default)]
 struct Tally {
     cases: usize,
+    paragraphs: usize,
+    refused_paragraphs: usize,
     stops: usize,
     interior_ligature_stops: usize,
     suppressed_boundaries: usize,
@@ -206,11 +209,29 @@ fn visual_walks(tally: &mut Tally, name: &str, queries: &Queries<'_>, stops: &[u
         }
     }
     for (line, expected) in &places {
-        let source = queries.source();
-        let facts = source.line(*line as usize).expect("line");
-        let y = facts.top + facts.height * 0.5;
-        for (direction, start_x) in [(TextDirection::Right, -1e12), (TextDirection::Left, 1e12)] {
-            let mut position = queries.hit_test(start_x, y).expect("hit");
+        for direction in [TextDirection::Right, TextDirection::Left] {
+            // The walk starts at the line's far edge: its outermost place. (A point far to one
+            // side would find another column's line where columns stand side by side.)
+            let edge = expected
+                .iter()
+                .min_by(|a, b| {
+                    if direction == TextDirection::Right {
+                        a.0.total_cmp(&b.0)
+                    } else {
+                        b.0.total_cmp(&a.0)
+                    }
+                })
+                .expect("a place");
+            let mut position = edge
+                .1
+                .iter()
+                .flat_map(|offset| both(*offset))
+                .find(|position| {
+                    let caret = queries.caret(*position).expect("caret");
+                    caret.line == *line && caret.rect.x == edge.0 && !caret.clipped
+                })
+                .map(|position| queries.normalize(position).expect("normalize"))
+                .expect("a position at the line's edge");
             let mut visited: Vec<f64> = Vec::new();
             let mut rested: Vec<u32> = Vec::new();
             let mut steps = 0;
@@ -377,7 +398,7 @@ fn boundaries_tile(tally: &mut Tally, name: &str, queries: &Queries<'_>) {
 
 /// The rectangles of a range never overlap, add up across a split, and cover exactly the
 /// advances of the graphemes drawn in it.
-fn ranges(tally: &mut Tally, name: &str, case: &Case, queries: &Queries<'_>) {
+fn ranges(tally: &mut Tally, name: &str, model: &Model, queries: &Queries<'_>) {
     let source = queries.source();
     let length = queries.text_length();
     let boundaries: Vec<u32> = source.grapheme_boundaries().to_vec();
@@ -423,14 +444,13 @@ fn ranges(tally: &mut Tally, name: &str, case: &Case, queries: &Queries<'_>) {
     }
     let covered: f64 = whole.iter().map(|rect| rect.width).sum();
     // Justification and letter spacing widen the gaps between graphemes; nothing narrows them.
-    let spaced = case.model.root.letter_spacing != 0.0
-        || case.model.root.word_spacing != 0.0
-        || case
-            .model
+    let spaced = model.root.letter_spacing != 0.0
+        || model.root.word_spacing != 0.0
+        || model
             .spans
             .iter()
             .any(|span| span.style.letter_spacing.is_some());
-    let justified = case.model.layout.align == ALIGN_JUSTIFY;
+    let justified = model.layout.align == ALIGN_JUSTIFY;
     let tolerance = 1e-3 * (1.0 + advances.abs());
     if covered < advances - tolerance || (!spaced && !justified && covered > advances + tolerance) {
         tally.fail(
@@ -464,17 +484,19 @@ fn ranges(tally: &mut Tally, name: &str, case: &Case, queries: &Queries<'_>) {
     }
 }
 
-/// Every caret, stop and hit of an edited paragraph equals a cold layout of the same model.
+/// Every caret, stop, hit and unit of every paragraph of an edited document equals a cold
+/// layout of the same document.
 fn edits_equal_cold(
     tally: &mut Tally,
     library: &FontLibrary,
     case: &Case,
+    start: &Document,
     stacks: &[&[&str]],
     warm: &mut Session,
 ) {
-    for planned in scripted(case, 20_261_121, 3) {
+    for planned in scripted(case, start, 20_261_121, 3) {
         if warm
-            .step(&planned.next, &planned.edits, planned.route)
+            .step_document(&planned.next, &planned.edits, planned.route)
             .is_err()
         {
             // A rejected request leaves the root unusable, as the oracle's driver records.
@@ -483,71 +505,105 @@ fn edits_equal_cold(
         let Ok(mut cold) = Session::new(library, stacks) else {
             return;
         };
-        if cold.step(&planned.next, &[], planned.route).is_err() {
+        if cold
+            .step_document(&planned.next, &[], planned.route)
+            .is_err()
+        {
             return;
         }
         // The lanes were filled before the edit: they must have followed it.
         prepare_lanes(warm);
         prepare_lanes(&mut cold);
-        let (warm_queries, cold_queries) = (editing(warm), editing(&cold));
-        let stops = warm_queries.caret_stops().expect("stops");
-        if stops != cold_queries.caret_stops().expect("stops") {
-            tally.fail(
+        for paragraph in &planned.next.paragraphs {
+            let (warm_queries, cold_queries) = match (
+                editing_at(warm, paragraph.id),
+                editing_at(&cold, paragraph.id),
+            ) {
+                (Some(warm_queries), Some(cold_queries)) => (warm_queries, cold_queries),
+                (None, None) => continue,
+                _ => {
+                    tally.fail(
+                        &case.name,
+                        format!(
+                            "after {}: paragraph {} is laid out in one engine only",
+                            planned.label, paragraph.id
+                        ),
+                    );
+                    return;
+                }
+            };
+            if !paragraph_equals_cold(
+                tally,
                 &case.name,
-                format!("after {}: caret stops differ from cold", planned.label),
-            );
-            return;
-        }
-        let length = warm_queries.text_length();
-        for unit in [TextUnit::Word, TextUnit::Sentence] {
-            let mut offset = 0;
-            while offset < length {
-                let position = TextPosition::downstream(offset);
-                let unit_range = warm_queries.boundary(position, unit).expect("boundary");
-                if Ok(unit_range) != cold_queries.boundary(position, unit) {
-                    tally.fail(
-                        &case.name,
-                        format!(
-                            "after {}: the {unit:?} at {offset} differs from cold",
-                            planned.label
-                        ),
-                    );
-                    return;
-                }
-                offset = unit_range.end.max(offset + 1);
-            }
-        }
-        for &offset in &stops {
-            for position in both(offset) {
-                let (warm_caret, cold_caret) = (
-                    warm_queries.caret(position).expect("caret"),
-                    cold_queries.caret(position).expect("caret"),
-                );
-                if warm_caret != cold_caret {
-                    tally.fail(
-                        &case.name,
-                        format!(
-                            "after {}: caret({position:?}) is {warm_caret:?}, cold {cold_caret:?}",
-                            planned.label
-                        ),
-                    );
-                    return;
-                }
-                let (x, y) = (warm_caret.rect.x + 1.25, warm_caret.rect.y + 1.0);
-                if warm_queries.hit_test(x, y) != cold_queries.hit_test(x, y) {
-                    tally.fail(
-                        &case.name,
-                        format!(
-                            "after {}: hit_test({x}, {y}) differs from cold",
-                            planned.label
-                        ),
-                    );
-                    return;
-                }
+                &planned.label,
+                &warm_queries,
+                &cold_queries,
+            ) {
+                return;
             }
         }
         tally.edits_compared += 1;
     }
+}
+
+fn paragraph_equals_cold(
+    tally: &mut Tally,
+    name: &str,
+    label: &str,
+    warm_queries: &Queries<'_>,
+    cold_queries: &Queries<'_>,
+) -> bool {
+    let (Ok(stops), Ok(cold_stops)) = (warm_queries.caret_stops(), cold_queries.caret_stops())
+    else {
+        tally.fail(name, format!("after {label}: caret stops failed"));
+        return false;
+    };
+    if stops != cold_stops {
+        tally.fail(name, format!("after {label}: caret stops differ from cold"));
+        return false;
+    }
+    let length = warm_queries.text_length();
+    for unit in [TextUnit::Word, TextUnit::Sentence] {
+        let mut offset = 0;
+        while offset < length {
+            let position = TextPosition::downstream(offset);
+            let unit_range = warm_queries.boundary(position, unit).expect("boundary");
+            if Ok(unit_range) != cold_queries.boundary(position, unit) {
+                tally.fail(
+                    name,
+                    format!("after {label}: the {unit:?} at {offset} differs from cold"),
+                );
+                return false;
+            }
+            offset = unit_range.end.max(offset + 1);
+        }
+    }
+    for &offset in &stops {
+        for position in both(offset) {
+            let (warm_caret, cold_caret) = (
+                warm_queries.caret(position).expect("caret"),
+                cold_queries.caret(position).expect("caret"),
+            );
+            if warm_caret != cold_caret {
+                tally.fail(
+                    name,
+                    format!(
+                        "after {label}: caret({position:?}) is {warm_caret:?}, cold {cold_caret:?}"
+                    ),
+                );
+                return false;
+            }
+            let (x, y) = (warm_caret.rect.x + 1.25, warm_caret.rect.y + 1.0);
+            if warm_queries.hit_test(x, y) != cold_queries.hit_test(x, y) {
+                tally.fail(
+                    name,
+                    format!("after {label}: hit_test({x}, {y}) differs from cold"),
+                );
+                return false;
+            }
+        }
+    }
+    true
 }
 
 #[test]
@@ -563,12 +619,21 @@ fn properties_hold_for_every_oracle_fixture() {
             continue;
         }
         let stacks: Vec<&[&str]> = case.stacks.iter().map(Vec::as_slice).collect();
-        let mut warm = session(&library, &stacks, &case.model);
+        let start = case
+            .document
+            .clone()
+            .unwrap_or_else(|| Document::single(case.model.clone()));
+        let mut warm = session_document(&library, &stacks, &start);
         prepare_lanes(&mut warm);
         let tally = tallies.entry(format!("{:?}", case.script)).or_default();
         tally.cases += 1;
-        {
-            let queries = editing(&warm);
+        for paragraph in &start.paragraphs {
+            // A paragraph the engine refused has no layout to query.
+            let Some(queries) = editing_at(&warm, paragraph.id) else {
+                tally.refused_paragraphs += 1;
+                continue;
+            };
+            tally.paragraphs += 1;
             let stops = queries.caret_stops().expect("stops");
             let graphemes = queries.source().grapheme_boundaries().len().max(1);
             tally.stops += stops.len();
@@ -586,11 +651,11 @@ fn properties_hold_for_every_oracle_fixture() {
             logical_moves(tally, &case.name, &queries, &stops);
             visual_walks(tally, &case.name, &queries, &stops);
             boundaries_tile(tally, &case.name, &queries);
-            ranges(tally, &case.name, &case, &queries);
+            ranges(tally, &case.name, &paragraph.model, &queries);
             pen_order(tally, &mut reversed, &case.name, &queries);
         }
         if case.fuzz {
-            edits_equal_cold(tally, &library, &case, &stacks, &mut warm);
+            edits_equal_cold(tally, &library, &case, &start, &stacks, &mut warm);
         }
     }
     println!(

@@ -72,6 +72,7 @@ export function createThreeConfig(options: ThreeConfigOptions, shaders: ThreeSha
       requestBytes: 64 * 1024,
       resultBytes: 256 * 1024,
       textUnits: 64,
+      ...(options.maxTextUnits === undefined ? {} : { maxTextUnits: options.maxTextUnits }),
     },
     root: {
       create: (context) => {
@@ -93,6 +94,8 @@ export function createThreeConfig(options: ThreeConfigOptions, shaders: ThreeSha
           shape: {
             prepare: () => root.prepareShape(),
             prepared: () => root.resolvePreparedAnchors(),
+            layout: () => root.runLayoutPhase(),
+            invalidated: () => root.notifyInvalidated(),
             unchanged: () => root.acceptShape(),
             accepted: () => root.acceptShape(),
             rejected: (error) => root.rejectShape(error),

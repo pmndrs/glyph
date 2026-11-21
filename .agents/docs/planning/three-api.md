@@ -42,10 +42,12 @@ generated:
 
 ## Held refactor contract
 
-The [accepted preparation/publication decision](decisions/retained-prepare-publish.md) governs the held ropes work.
-Bound setters prepare retained Rust layout synchronously. Reads and independent copies use that prepared revision;
-publication handles accumulated renderer updates and batching. Existing public signatures remain unchanged. This is
-a refactor target; passing implementation evidence is tracked in [publication-frontier](publication-frontier.md).
+[Deferred, never-stale preparation](decisions/deferred-never-stale-preparation.md) governs when layout runs; it
+supersedes the setter rule of the [retained preparation/publication decision](decisions/retained-prepare-publish.md),
+whose remainder stands. A setter validates its input and marks the paragraph dirty; it does not enter the engine. A
+read prepares that one paragraph on demand, so no read is stale. `glyph.shape()` (and a Three scene traversal)
+batch-prepares every paragraph still dirty in one engine call, then publishes; `glyph.prepare()` does the first half
+alone. Reads, copies and publication share one prepared revision.
 
 `@pmndrs/glyph/three` is the maintained renderer integration. `Text` and `TextGroup` are Three.js `Object3D` subclasses;
 scene traversal collects desired mutations, participates in root publication, consumes the resulting command buffer,
@@ -215,42 +217,60 @@ label.constraints = { width: { mode: 'exact', size: 500 } };
 label.set({ text: 'Final value', style: { color: '#ffffff' } });
 ```
 
-Once a `Text` has a runtime binding, each setter synchronously prepares its current text and layout in Rust before the
-setter returns. `measure()`, `glyphs()`, and `readGlyphs()` consume that prepared revision without waiting for
-`updateMatrixWorld()`. Author input may exist before a runtime binding; the root prepares it synchronously when that
-binding is created. Reassigning a value that normalizes to the current state is a no-op. Transform-only changes update
-the transform buffer and do not reshape or recompose text.
+A setter validates its input, records it as the desired state and marks the paragraph dirty. It makes no engine call,
+so it cannot fail for a layout reason: invalid input (a `NaN` size, an inverted range) throws a `GlyphInputError`
+from the setter and the previous value stays. The error has `code: 'invalid-input'`, a `path` array naming the input
+from the property the caller wrote (`['style']`, `['constraints']`, `['text', 'spans', 2, 'style']`; empty when the
+properties are only invalid together) and the validator's `TypeError` or `RangeError` as `cause`. A text longer than
+`maxTextUnits` is invalid input at `['text']`. `measure()`, `glyphs()`, `readGlyphs()`, `measureGlyphs()`, `split()`,
+`boundingBox` and the caret helpers prepare that one paragraph first when a setter left it dirty, so a read is never
+stale and never waits for `updateMatrixWorld()`. Constructing a `Text` is a setter: it enters the engine zero times.
+Reassigning a value that normalizes to the current state is a no-op, a value overwritten before a read or a frame
+never reaches the engine, and restoring the value the renderer already draws publishes nothing. A colour, opacity or
+material change never runs layout. Transform-only changes update the transform buffer and do not reshape or recompose
+text.
 
-Call `glyph.shape()` to synchronously publish all dirty roots in one Rust/Wasm crossing instead of crossing once per
-TextGroup or named root. Three scene traversal also participates in publication before display-list realization. If no
-semantics are pending, `updateMatrixWorld()` uses only the cheap transform synchronizer. Traversal retains an error on
-`Text`/`TextGroup`; explicit `glyph.shape()` throws a publication failure at the call that requested it.
+Lone surrogates are data, not an error: a string cut at a UTF-16 index carries them routinely. Each is laid out and
+drawn as U+FFFD, one unit for one unit, so every offset stays where the caller put it. `text.text` returns the string
+exactly as it was assigned, and the replacement has no public surface.
 
-One root traversal contributes at most one entry to the mutating `pmndrs_glyph_engine_update_batch` transaction for that
-root's pending values. Traversal publishes the exact preparation produced by the setter and does not replay text,
-styles, geometry, or Unicode work.
+Call `glyph.shape()` to prepare whatever is still dirty and publish all dirty roots: one
+`pmndrs_glyph_engine_prepare_batch` crossing for every dirty paragraph of every dirty root, then one
+`pmndrs_glyph_engine_update_batch` crossing. Paragraphs a read already prepared are not prepared again, and a frame
+with nothing dirty makes no crossing. Three scene traversal runs the same two steps before display-list realization
+(see [The frame](#the-frame)). If no semantics are pending, `updateMatrixWorld()` uses only the cheap transform
+synchronizer. Traversal retains an error on `Text`/`TextGroup`; explicit `glyph.shape()` throws a publication failure
+at the call that requested it.
+
+Call `glyph.prepare()` before reading many texts between frames: it batch-prepares every dirty text in one crossing,
+keeps each one's measurement so the following `measure()` calls do not enter the engine, and publishes nothing. A loop
+of reads without it costs one crossing per dirty text.
+
+One root contributes at most one entry to each batch. The publication carries only lifecycle and order records and
+compiles the exact preparation a read or the batch produced; it does not replay text, styles, geometry, or Unicode
+work. A batch serializes a summary only for a paragraph someone will read: one with an anchor, or one whose previous
+summary a caller read.
 
 Paragraph base order remains part of that complete root publication. Reordering reused Scene siblings updates desired
-orders one Text at a time, so semantic setter preparation keeps each existing paragraph at its last Rust-installed order
+orders one Text at a time, so preparation keeps each existing paragraph at its last Rust-installed order
 and retains the desired order until traversal has reconciled the complete sibling set. A newly bound Text whose final
 slot is temporarily occupied prepares at a creation-only free order. Neither preparation order is observable through
 measurement or glyph reads; the gated final-set check and one publication install swaps, beginning insertions,
 removal/reinsertion, and mixed content/order changes atomically.
 
 Editor-style changes go through the same assignment. `label.text = next` states the complete string the paragraph now
-holds. JavaScript performs cheap equivalence/domain checks and UTF-16 encoding; Rust compares that input with its
-retained text, discovers scalar-safe changed ranges through the shared packed comparison path, and drives the same
-Unicode, shaping, wrapping, and positioning pipeline used for publication:
+holds. When the paragraph is next prepared, the host derives one UTF-16 range replacement against the text the engine
+last prepared (the common prefix and suffix are dropped, and a boundary never splits a surrogate pair) and Rust drives
+the same Unicode, shaping, wrapping, and positioning pipeline used for publication:
 
 ```ts
 label.text = document.applyEdit(cursor, 'a');
 label.set({ text: document.value, spans: document.spans });
 ```
 
-Each successful assignment is its own synchronous preparation, while multiple assignments before traversal still
-publish only the latest prepared revision. The wire carries a full replacement (`start = 0`, prior UTF-16 length,
-complete input); it is not a public edit table. Rust, not a JavaScript prefix/suffix scan, establishes reusable sparse
-evidence and Unicode-scalar boundaries.
+Assignments before a read or a frame collapse into that one replacement, so a keystroke in a long paragraph sends a
+request the size of the edit, in either direction. The wire record is `(start, deleteCount, insert)` in UTF-16 units;
+it is not a public edit table. An editing session that knows its range would state it through the same record.
 
 `text` and `spans` are authored together: stating `text` without `spans` clears the ranges it replaced, because
 replacement text carries its own formatting and retaining the previous ranges would reinterpret them against unrelated
@@ -323,6 +343,67 @@ scene traversal. A renderer-side failure leaves the last accepted draw state liv
 traversals do not retry it. Assigning new material or other renderer-relevant state requests a checkpoint from the last
 accepted plan revision; malformed engine output remains a defect rather than a supported recovery state (D-285).
 
+## The frame
+
+A root keeps two private objects in the Scene that holds its text. `@pmndrs/glyph-prepare` is the Scene's first child:
+Three visits it before any other object computes its matrix, and there the frame batch-prepares every dirty text and
+runs layout callbacks. `@pmndrs/glyph:<root>` is the publication object: when the traversal reaches it, the frame
+prepares whatever became dirty since and publishes. A scene with nothing dirty makes no engine call in either.
+
+A root learns its Scene from the first traversal that reaches one of its texts. That traversal has already begun, so
+the two objects are appended and that one frame prepares and publishes together at the publication object; the
+preparation object moves to the front during the next traversal. `root.attach(scene)` names the Scene beforehand so the
+first frame is prepared at the front like every later one. The React and Vue components call it.
+
+A renderer traverses the Scene, calls `scene.onBeforeRender`, runs shadow and pass renders, then calls
+`scene.onAfterRender`. A traversal that starts between those two belongs to a nested render: it synchronizes transforms
+and neither prepares nor publishes.
+
+`root.onInvalidate` runs when a setter leaves the root needing a frame. An on-demand render loop requests one there;
+the React and Vue components wire it to their canvas.
+
+### Layout callbacks
+
+```ts
+label.onLayout = (text, layout) => {
+  panel.scale.set(layout.width + 24, layout.height + 16, 1);
+};
+```
+
+`onLayout(text, layout)` receives the text and what `text.measure()` returns. It runs after the text is first prepared
+and whenever that summary changes (width, height, line count, glyph count or anchor offset), in a phase after every
+root is prepared and before anything is published. A colour, opacity, material or transform change is not a new
+layout and does not run it, and neither does a read that prepares the text on demand. `glyph.prepare()` runs the
+phase too, and the frame after it does not repeat a summary already handed over. A callback installed on text that is
+already drawn receives the current layout in the next frame.
+
+Inside the phase a callback may read any text and write transforms, visibility, colour, opacity and material; what it
+paints is drawn by the same frame. Writing a layout input of any text throws `GlyphLayoutPhaseError` (`code:
+'layout-phase'`) from that setter and the text keeps its value: a layout written there could not be laid out before
+the frame it was meant for. `dispose()` is allowed. An exception thrown by a callback is reported to that text's
+`onError` and the root's `onError` (or to the global error event when neither is set); the other callbacks still run
+and the frame publishes.
+
+A text with a callback is drawn only at a layout its callback has seen. A layout input written after the frame's
+layout phase (from a later sibling's `updateMatrixWorld`, for example) keeps that text at its published revision for
+this frame; the next frame runs its callback and draws it. Text without a callback is drawn by the frame that changed
+it.
+
+### Errors
+
+| Failure                                                       | Where it surfaces                                                  |
+| ------------------------------------------------------------- | ------------------------------------------------------------------ |
+| A value a setter, `set()` or `createText()` cannot accept     | `GlyphInputError` thrown by that call; the previous value stays    |
+| A layout input written inside a layout callback               | `GlyphLayoutPhaseError` thrown by that setter                      |
+| A paragraph the engine refuses (memory, an input that traps)  | That text's `error` and `onError`, once; siblings publish as usual |
+| A publication the renderer rejects, a fixed capacity exceeded | `text.error`/`group.error` and `onError` of the texts involved     |
+| An engine trap during a frame                                 | The affected texts' `error` and `onError`; the next frame retries  |
+| An exception thrown by a layout callback                      | That text's `onError`                                              |
+
+`root.onError` also receives every failure in the last four rows, once per report, so one handler can observe a
+root. It is assigned on the root (`handle.onError = …` for the anonymous root, `handle('hud').onError = …` for
+a named one). GPU device loss is not detected by this package; the host observes `device.lost` and rebuilds.
+
 ## Measure desired layout and inspect positioned glyphs
 
 ```ts
@@ -330,11 +411,12 @@ const summary = label.measure();
 const glyphs = label.glyphs();
 ```
 
-`measure()` synchronously returns the allocation-light `ParagraphLayoutSummary` cached by the latest successful
-preparation. A detached `Text` uses its implicit standalone planner; a `Text` beneath a `TextGroup` uses that group's
-planner. Creating that runtime binding prepares the author value once. Later unchanged `measure()` calls make no Wasm
-preparation call, do not traverse matrices, realize materials or GPU resources, publish draws, or change
-`commitState()` from `pending` to `committed`.
+`measure()` synchronously returns the allocation-light `ParagraphLayoutSummary` of the current desired state, preparing
+the paragraph first when a setter left it dirty. A detached `Text` uses its implicit standalone planner; a `Text`
+beneath a `TextGroup` uses that group's planner. The first read of a root also creates every sibling the engine has
+not seen, so reading a freshly mounted group is linear in its labels. Later unchanged `measure()` calls make no Wasm
+call, do not traverse matrices, realize materials or GPU resources, publish draws, or change `commitState()` from
+`pending` to `committed`. `pending` therefore means "not yet published", whether or not the paragraph is prepared.
 
 `glyphs()` copies per-line and per-glyph arrays from the current prepared positioned arena, while `readGlyphs()` borrows
 only requested scalar records. Neither is a preparation trigger. Ordinary rendering consumes the same retained revision
@@ -641,6 +723,17 @@ properties in layout effects and calls R3F `invalidate()`. The subsequent Three 
 `shape()`-equivalent publication or cheap transform synchronization before the host renderer builds its render list. The
 maintained renderer target is `@react-three/fiber/webgpu`, which inherits Three's WebGL fallback.
 
+While a `<Text>` is mounted, its root is joined to the canvas: the root is attached to the canvas Scene, a scheduler
+job registered before `render` prepares dirty text and runs layout callbacks, and a setter that leaves the root
+needing a frame calls the canvas `invalidate()`, so `frameloop="demand"` draws an imperative
+`ref.current.text = …`. `<Text onLayout={(text, layout) => …}>` is the layout callback and `onError` the per-text
+error handler.
+
+A prop that is not valid input throws from the Text's setter while React commits. Without a boundary inside the
+canvas that error unmounts the whole canvas. `<GlyphErrorBoundary fallback={…} onError={…}>` is a boundary to place
+inside the canvas around Text: only the subtree it wraps is replaced by `fallback`, which is canvas elements, `null`,
+or a function `(error, reset) => …` whose `reset` mounts the children again.
+
 Fonts may be caller-owned `glyph.fontFace()` declarations passed directly to Text, hook-owned declarations returned by
 `useFont` or a typed format hook, or provider aliases declared through `fontFaces`. All three use Glyph's one FontFace
 resource graph; React retains only stable suspension identity and mounted Font leases. The complete ownership, preload,
@@ -648,6 +741,6 @@ retry, and cleanup rules are in [React font loading](../guides/react.md).
 
 ## Deliberately absent surfaces
 
-There is no JavaScript layout callback or user-authored command parser in this surface. Custom visual behavior uses
-`material`; renderer-directed batching uses the compiled Codec and command buffer. TypeGPU consumes the same public
+There is no user-authored command parser and no callback that takes part in layout: `onLayout` observes a finished
+layout and cannot change one. Custom visual behavior uses `material`; renderer-directed batching uses the compiled Codec and command buffer. TypeGPU consumes the same public
 `GlyphConfig` contract through the example renderer.

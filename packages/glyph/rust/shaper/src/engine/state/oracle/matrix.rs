@@ -22,7 +22,9 @@ use crate::{
 
 use super::{
     corpus::{self, Script},
-    model::{Exclusion, Layout, Model, RootStyle, Span, SpanStyle, TextEdit},
+    model::{
+        Document, Exclusion, InlineObject, Layout, Model, RootStyle, Span, SpanStyle, TextEdit,
+    },
     session::Route,
 };
 
@@ -40,8 +42,17 @@ pub struct Step {
     pub layout: Option<Layout>,
     pub root: Option<RootStyle>,
     pub spans: Option<Vec<Span>>,
+    pub inline_objects: Option<Vec<InlineObject>>,
     /// How the request reaches the engine; the full route when unset.
     pub route: Option<Route>,
+    /// The paragraph the fields above change; the first when unset.
+    pub paragraph: Option<u32>,
+    /// Text edits to other paragraphs in the same step.
+    pub more_edits: Vec<(u32, Vec<TextEdit>)>,
+    /// Which paragraphs exist after the step and where they sort, for a step that creates,
+    /// removes or reorders them. A paragraph that already exists keeps its content; the
+    /// fields above then apply on top.
+    pub document: Option<Document>,
 }
 
 #[derive(Clone, Debug)]
@@ -52,14 +63,40 @@ pub struct Case {
     pub stacks: Vec<Vec<&'static str>>,
     pub script: Script,
     pub model: Model,
+    /// Several paragraphs in one root; when set it replaces `model` as the starting point.
+    pub document: Option<Document>,
     pub steps: Vec<Step>,
     /// Whether the differential driver edits this case.
     pub fuzz: bool,
     /// Paragraph cases must reach the plan's 2,000-cluster floor.
     pub paragraph: bool,
+    /// Added after the first reference set was frozen: its frozen text includes the stages
+    /// added since, and the driver uses the operations added since. Cases frozen earlier
+    /// leave both out so their files and their seeded requests stay exactly as blessed.
+    pub extended: bool,
+    /// The driver operations beyond the first set that this case uses.
+    pub extras: Extras,
+}
+
+/// Driver operations added after the first reference set was frozen. A case turns on the
+/// ones it was frozen with, so adding an operation never changes the requests an existing
+/// case plans.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Extras {
+    pub paint: bool,
+    pub objects: bool,
+    pub regions: bool,
+    pub paragraphs: bool,
 }
 
 impl Case {
+    /// The document the case starts from: its paragraphs, or its one implicit paragraph.
+    pub fn start(&self) -> Document {
+        self.document
+            .clone()
+            .unwrap_or_else(|| Document::single(self.model.clone()))
+    }
+
     pub fn font_keys(&self) -> Vec<&'static str> {
         let mut keys: Vec<&'static str> = self.stacks.iter().flatten().copied().collect();
         keys.sort_unstable();
@@ -159,6 +196,11 @@ pub fn cases() -> Vec<Case> {
     labels(&mut cases);
     degenerate(&mut cases);
     super::mechanisms::cases(&mut cases);
+    super::effects::cases(&mut cases);
+    super::inline_objects::cases(&mut cases);
+    super::regions::cases(&mut cases);
+    super::regions::clipped_noop(&mut cases);
+    super::documents::cases(&mut cases);
     cases
 }
 
@@ -180,9 +222,12 @@ pub(super) fn new_case(name: String, tier: Tier, stack: &[&'static str], script:
         stacks: vec![stack.to_vec()],
         script,
         model: Model::default(),
+        document: None,
         steps: Vec::new(),
         fuzz: false,
         paragraph: false,
+        extended: false,
+        extras: Extras::default(),
     }
 }
 

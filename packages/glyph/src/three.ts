@@ -24,7 +24,7 @@ export type {
 export { TextFrameError } from './three/frame-error.js';
 export type { TextFrameRejection, TextFrameSubject } from './three/frame-error.js';
 export { Text, TextGroup } from './three/text.js';
-export type { ThreeRoot } from './three/text.js';
+export type { TextLayoutCallback, ThreeRoot } from './three/text.js';
 export { projectTextFlowBounds, projectTextFlowSilhouette } from './three/projected-flow.js';
 export type { ProjectTextFlowBoundsOptions, ProjectTextFlowSilhouetteOptions } from './three/projected-flow.js';
 export {

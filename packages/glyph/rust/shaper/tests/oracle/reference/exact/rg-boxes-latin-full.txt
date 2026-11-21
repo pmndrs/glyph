@@ -1,0 +1,80 @@
+# glyph layout oracle reference v1
+case rg-boxes-latin-full
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 67457eed4a395156
+stage text identity 1 789c644d2d63f052
+stage unicode value 6 e14f5e2fd41eb782
+stage bidi value 8 ea9e54675e47b037
+stage style value 26 db78bdeba099e2dd
+stage shaping_run value 5 34520715c6ae4f6b
+stage shape value 14 796fd2adbca56af3
+stage cluster value 29 87b46917a6b756bc
+stage cluster identity 4 2d9345db429846a2
+stage cluster repr 11 0834c2da4fc0b5dd
+stage run_local repr 16 32b36411473f68bb
+stage flow value 35 0d62c3aff4b8f9a2
+stage positioned identity 3 19b30b4ee3e134d4
+stage positioned value 13 6554f9e2b607d5da
+stage positioned repr 17 5d6b3ff512408f97
+stage public value 13 2089f92c1f0b2847
+stage public identity 1 9bdbc53e8f2300f6
+stage view identity 4 91054d035049692b
+stage view value 40 ede91cabe77987ba
+stage wire wire 1 241fe3ba8d7349ac
+stage gather identity 7 f32f7bf278a0bdfa
+stage gather value 36 6e2d3c458ce7ed6c
+stage gpu identity 2 cf18e8fd424229d4
+stage gpu value 3 a207f9856a3478bc
+stage plan value 23 51bb847507532445
+stage plan identity 7 90bed45b856e43e7
+step 01 insert in the first region
+class value 253 72e6bf3030531586
+class identity 29 669550fd1b131969
+class repr 44 61682d0f5f06258c
+class wire 1 87d35fb51f03fdad
+step 02 delete in a later region
+class value 253 cff2163a9f9aa821
+class identity 29 ba91d2242f58310f
+class repr 44 a4847e18cb6a24bb
+class wire 1 b8bfe92ea0e97656
+step 03 narrower measure
+class value 253 c6136578571dcbeb
+class identity 29 ba91d2242f58310f
+class repr 44 a4847e18cb6a24bb
+class wire 1 71386df67518af11
+step 04 shorter regions
+class value 253 a9474c53b6c63b54
+class identity 29 ba91d2242f58310f
+class repr 44 a4847e18cb6a24bb
+class wire 1 24eb3c7989a060a3
+step 05 three columns, wider gap
+class value 253 f3530ed3ac5de5a8
+class identity 29 49d8a07aab276cc5
+class repr 44 530aa5f520b24194
+class wire 1 6b51605a983b617a
+step 06 one region
+class value 253 768998496d587d05
+class identity 29 4f28dff316e027ba
+class repr 44 471486f0bbfaccc2
+class wire 1 98cef631ae1a1399
+step 07 the starting regions
+class value 253 cff2163a9f9aa821
+class identity 29 8e8a5b1fbcdf7cd3
+class repr 44 a4847e18cb6a24bb
+class wire 1 6d3f7f2ddf29fd2e
+step 08 insert Bidi (1 units) at 836 + flip case at 129 + direction 1
+class value 253 0713effaebfd814f
+class identity 29 9397df6810b35584
+class repr 44 999841f14d0e772d
+class wire 1 063e841539971aa3
+step 09 regions Single height 400
+class value 253 7e13bfb7ec1f9b21
+class identity 29 6e89e04b2dc380c1
+class repr 44 f8c30bf39ba17a3d
+class wire 1 6f716588ded3b2b1
+step 10 metrics size 16 spacing 0 line 1 word 0
+class value 253 92158c596b2df862
+class identity 29 968f65e57cedb313
+class repr 44 1a3af122d9c2eaaa
+class wire 1 7461288716cb4aca

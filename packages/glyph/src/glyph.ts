@@ -54,6 +54,11 @@ class GlyphRuntime implements Glyph {
   readonly #handles = new Map<string, GlyphHandle>();
   readonly fontLibrary: FontLibrary;
   #engine: GlyphEngine | undefined;
+  /**
+   * Whether a renderer's frame was prepared and not yet published. Only a frame's own preparation sets it: an
+   * explicit `prepare()` is for reading, and must not make a later frame hold text it never saw.
+   */
+  #preparedSinceShape = false;
   #initializing: Promise<void> | undefined;
 
   constructor(fontLibrary: FontLibrary) {
@@ -147,9 +152,27 @@ class GlyphRuntime implements Glyph {
     prepareGlyphEngine(engine);
   }
 
+  /** @internal */
+  _prepareFrame(): void {
+    const engine = this.#engine;
+    if (engine === undefined) return;
+    this.#preparedSinceShape = true;
+    prepareGlyphEngine(engine, false);
+  }
+
+  /** @internal */
+  _publishFrame(): void {
+    const engine = this.#engine;
+    if (engine === undefined) return;
+    const prepared = this.#preparedSinceShape;
+    this.#preparedSinceShape = false;
+    shapeGlyphEngine(engine, prepared);
+  }
+
   shape(): void {
     const engine = this.#engine;
     if (engine === undefined) throw new Error('await glyph.init() before calling glyph.shape()');
+    this.#preparedSinceShape = false;
     shapeGlyphEngine(engine);
   }
 
@@ -180,3 +203,20 @@ hot?.dispose((data) => {
   data.glyphRuntime = glyphRuntime;
 });
 export const glyph: Glyph = glyphRuntime;
+
+/**
+ * @internal Publishes for a renderer's frame. If {@link prepareGlyphFrame} already ran for this frame, its
+ * layout phase is over: what became dirty since is prepared and published, except a text with a layout callback
+ * whose layout changed, which is drawn by the next frame, after its callback. Otherwise this is `glyph.shape()`.
+ */
+export function publishGlyphFrame(): void {
+  glyphRuntime._publishFrame();
+}
+
+/**
+ * @internal Prepares for a renderer's frame: what `glyph.prepare()` does, except that only the texts someone
+ * will read have their summary returned. An explicit `glyph.prepare()` is for a caller about to read them all.
+ */
+export function prepareGlyphFrame(): void {
+  glyphRuntime._prepareFrame();
+}

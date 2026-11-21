@@ -1,6 +1,7 @@
 import { d, type TgpuRoot, type TgpuBindGroup, type TgpuRenderPass } from 'typegpu';
 import type { Codec, GlyphConfigFor, GlyphHandle, GlyphRoot } from '../index.js';
 import { defineGlyphConfig, resourceLease } from '../config/glyph.js';
+import { validatingInput } from '../glyph-error.js';
 import { bitmap } from '../raster/bitmap.js';
 import { msdf } from '../raster/msdf.js';
 import { slug } from '../raster/slug.js';
@@ -120,9 +121,11 @@ export function defineTypeGpuConfig(options: TypeGpuConfigOptions): TypeGpuGlyph
                 // A CPU-side offset: the renderer uploads it when it next draws, so moving a Text needs no shape().
                 const transform = new TypeGpuTransform(renderer.transformChanged);
                 let text: TypeGpuText<Selection>;
-                const publication = createText(context.fonts!, context.services, transform, textOptions, () => {
-                  texts.delete(text);
-                });
+                const publication = validatingInput([], () =>
+                  createText(context.fonts!, context.services, transform, textOptions, () => {
+                    texts.delete(text);
+                  }),
+                );
                 text = publication.text;
                 texts.set(text, publication);
                 return text;
@@ -136,6 +139,9 @@ export function defineTypeGpuConfig(options: TypeGpuConfigOptions): TypeGpuGlyph
               shape: {
                 prepared: () => {
                   for (const text of texts.values()) text.prepare();
+                },
+                layout: () => {
+                  for (const text of [...texts.values()]) text.layout();
                 },
                 unchanged: () => {
                   for (const text of texts.values()) text.accepted();

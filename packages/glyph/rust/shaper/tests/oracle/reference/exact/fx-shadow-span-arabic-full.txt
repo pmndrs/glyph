@@ -1,0 +1,70 @@
+# glyph layout oracle reference v1
+case fx-shadow-span-arabic-full
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 1fa24e8c494c224b
+stage text identity 1 8c79cdd234e899aa
+stage unicode value 6 1c188d1ec29a3b21
+stage bidi value 8 29c5cdaf3ea9f587
+stage style value 26 2311e7915d7a1a2d
+stage shaping_run value 5 c7bf0d2877dba0d1
+stage shape value 14 10b65f881c74956b
+stage cluster value 29 9e5e3a2577a709c2
+stage cluster identity 4 ee33e0566e267ff4
+stage cluster repr 11 bdd4311f9a20761c
+stage run_local repr 16 cd37f99ac10fc32c
+stage flow value 35 8884b6899fd77e80
+stage positioned identity 3 4d4842675b4b514a
+stage positioned value 13 630154b42c0161b5
+stage positioned repr 17 a6c14b4ca4465c3c
+stage public value 13 8d745db684648007
+stage public identity 1 9f58ac2691d9d2e1
+stage view identity 4 b7b7f58c55341768
+stage view value 40 0cc031ab06df0421
+stage wire wire 1 1d3d509f91b20f9b
+stage gather identity 7 c2c572bffa9b1d93
+stage gather value 36 b291ba1f7ae0483c
+stage gpu identity 2 11f6365e1b348138
+stage gpu value 3 4ea2dcdc921d40a8
+stage plan value 23 bf342c97bf9cc38c
+stage plan identity 7 c0abddf879e48152
+step 01 shadow on
+class value 253 d3e3c20cbfb0ad32
+class identity 29 4f4078ee003295e0
+class repr 44 f1d759e2cd755ef7
+class wire 1 51f72f8f94fc585d
+step 02 moved
+class value 253 8480c5b3fc2f683f
+class identity 29 d060bead1d4dfd39
+class repr 44 f1d759e2cd755ef7
+class wire 1 9f609dfea61c78e9
+step 03 recolour and same-length edit
+class value 253 884900547b99706f
+class identity 29 ac1a680db8994fda
+class repr 44 941dec03b4cc8ee9
+class wire 1 2faeda2f53c283ef
+step 04 shadow off and edit
+class value 253 34dd1c9b4241709f
+class identity 29 e841ac198266a279
+class repr 44 afe0db6132923aef
+class wire 1 cdcfe5fe96fae46c
+step 05 shadow and outline on
+class value 253 9454a08ada856201
+class identity 29 17bd1935a333238d
+class repr 44 afe0db6132923aef
+class wire 1 891cef68cb105d08
+step 06 add span 102..112
+class value 265 202363aed001a5ea
+class identity 29 a3107c4d05111974
+class repr 44 afe0db6132923aef
+class wire 1 803fa09b2343a530
+step 07 delete 88 at 74
+class value 253 807007d15e6aae88
+class identity 29 e434ad36e952f5fd
+class repr 44 9b06c63fffb81bb4
+class wire 1 b33a8439db2bffef
+step 08 metrics size 16 spacing -0.25 line 1.2 word 0
+class value 253 c339d16d10f5d618
+class identity 29 06444f0c007383b7
+class repr 44 1ee79ed17aef9c20
+class wire 1 d987669d8e8ab947

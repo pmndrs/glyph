@@ -1,3 +1,4 @@
+/* @workflow { "name": "glyph:preparation-spans", "summary": "Time setter, setter + read and setter + frame for the many-label, typing, colour and mount operations against one built package, with the engine crossings of each span.", "requirements": "A built package at --package-root <absolute directory> (its dist and node_modules). A spike probe, not a benchmark protocol: alternate the package roots to compare and run one at a time.", "writes": "Only --json <file> when given." } */
 // Times the three spans of every setter-ending operation (setter; setter + read; setter + frame)
 // against one built package, and counts the engine crossings each span makes.
 //

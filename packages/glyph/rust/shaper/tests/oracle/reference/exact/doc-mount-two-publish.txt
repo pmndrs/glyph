@@ -1,0 +1,78 @@
+# glyph layout oracle reference v1
+case doc-mount-two-publish
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 4b88e742bf1439c2
+stage text identity 1 a10ae7b07f0dc0fa
+stage unicode value 6 fa130b5908f1433d
+stage bidi value 8 ec354c2c8e20359f
+stage style value 26 016d1abaa9fbd1a8
+stage shaping_run value 5 2992ec16a9003284
+stage shape value 14 a94d5c2a51e40fab
+stage cluster value 29 14b10f43e054a6d9
+stage cluster identity 4 a4c6b504746f14a1
+stage cluster repr 11 f742800f5ae9f1d8
+stage run_local repr 16 98a103cd923529b1
+stage flow value 35 e1d3c3ef7e1212d4
+stage positioned identity 3 756ed9fc6941926c
+stage positioned value 13 88bd77d6f404ed89
+stage positioned repr 17 1e716c48a6035ad8
+stage public value 13 19463be133db82e1
+stage public identity 1 9e41fa81cbf8ada8
+stage p2:owner value 1 344ba45791786151
+stage p2:text value 1 cf5158749dd7079f
+stage p2:text identity 1 7192b3c43f888e9b
+stage p2:unicode value 6 e3ee95bd1d24cb64
+stage p2:bidi value 8 433d088a9360cc3f
+stage p2:style value 26 bef4e54114eaf9d1
+stage p2:shaping_run value 5 8ea5b0981ee0afb3
+stage p2:shape value 14 67db48cf9f9de8d2
+stage p2:cluster value 29 2c6adfd251d549ca
+stage p2:cluster identity 4 f0a1c5c9e64abdbe
+stage p2:cluster repr 11 2a38ed56605b21c0
+stage p2:run_local repr 16 8c84a03f8a7d629b
+stage p2:flow value 35 eb2bd6133475790a
+stage p2:positioned identity 3 573bdec17152ca33
+stage p2:positioned value 13 fac5b497c2c7dfd3
+stage p2:positioned repr 17 667822417f6552a0
+stage p2:public value 13 90e454bfdb2162ea
+stage p2:public identity 1 6aecd93a0b212e32
+stage view identity 4 722b6e676e338581
+stage view value 40 e6456f1a63dec256
+stage p2:view identity 2 87ce3d9525f306c4
+stage p2:view value 20 cba35379b518b783
+stage wire wire 1 5982d94b8f5d2862
+stage gather identity 7 2f9386cf03dfa699
+stage gather value 36 b91c732e57859298
+stage gpu identity 2 ae526d698312cf86
+stage gpu value 3 984a2d3a98c56346
+stage plan value 23 c9873158d9838c16
+stage plan identity 7 e4589a0e40621213
+stage doc value 3 78f7e067128eb5cb
+step 01 edit the last paragraph
+class value 427 66d7c48597c2f3a9
+class identity 40 c5741c17713250b0
+class repr 88 2176c9432003583a
+class wire 1 304d21a61b812506
+step 02 nothing changes
+class value 407 5dbe4c444a18e79a
+class identity 38 731fea6f022a5220
+class repr 88 2176c9432003583a
+class wire 1 a936ab69eca40f59
+step 03 paragraph 1: insert HardBreak (1 units) at 115 + paragraph 1: delete 6 at 75 + add span 76..113 + rank paragraph 2 0/0
+class value 427 8816c97a35cd9aa3
+class identity 40 8964415b282fc1f1
+class repr 88 1f4be5339f444108
+class wire 1 7c5ac5638b990295
+step 04 add paragraph 3
+class value 598 2abe6d1e5e1a96fc
+class identity 51 023dd61855f4e487
+class repr 129 6ba40ae01e55aa12
+class cache 3 65b56df577659cb2
+class wire 1 840989b0eaf1b796
+step 05 add paragraph 4 + paragraph 4: align 3 + max lines 0
+class value 769 ff65c6ae22e45d7b
+class identity 62 a2ca21585234b653
+class repr 173 b2b2f08fb813245f
+class cache 3 65b56df577659cb2
+class wire 1 02cce2d7a0241dcf

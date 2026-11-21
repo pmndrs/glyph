@@ -12,14 +12,16 @@ const SETUP = /register_|create_root|reserve_|shaper_initialize/;
 const calls = new Map();
 const lastArguments = new Map();
 let failNext;
+let trapWhen;
 let instances = 0;
 let memory;
 
-const instantiate = WebAssembly.instantiate;
-WebAssembly.instantiate = async (source, imports) => {
-  const result = await instantiate(source, imports);
-  const instance = result instanceof WebAssembly.Instance ? result : result.instance;
-  if (!(`${PREFIX}shaper_abi_version` in instance.exports)) return result;
+const NativeInstance = WebAssembly.Instance;
+let refuseSynchronousInstantiation = false;
+
+/** The instance's exports with every function counted and open to trap injection, or `undefined` for other modules. */
+function countedExports(instance) {
+  if (!(`${PREFIX}shaper_abi_version` in instance.exports)) return undefined;
   instances += 1;
   memory = instance.exports.memory;
   const exports = {};
@@ -36,11 +38,35 @@ WebAssembly.instantiate = async (source, imports) => {
         failNext = undefined;
         throw new WebAssembly.RuntimeError('unreachable');
       }
+      if (trapWhen?.(short, args) === true) throw new WebAssembly.RuntimeError('unreachable');
       return value(...args);
     };
   }
-  return result instanceof WebAssembly.Instance ? { exports } : { module: result.module, instance: { exports } };
+  return exports;
+}
+
+const instantiate = WebAssembly.instantiate;
+WebAssembly.instantiate = async (source, imports) => {
+  const result = await instantiate(source, imports);
+  const instance = result instanceof NativeInstance ? result : result.instance;
+  const exports = countedExports(instance);
+  if (exports === undefined) return result;
+  return result instanceof NativeInstance ? { exports } : { module: result.module, instance: { exports } };
 };
+// An engine that restarts after a trap instantiates synchronously; that instance is counted too.
+WebAssembly.Instance = function Instance(module, imports) {
+  if (refuseSynchronousInstantiation) {
+    throw new RangeError('WebAssembly.Instance is disallowed on the main thread for a module this large');
+  }
+  const instance = new NativeInstance(module, imports);
+  const exports = countedExports(instance);
+  return exports === undefined ? instance : { exports };
+};
+
+/** Makes `new WebAssembly.Instance` throw, as a browser main thread does for a module this large. */
+export function refuseSynchronousInstances(refuse) {
+  refuseSynchronousInstantiation = refuse;
+}
 
 /** A snapshot to pass to `crossingsSince`. */
 export function crossingSnapshot() {
@@ -72,6 +98,11 @@ export function lastCallArguments(name) {
 /** Makes the next call to an export matching `pattern` trap as a panic in shipped Wasm does. */
 export function trapNextCall(pattern) {
   failNext = pattern;
+}
+
+/** Makes every call for which `predicate(name, args)` answers true trap, until cleared with `undefined`. */
+export function trapCallsWhen(predicate) {
+  trapWhen = predicate;
 }
 
 /** How many shaper modules have been instantiated in this process. */

@@ -1,0 +1,56 @@
+# glyph layout oracle reference v1
+case doc-mount-one-publish
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 9d974b48b27dbcb6
+stage text identity 1 eab8298ae3246858
+stage unicode value 6 972f836127c75418
+stage bidi value 8 89225c7551d0c7dd
+stage style value 26 c72fc73719f39097
+stage shaping_run value 5 cc38a0e10ff3fb36
+stage shape value 14 78450e7b6ea01fdf
+stage cluster value 29 65c64ed17b742578
+stage cluster identity 4 74ba774def0a4974
+stage cluster repr 11 0504925bd1a15b34
+stage run_local repr 16 b6b102f6502bb22e
+stage flow value 35 73f1bfc09ab83e5f
+stage positioned identity 3 478076d947424398
+stage positioned value 13 d224fbdd4bb572e1
+stage positioned repr 17 85e9d30aa12610db
+stage public value 13 a094c87a0f3ef3cd
+stage public identity 1 cb311c1cba93314b
+stage view identity 4 9e1baef37d580513
+stage view value 40 9356e369eac1f605
+stage wire wire 1 351c7188e7f7af87
+stage gather identity 7 fa9e40cf1a8acb81
+stage gather value 36 805279403901131d
+stage gpu identity 2 33d1d1966af37791
+stage gpu value 3 ee7008aa2c29d8a2
+stage plan value 23 8b50686ed1defc05
+stage plan identity 7 b65a14036160df65
+stage doc value 3 9eff73b2158acdb7
+step 01 edit the last paragraph
+class value 256 bc6fe8022192b970
+class identity 29 4315b369e33aeac8
+class repr 44 76000b489026ad6d
+class wire 1 2d4bfad45a17c637
+step 02 nothing changes
+class value 236 ee17894a3febfd0b
+class identity 27 2f789cd18acc795d
+class repr 44 76000b489026ad6d
+class wire 1 a936ab69eca40f59
+step 03 order paragraph 1 at 200 + add paragraph 2
+class value 427 9d4ba3e87548e4e3
+class identity 40 cc35abd88213db2b
+class repr 88 d4b95d392f55c622
+class wire 1 5c0a8a91136b641b
+step 04 paragraph 2: replace 3 at 91
+class value 427 e9038d26fde9537f
+class identity 40 303cf2b7061973c4
+class repr 88 a36e7ab46ab02935
+class wire 1 3cd09877e027eac3
+step 05 paragraph 1: insert Word (1 units) at 325 + paragraph 2: insert Word (3 units) at 98 + add span 107..132 + width 420.01563 + paragraph 1: direction 1 + delete 6 at 352 + add span 423..424 + paragraph 2: add span 157..159 + metrics size 16 spacing 0 line 1.2 word 0 + align 1 + restyle span 3
+class value 451 69ed803922b5c2b0
+class identity 40 2a868c502a12c002
+class repr 88 1bbbc36a2ff33c47
+class wire 1 79640f7598c0b847

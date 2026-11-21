@@ -36,10 +36,19 @@ generated:
 
 ## Held refactor contract
 
-The [accepted preparation/publication decision](decisions/retained-prepare-publish.md) governs the held ropes work.
-Bound setters prepare retained Rust layout synchronously. Reads and independent copies use that prepared revision;
-publication handles accumulated renderer updates and batching. Existing public signatures remain unchanged. This is
-a refactor target; passing implementation evidence is tracked in [publication-frontier](publication-frontier.md).
+[Deferred, never-stale preparation](decisions/deferred-never-stale-preparation.md) governs when layout runs; it
+supersedes the setter rule of the [retained preparation/publication decision](decisions/retained-prepare-publish.md),
+whose remainder stands. A setter validates its input and marks the paragraph dirty; it does not enter the engine. A
+read prepares that one paragraph on demand, so no read is stale. `glyph.shape()` (and a Three scene traversal)
+batch-prepares every paragraph still dirty in one engine call, then publishes; `glyph.prepare()` does the first half
+alone. Reads, copies and publication share one prepared revision.
+
+Preparation ends with the layout phase: after every root is prepared and before any is published, each root's
+`layout()` hook runs its texts' layout callbacks. While the phase runs, a write that changes a layout input of any
+text throws `GlyphLayoutPhaseError`; colour, opacity, material and transform writes are accepted and published by the
+same call. Invalid input throws `GlyphInputError` (`code: 'invalid-input'`, `path` as an array) from the setter that
+received it. Lone surrogates are not invalid input: they reach the engine as U+FFFD, one unit for one unit, with no
+public surface.
 
 Applications import the values and types they encounter from `@pmndrs/glyph`. Integration authors import the
 renderer-neutral construction helpers from `@pmndrs/glyph/core`. The engine-driving API formerly published at `/core`
@@ -219,7 +228,17 @@ Candidate discard, resource retirement, root disposal, and handle disposal relea
 - `context.create(extension, { boundary, defaultRenderer?, dispose? })` to finalize the root.
 
 An adapter Text owns desired state and privately holds a `GlyphTextController`. Complete state snapshots flow through
-`controller.update()`. The top-level `glyph.shape()` publishes semantic changes; `services.syncTransforms()` is the
+`controller.update()`. `controller.keepMeasured` asks every batch preparation to return the text's summary, which an
+adapter sets for a text with a layout callback; `controller.preparedMeasurement()` reads that summary without
+entering the engine, `controller.refusal` is the error of a preparation the engine refused for this text alone, and
+`controller.awaitsPreparation` says the text was left for a later preparation, so the adapter neither reads it nor
+counts it as published. Root shape hooks are `prepare()`, `prepared()`, `layout()`, `unchanged()`, `accepted()`,
+`rejected()` and `invalidated()`.
+
+TypeGPU text created through a configured handle exposes the same model directly: `text.onLayout(text, layout)`,
+`text.onError(error)` and a read-only `text.error`, each also accepted as a `createText()` option. `error` is the
+refusal that keeps the text from being drawn and clears when its input changes; `onError` receives it once, and any
+exception its layout callback throws. The top-level `glyph.shape()` publishes semantic changes; `services.syncTransforms()` is the
 cheap transform-only path. TextGroup remains adapter hierarchy and inheritance inside a root, not a publication boundary.
 
 ## Layout-query values
@@ -265,7 +284,8 @@ own participating styles. This preserves body line spacing while making cap/x-he
 Line alignment stays in `layout.align` and controls lines _inside_ that box. Omitting the anchor preserves left/top
 placement. Horizontal tokens are `left`, `center`, `right`; vertical tokens are `top`, `middle`, `bottom`,
 `first-baseline`, `last-baseline`, `alphabetic-baseline`, `ideographic-baseline`, `cap-height-top`, `x-height-top`.
-Metric tokens are their public camelCase names converted directly to kebab case.
+Each metric token is the kebab-case form of the camelCase field `measure()` returns: `'first-baseline'` anchors at
+`firstBaseline`.
 
 `measure().anchorOffset` is the negative reference point in paragraph-local units. Geometry anchors use the resolved
 `width`/`height`, including exact constraints and paragraph spacing. Typographic anchors use the named reference.

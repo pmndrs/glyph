@@ -6836,7 +6836,11 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   assert.deepEqual(engineCrossings(), { read: 1, batch: 0, publish: 1 });
 
   mutableWidth.size = 300;
-  assert.throws(() => right.set({ constraints: { width: { mode: 'exact', size: NaN } } }), RangeError);
+  assert.throws(() => right.set({ constraints: { width: { mode: 'exact', size: NaN } } }), {
+    name: 'GlyphInputError',
+    code: 'invalid-input',
+    path: ['constraints'],
+  });
   instrumented.reset();
   right.text = 'DC';
   right.style = { ...right.style, fontSize: 21 };
@@ -8338,7 +8342,11 @@ test('Text.readGlyphs promotes actual dense demand before the next callback and 
     3 + Math.ceil(count / textShaperAbi.engine.borrowedGlyphCapacity),
     'owned callbacks cross no record ABI',
   );
-  assert.throws(() => label.set({ constraints: { width: { mode: 'exact', size: NaN } } }), RangeError);
+  assert.throws(() => label.set({ constraints: { width: { mode: 'exact', size: NaN } } }), {
+    name: 'GlyphInputError',
+    code: 'invalid-input',
+    path: ['constraints'],
+  });
   instrumentedGlyph.reset();
   assert.deepEqual(
     label.readGlyphs((layout) => layout.glyphAt(1)),
@@ -8393,7 +8401,7 @@ test('seeded inspection demand remains equal to cold recomputation across edits 
         assert.throws(() => escaped.glyphAt(index), /expired/);
         assert.throws(
           () => warm.set({ text: 'rejected candidate', constraints: { width: { mode: 'exact', size: NaN } } }),
-          RangeError,
+          { name: 'GlyphInputError', code: 'invalid-input', path: ['constraints'] },
         );
         assert.equal(warm.text, text, 'a rejected setter preserves the inspected preparation');
         warm.readGlyphs((layout) => {
@@ -8440,7 +8448,7 @@ test('a setter crosses into the engine once and reuses its request arena views',
     assert.equal(instrumentedGlyph.arenaQueries, 0, 'a request that fits the arena asks the engine nothing first');
 
     // A request larger than the arena reserves once, resolves the moved arena once, and then settles again.
-    const long = 'long paragraph '.repeat(6_000);
+    const long = 'long paragraph '.repeat(4_000);
     label.text = long;
     assert.equal(label.measure().glyphCount, long.length);
     const afterGrowth = instrumentedGlyph.arenaQueries;

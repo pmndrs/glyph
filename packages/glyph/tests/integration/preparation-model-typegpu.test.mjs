@@ -32,8 +32,18 @@ preparationModel('TypeGPU', async (labels) => {
       },
       setStyle: (style) => text.update({ style }),
       read: () => text.measure(),
+      paint: (color) => text.update({ style: { color } }),
+      move: () => text.update({ position: [12, index * 40 + 3] }),
+      onLayout: (listener) => {
+        text.onLayout = (_text, layout) => listener(layout);
+      },
+      onError: (listener) => {
+        text.onError = listener;
+      },
+      dispose: () => text.dispose(),
     })),
     frame: () => glyph.shape(),
+    prepare: () => glyph.prepare(),
     unmount: () => {
       handle.dispose();
       font.dispose();

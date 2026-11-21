@@ -1,0 +1,183 @@
+# glyph layout oracle reference v1
+case doc-mount-seven-publish
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 4b88e742bf1439c2
+stage text identity 1 a10ae7b07f0dc0fa
+stage unicode value 6 fa130b5908f1433d
+stage bidi value 8 ec354c2c8e20359f
+stage style value 26 016d1abaa9fbd1a8
+stage shaping_run value 5 2992ec16a9003284
+stage shape value 14 a94d5c2a51e40fab
+stage cluster value 29 14b10f43e054a6d9
+stage cluster identity 4 a4c6b504746f14a1
+stage cluster repr 11 f742800f5ae9f1d8
+stage run_local repr 16 98a103cd923529b1
+stage flow value 35 e1d3c3ef7e1212d4
+stage positioned identity 3 756ed9fc6941926c
+stage positioned value 13 88bd77d6f404ed89
+stage positioned repr 17 1e716c48a6035ad8
+stage public value 13 19463be133db82e1
+stage public identity 1 9e41fa81cbf8ada8
+stage p2:owner value 1 344ba45791786151
+stage p2:text value 1 1e816c931d1fca10
+stage p2:text identity 1 8a065b4d6d83522e
+stage p2:unicode value 6 a3db139c8ed8d837
+stage p2:bidi value 8 0d022813043911b0
+stage p2:style value 26 7b71bb2daaa66822
+stage p2:shaping_run value 5 8761f4b1a8393cf6
+stage p2:shape value 14 b93b69e579983b83
+stage p2:cluster value 29 d18c4e4eaca4d9bf
+stage p2:cluster identity 4 de7c37b224a09207
+stage p2:cluster repr 11 e9d0d65ee484dedf
+stage p2:run_local repr 16 67b0b7d4703c0a16
+stage p2:flow value 35 2adf5970758bf729
+stage p2:positioned identity 3 7a825c66484d9693
+stage p2:positioned value 13 2601d61082e6e46e
+stage p2:positioned repr 17 ab983dbc9c8dd3bc
+stage p2:public value 13 66b3519edb29a0f9
+stage p2:public identity 1 8df9a476e5cfb17e
+stage p3:owner value 1 39fb75f4abad5a21
+stage p3:text value 1 9d451c326f0c844d
+stage p3:text identity 1 c426c127fab496f7
+stage p3:unicode value 6 1deb21d4633f5ee8
+stage p3:bidi value 8 afd8971f602483bd
+stage p3:style value 26 f744de2fb9ce8102
+stage p3:shaping_run value 5 80904a573ef6cf54
+stage p3:shape value 14 125590deaa16adb2
+stage p3:cluster value 29 f000caff1ea8db6a
+stage p3:cluster identity 4 671fd5bc22b1e094
+stage p3:cluster repr 8 d33764a180967767
+stage p3:cluster cache 3 3d89a9e4daf93fbd
+stage p3:run_local repr 16 87dee0d3eb736f59
+stage p3:flow value 35 baa2eb6ecb03350c
+stage p3:positioned identity 3 a23c74b50e30af43
+stage p3:positioned value 13 a8f8dcea10c21e6a
+stage p3:positioned repr 17 21be93d45c72941b
+stage p3:public value 13 1daed4395410cc7c
+stage p3:public identity 1 4bbeeb91572b35e2
+stage p4:owner value 1 de0ba8b4163ac6bb
+stage p4:text value 1 b4d90fb4628a08d6
+stage p4:text identity 1 0c5922350815d6a0
+stage p4:unicode value 6 f6ca91a105f09217
+stage p4:bidi value 8 eebd0a81cebc8da2
+stage p4:style value 26 230df6f379c7b037
+stage p4:shaping_run value 5 6247524032dcb2f9
+stage p4:shape value 14 764343e3b42cec6b
+stage p4:cluster value 29 02097b30ef897213
+stage p4:cluster identity 4 c3a31c0830118927
+stage p4:cluster repr 11 4a3741d8cad68d73
+stage p4:run_local repr 16 734058cf5d626f80
+stage p4:flow value 35 8e871b0ef2da9bf4
+stage p4:positioned identity 3 d346db7e32538a5f
+stage p4:positioned value 13 644e48df6a3ae31b
+stage p4:positioned repr 17 d8863dd33e2a3ca1
+stage p4:public value 13 5c02aee380514dae
+stage p4:public identity 1 e6d199fae3e35e75
+stage p5:owner value 1 f3e7b8111ef74d5f
+stage p5:text value 1 ded675e89e605334
+stage p5:text identity 1 d71fa2712d22b224
+stage p5:unicode value 6 98bf2e71a9c72ce9
+stage p5:bidi value 8 b6e4d3d74be8fffa
+stage p5:style value 26 1a5232da9e3be482
+stage p5:shaping_run value 5 61a6aa4641ea9804
+stage p5:shape value 14 eaf31768c0d5b7bd
+stage p5:cluster value 29 0a4254e7a5ff613e
+stage p5:cluster identity 4 536290f8803cdd40
+stage p5:cluster repr 11 6dd08c94a82e5383
+stage p5:run_local repr 16 9529e57b93794a12
+stage p5:flow value 35 3b437d6380b67f93
+stage p5:positioned identity 3 632681f2dfb841c0
+stage p5:positioned value 13 16e8266d7414a952
+stage p5:positioned repr 17 55a01c75916f1242
+stage p5:public value 13 682064201e11552f
+stage p5:public identity 1 c129c73f258e7035
+stage p6:owner value 1 24fd2bdabf6088db
+stage p6:text value 1 4f8a3e9d3b18cf14
+stage p6:text identity 1 8bc140726be2c9c3
+stage p6:unicode value 6 69a5fdd081b63afd
+stage p6:bidi value 8 973ef5c3541540e9
+stage p6:style value 26 eadd2830fb34f858
+stage p6:shaping_run value 5 347a80244b48b44c
+stage p6:shape value 14 eefaa9061bf5309d
+stage p6:cluster value 29 1f4b12533744cd98
+stage p6:cluster identity 4 a84ff0b92dbb9a41
+stage p6:cluster repr 8 628b2b31083ec54f
+stage p6:cluster cache 5 98772e0a03e7b5c2
+stage p6:run_local repr 16 5172e68a969742d6
+stage p6:flow value 35 97d25473d7ac3947
+stage p6:positioned identity 3 985055c4eeda7ecd
+stage p6:positioned value 13 be340981843d3df0
+stage p6:positioned repr 17 145ae3b9807b9fb0
+stage p6:public value 13 d692aa6f31fc5838
+stage p6:public identity 1 e6aefadf1496c14a
+stage p7:owner value 1 720d1c557b47ba4b
+stage p7:text value 1 7af0abb6fe0ab0d0
+stage p7:text identity 1 8d3763c3f6bac6b3
+stage p7:unicode value 6 342e489a1000e2df
+stage p7:bidi value 8 e2ffc15973d642a2
+stage p7:style value 26 1b74ab9a038e38e4
+stage p7:shaping_run value 5 5f76217e32e13ce6
+stage p7:shape value 14 2551daa5dff0c53e
+stage p7:cluster value 29 a6c1f4df8e3ea4fc
+stage p7:cluster identity 4 45f8e46716526f6d
+stage p7:cluster repr 11 386c35c57e018106
+stage p7:run_local repr 16 c0d1e5b633ed23bb
+stage p7:flow value 35 db94fd8c7e0c83ed
+stage p7:positioned identity 3 9534aad8d8d7a309
+stage p7:positioned value 13 3ded4f7f4fced501
+stage p7:positioned repr 17 a0c110015caaa8b1
+stage p7:public value 13 7dfb07e8b1c03822
+stage p7:public identity 1 603b10da88429bf6
+stage view identity 4 6ff3dbd82138e613
+stage view value 40 99985a25ccb055c9
+stage p2:view identity 2 e49feed775e6513d
+stage p2:view value 20 fd79a0ab2525f226
+stage p3:view identity 2 2c6eb913310d35da
+stage p3:view value 20 c960788bad1af165
+stage p4:view identity 2 051d4c8b861ce30f
+stage p4:view value 20 146bce9b51fc84ed
+stage p5:view identity 2 d05705c29b4d61d7
+stage p5:view value 20 b8cd966857c3a7a3
+stage p6:view identity 2 a349f9f33910dc1b
+stage p6:view value 20 e9f66094c129f9a4
+stage p7:view identity 2 786ff284d7c62606
+stage p7:view value 20 57337c8d8bf47332
+stage wire wire 1 c8fd86187f309b22
+stage gather identity 7 57287c188202ff41
+stage gather value 36 8dc240123e7a60ec
+stage gpu identity 2 fd9cbe8b80572f9f
+stage gpu value 3 e2505899210bab8d
+stage plan value 23 866f1876e7ca7b94
+stage plan identity 7 c87e13a8ad54591c
+stage doc value 3 bb52517d84517a30
+step 01 edit the last paragraph
+class value 1282 0482e6603850a019
+class identity 95 26f6514c52f39ecd
+class repr 302 e6ce20aee88d9adb
+class cache 8 725dae21fd26b934
+class wire 1 3b28f4b1b3edb74b
+step 02 nothing changes
+class value 1262 75f5709204e90a74
+class identity 93 f6ed0616fe672cbf
+class repr 302 e6ce20aee88d9adb
+class cache 8 725dae21fd26b934
+class wire 1 901c14c35beecce9
+step 03 paragraph 7: add span 98..135 + insert Word (5 units) at 99 + width 471.75 + insert Word (4 units) at 182 + rank paragraph 2 3/-2 + rank paragraph 6 3/-2
+class value 1282 df4dc80db0edd3e5
+class identity 95 46bb34fee2a02f58
+class repr 302 dd0d7a69a54db58f
+class cache 8 725dae21fd26b934
+class wire 1 606e7942e15251bf
+step 04 paragraph 5: insert Mark (1 units) at 113 + width 0 + paragraph 1: insert Space (1 units) at 104 + insert SpacedWord (9 units) at 190 + width 420.01563 + metrics size 16 spacing 0 line 1 word 0 + paragraph 2: delete 5 at 11 + paragraph 3: align 2 + delete 1 at 126 + replace 5 at 11 + insert Word (4 units) at 101 + paragraph 4: width 437.75 + paragraph 5: replace 3 at 0 + paragraph 6: align 4 + paragraph 7: delete 2 at 0
+class value 1282 1cfca176cda68a66
+class identity 95 a9c60dae8975d815
+class repr 302 8911d5c3635cfeeb
+class cache 8 2440ec47399eef0b
+class wire 1 c1c785c02fe58d63
+step 05 paragraph 2: delete 7 at 62 + paragraph 1: direction 0 + paragraph 2: align 3 + paragraph 3: flip case at 66 + paragraph 4: add span 188..204 + paragraph 5: delete 60 at 110 + direction 0 + paragraph 6: add span 28..31 + paragraph 7: width 0 + paragraph 6: width 427
+class value 1282 650238be0d102a45
+class identity 95 073b185e682ce4e2
+class repr 302 bd546caa45e19abe
+class cache 6 e233cedcdf2523fc
+class wire 1 b10c3980ed0263e6

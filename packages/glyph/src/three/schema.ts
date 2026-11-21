@@ -107,6 +107,11 @@ export interface ThreeConfigOptions extends ThreeRootOptions {
    * sharp (visible at large sizes).
    */
   readonly msdfAtlas?: 'msdf' | 'sdf';
+  /**
+   * The most UTF-16 units one Text may hold; assigning more throws from the setter. Defaults to 65,536, which
+   * keeps one paragraph under roughly a hundred megabytes of engine memory.
+   */
+  readonly maxTextUnits?: number;
 }
 
 export interface ThreeFontFormats {

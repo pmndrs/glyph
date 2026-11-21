@@ -10,7 +10,7 @@ use pmndrs_glyph_shaper::engine::{
     oracle::{
         fonts::{FontLibrary, FontRoot, font_spec},
         matrix::utf16,
-        model::{Model, PARAGRAPH_ID, ROOT_ID},
+        model::{Document, Model, PARAGRAPH_ID, ROOT_ID},
         session::{Route, Session},
     },
 };
@@ -50,23 +50,41 @@ pub fn session(library: &FontLibrary, stacks: &[&[&str]], model: &Model) -> Sess
     session
 }
 
-/// The paragraph's editing queries, with the word and sentence lanes filled.
+/// Every paragraph of a document laid out cold in one root.
+pub fn session_document(library: &FontLibrary, stacks: &[&[&str]], document: &Document) -> Session {
+    let mut session = Session::new(library, stacks).expect("session");
+    session
+        .step_document(document, &[], Route::FULL)
+        .expect("cold layout");
+    session
+}
+
+/// Fills the word and sentence lanes of every paragraph the session holds.
 pub fn prepare_lanes(session: &mut Session) {
-    for unit in [TextUnit::Word, TextUnit::Sentence] {
-        session
-            .engine_mut()
-            .prepare_editing_boundaries(ROOT_ID, PARAGRAPH_ID, unit)
-            .expect("boundary lanes");
+    let ids: Vec<u32> = session
+        .document()
+        .map(|document| document.paragraphs.iter().map(|p| p.id).collect())
+        .unwrap_or_default();
+    for id in ids {
+        for unit in [TextUnit::Word, TextUnit::Sentence] {
+            // A paragraph the engine refused has no layout and nothing to fill.
+            let _ = session
+                .engine_mut()
+                .prepare_editing_boundaries(ROOT_ID, id, unit);
+        }
     }
 }
 
 pub type Queries<'a> = Editing<ParagraphSource<'a>>;
 
-pub fn editing(session: &Session) -> Queries<'_> {
+/// The editing queries of one paragraph, or `None` when the engine holds no layout for it.
+pub fn editing_at(session: &Session, paragraph: u32) -> Option<Queries<'_>> {
     let (engine, fonts) = session.engine();
-    engine
-        .editing(fonts, ROOT_ID, PARAGRAPH_ID)
-        .expect("a prepared paragraph")
+    engine.editing(fonts, ROOT_ID, paragraph).ok()
+}
+
+pub fn editing(session: &Session) -> Queries<'_> {
+    editing_at(session, PARAGRAPH_ID).expect("a prepared paragraph")
 }
 
 pub fn model(text: &str) -> Model {

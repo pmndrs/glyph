@@ -14,12 +14,16 @@
 
 pub mod capture;
 pub mod corpus;
+mod documents;
+mod effects;
 pub mod fonts;
 pub mod fuzz;
+mod inline_objects;
 pub mod lanes;
 pub mod matrix;
 mod mechanisms;
 pub mod model;
+mod regions;
 pub mod rng;
 pub mod run;
 pub mod session;

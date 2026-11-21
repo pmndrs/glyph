@@ -50,6 +50,7 @@ import type {
   OwnedTextInspectionView,
 } from './render-planner.js';
 import {
+  assertTextUnitLimit,
   observeRenderPlannerDirty,
   ownedTextInspection,
   stageRenderPlanner,
@@ -491,16 +492,21 @@ class ConfiguredRootServices<
         requestCapacity: commands?.requestBytes ?? 64 * 1024,
         resultCapacity: commands?.resultBytes ?? 256 * 1024,
         textCapacity: commands?.textUnits ?? 64,
+        ...(commands?.maxTextUnits === undefined ? {} : { maxTextUnits: commands.maxTextUnits }),
       });
       registration = registerGlyphShapeParticipant(this.#engine, {
-        prepare: (measureAll) => this.#prepareShape(measureAll),
+        prepare: (measureAll, holdObserved) => this.#prepareShape(measureAll, holdObserved),
         prepared: () => this.#shapeHooks?.prepared?.(),
+        layout: () => this.#shapeHooks?.layout?.(),
         stage: () => this.#stageShape(),
         accepted: () => this.#acceptShape(),
         rejected: (error) => this.#rejectShape(error),
       });
       const activeRegistration = registration;
-      stopObservingDirty = observeRenderPlannerDirty(planner, () => activeRegistration.invalidate());
+      stopObservingDirty = observeRenderPlannerDirty(planner, () => {
+        activeRegistration.invalidate();
+        this.#shapeHooks?.invalidated?.();
+      });
       this.#planner = planner;
       this.#target = target;
       this.#shapeHooks = options.shape;
@@ -676,8 +682,16 @@ class ConfiguredRootServices<
     this.#requiredPlanner();
   }
 
+  assertTextUnits(text: string): void {
+    assertTextUnitLimit(text, this.#config.commands?.maxTextUnits);
+  }
+
   assertMutationAllowed(): void {
     this.#requiredPlanner().assertMutationAllowed();
+  }
+
+  get layoutPhaseActive(): boolean {
+    return this.#handleState._layoutPhaseActive();
   }
 
   _preflightLifecycleMutation(): void {
@@ -824,11 +838,11 @@ class ConfiguredRootServices<
     return this.#planner;
   }
 
-  #prepareShape(measureAll: boolean): StagedPlannerPreparation | undefined {
+  #prepareShape(measureAll: boolean, holdObserved: boolean): StagedPlannerPreparation | undefined {
     const planner = this.#requiredPlanner();
     this.#reconciled = this.#shapeHooks?.prepare?.();
     if (this.#reconciled === false) return undefined;
-    return stageRenderPlannerPreparation(planner, measureAll);
+    return stageRenderPlannerPreparation(planner, measureAll, holdObserved);
   }
 
   #stageShape(): StagedRenderPlanner | undefined {
@@ -970,6 +984,26 @@ class ConfiguredTextController<
     this.#services.assertMutationAllowed();
     const orderRank = normalizeParagraphOrderRank(rank);
     this.#text.updateOrder(order, this.#services.bindParagraphOrderScope(scope), orderRank);
+  }
+
+  get refusal(): unknown {
+    return this.#text.refusal;
+  }
+
+  get keepMeasured(): boolean {
+    return this.#text.keepMeasured;
+  }
+
+  set keepMeasured(value: boolean) {
+    this.#text.keepMeasured = value;
+  }
+
+  preparedMeasurement() {
+    return this.#text.preparedMeasurement();
+  }
+
+  get awaitsPreparation(): boolean {
+    return this.#text.awaitsPreparation;
   }
 
   measure() {

@@ -1,4 +1,4 @@
-use alloc::{collections::BTreeMap, vec::Vec};
+use alloc::{boxed::Box, collections::BTreeMap, vec::Vec};
 use core::{cell::RefCell, num::NonZeroU32};
 
 use crate::{
@@ -278,7 +278,9 @@ struct PlannerState {
     placement_slot_count: u32,
     pending_placement_slot_count: u32,
     spare_paragraph: Option<ParagraphState>,
-    paragraphs: Vec<RetainedParagraph>,
+    /// Sorted by id. Boxed so that creating or removing one paragraph moves pointers, not every
+    /// retained paragraph's stages: mount cost must not depend on how many paragraphs a root holds.
+    paragraphs: Vec<Box<RetainedParagraph>>,
     ordered_paragraphs: Vec<ParagraphOrder>,
     pending_ordered_paragraphs: Vec<ParagraphOrder>,
     /// Source count from the last undecorated gather; authorized only by its exact cache key.
@@ -451,6 +453,9 @@ struct RankedParagraph {
     id: u32,
     rank: f64,
     slot: u32,
+    /// The member's authored root order: it travels with the id to the slot the rank assigns,
+    /// so the next lifecycle request sorts every paragraph back to its own place first.
+    order: u32,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -1465,6 +1470,7 @@ impl TextEngine {
     /// positioning run for the selected paragraph without advancing renderer-plan revision,
     /// acknowledging a renderer fence, gathering, or compiling a plan. The Wasm boundary commits
     /// this transaction only after its requested semantic result has encoded successfully.
+    #[cfg(test)]
     pub(crate) fn measure_paragraph_with_shaper(
         &mut self,
         shaper: &mut ShaperRegistry,
@@ -1483,13 +1489,24 @@ impl TextEngine {
         self.measure_paragraph_inner(None, request, paragraph_id)
     }
 
+    #[cfg(test)]
     fn measure_paragraph_inner(
         &mut self,
         shaper: Option<&mut ShaperRegistry>,
         request: UpdateRequest<'_>,
         paragraph_id: u32,
     ) -> Result<MeasuredParagraph, EngineError> {
-        self.prepare_paragraphs(shaper, request, PreparationTarget::One(paragraph_id))
+        let prepared =
+            self.prepare_paragraphs(shaper, request, PreparationTarget::One(paragraph_id))?;
+        match prepared.refused {
+            None => Ok(prepared.witness),
+            // This entry answers with one witness or one error, so it settles the refusal itself:
+            // whatever else the request prepared is committed and the paragraph's error returned.
+            Some((_, error)) => {
+                self.commit_measure(prepared.witness)?;
+                Err(error)
+            }
+        }
     }
 
     fn prepare_update_inner(
@@ -3031,14 +3048,14 @@ impl PlannerState {
         self.paragraphs
             .binary_search_by_key(&id, |paragraph| paragraph.id)
             .ok()
-            .map(|index| &self.paragraphs[index])
+            .map(|index| &*self.paragraphs[index])
     }
 
     fn paragraph_mut(&mut self, id: u32) -> Option<&mut RetainedParagraph> {
         self.paragraphs
             .binary_search_by_key(&id, |paragraph| paragraph.id)
             .ok()
-            .map(|index| &mut self.paragraphs[index])
+            .map(|index| &mut *self.paragraphs[index])
     }
 
     fn prepare_semantic_inputs(
@@ -3539,6 +3556,7 @@ impl PlannerState {
                 id: paragraph.id,
                 rank: placement.rank,
                 slot: u32::try_from(slot).map_err(|_| EngineError::ResultTooLarge)?,
+                order: ordered.order,
             });
         }
         sort::prepare_pairs(&mut self.rank_sort_scratch, self.ranked_paragraphs.len())?;
@@ -3557,8 +3575,11 @@ impl PlannerState {
                 self.ranked_paragraphs.iter().zip(&self.rank_sort_scratch)
             {
                 let source = usize::try_from(source).map_err(|_| EngineError::InvalidRequest)?;
-                self.pending_ordered_paragraphs[destination.slot as usize].id =
-                    self.ranked_paragraphs[source].id;
+                let ranked = self.ranked_paragraphs[source];
+                self.pending_ordered_paragraphs[destination.slot as usize] = ParagraphOrder {
+                    order: ranked.order,
+                    id: ranked.id,
+                };
             }
         } else {
             sort::apply_pair_order(&mut self.ranked_paragraphs, &mut self.rank_sort_scratch);
@@ -3580,7 +3601,10 @@ impl PlannerState {
             {
                 let destination =
                     usize::try_from(destination).map_err(|_| EngineError::InvalidRequest)?;
-                self.pending_ordered_paragraphs[destination].id = ranked.id;
+                self.pending_ordered_paragraphs[destination] = ParagraphOrder {
+                    order: ranked.order,
+                    id: ranked.id,
+                };
             }
         }
         self.lifecycle_changed = self.pending_ordered_paragraphs != self.ordered_paragraphs;
@@ -3623,7 +3647,7 @@ impl PlannerState {
                 };
                 self.paragraphs.insert(
                     index,
-                    RetainedParagraph {
+                    Box::new(RetainedParagraph {
                         id,
                         incarnation,
                         placement: ParagraphPlacement {
@@ -3645,7 +3669,7 @@ impl PlannerState {
                         renderer_order_index: usize::MAX,
                         placement_range: RecordSpan::default(),
                         state,
-                    },
+                    }),
                 );
                 Ok(())
             }
@@ -9249,7 +9273,8 @@ mod prepare_paragraphs;
 use change_class::ChangeClass;
 pub(crate) use change_class::{DirtyInterval, ParagraphChange};
 pub use editing_source::ParagraphSource;
-pub(crate) use prepare_paragraphs::PreparationTarget;
+#[cfg(any(target_arch = "wasm32", feature = "oracle", test))]
+pub(crate) use prepare_paragraphs::{MeasuredParagraphs, PreparationTarget};
 
 #[cfg(test)]
 mod unsafe_break_tests;
@@ -22265,6 +22290,7 @@ mod tests {
         assert_eq!(after_glyphs, before_glyphs);
     }
     include!("state/change_class_tests.rs");
+    include!("state/refusal_tests.rs");
     include!("state_ascii_anchor_runtime_oracle.rs");
     include!("state_ascii_anchor_acceptance_tests.rs");
     include!("state_ascii_anchor_policy_tests.rs");

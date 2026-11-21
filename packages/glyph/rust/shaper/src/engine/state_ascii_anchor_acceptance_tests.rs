@@ -221,7 +221,7 @@ fn ascii_anchor_preflight_rejection_and_injected_post_shape_failure_follow_exist
         assert_eq!(state.accepted_shape_font_instance, before_token);
 
         // Inject the same test-only fault after successful shape preparation in
-        // both producers. The engine contract invalidates this derived root.
+        // both producers. The engine contract confines it to the paragraph.
         let mut b = a.clone();
         b.insert(a.len() / 2, u16::from(b'x'));
         let bytes = text_mutation_bytes(&[(0, u32::try_from(a.len()).unwrap(), &b)]);
@@ -240,12 +240,11 @@ fn ascii_anchor_preflight_rejection_and_injected_post_shape_failure_follow_exist
             assert_eq!(work.ascii_anchor_splice_successes, 1,
                 "fault must occur after successful optional shape construction");
         }
-        assert_eq!(engine.root_revision(4), Err(EngineError::RootMissing));
-        engine.reset_root(4).unwrap();
-        assert_eq!(engine.root_revision(4), Ok(RootRevision::default()));
-        let empty = engine.prepare_update(update(0, 0, 1), 2).unwrap();
-        engine.commit_update(empty).unwrap();
-        assert_eq!(engine.root_revision(4), Ok(RootRevision { engine: 1, root: 1 }));
+        // The failure is the paragraph's: the root keeps its revision and the paragraph is emptied.
+        assert_eq!(engine.root_revision(4).unwrap(), before_revision);
+        let refused = engine.planners.get(&4).unwrap().paragraph(1).unwrap();
+        assert!(refused.state.text.committed().units.is_empty());
+        assert!(!refused.state.has_pending_preparation());
     }
     assert_eq!(downstream_errors[0], downstream_errors[1],
         "the optional producer preserves the ordinary failure code");

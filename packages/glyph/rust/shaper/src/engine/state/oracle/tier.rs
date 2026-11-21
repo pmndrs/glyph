@@ -230,17 +230,25 @@ fn judge(
         let listed = known_step(&set.known, &case.name, &step);
         tally.divergent_steps += 1;
         tally.unlisted_steps += usize::from(!listed);
-        let first = actual
+        let lines: Vec<&String> = actual
             .divergences
             .iter()
-            .find(|line| step_of(line).as_deref() == Some(step.as_str()))
-            .map_or("", String::as_str);
+            .filter(|line| step_of(line).as_deref() == Some(step.as_str()))
+            .collect();
         let _ = writeln!(
             report,
-            "DIVERGES{} {} {first}",
+            "DIVERGES{} {} {}",
             if listed { " (listed)" } else { "" },
-            case.name
+            case.name,
+            lines.first().map_or("", |line| line.as_str())
         );
+        // An unlisted divergence shows every lane it reaches; a listed one, its first.
+        for line in lines.iter().skip(1).take(if listed { 0 } else { 40 }) {
+            let lane = line
+                .split_once(": ")
+                .map_or(line.as_str(), |(_, lane)| lane);
+            let _ = writeln!(report, "    {lane}");
+        }
     }
     problems
 }

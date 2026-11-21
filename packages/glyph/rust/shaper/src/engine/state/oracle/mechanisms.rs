@@ -17,7 +17,7 @@ use super::{
     corpus::Script,
     matrix::{Case, Step, Tier, new_case, utf16},
     model::{Layout, Span, SpanStyle, TextEdit},
-    session::Route,
+    session::{Route, Split},
 };
 
 struct Mechanism {
@@ -387,7 +387,7 @@ pub(super) fn cases(cases: &mut Vec<Case>) {
 
 /// The ways a host reaches the engine: publish with every view, publish with none and read
 /// back, publish with none and no read, and measure before publishing.
-const ROUTES: [(&str, Route); 4] = [
+pub(super) const ROUTES: [(&str, Route); 4] = [
     ("full", Route::FULL),
     (
         "silent-then-measure",
@@ -395,6 +395,7 @@ const ROUTES: [(&str, Route); 4] = [
             view_mask: 0,
             measure_first: false,
             measure_after: true,
+            split: Split::Batch,
         },
     ),
     (
@@ -403,6 +404,7 @@ const ROUTES: [(&str, Route); 4] = [
             view_mask: 0,
             measure_first: false,
             measure_after: false,
+            split: Split::Batch,
         },
     ),
     (
@@ -411,6 +413,7 @@ const ROUTES: [(&str, Route); 4] = [
             view_mask: 0,
             measure_first: true,
             measure_after: false,
+            split: Split::Batch,
         },
     ),
 ];

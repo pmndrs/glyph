@@ -1,0 +1,65 @@
+# glyph layout oracle reference v1
+case io-arabic-silent
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 1fa24e8c494c224b
+stage text identity 1 8c79cdd234e899aa
+stage unicode value 6 1c188d1ec29a3b21
+stage bidi value 8 29c5cdaf3ea9f587
+stage style value 26 2311e7915d7a1a2d
+stage shaping_run value 5 c7bf0d2877dba0d1
+stage shape value 14 10b65f881c74956b
+stage cluster value 29 9e5e3a2577a709c2
+stage cluster identity 4 ee33e0566e267ff4
+stage cluster repr 11 bdd4311f9a20761c
+stage run_local repr 16 cd37f99ac10fc32c
+stage flow value 35 30107cbf54c24b9e
+stage positioned identity 3 5259eb6058e62e2f
+stage positioned value 13 d1ebecae887d9a33
+stage positioned repr 17 fec2c0d4b1a585e1
+stage public value 13 b6a85cd409925c03
+stage public identity 1 439e606845cfd80b
+stage view identity 4 a5a25d18841c291d
+stage view value 40 92e8e580ddd996e2
+stage wire wire 1 30439b0819cf8afc
+stage gather identity 7 a06cdc106a1e2f1c
+stage gather value 36 18fc44bd7379692d
+stage gpu identity 2 c2b5b1e1fb6a8bcc
+stage gpu value 3 42998609e655a7ad
+stage plan value 23 7c5d8d2630c52a97
+stage plan identity 7 e1b57f2b6239baf7
+step 01 add one at the end
+class value 213 8bb112104213dd96
+class identity 25 a8d48d1ef9a80749
+class repr 44 435f8337521f7bba
+class wire 1 f72166e21bcf4e04
+step 02 move and grow the middle one
+class value 213 8bb112104213dd96
+class identity 25 a8d48d1ef9a80749
+class repr 44 435f8337521f7bba
+class wire 1 a936ab69eca40f59
+step 03 align to the text top with margins
+class value 213 8bb112104213dd96
+class identity 25 a8d48d1ef9a80749
+class repr 44 435f8337521f7bba
+class wire 1 e3e5eaecf105ce0b
+step 04 edit the text and leave the objects
+class value 213 5496a30648329056
+class identity 25 e644b23a975f004c
+class repr 44 9d3e5268fc3ab8bf
+class wire 1 8d5fdb97f559ba41
+step 05 narrow the measure and re-anchor
+class value 213 50751757e13dc5fd
+class identity 25 0ac987d0a59c6248
+class repr 44 eee3b3a3750706b0
+class wire 1 c71ae009454cc153
+step 06 remove every object
+class value 213 50751757e13dc5fd
+class identity 25 0ac987d0a59c6248
+class repr 44 eee3b3a3750706b0
+class wire 1 a531049b9c6e615b
+step 07 put two back
+class value 213 50751757e13dc5fd
+class identity 25 0ac987d0a59c6248
+class repr 44 eee3b3a3750706b0
+class wire 1 93fa8c568be4aaf2

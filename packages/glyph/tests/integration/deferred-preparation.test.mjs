@@ -1,6 +1,6 @@
 // Deferred, never-stale preparation through the public Three API: what a setter, a read, an explicit
 // prepare and a frame each do, and that all three routes to a prepared layout agree with a cold one.
-import { crossingsOf, lastCallArguments } from '../support/wasm-crossings.mjs';
+import { crossingsOf, lastCallArguments, shaperMemoryPages } from '../support/wasm-crossings.mjs';
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -201,22 +201,26 @@ test('an edit next to a surrogate pair never splits it', { timeout }, async (t) 
   }
 });
 
-test('lone surrogates become U+FFFD and are counted, not thrown', { timeout }, async (t) => {
+test('lone surrogates are drawn as U+FFFD and the text reads back as assigned', { timeout }, async (t) => {
   const { add, frame } = await createScene(t);
   const text = add({ text: 'well formed' });
-  assert.equal(text.replacedSurrogates, 0);
-  text.text = 'cut \ud83d here and \udc00 there';
-  assert.equal(text.text, 'cut � here and � there');
-  assert.equal(text.replacedSurrogates, 2);
-  const reference = add({ text: 'cut � here and � there' });
+  const assigned = 'cut \ud83d here and \udc00 there';
+  text.text = assigned;
+  assert.equal(text.text, assigned, 'the getter returns what the setter was given');
+  assert.equal('replacedSurrogates' in text, false, 'the repair has no public surface');
+  const reference = add({ text: 'cut \ufffd here and \ufffd there' });
   assert.deepEqual(layoutOf(text), layoutOf(reference));
   text.style = { fontSize: 20 };
-  assert.equal(text.replacedSurrogates, 2, 'an unrelated setter keeps the count of the text it did not change');
+  assert.equal(text.text, assigned);
   frame();
   assert.equal(text.commitState().status, 'committed');
+  // An edit beside a lone surrogate is derived against the assigned string and still lays out as a cold text.
+  text.text = 'cut \ud83d here, and \udc00 there';
+  reference.set({ text: 'cut \ufffd here, and \ufffd there', style: { fontSize: 20 } });
+  assert.deepEqual(layoutOf(text), layoutOf(reference));
   const created = add({ text: txt`${span({ color: '#ff0000' })`\ud800`} tail` });
-  assert.equal(created.text, '� tail');
-  assert.equal(created.replacedSurrogates, 1);
+  assert.equal(created.text, '\ud800 tail');
+  assert.deepEqual(layoutOf(created), layoutOf(add({ text: txt`${span({ color: '#ff0000' })`\ufffd`} tail` })));
 });
 
 test('a paint-only change is published without changing the layout', { timeout }, async (t) => {
@@ -253,4 +257,79 @@ test('an overwritten value is never sent to the engine', { timeout }, async (t) 
     lastCallArguments('engine_measure_paragraph')[2] < 512,
     'the request carries the final value, not the 4,000-unit intermediate',
   );
+});
+
+test('the first read of a mount creates every sibling once; later reads carry no lifecycle', { timeout }, async (t) => {
+  const { add, frame, scene } = await createScene(t);
+  const label = (index) => `label ${String(index).padStart(3, '0')}`;
+  const texts = Array.from({ length: 300 }, (_, index) => add({ text: label(index) }));
+  const requestLength = () => lastCallArguments('engine_measure_paragraph')[2];
+  texts[0].measure();
+  const first = requestLength();
+  texts[1].measure();
+  const second = requestLength();
+  texts[299].measure();
+  assert.ok(first > second * 4, `the first read (${String(first)} bytes) carries the root's lifecycle`);
+  assert.equal(requestLength(), second, 'every later read sends the same paragraph-sized request');
+
+  // A sibling the engine holds but never prepared is still removed from it, and one created later is added.
+  const removed = texts[150];
+  removed.dispose();
+  scene.remove(removed);
+  const late = add({ text: label(150) });
+  assert.deepEqual(crossingsOf(frame), { engine_prepare_batch: 1, engine_update_batch: 1 });
+  assert.equal(late.commitState().status, 'committed');
+  assert.equal(texts[200].commitState().status, 'committed');
+  const cold = await createScene(t);
+  assert.deepEqual(layoutOf(texts[7]), layoutOf(cold.add({ text: label(7) })));
+  assert.deepEqual(layoutOf(late), layoutOf(cold.add({ text: label(150) })));
+});
+
+test(
+  'mounting many labels reserves memory in proportion to the labels, by a read or by a frame',
+  { timeout },
+  async (t) => {
+    const pagesFor = async (count, finish) => {
+      const { add, frame } = await createScene(t);
+      const before = shaperMemoryPages();
+      const texts = Array.from({ length: count }, (_, index) => add({ text: `label ${String(index)}` }));
+      finish(texts, frame);
+      return shaperMemoryPages() - before;
+    };
+    const byFrame = await pagesFor(1_500, (_texts, frame) => frame());
+    const byRead = await pagesFor(1_500, (texts) => {
+      for (const text of texts) text.measure();
+    });
+    // 64 KiB pages: a label must cost kilobytes, not a share of every other label's geometry.
+    assert.ok(byFrame * 65_536 < 1_500 * 48_000, `a frame mount grew memory by ${String(byFrame)} pages`);
+    assert.ok(byRead * 65_536 < 1_500 * 48_000, `a read mount grew memory by ${String(byRead)} pages`);
+  },
+);
+
+test('a batch serializes a summary only for the paragraphs someone will read', { timeout }, async (t) => {
+  const { add, frame } = await createScene(t);
+  const texts = Array.from({ length: 40 }, (_, index) => add({ text: `label ${String(index)}` }));
+  frame();
+  const [read, anchored, plain] = texts;
+  read.measure();
+  anchored.constraints = { anchor: { x: 'center', y: 'middle' } };
+  frame();
+  for (const [index, text] of texts.entries()) text.text = `value ${String(index)}`;
+  assert.deepEqual(crossingsOf(frame), { engine_prepare_batch: 1, engine_update_batch: 1 });
+  assert.deepEqual(
+    crossingsOf(() => {
+      read.measure();
+      anchored.measure();
+    }),
+    {},
+    'the text that was read and the anchored text got their summaries from the batch',
+  );
+  assert.deepEqual(
+    crossingsOf(() => plain.measure()),
+    { engine_measure_paragraph: 1 },
+    'a sibling nobody read was prepared without a summary',
+  );
+  const cold = await createScene(t);
+  assert.deepEqual(layoutOf(plain), layoutOf(cold.add({ text: 'value 2' })));
+  assert.equal(anchored.measure().width, cold.add({ text: 'value 1' }).measure().width);
 });

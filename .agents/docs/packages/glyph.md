@@ -721,8 +721,10 @@ realizes decorations as separate ordered draw objects. The same `defineTextMater
 receives a `kind: 'glyph' | 'decoration'` discriminated context and may keep or override the default flat-quad TSL
 material without mutating the glyph draw. `ThreeTextMaterialContextMap` supplies the exact built-in payloads and is the
 augmentation point for a custom Three program's literal format and output types; it does not add an untyped string
-fallback. Only glyph branches carry a raster `format`; `pmndrs.decoration` remains an internal Codec/command-buffer
-technique identifier. Decorated command-buffer gathers rebuild their output, counting and appending each paint pass
+fallback. Only glyph branches carry a raster `format`; `pmndrs.decoration` remains a Codec/command-buffer technique
+identifier, not a raster format. Its schema and program (`decorationSchema`, `createDecorationCodecProgram`) live in
+`src/config/decoration.ts` and are exported from `/core` so other renderers publish the same rows; `/core` also exports
+`SlugBandResidency`, the per-glyph Slug band residency every renderer shares. Decorated command-buffer gathers rebuild their output, counting and appending each paint pass
 directly from the retained contiguous decoration slice without a transient filtered allocation; the undecorated retained
 fast path is unchanged.
 

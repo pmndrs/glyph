@@ -1,0 +1,70 @@
+# glyph layout oracle reference v1
+case fx-strike-span-material-label-full
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 9905404f54edefec
+stage text identity 1 e6a56f1a253f95f5
+stage unicode value 6 3bb09daca3bd60de
+stage bidi value 8 a7e9f1055db59fb7
+stage style value 26 e9191fa676d71f81
+stage shaping_run value 5 31477ea3d3df3570
+stage shape value 14 f0eb794aad841f69
+stage cluster value 29 649c36ab02e57867
+stage cluster identity 4 f59f266359f8fdd5
+stage cluster repr 8 e7b54e0d26a23871
+stage run_local repr 16 49dfa0de8634ec3b
+stage flow value 35 089cf87053fd061c
+stage positioned identity 3 4534caadac20b9e0
+stage positioned value 25 906be9be9ea8c3f4
+stage positioned repr 17 3ddec720486957dd
+stage public value 13 0073e209450629ad
+stage public identity 1 a7565d089b77c68d
+stage view identity 4 1214032c5184c4a2
+stage view value 40 2c36ba31d1530b11
+stage wire wire 1 cfa04b2b985fc23a
+stage gather identity 7 850d47eb73e2c483
+stage gather value 36 529c712ca0b46739
+stage gpu identity 2 68fc66a75be58a57
+stage gpu value 3 078907d31cb5d992
+stage plan value 23 84d23bc5caf17d6e
+stage plan identity 7 b65a14036160df65
+step 01 material swapped
+class value 265 e2e993686279dca7
+class identity 29 12da22ea20f067fb
+class repr 41 b6b254b9129b61de
+class wire 1 e92ac6ebcb953b8d
+step 02 recolour
+class value 265 9a311cb883d35d8f
+class identity 29 22e11050c9216f33
+class repr 41 b6b254b9129b61de
+class wire 1 e7dfd22b3669201a
+step 03 material and edit
+class value 265 194ff6e86e691daf
+class identity 29 c7ef288f4e2829f6
+class repr 41 6a1504d257109642
+class wire 1 ebb25e7fe1f3f538
+step 04 material and same-length edit
+class value 265 2ac56756b860d8a5
+class identity 29 e907307345f90d3a
+class repr 41 569e89e05002d736
+class wire 1 f1389a30b73e34f6
+step 05 material and width
+class value 265 59c00a34f7528baa
+class identity 29 0f834e73d68da595
+class repr 41 569e89e05002d736
+class wire 1 576a4f419ac40720
+step 06 align 1 + width 279 + flip case at 15 + insert HardBreak (1 units) at 0
+class value 265 88f9d45ec65f5fb6
+class identity 29 674402cddb185217
+class repr 41 16efd8b7406b51f6
+class wire 1 ca44b20e8616aeb8
+step 07 shadow of span 2 + delete 1 at 0
+class value 265 43016d04b526320f
+class identity 29 15aa8cb1b96e9271
+class repr 41 4f95d458d8783531
+class wire 1 6721930ad174c100
+step 08 replace 3 at 15 + direction 0 + replace 3 at 26
+class value 265 889618bc13209f84
+class identity 29 f6781d80eaa83dc7
+class repr 41 aad43099f9811bcb
+class wire 1 2f7d5546e619825d

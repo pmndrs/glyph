@@ -64,8 +64,9 @@ Updated in place; the history of each change is in the log below.
 | Unit 2: local edits                                                                                                                                                                                                           | held     | —                                                   | Needs 1b, 1c                                                                                       |
 | Metric changes: keep island shapes, dense rescale                                                                                                                                                                             | held     | —                                                   | Needs 1a                                                                                           |
 | Unit 3 stages 0–2: guards, batch `prepare()`, the setter flip, paint-only path, minimal mutation, change class                                                                                                                | merged   | tag `sil-green-13`                                  | 200-label mount 401 → 2 engine calls; setters make none                                            |
-| Unit 3 stages 4–6 (ship gate): paragraph-local failure, trap recovery, text-size limit; publication hold, nested renders, on-demand loops, `onLayout`                                                                         | building | `experiments/sil-prepare`                           |                                                                                                    |
-| Unit 3 performance items: linear engine mount, per-paragraph measurement interest, edit-proportional validation                                                                                                               | held     | —                                                   | After the ship gate                                                                                |
+| Unit 3 stage 4 (ship gate): paragraph-local failure, trap recovery, `maxTextUnits`, failed-frame retry; linear engine mount; per-paragraph measurement interest                                                               | merged   | tag `sil-green-17`                                  | No memory cap leaves a root dead; 4,000-label frame 3.4 s → 109 ms                                 |
+| Unit 3 stages 5–6 (ship gate): publication hold, nested renders, on-demand loops, `onLayout`, root `onError`, error boundary; remove `replacedSurrogates`; API docs and migration note                                        | building | `experiments/sil-prepare`                           |                                                                                                    |
+| Unit 3 leftovers: publication failures still discard the root; failure inventory; interleaving fuzz                                                                                                                           | held     | —                                                   | After stages 5–6                                                                                   |
 | Unit 4: publication (retained topology, `PATCH_COPY`, multi-range uploads)                                                                                                                                                    | held     | —                                                   | After unit 3                                                                                       |
 | Many-label updates and paint-only changes                                                                                                                                                                                     | held     | —                                                   | Needs its profile and unit 3                                                                       |
 | Editing support (ship gate): offset map, carets, affinity, ligature carets, IME ranges, edit session                                                                                                                          | held     | —                                                   | Waits on the owner's API review and the positioning merge                                          |
@@ -644,3 +645,53 @@ Updated in place; the history of each change is in the log below.
   only on that branch, largely uncommitted, and was built against the old Slug and MSDF schemas and
   synchronous setters, so official integration is a port. Awaiting the owner on whether it is in the ship
   gate and who commits the uncommitted work.
+- **Decision (owner): API summary approved** with the recommended answers, except lone surrogates.
+- **Decision (owner): lone surrogates get no public API.** They render as the replacement character instead
+  of throwing, and that is all: `Text.replacedSurrogates` is removed and no count is added anywhere.
+  `text.text` returns the string as assigned.
+- **Decision (owner): PixiJS 3D support is part of 0.2.0.** The owner's pixi work was committed locally on
+  `feature/pixi3d` (`2ecb36411`; hook bypassed for two unused-symbol warnings in the demo app; not pushed).
+  Left out of that commit and untouched on disk: 52 GB of untracked demo assets and new app files, the
+  vendored private beta tarball, two scratch directories. The renderer package is being ported onto the
+  integration branch against the official public release, proven by a pixel comparison against Three; demos,
+  examples and apps stay behind; the private beta tarball must not enter the public repository.
+- **Building.** Editing support, engine half (`experiments/sil-editing`): offset map, carets, hit testing,
+  movement, selection rectangles, with property tests over the oracle corpus. PixiJS 3D port
+  (`experiments/sil-pixi3d`). Oracle coverage (`experiments/sil-oracle`). Preparation lane: catching up, then
+  frame integration and `onLayout`.
+- **Merged: error model, unit 3 stage 4** (tag `sil-green-17`, pushed). Verified on the combined tree after a
+  clean rebuild: glyph package tests 1,234 of 1,234; TypeGPU real-device parity; both render proofs on WebGPU
+  and WebGL2; live check; full oracle tier native and wasm at 423 equal, 0 divergences. The full repository
+  check passed on the lane's merged branch and was not re-run on the integration tree for this tag.
+- **Merged: PixiJS 3D renderer** (tag `sil-green-18`, pushed). Package `@pmndrs/glyph-pixi3d`, public, against
+  the official `@pixi/3d` 0.1.0 (MIT, published 2026-11-12) and `pixi.js` 8.23 as peer dependencies; both
+  earlier patches dropped; nothing from the private beta copied. Techniques carried: bitmap, MSDF/MTSDF with
+  outline and shadow, Slug, decorations; also spans, `split()`, anchors, custom materials. Verified on the
+  combined tree after a clean install and rebuild: full repository check exits 0; glyph package tests; the
+  package's own check (34 tests); new `benchmark:pixi3d-parity` (27 scenes against Three on WebGPU and
+  WebGL2); TypeGPU parity; both render proofs; live check. The Rust engine is unchanged by this merge, so the
+  oracle was not re-run. Parity: WebGPU within tolerance on every scene (max 2/255) except 13 of 74,484
+  pixels in one outline scene; WebGL2 Slug at most 13 pixels over; WebGL2 bitmap up to 1.63% of lit pixels
+  over; each difference is a named budget with its cause. Gaps: MSDF uploads every baked page on PixiJS 3D;
+  no ordered `TextGroup` equivalent; decorations, `split()` and instancing have unit tests but no parity
+  scene; no performance numbers. Left behind: the demo app, the GLYPH//BREAKER shader bit, two demo skills.
+- **Needs owner sign-off: three new `/core` names** the port required: `createDecorationCodecProgram` and
+  `decorationSchema`; `SlugBandResidency` and `SLUG_RESIDENT_BAND_CURVE_WIDTH`.
+- **Tested, not merged: oracle coverage** (`experiments/sil-oracle`): 165 new cases (decorated text and
+  effects 84, several paragraphs per root 27, columns and regions 38, inline objects 16); full tier 588 cases
+  and 54,240 requests. It now catches the decorated-text material bug. Three new engine divergences recorded,
+  not fixed: paragraph draw order under ranked scopes depends on history; removing every paragraph from a
+  root leaves its glyphs drawn and the next request rejected; a borrowed-glyph read after a no-op on a
+  clipped paragraph is stale. Findings: inline objects are accepted and validated but no layout stage reads
+  them; regions were exercised only as horizontal rectangles. The lane is catching up with the integration
+  branch before the coverage merges.
+- **Merged: oracle coverage** (tag `sil-green-19`, pushed; full tier native and wasm: 588 cases equal, 54,240
+  requests, 0 unlisted divergences; reference set `9eec1a5a309ffe3f`; every pre-existing case byte-identical).
+  Ship-gate item closed for coverage. One of the three reported divergences was retracted: the "emptied
+  root" case was a bug in the oracle's own driver (removals were not sent when a step removed every
+  paragraph), fixed; an emptied root equals cold. **Two engine divergences stand** and are listed: (1)
+  paragraph draw order under ranked scopes depends on history (lead: `validate_lifecycle_input` rebuilds the
+  pending order from the already rank-permuted list, and `prepare_lifecycle` permutes again); (2) a
+  borrowed-glyph read after a no-op on a clipped paragraph is stale (lead: `append_paragraph_measurement`
+  keeps the previous clipped-inspection mode when nothing is pending, regardless of the views requested).
+  Both leads come from reading the code, not from a fix. A fix lane has started.
