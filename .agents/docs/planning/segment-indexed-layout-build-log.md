@@ -360,3 +360,10 @@ Updated in place; the history of each change is in the log below.
   because process text is interleaved with measurements or design: several chronological passages in
   `publication-frontier.md`, two in `retained-text-assignment.md`, and acceptance gates for unrelated
   features. Full list: `stale-guidance-removed-2026-11-21.md`.
+- **Decision (owner).** Integrate, commit and push to the remote as each feature resolves, so no work is at
+  risk. This replaces "push when the feature is done".
+- **Pushed.** `experiments/segment-indexed-layout` and tags `sil-green-0` to `sil-green-4` are on
+  `origin`. In-progress lane branches are pushed as backups (`experiments/sil-geometry`, `sil-unicode`,
+  `sil-render`, `sil-prepare`, `sil-typegpu`); they hold unverified checkpoints and are not for review. No
+  pull request is opened. From here: each lane result is merged, gated on the full oracle tier and the
+  package tests, tagged, and pushed in the same step; lane branches are pushed at each hand-back.
