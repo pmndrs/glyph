@@ -71,30 +71,105 @@ const MsdfGlyph = d.struct({
   shadow: d.vec4f,
 });
 
+/** Screen pixels a trimmed quad keeps around the ink for antialiasing; the coverage ramp never reaches further. */
+const TRIM_ANTIALIAS_PIXELS = 1;
 /**
- * Everything constant across one glyph, resolved per vertex: its cell from the font's glyph table, its placement, and
- * its decoded effect colors. A program that composes no outline or shadow leaves those outputs unread.
+ * Atlas texels kept besides. The median of three filtered channels is not exactly the distance to the ink box, so a
+ * faint edge (under 2% coverage) can sit slightly past the antialiasing margin.
  */
-function msdfGlyph(index: number, instance: number, rect: d.v4f, effectColor: d.v2u, effect: d.v4f) {
+const TRIM_FIELD_TEXELS = 0.5;
+
+function projectCell(origin: d.v2f, size: d.v2f, cell: d.v2f): d.v4f {
+  'use gpu';
+  return projectWithScene(msdfPosition(origin, size, d.vec3f(cell, 0)), msdfScene.$.viewport, msdfScene.$.position);
+}
+
+/**
+ * The quad corner `unit` moved inward from the cell edge, in cell-normalized coordinates; the rule the Three path
+ * uses.
+ *
+ * The baker pads every ink box by half the distance range (rounded up) on each side. Coverage can be nonzero outside
+ * the ink box only as far as the antialiasing ramp (one screen pixel plus half a texel), the outline width, and the
+ * shadow displacement on the side the shadow falls toward. Each side keeps exactly that much padding and never grows
+ * past the cell, so a trimmed quad discards only fragments whose coverage was already zero. The screen pixel comes
+ * from the configured projection, evaluated at the cell corners: exact for any matrix (projective) transform, a local
+ * estimate for a nonlinear one. Minified text, whose ramp spans the whole range, keeps the full cell.
+ *
+ * `outlineTexels` and `shadowTexels` are what the program's effects can draw outside the ink; an effect the program
+ * does not compose passes zero.
+ */
+function trimmedCell(
+  origin: d.v2f,
+  size: d.v2f,
+  cellTexels: d.v2f,
+  unit: d.v2f,
+  outlineTexels: number,
+  shadowTexels: d.v2f,
+): d.v2f {
+  'use gpu';
+  const padding = std.ceil(msdfPixelRangeAccessor.$ * 0.5);
+  // The projection is linear in the cell coordinate before the perspective divide: clip(u, v) = a + u b + v c.
+  const a = projectCell(origin, size, d.vec2f(0, 0));
+  const b = projectCell(origin, size, d.vec2f(1, 0)).sub(a);
+  const c = projectCell(origin, size, d.vec2f(0, 1)).sub(a);
+  const clip = a.add(b.mul(unit.x)).add(c.mul(unit.y));
+  // Screen-pixel Jacobian of the cell coordinate at this corner, scaled by w squared to avoid the divide.
+  const halfViewport = msdfScene.$.viewport.mul(0.5);
+  const alongU = b.xy.mul(clip.w).sub(clip.xy.mul(b.w)).mul(halfViewport);
+  const alongV = c.xy.mul(clip.w).sub(clip.xy.mul(c.w)).mul(halfViewport);
+  const area = std.abs(alongU.x * alongV.y - alongU.y * alongV.x);
+  // Cell-coordinate distance that moves an edge one screen pixel along its normal.
+  const pixel = d.vec2f(std.length(alongV), std.length(alongU)).mul((clip.w * clip.w) / std.max(area, 1e-30));
+  const antialias = pixel.mul(cellTexels).mul(TRIM_ANTIALIAS_PIXELS).add(TRIM_FIELD_TEXELS);
+  const low = antialias.add(std.max(d.vec2f(outlineTexels), shadowTexels.mul(-1)));
+  const high = antialias.add(std.max(d.vec2f(outlineTexels), shadowTexels));
+  const insetLow = std.clamp(d.vec2f(padding).sub(low), d.vec2f(0), d.vec2f(padding)).div(cellTexels);
+  const insetHigh = std.clamp(d.vec2f(padding).sub(high), d.vec2f(0), d.vec2f(padding)).div(cellTexels);
+  return insetLow.add(d.vec2f(1).sub(insetHigh).sub(insetLow).mul(unit));
+}
+
+/**
+ * Everything constant across one glyph, resolved per vertex: its cell from the font's glyph table, its placement, its
+ * trimmed quad and its decoded effect colors. A program that composes no outline or shadow leaves those outputs
+ * unread; `outlineReach` and `shadowReach` (0 or 1) say whether the program composes them, so whether they claim room.
+ */
+function msdfGlyph(
+  index: number,
+  instance: number,
+  rect: d.v4f,
+  effectColor: d.v2u,
+  effect: d.v4f,
+  outlineReach: number,
+  shadowReach: number,
+) {
   'use gpu';
   const atlasSize = msdfAtlasSizeAccessor.$;
   const scale = effectScaleAccessor.$;
-  const cell = msdfScene.$.glyphs[d.u32(effect.w)]!;
-  const layer = std.floor(cell.w / MSDF_GLYPH_TABLE_LAYER_STEP);
-  const uvOrigin = cell.xy.div(atlasSize);
-  const uvSize = d.vec2f(cell.z, cell.w - layer * MSDF_GLYPH_TABLE_LAYER_STEP).div(atlasSize);
+  const row = msdfScene.$.glyphs[d.u32(effect.w)]!;
+  const layer = std.floor(row.w / MSDF_GLYPH_TABLE_LAYER_STEP);
+  const cellTexels = std.max(d.vec2f(row.z, row.w - layer * MSDF_GLYPH_TABLE_LAYER_STEP), d.vec2f(1e-6));
+  const uvOrigin = row.xy.div(atlasSize);
+  const uvSize = cellTexels.div(atlasSize);
   const origin = rect.xy.add(msdfScene.$.placements[msdfScene.$.placementSlots[instance]!]!);
-  const unit = corner(index);
-  const uv = uvOrigin.add(unit.mul(uvSize));
-  const position = msdfPosition(origin, rect.zw, d.vec3f(unit, 0));
+  const width = effect.z * scale.z;
+  const shadowOffset = effect.xy.mul(scale.xy);
+  const cell = trimmedCell(
+    origin,
+    rect.zw,
+    cellTexels,
+    corner(index),
+    outlineReach * std.max(width, 0) * msdfPixelRangeAccessor.$,
+    shadowOffset.mul(atlasSize).mul(shadowReach),
+  );
+  const uv = uvOrigin.add(cell.mul(uvSize));
   return MsdfGlyph({
-    position: projectWithScene(position, msdfScene.$.viewport, msdfScene.$.position),
+    position: projectCell(origin, rect.zw, cell),
     uv,
     bounds: d.vec4f(uvOrigin, uvOrigin.add(uvSize)),
     layer: d.u32(layer),
     outline: decorationPaint(d.vec2u(effectColor.x, 0)),
-    width: effect.z * scale.z,
-    shadowUv: uv.sub(effect.xy.mul(scale.xy)),
+    width,
+    shadowUv: uv.sub(shadowOffset),
     shadow: decorationPaint(d.vec2u(effectColor.y, 0)),
   });
 }
@@ -167,7 +242,7 @@ function composeEffects(
 
 const plainVertex = tgpu.vertexFn({ in: vertexIn, out: { position: d.builtin.position, ...fillVaryings } })((input) => {
   'use gpu';
-  const glyph = msdfGlyph(input.index, input.instance, input.rect, input.effectColor, input.effect);
+  const glyph = msdfGlyph(input.index, input.instance, input.rect, input.effectColor, input.effect, d.f32(0), d.f32(0));
   return { position: glyph.position, uv: glyph.uv, bounds: glyph.bounds, color: input.color, layer: glyph.layer };
 });
 const plainFragment = tgpu.fragmentFn({ in: { position: d.builtin.position, ...fillVaryings }, out: d.vec4f })((
@@ -182,7 +257,7 @@ const outlineVertex = tgpu.vertexFn({
   out: { position: d.builtin.position, ...fillVaryings, ...outlineVaryings },
 })((input) => {
   'use gpu';
-  const glyph = msdfGlyph(input.index, input.instance, input.rect, input.effectColor, input.effect);
+  const glyph = msdfGlyph(input.index, input.instance, input.rect, input.effectColor, input.effect, d.f32(1), d.f32(0));
   return {
     position: glyph.position,
     uv: glyph.uv,
@@ -206,7 +281,7 @@ const shadowVertex = tgpu.vertexFn({
   out: { position: d.builtin.position, ...fillVaryings, ...shadowVaryings },
 })((input) => {
   'use gpu';
-  const glyph = msdfGlyph(input.index, input.instance, input.rect, input.effectColor, input.effect);
+  const glyph = msdfGlyph(input.index, input.instance, input.rect, input.effectColor, input.effect, d.f32(0), d.f32(1));
   return {
     position: glyph.position,
     uv: glyph.uv,
@@ -231,7 +306,7 @@ const bothVertex = tgpu.vertexFn({
   out: { position: d.builtin.position, ...fillVaryings, ...outlineVaryings, ...shadowVaryings },
 })((input) => {
   'use gpu';
-  const glyph = msdfGlyph(input.index, input.instance, input.rect, input.effectColor, input.effect);
+  const glyph = msdfGlyph(input.index, input.instance, input.rect, input.effectColor, input.effect, d.f32(1), d.f32(1));
   return {
     position: glyph.position,
     uv: glyph.uv,
