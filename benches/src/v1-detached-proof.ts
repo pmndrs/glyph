@@ -1,6 +1,8 @@
 import { Decorations, Glyphs } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
+import { comparePixelReadbacks } from './renderer/pixel-readback-comparison';
+
 export interface DetachedRasterParity {
   readonly detachedFirstFrameMatches: boolean;
   readonly detachedSameFrameWriteMatches: boolean;
@@ -20,10 +22,18 @@ export async function proveDetachedRasterParity(
   camera: THREE.Camera,
   target: THREE.RenderTarget,
   text: SplittableText,
+  /**
+   * Readback tolerance, exact by default. A detached branch places glyphs through its per-glyph matrices; with quads
+   * trimmed to fractional insets that arithmetic rounds a few vertex positions one ulp away from the source's, which
+   * can move an edge sample to the adjacent byte. Techniques with untrimmed quads stay exact.
+   */
+  tolerance: Readonly<{ channelDelta: number; sparseChannels: number }> = { channelDelta: 0, sparseChannels: 0 },
 ): Promise<DetachedRasterParity> {
   const sourceVisible = text.visible;
   const parent = text.parent;
   if (parent === null) throw new TypeError('detached raster parity requires an attached text object');
+  const matches = (expected: ArrayLike<number>, actual: ArrayLike<number>): boolean =>
+    comparePixelReadbacks(expected, actual, tolerance.channelDelta, tolerance.sparseChannels).matches;
   let detached: Glyphs | undefined;
   let decorations: Decorations | undefined;
   try {
@@ -43,20 +53,12 @@ export async function proveDetachedRasterParity(
     await renderer.renderAsync(scene, camera);
     const sameFrameWrite = await renderer.readRenderTargetPixelsAsync(target, 0, 0, target.width, target.height);
     return {
-      detachedFirstFrameMatches: pixelsEqual(sourcePixels, firstFrame),
-      detachedSameFrameWriteMatches: pixelsEqual(sourcePixels, sameFrameWrite),
+      detachedFirstFrameMatches: matches(sourcePixels, firstFrame),
+      detachedSameFrameWriteMatches: matches(sourcePixels, sameFrameWrite),
     };
   } finally {
     detached?.dispose();
     decorations?.dispose();
     text.visible = sourceVisible;
   }
-}
-
-function pixelsEqual(left: ArrayLike<number>, right: ArrayLike<number>): boolean {
-  if (left.length !== right.length) return false;
-  for (let index = 0; index < left.length; index += 1) {
-    if (left[index] !== right[index]) return false;
-  }
-  return true;
 }

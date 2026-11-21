@@ -163,10 +163,12 @@ function typedGeometryArray(
 
 function unitQuad(): THREE.InstancedBufferGeometry {
   const geometry = new THREE.InstancedBufferGeometry();
+  // Shaders place the unit square with y pointing down and then negate y for Three, which mirrors it. The
+  // triangles are therefore wound clockwise here so the placed quads face the viewer (`FrontSide` draws them).
   geometry.setAttribute(
     'position',
-    new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0], 3),
+    new THREE.Float32BufferAttribute([0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0], 3),
   );
-  geometry.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1], 2));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1], 2));
   return geometry;
 }

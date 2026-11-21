@@ -129,6 +129,34 @@ export async function proveMsdfDistanceMaterial(
       );
     }
 
+    // Placed glyph quads face the viewer: a front-face-only material draws the canonical fill and a
+    // back-face-only material draws no glyph at all.
+    for (const [side, drawsGlyphs] of [
+      [THREE.FrontSide, true],
+      [THREE.BackSide, false],
+    ] as const) {
+      text.material = defineTextMaterial((context) => {
+        const material = context.createDefaultMaterial();
+        if (context.kind === 'glyph') material.side = side;
+        return material;
+      });
+      await renderer.renderAsync(scene, camera);
+      if (text.error !== undefined) throw text.error;
+      const sided = await renderer.readRenderTargetPixelsAsync(target, 0, 0, 256, 128);
+      if (drawsGlyphs) {
+        const facing = comparePixelReadbacks(baseline, sided, 1, text.measure().glyphCount * 3);
+        if (!facing.matches) {
+          throw new Error(`FrontSide MSDF text changed ${String(facing.changedChannels)} canonical channels`);
+        }
+      } else {
+        let white = 0;
+        for (let offset = 0; offset < sided.length; offset += 4) {
+          if (sided[offset]! > 200 && sided[offset + 1]! > 200 && sided[offset + 2]! > 200) white += 1;
+        }
+        if (white !== 0) throw new Error(`BackSide MSDF text still drew ${String(white)} fill pixels`);
+      }
+    }
+
     text.material = defineTextMaterial((context) => {
       const material = context.createDefaultMaterial();
       if (context.kind === 'glyph' && context.format === msdf.id) {

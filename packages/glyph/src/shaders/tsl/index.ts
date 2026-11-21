@@ -8,7 +8,9 @@ export {
 } from './bitmap-shader.js';
 export {
   msdfShader,
+  type TslMsdfEffects,
   type TslMsdfInstanceNodes,
+  type TslMsdfQuadTrim,
   type TslMsdfShaderOutput,
   type TslMsdfShaderResources,
 } from './msdf-shader.js';

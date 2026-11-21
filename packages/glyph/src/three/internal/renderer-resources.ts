@@ -32,6 +32,28 @@ export interface RetainedSlugPage extends TslSlugPageResources {
   dispose(): void;
 }
 
+/**
+ * One MSDF font's GPU state: an atlas holding only the glyphs that have been drawn, and the per-glyph table that
+ * says where each one is.
+ */
+export interface RetainedMsdfAtlas {
+  readonly texture: THREE.DataArrayTexture;
+  /** `rgba32float`, one texel per baked glyph record: `[left, top, width, height + layer * 4096]` in atlas texels. */
+  readonly glyphs: THREE.DataTexture;
+  readonly glyphsWidth: number;
+  /** `(atlas width, atlas height, field range in texels, plane units per em over field range)`. */
+  readonly metrics: THREE.Vector4;
+  /** The texture holds only the true distance, in its red channel. */
+  readonly singleChannel: boolean;
+  readonly byteLength: number;
+  /**
+   * Makes the atlas cells of the glyph rows in `lane` resident. `lane` holds `stride` values per instance with the
+   * glyph table row last; `start` and `end` are instance indices.
+   */
+  use(lane: Float32Array, start: number, end: number, stride: number): void;
+  dispose(): void;
+}
+
 interface ThreeCodecState {
   readonly programs: ReadonlyMap<string, CompiledThreeRasterProgram>;
   readonly resources: ThreeRendererResources;
@@ -45,12 +67,14 @@ export function createThreeCodec(
   descriptor: (programs: readonly CompiledThreeRasterProgram[]) => Codec['descriptor'],
   material: ThreeTextMaterial | undefined,
   shaders: ThreeShaderSet,
+  msdfSingleChannel = false,
 ): ThreeCodec {
   const programs = compiledThreeRasterPrograms(ids, transformMode);
   const resources = new ThreeRendererResources(
     new Map(programs.map((program) => [program.raster.id, program])),
     material,
     shaders,
+    msdfSingleChannel,
   );
   let disposed = false;
   const codec: ThreeCodec = Object.freeze({
@@ -81,12 +105,15 @@ export class ThreeRendererResources {
   readonly material: ThreeTextMaterial | undefined;
   readonly #textureArrays = new Map<PortableTextureArrayPayload, RetainedThreeRenderResource<THREE.DataArrayTexture>>();
   readonly #slugPages = new Map<PortableResourceGroupPayload, RetainedThreeRenderResource<RetainedSlugPage>>();
+  readonly #msdfAtlases = new Map<PortableResourceGroupPayload, RetainedThreeRenderResource<RetainedMsdfAtlas>>();
   #disposed = false;
 
   constructor(
     programs: ReadonlyMap<string, CompiledThreeRasterProgram>,
     material: ThreeTextMaterial | undefined,
     readonly shaders: ThreeShaderSet,
+    /** MSDF atlases of this handle keep only the true-distance channel. */
+    readonly msdfSingleChannel = false,
   ) {
     this.programs = programs;
     this.material = material;
@@ -112,8 +139,16 @@ export class ThreeRendererResources {
     return acquireRenderResource(this.#slugPages, key, create);
   }
 
+  acquireMsdfAtlasResource(
+    key: PortableResourceGroupPayload,
+    create: () => RetainedMsdfAtlas,
+  ): ThreeRenderResourceLease<RetainedMsdfAtlas> {
+    this.#assertActive();
+    return acquireRenderResource(this.#msdfAtlases, key, create);
+  }
+
   get sharedRenderResourceCount(): number {
-    return this.#textureArrays.size + this.#slugPages.size;
+    return this.#textureArrays.size + this.#slugPages.size + this.#msdfAtlases.size;
   }
 
   dispose(): void {
@@ -121,7 +156,8 @@ export class ThreeRendererResources {
     this.#disposed = true;
     const textureFailure = disposeRenderResources(this.#textureArrays);
     const slugFailure = disposeRenderResources(this.#slugPages);
-    const failure = textureFailure ?? slugFailure;
+    const msdfFailure = disposeRenderResources(this.#msdfAtlases);
+    const failure = textureFailure ?? slugFailure ?? msdfFailure;
     if (failure !== undefined) throw failure;
   }
 
