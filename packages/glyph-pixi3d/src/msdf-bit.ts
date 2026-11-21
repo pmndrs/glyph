@@ -1,6 +1,6 @@
 import type { ShaderBit } from '@pixi/3d';
 
-import { msdfGlsl, msdfWgsl } from './generated/shaders.js';
+import { msdfFragmentGlsl, msdfGlsl, msdfWgsl } from './generated/shaders.js';
 
 /** Pixi-owned attributes, constants, and texture access around Glyph's generated TypeGPU MTSDF math. */
 export const glyphMsdfBit: ShaderBit = {
@@ -88,6 +88,8 @@ export const glyphMsdfBit: ShaderBit = {
 `,
     },
     fragment: {
+      // Reconstruction takes derivatives, which GLSL ES 3.0 rejects anywhere in a vertex shader.
+      header: msdfFragmentGlsl,
       material: `
   vec4 glyphCoordinates = glyphMsdfClampedCoordinates(
     vUV,

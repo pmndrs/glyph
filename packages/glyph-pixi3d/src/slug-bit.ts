@@ -1,6 +1,6 @@
 import type { ShaderBit } from '@pixi/3d';
 
-import { slugGlsl, slugWgsl } from './generated/shaders.js';
+import { slugFragmentGlsl, slugGlsl, slugWgsl } from './generated/shaders.js';
 import { SLUG_BAND_CURVE_TEXELS, type Pixi3DSlugResource } from './resource.js';
 
 export interface GlyphSlugBits {
@@ -104,7 +104,7 @@ fn glyphSlugCoverageAt(
   bandTransform: vec4<f32>
 ) -> f32 {
   return glyphSlugRender(tableStarts, bandCounts.xy, bandTransform, renderCoordinate);
-}}`,
+}`,
       vertex: {
         beforeTransform: `
   position = vec4<f32>(input.aGlyphRect.x + input.aPosition.x * input.aGlyphRect.z, -(input.aGlyphRect.y + input.aPosition.y * input.aGlyphRect.w), 0.0, 1.0);
@@ -129,16 +129,7 @@ fn glyphSlugCoverageAt(
       },
     },
     gl: {
-      header: `${glslLoads}
-${slugGlsl}
-float glyphSlugCoverageAt(
-  vec2 renderCoordinate,
-  uvec4 tableStarts,
-  uvec4 bandCounts,
-  vec4 bandTransform
-) {
-  return glyphSlugRender(tableStarts, bandCounts.xy, bandTransform, renderCoordinate);
-}}`,
+      header: slugGlsl,
       vertex: {
         beforeTransform: `
   position = vec4(aGlyphRect.x + aPosition.x * aGlyphRect.z, -(aGlyphRect.y + aPosition.y * aGlyphRect.w), 0.0, 1.0);
@@ -156,6 +147,17 @@ float glyphSlugCoverageAt(
 `,
       },
       fragment: {
+        // Coverage takes derivatives, which GLSL ES 3.0 rejects anywhere in a vertex shader: fragment-only header.
+        header: `${glslLoads}
+${slugFragmentGlsl}
+float glyphSlugCoverageAt(
+  vec2 renderCoordinate,
+  uvec4 tableStarts,
+  uvec4 bandCounts,
+  vec4 bandTransform
+) {
+  return glyphSlugRender(tableStarts, bandCounts.xy, bandTransform, renderCoordinate);
+}`,
         material: `
   vec2 glyphSlugCoordinate = vGlyphRenderCoordinate;
   albedo = vGlyphColor.rgb;
@@ -208,12 +210,14 @@ export function createGlyphSlugBit(page: Pick<Pixi3DSlugResource, 'headerSize' |
     gpu: {
       ...setup.gpu,
       fragment: {
+        ...setup.gpu?.fragment,
         material: `${setup.gpu?.fragment?.material ?? ''}${coverage.gpu?.fragment?.material ?? ''}`,
       },
     },
     gl: {
       ...setup.gl,
       fragment: {
+        ...setup.gl?.fragment,
         material: `${setup.gl?.fragment?.material ?? ''}${coverage.gl?.fragment?.material ?? ''}`,
       },
     },

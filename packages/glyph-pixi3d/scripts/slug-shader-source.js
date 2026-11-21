@@ -59,4 +59,6 @@ const glyphSlugDilate = tgpu
   )(slugDilateMatrix)
   .$name('glyphSlugDilate');
 
-export const slugFunctions = [glyphSlugRender, glyphSlugDilate];
+export const slugVertexFunctions = [glyphSlugDilate];
+export const slugFragmentFunctions = [glyphSlugRender];
+export const slugFunctions = [...slugFragmentFunctions, ...slugVertexFunctions];

@@ -25,5 +25,14 @@ export {
   type Pixi3DTextOptions,
   type Pixi3DTextUpdate,
 } from './text.js';
-export { bitmapGlsl, bitmapWgsl, msdfGlsl, msdfWgsl, slugGlsl, slugWgsl } from './generated/shaders.js';
+export {
+  bitmapGlsl,
+  bitmapWgsl,
+  msdfFragmentGlsl,
+  msdfGlsl,
+  msdfWgsl,
+  slugFragmentGlsl,
+  slugGlsl,
+  slugWgsl,
+} from './generated/shaders.js';
 export { Pixi3DTextSnapshot } from './detached.js';

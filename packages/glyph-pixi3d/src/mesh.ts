@@ -513,13 +513,18 @@ export function createDecorationMeshes(
     createMesh(
       geometry,
       () =>
-        pool.material(
-          decorationMaterialScope,
-          undefined,
-          'pmndrs.bitmap',
-          () =>
-            new FlatMaterial({ alphaMode: 'blend', doubleSided: true, fog: false, extraBits: [glyphDecorationBit] }),
-        ),
+        pool.material(decorationMaterialScope, undefined, 'pmndrs.bitmap', () => {
+          const material = new FlatMaterial({
+            alphaMode: 'blend',
+            doubleSided: true,
+            fog: false,
+            extraBits: [glyphDecorationBit],
+          });
+          // Decoration paint is linear like glyph paint, and the default text material encodes linear light for
+          // display; FlatMaterial's own default (`'display'`) would write the linear value unencoded, too dark.
+          material.colorSpace = 'linear';
+          return material;
+        }),
       pool,
     ),
   ];

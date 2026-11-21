@@ -9,8 +9,10 @@ import {
   createGlyphSlugBits,
   glyphBitmapBit,
   glyphMsdfBit,
+  msdfFragmentGlsl,
   msdfGlsl,
   msdfWgsl,
+  slugFragmentGlsl,
   slugGlsl,
   slugWgsl,
 } from '../dist/index.js';
@@ -31,16 +33,31 @@ test('generated MTSDF helpers cover both Pixi3D backends', () => {
   assert.match(msdfWgsl, /fn glyphMsdfClampedCoordinates\(/);
   assert.match(msdfWgsl, /fn glyphMsdfRender\(/);
   assert.match(msdfGlsl, /vec3 glyphMsdfPosition\(/);
-  assert.match(msdfGlsl, /vec4 glyphMsdfClampedCoordinates\(/);
-  assert.match(msdfGlsl, /vec4 glyphMsdfRender\(/);
+  assert.match(msdfFragmentGlsl, /vec4 glyphMsdfClampedCoordinates\(/);
+  assert.match(msdfFragmentGlsl, /vec4 glyphMsdfRender\(/);
   assert.equal(glyphMsdfBit.gpu?.header, msdfWgsl);
   assert.equal(glyphMsdfBit.gl?.header, msdfGlsl);
+  assert.equal(glyphMsdfBit.gl?.fragment?.header, msdfFragmentGlsl);
+});
+
+test('GLSL shared by both stages takes no derivatives and defines nothing the fragment header redefines', () => {
+  const names = (source) =>
+    [...source.matchAll(/^(?:struct\s+(\w+)|[\w<>]+\s+(\w+)\s*\()/gmu)].map((m) => m[1] ?? m[2]);
+  for (const [shared, fragment] of [
+    [msdfGlsl, msdfFragmentGlsl],
+    [slugGlsl, slugFragmentGlsl],
+  ]) {
+    // GLSL ES 3.0 rejects a derivative anywhere in a vertex shader, and PixiJS 3D puts `gl.header` in both stages.
+    assert.doesNotMatch(shared, /\b(?:dFdx|dFdy|fwidth)\(/);
+    const all = [...names(shared), ...names(fragment)];
+    assert.equal(new Set(all).size, all.length);
+  }
 });
 
 test('the Slug bit publishes stable coverageAt helpers for composed material bits', () => {
   const bit = createTestSlugBit();
   assert.match(bit.gpu?.header ?? '', /fn glyphSlugCoverageAt\(/);
-  assert.match(bit.gl?.header ?? '', /float glyphSlugCoverageAt\(/);
+  assert.match(bit.gl?.fragment?.header ?? '', /float glyphSlugCoverageAt\(/);
   assert.match(bit.gpu?.fragment?.material ?? '', /glyphSlugCoverageAt\(/);
   assert.match(bit.gl?.fragment?.material ?? '', /glyphSlugCoverageAt\(/);
 });
@@ -58,7 +75,7 @@ test('split Slug bits evaluate a material-warped coordinate exactly once', () =>
 });
 
 test('generated Slug helpers read their u32 words through the bit-supplied byte loaders', () => {
-  for (const source of [slugWgsl, slugGlsl]) {
+  for (const source of [slugWgsl, slugFragmentGlsl]) {
     assert.match(source, /glyphSlugLoadHeader\(_coords\)/);
     assert.match(source, /glyphSlugLoadBandCurve\(_coords\)/);
     assert.match(source, /GLYPH_SLUG_HEADER_WIDTH/);
@@ -70,14 +87,17 @@ test('generated Slug helpers read their u32 words through the bit-supplied byte 
     /fn glyphSlugRender\(starts: vec4u, counts: vec2u, bandTransform: vec4f, renderCoordinate: vec2f\) -> f32/,
   );
   assert.match(
-    slugGlsl,
+    slugFragmentGlsl,
     /float glyphSlugRender\(uvec4 starts, uvec2 counts, vec4 bandTransform, vec2 renderCoordinate\)/,
   );
   const bit = createTestSlugBit();
   assert.match(bit.gpu?.header ?? '', /const GLYPH_SLUG_HEADER_WIDTH: u32 = 8u;/);
-  assert.match(bit.gl?.header ?? '', /const uint GLYPH_SLUG_HEADER_WIDTH = 8u;/);
+  assert.match(bit.gl?.fragment?.header ?? '', /const uint GLYPH_SLUG_HEADER_WIDTH = 8u;/);
   assert.match(bit.gpu?.header ?? '', /bytes\.x \| \(bytes\.y << 8u\) \| \(bytes\.z << 16u\) \| \(bytes\.w << 24u\)/);
-  assert.match(bit.gl?.header ?? '', /bytes\.x \| \(bytes\.y << 8u\) \| \(bytes\.z << 16u\) \| \(bytes\.w << 24u\)/);
+  assert.match(
+    bit.gl?.fragment?.header ?? '',
+    /bytes\.x \| \(bytes\.y << 8u\) \| \(bytes\.z << 16u\) \| \(bytes\.w << 24u\)/,
+  );
 });
 
 function createTestSlugBit() {
