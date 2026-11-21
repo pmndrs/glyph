@@ -6239,7 +6239,8 @@ impl ParagraphState {
                     committed_clusters,
                     styles,
                     runs,
-                    self.style_invalidation.metrics,
+                    // Line height alone leaves advances and run-local geometry as they are.
+                    self.style_invalidation.run_geometry,
                 )?
                 .is_some()
         } {
