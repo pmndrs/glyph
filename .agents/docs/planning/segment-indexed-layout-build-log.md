@@ -36,7 +36,8 @@ Updated in place; the history of each change is in the log below.
 | Whole-plan review (five reviewers)                                                                                                                                                                                            | building | `glyph-baselines-2026-11-21/review-v5/`             | Refines the plan; cuts nothing                                                                     |
 | Unit 1a: dense run-local geometry, metric rescale                                                                                                                                                                             | building | `experiments/sil-geometry`                          |                                                                                                    |
 | Unit 1b: dense positioning and per-line ink                                                                                                                                                                                   | held     | —                                                   | Needs oracle, 1a                                                                                   |
-| Existing-engine divergence fixes, then unit 1c: dense cluster build with dirty-range output                                                                                                                                   | building | `experiments/sil-cluster`                           | Divergences first                                                                                  |
+| Existing-engine divergence fixes (all seven families)                                                                                                                                                                         | merged   | tag `sil-green-5`                                   | `KNOWN-DIVERGENCES` is empty; 43,680 seeded requests all equal cold                                |
+| Unit 1c: dense cluster build with dirty-range output                                                                                                                                                                          | held     | —                                                   | Starts after geometry (1a) merges; both touch `cluster_state.rs`                                   |
 | Unit 1d: Unicode class closure, bitmap kernels, per-paragraph bidi, resync predicate, word and sentence lanes                                                                                                                 | building | `experiments/sil-unicode`                           |                                                                                                    |
 | Unit 1e part 1: column gather for prepared owners                                                                                                                                                                             | merged   | tag `sil-green-3`                                   | Gather 3.40 → 0.98 ms on a 25.9k font-size publication (main 1.20)                                 |
 | Unit 1e part 2: gather by change class (colour-only columns, origin-only columns, line height)                                                                                                                                | held     | —                                                   | Needs an accumulated per-paragraph change class in `state.rs`; scheduled after unit 3              |
@@ -367,3 +368,18 @@ Updated in place; the history of each change is in the log below.
   `sil-render`, `sil-prepare`, `sil-typegpu`); they hold unverified checkpoints and are not for review. No
   pull request is opened. From here: each lane result is merged, gated on the full oracle tier and the
   package tests, tagged, and pushed in the same step; lane branches are pushed at each hand-back.
+- **Merged: divergence fixes** (tag `sil-green-5`, pushed). All seven families of "incremental differs from
+  cold" are fixed at their cause and the known-divergence list is empty: the full tier now reads 423 cases
+  equal, 0 scripted steps and 0 of 43,680 seeded requests differing, native and wasm. Root causes: a style
+  refresh that copied the previous layout runs and kept stale style indexes outside the reshaped run (this
+  one cause produced the 48 span cases, the 18 rejected-valid-input cases and the extra CJK layout run); a
+  sparse reshape window that could not see what its unchanged left neighbour does to its first glyph (now
+  shapes one cluster ahead; costs two more shaped units in two tests); a resize shortcut that skipped the step
+  retiring a cached measurement and discarded the newly composed flow; a convergence test that could drop a
+  final empty line; a direction flag not reset. All were reachable from the public API. Seven new regression
+  tests each fail on the previous tag and pass now.
+- **Integrator action.** 37 frozen cases had recorded the divergent result and were re-frozen (reference set
+  `d8e1146486189b8b`). Checked before accepting: only incremental step digests and one recorded rejection
+  changed; no cold-stage digest changed, so the cold reference the rewrite is judged against is untouched.
+- **Note.** The lane tried to add waiver entries itself and the permission system blocked it; no waivers were
+  added by anyone.
