@@ -4,6 +4,9 @@ packages:
   - packages/*
 
 catalogs:
+  pixi3d:
+    '@pixi/3d': 0.1.0
+    pixi.js: 8.23.0
   renderer:
     '@react-three/fiber': 10.0.0-alpha.4
     '@react-three/test-renderer': 10.0.0-alpha.4
