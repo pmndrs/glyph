@@ -67,6 +67,47 @@ test('React: the canvas prepares before it renders, and a setter asks an on-dema
   }
 });
 
+test('React: an onLayout prop positions the first frame exactly', async () => {
+  const adapter = await adapterFont();
+  let label;
+  const renderer = await create(
+    createElement(
+      Suspense,
+      { fallback: null },
+      createElement(
+        ReactText,
+        {
+          font: adapter.face,
+          ref: (value) => {
+            if (value !== null) label = value;
+          },
+          onLayout: (text, layout) => {
+            text.position.x = -layout.width / 2;
+          },
+        },
+        'centred on its own width',
+      ),
+    ),
+    { frameloop: 'demand' },
+  );
+  try {
+    await renderer.advanceFrames(1, 0.016);
+    const width = label.measure().width;
+    assert.ok(width > 0);
+    assert.equal(label.matrixWorld.elements[12], -width / 2, 'the first rendered frame uses the callback position');
+    assert.equal(label.commitState().status, 'committed');
+    const table = [];
+    renderer.scene.instance.traverse((object) => {
+      const transforms = object.geometry?.attributes?._pmndrsGlyphTransforms;
+      if (transforms !== undefined) table.push(...transforms.array);
+    });
+    assert.ok(table.includes(-width / 2), 'and the published transform table carries it');
+  } finally {
+    await renderer.unmount();
+    adapter.dispose();
+  }
+});
+
 test('React: GlyphErrorBoundary keeps an invalid Text from unmounting the canvas', async () => {
   const adapter = await adapterFont();
   const caught = [];

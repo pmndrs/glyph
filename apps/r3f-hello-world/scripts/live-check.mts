@@ -13,6 +13,7 @@ const applicationRoot = fileURLToPath(new URL('..', import.meta.url));
 const probes = [
   { file: './scripts/live-check.probe.ts', marker: 'r3f-hello-world-live-ok', path: '/?example=r3f' },
   { file: './scripts/three-live-check.probe.ts', marker: 'three-hello-world-live-ok', path: '/?example=three' },
+  { file: './scripts/layout-frame.probe.ts', marker: 'r3f-layout-frame-live-ok', path: '/?example=three' },
 ] as const;
 
 for (const probe of probes) {

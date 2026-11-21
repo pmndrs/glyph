@@ -351,9 +351,13 @@ runs layout callbacks. `@pmndrs/glyph:<root>` is the publication object: when th
 prepares whatever became dirty since and publishes. A scene with nothing dirty makes no engine call in either.
 
 A root learns its Scene from the first traversal that reaches one of its texts. That traversal has already begun, so
-the two objects are appended and that one frame prepares and publishes together at the publication object; the
-preparation object moves to the front during the next traversal. `root.attach(scene)` names the Scene beforehand so the
-first frame is prepared at the front like every later one. The React and Vue components call it.
+the two objects are appended and that frame prepares, runs layout callbacks and publishes at the first text it
+visits; the preparation object moves to the front during the next traversal. Objects visited before that point have
+their matrices already, so when a layout callback ran there the root computes the Scene's matrices once more before
+it synchronizes transforms: the first frame draws what the callbacks wrote, including objects other than the text.
+The same happens whenever the preparation object is not the first child. An `updateMatrixWorld` override in that
+Scene therefore runs twice in such a frame. `root.attach(scene)` names the Scene beforehand, so the first frame is
+prepared at the front like every later one and nothing is recomputed. The React and Vue components call it.
 
 A renderer traverses the Scene, calls `scene.onBeforeRender`, runs shadow and pass renders, then calls
 `scene.onAfterRender`. A traversal that starts between those two belongs to a nested render: it synchronizes transforms
