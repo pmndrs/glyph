@@ -25,6 +25,9 @@ sources:
   - id: generation
     resource: ../../../packages/glyph-pixi3d/scripts/generate-shaders.mjs
     title: Build-time TypeGPU shader generation
+  - id: parity
+    resource: ../../../benches/scripts/verify-pixi3d-parity.mts
+    title: Real-device pixel parity with Three
 generated:
   by: anthropic/claude-opus-5-5
   at: '2026-11-21T22:00:00Z'
@@ -53,10 +56,12 @@ Native transforms, visibility and sorting stay authoritative; positions are not 
   `SlugBandResidency`, admitted before any row is read. Its texture is allocated once at the page's largest grid,
   so growth never rebinds a material. Integer words ride in nearest-sampled `rgba8unorm` texels because material
   textures are float-sampled.
-- **Decorations** use core's `createDecorationCodecProgram` and a shared flat material.
+- **Decorations** use core's `createDecorationCodecProgram` and a shared unlit material in linear colour space, so
+  their paint is encoded for display like the default text material's.
 
 Shader math is Glyph's TypeGPU library resolved at build time to WGSL and GLSL (`src/generated/shaders.ts`); the
-runtime imports no TypeGPU. Slug dilation recovers the physical viewport from `camera.uLightTileTransform`, which
+runtime imports no TypeGPU. GLSL ES 3.0 rejects derivatives anywhere in a vertex shader and PixiJS 3D's `gl.header`
+reaches both stages, so MSDF and Slug put their derivative-taking helpers in `gl.fragment.header`. Slug dilation recovers the physical viewport from `camera.uLightTileTransform`, which
 0.1.0 still derives from a fixed 16×9 light grid.
 
 Root hooks follow the integration branch: `prepared()` resolves anchors after core prepared every dirty paragraph;
@@ -78,5 +83,10 @@ decoration order is not enforced where a decoration crosses ink.
 ## Evidence
 
 `mise exec -- pnpm --filter @pmndrs/glyph-pixi3d check` runs the node suite (realization, native records, materials,
-anchors, split, rejection, generated shaders). `benchmark:pixi3d-parity` renders the same scenes through this renderer
-and through Three in headless Chrome and compares pixels; see the log entry of the change that added it for numbers.
+anchors, split, rejection, generated shaders). `benchmark:pixi3d-parity` renders 27 scenes (sizes 6–64 px, MSDF
+effects, paragraphs, 200 labels, Devanagari, glyphs arriving over six frames, growth from 40 to 400 labels, an edit,
+a width change, a perspective page) through this renderer on WebGPU and WebGL2 and through Three on WebGPU, and
+compares pixels at 8/255. It draws text with an unlit `FlatMaterial` in display space so stored values are the
+linear blend Three stores. Budgets name the intended differences: Three's MSDF quad trimming, and pixel-centre quad
+edges that the y-flipped WebGL path assigns to the other row (Bitmap up to 2% of lit pixels, Slug 0.05%). The
+[log entry](../log/2026-11-21-pixi3d-official-release.md) records the measured numbers.
