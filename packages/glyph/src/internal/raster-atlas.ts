@@ -57,7 +57,9 @@ export function decodeEmbeddedLosslessAtlasPage(
     }
     throw error;
   }
-  return { width, height, bytes: levelData.slice() };
+  // A view of the loaded artifact: the font retains those bytes for as long as its decoded data, and nothing
+  // writes to a page. Copying here cost one full atlas per load.
+  return { width, height, bytes: levelData };
 }
 
 export function validateDenseGlyphRecords(

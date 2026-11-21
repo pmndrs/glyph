@@ -9,7 +9,7 @@ import tgpu, {
 } from 'typegpu';
 import type { CodecBufferId, PortableResource, PortableLeafResource } from '../../index.js';
 import { bitmapSchema } from '../../raster/bitmap.js';
-import { MSDF_GLYPH_TABLE_LAYER_STEP, msdfSchema } from '../../raster/msdf.js';
+import { MSDF_GLYPH_TABLE_LAYER_STEP, msdfBakedPages, msdfSchema } from '../../raster/msdf.js';
 import { slugSchema } from '../../raster/slug.js';
 import { bitmapFragment, bitmapQuadPosition, bitmapAtlasUv } from '../../shaders/typegpu/bitmap-shader.js';
 import {
@@ -156,6 +156,29 @@ function texture(root: TgpuRoot, payload: PortableLeafResource) {
     throw error;
   }
 }
+/** Uploads every baked MSDF page as one layer, straight from the decoded page bytes. */
+function bakedAtlas(root: TgpuRoot, token: PortableLeafResource) {
+  if (token.kind !== 'buffer') throw new Error('Expected the MSDF baked-pages token');
+  const baked = msdfBakedPages(token);
+  const result = root
+    .createTexture({ size: [baked.width, baked.height, baked.pages.length], format: 'rgba8unorm' })
+    .$usage('sampled');
+  try {
+    const gpu = root.unwrap(result);
+    for (const [layer, page] of baked.pages.entries()) {
+      root.device.queue.writeTexture(
+        { texture: gpu, origin: [0, 0, layer] },
+        page.bytes,
+        { bytesPerRow: page.width * 4, rowsPerImage: page.height },
+        [page.width, page.height, 1],
+      );
+    }
+    return result;
+  } catch (error) {
+    result.destroy();
+    throw error;
+  }
+}
 /** Uploads a portable constant table as a read-only storage buffer. */
 function storageTable(root: TgpuRoot, payload: PortableLeafResource): GPUBuffer {
   if (payload.kind !== 'buffer') throw new Error('Expected a raster constant table');
@@ -273,7 +296,7 @@ function msdfResource(
   members: Readonly<Record<string, PortableLeafResource>>,
 ): TypeGpuResource {
   const { root } = options;
-  const atlas = texture(root, members.texture!);
+  const atlas = bakedAtlas(root, members.pages!);
   const glyphs = storageTable(root, members.glyphs!);
   try {
     const view = atlas.createView(d.texture2dArray(d.f32));

@@ -1,8 +1,13 @@
 import * as THREE from 'three/webgpu';
 
-import type { PortableResourceGroupPayload, PortableTextureArrayPayload } from '../../config/resources.js';
-import { MSDF_GLYPH_TABLE_LAYER_STEP, MSDF_GLYPH_TABLE_STRIDE } from '../../raster/msdf.js';
-import { atlasTextureArray, f32BufferMember, f32x3BufferMember, textureArrayMember } from './portable-resource.js';
+import type { PortableResourceGroupPayload } from '../../config/resources.js';
+import {
+  MSDF_GLYPH_TABLE_LAYER_STEP,
+  MSDF_GLYPH_TABLE_STRIDE,
+  msdfBakedPages,
+  type MsdfBakedPages,
+} from '../../raster/msdf.js';
+import { atlasTextureArray, f32BufferMember, f32x3BufferMember } from './portable-resource.js';
 import type { RetainedMsdfAtlas } from './renderer-resources.js';
 
 export type { RetainedMsdfAtlas } from './renderer-resources.js';
@@ -21,7 +26,7 @@ const TEXEL_BYTES = 4;
  * are shelf-packed in arrival order and never move or leave, so a row written once stays valid.
  */
 export function createMsdfAtlas(group: PortableResourceGroupPayload): RetainedMsdfAtlas {
-  const baked = textureArrayMember(group, 'texture', 'rgba8unorm', 'MSDF');
+  const baked = bakedPages(group.members.pages);
   const pixelRange = f32BufferMember(group, 'pixelRange', 'MSDF');
   const effectScale = f32x3BufferMember(group, 'effectScale', 'MSDF');
   const cells = bakedCells(group.members.glyphs);
@@ -81,10 +86,11 @@ export function createMsdfAtlas(group: PortableResourceGroupPayload): RetainedMs
     if (shelfTop + height > page) addLayer();
     const sourceLeft = cells[source]!;
     const sourceTop = cells[source + 1]!;
+    const sourcePage = baked.pages[sourceLayer]!;
     for (let line = 0; line < height; line += 1) {
-      const from = ((sourceLayer * baked.height + sourceTop + line) * baked.width + sourceLeft) * TEXEL_BYTES;
+      const from = ((sourceTop + line) * sourcePage.width + sourceLeft) * TEXEL_BYTES;
       const to = ((layer * page + shelfTop + line) * page + penX) * TEXEL_BYTES;
-      texels.set(baked.bytes.subarray(from, from + width * TEXEL_BYTES), to);
+      texels.set(sourcePage.bytes.subarray(from, from + width * TEXEL_BYTES), to);
     }
     table[source] = penX;
     table[source + 1] = shelfTop;
@@ -127,8 +133,15 @@ function bakedCells(payload: PortableResourceGroupPayload['members'][string] | u
   return new Float32Array(copy.buffer, 0, copy.byteLength / 4);
 }
 
+function bakedPages(payload: PortableResourceGroupPayload['members'][string] | undefined): MsdfBakedPages {
+  if (payload?.kind !== 'buffer' || payload.bytes.byteLength !== 4) {
+    throw new TypeError('MSDF resource group needs a baked-pages token member "pages"');
+  }
+  return msdfBakedPages(payload);
+}
+
 /** A resident layer must hold the largest baked cell; fonts baked at a large em size get larger layers. */
-function residentPageSize(cells: Float32Array, baked: PortableTextureArrayPayload): number {
+function residentPageSize(cells: Float32Array, baked: MsdfBakedPages): number {
   let largest = 0;
   for (let source = 0; source < cells.length; source += MSDF_GLYPH_TABLE_STRIDE) {
     largest = Math.max(largest, cells[source + 2]!, cells[source + 3]! % MSDF_GLYPH_TABLE_LAYER_STEP);

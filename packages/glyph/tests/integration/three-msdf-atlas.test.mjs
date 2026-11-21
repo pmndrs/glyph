@@ -1,39 +1,62 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { msdf, msdfCodec } from '../../dist/raster/msdf.js';
 import { createMsdfAtlas } from '../../dist/three/internal/msdf-atlas.js';
 
 const STRIDE = 4;
+const RECORD_STRIDE = 20;
 const LAYER_STEP = 4096;
 
-/** A baked atlas of `count` cells, `size` texels square, each filled with its own row number + 1. */
+/**
+ * A decoded MSDF font of `count` cells, `size` texels square, each filled with its own row number + 1, and the atlas
+ * resource group the codec retains for it.
+ */
 function bakedGroup(count, size, bakedWidth, bakedHeight) {
   const perRow = Math.floor(bakedWidth / size);
   const perLayer = perRow * Math.floor(bakedHeight / size);
   const layers = Math.ceil(count / perLayer);
-  const bytes = new Uint8Array(bakedWidth * bakedHeight * layers * 4);
-  const cells = new Float32Array((count + 1) * STRIDE);
+  const pages = Array.from({ length: layers }, () => ({
+    width: bakedWidth,
+    height: bakedHeight,
+    format: 'rgba8unorm',
+    bytes: new Uint8Array(bakedWidth * bakedHeight * 4),
+  }));
+  const records = new Uint8Array((count + 1) * RECORD_STRIDE);
+  const view = new DataView(records.buffer);
+  view.setUint16(count * RECORD_STRIDE + 16, 0xffff, true);
   for (let row = 0; row < count; row += 1) {
     const layer = Math.floor(row / perLayer);
     const slot = row % perLayer;
     const left = (slot % perRow) * size;
     const top = Math.floor(slot / perRow) * size;
-    cells.set([left, top, size, size + layer * LAYER_STEP], row * STRIDE);
+    const record = row * RECORD_STRIDE;
+    view.setUint16(record + 8, left, true);
+    view.setUint16(record + 10, top, true);
+    view.setUint16(record + 12, left + size, true);
+    view.setUint16(record + 14, top + size, true);
+    view.setUint16(record + 16, layer, true);
     for (let y = 0; y < size; y += 1) {
-      const start = ((layer * bakedHeight + top + y) * bakedWidth + left) * 4;
-      bytes.fill(row + 1, start, start + size * 4);
+      const start = ((top + y) * bakedWidth + left) * 4;
+      pages[layer].bytes.fill(row + 1, start, start + size * 4);
     }
   }
-  const f32 = (...values) => new Uint8Array(new Float32Array(values).buffer);
-  return {
-    kind: 'group',
-    members: {
-      texture: { kind: 'texture-array', format: 'rgba8unorm', width: bakedWidth, height: bakedHeight, layers, bytes },
-      pixelRange: { kind: 'buffer', bytes: f32(8), stride: 4 },
-      effectScale: { kind: 'buffer', bytes: f32(0.125, 0.125, 8), stride: 12 },
-      glyphs: { kind: 'buffer', bytes: new Uint8Array(cells.buffer), stride: STRIDE * 4 },
-    },
+  const data = {
+    resource: `test/${count}/${size}`,
+    binding: { width: bakedWidth, height: bakedHeight, layers },
+    emSize: 64,
+    pixelRange: 8,
+    planeUnitsPerEm: 64,
+    records,
+    pages,
   };
+  let retained;
+  msdfCodec.compileFont({
+    font: { data },
+    retain: (_name, _id, payload) => (retained = payload),
+    compile: () => undefined,
+  });
+  return { group: retained, data };
 }
 
 /** One instance per glyph row, with the row in the last lane as the MSDF effect lane carries it. */
@@ -55,7 +78,7 @@ function texel(atlas, cell, x, y) {
 }
 
 test('an MSDF atlas holds only the glyphs that were drawn', () => {
-  const atlas = createMsdfAtlas(bakedGroup(200, 40, 1024, 344));
+  const atlas = createMsdfAtlas(bakedGroup(200, 40, 1024, 344).group);
   try {
     assert.equal(atlas.texture.image.depth, 1, 'the resident atlas starts with one layer');
     assert.equal(atlas.byteLength < 1024 * 344 * 4, true, 'resident memory starts below the baked atlas');
@@ -86,7 +109,7 @@ test('an MSDF atlas holds only the glyphs that were drawn', () => {
 });
 
 test('an MSDF atlas grows by whole layers and keeps earlier cells', () => {
-  const atlas = createMsdfAtlas(bakedGroup(200, 40, 1024, 344));
+  const atlas = createMsdfAtlas(bakedGroup(200, 40, 1024, 344).group);
   try {
     const perLayer = Math.floor(256 / 40) ** 2;
     atlas.use(lane(Array.from({ length: perLayer }, (_, row) => row)), 0, perLayer, STRIDE);
@@ -108,12 +131,28 @@ test('an MSDF atlas grows by whole layers and keeps earlier cells', () => {
 });
 
 test('an MSDF atlas sizes its layers to the largest baked cell', () => {
-  const atlas = createMsdfAtlas(bakedGroup(4, 300, 1024, 1024));
+  const atlas = createMsdfAtlas(bakedGroup(4, 300, 1024, 1024).group);
   try {
     atlas.use(lane([0, 1, 2]), 0, 3, STRIDE);
     assert.equal(atlas.texture.image.width, 512);
     assert.equal(atlas.metrics.x, 512, 'the shader normalizes by the resident extent');
     assert.equal(atlas.texture.image.depth, 3, 'one 300-texel cell fits per 512-texel layer');
+  } finally {
+    atlas.dispose();
+  }
+});
+
+test('an MSDF atlas reads baked pages by reference and outlives the font data', () => {
+  const { group, data } = bakedGroup(8, 40, 256, 256);
+  assert.equal(group.members.pages.bytes.byteLength, 4, 'the resource carries a token, not the baked texels');
+  const atlas = createMsdfAtlas(group);
+  try {
+    // Disposing the decoded font releases the token; a realized atlas keeps the pages it resolved.
+    msdf.dispose(data);
+    data.pages[0].bytes.fill(77, 0, 4);
+    atlas.use(lane([0]), 0, 1, STRIDE);
+    assert.equal(texel(atlas, residentCell(atlas, 0), 0, 0), 77, 'cells are copied from the page itself');
+    assert.throws(() => createMsdfAtlas(group), /released before a renderer realized them/);
   } finally {
     atlas.dispose();
   }
