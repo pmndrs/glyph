@@ -33,7 +33,7 @@ export function codecDescriptor(ids: CodecIdFactory): CodecDescriptor {
   } as const;
   const slugOptions = {
     ...options,
-    placementSlotTarget: { buffer: slugSchema.buffers.bandCounts.id, lane: 2 },
+    placementSlotTarget: { buffer: slugSchema.buffers.glyph.id, lane: 1 },
   } as const;
   return {
     capabilitySets: [capabilitySet],

@@ -80,16 +80,18 @@ const msdfScene = tgpu.bindGroupLayout({
   /** One row per baked glyph: `[left, top, width, height + layer * 4096]` in atlas texels. */
   glyphs: { storage: d.arrayOf(d.vec4f), access: 'readonly' as const, visibility: ['vertex' as const] },
 });
+/** One row of a Slug page's `glyphs` table: the em quad and band transform, then the table bases and band counts. */
+const SlugGlyphRow = d.struct({ quad: d.vec4f, band: d.vec4f, starts: d.vec4u, counts: d.vec4u });
 const slugScene = tgpu.bindGroupLayout({
   viewport: { uniform: d.vec2f },
   position: { uniform: d.vec2f },
   placements: { storage: d.arrayOf(d.vec2f), access: 'readonly', visibility: ['vertex'] },
+  glyphs: { storage: d.arrayOf(SlugGlyphRow), access: 'readonly', visibility: ['vertex'] },
 });
 const v2 = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
 const v4 = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const u1 = tgpu.vertexLayout(d.disarrayOf(d.uint32), 'instance');
 const u2 = tgpu.vertexLayout(d.disarrayOf(d.uint32x2), 'instance');
-const u4 = tgpu.vertexLayout(d.disarrayOf(d.uint32x4), 'instance');
 // Each attribute needs its own layout identity, even when its physical shape matches.
 const originLayout = v2;
 const sizeLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
@@ -98,10 +100,6 @@ const uvSizeLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
 const colorLayout = v4;
 const rectLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const pageLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
-const planeLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
-const bandLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
-const inverseLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
-const countsLayout = tgpu.vertexLayout(d.disarrayOf(d.uint32x4), 'instance');
 
 function corner(index: number): d.v2f {
   'use gpu';
@@ -439,6 +437,7 @@ function slugResource(
 ): TypeGpuResource {
   const { root } = options;
   const textures: ReturnType<typeof texture>[] = [];
+  const glyphs = storageTable(root, members.glyphs!);
   try {
     const curves = texture(root, members.curves!);
     textures.push(curves);
@@ -454,27 +453,27 @@ function slugResource(
       color: d.vec4f,
       band: d.vec4f,
       starts: d.interpolate('flat', d.vec4u),
-      counts: d.interpolate('flat', d.vec4u),
+      counts: d.interpolate('flat', d.vec2u),
     };
     const vertex = tgpu.vertexFn({
       in: {
         index: d.builtin.vertexIndex,
         rect: d.vec4f,
-        plane: d.vec4f,
-        band: d.vec4f,
         color: d.vec4f,
-        inverse: d.vec4f,
-        starts: d.vec4u,
-        counts: d.vec4u,
+        glyph: d.vec2u,
       },
       out: { position: d.builtin.position, ...varyings },
     })((input) => {
       'use gpu';
       const unit = corner(input.index);
-      const origin = placedSlugOrigin(input.rect.xy, input.counts.z);
+      // What every drawing of a glyph shares is read once per vertex from the page's glyph table.
+      const row = slugScene.$.glyphs[input.glyph.x]!;
+      const origin = placedSlugOrigin(input.rect.xy, input.glyph.y);
       const local = d.vec2f(origin.x + unit.x * input.rect.z, -(origin.y + unit.y * input.rect.w));
       const normal = d.vec2f((unit.x - 0.5) * input.rect.z, -(unit.y - 0.5) * input.rect.w);
-      const em = d.vec2f(input.plane.x + unit.x * input.plane.z, input.plane.y - unit.y * input.plane.w);
+      const em = d.vec2f(row.quad.x + unit.x * row.quad.z, row.quad.y - unit.y * row.quad.w);
+      // Em units per layout unit: the quad is the em quad scaled by the font size.
+      const inverseScale = (row.quad.z + row.quad.w) / std.max(input.rect.z + input.rect.w, 1e-30);
       // Local homogeneous projection derivatives keep Slug's half-pixel expansion in screen space.
       const clip = projectSlug(d.vec3f(local, 0));
       const dx = projectSlug(d.vec3f(local.x + 1, local.y, 0)).sub(clip);
@@ -483,7 +482,7 @@ function slugResource(
         d.vec2f(0),
         normal,
         em,
-        input.inverse.x,
+        inverseScale,
         d.vec4f(dx.x, dy.x, 0, clip.x),
         d.vec4f(dx.y, dy.y, 0, clip.y),
         d.vec4f(dx.w, dy.w, 0, clip.w),
@@ -493,9 +492,9 @@ function slugResource(
         position: projectSlug(d.vec3f(local.add(dilated.xy), 0)),
         coordinate: dilated.zw,
         color: input.color,
-        band: input.band,
-        starts: input.starts,
-        counts: input.counts,
+        band: row.band,
+        starts: row.starts,
+        counts: row.counts.xy,
       };
     });
     const fragment = tgpu.fragmentFn({ in: { position: d.builtin.position, ...varyings }, out: d.vec4f })((input) => {
@@ -535,12 +534,8 @@ function slugResource(
         fragment,
         attribs: {
           rect: rectLayout.attrib,
-          plane: planeLayout.attrib,
-          band: bandLayout.attrib,
           color: colorLayout.attrib,
-          inverse: inverseLayout.attrib,
-          starts: u4.attrib,
-          counts: countsLayout.attrib,
+          glyph: u2.attrib,
         },
         targets: target(options),
         multisample: { count: options.sampleCount ?? 1 },
@@ -550,24 +545,22 @@ function slugResource(
     return {
       dispose: () => {
         for (const value of textures) value.destroy();
+        glyphs.destroy();
       },
       prepare(buffers, placementTable, viewport, position, start, count) {
-        const group = root.createBindGroup(slugScene, { viewport, position, placements: placementTable });
+        const group = root.createBindGroup(slugScene, { viewport, position, placements: placementTable, glyphs });
         const b = slugSchema.buffers;
         const draw = pipeline
           .with(group)
           .with(rectLayout, buffers.get(b.rect.id)!)
-          .with(planeLayout, buffers.get(b.planeRect.id)!)
-          .with(bandLayout, buffers.get(b.bandTransform.id)!)
           .with(colorLayout, buffers.get(b.color.id)!)
-          .with(inverseLayout, buffers.get(b.inverseFontSize.id)!)
-          .with(u4, buffers.get(b.tableStarts.id)!)
-          .with(countsLayout, buffers.get(b.bandCounts.id)!);
+          .with(u2, buffers.get(b.glyph.id)!);
         return preparedDraw(root, draw, start, count);
       },
     };
   } catch (error) {
     for (const value of textures) value.destroy();
+    glyphs.destroy();
     throw error;
   }
 }

@@ -18,6 +18,7 @@ import {
 import {
   bitmapCodec,
   msdfCodec,
+  SLUG_GLYPH_TABLE_STRIDE,
   SLUG_PLANE_UNITS_PER_EM,
   slugCodec,
   compileRasterFont,
@@ -119,6 +120,7 @@ export function compiledSlugData(font: Font<typeof slug>): SlugCpuReferenceData 
     throw new TypeError('Slug compiled binding must use one glyph-scoped strike');
   }
   const pages = view.resources.map((resource) => slugPage(resource));
+  const tables = view.resources.map((resource) => slugGlyphTable(resource));
   const pageIndex = new Map(view.resources.map((resource, index) => [resource.key, index]));
   const glyphs = {
     planeLeft: new Int16Array(view.glyphCount),
@@ -150,12 +152,17 @@ export function compiledSlugData(font: Font<typeof slug>): SlugCpuReferenceData 
     glyphs.planeRight[glyph] = planeValue(right, SLUG_PLANE_UNITS_PER_EM, 'Slug right');
     glyphs.planeTop[glyph] = planeValue(top, SLUG_PLANE_UNITS_PER_EM, 'Slug top');
     glyphs.page[glyph] = u16(selectedPage, 'Slug page index');
-    glyphs.horizontalBands[glyph] = u16(view.u32('horizontalBands', glyph), 'Slug horizontal bands');
-    glyphs.verticalBands[glyph] = u16(view.u32('verticalBands', glyph), 'Slug vertical bands');
-    glyphs.curveBase[glyph] = view.u32('curveBase', glyph);
-    glyphs.horizontalHeaderBase[glyph] = view.u32('horizontalHeaderBase', glyph);
-    glyphs.verticalHeaderBase[glyph] = view.u32('verticalHeaderBase', glyph);
-    glyphs.referenceBase[glyph] = view.u32('referenceBase', glyph);
+    // Band counts and table bases live in the page's glyph table, at the row the binding names.
+    const table = tables[selectedPage]!;
+    const row = view.u32('glyph', glyph) * SLUG_GLYPH_TABLE_STRIDE * 4;
+    if (row + SLUG_GLYPH_TABLE_STRIDE * 4 > table.byteLength)
+      throw new TypeError('Slug glyph row is outside its table');
+    glyphs.curveBase[glyph] = table.getUint32(row + 32, true);
+    glyphs.horizontalHeaderBase[glyph] = table.getUint32(row + 36, true);
+    glyphs.verticalHeaderBase[glyph] = table.getUint32(row + 40, true);
+    glyphs.referenceBase[glyph] = table.getUint32(row + 44, true);
+    glyphs.horizontalBands[glyph] = u16(table.getUint32(row + 48, true), 'Slug horizontal bands');
+    glyphs.verticalBands[glyph] = u16(table.getUint32(row + 52, true), 'Slug vertical bands');
   }
   return { planeUnitsPerEm: SLUG_PLANE_UNITS_PER_EM, glyphs, pages };
 }
@@ -257,6 +264,12 @@ function groupTexture(group: PortableResourceGroupPayload, name: string, label: 
   const member = group.members[name];
   if (member?.kind !== 'texture') throw new TypeError(`${label} must be a texture`);
   return member;
+}
+
+function slugGlyphTable(resource: CompiledRasterFontResource): DataView {
+  const table = resourceGroup(resource, 'Slug page').members.glyphs;
+  if (table?.kind !== 'buffer') throw new TypeError('Slug page glyphs must be a buffer');
+  return new DataView(table.bytes.buffer, table.bytes.byteOffset, table.bytes.byteLength);
 }
 
 function slugPage(resource: CompiledRasterFontResource): SlugPageData {
