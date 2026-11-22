@@ -1,4 +1,4 @@
-/* @workflow { "name": "glyph:stage-bench", "summary": "Time the run-local geometry stage, the cluster build, positioning and measurement, the engine steps around them and the Unicode and bidi analysis inside the optimized wasm32+simd128 oracle probe.", "requirements": "Pinned Rust through mise and installed package dependencies for wasm-opt. Evidence for a rewrite, not a benchmark protocol: run one at a time on a quiet machine.", "writes": "packages/glyph/rust/shaper/target/stage-bench-wasm; never dist." } */
+/* @workflow { "name": "glyph:stage-bench", "summary": "Time the run-local geometry stage, the cluster build, positioning and measurement, the engine steps around them and the Unicode and bidi analysis inside the optimized wasm32+simd128 oracle probe.", "requirements": "Pinned Rust through mise and installed package dependencies for wasm-opt. Evidence for a rewrite, not a benchmark protocol: run one at a time on a quiet machine.", "writes": "packages/glyph/rust/shaper/target/stage-bench-wasm, or <CARGO_TARGET_DIR>/pmndrs-glyph/shaper/stage-bench-wasm when it is set; never dist." } */
 // Usage:
 //   node scripts/stage-bench.mjs [--iterations N] [--rounds N] [--only SUBSTRING] [--save FILE]
 //                                [--suite stage|layout|analysis|sweep] [--probe LABEL=FILE]...
@@ -15,12 +15,13 @@ import { copyFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { rustTargetDirectory, withRustTarget } from './support/rust-target.mjs';
 import { shaperBuildEnvironment, shaperOptimizationArguments } from './support/shaper-build.mjs';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const workspaceRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const shaperRoot = join(packageRoot, 'rust/shaper');
-const probeTarget = join(shaperRoot, 'target/stage-bench-wasm');
+const probeTarget = rustTargetDirectory('shaper', 'stage-bench-wasm');
 const optimizedProbe = join(probeTarget, 'stage-bench.wasm');
 const fontRoots = {
   repository: join(workspaceRoot, 'benches/fixtures/fonts'),
@@ -153,7 +154,7 @@ async function buildProbe() {
       '--features',
       'simd128,stage-bench',
     ],
-    shaperBuildEnvironment(workspaceRoot, probeTarget, true),
+    withRustTarget(shaperBuildEnvironment(workspaceRoot, probeTarget, true), probeTarget),
   );
   const wasmOpt = join(packageRoot, 'node_modules/.bin', process.platform === 'win32' ? 'wasm-opt.CMD' : 'wasm-opt');
   await run(wasmOpt, [

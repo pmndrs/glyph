@@ -10,15 +10,17 @@ import { fileURLToPath } from 'node:url';
 import { Worker as NodeWorker } from 'node:worker_threads';
 
 import { reproducibleRustEnvironment } from './support/reproducible-rust-env.mjs';
+import { rustTargetDirectory } from './support/rust-target.mjs';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const workspaceRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const scriptPath = fileURLToPath(import.meta.url);
 const fontPath = join(workspaceRoot, 'benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf');
 const evidencePath = join(packageRoot, 'rust/mtsdf-admission/evidence/baker-phases-v0.json');
+const profileTarget = rustTargetDirectory('mtsdf-baker');
 const profileBinary = join(
-  packageRoot,
-  'rust/mtsdf-baker/target/release',
+  profileTarget,
+  'release',
   platform() === 'win32' ? 'profile-mtsdf-baker.exe' : 'profile-mtsdf-baker',
 );
 const cases = ['small', 'medium', 'complete'];
@@ -78,6 +80,7 @@ async function buildNativeProfiler() {
       '--bin=profile-mtsdf-baker',
     ],
     packageRoot,
+    { ...process.env, CARGO_TARGET_DIR: profileTarget },
   );
 }
 

@@ -1,0 +1,47 @@
+# glyph layout oracle reference v1
+case mech-negative-spacing-lone-mark
+step cold
+stage owner value 1 07e27e8ffd8af189
+stage text value 1 4bf49644440cd6ce
+stage text identity 1 8b4193d3cf71402e
+stage unicode value 6 e3561f08f0b70385
+stage bidi value 8 757f8fc7281b31a6
+stage style value 26 ecf719070240b386
+stage shaping_run value 5 45d0a925e82e74d5
+stage inline value 81 717ec3ff0f86fb32
+stage inline identity 5 59c53ad6cefec835
+stage inline repr 21 e26f729a2cda5297
+stage public value 13 ed195af086cc594a
+stage public identity 1 b14cb9f4279e7fe2
+stage view identity 4 8ae554fe3de14028
+stage view value 40 59c64c0ee11c05a5
+stage wire wire 1 f2745bed1b94830c
+stage gather identity 7 01db1c97bc6ee05c
+stage gather value 36 65d3e877b49afb14
+stage gpu identity 2 e12dc6ad94f1f3e1
+stage gpu value 3 6401c317cca82d9c
+step 01 a base for the mark
+class value 220 661eb6435cfd702a
+class identity 20 37631c79eb411e06
+class repr 21 7d4b25809eddb010
+class wire 1 98d9d259d8fb2eec
+step 02 the mark alone again
+class value 220 18d6cba087f33ab8
+class identity 20 0444b82156564b9a
+class repr 21 e26f729a2cda5297
+class wire 1 7a781c8d45587245
+step 03 metrics size 16 spacing 0.5 line 1.2 word 0
+class value 220 ed896ae8039c44c2
+class identity 20 dfda22f8b03af7ad
+class repr 21 966804714bd34e20
+class wire 1 1f6301f490ddbae8
+step 04 max lines 0 + direction 0
+class value 200 3ea9bb421e17b06e
+class identity 18 b4eb68b83510e5ef
+class repr 21 966804714bd34e20
+class wire 1 9d29fb26a0718b09
+step 05 align 4
+class value 230 bd51295bbc0a6c70
+class identity 22 c6e7e43bf6e04a9e
+class repr 41 8ea35f4ef8d7eb16
+class wire 1 0578a17a17e7fc39

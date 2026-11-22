@@ -1,0 +1,53 @@
+# glyph layout oracle reference v1
+case mech-rtl-ellipsis-leading-virama
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 dd8ceef5b245df91
+stage text identity 1 78871522f8b3db0f
+stage unicode value 6 a07ca0628863dfe4
+stage bidi value 8 64425214750d40a2
+stage style value 26 87c741623946e75f
+stage shaping_run value 5 35fb669b405a955b
+stage shape value 14 210616e5407e7ebc
+stage cluster value 29 078986422660bb6f
+stage cluster identity 4 64bc14ead8b82e43
+stage cluster repr 8 fdb3a2551942fefa
+stage run_local repr 16 5f202280c07e24a0
+stage flow value 35 f10e2aa954cc9bd7
+stage positioned identity 3 4eeea13c611f8c55
+stage positioned value 13 44b49f9c3062c442
+stage positioned repr 17 1da1f9b5b91bc335
+stage public value 13 81b16255ff1bdc1a
+stage public identity 1 dfd36a3d76d4bec3
+stage view identity 4 cc2bb089c5155899
+stage view value 40 e5396c7073916eb6
+stage wire wire 1 23c54eb06aaabb28
+stage gather identity 7 1683a09fe7fcde3b
+stage gather value 36 4e8ca04b31d61325
+stage gpu identity 2 aacb9d7d94e32658
+stage gpu value 3 99ccb879e8e97d22
+step 01 a consonant after the non-joiner
+class value 230 34a76b6291afa393
+class identity 22 a34005256380c837
+class repr 41 9607ee198a1efca4
+class wire 1 715e728c7f44e3c5
+step 02 a hard break after it
+class value 266 a96a4c3f9943e809
+class identity 24 65b68872416d6458
+class repr 61 3036e62900eef0b3
+class wire 1 a6bf3af301a9632f
+step 03 delete 5 at 1 + replace 1 at 0 + width 299.51563
+class value 230 934bc17564bcc561
+class identity 22 7061465bb51826e4
+class repr 41 8348129ef6d0a6d5
+class wire 1 0704ab5b3a1d182c
+step 04 replace 1 at 0
+class value 230 11c307d0b3dfc283
+class identity 22 4df84e626ae7a9b2
+class repr 41 adaa4518ed058cf6
+class wire 1 473365ffbe21734d
+step 05 insert Mark (1 units) at 0
+class value 230 c58ce58cf42eb410
+class identity 22 0b28fad55b582883
+class repr 41 a39cab02a262df83
+class wire 1 21282f2ead066d54

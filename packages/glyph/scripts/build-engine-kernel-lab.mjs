@@ -1,13 +1,14 @@
-/* @workflow { "name": "glyph:kernel-lab-build", "summary": "Build scalar, auto-vectorized, and explicit SIMD Wasm artifacts for the retained-engine kernel lab.", "requirements": "Pinned Rust and Binaryen toolchains through mise.", "writes": "packages/glyph/rust/shaper/target/kernel-lab" } */
+/* @workflow { "name": "glyph:kernel-lab-build", "summary": "Build scalar, auto-vectorized, and explicit SIMD Wasm artifacts for the retained-engine kernel lab.", "requirements": "Pinned Rust and Binaryen toolchains through mise.", "writes": "packages/glyph/rust/shaper/target/kernel-lab, or <CARGO_TARGET_DIR>/pmndrs-glyph/shaper/kernel-lab when it is set" } */
 import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 import { reproducibleRustEnvironment } from './support/reproducible-rust-env.mjs';
+import { rustTargetDirectory } from './support/rust-target.mjs';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const workspaceRoot = fileURLToPath(new URL('../../../', import.meta.url));
-const outputRoot = fileURLToPath(new URL('../rust/shaper/target/kernel-lab/', import.meta.url));
+const outputRoot = rustTargetDirectory('shaper', 'kernel-lab');
 const executable = process.platform === 'win32' ? 'wasm-opt.CMD' : 'wasm-opt';
 const wasmOpt = fileURLToPath(new URL(`../node_modules/.bin/${executable}`, import.meta.url));
 const disExecutable = process.platform === 'win32' ? 'wasm-dis.CMD' : 'wasm-dis';
