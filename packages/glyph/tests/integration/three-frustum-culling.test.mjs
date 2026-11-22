@@ -221,35 +221,125 @@ test('MSDF effects and Slug fringes are inside the bound of a draw crossing the 
   fringe.dispose();
 });
 
-test('a caller material may displace vertices, so its draws are never culled', async (t) => {
-  const three = await cullingHandle(t, 'indexed');
-  const font = await loadFont({ baked: { bytes: await readFile(bitmapFontUrl) } }, bitmap({ strikes: [16] }));
-  t.after(() => font.dispose());
-  const scene = new THREE.Scene();
-  const camera = viewCamera();
-  const label = three.createText({
-    font,
-    text: 'Displaced',
-    style: { fontSize: 16 },
-    material: defineTextMaterial((context) => {
-      const material = context.createDefaultMaterial();
-      material.positionNode = context.position.add(vec3(-900, 0, 0));
-      return material;
-    }),
+for (const transformMode of ['indexed', 'direct']) {
+  test(`${transformMode} caller materials are culled by their declared padding or opt out`, async (t) => {
+    const three = await cullingHandle(t, transformMode);
+    const font = await loadFont({ baked: { bytes: await readFile(bitmapFontUrl) } }, bitmap({ strikes: [16] }));
+    t.after(() => font.dispose());
+    const scene = new THREE.Scene();
+    const camera = viewCamera();
+    const shift = (options) =>
+      defineTextMaterial((context) => {
+        const material = context.createDefaultMaterial();
+        material.positionNode = context.position.add(vec3(-900, 0, 0));
+        return material;
+      }, options);
+    const label = three.createText({ font, text: 'Displaced', style: { fontSize: 16 }, material: shift() });
+    label.position.x = 900;
+    scene.add(label);
+    const undeclared = submittedDraws(scene, camera);
+    assert.ok(glyphDraws(scene).length > 0);
+    assert.ok(
+      glyphDraws(scene).every((draw) => draw.frustumCulled),
+      'a caller material is culled by default',
+    );
+    assert.equal(undeclared.length, 0, 'an undeclared displacement is culled with its source');
+
+    label.material = shift({ boundsPadding: 900 });
+    assert.equal(
+      submittedDraws(scene, camera).length,
+      glyphDraws(scene).length,
+      'a declared padding keeps the displaced label submitted',
+    );
+    label.position.x = 900 + 3_000;
+    assert.equal(submittedDraws(scene, camera).length, 0, 'and still culls it once the padded bound (a sphere) leaves');
+
+    label.material = shift({ frustumCulled: false });
+    const neverCulled = submittedDraws(scene, camera);
+    assert.ok(
+      glyphDraws(scene).every((draw) => !draw.frustumCulled),
+      'a material declared frustumCulled: false is never culled',
+    );
+    assert.equal(neverCulled.length, glyphDraws(scene).length);
+
+    label.material = undefined;
+    assert.equal(submittedDraws(scene, camera).length, 0, 'restoring the default material culls it again');
+    assert.throws(() => defineTextMaterial(() => undefined, { boundsPadding: -1 }), RangeError);
+    assert.throws(() => defineTextMaterial(() => undefined, { boundsPadding: Infinity }), RangeError);
+    assert.throws(() => defineTextMaterial(() => undefined, { frustumCulled: 0 }), TypeError);
+    label.dispose();
   });
-  label.position.x = 900;
-  scene.add(label);
-  const submitted = submittedDraws(scene, camera);
-  assert.ok(glyphDraws(scene).length > 0);
-  assert.ok(
-    glyphDraws(scene).every((draw) => !draw.frustumCulled),
-    'no draw of a caller material is frustum culled',
-  );
-  assert.equal(submitted.length, glyphDraws(scene).length, 'the displaced label is submitted from off-screen');
-  label.material = undefined;
-  assert.equal(submittedDraws(scene, camera).length, 0, 'restoring the default material makes it cullable again');
-  label.dispose();
-});
+
+  test(`${transformMode} a Text, Glyphs or TextGroup with frustumCulled = false is drawn off-screen`, async (t) => {
+    const three = await cullingHandle(t, transformMode);
+    const font = await loadFont({ baked: { bytes: await readFile(bitmapFontUrl) } }, bitmap({ strikes: [16] }));
+    t.after(() => font.dispose());
+    const scene = new THREE.Scene();
+    const camera = viewCamera();
+    const group = three.createTextGroup({ batching: 'group' });
+    const member = three.createText({ font, text: 'Member', style: { fontSize: 16 } });
+    const other = three.createText({ font, text: 'Other', style: { fontSize: 16 } });
+    member.position.x = 600;
+    other.position.x = 700;
+    group.add(member, other);
+    scene.add(group);
+    assert.equal(submittedDraws(scene, camera).length, 0, 'both members are culled off-screen');
+
+    member.frustumCulled = false;
+    const kept = submittedDraws(scene, camera);
+    assert.ok(kept.length > 0, 'an opted-out member is submitted from off-screen');
+    if (transformMode === 'indexed') {
+      assert.equal(kept.length, glyphDraws(scene).length, 'and keeps its whole batch drawn');
+    }
+    member.frustumCulled = true;
+    assert.equal(submittedDraws(scene, camera).length, 0, 'opting back in culls it again');
+    // Records that change while opted out must leave a current bound for when it opts back in.
+    member.position.x = -4_000;
+    member.frustumCulled = false;
+    member.text = `${'Member '.repeat(80)}Member`;
+    submittedDraws(scene, camera);
+    member.frustumCulled = true;
+    assertInkSubmitted(submittedDraws(scene, camera), [member], 'a member edited into view while opted out');
+    member.text = 'Member';
+    member.position.x = 600;
+    assert.equal(submittedDraws(scene, camera).length, 0);
+
+    group.frustumCulled = false;
+    assert.equal(submittedDraws(scene, camera).length, glyphDraws(scene).length, 'an opted-out group keeps all');
+    group.frustumCulled = true;
+    assert.equal(submittedDraws(scene, camera).length, 0);
+
+    const loose = three.createText({ font, text: 'Loose', style: { fontSize: 16 } });
+    loose.position.x = 800;
+    scene.add(loose);
+    group.frustumCulled = false;
+    loose.removeFromParent();
+    group.add(loose);
+    scene.updateMatrixWorld(true);
+    assert.equal(submittedDraws(scene, camera).length, glyphDraws(scene).length, 'a Text moved into it opts out');
+
+    group.frustumCulled = true;
+    scene.updateMatrixWorld(true);
+    const [glyphs] = member.split();
+    scene.add(glyphs);
+    glyphs.position.x = 1_000;
+    member.visible = false;
+    const glyphDrawsOf = () => glyphDraws(glyphs);
+    assert.ok(glyphDrawsOf().length > 0, 'the detached copy publishes draws');
+    assert.equal(submittedDraws(scene, camera).length, 0, 'the detached copy is culled');
+    glyphs.frustumCulled = false;
+    const submitted = submittedDraws(scene, camera);
+    assert.ok(
+      glyphDrawsOf().every((draw) => submitted.includes(draw)),
+      'an opted-out Glyphs is drawn',
+    );
+    glyphs.dispose();
+    loose.dispose();
+    member.dispose();
+    other.dispose();
+    group.dispose();
+  });
+}
 
 for (const transformMode of ['indexed', 'direct']) {
   test(`${transformMode} detached glyph bounds follow their instance matrices`, async (t) => {

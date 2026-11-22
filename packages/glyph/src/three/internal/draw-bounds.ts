@@ -8,6 +8,7 @@ import type { ThreeResolvedMaterialBinding } from '../schema.js';
 import type { DrawGeometry } from './geometry.js';
 import type { RetainedBuffer, ThreeBufferBindingId } from './host-buffer.js';
 import type { ThreeHostResource, TransformRealization } from './render-state.js';
+import { cullingGeneration, cullingOptOutObserved, optsOutOfCulling } from './culling-scope.js';
 
 /** Two consecutive lanes of one retained Codec buffer, read per record. */
 export interface RecordLanes {
@@ -38,29 +39,45 @@ export interface DrawBoundsSource {
   readonly indexed?: Readonly<{ indices: RetainedBuffer; table: THREE.StorageInstancedBufferAttribute }>;
   /** Per-record glyph matrices of a detached `Glyphs` branch, applied before the record's transform. */
   readonly glyphTransforms?: THREE.StorageInstancedBufferAttribute;
+  /** The material's declared `boundsPadding`, in draw-local units: how far its vertex stage moves any vertex. */
+  readonly padding: number;
+  /** The objects whose records this draw places, read to honour their `frustumCulled = false`. */
+  readonly members: DrawMembers;
+}
+
+/** Resolves the transform identities a draw's records name to the objects that own them. */
+export interface DrawMembers {
+  /** The renderer's current transform table; a new publication may replace it. */
+  transforms(): ReadonlyMap<number, THREE.Object3D>;
+  /** The one transform of a direct-mode draw; an indexed draw names its transforms per record. */
+  readonly direct: number | undefined;
 }
 
 interface DrawBoundsInput {
   readonly decoration: boolean;
   readonly resource: ThreeHostResource | undefined;
   readonly geometry: DrawGeometry;
-  /** A caller's material factory may displace vertices anywhere, so its draws stay unculled. */
+  /** A caller material pads the bound by its declared `boundsPadding`, or opts every draw out of culling. */
   readonly material: ThreeResolvedMaterialBinding | undefined;
   readonly buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>;
   readonly placementTable: RetainedBuffer | undefined;
   readonly transform: TransformRealization;
   readonly transformTable: THREE.StorageInstancedBufferAttribute;
   readonly glyphStorage: Readonly<{ transforms: THREE.StorageInstancedBufferAttribute }> | undefined;
+  readonly transforms: DrawMembers['transforms'];
 }
 
 /**
- * Where a built-in draw's quads come from, or undefined when nothing provable bounds them: a caller's material, a
- * raster program this package did not write, or supplied glyph geometry. Bitmap and decoration quads are drawn exactly; pixel snapping rounds each
- * projected corner to the nearest pixel edge, which never brings a quad that lies outside a frustum plane inside it.
- * An MSDF quad never leaves its atlas cell, whatever its outline width, shadow offset or trim.
+ * Where a built-in draw's quads come from, or undefined when the draw is never culled: a material declared with
+ * `frustumCulled: false`, a raster program this package did not write (its record layout is its own), or supplied
+ * glyph geometry. Bitmap and decoration quads are drawn exactly; pixel snapping rounds each projected corner to the
+ * nearest pixel edge, which never brings a quad that lies outside a frustum plane inside it. An MSDF quad never leaves
+ * its atlas cell, whatever its outline width, shadow offset or trim. A caller material's vertex stage is trusted to
+ * move no vertex further than its declared `boundsPadding`.
  */
 export function drawBoundsSource(input: DrawBoundsInput): DrawBoundsSource | undefined {
-  if (input.material?.material !== undefined || input.geometry.kind !== 'synthetic-quad') return undefined;
+  const material = input.material?.material;
+  if (material?.frustumCulled === false || input.geometry.kind !== 'synthetic-quad') return undefined;
   const { buffers, resource } = input;
   const lanes = (id: ThreeBufferBindingId, lane: number): RecordLanes => ({ buffer: buffers.get(id)!, lane });
   const placement = (slot: RecordLanes) => ({ slot, table: input.placementTable! });
@@ -69,6 +86,11 @@ export function drawBoundsSource(input: DrawBoundsInput): DrawBoundsSource | und
       ? { indexed: { indices: input.transform.indices, table: input.transformTable } }
       : {}),
     ...(input.glyphStorage === undefined ? {} : { glyphTransforms: input.glyphStorage.transforms }),
+    padding: material?.boundsPadding ?? 0,
+    members: {
+      transforms: input.transforms,
+      direct: input.transform.kind === 'direct' ? input.transform.transformId : undefined,
+    },
   };
   if (input.decoration) {
     const rect = decorationSchema.buffers.rect.id;
@@ -103,18 +125,22 @@ export function drawBoundsSource(input: DrawBoundsInput): DrawBoundsSource | und
 }
 
 const emptySphere = Object.freeze(new THREE.Sphere(new THREE.Vector3(), -Infinity));
+/** Inside every frustum: `Sphere.applyMatrix4` keeps an infinite radius infinite, or NaN under a zero scale. */
+const unboundedSphere = Object.freeze(new THREE.Sphere(new THREE.Vector3(), Infinity));
 
 /**
  * A glyph or decoration draw whose frustum test reads a conservative bound of every quad it currently draws.
  *
  * Three's frustum test reads `boundingSphere` from the object before falling back to its geometry, so the bound lives
  * on the draw and the geometry keeps the unit quad Three sorts by. The bound is recomputed lazily on the first test
- * after anything it reads changed: a static draw costs one version comparison per buffer per test.
+ * after anything it reads changed: a static draw costs one version comparison per buffer per test. A draw that places a
+ * record of an object opted out with `frustumCulled = false` reports an unbounded sphere, so a batch with one such
+ * member is drawn whole.
  */
 export class GlyphDraw extends THREE.Mesh {
   #bounds: DrawBounds | undefined;
 
-  /** `source` undefined leaves the draw unculled: a caller material may move vertices anywhere. */
+  /** `source` undefined leaves the draw unculled: see {@link drawBoundsSource}. */
   constructor(geometry?: THREE.BufferGeometry, material?: THREE.Material, source?: DrawBoundsSource) {
     super(geometry, material);
     this.#bounds = source === undefined ? undefined : new DrawBounds(source);
@@ -152,6 +178,10 @@ class DrawBounds {
   /** The draw matrix's linear part the sphere was fitted under; translation moves a sphere exactly. */
   readonly #linear = new Float64Array(9).fill(Number.NaN);
   #empty = true;
+  /** The transform table and opt-out generation the member opt-out was read under. */
+  #memberTransforms: ReadonlyMap<number, THREE.Object3D> | undefined;
+  #memberGeneration = -1;
+  #optedOut = false;
 
   constructor(source: DrawBoundsSource) {
     this.#source = source;
@@ -166,6 +196,7 @@ class DrawBounds {
 
   sphere(draw: THREE.Mesh): THREE.Sphere {
     const recordsChanged = this.#observeRecords(draw);
+    const optedOut = this.#observeOptOut(recordsChanged);
     const table = this.#source.indexed?.table;
     const boxChanged = recordsChanged || (table !== undefined && table.version !== this.#tableVersion);
     if (boxChanged) {
@@ -175,10 +206,12 @@ class DrawBounds {
         this.#composeTransforms(table.array as Float32Array);
       }
       this.#empty = this.#box.isEmpty();
+      if (!this.#empty && this.#source.padding !== 0) this.#box.expandByScalar(this.#source.padding);
     }
     if (this.#empty) return emptySphere;
     if (observeLinearPart(draw.matrixWorld.elements, this.#linear) || boxChanged) this.#fitSphere(draw.matrixWorld);
-    return this.#sphere;
+    // The bound stays current while opted out, so opting back in needs no change to be observed.
+    return optedOut ? unboundedSphere : this.#sphere;
   }
 
   /** Re-measures the records when the run or any attribute they are read from changed since the last test. */
@@ -198,6 +231,30 @@ class DrawBounds {
     this.#recordCount = count;
     this.#measureRecords(start, count);
     return true;
+  }
+
+  /** Re-reads whether any member opts out when the records, the transform table or some scope's flag changed. */
+  #observeOptOut(recordsChanged: boolean): boolean {
+    if (!cullingOptOutObserved()) return false;
+    const { members } = this.#source;
+    const transforms = members.transforms();
+    const generation = cullingGeneration();
+    if (!recordsChanged && transforms === this.#memberTransforms && generation === this.#memberGeneration) {
+      return this.#optedOut;
+    }
+    this.#memberTransforms = transforms;
+    this.#memberGeneration = generation;
+    let optedOut = false;
+    if (members.direct !== undefined) optedOut = optsOutOfCulling(transforms.get(members.direct));
+    else {
+      for (const transform of this.#recordBoxes.keys()) {
+        if (!optsOutOfCulling(transforms.get(transform))) continue;
+        optedOut = true;
+        break;
+      }
+    }
+    this.#optedOut = optedOut;
+    return optedOut;
   }
 
   #copyDirectBox(): void {

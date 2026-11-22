@@ -51,6 +51,8 @@ interface PrepareDrawReplacementOptions {
   readonly previousDraws: readonly THREE.Mesh[];
   readonly previousKeys: readonly string[];
   readonly bindingId: (value: object) => number;
+  /** The renderer's committed transform table, read by a draw's frustum test after this replacement commits. */
+  readonly transforms: () => ReadonlyMap<number, THREE.Object3D>;
 }
 
 /** Builds one ordered Three draw-tree replacement without mutating the committed scene. */
@@ -201,6 +203,7 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
               transform,
               transformTable: context.transformAttribute,
               glyphStorage,
+              transforms: options.transforms,
             }),
           );
           trackDrawStorage(mesh, [...storage]);
