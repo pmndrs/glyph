@@ -3507,7 +3507,8 @@ mod tests {
         let slots = vec![0; initial.len()];
         // Every record moved under a new revision and full semantic dirt; its columns did not.
         let masks = vec![super::super::positioning::ALL_SEMANTIC_CHANGES; initial.len()];
-        let intervals = [0..initial.len()];
+        let whole = 0..initial.len();
+        let intervals = std::slice::from_ref(&whole);
         for (inputs, executed) in [
             (ChangedInputs::ALL, initial.len()),
             (ChangedInputs::default(), 0),
@@ -3542,7 +3543,7 @@ mod tests {
                     },
                     false,
                     2,
-                    Some(RetainedOutputScope::ChangedIntervals(&intervals, inputs)),
+                    Some(RetainedOutputScope::ChangedIntervals(intervals, inputs)),
                     true,
                 )
                 .unwrap();
