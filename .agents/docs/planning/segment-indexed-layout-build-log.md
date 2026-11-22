@@ -788,3 +788,5 @@ Updated in place; the history of each change is in the log below.
   under `semanticViews: 'measurement'`. Two oracle cases added (590); no existing reference moved.
 - Decision (Justin): port #317, #316, #314; #311 not ported. Triage of the other open PRs is in the handoff.
 - Held: compile-only storage leak; codec buffer growth across empty/revive cycles.
+
+- **Nine open questions answered (2026-11-22)**; see section 4 of the handoff. New ship-gate units: port #311, PixiJS 3D `replace`, inline-object verification. Then docs, then the quiet comparison.

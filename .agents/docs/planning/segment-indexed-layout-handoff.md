@@ -107,16 +107,22 @@ and was turned from a print into an assertion.
 - The package build writes into in-tree `rust/*/target`; make it honour `CARGO_TARGET_DIR` so agent builds can go
   to Depot scratch.
 
-## 4. Decisions waiting on Justin
+## 4. Decisions answered by Justin, 2026-11-22
 
-2. **Fetch Hind Madurai** (OFL, from the official google/fonts repository) into the adversarial font set so the
-   Tamil conjunct caret test runs instead of skipping.
-3. **Sign off the new `/core` names**: `createDecorationCodecProgram`, `decorationSchema`, `SlugBandResidency`,
-   `SLUG_RESIDENT_BAND_CURVE_WIDTH`.
-4. **Inline objects**: laid out in 0.2.0, or documented as accepted but not placed.
-5. **Caret result fields** `secondary` and `clipped`: keep or cut.
-6. **Push `feature/pixi3d`** (checkpoint `2ecb36411`, local only) or leave it local.
-7. **Disk**: remove other sessions' `/private/tmp` items and stale spike/profile worktrees on Depot.
+1. Hind Madurai fetched into the adversarial font set (OFL, google/fonts); the Tamil caret test now runs.
+2. All four new `/core` names stay public: `createDecorationCodecProgram`, `decorationSchema`,
+   `SlugBandResidency`, `SLUG_RESIDENT_BAND_CURVE_WIDTH`.
+3. Inline objects: verify that layout reserves space and positions can be read through the public API, add a
+   test, then document as supported.
+4. The caret result keeps `secondary` and `clipped`.
+5. PR #311 (fragment-safe `position`, `paragraphPosition`) is re-implemented in 0.2.0, because paragraph
+   gradients, image fills, reveal wipes and pointer effects need it.
+6. `feature/pixi3d` stays local; not pushed.
+7. Disk: fault dumps and the clean `glyph-profile-manylabel` worktree removed. Five spike worktrees
+   (`glyph-chunk-spike`, `-floor-exp`, `-throughput-spike`, `-profile-inspect`, `-profile-size`) hold uncommitted
+   experiment source and were left in place.
+8. The quiet-machine comparison runs once, after the last code change.
+9. PRs #317, #314, #316, #240 (and #311) stay open until the ship PR, which lists them as superseded.
 
 ## 5. Remaining work before ship
 
