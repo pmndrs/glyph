@@ -407,6 +407,9 @@ impl ClusterArena {
             || previous.chunk_advance_sums.len() != previous.starts.len().div_ceil(LAYOUT_CHUNK)
             || previous.advance_units.len() != previous.starts.len()
             || splice.previous_unicode.grapheme_boundaries().len() != previous.starts.len() + 1
+            // Whether a line edge may be corrected depends on every run's direction, so the kept
+            // break flags hold only while the paragraph stays left to right or not.
+            || all_ltr(new_runs) != previous.ltr
         {
             return None;
         }
