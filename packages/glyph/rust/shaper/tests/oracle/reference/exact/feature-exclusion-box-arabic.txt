@@ -30,7 +30,7 @@ step 01 insert HardBreak (1 units) at 2478 + replace 4 at 42
 class value 230 721f880b5f7505f1
 class identity 22 03e3a64e4a9902ae
 class repr 44 0c25015b67cc61cb
-class wire 1 6db2cef48d58313d
+class wire 1 b16e5e77dfd2578d
 step 02 insert Foreign (7 units) at 927
 class value 230 8c24498768382a28
 class identity 22 d8955deb5f8ddf80

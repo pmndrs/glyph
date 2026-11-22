@@ -60,4 +60,4 @@ step 07 replace 6 at 677
 class value 230 14aae7768df51494
 class identity 22 72eb3109ea2897ca
 class repr 44 7c5ab3e6f95ec7cf
-class wire 1 6d79eb2dec46f2ba
+class wire 1 849862a3d5e1d420

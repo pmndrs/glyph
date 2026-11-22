@@ -42,7 +42,7 @@ class value 300 f91fb67cecc1c8b8
 class identity 31 198db73f469cf89f
 class repr 64 b8dac8757781cc0e
 class cache 5 9671cfa50cb38fc4
-class wire 1 83c6bc4b81127915
+class wire 1 8f099d390dc0c897
 step 03 thicker
 class value 300 1c25028403602a4b
 class identity 31 637844c0022f673f
@@ -77,7 +77,7 @@ step 08 direction 2
 class value 265 da630dc4526bc584
 class identity 29 4eead0c119308396
 class repr 44 adc167d1dc144898
-class wire 1 21f589de0798dc59
+class wire 1 704d01672ab62e71
 step 09 insert Bidi (1 units) at 224
 class value 265 600b4690f63f712b
 class identity 29 4dc7096d4e6e833d

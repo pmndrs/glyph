@@ -66,7 +66,7 @@ class value 288 d9e0c9a8525ebd96
 class identity 31 c800b11d32a8268c
 class repr 64 ff2361ae7a30e17e
 class cache 5 3837f998dbcab93c
-class wire 1 39d32c50b7511c56
+class wire 1 686ffeea170810be
 step 07 opacity of the root
 class value 268 135f636a66614faa
 class identity 29 27ed76aeaa398c88

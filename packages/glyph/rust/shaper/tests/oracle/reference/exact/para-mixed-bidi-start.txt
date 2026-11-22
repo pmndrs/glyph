@@ -30,32 +30,32 @@ step 01 width 417
 class value 230 34942fa8111e3a0b
 class identity 22 f862ff07d8345a07
 class repr 44 e319f00b1cea1d19
-class wire 1 ee7e739ae4b465b5
+class wire 1 872994a10eae8e93
 step 02 width 418
 class value 230 12bc5942dab88b4b
 class identity 22 dfc5b62ec04b1154
 class repr 44 ffb2314a72fa8aec
-class wire 1 ba82c144867b1d28
+class wire 1 40f3b085a0f80533
 step 03 width 233.5
 class value 230 b09c75f11833b5e0
 class identity 22 aceb0c7c5cbfc8d4
 class repr 44 8535e6669eec827d
-class wire 1 7649e5f49833cbc4
+class wire 1 0f6ab8da7d6ede1e
 step 04 width 600
 class value 230 8dbc965fcb1dcaf3
 class identity 22 2591f88f67a34731
 class repr 44 1f74270dab3d76a2
-class wire 1 fabecdea188fa26b
+class wire 1 ed8ce944e1b7cf92
 step 05 direction 0 + width 600.0156 + flip case at 1124
 class value 230 82be01ca24cd1767
 class identity 22 a031b654d32d783c
 class repr 44 c7580c874a7f024b
-class wire 1 efd2eff9d0774b77
+class wire 1 65d805af95f99672
 step 06 add span 2278..2287 + width 600.03125 + metrics size 16 spacing 0 line 1.2 word 3 + width 807.75
 class value 230 df627266f9a58adc
 class identity 22 ab31a4f785cb182b
 class repr 44 95ee6fe9b239bb9d
-class wire 1 3c76ed1d91143390
+class wire 1 bd8bde30879184b2
 step 07 insert Mark (196 units) at 0
 class value 230 10b28d808ea98525
 class identity 22 2afca679680386ff

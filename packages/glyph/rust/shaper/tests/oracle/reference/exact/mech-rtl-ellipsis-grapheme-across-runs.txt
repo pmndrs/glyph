@@ -32,12 +32,12 @@ step 01 quote to Hebrew letter
 class value 266 412e3d501a18aea6
 class identity 24 cb361b7f1c654e3e
 class repr 61 776243d440e7a347
-class wire 1 e5b339c287663b04
+class wire 1 d0e7510639d47fd8
 step 02 restore
 class value 266 cdd86fd27a354c53
 class identity 24 efde980c249938ed
 class repr 61 4d4a6a246faa911d
-class wire 1 ea42fe8fa7881b94
+class wire 1 7aa469bfaad48543
 step 03 insert Word (4 units) at 3 + width 0 + metrics size 16 spacing 0 line 1.2 word 3
 class value 230 9c7c9d647f520e0a
 class identity 22 b09670e5105bc966

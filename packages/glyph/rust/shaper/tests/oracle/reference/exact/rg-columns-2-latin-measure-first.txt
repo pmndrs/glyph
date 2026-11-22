@@ -52,7 +52,7 @@ step 05 three columns, wider gap
 class value 233 f734ee46833ce3a0
 class identity 27 4d13ba6295ba383f
 class repr 44 8b813053367b0df1
-class wire 1 ddcf7ac574193f9c
+class wire 1 e76fefa693716a57
 step 06 one region
 class value 233 423c6c9a679f6ae4
 class identity 27 1af545bf56a2eaf2

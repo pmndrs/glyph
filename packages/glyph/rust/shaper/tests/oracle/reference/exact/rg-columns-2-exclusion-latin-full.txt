@@ -52,12 +52,12 @@ step 05 three columns, wider gap
 class value 253 673e7f9debb288aa
 class identity 29 92568f387b0914ad
 class repr 44 aed6307b5b79e394
-class wire 1 5f73ee77dc6bd5d5
+class wire 1 ece52490a7c7ab51
 step 06 one region
 class value 253 ffd73a00522013a7
 class identity 29 1e03f54452ad9771
 class repr 44 541c8dcc63147821
-class wire 1 454259ed194872d6
+class wire 1 833150701dc3b425
 step 07 the starting regions
 class value 253 0e3cd0cc2fc5b141
 class identity 29 a0a68c4026b8204a
@@ -77,4 +77,4 @@ step 10 add span 274..292
 class value 253 4610717f97c74780
 class identity 29 764c2d2e6d05bee0
 class repr 44 a61492c387e1ed0c
-class wire 1 9e6967bbf8484ecc
+class wire 1 0957950c15895857

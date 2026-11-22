@@ -35,4 +35,4 @@ step 02 restore
 class value 222 a85d8352751e09c1
 class identity 20 306158a18e6fcfae
 class repr 44 32a352801a9563d0
-class wire 1 d79ba5507f3a1dd4
+class wire 1 d00bfc11552afde1

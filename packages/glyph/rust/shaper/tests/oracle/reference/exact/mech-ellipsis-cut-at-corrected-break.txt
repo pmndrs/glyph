@@ -46,7 +46,7 @@ class value 230 027e7bd7571e4b4c
 class identity 22 23c741733d63af1d
 class repr 41 c4de3c454fd6865b
 class cache 5 1dc29a24a940d5d4
-class wire 1 944ce5839530a729
+class wire 1 b280b9131038f60e
 step 04 delete 4 at 16 + max lines 3
 class value 230 38de3eb5db8dd020
 class identity 22 b792ffc9dcef04f8

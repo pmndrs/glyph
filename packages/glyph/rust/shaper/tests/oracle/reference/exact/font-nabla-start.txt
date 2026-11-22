@@ -50,7 +50,7 @@ step 05 insert Space (1 units) at 519
 class value 230 9e9fbe40b75ae8a9
 class identity 22 f44dc172799a8b0c
 class repr 44 074f6f5400aa4e8c
-class wire 1 7ecbf08c58f87d9a
+class wire 1 8e7d260e1803cc49
 step 06 max lines 3 + insert Foreign (6 units) at 1308
 class value 230 0365897d18fd2da9
 class identity 22 030cf59d2a6444ce

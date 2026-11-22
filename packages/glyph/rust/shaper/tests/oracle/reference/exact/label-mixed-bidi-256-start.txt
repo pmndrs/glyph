@@ -30,7 +30,7 @@ step 01 insert Word (9 units) at 109 + flip case at 80 + replace 3 at 223 + alig
 class value 230 8dee97bb8136ac90
 class identity 22 9b182b7a2e2da5f7
 class repr 44 bd9fee0139458f1d
-class wire 1 b5b64146686ffbfa
+class wire 1 d6e51c6e21de097d
 step 02 insert HardBreak (199 units) at 198 + align 2
 class value 230 0a01e513b5553e7b
 class identity 22 626b9ffc69c265ed

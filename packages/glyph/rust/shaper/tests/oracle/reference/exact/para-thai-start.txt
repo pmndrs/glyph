@@ -60,4 +60,4 @@ step 07 insert HardBreak (1 units) at 1668
 class value 230 7eaece86b118cf69
 class identity 22 cf76b4cb90fe707e
 class repr 44 a4f5029733eb8e89
-class wire 1 e30fa5ad368277e8
+class wire 1 58ff1c736f08fcac

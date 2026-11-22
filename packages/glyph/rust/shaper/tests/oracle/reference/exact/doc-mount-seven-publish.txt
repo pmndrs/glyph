@@ -168,13 +168,13 @@ class value 1282 df4dc80db0edd3e5
 class identity 95 c2da7ce6aa0e84de
 class repr 302 dd0d7a69a54db58f
 class cache 8 725dae21fd26b934
-class wire 1 cc9853c51ef8d530
+class wire 1 44c0700a3f2f8f11
 step 04 paragraph 5: insert Mark (1 units) at 113 + width 0 + paragraph 1: insert Space (1 units) at 104 + insert SpacedWord (9 units) at 190 + width 420.01563 + metrics size 16 spacing 0 line 1 word 0 + paragraph 2: delete 5 at 11 + paragraph 3: align 2 + delete 1 at 126 + replace 5 at 11 + insert Word (4 units) at 101 + paragraph 4: width 437.75 + paragraph 5: replace 3 at 0 + paragraph 6: align 4 + paragraph 7: delete 2 at 0
 class value 1282 1cfca176cda68a66
 class identity 95 24f8bc8ccfc52271
 class repr 302 8911d5c3635cfeeb
 class cache 8 2440ec47399eef0b
-class wire 1 0183c35a628fb78f
+class wire 1 d47ab769301d2218
 step 05 paragraph 2: delete 7 at 62 + paragraph 1: direction 0 + paragraph 2: align 3 + paragraph 3: flip case at 66 + paragraph 4: add span 188..204 + paragraph 5: delete 60 at 110 + direction 0 + paragraph 6: add span 28..31 + paragraph 7: width 0 + paragraph 6: width 427
 class value 1282 650238be0d102a45
 class identity 95 c291f78bcc28e861

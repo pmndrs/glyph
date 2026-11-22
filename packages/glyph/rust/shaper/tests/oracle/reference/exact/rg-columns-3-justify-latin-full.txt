@@ -48,31 +48,31 @@ class value 288 481d2f0f28969d63
 class identity 31 69144f192f945617
 class repr 64 78452b15443932af
 class cache 5 52cd87d4aef771a3
-class wire 1 13af9aefa0134fef
+class wire 1 50e02510f8a1fc94
 step 04 shorter regions
 class value 288 ddc2f8e54e609e22
 class identity 31 4bcccaf151f9f2e4
 class repr 64 cf414c2af969c17c
 class cache 5 52cd87d4aef771a3
-class wire 1 9c17185be8bc3c3a
+class wire 1 23ff8144ba89234a
 step 05 three columns, wider gap
 class value 288 824ae2e916476bd6
 class identity 31 0031b7711d9232a3
 class repr 64 053c1a62847840f6
 class cache 5 8ffda01a42e2ed80
-class wire 1 47a805031e767f72
+class wire 1 02128fc445418760
 step 06 one region
 class value 288 2cdfc15a4f1a70ef
 class identity 31 8310b617a74924bb
 class repr 64 1ac85ba5b8b7ec06
 class cache 5 d7e96085f1fdf37b
-class wire 1 df6cb09611755693
+class wire 1 ddbbbd04d5c86334
 step 07 the starting regions
 class value 288 2e1c028cf841680f
 class identity 31 b634ca0ad9c0b1cc
 class repr 64 e934fde2c6b20674
 class cache 5 d7e96085f1fdf37b
-class wire 1 260c79e3ef19e414
+class wire 1 b71d5b68049fc968
 step 08 flip case at 708
 class value 288 c5f72811832f4cdd
 class identity 31 29ab01744f62e9d0
@@ -90,4 +90,4 @@ class value 288 6e169f0a56dad416
 class identity 31 eb50d04241910473
 class repr 64 2b2e60ccd53fa701
 class cache 5 192a40255fd548e6
-class wire 1 abefe92212214ab2
+class wire 1 f193ca94df9b087f

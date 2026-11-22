@@ -52,12 +52,12 @@ step 05 three columns, wider gap
 class value 233 51109a1e2f5ce3ff
 class identity 27 b9c6a116241b92ff
 class repr 44 aed6307b5b79e394
-class wire 1 ae6e3a0dad19ab6f
+class wire 1 5b7092c989d0cac4
 step 06 one region
 class value 233 8af6b36a625c194f
 class identity 27 23b4d46d1e32355a
 class repr 44 541c8dcc63147821
-class wire 1 a5f78617948e0945
+class wire 1 1410bce0edd7137c
 step 07 the starting regions
 class value 233 c53c27eedc45769c
 class identity 27 bfc4e2a2916384f8

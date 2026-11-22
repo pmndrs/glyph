@@ -51,4 +51,4 @@ step 05 width 156.25
 class value 230 a9fb722a8bfbc64a
 class identity 22 13053bb4ad5b6026
 class repr 44 fdad927247aa4399
-class wire 1 92a435237f4c3a34
+class wire 1 f0c8a936448d8e31

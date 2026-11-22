@@ -44,24 +44,24 @@ step 03 narrower measure
 class value 269 8726b8355285c43b
 class identity 29 ee5ec15a26ef32a6
 class repr 64 11d7ea7b7b277f0f
-class wire 1 ad50e7eeb65bc522
+class wire 1 54ba372af942b31f
 step 04 shorter regions
 class value 269 f53e0d33f4e7baef
 class identity 29 22ff5c53ba6c0e92
 class repr 64 4faf3615c2981982
-class wire 1 5cf7f9a413d6dbb6
+class wire 1 ce686811224cb667
 step 05 three columns, wider gap
 class value 269 d915571140c75967
 class identity 29 abf62581bf95e437
 class repr 64 abbb70f8c69ba485
-class wire 1 9eb4fb733c9279ca
+class wire 1 c8ebb9ad5d669bb5
 step 06 one region
 class value 269 10b128c9041aa228
 class identity 29 036734e5c669aad3
 class repr 64 d6f206576b32d1da
-class wire 1 d6a0f613957f14a8
+class wire 1 5c3a0ca2519aa22e
 step 07 the starting regions
 class value 269 77ccd37166104dad
 class identity 29 218ba9d24f7f3225
 class repr 64 e5455abf71ec29ee
-class wire 1 b382c035e25b0da8
+class wire 1 ecf690f834537668

@@ -52,29 +52,29 @@ step 05 three columns, wider gap
 class value 253 a3ec5964da682bcc
 class identity 29 6faed41618656a55
 class repr 44 04b85d767a78b811
-class wire 1 075fc2472a3196e9
+class wire 1 d034d992c8a6f31e
 step 06 one region
 class value 253 39cdd722b86c45de
 class identity 29 f49d35713df0ae05
 class repr 44 26d6ff327eb94353
-class wire 1 3650893f1e260bf4
+class wire 1 4793bc55fa8795e0
 step 07 the starting regions
 class value 253 d04118f06a0327cf
 class identity 29 08e7d6f7247a8aa6
 class repr 44 b7c4f93e84845980
-class wire 1 a942e44f1dcc6c64
+class wire 1 fb412330fab7adf2
 step 08 regions Boxes { boxes: [RegionBox { inline_start: 0.0, block_start: 0.0, inline_end: 291.0, block_end: 90.0 }, RegionBox { inline_start: 20.0, block_start: 100.0, inline_end: 371.0, block_end: 260.0 }, RegionBox { inline_start: 0.0, block_start: 0.0, inline_end: 0.0, block_end: 0.0 }], count: 2 } height 400 + width 599 + regions Columns { count: 2, gap: 0.0 } height 400 + add span 44..68
 class value 265 c938df18a31dd14c
 class identity 29 4b007ac9ce285fec
 class repr 44 3b96bcc8bbf16710
-class wire 1 eb463491e86f2478
+class wire 1 1d7fc8b7e94a16d7
 step 09 width 156.5
 class value 265 a5b65badb4b7dc23
 class identity 29 0430da1ade1b9b44
 class repr 44 50e8fafecfc61afe
-class wire 1 6792880515e36e27
+class wire 1 c8ca6f980693019f
 step 10 max lines 12
 class value 301 18c1d0d0d7da0d60
 class identity 31 422c54eed39e6ece
 class repr 64 f6bb8adc39391496
-class wire 1 07c8085cca4b8261
+class wire 1 7e56fc0c022d7296

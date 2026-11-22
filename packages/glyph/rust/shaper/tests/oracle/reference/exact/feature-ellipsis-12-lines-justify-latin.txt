@@ -34,7 +34,7 @@ class value 266 bbb71558f36089b2
 class identity 24 20624d0cb0f33ef2
 class repr 64 ae578357fd744865
 class cache 5 e324dcf149f1460d
-class wire 1 a88b49b731aaf896
+class wire 1 2f632d9661e32804
 step 02 add span 1632..1666 + delete 1 at 1205 + remove span 2
 class value 266 c952210dadf396ef
 class identity 24 fcf1d55553e95129

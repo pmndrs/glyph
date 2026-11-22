@@ -48,7 +48,7 @@ class value 280 867bf6b97718afb9
 class identity 29 7edbc68d1645763f
 class repr 64 36fcb656a068b62c
 class cache 5 06ed371bbb5668ae
-class wire 1 e8def81afca0820d
+class wire 1 da0f1584917146c5
 step 04 material and edit
 class value 280 496a7223b98883a4
 class identity 29 3fd6d4658ca51597
@@ -60,7 +60,7 @@ class value 280 b7bda86ddab1478e
 class identity 29 a30bd2385a093591
 class repr 64 5fa4eb449dac45d6
 class cache 5 8939a825104bb0bb
-class wire 1 3d60419c96afdf54
+class wire 1 a4bd74e57210c67a
 step 06 material off
 class value 280 9b2e88530eba4e63
 class identity 29 47f0344d42c55e07

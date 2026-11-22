@@ -60,4 +60,4 @@ step 07 insert Space (1 units) at 0 + flip case at 1252
 class value 230 f32ee356b7c9ca45
 class identity 22 d056dfbe4b06611b
 class repr 44 61d23ba90ad8cfea
-class wire 1 7ca3d2f688122e5a
+class wire 1 49a52ebdf0d34483

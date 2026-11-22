@@ -57,9 +57,9 @@ step 06 one region
 class value 213 0a0f0137faf8d19a
 class identity 25 0f74e475140f2014
 class repr 44 26d6ff327eb94353
-class wire 1 dcfbc21d6b278a4c
+class wire 1 fea969c2460eab77
 step 07 the starting regions
 class value 213 6dca8523e3b01019
 class identity 25 352f957f7e51859b
 class repr 44 bca79e8a74623c3e
-class wire 1 42689a343523a67c
+class wire 1 6cda32914d5071cf

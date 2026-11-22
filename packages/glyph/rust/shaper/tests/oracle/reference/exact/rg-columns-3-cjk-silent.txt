@@ -58,13 +58,13 @@ class value 213 13e092f4a362d02e
 class identity 25 8216d999f4528763
 class repr 41 3dffc59a576c2584
 class cache 5 e2a6ffa8aaea4804
-class wire 1 906bc96f7ecb847a
+class wire 1 691bedb636df9e97
 step 06 one region
 class value 213 275c21f119bd7242
 class identity 25 41492702fd7ef150
 class repr 41 82d4bf639d9ff4db
 class cache 5 e2a6ffa8aaea4804
-class wire 1 1733e10fcad43a43
+class wire 1 70e7f1abf42da628
 step 07 the starting regions
 class value 213 9e62b1e635fac356
 class identity 25 d02771248fc56a75

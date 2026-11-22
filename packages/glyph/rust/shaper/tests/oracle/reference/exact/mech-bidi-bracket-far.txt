@@ -30,12 +30,12 @@ step 01 open a bracket
 class value 230 91abccf2f5ab315c
 class identity 22 48c12b7076d7f5fe
 class repr 44 a5fd54260164a5aa
-class wire 1 ec6ffb68c0f2a0c3
+class wire 1 f71dd393c9e7476f
 step 02 restore
 class value 230 5f0fe09c7281178b
 class identity 22 7246648e9368b973
 class repr 44 b50ac9c0baa9c077
-class wire 1 4bbb8f58b27df57f
+class wire 1 3421d134073e11d6
 step 03 delete 5 at 323 + add span 54..66 + metrics size 16 spacing 2 line 1.2 word 0
 class value 230 b7ec56a1c4175a62
 class identity 22 a2b300d2db0344f8
@@ -50,4 +50,4 @@ step 05 replace 3 at 506
 class value 242 69c29c0f90e57e11
 class identity 22 abbed22b2c0c445a
 class repr 44 99e12170cc20168b
-class wire 1 07f8347990a2e5b2
+class wire 1 d81a2160b39a3020

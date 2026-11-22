@@ -30,9 +30,9 @@ step 01 open a bracket
 class value 230 50af9a7175b1a4ad
 class identity 22 8dee4dfe48ce27d8
 class repr 44 c44ac86576631190
-class wire 1 5effef60ab5f6e8b
+class wire 1 28a4d54f331c4718
 step 02 restore
 class value 230 9c3404f046e162f8
 class identity 22 bc9c5391af497ab5
 class repr 44 702fd6bb2cf2ecb7
-class wire 1 1d6da1a6b2c702d5
+class wire 1 33cbe9a92afd6821

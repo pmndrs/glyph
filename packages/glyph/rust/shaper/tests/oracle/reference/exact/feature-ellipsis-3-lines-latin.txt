@@ -46,4 +46,4 @@ class value 266 896ca6f3debad38b
 class identity 24 88ba242318282b71
 class repr 64 dde080712b445ded
 class cache 3 a6b54575d613eec3
-class wire 1 115c392092854f82
+class wire 1 3359f106459a8a78

@@ -34,13 +34,13 @@ class value 277 14ca282361c1ff80
 class identity 24 891e6cf02bc654cb
 class repr 61 5918668a8b38a31c
 class cache 5 2a6e943d842f2e0e
-class wire 1 f8ecf5296d670135
+class wire 1 e770b1fb18244f78
 step 02 insert Word (2 units) at 2136
 class value 277 80a7339e7b11f97a
 class identity 24 708f8d38fe40d1bb
 class repr 61 c2f63efeac8f2560
 class cache 5 ae4e5ddece00fa27
-class wire 1 8eb421297ac69bbb
+class wire 1 75a552c6ab2dd3cf
 step 03 direction 0
 class value 257 6fad0a3eae5e1f3d
 class identity 22 f067ca7b51066304

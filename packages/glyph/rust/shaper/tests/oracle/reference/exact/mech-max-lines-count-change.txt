@@ -34,7 +34,7 @@ class value 230 ba470d708a346c18
 class identity 22 a14abf6a78b4415f
 class repr 44 dc8f71cb435e1b09
 class cache 5 5d81e22640576ca3
-class wire 1 be5866f8dae88441
+class wire 1 ec4a50d8bf7abb7b
 step 02 two edits in one request, over the limit
 class value 266 c427c0123f146fe8
 class identity 24 747f5ea2aa5c62bc

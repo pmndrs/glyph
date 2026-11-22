@@ -40,4 +40,4 @@ step 03 width 607
 class value 230 7280c8f2f071c85d
 class identity 22 554ea48416738a38
 class repr 44 587ef6a00acf62b9
-class wire 1 38e8bd10019cddac
+class wire 1 797f69ea9c5bb535

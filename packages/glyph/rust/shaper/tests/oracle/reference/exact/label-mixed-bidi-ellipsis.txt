@@ -32,12 +32,12 @@ step 01 add span 13..45
 class value 266 cf3a2c32a34ecf9d
 class identity 24 a87f1994b4fcc8b0
 class repr 61 0275be5a7359712e
-class wire 1 7e04af7ad1774f30
+class wire 1 f65207c359ad2e8e
 step 02 insert Foreign (8 units) at 15 + replace 5 at 15
 class value 266 7d352cdc58a99d18
 class identity 24 5763987fcb8361a8
 class repr 61 26a3d6feb8a03c16
-class wire 1 5f8e267691483822
+class wire 1 fef35ab4e89ae937
 step 03 max lines 12
 class value 266 7d352cdc58a99d18
 class identity 24 5763987fcb8361a8

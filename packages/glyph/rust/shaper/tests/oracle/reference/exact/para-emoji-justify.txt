@@ -50,7 +50,7 @@ step 05 insert Space (191 units) at 3059
 class value 230 810ded4d29f509f0
 class identity 22 24aa713e37a01980
 class repr 44 b334cc773083d1aa
-class wire 1 965f5b180d53e693
+class wire 1 5b68344cdcbc49c9
 step 06 insert Foreign (2 units) at 2320 + insert Mark (1 units) at 3641 + add span 3740..3792
 class value 230 f0f74442d15ae091
 class identity 22 76e246d3277e0b30

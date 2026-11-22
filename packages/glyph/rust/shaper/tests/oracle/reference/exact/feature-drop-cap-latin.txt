@@ -40,7 +40,7 @@ class value 313 7466a6df627de07a
 class identity 24 051f0101a836d6cb
 class repr 64 ecdd7715be597b12
 class cache 5 0529f8665443ef13
-class wire 1 fe11b151a5ad3f6b
+class wire 1 f3ab88728676979b
 step 03 delete 2013 at 451
 class value 266 3c6263e1e6e6df24
 class identity 22 314c904d9162523c

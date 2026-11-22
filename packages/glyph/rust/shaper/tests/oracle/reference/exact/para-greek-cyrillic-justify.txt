@@ -50,7 +50,7 @@ step 05 replace 4 at 144
 class value 230 94596313e193c32d
 class identity 22 34f8f84311e2a55d
 class repr 44 f4aef3f1cfef284f
-class wire 1 afd8e1bdbcf93a2b
+class wire 1 8280c4a720ad3b8d
 step 06 
 class value 210 9204d54284139e50
 class identity 20 35107053a67b35c6

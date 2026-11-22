@@ -58,13 +58,13 @@ class value 233 fef5ba0055518d74
 class identity 27 84a54bd335e30f25
 class repr 41 3dffc59a576c2584
 class cache 5 25ed881d012485b5
-class wire 1 906bc96f7ecb847a
+class wire 1 691bedb636df9e97
 step 06 one region
 class value 233 3c0efcd03d25718f
 class identity 27 b8de7f20ef91808b
 class repr 41 82d4bf639d9ff4db
 class cache 5 25ed881d012485b5
-class wire 1 1733e10fcad43a43
+class wire 1 70e7f1abf42da628
 step 07 the starting regions
 class value 233 9d2d0bc87a56caed
 class identity 27 a7356b18c8b578ee

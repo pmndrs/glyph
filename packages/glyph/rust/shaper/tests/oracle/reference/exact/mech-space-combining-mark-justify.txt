@@ -30,9 +30,9 @@ step 01 mark a plain space
 class value 230 9239a5ca8e58492d
 class identity 22 b4b85f98cf44e654
 class repr 41 e088d0937a4298a6
-class wire 1 ae8d3aa5794cfc65
+class wire 1 fe2ded23de8f77ed
 step 02 restore
 class value 230 c5005294eb1f18e1
 class identity 22 8247781ade7e8467
 class repr 41 01664a7c40ec4505
-class wire 1 c51e706c20acd74b
+class wire 1 411d929a168ee6d1

@@ -35,7 +35,7 @@ step 02 width 418
 class value 230 cfdb54b38529d626
 class identity 22 d6e530d3c3693f82
 class repr 44 f8347eba1f4b7506
-class wire 1 070d4d1e16d686a9
+class wire 1 590594239e88a65c
 step 03 width 233.5
 class value 230 b1dda8430eb05636
 class identity 22 13dc2a4634b24b0e
@@ -50,12 +50,12 @@ step 05 insert Space (1 units) at 825
 class value 230 5102c33259ed8c4b
 class identity 22 ec2d6423dd3ba45c
 class repr 44 5e10cb0f4fbade8b
-class wire 1 0545ded1bbcb5542
+class wire 1 2e92bdec2236c108
 step 06 replace 3 at 56 + delete 8 at 785
 class value 230 8d2cd3ffa338dbb6
 class identity 22 f20a07bb514c7ce8
 class repr 44 a819370ff25d0f26
-class wire 1 15068a185e6b26c8
+class wire 1 d1269cd790a5beb5
 step 07 delete 5 at 360 + max lines 3 + direction 2
 class value 266 64321c15c11ad90e
 class identity 24 ec0065583a2b2acd

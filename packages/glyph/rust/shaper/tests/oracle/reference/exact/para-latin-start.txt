@@ -61,10 +61,10 @@ step 06 width 74 + insert Word (6 units) at 2248 + insert SpacedWord (11 units) 
 class value 230 e428577831489af4
 class identity 22 1d06ea7e3dd24138
 class repr 44 9764dedebbf8883d
-class wire 1 90c0478ccf86a47a
+class wire 1 42115bc5a739f9d9
 step 07 delete 6 at 1425 + insert Word (7 units) at 2475 + replace 3 at 745
 class value 265 a71c5671aca8612c
 class identity 24 c47ca4efa172fe8a
 class repr 64 4b8a5ed54723a7ec
 class cache 5 787202c1119ef68b
-class wire 1 eadb524c89990f5f
+class wire 1 b7cea21281642444

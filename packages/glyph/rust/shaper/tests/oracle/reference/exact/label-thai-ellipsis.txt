@@ -42,4 +42,4 @@ step 03 replace 4 at 267
 class value 242 e65f6e1f29ab531a
 class identity 22 8fac99b7a813d408
 class repr 44 52aae716376fe17d
-class wire 1 289f3a69bc3932a1
+class wire 1 7e44ecbcdc06c3c4

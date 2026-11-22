@@ -30,12 +30,12 @@ step 01 prepend a Hebrew letter
 class value 230 7f6d8e5353272808
 class identity 22 30a4e5cf8e9936f1
 class repr 41 9ee679fe83d8b399
-class wire 1 17759dab6353e4a4
+class wire 1 b2fefcdf03f2dda4
 step 02 restore
 class value 230 b3b1c53a7ac3a699
 class identity 22 35d5f26044fb005a
 class repr 41 be648363a29340fe
-class wire 1 feaf4548297fa3ee
+class wire 1 1f8437e5c84056a1
 step 03 delete 2 at 8
 class value 230 2082699d046d6172
 class identity 22 0b811831542b11e5
@@ -50,4 +50,4 @@ step 05 flip case at 188
 class value 230 e37fc1e0e0f2485e
 class identity 22 d6b4b9076b6a6cc8
 class repr 44 8715d2982a48ab6e
-class wire 1 d57bfc1f0ef30e2e
+class wire 1 89361c6f5042ba9f

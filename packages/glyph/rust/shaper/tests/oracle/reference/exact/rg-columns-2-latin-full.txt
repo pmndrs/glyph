@@ -52,7 +52,7 @@ step 05 three columns, wider gap
 class value 253 15ab7e819fc3d141
 class identity 29 c26dd3ef1bda93ee
 class repr 44 8b813053367b0df1
-class wire 1 abca1c9391c7e659
+class wire 1 775089649ec23c98
 step 06 one region
 class value 253 77da22697cdbe2f6
 class identity 29 28cdbc1e7075c999
@@ -67,7 +67,7 @@ step 08 regions Single height 200 + delete 5 at 549
 class value 253 5a1ad4782f224edd
 class identity 29 c2c9a2d2a729b82d
 class repr 44 62990f968686db8e
-class wire 1 968cfd99531f7306
+class wire 1 1c0659e33d29588e
 step 09 width 567
 class value 253 bccb9a71c40ff4a5
 class identity 29 1b1a6bda2222caf2

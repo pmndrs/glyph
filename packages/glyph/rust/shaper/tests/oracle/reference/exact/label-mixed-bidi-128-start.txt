@@ -30,7 +30,7 @@ step 01 align 3 + delete 6 at 10
 class value 230 c4480bda62e8aa76
 class identity 22 f38356954cc9c995
 class repr 44 73a3c349163d5c9f
-class wire 1 2394c2bc8486f39e
+class wire 1 06624f60905c5a23
 step 02 replace 3 at 43
 class value 230 fa8b9fe31eccd9df
 class identity 22 0bdfe557e517f059

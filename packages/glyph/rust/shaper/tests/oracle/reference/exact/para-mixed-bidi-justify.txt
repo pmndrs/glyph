@@ -30,34 +30,34 @@ step 01 width 417
 class value 230 e18221dd8c55627b
 class identity 22 f393b181348f47b2
 class repr 44 46f70dee6db779b4
-class wire 1 84ac250f3e2d7b72
+class wire 1 8e7c4075ea0fd795
 step 02 width 418
 class value 230 1e4c6775a47e1945
 class identity 22 4a0cbd3a373244c7
 class repr 44 c6f1140d86f2da15
-class wire 1 271e2dde7003b347
+class wire 1 b9f14bd2c7ad4705
 step 03 width 233.5
 class value 230 0ba4b5155829c6e3
 class identity 22 a127694aa04af4ef
 class repr 44 dd1e283c2b7d34f1
-class wire 1 a4e555fc92725051
+class wire 1 36ffa1471aea25a1
 step 04 width 600
 class value 230 c37fcc12b3ab3640
 class identity 22 7216c2ebe89aad6d
 class repr 44 c2063d009f2c5613
-class wire 1 cdda0fc381e64c63
+class wire 1 809ae8b0fbf02426
 step 05 delete 1 at 1434
 class value 230 f22ef315d828b80c
 class identity 22 d969a7ecf3beaead
 class repr 44 927fd0941ea48712
-class wire 1 345f5e6798522dce
+class wire 1 aba783f03e5f14e8
 step 06 width 634.75 + insert Mark (1 units) at 2286
 class value 230 657d6fc53774fd28
 class identity 22 75d7ad0cb8415639
 class repr 44 89da544e1678eb82
-class wire 1 cf52ba2804b414a8
+class wire 1 c510603191c9903c
 step 07 insert HardBreak (1 units) at 846
 class value 230 027e93b3a8cf6041
 class identity 22 21d4ed5bd957048e
 class repr 44 458891c32828738c
-class wire 1 c272ed6a96790d4c
+class wire 1 26f2e9d4b96e456b

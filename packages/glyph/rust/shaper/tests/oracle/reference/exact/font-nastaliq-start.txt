@@ -35,7 +35,7 @@ step 02 width 418
 class value 230 9815c7db5ba329d4
 class identity 22 05e0c80ccc715402
 class repr 44 8a80280de4d48584
-class wire 1 201e18e6673609ed
+class wire 1 6a98798b02e9399b
 step 03 width 233.5
 class value 230 0cc336f4e0c80c6e
 class identity 22 ef42f338eb1d9dcc
@@ -45,7 +45,7 @@ step 04 width 600
 class value 230 28d892cd5ca1b44a
 class identity 22 839b0e11d9755372
 class repr 44 f00c10aaef61cbb4
-class wire 1 0b5e8977e3083293
+class wire 1 6cf0bedc5f6e7c8e
 step 05 insert SpacedWord (164 units) at 976
 class value 230 5734067bce47c318
 class identity 22 d900f5cb759509a8
@@ -60,4 +60,4 @@ step 07 replace 2 at 0 + delete 3 at 2447 + align 4 + align 4
 class value 230 2d2561ea6b630219
 class identity 22 64258aa1a3e67f39
 class repr 44 3bde3580146e2be0
-class wire 1 79f902bbe2ae65af
+class wire 1 7dd9fb2b351db3f8

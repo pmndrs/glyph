@@ -109,7 +109,7 @@ class value 824 52e7abd61153cd98
 class identity 66 8fc9a029420d017e
 class repr 193 28c364bc196c28b0
 class cache 5 72ec9ccf70f4b2d6
-class wire 1 c8342c7a54f17c01
+class wire 1 686995550b57347f
 step 04 move paragraph 1 last
 class value 804 510590dfe3cad7dc
 class identity 64 010bbadebbaecfea
@@ -146,7 +146,7 @@ step 10 paragraph 5: insert Bidi (1 units) at 194
 class value 769 badd51b527680d68
 class identity 62 4ac5ac6bf0443f31
 class repr 173 d7caeda334bbc57e
-class wire 1 78f3a7ff11499e9a
+class wire 1 d1da36224d6bed73
 step 11 paragraph 6: width 607 + replace 1 at 26 + insert Word (6 units) at 0 + replace 2 at 78 + add paragraph 7 + paragraph 1: width 672.75 + paragraph 4: width 419 + paragraph 5: direction 1 + paragraph 6: metrics size 16 spacing 0 line 1.2 word 3 + delete 2 at 0 + add span 47..61 + direction 0 + paragraph 7: align 2
 class value 940 b87bf9b390b60f15
 class identity 73 ccadcb2ad939bcb8

@@ -45,9 +45,9 @@ step 04 align 4 + insert Foreign (4 units) at 180 + add span 793..795
 class value 242 bb3155f43c1e0797
 class identity 22 008beae63e92a74f
 class repr 44 80821e2b72887e7b
-class wire 1 941ab3dc843adc2d
+class wire 1 b1d834d4343720cd
 step 05 delete 7 at 638
 class value 242 afdcc26fc6326fb2
 class identity 22 2a521abd910e0dff
 class repr 44 eb5922583143a0f3
-class wire 1 f9913d2c18ed8820
+class wire 1 758b51bb2d471838

@@ -33,13 +33,13 @@ step 01 one Arabic letter in paragraph two
 class value 230 a6e9bf7c7d83ede8
 class identity 22 2e39f31a96bad163
 class repr 44 1231ece2c565a9cd
-class wire 1 7559ab7a0de0af68
+class wire 1 9c754fc7775a24c0
 step 02 restore
 class value 265 5f88738a309b762a
 class identity 24 71b0626ae6537081
 class repr 64 bcd790e042d19d68
 class cache 5 8aa735c8a2972aa1
-class wire 1 c0072fafeb7454c7
+class wire 1 4001ed0bc5842785
 step 03 insert HardBreak (1 units) at 320 + insert Word (8 units) at 68 + replace 4 at 343
 class value 265 25a63f23964f5485
 class identity 24 e9e48cea68af4121

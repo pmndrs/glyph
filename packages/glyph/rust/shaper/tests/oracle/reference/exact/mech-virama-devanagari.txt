@@ -45,9 +45,9 @@ step 04 delete 4 at 383 + width 382.75 + insert HardBreak (1 units) at 205
 class value 266 7d295776c6f7f248
 class identity 24 af430e3a6bcb5587
 class repr 64 0326fd83a73a4d21
-class wire 1 2b84a12f6ec33e0e
+class wire 1 bf91b7d2db3def0f
 step 05 width 349.75
 class value 266 7519a7e17c1cfd8d
 class identity 24 76f8d92dcfc8811d
 class repr 64 81baf3c1811ac0b7
-class wire 1 39225c39c0e42273
+class wire 1 2280e818cfdbcb7d

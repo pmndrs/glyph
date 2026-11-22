@@ -53,4 +53,4 @@ step 05 paragraph 1: insert Word (1 units) at 325 + paragraph 2: insert Word (3 
 class value 451 69ed803922b5c2b0
 class identity 40 0ac849d9e6faba7e
 class repr 88 1bbbc36a2ff33c47
-class wire 1 cadb5deaf3ac5b14
+class wire 1 dbbad229c1e48b9f

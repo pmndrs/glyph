@@ -35,7 +35,7 @@ step 02 width 418
 class value 230 9fea47f87f36bb30
 class identity 22 754de768e82518e3
 class repr 44 35df4cdb32ed98e2
-class wire 1 8289e1032553c8d9
+class wire 1 5538401466f87368
 step 03 width 233.5
 class value 230 10eebfdf0dc03d0c
 class identity 22 f1c63996100578fe

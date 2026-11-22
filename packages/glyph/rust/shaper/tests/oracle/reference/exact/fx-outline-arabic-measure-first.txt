@@ -57,4 +57,4 @@ step 06 outline on with width
 class value 233 233e80d30453d6d1
 class identity 27 c5b19f56e3d70a44
 class repr 44 90c3103dd644092e
-class wire 1 2c2cbc406ac78413
+class wire 1 e91b9c258fc9b3cb
