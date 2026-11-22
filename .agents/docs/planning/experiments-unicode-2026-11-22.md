@@ -204,3 +204,23 @@ Typing at the end is unchanged: that row does not reach the splice, and why is t
 Verification on `c7867e00f`: native and wasm oracle, full tier, 592 cases equal, 54,720 differential requests and 0
 runs with an unlisted divergence, no reference re-frozen; `cargo test --features oracle` (573 library tests and every
 other target, the conformance suites among them) and `pnpm --filter @pmndrs/glyph test` passed.
+
+### Typing at the end, right-to-left runs and several edits
+
+- **Typing at the end** missed the splice: it checks that style segments and shaping runs are the previous ones
+  moved by the edit, and it mapped an insertion point only to the side before it, while the typed units join the
+  segment or run that ends there. Fixed (`536085be2`). Browser, Latin 15k Inter, three A/B rounds against `main`,
+  load average 3–6: type-end 9.44 → 4.64 ms (0.49, was 0.54), mutate-and-measure 1.47 → 1.02 ms; insert-middle
+  0.61, delete-middle 0.61, paste-middle 0.59.
+- **Right-to-left runs** already splice whenever the incremental shape stage reshapes one run; run-local geometry
+  now also keeps the whole chunks a reversed run visits before the rebuilt clusters (`20528e989`). In the stage
+  bench, the Arabic delete is spliced (cluster work about 90 µs native against 440 for the full path). The Arabic
+  insert is not: the shape stage declines to reshape one run (`incremental_shape_source_run` is `None`), so it
+  reshapes the whole paragraph and the cluster stage takes the full build.
+- **Several edits** (`three_range`) are one bounding edit across many shaping runs, which the shape stage also
+  declines, and reshaping dominates that step. Both are the shape stage's to lift; the splice would follow a
+  reshape scoped to several runs with one window per run.
+
+Verification on `20528e989`: native and wasm oracle, full tier, 592 cases equal, 0 runs with an unlisted
+divergence, no reference re-frozen; `cargo test --features oracle`, `pnpm --filter @pmndrs/glyph test` and
+`cargo clippy --features oracle --all-targets -- -D warnings` passed.

@@ -46,16 +46,13 @@ pub(crate) struct SourceRunSplice<'a> {
 const BREAK_BITS: u8 = CLUSTER_REQUIRED_BREAK | CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION;
 
 impl SourceRunSplice<'_> {
-    /// A previous text offset in the edited text; `None` inside the replaced units.
-    fn map(&self, offset: u32, delta: i64) -> Option<u32> {
-        let offset_usize = offset as usize;
-        if offset_usize <= self.edit_start {
-            Some(offset)
-        } else if offset_usize >= self.old_end {
-            u32::try_from(i64::from(offset) + delta).ok()
-        } else {
-            None
-        }
+    /// Whether previous text offset `old` became `new`: offsets before the replaced units
+    /// stay, offsets after them move by `delta`, and an insertion point (an edit that removed
+    /// nothing) is both, since the inserted units join the segment on either side of it.
+    fn moved(&self, old: u32, new: u32, delta: i64) -> bool {
+        let old_usize = old as usize;
+        let after = i64::from(old) + delta == i64::from(new);
+        (old_usize <= self.edit_start && old == new) || (old_usize >= self.old_end && after)
     }
 }
 
@@ -348,14 +345,14 @@ impl ClusterArena {
         {
             return None;
         }
-        let map = |offset: u32| splice.map(offset, text_delta);
+        let moved = |old: u32, new: u32| splice.moved(old, new, text_delta);
         // Styles and shaping runs outside the edit are the previous ones, moved.
         let segments_moved = |new: &[StyleSegment], old: &[StyleSegment]| {
             new.len() == old.len()
                 && new.iter().zip(old).all(|(new, old)| {
                     new.style == old.style
-                        && map(old.text_start) == Some(new.text_start)
-                        && map(old.text_end) == Some(new.text_end)
+                        && moved(old.text_start, new.text_start)
+                        && moved(old.text_end, new.text_end)
                 })
         };
         if !segments_moved(input.styles, splice.previous_styles)
@@ -370,8 +367,8 @@ impl ClusterArena {
                         text_end: new.text_end,
                         ..*old
                     } == *new
-                        && map(old.text_start) == Some(new.text_start)
-                        && map(old.text_end) == Some(new.text_end)
+                        && moved(old.text_start, new.text_start)
+                        && moved(old.text_end, new.text_end)
                 })
         {
             return None;
@@ -399,7 +396,7 @@ impl ClusterArena {
             || !boundaries[end..boundaries.len() - 1]
                 .iter()
                 .zip(&previous.starts[old_end_cluster..])
-                .all(|(new, old)| map(*old) == Some(*new))
+                .all(|(new, old)| i64::from(*old) + text_delta == i64::from(*new))
         {
             return None;
         }
