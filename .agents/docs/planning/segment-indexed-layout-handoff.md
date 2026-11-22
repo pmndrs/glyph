@@ -1,7 +1,7 @@
 ---
 type: Plan
 title: 'Layout refactor: handoff and remaining plans'
-description: 'Where the layout refactor stands at sil-green-21 plus the staging merge, what is left before ship, and a plan for every remaining unit.'
+description: 'Where the layout refactor stands at sil-green-22, what is left before ship, and a plan for every remaining unit.'
 status: draft
 generated:
   by: anthropic/claude-fable-5-2
@@ -69,7 +69,7 @@ the [build log](segment-indexed-layout-build-log.md), the [branch map](segment-i
 ## 3. `sil-green-22`: faults plus editing
 
 Merged into the integration branch on Justin's word (2026-11-21), tagged `sil-green-22` and pushed. The lane and
-staging branches and worktrees are deleted. Verification ran on the staging tree; the merge added only docs.
+branches and worktrees are deleted. There is one branch: the integration branch.
 
 **What the re-freeze changed**
 
@@ -79,7 +79,7 @@ staging branches and worktrees are deleted. Verification ran on the staging tree
   Reference set `52e6502a494f3da2`.
 - Full oracle after both: 588 equal, 0 unlisted divergences, natively and in wasm.
 
-**Verification on the staging tree, all passing:** `@pmndrs/glyph` tests (1,329 integration tests, none skipped),
+**Verification, all passing:** `@pmndrs/glyph` tests (1,329 integration tests, none skipped),
 the shaper's cargo tests including editing, `@pmndrs/glyph-pixi3d` check, PixiJS 3D parity, TypeGPU parity, both
 bitmap proofs, the TypeGPU live check, and `pnpm check`. Wasm is 647,666 bytes gzip.
 
@@ -122,8 +122,6 @@ and was turned from a print into an assertion.
 
 Each unit is one lane, one worktree, one branch (`experiments/sil-<lane>`), merged only after the full oracle
 tier (native and wasm) and the browser verification pass on the integration tree after a clean rebuild.
-
-### S1. Land staging as `sil-green-22` — done
 
 ### S2. PixiJS 3D `replace` — Opus, small
 
