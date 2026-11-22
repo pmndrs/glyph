@@ -3,10 +3,11 @@
 //! Preparation can run several times between publications: once per read, then once in the
 //! frame's batch. Each run knows only its own delta, so the class and the dirty intervals are
 //! accumulated here and cleared when a publication consumes the paragraph. Publication reads the
-//! accumulated value from `ParagraphState::change_since_publication`; gather does not consume it
-//! yet.
+//! accumulated value from `ParagraphState::change_since_publication`; gather consumes
+//! `glyph_rows` to leave the columns of unchanged glyph rows alone.
 
 use super::{EngineError, ParagraphState, TextEngine};
+use crate::engine::codec_gather::RowChange;
 
 /// The widest kind of change a paragraph accumulated, ordered from cheapest to republish.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -83,6 +84,11 @@ pub(crate) struct ParagraphChange {
     pub class: ChangeClass,
     pub units: DirtyInterval,
     pub lines: DirtyInterval,
+    /// A stage that authors what a paragraph-run glyph projects was staged: text, Unicode, bidi,
+    /// styles, shaping runs, shaping or clusters. While it is clear, a glyph that keeps its
+    /// stable identity keeps its style, its binding selection and its run-local geometry, and
+    /// only its line and placement can differ.
+    pub glyph_rows: bool,
 }
 
 impl ParagraphChange {
@@ -91,6 +97,7 @@ impl ParagraphChange {
             class: self.class.max(other.class),
             units: self.units.join(other.units),
             lines: self.lines.join(other.lines),
+            glyph_rows: self.glyph_rows || other.glyph_rows,
         }
     }
 }
@@ -103,6 +110,13 @@ impl ParagraphState {
             class,
             units: self.staged_units(class),
             lines: self.staged_lines(class),
+            glyph_rows: self.text.is_prepared()
+                || self.unicode.is_prepared()
+                || self.bidi.is_prepared()
+                || self.styles.is_prepared()
+                || self.shaping_runs.is_prepared()
+                || self.shape.is_prepared()
+                || self.clusters.is_prepared(),
         }
     }
 
@@ -173,6 +187,17 @@ impl ParagraphState {
     /// Folds the staged preparation into what publication has yet to consume.
     pub(super) fn accumulate_staged_change(&mut self) {
         self.change_since_publication = self.change_since_publication.join(self.staged_change());
+    }
+}
+
+impl ParagraphState {
+    /// What the paragraph's gathered rows can differ in from the rows it last published.
+    pub(super) fn row_change_since_publication(&self) -> RowChange {
+        if self.change_since_publication.glyph_rows {
+            RowChange::Any
+        } else {
+            RowChange::Placement
+        }
     }
 }
 

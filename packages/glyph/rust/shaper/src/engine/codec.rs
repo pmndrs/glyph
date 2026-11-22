@@ -416,6 +416,31 @@ impl ValidatedCodec {
         Some(&self.execution.get(index)?.buffer_dependency_masks)
     }
 
+    /// The buffers of a program that read none of the given inputs, one bit per buffer.
+    pub(crate) fn buffers_without_inputs(
+        &self,
+        capability_set: CapabilitySetId,
+        technique: TechniqueId,
+        variant: u16,
+        f32_inputs: u32,
+        u32_inputs: u32,
+    ) -> Option<u32> {
+        let index = program_index(&self.programs, capability_set, technique, variant)?;
+        let execution = self.execution.get(index)?;
+        Some(
+            execution
+                .buffer_f32_input_masks
+                .iter()
+                .zip(&execution.buffer_u32_input_masks)
+                .enumerate()
+                .fold(0_u32, |buffers, (buffer, (f32_mask, u32_mask))| {
+                    buffers
+                        | (u32::from(f32_mask & f32_inputs == 0 && u32_mask & u32_inputs == 0)
+                            << buffer)
+                }),
+        )
+    }
+
     pub(crate) fn input_masks_for_changes(
         &self,
         capability_set: CapabilitySetId,

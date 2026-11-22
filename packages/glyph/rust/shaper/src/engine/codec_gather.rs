@@ -31,7 +31,7 @@ use super::{
 
 mod columns;
 
-use columns::{CHUNK, ColumnPlan, RowSource, Rows, SourceChunk};
+use columns::{CHUNK, ColumnPlan, Lanes, RowSource, Rows, SourceChunk};
 
 const POSITION_ONLY_CHANGES: u16 =
     (1 << 0) | (1 << 1) | (1 << 6) | (1 << 7) | SEMANTIC_PLACEMENT_SLOT_CHANGE;
@@ -369,6 +369,21 @@ impl DecorationPass {
 struct GatherSource {
     stable_id: u32,
     selection: u32,
+    /// The row was read from the paragraph's own runs. A boundary glyph can carry the
+    /// identity of the run glyph it stands in for with another shape, so an equal identity
+    /// names an unchanged glyph row only between two rows that both say this.
+    paragraph_run: bool,
+}
+
+/// What the glyph rows of a retained owner can differ in from the rows it last published.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RowChange {
+    /// Anything: every declared input is projected and compared.
+    Any,
+    /// Line and placement only. No stage that authors a paragraph-run glyph's style, binding
+    /// selection or run-local geometry ran, so a row that keeps its stable identity keeps
+    /// every input those decide.
+    Placement,
 }
 
 #[derive(Clone)]
@@ -376,6 +391,23 @@ pub(crate) struct RetainedGatherOwner<'a> {
     range: GatherRange,
     input: GatherInput<'a>,
     intervals: Option<&'a [Range<usize>]>,
+    rows: RowChange,
+}
+
+/// The codec inputs a retained gather changed in any record, one bit per field. A buffer
+/// that reads none of them keeps its bytes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct ChangedInputs {
+    pub(crate) f32_fields: u32,
+    pub(crate) u32_fields: u32,
+}
+
+impl ChangedInputs {
+    /// Every input, from a writer that did not compare its columns with the accepted lanes.
+    pub(crate) const ALL: Self = Self {
+        f32_fields: u32::MAX,
+        u32_fields: u32::MAX,
+    };
 }
 
 impl<'a> RetainedGatherOwner<'a> {
@@ -398,7 +430,15 @@ impl<'a> RetainedGatherOwner<'a> {
                 copied_placement_segments: None,
             }),
             intervals,
+            rows: RowChange::Any,
         }
+    }
+
+    /// Declares what the owner's rows can differ in; the caller proves it from the stages
+    /// that ran since the owner last published.
+    pub(crate) fn with_row_change(mut self, rows: RowChange) -> Self {
+        self.rows = rows;
+        self
     }
 
     pub(crate) fn inline(
@@ -418,6 +458,7 @@ impl<'a> RetainedGatherOwner<'a> {
                 copied_placement_segments: None,
             }),
             intervals,
+            rows: RowChange::Any,
         }
     }
 
@@ -594,6 +635,7 @@ impl GatherSource {
         Self {
             stable_id,
             selection: selected.map_or(u32::MAX, selection_key),
+            paragraph_run: false,
         }
     }
 
@@ -632,6 +674,9 @@ pub struct CodecGatherWorkspace {
     correspondence: Vec<GatherCorrespondence>,
     retained_output_intervals: bool,
     bounds_changed: bool,
+    /// Inputs the current retained gather changed. A writer that does not compare a column
+    /// against the accepted lane declares every input changed.
+    changed_inputs: ChangedInputs,
     f32_fields: Vec<AlignedField<f32>>,
     u32_fields: Vec<AlignedField<u32>>,
     retained_cursor: usize,
@@ -838,6 +883,11 @@ impl CodecGatherWorkspace {
                 .all(|field| field.len == retained_len);
         self.retained_output_intervals = retained;
         self.bounds_changed = !retained;
+        self.changed_inputs = if retained {
+            ChangedInputs::default()
+        } else {
+            ChangedInputs::ALL
+        };
         if retained {
             for range in self.dirty_mask_ranges.drain(..) {
                 self.semantic_change_masks[range].fill(0);
@@ -862,6 +912,26 @@ impl CodecGatherWorkspace {
         capability_set: CapabilitySetId,
         input: impl Into<GatherInput<'a>>,
         source_intervals: Option<&[Range<usize>]>,
+        binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
+    ) -> Result<RetainedGather, GatherError> {
+        self.append_retained_rows(
+            codec,
+            capability_set,
+            input,
+            source_intervals,
+            RowChange::Any,
+            binding_for_font,
+        )
+    }
+
+    /// Retains the owner that starts at the cursor, whose rows can differ as `rows` says.
+    pub(crate) fn append_retained_rows<'a, 'binding>(
+        &mut self,
+        codec: &ValidatedCodec,
+        capability_set: CapabilitySetId,
+        input: impl Into<GatherInput<'a>>,
+        source_intervals: Option<&[Range<usize>]>,
+        rows: RowChange,
         mut binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
     ) -> Result<RetainedGather, GatherError> {
         let input = input.into();
@@ -888,6 +958,7 @@ impl CodecGatherWorkspace {
             },
             input,
             intervals: source_intervals,
+            rows,
         };
         match self.append_retained_stream(
             codec,
@@ -1134,6 +1205,10 @@ impl CodecGatherWorkspace {
             state.input_plan = None;
             let retained_count = owner.range.source_count().min(source_count);
             let mut rows = RowSource::new(owner.input);
+            // Only a paragraph-run glyph is covered by the declaration; the first chunk that
+            // cannot use it returns the rest of the owner to the full comparison.
+            let mut placement_only = owner.rows == RowChange::Placement
+                && matches!(owner.input, GatherInput::Projected(_));
             for range in intervals {
                 if range.start > range.end || range.end > source_count {
                     return Err(GatherError::InvalidSemanticShape);
@@ -1151,6 +1226,7 @@ impl CodecGatherWorkspace {
                     owner.input.transform_id(),
                     rows,
                     range,
+                    &mut placement_only,
                     &mut state,
                     &mut bound,
                     binding_for_font,
@@ -1214,6 +1290,7 @@ impl CodecGatherWorkspace {
         transform_id: u32,
         rows: &mut RowSource<'_>,
         range: Range<usize>,
+        placement_only: &mut bool,
         state: &mut RetainedGatherCursor<'codec, 'binding>,
         bound: &mut Option<ColumnBinding<'codec, 'binding>>,
         binding_for_font: &mut BindingLookup<'_, 'binding>,
@@ -1221,11 +1298,50 @@ impl CodecGatherWorkspace {
     ) -> Result<(), GatherError> {
         let mut cursor = range.start;
         while cursor < range.end {
-            rows.fill(&mut scratch.chunk, cursor, range.end - cursor)?;
-            let len = scratch.chunk.len;
-            if len == 0 {
+            // A test build reads every lane, so that it can hold the declaration to the
+            // inputs a placed chunk does not compare.
+            let lanes = if *placement_only && !cfg!(test) {
+                Lanes::Placed
+            } else {
+                Lanes::All
+            };
+            rows.fill(&mut scratch.chunk, cursor, range.end - cursor, lanes)?;
+            if scratch.chunk.len == 0 {
                 return Err(GatherError::SourceFieldMissing);
             }
+            if *placement_only {
+                if let Some(selected) = self.pair_placed_chunk(transform_id, state, scratch) {
+                    let len = scratch.chunk.len;
+                    if selected != 0 {
+                        let bound = ColumnBinding::resolve(
+                            bound,
+                            scratch.chunk.binding_handle,
+                            binding_for_font,
+                        )?;
+                        #[cfg(test)]
+                        scratch.chunk.select(bound.binding);
+                        let plan = bound.plan(codec, capability_set)?;
+                        self.compare_placement_columns(
+                            plan,
+                            state.record_cursor,
+                            selected,
+                            scratch,
+                        )?;
+                        self.adopt_retained_changes(state.record_cursor, selected, scratch, lanes)?;
+                    }
+                    #[cfg(test)]
+                    super::work_attribution::record(|work| work.gather_glyph_visits += len);
+                    state.source_cursor += len;
+                    state.record_cursor += selected;
+                    cursor += len;
+                    continue;
+                }
+                *placement_only = false;
+                if lanes == Lanes::Placed {
+                    rows.fill(&mut scratch.chunk, cursor, range.end - cursor, Lanes::All)?;
+                }
+            }
+            let len = scratch.chunk.len;
             let bound =
                 ColumnBinding::resolve(bound, scratch.chunk.binding_handle, binding_for_font)?;
             scratch.chunk.select(bound.binding);
@@ -1244,7 +1360,7 @@ impl CodecGatherWorkspace {
             if selected != 0 {
                 let plan = bound.plan(codec, capability_set)?;
                 self.compare_retained_columns(plan, state.record_cursor, selected, scratch)?;
-                self.adopt_retained_changes(state.record_cursor, selected, scratch)?;
+                self.adopt_retained_changes(state.record_cursor, selected, scratch, Lanes::All)?;
             }
             self.stage_source_identities(state.source_cursor, replaced, &scratch.chunk)?;
             state.source_cursor += accepted;
@@ -1284,10 +1400,14 @@ impl CodecGatherWorkspace {
                 break;
             }
             let identity_changed = previous.stable_id != chunk.stable_id[index % CHUNK];
+            // The source row follows a glyph that keeps its identity but is now read from
+            // the other shape.
+            let source_changed = previous.paragraph_run != chunk.paragraph_run(index);
             if !is_selected {
                 if identity_changed {
                     break;
                 }
+                replaced |= u64::from(source_changed) << (index % CHUNK);
                 accepted += 1;
                 continue;
             }
@@ -1310,11 +1430,121 @@ impl CodecGatherWorkspace {
                 break;
             }
             scratch.rows[selected % CHUNK] = index as u8;
-            replaced |= u64::from(identity_changed) << (index % CHUNK);
+            replaced |= u64::from(identity_changed || source_changed) << (index % CHUNK);
             selected += 1;
             accepted += 1;
         }
         Ok((accepted, selected, replaced))
+    }
+
+    /// Pairs a chunk whose owner declared [`RowChange::Placement`] with the accepted rows.
+    /// Returns how many rows own a record when every row is a paragraph-run glyph, now and
+    /// when it was accepted, that keeps its identity, its record and the record's transform
+    /// and clip: such a chunk can differ from the accepted records only in what its placement
+    /// spans decide.
+    fn pair_placed_chunk(
+        &self,
+        transform_id: u32,
+        state: &RetainedGatherCursor<'_, '_>,
+        scratch: &mut ColumnScratch,
+    ) -> Option<usize> {
+        let chunk = &scratch.chunk;
+        if !chunk.paragraph_runs_only() {
+            return None;
+        }
+        let previous = self
+            .sources
+            .range(state.source_cursor..state.source_cursor + chunk.len)?;
+        let mut selected = 0;
+        let mut paired = 0;
+        for (index, previous) in previous.iter().enumerate() {
+            if previous.stable_id != chunk.stable_id[index % CHUNK] || !previous.paragraph_run {
+                return None;
+            }
+            paired += 1;
+            if !previous.selected() {
+                continue;
+            }
+            let old = self.glyphs.get(state.record_cursor + selected)?;
+            if old.stable_id != previous.stable_id
+                || old.transform_id != transform_id
+                || old.clip_id != chunk.clip_id(index)
+            {
+                return None;
+            }
+            scratch.rows[selected % CHUNK] = index as u8;
+            selected += 1;
+        }
+        (paired == chunk.len).then_some(selected)
+    }
+
+    /// Compares the inputs a placement span decides and leaves every other accepted lane
+    /// alone: [`Self::pair_placed_chunk`] proved those rows unchanged.
+    fn compare_placement_columns(
+        &mut self,
+        plan: &ColumnPlan<'_, '_>,
+        record: usize,
+        count: usize,
+        scratch: &mut ColumnScratch,
+    ) -> Result<(), GatherError> {
+        let rows = Rows::new(&scratch.rows[..count], &scratch.chunk);
+        let masks = &mut scratch.masks[..count];
+        masks.fill(0);
+        for field in 0..plan.f32_count() {
+            let accepted = self
+                .f32_fields
+                .get_mut(field)
+                .and_then(|lane| lane.as_mut_slice().get_mut(record..record + count))
+                .ok_or(GatherError::InvalidSemanticShape)?;
+            let follows = plan.f32_follows_placement(field);
+            // A test build projects the skipped inputs too and holds the declaration to them.
+            if !follows && !cfg!(test) {
+                continue;
+            }
+            let values = &mut scratch.f32_values[..count];
+            if !plan.f32_column(field, &scratch.chunk, rows, values) {
+                return Err(GatherError::SourceFieldMissing);
+            }
+            if !follows {
+                assert!(
+                    accepted
+                        .iter()
+                        .zip(values.iter())
+                        .all(|(accepted, next)| accepted.to_bits() == next.to_bits()),
+                    "an input no placement span decides changed under RowChange::Placement"
+                );
+                continue;
+            }
+            if columns::store_changes(accepted, values, plan.f32_dependency(field), masks) != 0 {
+                self.changed_inputs.f32_fields |= 1 << field;
+            }
+        }
+        for field in 0..plan.u32_count() {
+            let accepted = self
+                .u32_fields
+                .get_mut(field)
+                .and_then(|lane| lane.as_mut_slice().get_mut(record..record + count))
+                .ok_or(GatherError::InvalidSemanticShape)?;
+            let follows = plan.u32_follows_placement(field);
+            if !follows && !cfg!(test) {
+                continue;
+            }
+            let values = &mut scratch.u32_values[..count];
+            if !plan.u32_column(field, &scratch.chunk, rows, values) {
+                return Err(GatherError::SourceFieldMissing);
+            }
+            if !follows {
+                assert!(
+                    accepted == values,
+                    "an input no placement span decides changed under RowChange::Placement"
+                );
+                continue;
+            }
+            if columns::store_changes(accepted, values, plan.u32_dependency(field), masks) != 0 {
+                self.changed_inputs.u32_fields |= 1 << field;
+            }
+        }
+        Ok(())
     }
 
     /// Writes every declared input of the paired records as one column each and folds the
@@ -1343,6 +1573,7 @@ impl CodecGatherWorkspace {
                 .ok_or(GatherError::InvalidSemanticShape)?;
             let _changed =
                 columns::store_changes(accepted, values, plan.f32_dependency(field), masks);
+            self.changed_inputs.f32_fields |= u32::from(_changed != 0) << field;
             #[cfg(test)]
             {
                 changed.0 += _changed;
@@ -1360,6 +1591,7 @@ impl CodecGatherWorkspace {
                 .ok_or(GatherError::InvalidSemanticShape)?;
             let _changed =
                 columns::store_changes(accepted, values, plan.u32_dependency(field), masks);
+            self.changed_inputs.u32_fields |= u32::from(_changed != 0) << field;
             #[cfg(test)]
             {
                 changed.1 += _changed;
@@ -1386,6 +1618,7 @@ impl CodecGatherWorkspace {
         record: usize,
         count: usize,
         scratch: &ColumnScratch,
+        lanes: Lanes,
     ) -> Result<(), GatherError> {
         let records = record..record + count;
         let (Some(glyphs), Some(slots), Some(masks)) = (
@@ -1405,7 +1638,10 @@ impl CodecGatherWorkspace {
         {
             let row = usize::from(scratch.rows[offset % CHUNK]);
             // Pairing proved the storage topology equal: only identity and bounds can move.
-            let next = scratch.chunk.record_geometry(row)?;
+            let next = match lanes {
+                Lanes::All => scratch.chunk.record_geometry(row)?,
+                Lanes::Placed => scratch.chunk.record_placement(row, previous)?,
+            };
             let slot = scratch.chunk.placement_slot(row);
             let (changes, moved) = retained_record_changes(
                 previous,
@@ -1482,6 +1718,7 @@ impl CodecGatherWorkspace {
                 GatherSource {
                     stable_id: chunk.stable_id[row % CHUNK],
                     selection: chunk.selection[row % CHUNK],
+                    paragraph_run: chunk.paragraph_run(row),
                 },
             ));
         }
@@ -1544,6 +1781,8 @@ impl CodecGatherWorkspace {
         // record columns are already written. Adopt that prefix before suffix rebuild.
         #[cfg(test)]
         super::work_attribution::record(|work| work.gather_glyph_visits += 1);
+        // Flat rows write under the caller's change mask without comparing columns.
+        self.changed_inputs = ChangedInputs::ALL;
         let row = input.row(glyph_index)?;
         let glyph = row.glyph;
         let previous_source = *previous_source;
@@ -1918,6 +2157,11 @@ impl CodecGatherWorkspace {
             .then_some(self.dirty_mask_ranges.as_slice())
     }
 
+    /// The codec inputs this retained gather changed in any record.
+    pub(crate) fn changed_inputs(&self) -> ChangedInputs {
+        self.changed_inputs
+    }
+
     /// The planner authenticates one changed owner and its otherwise unchanged suffix.
     /// Reuse the ordinary row writer, then splice its appended rows into the old owner.
     pub(crate) fn correspondence(&self) -> &[GatherCorrespondence] {
@@ -1933,6 +2177,7 @@ impl CodecGatherWorkspace {
     ) -> Result<GatherRange, GatherError> {
         let source_len = self.sources.len();
         let record_len = self.glyphs.len();
+        self.changed_inputs = ChangedInputs::ALL;
         let first = owners
             .clone()
             .next()
@@ -2151,6 +2396,7 @@ impl CodecGatherWorkspace {
 
     pub fn truncate_to_retained_prefix(&mut self) -> Result<(), GatherError> {
         self.correspondence.clear();
+        self.changed_inputs = ChangedInputs::ALL;
         self.sources
             .truncate(self.retained_source_cursor)
             .map_err(|_| GatherError::AllocationFailed)?;
@@ -2217,6 +2463,7 @@ impl CodecGatherWorkspace {
         if source_start > input.len() {
             return Err(GatherError::InvalidSemanticShape);
         }
+        self.changed_inputs = ChangedInputs::ALL;
         self.reserve_mask_ranges(
             input.masks(),
             source_start,
@@ -2291,7 +2538,12 @@ impl CodecGatherWorkspace {
         let mut bound = None;
         let mut cursor = source_start;
         while cursor < source_count {
-            rows.fill(&mut scratch.chunk, cursor, source_count - cursor)?;
+            rows.fill(
+                &mut scratch.chunk,
+                cursor,
+                source_count - cursor,
+                Lanes::All,
+            )?;
             let chunk = &mut scratch.chunk;
             let len = chunk.len;
             if len == 0 {
@@ -2304,6 +2556,7 @@ impl CodecGatherWorkspace {
                 scratch.sources[index % CHUNK] = GatherSource {
                     stable_id: chunk.stable_id[index % CHUNK],
                     selection: chunk.selection[index % CHUNK],
+                    paragraph_run: chunk.paragraph_run(index),
                 };
                 scratch.rows[count % CHUNK] = index as u8;
                 count += usize::from(chunk.selected(index));
@@ -2483,6 +2736,7 @@ impl CodecGatherWorkspace {
     ) -> Result<bool, GatherError> {
         if !decorations.is_empty() {
             self.retained_output_intervals = false;
+            self.changed_inputs = ChangedInputs::ALL;
         }
         let Some(program) = codec.decoration_program(capability_set) else {
             return Ok(false);
@@ -2771,6 +3025,7 @@ impl CodecGatherWorkspace {
         self.correspondence.clear();
         self.retained_output_intervals = false;
         self.bounds_changed = false;
+        self.changed_inputs = ChangedInputs::ALL;
         for field in &mut self.f32_fields {
             field.clear();
         }
@@ -5001,6 +5256,7 @@ mod tests {
                     }
                     .into(),
                     intervals: Some(&intervals),
+                    rows: RowChange::Any,
                 })
             });
             assert!(workspace.begin_retained(&codec, glyphs.len()).unwrap());
@@ -5086,6 +5342,7 @@ mod tests {
                 }
                 .into(),
                 intervals: None,
+                rows: RowChange::Any,
             })
         });
         assert!(workspace.begin_retained(&codec, glyphs.len()).unwrap());
@@ -5159,6 +5416,7 @@ mod tests {
                 },
                 input: wide_range_input(&after[index..index + 1], &masks[index..index + 1]).into(),
                 intervals: None,
+                rows: RowChange::Any,
             })
         });
         let mut binding_reads = 0;
@@ -5257,6 +5515,7 @@ mod tests {
                     range: range_a,
                     input: wide_range_input(&next_a, &masks[..next_count]).into(),
                     intervals: empty_scope.then_some(&empty_intervals[..]),
+                    rows: RowChange::Any,
                 },
                 RetainedGatherOwner {
                     range: range_b,
@@ -5266,6 +5525,7 @@ mod tests {
                     }
                     .into(),
                     intervals: None,
+                    rows: RowChange::Any,
                 },
             ];
             assert!(
@@ -5417,6 +5677,7 @@ mod tests {
                 range: first_range,
                 input: wide_range_input(&next_first, &masks[..1]).into(),
                 intervals: None,
+                rows: RowChange::Any,
             },
             RetainedGatherOwner {
                 range: last_range,
@@ -5426,6 +5687,7 @@ mod tests {
                 }
                 .into(),
                 intervals: None,
+                rows: RowChange::Any,
             },
         ];
         assert!(workspace.begin_retained(&codec, 5).unwrap());
@@ -5520,6 +5782,7 @@ mod tests {
             }
             .into(),
             intervals: None,
+            rows: RowChange::Any,
         };
         assert!(
             workspace
@@ -5613,6 +5876,7 @@ mod tests {
                     }
                     .into(),
                     intervals: None,
+                    rows: RowChange::Any,
                 })
             });
             assert!(
@@ -5866,6 +6130,7 @@ mod tests {
                         range: owner,
                         input: input.into(),
                         intervals: None,
+                        rows: RowChange::Any,
                     })),
                     |_| Some(&binding),
                 )
@@ -6031,6 +6296,7 @@ mod tests {
                                         range: old,
                                         input: input.into(),
                                         intervals: None,
+                                        rows: RowChange::Any,
                                     })),
                                     |_| Some(&binding),
                                 )

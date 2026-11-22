@@ -14,7 +14,7 @@ use super::{
     codec::{
         BATCH_MATERIAL, BATCH_TRANSFORM, BufferSchema, CapabilitySetId, TechniqueId, ValidatedCodec,
     },
-    codec_gather::GatherCorrespondence,
+    codec_gather::{ChangedInputs, GatherCorrespondence},
     plan_draw::{GlyphDraw, independent_draw_sort_key, push_glyph_draw},
     plan_input::{DrawSpanSummary, draw_fields_compatible, draw_span_compatible},
     plan_packing::{
@@ -125,8 +125,18 @@ enum MappingState {
 
 #[derive(Clone, Copy)]
 pub(crate) enum RetainedOutputScope<'a> {
-    ChangedIntervals(&'a [Range<usize>]),
+    /// The changed records, and the codec inputs the gather changed in any of them.
+    ChangedIntervals(&'a [Range<usize>], ChangedInputs),
     Replacement(&'a [GatherCorrespondence]),
+}
+
+impl<'a> RetainedOutputScope<'a> {
+    fn changed_records(self) -> Option<&'a [Range<usize>]> {
+        match self {
+            Self::ChangedIntervals(records, _) => Some(records),
+            Self::Replacement(_) => None,
+        }
+    }
 }
 
 fn sparse_output_intervals(ranges: &[Range<usize>], glyph_count: usize) -> Option<&[Range<usize>]> {
@@ -145,6 +155,8 @@ struct PrepareContext<'a> {
     input: OrderedPlanInput<'a>,
     checkpoint: bool,
     changed_intervals: Option<&'a [Range<usize>]>,
+    /// Inputs the gather changed, when every instance kept its input and physical slot.
+    changed_inputs: Option<ChangedInputs>,
 }
 
 #[derive(Default)]
@@ -521,9 +533,12 @@ impl OrderedPlanCompiler {
                         input,
                         Some(correspondence),
                     )?,
-                Some(RetainedOutputScope::ChangedIntervals(ranges)) => {
-                    self.prepare_retained_topology(codec, capability_set, input, Some(ranges))?
-                }
+                Some(scope) => self.prepare_retained_topology(
+                    codec,
+                    capability_set,
+                    input,
+                    scope.changed_records(),
+                )?,
                 None => self.prepare_retained_topology(codec, capability_set, input, None)?,
             };
         #[cfg(test)]
@@ -546,14 +561,17 @@ impl OrderedPlanCompiler {
             checkpoint,
             // Exact output intervals cover gathered glyph metadata, including bounds.
             changed_intervals: if retained_topology {
-                match output_scope {
-                    Some(RetainedOutputScope::ChangedIntervals(ranges)) => {
-                        sparse_output_intervals(ranges, input.glyphs.len())
-                    }
-                    _ => None,
-                }
+                output_scope
+                    .and_then(RetainedOutputScope::changed_records)
+                    .and_then(|ranges| sparse_output_intervals(ranges, input.glyphs.len()))
             } else {
                 None
+            },
+            changed_inputs: match output_scope {
+                Some(RetainedOutputScope::ChangedIntervals(_, inputs)) if retained_topology => {
+                    Some(inputs)
+                }
+                _ => None,
             },
         };
         for batch_index in 0..self.pending_batches.len() {
@@ -1429,6 +1447,7 @@ impl OrderedPlanCompiler {
             capability,
             input,
             checkpoint,
+            changed_inputs,
             ..
         } = context;
         let pending = self.pending_batches[batch_index];
@@ -1560,6 +1579,17 @@ impl OrderedPlanCompiler {
             program,
             prior,
             self.pending_batches[batch_index],
+            changed_inputs
+                .and_then(|inputs| {
+                    codec.buffers_without_inputs(
+                        capability_set,
+                        key.technique,
+                        key.program_variant,
+                        inputs.f32_fields,
+                        inputs.u32_fields,
+                    )
+                })
+                .unwrap_or(0),
         )?;
         if let Some(prior) = prior
             && required < prior.instance_count
@@ -1596,6 +1626,7 @@ impl OrderedPlanCompiler {
         program: &super::codec::ProgramDescriptor,
         prior: Option<BatchState>,
         pending: PendingBatch,
+        unchanged_buffers: u32,
     ) -> Result<(), OrderedPlanError> {
         let allocation_start = pending.allocation_start;
         let replace = allocation_start.is_some();
@@ -1662,6 +1693,20 @@ impl OrderedPlanCompiler {
                 range: aligned,
                 active_buffers,
             } = self.range_jobs[job_index];
+            // A buffer none of whose inputs changed already holds the bytes this job would
+            // write, wherever the job stays inside the records both plans keep live. Executing
+            // it only to compare the result equal is what the gather's proof replaces.
+            let active_buffers = if !replace
+                && aligned.end <= pending.state.instance_count
+                && prior.is_some_and(|batch| aligned.end <= batch.instance_count)
+            {
+                active_buffers & !unchanged_buffers
+            } else {
+                active_buffers
+            };
+            if active_buffers == 0 {
+                continue;
+            }
             let count = aligned.end - aligned.start;
             let mut compact_cursor = self.payload.len();
             let mut payload_starts = [0_usize; MAX_PHYSICAL_BUFFERS];
@@ -3111,7 +3156,10 @@ mod tests {
                             },
                             false,
                             2,
-                            Some(RetainedOutputScope::ChangedIntervals(&intervals)),
+                            Some(RetainedOutputScope::ChangedIntervals(
+                                &intervals,
+                                ChangedInputs::ALL,
+                            )),
                             false,
                         )
                         .unwrap();
@@ -3289,7 +3337,10 @@ mod tests {
                         },
                         false,
                         2,
-                        Some(RetainedOutputScope::ChangedIntervals(&intervals)),
+                        Some(RetainedOutputScope::ChangedIntervals(
+                            &intervals,
+                            ChangedInputs::ALL,
+                        )),
                         case.starts_with("summary_"),
                     )
                 };
@@ -3387,7 +3438,10 @@ mod tests {
                             },
                             false,
                             2,
-                            Some(RetainedOutputScope::ChangedIntervals(&intervals)),
+                            Some(RetainedOutputScope::ChangedIntervals(
+                                &intervals,
+                                ChangedInputs::ALL,
+                            )),
                             false,
                         )
                         .unwrap();
@@ -3446,6 +3500,74 @@ mod tests {
     }
 
     #[test]
+    fn a_buffer_whose_inputs_the_gather_left_alone_is_not_executed() {
+        let codec = paint_codec_with_limits(false, 65_536, true);
+        let initial: Vec<_> = (0..64).map(|index| glyph(index + 1, 1)).collect();
+        let x: Vec<_> = initial.iter().map(|row| row.inline_start).collect();
+        let slots = vec![0; initial.len()];
+        // Every record moved under a new revision and full semantic dirt; its columns did not.
+        let masks = vec![super::super::positioning::ALL_SEMANTIC_CHANGES; initial.len()];
+        let intervals = [0..initial.len()];
+        for (inputs, executed) in [
+            (ChangedInputs::ALL, initial.len()),
+            (ChangedInputs::default(), 0),
+        ] {
+            let mut compiler = OrderedPlanCompiler::default();
+            let mut host = TestHost::default();
+            let mut glyphs = initial.clone();
+            prepare_with_options(&mut compiler, &codec, &glyphs, &x, &[], true, true);
+            host.accept(
+                compiler
+                    .plan_view(7, CAPABILITY, codec.fingerprint())
+                    .unwrap(),
+                compiler.publish_bindings,
+            );
+            compiler.commit().unwrap();
+            for row in &mut glyphs {
+                row.content_revision += 1;
+                row.block_start += 4.0;
+            }
+            super::super::work_attribution::reset();
+            compiler
+                .prepare_scoped(
+                    &codec,
+                    CAPABILITY,
+                    OrderedPlanInput {
+                        glyphs: &glyphs,
+                        placement_slots: &slots,
+                        semantic_change_masks: &masks,
+                        f32_fields: &[&x],
+                        u32_fields: &[],
+                        order_independent: true,
+                    },
+                    false,
+                    2,
+                    Some(RetainedOutputScope::ChangedIntervals(&intervals, inputs)),
+                    true,
+                )
+                .unwrap();
+            let work = super::super::work_attribution::snapshot();
+            assert_eq!(work.codec_executed_records, executed);
+            assert_eq!(work.ordered_emitted_write_bytes, 0);
+            host.accept(
+                compiler
+                    .plan_view(7, CAPABILITY, codec.fingerprint())
+                    .unwrap(),
+                compiler.publish_bindings,
+            );
+            compiler.commit().unwrap();
+            let mut cold = OrderedPlanCompiler::default();
+            let mut oracle = TestHost::default();
+            prepare_with_options(&mut cold, &codec, &glyphs, &x, &[], true, true);
+            oracle.accept(
+                cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap(),
+                cold.publish_bindings,
+            );
+            assert_eq!(host.snapshot(), oracle.snapshot());
+        }
+    }
+
+    #[test]
     fn rebuilt_bindings_check_retained_storage_once_after_buffer_construction() {
         let codec = paint_codec_with_limits(false, 65_536, true);
         let mut compiler = OrderedPlanCompiler::default();
@@ -3489,7 +3611,10 @@ mod tests {
                 },
                 false,
                 2,
-                Some(RetainedOutputScope::ChangedIntervals(&intervals)),
+                Some(RetainedOutputScope::ChangedIntervals(
+                    &intervals,
+                    ChangedInputs::ALL,
+                )),
                 false,
             )
             .unwrap();
@@ -3564,7 +3689,10 @@ mod tests {
                 },
                 false,
                 2,
-                Some(RetainedOutputScope::ChangedIntervals(&intervals)),
+                Some(RetainedOutputScope::ChangedIntervals(
+                    &intervals,
+                    ChangedInputs::ALL,
+                )),
                 true,
             )
             .unwrap();
@@ -3819,7 +3947,10 @@ mod tests {
                                 input,
                                 false,
                                 2 + phase,
-                                Some(RetainedOutputScope::ChangedIntervals(&intervals)),
+                                Some(RetainedOutputScope::ChangedIntervals(
+                                    &intervals,
+                                    ChangedInputs::ALL,
+                                )),
                                 false,
                             )
                             .unwrap();
@@ -4333,7 +4464,10 @@ mod tests {
                                     checkpoint,
                                     1,
                                     (!topology_changed && !checkpoint).then_some(
-                                        RetainedOutputScope::ChangedIntervals(intervals.as_slice()),
+                                        RetainedOutputScope::ChangedIntervals(
+                                            intervals.as_slice(),
+                                            ChangedInputs::ALL,
+                                        ),
                                     ),
                                     false,
                                 )
@@ -4653,7 +4787,10 @@ mod tests {
                 },
                 false,
                 2,
-                Some(RetainedOutputScope::ChangedIntervals(&merge)),
+                Some(RetainedOutputScope::ChangedIntervals(
+                    &merge,
+                    ChangedInputs::ALL,
+                )),
                 false,
             )
             .unwrap();
@@ -4683,7 +4820,10 @@ mod tests {
                 },
                 false,
                 2,
-                Some(RetainedOutputScope::ChangedIntervals(&split)),
+                Some(RetainedOutputScope::ChangedIntervals(
+                    &split,
+                    ChangedInputs::ALL,
+                )),
                 false,
             )
             .unwrap();
@@ -4716,7 +4856,10 @@ mod tests {
                 },
                 false,
                 3,
-                Some(RetainedOutputScope::ChangedIntervals(&merge_both)),
+                Some(RetainedOutputScope::ChangedIntervals(
+                    &merge_both,
+                    ChangedInputs::ALL,
+                )),
                 false,
             )
             .unwrap();
@@ -4827,7 +4970,10 @@ mod tests {
                 },
                 false,
                 3,
-                Some(RetainedOutputScope::ChangedIntervals(&intervals)),
+                Some(RetainedOutputScope::ChangedIntervals(
+                    &intervals,
+                    ChangedInputs::ALL,
+                )),
                 true,
             )
             .unwrap();
@@ -4983,7 +5129,10 @@ mod tests {
                     input(&changed, order_independent),
                     false,
                     3,
-                    Some(RetainedOutputScope::ChangedIntervals(&[])),
+                    Some(RetainedOutputScope::ChangedIntervals(
+                        &[],
+                        ChangedInputs::ALL,
+                    )),
                     false,
                 )
                 .unwrap();
@@ -5043,6 +5192,7 @@ mod tests {
                 2,
                 Some(RetainedOutputScope::ChangedIntervals(
                     core::slice::from_ref(&(0..1)),
+                    ChangedInputs::ALL,
                 )),
                 false,
             )
@@ -6141,7 +6291,10 @@ mod tests {
                     },
                     false,
                     2,
-                    Some(RetainedOutputScope::ChangedIntervals(&intervals)),
+                    Some(RetainedOutputScope::ChangedIntervals(
+                        &intervals,
+                        ChangedInputs::ALL,
+                    )),
                     false,
                 )
                 .unwrap();
@@ -6572,7 +6725,10 @@ mod tests {
                 },
                 false,
                 2,
-                Some(RetainedOutputScope::ChangedIntervals(&intervals)),
+                Some(RetainedOutputScope::ChangedIntervals(
+                    &intervals,
+                    ChangedInputs::ALL,
+                )),
                 true,
             );
             let expected = original_bounds(&rows);
@@ -6918,7 +7074,10 @@ mod tests {
                 },
                 false,
                 2,
-                Some(RetainedOutputScope::ChangedIntervals(&intervals)),
+                Some(RetainedOutputScope::ChangedIntervals(
+                    &intervals,
+                    ChangedInputs::ALL,
+                )),
                 false,
             )
             .unwrap();
