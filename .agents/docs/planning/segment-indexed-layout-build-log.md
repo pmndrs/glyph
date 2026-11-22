@@ -797,3 +797,8 @@ Updated in place; the history of each change is in the log below.
 - **Headline benchmark vs main** ([record](benchmark-main-vs-0.2.0-2026-11-22.md)): edits 1.5–2.2× faster; width sweep same to 14% slower on Latin, faster on bidi; `measure()` after a width change 2–4× slower; small ASCII frame 1.2× faster with 59% of time in shaping.
 - **Decision (Justin):** local edits, culling, the smaller items and the experiments are resolved in 0.2.0. No ascii.rest grid scenario is built now. For the three headline problems, brainstorm when the fix is not obvious.
 - **Building:** scoped gather, culling, shaping fast path with reshape-only-changed and run cache, two experiment lanes, one fix lane. Each merges as it reports green.
+
+- **`sil-green-28`: culling merged.** Every built-in draw is culled from the records it draws; no new API. Decision (Justin): custom-material draws must not simply stay unculled — users need an opt-out and a way to override the bounds. A follow-up lane builds that.
+- **`sil-green-29`: bidi class lanes merged** (first analysis experiment).
+- **Decision (Justin): the RTL gap rides; no second bidi resolver in 0.2.0** ([decision](decisions/rtl-bidi-resolver-deferred.md)).
+- **Usage limit:** the four top-model lanes (scoped gather, shaping, both experiment lanes) stopped on the Fable limit (resets 2026-11-23 15:00 America/Detroit). Each lane's work was committed as wip and pushed as a backup branch; nothing was lost.
