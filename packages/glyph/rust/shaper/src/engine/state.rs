@@ -15834,6 +15834,8 @@ mod tests {
             (middle, 3, "fi ffl, "),
             (last, 0, "ffi"),
             (length(&lines[0]) + 1, 0, "Wa "),
+            (length(&text), 0, "x"),
+            (length(&lines[0]), 0, "y"),
         ] {
             let (mut engine, mut shaper) = shaped_inter_engine(&text);
             let replacement = utf16(insert);
@@ -15876,6 +15878,56 @@ mod tests {
                 .unwrap();
             assert_visible_shape_equal(warm, cold, "spliced source run");
         }
+    }
+
+    /// The same splice in right-to-left runs: the geometry of whole chunks after the edit,
+    /// which a reversed run lays out first, is kept and moved.
+    #[test]
+    fn a_right_to_left_edit_splices_its_source_run() {
+        let line = "abc defg hijkl mnopqr stu vwx yz ".repeat(6);
+        let text = [line.as_str(); 5].join("\n");
+        let length = |text: &str| text.encode_utf16().count();
+        let middle = length(&line) * 2 + 2 + 30;
+        let mut spliced = 0;
+        for (start, delete, insert) in [(middle, 0, "q"), (middle, 4, ""), (middle, 1, "xyz")] {
+            let (mut engine, mut shaper) = shaped_rtl_engine(&text);
+            let replacement = utf16(insert);
+            let bytes = text_mutation_bytes(&[(start as u32, delete as u32, &replacement)]);
+            let mut request = update(1, 1, 1);
+            request.limits.max_clusters = 1 << 14;
+            request.limits.max_lines = 1 << 12;
+            request.limits.max_output_bytes = 1 << 24;
+            request.text_mutations =
+                parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            let new_length = (length(&text) - delete + replacement.len()) as u32;
+            let styles = override_style_bytes_for_text(7, new_length, DIRECTION_RTL);
+            request.style_mutations =
+                parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 2).unwrap();
+            super::super::work_attribution::reset();
+            let measured = engine
+                .measure_paragraph_with_shaper(&mut shaper, request, 1)
+                .unwrap();
+            let work = super::super::work_attribution::snapshot();
+            spliced += work.cluster_source_run_splices;
+            engine.commit_measure(measured).unwrap();
+            let mut edited: Vec<u16> = text.encode_utf16().collect();
+            edited.splice(start..start + delete, replacement.iter().copied());
+            let (cold_engine, _) = shaped_rtl_engine(&String::from_utf16(&edited).unwrap());
+            let warm = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            let cold = cold_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert_visible_shape_equal(warm, cold, "spliced right-to-left run");
+        }
+        assert!(spliced > 0, "no right-to-left edit spliced");
     }
 
     #[test]
