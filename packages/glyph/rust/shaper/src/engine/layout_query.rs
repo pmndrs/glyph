@@ -135,7 +135,9 @@ fn semantic_line_record(
         item_start,
         item_count,
         block_start: finite_f32(line.block_start + line.baseline)?,
-        inline_extent: finite_nonnegative_f32(advance)?,
+        // Negative letter spacing can pull a line's pen back past its start (a lone combining
+        // mark draws nothing and is charged the spacing); its box is then empty, not negative.
+        inline_extent: finite_nonnegative_f32(if advance < 0.0 { 0.0 } else { advance })?,
         block_extent: finite_nonnegative_f32(line.height)?,
         ascent: finite_nonnegative_f32(line.baseline)?,
         inline_start: finite_nonnegative_f32(line.typography.ascent)?,

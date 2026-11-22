@@ -384,6 +384,7 @@ pub(super) fn cases(cases: &mut Vec<Case>) {
     cases.push(style_removal_with_same_length_edit());
     cases.push(ellipsis_on_empty_lines());
     cases.push(ellipsis_cut_at_corrected_break());
+    cases.push(negative_spacing_on_a_lone_mark());
     span_changes(cases);
 }
 
@@ -641,6 +642,47 @@ fn ellipsis_cut_at_corrected_break() -> Case {
         Step {
             label: "restore the limit".into(),
             layout: Some(limited),
+            ..Step::default()
+        },
+    ];
+    case.fuzz = true;
+    case
+}
+
+/// A combining mark with no base draws nothing and is charged the letter spacing, so negative
+/// spacing pulls the line's pen back past its start. Found by the differential driver: the engine
+/// at the reference commit refuses the request for the line's negative extent.
+fn negative_spacing_on_a_lone_mark() -> Case {
+    let mut case = new_case(
+        "mech-negative-spacing-lone-mark".into(),
+        Tier::Quick,
+        &["inter"],
+        Script::Latin,
+    );
+    case.model.text = utf16("\u{301}");
+    case.model.root.letter_spacing = -0.25;
+    case.model.layout = Layout {
+        width: 300.0,
+        align: crate::engine::frame::ALIGN_END,
+        ..Layout::default()
+    };
+    case.steps = vec![
+        Step {
+            label: "a base for the mark".into(),
+            edits: vec![TextEdit {
+                start: 0,
+                delete: 0,
+                insert: utf16("a"),
+            }],
+            ..Step::default()
+        },
+        Step {
+            label: "the mark alone again".into(),
+            edits: vec![TextEdit {
+                start: 0,
+                delete: 1,
+                insert: Vec::new(),
+            }],
             ..Step::default()
         },
     ];
