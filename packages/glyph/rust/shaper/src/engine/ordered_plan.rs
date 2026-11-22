@@ -3695,6 +3695,8 @@ mod tests {
             }
             let slots = vec![0; glyphs.len()];
             let masks = vec![super::super::positioning::ALL_SEMANTIC_CHANGES; glyphs.len()];
+            // One changed interval covering every record.
+            #[allow(clippy::single_range_in_vec_init)]
             let intervals = [0..glyphs.len()];
             super::super::work_attribution::reset();
             compiler
