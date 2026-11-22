@@ -547,13 +547,15 @@ with fully overlapping ranges; this is not resolvable on a loaded host and shoul
 After the merge with `sil-green-43` (`86afe793c`, `1,726,075` raw / `682,851` gzip / `522,919` Brotli, of which the
 language cut still accounts for `−17,647` / `−4,816` / `−3,050`), each later cut is measured against the one before it:
 
-| Cut                                                             | Commit                   |   Δ raw |  Δ gzip | Δ Brotli |
-| --------------------------------------------------------------- | ------------------------ | ------: | ------: | -------: |
-| placement run lookup through the shared `u64` sort kernel       | `464e046a3`              |  −6,383 |  −2,048 |   −1,933 |
-| one measurement record writer, glyph source as `&mut dyn FnMut` | `0d589655c`              |  −5,575 |  −2,625 |   −1,620 |
-| fork `variations` feature off (default instance only)           | `7d8ad3bc2`              | −13,165 |  −5,151 |   −4,837 |
-| fork `FontInstance` support only with `experimental_font_api`   | `1faf6a1e4`              | −12,722 |  −2,534 |   −1,317 |
-| glyph-outline decoding moved to the font baker                  | `05426b7c7`, `54714cd2e` | −62,603 | −23,502 |  −17,858 |
+| Cut                                                                | Commit                   |   Δ raw |  Δ gzip | Δ Brotli |
+| ------------------------------------------------------------------ | ------------------------ | ------: | ------: | -------: |
+| placement run lookup through the shared `u64` sort kernel          | `464e046a3`              |  −6,383 |  −2,048 |   −1,933 |
+| one measurement record writer, glyph source as `&mut dyn FnMut`    | `0d589655c`              |  −5,575 |  −2,625 |   −1,620 |
+| fork `variations` feature off (default instance only)              | `7d8ad3bc2`              | −13,165 |  −5,151 |   −4,837 |
+| fork `FontInstance` support only with `experimental_font_api`      | `1faf6a1e4`              | −12,722 |  −2,534 |   −1,317 |
+| glyph-outline decoding moved to the font baker                     | `05426b7c7`, `54714cd2e` | −62,603 | −23,502 |  −17,858 |
+| engine handle registries: `IdMap` instead of `BTreeMap<u32, _>`    | `1067c1f96`              | −37,784 | −13,772 |  −11,042 |
+| UAX #29 categories from one trie (vendored `unicode-segmentation`) | `9b086527d`              | −36,128 | −23,478 |   −9,589 |
 
 ### Monomorphization (research step 5)
 
@@ -574,7 +576,10 @@ ours `94,401` / `42,770`, HarfRust `8,553` / `5,587`, read-fonts `7,633` / `4,48
 | `retained_rope::split` / `balance` / `join_nodes` / `append_right` (5 node types each) |    17,333 | 23,177 |
 | read-fonts CFF `Evaluator`                                                             |     2,950 |  5,320 |
 
-Two were collapsed (table above); together `−4,673` gzip with every headline row within ±4% and overlapping ranges. The
+`BTreeMap<u32, _>` was a hidden instance of the same problem: four handle registries instantiated B-tree node code per
+value type (about 23 kB raw of `alloc::collections::btree`) and inlined it into every lookup site. `engine::id_map::IdMap`
+keeps sorted keys beside values and runs one non-generic binary search; it saved 13,772 gzip. Two more were collapsed
+(table above); together `−4,673` gzip with every headline row within ±4% and overlapping ranges. The
 engine already had a shared sort kernel (D-243, `engine/sort.rs`); the run lookup was the largest caller still sorting a
 tuple type of its own. Remaining, priced:
 
@@ -655,7 +660,7 @@ public change if the font-baker binding moves out of the public entry into an in
 could then bind a subsetting-free build whenever a request has no `unicodeRanges` (the only caller of `prepare`), which
 measured `456,403` raw / `179,716` gzip against the full baker and baked every fixture face to identical bytes.
 
-### Unicode tables (research step 4): no change
+### Unicode tables (research step 4)
 
 The kernel's three-stage tries replaced the flat `u32` boundary arrays this note priced in August, and they already
 compress well: about 90 kB raw but about 11 kB gzip together. Standalone gzip -9 of each table, as shipped and in the
@@ -672,9 +677,11 @@ Bit-packing the leaves makes gzip worse by 380 to 470 bytes per table, which is 
 for gzip. Splitting each middle stage into low and high byte planes would save about 520 gzip bytes in all, but turns
 one `u16` load into two byte loads on the per-code-point lookup that every paragraph runs; it is not worth a hot-path
 change. HarfRust's `ucd_table` comes from HarfBuzz's packtab, already a multi-stage byte encoding. The
-`unicode-segmentation` range tables (word 29,940, grapheme 19,416, sentence 13,200 raw; `(char, char, u8)` rows padded
-to 12 bytes) belong to a pinned third-party crate; their padding is zeros that gzip absorbs, and replacing them means
-owning a UAX #29 implementation, which the engineering standard argues against.
+`unicode-segmentation` range tables were the exception: `(char, char, category)` rows of code points that
+gzip barely compresses (grapheme 19,416 raw / 6,961 gzip, word 29,940 / 10,877, sentence 13,200 / 4,977). The crate is
+now vendored with its four category lookups (grapheme, word, sentence, emoji) answered from one trie over the combined
+57-tuple category, about 3.9 kB gzip, generated from the crate's own tables and compared with them at every scalar value;
+whole-wasm gzip fell by 23,478 bytes. The UAX #29 algorithms are untouched.
 
 ### Not now: estimates
 

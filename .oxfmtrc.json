@@ -23,6 +23,9 @@
     "packages/**/src/**/generated/**",
     "packages/**/tests/fixtures/**",
     "vendor/harfrust/README.md",
-    "vendor/harfrust/src/**"
+    "vendor/harfrust/src/**",
+    "vendor/unicode-segmentation/Cargo.toml",
+    "vendor/unicode-segmentation/README.md",
+    "vendor/unicode-segmentation/src/**"
   ]
 }

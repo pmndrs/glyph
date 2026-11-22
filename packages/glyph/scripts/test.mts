@@ -13,6 +13,8 @@ const libraryRustManifests = [
   // never executed until it was listed here.
   'rust/raster-artifact/Cargo.toml',
   'rust/glyph-outline/Cargo.toml',
+  // The vendored unicode-segmentation: its trie is proved against its own range tables.
+  '../../vendor/unicode-segmentation/Cargo.toml',
   'rust/mtsdf-core/Cargo.toml',
   'rust/mtsdf-baker/Cargo.toml',
   'rust/mtsdf-admission/Cargo.toml',

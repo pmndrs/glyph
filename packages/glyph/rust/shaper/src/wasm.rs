@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, collections::BTreeMap, vec::Vec};
+use alloc::{boxed::Box, vec::Vec};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::{
@@ -1433,7 +1433,7 @@ pub extern "C" fn pmndrs_glyph_engine_text_check_range(
 struct WasmState {
     registry: ShaperRegistry,
     engine: TextEngine,
-    frames: BTreeMap<u32, FrameTransport>,
+    frames: crate::engine::id_map::IdMap<FrameTransport>,
     update_batch: UpdateBatchTransport,
     allocations: Vec<Allocation>,
     borrow_generation: u32,
