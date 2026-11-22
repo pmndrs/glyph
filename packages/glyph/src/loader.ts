@@ -560,18 +560,6 @@ export class FontLoader {
     return active;
   }
 
-  /** @internal Return a currently registered load without crossing a Promise boundary. */
-  _peek(input: FontInput): RegisteredFont | undefined {
-    const request = resolveFontRequest(input, this.#baseUrl);
-    const key = requestKey(request);
-    const shared = this.#loads.get(key);
-    const font = shared?.value;
-    if (font === undefined) return undefined;
-    if (this.registry.get(font.key) === font) return font;
-    if (this.#loads.get(key) === shared) this.#loads.delete(key);
-    return undefined;
-  }
-
   #sharedLoad(request: ResolvedFontRequest, key: string): SharedFontLoad {
     let shared = this.#loads.get(key);
     if (shared?.controller.signal.aborted === true) {

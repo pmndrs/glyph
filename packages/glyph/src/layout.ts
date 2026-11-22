@@ -1,5 +1,4 @@
 import type { GlyphOutlineContour, GlyphOutlineView } from './glyph-outline.js';
-import type { FontHandle } from './identity.js';
 import { textShaperAbi } from './generated/text-shaper-abi.js';
 
 /** Axis-aligned box in paragraph-local units: origin top-left, +X right, +Y down — every box this module publishes is in that space. */
@@ -257,9 +256,4 @@ export function copyGlyphLayoutInspection(
     },
   });
   return Object.freeze(copy as GlyphLayoutColumns as GlyphLayoutInspection);
-}
-
-export interface FontSlotRecord {
-  readonly slot: number;
-  readonly font: FontHandle;
 }

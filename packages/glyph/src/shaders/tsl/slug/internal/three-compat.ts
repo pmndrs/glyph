@@ -10,7 +10,6 @@ import {
   shiftRight as shiftRightOperator,
   sub as subOperator,
   textureLoad as textureLoadOperator,
-  uint as uintOperator,
 } from 'three/tsl';
 
 /** Three 0.185.1 omits the runtime while-loop overload and unsigned texture result type. */
@@ -31,10 +30,6 @@ export function loadUvec4(texture: DataTexture, coordinate: Node<'ivec2'>): Node
 
 export function uintAdd(left: Node<'uint'>, right: Node<'uint'>): Node<'uint'> {
   return addOperator(left, right);
-}
-
-export function uintFromInt(value: Node<'int'>): Node<'uint'> {
-  return uintOperator(value);
 }
 
 export function uintBitAnd(left: Node<'uint'>, right: Node<'uint'>): Node<'uint'> {

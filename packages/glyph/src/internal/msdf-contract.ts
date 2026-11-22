@@ -13,8 +13,6 @@ export const MSDF_PLANE_UNITS_PER_EM = 64 as const;
 export const MSDF_MAX_EM_SIZE = 1_022 as const;
 /** Largest full range that can leave at least one inner texel in a fixed 1024 page. */
 export const MSDF_MAX_PIXEL_RANGE = 1_020 as const;
-/** Default 64/8 MTSDF field limit; configured resources derive their limit as `pixelRange / 2`. */
-export const MSDF_MAX_OUTLINE_ATLAS_PIXELS: number = MSDF_PIXEL_RANGE / 2;
 
 export interface MsdfOptions {
   /** Atlas texels per font em. Defaults to 64. */

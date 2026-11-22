@@ -1,13 +1,6 @@
-import type { ParagraphSpan } from './formatted-text.js';
 import type { RasterFormatMetadata } from './config/raster-format.js';
 import type { AxisConstraint, Constraints, ParagraphLayout, TextStyle } from './text-properties.js';
-import type {
-  PlannerConstraint,
-  PlannerDecoration,
-  PlannerFrameLimits,
-  PlannerRegion,
-  PlannerStyleValue,
-} from './internal/frame-wire.js';
+import type { PlannerConstraint, PlannerDecoration, PlannerRegion, PlannerStyleValue } from './internal/frame-wire.js';
 import type { HandleIdFactory, ParagraphId, StyleId } from './internal/glyph-id.js';
 
 /** Single implementation of the Text-to-engine encodings shared by every host — every GlyphConfig integration compiles through these functions so hosts cannot drift. */
@@ -132,28 +125,6 @@ export function axis(value: AxisConstraint | undefined): {
   return { mode: value.mode, size: value.size };
 }
 
-export function engineLimits(
-  paragraphCount: number,
-  textLength: number,
-  maximumParagraphTextLength: number,
-  regionCount: number,
-  maxOutputBytes: number,
-  mutationRecordCount = 0,
-): PlannerFrameLimits {
-  return {
-    maxParagraphs: Math.max(1, paragraphCount),
-    maxClusters: Math.max(1, textLength * 2, mutationRecordCount),
-    // Rust applies this limit while composing each paragraph. Using aggregate batch text here makes every paragraph
-    // reserve enough line scratch for the whole TextGroup, multiplying retained memory by paragraph count.
-    maxLines: Math.max(1, maximumParagraphTextLength),
-    maxRegions: Math.max(1, regionCount),
-    maxExclusions: 1,
-    maxInlineObjects: 1,
-    maxSlotsPerBand: 8,
-    maxOutputBytes,
-  };
-}
-
 export function engineStyleValue(
   style: TextStyle,
   start: number,
@@ -225,14 +196,6 @@ function engineDecoration(decoration: NonNullable<TextStyle['decoration']>, styl
     thickness: decoration.thickness ?? 0,
     offset: decoration.offset ?? 0,
   };
-}
-
-/** Drops only empty spans (start === end) — the engine's style resolution can't advance across a zero-width scope and fails the frame otherwise (`style_state.rs::resolve`); style ids must stay contiguous with the emitted order. */
-export function styledSpans<Span extends ParagraphSpan<RasterFormatMetadata>>(
-  spans: readonly Span[] | undefined,
-): readonly Span[] {
-  // Drop only collapsed spans. Range validation must reject inverted spans instead of silently publishing them.
-  return spans === undefined ? [] : spans.filter((span) => span.start !== span.end);
 }
 
 export function packedForeground(style: TextStyle): number {

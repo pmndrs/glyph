@@ -40,19 +40,6 @@ export function textureMember(
   return payload;
 }
 
-export function textureArrayMember(
-  group: PortableResourceGroupPayload,
-  name: string,
-  format: PortableTextureArrayPayload['format'],
-  label: string,
-): PortableTextureArrayPayload {
-  const payload = group.members[name];
-  if (payload?.kind !== 'texture-array' || payload.format !== format) {
-    throw new TypeError(`${label} resource group needs ${format} texture-array member "${name}"`);
-  }
-  return payload;
-}
-
 export function bufferMember(group: PortableResourceGroupPayload, name: string, label: string): PortableBufferPayload {
   const payload = group.members[name];
   if (payload?.kind !== 'buffer') throw new TypeError(`${label} resource group needs buffer member "${name}"`);

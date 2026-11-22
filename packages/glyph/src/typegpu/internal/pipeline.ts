@@ -164,13 +164,6 @@ export function target(options: PipelineOptions): GPUColorTargetState {
     },
   };
 }
-export function preparedDraw(root: TgpuRoot, pipeline: TgpuRenderPipeline, start: number, count: number): Draw {
-  return {
-    draw(pass, bindGroups) {
-      recordDraw(root, pipeline, pass, bindGroups, start, count);
-    },
-  };
-}
 export function recordDraw(
   root: TgpuRoot,
   pipeline: TgpuRenderPipeline,

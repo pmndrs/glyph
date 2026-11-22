@@ -320,23 +320,6 @@ export function isFontFaceSelection(selection: unknown): selection is FontFaceSe
   return state !== undefined && !state.face.owner.disposed;
 }
 
-/** @internal Acquires an independent immutable Font lease without a configured handle; the selection's format must resolve on its own. The caller owns and must dispose the returned lease. */
-export function acquireLoadedFontFaceSelection<const Selection extends FontFaceSelection>(
-  selection: Selection,
-): Font<FontFaceRasterOf<Selection>>;
-
-export function acquireLoadedFontFaceSelection(selection: FontFaceSelection): Font<RasterFormatMetadata> {
-  const selected = fontFaceSelectionState(selection);
-  if (selected.format === undefined) {
-    throw new GlyphFontError(
-      'FONT_FACE_FORMAT_REQUIRED',
-      `FontFace ${JSON.stringify(selection.family)} requires an explicit format outside a configured handle`,
-    );
-  }
-  const raster = resolveDeclaredFormat(selected.format);
-  return cloneImmutableFont(requiredFontFaceFormat(selection, raster));
-}
-
 interface LoadedFaceRecord {
   promise: Promise<Font<RasterFormatMetadata>>;
   font: Font<RasterFormatMetadata> | undefined;
