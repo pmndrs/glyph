@@ -1,3 +1,4 @@
+#[cfg(feature = "experimental_font_api")]
 use alloc::boxed::Box;
 use read_fonts::types::{F2Dot14, Fixed};
 use read_fonts::{FontRef, TableProvider};
@@ -49,6 +50,7 @@ impl ShaperData {
         }
     }
 
+    #[cfg(feature = "experimental_font_api")]
     fn from_font(font: &crate::font::Font) -> Self {
         let tables = font.tables();
         let ot_cache = OtCache::new(&tables);
@@ -437,7 +439,7 @@ impl Scale {
 ///
 /// Will panic when debugging assertions are enabled if the buffer and plan have mismatched
 /// properties.
-#[cfg_attr(not(feature = "experimental_font_api"), allow(dead_code))]
+#[cfg(feature = "experimental_font_api")]
 pub fn shape(
     font: &crate::font::FontInstance,
     mut buffer: UnicodeBuffer,
@@ -462,6 +464,8 @@ pub fn shape(
 #[derive(Clone)]
 pub enum FontKind<'a> {
     FontRef(FontRefData<'a>),
+    // Only a `FontInstance` builds this variant, and only the experimental API exposes one.
+    #[cfg(feature = "experimental_font_api")]
     FontInstance(&'a crate::font::FontInstance, BasicFontMetrics),
 }
 
@@ -492,6 +496,7 @@ pub struct hb_font_t<'a> {
 }
 
 impl<'a> crate::Shaper<'a> {
+    #[cfg(feature = "experimental_font_api")]
     pub(crate) fn from_font(font: &'a crate::font::FontInstance) -> Option<Self> {
         let data = crate::font::_font_interop::_get_or_init_shaping_data(font, || {
             Box::new(ShaperData::from_font(font))
@@ -608,6 +613,7 @@ impl<'a> crate::Shaper<'a> {
     pub(crate) fn glyph_metrics(&self) -> GlyphMetrics<'a> {
         match &self.font {
             FontKind::FontRef(data) => data.glyph_metrics.clone(),
+            #[cfg(feature = "experimental_font_api")]
             FontKind::FontInstance(instance, metrics) => {
                 GlyphMetrics::from_tables(&instance.tables(), metrics)
             }

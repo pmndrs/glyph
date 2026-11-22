@@ -119,10 +119,17 @@ instance (the shaper shapes baked fonts at their default instance), so its shapi
 | `src/hb/ot/gpos/mod.rs`                  | Value-record deltas read `active_var_store` and `active_coords`.                                                                    |
 | `src/hb/font_funcs.rs`, `src/hb/face.rs` | Metrics and `Shaper::coords` read `active_coords`.                                                                                  |
 
-### Not part of the feature work
+### `FontInstance` support only with `experimental_font_api`
 
-`src/hb/face.rs`: `shape` is allowed to be dead without `experimental_font_api`. Upstream has this
-warning too; cargo hides it for registry dependencies and shows it for a path dependency.
+Upstream compiles the `FontKind::FontInstance` variant, `Shaper::from_font`, `impl AnyFont for
+FontInstance` and the `from_tables` constructors they use (`ShaperData::from_font`,
+`OtTables::from_tables`, `AatTables::from_tables`, `Charmap::from_tables`) in every configuration,
+although only the `experimental_font_api` feature exposes a `FontInstance` to callers. The fork
+compiles them, and the `FontInstance` match arms in `face.rs`, `font_funcs.rs` and
+`glyph_names.rs`, only with that feature. Without it a shaper is always built from a `FontRef`, so
+nothing observable changes, and the read-fonts `FontTables` model paths are no longer linked.
+`shape` (the experimental entry point) is compiled only with the feature too, instead of being
+allowed to be dead.
 
 ## Checks
 

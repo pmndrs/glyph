@@ -216,6 +216,7 @@ impl<'a> OtTables<'a> {
         }
     }
 
+    #[cfg(feature = "experimental_font_api")]
     pub fn from_tables(
         font: &impl TableProvider<'a>,
         cache: &'a OtCache,

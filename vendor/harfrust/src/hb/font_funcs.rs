@@ -129,6 +129,7 @@ impl<'a> BuiltinFontFuncs<'a> {
     fn charmap(&self) -> &Charmap<'a> {
         self.charmap.get_or_init(|| match &self.face.font {
             FontKind::FontRef(font) => font.charmap.clone(),
+            #[cfg(feature = "experimental_font_api")]
             FontKind::FontInstance(instance, _) => Charmap::from_tables(&instance.tables()),
         })
     }
@@ -136,6 +137,7 @@ impl<'a> BuiltinFontFuncs<'a> {
     fn glyph_metrics(&self) -> &GlyphMetrics<'a> {
         self.glyph_metrics.get_or_init(|| match &self.face.font {
             FontKind::FontRef(font) => font.glyph_metrics.clone(),
+            #[cfg(feature = "experimental_font_api")]
             FontKind::FontInstance(instance, metrics) => {
                 GlyphMetrics::from_tables(&instance.tables(), metrics)
             }

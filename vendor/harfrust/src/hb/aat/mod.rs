@@ -15,6 +15,7 @@ use crate::hb::aat::layout_kerx_table::KerxSubtableCache;
 #[cfg(feature = "aat")]
 use crate::hb::aat::layout_morx_table::MorxSubtableCache;
 use crate::hb::kerning::KernSubtableCache;
+#[cfg(feature = "experimental_font_api")]
 use crate::hb::ot::OtTables;
 use crate::hb::tables::TableRanges;
 use alloc::vec::Vec;
@@ -160,6 +161,7 @@ impl<'a> AatTables<'a> {
         }
     }
 
+    #[cfg(feature = "experimental_font_api")]
     pub fn from_tables(
         font: &impl TableProvider<'a>,
         ot_tables: &OtTables,

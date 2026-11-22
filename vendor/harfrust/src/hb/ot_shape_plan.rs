@@ -68,6 +68,7 @@ impl AnyFont for hb_font_t<'_> {
     }
 }
 
+#[cfg(feature = "experimental_font_api")]
 impl AnyFont for crate::font::FontInstance {
     fn with_font<F, R>(&self, f: F) -> R
     where
