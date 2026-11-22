@@ -1,6 +1,6 @@
 ---
 type: Log Entry
-title: "Republish a reflow without regathering unchanged glyph rows"
+title: 'Republish a reflow without regathering unchanged glyph rows'
 generated:
   by: process:docs-new
   at: '2026-11-22T08:25:45Z'
@@ -33,11 +33,11 @@ Measured with the headline harness, three interleaved rounds per arm, per-step m
 The before columns are the 2026-11-22 evidence run; the after columns were measured later on the same machine under
 heavier background load, each against its own `main` arm, so the ratio is the comparable figure:
 
-| workload | main, before | branch, before | ratio | main, after | branch, after | ratio |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| sweep, Latin 15k | 2.95 | 3.25 | 1.10 | 3.05 | 2.78 | 0.91 |
-| sweep, stress 22k | 3.49 | 3.96 | 1.14 | 3.58 | 3.21 | 0.90 |
-| sweep, bidi Amiri 15k | 6.23 | 4.70 | 0.76 | 6.30 | 4.84 | 0.77 |
+| workload              | main, before | branch, before | ratio | main, after | branch, after | ratio |
+| --------------------- | -----------: | -------------: | ----: | ----------: | ------------: | ----: |
+| sweep, Latin 15k      |         2.95 |           3.25 |  1.10 |        3.05 |          2.78 |  0.91 |
+| sweep, stress 22k     |         3.49 |           3.96 |  1.14 |        3.58 |          3.21 |  0.90 |
+| sweep, bidi Amiri 15k |         6.23 |           4.70 |  0.76 |        6.30 |          4.84 |  0.77 |
 
 Publication alone went from 1.17 to 0.62 ms per step on Latin (`main` 0.95) and from 1.66 to 0.85 ms on 22k (`main`
 1.34). The eight edit rows keep their ratios to `main` (0.45 to 0.67) within 0.02. The Latin row's per-load ranges
@@ -51,3 +51,16 @@ Not changed, and why:
 - Typing at the end still uploads the whole instance buffer. A Content edit regathers its owner whole, every record
   takes a new revision, the plan forms one changed range over the paragraph and writes the range when any byte in it
   differs. Narrowing that changes the frozen `wire.publication` lane, so it waits for a decision to re-freeze.
+
+After merging `experiments/segment-indexed-layout` (culling, bidi class lanes) the change still passes the native and
+Wasm full-tier oracles without a re-freeze, the shaper and package tests, and the PixiJS 3D, TypeGPU, v1 Bitmap and
+frustum-culling browser checks. Three interleaved rounds under heavy background load (load average 9 to 33) measured
+sweep Latin 15k 3.17 against `main` 3.36 (0.94) and stress 22k 3.63 against 3.85 (0.94), both "same" under the verdict
+rule; `measure()` after a width change 0.50 against 0.24 and 0.65 against 0.29 ms.
+
+The upload of an edit was measured with a narrowed write: the ordered plan compares a write job's records with the
+accepted bytes and writes from the first differing aligned record to the last, plus any records past the accepted
+count. One load each on Latin 15k: typing at the end went from 695 to 0.5 kB per frame (`main` 26.5) and its render
+CPU from 0.51 to 0.30 ms; the middle edits went from about 700 to 230 kB (`main` 616). Every scripted edit step's
+`wire.publication` digest moves (216 of 590 reference cases, wire lanes only; the incremental-against-cold
+differential stays green), so the change is held outside the branch until a re-freeze is decided.
