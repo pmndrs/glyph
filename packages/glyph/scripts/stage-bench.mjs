@@ -32,6 +32,8 @@ const fonts = [
   ['inter', 'latin'],
   ['fredoka', 'latin'],
   ['amiri', 'arabic'],
+  // Mixed Arabic and Latin: typing a Latin letter between Arabic words opens a run.
+  ['amiri', 'mixed-bidi'],
   ['devanagari', 'devanagari'],
   ['cjk-jp', 'cjk'],
   // A fallback stack: Inter has no Arabic, so every Arabic run shapes in the second font.

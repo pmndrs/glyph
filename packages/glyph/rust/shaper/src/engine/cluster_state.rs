@@ -11,7 +11,7 @@ mod diff;
 mod splice;
 
 pub(crate) use diff::ClusterChanges;
-pub(crate) use splice::SourceRunSplice;
+pub(crate) use splice::{RunWindow, SourceRunSplice};
 
 use super::{
     EngineError, FrameFault,
@@ -825,7 +825,7 @@ impl ClusterArena {
             .map_err(|_| EngineError::ResultTooLarge)?;
         let scope = build::ShapeScope {
             clusters: 0..count,
-            source_run: None,
+            source_runs: None,
             glyph_base: 0,
         };
         if self.aggregate_shape(runs, shape, scope, metrics_for, ink_for)? {
@@ -2164,7 +2164,7 @@ fn scatter_is_identity(shape: &ShapeArena) -> bool {
         shape,
         &build::ShapeScope {
             clusters: 0..0,
-            source_run: None,
+            source_runs: None,
             glyph_base: 0,
         },
     )

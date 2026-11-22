@@ -480,7 +480,9 @@ pub(in crate::engine) struct Spliced {
 
 impl Spliced {
     /// The revision of a layout run that lies outside the changed clusters and covers exactly
-    /// the clusters of a previous run, which is then canonically equal to it.
+    /// the clusters of a previous run, which is then canonically equal to it. Its shaping run
+    /// may have moved to another index when a window split or merged runs; the splice proved it
+    /// the previous one.
     fn kept_revision(
         &self,
         run: LayoutRun,
@@ -505,7 +507,6 @@ impl Spliced {
             && candidate.cluster_end == end
             && candidate.glyph_count == run.glyph_count
             && candidate.font_handle == run.font_handle
-            && candidate.source_run == run.source_run
             && candidate.source_kind == run.source_kind)
             .then_some(candidate.canonical_revision)
             .flatten()

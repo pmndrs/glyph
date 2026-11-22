@@ -30,22 +30,32 @@ use super::{
     build::ShapeScope, reserve, summarize_unit_chunks,
 };
 
-/// The source runs the incremental shape stage reshaped, and what the previous arena was
+/// The shaping runs the incremental shape stage reshaped, and what the previous arena was
 /// built from.
 #[derive(Clone, Copy)]
 pub(crate) struct SourceRunSplice<'a> {
-    /// Ascending; every edit of the request lies in one of them.
-    pub source_runs: &'a [u32],
+    /// Ascending and disjoint; every edit of the request lies in one of them.
+    pub windows: &'a [RunWindow],
     pub previous_unicode: &'a UnicodeAnalysis,
     pub previous_styles: &'a [StyleSegment],
     pub previous_runs: &'a [ShapingRun],
+}
+
+/// Shaping runs `new` replaced the previous runs `old`: one run reshaped in place, or the runs
+/// an edit split or merged.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct RunWindow {
+    pub new: Range<u32>,
+    pub old: Range<u32>,
 }
 
 const BREAK_BITS: u8 = CLUSTER_REQUIRED_BREAK | CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION;
 
 /// Where one edited run's clusters and glyphs sit in the previous arena and in this one.
 struct Window {
-    source_run: u32,
+    /// The shaping runs of the window here, and how many fewer the previous arena had.
+    source_runs: Range<u32>,
+    added_runs: i64,
     /// Clusters of the run here and in the previous arena.
     clusters: Range<usize>,
     old_clusters: Range<usize>,
@@ -63,6 +73,14 @@ struct Plan {
 }
 
 impl Plan {
+    /// How many shaping runs the windows before window `index` added.
+    fn run_shift(&self, index: usize) -> i64 {
+        self.windows[..index]
+            .iter()
+            .map(|window| window.added_runs)
+            .sum()
+    }
+
     /// How far the stretch before window `index` (or after the last, at `windows.len()`)
     /// moved: in text units, clusters and glyphs.
     fn shift(&self, index: usize) -> (i64, i64, i64) {
@@ -163,7 +181,15 @@ impl ClusterArena {
             // The previous clusters before this window (or after the last), moved.
             let (text_delta, cluster_delta, glyph_delta) = plan.shift(index);
             let (clusters, glyphs, old_text) = plan.old_gap(index, previous);
-            self.copy_clusters(previous, clusters, glyphs, text_delta, glyph_delta);
+            let run_delta = plan.run_shift(index);
+            self.copy_clusters(
+                previous,
+                clusters,
+                glyphs,
+                text_delta,
+                glyph_delta,
+                run_delta,
+            );
             let last = index == plan.windows.len();
             let text_end = if last { old_text.end + 1 } else { old_text.end };
             self.index_at.extend(
@@ -195,7 +221,7 @@ impl ClusterArena {
             let glyph_base = self.glyph_ids.len();
             let scope = ShapeScope {
                 clusters: window.clusters.clone(),
-                source_run: Some(window.source_run),
+                source_runs: Some(window.source_runs.clone()),
                 glyph_base,
             };
             ink_is_whole &= self.aggregate_shape(runs, shape, scope, &metrics_for, &ink_for)?;
@@ -298,6 +324,7 @@ impl ClusterArena {
         glyphs: Range<usize>,
         text_delta: i64,
         glyph_delta: i64,
+        run_delta: i64,
     ) {
         let c = clusters;
         self.starts.extend(
@@ -318,7 +345,13 @@ impl ClusterArena {
         self.style_indexes
             .extend_from_slice(&previous.style_indexes[c.clone()]);
         self.source_runs
-            .extend_from_slice(&previous.source_runs[c.clone()]);
+            .extend(previous.source_runs[c.clone()].iter().map(|run| {
+                if *run == super::NO_SOURCE_RUN {
+                    *run
+                } else {
+                    moved(*run, run_delta)
+                }
+            }));
         self.binding_handles
             .extend_from_slice(&previous.binding_handles[c.clone()]);
         self.font_handles
@@ -367,58 +400,98 @@ impl ClusterArena {
     ) -> Option<Plan> {
         let text = input.text;
         let old_length = previous.index_at.len().checked_sub(1)?;
-        if splice.source_runs.is_empty()
+        let (new_runs, old_runs) = (input.runs, splice.previous_runs);
+        if splice.windows.is_empty()
             || input.text_unit_ids.len() != text.len()
             || previous.run_local.ink.units().len() != previous.glyph_ids.len()
             || previous.chunk_advance_sums.len() != previous.starts.len().div_ceil(LAYOUT_CHUNK)
             || previous.advance_units.len() != previous.starts.len()
             || splice.previous_unicode.grapheme_boundaries().len() != previous.starts.len() + 1
-            || input.runs.len() != splice.previous_runs.len()
-            || !splice.source_runs.windows(2).all(|pair| pair[0] < pair[1])
         {
             return None;
         }
-        let edited = |run: usize| splice.source_runs.binary_search(&(run as u32)).is_ok();
-        // Every shaping run is the previous one moved by the edited runs before it; only an
-        // edited run changes length.
-        let mut delta = 0_i64;
-        let mut offsets = Vec::new();
-        offsets.try_reserve(input.runs.len()).ok()?;
-        for (index, (new, old)) in input.runs.iter().zip(splice.previous_runs).enumerate() {
-            let grown = new.text_end as i64
-                - new.text_start as i64
-                - (old.text_end as i64 - old.text_start as i64);
-            if (ShapingRun {
+        // Between the windows every shaping run is the previous one moved by the windows
+        // before it, in text and in index. A window's runs tile the same place in both texts.
+        let same = |new: &ShapingRun, old: &ShapingRun, delta: i64| {
+            ShapingRun {
                 text_start: new.text_start,
                 text_end: new.text_end,
                 ..*old
-            }) != *new
-                || i64::from(new.text_start) != i64::from(old.text_start) + delta
-                || (!edited(index) && grown != 0)
+            } == *new
+                && i64::from(old.text_start) + delta == i64::from(new.text_start)
+                && i64::from(old.text_end) + delta == i64::from(new.text_end)
+        };
+        // (old text, new text) of every window.
+        let mut texts: Vec<(Range<u32>, Range<u32>)> = Vec::new();
+        texts.try_reserve(splice.windows.len()).ok()?;
+        let (mut old_at, mut new_at, mut delta) = (0u32, 0u32, 0i64);
+        for window in splice.windows {
+            let (new, old) = (&window.new, &window.old);
+            if new.is_empty()
+                || old.is_empty()
+                || old.start < old_at
+                || i64::from(new.start) - i64::from(old.start)
+                    != i64::from(new_at) - i64::from(old_at)
             {
                 return None;
             }
-            offsets.push((old.text_start, old.text_end, delta, delta + grown));
-            delta += grown;
+            for (old_run, new_run) in old_runs
+                .get(old_at as usize..old.start as usize)?
+                .iter()
+                .zip(new_runs.get(new_at as usize..new.start as usize)?)
+            {
+                if !same(new_run, old_run, delta) {
+                    return None;
+                }
+            }
+            let new_text = new_runs.get(new.start as usize)?.text_start
+                ..new_runs.get(new.end as usize - 1)?.text_end;
+            let old_text = old_runs.get(old.start as usize)?.text_start
+                ..old_runs.get(old.end as usize - 1)?.text_end;
+            if i64::from(old_text.start) + delta != i64::from(new_text.start)
+                || new_text.start >= new_text.end
+            {
+                return None;
+            }
+            delta +=
+                i64::from(new_text.end - new_text.start) - i64::from(old_text.end - old_text.start);
+            texts.push((old_text, new_text));
+            (old_at, new_at) = (old.end, new.end);
         }
-        if text.len() as i64 != old_length as i64 + delta {
+        let old_rest = old_runs.get(old_at as usize..)?;
+        let new_rest = new_runs.get(new_at as usize..)?;
+        if old_rest.len() != new_rest.len()
+            || !old_rest
+                .iter()
+                .zip(new_rest)
+                .all(|(old_run, new_run)| same(new_run, old_run, delta))
+            || text.len() as i64 != old_length as i64 + delta
+        {
             return None;
         }
-        // A previous offset moves by the edited runs wholly before it when it starts a stretch,
-        // and by those that started before it when it ends one.
-        let shift_start = |offset: u32| {
-            offsets
-                .iter()
-                .take_while(|run| run.1 <= offset)
-                .last()
-                .map_or(0, |run| run.3)
+        // A previous style boundary moves by the windows wholly before it when it starts a
+        // segment, and by those that started before it when it ends one; none lies inside one.
+        let grown = |window: &(Range<u32>, Range<u32>)| {
+            i64::from(window.1.end - window.1.start) - i64::from(window.0.end - window.0.start)
         };
-        let shift_end = |offset: u32| {
-            offsets
+        let shift_start = |offset: u32| -> i64 {
+            texts
                 .iter()
-                .take_while(|run| run.0 < offset)
-                .last()
-                .map_or(0, |run| run.3)
+                .filter(|window| window.0.end <= offset)
+                .map(grown)
+                .sum()
+        };
+        let shift_end = |offset: u32| -> i64 {
+            texts
+                .iter()
+                .filter(|window| window.0.start < offset)
+                .map(grown)
+                .sum()
+        };
+        let inside = |offset: u32| {
+            texts
+                .iter()
+                .any(|window| window.0.start < offset && offset < window.0.end)
         };
         if input.styles.len() != splice.previous_styles.len()
             || !input
@@ -427,6 +500,8 @@ impl ClusterArena {
                 .zip(splice.previous_styles)
                 .all(|(new, old)| {
                     new.style == old.style
+                        && !inside(old.text_start)
+                        && !inside(old.text_end)
                         && moved(old.text_start, shift_start(old.text_start)) == new.text_start
                         && moved(old.text_end, shift_end(old.text_end)) == new.text_end
                 })
@@ -437,26 +512,19 @@ impl ClusterArena {
         let boundaries = input.unicode.grapheme_boundaries();
         let old_count = previous.starts.len();
         let mut windows: Vec<Window> = Vec::new();
-        windows.try_reserve(splice.source_runs.len()).ok()?;
-        for source_run in splice.source_runs.iter().copied() {
-            let run = *input.runs.get(source_run as usize)?;
-            let old_run = *splice.previous_runs.get(source_run as usize)?;
-            if run.text_start >= run.text_end {
-                return None;
-            }
-            let start = boundaries.binary_search(&run.text_start).ok()?;
-            let end = boundaries.binary_search(&run.text_end).ok()?;
-            let old_start = match previous.starts.binary_search(&old_run.text_start) {
+        windows.try_reserve(splice.windows.len()).ok()?;
+        for (window, (old_text, new_text)) in splice.windows.iter().zip(&texts) {
+            let start = boundaries.binary_search(&new_text.start).ok()?;
+            let end = boundaries.binary_search(&new_text.end).ok()?;
+            let old_start = match previous.starts.binary_search(&old_text.start) {
                 Ok(index) => index,
-                Err(index) if index == old_count && old_run.text_start as usize == old_length => {
-                    index
-                }
+                Err(index) if index == old_count && old_text.start as usize == old_length => index,
                 Err(_) => return None,
             };
-            let old_end = if old_run.text_end == old_run.text_start {
+            let old_end = if old_text.end == old_text.start {
                 old_start
             } else {
-                previous.ends.binary_search(&old_run.text_end).ok()? + 1
+                previous.ends.binary_search(&old_text.end).ok()? + 1
             };
             // The clusters since the previous window are as many as before.
             let (gap_start, old_gap_start) = windows.last().map_or((0, 0), |window| {
@@ -475,15 +543,17 @@ impl ClusterArena {
                 .shape
                 .runs
                 .iter()
-                .filter(|shaped| shaped.source_run == source_run)
+                .filter(|shaped| window.new.contains(&shaped.source_run))
                 .map(|shaped| shaped.glyph_count as usize)
                 .sum();
             windows.push(Window {
-                source_run,
+                source_runs: window.new.clone(),
+                added_runs: i64::from(window.new.end - window.new.start)
+                    - i64::from(window.old.end - window.old.start),
                 clusters: start..end,
                 old_clusters: old_start..old_end,
-                text: run.text_start as usize..run.text_end as usize,
-                old_text: old_run.text_start as usize..old_run.text_end as usize,
+                text: new_text.start as usize..new_text.end as usize,
+                old_text: old_text.start as usize..old_text.end as usize,
                 old_glyphs: old_glyph(old_start)..old_glyph(old_end),
                 glyphs,
             });

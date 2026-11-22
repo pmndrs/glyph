@@ -443,8 +443,24 @@ fn edits(
     };
     let middle = [typed(2)?];
     let three = [typed(1)?, typed(2)?, typed(3)?];
-    let cases: [(&str, Vec<TextEdit>, Vec<TextEdit>); 3] = [
+    // A Latin letter typed and a grapheme deleted at the same caret, as the browser
+    // headline's edit rows do: in right-to-left or mixed text the letter opens a run.
+    let latin = [(middle[0].0, alloc::vec![u16::from(b'x')])];
+    let deleted = (middle[0].0 - middle[0].1.len() as u32, middle[0].1.clone());
+    let delete = alloc::vec![TextEdit {
+        start: deleted.0,
+        delete: deleted.1.len() as u32,
+        insert: Vec::new(),
+    }];
+    let restore = alloc::vec![TextEdit {
+        start: deleted.0,
+        delete: 0,
+        insert: deleted.1,
+    }];
+    let cases: [(&str, Vec<TextEdit>, Vec<TextEdit>); 5] = [
         ("insert_mid", insert(&middle), remove(&middle)),
+        ("latin_mid", insert(&latin), remove(&latin)),
+        ("delete_mid", delete, restore),
         ("three_range", insert(&three), remove(&three)),
         (
             "replace_all",

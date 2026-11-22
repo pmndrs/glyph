@@ -12,7 +12,7 @@ use super::{
     cluster_state::{
         CLUSTER_ALLOWED_BREAK, CLUSTER_BREAK_CORRECTION, CLUSTER_SPACE, CanonicalClusterView,
         ClusterArena, ClusterBuildInput, LayoutDirtyRanges, LayoutRunSourceKind, NO_SOURCE_RUN,
-        RunCanonicalInput, SHAPING_CONTEXT, SourceRunSplice,
+        RunCanonicalInput, RunWindow, SHAPING_CONTEXT, SourceRunSplice,
     },
     codec::{CapabilitySetId, ValidatedCodec},
     codec_gather::{
@@ -602,6 +602,10 @@ struct ParagraphState {
     /// The source runs a multi-run incremental shape reshaped whole, ascending; empty unless
     /// that path prepared the shape.
     incremental_shape_source_runs: Vec<u32>,
+    /// When the edits split or merged shaping runs: the new runs that replaced the previous
+    /// runs, which the shape stage reshaped whole. `incremental_shape_source_runs` lists the
+    /// new ones.
+    incremental_shape_replaced: Option<(core::ops::Range<u32>, core::ops::Range<u32>)>,
     clusters: Staged<ClusterArena>,
     glyph_identity_index: IdentityIndex,
     layout_run_identity_index: IdentityIndex,
@@ -4320,6 +4324,7 @@ impl ParagraphState {
         self.fallback_cluster_scratch.clear();
         self.incremental_shape_source_run = None;
         self.incremental_shape_source_runs.clear();
+        self.incremental_shape_replaced = None;
         self.shape.discard_candidate();
         let (candidate, previous_layout) = self.prepared_layout.derive_mut();
         if !matches!(candidate, PreparedLayout::Inline(_)) {
@@ -4607,6 +4612,7 @@ impl ParagraphState {
         self.shape_window_scratch.clear();
         self.incremental_shape_source_run = None;
         self.incremental_shape_source_runs.clear();
+        self.incremental_shape_replaced = None;
         {
             let (committed, pending) = self.clusters.pair_mut();
             committed.clear();
@@ -5374,7 +5380,8 @@ impl ParagraphState {
         }
         if self.committed_inline().is_none()
             && (self.try_prepare_incremental_shape(shaper, font_stacks, font_bindings)?
-                || self.try_prepare_multi_run_shape(shaper)?)
+                || self.try_prepare_multi_run_shape(shaper)?
+                || self.try_prepare_realigned_shape(shaper, font_stacks, font_bindings)?)
         {
             self.shape.mark_prepared();
             return Ok(());
@@ -5661,6 +5668,7 @@ impl ParagraphState {
                 // this first candidate credits only full-run HarfRust work.
                 self.incremental_shape_source_run = None;
                 self.incremental_shape_source_runs.clear();
+                self.incremental_shape_replaced = None;
                 return Ok(true);
             }
             set_whole_shape_window(
@@ -5921,6 +5929,242 @@ impl ParagraphState {
         }
         self.incremental_shape_source_run = None;
         self.incremental_shape_source_runs = edited;
+        self.pending_shape_font_instance = None;
+        Ok(true)
+    }
+
+    /// An edit that split or merged shaping runs (a Latin letter typed between two Arabic
+    /// words opens a run between the halves of one): the runs before the first that differs
+    /// and after the last are kept, moved by the edit in text and in index, and the runs
+    /// between them are reshaped whole with the first font of their stacks. A run that needs a
+    /// fallback font declines to the full shape.
+    fn try_prepare_realigned_shape(
+        &mut self,
+        shaper: &mut ShaperRegistry,
+        font_stacks: &[RegisteredFontStack],
+        font_bindings: &[RegisteredFontBinding],
+    ) -> Result<bool, EngineError> {
+        let Some(edit) = bounding_text_edit(&self.text_edits) else {
+            return Ok(false);
+        };
+        let old_runs = self.shaping_runs.committed().runs();
+        let new_runs = self.shaping_runs.active().runs();
+        if old_runs.is_empty() || new_runs.is_empty() || old_runs.len() == new_runs.len() {
+            return Ok(false);
+        }
+        let delta = i64::try_from(self.text.active().units.len())
+            .ok()
+            .zip(i64::try_from(self.text.committed().units.len()).ok())
+            .map(|(new, old)| new - old)
+            .ok_or(EngineError::ResultTooLarge)?;
+        let languages = self
+            .style_invalidation
+            .shaping
+            .then_some((&self.styles.committed().arena, &self.styles.active().arena));
+        let same = |old: ShapingRun, new: ShapingRun, shift: i64| {
+            old.script == new.script
+                && old.direction == new.direction
+                && old.bidi_level == new.bidi_level
+                && old.style == new.style
+                && languages.is_none_or(|(previous, next)| {
+                    previous.resolved_language(old.style) == next.resolved_language(new.style)
+                        && previous.resolved_features(old.style)
+                            == next.resolved_features(new.style)
+                })
+                && i64::from(old.text_start) + shift == i64::from(new.text_start)
+                && i64::from(old.text_end) + shift == i64::from(new.text_end)
+        };
+        let shared = old_runs.len().min(new_runs.len());
+        let kept_before = (0..shared)
+            .take_while(|index| same(old_runs[*index], new_runs[*index], 0))
+            .count();
+        let kept_after = (0..shared - kept_before)
+            .take_while(|offset| {
+                same(
+                    old_runs[old_runs.len() - 1 - offset],
+                    new_runs[new_runs.len() - 1 - offset],
+                    delta,
+                )
+            })
+            .count();
+        let old_middle = kept_before..old_runs.len() - kept_after;
+        let new_middle = kept_before..new_runs.len() - kept_after;
+        if old_middle.is_empty() || new_middle.is_empty() {
+            return Ok(false);
+        }
+        // The edit lies in the replaced runs, in both texts.
+        let old_text = old_runs[old_middle.start].text_start as usize
+            ..old_runs[old_middle.end - 1].text_end as usize;
+        let new_text = new_runs[new_middle.start].text_start as usize
+            ..new_runs[new_middle.end - 1].text_end as usize;
+        if edit.old_start < old_text.start
+            || edit.old_end > old_text.end
+            || edit.new_start < new_text.start
+            || edit.new_end > new_text.end
+        {
+            return Ok(false);
+        }
+        let run_shift = new_runs.len() as i64 - old_runs.len() as i64;
+        let to_u32 = |value: usize| u32::try_from(value).map_err(|_| EngineError::ResultTooLarge);
+        let (old_first, old_last) = (to_u32(old_middle.start)?, to_u32(old_middle.end)?);
+
+        self.shape.pending_mut().clear();
+        let mut spans = core::mem::take(&mut self.pending_fallback_spans);
+        spans.clear();
+        let result = (|| -> Result<bool, EngineError> {
+            // The kept runs before the edit, as they were.
+            let committed_runs = self.shape.committed().runs.len();
+            for shape_index in 0..committed_runs {
+                let shaped_run = self.shape.committed().runs[shape_index];
+                if shaped_run.source_run >= old_first {
+                    continue;
+                }
+                let (pending, committed) = self.shape.derive_mut();
+                pending.append_text_range_from(
+                    committed,
+                    shape_index,
+                    shaped_run.source_run,
+                    shaped_run.text_start,
+                    shaped_run.text_end,
+                    0,
+                )?;
+            }
+            // The replaced runs, reshaped whole.
+            for index in new_middle.clone() {
+                let run = new_runs[index];
+                let stack = find_font_stack(font_stacks, run.style.font_stack_handle)?;
+                let binding_handle = *stack.fonts.first().ok_or(EngineError::FontStackMissing)?;
+                let font_handle = find_font_binding(font_bindings, binding_handle)?.shaping_handle;
+                self.boundary_shape_scratch.clear();
+                let scratch = &mut self.boundary_shape_scratch;
+                let styles = &self.styles.active().arena;
+                shaper
+                    .with_shaped_range(
+                        font_handle,
+                        &self.text.pending().units,
+                        ShapeRunRef {
+                            text_start: run.text_start,
+                            text_end: run.text_end,
+                            script: run.script,
+                            language: styles.resolved_language(run.style),
+                            features: styles.resolved_features(run.style),
+                            direction: run.direction,
+                            cluster_level: 0,
+                            flags: 0x40,
+                        },
+                        ShapeRangeRef {
+                            item_start: run.text_start,
+                            item_end: run.text_end,
+                            context_start: run.text_start,
+                            context_end: run.text_end,
+                            flags: 0x40,
+                        },
+                        |shaped| {
+                            scratch.append(
+                                index,
+                                font_handle,
+                                binding_handle,
+                                run.text_start,
+                                run.text_end,
+                                shaped,
+                            )
+                        },
+                    )
+                    .map_err(shaper_error)?;
+                if self.boundary_shape_scratch.glyph_ids.contains(&0) {
+                    // The run needs a fallback font: the full shape decides it.
+                    return Ok(false);
+                }
+                let source_run = to_u32(index)?;
+                let scratch = &self.boundary_shape_scratch;
+                self.shape.pending_mut().append_text_range_from(
+                    scratch,
+                    0,
+                    source_run,
+                    run.text_start,
+                    run.text_end,
+                    0,
+                )?;
+                spans
+                    .try_reserve(1)
+                    .map_err(|_| EngineError::ResultTooLarge)?;
+                spans.push(FallbackSpan {
+                    source_run,
+                    text_start: run.text_start,
+                    text_end: run.text_end,
+                    font_index: 0,
+                    binding_handle,
+                    font_handle,
+                });
+            }
+            // The kept runs after the edit, moved in text and in index.
+            for shape_index in 0..committed_runs {
+                let shaped_run = self.shape.committed().runs[shape_index];
+                if shaped_run.source_run < old_last {
+                    continue;
+                }
+                let source_run = u32::try_from(i64::from(shaped_run.source_run) + run_shift)
+                    .map_err(|_| EngineError::ResultTooLarge)?;
+                let (pending, committed) = self.shape.derive_mut();
+                pending.append_text_range_from(
+                    committed,
+                    shape_index,
+                    source_run,
+                    shaped_run.text_start,
+                    shaped_run.text_end,
+                    delta,
+                )?;
+            }
+            Ok(true)
+        })();
+        self.boundary_shape_scratch.clear();
+        match result {
+            Ok(true) => {}
+            Ok(false) => {
+                self.shape.pending_mut().clear();
+                self.pending_fallback_spans = spans;
+                self.pending_fallback_spans.clear();
+                return Ok(false);
+            }
+            Err(error) => {
+                self.shape.pending_mut().clear();
+                self.pending_fallback_spans = spans;
+                self.pending_fallback_spans.clear();
+                return Err(error);
+            }
+        }
+        // Fallback spans in run order: those before, the reshaped runs', those after, moved.
+        let middle_spans = core::mem::take(&mut spans);
+        spans
+            .try_reserve(self.fallback_spans.len() + middle_spans.len())
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        for span in self.fallback_spans.iter().copied() {
+            if span.source_run < old_first {
+                spans.push(span);
+            }
+        }
+        spans.extend_from_slice(&middle_spans);
+        for span in self.fallback_spans.iter().copied() {
+            if span.source_run >= old_last {
+                spans.push(FallbackSpan {
+                    source_run: u32::try_from(i64::from(span.source_run) + run_shift)
+                        .map_err(|_| EngineError::ResultTooLarge)?,
+                    text_start: shifted_text_offset(span.text_start, delta)?,
+                    text_end: shifted_text_offset(span.text_end, delta)?,
+                    ..span
+                });
+            }
+        }
+        self.pending_fallback_spans = spans;
+        self.incremental_shape_source_run = None;
+        self.incremental_shape_source_runs.clear();
+        for index in new_middle.clone() {
+            self.incremental_shape_source_runs.push(to_u32(index)?);
+        }
+        self.incremental_shape_replaced = Some((
+            to_u32(new_middle.start)?..to_u32(new_middle.end)?,
+            old_first..old_last,
+        ));
         self.pending_shape_font_instance = None;
         Ok(true)
     }
@@ -6387,6 +6631,7 @@ impl ParagraphState {
         self.fallback_cluster_scratch.clear();
         self.incremental_shape_source_run = None;
         self.incremental_shape_source_runs.clear();
+        self.incremental_shape_replaced = None;
         self.shape.discard_candidate();
     }
 
@@ -6494,17 +6739,30 @@ impl ParagraphState {
         // between the previous rows. The full build stays the authority for every error.
         // The source runs the shape stage reshaped alone: rebuild their clusters between the
         // previous rows. The full build stays the authority for every error.
-        let single = self.incremental_shape_source_run.map(|run| [run]);
-        let source_runs: &[u32] = match &single {
-            Some(run) => run,
-            None => &self.incremental_shape_source_runs,
-        };
-        let spliced = !source_runs.is_empty()
+        let mut windows: Vec<RunWindow> = Vec::new();
+        if let Some(run) = self.incremental_shape_source_run {
+            windows.push(RunWindow {
+                new: run..run + 1,
+                old: run..run + 1,
+            });
+        } else if let Some((new, old)) = self.incremental_shape_replaced.clone() {
+            windows.push(RunWindow { new, old });
+        } else {
+            windows.extend(
+                self.incremental_shape_source_runs
+                    .iter()
+                    .map(|run| RunWindow {
+                        new: *run..*run + 1,
+                        old: *run..*run + 1,
+                    }),
+            );
+        }
+        let spliced = !windows.is_empty()
             && !full_source_run
             && matches!(self.prepared_layout.committed(), PreparedLayout::General)
             && {
                 let splice = SourceRunSplice {
-                    source_runs,
+                    windows: &windows,
                     previous_unicode: self.unicode.committed(),
                     previous_styles: self.styles.committed().resolved.segments(),
                     previous_runs: self.shaping_runs.committed().runs(),
@@ -16185,6 +16443,77 @@ mod tests {
                 .first_paragraph_state()
                 .unwrap();
             assert_visible_shape_equal(warm, cold, "spliced source run");
+        }
+    }
+
+    /// A Latin letter typed inside a Greek word opens a run between its halves, and deleting
+    /// it merges them again: the runs the edit split or merged are reshaped alone and spliced.
+    #[test]
+    fn an_edit_that_splits_or_merges_runs_splices_the_replaced_runs() {
+        let line = "Typography αλφάβητο moving system; office waffle. ";
+        let lines: Vec<String> = (0..5).map(|index| line.repeat(2 + index)).collect();
+        let text = lines.join("\n");
+        let length = |text: &str| text.encode_utf16().count();
+        let greek = length(&lines[..2].join("\n")) + 1 + length(&line[..line.find('φ').unwrap()]);
+        let mut current: Vec<u16> = text.encode_utf16().collect();
+        for (step, (start, delete, insert)) in [
+            (greek, 0usize, "x"),
+            (greek, 1, ""),
+            (greek, 0, "xy z"),
+            (greek, 4, ""),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let (mut engine, mut shaper) =
+                shaped_inter_engine(&String::from_utf16(&current).unwrap());
+            let replacement = utf16(insert);
+            let bytes = text_mutation_bytes(&[(start as u32, delete as u32, &replacement)]);
+            current.splice(start..start + delete, replacement.iter().copied());
+            let mut request = update(1, 1, 1);
+            request.limits.max_clusters = 1 << 14;
+            request.limits.max_lines = 1 << 12;
+            request.limits.max_output_bytes = 1 << 24;
+            request.text_mutations =
+                parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            let styles = root_style_bytes_for_text(7, current.len() as u32);
+            request.style_mutations =
+                parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            super::super::work_attribution::reset();
+            let measured = engine
+                .measure_paragraph_with_shaper(&mut shaper, request, 1)
+                .unwrap();
+            let work = super::super::work_attribution::snapshot();
+            let candidate = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert!(
+                candidate.incremental_shape_replaced.is_some(),
+                "step {step}"
+            );
+            assert_eq!(
+                (work.cluster_source_run_splices, work.cluster_full_builds),
+                (1, 0),
+                "step {step}"
+            );
+            engine.commit_measure(measured).unwrap();
+            let (cold_engine, _) = shaped_inter_engine(&String::from_utf16(&current).unwrap());
+            let warm = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            let cold = cold_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert_visible_shape_equal(warm, cold, "split or merged runs");
         }
     }
 

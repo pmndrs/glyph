@@ -51,15 +51,16 @@ fn glyph_range(run: ShapedRun, stream_len: usize) -> Result<core::ops::Range<usi
 #[derive(Clone)]
 pub(super) struct ShapeScope {
     pub clusters: core::ops::Range<usize>,
-    pub source_run: Option<u32>,
+    pub source_runs: Option<core::ops::Range<u32>>,
     /// Where the scoped glyphs start in the arena's cluster-ordered glyph stream.
     pub glyph_base: usize,
 }
 
 impl ShapeScope {
     fn includes(&self, run: &ShapedRun) -> bool {
-        self.source_run
-            .is_none_or(|source| source == run.source_run)
+        self.source_runs
+            .as_ref()
+            .is_none_or(|sources| sources.contains(&run.source_run))
     }
 }
 
@@ -81,7 +82,7 @@ pub(super) fn identity_range(
         };
     }
     let range = range.unwrap_or(0..0);
-    if scope.source_run.is_none() && (range.start != 0 || range.end != shape.glyph_ids.len()) {
+    if scope.source_runs.is_none() && (range.start != 0 || range.end != shape.glyph_ids.len()) {
         return None;
     }
     shape
@@ -336,7 +337,7 @@ impl ClusterArena {
             glyph_start = glyph_start.wrapping_add(*count as usize);
         }
         if glyph_start - scope.glyph_base != scoped_glyphs
-            || (scope.source_run.is_none() && scoped_glyphs != stream_len)
+            || (scope.source_runs.is_none() && scoped_glyphs != stream_len)
             || u32::try_from(glyph_start).is_err()
         {
             return Err(EngineError::InvalidRequest);
