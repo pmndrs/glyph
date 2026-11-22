@@ -31,14 +31,14 @@ step 01 direction 2 + replace 3 at 2308
 class value 242 3d1c3da22ecea2c5
 class identity 22 c412744a5375ba47
 class repr 44 9704221f2419afc8
-class wire 1 5d9e8788860eff55
+class wire 1 b368d593df2a239f
 step 02 remove span 5
 class value 242 dfb9e9b99fe88ed0
 class identity 22 4ff2bc219368376f
 class repr 44 dbfb2b76112e8b64
-class wire 1 f9335a145c6aaa81
+class wire 1 27f10421da79e4d1
 step 03 delete 3 at 1880
 class value 242 69e7f7affd34af1f
 class identity 22 13d5fc1a685487ff
 class repr 44 9722bdbfa3101175
-class wire 1 07911ba4cc5e76b4
+class wire 1 1780d54c4a58b200

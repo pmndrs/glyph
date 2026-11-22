@@ -48,16 +48,16 @@ class repr 44 a69afaf539448fcb
 class wire 1 68d71c2d9fc3a88f
 step 05 max lines 12 + replace 3 at 1049 + replace 4 at 3106
 class value 266 0a28543c4e31e1a8
-class identity 24 d8fa5f808db1b3b5
+class identity 24 e0035b7821fc5cdd
 class repr 64 17f12e5920a0889d
-class wire 1 d5b499e0799a9a6a
+class wire 1 dd8a23ed6daeb333
 step 06 insert Mark (1 units) at 0 + metrics size 16 spacing -0.25 line 1.2 word 0 + max lines 0
 class value 230 24eb3e0f5d5a0cad
-class identity 22 38ea2d5da79683bd
+class identity 22 854b1c232f8e58cf
 class repr 44 53cd72af6c18a59b
 class wire 1 f037bd53e7830347
 step 07 insert Space (1 units) at 0 + flip case at 1252
 class value 230 f32ee356b7c9ca45
-class identity 22 32702174d7cb7e83
+class identity 22 d056dfbe4b06611b
 class repr 44 61d23ba90ad8cfea
-class wire 1 7ca3d2f688122e5a
+class wire 1 49a52ebdf0d34483

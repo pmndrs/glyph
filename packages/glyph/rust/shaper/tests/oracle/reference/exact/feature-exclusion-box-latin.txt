@@ -29,19 +29,19 @@ stage gpu identity 2 e0c194e17a126eed
 stage gpu value 3 07ff79d092362498
 step 01 max lines 3
 class value 266 fa53eb7f7482ee62
-class identity 24 ae8bc7cb9780ea37
+class identity 24 22328381c55fcdd6
 class repr 64 1bb8f999d7430619
 class cache 3 cb18201ad8c33652
-class wire 1 1d94d2e5226a864a
+class wire 1 6bc46a7a55c189a3
 step 02 add span 1550..1584 + align 1 + delete 1 at 1413
 class value 266 c6c3b1460d7d9efc
-class identity 24 05d13c9369d88763
+class identity 24 df7fd4107ae3688e
 class repr 64 25db312247752511
 class cache 3 1c623aa26df13098
 class wire 1 75c981d2f947e146
 step 03 delete 3 at 780 + width 0
 class value 266 7071e63fc630a158
-class identity 24 b5b26bd2a9c68d3d
+class identity 24 8917d6878dc19542
 class repr 64 b99f754dfaf379a5
 class cache 3 2cae2f87056c81a2
-class wire 1 47eab29d25b1a21a
+class wire 1 b26a6c489ee1745a

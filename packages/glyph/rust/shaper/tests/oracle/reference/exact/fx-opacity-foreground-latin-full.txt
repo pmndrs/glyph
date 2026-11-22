@@ -48,7 +48,7 @@ class value 300 46a73abb60dd1fb1
 class identity 31 21b17042bc7b2606
 class repr 64 36fcb656a068b62c
 class cache 5 06ed371bbb5668ae
-class wire 1 5acb3cc203f96f18
+class wire 1 d2be9f1ae37b852f
 step 04 add span 134..135
 class value 300 d43d52e8a975b50a
 class identity 31 412d9043dfaf3251
@@ -60,7 +60,7 @@ class value 300 eb0e6c0658c3c0f1
 class identity 31 117e962d36991b9a
 class repr 64 ca15a1426d3b35de
 class cache 5 a8856a970691c5cf
-class wire 1 5b02fc1ccba467c1
+class wire 1 38123a5cd9761c60
 step 06 replace 5 at 52 + insert Bidi (1 units) at 102
 class value 300 1a62152e23d55248
 class identity 31 2e2239eb38a1f1e7

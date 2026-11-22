@@ -14,6 +14,7 @@ export async function runUnicode(arguments_: readonly string[]): Promise<void> {
       await runNode('scripts/generate-unicode-line-break-data.mjs', rest);
       await runNode('scripts/generate-unicode-kernel-data.mjs', rest);
       await runNode('scripts/generate-language-tag-data.mjs', rest);
+      await runNode('scripts/generate-segmentation-trie.mjs', rest);
       return;
     case 'check-data':
       await runNode('scripts/generate-unicode-script-data.mjs', ['--check', ...rest]);
@@ -21,6 +22,7 @@ export async function runUnicode(arguments_: readonly string[]): Promise<void> {
       await runNode('scripts/generate-unicode-line-break-data.mjs', ['--check', ...rest]);
       await runNode('scripts/generate-unicode-kernel-data.mjs', ['--check', ...rest]);
       await runNode('scripts/generate-language-tag-data.mjs', ['--check', ...rest]);
+      await runNode('scripts/generate-segmentation-trie.mjs', ['--check', ...rest]);
       return;
     case 'sync-tests':
       await runNode('scripts/sync-unicode-test-data.mjs', rest);

@@ -72,6 +72,27 @@ fn main() {
                 "parameters": [],
                 "result": "byteLength",
             },
+            "glyphOutline": {
+                "export": abi_contract::GLYPH_OUTLINE_EXPORT,
+                "parameters": ["sfntPointer", "sfntByteLength", "glyphId"],
+                "result": "status",
+            },
+            "glyphOutlinePointer": {
+                "export": abi_contract::GLYPH_OUTLINE_POINTER_EXPORT,
+                "parameters": [],
+                "result": "pointer",
+            },
+            "glyphOutlineLength": {
+                "export": abi_contract::GLYPH_OUTLINE_LEN_EXPORT,
+                "parameters": [],
+                "result": "byteLength",
+            },
+        },
+        "glyphOutline": {
+            "ok": abi_contract::GLYPH_OUTLINE_STATUS_OK,
+            "invalidFont": abi_contract::GLYPH_OUTLINE_STATUS_INVALID_FONT,
+            "invalidRequest": abi_contract::GLYPH_OUTLINE_STATUS_INVALID_REQUEST,
+            "outOfMemory": abi_contract::GLYPH_OUTLINE_STATUS_OUT_OF_MEMORY,
         },
         "response": {
             "headerByteLength": abi_contract::RESPONSE_HEADER_BYTES,

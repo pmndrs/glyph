@@ -30,7 +30,7 @@ step 01 add span 2382..2413
 class value 230 104f605cf4cfb8be
 class identity 22 882d7e22c061ad79
 class repr 44 a6ebe46ff0930ca5
-class wire 1 8d9a3a7878a5ad7a
+class wire 1 0ff114c002fb78c7
 step 02 metrics size 16 spacing 0 line 1.2 word 3
 class value 230 c2a2f4681cc69aa9
 class identity 22 2bef361cdbff4f0b

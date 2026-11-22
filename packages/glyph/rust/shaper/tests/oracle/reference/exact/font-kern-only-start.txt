@@ -55,9 +55,9 @@ step 06 insert Word (5 units) at 2411
 class value 242 56fa17f01b759285
 class identity 22 1b504d0b5706723d
 class repr 44 44149bb4518c4cc6
-class wire 1 c601176595d59780
+class wire 1 dac0d529393878da
 step 07 insert SpacedWord (4 units) at 1648 + align 3 + insert Bidi (1 units) at 908
 class value 242 4e3331fbc75b106c
 class identity 22 ccb31110a64950fe
 class repr 44 72c4040452ee181f
-class wire 1 eef7b335abfb2466
+class wire 1 e89a41a62aba121d

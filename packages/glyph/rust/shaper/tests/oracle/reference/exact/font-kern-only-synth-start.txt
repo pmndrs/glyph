@@ -55,7 +55,7 @@ step 06 replace 2 at 538
 class value 230 c7c99d80ea59b230
 class identity 22 fbb10d155ffd2f6a
 class repr 44 5ff8949a29dca73a
-class wire 1 b6d1ce0620a8ba54
+class wire 1 74747d75a817af30
 step 07 insert Word (1 units) at 149 + width 73 + metrics size 16 spacing 0 line 1.2 word 3 + replace 2 at 1483
 class value 230 380db0d9be4474cd
 class identity 22 a878200077500150

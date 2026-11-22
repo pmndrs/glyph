@@ -48,7 +48,7 @@ class value 300 f131eb6eaffb74eb
 class identity 31 4f4678908e86acb4
 class repr 64 36fcb656a068b62c
 class cache 5 06ed371bbb5668ae
-class wire 1 bde44f735d39c4aa
+class wire 1 7e02bdc6ddf4ef35
 step 04 material and edit
 class value 300 acf3faa0a944ee44
 class identity 31 88b82ebea7fef8c6
@@ -60,7 +60,7 @@ class value 300 9eeefe0f5358368c
 class identity 31 c0b4415deaa44f0a
 class repr 64 5fa4eb449dac45d6
 class cache 5 8939a825104bb0bb
-class wire 1 587e3b8209261fc8
+class wire 1 009d78337a7add44
 step 06 material off
 class value 300 41937c159d24364a
 class identity 31 6ed800afee44b4a2
@@ -71,7 +71,7 @@ step 07 insert Bidi (1 units) at 87 + add span 218..231 + delete 2 at 231 + mate
 class value 265 0884e40346b97fe7
 class identity 29 b03af3c745add53f
 class repr 44 91b151dedf4ed1c5
-class wire 1 16331dc03520fb0a
+class wire 1 889ca4a1741b8262
 step 08 material of span 2
 class value 265 0884e40346b97fe7
 class identity 29 b03af3c745add53f
@@ -81,4 +81,4 @@ step 09 insert HardBreak (1 units) at 0 + width 300.01563 + insert SpacedWord (6
 class value 265 8c2442ae2a5a02f4
 class identity 29 564e62ebf2101787
 class repr 44 f4942cb312f10205
-class wire 1 c1b498f83b6b94ca
+class wire 1 7a7e36267d5e6b3d

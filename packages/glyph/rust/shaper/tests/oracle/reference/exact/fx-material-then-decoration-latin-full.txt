@@ -66,13 +66,13 @@ class value 300 baf1c198826df851
 class identity 31 be4c641f78185868
 class repr 64 221ab2b54b31bab0
 class cache 5 135421ae73fc5dc2
-class wire 1 1a5beed5f6635fa7
+class wire 1 7205562defc617e8
 step 07 width 420.01563 + delete 4 at 186 + opacity of the root
 class value 300 b56634ff6ef0dda5
 class identity 31 eaf9b430d2bcba57
 class repr 64 56aedf5af44f4636
 class cache 5 b2a16ccd17593fd6
-class wire 1 53fd2852301bf429
+class wire 1 b3339c66146c9b2c
 step 08 delete 200 at 13
 class value 265 1f4d42f7ceb3f427
 class identity 29 2cc64d24f2bb821a

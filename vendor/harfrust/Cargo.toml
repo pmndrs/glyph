@@ -45,6 +45,7 @@ default = [
     "aat",
     "language-tags",
     "rand",
+    "variations",
 ]
 experimental_font_api = []
 # BCP 47 to OpenType language-system resolution (`tag_table`). Without it, language systems
@@ -56,6 +57,9 @@ libm = [
 ]
 # Random alternate selection for the OpenType `rand` feature.
 rand = []
+# Shaping at non-default variable-font instances (`ShaperInstance` coordinates, GDEF/HVAR/VVAR/MVAR
+# and `gvar` deltas). Without it every font shapes at its default instance.
+variations = []
 std = ["read-fonts/std"]
 
 [lib]

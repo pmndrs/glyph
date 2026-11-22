@@ -1,10 +1,12 @@
 use crate::hb::tables::{SelectedCmapSubtable, TableRanges};
 
 use super::cache::hb_cache_t;
+#[cfg(feature = "experimental_font_api")]
+use read_fonts::TableProvider;
 use read_fonts::{
     tables::cmap::{Cmap, Cmap14, CmapSubtable, MapVariant},
     types::GlyphId,
-    FontRef, TableProvider,
+    FontRef,
 };
 
 pub type cache_t = hb_cache_t<21, 19, 256, 32>;
@@ -43,6 +45,7 @@ impl<'a> Charmap<'a> {
         }
     }
 
+    #[cfg(feature = "experimental_font_api")]
     pub fn from_tables(font: &impl TableProvider<'a>) -> Self {
         if let Ok(cmap) = font.cmap() {
             let subtable = if let Some((index, record, subtable)) = cmap.best_subtable() {

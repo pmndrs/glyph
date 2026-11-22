@@ -35,7 +35,7 @@ step 02 insert Word (3 units) at 4
 class value 230 4eb6048155018535
 class identity 22 3a6e8d4b106f660a
 class repr 44 977556084adc2b50
-class wire 1 46a8dcfffe2e6581
+class wire 1 4f6622e6396d6752
 step 03 
 class value 210 8111740356c6feae
 class identity 20 b5784e92a14ff85b

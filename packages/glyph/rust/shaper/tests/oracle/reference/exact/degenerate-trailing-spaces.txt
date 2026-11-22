@@ -35,9 +35,9 @@ step 02 add span 0..8
 class value 230 a5ffef8e13243faf
 class identity 22 eedfe2db2517817b
 class repr 41 66868f4cabbd9bdd
-class wire 1 4f07bd1298f68bb8
+class wire 1 3fcb635593b84732
 step 03 insert Word (4 units) at 15
 class value 230 c2b7df6249b93944
-class identity 22 e11048d8a78b1717
+class identity 22 544258fc42419f78
 class repr 41 d1998e6b05ef2bf6
 class wire 1 704567fe8f42c70f

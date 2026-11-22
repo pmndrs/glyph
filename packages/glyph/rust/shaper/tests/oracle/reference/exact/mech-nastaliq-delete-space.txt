@@ -43,11 +43,11 @@ class repr 41 af09e67c46a8bc0c
 class wire 1 2f3f36df2d1c8730
 step 04 replace 5 at 3 + insert Mark (1 units) at 11
 class value 230 c028327b1d658004
-class identity 22 9e7be0ac8c715430
+class identity 22 ca5d468f54859494
 class repr 41 7f2b5a26485197e2
-class wire 1 e1556522e23e5f5f
+class wire 1 eb64f25d66575c52
 step 05 delete 9 at 11 + add span 1..10 + insert SpacedWord (5 units) at 6
 class value 242 b7c88af0e6862aa0
-class identity 22 c5784cd6ccee9c74
+class identity 22 b7903e3005e79e50
 class repr 41 602619cabf54cb38
-class wire 1 285b6c44a0ba850a
+class wire 1 df635fea3f9827bc

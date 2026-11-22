@@ -35,9 +35,9 @@ step 02 replace 4 at 1378
 class value 242 a1b1a3b4b0598186
 class identity 22 0c8af56a77fc49de
 class repr 44 0614aacbf00f8e47
-class wire 1 57e27fd4ab44f262
+class wire 1 1e0c9bf76ac805b8
 step 03 insert Foreign (5 units) at 1141 + flip case at 1141
 class value 242 c941ca6adc4e05c7
 class identity 22 66003cffe8305f74
 class repr 44 96a77f8bfadf2970
-class wire 1 5be5525e85f065f3
+class wire 1 bdff16344e3221b9

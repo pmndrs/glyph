@@ -202,6 +202,7 @@ dependencies = [
  "core_maths",
  "flate2",
  "harfrust",
+ "pmndrs-glyph-outline",
  "pmndrs-glyph-raster-artifact",
  "read-fonts 0.42.1",
  "serde",
@@ -213,12 +214,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "pmndrs-glyph-outline"
+version = "0.0.0"
+dependencies = [
+ "pmndrs-glyph-slug-core",
+ "read-fonts 0.42.1",
+]
+
+[[package]]
 name = "pmndrs-glyph-raster-artifact"
 version = "0.0.0"
 dependencies = [
  "ktx2",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "pmndrs-glyph-slug-core"
+version = "0.0.0"
+dependencies = [
+ "core_maths",
 ]
 
 [[package]]

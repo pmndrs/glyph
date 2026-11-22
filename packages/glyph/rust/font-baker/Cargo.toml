@@ -47,6 +47,7 @@ read-fonts = { version = "0.42.1", default-features = false, features = ["libm"]
 serde = { version = "1.0.229", default-features = false, features = ["alloc", "derive"] }
 serde_json = { version = "1.0.145", default-features = false, features = ["alloc"] }
 pmndrs-glyph-raster-artifact = { path = "../raster-artifact", default-features = false }
+pmndrs-glyph-outline = { path = "../glyph-outline" }
 skera = { version = "=0.5.1", default-features = false, optional = true }
 skrifa = { version = "0.45.1", default-features = false, features = ["libm"] }
 thiserror = { version = "2.0.19", default-features = false }
@@ -68,3 +69,14 @@ strip = true
 # `aat` and `rand` cargo features; the dependency above leaves both off.
 [patch.crates-io]
 harfrust = { path = "../../../../vendor/harfrust" }
+
+# Outline decoding runs over every glyph when an outline font loads; at `z` it decoded a
+# 65,535-glyph CFF font about 2x slower than at 3.
+[profile.release.package.pmndrs-glyph-outline]
+opt-level = 3
+
+[profile.release.package.read-fonts]
+opt-level = 3
+
+[profile.release.package.pmndrs-glyph-slug-core]
+opt-level = 3

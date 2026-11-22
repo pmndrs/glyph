@@ -109,7 +109,7 @@ class value 804 d0cef99fd8b36a97
 class identity 64 0f67e6157f775928
 class repr 193 28c364bc196c28b0
 class cache 5 72ec9ccf70f4b2d6
-class wire 1 0bbc2b7229567273
+class wire 1 dfc95311fc1c9f4c
 step 04 move paragraph 1 last
 class value 784 a0d1d7968f15712d
 class identity 62 4ad0ada16e3f6f05

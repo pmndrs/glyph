@@ -109,7 +109,7 @@ class value 804 afc6439bc3d43460
 class identity 64 356749114bfad36f
 class repr 193 28c364bc196c28b0
 class cache 5 72ec9ccf70f4b2d6
-class wire 1 f654a77a05c99032
+class wire 1 fc8afa4aa28c114c
 step 04 move paragraph 1 last
 class value 804 510590dfe3cad7dc
 class identity 64 862831824c86d9a1

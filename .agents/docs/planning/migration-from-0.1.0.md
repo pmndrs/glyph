@@ -20,12 +20,12 @@ sources:
     title: Deferred, never-stale preparation
 generated:
   by: anthropic/claude-fable-5-2
-  at: '2026-11-21T22:00:00Z'
+  at: '2026-11-22T23:30:00Z'
 ---
 
 # Migrating from @pmndrs/glyph 0.1.0
 
-This release is breaking and has no compatibility paths. The `exports` map is unchanged: no entry point was added or
+This release is breaking and has no compatibility paths. The one entry point added is `@pmndrs/glyph/pixi3d`; none was
 removed. Sections 1–4 are for application code; section 5 is for code that implements a renderer against
 `@pmndrs/glyph/core` or the shader subpaths. The name-level evidence for each row is in the
 [API summary](api-summary-for-review.md).
@@ -100,10 +100,17 @@ None of these require a change; they replace patterns that no longer work or wer
   something else. Inside it, writing a layout input of any text throws `GlyphLayoutPhaseError`.
 - `root.onError`, `root.onInvalidate`, `root.attach(scene)` on a Three root; `text.error` and `text.onError` on
   TypeGPU text.
+- `@pmndrs/glyph/pixi3d`: PixiJS 3D text on WebGPU and WebGL2, a subpath of this package with optional peers `@pixi/3d`
+  (`>=0.1.0 <0.2`) and `pixi.js` (`>=8.23.0 <9`). It is not a separate package. `Pixi3DText` has `measure`, `glyphs`,
+  `split` and the editing methods below, including `replace`, and the entry exports `TextOffsetError` and the editing
+  types.
+- Frustum culling is on by default for every built-in draw, with no API: each draw is culled by a bound computed from
+  the records it draws. `frustumCulled = false` on a `Text`, an enclosing `TextGroup` or a `Glyphs` is respected and
+  submits every draw that places its records. For a custom material see "Custom materials" below.
 - `frameloop="demand"` (React) and on-demand rendering (Vue) now draw an imperative `ref.current.text = …`.
 - `Constraints.anchor` (`{ x, y }`), `measure().anchorOffset`, `fontMetrics` on measurements and lines, glyph outlines
   (`outlineAt`), `TextGroup.batching`, and the `msdfAtlas: 'msdf' | 'sdf'` config option.
-- Editing geometry and one exact edit, on Three `Text` and on TypeGPU text. These are what an application needs to
+- Editing geometry and one exact edit, on Three `Text`, TypeGPU text and `Pixi3DText`. These are what an application needs to
   build its own editable field; selection state, caret drawing, keyboard, pointer, clipboard and undo stay with the
   application.
 
@@ -139,8 +146,35 @@ None of these require a change; they replace patterns that no longer work or wer
   });
   ```
 
-Results that change without a code change: line breaks after opening quotation marks now follow UAX #14 LB15a, so text
-containing them can wrap differently; `boundingBox`, `measureGlyphs` and `split` include the anchor.
+Results that change without a code change:
+
+- Line breaks after opening quotation marks follow UAX #14 LB15a, so text containing them can wrap differently.
+- `boundingBox`, `measureGlyphs` and `split` include the anchor.
+- Empty and newline-only text have lines: `""`, `"\n"` and `"\n\n"` measure 1, 2 and 3 lines (they had none), and an
+  empty paragraph reports a known, empty ink box instead of an unknown one. Code that treated `lineCount === 0` as
+  "empty" must test the text instead.
+- An ellipsis follows the paragraph direction (it is at the end side of a right-to-left line), and an ellipsis line fits
+  its slot, with the spaces its fit hung charged to it. Right-to-left lines fill exclusion slots in reading order.
+- Lone surrogates draw as U+FFFD, one unit for one unit (section 2); nothing is counted.
+- Fonts baked with outlines decode them inside the dynamically loaded font baker, not the text shaper. No name,
+  signature or artifact changed; the first outline font fetches the baker if nothing had loaded it, and a cold decode
+  of 65,535 CFF glyphs measured the same (375 ms against 371 ms in Node).
+
+### Custom materials
+
+`ThreeTextMaterial` gained two required fields, `frustumCulled: boolean` and `boundsPadding: number`, so an object
+literal such as `{ create }` no longer type-checks. Build the value with
+`defineTextMaterial(create, { boundsPadding, frustumCulled })`; both options are optional and default to `true` and `0`.
+`boundsPadding` is the furthest the vertex stage moves any vertex along any axis, in the units of `context.position`
+(finite, `>= 0`; invalid options throw `TypeError` or `RangeError`). Glyph grows each draw's culling bound by it, so a
+material that displaces vertices must declare how far or pass `frustumCulled: false`, or its glyphs can be culled while
+on screen. Draws of custom materials are now culled by default; 0.1.0 computed no bound for them.
+
+Every built-in material context (decoration, bitmap, MSDF, Slug) also carries `position` (the final draw-local
+position the default material assigns to `positionNode`) and `paragraphPosition` (the unanchored paragraph-local
+position, +X right and +Y up). Both are evaluated per vertex and reach a fragment node interpolated, so either is safe
+in a vertex or a fragment node. A displacement assigns `material.positionNode` from `position`; fragment reads still see
+the undisplaced value.
 
 ## 5. Renderer integrators
 
@@ -169,7 +203,8 @@ draws, before the frame that draws them. MSDF quads are trimmed to the ink.
 ### New `/core` exports
 
 `msdfBakedPages`, `MsdfBakedPages`, `MSDF_GLYPH_TABLE_STRIDE`, `MSDF_GLYPH_TABLE_LAYER_STEP`,
-`SLUG_GLYPH_TABLE_STRIDE`, `createGlyphPlacements` with the types `GlyphPlacement`, `GlyphPlacements`, `GlyphRun`,
+`SLUG_GLYPH_TABLE_STRIDE`, `createDecorationCodecProgram`, `decorationSchema`, `SlugBandResidency`,
+`SLUG_RESIDENT_BAND_CURVE_WIDTH`, `createGlyphPlacements` with the types `GlyphPlacement`, `GlyphPlacements`, `GlyphRun`,
 `GlyphLine` and `GlyphSpace`, `GlyphSchema.preservesHostTopology`, and an optional argument on
 `GlyphRootServices.syncTransforms(updates?)`.
 

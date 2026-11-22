@@ -28,29 +28,29 @@ stage gpu identity 2 61b1dc89435ebcd2
 stage gpu value 3 982a5e0106c4814b
 step 01 insert in paragraph one
 class value 230 b3c32a6234b3a948
-class identity 22 823b63a35a4306c0
+class identity 22 5964e9537bc0c060
 class repr 41 816ebed227cc9efa
-class wire 1 e77bb83c52103758
+class wire 1 cb09b9237ed2eb74
 step 02 restore
 class value 230 19f3f10565aa6aef
-class identity 22 62f1133c79bf4cb9
+class identity 22 5ee7ebb5c45750fa
 class repr 41 86503e9b0e4f320d
-class wire 1 47e8038702197459
+class wire 1 82b3d31801fe971a
 step 03 replace 5 at 14
 class value 230 926bfb96fdc9dabe
-class identity 22 aaf0a3d4d75c2b24
+class identity 22 a644a761c821d9cd
 class repr 41 48ebf7bbca9ce5b2
 class cache 3 4b17b0a92684b0b9
 class wire 1 28054ef84e870098
 step 04 width 399
 class value 230 3ea7d5f4188bb0e8
-class identity 22 aaf0a3d4d75c2b24
+class identity 22 a644a761c821d9cd
 class repr 41 48ebf7bbca9ce5b2
 class cache 3 4b17b0a92684b0b9
 class wire 1 9e16a18c38caf65d
 step 05 add span 546..586
 class value 230 7d2e939eb58a2bb2
-class identity 22 8dd6cd3d33fd6145
+class identity 22 aecaaae9be3f5086
 class repr 41 0251a0a8616d6a33
 class cache 3 4b17b0a92684b0b9
 class wire 1 c3bcb35bf9b7198a

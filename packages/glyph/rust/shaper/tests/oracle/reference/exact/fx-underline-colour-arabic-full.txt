@@ -77,4 +77,4 @@ step 10 delete 6 at 138
 class value 265 83a10141ad38ec3d
 class identity 29 5b8647b9e0945df1
 class repr 44 aeae5778d144693a
-class wire 1 0320bec8e57a9b52
+class wire 1 10ebef15720ee714

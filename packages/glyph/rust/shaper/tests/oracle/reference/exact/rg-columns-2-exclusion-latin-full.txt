@@ -35,46 +35,46 @@ class repr 44 756e2937064e0fef
 class wire 1 39d6f20f00ad3063
 step 02 delete in a later region
 class value 253 0e3cd0cc2fc5b141
-class identity 29 1737edd852064414
+class identity 29 d876ad76dc83959f
 class repr 44 24568e905455cf33
-class wire 1 eed4fbd0c327921f
+class wire 1 9ba2932a232b7a04
 step 03 narrower measure
 class value 253 7bc61acfa5fd5af8
-class identity 29 a8424eac183011b9
+class identity 29 be467d92855b4fc8
 class repr 44 08e30966a117d62e
 class wire 1 54455051d19c3833
 step 04 shorter regions
 class value 253 2a5e2f6ba3f76042
-class identity 29 bc95b1fcb80cf81c
+class identity 29 004c712ea0009224
 class repr 44 eea98131ee08b719
 class wire 1 3d08b2b6f946fa1f
 step 05 three columns, wider gap
 class value 253 673e7f9debb288aa
-class identity 29 4de92116dd3d41e4
+class identity 29 92568f387b0914ad
 class repr 44 aed6307b5b79e394
-class wire 1 270f2e4dd87f72d0
+class wire 1 ece52490a7c7ab51
 step 06 one region
 class value 253 ffd73a00522013a7
-class identity 29 61fe48682288a39e
+class identity 29 1e03f54452ad9771
 class repr 44 541c8dcc63147821
-class wire 1 454259ed194872d6
+class wire 1 833150701dc3b425
 step 07 the starting regions
 class value 253 0e3cd0cc2fc5b141
-class identity 29 f2b31629f1f3fb68
+class identity 29 a0a68c4026b8204a
 class repr 44 24568e905455cf33
 class wire 1 ce43d8179fcaa129
 step 08 add span 380..412 + insert Word (4 units) at 0 + insert Foreign (8 units) at 112 + insert Foreign (217 units) at 465
 class value 253 7bbf6fcb78672824
-class identity 29 1e109fea5fefa215
+class identity 29 9617942178ae52f8
 class repr 44 77e460b175f01baa
 class wire 1 5f08e1c54dfa6018
 step 09 
 class value 233 a638a0344a915579
-class identity 27 67dbef9c1837f303
+class identity 27 77d3e84ed7a2a6fb
 class repr 44 77e460b175f01baa
 class wire 1 9040ffcfcf5f7ec0
 step 10 add span 274..292
 class value 253 4610717f97c74780
-class identity 29 67cd1ff25f1c21c1
+class identity 29 764c2d2e6d05bee0
 class repr 44 a61492c387e1ed0c
-class wire 1 9e6967bbf8484ecc
+class wire 1 0957950c15895857

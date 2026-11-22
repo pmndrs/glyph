@@ -31,37 +31,37 @@ stage gpu identity 2 f2e29aa5ab43293a
 stage gpu value 3 e74bdf8d60815a12
 step 01 delete half, under the limit
 class value 230 ba470d708a346c18
-class identity 22 833780f7fd29fd69
+class identity 22 a14abf6a78b4415f
 class repr 44 dc8f71cb435e1b09
 class cache 5 5d81e22640576ca3
-class wire 1 6683fa328a193594
+class wire 1 ec4a50d8bf7abb7b
 step 02 two edits in one request, over the limit
 class value 266 c427c0123f146fe8
-class identity 24 2951df3eb70b049b
+class identity 24 747f5ea2aa5c62bc
 class repr 64 673023b045028888
 class cache 5 7cb63a456530cfbe
 class wire 1 79bb88ab3c3301a1
 step 03 raise the limit
 class value 230 021d026c198d4bc4
-class identity 22 24c1f200e2f3abdd
+class identity 22 1ad8adefd92d9ed3
 class repr 44 231587889f680f9f
 class cache 5 7cb63a456530cfbe
-class wire 1 edfe24d21e1dda3b
+class wire 1 114d3a02c91ff2af
 step 04 insert HardBreak (1 units) at 11
 class value 265 d3f21bb10583e05f
-class identity 24 6f5d3f3a162204f5
+class identity 24 77f819d06a9589cb
 class repr 64 d423a1c16c94cf0a
 class cache 5 ba9f86dc411f0161
 class wire 1 a528de5bf92466ba
 step 05 metrics size 16 spacing 0 line 1.2 word 0
 class value 245 e798a15455ea828a
-class identity 22 c263d4dd15ab932f
+class identity 22 3f4ff95ff81107e9
 class repr 64 d423a1c16c94cf0a
 class cache 5 ba9f86dc411f0161
 class wire 1 7c302c2aabd1c4ac
 step 06 insert Word (2 units) at 248 + insert HardBreak (1 units) at 243 + replace 3 at 32 + max lines 3
 class value 230 2148859a1310025c
-class identity 22 0d48307fcb97178c
+class identity 22 a6066cc0879a1c10
 class repr 44 983229dfcccfa77d
 class cache 5 62f9280ccc167138
-class wire 1 bc2a4cb3c0952454
+class wire 1 2151ad5e596422eb

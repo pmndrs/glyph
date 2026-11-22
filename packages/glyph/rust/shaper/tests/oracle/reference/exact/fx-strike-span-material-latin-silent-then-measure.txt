@@ -54,10 +54,10 @@ class value 280 40f4effdc48b7a26
 class identity 29 bef31005c5539546
 class repr 64 e76f2c6888eba347
 class cache 5 6c222f41092c1a77
-class wire 1 c250af3fc2b10754
+class wire 1 6ee52c4e6e318044
 step 05 material and width
 class value 280 e03330644fc87571
 class identity 29 0f33c30f7d42d610
 class repr 64 14d8818c07e735bb
 class cache 5 03014a65336f4bae
-class wire 1 88486be017a805d0
+class wire 1 7f6c164bbdfecb0a

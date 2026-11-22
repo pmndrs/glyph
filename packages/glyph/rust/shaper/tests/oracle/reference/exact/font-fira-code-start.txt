@@ -59,13 +59,13 @@ class cache 5 a3ea252f7190ba7c
 class wire 1 1b1ffaece7e19a9d
 step 06 insert Foreign (8 units) at 1107
 class value 230 26cd37a106513bef
-class identity 22 2ed304e8e936bca0
+class identity 22 69754a45a6fdca19
 class repr 44 ba9445166aee61c9
 class cache 5 84ac0fbd2b2160b9
-class wire 1 1db3d8e8868ba9df
+class wire 1 9942ca1a5ab575ba
 step 07 replace 6 at 1812
 class value 230 3194e3b064994061
-class identity 22 fb75ec8f3f26db72
+class identity 22 874d8e1b4a71e291
 class repr 44 f69f2545e0ef3806
 class cache 5 4e50c38418c3ce12
-class wire 1 c4b72885ed1d6229
+class wire 1 b4d1ef6929d57dca

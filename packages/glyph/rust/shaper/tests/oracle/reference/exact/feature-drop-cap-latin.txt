@@ -31,19 +31,19 @@ stage gpu identity 2 a4f5fd50157d2e2f
 stage gpu value 3 f5ffc6a2f2cac854
 step 01 insert Word (3 units) at 665
 class value 301 ed13f8af50ca2f53
-class identity 24 67b002a76b184036
+class identity 24 98e49e764530ce08
 class repr 64 c991491831091462
 class cache 5 c94629db999d2614
-class wire 1 0889d1e94293f6c7
+class wire 1 fd636c9adde62ff6
 step 02 delete 7 at 2129 + insert Foreign (4 units) at 335 + add span 1382..1420
 class value 313 7466a6df627de07a
-class identity 24 deecab7f599ad332
+class identity 24 051f0101a836d6cb
 class repr 64 ecdd7715be597b12
 class cache 5 0529f8665443ef13
-class wire 1 fe11b151a5ad3f6b
+class wire 1 f3ab88728676979b
 step 03 delete 2013 at 451
 class value 266 3c6263e1e6e6df24
-class identity 22 332074aa6d5ee4b8
+class identity 22 314c904d9162523c
 class repr 44 a558e0abb5ad5bd4
 class cache 5 3b6c9c0ec39c3d52
 class wire 1 19133f194539172b

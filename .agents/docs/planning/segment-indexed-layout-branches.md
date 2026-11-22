@@ -93,3 +93,10 @@ comparison).
 | `experiments/sil-exp-reflow` | Experiments: validity interval, advance pyramid, integer pen, affine placement, content-anchored blocks | Top |
 | `experiments/sil-exp-unicode` | Experiments: SIMD class stage, bit-parallel rule matching, bidi fast outs, cluster build | Top |
 | `experiments/sil-fixes` | Open bugs and held items (handoff sections 5 and 5a) | Opus |
+
+## At handoff, 2026-11-22
+
+Integration branch `experiments/segment-indexed-layout` at `sil-green-49`. Open lane branches (local only, not
+pushed): `experiments/sil-refreeze`, `experiments/sil-exp-unicode`, `experiments/sil-size`. Their state and how to
+finish each is in [the handoff](segment-indexed-layout-handoff.md), section 3. Every other `experiments/sil-*` branch
+is merged and deleted.

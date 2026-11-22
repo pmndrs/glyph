@@ -4,6 +4,7 @@ import { runGlyphTest } from './test.mts';
 const rustCrates = [
   'bitmap-baker',
   'font-baker',
+  'glyph-outline',
   'mtsdf-admission',
   'mtsdf-baker',
   'mtsdf-core',

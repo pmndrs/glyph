@@ -1,6 +1,6 @@
 use std::{fs, path::PathBuf};
 
-use pmndrs_glyph_shaper::outline::{GlyphOutline, OutlineError, draw_glyph};
+use pmndrs_glyph_outline::{GlyphOutline, OutlineError, draw_glyph};
 use read_fonts::{
     TableProvider,
     model::pen::PathElement,

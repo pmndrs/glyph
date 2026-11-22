@@ -78,4 +78,4 @@ class value 288 5b259e74d3c9ba29
 class identity 31 1c2f504027ae8043
 class repr 64 1e1ee3fb73b25013
 class cache 5 08b169cbc74cae0d
-class wire 1 8d5adea251bd6b8b
+class wire 1 887659797ded0093

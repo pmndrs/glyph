@@ -38,7 +38,7 @@ class value 266 c31547b0f32e74d7
 class identity 24 a1a4c06f2d3da7b9
 class repr 64 1ac6ea433398f4c5
 class cache 3 187454528a84bece
-class wire 1 2040576066c2be8c
+class wire 1 0871069edcd37340
 step 03 delete 1 at 1052 + align 3 + restyle span 2
 class value 266 ee6833453eded9d5
 class identity 24 4463fa2ebdfbbe0a

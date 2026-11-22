@@ -28,26 +28,26 @@ stage gpu identity 2 ed1a772f654208f2
 stage gpu value 3 19b35e5a8f800fe4
 step 01 append a line
 class value 230 69b2d6a8c37be2a3
-class identity 22 33a5dcca9ba40459
+class identity 22 fa07d01bdec1aa85
 class repr 44 298474b3791ebae6
-class wire 1 963db7eae7df0489
+class wire 1 bfa241d021301760
 step 02 restore
 class value 230 71afcb7df66f8874
-class identity 22 68d8765547f4e5be
+class identity 22 883613a8e1b15cf7
 class repr 44 a804b2585fa443d1
-class wire 1 f331a5fd79519c0b
+class wire 1 26d0d7079fd27038
 step 03 replace 6 at 86
 class value 230 f83a852568abfb26
-class identity 22 31e96ec2e365420b
+class identity 22 b81e16da91225cd1
 class repr 44 31d8f8527edc3465
-class wire 1 98fd51631d453a91
+class wire 1 0f2219143249f60c
 step 04 delete 1 at 53
 class value 230 3b3c95fd12cbf05f
-class identity 22 9963d3ded4adec87
+class identity 22 85173d9a0687a0b2
 class repr 44 976cbdb41dca1a50
 class wire 1 46d81bc2bc1bf27f
 step 05 insert Foreign (201 units) at 180
 class value 230 208884979dd3c1ad
-class identity 22 998fe664b09f2d6b
+class identity 22 a019b5e05a9ea39b
 class repr 44 b0e5bbd94d54e83d
 class wire 1 d1bf9e1abbc5fe60

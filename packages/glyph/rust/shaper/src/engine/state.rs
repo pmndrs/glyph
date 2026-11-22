@@ -1,4 +1,6 @@
-use alloc::{boxed::Box, collections::BTreeMap, vec::Vec};
+use alloc::{boxed::Box, vec::Vec};
+
+use super::id_map::IdMap;
 use core::{cell::RefCell, num::NonZeroU32};
 
 use crate::{
@@ -151,11 +153,11 @@ impl EngineError {
 
 #[derive(Default)]
 pub struct TextEngine {
-    codecs: BTreeMap<u32, ValidatedCodec>,
+    codecs: IdMap<ValidatedCodec>,
     font_bindings: Vec<RegisteredFontBinding>,
     font_stacks: Vec<RegisteredFontStack>,
-    planners: BTreeMap<u32, PlannerState>,
-    invalidated_roots: BTreeMap<u32, RootHighWater>,
+    planners: IdMap<PlannerState>,
+    invalidated_roots: IdMap<RootHighWater>,
     gather: CodecGatherWorkspace,
     gather_cache: Option<GatherCacheKey>,
     prepared_gather_cache: Option<GatherCacheKey>,

@@ -53,17 +53,17 @@ class cache 5 cd1a66053b38895b
 class wire 1 3c860fe5b28d0712
 step 05 delete 4 at 2340
 class value 230 acf25d15b54c5720
-class identity 22 805d2e5da6e49ed7
+class identity 22 f39b5fa277fe07c1
 class repr 44 9d69a76089d163b6
 class cache 3 2cae2f87056c81a2
-class wire 1 8f86c44daa271e11
+class wire 1 f687e2310775c898
 step 06 insert Mark (199 units) at 85 + direction 2 + insert SpacedWord (11 units) at 1209 + max lines 0
 class value 230 1b431350b8938029
-class identity 22 14bdb5ddc8aef586
+class identity 22 cdb7f1813c39ae20
 class repr 44 bebc836b1e672010
-class wire 1 dc60deef5e7bdcf1
+class wire 1 dc02621e909004be
 step 07 delete 5 at 1289
 class value 230 bedf5a1c60208dd1
-class identity 22 3ba06c2fc1865ebb
+class identity 22 a08b624f7a7d1991
 class repr 44 ad48e2e5b4c0af91
-class wire 1 75be3ebe972f3a28
+class wire 1 82a6be82bef4fc80

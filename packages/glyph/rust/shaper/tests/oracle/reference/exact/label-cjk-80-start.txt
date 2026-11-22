@@ -37,13 +37,13 @@ class cache 3 a870d664d9fe6ae5
 class wire 1 18b32af903094183
 step 02 insert Word (1 units) at 60
 class value 230 c28a43c7687fae30
-class identity 22 18ebfe791ecd2ec7
+class identity 22 b62b3261f05c44f5
 class repr 41 fb25cdec5f4716e8
 class cache 3 bdf7fca7cfcce68b
-class wire 1 e20b5b079558917d
+class wire 1 2dead36ab4b99121
 step 03 replace 2 at 17 + flip case at 38 + metrics size 16 spacing 2 line 1.2 word 0
 class value 230 906bfd18ce77544f
-class identity 22 dd5b4729f07fed74
+class identity 22 7f357cc818e16ebc
 class repr 41 765d6f2a0dd1f8fb
 class cache 3 bdf7fca7cfcce68b
 class wire 1 bfd8eba383a11be4

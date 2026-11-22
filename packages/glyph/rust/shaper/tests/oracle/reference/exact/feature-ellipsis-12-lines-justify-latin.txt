@@ -31,19 +31,19 @@ stage gpu identity 2 e43ac729b5e15deb
 stage gpu value 3 6f65337682901dce
 step 01 insert SpacedWord (9 units) at 814
 class value 266 bbb71558f36089b2
-class identity 24 bfb4a565a6c329cd
+class identity 24 20624d0cb0f33ef2
 class repr 64 ae578357fd744865
 class cache 5 e324dcf149f1460d
-class wire 1 817f74ecf219ed7d
+class wire 1 2f632d9661e32804
 step 02 add span 1632..1666 + delete 1 at 1205 + remove span 2
 class value 266 c952210dadf396ef
-class identity 24 a07dc91d9e4474a5
+class identity 24 fcf1d55553e95129
 class repr 64 a7a4caa84a6322a9
 class cache 5 c45de08d2cb8a980
 class wire 1 09f831c97628b3d0
 step 03 add span 1240..1268
 class value 266 d2643343d4249d9f
-class identity 24 bbdb51b66fec6a9c
+class identity 24 9d528a16c394d37b
 class repr 64 a7a4caa84a6322a9
 class cache 5 c45de08d2cb8a980
 class wire 1 792fd9265d0aa3b8

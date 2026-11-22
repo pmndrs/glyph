@@ -33,21 +33,21 @@ class repr 41 9607ee198a1efca4
 class wire 1 715e728c7f44e3c5
 step 02 a hard break after it
 class value 266 a96a4c3f9943e809
-class identity 24 65b68872416d6458
+class identity 24 06e961fc622ae91a
 class repr 61 3036e62900eef0b3
-class wire 1 a6bf3af301a9632f
+class wire 1 d3be7feabcb12159
 step 03 delete 5 at 1 + replace 1 at 0 + width 299.51563
 class value 230 934bc17564bcc561
-class identity 22 7061465bb51826e4
+class identity 22 5a77c23d5b8c2393
 class repr 41 8348129ef6d0a6d5
 class wire 1 0704ab5b3a1d182c
 step 04 replace 1 at 0
 class value 230 11c307d0b3dfc283
-class identity 22 4df84e626ae7a9b2
+class identity 22 6a0a391232def053
 class repr 41 adaa4518ed058cf6
 class wire 1 473365ffbe21734d
 step 05 insert Mark (1 units) at 0
 class value 230 c58ce58cf42eb410
-class identity 22 0b28fad55b582883
+class identity 22 507d3d244a1d727c
 class repr 41 a39cab02a262df83
 class wire 1 21282f2ead066d54

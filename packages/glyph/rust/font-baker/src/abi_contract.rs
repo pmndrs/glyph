@@ -9,6 +9,15 @@ pub const BAKE_EXPORT: &str = "pmndrs_font_baker_bake";
 pub const PREPARE_EXPORT: &str = "pmndrs_font_baker_prepare";
 pub const INSPECT_EXPORT: &str = "pmndrs_font_baker_inspect";
 pub const RESULT_LEN_EXPORT: &str = "pmndrs_font_baker_result_len";
+pub const GLYPH_OUTLINE_EXPORT: &str = "pmndrs_font_baker_glyph_outline";
+pub const GLYPH_OUTLINE_POINTER_EXPORT: &str = "pmndrs_font_baker_glyph_outline_ptr";
+pub const GLYPH_OUTLINE_LEN_EXPORT: &str = "pmndrs_font_baker_glyph_outline_len";
+/// `glyphOutline` statuses: decoded; the SFNT or glyph is malformed; decoding ran out of memory;
+/// the SFNT range is not an active allocation.
+pub const GLYPH_OUTLINE_STATUS_OK: u32 = 0;
+pub const GLYPH_OUTLINE_STATUS_INVALID_FONT: u32 = 2;
+pub const GLYPH_OUTLINE_STATUS_INVALID_REQUEST: u32 = 6;
+pub const GLYPH_OUTLINE_STATUS_OUT_OF_MEMORY: u32 = 7;
 
 pub const RESPONSE_HEADER_BYTES: u32 = size_of::<ResponseHeader>() as u32;
 pub const RESPONSE_HEADER_ALIGNMENT: u32 = align_of::<ResponseHeader>() as u32;

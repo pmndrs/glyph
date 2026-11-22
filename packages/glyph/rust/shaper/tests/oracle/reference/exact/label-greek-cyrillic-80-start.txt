@@ -33,11 +33,11 @@ class repr 44 7e141b9bde810902
 class wire 1 e6c4295f0a89eecc
 step 02 delete 4 at 63 + delete 5 at 48
 class value 230 80ce384311dfbf06
-class identity 22 c3c4c83648047243
+class identity 22 238084452eac53f2
 class repr 44 32badcf7e6ce6818
-class wire 1 bbb87e8aeeb10a7b
+class wire 1 3ddad24d992fa5eb
 step 03 insert Mark (1 units) at 17
 class value 230 f9e916afe9cd4a80
-class identity 22 4cd5b95c79297deb
+class identity 22 dfb1dee0dd3adacc
 class repr 44 548684880fb530d9
 class wire 1 7aebf3ca23d0c7a6

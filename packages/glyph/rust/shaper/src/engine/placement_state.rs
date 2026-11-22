@@ -58,8 +58,9 @@ pub(crate) struct PlacementState {
     line_segment_starts: Vec<u32>,
     line_segment_counts: Vec<u32>,
     segment_instance_counts: Vec<u32>,
-    paragraph_run_lookup: Vec<(RunCanonicalRevision, u32)>,
-    replacement_run_lookup: Vec<(RunCanonicalRevision, u32)>,
+    /// `pack2(canonical revision, run index)`, ascending: sorted by the shared `u64` kernel.
+    paragraph_run_lookup: Vec<u64>,
+    replacement_run_lookup: Vec<u64>,
     last_segment: Option<(u32, PlacementSegment, SegmentTranslation)>,
 }
 
@@ -835,7 +836,7 @@ fn resolve_run<'a>(
     segment: PlacementSegment,
     layout_runs: &'a [LayoutRun],
     replacement_runs: &'a [LayoutRun],
-    lookup: &[(RunCanonicalRevision, u32)],
+    lookup: &[u64],
 ) -> Result<(u32, &'a LayoutRun), EngineError> {
     let runs = match segment.layout_run_owner {
         LayoutRunOwner::Paragraph => layout_runs,
@@ -851,9 +852,9 @@ fn resolve_run<'a>(
         .or_else(|| {
             expected.and_then(|revision| {
                 let lookup_index = lookup
-                    .binary_search_by_key(&revision.get(), |(candidate, _)| candidate.get())
+                    .binary_search_by_key(&revision.get(), |entry| (entry >> 32) as u32)
                     .ok()?;
-                let run_index = usize::try_from(lookup[lookup_index].1).ok()?;
+                let run_index = usize::try_from(lookup[lookup_index] as u32).ok()?;
                 runs.get(run_index).map(|run| (run_index, run))
             })
         })
@@ -901,10 +902,7 @@ fn hinted_run_matches(
         })
 }
 
-fn prepare_run_lookup(
-    lookup: &mut Vec<(RunCanonicalRevision, u32)>,
-    runs: &[LayoutRun],
-) -> Result<(), EngineError> {
+fn prepare_run_lookup(lookup: &mut Vec<u64>, runs: &[LayoutRun]) -> Result<(), EngineError> {
     lookup.clear();
     lookup
         .try_reserve(runs.len())
@@ -913,13 +911,13 @@ fn prepare_run_lookup(
         #[cfg(test)]
         super::work_attribution::record(|work| work.placement_run_lookup_visits += 1);
         let revision = run.canonical_revision.ok_or(EngineError::InvalidRequest)?;
-        lookup.push((
-            revision,
+        lookup.push(super::sort::pack2(
+            revision.get(),
             u32::try_from(index).map_err(|_| EngineError::ResultTooLarge)?,
         ));
     }
-    lookup.sort_unstable_by_key(|(revision, _)| revision.get());
-    if lookup.windows(2).any(|pair| pair[0].0 == pair[1].0) {
+    super::sort::sort_keys(lookup);
+    if lookup.windows(2).any(|pair| pair[0] >> 32 == pair[1] >> 32) {
         return Err(EngineError::InvalidRequest);
     }
     Ok(())

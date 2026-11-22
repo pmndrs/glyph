@@ -52,7 +52,7 @@ step 05 material and same-length edit
 class value 265 cc71f441d2f8a27d
 class identity 29 361daf2f48393ca9
 class repr 44 a775e8401d3e65c2
-class wire 1 2140daa3fa3c55b3
+class wire 1 7f15faacf5f59be2
 step 06 material off
 class value 265 37271c5a2b30f4be
 class identity 29 bed0ed8ff0f93758
@@ -62,7 +62,7 @@ step 07 insert SpacedWord (7 units) at 26
 class value 265 658b914e1814c6b3
 class identity 29 7490f6b256c17c7a
 class repr 44 b189cff4d2ee1afb
-class wire 1 514901773545c39b
+class wire 1 36caa3ab33a38d02
 step 08 foreground of the root
 class value 265 60e608fdf98b24cb
 class identity 29 e4162db4c4b602a0

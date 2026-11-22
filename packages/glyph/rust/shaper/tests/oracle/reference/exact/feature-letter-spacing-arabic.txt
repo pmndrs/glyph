@@ -30,7 +30,7 @@ step 01 insert HardBreak (1 units) at 181
 class value 230 cd52f18fceef6e1d
 class identity 22 3991904f42534339
 class repr 44 c7202620568091ea
-class wire 1 6ad249d3acaca543
+class wire 1 63d1b64e29f61684
 step 02 width 892
 class value 230 f15770d6bd63fff5
 class identity 22 ec4466625d77ab37
@@ -40,4 +40,4 @@ step 03 add span 1215..1220
 class value 230 af497117dbb31231
 class identity 22 653859e91f1480ed
 class repr 44 7dd22129d89f5819
-class wire 1 01d7405d038971b8
+class wire 1 bd7ee62fa901316a
