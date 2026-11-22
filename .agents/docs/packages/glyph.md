@@ -894,9 +894,16 @@ records it draws (quad origin and extent, placement table, per-record transform 
 by the versions of the attributes it reads, so a static draw does one version comparison per buffer per frustum test
 and the publication path does no bounds work. MSDF quads never leave their cell whatever the outline, shadow or trim;
 pixel snapping cannot move an outside quad inside; Slug quads are padded by their own extent for the screen-space
-fringe. The local radius compensates for Three's `Sphere.applyMatrix4` under sheared draw matrices. Draws of a caller
-material factory and of external raster programs stay unculled, and a batched draw is culled only when the union of
-its members is outside. `benchmark:frustum-culling` proves culled and unculled pixels identical on both backends.
+fringe. The local radius compensates for Three's `Sphere.applyMatrix4` under sheared draw matrices. A caller material
+factory is culled by the same bound grown on every side by its declared `boundsPadding` (draw-local units, the space of
+`context.position`), or never when declared `frustumCulled: false`; draws of external raster programs and supplied
+geometry stay unculled because their record layout is not Glyph's. A batched draw is culled only when the union of its
+members is outside. Three's `frustumCulled = false` on a `Text`, an enclosing `TextGroup` or a `Glyphs` makes every
+draw placing its records report an unbounded sphere, so in indexed mode its whole batch stays drawn; each of those
+objects compares the flag in its per-frame matrix visit, and a draw re-reads its members only after such a change, a
+reparenting, a new transform table, or a change of its records. `benchmark:frustum-culling` proves culled and unculled
+pixels identical on both backends, including a displacing material at its declared maximum, with half that padding
+as a pixel-detected negative control.
 When a rank-only permutation keeps the committed Codec, capability, one-batch single-aggregate-draw storage topology,
 and renderable stable-ID set, Rust copies the committed physical records into their new order and publishes write patches only. It transactionally
 updates its internal aggregate primitive/draw spans but does not republish unchanged buffers, resources, primitives,
