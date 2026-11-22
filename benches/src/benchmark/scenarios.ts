@@ -1,6 +1,6 @@
 import type { BenchmarkScenario } from './contracts';
 import { ADVANCED_SHAPING_CASES } from '../workloads/advanced-shaping/scene';
-const ADVANCED_SHAPING_HASH = 'f718256d';
+const ADVANCED_SHAPING_HASH = 'b5471a88';
 const UPDATED_EXTERNAL_RASTER_GLYPHS = 13;
 
 function deterministicValidation(hashes: readonly string[]): string {
@@ -326,7 +326,8 @@ function advancedShapingValidation(values: readonly import('./contracts').Benchm
     const metrics = value.metrics;
     if (
       value.hash !== ADVANCED_SHAPING_HASH ||
-      value.outputBytes !== 17_362 ||
+      // Each timeline opens on an empty frame, which is one empty line: six 4-byte line records each.
+      value.outputBytes !== 17_482 ||
       metrics?.caseCount !== ADVANCED_SHAPING_CASES.length ||
       metrics.frameCount !== frameCount ||
       metrics.finalFrameCount !== ADVANCED_SHAPING_CASES.length ||

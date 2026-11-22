@@ -24,7 +24,7 @@ stage public value 13 f4aae7542087ceb0
 stage public identity 1 836e4dffe357b3f2
 stage view identity 4 98e6577ddb1bf609
 stage view value 40 c91180337764cf50
-stage wire wire 1 2bbb1d51605820d1
+stage wire wire 1 13c9ee6247fc7d29
 stage gather identity 7 8421f890196976b6
 stage gather value 36 13857ea4ae18b9c1
 stage gpu identity 2 2a28d1bfddacaa7e
@@ -34,40 +34,40 @@ class value 265 79d8fecfb6b255dd
 class identity 24 6f1333fc600cba4c
 class repr 61 869f11aca8a2d65c
 class cache 5 a709591e210580fa
-class wire 1 0a7c3656d3250973
+class wire 1 19b17114ba2f7b7b
 step 02 width 418
 class value 265 54d7f05d179d7527
 class identity 24 5300690aa67dc394
 class repr 61 ba9292d3aba08c23
 class cache 5 686a43d718ffb3be
-class wire 1 f3e9a196303c5566
+class wire 1 2473e057717cc4d0
 step 03 width 233.5
 class value 265 ac91167f7fc761a8
 class identity 24 3e8d861cc764a462
 class repr 61 115118da3326c1b9
 class cache 5 e39d3a7eb8e729fe
-class wire 1 a02baabdbb90a73c
+class wire 1 16df70114ba21ab6
 step 04 width 600
 class value 265 40407fd277240aed
 class identity 24 20f985cd6e024122
 class repr 61 148e0390f62a9478
 class cache 5 e39d3a7eb8e729fe
-class wire 1 d332eb8a1bad5ee8
+class wire 1 17fd45bc337728c2
 step 05 insert Bidi (1 units) at 2243 + width 849.75 + add span 1232..1235
 class value 277 ed2d867903926215
 class identity 24 32e39505de7d6d7e
 class repr 61 3f0bb12746f84b69
 class cache 5 24cc6cd6c4f3211a
-class wire 1 0ce32180e4e09266
+class wire 1 7433d9d109d14338
 step 06 flip case at 704
 class value 277 e98d244174964b9f
 class identity 24 67bf8868daffb69e
 class repr 61 c700b918970ca236
 class cache 5 4aa4174390addea6
-class wire 1 695969ebc996b1af
+class wire 1 b24fa0e584baa269
 step 07 delete 8 at 1020
 class value 277 76870dbbfe7dc4d2
 class identity 24 77a7113fea7a4a55
 class repr 61 7508a3002babe9d8
 class cache 5 44630bb6fe99b7e5
-class wire 1 ca47046781ef852d
+class wire 1 55028b441b013146

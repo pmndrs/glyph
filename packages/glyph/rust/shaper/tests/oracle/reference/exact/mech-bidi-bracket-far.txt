@@ -21,7 +21,7 @@ stage public value 13 37b97f3a8bce32b5
 stage public identity 1 bac2802329f2e704
 stage view identity 4 bc0cea665943095a
 stage view value 40 fa191e8ecde5148e
-stage wire wire 1 87a4fa5df635eefb
+stage wire wire 1 35be2ef87b379abe
 stage gather identity 7 fbba6b1ffe6b0ef1
 stage gather value 36 0e471076fe844d12
 stage gpu identity 2 488358ab82a5b5b2
@@ -30,24 +30,24 @@ step 01 open a bracket
 class value 230 91abccf2f5ab315c
 class identity 22 48c12b7076d7f5fe
 class repr 44 a5fd54260164a5aa
-class wire 1 5830e6374838921b
+class wire 1 ec6ffb68c0f2a0c3
 step 02 restore
 class value 230 5f0fe09c7281178b
 class identity 22 7246648e9368b973
 class repr 44 b50ac9c0baa9c077
-class wire 1 e130ccfc423462df
+class wire 1 4bbb8f58b27df57f
 step 03 delete 5 at 323 + add span 54..66 + metrics size 16 spacing 2 line 1.2 word 0
 class value 230 b7ec56a1c4175a62
 class identity 22 a2b300d2db0344f8
 class repr 44 231a23e72b12195e
-class wire 1 5964f6ec9d1350b0
+class wire 1 951c09bfdcb0525d
 step 04 add span 439..444
 class value 242 79c2ac4607dc997c
 class identity 22 4c8e2cce59a68adc
 class repr 44 231a23e72b12195e
-class wire 1 92c08854ed0d330d
+class wire 1 0ab3550672ce45a7
 step 05 replace 3 at 506
 class value 242 69c29c0f90e57e11
 class identity 22 abbed22b2c0c445a
 class repr 44 99e12170cc20168b
-class wire 1 b70dbf5a159ac46d
+class wire 1 07f8347990a2e5b2

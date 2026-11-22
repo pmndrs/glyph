@@ -22,7 +22,7 @@ stage public value 13 5b78ab8033cb0041
 stage public identity 1 c727016a977af510
 stage view identity 4 3a191bb08a6b3cbd
 stage view value 40 8540e7847a59341e
-stage wire wire 1 0ce4dbffb416eafb
+stage wire wire 1 affc02807327dd7b
 stage gather identity 7 f952b5e5b1a1a82e
 stage gather value 36 b246d5f6b4f45e36
 stage gpu identity 2 760a39ccc1bf6863
@@ -32,16 +32,16 @@ class value 242 8433e70737c57689
 class identity 22 ea374f8e4ee3ac77
 class repr 41 dc4b6a8f019303b1
 class cache 3 942b9ea11340f538
-class wire 1 8f98d0424a1b8bf6
+class wire 1 f896444935d839a4
 step 02 insert Foreign (198 units) at 2
 class value 277 a77897afa04179ba
 class identity 24 cef86d906583443e
 class repr 64 a28c291a0aeb81b7
 class cache 5 faef79f581126368
-class wire 1 b4e3092dd470ec6d
+class wire 1 af526e536ac11075
 step 03 insert HardBreak (1 units) at 205
 class value 242 324a576eed70453a
 class identity 22 cc6fdf702835f10e
 class repr 44 ba4061e2136e7948
 class cache 3 1031f2c4b445e150
-class wire 1 47383e2c72e5ae7d
+class wire 1 b6ccf39df376fec3

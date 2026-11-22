@@ -24,7 +24,7 @@ stage public value 13 6f6750c8e28fd688
 stage public identity 1 84a7e091c78ee967
 stage view identity 4 0e4ab569a8da3b64
 stage view value 40 3a893b7c2bffe413
-stage wire wire 1 fb5ea88c072942da
+stage wire wire 1 f839a2dc8756d25a
 stage gather identity 7 bbb6cd92cd3d7847
 stage gather value 36 b0fed636e83084ec
 stage gpu identity 2 ed518fa9683ebde4
@@ -34,16 +34,16 @@ class value 266 ca1d09a76859c0dd
 class identity 24 1e3825cdce68a95d
 class repr 61 0961c35fabe9b00c
 class cache 3 49549f27aede8451
-class wire 1 47a7b6edf60adcd8
+class wire 1 182d78d607143325
 step 02 add span 41..47
 class value 266 0adacf7d0e913f71
 class identity 24 1e3825cdce68a95d
 class repr 61 0961c35fabe9b00c
 class cache 3 49549f27aede8451
-class wire 1 fa43258e86ef09f7
+class wire 1 5ea7578c41315b8a
 step 03 insert SpacedWord (3 units) at 21
 class value 266 febca6997a64080a
 class identity 24 4ffdfc65c3b6610c
 class repr 61 470ff2ad476ac54a
 class cache 3 5d5a147e2ceefe46
-class wire 1 eb8ad213e58cb8eb
+class wire 1 3a76ecd08e2d4ea1

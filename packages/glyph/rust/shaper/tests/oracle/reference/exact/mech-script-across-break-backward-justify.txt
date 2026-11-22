@@ -21,7 +21,7 @@ stage public value 13 af2ec210e8c07585
 stage public identity 1 e4c904a53c6f08f5
 stage view identity 4 751dd6842107984e
 stage view value 40 4d4dd4353c6048ef
-stage wire wire 1 eef5b75a79a289c2
+stage wire wire 1 a8813e7f08c3f497
 stage gather identity 7 59a353d47ed0c8dd
 stage gather value 36 27c9512bb26d8cbe
 stage gpu identity 2 1ccfdf0424d5babc
@@ -30,9 +30,9 @@ step 01 Cyrillic to Latin
 class value 230 52a5833dad0514c6
 class identity 22 2299abce76d7f45b
 class repr 41 ef9865055ca88b0d
-class wire 1 4b7ed1296e2ebcbf
+class wire 1 f5e8b9181d55e8ad
 step 02 restore
 class value 230 e6c07cec9487b83c
 class identity 22 91be6e0d4845e97a
 class repr 41 a9bc358f3087db70
-class wire 1 526cd2b04facde37
+class wire 1 60eb19ab555807b2

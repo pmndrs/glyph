@@ -21,7 +21,7 @@ stage public value 13 c4300e78a4e1440d
 stage public identity 1 a09ee6e81fe5b3ab
 stage view identity 4 86f3bf566a793791
 stage view value 40 99cb113f24662d76
-stage wire wire 1 28400670146fec8e
+stage wire wire 1 950ea6eaa9194e5f
 stage gather identity 7 65250a84ba37de35
 stage gather value 36 3b78ac61bf6aa509
 stage gpu identity 2 c4d90d243990a720
@@ -30,24 +30,24 @@ step 01 prepend a Hebrew letter
 class value 230 7f6d8e5353272808
 class identity 22 30a4e5cf8e9936f1
 class repr 41 9ee679fe83d8b399
-class wire 1 65006d0216fd6a53
+class wire 1 17759dab6353e4a4
 step 02 restore
 class value 230 b3b1c53a7ac3a699
 class identity 22 35d5f26044fb005a
 class repr 41 be648363a29340fe
-class wire 1 8b5471de0363f8ea
+class wire 1 feaf4548297fa3ee
 step 03 delete 2 at 8
 class value 230 2082699d046d6172
 class identity 22 0b811831542b11e5
 class repr 41 4ac041c7936611b0
-class wire 1 3a7aebcb73be1a5d
+class wire 1 76e03c65efc574a2
 step 04 width 119.75 + width 86.75 + insert Bidi (1 units) at 0 + insert Word (211 units) at 9
 class value 230 907003eae3a20266
 class identity 22 6cb952496b7148ca
 class repr 44 ee1b6737d6655f92
-class wire 1 18ae22dbce327f3b
+class wire 1 3ea6033b0af5cdf3
 step 05 flip case at 188
 class value 230 e37fc1e0e0f2485e
 class identity 22 d6b4b9076b6a6cc8
 class repr 44 8715d2982a48ab6e
-class wire 1 5c76fb4be17615b0
+class wire 1 d57bfc1f0ef30e2e

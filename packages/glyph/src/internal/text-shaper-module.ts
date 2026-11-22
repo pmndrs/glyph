@@ -91,6 +91,30 @@ export interface ShaperExports {
     paragraphId: number,
     maxOutputBytes: number,
   ) => number;
+  /** Where every editing query writes its fixed answer record. */
+  readonly textQueryPointer: () => number;
+  /** The rectangles the last range query wrote. */
+  readonly textRectsPointer: () => number;
+  readonly textCaret: (handle: number, paragraphId: number, offset: number, affinity: number) => number;
+  readonly textHitTest: (handle: number, paragraphId: number, x: number, y: number) => number;
+  readonly textMove: (
+    handle: number,
+    paragraphId: number,
+    offset: number,
+    affinity: number,
+    direction: number,
+    unit: number,
+    goalX: number,
+  ) => number;
+  readonly textBoundary: (
+    handle: number,
+    paragraphId: number,
+    offset: number,
+    affinity: number,
+    unit: number,
+  ) => number;
+  readonly textRangeRects: (handle: number, paragraphId: number, start: number, end: number) => number;
+  readonly textCheckRange: (handle: number, paragraphId: number, start: number, end: number) => number;
 }
 
 export interface ShaperModule {
@@ -173,6 +197,14 @@ function readExports(instance: WebAssembly.Instance): ShaperExports {
     borrowParagraphGlyphs: exportedFunction(instance, functions.borrowParagraphGlyphs),
     copyGlyphs: exportedFunction(instance, functions.copyGlyphs),
     copyDecorations: exportedFunction(instance, functions.copyDecorations),
+    textQueryPointer: exportedFunction(instance, functions.textQueryPointer),
+    textRectsPointer: exportedFunction(instance, functions.textRectsPointer),
+    textCaret: exportedFunction(instance, functions.textCaret),
+    textHitTest: exportedFunction(instance, functions.textHitTest),
+    textMove: exportedFunction(instance, functions.textMove),
+    textBoundary: exportedFunction(instance, functions.textBoundary),
+    textRangeRects: exportedFunction(instance, functions.textRangeRects),
+    textCheckRange: exportedFunction(instance, functions.textCheckRange),
   };
 }
 

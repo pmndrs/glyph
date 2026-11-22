@@ -21,7 +21,7 @@ stage public value 13 202f11ec3d19d3bd
 stage public identity 1 80739bf17aa7ef2d
 stage view identity 4 7fd4cdcbf94acf25
 stage view value 40 ae302920f5240f09
-stage wire wire 1 a17a0c4b0751e459
+stage wire wire 1 29c82935d2af9dd0
 stage gather identity 7 24d5b1f7935cee89
 stage gather value 36 26d18cc1a32c62b5
 stage gpu identity 2 d3ad60e6b105d71d
@@ -30,14 +30,14 @@ step 01 delete 8 at 135 + metrics size 16 spacing 0 line 1.2 word 3
 class value 230 1616be3163bfa459
 class identity 22 69f567a9fcdaafb3
 class repr 44 08028cbe89f733f3
-class wire 1 2dbf3f5be184a97b
+class wire 1 5910aa574ecd7a99
 step 02 add span 200..209
 class value 230 0b56f7823d076697
 class identity 22 51af6a5082ed867b
 class repr 44 2d5efc0eb7b6b1d4
-class wire 1 f08c00044581c9c2
+class wire 1 4d443b4b8dda5d28
 step 03 insert SpacedWord (3 units) at 184
 class value 230 85e7bfce88bb6d39
 class identity 22 3d54962ddba28340
 class repr 44 9fd72c79e6109f26
-class wire 1 f704cb38fb44bddd
+class wire 1 be7e5e3041838ac5

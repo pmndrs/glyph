@@ -15,20 +15,20 @@ stage public value 13 fecf2bba5c336bab
 stage public identity 1 29571feabe629a3d
 stage view identity 4 b7d522c5ca1660c8
 stage view value 40 9df85a34545c0af1
-stage wire wire 1 20a1de0dfd9783ce
+stage wire wire 1 163a44fc4898b660
 stage gpu identity 1 4dc52fb2775d76dd
 step 01 width 607 + insert SpacedWord (6 units) at 1
 class value 220 edb64f2b373ce10d
 class identity 20 01089cf211bca639
 class repr 21 20381dc23095c19f
-class wire 1 a31de857e68e4606
+class wire 1 d8d6c47c7af9d32b
 step 02 width 0 + flip case at 3 + add span 10..11 + direction 1
 class value 230 bf2c4d979cbf3bf7
 class identity 22 db80f5507b5507ff
 class repr 41 8466e2fe72fe0468
-class wire 1 c1ac2dd9311c4f94
+class wire 1 951fa9ac047c02a1
 step 03 remove span 2 + insert Foreign (3 units) at 3 + insert Foreign (5 units) at 1
 class value 230 879655533371cfe3
 class identity 22 c8c8eb011701f88c
 class repr 41 f4243418399f0a23
-class wire 1 55abc1484c29f28f
+class wire 1 453c210a70010a69

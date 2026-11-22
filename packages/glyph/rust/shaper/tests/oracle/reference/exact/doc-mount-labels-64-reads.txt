@@ -1281,7 +1281,7 @@ stage p63:view identity 2 807d07d82309f380
 stage p63:view value 20 58d907f80fe24dbf
 stage p64:view identity 2 d2eb2dde393b8e22
 stage p64:view value 20 abe703a7697d8c7a
-stage wire wire 1 ed93e98965a74d45
+stage wire wire 1 55effbbdf1ec67c1
 stage gather identity 7 ac69b6534b6a7acc
 stage gather value 36 eb34c763c07d5004
 stage gpu identity 2 6bafb0ae0272f0e3
@@ -1293,9 +1293,9 @@ step 01 edit the last paragraph
 class value 11029 296b4286f4650cf5
 class identity 722 35b7cfb53fc4886e
 class repr 2624 cf07222bf622f388
-class wire 1 46592754379f936f
+class wire 1 e2394e521aad4b9a
 step 02 nothing changes
 class value 11029 896d6a16ac68c3ec
 class identity 722 e34b06b44498ae76
 class repr 2624 cf07222bf622f388
-class wire 1 2e93f1aac756ee9d
+class wire 1 886cb156de60d59b

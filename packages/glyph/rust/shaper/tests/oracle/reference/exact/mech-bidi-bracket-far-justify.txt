@@ -21,7 +21,7 @@ stage public value 13 2c618bb400718889
 stage public identity 1 bac2802329f2e704
 stage view identity 4 bc0cea665943095a
 stage view value 40 a33117b22f149dd7
-stage wire wire 1 b3ea20364bcc8983
+stage wire wire 1 a2d933a4521ae497
 stage gather identity 7 fbba6b1ffe6b0ef1
 stage gather value 36 48cb3141e750f50d
 stage gpu identity 2 81e7c0978b140974
@@ -30,9 +30,9 @@ step 01 open a bracket
 class value 230 50af9a7175b1a4ad
 class identity 22 8dee4dfe48ce27d8
 class repr 44 c44ac86576631190
-class wire 1 9d2fb4937aa508cb
+class wire 1 5effef60ab5f6e8b
 step 02 restore
 class value 230 9c3404f046e162f8
 class identity 22 bc9c5391af497ab5
 class repr 44 702fd6bb2cf2ecb7
-class wire 1 8cffb08241e9bfd6
+class wire 1 1d6da1a6b2c702d5

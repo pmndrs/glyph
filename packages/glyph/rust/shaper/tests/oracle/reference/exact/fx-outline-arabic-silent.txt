@@ -21,7 +21,7 @@ stage public value 13 8d745db684648007
 stage public identity 1 9f58ac2691d9d2e1
 stage view identity 4 b7b7f58c55341768
 stage view value 40 0cc031ab06df0421
-stage wire wire 1 1d3d509f91b20f9b
+stage wire wire 1 c2f5b1a7d8b744f8
 stage gather identity 7 c2c572bffa9b1d93
 stage gather value 36 b291ba1f7ae0483c
 stage gpu identity 2 11f6365e1b348138
@@ -32,29 +32,29 @@ step 01 outline on
 class value 213 e9c997dddff391fe
 class identity 25 5cf1e33dce638918
 class repr 44 f1d759e2cd755ef7
-class wire 1 4157b93085a6f6b0
+class wire 1 94644a64afc43f2a
 step 02 recolour
 class value 213 8b3c845275ab7b44
 class identity 25 2eacc0ee70585832
 class repr 44 f1d759e2cd755ef7
-class wire 1 7ab2b0ecf3288566
+class wire 1 6889dcc9c8c868ab
 step 03 wider
 class value 213 afb3e85b56dd8caf
 class identity 25 1a882aa049d712fb
 class repr 44 f1d759e2cd755ef7
-class wire 1 8004877882ddbbcd
+class wire 1 d1584aacf6bcb96c
 step 04 wider and edit
 class value 213 6bf5844f75cc1af4
 class identity 25 d277563d9e7b86b8
 class repr 44 13df520d68a42971
-class wire 1 684196b73889828e
+class wire 1 ff86733fe7d5a341
 step 05 outline off
 class value 213 9660641442937d41
 class identity 25 e081a4f51ecf420e
 class repr 44 13df520d68a42971
-class wire 1 73c0827c6efa8e55
+class wire 1 1485eb364e4cb1c5
 step 06 outline on with width
 class value 213 8b58723c906a3187
 class identity 25 522b3fefc73615be
 class repr 44 90c3103dd644092e
-class wire 1 2b999482c70457d2
+class wire 1 2c2cbc406ac78413

@@ -21,7 +21,7 @@ stage public value 13 13b4a0d4aef9c89d
 stage public identity 1 ffeed191fb0a0085
 stage view identity 4 c9549b2e6303d5b8
 stage view value 40 ede677d7d1e85df7
-stage wire wire 1 e822fbbc2aeef95c
+stage wire wire 1 354d63856df61fea
 stage gather identity 7 1be970ccd4105295
 stage gather value 36 224d1b6c8e64ce8b
 stage gpu identity 2 139617c9b0940ec4
@@ -30,34 +30,34 @@ step 01 width 417
 class value 230 3e8a90ab370dceb0
 class identity 22 55c0122a8d2bd88e
 class repr 44 5dde0721e2310971
-class wire 1 e8090329a365a113
+class wire 1 8e458a9240ac1964
 step 02 width 418
 class value 230 76f327dfce98d829
 class identity 22 ac7e596c59fc9489
 class repr 44 1248b23a7b48b767
-class wire 1 685779f4df7af26c
+class wire 1 e15c0b61b86bc16b
 step 03 width 233.5
 class value 230 6014ed73805336ac
 class identity 22 ea59778ecc6b2a03
 class repr 44 70ddeca5ed19c227
-class wire 1 09510f8f670b49c6
+class wire 1 2259b09a77034d33
 step 04 width 600
 class value 230 aaccfefd503dcf5d
 class identity 22 a96368b19237cd44
 class repr 44 897df43512518fe9
-class wire 1 539d2c4165b7c82e
+class wire 1 7339819ff40bed54
 step 05 replace 4 at 144
 class value 230 94596313e193c32d
 class identity 22 34f8f84311e2a55d
 class repr 44 f4aef3f1cfef284f
-class wire 1 d14960fdca30ae7f
+class wire 1 afd8e1bdbcf93a2b
 step 06 
 class value 210 9204d54284139e50
 class identity 20 35107053a67b35c6
 class repr 44 f4aef3f1cfef284f
-class wire 1 1c03b8f80a468318
+class wire 1 c8df6a53ea6cbb26
 step 07 delete 5 at 251 + insert SpacedWord (9 units) at 2014 + direction 1
 class value 230 c042800b40658057
 class identity 22 940ee81e30a48560
 class repr 44 ef9f61c1533f533d
-class wire 1 8cee098334846cef
+class wire 1 5e00f1a2a4449c05

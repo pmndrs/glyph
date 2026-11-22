@@ -24,7 +24,7 @@ stage public value 13 09024bc14a3a8c6d
 stage public identity 1 c9ac5a78d5483cdb
 stage view identity 4 7049b04ecee23d36
 stage view value 40 13af191cf929fc11
-stage wire wire 1 6263816008938f2b
+stage wire wire 1 c3768d33d1cf80ec
 stage gather identity 7 0158e53cf4f97f7c
 stage gather value 36 4698263444f5b3fc
 stage gpu identity 2 29d6f6c13061d4ac
@@ -36,58 +36,58 @@ class value 288 1813cb48f5f0742b
 class identity 31 13552b7d11998c04
 class repr 64 09e49a6dbc1bb8e8
 class cache 5 b7541a0ed2382b8b
-class wire 1 41c99c7ed153b4cf
+class wire 1 5eba4c6d18106788
 step 02 delete in a later region
 class value 288 2e1c028cf841680f
 class identity 31 cd3ea0a8fee2f587
 class repr 64 e934fde2c6b20674
 class cache 5 9705c860f7a03f40
-class wire 1 28c7020dd8453dea
+class wire 1 57f77a286d2ba522
 step 03 narrower measure
 class value 288 481d2f0f28969d63
 class identity 31 249989c8c54e61b7
 class repr 64 78452b15443932af
 class cache 5 52cd87d4aef771a3
-class wire 1 58a90d072acd00c9
+class wire 1 c4de2cf64de9d447
 step 04 shorter regions
 class value 288 ddc2f8e54e609e22
 class identity 31 d0069515525eecc0
 class repr 64 cf414c2af969c17c
 class cache 5 52cd87d4aef771a3
-class wire 1 528afbe9d70e8f0b
+class wire 1 409701708cd6c729
 step 05 three columns, wider gap
 class value 288 824ae2e916476bd6
 class identity 31 4dde4fffeef303d6
 class repr 64 053c1a62847840f6
 class cache 5 8ffda01a42e2ed80
-class wire 1 e8a0a6b5667bc927
+class wire 1 99e265ff4822bae7
 step 06 one region
 class value 288 2cdfc15a4f1a70ef
 class identity 31 c5db72b8d73f4670
 class repr 64 1ac85ba5b8b7ec06
 class cache 5 d7e96085f1fdf37b
-class wire 1 53bee3416cf34eb3
+class wire 1 df6cb09611755693
 step 07 the starting regions
 class value 288 2e1c028cf841680f
 class identity 31 35af297fbfd60b4d
 class repr 64 e934fde2c6b20674
 class cache 5 d7e96085f1fdf37b
-class wire 1 19408e6e9969add5
+class wire 1 260c79e3ef19e414
 step 08 flip case at 708
 class value 288 c5f72811832f4cdd
 class identity 31 e39b93db4387d60e
 class repr 64 63ccc33c191fc370
 class cache 5 89009bcb432ae8c5
-class wire 1 7ee0f81db0816849
+class wire 1 9162de2647909080
 step 09 delete 4 at 235
 class value 288 18270d1d64789a8d
 class identity 31 08872ce8f0773d05
 class repr 64 285f8ca6614c0a23
 class cache 5 7e75e932580f297d
-class wire 1 2fca4e2cdedd13bf
+class wire 1 90a460bcc3a59773
 step 10 width 567
 class value 288 6e169f0a56dad416
 class identity 31 666a3e01d7b8ec20
 class repr 64 2b2e60ccd53fa701
 class cache 5 192a40255fd548e6
-class wire 1 b83b44a1f25cf30d
+class wire 1 7a663ad5b1d4e1bd

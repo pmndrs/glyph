@@ -15,7 +15,7 @@ stage public value 13 0073e209450629ad
 stage public identity 1 a7565d089b77c68d
 stage view identity 4 1214032c5184c4a2
 stage view value 40 2c36ba31d1530b11
-stage wire wire 1 cfa04b2b985fc23a
+stage wire wire 1 f37352e3c1b62cd2
 stage gather identity 7 850d47eb73e2c483
 stage gather value 36 2f8015f9c5ede1c6
 stage gpu identity 2 68fc66a75be58a57
@@ -26,39 +26,39 @@ step 01 material on
 class value 243 3ed1ff228575c1d3
 class identity 27 71ee7a0edc667da4
 class repr 21 8f1718588ca49665
-class wire 1 e92ac6ebcb953b8d
+class wire 1 e203a62551c39c48
 step 02 material swapped
 class value 243 f20648f699f39259
 class identity 27 ebb6d8218d98047f
 class repr 21 8f1718588ca49665
-class wire 1 e7dfd22b3669201a
+class wire 1 e8ac74045acd3482
 step 03 underline on
 class value 265 f75c708088d555f2
 class identity 29 8ad6a3d5ec8c9965
 class repr 41 b6b254b9129b61de
-class wire 1 db2e0b4851585992
+class wire 1 7b9336176f253d56
 step 04 material swapped under decoration
 class value 265 a59019973291964d
 class identity 29 5c307be37e40a258
 class repr 41 b6b254b9129b61de
-class wire 1 11ee4201f8eb6a62
+class wire 1 89830051d110b15c
 step 05 underline off
 class value 253 2ecf14b493cae502
 class identity 29 5c307be37e40a258
 class repr 41 b6b254b9129b61de
-class wire 1 9474c96f25fce869
+class wire 1 d226e77451db9516
 step 06 shadow of the root + insert Word (1 units) at 0 + insert Bidi (1 units) at 6
 class value 253 eeb182a06296d136
 class identity 29 6dd3e9844d479ff3
 class repr 41 9bb797d0e416f93b
-class wire 1 12a19ff07b963faa
+class wire 1 1bb286aede27f401
 step 07 insert Space (1 units) at 9
 class value 253 d8eda3b6956609f6
 class identity 29 66784b0ecaf9c52b
 class repr 41 c8bfd1b1696c2e49
-class wire 1 4175d553650471ea
+class wire 1 cf4ee825076c4a19
 step 08 add span 15..19
 class value 253 0f6fecdcf247dd26
 class identity 29 35d2e02d2f02deda
 class repr 41 95356ea577cbac96
-class wire 1 d7cd6235e07e9100
+class wire 1 b5c3b9658fd8bb7f

@@ -15,7 +15,7 @@ stage public value 13 0073e209450629ad
 stage public identity 1 a7565d089b77c68d
 stage view identity 4 1214032c5184c4a2
 stage view value 40 2c36ba31d1530b11
-stage wire wire 1 cfa04b2b985fc23a
+stage wire wire 1 f37352e3c1b62cd2
 stage gather identity 7 850d47eb73e2c483
 stage gather value 36 2f8015f9c5ede1c6
 stage gpu identity 2 68fc66a75be58a57
@@ -26,39 +26,39 @@ step 01 shadow on
 class value 253 e59a7349980bc5af
 class identity 29 12da22ea20f067fb
 class repr 41 b6b254b9129b61de
-class wire 1 e92ac6ebcb953b8d
+class wire 1 e203a62551c39c48
 step 02 moved
 class value 253 67c75b4dd8076611
 class identity 29 d57bd0846fae9cf2
 class repr 41 b6b254b9129b61de
-class wire 1 e7dfd22b3669201a
+class wire 1 e8ac74045acd3482
 step 03 recolour and same-length edit
 class value 253 1d86a4db8dd47a9c
 class identity 29 4e6c0e9adfa3a4d5
 class repr 41 f4affac3e2fb1754
-class wire 1 662d6b20e1e523cc
+class wire 1 6be197ee01a896f1
 step 04 shadow off and edit
 class value 253 8abdd2c8a7a56a79
 class identity 29 a8e4bcfb4f8ba174
 class repr 41 ec71269b67054192
-class wire 1 0de9072ce0fbc4be
+class wire 1 cd38b7ca6f820e59
 step 05 shadow and outline on
 class value 253 166ed8e6018ac0cb
 class identity 29 d26b235074f388c2
 class repr 41 ec71269b67054192
-class wire 1 fa7f5f41c5fd7e42
+class wire 1 edae6beb67f680d3
 step 06 opacity of the root
 class value 253 50683bae6595e6df
 class identity 29 8b0d4890424274e7
 class repr 41 ec71269b67054192
-class wire 1 5f5d82cb098378d1
+class wire 1 716a61a6342f94fb
 step 07 delete 3 at 1 + insert SpacedWord (4 units) at 0 + insert Foreign (3 units) at 11 + foreground of the root
 class value 253 d5257b8d1d431f1c
 class identity 29 df13388c57625c9c
 class repr 41 67bc688991bd5003
-class wire 1 7b1e109c82b0d5ac
+class wire 1 b26f3c47f02972e9
 step 08 insert SpacedWord (5 units) at 1
 class value 253 c69bd7e7e9e46d76
 class identity 29 ce9255ab4630c617
 class repr 41 6c0c489c8e05c926
-class wire 1 01c33d9e4317d0ef
+class wire 1 a46a9a18f6001673

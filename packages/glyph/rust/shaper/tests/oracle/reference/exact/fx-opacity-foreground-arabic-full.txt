@@ -21,7 +21,7 @@ stage public value 13 8d745db684648007
 stage public identity 1 9f58ac2691d9d2e1
 stage view identity 4 b7b7f58c55341768
 stage view value 40 0cc031ab06df0421
-stage wire wire 1 1d3d509f91b20f9b
+stage wire wire 1 c2f5b1a7d8b744f8
 stage gather identity 7 c2c572bffa9b1d93
 stage gather value 36 b291ba1f7ae0483c
 stage gpu identity 2 11f6365e1b348138
@@ -32,29 +32,29 @@ step 01 half opaque
 class value 265 f3568f53b70e7bd7
 class identity 29 c7422fd082c998b2
 class repr 44 f1d759e2cd755ef7
-class wire 1 51f72f8f94fc585d
+class wire 1 9bd080e390078d5f
 step 02 foreground
 class value 265 179d32819fa01509
 class identity 29 0ef27985e6aa344b
 class repr 44 f1d759e2cd755ef7
-class wire 1 9f609dfea61c78e9
+class wire 1 379fcc49a8cb78d7
 step 03 foreground and width
 class value 265 0b384e0310ac3474
 class identity 29 bb2c86ac18f5092f
 class repr 44 03f609437503c1b1
-class wire 1 689540e401fffacb
+class wire 1 dd869709e537a1d9
 step 04 delete 2 at 71
 class value 265 7ee996555f985ff6
 class identity 29 2b727f4e8d26e56c
 class repr 44 38774ea93373d4ce
-class wire 1 9f7ee80515eb5524
+class wire 1 f5c861b17464585b
 step 05 insert Mark (174 units) at 32
 class value 265 e94362fe48fd5bd9
 class identity 29 d54f4fd964ebf6b6
 class repr 44 bce3295ff3a99982
-class wire 1 e64ba9b4a139c87e
+class wire 1 aa35348a1d9cfd87
 step 06 insert Word (4 units) at 1
 class value 265 072dc77b11df9d33
 class identity 29 e999e4da23db512b
 class repr 44 9f05a34071b1a125
-class wire 1 f2cab1b42a240582
+class wire 1 979aa96db6f08909

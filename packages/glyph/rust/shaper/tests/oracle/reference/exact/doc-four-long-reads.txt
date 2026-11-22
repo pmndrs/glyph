@@ -84,7 +84,7 @@ stage p3:view identity 2 50e1ce189416d6bc
 stage p3:view value 20 099c253c9d893c81
 stage p4:view identity 2 95324d148e0bf5d1
 stage p4:view value 20 02afabd07155934e
-stage wire wire 1 b6ad91d73146a147
+stage wire wire 1 ce460ccd42a02b39
 stage gather identity 7 cc25a53272dfb63c
 stage gather value 36 94b2a9861795b691
 stage gpu identity 2 3a14348736b20ffc
@@ -97,48 +97,48 @@ class value 804 545d7cd2d9be76e8
 class identity 64 e9a5288baf8d401f
 class repr 193 e1d217b92df23ae1
 class cache 5 e7ec200ce8b8908d
-class wire 1 6affad351292f962
+class wire 1 55d8bd791a6212aa
 step 02 edit all four
 class value 804 0c321c3f12fd3ca2
 class identity 64 6a35712130009b7e
 class repr 193 ae24c8ffdf1d8ba3
 class cache 5 4cb87809ff087c60
-class wire 1 2a44bb7f8c2efe62
+class wire 1 6b1c3af11717640d
 step 03 narrow paragraph 3, edit paragraph 4
 class value 804 afc6439bc3d43460
 class identity 64 356749114bfad36f
 class repr 193 28c364bc196c28b0
 class cache 5 72ec9ccf70f4b2d6
-class wire 1 cf7b8bea1f7aa739
+class wire 1 f654a77a05c99032
 step 04 move paragraph 1 last
 class value 804 510590dfe3cad7dc
 class identity 64 862831824c86d9a1
 class repr 193 28c364bc196c28b0
 class cache 5 72ec9ccf70f4b2d6
-class wire 1 08d38640816eebb1
+class wire 1 a78cb64cb6b42d8f
 step 05 rank paragraphs 1 and 4 in a scope
 class value 804 510590dfe3cad7dc
 class identity 64 862831824c86d9a1
 class repr 193 28c364bc196c28b0
 class cache 5 72ec9ccf70f4b2d6
-class wire 1 2b79028f7742bb5a
+class wire 1 7cadf38803df51dc
 step 06 remove paragraph 3
 class value 598 506324feb6824aa1
 class identity 51 b01c1e7a3e3ef49f
 class repr 132 27e95a03faed14dd
-class wire 1 e7673f4a0a34daac
+class wire 1 17f911edd3600232
 step 07 add paragraph 5
 class value 769 37b04f7c42616fa1
 class identity 62 3d6e7bbac53d16cf
 class repr 176 8a755c5e9fcdd3c9
-class wire 1 9559faa906e4103b
+class wire 1 03efd2e90b331d14
 step 08 remove 2, add 6, edit 4
 class value 769 990347c679a6e11c
 class identity 62 27172fd4a5a2bd49
 class repr 173 a8742e4912325f75
-class wire 1 84f7cb2a808850ae
+class wire 1 738aa390657bb072
 step 09 nothing changes
 class value 769 bb3e8c44a22515fc
 class identity 62 fd5a6b1059e39081
 class repr 173 a8742e4912325f75
-class wire 1 abefe0f5fcec401d
+class wire 1 4651b1f5d139b55d

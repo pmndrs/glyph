@@ -21,7 +21,7 @@ stage public value 13 6f8b4211328d470e
 stage public identity 1 20801391aa65dd28
 stage view identity 4 740851e23dfe41f3
 stage view value 40 87eac730485c00af
-stage wire wire 1 1c986bded3ffc2e4
+stage wire wire 1 2508f3d6d4ab80b7
 stage gather identity 7 34d92ce284119bad
 stage gather value 36 730f80bce5f18513
 stage gpu identity 2 1b70cb801f2ebfc6
@@ -30,14 +30,14 @@ step 01
 class value 222 6b361c6a4e3b5857
 class identity 20 760d1e1da2dae33a
 class repr 44 5970a7f7a3a66386
-class wire 1 0bcd6d68a551a3ea
+class wire 1 a237fd132917ef9c
 step 02 replace 4 at 1378
 class value 242 a1b1a3b4b0598186
 class identity 22 0c8af56a77fc49de
 class repr 44 0614aacbf00f8e47
-class wire 1 b868ef93214a7fda
+class wire 1 57e27fd4ab44f262
 step 03 insert Foreign (5 units) at 1141 + flip case at 1141
 class value 242 c941ca6adc4e05c7
 class identity 22 66003cffe8305f74
 class repr 44 96a77f8bfadf2970
-class wire 1 4eef8bee39daf629
+class wire 1 5be5525e85f065f3

@@ -24,7 +24,7 @@ stage public value 13 76d2c60a469481ee
 stage public identity 1 44b75dd169e91bf2
 stage view identity 4 84c3efc36977ddfb
 stage view value 40 a91a3651dbabf6af
-stage wire wire 1 88fdcb859be06895
+stage wire wire 1 b5c0abfbe9971e10
 stage gather identity 7 2110940cf139cd67
 stage gather value 36 16f9fe6127268d3b
 stage gpu identity 2 6f9a98c6d7cb3b89
@@ -33,26 +33,26 @@ step 01 one Arabic letter in paragraph two
 class value 230 a6e9bf7c7d83ede8
 class identity 22 20dea345d3966723
 class repr 44 1231ece2c565a9cd
-class wire 1 1d85dfa2589316d1
+class wire 1 2e4548827bfce3e3
 step 02 restore
 class value 265 5f88738a309b762a
 class identity 24 93302c1ec7996815
 class repr 64 bcd790e042d19d68
 class cache 5 8aa735c8a2972aa1
-class wire 1 040dece21f2d5f3b
+class wire 1 e719cf0c34f70825
 step 03 insert HardBreak (1 units) at 320 + insert Word (8 units) at 68 + replace 4 at 343
 class value 265 25a63f23964f5485
 class identity 24 2cbe89179995dab0
 class repr 64 61395f49e2b3ba47
 class cache 5 e5154318b56dcc4f
-class wire 1 d7e854a2a93f699d
+class wire 1 6abb5b8047032eb4
 step 04 insert SpacedWord (209 units) at 379
 class value 230 5a3f8ffd335a8a09
 class identity 22 40c6c681c2c8ef4c
 class repr 44 715c0623075014a5
-class wire 1 e2a55d5d3cf62421
+class wire 1 4debf60e7795ef32
 step 05 width 709.5
 class value 230 5c33a78bf9f2d816
 class identity 22 c4aaa82c9c333eb6
 class repr 44 c9ee8a586768b58c
-class wire 1 86bc00c85abafa5f
+class wire 1 d5aefb3095fe8602

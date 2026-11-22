@@ -21,7 +21,7 @@ stage public value 13 c28c3486bbcd9c59
 stage public identity 1 8db892aa8a87db79
 stage view identity 4 f809f631f9577d9f
 stage view value 40 688125084541dccc
-stage wire wire 1 6d2d0c05317de5dd
+stage wire wire 1 a6c611f65099f06c
 stage gather identity 7 18845cdcc65cd65e
 stage gather value 36 abca80f7136ee8df
 stage gpu identity 2 7b494db94c3f87d3
@@ -30,24 +30,24 @@ step 01 join a conjunct
 class value 230 28e3dce12b49a25f
 class identity 22 7747d3ce3923e1de
 class repr 44 4b2eb0adc4c6bbd6
-class wire 1 0fb6f60a078816d5
+class wire 1 2984cc557061f3c9
 step 02 restore
 class value 230 4facd1bbcb8cf5cf
 class identity 22 e695e47e48f41df1
 class repr 44 bc4c7c180942db70
-class wire 1 0e0c1c6084b1941c
+class wire 1 f22b2ad882a24ad8
 step 03 insert SpacedWord (4 units) at 194
 class value 230 6e79361d31b73186
 class identity 22 d7195ddb52c90126
 class repr 44 4d28653876a8bd64
-class wire 1 238bf32bd11d4110
+class wire 1 ae45b538c86589fa
 step 04 width 300.01563
 class value 230 3dcd2ba117d344ee
 class identity 22 d7195ddb52c90126
 class repr 44 4d28653876a8bd64
-class wire 1 cbe8a2071e975284
+class wire 1 afd8481fc3fee4b6
 step 05 metrics size 16 spacing 0 line 1.2 word 0
 class value 210 b0202a1f1bea1d4e
 class identity 20 c5e50b975135d0ec
 class repr 44 4d28653876a8bd64
-class wire 1 613b3b92a0235ef4
+class wire 1 7c302c2aabd1c4ac

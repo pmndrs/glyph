@@ -143,7 +143,7 @@ stage p6:view identity 2 a349f9f33910dc1b
 stage p6:view value 20 e9f66094c129f9a4
 stage p7:view identity 2 786ff284d7c62606
 stage p7:view value 20 57337c8d8bf47332
-stage wire wire 1 c8fd86187f309b22
+stage wire wire 1 82813488a4adbdaf
 stage gather identity 7 57287c188202ff41
 stage gather value 36 8dc240123e7a60ec
 stage gpu identity 2 fd9cbe8b80572f9f
@@ -156,28 +156,28 @@ class value 1282 0482e6603850a019
 class identity 95 26f6514c52f39ecd
 class repr 302 e6ce20aee88d9adb
 class cache 8 725dae21fd26b934
-class wire 1 3b28f4b1b3edb74b
+class wire 1 19a28881598e46fc
 step 02 nothing changes
 class value 1262 75f5709204e90a74
 class identity 93 f6ed0616fe672cbf
 class repr 302 e6ce20aee88d9adb
 class cache 8 725dae21fd26b934
-class wire 1 901c14c35beecce9
+class wire 1 28cabc547af1be5b
 step 03 paragraph 7: add span 98..135 + insert Word (5 units) at 99 + width 471.75 + insert Word (4 units) at 182 + rank paragraph 2 3/-2 + rank paragraph 6 3/-2
 class value 1282 df4dc80db0edd3e5
 class identity 95 46bb34fee2a02f58
 class repr 302 dd0d7a69a54db58f
 class cache 8 725dae21fd26b934
-class wire 1 606e7942e15251bf
+class wire 1 c1db6ddb6e336573
 step 04 paragraph 5: insert Mark (1 units) at 113 + width 0 + paragraph 1: insert Space (1 units) at 104 + insert SpacedWord (9 units) at 190 + width 420.01563 + metrics size 16 spacing 0 line 1 word 0 + paragraph 2: delete 5 at 11 + paragraph 3: align 2 + delete 1 at 126 + replace 5 at 11 + insert Word (4 units) at 101 + paragraph 4: width 437.75 + paragraph 5: replace 3 at 0 + paragraph 6: align 4 + paragraph 7: delete 2 at 0
 class value 1282 1cfca176cda68a66
 class identity 95 a9c60dae8975d815
 class repr 302 8911d5c3635cfeeb
 class cache 8 2440ec47399eef0b
-class wire 1 c1c785c02fe58d63
+class wire 1 0183c35a628fb78f
 step 05 paragraph 2: delete 7 at 62 + paragraph 1: direction 0 + paragraph 2: align 3 + paragraph 3: flip case at 66 + paragraph 4: add span 188..204 + paragraph 5: delete 60 at 110 + direction 0 + paragraph 6: add span 28..31 + paragraph 7: width 0 + paragraph 6: width 427
 class value 1282 650238be0d102a45
 class identity 95 073b185e682ce4e2
 class repr 302 bd546caa45e19abe
 class cache 6 e233cedcdf2523fc
-class wire 1 b10c3980ed0263e6
+class wire 1 14ea34cdf8206533

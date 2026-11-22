@@ -21,7 +21,7 @@ stage public value 13 8d745db684648007
 stage public identity 1 9f58ac2691d9d2e1
 stage view identity 4 b7b7f58c55341768
 stage view value 40 0cc031ab06df0421
-stage wire wire 1 1d3d509f91b20f9b
+stage wire wire 1 c2f5b1a7d8b744f8
 stage gather identity 7 c2c572bffa9b1d93
 stage gather value 36 b291ba1f7ae0483c
 stage gpu identity 2 11f6365e1b348138
@@ -32,29 +32,29 @@ step 01 material on
 class value 225 820995fe687d8fde
 class identity 25 5cf1e33dce638918
 class repr 44 f1d759e2cd755ef7
-class wire 1 4157b93085a6f6b0
+class wire 1 94644a64afc43f2a
 step 02 material swapped
 class value 225 b4739b289da294dc
 class identity 25 2eacc0ee70585832
 class repr 44 f1d759e2cd755ef7
-class wire 1 7ab2b0ecf3288566
+class wire 1 6889dcc9c8c868ab
 step 03 material and width
 class value 225 8fab0fac1e4b1699
 class identity 25 b9a6a6b9e6054a58
 class repr 44 f83cd430a6fa1552
-class wire 1 592052667f24853d
+class wire 1 1db106ff42b75b8a
 step 04 material and edit
 class value 225 67f8970d62e6bac6
 class identity 25 5093d46f0bd94800
 class repr 44 b2d2221769eb5cad
-class wire 1 cbbd49432f9bd82c
+class wire 1 7dc97318ddfdf34e
 step 05 material and same-length edit
 class value 225 01e13ed8ef121f41
 class identity 25 78efe53a90ac396a
 class repr 44 a775e8401d3e65c2
-class wire 1 6c165ede0b5b9c00
+class wire 1 d44a3dde6c8b14e8
 step 06 material off
 class value 225 510632700ebb5663
 class identity 25 0064b0d15940daf2
 class repr 44 a775e8401d3e65c2
-class wire 1 2570cc7ab008ea38
+class wire 1 092cd7f4e719d47e

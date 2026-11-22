@@ -218,7 +218,21 @@ export type {
   ParagraphMeasurement,
 } from './layout.js';
 
-export type { GlyphCaret, GlyphKey } from './glyph-placement.js';
+export type { GlyphKey } from './glyph-placement.js';
+export { TextOffsetError } from './text-editing.js';
+export type {
+  TextAffinity,
+  TextCaret,
+  TextDirection,
+  TextEditingQueries,
+  TextMovement,
+  TextOffsetArgument,
+  TextOffsetMethod,
+  TextOffsetReason,
+  TextPosition,
+  TextRange,
+  TextUnit,
+} from './text-editing.js';
 
 // Font operations can throw this application-visible error; loader construction remains package-private.
 export { GlyphFontError } from './loader.js';

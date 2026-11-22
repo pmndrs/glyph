@@ -21,7 +21,7 @@ stage public value 13 3523c3618893ac84
 stage public identity 1 c2d5abf68c9421b1
 stage view identity 4 f0248e5a188cfee7
 stage view value 40 f90502295060d8cb
-stage wire wire 1 ecf03029f70429b6
+stage wire wire 1 bc9a6a464a834540
 stage gather identity 7 b1d9727b61771245
 stage gather value 36 1b3c07bde93bc1e3
 stage gpu identity 2 cdb408f60e30c935
@@ -30,14 +30,14 @@ step 01 insert Word (7 units) at 21 + add span 1..26 + max lines 12
 class value 242 52c67e1f88114372
 class identity 22 02d1a2c0add1403b
 class repr 44 7157e409ee7ae224
-class wire 1 1c9a4997e9f12c6e
+class wire 1 92608a8b6858e789
 step 02 width 227
 class value 242 07856c3bf5f87e78
 class identity 22 c8332d43d5b7a281
 class repr 44 62f2ec2ea3c9fd78
-class wire 1 b39ec687cf8a91c8
+class wire 1 5bca4dbf1b2251e0
 step 03 add span 43..55
 class value 242 73e14f87250ee0ec
 class identity 22 19e2a5f3ee3fd829
 class repr 44 9724f52cfcaa2e1e
-class wire 1 be1ea68084d76eaa
+class wire 1 ca1dbffe4b32f69f

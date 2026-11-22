@@ -21,7 +21,7 @@ stage public value 13 a4adce56caec0f79
 stage public identity 1 5b92d79eb0a72602
 stage view identity 4 fe8ce024b76090cf
 stage view value 40 1ab136f36249a7e3
-stage wire wire 1 c955b15d74b34d20
+stage wire wire 1 1f4f78d56545bc49
 stage gather identity 7 252fcceb77b379bf
 stage gather value 36 f2d6c773b258a913
 stage gpu identity 2 43f274759739fc57
@@ -30,14 +30,14 @@ step 01 replace 2 at 13 + insert HardBreak (1 units) at 42 + width 259 + width 2
 class value 230 fa62df6ab00c7ce8
 class identity 22 e39476ff97fa9dfd
 class repr 44 36af8179c4691efd
-class wire 1 d6940c044fc9b6f9
+class wire 1 654f0fa4e4bedc3b
 step 02 insert Word (3 units) at 4
 class value 230 4eb6048155018535
 class identity 22 3a6e8d4b106f660a
 class repr 44 977556084adc2b50
-class wire 1 113053d434819551
+class wire 1 46a8dcfffe2e6581
 step 03 
 class value 210 8111740356c6feae
 class identity 20 b5784e92a14ff85b
 class repr 44 977556084adc2b50
-class wire 1 e3e5eaecf105ce0b
+class wire 1 7488e30c6f964a24

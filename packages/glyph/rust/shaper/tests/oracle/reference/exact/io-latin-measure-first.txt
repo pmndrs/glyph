@@ -21,7 +21,7 @@ stage public value 13 3582ea85b78f8d8e
 stage public identity 1 3e373b7ccf7333b7
 stage view identity 4 2a8e0773b715036d
 stage view value 40 e5b6f01e634326d0
-stage wire wire 1 466ef69d2a5acce1
+stage wire wire 1 5deb62175534624f
 stage gather identity 7 bb51b46f5cab59fa
 stage gather value 36 7b85bf42cc5cf6bd
 stage gpu identity 2 391d936a8c01c224
@@ -32,34 +32,34 @@ step 01 add one at the end
 class value 233 78362be8ec0b5e0d
 class identity 27 3b1624d4c4d19b72
 class repr 44 58c6b786c5e94c12
-class wire 1 4157b93085a6f6b0
+class wire 1 94644a64afc43f2a
 step 02 move and grow the middle one
 class value 233 78362be8ec0b5e0d
 class identity 27 3b1624d4c4d19b72
 class repr 44 58c6b786c5e94c12
-class wire 1 7ab2b0ecf3288566
+class wire 1 6889dcc9c8c868ab
 step 03 align to the text top with margins
 class value 233 78362be8ec0b5e0d
 class identity 27 3b1624d4c4d19b72
 class repr 44 58c6b786c5e94c12
-class wire 1 8004877882ddbbcd
+class wire 1 d1584aacf6bcb96c
 step 04 edit the text and leave the objects
 class value 233 7c8acf4ae8ad9f74
 class identity 27 56af183d42c93a4d
 class repr 44 dd1038a8a5f6eb8b
-class wire 1 5adda0f0c3109c8c
+class wire 1 6675a0f4f7676a83
 step 05 narrow the measure and re-anchor
 class value 233 5679931da048f9fc
 class identity 27 0435f773eb6b9a27
 class repr 44 7fa4144f80f122ab
-class wire 1 c183c43574c66cef
+class wire 1 62ffd2ba854536cc
 step 06 remove every object
 class value 233 5679931da048f9fc
 class identity 27 0435f773eb6b9a27
 class repr 44 7fa4144f80f122ab
-class wire 1 2570cc7ab008ea38
+class wire 1 092cd7f4e719d47e
 step 07 put two back
 class value 233 5679931da048f9fc
 class identity 27 0435f773eb6b9a27
 class repr 44 7fa4144f80f122ab
-class wire 1 3f28b527d845fb6d
+class wire 1 4e77c336b1d547fc

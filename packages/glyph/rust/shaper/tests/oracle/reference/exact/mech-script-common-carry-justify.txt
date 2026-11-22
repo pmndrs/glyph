@@ -21,7 +21,7 @@ stage public value 13 77ba8ad694eb0a15
 stage public identity 1 e82358b9ddb1a814
 stage view identity 4 5bbb90863921d3d1
 stage view value 40 a8b341477694bf30
-stage wire wire 1 d3503915b1d3076c
+stage wire wire 1 ea54844e0eac99d7
 stage gather identity 7 8275a3950f99a1ba
 stage gather value 36 82a35e62c0e16bb3
 stage gpu identity 2 7685f83555be1e2d
@@ -30,9 +30,9 @@ step 01 delete the Cyrillic letter
 class value 230 1a5c11e8a951fb22
 class identity 22 f0b34ac716600dac
 class repr 41 6a1f7bd503aabc71
-class wire 1 ec660bff26506904
+class wire 1 96e9a264dd97a4ac
 step 02 restore
 class value 230 5e550a40a7db0877
 class identity 22 cfdf52447b4634ca
 class repr 41 443e6e2e8dfede19
-class wire 1 03557de026ed0670
+class wire 1 ec994ebde7b55e22

@@ -21,7 +21,7 @@ stage public value 13 ecd049950a5a3bf6
 stage public identity 1 eb05a14d2af00f93
 stage view identity 4 14c1295ce927a575
 stage view value 40 af92f338b66e667c
-stage wire wire 1 6ecb2e3c481dfe05
+stage wire wire 1 6a8f3cc489460048
 stage gather identity 7 06e810a60c104ca0
 stage gather value 36 d3678cf593290bc1
 stage gpu identity 2 be1536f79d60bddd
@@ -30,14 +30,14 @@ step 01 insert SpacedWord (5 units) at 40 + max lines 12 + insert Bidi (1 units)
 class value 230 8bb34a45c1a84a6c
 class identity 22 a43ca8c0a36e4f19
 class repr 44 ceee36a7cbd38829
-class wire 1 676e655c8d3a4513
+class wire 1 3310808dce8c5eda
 step 02 insert HardBreak (1 units) at 25
 class value 230 75e1c042b22f0dc8
 class identity 22 6884c68b46cc3782
 class repr 44 a7d3e81403cf4817
-class wire 1 b6b154d9670c0f28
+class wire 1 fc4c6387f74e59d9
 step 03 insert SpacedWord (3 units) at 80
 class value 230 591bc40b9cb561a7
 class identity 22 b129baab899e2bdb
 class repr 44 32ef8befc1bd85d8
-class wire 1 314037ea315e10f7
+class wire 1 da77a39232e7c466

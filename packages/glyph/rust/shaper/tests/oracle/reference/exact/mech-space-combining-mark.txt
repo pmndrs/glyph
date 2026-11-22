@@ -21,7 +21,7 @@ stage public value 13 fb04889aa08c101a
 stage public identity 1 8371fb03dcbd02fe
 stage view identity 4 a39199d7bb8df529
 stage view value 40 b98cb939aa11369a
-stage wire wire 1 5e5152fd033c9438
+stage wire wire 1 da5349c8a618459b
 stage gather identity 7 6fdd6ea332cde075
 stage gather value 36 a8b198ffe941ebeb
 stage gpu identity 2 7dc509de9aaae512
@@ -30,24 +30,24 @@ step 01 mark a plain space
 class value 230 a6f89511e16e231e
 class identity 22 cbc013cd37881232
 class repr 41 611e89ca823499f0
-class wire 1 aa788c58fb613fe5
+class wire 1 e90a303ac754fa51
 step 02 restore
 class value 230 96f3905aaf8c366e
 class identity 22 4e5eaf9dd97d0971
 class repr 41 0decf24c0d6df88e
-class wire 1 d677305b2a7cfdba
+class wire 1 e656eb86e67acbce
 step 03 insert Word (6 units) at 15
 class value 230 10e2311e3321ea80
 class identity 22 2232fe40a90b612d
 class repr 41 5e0156fd911c46f3
-class wire 1 a71dcd6c82e46436
+class wire 1 ab7f680d788bf303
 step 04 flip case at 0
 class value 230 af0eeb8e370ce795
 class identity 22 b89a21bfeba15e56
 class repr 41 296a38e519aacfe9
-class wire 1 d2f2558b87685e82
+class wire 1 064473fc268685e5
 step 05 delete 7 at 10
 class value 230 40c30393c2c7991a
 class identity 22 273d1449fae758a3
 class repr 41 3474778a450cd66c
-class wire 1 1d9e3a9149c98ff5
+class wire 1 174de418b41ddef7

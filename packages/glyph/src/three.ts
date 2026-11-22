@@ -64,7 +64,10 @@ export type {
 } from './three/glyph-measurement.js';
 // `measure()`, `glyphs()`, caret helpers, and detached measurements return these.
 export type { BorrowedGlyphLayout, LayoutBox, GlyphLayoutInspection, ParagraphLayoutSummary } from './layout.js';
-export type { GlyphCaret, GlyphKey } from './glyph-placement.js';
+export type { GlyphKey } from './glyph-placement.js';
+export { TextOffsetError } from './text-editing.js';
+// `Text`'s editing methods take and return these; the rest of the vocabulary is on the package root.
+export type { TextCaret, TextDirection, TextMovement, TextPosition, TextRange, TextUnit } from './text-editing.js';
 
 /** Creates a Three config using the stable TSL shader implementation. */
 export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphConfig {

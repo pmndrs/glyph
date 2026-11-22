@@ -15,20 +15,20 @@ stage public value 13 677729ad5fdb85ee
 stage public identity 1 b14cb9f4279e7fe2
 stage view identity 4 8ae554fe3de14028
 stage view value 40 670b7ca80572a461
-stage wire wire 1 e879417f4c3f0c22
+stage wire wire 1 05028e2c527f35e0
 stage gpu identity 1 a015b8bb85bbe492
 step 01 
 class value 161 f5ca42afc440bead
 class identity 10 dbbe9b78366753a7
 class repr 21 aeba797d00af0f89
-class wire 1 f72166e21bcf4e04
+class wire 1 e6719149d6032289
 step 02 
 class value 161 f5ca42afc440bead
 class identity 10 dbbe9b78366753a7
 class repr 21 aeba797d00af0f89
-class wire 1 a936ab69eca40f59
+class wire 1 fbb592b5158a9110
 step 03 insert Word (8 units) at 1 + insert Space (1 units) at 5
 class value 220 ec6af73239e9d0c5
 class identity 20 9ddd04bdf7366ab0
 class repr 21 4c912bfbd47d1cf9
-class wire 1 e730d34fcd27e2b2
+class wire 1 896494091a463f17

@@ -22,7 +22,7 @@ stage public value 13 b66283c0f8375e2a
 stage public identity 1 3fc56f88fc243bf4
 stage view identity 4 b34ce2ebee5ef04a
 stage view value 40 5ed99e5d5fd6c891
-stage wire wire 1 9bd58c573da877ca
+stage wire wire 1 66e417eb5182f9b3
 stage gather identity 7 9f1faba5b00e8222
 stage gather value 36 ac9648823dbe9639
 stage gpu identity 2 5a67bfec72c77e3c
@@ -32,38 +32,38 @@ class value 230 08154de02388c913
 class identity 22 dddc30b8c1f30422
 class repr 44 c1f483e23b4a99f2
 class cache 3 cb18201ad8c33652
-class wire 1 14e56e4cdacc5f6c
+class wire 1 9f40c0a83b28e86f
 step 02 width 418
 class value 230 4135899afec3b4dc
 class identity 22 ecdb8f7bddb5d48f
 class repr 44 28a22e7b9f797c0f
 class cache 3 cb18201ad8c33652
-class wire 1 1a058e045aacc05a
+class wire 1 2b3ef723a827c143
 step 03 width 233.5
 class value 230 609c07e59fe34e10
 class identity 22 bb910fcc567ddae9
 class repr 44 11c240535d3cf870
 class cache 5 cd1a66053b38895b
-class wire 1 18b17c826a02de42
+class wire 1 a2cfa89260de20d8
 step 04 width 600
 class value 230 af7931bccf5e9ace
 class identity 22 a86824ec139fdcbc
 class repr 44 b336edcd48b45d70
 class cache 5 cd1a66053b38895b
-class wire 1 b38a41c441a86b55
+class wire 1 3c860fe5b28d0712
 step 05 delete 4 at 2340
 class value 230 acf25d15b54c5720
 class identity 22 805d2e5da6e49ed7
 class repr 44 9d69a76089d163b6
 class cache 3 2cae2f87056c81a2
-class wire 1 fb6c36307ddf5fe9
+class wire 1 8f86c44daa271e11
 step 06 insert Mark (199 units) at 85 + direction 2 + insert SpacedWord (11 units) at 1209 + max lines 0
 class value 230 1b431350b8938029
 class identity 22 14bdb5ddc8aef586
 class repr 44 bebc836b1e672010
-class wire 1 a47ff04a77b6accc
+class wire 1 dc60deef5e7bdcf1
 step 07 delete 5 at 1289
 class value 230 bedf5a1c60208dd1
 class identity 22 3ba06c2fc1865ebb
 class repr 44 ad48e2e5b4c0af91
-class wire 1 8b895222784e70e2
+class wire 1 75be3ebe972f3a28

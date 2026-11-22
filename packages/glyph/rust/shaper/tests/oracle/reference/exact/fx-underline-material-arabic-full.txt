@@ -21,7 +21,7 @@ stage public value 13 8d745db684648007
 stage public identity 1 9f58ac2691d9d2e1
 stage view identity 4 b7b7f58c55341768
 stage view value 40 0cc031ab06df0421
-stage wire wire 1 1d3d509f91b20f9b
+stage wire wire 1 c2f5b1a7d8b744f8
 stage gather identity 7 c2c572bffa9b1d93
 stage gather value 36 b291ba1f7ae0483c
 stage gpu identity 2 11f6365e1b348138
@@ -32,44 +32,44 @@ step 01 material on
 class value 265 92949d39ba0e054a
 class identity 29 c7422fd082c998b2
 class repr 44 f1d759e2cd755ef7
-class wire 1 51f72f8f94fc585d
+class wire 1 9bd080e390078d5f
 step 02 material swapped
 class value 265 09311162ac36f788
 class identity 29 0ef27985e6aa344b
 class repr 44 f1d759e2cd755ef7
-class wire 1 9f609dfea61c78e9
+class wire 1 379fcc49a8cb78d7
 step 03 material and width
 class value 265 a019b6341ada5ec8
 class identity 29 7fef35c643e80238
 class repr 44 f83cd430a6fa1552
-class wire 1 9c75e5a4b37dbd5a
+class wire 1 e7ad132f52d39797
 step 04 material and edit
 class value 265 a5713fa5d025dc68
 class identity 29 10b955b517b92c51
 class repr 44 b2d2221769eb5cad
-class wire 1 58d14d98172dd4e8
+class wire 1 f42a2ee3339e3d00
 step 05 material and same-length edit
 class value 265 cc71f441d2f8a27d
 class identity 29 361daf2f48393ca9
 class repr 44 a775e8401d3e65c2
-class wire 1 04e5bf8ba8a3f186
+class wire 1 2140daa3fa3c55b3
 step 06 material off
 class value 265 37271c5a2b30f4be
 class identity 29 bed0ed8ff0f93758
 class repr 44 a775e8401d3e65c2
-class wire 1 891a665a177bb681
+class wire 1 082d1d2a322df1b2
 step 07 insert SpacedWord (7 units) at 26
 class value 265 658b914e1814c6b3
 class identity 29 7490f6b256c17c7a
 class repr 44 b189cff4d2ee1afb
-class wire 1 34120b93f9bfe861
+class wire 1 514901773545c39b
 step 08 foreground of the root
 class value 265 60e608fdf98b24cb
 class identity 29 e4162db4c4b602a0
 class repr 44 b189cff4d2ee1afb
-class wire 1 0e75e8129d30bcdc
+class wire 1 55ea62a547cd9d16
 step 09 outline of the root
 class value 245 5c51dc7fd2ef802a
 class identity 27 1782a62b9ce2704a
 class repr 44 b189cff4d2ee1afb
-class wire 1 3c05f2eb6cf92ef2
+class wire 1 956299db36e3c2be

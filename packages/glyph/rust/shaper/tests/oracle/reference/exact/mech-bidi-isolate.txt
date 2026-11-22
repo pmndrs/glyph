@@ -21,7 +21,7 @@ stage public value 13 c7462f912be8fcf1
 stage public identity 1 682793ef2e730f59
 stage view identity 4 18b7f09f4b1179c2
 stage view value 40 38cd26c8d7ffc681
-stage wire wire 1 4e1edd79c041c55c
+stage wire wire 1 17bb3719fede3ace
 stage gather identity 7 3c568f56be547539
 stage gather value 36 4fdeaebbf5cf2fd2
 stage gpu identity 2 318ba3c11d859277
@@ -30,24 +30,24 @@ step 01 open an isolate
 class value 230 743f6e0b007c1c81
 class identity 22 9834f2dad0ec8706
 class repr 41 c8e144f98ae21fe9
-class wire 1 5aa22d1b792b141b
+class wire 1 ecc83961648441a7
 step 02 restore
 class value 230 6f5a0d49cbc0d454
 class identity 22 38a80926de946a83
 class repr 41 00042ec2fb3385cd
-class wire 1 56601eb9515f5b63
+class wire 1 d351eaf3c092d211
 step 03 insert HardBreak (1 units) at 25
 class value 230 fd02d5435b85cc8f
 class identity 22 b6ec33384844b4b5
 class repr 41 a7bb671d87418fdb
-class wire 1 687617df2371f487
+class wire 1 f91c5f0f2b1d8211
 step 04 flip case at 18
 class value 230 43ca5ab4ac095196
 class identity 22 b68c9c50546b7f69
 class repr 41 0a0e176223d7dd7f
-class wire 1 caf26bc4f801b9df
+class wire 1 28779e83052365c1
 step 05 add span 1..5 + delete 18 at 9
 class value 242 347f74a326fa0d61
 class identity 22 54b4fba87b8707fd
 class repr 41 e1c8b154f56431bf
-class wire 1 91081701bf7169d6
+class wire 1 f81203b8ec25eb72

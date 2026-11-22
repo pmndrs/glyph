@@ -21,7 +21,7 @@ stage public value 13 3a65e34f5b035759
 stage public identity 1 2ad2ff017860f003
 stage view identity 4 2582fcb2bb4e9f98
 stage view value 40 66c0753028ef8c7f
-stage wire wire 1 3b5c178948b26afa
+stage wire wire 1 86990491cdc1214e
 stage gather identity 7 3ed819e8043df449
 stage gather value 36 9b82996eddeb8f7f
 stage gpu identity 2 ed1a772f654208f2
@@ -30,24 +30,24 @@ step 01 append a line
 class value 230 69b2d6a8c37be2a3
 class identity 22 33a5dcca9ba40459
 class repr 44 298474b3791ebae6
-class wire 1 fe93e61879a4a88c
+class wire 1 963db7eae7df0489
 step 02 restore
 class value 230 71afcb7df66f8874
 class identity 22 68d8765547f4e5be
 class repr 44 a804b2585fa443d1
-class wire 1 a39f48a87567db6d
+class wire 1 f331a5fd79519c0b
 step 03 replace 6 at 86
 class value 230 f83a852568abfb26
 class identity 22 31e96ec2e365420b
 class repr 44 31d8f8527edc3465
-class wire 1 07dee3491e5ac587
+class wire 1 98fd51631d453a91
 step 04 delete 1 at 53
 class value 230 3b3c95fd12cbf05f
 class identity 22 9963d3ded4adec87
 class repr 44 976cbdb41dca1a50
-class wire 1 f33f9411aed51eb1
+class wire 1 46d81bc2bc1bf27f
 step 05 insert Foreign (201 units) at 180
 class value 230 208884979dd3c1ad
 class identity 22 998fe664b09f2d6b
 class repr 44 b0e5bbd94d54e83d
-class wire 1 d0779b459803b51d
+class wire 1 d1bf9e1abbc5fe60

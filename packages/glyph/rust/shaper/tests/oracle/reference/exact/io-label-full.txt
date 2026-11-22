@@ -21,7 +21,7 @@ stage public value 13 d6fcc3e5b58cc62e
 stage public identity 1 a7565d089b77c68d
 stage view identity 4 1214032c5184c4a2
 stage view value 40 4faebc04c02fa016
-stage wire wire 1 356acb2659bed1e0
+stage wire wire 1 826a9b6b3bbb5780
 stage gather identity 7 4513e2ac2ec439bf
 stage gather value 36 fe447c00aa7aa94e
 stage gpu identity 2 da90228547fc9986
@@ -32,49 +32,49 @@ step 01 add one at the end
 class value 253 45733b169b3e70f2
 class identity 29 411a69fc26952ca7
 class repr 41 33226e841cfdcdd7
-class wire 1 0ad5978712c06cbe
+class wire 1 c72a0640a8a54452
 step 02 move and grow the middle one
 class value 253 45733b169b3e70f2
 class identity 29 411a69fc26952ca7
 class repr 41 33226e841cfdcdd7
-class wire 1 f5d01710964bda90
+class wire 1 a1d5943de7304179
 step 03 align to the text top with margins
 class value 253 45733b169b3e70f2
 class identity 29 411a69fc26952ca7
 class repr 41 33226e841cfdcdd7
-class wire 1 4ca91a268ad2a4bf
+class wire 1 22442407cd35e39e
 step 04 edit the text and leave the objects
 class value 253 5407d91edb411aed
 class identity 29 982639c0d240b114
 class repr 41 41991d0cedfaad5a
-class wire 1 1eee5d00355e2c2d
+class wire 1 d85db86ffca76db6
 step 05 narrow the measure and re-anchor
 class value 253 ba1195c25f242f07
 class identity 29 f9866038d7b7f93e
 class repr 41 5998cd8fc9548214
-class wire 1 04b74177558684d3
+class wire 1 30726bb71a371824
 step 06 remove every object
 class value 253 ba1195c25f242f07
 class identity 29 f9866038d7b7f93e
 class repr 41 5998cd8fc9548214
-class wire 1 c58b5e7f96b9b21a
+class wire 1 25d864093caabb79
 step 07 put two back
 class value 253 ba1195c25f242f07
 class identity 29 f9866038d7b7f93e
 class repr 41 5998cd8fc9548214
-class wire 1 a6d2b0b0ac1e7429
+class wire 1 5cde50947bec5dd8
 step 08 alter inline object 1
 class value 253 ba1195c25f242f07
 class identity 29 f9866038d7b7f93e
 class repr 41 5998cd8fc9548214
-class wire 1 020bbef96f4f1245
+class wire 1 2236d1b7599e1a62
 step 09 metrics size 16 spacing 0 line 1.2 word 0
 class value 233 21dda090ac7f182c
 class identity 27 bda2889fdec32e5e
 class repr 41 5998cd8fc9548214
-class wire 1 3c05f2eb6cf92ef2
+class wire 1 956299db36e3c2be
 step 10 insert Word (1 units) at 29 + alter inline object 0
 class value 253 773eea84166ba7f6
 class identity 29 23348318a4a28453
 class repr 41 1bbf152820ff584c
-class wire 1 a400fbfb68935c80
+class wire 1 96457221b5f24b2e

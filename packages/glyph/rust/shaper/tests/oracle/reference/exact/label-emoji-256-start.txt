@@ -21,7 +21,7 @@ stage public value 13 eb845f193c984e75
 stage public identity 1 4f040436fc063ad4
 stage view identity 4 ba28e04e12b86f23
 stage view value 40 a7c20b73b58d2ad0
-stage wire wire 1 5ebd5a130c72533d
+stage wire wire 1 e66c7ca2e053555e
 stage gather identity 7 4dd05d832af44c6d
 stage gather value 36 c4583ec59f8a680f
 stage gpu identity 2 6fa711059535618e
@@ -30,16 +30,16 @@ step 01 delete 200 at 0
 class value 230 832dd97de67acded
 class identity 22 99178e2015ccdd11
 class repr 41 59703f46cd1d156d
-class wire 1 ee6b2b677aa36d52
+class wire 1 cbc14763b8491d43
 step 02 insert Mark (1 units) at 39 + metrics size 24 spacing 0 line 1.2 word 0 + insert SpacedWord (2 units) at 24 + width 838.5
 class value 230 f5b21f8a580f525d
 class identity 22 88ca353dd048e69d
 class repr 41 63fc2d5a363c33c3
 class cache 3 afcf64a761aba74e
-class wire 1 1899027900e0444a
+class wire 1 bb8db4f1702451c8
 step 03 insert SpacedWord (5 units) at 4
 class value 230 72f3c539a6afb398
 class identity 22 6665680aae60bf8b
 class repr 41 b9ca106d4025c320
 class cache 3 105c9cb18d7a4df0
-class wire 1 5dd798baf612f9f2
+class wire 1 f710b4ac753f135b

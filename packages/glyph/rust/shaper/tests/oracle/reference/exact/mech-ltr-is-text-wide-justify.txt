@@ -24,7 +24,7 @@ stage public value 13 4416f9d33ddcb554
 stage public identity 1 44b75dd169e91bf2
 stage view identity 4 84c3efc36977ddfb
 stage view value 40 20ef5bf0b0d4c231
-stage wire wire 1 16359605223cfe92
+stage wire wire 1 9fc987358ed38466
 stage gather identity 7 2110940cf139cd67
 stage gather value 36 e1dbdc1869d3ace2
 stage gpu identity 2 aa04158024f68d3f
@@ -33,10 +33,10 @@ step 01 one Arabic letter in paragraph two
 class value 230 4a14bb7d2e67ca3d
 class identity 22 d0a4ff11c172e70c
 class repr 44 e17969779aeb8418
-class wire 1 40d3000c2940bfda
+class wire 1 2d6941e9052d5a59
 step 02 restore
 class value 265 0e436bddd7b21b22
 class identity 24 2f3caffd2b289650
 class repr 64 3c987d880d3f6c4e
 class cache 5 8aa735c8a2972aa1
-class wire 1 297d6e21f8bc39ec
+class wire 1 ae5d59cc79a7e2a5

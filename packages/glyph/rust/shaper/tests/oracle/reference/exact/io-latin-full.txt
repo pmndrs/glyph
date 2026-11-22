@@ -21,7 +21,7 @@ stage public value 13 3582ea85b78f8d8e
 stage public identity 1 3e373b7ccf7333b7
 stage view identity 4 2a8e0773b715036d
 stage view value 40 e5b6f01e634326d0
-stage wire wire 1 466ef69d2a5acce1
+stage wire wire 1 5deb62175534624f
 stage gather identity 7 bb51b46f5cab59fa
 stage gather value 36 7b85bf42cc5cf6bd
 stage gpu identity 2 391d936a8c01c224
@@ -32,49 +32,49 @@ step 01 add one at the end
 class value 253 e8edbc00931777e0
 class identity 29 6b326397c86682cd
 class repr 44 58c6b786c5e94c12
-class wire 1 9dcf573aafb00010
+class wire 1 46cef7ec9d0d22b1
 step 02 move and grow the middle one
 class value 253 e8edbc00931777e0
 class identity 29 6b326397c86682cd
 class repr 44 58c6b786c5e94c12
-class wire 1 a8058eb379b4afa0
+class wire 1 46eefb70fd3139d8
 step 03 align to the text top with margins
 class value 253 e8edbc00931777e0
 class identity 29 6b326397c86682cd
 class repr 44 58c6b786c5e94c12
-class wire 1 c5089979021f3f4a
+class wire 1 dd05e88b0ef7ebaa
 step 04 edit the text and leave the objects
 class value 253 8b1f6a33ee099c13
 class identity 29 5d3995982ed0f919
 class repr 44 dd1038a8a5f6eb8b
-class wire 1 53efc8458dbe3e1f
+class wire 1 4928d36ad8b280e3
 step 05 narrow the measure and re-anchor
 class value 253 b5a0f5ec36397d4c
 class identity 29 94f4d72af85404c0
 class repr 44 7fa4144f80f122ab
-class wire 1 2385662f532d7293
+class wire 1 4ee9e1badf5ec989
 step 06 remove every object
 class value 253 b5a0f5ec36397d4c
 class identity 29 94f4d72af85404c0
 class repr 44 7fa4144f80f122ab
-class wire 1 17fb5cfdcd0c86cb
+class wire 1 873c48279c72aac2
 step 07 put two back
 class value 253 b5a0f5ec36397d4c
 class identity 29 94f4d72af85404c0
 class repr 44 7fa4144f80f122ab
-class wire 1 6b4276d50edb54c6
+class wire 1 45111bd587d3acb2
 step 08 insert SpacedWord (8 units) at 118
 class value 253 1362dfbf5d46a776
 class identity 29 e37da664f9a2f40d
 class repr 44 6a3dce640b41e84b
-class wire 1 158cbb0e8a3a6a7e
+class wire 1 e8b49359a14828dd
 step 09 width 0 + width 0
 class value 253 ff1400857f33d24d
 class identity 29 059c4dbfe336cebe
 class repr 44 47fc116176e9fdcd
-class wire 1 330dca5f7e846288
+class wire 1 d7732d4985bc605b
 step 10 metrics size 16 spacing -0.25 line 1.2 word 0 + remove an inline object
 class value 253 e961ded45613c4de
 class identity 29 a0ea5bc216ea2199
 class repr 44 7bc72aa525641683
-class wire 1 41ec83084a878baf
+class wire 1 50cb11198ab01be8

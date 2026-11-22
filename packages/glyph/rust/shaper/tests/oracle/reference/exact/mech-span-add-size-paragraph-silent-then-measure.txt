@@ -21,7 +21,7 @@ stage public value 13 e073fca7cba59189
 stage public identity 1 2ad2ff017860f003
 stage view identity 4 0fca4905afcfe500
 stage view value 40 cdb1c1ed2cbcbbd1
-stage wire wire 1 f64b65d9a41ad274
+stage wire wire 1 c36c88f3eb2582ba
 stage gather identity 7 3ed819e8043df449
 stage gather value 36 5cd0394d4aa4d81c
 stage gpu identity 2 77371c9112299e41
@@ -30,9 +30,9 @@ step 01 change the span
 class value 210 6978631071b64844
 class identity 20 d3ee50bb6514426a
 class repr 44 02339c0382e492dd
-class wire 1 1f30e5847e4e4404
+class wire 1 7be81c5e16143145
 step 02 restore
 class value 210 fef54aa8960674e2
 class identity 20 048559cf786be9ce
 class repr 44 32a352801a9563d0
-class wire 1 91656924e865a6ab
+class wire 1 824cb2f75e91bd4b

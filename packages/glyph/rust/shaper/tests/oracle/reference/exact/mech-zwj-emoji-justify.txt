@@ -21,7 +21,7 @@ stage public value 13 85b56d2c432e05e2
 stage public identity 1 36589ec349b92d55
 stage view identity 4 f957c84202a9f940
 stage view value 40 216a77b2c007ec5c
-stage wire wire 1 d8e8c5a39967101d
+stage wire wire 1 d3e33b0043e715ea
 stage gather identity 7 c36b24b49d52b27e
 stage gather value 36 65f2f459b72f69a2
 stage gpu identity 2 8e2183833a309a05
@@ -30,9 +30,9 @@ step 01 join two people
 class value 230 bc3f471dbef9be96
 class identity 22 e6aef33172949564
 class repr 41 4b4ea2b701adff2f
-class wire 1 1e5b9bf997dddfcd
+class wire 1 9c0c53a5222b6ea4
 step 02 restore
 class value 230 355c2b403e47802a
 class identity 22 e9cbacfe634e5ac7
 class repr 41 2ca0ec844447d441
-class wire 1 20c9e820f3378643
+class wire 1 e505485cfcebd20f

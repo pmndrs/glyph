@@ -21,7 +21,7 @@ stage public value 13 a094c87a0f3ef3cd
 stage public identity 1 cb311c1cba93314b
 stage view identity 4 9e1baef37d580513
 stage view value 40 9356e369eac1f605
-stage wire wire 1 351c7188e7f7af87
+stage wire wire 1 bbe55c651d89ee2c
 stage gather identity 7 fa9e40cf1a8acb81
 stage gather value 36 805279403901131d
 stage gpu identity 2 33d1d1966af37791
@@ -33,24 +33,24 @@ step 01 edit the last paragraph
 class value 256 bc6fe8022192b970
 class identity 29 4315b369e33aeac8
 class repr 44 76000b489026ad6d
-class wire 1 2d4bfad45a17c637
+class wire 1 7bac6fa0c07035c7
 step 02 nothing changes
 class value 236 ee17894a3febfd0b
 class identity 27 2f789cd18acc795d
 class repr 44 76000b489026ad6d
-class wire 1 a936ab69eca40f59
+class wire 1 fbb592b5158a9110
 step 03 order paragraph 1 at 200 + add paragraph 2
 class value 427 9d4ba3e87548e4e3
 class identity 40 cc35abd88213db2b
 class repr 88 d4b95d392f55c622
-class wire 1 5c0a8a91136b641b
+class wire 1 0b91dabb9ec862b4
 step 04 paragraph 2: replace 3 at 91
 class value 427 e9038d26fde9537f
 class identity 40 303cf2b7061973c4
 class repr 88 a36e7ab46ab02935
-class wire 1 3cd09877e027eac3
+class wire 1 4ac29d6bfca97cfa
 step 05 paragraph 1: insert Word (1 units) at 325 + paragraph 2: insert Word (3 units) at 98 + add span 107..132 + width 420.01563 + paragraph 1: direction 1 + delete 6 at 352 + add span 423..424 + paragraph 2: add span 157..159 + metrics size 16 spacing 0 line 1.2 word 0 + align 1 + restyle span 3
 class value 451 69ed803922b5c2b0
 class identity 40 2a868c502a12c002
 class repr 88 1bbbc36a2ff33c47
-class wire 1 79640f7598c0b847
+class wire 1 cadb5deaf3ac5b14
