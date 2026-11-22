@@ -189,6 +189,21 @@ fn analysis(script: Script, graphemes: usize, iterations: usize) -> Result<Strin
             .analyze(&text)
             .map_err(|error| format!("unicode: {error:?}"))
     })?;
+    // The kernel's own phases: classes, the rule words, the scalar windows. What
+    // `kernel.unicode` spends beyond them is the emit into breaks, graphemes and scripts.
+    let mut kernel = crate::unicode::kernel::Kernel::default();
+    time("kernel.classify", &mut || {
+        kernel.classify(&text);
+        Ok(())
+    })?;
+    time("kernel.decide", &mut || {
+        kernel.decide(text.len());
+        Ok(())
+    })?;
+    time("kernel.windows", &mut || {
+        kernel.find_windows(text.len());
+        Ok(())
+    })?;
     time("kernel.unicode.scalar", &mut || {
         unicode
             .analyze_scalar(&text)
