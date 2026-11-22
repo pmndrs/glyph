@@ -1,7 +1,7 @@
 import * as TSL from 'three/tsl';
 import type { DataTexture, Node } from 'three/webgpu';
 
-import { slugQuadVertex } from './internal/quad.js';
+import { slugVertexPosition } from './internal/quad.js';
 import { slugDilate, slugDilateMatrix } from './slug-dilate.js';
 import { slugRender, type SlugRenderOptions } from './slug-render.js';
 
@@ -92,31 +92,9 @@ export interface TslSlugShaderOutput {
 /** Builds the canonical Slug graph; composing over it inherits band walk, quadratic solve, and AA. `position`/`coverage` are two halves of one graph — using `coverage` requires driving material position from `position`. Reads `positionLocal` from a `[0, 1]` unit quad, origin upper-left. */
 export function slugShader(instance: TslSlugInstanceNodes, resources: TslSlugShaderResources): TslSlugShaderOutput {
   const renderCoordinate = TSL.varyingProperty('vec2', 'pmndrsSlugRenderCoordinate');
-  const position = TSL.Fn(() => {
-    const { localPosition, outwardNormal, emCoordinate } = slugQuadVertex(instance);
-    const dilated =
-      resources.modelViewProjection === undefined
-        ? slugDilate(
-            localPosition,
-            outwardNormal,
-            emCoordinate,
-            instance.inverseScale,
-            resources.modelViewProjectionRow0,
-            resources.modelViewProjectionRow1,
-            resources.modelViewProjectionRow3,
-            resources.viewport,
-          )
-        : slugDilateMatrix(
-            localPosition,
-            outwardNormal,
-            emCoordinate,
-            instance.inverseScale,
-            resources.modelViewProjection,
-            resources.viewport,
-          );
-    renderCoordinate.assign(dilated.textureCoordinate);
-    return TSL.vec3(dilated.position.x, dilated.position.y, 0);
-  })();
+  const position = TSL.Fn(() =>
+    slugVertexPosition(instance, resources, renderCoordinate, { slugDilate, slugDilateMatrix }),
+  )();
   const coverageAt = (coordinate: Node<'vec2'>): Node<'float'> =>
     TSL.Fn(() =>
       slugRender(

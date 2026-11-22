@@ -21,7 +21,7 @@ import type {
   TslSlugShaderOutput,
   TslSlugShaderResources,
 } from '../../../shaders/tsl/slug/shader.js';
-import { slugQuadVertex } from '../../../shaders/tsl/slug/internal/quad.js';
+import { slugVertexPosition } from '../../../shaders/tsl/slug/internal/quad.js';
 import { slugDilate, slugDilateMatrix } from './slug/slug-dilate.js';
 
 /**
@@ -36,31 +36,9 @@ import { slugDilate, slugDilateMatrix } from './slug/slug-dilate.js';
  */
 export function slugShader(instance: TslSlugInstanceNodes, resources: TslSlugShaderResources): TslSlugShaderOutput {
   const renderCoordinate = TSL.varyingProperty('vec2', 'pmndrsSlugRenderCoordinate');
-  const position = TSL.Fn(() => {
-    const { localPosition, outwardNormal, emCoordinate } = slugQuadVertex(instance);
-    const dilated =
-      resources.modelViewProjection === undefined
-        ? slugDilate(
-            localPosition,
-            outwardNormal,
-            emCoordinate,
-            instance.inverseScale,
-            resources.modelViewProjectionRow0,
-            resources.modelViewProjectionRow1,
-            resources.modelViewProjectionRow3,
-            resources.viewport,
-          )
-        : slugDilateMatrix(
-            localPosition,
-            outwardNormal,
-            emCoordinate,
-            instance.inverseScale,
-            resources.modelViewProjection,
-            resources.viewport,
-          );
-    renderCoordinate.assign(dilated.textureCoordinate);
-    return TSL.vec3(dilated.position.x, dilated.position.y, 0);
-  })();
+  const position = TSL.Fn(() =>
+    slugVertexPosition(instance, resources, renderCoordinate, { slugDilate, slugDilateMatrix }),
+  )();
   const page = shaderPage(resources.page);
   const specializedSlugRender = tgpu
     .fn(slugRenderWithOptions)

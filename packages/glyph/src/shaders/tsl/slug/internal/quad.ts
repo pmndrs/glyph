@@ -1,10 +1,11 @@
 import * as TSL from 'three/tsl';
 import type { Node } from 'three/webgpu';
 
-import type { TslSlugInstanceNodes } from '../shader.js';
+import type { TslSlugInstanceNodes, TslSlugShaderResources } from '../shader.js';
+import type { slugDilate, slugDilateMatrix } from '../slug-dilate.js';
 
 /** Where one corner of the technique's `[0, 1]` unit quad (origin upper-left) lands for a glyph. */
-export interface SlugQuadVertex {
+interface SlugQuadVertex {
   /** Paragraph-local position with y measured upward, as the dilation and projection expect. */
   readonly localPosition: Node<'vec2'>;
   /** Offset from the quad centre; dilation pushes the corner along it by half a pixel. */
@@ -13,8 +14,49 @@ export interface SlugQuadVertex {
   readonly emCoordinate: Node<'vec2'>;
 }
 
-/** Maps `positionLocal` on the unit quad onto one glyph; shared by the TSL and TypeGPU-backed Slug graphs. */
-export function slugQuadVertex(
+/** The half-pixel dilation a Slug graph applies; the TSL graph and the TypeGPU-backed graph each bring their own. */
+export interface SlugDilation {
+  readonly slugDilate: typeof slugDilate;
+  readonly slugDilateMatrix: typeof slugDilateMatrix;
+}
+
+/**
+ * The vertex half of a Slug graph: maps `positionLocal` on the unit quad onto the glyph, dilates it by half a pixel
+ * with the per-glyph MVP rows or matrix, writes the em-space `renderCoordinate` varying, and returns the position.
+ * Call inside `TSL.Fn`.
+ */
+export function slugVertexPosition(
+  instance: TslSlugInstanceNodes,
+  resources: TslSlugShaderResources,
+  renderCoordinate: ReturnType<typeof TSL.varyingProperty>,
+  dilation: SlugDilation,
+): Node<'vec3'> {
+  const { localPosition, outwardNormal, emCoordinate } = slugQuadVertex(instance);
+  const dilated =
+    resources.modelViewProjection === undefined
+      ? dilation.slugDilate(
+          localPosition,
+          outwardNormal,
+          emCoordinate,
+          instance.inverseScale,
+          resources.modelViewProjectionRow0,
+          resources.modelViewProjectionRow1,
+          resources.modelViewProjectionRow3,
+          resources.viewport,
+        )
+      : dilation.slugDilateMatrix(
+          localPosition,
+          outwardNormal,
+          emCoordinate,
+          instance.inverseScale,
+          resources.modelViewProjection,
+          resources.viewport,
+        );
+  renderCoordinate.assign(dilated.textureCoordinate);
+  return TSL.vec3(dilated.position.x, dilated.position.y, 0);
+}
+
+function slugQuadVertex(
   instance: Pick<TslSlugInstanceNodes, 'origin' | 'size' | 'emOrigin' | 'emSize'>,
 ): SlugQuadVertex {
   return {
