@@ -129,7 +129,12 @@ export function isGlyphPeerDependency(id: string): boolean {
     id.startsWith('@typegpu/') ||
     id === 'typed-binary' ||
     id === 'tinyest' ||
-    id.startsWith('tinyest')
+    id.startsWith('tinyest') ||
+    // PixiJS 3D and the PixiJS core it extends are consumer-installed peers of `@pmndrs/glyph/pixi3d`.
+    id === '@pixi/3d' ||
+    id.startsWith('@pixi/3d/') ||
+    id === 'pixi.js' ||
+    id.startsWith('pixi.js/')
   );
 }
 
