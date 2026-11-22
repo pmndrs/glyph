@@ -111,6 +111,9 @@ Off makes every font shape at its default instance: `OtTables::active_coords` is
 ignored, so the GDEF/HVAR/VVAR/MVAR and `gvar` delta paths are not linked. `ShaperInstance` still
 exists and still computes its coordinates; they simply have no effect. pmndrs/glyph never passes an
 instance (the shaper shapes baked fonts at their default instance), so its shaping is unchanged.
+Variable-font shaping needs the feature back on: FeatureVariations selection, GPOS and GDEF
+variation deltas and HVAR/`gvar` advances are all behind it. In the shipped shaper it costs 13,165
+raw / 5,151 gzip bytes (measured 2026-11-22).
 
 | File                                     | Change                                                                                                                              |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |

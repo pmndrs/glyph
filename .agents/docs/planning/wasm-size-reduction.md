@@ -547,13 +547,13 @@ with fully overlapping ranges; this is not resolvable on a loaded host and shoul
 After the merge with `sil-green-43` (`86afe793c`, `1,726,075` raw / `682,851` gzip / `522,919` Brotli, of which the
 language cut still accounts for `−17,647` / `−4,816` / `−3,050`), each later cut is measured against the one before it:
 
-| Cut | Commit | Δ raw | Δ gzip | Δ Brotli |
-| --- | --- | --: | --: | --: |
-| placement run lookup through the shared `u64` sort kernel | `464e046a3` | −6,383 | −2,048 | −1,933 |
-| one measurement record writer, glyph source as `&mut dyn FnMut` | `0d589655c` | −5,575 | −2,625 | −1,620 |
-| fork `variations` feature off (default instance only) | `7d8ad3bc2` | −13,165 | −5,151 | −4,837 |
-| fork `FontInstance` support only with `experimental_font_api` | `1faf6a1e4` | −12,722 | −2,534 | −1,317 |
-| glyph-outline decoding moved to the font baker | OUTLINECOMMIT | −62,603 | −23,502 | −17,858 |
+| Cut                                                             | Commit        |   Δ raw |  Δ gzip | Δ Brotli |
+| --------------------------------------------------------------- | ------------- | ------: | ------: | -------: |
+| placement run lookup through the shared `u64` sort kernel       | `464e046a3`   |  −6,383 |  −2,048 |   −1,933 |
+| one measurement record writer, glyph source as `&mut dyn FnMut` | `0d589655c`   |  −5,575 |  −2,625 |   −1,620 |
+| fork `variations` feature off (default instance only)           | `7d8ad3bc2`   | −13,165 |  −5,151 |   −4,837 |
+| fork `FontInstance` support only with `experimental_font_api`   | `1faf6a1e4`   | −12,722 |  −2,534 |   −1,317 |
+| glyph-outline decoding moved to the font baker                  | OUTLINECOMMIT | −62,603 | −23,502 |  −17,858 |
 
 ### Monomorphization (research step 5)
 
@@ -562,17 +562,17 @@ language cut still accounts for `−17,647` / `−4,816` / `−3,050`), each lat
 `core`/`alloc` `89,603` total / `59,906` duplicate (sorts, drop glue and collection code instantiated over our types),
 ours `94,401` / `42,770`, HarfRust `8,553` / `5,587`, read-fonts `7,633` / `4,480`. The largest duplicate groups:
 
-| Generic | Duplicate | Total |
-| --- | --: | --: |
-| `core::slice::sort::unstable::quicksort` | 16,746 | 22,884 |
-| `core::slice::sort::stable::quicksort` (HarfRust `ot_map` types, bidi brackets, Indic) | 14,470 | 19,795 |
-| `retained_rope::update_ordered_node` | 10,894 | 13,929 |
-| `core::ptr::drop_glue` | 10,804 | 16,875 |
-| `core::slice::sort::stable::drift::sort` | 6,175 | 8,715 |
-| `layout_query::append_measurement_from_occurrences_source` (2 closures) | 5,713 | 11,768 |
-| HarfRust `contextual::apply_chain_with_sequences` | 5,587 | 8,553 |
-| `retained_rope::split` / `balance` / `join_nodes` / `append_right` (5 node types each) | 17,333 | 23,177 |
-| read-fonts CFF `Evaluator` | 2,950 | 5,320 |
+| Generic                                                                                | Duplicate |  Total |
+| -------------------------------------------------------------------------------------- | --------: | -----: |
+| `core::slice::sort::unstable::quicksort`                                               |    16,746 | 22,884 |
+| `core::slice::sort::stable::quicksort` (HarfRust `ot_map` types, bidi brackets, Indic) |    14,470 | 19,795 |
+| `retained_rope::update_ordered_node`                                                   |    10,894 | 13,929 |
+| `core::ptr::drop_glue`                                                                 |    10,804 | 16,875 |
+| `core::slice::sort::stable::drift::sort`                                               |     6,175 |  8,715 |
+| `layout_query::append_measurement_from_occurrences_source` (2 closures)                |     5,713 | 11,768 |
+| HarfRust `contextual::apply_chain_with_sequences`                                      |     5,587 |  8,553 |
+| `retained_rope::split` / `balance` / `join_nodes` / `append_right` (5 node types each) |    17,333 | 23,177 |
+| read-fonts CFF `Evaluator`                                                             |     2,950 |  5,320 |
 
 Two were collapsed (table above); together `−4,673` gzip with every headline row within ±4% and overlapping ranges. The
 engine already had a shared sort kernel (D-243, `engine/sort.rs`); the run lookup was the largest caller still sorting a
@@ -623,14 +623,14 @@ below.
 Skrifa was never in the shipped shaper: it was a test-only dependency (the outline oracle), and it moved with that test
 to the font baker. read-fonts, about `164` kB of the merged build's functions, splits by what reaches it:
 
-| Reached by | read-fonts bytes | Runtime need |
-| --- | --: | --- |
-| HarfRust layout: `tables::layout`, `gsub`, `gpos`, `gdef`, `kern` | 85,055 | Shaping. Stays. |
-| outline decoding: `ps::cs`, `ps::cff`, `glyf`, `loca` | 46,514 | `outlineAt()` on fonts baked with `outlines`. Moved to the font baker. |
-| variable-font paths: `gvar`, `hvar`, `mvar`, `variations` | 11,758 | None today (no instance is passed). Behind the fork's `variations` feature. |
-| `model::font::tables` (the `FontInstance` model) | 7,178 | None. Behind `experimental_font_api`. |
-| `cmap`, `hmtx`, `head`, `maxp` and other metrics | 6,506 | Shaping. Stays. |
-| generic instantiations over read-fonts types | 7,141 | Mostly layout. |
+| Reached by                                                        | read-fonts bytes | Runtime need                                                                |
+| ----------------------------------------------------------------- | ---------------: | --------------------------------------------------------------------------- |
+| HarfRust layout: `tables::layout`, `gsub`, `gpos`, `gdef`, `kern` |           85,055 | Shaping. Stays.                                                             |
+| outline decoding: `ps::cs`, `ps::cff`, `glyf`, `loca`             |           46,514 | `outlineAt()` on fonts baked with `outlines`. Moved to the font baker.      |
+| variable-font paths: `gvar`, `hvar`, `mvar`, `variations`         |           11,758 | None today (no instance is passed). Behind the fork's `variations` feature. |
+| `model::font::tables` (the `FontInstance` model)                  |            7,178 | None. Behind `experimental_font_api`.                                       |
+| `cmap`, `hmtx`, `head`, `maxp` and other metrics                  |            6,506 | Shaping. Stays.                                                             |
+| generic instantiations over read-fonts types                      |            7,141 | Mostly layout.                                                              |
 
 The only runtime consumer of outlines is the font loader: `outlineAt()` (Text, borrowed and detached glyph views) reads a
 JavaScript store that the loader fills, glyph by glyph, behind the already-asynchronous load promise. Slug rendering uses
