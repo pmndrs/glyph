@@ -2344,6 +2344,11 @@ the same pass that prices it (`line_edge_records`, boundary-shape records beside
 line shaped by itself. A line that ends at one, unless a space ends it, draws the island it closes shaped alone too
 (the tail record, `FlowFragment::tail_index`), as Blink reshapes a line end that no breakable space
 precedes (so only at positioning-only breaks); a hanging space keeps the paragraph's glyphs, as browsers keep the terminating space in the shaping run. Extra glyphs an edge record draws beyond its cluster's paragraph glyphs keep the stable ids of the previous layout's records, found by the text unit of their cluster and their ordinal (`previous_edge_ids`), so an edit that moves offsets keeps them. An island a boundary prices is the island its line edge draws, so one shaping serves both and is kept with the cluster arena (`ClusterArena::islands`): a relayout over the same clusters, such as a width change, shapes nothing, and an edit rebuilds the arena empty.
+Each line fit records the widest width its tests admitted and the narrowest they refused (`FitWitness`; every read of
+the measure goes through `LineFit::within`). A rebuild that changes geometry alone offers the committed flow's
+witnesses to the new build, which reuses a fit whose start cursor matches and whose range holds the new measure and
+runs the fitter for every other line; output is unchanged by construction and proven against whole builds
+([experiments-reflow-2026-11-22.md](../planning/experiments-reflow-2026-11-22.md)).
 Edge records lay out cluster by cluster, so spans that split only paint or decoration keep their own extents and
 justification. A paragraph with a right-to-left or overridden run marks no unsafe break as correctable, as on main, so its widths and drawn glyphs cannot disagree (known limitation until edge records follow visual order). Optional language-resource imports,
 including a versioned linear-memory ABI that can move language tables out of the default Wasm payload, are tracked in

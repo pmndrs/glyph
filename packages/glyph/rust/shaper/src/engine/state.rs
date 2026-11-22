@@ -6438,6 +6438,8 @@ impl ParagraphState {
         max_slots_per_band: u32,
         next_glyph_id: &mut u32,
     ) -> Result<(), EngineError> {
+        #[cfg(feature = "stage-bench")]
+        let _clock = oracle::stage_bench::clock::FLOW.guard();
         self.discard_flow_layout_candidate();
         // Positioning is derived from one specific flow: its per-line lanes describe the
         // lines that flow composed. Re-running the flow therefore invalidates any pending
@@ -6575,7 +6577,20 @@ impl ParagraphState {
             self.flow_layout.mark_prepared();
             return Ok(());
         }
-        self.flow_layout.pending_mut().build_with_drop_cap_context(
+        // A change of geometry alone leaves every input of the fitter but the measure as the
+        // committed flow read it, so that flow's fits answer wherever the measure allows.
+        let same_clusters = self.geometry.is_prepared()
+            && !self.clusters.is_prepared()
+            && !self.text.is_prepared()
+            && !self.styles.is_prepared()
+            && !self.unicode.is_prepared()
+            && !self.bidi.is_prepared()
+            && !self.shape.is_prepared()
+            && !self.shaping_runs.is_prepared()
+            && !self.style_invalidation.any();
+        let (pending_flow, committed_flow) = self.flow_layout.derive_mut();
+        pending_flow.build_with_drop_cap_context(
+            same_clusters.then_some(committed_flow),
             geometry,
             clusters,
             runs,
@@ -6795,6 +6810,7 @@ impl ParagraphState {
         };
         self.intrinsic_flow_layout_scratch
             .build_with_drop_cap_context(
+                None,
                 &self.intrinsic_geometry_scratch,
                 clusters,
                 &[],
