@@ -543,3 +543,128 @@ ranges overlap and no ratio reaches the 10% verdict threshold. Headline workload
 runs on them. `latin15k` sweep read +2.3% and then +3.9% total (layout +4% and +9%, about 20 to 40 µs) across two runs
 with fully overlapping ranges; this is not resolvable on a loaded host and should be repeated on a quiet one. Oracles
 (native and wasm, full tier) are green without a re-freeze.
+
+After the merge with `sil-green-43` (`86afe793c`, `1,726,075` raw / `682,851` gzip / `522,919` Brotli, of which the
+language cut still accounts for `−17,647` / `−4,816` / `−3,050`), each later cut is measured against the one before it:
+
+| Cut | Commit | Δ raw | Δ gzip | Δ Brotli |
+| --- | --- | --: | --: | --: |
+| placement run lookup through the shared `u64` sort kernel | `464e046a3` | −6,383 | −2,048 | −1,933 |
+| one measurement record writer, glyph source as `&mut dyn FnMut` | `0d589655c` | −5,575 | −2,625 | −1,620 |
+| fork `variations` feature off (default instance only) | `7d8ad3bc2` | −13,165 | −5,151 | −4,837 |
+| fork `FontInstance` support only with `experimental_font_api` | `1faf6a1e4` | −12,722 | −2,534 | −1,317 |
+| glyph-outline decoding moved to the font baker | OUTLINECOMMIT | −62,603 | −23,502 | −17,858 |
+
+### Monomorphization (research step 5)
+
+`twiggy monos` over the named build of `86afe793c`: generics with more than one instantiation hold `201,647` B, of which
+`113,315` B are duplicate copies (everything but the largest instantiation of each generic). By the generic's owner:
+`core`/`alloc` `89,603` total / `59,906` duplicate (sorts, drop glue and collection code instantiated over our types),
+ours `94,401` / `42,770`, HarfRust `8,553` / `5,587`, read-fonts `7,633` / `4,480`. The largest duplicate groups:
+
+| Generic | Duplicate | Total |
+| --- | --: | --: |
+| `core::slice::sort::unstable::quicksort` | 16,746 | 22,884 |
+| `core::slice::sort::stable::quicksort` (HarfRust `ot_map` types, bidi brackets, Indic) | 14,470 | 19,795 |
+| `retained_rope::update_ordered_node` | 10,894 | 13,929 |
+| `core::ptr::drop_glue` | 10,804 | 16,875 |
+| `core::slice::sort::stable::drift::sort` | 6,175 | 8,715 |
+| `layout_query::append_measurement_from_occurrences_source` (2 closures) | 5,713 | 11,768 |
+| HarfRust `contextual::apply_chain_with_sequences` | 5,587 | 8,553 |
+| `retained_rope::split` / `balance` / `join_nodes` / `append_right` (5 node types each) | 17,333 | 23,177 |
+| read-fonts CFF `Evaluator` | 2,950 | 5,320 |
+
+Two were collapsed (table above); together `−4,673` gzip with every headline row within ±4% and overlapping ranges. The
+engine already had a shared sort kernel (D-243, `engine/sort.rs`); the run lookup was the largest caller still sorting a
+tuple type of its own. Remaining, priced:
+
+- **`retained_rope`, about 31 kB raw of duplicate copies across five node types (est. 10 to 12 kB gzip).** `Node<T>` has
+  the same layout for every `T` (a leaf is a `Vec<T>` plus a summary), so `branch`, `balance`, `join_nodes`, `split`'s
+  descent and `update_ordered_node`'s traversal could run on one type-erased node, with only leaf copying, dropping and
+  record summaries supplied per type. The rope is on every edit and is owned by the segment-layout lane, so it is a
+  separate task with its own A/B.
+- `IndexEdit` sort (6 kB raw; its `PlacementLogicalKey` does not pack into the `u64` kernel), a `usize` sort (3 kB) and the
+  `Range` sort in `cluster_state/splice.rs` (2 kB, left alone while the Unicode lane works in that file).
+- HarfRust's three stable sorts over `ot_map` types (about 19 kB raw with their drift-sort halves): their orderings are
+  total (`feature_info_t` compares the sequence number, merged lookups combine commutatively), so one unstable kernel
+  would do, but that is a fork change to the plan compiler and needs the cold-start check.
+
+How we write generics in this crate so they collapse:
+
+1. A generic function is a thin shell. It converts its generic arguments (`impl AsRef<[T]>`, closures, iterators) into
+   slices, indices or `&mut dyn FnMut` and calls one non-generic body; only per-element kernels on the hot path stay
+   generic over their element.
+2. A closure parameter on a function that is not a per-glyph or per-cluster kernel is `&mut dyn FnMut`, not
+   `impl FnMut`. One indirect call per record is invisible next to the record's work; a second copy of the body is not.
+3. Every ordering lowers its key to `u64` (`sort::pack2`, `sort::f64_key`) and sorts through `sort::sort_keys` or
+   `sort::sort_pairs`. A new `sort_unstable_by_key` or `sort_by` is a new copy of pdqsort (3 to 6 kB raw).
+4. A container generic over its element (`retained_rope`) keeps the structural algorithm on an erased node and makes the
+   element type visible only where elements are copied, dropped or summarised.
+5. Before adding a generic with more than one caller, check `twiggy monos` on the named build
+   (`glyph:shaper-profile-artifact`) for its duplicate bytes, and justify a second copy with an A/B.
+
+### HarfRust fork features (owner direction B)
+
+`variations` (default on upstream, off for us): every font shapes at its default instance; variation coordinates, the
+GDEF item variation store and feature-variation indices are ignored, so the HVAR/VVAR/MVAR, `gvar` and device-delta
+paths are not linked. The shaper never passes a `ShaperInstance`, so nothing changes today. **Variable-font shaping is
+on the roadmap and needs the feature back on**: FeatureVariations selection, GPOS/GDEF variation deltas and HVAR/`gvar`
+advances all live behind it, and turning it on costs the `5,151` gzip (`13,165` raw) this cut saved.
+
+The `FontInstance` gate removes code only the experimental `FontInstance` API can reach; it has no behaviour cost.
+
+A vertical-layout gate was priced and not taken: making `Direction::is_horizontal` constant would remove `2,962` raw /
+`1,200` gzip, but the shaper would then have to refuse vertical directions inside HarfRust rather than at its own wire,
+and the saving is small. The complex-script shapers stay (removing them removes behaviour); see the interpreter estimate
+below.
+
+### read-fonts and Skrifa in the core shaper (owner direction A)
+
+Skrifa was never in the shipped shaper: it was a test-only dependency (the outline oracle), and it moved with that test
+to the font baker. read-fonts, about `164` kB of the merged build's functions, splits by what reaches it:
+
+| Reached by | read-fonts bytes | Runtime need |
+| --- | --: | --- |
+| HarfRust layout: `tables::layout`, `gsub`, `gpos`, `gdef`, `kern` | 85,055 | Shaping. Stays. |
+| outline decoding: `ps::cs`, `ps::cff`, `glyf`, `loca` | 46,514 | `outlineAt()` on fonts baked with `outlines`. Moved to the font baker. |
+| variable-font paths: `gvar`, `hvar`, `mvar`, `variations` | 11,758 | None today (no instance is passed). Behind the fork's `variations` feature. |
+| `model::font::tables` (the `FontInstance` model) | 7,178 | None. Behind `experimental_font_api`. |
+| `cmap`, `hmtx`, `head`, `maxp` and other metrics | 6,506 | Shaping. Stays. |
+| generic instantiations over read-fonts types | 7,141 | Mostly layout. |
+
+The only runtime consumer of outlines is the font loader: `outlineAt()` (Text, borrowed and detached glyph views) reads a
+JavaScript store that the loader fills, glyph by glyph, behind the already-asynchronous load promise. Slug rendering uses
+its own baked curves, and ink bounds come from the baked extents table. So the decoder moved to the font baker with no
+change to a public API's synchronous shape or to the artifact format; fonts with outlines fetch `font-baker-core.wasm`
+(no subsetting, `opt-level = 3`, `457,179` raw / `179,816` gzip) once. Load-time decode in Node, cold (module compile
+included): Inter 9 to 11 ms through the core module against 10 to 15 ms through the shaper module, Noto Sans CJK JP
+(65,535 CFF glyphs) 368 ms against 380 ms. At the baker's own `opt-level = "z"` the CJK decode took 730 ms and the module
+was larger (`515,439` raw), so the core build overrides it.
+
+Baking outlines into the artifact instead (contours stored at bake time, no runtime decoder at all) would also remove the
+core module fetch, but it is an artifact format change and is not done here.
+
+### Lazy subsetting module (research step 2)
+
+Not done: it needs a public change. `FontBakeCore.prepare` is synchronous and `createFontBaker(source)` /
+`createFontBakerFromInstance(instance)` take exactly one module that must export `prepare` and `inspect`. Splitting
+subsetting into a second module therefore needs one of: an asynchronous `prepare`, a second module argument
+(`createFontBaker(source, { subsetting })`, `createFontBakerFromInstance(instance, subsettingInstance)`), or relaxing
+`createFontBakerFromInstance` to accept a bake-only module whose `prepare` and `inspect` throw. Internally, the runtime
+bake worker could already use `font-baker-core.wasm` whenever a request has no `unicodeRanges` (the only caller of
+`prepare`), cutting its download from about 401 kB gzip to about 180 kB; that needs either the relaxed factory above or
+moving the font-baker implementation out of the public entry into an internal module both can use.
+
+### Not now: estimates
+
+- **Data-driven syllabic interpreter (research step 7).** The Indic, Khmer, Myanmar and USE shapers plus vowel constraints
+  are about `63` kB of HarfRust code and `12` kB of machine tables in this build (`ot_shaper_use` 19,656, `indic` 17,257,
+  `vowel_constraints` 13,163, `khmer` 5,968, `myanmar` 5,916, Ragel tables ~12 kB). An interpreter that runs the same
+  Ragel tables from data would keep perhaps 8 to 12 kB of code and could move the tables into per-script payloads,
+  for roughly −45 to −55 kB raw / −15 to −20 kB gzip on a Latin-only download. Cost: a new state-machine runtime proven
+  against HarfBuzz on the full shaping corpus for every syllabic script, and a payload fetch before a complex-script
+  paragraph can shape.
+- **Per-script payloads.** Beyond the interpreter, the HarfRust `ucd_table` (~48 kB raw) and our script, line-break and
+  bidi tries (~90 kB raw, ~30 kB gzip) are script-independent lookups every paragraph uses; splitting them per script
+  would make Latin pay only for the Latin blocks, perhaps −20 to −30 kB gzip, at the price of a coverage check and fetch
+  before first shaping of a new script, i.e. a first-frame cost for multilingual text.
