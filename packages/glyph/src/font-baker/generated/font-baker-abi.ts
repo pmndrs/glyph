@@ -26,6 +26,25 @@ export const fontBakerAbi = {
         "byteLength"
       ]
     },
+    "glyphOutline": {
+      "export": "pmndrs_font_baker_glyph_outline",
+      "parameters": [
+        "sfntPointer",
+        "sfntByteLength",
+        "glyphId"
+      ],
+      "result": "status"
+    },
+    "glyphOutlineLength": {
+      "export": "pmndrs_font_baker_glyph_outline_len",
+      "parameters": [],
+      "result": "byteLength"
+    },
+    "glyphOutlinePointer": {
+      "export": "pmndrs_font_baker_glyph_outline_ptr",
+      "parameters": [],
+      "result": "pointer"
+    },
     "inspect": {
       "export": "pmndrs_font_baker_inspect",
       "parameters": [
@@ -51,6 +70,12 @@ export const fontBakerAbi = {
       "parameters": [],
       "result": "byteLength"
     }
+  },
+  "glyphOutline": {
+    "invalidFont": 2,
+    "invalidRequest": 6,
+    "ok": 0,
+    "outOfMemory": 7
   },
   "memory": "memory",
   "name": "pmndrs-glyph-font-baker",

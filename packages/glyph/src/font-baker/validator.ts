@@ -619,7 +619,7 @@ function validateOutlineSfnt(bytes: Uint8Array, metrics: Readonly<Record<string,
 }
 
 async function validateOutlineGlyphs(sfnt: Uint8Array, glyphCount: number): Promise<void> {
-  const { decodeEveryGlyphOutline } = await import('../internal/text-shaper-module.js');
+  const { decodeEveryGlyphOutline } = await import('../internal/glyph-outline-decoder.js');
   const error = await decodeEveryGlyphOutline(sfnt, glyphCount);
   if (error !== undefined) fail('OUTLINE_GLYPH_DECODE', error.message, '/extensions/PMNDRS_font/outlines/bufferView');
 }

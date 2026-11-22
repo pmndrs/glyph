@@ -23,7 +23,6 @@ use crate::{
         render_plan_wire::{publication_layout, query_layout},
         transport::{FailureInfo, FrameTransport, UpdateBatchResult, UpdateBatchTransport},
     },
-    outline::{GlyphOutline, OutlineError},
 };
 
 type TextQueries<'a> = Editing<ParagraphSource<'a>>;
@@ -1430,48 +1429,6 @@ pub extern "C" fn pmndrs_glyph_engine_text_check_range(
     })
 }
 
-/// Decodes one glyph from an outline SFNT in an owned allocation. The encoded words, aligned to 4
-/// bytes, stay readable through the pointer and byte-length exports until the next decode.
-#[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_glyph_shaper_glyph_outline(
-    sfnt_pointer: u32,
-    sfnt_length: u32,
-    glyph_id: u32,
-) -> u32 {
-    with_state(|state| {
-        let WasmState {
-            allocations,
-            outline,
-            outline_result,
-            ..
-        } = state;
-        outline_result.clear();
-        let Some(sfnt) = owned_bytes(allocations, sfnt_pointer, sfnt_length) else {
-            return STATUS_INVALID_REQUEST;
-        };
-        match outline
-            .decode(sfnt, glyph_id)
-            .and_then(|()| outline.encode(outline_result))
-        {
-            Ok(()) => STATUS_OK,
-            Err(OutlineError::InvalidFont | OutlineError::InvalidGlyph) => STATUS_INVALID_FONT,
-            Err(OutlineError::OutOfMemory) => STATUS_RESULT_TOO_LARGE,
-        }
-    })
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_glyph_shaper_glyph_outline_ptr() -> u32 {
-    with_state(|state| u32::try_from(state.outline_result.as_ptr() as usize).unwrap_or(0))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_glyph_shaper_glyph_outline_len() -> u32 {
-    with_state(|state| {
-        u32::try_from(core::mem::size_of_val(state.outline_result.as_slice())).unwrap_or(0)
-    })
-}
-
 #[derive(Default)]
 struct WasmState {
     registry: ShaperRegistry,
@@ -1484,8 +1441,6 @@ struct WasmState {
     borrowed_glyphs: Vec<crate::engine::SemanticGlyph>,
     text_query: TextQueryResult,
     text_rects: Vec<Rect>,
-    outline: GlyphOutline,
-    outline_result: Vec<u32>,
 }
 
 struct Allocation {

@@ -288,7 +288,7 @@ export class FontRegistry {
     let glyphOutlines: GlyphOutlineStore | undefined;
     if (artifact.glyphOutlines !== undefined) {
       try {
-        const { decodeGlyphOutlineStore } = await import('./internal/text-shaper-module.js');
+        const { decodeGlyphOutlineStore } = await import('./internal/glyph-outline-decoder.js');
         glyphOutlines = await decodeGlyphOutlineStore(
           artifact.glyphOutlines,
           integer(metricsValue.glyphCount, 'metrics.glyphCount'),

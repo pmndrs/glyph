@@ -1404,23 +1404,27 @@ a caller can cache one shape per key. A fallback glyph reads from the font that 
 A line keeps its midpoint as its control point, so code that ignores the flag still draws it. Contours keep the source
 order and winding for nonzero filling, and blank glyphs return no contours.
 
-**Decoding.** The shaper decodes with read-fonts, which HarfRust already links: TrueType simple and composite glyphs
+**Decoding.** The font baker decodes, in `rust/font-baker/src/glyph_outline.rs`, with read-fonts: TrueType simple and composite glyphs
 follow Skrifa's FreeType-style unscaled loader, and CFF uses read-fonts' charstring evaluator. A TrueType glyph nests
 composites at most 32 levels deep and places at most 65,535 components and 65,535 points, so a crafted font cannot make a
 decode unbounded. TrueType outlines are exact; each CFF cubic becomes Slug's `DEFAULT_CUBIC_SUBDIVISIONS` (four)
 equal-parameter quadratics through its shared split, within about 1.15 font units on the CFF fixtures. The decoder writes
-em-space `f32` points with the contour ends and line flags into one word-aligned result. The decoder adds 64,956 raw bytes
-(24,677 gzip) to `text-shaper.wasm`; Skrifa's outline drawing measured 97 KB gzip in the same shaper and cannot be
-trimmed by feature. `font-baker.wasm` draws no outlines: the bake validator decodes every glyph with the runtime decoder,
-so a bake cannot ship an outline the runtime would refuse. Variation axes and a runtime-bake outline option are not
+em-space `f32` points with the contour ends and line flags into one word-aligned result. Until 2026-11-22 the decoder
+lived in `text-shaper.wasm`, where every page paid 62,603 raw / 23,502 gzip bytes for it; only fonts baked with
+`outlines` use it, so it moved to the font baker. The package builds the baker twice: `font-baker.wasm` with subsetting,
+and `font-baker-core.wasm` (bake and outline decoding, no subsetting, `opt-level = 3`, about 457 KB raw / 180 KB gzip),
+which only outline fonts fetch. The bake validator decodes every glyph with the same decoder, so a bake cannot ship an
+outline the runtime would refuse. Variation axes and a runtime-bake outline option are not
 implemented.
 
 **Loading.** The loader decodes every glyph behind the load promise, where the artifact fetch already dominates, into one
 store the font owns: the columns of every glyph's view back to back plus a per-glyph offset table. A read is then plain
 data with no engine memory, and a later outlined bake of a font that first loaded without outlines adds its store to the
-deduplicated font. The decode runs in a fresh shaper instance compiled from the module the engine shared, so a
-caller-supplied `glyph.init({ wasm })` decodes too, or from the default module when a font loads before the engine
-starts. Natively over every glyph: Inter 2,937 glyphs in 3.6 ms to 1.37 MB, Source Serif 4 2.1 ms to 0.85 MB, Font
+deduplicated font. The decode runs in a fresh instance of `font-baker-core.wasm`, compiled once per page the first time an
+outline font loads (`src/internal/glyph-outline-decoder.ts`); fonts without outlines never fetch it. Loading Inter's
+outlines in Node measured 9 to 11 ms with the core module against 10 to 15 ms through the shaper module, and Noto Sans
+CJK JP's 65,535 CFF glyphs 368 ms against 380 ms; at the baker's `opt-level = "z"` the CJK decode took 730 ms, which is
+why the core build keeps `3`. Natively over every glyph: Inter 2,937 glyphs in 3.6 ms to 1.37 MB, Source Serif 4 2.1 ms to 0.85 MB, Font
 Awesome 3.9 ms to 1.62 MB, Amiri 6,710 glyphs in 13.3 ms to 5.06 MB, and Noto Sans CJK JP 65,535 glyphs in 757 ms to
 129 MB. The planned triplet stream (#244) replaces this with a faster decode into a smaller i16 store.
 

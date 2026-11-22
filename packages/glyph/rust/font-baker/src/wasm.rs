@@ -140,6 +140,55 @@ pub unsafe extern "C" fn pmndrs_font_baker_inspect(
     ))
 }
 
+/// Decodes one glyph from an outline SFNT in an owned allocation. The encoded words, aligned to 4
+/// bytes, stay readable through the pointer and byte-length exports until the next decode.
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_font_baker_glyph_outline(
+    sfnt_pointer: u32,
+    sfnt_length: u32,
+    glyph_id: u32,
+) -> u32 {
+    use crate::abi_contract::{
+        GLYPH_OUTLINE_STATUS_INVALID_FONT, GLYPH_OUTLINE_STATUS_INVALID_REQUEST,
+        GLYPH_OUTLINE_STATUS_OK, GLYPH_OUTLINE_STATUS_OUT_OF_MEMORY,
+    };
+    use crate::glyph_outline::OutlineError;
+    with_state(|state| {
+        let WasmState {
+            allocations,
+            outline,
+            outline_result,
+            ..
+        } = state;
+        outline_result.clear();
+        let Some(sfnt) = owned_allocation(allocations, sfnt_pointer, sfnt_length) else {
+            return GLYPH_OUTLINE_STATUS_INVALID_REQUEST;
+        };
+        match outline
+            .decode(sfnt, glyph_id)
+            .and_then(|()| outline.encode(outline_result))
+        {
+            Ok(()) => GLYPH_OUTLINE_STATUS_OK,
+            Err(OutlineError::InvalidFont | OutlineError::InvalidGlyph) => {
+                GLYPH_OUTLINE_STATUS_INVALID_FONT
+            }
+            Err(OutlineError::OutOfMemory) => GLYPH_OUTLINE_STATUS_OUT_OF_MEMORY,
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_font_baker_glyph_outline_ptr() -> u32 {
+    with_state(|state| u32::try_from(state.outline_result.as_ptr() as usize).unwrap_or(0))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_font_baker_glyph_outline_len() -> u32 {
+    with_state(|state| {
+        u32::try_from(core::mem::size_of_val(state.outline_result.as_slice())).unwrap_or(0)
+    })
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_font_baker_result_len() -> u32 {
     with_state(|state| state.result_len)
@@ -293,6 +342,8 @@ struct WasmState {
     allocations: Vec<Allocation>,
     result_pointer: u32,
     result_len: u32,
+    outline: crate::glyph_outline::GlyphOutline,
+    outline_result: Vec<u32>,
 }
 
 struct Allocation {
@@ -357,14 +408,18 @@ impl WasmState {
     }
 
     fn owned_bytes(&self, pointer: u32, length: u32) -> Option<&[u8]> {
-        if length == 0 {
-            return (pointer == 0).then_some(&[]);
-        }
-        self.allocations
-            .iter()
-            .find(|entry| entry.pointer == pointer && entry.requested_length == length)
-            .map(|entry| entry.bytes.as_slice())
+        owned_allocation(&self.allocations, pointer, length)
     }
+}
+
+fn owned_allocation(allocations: &[Allocation], pointer: u32, length: u32) -> Option<&[u8]> {
+    if length == 0 {
+        return (pointer == 0).then_some(&[]);
+    }
+    allocations
+        .iter()
+        .find(|entry| entry.pointer == pointer && entry.requested_length == length)
+        .map(|entry| entry.bytes.as_slice())
 }
 
 fn with_state<Result>(operation: impl FnOnce(&mut WasmState) -> Result) -> Result {
@@ -374,6 +429,8 @@ fn with_state<Result>(operation: impl FnOnce(&mut WasmState) -> Result) -> Resul
             allocations: Vec::new(),
             result_pointer: 0,
             result_len: 0,
+            outline: crate::glyph_outline::GlyphOutline::default(),
+            outline_result: Vec::new(),
         })) as usize;
         match STATE.compare_exchange(0, candidate, Ordering::AcqRel, Ordering::Acquire) {
             Ok(_) => pointer = candidate,

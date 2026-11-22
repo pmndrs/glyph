@@ -203,6 +203,7 @@ dependencies = [
  "flate2",
  "harfrust",
  "pmndrs-glyph-raster-artifact",
+ "pmndrs-glyph-slug-core",
  "read-fonts 0.42.1",
  "serde",
  "serde_json",
@@ -219,6 +220,13 @@ dependencies = [
  "ktx2",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "pmndrs-glyph-slug-core"
+version = "0.0.0"
+dependencies = [
+ "core_maths",
 ]
 
 [[package]]

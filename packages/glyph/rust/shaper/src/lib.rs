@@ -9,7 +9,6 @@ pub mod bidi;
 pub mod engine;
 mod language_tags;
 pub mod line_break;
-pub mod outline;
 pub mod unicode;
 #[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
 mod wire;

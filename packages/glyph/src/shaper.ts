@@ -13,7 +13,6 @@ import {
   copyIntoWasm,
   compileDefaultWasm,
   readModule,
-  shareShaperModule,
   shaperStatusError,
   type ShaperExports,
   type ShaperModule,
@@ -69,7 +68,6 @@ export async function createRuntimeShaper(options: RuntimeShaperOptions = {}): P
   const module = source instanceof WebAssembly.Module ? source : await WebAssembly.compile(source);
   const instance = await WebAssembly.instantiate(module, {});
   const resolved = readModule(instance, module);
-  shareShaperModule(module);
   return new RuntimeShaperImpl(options.registry ?? new FontRegistry(), resolved);
 }
 

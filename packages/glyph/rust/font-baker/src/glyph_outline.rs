@@ -9,7 +9,6 @@
 //! charstring evaluator. [`draw_glyph`] emits the raw segments, and
 //! [`GlyphOutline`] turns them into the closed quadratic contours `outlineAt()` returns.
 
-use alloc::vec::Vec;
 use pmndrs_glyph_slug_core::{
     Cubic, DEFAULT_CUBIC_SUBDIVISIONS, MAX_CUBIC_SUBDIVISIONS, Point, Quadratic,
     cubic_to_quadratics_into,
@@ -27,6 +26,7 @@ use read_fonts::{
     },
     types::{F26Dot6, Fixed, GlyphId, Point as FontPoint, Tag},
 };
+use std::vec::Vec;
 
 /// The outline SFNT or one of its glyphs could not be drawn.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
