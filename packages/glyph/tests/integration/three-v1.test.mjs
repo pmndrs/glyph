@@ -4977,6 +4977,46 @@ test('Three releases a retired storage generation with the draw geometry that re
   fontDomain.dispose();
 });
 
+test('a root that empties and revives reuses or releases its storage instead of growing', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  t.after(() => font.dispose());
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const label = three.createText({ font, text: 'Storage lifetime' });
+  group.add(label);
+  scene.add(group);
+  scene.updateMatrixWorld();
+  const { renderer, deleted } = storageReleaseRenderer();
+  const bound = new Set();
+  const draw = () => {
+    const draws = rootDraws(scene);
+    drawWith(renderer, draws);
+    for (const attribute of draws.flatMap((each) => sharedStorageOf(each))) bound.add(attribute);
+  };
+  const live = () => [...bound].filter((attribute) => !deleted.includes(attribute)).length;
+  draw();
+  const baseline = { live: live(), gpuBytes: three.gpuBytes };
+  assert.ok(baseline.live > 0);
+
+  for (let cycle = 0; cycle < 5; cycle += 1) {
+    group.removeFromParent();
+    scene.updateMatrixWorld();
+    glyph.shape();
+    assert.equal(rootDraws(scene).length, 0, `cycle ${cycle}: the empty root draws nothing`);
+    scene.add(group);
+    scene.updateMatrixWorld();
+    draw();
+    assert.equal(live(), baseline.live, `cycle ${cycle}: the revived root binds as much storage as the first draw`);
+    assert.equal(three.gpuBytes, baseline.gpuBytes, `cycle ${cycle}: the root holds as many bytes as the first draw`);
+  }
+
+  group.dispose();
+  label.dispose();
+  three.dispose();
+  assert.equal(live(), 0, 'teardown releases every storage attribute the root ever drew');
+});
+
 // Three r185/r186 free storage only through the renderer's attribute manager; BufferAttribute.dispose alone leaks (#317).
 test('Three releases every storage kind a drawn text binds through each renderer, once its last owner retires', async (t) => {
   assert.ok(['185', '186'].includes(THREE.REVISION), 'the installed Three needs the attribute-manager bridge');

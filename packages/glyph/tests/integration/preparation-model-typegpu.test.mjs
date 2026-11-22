@@ -89,3 +89,27 @@ test('TypeGPU: an anchored text is constructed without entering the engine and d
     font.dispose();
   }
 });
+
+test('TypeGPU: a root that empties and revives holds no more GPU buffers than its first frame', async () => {
+  const host = recordingHost();
+  const handle = glyph.handle(`typegpu:empty-revive:${String(nextHandle++)}`, host.config);
+  const font = glyph.fontFace(new Blob([fontBytes]), { format: msdf });
+  await font.load();
+  try {
+    let text = handle.createText({ font, text: 'Storage lifetime' });
+    glyph.shape();
+    const baseline = host.allocations.size;
+    assert.ok(baseline > 0);
+    for (let cycle = 0; cycle < 5; cycle += 1) {
+      text.dispose();
+      glyph.shape();
+      text = handle.createText({ font, text: 'Storage lifetime' });
+      glyph.shape();
+      assert.equal(host.allocations.size, baseline, `cycle ${cycle}: the revived root holds its first frame's buffers`);
+    }
+    text.dispose();
+  } finally {
+    handle.dispose();
+    font.dispose();
+  }
+});

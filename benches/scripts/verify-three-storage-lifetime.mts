@@ -269,6 +269,10 @@ try {
         `${backend} failed visible reactivation using the retained transform attribute: ${JSON.stringify(result)}`,
       );
     }
+    // Emptying retires the codec buffers; reviving allocates the same set again, not a second one.
+    if (backend === 'webgpu' && !expectLeak && result.revivedDraw !== result.firstDraw) {
+      throw new Error(`${backend} revived root holds more storage than its first draw: ${JSON.stringify(result)}`);
+    }
     if (backend === 'webgpu') {
       const leaked = result.finalDisposed > result.baseline;
       const released = result.finalDisposed === result.baseline;

@@ -236,8 +236,17 @@ class CommandBindingEngine<Bindings extends GlyphBindingSet, Boundary> implement
             const identity = this.#mapper.bufferIdentity(buffer);
             const retired = previousBuffers.get(identity.id);
             if (retired === undefined || retired.generation !== identity.generation) return undefined;
-            if (buffers.get(identity.id)?.value === retired.value) return undefined;
-            if (buffers.get(identity.id)?.generation === identity.generation) buffers.delete(identity.id);
+            const current = buffers.get(identity.id);
+            // A compatible rebind in this candidate keeps the retired generation's value under a
+            // newer generation; that value stays live. Any other retirement releases it.
+            if (
+              current !== undefined &&
+              current.generation !== identity.generation &&
+              current.value === retired.value
+            ) {
+              return undefined;
+            }
+            if (current?.generation === identity.generation) buffers.delete(identity.id);
             return retired.value;
           },
         });
