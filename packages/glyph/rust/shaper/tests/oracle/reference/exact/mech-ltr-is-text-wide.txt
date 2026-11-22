@@ -31,28 +31,28 @@ stage gpu identity 2 6f9a98c6d7cb3b89
 stage gpu value 3 5558b05e63d9b85d
 step 01 one Arabic letter in paragraph two
 class value 230 a6e9bf7c7d83ede8
-class identity 22 20dea345d3966723
+class identity 22 2e39f31a96bad163
 class repr 44 1231ece2c565a9cd
-class wire 1 2e4548827bfce3e3
+class wire 1 7559ab7a0de0af68
 step 02 restore
 class value 265 5f88738a309b762a
-class identity 24 93302c1ec7996815
+class identity 24 71b0626ae6537081
 class repr 64 bcd790e042d19d68
 class cache 5 8aa735c8a2972aa1
-class wire 1 e719cf0c34f70825
+class wire 1 c0072fafeb7454c7
 step 03 insert HardBreak (1 units) at 320 + insert Word (8 units) at 68 + replace 4 at 343
 class value 265 25a63f23964f5485
-class identity 24 2cbe89179995dab0
+class identity 24 e9e48cea68af4121
 class repr 64 61395f49e2b3ba47
 class cache 5 e5154318b56dcc4f
-class wire 1 6abb5b8047032eb4
+class wire 1 270d29da77bc6e12
 step 04 insert SpacedWord (209 units) at 379
 class value 230 5a3f8ffd335a8a09
-class identity 22 40c6c681c2c8ef4c
+class identity 22 87d463206efed13a
 class repr 44 715c0623075014a5
 class wire 1 4debf60e7795ef32
 step 05 width 709.5
 class value 230 5c33a78bf9f2d816
-class identity 22 c4aaa82c9c333eb6
+class identity 22 cc66066728eefb92
 class repr 44 c9ee8a586768b58c
 class wire 1 d5aefb3095fe8602

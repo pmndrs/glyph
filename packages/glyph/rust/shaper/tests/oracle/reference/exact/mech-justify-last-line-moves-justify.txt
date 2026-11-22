@@ -28,11 +28,11 @@ stage gpu identity 2 035f288c5a98ab5a
 stage gpu value 3 9ef8e2191dc91c89
 step 01 append a line
 class value 230 db879228a03b60cb
-class identity 22 063936c5cbe0d0a3
+class identity 22 c1e0bf9ae98c7c2b
 class repr 44 8b6cb9c1d644d8cf
-class wire 1 07fec4a80acea0ba
+class wire 1 85193acafbd39bb0
 step 02 restore
 class value 230 2792b3bb21c343c7
-class identity 22 493665e250106057
+class identity 22 fdf7fc2435257776
 class repr 44 7daa115a0e71e45b
-class wire 1 540c4cb110ecc9df
+class wire 1 4cf7d4f5fedc16a7

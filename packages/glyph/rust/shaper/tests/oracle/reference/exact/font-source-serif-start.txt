@@ -61,13 +61,13 @@ class cache 5 f5d18a5dc33470cd
 class wire 1 3f6ebe92af6e833c
 step 06 insert Word (8 units) at 467
 class value 230 d0866b046ac253ce
-class identity 22 4b282b19aed470dc
+class identity 22 884d0b023fe9ec91
 class repr 44 0b2e20e7ce71a7f3
 class cache 3 cf013bde4a940877
-class wire 1 06606f82d9a6bebd
+class wire 1 ba9ecec894de7bab
 step 07 insert Space (1 units) at 1030 + insert Bidi (1 units) at 2473
 class value 230 8cfe0716f0ec0787
-class identity 22 0b7285ee25263cb6
+class identity 22 45664df3b3220d5c
 class repr 44 b65bfb7dd812424d
 class cache 3 641691afeaab7de9
-class wire 1 16924aefd664e04e
+class wire 1 e6a65b6aec7497ea

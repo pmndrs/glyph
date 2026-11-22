@@ -53,11 +53,11 @@ class repr 44 5e10cb0f4fbade8b
 class wire 1 0545ded1bbcb5542
 step 06 replace 3 at 56 + delete 8 at 785
 class value 230 8d2cd3ffa338dbb6
-class identity 22 2c05ee08c7443f55
+class identity 22 f20a07bb514c7ce8
 class repr 44 a819370ff25d0f26
-class wire 1 0ad1f06453870ca7
+class wire 1 15068a185e6b26c8
 step 07 delete 5 at 360 + max lines 3 + direction 2
 class value 266 64321c15c11ad90e
-class identity 24 e42e13829fd3bcec
+class identity 24 ec0065583a2b2acd
 class repr 64 6184d9782d9306ad
-class wire 1 4bb17ddeb4582b8f
+class wire 1 736b2922ff4e9c4d

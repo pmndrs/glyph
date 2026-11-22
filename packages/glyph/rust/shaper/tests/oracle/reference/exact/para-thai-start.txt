@@ -48,16 +48,16 @@ class repr 44 936a915a09701a2d
 class wire 1 ea43e1742580bee4
 step 05 delete 3 at 784
 class value 230 9e094ec4729e1372
-class identity 22 7bb5721d861987eb
+class identity 22 7441d11799de3ef1
 class repr 44 cd93c1f5b5d2b829
-class wire 1 cb4fc772ac3f1e42
+class wire 1 7df82eef7c5a8a92
 step 06 insert SpacedWord (11 units) at 2666
 class value 230 63c62f3fbd86b20b
-class identity 22 3765968b9e269ac9
+class identity 22 e28c18c68a334391
 class repr 44 d96f0de5a3421d71
-class wire 1 55fd4158c415c85c
+class wire 1 f499a04e874263f4
 step 07 insert HardBreak (1 units) at 1668
 class value 230 7eaece86b118cf69
-class identity 22 5095f4cd385977a0
+class identity 22 cf76b4cb90fe707e
 class repr 44 a4f5029733eb8e89
 class wire 1 e30fa5ad368277e8

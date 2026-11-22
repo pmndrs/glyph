@@ -43,7 +43,7 @@ class cache 5 fc8091385e143802
 class wire 1 fbb592b5158a9110
 step 03 insert Word (6 units) at 126
 class value 230 9c0fbb04ccab4229
-class identity 22 70c8c041da90dc1b
+class identity 22 6ab97db4c5e5e6a4
 class repr 44 876f561f8b456f3f
 class cache 3 1031f2c4b445e150
-class wire 1 24f0e8cf5afbba96
+class wire 1 511006d01f92d26b

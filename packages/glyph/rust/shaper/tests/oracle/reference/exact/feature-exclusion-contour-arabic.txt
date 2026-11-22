@@ -33,11 +33,11 @@ class repr 44 77c2a6a7cf1108e0
 class wire 1 4779ceecbb23a7f3
 step 02 delete 951 at 1736
 class value 230 dca55700464d563b
-class identity 22 b801c3d466da78fa
+class identity 22 535d7b7c2aa149ab
 class repr 44 560200d3649b994b
-class wire 1 0ccc3c5350722c0e
+class wire 1 50b8466cdc9f5da4
 step 03 add span 1672..1696
 class value 230 ff10e51ce3ab3967
-class identity 22 17ddfc561e3279c5
+class identity 22 02b0e7b20878df08
 class repr 44 473f82835f100ef2
 class wire 1 857c9aab07f2baae

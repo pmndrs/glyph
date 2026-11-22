@@ -48,18 +48,18 @@ class repr 44 5cfab2aa4383014b
 class wire 1 2640fbfda653d47a
 step 05 insert Space (191 units) at 3059
 class value 230 810ded4d29f509f0
-class identity 22 de44424bdf5a014e
+class identity 22 24aa713e37a01980
 class repr 44 b334cc773083d1aa
-class wire 1 608d88ce2819090c
+class wire 1 965f5b180d53e693
 step 06 insert Foreign (2 units) at 2320 + insert Mark (1 units) at 3641 + add span 3740..3792
 class value 230 f0f74442d15ae091
-class identity 22 d4b23efd1804d394
+class identity 22 76e246d3277e0b30
 class repr 44 7ada20066ad3891d
 class cache 3 e7dcbc18847e1c7d
-class wire 1 ab4771b084c3ebc7
+class wire 1 468c0a1074974407
 step 07 width 720
 class value 230 90285bc7fb6f7b1b
-class identity 22 b8ba333d6f5eecfb
+class identity 22 ff89d19518c8fa23
 class repr 44 936cd75920f0485e
 class cache 3 e7dcbc18847e1c7d
 class wire 1 bd82afedcdd7c5ee

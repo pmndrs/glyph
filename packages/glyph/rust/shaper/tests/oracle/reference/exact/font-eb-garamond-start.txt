@@ -48,16 +48,16 @@ class repr 44 934258b5e4213fb8
 class wire 1 ec2c88a923f02c2d
 step 05 insert SpacedWord (5 units) at 1609
 class value 230 b40abbc47160d4f1
-class identity 22 a6f30f0f4de61e93
+class identity 22 fb959888f29fe9e8
 class repr 44 36fc97d1941b56cd
-class wire 1 6f92a1c5f9ef558b
+class wire 1 6d0f92fb638d1e3f
 step 06 width 483.5
 class value 230 814d7e8815f0226d
-class identity 22 375686688e80d15d
+class identity 22 3431e831de9107f6
 class repr 44 5eeb1255e47fce75
 class wire 1 1a70fb91a511eee5
 step 07 add span 2329..2362
 class value 242 57a839833817dcd6
-class identity 22 d37c4038cb8c684b
+class identity 22 aa5192bcd12666f2
 class repr 44 5eeb1255e47fce75
 class wire 1 10725cbc4dcc759a

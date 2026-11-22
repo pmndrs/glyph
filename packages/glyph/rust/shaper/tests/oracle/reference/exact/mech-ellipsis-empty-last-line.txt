@@ -55,11 +55,11 @@ class repr 61 beedcc063e085da4
 class wire 1 9b450cfb2fad9bc0
 step 06 replace 1 at 4
 class value 230 46a8cb073c75674d
-class identity 22 77561d9d07246399
+class identity 22 b3a38cefb1839096
 class repr 41 bfb5677e03acda81
 class wire 1 375ea819d765c12f
 step 07 replace 1 at 7 + add span 1..6 + align 3
 class value 242 00ef3a105cbab2e8
-class identity 22 a84eecbfff865723
+class identity 22 f16a59b779e2b94f
 class repr 41 85f2f5fcd14df9d0
 class wire 1 d62154d6c0342d25

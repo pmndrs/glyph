@@ -46,11 +46,11 @@ class repr 88 d4b95d392f55c622
 class wire 1 0b91dabb9ec862b4
 step 04 paragraph 2: replace 3 at 91
 class value 427 e9038d26fde9537f
-class identity 40 303cf2b7061973c4
+class identity 40 6317f2850a6561a7
 class repr 88 a36e7ab46ab02935
-class wire 1 4ac29d6bfca97cfa
+class wire 1 4e7d021ada738d93
 step 05 paragraph 1: insert Word (1 units) at 325 + paragraph 2: insert Word (3 units) at 98 + add span 107..132 + width 420.01563 + paragraph 1: direction 1 + delete 6 at 352 + add span 423..424 + paragraph 2: add span 157..159 + metrics size 16 spacing 0 line 1.2 word 0 + align 1 + restyle span 3
 class value 451 69ed803922b5c2b0
-class identity 40 2a868c502a12c002
+class identity 40 0ac849d9e6faba7e
 class repr 88 1bbbc36a2ff33c47
 class wire 1 cadb5deaf3ac5b14

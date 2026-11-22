@@ -39,37 +39,37 @@ class cache 5 faa5d7dd8818379f
 class wire 1 65cd8d638d373f90
 step 02 delete in a later region
 class value 304 013555b3f6756032
-class identity 29 1ebf161b46e27622
+class identity 29 7bf31e038fec16f2
 class repr 64 99bfb8ce74660201
 class cache 5 0e0cea5403453a72
-class wire 1 17c2945dd4c9d620
+class wire 1 b73a117cd9ae3761
 step 03 narrower measure
 class value 304 b3a048e9d003b117
-class identity 29 624cd789793c4134
+class identity 29 e96521bf0d47b4a9
 class repr 64 55e5a49e07c2940e
 class cache 5 9b097fd633bd2469
-class wire 1 33f732f301d4fdc6
+class wire 1 d8efbbe6bd2ae70b
 step 04 shorter regions
 class value 304 0e717d1634364437
-class identity 29 645a36ffd9c1456e
+class identity 29 b06d9027a2d38001
 class repr 64 400f0b92d441caf4
 class cache 5 3f58398be228604b
-class wire 1 a7e9ff0c3d56edcd
+class wire 1 cd34a8b6725403e0
 step 05 three columns, wider gap
 class value 304 1c9801c0f9b99155
-class identity 29 a18f50d3ea02d391
+class identity 29 a3f201c157c55698
 class repr 64 db89f606cf2c4080
 class cache 5 3bb8914380a9ff21
-class wire 1 f795772ee696049a
+class wire 1 1f9b9cac935a13f5
 step 06 one region
 class value 304 0a3b49d343cd824d
-class identity 29 881918c640cbc91f
+class identity 29 fd83b7decbce6bac
 class repr 64 10bfb5a7c17bf5a3
 class cache 5 771fd592c628b6df
 class wire 1 bd7896994a25a50a
 step 07 the starting regions
 class value 304 013555b3f6756032
-class identity 29 c835421940edb02d
+class identity 29 08ee31913764ae9c
 class repr 64 99bfb8ce74660201
 class cache 5 771fd592c628b6df
 class wire 1 d82249e10941377b

@@ -28,16 +28,16 @@ stage gpu identity 2 f2e2817cc79bbb39
 stage gpu value 3 5cdb902de2655350
 step 01 insert Word (9 units) at 109 + flip case at 80 + replace 3 at 223 + align 4
 class value 230 8dee97bb8136ac90
-class identity 22 67444dc39bb3742c
+class identity 22 9b182b7a2e2da5f7
 class repr 44 bd9fee0139458f1d
-class wire 1 0c67598731bc01eb
+class wire 1 b5b64146686ffbfa
 step 02 insert HardBreak (199 units) at 198 + align 2
 class value 230 0a01e513b5553e7b
-class identity 22 8b642e98af697087
+class identity 22 626b9ffc69c265ed
 class repr 44 b8a365a9045b63f7
 class wire 1 06fac442e6f13ca6
 step 03 metrics size 16 spacing 0 line 1.2 word 0 + width 347.5 + replace 1 at 237
 class value 230 9d4f4425171db4bc
-class identity 22 b743dbec3edb0515
+class identity 22 beea156aad3b2059
 class repr 44 60f77c298ea1292a
 class wire 1 6f95e82f505974bf

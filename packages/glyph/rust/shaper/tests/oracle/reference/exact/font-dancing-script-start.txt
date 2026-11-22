@@ -59,11 +59,11 @@ class cache 3 cb18201ad8c33652
 class wire 1 dcad281c3a13ea3a
 step 06 insert Word (215 units) at 1546 + direction 1
 class value 230 d0e0345fb876080c
-class identity 22 6c22e81f63d44877
+class identity 22 9c6b755dbc8d5fb9
 class repr 44 7760dfabacdfbaea
-class wire 1 bb9f92115810d452
+class wire 1 f505cf4287d891c8
 step 07 flip case at 996
 class value 230 90041401d01df748
-class identity 22 702ff81d8a88762b
+class identity 22 c1ea0c20d2404574
 class repr 44 c95c57d4af4ac847
 class wire 1 2940c6806186d744
