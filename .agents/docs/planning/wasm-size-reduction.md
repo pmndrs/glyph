@@ -454,3 +454,92 @@ Steps 3 and 6 share one upstream ask: HarfRust has no cargo features at all, whi
 harfrust#277 is fundamentally about. Contributing an `aat` feature and an inlining seam on the
 language path serves upstream's own stated size problem rather than forking away from it. Step 7
 is the one that lets a single runtime serve every script without shipping every script.
+
+## 2026-11-22 pass
+
+Branch `experiments/sil-size` from `sil-green-40` (`904ec2b9`). Levers 1 (`-Cpanic=immediate-abort` with
+`-Zbuild-std`, through `RUSTC_BOOTSTRAP` on the pinned compiler) and the AAT cut with legacy `kern` retained were
+already on the branch. Every size below is the shipped `text-shaper.wasm` built by the package build's own flags
+(`scripts/support/shaper-build.mjs`) into an isolated target; gzip is level 9 and Brotli is quality 11.
+
+### Where the artifact grew
+
+`sil-green-40` ships `1,719,376` raw / `676,672` gzip / `516,882` Brotli: `code` `1,466,728` (`581,440` gzip) and
+`data` `247,935` (`85,439` gzip). The August baseline above was `1,122,345` before levers 1 and AAT, which together
+were priced at about `−144,000` raw, so the shaper has grown by roughly `740,000` raw since this note was written.
+
+Attribution is `twiggy top` over the same build with names kept (`CARGO_PROFILE_RELEASE_STRIP=false`, `wasm-opt -g`;
+`1,719,608` B excluding the name section, within 0.02% of the shipped bytes). Unlike the August table these are
+post-optimizer function bodies, so inlined callees count toward their caller.
+
+| Owner                                               |   Bytes | Share |
+| --------------------------------------------------- | ------: | ----: |
+| `pmndrs_glyph_shaper` functions and exports         | 903,100 | 52.5% |
+| `core`/`alloc` instantiated over shaper types       |  73,724 |  4.3% |
+| data segments                                       | 247,933 | 14.4% |
+| HarfRust, with instantiations over its types        | 259,327 | 15.1% |
+| `read-fonts`, with instantiations over its types    | 164,422 |  9.6% |
+| `core`/`alloc`/`compiler_builtins`, not generic     |  20,383 |  1.2% |
+| `unicode-bidi`, `unicode-segmentation`, `smallvec`… | ~32,000 |  1.9% |
+
+Our engine went from `406,572` B (August, pre-optimizer) to about `977,000` B and is now 57% of the module; it is
+nearly all of the growth. By module (functions whose name places them there, instantiations included):
+`engine::state` 291,412; `positioning` 73,449; `retained_rope` 67,945; `cluster_state` 56,740; `codec_gather`
+52,361; `ordered_plan` 33,745; `flow_composition` 31,856; `editing` 26,593; `unicode` 25,732; `outline` 25,615;
+`bidi` 22,132; `placement_slot_arena` 21,768; `codec` 20,570; `line_composition` 19,662; `inline_leaf` 19,160;
+`layout_query` 19,022. The largest single bodies are `PlannerState::prepare_upsert` (43,478),
+`OrderedPlanCompiler::prepare_internal` (21,794) and `PositionedGlyphArena::build_lines` (16,856).
+
+The data segments, mapped by linking with `--no-merge-data-segments`:
+
+| Data                                                                                                                        |   Bytes |
+| --------------------------------------------------------------------------------------------------------------------------- | ------: |
+| our Unicode tries (script 29.4k, line break 23.1k, bidi 19.3k, kernel ~10k, script extensions ~7k)                          | ~90,000 |
+| `unicode-segmentation` range tables (word 29,940, grapheme 19,416, sentence 13,200), `(char, char, u8)` rows padded to 12 B |  62,556 |
+| HarfRust `ucd_table` (`u16` 21,568, `u8` 19,845, decomposition maps ~7k)                                                    | ~48,000 |
+| HarfRust USE/Indic/Myanmar machines and tables                                                                              | ~17,000 |
+| HarfRust `OPEN_TYPE_LANGUAGES`                                                                                              |  11,464 |
+
+HarfRust by module: `ot_shape` 49,147, `ot` 26,967, `ot_shaper_use` 19,656, `ot_shaper_indic` 17,257,
+`ot_shaper_vowel_constraints` 13,163, `face` 13,038, `tag_table` 12,706, `ot_shaper_arabic` 12,226. `read-fonts`:
+`tables::layout` 43,328, `gpos` 20,258, `gsub` 17,081, `ps::cs` 16,018 (the CFF charstring interpreter the outline
+module uses), `ps::cff::dict` 7,906. Generic duplication `twiggy monos` reports above 4 kB: unstable quicksort over five
+element types (20,850, 14,712 of it bloat), stable quicksort over HarfRust map types (19,795), drop glue (16,733),
+`retained_rope::update_ordered_node` over five node types (13,929), and `append_measurement_from_occurrences_source`
+over two closures (11,768).
+
+### Cuts
+
+| Cut                               | Commit     |       raw |   Δ raw |    gzip | Δ gzip |  Brotli | Δ Brotli |
+| --------------------------------- | ---------- | --------: | ------: | ------: | -----: | ------: | -------: |
+| control `sil-green-40`            | `904ec2b9` | 1,719,376 |       — | 676,672 |      — | 516,882 |        — |
+| language resolution in the shaper | `e8a60ecf` | 1,701,737 | −17,639 | 671,831 | −4,841 | 513,742 |   −3,140 |
+
+**Language resolution (research step 3).** The fork gained a default-on `language-tags` feature that owns
+`tag_table` and `tags_from_language`, and `ShapePlan::new_with_language_tags`, which takes the language-system tags
+from the caller. The shaper builds HarfRust without the feature, so resolution is not stripped after the fact but
+never compiled. `rust/shaper/src/language_tags.rs` resolves instead, from tables
+`scripts/generate-language-tag-data.mjs` generates out of the vendored `tag_table.rs` (checked by
+`unicode check-data`): the 148 complex rules as one byte stream interpreted in order, and the 1,433 table rows as a
+varint stream with a 23-entry block index, so lookup stays a binary search plus a scan of at most 64 rows. It runs only
+when a plan is built for a run that sets `language`, which the default path never does. A differential test compares it
+with HarfRust's own resolution (`harfrust::opentype_language_tags`, enabled for tests only) over every one-to-three
+letter word, every rule and table key with 26 suffixes and three prefixes, truncations, private-use and irregular forms,
+and 200,000 seeded random tags; two deliberate mutations (the last-row bound and the block search) each fail it.
+
+The research proposed handing HarfRust `<lang>-x-hbot<TAG>`. That is not behaviour-identical, for two reasons the
+differential test would have caught: HarfRust resolves up to three candidate tags (`zh-Hant-MO` is `ZHTM`, then `ZHH`)
+and GSUB and GPOS each take the first one the font has, while `-x-hbot` carries one; and a three-letter fallback such as
+`i-a` resolves to `I-A `, which a private-use subtag cannot spell. Passing the tags beside the language avoids both.
+
+The net is about half the research's `−10,511` gzip, because that figure removed resolution without replacing its table:
+the replacement data is ~7.3 kB raw / ~4.2 kB gzip and its interpreter ~2.5 kB raw. Delivering the table as an
+on-demand payload (fetched the first time a run sets `language`) would recover that remainder from the default download;
+it needs an asynchronous path the shaper does not have today.
+
+Speed, interleaved with the 2026-11-22 headline harness (base and candidate consumers built from one package, differing
+only in `text-shaper.wasm`; 7 fresh-browser loads per arm; host load average 5 to 22 from other lanes): every row's
+ranges overlap and no ratio reaches the 10% verdict threshold. Headline workloads never set `language`, so no changed code
+runs on them. `latin15k` sweep read +2.3% and then +3.9% total (layout +4% and +9%, about 20 to 40 µs) across two runs
+with fully overlapping ranges; this is not resolvable on a loaded host and should be repeated on a quiet one. Oracles
+(native and wasm, full tier) are green without a re-freeze.
