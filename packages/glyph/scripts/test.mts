@@ -24,6 +24,8 @@ export async function runGlyphTest(): Promise<void> {
   await runNode('scripts/migrate-split.mts', ['--test']);
   await runNode('scripts/unicode.mts', ['check-data']);
   await runNode('scripts/build.mjs');
+  // The PixiJS 3D entry ships TypeGPU shaders resolved to strings; prove they match the shader library just built.
+  await runNode('scripts/generate-pixi3d-shaders.mjs', ['--check']);
   await runNode('node_modules/typescript/bin/tsc', ['-p', 'tsconfig.types.json']);
   await runNode('scripts/bundle-registration-smoke.mjs');
   for (const target of completeRustTargets) {

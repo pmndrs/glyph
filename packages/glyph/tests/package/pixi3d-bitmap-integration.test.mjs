@@ -5,11 +5,14 @@ import { readFile } from 'node:fs/promises';
 import { Container3D, Material3D, Mesh3D } from '@pixi/3d';
 import { bitmap, glyph, msdf, slug, txt, span } from '@pmndrs/glyph';
 
-import { definePixi3DConfig, Pixi3DTextMaterial } from '../dist/index.js';
+import { definePixi3DConfig, Pixi3DTextMaterial } from '@pmndrs/glyph/pixi3d';
 
-const fontFixture = new URL('../../../benches/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
-const allRasterFontFixture = new URL('../../../apps/typegpu-hello-world/assets/inter-latin.font.glb', import.meta.url);
-const shaperWasm = new URL('../../glyph/dist/text-shaper.wasm', import.meta.url);
+const fontFixture = new URL('../../../../benches/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
+const allRasterFontFixture = new URL(
+  '../../../../apps/typegpu-hello-world/assets/inter-latin.font.glb',
+  import.meta.url,
+);
+const shaperWasm = new URL('../../dist/text-shaper.wasm', import.meta.url);
 
 test('shared text meshes survive sibling updates and native parent destruction', async () => {
   await glyph.init({ wasm: await readFile(shaperWasm) });

@@ -3,8 +3,9 @@ import type {
   PortableResource,
   PortableResourceGroupPayload,
   PortableTextureArrayPayload,
-} from '@pmndrs/glyph';
-import { msdfBakedPages, SLUG_RESIDENT_BAND_CURVE_WIDTH, SlugBandResidency } from '@pmndrs/glyph/core';
+} from '../../index.js';
+import { msdfBakedPages } from '../../raster/msdf.js';
+import { SLUG_RESIDENT_BAND_CURVE_WIDTH, SlugBandResidency } from '../../raster/internal/slug-residency.js';
 import { BufferImageSource, Texture } from 'pixi.js';
 
 export class Pixi3DBitmapResource {

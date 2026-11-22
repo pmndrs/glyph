@@ -1,5 +1,5 @@
 import { Container3D, type Destroy3DOptions } from '@pixi/3d';
-import type { GlyphCopy } from '@pmndrs/glyph';
+import type { GlyphCopy } from '../index.js';
 
 /** Independent desired text snapshot in native Container3D space (+X right, +Y up).
  * The root copies its source local transform/origin; content retains the captured anchor. Same-parent attachment

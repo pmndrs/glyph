@@ -7,7 +7,7 @@ generated:
 ---
 
 The PixiJS 3D renderer that lived on `feature/pixi3d` as the private `@pmndrs/glyph-pixi3d-beta` is now
-[`@pmndrs/glyph-pixi3d`](../packages/glyph-pixi3d.md), a public package on the official `@pixi/3d` 0.1.0 (npm, MIT,
+[`@pmndrs/glyph-pixi3d`](../packages/glyph.md), a public package on the official `@pixi/3d` 0.1.0 (npm, MIT,
 peer `pixi.js` ^8.23.0). It needs neither the private beta tarball nor the beta's `pixi.js` and `@pixi/3d` patches,
 which served the demo app's post-processing and KTX2 paths, not the renderer.
 

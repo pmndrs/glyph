@@ -3,7 +3,6 @@
 - [`@pmndrs/glyph`](glyph.md) — public loading, baking, HarfRust shaping, paragraph layout, static discovery, and portable bitmap artifact core.
 - [`@pmndrs/glyph-benchmarks`](benchmarks.md) — Figma-backed benchmark and product-verification application.
 - [`@pmndrs/glyph-examples`](examples.md) — paired imperative Three.js and R3F examples over shared assets.
-- [`@pmndrs/glyph-pixi3d`](glyph-pixi3d.md) — renderer for the official PixiJS 3D release: Bitmap, MSDF and Slug on WebGPU and WebGL2.
 
 - [`@pmndrs/glyph-typegpu-hello-world`](typegpu-hello-world.md) — editable text using the high-level TypeGPU integration.
 - [`@pmndrs/glyph-tres-playground`](tres-playground.md) — Vue adapter playground rendering every raster format inside a TresJS canvas.

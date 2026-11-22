@@ -3,18 +3,18 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { Material3D, Mesh3D } from '@pixi/3d';
 import { bitmap, glyph, msdf, slug } from '@pmndrs/glyph';
-import { definePixi3DConfig, Pixi3DTextMaterial } from '../dist/index.js';
-import { testEffectBit } from './support/effect-bit.mjs';
+import { definePixi3DConfig, Pixi3DTextMaterial } from '@pmndrs/glyph/pixi3d';
+import { testEffectBit } from '../support/pixi3d-effect-bit.mjs';
 
 const fixtures = [
-  ['bitmap', bitmap({ strikes: [16] }), '../../../benches/fixtures/rendering/inter-bitmap-16.font.glb'],
-  ['msdf', msdf, '../../../apps/typegpu-hello-world/assets/inter-latin.font.glb'],
-  ['slug', slug, '../../../apps/typegpu-hello-world/assets/inter-latin.font.glb'],
+  ['bitmap', bitmap({ strikes: [16] }), '../../../../benches/fixtures/rendering/inter-bitmap-16.font.glb'],
+  ['msdf', msdf, '../../../../apps/typegpu-hello-world/assets/inter-latin.font.glb'],
+  ['slug', slug, '../../../../apps/typegpu-hello-world/assets/inter-latin.font.glb'],
 ];
 
 for (const [name, format, fixture] of fixtures) {
   test(`${name}: independent Codec records share native geometry while retaining materials and transforms`, async () => {
-    await glyph.init({ wasm: await readFile(new URL('../../glyph/dist/text-shaper.wasm', import.meta.url)) });
+    await glyph.init({ wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)) });
     const handle = glyph.handle(`pixi3d:native-record:${name}`, definePixi3DConfig());
     const font = glyph.fontFace(new Blob([await readFile(new URL(fixture, import.meta.url))]), { format });
     await font.load();
@@ -103,7 +103,7 @@ for (const [name, format, fixture] of fixtures) {
 }
 
 test('native records lower cross-bit glyph reads and fall back for full custom material rows', async () => {
-  await glyph.init({ wasm: await readFile(new URL('../../glyph/dist/text-shaper.wasm', import.meta.url)) });
+  await glyph.init({ wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)) });
   const handle = glyph.handle('pixi3d:native-custom-bits', definePixi3DConfig());
   const font = glyph.fontFace(new Blob([await readFile(new URL(fixtures[2][2], import.meta.url))]), { format: slug });
   await font.load();
@@ -200,7 +200,7 @@ test('native records lower cross-bit glyph reads and fall back for full custom m
 });
 
 test('native record preparation rejects transactionally and keeps the accepted draw live', async () => {
-  await glyph.init({ wasm: await readFile(new URL('../../glyph/dist/text-shaper.wasm', import.meta.url)) });
+  await glyph.init({ wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)) });
   const handle = glyph.handle('pixi3d:native-rejection', definePixi3DConfig());
   const font = glyph.fontFace(new Blob([await readFile(new URL(fixtures[2][2], import.meta.url))]), { format: slug });
   await font.load();
@@ -238,7 +238,7 @@ test('native record preparation rejects transactionally and keeps the accepted d
 });
 
 test('custom factories preserve appended glyph bits and material fields unless native records are explicitly enabled', async () => {
-  await glyph.init({ wasm: await readFile(new URL('../../glyph/dist/text-shaper.wasm', import.meta.url)) });
+  await glyph.init({ wasm: await readFile(new URL('../../dist/text-shaper.wasm', import.meta.url)) });
   const handle = glyph.handle('pixi3d:native-factory-default', definePixi3DConfig());
   const font = glyph.fontFace(new Blob([await readFile(new URL(fixtures[2][2], import.meta.url))]), { format: slug });
   await font.load();

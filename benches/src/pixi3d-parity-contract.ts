@@ -4,7 +4,7 @@ export type Pixi3DBackend = 'webgpu' | 'webgl';
 export interface Pixi3DParityCapture {
   readonly width: number;
   readonly height: number;
-  /** Base64 RGBA rows, top first, drawn by `@pmndrs/glyph-pixi3d`. */
+  /** Base64 RGBA rows, top first, drawn by `@pmndrs/glyph/pixi3d`. */
   readonly pixi: string;
   /** The same scene drawn by Glyph's Three renderer on WebGPU at the same camera. */
   readonly three: string;

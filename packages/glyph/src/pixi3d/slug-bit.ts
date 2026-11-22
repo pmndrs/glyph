@@ -1,7 +1,7 @@
 import type { ShaderBit } from '@pixi/3d';
 
 import { slugFragmentGlsl, slugGlsl, slugWgsl } from './generated/shaders.js';
-import { SLUG_BAND_CURVE_TEXELS, type Pixi3DSlugResource } from './resource.js';
+import { SLUG_BAND_CURVE_TEXELS, type Pixi3DSlugResource } from './internal/resource.js';
 
 export interface GlyphSlugBits {
   /** Declares Slug resources and initializes the mutable coverage coordinate for following material bits. */

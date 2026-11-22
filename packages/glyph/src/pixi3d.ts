@@ -1,6 +1,7 @@
-export { glyphBitmapBit } from './bitmap-bit.js';
-export { glyphMsdfBit } from './msdf-bit.js';
-export { createGlyphSlugBit, createGlyphSlugBits, type GlyphSlugBits } from './slug-bit.js';
+/** PixiJS 3D integration: Glyph text as `Container3D` nodes drawn through `@pixi/3d` on WebGPU and WebGL2. */
+export { glyphBitmapBit } from './pixi3d/bitmap-bit.js';
+export { glyphMsdfBit } from './pixi3d/msdf-bit.js';
+export { createGlyphSlugBit, createGlyphSlugBits, type GlyphSlugBits } from './pixi3d/slug-bit.js';
 export {
   Pixi3DTextMaterial,
   type Pixi3DTextMaterialContext,
@@ -9,7 +10,7 @@ export {
   type Pixi3DTextMaterialFormat,
   type Pixi3DTextMaterialOptions,
   type Pixi3DTextMaterialValue,
-} from './material.js';
+} from './pixi3d/material.js';
 export {
   definePixi3DConfig,
   Pixi3DConfig,
@@ -17,14 +18,14 @@ export {
   type Pixi3DGlyphConfig,
   type Pixi3DHandle,
   type Pixi3DRoot,
-} from './config.js';
+} from './pixi3d/config.js';
 export {
   Pixi3DText,
   type Pixi3DFontSelection,
   type Pixi3DGlyphMeasurement,
   type Pixi3DTextOptions,
   type Pixi3DTextUpdate,
-} from './text.js';
+} from './pixi3d/text.js';
 export {
   bitmapGlsl,
   bitmapWgsl,
@@ -34,5 +35,5 @@ export {
   slugFragmentGlsl,
   slugGlsl,
   slugWgsl,
-} from './generated/shaders.js';
-export { Pixi3DTextSnapshot } from './detached.js';
+} from './pixi3d/generated/shaders.js';
+export { Pixi3DTextSnapshot } from './pixi3d/detached.js';

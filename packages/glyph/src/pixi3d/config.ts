@@ -1,11 +1,13 @@
-import type { Codec, GlyphConfigFor, GlyphHandle, GlyphRoot } from '@pmndrs/glyph';
-import { bitmap, msdf, slug } from '@pmndrs/glyph';
-import { defineGlyphConfig, resourceLease } from '@pmndrs/glyph/core';
+import type { Codec, GlyphConfigFor, GlyphHandle, GlyphRoot } from '../index.js';
+import { defineGlyphConfig, resourceLease } from '../config/glyph.js';
+import { bitmap } from '../raster/bitmap.js';
+import { msdf } from '../raster/msdf.js';
+import { slug } from '../raster/slug.js';
 
-import { Pixi3DSchema, type Pixi3DRootBoundary } from './bindings.js';
-import { pixi3dCodecDescriptor } from './codec.js';
-import { Pixi3DRenderer } from './renderer.js';
-import { resolveRasterResource } from './resource.js';
+import { Pixi3DSchema, type Pixi3DRootBoundary } from './internal/bindings.js';
+import { pixi3dCodecDescriptor } from './internal/codec.js';
+import { Pixi3DRenderer } from './internal/renderer.js';
+import { resolveRasterResource } from './internal/resource.js';
 import { Pixi3DText, type Pixi3DFontSelection, type Pixi3DTextOptions } from './text.js';
 
 export interface Pixi3DFontFormats {

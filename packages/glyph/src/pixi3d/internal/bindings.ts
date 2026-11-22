@@ -6,11 +6,11 @@ import type {
   GlyphInstanceSpanBindingInput,
   GlyphRootInstanceBindingInput,
   GlyphSchema,
-} from '@pmndrs/glyph';
-import { defineGlyphSchema } from '@pmndrs/glyph/core';
+} from '../../index.js';
+import { defineGlyphSchema } from '../../config/glyph.js';
 
 import type { Pixi3DResolvedResource } from './resource.js';
-import type { Pixi3DText } from './text.js';
+import type { Pixi3DText } from '../text.js';
 
 export interface Pixi3DProgramBinding {
   readonly kind: 'pixi3d-program';
