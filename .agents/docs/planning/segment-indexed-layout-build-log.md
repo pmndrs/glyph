@@ -802,3 +802,9 @@ Updated in place; the history of each change is in the log below.
 - **`sil-green-29`: bidi class lanes merged** (first analysis experiment).
 - **Decision (Justin): the RTL gap rides; no second bidi resolver in 0.2.0** ([decision](decisions/rtl-bidi-resolver-deferred.md)).
 - **Usage limit:** the four top-model lanes (scoped gather, shaping, both experiment lanes) stopped on the Fable limit (resets 2026-11-23 15:00 America/Detroit). Each lane's work was committed as wip and pushed as a backup branch; nothing was lost.
+
+## 2026-11-22 (evening): decisions and merges
+
+- Merged since the last entry: `sil-green-38` cluster splice; `-39` fixes-lane housekeeping; `-40` typing-at-end splice; `-41` lone-mark negative-spacing fix and guard cases; `-42` the simple-text fast path.
+- **Decisions (Justin):** re-freeze and land all six held results (grapheme-run fix, empty-text ink, start/end-correction shortcut, revision-preserving replacement, narrowed writes, `measure()` stopping after flow); keep the fast path and investigate why only pixel fonts qualify; install `kimun` 0.46.1 (pinned in `mise.toml`) and run it with `fallow` as a lane gate.
+- Inline objects: Justin asked what they are for and how they differ from font fallback and exclusions; answered in chat, decision pending.
