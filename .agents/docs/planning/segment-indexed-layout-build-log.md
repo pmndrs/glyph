@@ -777,3 +777,14 @@ Updated in place; the history of each change is in the log below.
   worktrees). Faults and editing are now **merged**. No lane branch is open.
 
 - **`sil-green-23`: PixiJS 3D is a subpath export.** Justin: "pixi3d is not a separate package it is a subpath export just like three and type gpu." `@pmndrs/glyph-pixi3d` deleted; `@pmndrs/glyph/pixi3d` added with optional peers; a test proves the root, `core`, `three` and `typegpu` entries import no PixiJS. Full verification passed on the lane; merged, pushed, lane deleted. Decision: new renderers are subpath exports.
+
+## 2026-11-22: ports of open PRs
+
+- **`sil-green-24`: #317 and #314 ported, merged.** Shared Three storage survives a retiring draw; the placement
+  table, never freed on r185/r186, is now released; browser imports work without `process`.
+- **`sil-green-25`: scene-unbind crash fixed, merged.** Removing a root's last text no longer mutates
+  `scene.children` during Three's traversal; removal is deferred to a microtask.
+- **`sil-green-26`: #316 ported, merged.** Line glyph spans are written on every view; the bug only reproduced
+  under `semanticViews: 'measurement'`. Two oracle cases added (590); no existing reference moved.
+- Decision (Justin): port #317, #316, #314; #311 not ported. Triage of the other open PRs is in the handoff.
+- Held: compile-only storage leak; codec buffer growth across empty/revive cycles.

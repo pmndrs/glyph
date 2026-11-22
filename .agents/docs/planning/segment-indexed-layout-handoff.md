@@ -17,11 +17,11 @@ the [build log](segment-indexed-layout-build-log.md), the [branch map](segment-i
 ## 1. Where things stand
 
 - **Integration branch** `experiments/segment-indexed-layout`, worktree `/Volumes/Depot/Developer/glyph-held-rope-wip`,
-  pushed to `origin`. Last verified tag: `sil-green-23`. It sits on `experiments/held-rope-ascii-anchor-wip`
+  pushed to `origin`. Last verified tag: `sil-green-26`. It sits on `experiments/held-rope-ascii-anchor-wip`
   (`8176a24e0a3f`; draft PRs #292 → #301 → #302 → #310).
 - **`sil-green-22`** merged the layout-fault fixes and the editing lane with the oracle re-frozen (section 3).
   No lane branch is open.
-- **Oracle**: 588 cases, 54,240 seeded requests, incremental compared against cold in every stage and lane class,
+- **Oracle**: 590 cases (two added for measurement-only publication), incremental compared against cold in every stage and lane class,
   natively and in wasm. `KNOWN-DIVERGENCES` may only shrink.
 - **No PR is open for this work.** Landing is one draft PR on top of the existing stack, opened at the ship gate.
 
@@ -164,6 +164,30 @@ each row against v0.1.0 (must win or tie in aggregate), against main (riding row
 One draft PR on top of #310 from the integration branch. Description: what changed for users, the migration
 note, the comparison table, the riding rows, the known divergences list, the wasm size with the size plan. Use
 the `gh-stack` skill. Not opened until S1–S5 are done and Justin says so.
+
+## 5a. Open pull requests outside the stack (triaged 2026-11-22)
+
+Ported into 0.2.0 (the original PRs can be closed when the ship PR opens): #317 (shared Three storage destroyed
+when a draw retires), #314 (browser import without `process`), #316 (line glyph spans under
+`semanticViews: 'measurement'`).
+
+| PR | Recommendation |
+| --- | --- |
+| #319 frustum-culling experiment | 0.3.0. Bench-only; culling still works after this lands, but automatic bounds (ink plus padding for format and effects) are new work. Its fixture overwrites `scene.onBeforeRender`, which replaces glyph's render-depth wrapper |
+| #311 stage-safe `position` and `paragraphPosition` for custom materials | Justin's own PR; undecided. A public contract change, so 0.2.0 is the cheap time; needs rework on the new material realizer |
+| #313 corrected breaks inside right-to-left runs | 0.3.0 |
+| #240 publish pending layout on read | Superseded by read-prepares; close |
+| #312 CFF subsetting error, #303 README paths, #315 Tres playground, #269 variable-font report | Independent; merge any time |
+| #212 hero demo, #199 benchmark playground, #178 `Intl.Segmenter` spike, #138 docs site | 0.3.0; rebase or rewrite on 0.2.0 |
+
+Found while porting, not fixed:
+
+- A draw compiled with `compileAsync` and never rendered can leak its storage on Three r185/r186; there is no
+  per-object hook that carries the renderer.
+- Each time a root empties and gets text again, nine codec buffers are allocated and the old ones kept until root
+  teardown. Add a memory test that cycles a root and release the old buffers at the swap.
+- `typegpu@0.12.5` reads `process.env` unguarded, so the TypeGPU entries fail as unbundled browser ESM.
+- A measurement-only view of an empty paragraph still withholds its ink box (`empty_ink_authoritative`).
 
 ## 6. After ship: hardening and performance
 

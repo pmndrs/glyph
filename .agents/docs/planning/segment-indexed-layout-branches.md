@@ -80,3 +80,5 @@ comparison).
 `sil-green-22` (2026-11-21): the three branches above are merged and deleted. No lane branch is open.
 
 `sil-green-23` (2026-11-22): `experiments/sil-pixi3d-subpath` (PixiJS 3D moved to `@pmndrs/glyph/pixi3d`) merged and deleted. No lane branch is open.
+
+`sil-green-24`…`-26` (2026-11-22): `experiments/sil-port-317-314` and `experiments/sil-port-316` merged and deleted. No lane branch is open.
