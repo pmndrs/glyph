@@ -5017,6 +5017,45 @@ test('a root that empties and revives reuses or releases its storage instead of 
   assert.equal(live(), 0, 'teardown releases every storage attribute the root ever drew');
 });
 
+// Three r185/r186 `compileAsync` calls `Scene.onBeforeRender` with the renderer, draws nothing, and never calls
+// `Scene.onAfterRender`.
+// `compileAsync` alone holds an array in `_compilationPromises` while it runs.
+function compileWith(renderer, scene) {
+  scene.updateMatrixWorld();
+  renderer._compilationPromises = [];
+  scene.onBeforeRender(renderer, scene, new THREE.Camera(), null);
+  renderer._compilationPromises = null;
+}
+
+test('a draw compiled and never rendered releases its storage through the compiling renderer', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  t.after(() => font.dispose());
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const label = three.createText({ font, text: 'Compiled only' });
+  group.add(label);
+  scene.add(group);
+  const { renderer, deleted } = storageReleaseRenderer();
+  compileWith(renderer, scene);
+  const storage = new Set(rootDraws(scene).flatMap((draw) => sharedStorageOf(draw)));
+  assert.ok(storage.size > 0);
+
+  label.text = 'x';
+  scene.updateMatrixWorld();
+  assert.equal(
+    rootDraws(scene).reduce((count, draw) => count + draw.geometry.instanceCount, 0),
+    1,
+    'a traversal after a compile still publishes',
+  );
+  group.dispose();
+  label.dispose();
+  three.dispose();
+  for (const attribute of storage) {
+    assert.ok(deleted.includes(attribute), 'storage a compile registered is released through that renderer');
+  }
+});
+
 // Three r185/r186 free storage only through the renderer's attribute manager; BufferAttribute.dispose alone leaks (#317).
 test('Three releases every storage kind a drawn text binds through each renderer, once its last owner retires', async (t) => {
   assert.ok(['185', '186'].includes(THREE.REVISION), 'the installed Three needs the attribute-manager bridge');

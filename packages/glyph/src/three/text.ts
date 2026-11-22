@@ -58,6 +58,7 @@ import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import type { ThreeBindings, ThreeMaterialBinding } from './schema.js';
 import { setThreeBatchScope } from './internal/batch-scope.js';
 import { cullingScopeChanged, cullingTreeChanged, registerCullingScope } from './internal/culling-scope.js';
+import { trackDrawRenderer } from './internal/draw-realizer.js';
 import { mapTextSpanBindings, ownTextSpanRecords } from '../config/text-span-owner.js';
 import type { ThreePublicationBoundary } from './internal/publication-boundary.js';
 import type { ThreeRendererResources } from './internal/renderer-resources.js';
@@ -1278,6 +1279,10 @@ export class ThreeRootHost {
    * Counts the renders in progress on a Scene. A renderer traverses the Scene before `onBeforeRender` and runs
    * shadow and pass renders between it and `onAfterRender`, so a traversal seen at depth above zero belongs to
    * a nested render: it synchronizes transforms and neither prepares nor publishes.
+   *
+   * `compileAsync` also calls `onBeforeRender`, after its traversal, but never `onAfterRender` and never a draw's
+   * `onBeforeRender`. It is not counted, or the root would stop publishing; and the compiling renderer is
+   * registered as a holder of every draw's storage, since compiling may allocate it.
    */
   #countRenders(scene: THREE.Scene): () => void {
     const before = scene.onBeforeRender;
@@ -1285,7 +1290,12 @@ export class ThreeRootHost {
     const host = this;
     const counted = {
       onBeforeRender(this: THREE.Scene, ...parameters: Parameters<THREE.Scene['onBeforeRender']>): void {
-        host.#renderDepth += 1;
+        const [renderer] = parameters;
+        if (compiling(renderer)) {
+          for (const draw of host.#renderObject.children) trackDrawRenderer(draw, renderer);
+        } else {
+          host.#renderDepth += 1;
+        }
         before.apply(this, parameters);
       },
       onAfterRender(this: THREE.Scene, ...parameters: Parameters<THREE.Scene['onAfterRender']>): void {
@@ -3405,5 +3415,17 @@ function sameDesiredExceptAnchor(
     previous.material === next.material &&
     Object.is(previous.rasterPixelRatio ?? 1, next.rasterPixelRatio ?? 1) &&
     sameConstraintSizes(previous.constraints, next.constraints)
+  );
+}
+
+/**
+ * Whether `renderer` is inside `compileAsync`. Three r185/r186 hold the pending compilations in
+ * `_compilationPromises` only for that call; a render leaves it `null`.
+ */
+function compiling(renderer: unknown): boolean {
+  return (
+    typeof renderer === 'object' &&
+    renderer !== null &&
+    Array.isArray((renderer as { readonly _compilationPromises?: unknown })._compilationPromises)
   );
 }

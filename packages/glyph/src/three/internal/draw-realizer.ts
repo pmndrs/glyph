@@ -249,14 +249,23 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
   };
 }
 
+const storageTrackers = new WeakMap<THREE.Object3D, (renderer: object) => void>();
+
 /** Registers each renderer that draws `mesh` as a holder of its storage, once per renderer. */
 function trackDrawStorage(mesh: THREE.Mesh, storage: readonly THREE.BufferAttribute[]): void {
   const observedRenderers = new WeakSet<object>();
-  mesh.onBeforeRender = (renderer) => {
+  const track = (renderer: object): void => {
     if (observedRenderers.has(renderer)) return;
     trackStorageRenderer(renderer, storage);
     observedRenderers.add(renderer);
   };
+  storageTrackers.set(mesh, track);
+  mesh.onBeforeRender = track;
+}
+
+/** Registers `renderer` as a holder of `draw`'s storage without drawing it: a compile can allocate it too. */
+export function trackDrawRenderer(draw: THREE.Object3D, renderer: object): void {
+  storageTrackers.get(draw)?.(renderer);
 }
 
 /** Every buffer the new display list draws from, plus the session placement table every glyph draw reads. */
