@@ -255,3 +255,54 @@ that each edited run is reshaped whole, which is what the unsafe concat chain it
 Verification on `d5d29dcd9`: native and wasm oracle, full tier, 592 cases equal, 0 runs with an unlisted
 divergence, no reference re-frozen; `cargo test --features oracle`, `pnpm --filter @pmndrs/glyph test` and
 `cargo clippy --features oracle --all-targets -- -D warnings` passed.
+
+## Kernel class stage and rules (experiments 1 and 2, landed)
+
+Full-text replacement analyses every unit, so its cost is the kernel's own throughput. Wasm, the analysis suite, 15k,
+minimum of 5 rounds, before (`k0`), microseconds:
+
+| Script | Whole analysis | Classify | Rules (`decide`) | Windows | Emit and residue |
+| ------ | -------------: | -------: | ---------------: | ------: | ---------------: |
+| Latin  |             66 |       11 |               17 |       1 |               37 |
+| Code   |             38 |        9 |               17 |     0.2 |               12 |
+| CJK    |             99 |       20 |               17 |     0.2 |               62 |
+
+- **Experiment 1, SIMD class stage.** The six bit planes the rule words decode from are one byte shift and
+  `i8x16_bitmask` per sixteen class bytes instead of the SWAR multiply per eight: `decide` 17.0 → 13.8 µs (−19%) on
+  every script. A lane of sixteen ASCII units is classified by two 128-entry table swizzles, and the per-unit ASCII
+  mask is filled only for a paragraph of ASCII units, the only kind that reads it: classify Latin 11.3 → 8.5 µs,
+  code 9.0 → 6.5; non-ASCII scripts are within noise (Hangul 18.0 → 19.6 at worst).
+- **Experiment 2, rule emission.** The rules were already bit-parallel; what followed them was not. Breaks are now
+  appended per block into slots counted by popcount instead of pushed one by one through a callback: CJK, a break
+  at nearly every unit, analysis 96.8 → 87.0 µs.
+
+Whole analysis, wasm, interleaved: Latin 66.2 → 59.5 µs (−10%), code 38.4 → 31.2 (−19%), CJK 98.6 → 87.0 (−12%),
+Greek and Cyrillic, Hangul and Arabic within noise. End to end the Unicode stage is about 1% of a `replace_all`
+step, and the whole step moved within noise (Latin 6,432 → 6,394 µs, CJK 6,485 → 6,383). Shipped shaper +1,558 B
+raw, +742 B gzip. Table formats are unchanged; the ASCII lane splits the generated ASCII table at run time.
+
+Proof of equality: both simd128 forms keep their scalar twins, which every other build runs; the oracle's new
+`kernels` command, which the wasm oracle runs, checks the simd128 forms against the twins on every ASCII unit at
+every lane position, on lanes with one non-ASCII unit anywhere (units whose low byte is ASCII among them, which
+narrowing must not mistake for ASCII), on short lanes and on 200,000 seeded random lanes and plane lifts (402,224
+checks, all equal). The kernel conformance and fuzz suites cover the rest natively.
+
+Browser headline after experiments 1 and 2 (tarball from `fd3f3f584` against the saved `main` consumer, three A/B
+rounds, load average 7–13; the Arabic edit rows come from a configuration added to the scratch copy of the harness,
+`bidi15k` with Amiri and the edit operations). Complete frame, milliseconds, and in brackets mutate-and-measure:
+
+| Workload      | Latin 15k Inter          | Stress 22k Inter          | Bidi 15k Amiri             |
+| ------------- | ------------------------ | ------------------------- | -------------------------- |
+| type-end      | 9.92 → 5.22 (0.53), 1.20 | 13.17 → 6.37 (0.48), 1.54 | 13.43 → 5.44 (0.41), 1.60  |
+| insert-middle | 8.20 → 5.12 (0.62), 1.12 | 15.26 → 6.37 (0.42), 1.39 | 8.70 → 12.34 (1.42), 8.30  |
+| delete-middle | 8.23 → 4.96 (0.60), 0.98 | 15.25 → 6.36 (0.42), 1.38 | 8.77 → 12.27 (1.40), 8.24  |
+| paste-middle  | 8.69 → 5.14 (0.59), 1.08 | 15.58 → 6.63 (0.43), 1.43 | 15.02 → 12.22 (0.81), 8.31 |
+
+The bidi middle edits are slower than `main` (mutate-and-measure 8.3 against 3.5 ms). The harness types a Latin `x`
+into the middle of mixed Arabic and Latin text, which changes the shaping-run topology, so neither the single-run nor
+the multi-run shape path applies and the whole paragraph is reshaped; that is the likely cause, not yet confirmed
+with stage clocks. Reshaping only the runs an edit splits or merges is the next step for it.
+
+Verification on `fd3f3f584`: native and wasm oracle, full tier, 594 cases equal, 0 runs with an unlisted divergence,
+no reference re-frozen, kernel twins 402,224 checks equal in wasm; `cargo test --features oracle`,
+`pnpm --filter @pmndrs/glyph test` and `cargo clippy --features oracle --all-targets -- -D warnings` passed.

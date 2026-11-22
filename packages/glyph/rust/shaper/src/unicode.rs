@@ -627,11 +627,7 @@ impl UnicodeAnalysis {
 
     /// Emits the kernel's results for closure units `[start, end)` and the boundary at `end`.
     fn emit_stretch(&mut self, text: &[u16], start: usize, end: usize) -> Result<(), UnicodeError> {
-        let breaks = &mut self.breaks;
-        self.kernel
-            .for_each_break(start, end, |position, required| {
-                breaks.push(LineBreak { position, required });
-            });
+        self.kernel.append_breaks(start, end, &mut self.breaks);
         self.grapheme_boundaries
             .extend((start + 1..=end).map(|boundary| boundary as u32));
         self.emit_stretch_scripts(text, start, end)
