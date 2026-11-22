@@ -91,6 +91,18 @@ sources:
   - id: three-api
     resource: ../../../packages/glyph/src/three.ts
     title: Three.js public exports
+  - id: pixi3d-api
+    resource: ../../../packages/glyph/src/pixi3d.ts
+    title: PixiJS 3D public exports
+  - id: pixi3d-renderer
+    resource: ../../../packages/glyph/src/pixi3d/internal/renderer.ts
+    title: PixiJS 3D retained command-buffer renderer
+  - id: pixi3d-shaders
+    resource: ../../../packages/glyph/scripts/generate-pixi3d-shaders.mjs
+    title: Build-time TypeGPU shader resolution for PixiJS 3D
+  - id: pixi3d-parity
+    resource: ../../../benches/scripts/verify-pixi3d-parity.mts
+    title: PixiJS 3D real-device pixel parity with Three
   - id: three-text
     resource: ../../../packages/glyph/src/three/text.ts
     title: Three.js retained text lifecycle
@@ -342,6 +354,7 @@ Browser ESM delivery uses the private `content-digest` module filename to avoid 
 | `@pmndrs/glyph/vue/*`           | Typed Bitmap, MSDF, and Slug Vue composables.                                                                    |
 | `@pmndrs/glyph/typegpu`         | Direct TypeGPU configuration, retained text, and drawing into caller-owned passes.                               |
 | `@pmndrs/glyph/three/typegpu`   | Experimental Three integration using TypeGPU-backed shader adapters.                                             |
+| `@pmndrs/glyph/pixi3d`          | PixiJS 3D configuration, retained `Container3D` text, materials, and shader bits for WebGPU and WebGL2.          |
 | `@pmndrs/glyph/shaders/tsl`     | Standalone native TSL raster shaders.                                                                            |
 | `@pmndrs/glyph/shaders/typegpu` | Standalone TypeGPU stages, schemas, slots, accessors, and composition helpers.                                   |
 | `@pmndrs/glyph/bake`            | Node file/project baking, inspection, and freshness operations used by the CLI.                                  |
@@ -398,7 +411,8 @@ consumer, like Three.js and React. Stable `/three` and `/shaders/tsl` consumers 
 package-size measurements externalize those peer graphs while retaining the package's emitted shader metadata.
 
 The supported peer floors are Three.js 0.185.0, React 19.0.0, R3F 9.7.0 or 10.0.0-alpha.4, TypeGPU 0.12.5,
-`@typegpu/gl` 0.12.4, and `@typegpu/three` 0.12.1. Development dependencies remain pinned independently.
+`@typegpu/gl` 0.12.4, `@typegpu/three` 0.12.1, `@pixi/3d` 0.1.0 (below 0.2), and `pixi.js` 8.23.0. Development dependencies remain pinned independently;
+`@pixi/3d` and `pixi.js` come from the `pixi3d` catalog.
 Shared renderer development versions come from the `renderer` catalog in `pnpm-workspace.yaml`; public peer ranges remain
 explicit compatibility contracts. `@types/three` remains an independent exact pin because DefinitelyTyped patch releases
 do not move in lockstep with the Three.js runtime package.
@@ -2813,6 +2827,56 @@ The Three split is exercised through `pnpm scripts run benchmark:v1-bitmap`, wit
 The split verification on 2026-09-07 passed both browser workflows. Bitmap produced 3,109 lit pixels with native TSL and 2,685 with the experimental shaders on each backend; custom Bitmap composition likewise produced 2,642 versus 2,185. MTSDF and Slug lit-pixel counts matched in these fixtures. These checks establish rendering and lifecycle behavior, not complete visual parity; the Bitmap difference remains a reason to keep the experimental entry separate.
 
 Published distributions include hidden JavaScript source maps and referenced declaration maps. The build rebases staging-relative source paths onto the packaged source tree before atomically publishing dist; packed-package checks verify every map source and declaration reference resolves inside the installed package. Hidden JS maps add install bytes but no runtime imports or browser map requests. The repository-only raster-baker profiler is excluded together with its source and maps.
+
+## PixiJS 3D integration
+
+`@pmndrs/glyph/pixi3d` adapts the public `GlyphConfig` and portable raster contracts to the official `@pixi/3d` release
+(0.1.0 on npm, MIT, peer `pixi.js` ^8.23.0) with no patch to either PixiJS package. It is a subpath of this package,
+like `/three` and `/typegpu`: the source lives in `src/pixi3d.ts` and `src/pixi3d/`, it imports package modules
+directly, and `@pixi/3d` and `pixi.js` are optional peers that no other entry imports.
+
+Each text is a `Container3D`. The Codec uses ordered direct draws. A publication decodes the retained lanes on the CPU
+and realizes each draw span as `Mesh3D` children: multi-record spans get expanded per-vertex attributes; a one-record
+span stores its lanes in PixiJS 3D's native material row on one canonical quad, so independent characters share a
+native instanced draw. Native transforms, visibility and sorting stay authoritative; positions are not baked into
+vertices per frame.
+
+- **Bitmap** uploads each `r8unorm` page widened to RGBA (a mixed-format WebGL batch otherwise drops the red channel).
+- **MSDF** exchanges the atlas `pages` token for the baked pages with `msdfBakedPages` and uploads every page; each
+  instance's cell, UV bounds and layer come from the font's `glyphs` table on the CPU, and the `effect` lane supplies
+  shadow offset and outline width. Fill, outline and shadow are composed by Glyph's `msdfRender`.
+- **Slug** uploads the band headers whole and keeps band curves resident per glyph through `SlugBandResidency`,
+  admitted before any row is read. Its texture is allocated once at the page's largest grid, so growth never rebinds a
+  material. Integer words ride in nearest-sampled `rgba8unorm` texels because material textures are float-sampled.
+- **Decorations** use `createDecorationCodecProgram` and a shared unlit material in linear colour space, so their
+  paint is encoded for display like the default text material's.
+
+Shader math is the TypeGPU library in `src/shaders/typegpu`, resolved to WGSL and GLSL by
+`scripts/generate-pixi3d-shaders.mjs` into the committed `src/pixi3d/generated/shaders.ts`; the entry imports no
+TypeGPU. The package test reruns the generator with `--check` after the build, so a shader-library change that alters
+the resolved source fails until the module is regenerated. GLSL ES 3.0 rejects derivatives anywhere in a vertex shader
+and PixiJS 3D's `gl.header` reaches both stages, so MSDF and Slug put their derivative-taking helpers in
+`gl.fragment.header`. Slug dilation recovers the physical viewport from `camera.uLightTileTransform`, which 0.1.0 still
+derives from a fixed 16×9 light grid.
+
+Root hooks: `prepared()` resolves anchors after core prepared every dirty paragraph; `accepted` and `unchanged` accept
+placement and sync transforms; a rejected publication keeps the accepted meshes, reports once through
+`text.error`/`onError`, and is not retried until an edit. Text provides desired measurements, ink, glyph columns,
+carets, selections and native bounds; `split()` returns independently disposable glyph and decoration snapshots.
+`Pixi3DTextMaterial` appends shader bits, updates material data without reshaping, and may supply a factory for another
+`BaseMaterial3D`.
+
+Known differences from the Three renderer: MSDF keeps the whole baked atlas resident and draws untrimmed cells; Bitmap
+quads are not snapped to the pixel grid; draw order between overlapping texts is PixiJS 3D's sort, so there is no
+ordered `TextGroup` and CSS under/over decoration order is not enforced where a decoration crosses ink.
+
+Evidence: `tests/package/pixi3d-*.test.mjs` cover realization, native records, materials, anchors, split, rejection and
+the generated shaders; `esm-only.test.mjs` proves the root, `/core`, `/three`, `/three/typegpu`, `/typegpu` and
+`/shaders/typegpu` graphs import no PixiJS module; the packed-package test installs a PixiJS-only consumer and proves
+the core consumer can import nothing from `/pixi3d` without its peers. `benchmark:pixi3d-parity` renders 27 scenes
+through this renderer on WebGPU and WebGL2 and through Three on WebGPU and compares pixels at 8/255, with budgets for
+the intended differences above; the [release log entry](../log/2026-11-21-pixi3d-official-release.md) records the
+measured numbers.
 
 ## Retained host topology publication
 
