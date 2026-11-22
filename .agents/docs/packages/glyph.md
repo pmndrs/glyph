@@ -2356,7 +2356,9 @@ including a versioned linear-memory ABI that can move language tables out of the
 
 After composition, start-aligned lines whose semantic range, fragment order, indent, baseline, transform, clip, slot
 origin, and final-line state are unchanged copy their committed positioned SoA slices even when a wider slot changes
-only its unused end. Retained lines copy their indexed decoration slice with their glyph and semantic slices; a changed
+only its unused end. When no cluster stage was prepared, both sides read one cluster arena, so a retained paragraph
+span keeps its glyphs without re-proving its run, range and outline pattern: only its segment and line are new.
+Retained lines copy their indexed decoration slice with their glyph and semantic slices; a changed
 slot start invalidates reuse because it changes the published semantic line extent. Nontrivial bidi, center/end
 alignment, justification changes, boundary reshaping, and any changed line geometry take the full positioning path. At 22,000 glyphs and 101 widening updates, the final candidate measured
 1.882/4.553 ms median/p95 versus exact remote main's 2.991/5.256 ms. The dedicated measurement query measured

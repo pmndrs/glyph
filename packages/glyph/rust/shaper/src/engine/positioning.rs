@@ -1488,6 +1488,35 @@ impl RetainedOccurrenceProof<'_> {
             {
                 return Err(EngineError::InvalidRequest);
             }
+            // Both sides read one cluster arena, so a paragraph span over the same run token
+            // names the same glyphs: the line moves as a unit and only its placement is new.
+            if core::ptr::eq(self.clusters, self.previous_clusters)
+                && old.run_owner == LayoutRunOwner::Paragraph
+                && old.run_index == next_placement.layout_run_index
+                && old_placement.canonical_revision.is_some()
+                && old_placement.canonical_revision == next_placement.canonical_revision
+            {
+                let (line, target_line) = self.target_line(old.line)?;
+                covered = covered
+                    .checked_add(old.source_glyph_count)
+                    .ok_or(EngineError::ResultTooLarge)?;
+                outlined_total = outlined_total
+                    .checked_add(old.outlined_count)
+                    .ok_or(EngineError::ResultTooLarge)?;
+                append_occurrence_span(
+                    self.spans,
+                    self.semantic_count,
+                    self.outlined_count,
+                    OccurrenceSpan {
+                        placement_segment: next_segment,
+                        line,
+                        line_facts: SourceLineFacts::from(target_line.line),
+                        ..old
+                    },
+                    old.outlined_count,
+                )?;
+                continue;
+            }
             let (previous_runs, next_runs, previous_local, next_local) = match old.run_owner {
                 LayoutRunOwner::Paragraph => (
                     self.previous_clusters.layout_runs(),
@@ -1619,20 +1648,7 @@ impl RetainedOccurrenceProof<'_> {
             {
                 return Err(EngineError::InvalidRequest);
             }
-            let target_line = match old.line {
-                SourceLine::Body(_) => self.target.body,
-                SourceLine::DropCap(_) => {
-                    self.target.drop_cap.ok_or(EngineError::InvalidRequest)?
-                }
-            };
-            let line = match old.line {
-                SourceLine::Body(_) => SourceLine::Body(
-                    u32::try_from(target_line.index).map_err(|_| EngineError::ResultTooLarge)?,
-                ),
-                SourceLine::DropCap(_) => SourceLine::DropCap(
-                    u32::try_from(target_line.index).map_err(|_| EngineError::ResultTooLarge)?,
-                ),
-            };
+            let (line, target_line) = self.target_line(old.line)?;
             let owner_cluster = if old.source == GlyphSource::Boundary {
                 // Ellipsis fallback ownership may sit just outside the replacement
                 // run's (possibly empty) source-cluster interval.
@@ -1681,6 +1697,25 @@ impl RetainedOccurrenceProof<'_> {
             return Err(EngineError::InvalidRequest);
         }
         Ok(())
+    }
+
+    /// The line a retained span of `line`'s kind lands on.
+    fn target_line(
+        &self,
+        line: SourceLine,
+    ) -> Result<(SourceLine, RetainedSourceLine), EngineError> {
+        let target = match line {
+            SourceLine::Body(_) => self.target.body,
+            SourceLine::DropCap(_) => self.target.drop_cap.ok_or(EngineError::InvalidRequest)?,
+        };
+        let index = u32::try_from(target.index).map_err(|_| EngineError::ResultTooLarge)?;
+        Ok((
+            match line {
+                SourceLine::Body(_) => SourceLine::Body(index),
+                SourceLine::DropCap(_) => SourceLine::DropCap(index),
+            },
+            target,
+        ))
     }
 }
 
