@@ -104,6 +104,15 @@ async function prove(): Promise<FrustumCullingReport> {
       style: { color: '#80ff80', fontSize: 18 },
     });
     scene.add(standalone);
+    // Snapping rounds projected corners to pixel edges; fractional placements make it move them.
+    const snapped = root.createText({
+      font: bitmapFont,
+      text: 'Snapped bitmap',
+      pixelSnapping: true,
+      style: { color: '#ffd040', fontSize: 16 },
+    });
+    scene.add(snapped);
+    const edgeLabels = [...labels, snapped];
 
     async function frame(enabled: boolean, renderTarget = target) {
       culling = enabled;
@@ -145,6 +154,7 @@ async function prove(): Promise<FrustumCullingReport> {
       bitmapLabel.position.set(x, y + 34, 0);
       msdfLabel.position.set(x, y, 0);
       slugLabel.position.set(x, y - 34, 0);
+      snapped.position.set(x + 0.37, y + 52.61, 0);
     };
     const inkWorld = (label: THREE.Object3D & { computeBoundingBox(): THREE.Box3 }) => {
       scene.updateMatrixWorld(true);
@@ -164,25 +174,31 @@ async function prove(): Promise<FrustumCullingReport> {
       place(x, y);
       await parity(`straddles ${String(x)},${String(y)}`);
     }
-    // Ink a fraction of a pixel to a few pixels past each edge: quad padding, cells, fringes and shadows decide.
-    for (const gap of [0.05, 0.3, 0.5, 0.8, 1.2, 2, 4, 8]) {
-      for (const label of labels) {
+    // Ink a fraction of a pixel to a few pixels past each edge: quad padding, cells, fringes and shadows decide. Turned
+    // glyphs reach furthest: Slug's coverage fringe spans up to half a pixel times sqrt(2) past a diagonal edge.
+    for (const [angle, gap] of [
+      ...[0.05, 0.3, 0.5, 0.8, 1.2, 2, 4, 8].map((value) => [0, value] as const),
+      ...[0.02, 0.08, 0.15, 0.25, 0.4].flatMap((value) => [[0.35, value] as const, [Math.PI / 4, value] as const]),
+    ]) {
+      for (const label of edgeLabels) label.rotation.z = angle;
+      for (const label of edgeLabels) {
         label.position.x = 0;
         label.position.x = WIDTH / 2 + gap - inkWorld(label).min.x;
       }
-      await parity(`ink ${String(gap)}px right of the view`, 'any');
-      for (const label of labels) {
+      await parity(`ink ${String(gap)}px right of the view, turned ${angle.toFixed(2)}`, 'any');
+      for (const label of edgeLabels) {
         label.position.x = 0;
         label.position.x = -WIDTH / 2 - gap - inkWorld(label).max.x;
       }
-      await parity(`ink ${String(gap)}px left of the view`, 'any');
+      await parity(`ink ${String(gap)}px left of the view, turned ${angle.toFixed(2)}`, 'any');
       place(-60, 0);
-      for (const label of labels) {
+      for (const label of edgeLabels) {
         label.position.y = 0;
         label.position.y = HEIGHT / 2 + gap - inkWorld(label).min.y;
       }
-      await parity(`ink ${String(gap)}px above the view`, 'any');
+      await parity(`ink ${String(gap)}px above the view, turned ${angle.toFixed(2)}`, 'any');
     }
+    for (const label of edgeLabels) label.rotation.z = 0;
     place(600, 0);
     standalone.position.x = 600;
     await parity('everything off-screen', 'empty', true);
@@ -320,7 +336,7 @@ async function prove(): Promise<FrustumCullingReport> {
     const negativeControlDetected = countChanged(reference.bytes, broken.bytes) !== 0;
     if (!negativeControlDetected) throw new Error('a wrong bound was not detected by the pixel oracle');
 
-    for (const label of [...labels, standalone]) label.dispose();
+    for (const label of [...edgeLabels, standalone]) label.dispose();
     const timings = await measure(timingLabels, timingSamples);
     return {
       backend: renderer.backend instanceof THREE.WebGLBackend ? 'webgl2' : 'webgpu',
