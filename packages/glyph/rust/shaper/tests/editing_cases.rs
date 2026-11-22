@@ -1333,3 +1333,37 @@ fn a_conjunct_of_a_real_font_moves_as_one_unit() {
     );
     assert!(close(halves.0[0].width + halves.1[0].width, end - start));
 }
+
+/// A clipped box shorter than one line lays out no line at all, so no offset has a line box to
+/// stand a caret in: every caret is clipped and empty at the box's origin.
+#[test]
+fn a_box_shorter_than_one_line_clips_every_caret() {
+    const OVERFLOW_CLIP: u8 = 2;
+    for (text, overflow) in [
+        ("abc", OVERFLOW_CLIP),
+        ("", OVERFLOW_CLIP),
+        ("a\nb", OVERFLOW_ELLIPSIS),
+    ] {
+        let mut model = model(text);
+        model.layout.height = 0.5;
+        model.layout.overflow = overflow;
+        let session = lay_out(&["inter"], &model);
+        let queries = editing(&session);
+        assert_eq!(
+            queries.source().line_count(),
+            0,
+            "{text:?} lays out no line"
+        );
+        for offset in 0..=queries.text_length() {
+            for position in [down(offset), up(offset)] {
+                let caret = queries.caret(position).expect("a caret");
+                assert!(caret.clipped, "{text:?} {offset}: nothing was drawn");
+                assert_eq!(
+                    (caret.rect, caret.line, caret.secondary),
+                    (Rect::default(), 0, None),
+                    "{text:?} {offset}"
+                );
+            }
+        }
+    }
+}

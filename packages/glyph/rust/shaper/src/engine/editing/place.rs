@@ -125,7 +125,8 @@ impl<S: LayoutSource> Editing<S> {
             None
         };
         let Some(line) = owning.or(self.line_at_or_before(offset)?) else {
-            // Layout made no line: there is no line box to stand a caret in.
+            // Layout made no line -- a clipped box shorter than one line -- so nothing was drawn
+            // and there is no line box to stand a caret in.
             return Ok(Place {
                 line: 0,
                 box_index: 0,
@@ -134,7 +135,7 @@ impl<S: LayoutSource> Editing<S> {
                 top: 0.0,
                 height: 0.0,
                 level: 0,
-                clipped: false,
+                clipped: true,
             });
         };
         let boxes = self.line_boxes(cache, line)?;
