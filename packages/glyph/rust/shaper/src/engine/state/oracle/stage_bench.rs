@@ -35,6 +35,7 @@ pub(crate) mod clock {
 
     pub(crate) struct Stage(AtomicU64);
 
+    pub(crate) static FLOW: Stage = Stage(AtomicU64::new(0));
     pub(crate) static POSITIONING: Stage = Stage(AtomicU64::new(0));
     pub(crate) static MEASUREMENT: Stage = Stage(AtomicU64::new(0));
     /// Unicode analysis of a candidate text: classes, line breaks, graphemes and scripts.
@@ -260,9 +261,13 @@ pub fn command(library: &FontLibrary, fields: &[&str]) -> Result<String, String>
             number(graphemes)?,
             number(iterations)?,
         ),
+        ["sweep", fixture, align, units, rounds] => {
+            sweep(library, fixture, align, number(units)?, number(rounds)?)
+        }
         _ => Err(
             "usage: bench paragraph|labels <font> <script> <size> <iterations> | bench layout \
-             <fixture> <align> <size> <iterations> | bench analysis <script> <size> <iterations>"
+             <fixture> <align> <size> <iterations> | bench analysis <script> <size> <iterations> \
+             | bench sweep <fixture> <align> <units> <rounds>"
                 .to_string(),
         ),
     }
@@ -745,6 +750,152 @@ fn layout(
     Ok(format!("ok\n{report}"))
 }
 
+/// The browser headline harness's Latin corpus: short paragraphs separated by blank lines.
+const HEADLINE_LATIN: &str = "Typography is a moving system. AVATAR To Wa Yo repeat familiar kerning pairs while a responsive panel changes the space around them. The quick visual check is useful, but the benchmark records the cost of shaping, layout, upload, and every rendered frame.\n\nA practical interface mixes prose with 0123456789, prices such as 24.50, ranges from 8\u{2013}512 px, and punctuation\u{2014}\u{201c}quotes\u{201d}, (parentheses), brackets, commas, and semicolons. Repeated office, affine, difficult, and shuffle words retain ff, fi, fl, ffi, and ffl candidates without claiming that every font substitutes them.\n\nScientific copy adds x\u{b2}+y\u{b2}\u{2248}z\u{b2}, 0\u{2264}\u{3b1}\u{2264}1, \u{b1}\u{d7}\u{f7}\u{221e}, \u{221a}, \u{2211}, and \u{3c0}. Arrows point both ways: \u{2192} \u{2190}. These symbols expose missing coverage, uneven baselines, bad advances, and atlas placement errors that plain alphabet samples can hide.\n\nReal text is rarely one centered label. It wraps into paragraphs, reflows beside controls, survives narrow and wide containers, and stays readable while the scene continues to render. This corpus repeats ordinary shapes on purpose so caches, batching, and steady-state costs become visible.\n\nPerformance is experienced as motion, response, and stability. This scene keeps the paragraph visible while it reports startup, retained bytes, shaping and layout work, CPU frame time, GPU frame time when supported, and frames per second across the selected renderer.\n";
+/// The headline harness's mixed-direction corpus: one unbroken paragraph.
+const HEADLINE_BIDI: &str = "The panel resizes while the reader keeps their place. \u{627}\u{644}\u{646}\u{635} \u{627}\u{644}\u{639}\u{631}\u{628}\u{64a} \u{64a}\u{62a}\u{62f}\u{641}\u{642} \u{645}\u{646} \u{627}\u{644}\u{64a}\u{645}\u{64a}\u{646} \u{625}\u{644}\u{649} \u{627}\u{644}\u{64a}\u{633}\u{627}\u{631} \u{648}\u{64a}\u{62e}\u{62a}\u{644}\u{637} \u{645}\u{639} \u{627}\u{644}\u{623}\u{631}\u{642}\u{627}\u{645} \u{645}\u{62b}\u{644} 2026 \u{648} 15.5 \u{648}\u{627}\u{644}\u{643}\u{644}\u{645}\u{627}\u{62a} \u{627}\u{644}\u{644}\u{627}\u{62a}\u{64a}\u{646}\u{64a}\u{629}. Mixed lines reorder numbers, quotes and (parentheses) at every width. \u{647}\u{630}\u{647} \u{627}\u{644}\u{641}\u{642}\u{631}\u{629} \u{62a}\u{62e}\u{62a}\u{628}\u{631} \u{625}\u{639}\u{627}\u{62f}\u{629} \u{62a}\u{631}\u{62a}\u{64a}\u{628} \u{627}\u{644}\u{627}\u{62a}\u{62c}\u{627}\u{647} \u{627}\u{644}\u{62b}\u{646}\u{627}\u{626}\u{64a} \u{639}\u{646}\u{62f} \u{62a}\u{63a}\u{64a}\u{64a}\u{631} \u{639}\u{631}\u{636} \u{627}\u{644}\u{633}\u{637}\u{631} \u{641}\u{64a} \u{643}\u{644} \u{625}\u{637}\u{627}\u{631}. Prices such as 24.50 and ranges from 8 to 512 px sit beside right-to-left words. \u{64a}\u{643}\u{62a}\u{628} \u{627}\u{644}\u{645}\u{633}\u{62a}\u{62e}\u{62f}\u{645} \u{641}\u{64a} \u{645}\u{646}\u{62a}\u{635}\u{641} \u{627}\u{644}\u{641}\u{642}\u{631}\u{629} \u{627}\u{644}\u{637}\u{648}\u{64a}\u{644}\u{629} \u{648}\u{62a}\u{639}\u{627}\u{62f} \u{635}\u{64a}\u{627}\u{63a}\u{629} \u{627}\u{644}\u{623}\u{633}\u{637}\u{631} \u{627}\u{644}\u{62a}\u{627}\u{644}\u{64a}\u{629} \u{641}\u{642}\u{637}. ";
+/// The headline harness's CJK corpus: one unbroken paragraph.
+const HEADLINE_CJK: &str = "\u{6587}\u{5b57}\u{7d44}\u{7248}\u{3067}\u{306f}\u{3001}\u{7a7a}\u{767d}\u{306a}\u{3057}\u{3067}\u{3082}\u{81ea}\u{7136}\u{306b}\u{6539}\u{884c}\u{3057}\u{307e}\u{3059}\u{3002}\u{53e5}\u{8aad}\u{70b9}\u{306e}\u{4f4d}\u{7f6e}\u{3092}\u{4fdd}\u{3061}\u{306a}\u{304c}\u{3089}\u{6bb5}\u{843d}\u{304c}\u{4f38}\u{3073}\u{3066}\u{3044}\u{304d}\u{307e}\u{3059}\u{3002}";
+
+/// Per-step stage times of one sweep, each the minimum over the rounds.
+struct SweepClock {
+    name: &'static str,
+    steps: Vec<f64>,
+}
+
+impl SweepClock {
+    fn record(&mut self, step: usize, value: f64) {
+        match self.steps.get_mut(step) {
+            Some(best) => *best = best.min(value),
+            None => self.steps.push(value),
+        }
+    }
+
+    /// `name<TAB>median<TAB>mean<TAB>ns per glyph of the mean`, in microseconds.
+    fn report(&mut self, report: &mut String, glyphs: usize) {
+        let mean = self.steps.iter().sum::<f64>() / self.steps.len().max(1) as f64 * 1_000.0;
+        let (median, _) = summary(&mut self.steps);
+        report.push_str(&format!(
+            "sweep.{}\t{median:.1}\t{mean:.1}\t{:.2}\n",
+            self.name,
+            mean * 1_000.0 / glyphs.max(1) as f64
+        ));
+    }
+}
+
+/// `bench sweep <fixture> <align> <units> <rounds>`: the browser headline width sweep, 600 to
+/// 300 and back in 4 px steps at 8 px type, each step a publication followed by a measurement.
+/// Every step's time is its minimum over the rounds; a row is the median and the mean of the
+/// 151 steps. The `reuse` line counts, per step, the lines whose break the previous width
+/// already had.
+fn sweep(
+    library: &FontLibrary,
+    fixture: &str,
+    align: &str,
+    units: usize,
+    rounds: usize,
+) -> Result<String, String> {
+    let (source, stack): (&str, &[&str]) = match fixture {
+        "latin" => (HEADLINE_LATIN, &["inter"]),
+        "fredoka" => (HEADLINE_LATIN, &["fredoka"]),
+        "bidi" => (HEADLINE_BIDI, &["amiri"]),
+        "cjk" => (HEADLINE_CJK, &["cjk-jp"]),
+        _ => return Err(format!("unknown sweep fixture `{fixture}`")),
+    };
+    let align = match align {
+        "start" => ALIGN_START,
+        "center" => ALIGN_CENTER,
+        "end" => ALIGN_END,
+        "justify" => ALIGN_JUSTIFY,
+        _ => return Err(format!("unknown alignment `{align}`")),
+    };
+    let unit: Vec<u16> = source.encode_utf16().collect();
+    let mut text = Vec::new();
+    while text.len() < units {
+        text.extend_from_slice(&unit);
+    }
+    let at = |width: f32| Model {
+        text: text.clone(),
+        root: RootStyle {
+            font_size: 8.0,
+            line_height: 1.25,
+            ..RootStyle::default()
+        },
+        layout: Layout {
+            align,
+            width,
+            ..Layout::default()
+        },
+        ..Model::default()
+    };
+    let widths: Vec<f32> = (0..=75)
+        .map(|step| 600.0 - 4.0 * step as f32)
+        .chain((1..=75).map(|step| 300.0 + 4.0 * step as f32))
+        .collect();
+    let models: Vec<Model> = widths.iter().map(|width| at(*width)).collect();
+    let stacks: &[&[&str]] = &[stack];
+    let mut session = Session::new(library, stacks)?;
+    session.step(&models[0], &[], MEASURED)?;
+    let glyphs = paragraph_state(&mut session)?
+        .clusters
+        .committed()
+        .glyph_ids
+        .len();
+
+    let (mut lines, mut kept, mut prefix) = (0_usize, 0_usize, 0_usize);
+    let mut previous = breaks(&mut session)?;
+    for model in &models[1..] {
+        session.step(model, &[], MEASURED)?;
+        let next = breaks(&mut session)?;
+        lines += next.len();
+        kept += next
+            .iter()
+            .filter(|line| previous.binary_search(line).is_ok())
+            .count();
+        prefix += next
+            .iter()
+            .zip(&previous)
+            .take_while(|(left, right)| left == right)
+            .count();
+        previous = next;
+    }
+    let steps = models.len() - 1;
+    let mut report = format!(
+        "shape\tglyphs {glyphs}\tsteps {steps}\tlines/step {:.1}\tkept-breaks {:.1}%\tkept-prefix {:.1}%\n",
+        lines as f64 / steps as f64,
+        kept as f64 * 100.0 / lines.max(1) as f64,
+        prefix as f64 * 100.0 / lines.max(1) as f64,
+    );
+
+    let mut clocks = ["op", "flow", "positioning", "measurement"].map(|name| SweepClock {
+        name,
+        steps: Vec::new(),
+    });
+    for _ in 0..rounds.max(1) {
+        session.step(&models[0], &[], MEASURED)?;
+        for (step, model) in models[1..].iter().enumerate() {
+            clock::FLOW.take();
+            clock::POSITIONING.take();
+            clock::MEASUREMENT.take();
+            let started = now();
+            session.step(model, &[], MEASURED)?;
+            let stages = [
+                now() - started,
+                clock::FLOW.take(),
+                clock::POSITIONING.take(),
+                clock::MEASUREMENT.take(),
+            ];
+            for (clock, value) in clocks.iter_mut().zip(stages) {
+                clock.record(step, value);
+            }
+        }
+    }
+    for clock in &mut clocks {
+        clock.report(&mut report, glyphs);
+    }
+    Ok(format!("ok\n{report}"))
+}
+
 fn label_text(script: Script, index: usize) -> Vec<u16> {
     match script {
         Script::Latin => format!("label {index:03}").encode_utf16().collect(),
@@ -875,6 +1026,11 @@ mod tests {
         let labels = command(&library, &["labels", "inter", "latin", "8", "2"]).unwrap();
         assert!(labels.contains("inline 8"), "{labels}");
         assert!(labels.contains("stage.run_local.labels"), "{labels}");
+        let sweep = command(&library, &["sweep", "latin", "start", "300", "1"]).unwrap();
+        assert!(sweep.contains("steps 150"), "{sweep}");
+        for clock in ["op", "flow", "positioning", "measurement"] {
+            assert!(sweep.contains(&std::format!("sweep.{clock}\t")), "{sweep}");
+        }
         for align in ["start", "center", "end", "justify"] {
             let layout = command(&library, &["layout", "inter", align, "300", "2"]).unwrap();
             for change in ["cold", "edit", "width.same", "width.moved", "align"] {

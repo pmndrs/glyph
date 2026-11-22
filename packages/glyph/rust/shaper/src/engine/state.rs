@@ -6407,6 +6407,8 @@ impl ParagraphState {
         max_slots_per_band: u32,
         next_glyph_id: &mut u32,
     ) -> Result<(), EngineError> {
+        #[cfg(feature = "stage-bench")]
+        let _clock = oracle::stage_bench::clock::FLOW.guard();
         self.discard_flow_layout_candidate();
         // Positioning is derived from one specific flow: its per-line lanes describe the
         // lines that flow composed. Re-running the flow therefore invalidates any pending

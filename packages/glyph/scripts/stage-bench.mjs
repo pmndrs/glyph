@@ -1,10 +1,13 @@
 /* @workflow { "name": "glyph:stage-bench", "summary": "Time the run-local geometry stage, the cluster build, positioning and measurement, the engine steps around them and the Unicode and bidi analysis inside the optimized wasm32+simd128 oracle probe.", "requirements": "Pinned Rust through mise and installed package dependencies for wasm-opt. Evidence for a rewrite, not a benchmark protocol: run one at a time on a quiet machine.", "writes": "packages/glyph/rust/shaper/target/stage-bench-wasm; never dist." } */
 // Usage:
 //   node scripts/stage-bench.mjs [--iterations N] [--rounds N] [--only SUBSTRING] [--save FILE]
-//                                [--suite stage|layout|analysis] [--probe LABEL=FILE]...
+//                                [--suite stage|layout|analysis|sweep] [--probe LABEL=FILE]...
 // `--suite layout` times positioning and measurement per change class (cold, edit, width change
 // with and without moved breaks, alignment change) for each fixture, alignment and size.
 // `--suite analysis` times the Unicode and bidi analysis of one paragraph per script, alone.
+// `--suite sweep` times the browser headline width sweep (600 to 300 px and back in 4 px steps at
+// 8 px type) per fixture and alignment; its rows are the median and the mean step, and
+// --iterations is the number of sweeps each step's minimum is taken over.
 // With no --probe the current source is built and timed. Each --probe names a saved probe; several are
 // timed interleaved, round by round, so two builds can be compared in one session.
 import { spawn } from 'node:child_process';
@@ -49,6 +52,18 @@ const analysisScripts = [
   'thai',
   'emoji',
 ];
+// `<fixture> <align> <UTF-16 units>`: the headline rows first, then the other alignments.
+const sweeps = [
+  'latin start 15000',
+  'latin start 22000',
+  'bidi start 15000',
+  'cjk start 15000',
+  'fredoka start 15000',
+  'latin center 15000',
+  'latin end 15000',
+  'latin justify 15000',
+  'bidi justify 15000',
+];
 
 const options = { iterations: 40, rounds: 3, only: undefined, save: undefined, suite: 'stage', probes: [] };
 const arguments_ = process.argv.slice(2);
@@ -72,18 +87,21 @@ if (options.probes.length === 0) {
 const probes = [];
 for (const [label, file] of options.probes) probes.push({ label, probe: await instantiateProbe(file) });
 
-if (!['stage', 'layout', 'analysis'].includes(options.suite)) throw new Error(`unknown suite ${options.suite}`);
+if (!['stage', 'layout', 'analysis', 'sweep'].includes(options.suite))
+  throw new Error(`unknown suite ${options.suite}`);
 const cases = (
-  options.suite === 'analysis'
-    ? analysisScripts.flatMap((script) => [1000, 15000].map((size) => `analysis ${script} ${size}`))
-    : options.suite === 'layout'
-      ? layoutFixtures.flatMap((fixture) =>
-          alignments.flatMap((align) => sizes.map((size) => `layout ${fixture} ${align} ${size}`)),
-        )
-      : [
-          ...fonts.flatMap(([font, script]) => sizes.map((size) => `paragraph ${font} ${script} ${size}`)),
-          'labels inter latin 200',
-        ]
+  options.suite === 'sweep'
+    ? sweeps.map((sweep) => `sweep ${sweep}`)
+    : options.suite === 'analysis'
+      ? analysisScripts.flatMap((script) => [1000, 15000].map((size) => `analysis ${script} ${size}`))
+      : options.suite === 'layout'
+        ? layoutFixtures.flatMap((fixture) =>
+            alignments.flatMap((align) => sizes.map((size) => `layout ${fixture} ${align} ${size}`)),
+          )
+        : [
+            ...fonts.flatMap(([font, script]) => sizes.map((size) => `paragraph ${font} ${script} ${size}`)),
+            'labels inter latin 200',
+          ]
 ).filter((name) => options.only === undefined || name.includes(options.only));
 
 for (const name of cases) {
