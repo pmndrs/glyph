@@ -23,7 +23,7 @@ stage public value 13 0349aa9ef1038091
 stage public identity 1 2293c033b3923480
 stage view identity 4 c2e6557ee105af5e
 stage view value 40 4a0a66934e438595
-stage wire wire 1 5e432426b05341f5
+stage wire wire 1 98d3fb52fc1ed5cd
 stage gather identity 7 7b8b687db516fcac
 stage gather value 36 772829455ff64d7e
 stage gpu identity 2 adf5853e08013782
@@ -32,14 +32,14 @@ step 01 width 87 + align 2 + width 54 + max lines 0
 class value 230 3c16857abe4e7c80
 class identity 22 ae4f9157d6fc0a40
 class repr 41 b36236ecc9ef0516
-class wire 1 c17711f451081ff7
+class wire 1 9df6530fdc8bf287
 step 02 add span 8..12 + insert HardBreak (235 units) at 13
 class value 242 23c3db9731212927
 class identity 22 9a2cd48cc21ce75e
 class repr 44 903ef14eb02baa84
-class wire 1 700ee591d30c700e
+class wire 1 607693940b548b06
 step 03 replace 4 at 267
 class value 242 e65f6e1f29ab531a
 class identity 22 8fac99b7a813d408
 class repr 44 52aae716376fe17d
-class wire 1 4958cdc9e8fecf6d
+class wire 1 289f3a69bc3932a1

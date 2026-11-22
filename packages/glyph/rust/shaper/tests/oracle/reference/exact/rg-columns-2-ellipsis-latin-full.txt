@@ -23,7 +23,7 @@ stage public value 13 3e62f9e344413252
 stage public identity 1 3beca43766132627
 stage view identity 4 af458e9eff58ab8c
 stage view value 40 442e9203801011d0
-stage wire wire 1 dca1d45551993111
+stage wire wire 1 0b7234ff176af053
 stage gather identity 7 9b42d06262444b9b
 stage gather value 36 b76de2bb69ab48f1
 stage gpu identity 2 6b2a18c4624839dd
@@ -34,49 +34,49 @@ step 01 insert in the first region
 class value 289 2e375affd3bcb4e9
 class identity 31 3e1f0cceca63f344
 class repr 64 362c5485398dc408
-class wire 1 7ef85603e6c78799
+class wire 1 197e989a5ed427c1
 step 02 delete in a later region
 class value 289 bd5bc4f84327966a
 class identity 31 a93d401538491eb2
 class repr 64 e5455abf71ec29ee
-class wire 1 6e2c4ec4fd8b0237
+class wire 1 12423252a875864f
 step 03 narrower measure
 class value 289 5dce8156619af035
 class identity 31 17af6a95ca35d29f
 class repr 64 11d7ea7b7b277f0f
-class wire 1 ae45f44556f08ab4
+class wire 1 f1df45c9f4d5e62d
 step 04 shorter regions
 class value 289 3770c41a5f628287
 class identity 31 c581bac1619f5e09
 class repr 64 4faf3615c2981982
-class wire 1 7483a389c9c902e5
+class wire 1 6b5430bccdca972d
 step 05 three columns, wider gap
 class value 289 6db77d199d685861
 class identity 31 143bf373df4245fa
 class repr 64 abbb70f8c69ba485
-class wire 1 6e0257dfcc6c6d2d
+class wire 1 14523138f5a9611d
 step 06 one region
 class value 289 c0db659d00e170a1
 class identity 31 a3fa8c821d061cb6
 class repr 64 d6f206576b32d1da
-class wire 1 846c89788ff40c44
+class wire 1 7d7fb0ca51d5df13
 step 07 the starting regions
 class value 289 bd5bc4f84327966a
 class identity 31 640f0a49d19bd683
 class repr 64 e5455abf71ec29ee
-class wire 1 67ff9f2ce47d742d
+class wire 1 14d9b0881aff2c20
 step 08 insert Bidi (212 units) at 356
 class value 289 85607236c57fc9b8
 class identity 31 d5c72e6f57639adc
 class repr 64 6c1ba6272cda5717
-class wire 1 aa3ac7aac63d8bf3
+class wire 1 2e86b8a5cf5afeb3
 step 09 replace 6 at 675
 class value 289 4e8f8bf73846cf4d
 class identity 31 ac2bdc418930f3d1
 class repr 64 0604da7186488ff8
-class wire 1 41d367cab24122a5
+class wire 1 d3ac240315cef9e0
 step 10 width 567
 class value 289 36549409de403629
 class identity 31 2934b31078eecd65
 class repr 64 08c2de4f02d4b1a6
-class wire 1 65e4939bcd67a5c0
+class wire 1 628971df91130974

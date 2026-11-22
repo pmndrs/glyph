@@ -21,7 +21,7 @@ stage public value 13 402b7b0b77f931fc
 stage public identity 1 9b398bc663aa16ca
 stage view identity 4 e8e9d5983020756c
 stage view value 40 7252866fdfd22422
-stage wire wire 1 7a56dce6f3f87b3d
+stage wire wire 1 2408f423181aa04b
 stage gather identity 7 a302de53f9142d4b
 stage gather value 36 2a66d87401d69128
 stage gpu identity 2 74bc158269361e1b
@@ -32,49 +32,49 @@ step 01 insert in the first region
 class value 253 711e7f6691ab3696
 class identity 29 c3dc8e99b74a872c
 class repr 44 05498afd46b71c74
-class wire 1 bdd9bda69823ada2
+class wire 1 c2339dfb88f9f6a8
 step 02 delete in a later region
 class value 253 fb4961541fadb698
 class identity 29 5aceed676e7a2338
 class repr 44 bca79e8a74623c3e
-class wire 1 beab5cf85cc920c4
+class wire 1 99583587985bb882
 step 03 narrower measure
 class value 253 04e6a7ba8030f158
 class identity 29 ca44acd710cdf981
 class repr 44 6a7730cc2b6e2bf9
-class wire 1 b11cdd419fb058ac
+class wire 1 2fd03e5ec1a0372c
 step 04 shorter regions
 class value 253 86127d264f667ab1
 class identity 29 11bbf2a104ab44ee
 class repr 44 7067cdd484459ee0
-class wire 1 f2068ea2c2e10e5f
+class wire 1 568865b6da67f1d7
 step 05 three columns, wider gap
 class value 253 319778797f0615b9
 class identity 29 b3a13620146757be
 class repr 44 0d5ddc95e1f9a7cc
-class wire 1 9957a89ed4b8bc19
+class wire 1 99f6ef25e6c7a094
 step 06 one region
 class value 253 2d7685cf0b490c5b
 class identity 29 b35fd762a99a045f
 class repr 44 26d6ff327eb94353
-class wire 1 e0f507a19b40bce7
+class wire 1 a8c5c36840a6bac0
 step 07 the starting regions
 class value 253 fb4961541fadb698
 class identity 29 62c81f1d420c5838
 class repr 44 bca79e8a74623c3e
-class wire 1 b4b2b56de89175e5
+class wire 1 04344e3cc4bbf0eb
 step 08 width 607
 class value 253 7fbcc49ef9792ae5
 class identity 29 d159047f2f47735c
 class repr 44 ebbdbffd5b507d1d
-class wire 1 8b6806a8b7572773
+class wire 1 32efc5a312db7a22
 step 09 width 607.0156
 class value 253 379beb10809aab86
 class identity 29 5cf17f1b595ac843
 class repr 44 a15aba50c701c07a
-class wire 1 0daea5914b5e38f6
+class wire 1 ba7eeafa95dd7ce3
 step 10 insert Foreign (10 units) at 398
 class value 253 f123452704073086
 class identity 29 27433524ab4b3225
 class repr 44 bbec333fa008e1f7
-class wire 1 7494254263d1339e
+class wire 1 a3d8e69638bdf022

@@ -24,7 +24,7 @@ stage public value 13 c67d02748c564e5f
 stage public identity 1 2ad2ff017860f003
 stage view identity 4 2582fcb2bb4e9f98
 stage view value 40 cd7892bc1977a734
-stage wire wire 1 7f458ad79f946cbf
+stage wire wire 1 937dac5293df7cb7
 stage gather identity 7 993aca606064d3eb
 stage gather value 36 a2012f79019520ae
 stage gpu identity 2 86c34ed1e43d83b0
@@ -36,45 +36,45 @@ class value 288 b7cbcdd4a44abaa6
 class identity 31 e90c868d6dbe96dc
 class repr 64 6d0e001b71a0ba42
 class cache 5 ab968f21cb7a4012
-class wire 1 6c68335e08b5d677
+class wire 1 6c89a6d2475626f2
 step 02 material swapped
 class value 288 13bcd3803332c947
 class identity 31 9c2991457cdf3bce
 class repr 64 6d0e001b71a0ba42
 class cache 5 ab968f21cb7a4012
-class wire 1 1eb2856d0475d830
+class wire 1 d78b9daa894fed5f
 step 03 underline on
 class value 300 54254aead116ea6f
 class identity 31 2f2d207d4fe9a2a0
 class repr 64 6d0e001b71a0ba42
 class cache 5 ab968f21cb7a4012
-class wire 1 499e0225f20bb101
+class wire 1 77162f40b93c657f
 step 04 material swapped under decoration
 class value 300 fa7c9b11ecc14416
 class identity 31 70563fc9b01dda23
 class repr 64 6d0e001b71a0ba42
 class cache 5 ab968f21cb7a4012
-class wire 1 92c1b524d0ae2a9d
+class wire 1 45f4e1c38f13a785
 step 05 underline off
 class value 288 757423e67d136882
 class identity 31 bd81570ec2fc2de5
 class repr 64 6d0e001b71a0ba42
 class cache 5 ab968f21cb7a4012
-class wire 1 c718aa679dba117f
+class wire 1 4b899fa5bd1518b4
 step 06 delete 3 at 79 + material of the root + decoration of the root
 class value 300 baf1c198826df851
 class identity 31 be4c641f78185868
 class repr 64 221ab2b54b31bab0
 class cache 5 135421ae73fc5dc2
-class wire 1 dd19d6d565f44459
+class wire 1 1a5beed5f6635fa7
 step 07 width 420.01563 + delete 4 at 186 + opacity of the root
 class value 300 b56634ff6ef0dda5
 class identity 31 eaf9b430d2bcba57
 class repr 64 56aedf5af44f4636
 class cache 5 b2a16ccd17593fd6
-class wire 1 b90c0c5684357dac
+class wire 1 53fd2852301bf429
 step 08 delete 200 at 13
 class value 265 1f4d42f7ceb3f427
 class identity 29 2cc64d24f2bb821a
 class repr 41 9112c25319b44da4
-class wire 1 d2a197feddfcc26a
+class wire 1 782ad8e6eb44ed30

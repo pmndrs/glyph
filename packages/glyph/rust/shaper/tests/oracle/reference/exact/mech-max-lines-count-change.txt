@@ -24,7 +24,7 @@ stage public value 13 7e06a0f3f449d540
 stage public identity 1 8d30a0eb48126d14
 stage view identity 4 8959839ef0638c09
 stage view value 40 7fad22e4f4674912
-stage wire wire 1 a9b3a4573776941e
+stage wire wire 1 c9bcba46bfebdebe
 stage gather identity 7 84f6c268a4c0c66d
 stage gather value 36 4864fe7248647cc7
 stage gpu identity 2 f2e29aa5ab43293a
@@ -34,34 +34,34 @@ class value 230 ba470d708a346c18
 class identity 22 833780f7fd29fd69
 class repr 44 dc8f71cb435e1b09
 class cache 5 5d81e22640576ca3
-class wire 1 c92f5a5d0cdf4434
+class wire 1 6683fa328a193594
 step 02 two edits in one request, over the limit
 class value 266 c427c0123f146fe8
 class identity 24 2951df3eb70b049b
 class repr 64 673023b045028888
 class cache 5 7cb63a456530cfbe
-class wire 1 8faeaa359d1ea159
+class wire 1 79bb88ab3c3301a1
 step 03 raise the limit
 class value 230 021d026c198d4bc4
 class identity 22 24c1f200e2f3abdd
 class repr 44 231587889f680f9f
 class cache 5 7cb63a456530cfbe
-class wire 1 01aa15ce525ea717
+class wire 1 edfe24d21e1dda3b
 step 04 insert HardBreak (1 units) at 11
 class value 265 d3f21bb10583e05f
 class identity 24 6f5d3f3a162204f5
 class repr 64 d423a1c16c94cf0a
 class cache 5 ba9f86dc411f0161
-class wire 1 f72334d4fc71dc20
+class wire 1 a528de5bf92466ba
 step 05 metrics size 16 spacing 0 line 1.2 word 0
 class value 245 e798a15455ea828a
 class identity 22 c263d4dd15ab932f
 class repr 64 d423a1c16c94cf0a
 class cache 5 ba9f86dc411f0161
-class wire 1 613b3b92a0235ef4
+class wire 1 7c302c2aabd1c4ac
 step 06 insert Word (2 units) at 248 + insert HardBreak (1 units) at 243 + replace 3 at 32 + max lines 3
 class value 230 2148859a1310025c
 class identity 22 0d48307fcb97178c
 class repr 44 983229dfcccfa77d
 class cache 5 62f9280ccc167138
-class wire 1 8a1c8bd0edf907b4
+class wire 1 bc2a4cb3c0952454

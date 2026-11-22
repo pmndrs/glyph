@@ -23,7 +23,7 @@ stage public value 13 787baecfcfd61f30
 stage public identity 1 6ade88c09c906ed6
 stage view identity 4 29faa2d94ddb628f
 stage view value 40 46354375a3d23da3
-stage wire wire 1 10f0079b6fc72026
+stage wire wire 1 92ff7b57d78160ff
 stage gather identity 7 5a9fe3b3493627a7
 stage gather value 36 7e48dbdcfcc03763
 stage gpu identity 2 94920704f134b666
@@ -32,14 +32,14 @@ step 01 metrics size 16 spacing 0 line 1.2 word 0
 class value 246 d703f8822c518757
 class identity 22 6fab61db97356474
 class repr 61 6153ed7e95f9acd2
-class wire 1 f72166e21bcf4e04
+class wire 1 e6719149d6032289
 step 02 width 119
 class value 266 52c696d83b276bea
 class identity 24 384e8e8ac025ab44
 class repr 61 6153ed7e95f9acd2
-class wire 1 96e7e2c6359dbe4d
+class wire 1 d78cad12e4fbc324
 step 03 width 126 + max lines 3 + replace 1 at 42 + insert SpacedWord (4 units) at 27
 class value 230 6c4194a9084abb76
 class identity 22 98e9cb7ec9e35cfe
 class repr 41 d4b442964b6b3b27
-class wire 1 a8d43c7350685aae
+class wire 1 6d23d2d0592e5785

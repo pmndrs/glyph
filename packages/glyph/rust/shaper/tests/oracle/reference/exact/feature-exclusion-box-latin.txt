@@ -22,7 +22,7 @@ stage public value 13 66174965aac77b92
 stage public identity 1 3fc56f88fc243bf4
 stage view identity 4 4164fa992fae75a8
 stage view value 40 ee2d270364348cad
-stage wire wire 1 2aa5ee6ecb4ddbd2
+stage wire wire 1 3d33df96ba0a1373
 stage gather identity 7 9f1faba5b00e8222
 stage gather value 36 78323b7f6f66a98c
 stage gpu identity 2 e0c194e17a126eed
@@ -32,16 +32,16 @@ class value 266 fa53eb7f7482ee62
 class identity 24 ae8bc7cb9780ea37
 class repr 64 1bb8f999d7430619
 class cache 3 cb18201ad8c33652
-class wire 1 c77fbd962405ffea
+class wire 1 1d94d2e5226a864a
 step 02 add span 1550..1584 + align 1 + delete 1 at 1413
 class value 266 c6c3b1460d7d9efc
 class identity 24 05d13c9369d88763
 class repr 64 25db312247752511
 class cache 3 1c623aa26df13098
-class wire 1 a62bfb5f14f83725
+class wire 1 75c981d2f947e146
 step 03 delete 3 at 780 + width 0
 class value 266 7071e63fc630a158
 class identity 24 b5b26bd2a9c68d3d
 class repr 64 b99f754dfaf379a5
 class cache 3 2cae2f87056c81a2
-class wire 1 1a170d6d9d6b07b6
+class wire 1 47eab29d25b1a21a

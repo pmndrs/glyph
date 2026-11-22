@@ -23,7 +23,7 @@ stage public value 13 3e62f9e344413252
 stage public identity 1 3beca43766132627
 stage view identity 4 af458e9eff58ab8c
 stage view value 40 442e9203801011d0
-stage wire wire 1 dca1d45551993111
+stage wire wire 1 0b7234ff176af053
 stage gather identity 7 9b42d06262444b9b
 stage gather value 36 b76de2bb69ab48f1
 stage gpu identity 2 6b2a18c4624839dd
@@ -34,34 +34,34 @@ step 01 insert in the first region
 class value 269 cdc4fb2bdc4c89b3
 class identity 29 267fc372a9dc79fc
 class repr 64 362c5485398dc408
-class wire 1 e1f2061ca16f6d74
+class wire 1 500f9b68e46a1e42
 step 02 delete in a later region
 class value 269 77ccd37166104dad
 class identity 29 ae21049b28419836
 class repr 64 e5455abf71ec29ee
-class wire 1 5e9b5d18687427e2
+class wire 1 a46a23bf00da5cf6
 step 03 narrower measure
 class value 269 8726b8355285c43b
 class identity 29 b3d8886e8a9bc822
 class repr 64 11d7ea7b7b277f0f
-class wire 1 a7b6adfa6abba90a
+class wire 1 fcbb55af01736987
 step 04 shorter regions
 class value 269 f53e0d33f4e7baef
 class identity 29 5bb524368c194dc2
 class repr 64 4faf3615c2981982
-class wire 1 72bf14e4046563e7
+class wire 1 39422e0ecb89522e
 step 05 three columns, wider gap
 class value 269 d915571140c75967
 class identity 29 f0960121afd9d5ef
 class repr 64 abbb70f8c69ba485
-class wire 1 ed4f5d892c37a37e
+class wire 1 f95082bc89c35d45
 step 06 one region
 class value 269 10b128c9041aa228
 class identity 29 50c7b3f54c16600d
 class repr 64 d6f206576b32d1da
-class wire 1 3e8bd491dd6995c5
+class wire 1 d6a0f613957f14a8
 step 07 the starting regions
 class value 269 77ccd37166104dad
 class identity 29 7408300184cd6cb7
 class repr 64 e5455abf71ec29ee
-class wire 1 838c56ecb0c05d23
+class wire 1 b382c035e25b0da8

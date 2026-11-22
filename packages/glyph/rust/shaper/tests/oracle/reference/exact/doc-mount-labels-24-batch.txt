@@ -481,7 +481,7 @@ stage p23:view identity 2 ca5b3e1d97a1f1ce
 stage p23:view value 20 f94664ec97f2ad95
 stage p24:view identity 2 df9ac171fb00cf15
 stage p24:view value 20 0677d994736aaf37
-stage wire wire 1 9ac226e4c869a9cb
+stage wire wire 1 c153aa9bd2185995
 stage gather identity 7 09e10b892e0a4b6f
 stage gather value 36 f4edc50bee3c8b3c
 stage gpu identity 2 8588cc8550873479
@@ -493,9 +493,9 @@ step 01 edit the last paragraph
 class value 4209 878fb799a0ccb0a8
 class identity 284 3ad6bd5c7bddc27d
 class repr 984 9245468bbe8399a7
-class wire 1 714a4f24042143f0
+class wire 1 cbf27b9a2651f95d
 step 02 nothing changes
 class value 4189 e313291397c039f8
 class identity 282 3f53fc18f22bf3ea
 class repr 984 9245468bbe8399a7
-class wire 1 901c14c35beecce9
+class wire 1 28cabc547af1be5b

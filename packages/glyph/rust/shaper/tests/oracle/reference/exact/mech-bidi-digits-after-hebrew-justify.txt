@@ -21,7 +21,7 @@ stage public value 13 29a7401d360b9d2e
 stage public identity 1 3708d9bde4875dcd
 stage view identity 4 c770d4332c3d7ab5
 stage view value 40 dade84ff732423bd
-stage wire wire 1 fa89a5c578eb649b
+stage wire wire 1 c77b27fd7510c3cf
 stage gather identity 7 648cf4ea41a5e88a
 stage gather value 36 a841e421fac9aa11
 stage gpu identity 2 94df24363efff5c5
@@ -31,9 +31,9 @@ class value 230 ed36a753944b54a3
 class identity 22 5daa855150f66ae2
 class repr 41 e87998a415bcbaac
 class cache 5 62de11a5818d0afd
-class wire 1 d02967383381e878
+class wire 1 f4611b6bf9fd6f56
 step 02 restore
 class value 230 1a3ed363ceb91db9
 class identity 22 a9d850ce964394d1
 class repr 41 32bd3815b4f7d057
-class wire 1 a42aac55c767115b
+class wire 1 eb48c59ca311c2d2

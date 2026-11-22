@@ -21,7 +21,7 @@ stage public value 13 389f1663aec43d46
 stage public identity 1 6ac9f39dd39f5caf
 stage view identity 4 9f0f706bf5028c80
 stage view value 40 8f9be4d9e83e1aaf
-stage wire wire 1 c9427e1a4b2e0291
+stage wire wire 1 76cc8daacc8fb47b
 stage gather identity 7 57f36af1c1d0bccc
 stage gather value 36 4a82f7ccb0e13716
 stage gpu identity 2 90b551cf3587bfad
@@ -30,34 +30,34 @@ step 01 width 417
 class value 230 359ced225beb25be
 class identity 22 206d059b2fe6d3cd
 class repr 44 418e5e9c4dc440cf
-class wire 1 4a3b656598752990
+class wire 1 782fb5ccebe50428
 step 02 width 418
 class value 230 df7bfb4ed116cee8
 class identity 22 206d059b2fe6d3cd
 class repr 44 418e5e9c4dc440cf
-class wire 1 2fc8f78c1c8f3624
+class wire 1 5e0f3f3dcad455a8
 step 03 width 233.5
 class value 230 f633281478a06a10
 class identity 22 5df0c3db791f8f98
 class repr 44 304f2ebfa7331806
-class wire 1 254b4f7a3860a260
+class wire 1 b51ccb9826dcb9fe
 step 04 width 600
 class value 230 a2a4ce78f4ba976d
 class identity 22 06eee11d330d9948
 class repr 44 936a915a09701a2d
-class wire 1 51fc5e41c9b03c50
+class wire 1 ea43e1742580bee4
 step 05 delete 3 at 784
 class value 230 9e094ec4729e1372
 class identity 22 7bb5721d861987eb
 class repr 44 cd93c1f5b5d2b829
-class wire 1 00da7a2204cacafb
+class wire 1 cb4fc772ac3f1e42
 step 06 insert SpacedWord (11 units) at 2666
 class value 230 63c62f3fbd86b20b
 class identity 22 3765968b9e269ac9
 class repr 44 d96f0de5a3421d71
-class wire 1 a8fa50c5c038c73a
+class wire 1 55fd4158c415c85c
 step 07 insert HardBreak (1 units) at 1668
 class value 230 7eaece86b118cf69
 class identity 22 5095f4cd385977a0
 class repr 44 a4f5029733eb8e89
-class wire 1 6fa133a11afb09c1
+class wire 1 e30fa5ad368277e8

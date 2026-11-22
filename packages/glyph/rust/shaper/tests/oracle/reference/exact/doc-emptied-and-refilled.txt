@@ -41,7 +41,7 @@ stage view identity 4 6febe55fb4844682
 stage view value 40 a88e28533eb49929
 stage p2:view identity 2 e49feed775e6513d
 stage p2:view value 20 fd79a0ab2525f226
-stage wire wire 1 8d5898722840694f
+stage wire wire 1 690ec4a98390b97b
 stage gather identity 7 ccca2718e955dd8c
 stage gather value 36 01d60544095da5cd
 stage gpu identity 2 2f5a16090b667a49
@@ -50,11 +50,11 @@ stage plan value 23 c6fac25bf3f88c92
 stage plan identity 7 e4589a0e40621213
 stage doc value 3 78f7e067128eb5cb
 step 01 remove every paragraph
-class wire 1 cceaffe44f844cb4
+class wire 1 0649ab69cbd3b11a
 class identity 1 0b15778fb54f5b80
 class value 1 16373847b11b5f2e
 step 02 nothing, on an empty root
-class wire 1 a936ab69eca40f59
+class wire 1 fbb592b5158a9110
 class identity 1 0b15778fb54f5b80
 class value 1 16373847b11b5f2e
 step 03 three new paragraphs
@@ -62,4 +62,4 @@ class value 538 75c429a9b5cffc87
 class identity 45 fca300848de8d47b
 class repr 129 30be3287fadc7f8c
 class cache 3 bd7bf1e48747bc49
-class wire 1 244ce82c5df934c4
+class wire 1 f32d78035dabf094

@@ -21,7 +21,7 @@ stage public value 13 f439455f1254edcf
 stage public identity 1 e4c904a53c6f08f5
 stage view identity 4 751dd6842107984e
 stage view value 40 e152c8a4ff5fcd15
-stage wire wire 1 bf981068d050401f
+stage wire wire 1 7698f09437eb4e17
 stage gather identity 7 9028fb20acd9ea44
 stage gather value 36 f23f41624e7fdbcc
 stage gpu identity 2 35f861df241fa41c
@@ -30,24 +30,24 @@ step 01 Cyrillic to Latin
 class value 230 2c2d90d22a55d95a
 class identity 22 dc5f929b8fc7d66d
 class repr 41 4529298752991650
-class wire 1 90debac3b9d802d6
+class wire 1 eb2d1fbda1444636
 step 02 restore
 class value 230 9d324992168b8b3e
 class identity 22 04a422a787c524f0
 class repr 41 d86c35e8dc00e9a4
-class wire 1 77df0fd9a0d96412
+class wire 1 0010ad2a4d899bed
 step 03 replace 1 at 0
 class value 230 54953e32760e5788
 class identity 22 60541a09ff934a89
 class repr 41 dbf56ed7d83d04e6
-class wire 1 5f4fb76ac5a0a9fd
+class wire 1 356cb2a4e6b3111e
 step 04 width 247.75
 class value 230 6a0a42e533c22293
 class identity 22 60541a09ff934a89
 class repr 41 dbf56ed7d83d04e6
-class wire 1 0e3cddf87c078d6c
+class wire 1 4c7073a829085822
 step 05 insert HardBreak (1 units) at 6 + delete 5 at 3 + insert SpacedWord (8 units) at 3
 class value 230 14284cc10ee4079e
 class identity 22 93c32c2f1892cac2
 class repr 41 4743243843e711cb
-class wire 1 091cadb9a50a8079
+class wire 1 5339db2e7fea4f29

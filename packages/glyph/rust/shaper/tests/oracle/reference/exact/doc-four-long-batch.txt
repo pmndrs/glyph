@@ -84,7 +84,7 @@ stage p3:view identity 2 50e1ce189416d6bc
 stage p3:view value 20 099c253c9d893c81
 stage p4:view identity 2 95324d148e0bf5d1
 stage p4:view value 20 02afabd07155934e
-stage wire wire 1 b6ad91d73146a147
+stage wire wire 1 ce460ccd42a02b39
 stage gather identity 7 cc25a53272dfb63c
 stage gather value 36 94b2a9861795b691
 stage gpu identity 2 3a14348736b20ffc
@@ -97,63 +97,63 @@ class value 824 39abd29335c0954a
 class identity 66 1407b31d5ceb488f
 class repr 193 e1d217b92df23ae1
 class cache 5 e7ec200ce8b8908d
-class wire 1 e83ad49e69559590
+class wire 1 bce24f59504c1e19
 step 02 edit all four
 class value 824 b045d4f5b0c1c24d
 class identity 66 ec4c5a9abf58226e
 class repr 193 ae24c8ffdf1d8ba3
 class cache 5 4cb87809ff087c60
-class wire 1 a0a8c4976113d495
+class wire 1 b501bb73689f17cf
 step 03 narrow paragraph 3, edit paragraph 4
 class value 824 52e7abd61153cd98
 class identity 66 8fc9a029420d017e
 class repr 193 28c364bc196c28b0
 class cache 5 72ec9ccf70f4b2d6
-class wire 1 c355f6ba1650d8a2
+class wire 1 c8342c7a54f17c01
 step 04 move paragraph 1 last
 class value 804 510590dfe3cad7dc
 class identity 64 010bbadebbaecfea
 class repr 193 28c364bc196c28b0
 class cache 5 72ec9ccf70f4b2d6
-class wire 1 788ce78db79bcb36
+class wire 1 0199a40e0a3e1236
 step 05 rank paragraphs 1 and 4 in a scope
 class value 804 510590dfe3cad7dc
 class identity 64 010bbadebbaecfea
 class repr 193 28c364bc196c28b0
 class cache 5 72ec9ccf70f4b2d6
-class wire 1 f77f714d2f21012d
+class wire 1 72f745eab8c5676f
 step 06 remove paragraph 3
 class value 618 aa9f5290afab61c1
 class identity 53 9c3b5ab55664becb
 class repr 132 27e95a03faed14dd
-class wire 1 11a1adc1cd88ef4e
+class wire 1 994d8c608aee8e45
 step 07 add paragraph 5
 class value 789 9e7ec6e8434ff7ce
 class identity 64 bbe7ebf8ad3df363
 class repr 176 8a755c5e9fcdd3c9
-class wire 1 64be4b35e1f801d9
+class wire 1 e9a4eb5da6556ebf
 step 08 remove 2, add 6, edit 4
 class value 789 700d3046d4eb8986
 class identity 64 7b2ffbfe211a6fda
 class repr 173 a8742e4912325f75
-class wire 1 195596556cdb6883
+class wire 1 aad67f9615c09283
 step 09 nothing changes
 class value 769 bb3e8c44a22515fc
 class identity 62 5d4ed8d13234d79d
 class repr 173 a8742e4912325f75
-class wire 1 4b8f6977e57a9133
+class wire 1 7aca8ea3d3e7dde6
 step 10 paragraph 5: insert Bidi (1 units) at 194
 class value 769 badd51b527680d68
 class identity 62 4ac5ac6bf0443f31
 class repr 173 d7caeda334bbc57e
-class wire 1 cec3e0fb1434bfb4
+class wire 1 78f3a7ff11499e9a
 step 11 paragraph 6: width 607 + replace 1 at 26 + insert Word (6 units) at 0 + replace 2 at 78 + add paragraph 7 + paragraph 1: width 672.75 + paragraph 4: width 419 + paragraph 5: direction 1 + paragraph 6: metrics size 16 spacing 0 line 1.2 word 3 + delete 2 at 0 + add span 47..61 + direction 0 + paragraph 7: align 2
 class value 940 b87bf9b390b60f15
 class identity 73 ccadcb2ad939bcb8
 class repr 217 745f69bb4734f32e
-class wire 1 2634be054665e9bd
+class wire 1 18a5dfdf5faecbb0
 step 12 rank paragraph 7 0/0
 class value 920 d7740256b92d4023
 class identity 71 e77f815cd5c943c8
 class repr 217 745f69bb4734f32e
-class wire 1 89e0e740c82d2eaa
+class wire 1 e26dca133c86f3c0

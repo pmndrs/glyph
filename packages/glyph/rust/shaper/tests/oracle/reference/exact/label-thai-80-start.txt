@@ -21,7 +21,7 @@ stage public value 13 40434ff10c36b4a8
 stage public identity 1 68d4ee1cd07642cc
 stage view identity 4 2aa6f5d399954e72
 stage view value 40 167f67499b1276f1
-stage wire wire 1 f30cb39abe5d9cdf
+stage wire wire 1 c3aaf14a2a57da96
 stage gather identity 7 fab517573e89ca52
 stage gather value 36 e7c6b223f38eb28f
 stage gpu identity 2 5e9eebcd40a7a6b1
@@ -30,11 +30,11 @@ step 01 direction 2
 class value 230 be18314315b6ea8f
 class identity 22 a708ec8bb3ea8ff6
 class repr 44 06f5288f8004bc6a
-class wire 1 1727f940bd01f9ce
+class wire 1 5d326666886b41c1
 step 02 insert SpacedWord (192 units) at 43 + insert SpacedWord (11 units) at 0 + width 267 + delete 1 at 179
 class value 230 cc10b6c7e643b704
 class identity 22 6bdbd8e01e8469de
 class repr 44 7bc01f2071734f69
-class wire 1 c96303378c47c8d1
+class wire 1 d68213acca3c8afa
 step 03 insert Word (4 units) at 141 + insert HardBreak (1 units) at 142
 rejected prepare: InvalidRequest

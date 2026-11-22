@@ -21,7 +21,7 @@ stage public value 13 69abd5021d1e0052
 stage public identity 1 36589ec349b92d55
 stage view identity 4 f957c84202a9f940
 stage view value 40 bc1fb6d35483eac9
-stage wire wire 1 ca4a7cc53f8194f0
+stage wire wire 1 909559e1902df038
 stage gather identity 7 08f963a09e9b9cdf
 stage gather value 36 f60aa2ff66cecab7
 stage gpu identity 2 28898cdba2c67804
@@ -30,24 +30,24 @@ step 01 join two people
 class value 230 7a62e86b6bda7e41
 class identity 22 4d26798d5f95e50c
 class repr 41 f4a64e624973a65e
-class wire 1 3844333014787263
+class wire 1 a3e18991086614e3
 step 02 restore
 class value 230 50e46aefd7a2c297
 class identity 22 e3ff4d1205ae019e
 class repr 41 2f2e978adcbde66a
-class wire 1 29598e82f6ac97a3
+class wire 1 bd69b10dcbf33920
 step 03 insert Foreign (6 units) at 158 + insert Space (1 units) at 286 + delete 3 at 99 + metrics size 16 spacing 0 line 1.2 word 3
 class value 230 968c776e4e9f0027
 class identity 22 e3e139c59329f8e6
 class repr 41 6c8200a596e98061
-class wire 1 579663becba7663b
+class wire 1 a7b392f9b3637540
 step 04 insert Mark (1 units) at 20
 class value 230 6396e54b67ad45c1
 class identity 22 9b7bc82d372b3796
 class repr 41 441ae107cf4359d6
-class wire 1 e746789b44043d55
+class wire 1 87e47a47323616aa
 step 05 direction 1 + insert Space (1 units) at 144
 class value 230 e508adaafd03c14f
 class identity 22 8f5c032551112d36
 class repr 41 0b5483949ed6c4c2
-class wire 1 3f6239eab3d81f4f
+class wire 1 ed5bfa9d74911536

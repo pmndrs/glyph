@@ -21,7 +21,7 @@ stage public value 13 2d5f90b15e149474
 stage public identity 1 8db892aa8a87db79
 stage view identity 4 f809f631f9577d9f
 stage view value 40 497537f0c09a5d1c
-stage wire wire 1 f95bd197d9a6a854
+stage wire wire 1 cf85627a21ae061e
 stage gather identity 7 18845cdcc65cd65e
 stage gather value 36 e2ae62749235310e
 stage gpu identity 2 0cb69fa535edb0d9
@@ -30,9 +30,9 @@ step 01 join a conjunct
 class value 230 ed96cb64b65cec5c
 class identity 22 1e6ee212a40cf903
 class repr 44 892b80eed302e2c9
-class wire 1 c3aa59af931a8ff6
+class wire 1 c9d2d6b2ccfa0a95
 step 02 restore
 class value 230 7fb0c605f63a0f60
 class identity 22 6aeefcde1b4266f5
 class repr 44 6562ec309fe4e7f0
-class wire 1 8b4ed587b6375716
+class wire 1 fd5c60f8ca3f9c9c

@@ -21,7 +21,7 @@ stage public value 13 4ee1f573d201ffc5
 stage public identity 1 29571feabe629a3d
 stage view identity 4 b7d522c5ca1660c8
 stage view value 40 3afe622d98ce61b4
-stage wire wire 1 c7f25986c0062a2c
+stage wire wire 1 157ac46f32a5d084
 stage gather identity 7 2119847128e8d346
 stage gather value 36 e56ef83d50e47050
 stage gpu identity 2 f4cadb2f7e1c1241
@@ -30,9 +30,9 @@ step 01 strip the keycap
 class value 230 2712bc0ef74e2e5f
 class identity 22 2ab17bdcc077b57a
 class repr 41 ef5ca4c718a2d996
-class wire 1 5db88153e4b21b62
+class wire 1 b2c5ecb348e79459
 step 02 restore
 class value 230 90b1b07ec06de4f5
 class identity 22 1d2051c6f677874c
 class repr 41 c54889a606bb0545
-class wire 1 7a2505a8d4b350f3
+class wire 1 73898197e4790006

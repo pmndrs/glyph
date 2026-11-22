@@ -15,7 +15,7 @@ stage public value 13 0073e209450629ad
 stage public identity 1 a7565d089b77c68d
 stage view identity 4 1214032c5184c4a2
 stage view value 40 2c36ba31d1530b11
-stage wire wire 1 cfa04b2b985fc23a
+stage wire wire 1 f37352e3c1b62cd2
 stage gather identity 7 850d47eb73e2c483
 stage gather value 36 2f8015f9c5ede1c6
 stage gpu identity 2 68fc66a75be58a57
@@ -26,24 +26,24 @@ step 01 shadow on
 class value 233 3b3a6dc0b33a5b47
 class identity 27 4594fef1474126fa
 class repr 41 b6b254b9129b61de
-class wire 1 4157b93085a6f6b0
+class wire 1 94644a64afc43f2a
 step 02 moved
 class value 233 03bec47b0240f0f5
 class identity 27 b26e3b390328d1a2
 class repr 41 b6b254b9129b61de
-class wire 1 7ab2b0ecf3288566
+class wire 1 6889dcc9c8c868ab
 step 03 recolour and same-length edit
 class value 233 996cd761400e089a
 class identity 27 a0e1dc7a02cc819a
 class repr 41 f4affac3e2fb1754
-class wire 1 06def9a0286e9886
+class wire 1 8212c8ed505a7bd6
 step 04 shadow off and edit
 class value 233 0a61fdb28380fcc6
 class identity 27 b199380961df5ffb
 class repr 41 ec71269b67054192
-class wire 1 d87cf21c820ed5c3
+class wire 1 b77958319ceb34f0
 step 05 shadow and outline on
 class value 233 501f34cb57f55b13
 class identity 27 a806f31d19122d4e
 class repr 41 ec71269b67054192
-class wire 1 73c0827c6efa8e55
+class wire 1 1485eb364e4cb1c5

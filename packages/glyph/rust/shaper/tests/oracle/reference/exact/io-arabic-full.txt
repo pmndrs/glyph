@@ -21,7 +21,7 @@ stage public value 13 b6a85cd409925c03
 stage public identity 1 439e606845cfd80b
 stage view identity 4 a5a25d18841c291d
 stage view value 40 92e8e580ddd996e2
-stage wire wire 1 30439b0819cf8afc
+stage wire wire 1 57e67686381a8973
 stage gather identity 7 a06cdc106a1e2f1c
 stage gather value 36 18fc44bd7379692d
 stage gpu identity 2 c2b5b1e1fb6a8bcc
@@ -32,49 +32,49 @@ step 01 add one at the end
 class value 253 5a2f80c93e8f4a9f
 class identity 29 880677912f4f7642
 class repr 44 435f8337521f7bba
-class wire 1 000f12bcc1db088c
+class wire 1 4c7d3189ef069e8d
 step 02 move and grow the middle one
 class value 253 5a2f80c93e8f4a9f
 class identity 29 880677912f4f7642
 class repr 44 435f8337521f7bba
-class wire 1 4e4cc9c00758380f
+class wire 1 cef56560fb6e3aeb
 step 03 align to the text top with margins
 class value 253 5a2f80c93e8f4a9f
 class identity 29 880677912f4f7642
 class repr 44 435f8337521f7bba
-class wire 1 224423b44ec2bc48
+class wire 1 4cbea7c5ea2a165f
 step 04 edit the text and leave the objects
 class value 253 871d6c71845c36c2
 class identity 29 29b3d1cc3588d832
 class repr 44 9d3e5268fc3ab8bf
-class wire 1 6d254e53f55e7ff6
+class wire 1 2ddd214216bb9acf
 step 05 narrow the measure and re-anchor
 class value 253 df8cb24f517500c3
 class identity 29 5921a0bbe5cb4256
 class repr 44 eee3b3a3750706b0
-class wire 1 3a01d22f3812b6c4
+class wire 1 8304e04f4a648948
 step 06 remove every object
 class value 253 df8cb24f517500c3
 class identity 29 5921a0bbe5cb4256
 class repr 44 eee3b3a3750706b0
-class wire 1 0d8ca1bbd91f2575
+class wire 1 389c3663e9c0b0b0
 step 07 put two back
 class value 253 df8cb24f517500c3
 class identity 29 5921a0bbe5cb4256
 class repr 44 eee3b3a3750706b0
-class wire 1 0eb80ff6f5e77935
+class wire 1 835506986e4fafcf
 step 08 insert Mark (1 units) at 84 + delete 8 at 17 + insert Bidi (1 units) at 0 + direction 1
 class value 253 ee44b2c946dabb32
 class identity 29 f04659f34fdcda75
 class repr 44 e957fe4c727d5ac4
-class wire 1 da4b9c0d1a1888b6
+class wire 1 e47489dfb2f816e8
 step 09 remove an inline object + insert Foreign (5 units) at 0 + delete 3 at 114 + add an inline object at 64
 class value 253 2a059d7ea561b702
 class identity 29 df827ac320708de3
 class repr 44 ff0e70749b1f9151
-class wire 1 0cd5e899ebf1c599
+class wire 1 7d567abe4a4a4a32
 step 10 direction 1 + delete 16 at 148 + add span 31..59
 class value 253 7cc3db6a39f9bcae
 class identity 29 3b392e80dd628ae2
 class repr 44 906c2ba5730285ee
-class wire 1 c9a278c98dbd94a6
+class wire 1 8e6a4f300d46993d

@@ -21,7 +21,7 @@ stage public value 13 b9af00bbc0557a6c
 stage public identity 1 8923b1f0f3246d5b
 stage view identity 4 7cfbe685080095d4
 stage view value 40 48fabac2732a7d26
-stage wire wire 1 4989b5c677121dc7
+stage wire wire 1 7d183363fea202de
 stage gather identity 7 97896837e465f14d
 stage gather value 36 6120e976142610e2
 stage gpu identity 2 2eb6985a7e49606e
@@ -30,14 +30,14 @@ step 01 add span 43..47
 class value 242 011af78a779ff8b2
 class identity 22 53b172d402294517
 class repr 41 bfe9d8b0890323eb
-class wire 1 ceb280b9f825edf9
+class wire 1 559b6eec8990a1b2
 step 02 delete 4 at 27
 class value 242 9d9d77d453ecb83d
 class identity 22 749adcb4c5de45e5
 class repr 41 232391207e3d0373
-class wire 1 58e79d6591015e8a
+class wire 1 965136ca42127a99
 step 03 width 248.25 + delete 8 at 13 + insert Bidi (1 units) at 24
 class value 242 06972b23eb15c989
 class identity 22 0cd6f06d2a6b89db
 class repr 41 84d05ef90bea6b26
-class wire 1 72bfe9c9ba24b3bd
+class wire 1 3281bdb529181aa5

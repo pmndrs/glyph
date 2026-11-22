@@ -21,7 +21,7 @@ stage public value 13 5f24acfa150ae3a2
 stage public identity 1 ccca36f281109269
 stage view identity 4 3ff9082a0bd48da3
 stage view value 40 e8451c218988ff07
-stage wire wire 1 b38eed534936ba0a
+stage wire wire 1 a5838b8e82e01355
 stage gather identity 7 242538a79afcffa9
 stage gather value 36 1b29781bc0dad77b
 stage gpu identity 2 f6aff1f18f2cf462
@@ -30,24 +30,24 @@ step 01 capitalize
 class value 230 2387686faec85b82
 class identity 22 eec4822d1d5accca
 class repr 41 c69f298079bc4762
-class wire 1 a23acae09610d31b
+class wire 1 88d904358dd1d074
 step 02 restore
 class value 230 69a7a89980b5b345
 class identity 22 81a60478c77b3911
 class repr 41 c1406ac58efb9aea
-class wire 1 e617102446dfd5d7
+class wire 1 9262091554f5a2aa
 step 03 add span 12..13
 class value 242 60d72be8e0dc5afc
 class identity 22 0b46634b94be4ef5
 class repr 41 c1406ac58efb9aea
-class wire 1 e5b50ce25ee9d9e5
+class wire 1 a580bf99d9c69ea0
 step 04 flip case at 4 + insert Word (8 units) at 11 + insert Space (1 units) at 21
 class value 242 0b63bca37c69d8e1
 class identity 22 be906f262873e48f
 class repr 41 5813450b00c7d48c
-class wire 1 b0c79ac2e0c8a2da
+class wire 1 88e38f5f763d639d
 step 05 insert Mark (1 units) at 17 + direction 2 + insert HardBreak (1 units) at 23 + flip case at 0
 class value 242 5ff96d549f8d5e61
 class identity 22 f7935549ea58ca3c
 class repr 41 235be7659d4a4475
-class wire 1 5b4ea9667bdf9ac6
+class wire 1 d2d97bfcdec3d809

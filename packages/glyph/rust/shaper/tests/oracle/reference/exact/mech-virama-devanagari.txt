@@ -21,7 +21,7 @@ stage public value 13 943c859d73ff34c2
 stage public identity 1 8db892aa8a87db79
 stage view identity 4 f809f631f9577d9f
 stage view value 40 25546179f9d3b6a6
-stage wire wire 1 c6369aa19eb60a6c
+stage wire wire 1 c3d5d1c03e165c44
 stage gather identity 7 18845cdcc65cd65e
 stage gather value 36 02eba1d53a33b351
 stage gpu identity 2 0dd20fdbfa99e34f
@@ -30,24 +30,24 @@ step 01 join a conjunct
 class value 230 becb531eb4f18e94
 class identity 22 190c1b75fbbb2f5d
 class repr 44 c6b7c852a349a6e1
-class wire 1 7afba6d4ce841a2b
+class wire 1 876fa84e652d7980
 step 02 restore
 class value 230 ecd70ff9dfb33c50
 class identity 22 9aa383360b145ae6
 class repr 44 bda88cdfb04d6cfd
-class wire 1 1f25d443917c40ad
+class wire 1 6708471a2b5f6534
 step 03 max lines 3
 class value 266 7c51137d27bb489b
 class identity 24 bf409afbc89a5406
 class repr 64 c6b27d044964b1c3
-class wire 1 baa27ec2d399b669
+class wire 1 3081c85124326b50
 step 04 delete 4 at 383 + width 382.75 + insert HardBreak (1 units) at 205
 class value 266 7d295776c6f7f248
 class identity 24 07f4a0b1df126eb8
 class repr 64 0326fd83a73a4d21
-class wire 1 3ab42757999a17d3
+class wire 1 ac7caf40ad8878ab
 step 05 width 349.75
 class value 266 7519a7e17c1cfd8d
 class identity 24 6879aeb3b2c962d1
 class repr 64 81baf3c1811ac0b7
-class wire 1 33b802c7af96d77d
+class wire 1 84e3c9b5577c26e8

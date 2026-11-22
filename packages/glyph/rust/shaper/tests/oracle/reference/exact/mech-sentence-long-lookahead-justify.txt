@@ -21,7 +21,7 @@ stage public value 13 06896ada076685ec
 stage public identity 1 16bd730417308b79
 stage view identity 4 476dafeba0104d48
 stage view value 40 194d8225f8e550ec
-stage wire wire 1 bfad63810d56385c
+stage wire wire 1 03020062a20e440f
 stage gather identity 7 9344d665fd181678
 stage gather value 36 44dc72426553b6ec
 stage gpu identity 2 384444f358253e4f
@@ -30,9 +30,9 @@ step 01 capitalize
 class value 230 1bab8d37b7ac8fd6
 class identity 22 7b62eaca66a1f77f
 class repr 44 421def8e2c278d98
-class wire 1 90a0e0d938887348
+class wire 1 29afbb154e4789d7
 step 02 restore
 class value 230 32a55ede7779acd0
 class identity 22 8616df446b899224
 class repr 44 e3cbc31e3be44fa5
-class wire 1 05f4e45766e8218e
+class wire 1 7385f38ef4901ae7

@@ -21,7 +21,7 @@ stage public value 13 bc2dff8797e65d66
 stage public identity 1 2202abde84a7060c
 stage view identity 4 bb6cf02c8d71b93c
 stage view value 40 0bb5938377edd391
-stage wire wire 1 ef8a673a740d25c7
+stage wire wire 1 91af79fafdc863a2
 stage gather identity 7 726ad281086be88f
 stage gather value 36 78042b85b1ad24a0
 stage gpu identity 2 61b1dc89435ebcd2
@@ -30,9 +30,9 @@ step 01 insert in paragraph one
 class value 230 a5897c00a6d64f03
 class identity 22 823b63a35a4306c0
 class repr 41 816ebed227cc9efa
-class wire 1 09d691ef5c3713b3
+class wire 1 e77bb83c52103758
 step 02 restore
 class value 230 d28f62e0c38b068f
 class identity 22 62f1133c79bf4cb9
 class repr 41 86503e9b0e4f320d
-class wire 1 24cc91e79461618d
+class wire 1 47e8038702197459

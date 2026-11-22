@@ -21,7 +21,7 @@ stage public value 13 c414b18f971b5521
 stage public identity 1 1468f58222a8a463
 stage view identity 4 012fdb6355c738ad
 stage view value 40 ee7e666b618564b3
-stage wire wire 1 cdf9bcb64c814d35
+stage wire wire 1 24bfc14772b0d5bf
 stage gather identity 7 cfdeda1f8cc80e95
 stage gather value 36 ba001576d24fd559
 stage gpu identity 2 0dc5c1c78107420f
@@ -30,14 +30,14 @@ step 01 width 600.0156
 class value 230 d62a8b5284719220
 class identity 22 30c88eaed2eee2b1
 class repr 44 77c2a6a7cf1108e0
-class wire 1 8c77698749d7de3d
+class wire 1 4779ceecbb23a7f3
 step 02 delete 951 at 1736
 class value 230 dca55700464d563b
 class identity 22 b801c3d466da78fa
 class repr 44 560200d3649b994b
-class wire 1 fffee6a598f79f17
+class wire 1 0ccc3c5350722c0e
 step 03 add span 1672..1696
 class value 230 ff10e51ce3ab3967
 class identity 22 17ddfc561e3279c5
 class repr 44 473f82835f100ef2
-class wire 1 42e6576ee9aad704
+class wire 1 857c9aab07f2baae

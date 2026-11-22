@@ -21,7 +21,7 @@ stage public value 13 0073e209450629ad
 stage public identity 1 a7565d089b77c68d
 stage view identity 4 1214032c5184c4a2
 stage view value 40 2c36ba31d1530b11
-stage wire wire 1 cfa04b2b985fc23a
+stage wire wire 1 f37352e3c1b62cd2
 stage gather identity 7 850d47eb73e2c483
 stage gather value 36 2f8015f9c5ede1c6
 stage gpu identity 2 68fc66a75be58a57
@@ -32,29 +32,29 @@ step 01 half opaque
 class value 265 a8b58d84950a0aaa
 class identity 29 12da22ea20f067fb
 class repr 41 b6b254b9129b61de
-class wire 1 e92ac6ebcb953b8d
+class wire 1 e203a62551c39c48
 step 02 foreground
 class value 265 241160d889908f3d
 class identity 29 22e11050c9216f33
 class repr 41 b6b254b9129b61de
-class wire 1 e7dfd22b3669201a
+class wire 1 e8ac74045acd3482
 step 03 foreground and width
 class value 265 7ae2d6e118c230bf
 class identity 29 8ad6a3d5ec8c9965
 class repr 41 b6b254b9129b61de
-class wire 1 16a26e75b2b220a1
+class wire 1 64659e22462c2808
 step 04 metrics size 8 spacing 0 line 1.2 word 0 + replace 2 at 5 + delete 4 at 6
 class value 265 418db09ed58d9e92
 class identity 29 14fdee4f0bffba96
 class repr 41 cd1780bc2c97a5d4
-class wire 1 cb0e98a664a7d023
+class wire 1 ea757e12790ca10d
 step 05 insert Space (1 units) at 7
 class value 265 cecf9942e36d0de4
 class identity 29 d73594830d3caa1b
 class repr 41 5ab6d610ab406bbf
-class wire 1 8751fa0b48f29f01
+class wire 1 09cf97886475fd95
 step 06 decoration of the root
 class value 265 732b00ba0d9817dd
 class identity 29 acb5669b1e69f375
 class repr 41 5ab6d610ab406bbf
-class wire 1 6dc51d90c37d7553
+class wire 1 090d947e50f5d3ab

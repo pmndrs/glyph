@@ -21,7 +21,7 @@ stage public value 13 77ba8ad694eb0a15
 stage public identity 1 e82358b9ddb1a814
 stage view identity 4 5bbb90863921d3d1
 stage view value 40 a8b341477694bf30
-stage wire wire 1 d3503915b1d3076c
+stage wire wire 1 ea54844e0eac99d7
 stage gather identity 7 8275a3950f99a1ba
 stage gather value 36 82a35e62c0e16bb3
 stage gpu identity 2 7685f83555be1e2d
@@ -30,24 +30,24 @@ step 01 delete the Cyrillic letter
 class value 230 7d4af86fa11ce995
 class identity 22 f0b34ac716600dac
 class repr 41 6a1f7bd503aabc71
-class wire 1 ec660bff26506904
+class wire 1 96e9a264dd97a4ac
 step 02 restore
 class value 230 e9c00cd2448b3c0b
 class identity 22 cfdf52447b4634ca
 class repr 41 443e6e2e8dfede19
-class wire 1 03557de026ed0670
+class wire 1 ec994ebde7b55e22
 step 03 align 2
 class value 230 3c7e5dbcd505de4d
 class identity 22 7f8276c99fa5100e
 class repr 41 f3076f3dd24b9fab
-class wire 1 62d0eddd0f7aef2c
+class wire 1 c52ba2370dd608b9
 step 04 replace 6 at 1
 class value 230 ef346a1b46a8c50b
 class identity 22 6196e5c0e95b16c0
 class repr 41 1165e6e341ac4f20
-class wire 1 a8110e4cbfc65e64
+class wire 1 e38dd3a4232364ca
 step 05 replace 2 at 5 + add span 2..6 + insert Space (1 units) at 6
 class value 230 49c3c9d95162f218
 class identity 22 75e5dec97f8475d1
 class repr 41 bdc060295446035d
-class wire 1 2cba0760c64ec902
+class wire 1 e5f4e5af0c08f21e

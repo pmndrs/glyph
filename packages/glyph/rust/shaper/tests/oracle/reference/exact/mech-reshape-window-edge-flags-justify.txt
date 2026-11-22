@@ -21,7 +21,7 @@ stage public value 13 3886957a97089081
 stage public identity 1 4393ef93ab509b34
 stage view identity 4 eea6cb7b5742c84f
 stage view value 40 7f7ead18f573f191
-stage wire wire 1 096bfe6845d84b24
+stage wire wire 1 5a180c6d25b4b221
 stage gather identity 7 2b6a0c8ed85002dd
 stage gather value 36 96f2433322b11256
 stage gpu identity 2 f2c1e4de760e383f
@@ -30,9 +30,9 @@ step 01 space to right-to-left mark
 class value 230 d64496285c4fd0f8
 class identity 22 f9efc1cfef77d6ad
 class repr 41 e9693aceb901a85b
-class wire 1 c5a8b43651e4b515
+class wire 1 03ad62e337b97844
 step 02 restore
 class value 230 ce6e095a9b1ece92
 class identity 22 cf7d8e58bced3282
 class repr 41 224823d749850dfc
-class wire 1 421c4bc939b636dc
+class wire 1 64ba1ff575007639

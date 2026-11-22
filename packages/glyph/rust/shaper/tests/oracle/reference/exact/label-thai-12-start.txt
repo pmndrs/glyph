@@ -15,7 +15,7 @@ stage public value 13 74dcdda83432aac0
 stage public identity 1 3a7ff0a69ae552f2
 stage view identity 4 951a1e88d424b5bf
 stage view value 40 363bab8f0ddb5e25
-stage wire wire 1 14bee484c8b6a60d
+stage wire wire 1 de764d18a8c56449
 stage gather identity 7 68a307f835c7cab3
 stage gather value 36 d1871ae6f8eb781c
 stage gpu identity 2 8763516975bc126d
@@ -24,14 +24,14 @@ step 01 max lines 12 + insert Word (8 units) at 0 + insert Foreign (6 units) at 
 class value 230 22ea292ae167d9a4
 class identity 22 26a681953704c840
 class repr 41 5d5a25c7ee37065e
-class wire 1 37e80e2e0d8df454
+class wire 1 1d46409eb1d39ef1
 step 02 delete 3 at 0 + max lines 12
 class value 230 bab5cd5893265a17
 class identity 22 6b3075db1e7db311
 class repr 41 44de741656f39689
-class wire 1 37e0f7d6e8b69f18
+class wire 1 bc92579f64cc7304
 step 03 flip case at 8 + add span 20..23 + delete 2 at 21
 class value 230 5a32164b145491bc
 class identity 22 36bcc5ee4551be92
 class repr 41 d53cffb686446d7f
-class wire 1 1c7f745dbb83e2e6
+class wire 1 71c0b62abd4de7ae

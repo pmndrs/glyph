@@ -21,7 +21,7 @@ stage public value 13 0073e209450629ad
 stage public identity 1 a7565d089b77c68d
 stage view identity 4 1214032c5184c4a2
 stage view value 40 2c36ba31d1530b11
-stage wire wire 1 cfa04b2b985fc23a
+stage wire wire 1 f37352e3c1b62cd2
 stage gather identity 7 850d47eb73e2c483
 stage gather value 36 2f8015f9c5ede1c6
 stage gpu identity 2 68fc66a75be58a57
@@ -32,14 +32,14 @@ step 01 half opaque
 class value 225 7ecc861ec991aa38
 class identity 25 60bc7f84740cea65
 class repr 41 b6b254b9129b61de
-class wire 1 4157b93085a6f6b0
+class wire 1 94644a64afc43f2a
 step 02 foreground
 class value 225 212e2fe095f2b8ce
 class identity 25 e0172cdecd215191
 class repr 41 b6b254b9129b61de
-class wire 1 7ab2b0ecf3288566
+class wire 1 6889dcc9c8c868ab
 step 03 foreground and width
 class value 225 57406b01225eb0b8
 class identity 25 7d677a3e230706ca
 class repr 41 b6b254b9129b61de
-class wire 1 8004877882ddbbcd
+class wire 1 d1584aacf6bcb96c

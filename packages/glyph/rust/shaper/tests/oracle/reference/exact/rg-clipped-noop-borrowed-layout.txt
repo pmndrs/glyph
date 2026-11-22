@@ -21,7 +21,7 @@ stage public value 13 03126c64bbcd2c70
 stage public identity 1 58c3da09c9788ebb
 stage view identity 4 167fa8f78826c0de
 stage view value 40 ea53ffd858e8a512
-stage wire wire 1 c335fbeda7f70b25
+stage wire wire 1 978ca9faf5bd50e5
 stage gather identity 7 49eda5f2f0480861
 stage gather value 36 d4a01256ef54639f
 stage gpu identity 2 b36a751ceb3e2e78
@@ -32,19 +32,19 @@ step 01 nothing changes, full
 class value 233 9e2af5db601e4dcd
 class identity 27 54d1089debdb9c07
 class repr 44 c43a93bd749a7452
-class wire 1 f72166e21bcf4e04
+class wire 1 e6719149d6032289
 step 02 nothing changes, silent-then-measure
 class value 233 9e2af5db601e4dcd
 class identity 27 54d1089debdb9c07
 class repr 44 c43a93bd749a7452
-class wire 1 a936ab69eca40f59
+class wire 1 fbb592b5158a9110
 step 03 nothing changes, silent
 class value 213 50c194f470660067
 class identity 25 52409ea0492a1ea1
 class repr 44 c43a93bd749a7452
-class wire 1 e3e5eaecf105ce0b
+class wire 1 7488e30c6f964a24
 step 04 nothing changes, measure-first
 class value 233 f55e7f09b8806d90
 class identity 27 6b6ef2b4da9e78ba
 class repr 44 c43a93bd749a7452
-class wire 1 27ae8fb4331492db
+class wire 1 9d29fb26a0718b09

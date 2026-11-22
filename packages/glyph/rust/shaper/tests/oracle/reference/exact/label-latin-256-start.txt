@@ -21,7 +21,7 @@ stage public value 13 9837f196784bb5b5
 stage public identity 1 7f60999d93737b9c
 stage view identity 4 06a2999fe9807fff
 stage view value 40 bde0874079b1ccad
-stage wire wire 1 c769443ce05d094d
+stage wire wire 1 e7d5e9370abe5cc2
 stage gather identity 7 32c7d4cafeff9a49
 stage gather value 36 400c63bd75e0e4c3
 stage gpu identity 2 b40e4073e40ad6fe
@@ -30,14 +30,14 @@ step 01 delete 4 at 4
 class value 230 7cceec1dd221f442
 class identity 22 1bee78af06814a1f
 class repr 44 f49ef99f397161b7
-class wire 1 8b222da36b6a5793
+class wire 1 81f3ba122040f77e
 step 02 insert Mark (1 units) at 123
 class value 230 c1222d62765d63bf
 class identity 22 6922233c32e9fb3c
 class repr 44 c657ae9cbb28824c
-class wire 1 3b8d18d1092b8a7e
+class wire 1 9072cba8765e47d6
 step 03 width 229.5 + insert HardBreak (1 units) at 187
 class value 230 1a7f93f203517596
 class identity 22 6fdc6b8a1441ceac
 class repr 44 9a8acf93e43459b4
-class wire 1 8c4d11e5c5323e67
+class wire 1 94f317fe8cd40487

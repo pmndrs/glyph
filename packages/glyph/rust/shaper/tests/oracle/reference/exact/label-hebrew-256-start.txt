@@ -21,7 +21,7 @@ stage public value 13 31e1d808a2aa65f3
 stage public identity 1 3b09c87fa988a3fa
 stage view identity 4 1024980503b2b725
 stage view value 40 7deed747f754ff78
-stage wire wire 1 c0c6d64f23efa35d
+stage wire wire 1 19718a1946fe01ee
 stage gather identity 7 69d591d9618dd28e
 stage gather value 36 7dc804bda0e3306c
 stage gpu identity 2 d65507c3f8d1a0b4
@@ -30,14 +30,14 @@ step 01 delete 8 at 56 + insert SpacedWord (3 units) at 242 + add span 16..18 + 
 class value 242 2f2c330d166e6938
 class identity 22 f082cb0fa134ca90
 class repr 44 b921a8f4f71f1a6f
-class wire 1 5398ce971188d6d9
+class wire 1 e6cb32f29e399620
 step 02 insert Word (5 units) at 3
 class value 242 066d2068d7cbee9d
 class identity 22 b173c3b3def9ea5b
 class repr 44 6d7b93212343bb09
-class wire 1 f133182cbb2e126c
+class wire 1 0485524fe8837ae3
 step 03 insert Foreign (8 units) at 121
 class value 242 7a3f2011f142b179
 class identity 22 4d827ab07ad47fe8
 class repr 44 5699ebdd0b4e3123
-class wire 1 21a02b11873c60d8
+class wire 1 77d74bd14b448283

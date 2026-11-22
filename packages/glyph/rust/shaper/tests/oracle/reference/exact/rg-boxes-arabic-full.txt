@@ -21,7 +21,7 @@ stage public value 13 50cae7ecf1bb004c
 stage public identity 1 1fad0102e39db296
 stage view identity 4 b39d7b4fb7706c47
 stage view value 40 730a8e959cb36ad9
-stage wire wire 1 60869e9920eff589
+stage wire wire 1 14a39039f9a23097
 stage gather identity 7 13ece63ec8b67fe5
 stage gather value 36 389068d858e7c3ca
 stage gpu identity 2 115853c363c27978
@@ -32,49 +32,49 @@ step 01 insert in the first region
 class value 253 03e164d3ed9b3d5c
 class identity 29 dfb29911b5930756
 class repr 44 36fd5f32065e1f30
-class wire 1 ae8ed9d142259be2
+class wire 1 dd9b762e54290d4a
 step 02 delete in a later region
 class value 253 d04118f06a0327cf
 class identity 29 85e9891baad7bc69
 class repr 44 b7c4f93e84845980
-class wire 1 6cdf900dab82c2e8
+class wire 1 bb1e266427677faf
 step 03 narrower measure
 class value 253 f48611e13cf4fa96
 class identity 29 85e9891baad7bc69
 class repr 44 b7c4f93e84845980
-class wire 1 191b05e1b13ea22b
+class wire 1 27fae7409aa66b2e
 step 04 shorter regions
 class value 253 348a6fa84e7c26fe
 class identity 29 85e9891baad7bc69
 class repr 44 b7c4f93e84845980
-class wire 1 28c5d2d8abed36ee
+class wire 1 df985a0d6b3a6650
 step 05 three columns, wider gap
 class value 253 a3ec5964da682bcc
 class identity 29 51f265b0ce53ca41
 class repr 44 04b85d767a78b811
-class wire 1 8cb5fa629f374242
+class wire 1 f7a8d8b544f384ab
 step 06 one region
 class value 253 39cdd722b86c45de
 class identity 29 4d48acca5c229efd
 class repr 44 26d6ff327eb94353
-class wire 1 957d9532223c315c
+class wire 1 3650893f1e260bf4
 step 07 the starting regions
 class value 253 d04118f06a0327cf
 class identity 29 c3cb83d6929b47d6
 class repr 44 b7c4f93e84845980
-class wire 1 b616d8d8ee352fd8
+class wire 1 a942e44f1dcc6c64
 step 08 regions Boxes { boxes: [RegionBox { inline_start: 0.0, block_start: 0.0, inline_end: 291.0, block_end: 90.0 }, RegionBox { inline_start: 20.0, block_start: 100.0, inline_end: 371.0, block_end: 260.0 }, RegionBox { inline_start: 0.0, block_start: 0.0, inline_end: 0.0, block_end: 0.0 }], count: 2 } height 400 + width 599 + regions Columns { count: 2, gap: 0.0 } height 400 + add span 44..68
 class value 265 c938df18a31dd14c
 class identity 29 19787f6ad3b293b1
 class repr 44 3b96bcc8bbf16710
-class wire 1 62f08dbd122aad2c
+class wire 1 eb463491e86f2478
 step 09 width 156.5
 class value 265 a5b65badb4b7dc23
 class identity 29 b5fc6de4e2bf2669
 class repr 44 50e8fafecfc61afe
-class wire 1 71e26a104cbada0d
+class wire 1 6792880515e36e27
 step 10 max lines 12
 class value 301 18c1d0d0d7da0d60
 class identity 31 878f7a88c80fa52e
 class repr 64 f6bb8adc39391496
-class wire 1 05da8947260648a1
+class wire 1 07c8085cca4b8261

@@ -24,7 +24,7 @@ stage public value 13 1a893e402a10c526
 stage public identity 1 35b972bfc474af6e
 stage view identity 4 0cc2041d8f84762a
 stage view value 40 3f2b5ddf1b5244f1
-stage wire wire 1 8c12dd20d35752d4
+stage wire wire 1 a40f5bb23546164b
 stage gather identity 7 33ff331e3be91bfe
 stage gather value 36 43d4681616c5e395
 stage gpu identity 2 78aa38dcadcb9b4b

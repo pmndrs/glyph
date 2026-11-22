@@ -24,7 +24,7 @@ stage public value 13 8cef9c576baafa54
 stage public identity 1 ae79e57f1ab222ef
 stage view identity 4 cd381f098ad1d0b7
 stage view value 40 291e45bd273d48f4
-stage wire wire 1 15f08a22b34adf78
+stage wire wire 1 122982ba32dcd91b
 stage gather identity 7 4d8b2815c7a87554
 stage gather value 36 39a2d279b6f9367d
 stage gpu identity 2 9502914cc26fdf38
@@ -36,58 +36,58 @@ class value 288 a6439c481ec6a571
 class identity 31 62afbacdda52f07e
 class repr 64 6ef237e4ec2d9cbd
 class cache 5 98b6b8eaa40950d2
-class wire 1 f31be40e5bf05512
+class wire 1 7b7dd3c95c932332
 step 02 delete in a later region
 class value 288 63ce10eda55aafe2
 class identity 31 628bd0ea05047985
 class repr 64 d4c18fe584e5f916
 class cache 5 143dcf786e0bb44d
-class wire 1 f97e9be39e9d71a2
+class wire 1 9b2d88cd7d756efc
 step 03 narrower measure
 class value 288 46a15f4a9603af4f
 class identity 31 730af92f75251f8f
 class repr 64 d8d113aca80ff4aa
 class cache 5 143dcf786e0bb44d
-class wire 1 743bfecf14599fbf
+class wire 1 b1fec0f42701eede
 step 04 shorter regions
 class value 288 d88179e2357f4d30
 class identity 31 acbcf968ad5b1bab
 class repr 64 d4c18fe584e5f916
 class cache 5 143dcf786e0bb44d
-class wire 1 9ded75170fadf26a
+class wire 1 4f8d0b8bb932b9b2
 step 05 three columns, wider gap
 class value 253 b98bd98568bd9af6
 class identity 29 8455f483162339f6
 class repr 44 dadb21ac729907c6
 class cache 5 143dcf786e0bb44d
-class wire 1 ba5b168cd02da688
+class wire 1 fcd866036bfa07c5
 step 06 one region
 class value 253 6b16625f24c07127
 class identity 29 ad2b0aaa5ec8bdce
 class repr 44 4a06e6dcbcce67b2
 class cache 5 143dcf786e0bb44d
-class wire 1 728b9144b42c2264
+class wire 1 ea53db38ef1af75b
 step 07 the starting regions
 class value 288 63ce10eda55aafe2
 class identity 31 11abf638529002af
 class repr 64 d4c18fe584e5f916
 class cache 5 143dcf786e0bb44d
-class wire 1 e62de6a8b3f8111a
+class wire 1 cb817c2b1cb535e8
 step 08 direction 0
 class value 268 be082008fb599df7
 class identity 29 80436d34eda97ddc
 class repr 64 d4c18fe584e5f916
 class cache 5 143dcf786e0bb44d
-class wire 1 cf46ff48deca1f53
+class wire 1 c2eac421e04b6fb2
 step 09 flip case at 2196
 class value 288 bbb4448cd6359e1b
 class identity 31 b36d67694dc490ed
 class repr 64 d0b319f53daebd49
 class cache 5 4e59808dd5e90db2
-class wire 1 3e223c9228648dba
+class wire 1 5b80b73c0c97b108
 step 10 regions Columns { count: 3, gap: 0.0 } height 1600
 class value 288 cd59549abc8ca893
 class identity 31 3d2db8b840e129b1
 class repr 64 f4e58876226caed3
 class cache 5 4e59808dd5e90db2
-class wire 1 96ba1ce24009da1e
+class wire 1 1d273d826f24c692

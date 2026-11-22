@@ -21,7 +21,7 @@ stage public value 13 8d745db684648007
 stage public identity 1 9f58ac2691d9d2e1
 stage view identity 4 b7b7f58c55341768
 stage view value 40 0cc031ab06df0421
-stage wire wire 1 1d3d509f91b20f9b
+stage wire wire 1 c2f5b1a7d8b744f8
 stage gather identity 7 c2c572bffa9b1d93
 stage gather value 36 b291ba1f7ae0483c
 stage gpu identity 2 11f6365e1b348138
@@ -32,49 +32,49 @@ step 01 recolour
 class value 265 f607500010a45823
 class identity 29 c7422fd082c998b2
 class repr 44 f1d759e2cd755ef7
-class wire 1 51f72f8f94fc585d
+class wire 1 9bd080e390078d5f
 step 02 recolour and width
 class value 265 765b8fc96b0c28c4
 class identity 29 698242d7f9670d52
 class repr 44 5d8b11d4cd7a9784
-class wire 1 96991f1d064dcb79
+class wire 1 6a960411ff1d5bba
 step 03 thicker
 class value 265 d0cc3dc6cb4ba865
 class identity 29 406af8fbbc1d8caf
 class repr 44 5d8b11d4cd7a9784
-class wire 1 6ed9ce28bb412132
+class wire 1 f5f680c05ac97de4
 step 04 double
 class value 265 174d3b7a3d997f80
 class identity 29 fbcd2303a97566ab
 class repr 44 5d8b11d4cd7a9784
-class wire 1 29851eca9cd33145
+class wire 1 a18e86cfcc9aa37f
 step 05 add strikethrough
 class value 265 c92e79cbc7da3805
 class identity 29 2f0259a69c8f0303
 class repr 44 5d8b11d4cd7a9784
-class wire 1 5b542cc552fa552a
+class wire 1 55e0877af427af18
 step 06 decoration off
 class value 253 ba950076c3ef8aed
 class identity 29 2f0259a69c8f0303
 class repr 44 5d8b11d4cd7a9784
-class wire 1 a37bf8bfcee72c8f
+class wire 1 77b9d9d4bf9a5e48
 step 07 decoration on with an edit
 class value 265 1aebe9276061686a
 class identity 29 57fcb8c5c9b54d03
 class repr 44 8f5f9ee9bced004c
-class wire 1 6a8a2a003a34eab5
+class wire 1 b699e8da8e0a3444
 step 08 width 332 + align 2
 class value 265 8cdf5ac08259cd2f
 class identity 29 4ae8267967215ce6
 class repr 44 30b6e4d5fe95d24f
-class wire 1 74649b97ad78462b
+class wire 1 061ae5bf6e5f2903
 step 09 shadow of the root
 class value 265 a2b15f9879dbfc3a
 class identity 29 04304d16d6d4a27e
 class repr 44 30b6e4d5fe95d24f
-class wire 1 8015b877916b7bc5
+class wire 1 a6e4ead18b9ad5a3
 step 10 delete 6 at 138
 class value 265 83a10141ad38ec3d
 class identity 29 5b8647b9e0945df1
 class repr 44 aeae5778d144693a
-class wire 1 e37552f4d35202e2
+class wire 1 0320bec8e57a9b52

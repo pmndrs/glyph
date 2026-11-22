@@ -21,7 +21,7 @@ stage public value 13 0073e209450629ad
 stage public identity 1 a7565d089b77c68d
 stage view identity 4 1214032c5184c4a2
 stage view value 40 2c36ba31d1530b11
-stage wire wire 1 cfa04b2b985fc23a
+stage wire wire 1 f37352e3c1b62cd2
 stage gather identity 7 850d47eb73e2c483
 stage gather value 36 2f8015f9c5ede1c6
 stage gpu identity 2 68fc66a75be58a57
@@ -32,49 +32,49 @@ step 01 recolour
 class value 265 0efd99c2862cc663
 class identity 29 12da22ea20f067fb
 class repr 41 b6b254b9129b61de
-class wire 1 e92ac6ebcb953b8d
+class wire 1 e203a62551c39c48
 step 02 recolour and width
 class value 265 b103a839a064fc01
 class identity 29 22e11050c9216f33
 class repr 41 b6b254b9129b61de
-class wire 1 61d4e692d8df6c74
+class wire 1 25e01e0a9607d5f0
 step 03 thicker
 class value 265 c38621787c9eea42
 class identity 29 8ad6a3d5ec8c9965
 class repr 41 b6b254b9129b61de
-class wire 1 3256e23ac3507aa4
+class wire 1 f211e5b0cad4ed6b
 step 04 double
 class value 265 e46cdbd529568295
 class identity 29 5c307be37e40a258
 class repr 41 b6b254b9129b61de
-class wire 1 5a2d66070416241e
+class wire 1 9466829ad9418d06
 step 05 add strikethrough
 class value 265 9f95ca1aab468174
 class identity 29 7841722420bf490f
 class repr 41 b6b254b9129b61de
-class wire 1 2b34e199cfc5aa8f
+class wire 1 1068b25efbb12518
 step 06 decoration off
 class value 253 5d2b8cb8af792a08
 class identity 29 7841722420bf490f
 class repr 41 b6b254b9129b61de
-class wire 1 b06b7a73ec9216f0
+class wire 1 d5947ec456a1bfc7
 step 07 decoration on with an edit
 class value 265 90bbea7409ed95e0
 class identity 29 126ea1aa35635cd5
 class repr 41 6a1504d257109642
-class wire 1 88f39615e1aa5315
+class wire 1 57f1a8f3068db15e
 step 08 material of the root + decoration of the root
 class value 265 8de006d82fe6f335
 class identity 29 a9d9a4d94067e8d2
 class repr 41 6a1504d257109642
-class wire 1 a070cf035ee278c3
+class wire 1 f258d054543d096f
 step 09 flip case at 15 + add span 11..18 + outline of the root
 class value 265 b5542c704c21aaf5
 class identity 29 e38082776efd3f10
 class repr 41 288038b95b82cb96
-class wire 1 4d3a3ae13aa2882f
+class wire 1 2ede33927d49f906
 step 10 delete 1 at 18
 class value 265 da22177d78be0ceb
 class identity 29 844f668364f8fd1c
 class repr 41 bab5bdeed44b0d10
-class wire 1 ad5c9b2b08688b0b
+class wire 1 f98093f143842fc9
