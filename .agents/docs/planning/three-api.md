@@ -512,8 +512,8 @@ or update text; the coordinator rejects such reentrancy before another Wasm call
 
 `ThreeTextMaterialContext` is a closed discriminated union on `kind`. A glyph branch also carries the concrete
 `pmndrs.bitmap`, `pmndrs.msdf`, or `pmndrs.slug` raster format. The decoration branch does not pretend that decoration is a
-raster format. Every branch provides its concrete shader, the final Codec-selected position node, and
-`createDefaultMaterial()`, so decoration can keep the built-in material or override it explicitly:
+raster format. Every branch provides its concrete shader, a paragraph-local position node, the final draw-local position
+node, and `createDefaultMaterial()`, so decoration can keep the built-in material or override it explicitly:
 
 ```ts
 const material = defineTextMaterial((context) => {
@@ -529,6 +529,69 @@ Decoration paint still comes from the engine-authored text style. Underline, ove
 as their own ordered batches and become separate Three draw objects with separate material instances. Reusing one factory
 therefore unifies material selection without merging decoration geometry into the glyph draw or mutating the glyph
 material.
+
+### Position nodes
+
+Every built-in branch (Bitmap, MSDF, Slug, and decoration) carries two `Node<'vec3'>` positions:
+
+| Field               | Space                                                                                                                                                                                                                                                      |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `paragraphPosition` | Unanchored paragraph-local Three units, +X right and +Y up. Excludes the anchor offset, detached-glyph transforms, and the Text/ancestor transform, so it has the same value in direct and indexed transform modes. Slug's value includes its AA dilation. |
+| `position`          | Final draw-local position, the value the default material assigns to `material.positionNode`. Indexed mode folds the Text/ancestor transform in; direct mode leaves it on the draw mesh's matrix, so the value differs between modes for one world glyph.  |
+
+**Stage and arity.** Both are evaluated once per vertex. Read them from any vertex or fragment node, any number of
+times. In the vertex stage a read is the position graph itself, so `material.positionNode = context.position` compiles to
+the default material's vertex program and repeated reads share one evaluation. In the fragment stage a read is that
+vertex value interpolated across the drawn quad: the position of the rasterized point, not the graph re-run per
+fragment. Slug's position graph assigns its coverage varying, which a fragment cannot do; the interpolated read never
+re-enters it. Neither node adds a varying unless a fragment node reads it, and the default material (no factory)
+receives neither.
+
+**Displacement.** Assign the displaced position to `material.positionNode`. A fragment read still sees the undisplaced
+value; carry the displaced value with your own `varying()` if the fragment needs it:
+
+```ts
+const material = defineTextMaterial((context) => {
+  const value = context.createDefaultMaterial();
+  if (context.kind !== 'glyph' || context.format !== 'pmndrs.slug') return value;
+  const position = context.position;
+  value.positionNode = position.add(vec3(position.y.sin().mul(0.12), 0, 0));
+  value.colorNode = context.shader.color.mul(position.x.sin().mul(0.2).add(0.8));
+  return value;
+});
+```
+
+**Paragraph texture mapping and inspection bounds.** Normalize `paragraphPosition` against `label.glyphs().inkBounds`,
+which uses the same origin with +Y down. `computeBoundingBox()` and `measureGlyphs()` report Text-local bounds with the
+anchor included; subtract `measure().anchorOffset` (x as is, y negated) to reach paragraph space. Never normalize
+`position` against either: it carries draw-space transforms they do not.
+
+```ts
+const label = three.createText({ font, text: 'Custom' });
+const bounds = label.glyphs().inkBounds; // paragraph-local, +Y down
+if (bounds !== undefined && bounds.width > 0 && bounds.height > 0) {
+  const bottom = -(bounds.y + bounds.height);
+  label.material = defineTextMaterial((context) => {
+    const value = context.createDefaultMaterial();
+    const position = context.paragraphPosition;
+    const uv = vec2(position.x.sub(bounds.x).div(bounds.width), position.y.sub(bottom).div(bounds.height));
+    value.colorNode = texture(image, uv).rgb.mul(context.shader.color);
+    return value;
+  });
+}
+```
+
+Here `vec2`, `vec3`, and `texture` come from `three/tsl`, and `image` is a caller-owned texture. Query the bounds before
+material realization: the factory runs while Three holds borrowed plan data and must not call `glyphs()`. A material
+shared across Text objects has no single paragraph extent, so give each mapped Text its own material and refresh it when
+its text or layout changes.
+
+**Quad extent.** A position reaches only fragments inside the drawn quad. The default MSDF material trims each quad to
+the glyph's ink plus its antialiasing, outline, and shadow reach. A material from a factory, including one built with
+`createDefaultMaterial()` inside it, draws the whole atlas cell, because it may paint anywhere in the cell. Either way a
+fragment's position is interpolated from the corners actually drawn. Under a perspective camera a trimmed quad's insets
+can differ per corner, so that interpolation is the true position where re-evaluating the corner mapping per fragment would
+not be.
 
 A material on a span overrides the text material; a text material overrides the group material. Equal material objects
 share identity. Different materials may still share instance buffers—the command buffer determines draw segmentation, while

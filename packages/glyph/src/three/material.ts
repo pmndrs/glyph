@@ -17,41 +17,60 @@ export interface ThreeRootContext {
 
 type ThreeMaterialRootContext = Readonly<{ root: ThreeRootContext }>;
 
+/**
+ * The two position nodes every built-in material context carries. Both are evaluated once per vertex and reach a
+ * fragment node as their interpolated value, so either may be read from any node, in either stage, any number of
+ * times. A displacement assigns `material.positionNode` from `position`; fragment reads still see the undisplaced value.
+ */
+type ThreeMaterialPositions = Readonly<{
+  /**
+   * Unanchored paragraph-local position in Three units, +X right and +Y up: the space of `Text.glyphs().inkBounds`
+   * with its Y axis negated. Excludes the anchor offset, detached-glyph transforms, and the Text/ancestor transform,
+   * so it tracks the paragraph identically in direct and indexed transform modes.
+   */
+  paragraphPosition: Node<'vec3'>;
+  /**
+   * Final draw-local position, the value the default material assigns to `material.positionNode`. Indexed transform
+   * mode folds the Text/ancestor transform in; direct mode leaves it on the draw mesh's matrix, so the value differs
+   * between modes for the same world-space glyph. Not comparable with paragraph or Text-local bounds.
+   */
+  position: Node<'vec3'>;
+}>;
+
 type ThreeDecorationMaterialContext = ThreeMaterialRootContext &
   Readonly<{
     kind: 'decoration';
     shader: TslDecorationShaderOutput;
-    position: Node<'vec3'>;
     createDefaultMaterial(): NodeMaterial;
-  }>;
+  }> &
+  ThreeMaterialPositions;
 
 type ThreeBitmapMaterialContext = ThreeMaterialRootContext &
   Readonly<{
     kind: 'glyph';
     format: 'pmndrs.bitmap';
     shader: TslBitmapShaderOutput;
-    /** Final renderer-local position including Codec-selected transform indirection. */
-    position: Node<'vec3'>;
     createDefaultMaterial(): NodeMaterial;
-  }>;
+  }> &
+  ThreeMaterialPositions;
 
 type ThreeMsdfMaterialContext = ThreeMaterialRootContext &
   Readonly<{
     kind: 'glyph';
     format: 'pmndrs.msdf';
     shader: TslMsdfShaderOutput;
-    position: Node<'vec3'>;
     createDefaultMaterial(): NodeMaterial;
-  }>;
+  }> &
+  ThreeMaterialPositions;
 
 type ThreeSlugMaterialContext = ThreeMaterialRootContext &
   Readonly<{
     kind: 'glyph';
     format: 'pmndrs.slug';
     shader: TslSlugShaderOutput;
-    position: Node<'vec3'>;
     createDefaultMaterial(): NodeMaterial;
-  }>;
+  }> &
+  ThreeMaterialPositions;
 
 /** Custom Three rasters augment this map with their literal format key and exact material context. */
 export interface ThreeTextMaterialContextMap {

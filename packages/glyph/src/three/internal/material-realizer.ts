@@ -15,7 +15,7 @@ import { createSlugPage, registerSlugPageUse } from './slug-residency.js';
 import { registerMsdfAtlasUse, registerMsdfEffectVariants } from './msdf-draws.js';
 import type { TslMsdfEffects } from '../../shaders/tsl/index.js';
 import { atlasTextureArray } from './portable-resource.js';
-import type { ThreeRootContext, ThreeTextMaterialContext } from '../material.js';
+import type { ThreeRootContext, ThreeTextMaterialContextMap } from '../material.js';
 import type { ThreeRasterProgramBuffer } from '../raster-program.js';
 import { decorationSchema, threeSystemBuffers } from '../codec.js';
 import type { ThreeBufferBinding, ThreeResolvedMaterialBinding, ThreeResolvedResourceBinding } from '../schema.js';
@@ -31,6 +31,16 @@ import type {
 } from './render-state.js';
 
 type MaterialSelection = ThreeResolvedMaterialBinding | undefined;
+type BuiltinMaterialContextKey = 'decoration' | 'pmndrs.bitmap' | 'pmndrs.msdf' | 'pmndrs.slug';
+/** A built-in context before its stage-safe position nodes; the open map's external augmentations are not built here. */
+type RawMaterialContext = {
+  [Key in BuiltinMaterialContextKey]: Omit<ThreeTextMaterialContextMap[Key], 'paragraphPosition' | 'position'>;
+}[BuiltinMaterialContextKey];
+/** One draw's raw vertex position graphs: paragraph-local, and final draw-local. */
+interface RawMaterialPositions {
+  readonly paragraph: THREE.Node<'vec3'>;
+  readonly draw: THREE.Node<'vec3'>;
+}
 
 interface ThreeMaterialOwner {
   readonly renderObject: THREE.Object3D;
@@ -103,13 +113,16 @@ export class ThreeMaterialRealizer {
       packed: storageUvec2(packed, instance),
     });
     const position = this.#position(shader.position, instance, buffers, transform);
-    const material = this.#createMaterial(selection, {
-      root: this.#root(selection),
-      kind: 'decoration',
-      shader,
-      position,
-      createDefaultMaterial: () => coverageMaterial(shader, position),
-    });
+    const material = this.#createMaterial(
+      selection,
+      {
+        root: this.#root(selection),
+        kind: 'decoration',
+        shader,
+        createDefaultMaterial: () => coverageMaterial(shader, position),
+      },
+      { paragraph: shader.position, draw: position },
+    );
     this.#retain(key, material, undefined, lanes, transform.kind, shape);
     return material;
   }
@@ -166,14 +179,17 @@ export class ThreeMaterialRealizer {
       { pixelSnapping: this.#owner.pixelSnapping ?? selection?.pixelSnapping ?? false },
     );
     const position = this.#position(shader.position, instance, buffers, transform);
-    const material = this.#createMaterial(selection, {
-      root: this.#root(selection),
-      kind: 'glyph',
-      format: bitmap.id,
-      shader,
-      position,
-      createDefaultMaterial: () => bitmapMaterial(shader, position),
-    });
+    const material = this.#createMaterial(
+      selection,
+      {
+        root: this.#root(selection),
+        kind: 'glyph',
+        format: bitmap.id,
+        shader,
+        createDefaultMaterial: () => bitmapMaterial(shader, position),
+      },
+      { paragraph: shader.position, draw: position },
+    );
     this.#retain(key, material, resource, lanes, transform.kind, shape);
     return material;
   }
@@ -245,14 +261,17 @@ export class ThreeMaterialRealizer {
       return { shader, position: place(shader.position) };
     };
     const { shader, position } = graph({ outline: true, shadow: true });
-    const material = this.#createMaterial(selection, {
-      root: this.#root(selection),
-      kind: 'glyph',
-      format: msdf.id,
-      shader,
-      position,
-      createDefaultMaterial: () => coverageMaterial(shader, position),
-    });
+    const material = this.#createMaterial(
+      selection,
+      {
+        root: this.#root(selection),
+        kind: 'glyph',
+        format: msdf.id,
+        shader,
+        createDefaultMaterial: () => coverageMaterial(shader, position),
+      },
+      { paragraph: shader.position, draw: position },
+    );
     registerMsdfAtlasUse(material, atlas);
     // A caller's material is theirs to keep, so only the default material is exchanged for effect specializations.
     if (selection?.material === undefined) {
@@ -325,14 +344,17 @@ export class ThreeMaterialRealizer {
     );
     const glyphPosition = this.#glyphPosition(shader.position, instance, buffers);
     const position = indexed?.position(glyphPosition) ?? glyphPosition;
-    const material = this.#createMaterial(selection, {
-      root: this.#root(selection),
-      kind: 'glyph',
-      format: slug.id,
-      shader,
-      position,
-      createDefaultMaterial: () => coverageMaterial(shader, position),
-    });
+    const material = this.#createMaterial(
+      selection,
+      {
+        root: this.#root(selection),
+        kind: 'glyph',
+        format: slug.id,
+        shader,
+        createDefaultMaterial: () => coverageMaterial(shader, position),
+      },
+      { paragraph: shader.position, draw: position },
+    );
     registerSlugPageUse(material, page);
     this.#retain(key, material, resource, lanes, transform.kind, shape);
     return material;
@@ -558,8 +580,23 @@ export class ThreeMaterialRealizer {
     return lease.resource;
   }
 
-  #createMaterial(selection: MaterialSelection, context: ThreeTextMaterialContext): THREE.NodeMaterial {
-    return this.#own(selection?.material?.create(context) ?? context.createDefaultMaterial());
+  /**
+   * The default material drives its raw vertex graphs directly and builds nothing more. A caller's factory receives
+   * each position as a stage-safe node, which any node of either stage may read any number of times.
+   */
+  #createMaterial(
+    selection: MaterialSelection,
+    context: RawMaterialContext,
+    positions: RawMaterialPositions,
+  ): THREE.NodeMaterial {
+    const factory = selection?.material;
+    if (factory === undefined) return this.#own(context.createDefaultMaterial());
+    const created = factory.create({
+      ...context,
+      paragraphPosition: stagePosition(positions.paragraph),
+      position: stagePosition(positions.draw),
+    });
+    return this.#own(created ?? context.createDefaultMaterial());
   }
 
   #root(selection: MaterialSelection): ThreeRootContext {
@@ -718,6 +755,49 @@ function affineColumns(transforms: THREE.StorageInstancedBufferAttribute, firstC
       return column0.mul(local.x).add(column1.mul(local.y)).add(column2.mul(local.z)).add(column3.mul(local.w)).xyz;
     },
   };
+}
+
+/**
+ * A vertex position graph that is safe to read from either stage.
+ *
+ * The vertex stage reads the graph itself, so a material passing it to `positionNode` compiles to the default
+ * material's vertex program; a three.js `vertexStage()` varying there instead loses a TypeGPU-backed graph's
+ * `positionLocal` on WebGL2. The fragment stage reads the graph's vertex-computed varying: the position of the
+ * rasterized surface, interpolated from the corners actually drawn, rather than the graph re-run per fragment (where
+ * Slug's graph would assign its coverage varying, an immutable fragment input).
+ */
+class StagePositionNode extends THREE.Node<'vec3'> {
+  readonly node: THREE.Node<'vec3'>;
+  readonly interpolated: THREE.Node<'vec3'>;
+
+  constructor(node: THREE.Node<'vec3'>) {
+    super('vec3');
+    this.node = node;
+    this.interpolated = TSL.vertexStage(node);
+  }
+
+  #stageNode(builder: THREE.NodeBuilder): THREE.Node<'vec3'> {
+    // three 0.185.1 sets `NodeBuilder.shaderStage` while building each stage; @types/three 0.185.4 declares only a
+    // stub of the builder, so the field is read untyped and compared, never trusted as a type.
+    return Reflect.get(builder, 'shaderStage') === 'fragment' ? this.interpolated : this.node;
+  }
+
+  // Only the graph a stage reads is set up and analyzed there, so the vertex stage never builds the unused varying.
+  override setup(): null {
+    return null;
+  }
+
+  override analyze(builder: THREE.NodeBuilder): void {
+    this.#stageNode(builder).build(builder, this);
+  }
+
+  override generate(builder: THREE.NodeBuilder, output?: string | null): string {
+    return this.#stageNode(builder).build(builder, output) as string;
+  }
+}
+
+function stagePosition(node: THREE.Node<'vec3'>): THREE.Node<'vec3'> {
+  return TSL.nodeObject(new StagePositionNode(node));
 }
 
 function bitmapMaterial(
