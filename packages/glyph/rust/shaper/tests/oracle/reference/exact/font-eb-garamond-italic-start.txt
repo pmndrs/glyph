@@ -53,11 +53,11 @@ class repr 44 5e46149a7c870d55
 class wire 1 42d244c3b1aead98
 step 06 width 138
 class value 230 a17c853c748bebb6
-class identity 22 a4b44192457fedf1
+class identity 22 80a11e1925ca55af
 class repr 44 8f1d63ca3fe4cbce
 class wire 1 2520e994f9747b82
 step 07 replace 1 at 15
 class value 230 a17c853c748bebb6
-class identity 22 a4b44192457fedf1
+class identity 22 80a11e1925ca55af
 class repr 44 8f1d63ca3fe4cbce
 class wire 1 53c5561db1fcd548

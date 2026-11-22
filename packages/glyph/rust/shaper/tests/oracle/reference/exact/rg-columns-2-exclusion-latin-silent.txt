@@ -35,31 +35,31 @@ class repr 44 756e2937064e0fef
 class wire 1 fee7d5b604659fe7
 step 02 delete in a later region
 class value 213 9d7e809c6679ea1d
-class identity 25 5a7e9918087a6245
+class identity 25 fb25e8e72faac5c6
 class repr 44 24568e905455cf33
-class wire 1 515aa73ad6ee4fb6
+class wire 1 05940a7517f7c565
 step 03 narrower measure
 class value 213 6ae6757eb7fcf323
-class identity 25 e5dab4dfe11914f8
+class identity 25 33feb85c9be62f2a
 class repr 44 08e30966a117d62e
 class wire 1 f200796f04fc0766
 step 04 shorter regions
 class value 213 84bb4143933dd240
-class identity 25 9dadb1865c9a1c3d
+class identity 25 dfc37deb4f60f126
 class repr 44 eea98131ee08b719
 class wire 1 aff247a0e5456a7f
 step 05 three columns, wider gap
 class value 213 3cfd1aae9e38dee4
-class identity 25 d3f16f75945ca16c
+class identity 25 d360ac8fbe7058d9
 class repr 44 aed6307b5b79e394
-class wire 1 9baeac8afbc4a8f7
+class wire 1 5b7092c989d0cac4
 step 06 one region
 class value 213 8404f25b839b9dc1
-class identity 25 4ed27d481a82f017
+class identity 25 6d4311decf52b17d
 class repr 44 541c8dcc63147821
-class wire 1 a5f78617948e0945
+class wire 1 1410bce0edd7137c
 step 07 the starting regions
 class value 213 9d7e809c6679ea1d
-class identity 25 c977d2f5d8a69d77
+class identity 25 a721836907f96556
 class repr 44 24568e905455cf33
 class wire 1 abd5c0c03734a96e

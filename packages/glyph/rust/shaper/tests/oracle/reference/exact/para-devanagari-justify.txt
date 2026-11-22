@@ -31,43 +31,43 @@ stage gpu identity 2 f40e7e7fe3dbea13
 stage gpu value 3 12ec1dcddfc3820c
 step 01 width 417
 class value 265 e8ef0e12ef6aefb3
-class identity 24 fda41bf28d5d1839
+class identity 24 8576e787817684bb
 class repr 64 b2151ba702188589
 class cache 5 c556ecec338e581a
-class wire 1 39b550b79ee570c7
+class wire 1 040e33e497e4fe5c
 step 02 width 418
 class value 265 5e860f0342e35999
-class identity 24 6c0effa6fe290af7
+class identity 24 dcb92c97d93568fd
 class repr 64 9b5ffd1592962418
 class cache 5 c556ecec338e581a
-class wire 1 963d12dbb787205d
+class wire 1 317cda578e24099a
 step 03 width 233.5
 class value 265 97769cc6764f44fe
-class identity 24 a389c3461cdab286
+class identity 24 cff1bb515d07d988
 class repr 64 01f057c8b41c5b8a
 class cache 5 81aeede017484a9d
-class wire 1 96934be83142ff88
+class wire 1 d4fc86a827f71def
 step 04 width 600
 class value 265 a01a3d6973008492
-class identity 24 35f4f82ed23eafd2
+class identity 24 c6e2b4a8cc756768
 class repr 64 e3db395533bba727
 class cache 5 81aeede017484a9d
-class wire 1 676423d8b2684cf3
+class wire 1 21adff39f1603608
 step 05 insert Bidi (1 units) at 1589
 class value 265 8396699f3e70f18f
-class identity 24 c1ab2f2118f28dc1
+class identity 24 ddd499727cd686ba
 class repr 64 d44f7ef35d4b8f77
 class cache 5 06e51d8162ba560b
 class wire 1 57b56ccd5577af20
 step 06 insert Word (8 units) at 3632
 class value 265 1dba3a2eacc6ba41
-class identity 24 6843c131e553e36e
+class identity 24 285db2e287b8640d
 class repr 64 fa5a67db32c4d3b3
 class cache 5 374e4b30e4159163
-class wire 1 7e6bccfb8722a906
+class wire 1 37db74ce4124bd40
 step 07 insert SpacedWord (4 units) at 2079
 class value 265 999f42a748e02b83
-class identity 24 858eb072e05c1f96
+class identity 24 d4ec506f3f505341
 class repr 64 3d0b0c1826e0fe56
 class cache 5 63bfad5734a342c0
-class wire 1 18656bb56fc9e99f
+class wire 1 8e33c5eb7af18a12

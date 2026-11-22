@@ -107,7 +107,7 @@ class value 689 ca652334423a6364
 class identity 54 ddba35b2dfe72b39
 class repr 173 7cdbe753ec3f0b29
 class cache 5 825ee18a96071368
-class wire 1 ff492136effae12b
+class wire 1 60faaa7b76bba524
 step 04 move paragraph 1 last
 class value 689 1b3bf6b4fbdc2b49
 class identity 54 8e247ee3266c50d9

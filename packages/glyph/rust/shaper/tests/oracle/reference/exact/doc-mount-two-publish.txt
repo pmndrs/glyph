@@ -63,7 +63,7 @@ step 03 paragraph 1: insert HardBreak (1 units) at 115 + paragraph 1: delete 6 a
 class value 427 8816c97a35cd9aa3
 class identity 40 8964415b282fc1f1
 class repr 88 1f4be5339f444108
-class wire 1 5e57afcfecdc478b
+class wire 1 bdfa89a97d3cb4fe
 step 04 add paragraph 3
 class value 598 2abe6d1e5e1a96fc
 class identity 51 023dd61855f4e487

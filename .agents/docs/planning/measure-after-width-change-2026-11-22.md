@@ -1,7 +1,7 @@
 ---
 type: Log
 title: 'measure() right after a width change: main vs 0.2.0, 2026-11-22'
-description: 'Stage-by-stage evidence for why a measure() that follows a width change costs about twice main on the 0.2.0 integration branch, the call path into the engine on both, and candidate fixes with expected savings. Evidence for a design discussion; nothing here is built.'
+description: 'Stage-by-stage evidence for why a measure() that follows a width change costs about twice main on the 0.2.0 integration branch, the call path into the engine on both, and candidate fixes with expected savings, why a spike of the first fix stopped, and alternative designs. Evidence for a design discussion; nothing here is landed.'
 status: draft
 generated:
   by: anthropic/claude-opus-5-5
@@ -10,7 +10,8 @@ generated:
 
 # measure() right after a width change: main vs 0.2.0, 2026-11-22 (UTC)
 
-This page gathers evidence for a design discussion. Nothing was built for it.
+This page gathers evidence for a design discussion. Nothing was landed for it; a spike of fix 1 and why it stopped
+are recorded below.
 
 ## The gap
 
@@ -108,6 +109,115 @@ position.
      rewraps, which limits what retention can reuse.
 
 Fix 1 is the only one that reaches `main` on its own. Fixes 2 and 3 together recover about half the gap.
+
+## Why fix 1 does not build as stated (spike, 2026-11-22, not landed)
+
+A spike tried fix 1 on the integration branch after `sil-green-42` (scratch worktree, no commit). It hit two blockers.
+
+### 1. A read commits its stages, and positioning needs the uncommitted pairing
+
+On `main` a summary-only read leaves its flow as a speculative candidate. Publication then positions that
+candidate against the committed state the last positioning was built from. On 0.2.0 a read is durable: the Wasm
+`prepare` export calls `commit_measure` right after the summary is staged, and `commit_paragraphs` commits every
+stage (text, clusters, shaping runs, flow, boundary shapes, geometry). Positioning that ran later would see
+committed state that no longer matches the committed positioned arena.
+
+`ParagraphState::prepare_positioned` (`rust/shaper/src/engine/state.rs`) builds the new arena with
+`build_with_previous`. That call reads the previous side of every input from committed state:
+
+- the committed positioned arena;
+- `retained_flow` (the committed flow, when only geometry changed);
+- `self.clusters.committed()` and `self.shaping_runs.committed()`;
+- the committed `boundary_shape` beside the pending one;
+- the committed geometry's typography;
+- `pending_next_run_canonical_revision`.
+
+It uses them for three things:
+
+- **Line retention:** `RetainedOccurrenceProof` and `retain_edge_line`.
+- **Canonical revisions:** `rebuild_replacement_runs` mints a revision for each replacement run.
+- **Recomposition windows:** these feed gather and upload.
+
+After a read commits, the committed positioned arena is one generation older than every other committed input. A
+deferred positioning would therefore compare it against the new clusters, runs and boundary arena:
+
+- retention proofs would compare unrelated rows;
+- revisions would be minted against the wrong predecessor.
+
+Running it with no predecessor (a cold rebuild) is correct, but it gives up retention. It also mints fresh
+canonical revisions, so identity and wire lanes in the publication would move, not only lanes captured after the
+read.
+
+### 2. The summary needs per-line glyph counts, and only positioning knows them
+
+`ParagraphLayoutSummary` exposes `glyphCount` and each line's `glyphStart` and `glyphCount`
+(`src/internal/layout-query-view.ts`). On 0.2.0 these come from the positioned arena's
+`semantic_line_glyph_spans`. `main` derived totals from the flow (`layout_query::visible_glyph_counts`).
+
+The spike ported that walk per line (`flow_line_glyph_counts`):
+
+- the drop cap, then each fragment;
+- the lead island's source glyphs;
+- retained clusters, skipping hard breaks;
+- the cut island and ellipsis marker.
+
+It also cross-checked every measurement the native oracle builds, `check --tier full`: 596 references plus 928
+differential runs.
+
+- **Line advances** from the flow (`line_inline_extent`) equalled positioning's `semantic_line_inline_extents` bit
+  for bit, with no mismatch.
+- **Glyph counts** disagreed in 2,426 measurements. The 16 reference cases where they disagree:
+  - `para-latin-start`;
+  - `para-devanagari-{start,center,end,justify}` and `para-bengali-{start,center,end,justify}`;
+  - `label-devanagari-80-start`;
+  - `label-devanagari-256-{start,center,end}` and `label-bengali-256-{start,center,end}`.
+
+The differences are 1 to 5 glyphs per line, in both directions. Two causes were traced:
+
+- **Corrected-break lead islands.** A line that starts at a corrected break draws its leading island shaped
+  alone. Those glyphs come from the replacement run's run-local rows (`rebuild_replacement_run_local`), not from
+  the boundary record's `source_glyph_count`, which is 0 for such a lead.
+  - `para-latin-start`, line 78: positioning emits 2 island glyphs (1462, 1777) where the flow walk counts none.
+  - `label-devanagari-80-start`, line 5: the island is the two glyphs of cluster 132 without its trailing
+    space glyph (3).
+  - The island can therefore have more or fewer glyphs than the clusters it replaces.
+- **Hung trailing spaces.** `hanging_cluster_start` ends the drawn body before spaces hung past the line end. In
+  `para-latin-start`, line 78, the hung space cluster 585 is not emitted.
+
+A flow-level count would have to replay island shaping and hanging. That would be a second implementation of the
+positioning glyph walk, kept in step by hand.
+
+## Alternative designs for the brainstorm
+
+Savings are estimated from the profile above: 0.19 ms Latin 15k, 0.27 ms stress 22k per read for positioning plus
+placement segments. None is built.
+
+| design                                                  | read after a width change          | frame     | references                                            | main risk                                                                                                                                            |
+| ------------------------------------------------------- | ---------------------------------- | --------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A. Speculative read (main's model)                      | to main, about 0.24 / 0.29 ms      | unchanged | lanes captured after reads (ink, positioned arena)    | Reverses "preparation is durable". Needs a staged-transaction lifetime across calls, and a counting source for the summary (blocker 2 still applies) |
+| B. Keep positioning's predecessor                       | to main                            | unchanged | lanes captured after reads only, if retention matches | Memory and bookkeeping for one more generation. Blocker 2 still applies                                                                              |
+| C. Count where lines are composed, defer placement only | 0.45 Latin (−0.05), about 0.58 22k | unchanged | none expected                                         | Smallest win                                                                                                                                         |
+
+- **A. Speculative read, as on `main`.** A summary-only read stages flow and does not commit it. Publication (or
+  a later glyph read) adopts the staged candidate and positions it against the committed generation, as it does
+  today. It still needs a glyph count for the summary; see C.
+- **B. Keep positioning's predecessor across a read.** When a read commits without positioning, the inputs the
+  committed positioned arena was built from are kept rather than overwritten: committed clusters, shaping runs,
+  boundary arena, flow and typography. The deferred positioning then retains and mints revisions exactly as it
+  would have.
+  - This costs one extra retained generation of those arenas while a paragraph's positioning is pending; most
+    arenas are swap-committed, so it can be a swap rather than a copy.
+  - It still needs a glyph-count source for the summary (blocker 2).
+- **C. Per-line glyph counts from flow composition, plus fix 2.** The flow composer already decides lead and tail
+  islands, cuts and hanging, so it could record each line's semantic glyph count as it composes. That removes
+  blocker 2 for A and B, and it matters on its own only with them.
+  - The independent part is fix 2: build placement segments in publication instead of on the read. Expected about
+    −0.05 ms per Latin read, with no reference change expected, since placement is not captured after a read.
+    This needs checking.
+  - Fix 3 (cheaper per-line retention proofs and line ink) adds an estimated −0.03 to −0.05 ms on either path.
+
+Summary: only A or B reach `main`'s read time, and either needs C's counting source before the summary can skip
+positioning. C with fixes 2 and 3 recovers about half the gap without touching the commit model.
 
 ## Sources
 

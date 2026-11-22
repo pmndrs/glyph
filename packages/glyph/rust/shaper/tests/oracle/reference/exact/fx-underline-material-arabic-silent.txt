@@ -52,7 +52,7 @@ step 05 material and same-length edit
 class value 225 01e13ed8ef121f41
 class identity 25 78efe53a90ac396a
 class repr 44 a775e8401d3e65c2
-class wire 1 d44a3dde6c8b14e8
+class wire 1 a7a27f09c875aac4
 step 06 material off
 class value 225 510632700ebb5663
 class identity 25 0064b0d15940daf2

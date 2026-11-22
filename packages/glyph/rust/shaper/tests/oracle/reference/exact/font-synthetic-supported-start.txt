@@ -55,9 +55,9 @@ step 06 add span 92..94
 class value 230 e62fc1355da86788
 class identity 22 30effe49aed61b92
 class repr 44 6381daeeb2611003
-class wire 1 a09aff1a9d5919e6
+class wire 1 c0a1d8549e3ac1f9
 step 07 add span 165..193 + insert Foreign (4 units) at 114
 class value 242 8f9a3a60439396f7
 class identity 22 69d99a844733b51a
 class repr 44 3ddaa6555f128443
-class wire 1 5d35a66b432866d3
+class wire 1 afba532b90b25f1a

@@ -30,14 +30,14 @@ step 01 align 3 + delete 6 at 10
 class value 230 c4480bda62e8aa76
 class identity 22 f38356954cc9c995
 class repr 44 73a3c349163d5c9f
-class wire 1 2394c2bc8486f39e
+class wire 1 06624f60905c5a23
 step 02 replace 3 at 43
 class value 230 fa8b9fe31eccd9df
-class identity 22 a242b9e7eb7a77b3
+class identity 22 0bdfe557e517f059
 class repr 44 5e5d28f6b526ab9b
-class wire 1 de6bedf2d5b30984
+class wire 1 65b32e6a8d434754
 step 03 add span 57..76
 class value 242 ea988c5139bc9046
-class identity 22 46748fdc12bf79cc
+class identity 22 76471cd5ca322f22
 class repr 44 5e5d28f6b526ab9b
 class wire 1 5d851c359ef0a5b5

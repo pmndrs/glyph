@@ -54,13 +54,13 @@ class value 300 12412ea5be70f7e9
 class identity 31 7265e11a29772ac1
 class repr 64 e76f2c6888eba347
 class cache 5 6c222f41092c1a77
-class wire 1 e4d4accab3bda9e8
+class wire 1 38c6026c2adb1dd5
 step 05 material and width
 class value 300 736306adc4731202
 class identity 31 aee623a47784e82c
 class repr 64 14d8818c07e735bb
 class cache 5 03014a65336f4bae
-class wire 1 fba731e3b85d59b0
+class wire 1 0b152b4720a0f826
 step 06 add span 42..53 + insert Space (1 units) at 87 + insert SpacedWord (9 units) at 30
 class value 300 b1389fbce4e97bf3
 class identity 31 0b879e98c5b7e2c0
@@ -72,7 +72,7 @@ class value 300 bbb7021b8f783392
 class identity 31 6d34f547b061842e
 class repr 64 d547fb48ba8cbff6
 class cache 5 5fd9526b554b5d38
-class wire 1 28308e02b6f93ad0
+class wire 1 392eba8fe59f599e
 step 08 material of the root
 class value 300 68ad38e3c2449bf0
 class identity 31 bcbc43d35e10d1cb

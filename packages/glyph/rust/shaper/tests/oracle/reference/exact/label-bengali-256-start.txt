@@ -37,13 +37,13 @@ class cache 5 9d7b9a70a17cf576
 class wire 1 f76595e040349c0f
 step 02 replace 5 at 194
 class value 265 cb81bbbd1b2d241c
-class identity 24 e0b12c0570661f3c
+class identity 24 44dde1efee397d1f
 class repr 64 32f4c9982885c498
 class cache 5 d7c52820a0d89166
-class wire 1 a705cd356d38b458
+class wire 1 cb9db9215b5d7043
 step 03 insert Word (5 units) at 121
 class value 265 0e1711b9622080e4
-class identity 24 52735ebe35cea7e3
+class identity 24 89df47f9b29e8724
 class repr 64 f6b9b0a38a81c650
 class cache 5 e84d4793edaec044
-class wire 1 50a05f9dd004129c
+class wire 1 5dfea0f0a5ba1c5d

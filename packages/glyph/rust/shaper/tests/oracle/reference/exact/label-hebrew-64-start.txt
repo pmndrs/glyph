@@ -30,7 +30,7 @@ step 01 replace 1 at 0
 class value 230 dd02938b8ba8d02d
 class identity 22 9f8d18e2fb0a486c
 class repr 41 75b0b2422cc3d51c
-class wire 1 9eb9800c8150b7aa
+class wire 1 6131d991851122ce
 step 02 max lines 0 + delete 4 at 12 + insert Bidi (180 units) at 18 + width 259
 class value 230 5ac5426f45c5d37a
 class identity 22 cda9d13362e4bd3d
@@ -40,4 +40,4 @@ step 03 add span 60..69 + delete 8 at 229 + add span 207..232
 class value 242 868892b897cfab8a
 class identity 22 e320d5becf25ee08
 class repr 44 2cf35a4f9c9e0766
-class wire 1 9ceb195968ea8e2f
+class wire 1 4c4379ed205b9830

@@ -29,19 +29,19 @@ stage gpu identity 2 a1f5176c3d117b27
 stage gpu value 3 72e73417f88636a5
 step 01 flip case at 82 + insert Word (7 units) at 904
 class value 230 d316d424e436f6a6
-class identity 22 78beba7bc8e91170
+class identity 22 29e49ac58cbf14b1
 class repr 44 d87d6eea25bf2462
 class cache 3 8712f1af113d6fca
-class wire 1 f6b1bb07255918e6
+class wire 1 03b840849fdb09f3
 step 02 insert Word (3 units) at 2471
 class value 230 6ca391eb5199b974
-class identity 22 5b87671ef635a95f
+class identity 22 faf8c37e74b2252d
 class repr 44 c66a5fa324a6f352
 class cache 3 641691afeaab7de9
-class wire 1 732dcda548f61176
+class wire 1 dd2ce7e946890d5e
 step 03 insert SpacedWord (5 units) at 174
 class value 230 c360068cc5df18a6
-class identity 22 19bfe075c99cfb77
+class identity 22 50ae85d4e1edbf10
 class repr 44 e58f5d13eac9e684
 class cache 3 3db8ce23dafe4e6f
-class wire 1 255a68737ae00df4
+class wire 1 c915f62c33f5965f

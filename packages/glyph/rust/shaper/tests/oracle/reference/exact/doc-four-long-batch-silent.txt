@@ -109,7 +109,7 @@ class value 724 a89991d1eb089423
 class identity 56 a5e87b59ee9c2542
 class repr 193 28c364bc196c28b0
 class cache 5 72ec9ccf70f4b2d6
-class wire 1 f9073528090da4ff
+class wire 1 6be579ffae3fb7b0
 step 04 move paragraph 1 last
 class value 724 3759b7132e48f8c1
 class identity 56 9a74543d79067333

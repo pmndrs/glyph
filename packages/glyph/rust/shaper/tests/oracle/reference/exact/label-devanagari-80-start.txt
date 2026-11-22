@@ -44,4 +44,4 @@ class value 242 324a576eed70453a
 class identity 22 cc6fdf702835f10e
 class repr 44 ba4061e2136e7948
 class cache 3 1031f2c4b445e150
-class wire 1 b6ccf39df376fec3
+class wire 1 98e2a08c7febfc8a

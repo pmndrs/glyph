@@ -42,7 +42,7 @@ class value 280 e1e5646c7a53e1ce
 class identity 29 1e5564f21c6a22cb
 class repr 64 b8dac8757781cc0e
 class cache 5 9671cfa50cb38fc4
-class wire 1 c1c288d14efc5cae
+class wire 1 db5ebef06c143f99
 step 03 thicker
 class value 280 fc9eb4f9fe5c3115
 class identity 29 1c36506f65edd1d0

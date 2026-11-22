@@ -65,16 +65,16 @@ class repr 44 7fa4144f80f122ab
 class wire 1 45111bd587d3acb2
 step 08 insert SpacedWord (8 units) at 118
 class value 253 1362dfbf5d46a776
-class identity 29 e37da664f9a2f40d
+class identity 29 d6250694cc8b0db6
 class repr 44 6a3dce640b41e84b
-class wire 1 e8b49359a14828dd
+class wire 1 91f7e9aa88488374
 step 09 width 0 + width 0
 class value 253 ff1400857f33d24d
-class identity 29 059c4dbfe336cebe
+class identity 29 d3ccf036f4397067
 class repr 44 47fc116176e9fdcd
 class wire 1 d7732d4985bc605b
 step 10 metrics size 16 spacing -0.25 line 1.2 word 0 + remove an inline object
 class value 253 e961ded45613c4de
-class identity 29 a0ea5bc216ea2199
+class identity 29 2a50a9734a2f8e88
 class repr 44 7bc72aa525641683
 class wire 1 50cb11198ab01be8

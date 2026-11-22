@@ -28,26 +28,26 @@ stage gpu identity 2 7dc509de9aaae512
 stage gpu value 3 32060ec55a15fd2e
 step 01 mark a plain space
 class value 230 a6f89511e16e231e
-class identity 22 cbc013cd37881232
+class identity 22 2a7a550ae25e7731
 class repr 41 611e89ca823499f0
-class wire 1 e90a303ac754fa51
+class wire 1 bdedef0f03c490fa
 step 02 restore
 class value 230 96f3905aaf8c366e
-class identity 22 4e5eaf9dd97d0971
+class identity 22 80023b6a236f3e90
 class repr 41 0decf24c0d6df88e
-class wire 1 e656eb86e67acbce
+class wire 1 8c2fd5d8995514f2
 step 03 insert Word (6 units) at 15
 class value 230 10e2311e3321ea80
-class identity 22 2232fe40a90b612d
+class identity 22 0448aa4d4813afae
 class repr 41 5e0156fd911c46f3
 class wire 1 ab7f680d788bf303
 step 04 flip case at 0
 class value 230 af0eeb8e370ce795
-class identity 22 b89a21bfeba15e56
+class identity 22 053d19fd9ec96bcb
 class repr 41 296a38e519aacfe9
 class wire 1 064473fc268685e5
 step 05 delete 7 at 10
 class value 230 40c30393c2c7991a
-class identity 22 273d1449fae758a3
+class identity 22 6a1c6c0757a5bf5a
 class repr 41 3474778a450cd66c
 class wire 1 174de418b41ddef7

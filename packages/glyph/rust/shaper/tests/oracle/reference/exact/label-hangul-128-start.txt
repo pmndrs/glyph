@@ -38,6 +38,6 @@ class repr 44 a7d3e81403cf4817
 class wire 1 fc4c6387f74e59d9
 step 03 insert SpacedWord (3 units) at 80
 class value 230 591bc40b9cb561a7
-class identity 22 b129baab899e2bdb
+class identity 22 0ac3764730c3d546
 class repr 44 32ef8befc1bd85d8
-class wire 1 da77a39232e7c466
+class wire 1 7b4945cd19ed7fa7

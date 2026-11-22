@@ -42,4 +42,4 @@ class value 230 72f3c539a6afb398
 class identity 22 6665680aae60bf8b
 class repr 41 b9ca106d4025c320
 class cache 3 105c9cb18d7a4df0
-class wire 1 f710b4ac753f135b
+class wire 1 525efbe956521259

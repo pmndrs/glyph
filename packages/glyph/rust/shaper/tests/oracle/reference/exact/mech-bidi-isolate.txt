@@ -50,4 +50,4 @@ step 05 add span 1..5 + delete 18 at 9
 class value 242 347f74a326fa0d61
 class identity 22 54b4fba87b8707fd
 class repr 41 e1c8b154f56431bf
-class wire 1 f81203b8ec25eb72
+class wire 1 9571f862ebfd66a9

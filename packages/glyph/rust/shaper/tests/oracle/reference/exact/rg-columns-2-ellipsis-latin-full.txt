@@ -37,46 +37,46 @@ class repr 64 362c5485398dc408
 class wire 1 197e989a5ed427c1
 step 02 delete in a later region
 class value 289 bd5bc4f84327966a
-class identity 31 a93d401538491eb2
+class identity 31 08b1838589d99d6a
 class repr 64 e5455abf71ec29ee
-class wire 1 12423252a875864f
+class wire 1 7476a9a702fd6952
 step 03 narrower measure
 class value 289 5dce8156619af035
-class identity 31 17af6a95ca35d29f
+class identity 31 7f322cb5007a9fe7
 class repr 64 11d7ea7b7b277f0f
-class wire 1 f1df45c9f4d5e62d
+class wire 1 4179a567e5de1627
 step 04 shorter regions
 class value 289 3770c41a5f628287
-class identity 31 c581bac1619f5e09
+class identity 31 74e6d1f360e5d81c
 class repr 64 4faf3615c2981982
-class wire 1 6b5430bccdca972d
+class wire 1 e571e418cc34e640
 step 05 three columns, wider gap
 class value 289 6db77d199d685861
-class identity 31 143bf373df4245fa
+class identity 31 e30931a277bf37a3
 class repr 64 abbb70f8c69ba485
-class wire 1 14523138f5a9611d
+class wire 1 ee5631e971521c42
 step 06 one region
 class value 289 c0db659d00e170a1
-class identity 31 a3fa8c821d061cb6
+class identity 31 26952054f1ba41b1
 class repr 64 d6f206576b32d1da
-class wire 1 7d7fb0ca51d5df13
+class wire 1 64fcf4514208d283
 step 07 the starting regions
 class value 289 bd5bc4f84327966a
-class identity 31 640f0a49d19bd683
+class identity 31 9ad6be8ed7d799d0
 class repr 64 e5455abf71ec29ee
-class wire 1 14d9b0881aff2c20
+class wire 1 a1360b09f0f4dc07
 step 08 insert Bidi (212 units) at 356
 class value 289 85607236c57fc9b8
-class identity 31 d5c72e6f57639adc
+class identity 31 ab2cddcfc6b389e5
 class repr 64 6c1ba6272cda5717
-class wire 1 2e86b8a5cf5afeb3
+class wire 1 48e1799e53982651
 step 09 replace 6 at 675
 class value 289 4e8f8bf73846cf4d
-class identity 31 ac2bdc418930f3d1
+class identity 31 0c31fe441fafc147
 class repr 64 0604da7186488ff8
-class wire 1 d3ac240315cef9e0
+class wire 1 882193fbb7a4a45a
 step 10 width 567
 class value 289 36549409de403629
-class identity 31 2934b31078eecd65
+class identity 31 81bb9a31d156ec9b
 class repr 64 08c2de4f02d4b1a6
-class wire 1 628971df91130974
+class wire 1 02f50528fdf8096e
