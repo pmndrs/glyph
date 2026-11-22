@@ -145,3 +145,62 @@ Verification of 5, on `d0c17d8e3`:
 - `cargo test --features oracle` in the shaper: every target passed, the UAX #9, #14 and #29 conformance
   suites among them (569 library tests).
 - `pnpm --filter @pmndrs/glyph test`: passed.
+
+## Cluster stage of an edit (landed)
+
+An insert cost the cluster stage more than a cold build (wasm, Latin 15k: 344 against 224 µs) because an edit that
+changes a source run's cluster or glyph count fell through to the full cluster build, and the stages after it
+(glyph identity, layout-run revisions, cluster changes and run-local geometry) each walked the whole paragraph again.
+Native stage clocks of that insert, before: full build 159 µs (headers 30, index 13, shape aggregation with ink 75,
+break flags 14, layout units 22), revisions and changes 101, run-local geometry 155.
+
+- **Cluster splice** (`cluster_state/splice.rs`). When the incremental shape stage reshaped one source run, the arena
+  is the previous rows before and after that run, renumbered, and only the run's clusters are built, by the full
+  build's own passes scoped to the run (`ShapeScope`). Grapheme boundaries after the run, style segments and shaping
+  runs must be the previous ones moved by the edit, or the full build runs. Break flags are redone for the clusters a
+  changed line break touches and the cluster before the run; chunk summaries from the first changed chunk.
+- **Run-local splice.** Layout runs before the splice keep their blocks, runs after it keep theirs moved, and a
+  left-to-right run that starts before it keeps every whole chunk before it and resumes the kernel there (the
+  edit-diff lane's `layout_run_from`). Any other rebuild uses that lane's compared-prefix adoption.
+- **Proportional revisions and changes.** The splice reports the clusters it rebuilt or reflagged; a layout run
+  outside them that covers exactly a previous run keeps its revision without a comparison, and that range is the
+  arena's `ClusterChanges`, so a later consumer can stay proportional too. Glyph identities keep their existing
+  prefix and suffix alignment.
+
+Wasm, interleaved, minimum of 5 rounds × 30 iterations, load average about 12, microseconds. `green-33` is the
+integration tip this lane started from; `splice` adds the cluster and run-local splice; `combined` adds the edit-diff
+merge and the proportional revisions:
+
+| Paragraph, 15k    | Cluster stage, insert: green-33 → splice → combined | `insert_mid` whole step: green-33 → splice → combined |
+| ----------------- | --------------------------------------------------: | ----------------------------------------------------: |
+| Latin, Inter      |                                      344 → 200 → 88 |                          2,558 → 2,203 → 2,112 (−17%) |
+| Latin, Fredoka    |                                      365 → 206 → 86 |                          2,866 → 2,510 → 2,380 (−17%) |
+| CJK, Noto Sans JP |                                     765 → 471 → 140 |                          3,340 → 2,836 → 2,524 (−24%) |
+| Devanagari        |                                      459 → 233 → 98 |                          3,772 → 3,317 → 3,245 (−14%) |
+| Arabic, Amiri     |                                     541 → 548 → 553 |                              13,974 → 14,064 → 14,038 |
+
+The cluster stage of an insert is now below a cold build's (Latin 88 against 224 µs). Arabic is unchanged: its runs
+are right-to-left and the edit takes the full build. `three_range` (three edits) and `replace_all` take the full
+build too and are equal in all three arms, so the edit-diff lane's prefix adoption is neither faster nor slower on
+them in this bench; the combination was kept because it is faster on every spliced row and equal elsewhere.
+
+Proof of equality: test builds hold every spliced cluster lane, the ink and every run-local lane to the full build of
+the same inputs, and the revisions and changes to the view rule and to every kept cluster, across the whole shaper
+suite; an engine test splices a typed letter, a deleted word, a paste and edits in the first and last lines of a
+six-line paragraph and compares each with its cold twin.
+
+Browser headline, Latin 15k Inter edit rows, tarball packed from `c7867e00f` against the saved `main` consumer, three
+A/B rounds, load average 9–16; complete frame, and in brackets the mutate-and-measure share, milliseconds:
+
+| Workload      | main        | this branch | branch/main | After experiment 5 |
+| ------------- | ----------- | ----------- | ----------: | -----------------: |
+| type-end      | 9.53 (6.10) | 5.18 (1.47) |        0.54 |               0.54 |
+| insert-middle | 7.82 (3.09) | 4.81 (1.03) |        0.62 |               0.68 |
+| delete-middle | 7.75 (3.06) | 4.84 (0.94) |        0.62 |               0.66 |
+| paste-middle  | 8.04 (3.12) | 5.08 (1.04) |        0.63 |               0.64 |
+
+Typing at the end is unchanged: that row does not reach the splice, and why is the next thing to find.
+
+Verification on `c7867e00f`: native and wasm oracle, full tier, 592 cases equal, 54,720 differential requests and 0
+runs with an unlisted divergence, no reference re-frozen; `cargo test --features oracle` (573 library tests and every
+other target, the conformance suites among them) and `pnpm --filter @pmndrs/glyph test` passed.
