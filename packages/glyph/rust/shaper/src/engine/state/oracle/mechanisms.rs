@@ -382,6 +382,7 @@ pub(super) fn cases(cases: &mut Vec<Case>) {
     }
     cases.push(max_lines_count_change());
     cases.push(style_removal_with_same_length_edit());
+    cases.push(ellipsis_on_empty_lines());
     span_changes(cases);
 }
 
@@ -565,6 +566,44 @@ fn style_removal_with_same_length_edit() -> Case {
         spans: Some(Vec::new()),
         ..Step::default()
     }];
+    case
+}
+
+/// A line limit whose last kept line is empty. The marker follows no retained cluster, so it
+/// takes the style of the first drawn cluster the limit hides, or, when only the empty line
+/// after a final hard break is hidden, of the last one drawn; text of hard breaks alone draws
+/// no marker. Found by the differential driver: the engine at the reference commit refuses
+/// every step.
+fn ellipsis_on_empty_lines() -> Case {
+    let mut case = new_case(
+        "mech-ellipsis-empty-last-line".into(),
+        Tier::Quick,
+        &["inter"],
+        Script::Latin,
+    );
+    case.model.text = utf16("one\n\ntwo");
+    case.model.layout = Layout {
+        width: 300.0,
+        max_lines: 2,
+        overflow: OVERFLOW_ELLIPSIS,
+        ..Layout::default()
+    };
+    let edit = |label: &str, start: u32, delete: u32, insert: &str| Step {
+        label: label.into(),
+        edits: vec![TextEdit {
+            start,
+            delete,
+            insert: utf16(insert),
+        }],
+        ..Step::default()
+    };
+    case.steps = vec![
+        edit("hide only the line after the final break", 5, 3, ""),
+        edit("hard breaks alone", 0, 3, ""),
+        edit("restore", 0, 0, "one"),
+        edit("restore the hidden word", 5, 0, "two"),
+    ];
+    case.fuzz = true;
     case
 }
 

@@ -63,7 +63,7 @@ impl StageClock {
     }
 }
 
-const NO_SOURCE_RUN: u32 = u32::MAX;
+pub(crate) const NO_SOURCE_RUN: u32 = u32::MAX;
 pub(super) const SHAPING_CONTEXT: usize = 5;
 /// The most clusters an island may span and still be reshaped: real ones (a ligature, a contextual arrow) cover a
 /// few, so a longer chain is a font that flags every boundary unsafe, and its breaks stay uncorrected, as on main.

@@ -1897,12 +1897,12 @@ impl FlowLayoutArena {
             .get(fragment_index)
             .ok_or(EngineError::InvalidRequest)?;
         let cluster_count = clusters.starts.len();
+        // Composition asked for the marker, and it is the one that knows a line was dropped: the
+        // line that follows a final hard break holds no cluster, so a last line that consumed
+        // every cluster and fits can still be followed by one that did not fit.
         let consumed =
             usize::try_from(fragment.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
         let available = fragment.slot_end - fragment.slot_start;
-        if consumed >= cluster_count && fragment.line.advance <= available {
-            return Ok(None);
-        }
         let cluster_start = usize::try_from(fragment.line.cluster_start)
             .map_err(|_| EngineError::InvalidRequest)?;
         let mut cluster_end = consumed.min(cluster_count);

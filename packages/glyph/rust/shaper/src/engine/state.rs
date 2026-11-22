@@ -11,8 +11,8 @@ use crate::{
 use super::{
     cluster_state::{
         CLUSTER_ALLOWED_BREAK, CLUSTER_BREAK_CORRECTION, CLUSTER_SPACE, CanonicalClusterView,
-        ClusterArena, ClusterBuildInput, LayoutDirtyRanges, LayoutRunSourceKind, RunCanonicalInput,
-        SHAPING_CONTEXT,
+        ClusterArena, ClusterBuildInput, LayoutDirtyRanges, LayoutRunSourceKind, NO_SOURCE_RUN,
+        RunCanonicalInput, SHAPING_CONTEXT,
     },
     codec::{CapabilitySetId, ValidatedCodec},
     codec_gather::{
@@ -6553,7 +6553,13 @@ impl ParagraphState {
             first_font_for_stack,
             &mut corrections,
         )?;
-        let mut ellipsis_index = 0usize;
+        // Text of hard breaks alone has no run: no font draws its marker, so its lines are
+        // dropped without one.
+        let mut ellipsis_index = if runs.is_empty() {
+            self.flow_layout.pending().ellipsis_threads().len()
+        } else {
+            0
+        };
         while ellipsis_index < self.flow_layout.pending_mut().ellipsis_threads().len() {
             let flow_thread_id = self.flow_layout.pending_mut().ellipsis_threads()[ellipsis_index];
             let line_index = self
@@ -8498,10 +8504,15 @@ fn prepare_boundary_candidate(
     cluster_end: usize,
     text_end: u32,
 ) -> Result<BoundaryCandidate, EngineError> {
+    // The marker follows the last retained cluster. A line that keeps none -- an empty line,
+    // or one cut to nothing -- takes the first drawn cluster it hides; a hard break has no
+    // run and is not drawn. Hiding none, it takes the last drawn cluster before it.
+    let drawn = |index: &usize| clusters.source_runs[*index] != NO_SOURCE_RUN;
     let anchor = cluster_end
         .checked_sub(1)
         .filter(|index| *index >= line_cluster_start)
-        .or_else(|| (cluster_end < clusters.starts.len()).then_some(cluster_end))
+        .or_else(|| (cluster_end..clusters.starts.len()).find(drawn))
+        .or_else(|| (0..line_cluster_start).rev().find(drawn))
         .ok_or(EngineError::InvalidRequest)?;
     let source_run = usize::try_from(
         *clusters

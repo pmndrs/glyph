@@ -1,0 +1,65 @@
+# glyph layout oracle reference v1
+case mech-ellipsis-empty-last-line
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 cc8a659ca0a65780
+stage text identity 1 6c9c3b0070777920
+stage unicode value 6 3c52f26d9fe65142
+stage bidi value 8 f09b4094752c5cd9
+stage style value 26 ddb185d7317f5c63
+stage shaping_run value 5 97c3b027a9875b93
+stage shape value 14 da152cb1a4f22861
+stage cluster value 29 559c9eefa8889cae
+stage cluster identity 4 89ddcb4d4a567496
+stage cluster repr 8 c443c18af8269b98
+stage run_local repr 16 b53680bc5d8397a5
+stage flow value 36 9c3f83346d1bfe4c
+stage boundary value 28 21e67824c88a450a
+stage boundary identity 1 9f0a3f0e09c8d01a
+stage positioned identity 4 aeeba3b006e5e586
+stage positioned value 20 17e58f4fbfb431c0
+stage positioned repr 37 ade8a547362ca5f3
+stage public value 13 51edb328f95ef02a
+stage public identity 1 099607400ee37a79
+stage view identity 4 9ca94e0c9ccac72e
+stage view value 40 d4b1cf424a387b2c
+stage wire wire 1 6fff9604b6715c4b
+stage gather identity 7 d01017be27cd3612
+stage gather value 36 8942c478911af1b2
+stage gpu identity 2 a17271879bf10103
+stage gpu value 3 fd25ebe9aaa0a052
+step 01 hide only the line after the final break
+class value 266 218b4e3dbaf62c38
+class identity 24 a179fe3586a48246
+class repr 61 728321ac03dfbe0b
+class wire 1 9c67b712a5ac6ab7
+step 02 hard breaks alone
+class value 144 69ee0df5e0ad273e
+class identity 11 20a6e697d5127050
+class repr 22 60c452ba402a1277
+class wire 1 9acf23b4fd9d3188
+step 03 restore
+class value 266 218b4e3dbaf62c38
+class identity 24 fe95835b66b432a6
+class repr 61 728321ac03dfbe0b
+class wire 1 cfb43ee68cab21c9
+step 04 restore the hidden word
+class value 266 966ed47620636f9c
+class identity 24 ee2c007605617781
+class repr 61 beedcc063e085da4
+class wire 1 5c676b11de5df31c
+step 05 width 0
+class value 266 aff7222261eb07ad
+class identity 24 ee2c007605617781
+class repr 61 beedcc063e085da4
+class wire 1 9b450cfb2fad9bc0
+step 06 replace 1 at 4
+class value 230 46a8cb073c75674d
+class identity 22 77561d9d07246399
+class repr 41 bfb5677e03acda81
+class wire 1 375ea819d765c12f
+step 07 replace 1 at 7 + add span 1..6 + align 3
+class value 242 00ef3a105cbab2e8
+class identity 22 a84eecbfff865723
+class repr 41 85f2f5fcd14df9d0
+class wire 1 d62154d6c0342d25
