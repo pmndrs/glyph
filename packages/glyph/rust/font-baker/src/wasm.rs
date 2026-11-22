@@ -152,7 +152,7 @@ pub extern "C" fn pmndrs_font_baker_glyph_outline(
         GLYPH_OUTLINE_STATUS_INVALID_FONT, GLYPH_OUTLINE_STATUS_INVALID_REQUEST,
         GLYPH_OUTLINE_STATUS_OK, GLYPH_OUTLINE_STATUS_OUT_OF_MEMORY,
     };
-    use crate::glyph_outline::OutlineError;
+    use pmndrs_glyph_outline::OutlineError;
     with_state(|state| {
         let WasmState {
             allocations,
@@ -342,7 +342,7 @@ struct WasmState {
     allocations: Vec<Allocation>,
     result_pointer: u32,
     result_len: u32,
-    outline: crate::glyph_outline::GlyphOutline,
+    outline: pmndrs_glyph_outline::GlyphOutline,
     outline_result: Vec<u32>,
 }
 
@@ -429,7 +429,7 @@ fn with_state<Result>(operation: impl FnOnce(&mut WasmState) -> Result) -> Resul
             allocations: Vec::new(),
             result_pointer: 0,
             result_len: 0,
-            outline: crate::glyph_outline::GlyphOutline::default(),
+            outline: pmndrs_glyph_outline::GlyphOutline::default(),
             outline_result: Vec::new(),
         })) as usize;
         match STATE.compare_exchange(0, candidate, Ordering::AcqRel, Ordering::Acquire) {

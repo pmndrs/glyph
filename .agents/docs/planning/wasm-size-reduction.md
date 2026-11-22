@@ -634,26 +634,26 @@ to the font baker. read-fonts, about `164` kB of the merged build's functions, s
 
 The only runtime consumer of outlines is the font loader: `outlineAt()` (Text, borrowed and detached glyph views) reads a
 JavaScript store that the loader fills, glyph by glyph, behind the already-asynchronous load promise. Slug rendering uses
-its own baked curves, and ink bounds come from the baked extents table. So the decoder moved to the font baker with no
-change to a public API's synchronous shape or to the artifact format; fonts with outlines fetch `font-baker-core.wasm`
-(no subsetting, `opt-level = 3`, `457,179` raw / `179,816` gzip) once. Load-time decode in Node, cold (module compile
-included): Inter 9 to 11 ms through the core module against 10 to 15 ms through the shaper module, Noto Sans CJK JP
-(65,535 CFF glyphs) 368 ms against 380 ms. At the baker's own `opt-level = "z"` the CJK decode took 730 ms and the module
-was larger (`515,439` raw), so the core build overrides it.
+its own baked curves, and ink bounds come from the baked extents table. So the decoder moved, as the
+`rust/glyph-outline` crate, into `font-baker.wasm`, which the runtime already loads on demand; nothing about a public
+API's synchronous shape or the artifact format changed. Fonts with outlines now fetch the baker once.
+
+The baker builds at `opt-level = "z"`; at `z` the CJK decode below took about 630 ms. Per-package profile overrides give
+`pmndrs-glyph-outline`, `read-fonts` and `pmndrs-glyph-slug-core` `opt-level = 3` (read-fonts alone at 3 reached about
+500 ms). The baker grows from `1,080,718` raw / `389,311` gzip to `1,160,249` / `427,030` (`+79,531` / `+37,719`),
+which the owner accepts because the baker is loaded on demand. Cold outline load in Node (module compile included),
+interleaved eight times each: Noto Sans CJK JP, 65,535 CFF glyphs, median 375 ms through the baker against 371 ms
+through the shaper; Inter, 2,937 glyphs, 11 to 12 ms against 12 to 15 ms.
 
 Baking outlines into the artifact instead (contours stored at bake time, no runtime decoder at all) would also remove the
 core module fetch, but it is an artifact format change and is not done here.
 
-### Lazy subsetting module (research step 2)
+### Lazy subsetting module (research step 2): parked
 
-Not done: it needs a public change. `FontBakeCore.prepare` is synchronous and `createFontBaker(source)` /
-`createFontBakerFromInstance(instance)` take exactly one module that must export `prepare` and `inspect`. Splitting
-subsetting into a second module therefore needs one of: an asynchronous `prepare`, a second module argument
-(`createFontBaker(source, { subsetting })`, `createFontBakerFromInstance(instance, subsettingInstance)`), or relaxing
-`createFontBakerFromInstance` to accept a bake-only module whose `prepare` and `inspect` throw. Internally, the runtime
-bake worker could already use `font-baker-core.wasm` whenever a request has no `unicodeRanges` (the only caller of
-`prepare`), cutting its download from about 401 kB gzip to about 180 kB; that needs either the relaxed factory above or
-moving the font-baker implementation out of the public entry into an internal module both can use.
+Parked by the owner: the baker is already loaded on demand, so its size is not a target. For the record, it needs no
+public change if the font-baker binding moves out of the public entry into an internal module: the runtime bake worker
+could then bind a subsetting-free build whenever a request has no `unicodeRanges` (the only caller of `prepare`), which
+measured `456,403` raw / `179,716` gzip against the full baker and baked every fixture face to identical bytes.
 
 ### Not now: estimates
 

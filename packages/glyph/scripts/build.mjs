@@ -70,8 +70,6 @@ const mtsdfArtifactTargetDirectory = rustTargetDirectory('mtsdf-baker', 'artifac
 const slugArtifactTargetDirectory = rustTargetDirectory('slug-baker', 'artifact-baker-wasm');
 const bitmapTargetDirectory = rustTargetDirectory('bitmap-baker');
 const fontBakerTargetDirectory = rustTargetDirectory('font-baker');
-// The core build has no subsetting: bake and glyph-outline decoding, fetched by fonts that carry outlines.
-const fontBakerCoreTargetDirectory = rustTargetDirectory('font-baker', 'core');
 const shaperRustEnvironment = withRustTarget(
   shaperBuildEnvironment(workspaceRoot, shaperTargetDirectory, shaperSimd),
   shaperTargetDirectory,
@@ -80,12 +78,6 @@ const mtsdfArtifactRustEnvironment = withRustTarget(rustEnvironment, mtsdfArtifa
 const slugArtifactRustEnvironment = withRustTarget(rustEnvironment, slugArtifactTargetDirectory);
 const bitmapRustEnvironment = withRustTarget(rustEnvironment, bitmapTargetDirectory);
 const fontBakerRustEnvironment = withRustTarget(rustEnvironment, fontBakerTargetDirectory);
-// Outline decoding runs over every glyph when an outline font loads, so the core build keeps `opt-level = 3`: at the
-// crate's `z` it decoded a 65,535-glyph CFF font 1.9x slower, and after the shared Binaryen pass it is smaller at 3 too.
-const fontBakerCoreRustEnvironment = {
-  ...withRustTarget(rustEnvironment, fontBakerCoreTargetDirectory),
-  CARGO_PROFILE_RELEASE_OPT_LEVEL: '3',
-};
 const executable = process.platform === 'win32' ? 'wasm-opt.CMD' : 'wasm-opt';
 const wasmOpt = fileURLToPath(new URL(`../node_modules/.bin/${executable}`, import.meta.url));
 const rustWasm = join(bitmapTargetDirectory, 'wasm32-unknown-unknown/release/pmndrs_glyph_bitmap_baker.wasm');
@@ -98,11 +90,6 @@ const slugWasm = join(slugArtifactTargetDirectory, 'wasm32-unknown-unknown/relea
 const distributedSlugWasm = fileURLToPath(staged('slug-baker.wasm'));
 const fontBakerWasm = join(fontBakerTargetDirectory, 'wasm32-unknown-unknown/release/pmndrs_glyph_font_baker.wasm');
 const distributedFontBakerWasm = fileURLToPath(staged('font-baker.wasm'));
-const fontBakerCoreWasm = join(
-  fontBakerCoreTargetDirectory,
-  'wasm32-unknown-unknown/release/pmndrs_glyph_font_baker.wasm',
-);
-const distributedFontBakerCoreWasm = fileURLToPath(staged('font-baker-core.wasm'));
 
 const [bitmapAbiJson, shaperAbiJson, mtsdfAbiJson, slugAbiJson, fontBakerAbiJson] = await Promise.all([
   runCapture('cargo', [
@@ -251,20 +238,6 @@ await run(
   ],
   fontBakerRustEnvironment,
 );
-await run(
-  'cargo',
-  [
-    'build',
-    '--manifest-path',
-    'rust/font-baker/Cargo.toml',
-    '--target',
-    'wasm32-unknown-unknown',
-    '--release',
-    '--locked',
-    '--no-default-features',
-  ],
-  fontBakerCoreRustEnvironment,
-);
 // The build info has to travel with the outputs it describes. `tsconfig.build.json` points
 // it at `dist/`, and overriding only `--outDir` leaves tsc recording staged emits against a
 // path that survives a failed build: the next run deletes the staging tree, tsc reads the
@@ -328,17 +301,6 @@ await run(wasmOpt, [
   fontBakerWasm,
   '-o',
   distributedFontBakerWasm,
-]);
-await run(wasmOpt, [
-  '--enable-bulk-memory',
-  '--enable-nontrapping-float-to-int',
-  '--merge-similar-functions',
-  '-Oz',
-  '--merge-similar-functions',
-  '-Oz',
-  fontBakerCoreWasm,
-  '-o',
-  distributedFontBakerCoreWasm,
 ]);
 await Promise.all([
   assertMtsdfArtifactBakerExports(distributedMtsdfWasm, mtsdfAbiJson),

@@ -1,5 +1,6 @@
 //! Unhinted glyph outlines at the default instance, decoded from the `glyf`/`loca` or `CFF ` table
-//! a bake keeps in its outline SFNT, through the read-fonts that HarfRust already links.
+//! a bake keeps in its outline SFNT. The font baker links this crate and exports the decoder to
+//! the runtime, which decodes every glyph when an outline font loads.
 //!
 //! TrueType glyphs follow Skrifa's FreeType-style unscaled loader, so both draw the same segments:
 //! 26.6 fixed-point points, 16.16 fixed-point composite transforms applied before matched-point
@@ -9,6 +10,11 @@
 //! charstring evaluator. [`draw_glyph`] emits the raw segments, and
 //! [`GlyphOutline`] turns them into the closed quadratic contours `outlineAt()` returns.
 
+#![no_std]
+
+extern crate alloc;
+
+use alloc::vec::Vec;
 use pmndrs_glyph_slug_core::{
     Cubic, DEFAULT_CUBIC_SUBDIVISIONS, MAX_CUBIC_SUBDIVISIONS, Point, Quadratic,
     cubic_to_quadratics_into,
@@ -26,7 +32,6 @@ use read_fonts::{
     },
     types::{F26Dot6, Fixed, GlyphId, Point as FontPoint, Tag},
 };
-use std::vec::Vec;
 
 /// The outline SFNT or one of its glyphs could not be drawn.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

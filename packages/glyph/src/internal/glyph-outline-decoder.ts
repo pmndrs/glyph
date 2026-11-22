@@ -6,13 +6,13 @@ import {
   type GlyphOutlineStore,
 } from '../glyph-outline.js';
 import { compileWasmResponse } from './compile-wasm-response.js';
-import { fontBakerCoreWasmUrl } from './font-baker-core-wasm-url.js';
+import { fontBakerWasmUrl } from '../font-baker/wasm-url.js';
 import { cacheSuccessfulPromise } from './successful-promise-cache.js';
 
 /**
  * Outline decoding lives in the font baker, not the text shaper: only fonts baked with `outlines` need it, and it
- * links the glyf/CFF readers the shaper has no other use for. The baker's core build (no subsetting) is the module
- * fetched here, once, the first time such a font loads.
+ * links the glyf/CFF readers the shaper has no other use for. The baker is fetched here, once, the first time such a
+ * font loads; the runtime bake worker fetches the same module.
  */
 interface OutlineDecoderExports {
   readonly memory: WebAssembly.Memory;
@@ -23,7 +23,7 @@ interface OutlineDecoderExports {
 }
 
 const loadDecoderModule = cacheSuccessfulPromise<WebAssembly.Module>(async () => {
-  const url = fontBakerCoreWasmUrl();
+  const url = new URL(fontBakerWasmUrl);
   if (url.protocol === 'file:' && typeof process !== 'undefined' && typeof process.getBuiltinModule === 'function') {
     const fileSystem = process.getBuiltinModule('node:fs') as typeof import('node:fs');
     return WebAssembly.compile(Uint8Array.from(fileSystem.readFileSync(url)));

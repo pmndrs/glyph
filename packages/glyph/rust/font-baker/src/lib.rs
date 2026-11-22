@@ -10,7 +10,6 @@ extern crate alloc as std;
 mod abi_contract;
 mod error;
 mod glb;
-pub mod glyph_outline;
 mod outline;
 mod report;
 mod sfnt;

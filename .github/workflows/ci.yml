@@ -176,6 +176,7 @@ jobs:
           workspaces: |
             packages/glyph/rust/bitmap-baker -> target
             packages/glyph/rust/font-baker -> target
+            packages/glyph/rust/glyph-outline -> target
             packages/glyph/rust/mtsdf-admission -> target
             packages/glyph/rust/mtsdf-baker -> target
             packages/glyph/rust/mtsdf-core -> target
@@ -325,6 +326,7 @@ jobs:
           workspaces: |
             packages/glyph/rust/bitmap-baker -> target
             packages/glyph/rust/font-baker -> target
+            packages/glyph/rust/glyph-outline -> target
             packages/glyph/rust/mtsdf-admission -> target
             packages/glyph/rust/mtsdf-baker -> target
             packages/glyph/rust/mtsdf-core -> target

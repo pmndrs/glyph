@@ -202,8 +202,8 @@ dependencies = [
  "core_maths",
  "flate2",
  "harfrust",
+ "pmndrs-glyph-outline",
  "pmndrs-glyph-raster-artifact",
- "pmndrs-glyph-slug-core",
  "read-fonts 0.42.1",
  "serde",
  "serde_json",
@@ -211,6 +211,14 @@ dependencies = [
  "skrifa",
  "talc",
  "thiserror",
+]
+
+[[package]]
+name = "pmndrs-glyph-outline"
+version = "0.0.0"
+dependencies = [
+ "pmndrs-glyph-slug-core",
+ "read-fonts 0.42.1",
 ]
 
 [[package]]
