@@ -15435,7 +15435,11 @@ mod tests {
             "the chosen line was admitted by retention, not freshly positioned"
         );
         assert_ne!(old.placement_segment, next.placement_segment);
-        assert!(super::super::work_attribution::snapshot().retained_occurrence_span_visits > 0);
+        let work = super::super::work_attribution::snapshot();
+        assert!(work.retained_occurrence_span_visits > 0);
+        // Geometry alone changed, so both sides read one cluster arena and a retained line
+        // moves as a unit: no span re-proves its glyphs' outline admission.
+        assert_eq!(work.retained_outline_word_comparisons, 0);
         engine.commit_measure(measured).unwrap();
 
         let mut publication = update(1, 1, 1);
