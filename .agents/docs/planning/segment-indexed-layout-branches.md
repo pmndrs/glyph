@@ -100,3 +100,5 @@ Integration branch `experiments/segment-indexed-layout` at `sil-green-49`. Open 
 pushed): `experiments/sil-refreeze`, `experiments/sil-exp-unicode`, `experiments/sil-size`. Their state and how to
 finish each is in [the handoff](segment-indexed-layout-handoff.md), section 3. Every other `experiments/sil-*` branch
 is merged and deleted.
+
+`sil-green-51` (2026-11-22): `sil-refreeze`, `sil-size` and `sil-exp-unicode` merged and deleted. No lane branch is open.

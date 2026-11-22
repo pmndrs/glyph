@@ -18,7 +18,7 @@ named below.
 ## 1. Where things stand
 
 - **Integration branch** `experiments/segment-indexed-layout`, worktree `/Volumes/Depot/Developer/glyph-held-rope-wip`,
-  pushed to `origin`. Last verified tag: **`sil-green-50`** (local; push pending Justin's go-ahead). It sits on `experiments/held-rope-ascii-anchor-wip`
+  pushed to `origin`. Last verified tag: **`sil-green-51`**. It sits on `experiments/held-rope-ascii-anchor-wip`
   (`8176a24e0a3f`; draft PRs #292 → #301 → #302 → #310). It ships as **0.2.0**, a breaking release.
 - **Oracle:** 596 frozen cases, 928 differential runs (~55,700 requests) comparing incremental against cold in every
   stage and lane class, natively and in wasm. 0 unlisted divergences. `KNOWN-DIVERGENCES` may only shrink.
@@ -55,7 +55,7 @@ named below.
 | Insert, delete, paste mid, 22k | 0.42–0.43 |
 | Width sweep, 2,500 words / 22k / bidi | 0.94 / 0.94 / 0.78 |
 | Small ASCII frame | about 0.83 |
-| **Mixed Arabic/Latin insert and delete mid** | **1.40–1.42 (regression, being fixed)** |
+| Mixed Arabic/Latin edits (type end / insert / delete / paste) | 0.52 / 0.77 / 0.76 / 0.81 |
 | `measure()` alone right after a width change | about 2.1 (frame total equal or faster; decision below) |
 
 Not yet re-measured with the typing fix and upload narrowing (section 3), which take type-at-end to about 4.67 ms and
@@ -84,18 +84,12 @@ its upload from 695 kB to 1.7 kB per keystroke.
 
 ## 3. Open lanes at handoff
 
-Three lane branches hold finished or nearly finished work that is **not on the integration branch yet**. None is
-pushed: the lanes' own pushes were refused by the permission system at wrap-up, and they were deliberately not pushed
-on the lanes' behalf. Justin decides whether to push them as backups.
-
-| Branch (worktree) | Tip | State | To finish |
-| --- | --- | --- | --- |
-| `experiments/sil-refreeze` | `7cfd499a1` | **Merged into `sil-green-50`.** Items 1–4 landed: Thai grapheme fix, empty-text ink, start/end-correction shortcut, typing fix (type at end 3.84 vs main 9.63 ms, 1.7 vs 27 kB/frame), narrowed writes. Item 5 (`measure()`) not built; see section 4. | Delete the branch once pushed. |
-| `experiments/sil-exp-unicode` (`glyph-wt-exp-unicode`) | `e07a29dcb` | Mixed Arabic/Latin edit regression. `2a2fe78f5` (reshape only runs an edit splits or merges) and `f2beb28b1` (splice declines when an edit flips the paragraph's direction flag) are **verified**: oracles, cargo test, package tests, clippy. `e07a29dcb` is **wip**: the confirmed cause is `containing_run` counting a run's end as inside it, so an insert at the first unit of a Latin run after an Arabic run reshaped the whole paragraph (15,131 units, 8.4 ms); the new `edit_run` makes it a 55-unit splice. Only release lib tests ran on it, and it carries an `#[ignore]` diagnostic test `diagnose_bidi_headline_edit` whose second step fails with `RevisionConflict`. | Run the full gates; re-run the browser `bidi15k-amiri-edit` rows (added to the baseline harness `run.mts` outside git, backup in `glyph-scratch/exp-unicode/`); every row must be at or below main; drop or fix the diagnostic test; reword the wip commit; merge and tag. Move the `bidi15k-amiri-edit` scenario into `benches/` so it is tracked. |
-| `experiments/sil-size` | `cd7e62bad` | **Merged into `sil-green-50`.** All cuts gated; core shaper 611.0 kB gzip. Remaining cuts priced in the size doc. | Delete the branch once pushed. |
-
-Merged and deleted at wrap-up: `sil-edit-diff`, `sil-exp-reflow`, `sil-fixes`, `sil-scoped-gather` (every commit is on
-the integration branch or superseded by an equivalent landed commit).
+None. Every lane is merged into `sil-green-51` and its branch deleted. `sil-green-51` passed, on its own tip: clippy
+`-D warnings`, native and wasm oracle (596 equal, 0 unlisted divergences), `cargo test --features oracle`, the
+package tests, `pnpm check`, and the pixi3d-parity, typegpu-parity, v1-bitmap, three-storage-lifetime,
+frustum-culling and material-position proofs. The mixed-bidi lane's last fix: an edit that empties a paragraph now
+takes the empty-text path before any incremental shaping path. Mixed Arabic/Latin edit rows are tracked by
+`pnpm scripts run benchmark:headline-bidi-edit`.
 
 ## 4. Decisions waiting on Justin
 
