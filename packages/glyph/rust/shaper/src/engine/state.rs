@@ -5584,12 +5584,10 @@ impl ParagraphState {
         if old_runs.len() != new_runs.len() || old_runs.is_empty() {
             return Ok(false);
         }
-        let Some(old_run_index) = containing_run(old_runs, edit.old_start, edit.old_end) else {
+        let Some(old_run_index) = edit_run(old_runs, new_runs, edit) else {
             return Ok(false);
         };
-        let Some(new_run_index) = containing_run(new_runs, edit.old_start, edit.new_end) else {
-            return Ok(false);
-        };
+        let new_run_index = old_run_index;
         if old_run_index != new_run_index
             || !same_edit_run_topology(
                 old_runs,
@@ -5752,12 +5750,9 @@ impl ParagraphState {
             .try_reserve(self.text_edit_parts.len())
             .map_err(|_| EngineError::ResultTooLarge)?;
         for edit in self.text_edit_parts.iter().copied() {
-            let Some(run) = containing_run(old_runs, edit.old_start, edit.old_end) else {
+            let Some(run) = edit_run(old_runs, new_runs, edit) else {
                 return Ok(false);
             };
-            if containing_run(new_runs, edit.new_start, edit.new_end) != Some(run) {
-                return Ok(false);
-            }
             let run = u32::try_from(run).map_err(|_| EngineError::ResultTooLarge)?;
             match edited.last() {
                 Some(last) if *last == run => {}
@@ -9022,6 +9017,25 @@ fn same_shaping_properties(left: ShapingRun, right: ShapingRun) -> bool {
         && left.direction == right.direction
         && left.bidi_level == right.bidi_level
         && left.style.same_layout_sources(right.style)
+}
+
+/// The run that holds an edit in both texts, at one index. The side whose range is not empty
+/// names it: inserted units belong to the run they landed in, removed units to the run they
+/// left, even at a run's first or last unit. The other side must hold the edit at that index,
+/// an empty range at either end of the run included.
+fn edit_run(old_runs: &[ShapingRun], new_runs: &[ShapingRun], edit: TextEdit) -> Option<usize> {
+    let holds = |runs: &[ShapingRun], index: usize, start: usize, end: usize| {
+        runs.get(index)
+            .is_some_and(|run| (run.text_start as usize) <= start && end <= run.text_end as usize)
+    };
+    let index = if edit.new_end > edit.new_start {
+        containing_run(new_runs, edit.new_start, edit.new_end)?
+    } else {
+        containing_run(old_runs, edit.old_start, edit.old_end)?
+    };
+    (holds(old_runs, index, edit.old_start, edit.old_end)
+        && holds(new_runs, index, edit.new_start, edit.new_end))
+    .then_some(index)
 }
 
 fn containing_run(runs: &[ShapingRun], start: usize, end: usize) -> Option<usize> {
@@ -16443,6 +16457,93 @@ mod tests {
                 .first_paragraph_state()
                 .unwrap();
             assert_visible_shape_equal(warm, cold, "spliced source run");
+        }
+    }
+
+    /// Typing at the first unit of a Latin run that follows an Arabic run, and deleting it
+    /// again, edits the run that holds the inserted or removed units: that run alone is
+    /// reshaped and spliced, not the whole paragraph.
+    #[test]
+    fn an_edit_at_a_run_boundary_reshapes_the_run_that_holds_its_units() {
+        const AMIRI: &[u8] = include_bytes!(
+            "../../../../../../benches/fixtures/fonts/amiri-1.002/Amiri-Regular.ttf"
+        );
+        let count = u32::from(
+            read_fonts::FontRef::new(AMIRI)
+                .unwrap()
+                .maxp()
+                .unwrap()
+                .num_glyphs(),
+        );
+        let units = [
+            "The panel resizes while the reader keeps their place. ",
+            "النص العربي يتدفق من اليمين إلى اليسار ويختلط مع الأرقام مثل 2026 و 15.5. ",
+            "Mixed lines reorder numbers, quotes and (parentheses) at every width. ",
+        ]
+        .concat();
+        let text = units.repeat(4);
+        let length = |text: &str| text.encode_utf16().count();
+        let latin = length(&units) * 2 + length(&units[..units.find("Mixed").unwrap()]);
+        let mut current: Vec<u16> = text.encode_utf16().collect();
+        for (step, (start, delete, insert)) in [(latin, 0usize, "x"), (latin, 1, "")]
+            .into_iter()
+            .enumerate()
+        {
+            let (mut engine, mut shaper) =
+                shaped_engine_with_font(&String::from_utf16(&current).unwrap(), AMIRI, count);
+            let replacement = utf16(insert);
+            let bytes = text_mutation_bytes(&[(start as u32, delete as u32, &replacement)]);
+            current.splice(start..start + delete, replacement.iter().copied());
+            let mut request = update(1, 1, 1);
+            request.limits.max_clusters = 1 << 14;
+            request.limits.max_lines = 1 << 12;
+            request.limits.max_output_bytes = 1 << 24;
+            request.text_mutations =
+                parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            let styles = root_style_bytes_for_text(7, current.len() as u32);
+            request.style_mutations =
+                parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            super::super::work_attribution::reset();
+            let measured = engine
+                .measure_paragraph_with_shaper(&mut shaper, request, 1)
+                .unwrap();
+            let work = super::super::work_attribution::snapshot();
+            let candidate = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert!(
+                candidate.incremental_shape_source_run.is_some(),
+                "step {step}"
+            );
+            assert_eq!(
+                (work.cluster_source_run_splices, work.cluster_full_builds),
+                (1, 0),
+                "step {step}"
+            );
+            assert!(
+                work.harfrust_utf16_units < length(&units),
+                "step {step}: {} units reshaped",
+                work.harfrust_utf16_units
+            );
+            engine.commit_measure(measured).unwrap();
+            let (cold_engine, _) =
+                shaped_engine_with_font(&String::from_utf16(&current).unwrap(), AMIRI, count);
+            let warm = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            let cold = cold_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert_visible_shape_equal(warm, cold, "edit at a run boundary");
         }
     }
 
