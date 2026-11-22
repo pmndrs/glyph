@@ -191,17 +191,17 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
           mesh = new GlyphDraw(
             geometry,
             material,
-            drawGeometry.kind === 'synthetic-quad'
-              ? drawBoundsSource({
-                  resource: decoration ? undefined : resolvedResource,
-                  buffers: byCodecId,
-                  placementTable: context.placementTable,
-                  transform,
-                  transformTable: context.transformAttribute,
-                  glyphTransforms: glyphStorage?.transforms,
-                  customMaterial: draw.material?.material !== undefined,
-                })
-              : undefined,
+            drawBoundsSource({
+              decoration,
+              resource: resolvedResource,
+              geometry: drawGeometry,
+              material: draw.material,
+              buffers: byCodecId,
+              placementTable: context.placementTable,
+              transform,
+              transformTable: context.transformAttribute,
+              glyphStorage,
+            }),
           );
           trackDrawStorage(mesh, [...storage]);
           attachMsdfDrawState(mesh, material, byCodecId);

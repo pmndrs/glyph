@@ -4,6 +4,8 @@ import { bitmap, bitmapSchema } from '../../raster/bitmap.js';
 import { msdf, msdfSchema } from '../../raster/msdf.js';
 import { slug, slugSchema } from '../../raster/slug.js';
 import { decorationSchema, threeSystemBuffers } from '../codec.js';
+import type { ThreeResolvedMaterialBinding } from '../schema.js';
+import type { DrawGeometry } from './geometry.js';
 import type { RetainedBuffer, ThreeBufferBindingId } from './host-buffer.js';
 import type { ThreeHostResource, TransformRealization } from './render-state.js';
 
@@ -39,25 +41,26 @@ export interface DrawBoundsSource {
 }
 
 interface DrawBoundsInput {
-  /** Undefined for a decoration draw. */
+  readonly decoration: boolean;
   readonly resource: ThreeHostResource | undefined;
+  readonly geometry: DrawGeometry;
+  /** A caller's material factory may displace vertices anywhere, so its draws stay unculled. */
+  readonly material: ThreeResolvedMaterialBinding | undefined;
   readonly buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>;
   readonly placementTable: RetainedBuffer | undefined;
   readonly transform: TransformRealization;
   readonly transformTable: THREE.StorageInstancedBufferAttribute;
-  readonly glyphTransforms: THREE.StorageInstancedBufferAttribute | undefined;
-  /** A caller's material factory may displace vertices anywhere, so its draws stay unculled. */
-  readonly customMaterial: boolean;
+  readonly glyphStorage: Readonly<{ transforms: THREE.StorageInstancedBufferAttribute }> | undefined;
 }
 
 /**
- * Where a built-in draw's quads come from, or undefined when nothing provable bounds them: a caller's material, or a
- * raster program this package did not write. Bitmap and decoration quads are drawn exactly; pixel snapping rounds each
+ * Where a built-in draw's quads come from, or undefined when nothing provable bounds them: a caller's material, a
+ * raster program this package did not write, or supplied glyph geometry. Bitmap and decoration quads are drawn exactly; pixel snapping rounds each
  * projected corner to the nearest pixel edge, which never brings a quad that lies outside a frustum plane inside it.
  * An MSDF quad never leaves its atlas cell, whatever its outline width, shadow offset or trim.
  */
 export function drawBoundsSource(input: DrawBoundsInput): DrawBoundsSource | undefined {
-  if (input.customMaterial) return undefined;
+  if (input.material?.material !== undefined || input.geometry.kind !== 'synthetic-quad') return undefined;
   const { buffers, resource } = input;
   const lanes = (id: ThreeBufferBindingId, lane: number): RecordLanes => ({ buffer: buffers.get(id)!, lane });
   const placement = (slot: RecordLanes) => ({ slot, table: input.placementTable! });
@@ -65,14 +68,14 @@ export function drawBoundsSource(input: DrawBoundsInput): DrawBoundsSource | und
     ...(input.transform.kind === 'indexed'
       ? { indexed: { indices: input.transform.indices, table: input.transformTable } }
       : {}),
-    ...(input.glyphTransforms === undefined ? {} : { glyphTransforms: input.glyphTransforms }),
+    ...(input.glyphStorage === undefined ? {} : { glyphTransforms: input.glyphStorage.transforms }),
   };
-  if (resource === undefined) {
+  if (input.decoration) {
     const rect = decorationSchema.buffers.rect.id;
     return { origin: lanes(rect, 0), size: lanes(rect, 2), screenFringe: false, ...shared };
   }
   const slot = lanes(threeSystemBuffers.placementSlot.id, 0);
-  if (resource.format === bitmap.id) {
+  if (resource?.format === bitmap.id) {
     return {
       origin: lanes(bitmapSchema.buffers.origin.id, 0),
       size: lanes(bitmapSchema.buffers.size.id, 0),
@@ -81,11 +84,11 @@ export function drawBoundsSource(input: DrawBoundsInput): DrawBoundsSource | und
       ...shared,
     };
   }
-  if (resource.format === msdf.id) {
+  if (resource?.format === msdf.id) {
     const rect = msdfSchema.buffers.rect.id;
     return { origin: lanes(rect, 0), size: lanes(rect, 2), placement: placement(slot), screenFringe: false, ...shared };
   }
-  if (resource.format === slug.id) {
+  if (resource?.format === slug.id) {
     const rect = slugSchema.buffers.rect.id;
     return {
       origin: lanes(rect, 0),
@@ -162,33 +165,12 @@ class DrawBounds {
   }
 
   sphere(draw: THREE.Mesh): THREE.Sphere {
-    const start = (draw.userData.pmndrsGlyphRunStart as number | undefined) ?? 0;
-    const count = (draw.geometry as THREE.InstancedBufferGeometry).instanceCount;
-    let recordsChanged = start !== this.#recordStart || count !== this.#recordCount;
-    const attributes = this.#recordAttributes;
-    for (let index = 0; index < attributes.length; index += 1) {
-      const version = attributes[index]!.version;
-      if (this.#recordVersions[index] === version) continue;
-      this.#recordVersions[index] = version;
-      recordsChanged = true;
-    }
+    const recordsChanged = this.#observeRecords(draw);
     const table = this.#source.indexed?.table;
-    const tableChanged = table !== undefined && table.version !== this.#tableVersion;
-    if (recordsChanged) {
-      this.#recordStart = start;
-      this.#recordCount = count;
-      this.#measureRecords(start, count);
-    }
-    const boxChanged = recordsChanged || tableChanged;
+    const boxChanged = recordsChanged || (table !== undefined && table.version !== this.#tableVersion);
     if (boxChanged) {
-      if (table === undefined) {
-        const box = this.#recordBoxes.get(0);
-        if (box === undefined) this.#box.makeEmpty();
-        else {
-          this.#box.min.set(box[0]!, box[1]!, box[2]!);
-          this.#box.max.set(box[3]!, box[4]!, box[5]!);
-        }
-      } else {
+      if (table === undefined) this.#copyDirectBox();
+      else {
         this.#tableVersion = table.version;
         this.#composeTransforms(table.array as Float32Array);
       }
@@ -197,6 +179,35 @@ class DrawBounds {
     if (this.#empty) return emptySphere;
     if (observeLinearPart(draw.matrixWorld.elements, this.#linear) || boxChanged) this.#fitSphere(draw.matrixWorld);
     return this.#sphere;
+  }
+
+  /** Re-measures the records when the run or any attribute they are read from changed since the last test. */
+  #observeRecords(draw: THREE.Mesh): boolean {
+    const start = (draw.userData.pmndrsGlyphRunStart as number | undefined) ?? 0;
+    const count = (draw.geometry as THREE.InstancedBufferGeometry).instanceCount;
+    let changed = start !== this.#recordStart || count !== this.#recordCount;
+    const attributes = this.#recordAttributes;
+    for (let index = 0; index < attributes.length; index += 1) {
+      const version = attributes[index]!.version;
+      if (this.#recordVersions[index] === version) continue;
+      this.#recordVersions[index] = version;
+      changed = true;
+    }
+    if (!changed) return false;
+    this.#recordStart = start;
+    this.#recordCount = count;
+    this.#measureRecords(start, count);
+    return true;
+  }
+
+  #copyDirectBox(): void {
+    const box = this.#recordBoxes.get(0);
+    if (box === undefined) {
+      this.#box.makeEmpty();
+      return;
+    }
+    this.#box.min.set(box[0]!, box[1]!, box[2]!);
+    this.#box.max.set(box[3]!, box[4]!, box[5]!);
   }
 
   /**
