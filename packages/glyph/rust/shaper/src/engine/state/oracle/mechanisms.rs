@@ -383,6 +383,7 @@ pub(super) fn cases(cases: &mut Vec<Case>) {
     cases.push(max_lines_count_change());
     cases.push(style_removal_with_same_length_edit());
     cases.push(grapheme_across_runs());
+    cases.push(rtl_leading_thai_mark());
     cases.push(ellipsis_on_empty_lines());
     cases.push(ellipsis_cut_at_corrected_break());
     cases.push(negative_spacing_on_a_lone_mark());
@@ -776,6 +777,37 @@ fn rtl_ellipsis_over_a_leading_virama() -> Case {
             ..Step::default()
         },
     ];
+    case.fuzz = true;
+    case
+}
+
+/// A right-to-left Thai paragraph that opens with a tone mark and a vowel sign: one grapheme with
+/// no base, the mark neutral at level 1 and the vowel sign left-to-right at level 2, so a bidi run
+/// ends inside it. Refused as an invalid request until runs kept a grapheme whole.
+fn rtl_leading_thai_mark() -> Case {
+    let mut case = new_case(
+        "mech-rtl-leading-thai-mark".into(),
+        Tier::Full,
+        &["thai"],
+        Script::Thai,
+    );
+    case.model.text = utf16("\u{e49}\u{e33}");
+    case.model.root.direction = DIRECTION_RTL;
+    case.model.layout = Layout {
+        width: 250.75,
+        max_lines: 3,
+        overflow: OVERFLOW_ELLIPSIS,
+        ..Layout::default()
+    };
+    case.steps = vec![Step {
+        label: "a base before the marks".into(),
+        edits: vec![TextEdit {
+            start: 0,
+            delete: 0,
+            insert: utf16("\u{e19}"),
+        }],
+        ..Step::default()
+    }];
     case.fuzz = true;
     case
 }

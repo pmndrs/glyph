@@ -472,6 +472,7 @@ b1ba733b900905b4 mech-regional-indicators-9-justify
 127de18ebe21865a mech-reshape-window-edge-flags-justify
 b040911bda3d9ead mech-rtl-ellipsis-grapheme-across-runs
 883574b40f9887a6 mech-rtl-ellipsis-leading-virama
+34927d27fbb27bf3 mech-rtl-leading-thai-mark
 2df59200ac70efc1 mech-rtl-same-length-edit-with-span-removal
 bd6967aaae1f8d0e mech-script-across-break-backward
 526a2db191617cde mech-script-across-break-backward-justify
@@ -593,4 +594,4 @@ b1eb2ffa1b9039bc rg-columns-3-cjk-silent-then-measure
 ce13f154c56854f0 rg-columns-3-justify-latin-silent
 19373280cc43cea2 rg-columns-3-justify-latin-silent-then-measure
 4927fb82d0d212fa rg-columns-3-paragraph-latin-full
-dc07cde01d7a553f set
+5b92a2fa994e6ffb set
