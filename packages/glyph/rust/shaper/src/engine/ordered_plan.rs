@@ -1889,42 +1889,77 @@ impl OrderedPlanCompiler {
                 }
                 // Prior-batch admission matches the batch key; prepare_batch copies its buffer
                 // identities and capacity when !replace. Matching codec/capability fingerprints
-                // then prove program and schema reuse. Only live-range and byte equality remain.
-                let same_physical_bytes = !replace
+                // then prove program and schema reuse. Only live-range and byte equality remain:
+                // the records both plans keep live are compared with the accepted bytes, and the
+                // write narrows to the aligned records that differ, plus any it adds past them.
+                let comparable_records = if !replace
                     && self.codec_fingerprint == codec.fingerprint()
                     && self.capability_set == capability_set.0
-                    && aligned.end <= pending.state.instance_count
-                    && prior.is_some_and(|batch| {
-                        aligned.end <= batch.instance_count
-                            && self
-                                .buffers
-                                .get(batch.buffer_start as usize + schema_index)
-                                .is_some_and(|old| {
-                                    #[cfg(not(test))]
-                                    {
-                                        old.bytes.get(destination_start..destination_end)
-                                            == Some(&self.payload[source_start..source_end])
-                                    }
-                                    #[cfg(test)]
-                                    {
-                                        let prior =
-                                            old.bytes.get(destination_start..destination_end);
-                                        if prior.is_some() {
-                                            super::work_attribution::record(|work| {
-                                                work.ordered_comparison_bytes += length;
-                                            });
-                                        }
-                                        prior == Some(&self.payload[source_start..source_end])
-                                    }
-                                })
-                    });
-                if same_physical_bytes {
+                {
+                    prior.map_or(0, |batch| {
+                        aligned
+                            .end
+                            .min(pending.state.instance_count)
+                            .min(batch.instance_count)
+                            .saturating_sub(aligned.start)
+                    })
+                } else {
+                    0
+                };
+                let comparable = match prior {
+                    Some(batch) if comparable_records != 0 => self
+                        .buffers
+                        .get(batch.buffer_start as usize + schema_index)
+                        .and_then(|old| {
+                            old.bytes.get(
+                                destination_start
+                                    ..destination_start
+                                        + comparable_records as usize * schema.stride(),
+                            )
+                        }),
+                    _ => None,
+                };
+                let written = match comparable {
+                    Some(accepted) => {
+                        #[cfg(test)]
+                        super::work_attribution::record(|work| {
+                            work.ordered_comparison_bytes += accepted.len();
+                        });
+                        differing_records(
+                            accepted,
+                            &self.payload[source_start..source_start + accepted.len()],
+                            schema.stride(),
+                            count,
+                            buffer_record_alignment(schema, capability.update_alignment),
+                            aligned.start,
+                        )
+                    }
+                    None => Some(0..count),
+                };
+                let Some(written) = written else {
                     #[cfg(test)]
                     super::work_attribution::record(|work| {
                         work.ordered_equal_suppressed_bytes += length;
                     });
                     continue;
-                }
+                };
+                #[cfg(test)]
+                super::work_attribution::record(|work| {
+                    work.ordered_equal_suppressed_bytes +=
+                        length - (written.end - written.start) as usize * schema.stride();
+                });
+                let skipped = written.start as usize * schema.stride();
+                let byte_length = (written.end - written.start)
+                    .checked_mul(u32::from(schema.stride))
+                    .ok_or(OrderedPlanError::ArithmeticOverflow)?;
+                let length = byte_length as usize;
+                let destination_offset = destination_offset
+                    .checked_add(skipped as u32)
+                    .ok_or(OrderedPlanError::ArithmeticOverflow)?;
+                let destination_start = destination_start + skipped;
+                let destination_end = destination_start + length;
+                let source_start = source_start + skipped;
+                let source_end = source_start + length;
                 // Active segments were appended in schema order. The compact destination never
                 // passes this source, so it cannot overwrite a later segment or an earlier job.
                 if compact_cursor != source_start {
@@ -2782,6 +2817,66 @@ fn active_buffers_for_range(
     Ok(active)
 }
 
+/// The records of a write job, relative to its first, that it must still write: from the first
+/// aligned record whose bytes differ from the accepted ones to the last, and every record past
+/// the `accepted` ones. `None` when the job writes nothing the host does not already hold.
+fn differing_records(
+    accepted: &[u8],
+    next: &[u8],
+    stride: usize,
+    count: u32,
+    alignment: u32,
+    first_record: u32,
+) -> Option<Range<u32>> {
+    let compared = (accepted.len() / stride) as u32;
+    if compared == count && accepted == next {
+        return None;
+    }
+    let first = first_difference(accepted, next).map_or(compared, |byte| (byte / stride) as u32);
+    let end = if compared < count {
+        count
+    } else {
+        last_difference(accepted, next).map_or(first, |byte| (byte / stride) as u32 + 1)
+    };
+    // The job starts aligned; realign the narrowed write to the same absolute grid.
+    let start = (first_record + first) / alignment * alignment - first_record;
+    let end = ((first_record + end).div_ceil(alignment) * alignment - first_record).min(count);
+    Some(start..end)
+}
+
+/// Compares in blocks so the common equal prefix runs as `memcmp`.
+const DIFFERENCE_BLOCK: usize = 256;
+
+fn first_difference(left: &[u8], right: &[u8]) -> Option<usize> {
+    let block = left
+        .chunks(DIFFERENCE_BLOCK)
+        .zip(right.chunks(DIFFERENCE_BLOCK))
+        .position(|(left, right)| left != right)?;
+    let base = block * DIFFERENCE_BLOCK;
+    left[base..]
+        .iter()
+        .zip(&right[base..])
+        .position(|(left, right)| left != right)
+        .map(|offset| base + offset)
+}
+
+fn last_difference(left: &[u8], right: &[u8]) -> Option<usize> {
+    let length = left.len().min(right.len());
+    let mut end = length;
+    while end != 0 {
+        let start = end.saturating_sub(DIFFERENCE_BLOCK);
+        if left[start..end] != right[start..end] {
+            return left[start..end]
+                .iter()
+                .zip(&right[start..end])
+                .rposition(|(left, right)| left != right)
+                .map(|offset| start + offset);
+        }
+        end = start;
+    }
+    None
+}
+
 fn instance_unchanged(
     previous: Option<&InstanceState>,
     next: &InstanceState,
@@ -3565,6 +3660,87 @@ mod tests {
                 cold.publish_bindings,
             );
             assert_eq!(host.snapshot(), oracle.snapshot());
+        }
+    }
+
+    #[test]
+    fn a_job_whose_records_all_took_new_revisions_writes_only_the_bytes_that_moved() {
+        let codec = paint_codec_with_limits(false, 65_536, true);
+        let initial: Vec<_> = (0..200).map(|index| glyph(index + 1, 1)).collect();
+        let x: Vec<_> = initial.iter().map(|row| row.inline_start).collect();
+        // Typing at the end: every record takes a new revision, one record is appended. A move
+        // in the middle: one record changes its input.
+        for (name, appended, moved) in [("append", true, None), ("move", false, Some(100))] {
+            let mut compiler = OrderedPlanCompiler::default();
+            let mut host = TestHost::default();
+            prepare_with_options(&mut compiler, &codec, &initial, &x, &[], true, true);
+            host.accept(
+                compiler
+                    .plan_view(7, CAPABILITY, codec.fingerprint())
+                    .unwrap(),
+                compiler.publish_bindings,
+            );
+            compiler.commit().unwrap();
+            let mut glyphs = initial.clone();
+            let mut x = x.clone();
+            for row in &mut glyphs {
+                row.content_revision += 1;
+            }
+            if appended {
+                glyphs.push(glyph(initial.len() as u32 + 1, 2));
+                x.push(glyphs.last().unwrap().inline_start);
+            }
+            if let Some(index) = moved {
+                x[index] += 0.5;
+            }
+            let slots = vec![0; glyphs.len()];
+            let masks = vec![super::super::positioning::ALL_SEMANTIC_CHANGES; glyphs.len()];
+            let intervals = [0..glyphs.len()];
+            super::super::work_attribution::reset();
+            compiler
+                .prepare_scoped(
+                    &codec,
+                    CAPABILITY,
+                    OrderedPlanInput {
+                        glyphs: &glyphs,
+                        placement_slots: &slots,
+                        semantic_change_masks: &masks,
+                        f32_fields: &[&x],
+                        u32_fields: &[],
+                        order_independent: true,
+                    },
+                    false,
+                    2,
+                    Some(RetainedOutputScope::ChangedIntervals(
+                        &intervals,
+                        ChangedInputs::ALL,
+                    )),
+                    true,
+                )
+                .unwrap();
+            let work = super::super::work_attribution::snapshot();
+            let plan = compiler
+                .plan_view(7, CAPABILITY, codec.fingerprint())
+                .unwrap();
+            assert!(
+                plan.patches.iter().all(|patch| patch.opcode != PATCH_ALLOCATE_OR_RESIZE),
+                "{name}: the batch keeps its storage"
+            );
+            assert!(
+                work.ordered_emitted_write_bytes > 0 && work.ordered_emitted_write_bytes <= 256,
+                "{name}: wrote {} bytes",
+                work.ordered_emitted_write_bytes
+            );
+            host.accept(plan, compiler.publish_bindings);
+            compiler.commit().unwrap();
+            let mut cold = OrderedPlanCompiler::default();
+            let mut oracle = TestHost::default();
+            prepare_with_options(&mut cold, &codec, &glyphs, &x, &[], true, true);
+            oracle.accept(
+                cold.plan_view(7, CAPABILITY, codec.fingerprint()).unwrap(),
+                cold.publish_bindings,
+            );
+            assert_eq!(host.snapshot(), oracle.snapshot(), "{name}");
         }
     }
 
