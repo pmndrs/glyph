@@ -205,6 +205,21 @@ interface TextGroupErrorReconciler {
 
 let textGroupErrors!: TextGroupErrorReconciler;
 
+/**
+ * Glyph-owned matrix updates in progress. Three caches a parent's child count before visiting its children, so while
+ * one runs no root may remove its private objects from a Scene; the removal waits until the traversal returns.
+ */
+let sceneTraversalDepth = 0;
+
+function duringSceneTraversal(visit: () => void): void {
+  sceneTraversalDepth += 1;
+  try {
+    visit();
+  } finally {
+    sceneTraversalDepth -= 1;
+  }
+}
+
 class ThreePublicationObject extends THREE.Object3D {
   readonly #commit: () => void;
 
@@ -215,7 +230,7 @@ class ThreePublicationObject extends THREE.Object3D {
 
   override updateMatrixWorld(force?: boolean): void {
     super.updateMatrixWorld(force);
-    this.#commit();
+    duringSceneTraversal(this.#commit);
   }
 
   updateMatrixWorldWithoutCommit(force?: boolean): void {
@@ -239,7 +254,7 @@ class ThreePrepareObject extends THREE.Object3D {
   }
 
   override updateMatrixWorld(): void {
-    this.#prepare();
+    duringSceneTraversal(this.#prepare);
   }
 }
 
@@ -378,6 +393,8 @@ export class ThreeRootHost {
   /** How many `renderer.render` calls are inside one another on this root's Scene; above zero is a nested pass. */
   #renderDepth = 0;
   #restoreSceneHooks: (() => void) | undefined;
+  /** The private objects wait for a traversal to return before they move to the bound Scene or leave the old one. */
+  #placementPending = false;
   /** A layout callback ran since the last point at which every matrix of the Scene was still to be computed. */
   #layoutCallbacksRan = false;
   /** The Scene's matrices are being recomputed after layout callbacks moved objects mid-traversal. */
@@ -553,11 +570,10 @@ export class ThreeRootHost {
       threeRootHosts.delete(this);
       this.#renderObject.removeEventListener('removed', this.#onTreeChange);
       this.#untrackAll();
-      this.#renderObject.removeFromParent();
-      this.#prepareObject.removeFromParent();
       this.#restoreSceneHooks?.();
       this.#restoreSceneHooks = undefined;
       this.#scene = undefined;
+      this.#placeSceneObjects();
     }
   }
 
@@ -655,8 +671,10 @@ export class ThreeRootHost {
     if (this.#texts.size !== 0 || this.#binding === undefined) return;
     // Keep the root publisher alive until its queued Rust removals can settle.
     // The empty adapter is reusable; root teardown remains its terminal owner.
-    this.#renderObject.removeFromParent();
+    this.#restoreSceneHooks?.();
+    this.#restoreSceneHooks = undefined;
     this.#scene = undefined;
+    this.#placeSceneObjects();
   }
 
   /** @internal Invalidate inherited material state after a TextGroup change. */
@@ -1035,6 +1053,8 @@ export class ThreeRootHost {
 
   #commitTraversal(worldMatricesCurrent: boolean, sceneTraversal = false): void {
     if (this.#disposed || (this.#resynchronizing && !sceneTraversal)) return;
+    // Left behind in a Scene this root no longer draws into, the publication object waits to leave and publishes nothing.
+    if (sceneTraversal && !this.#placedInScene()) return;
     const texts = this.#renderMembers();
     if (this.#reconcileDirty) {
       try {
@@ -1183,19 +1203,49 @@ export class ThreeRootHost {
     if (scene === this.#scene && (scene === undefined || this.#renderObject.parent === scene)) return false;
     // Moving the private publication and preparation objects is not a member change.
     const membersDirty = this.#membersDirty;
-    this.#renderObject.removeFromParent();
-    this.#prepareObject.removeFromParent();
     this.#restoreSceneHooks?.();
     this.#restoreSceneHooks = undefined;
     this.#scene = scene;
-    if (scene !== undefined) {
-      // Both are appended: a traversal may be iterating these children, and appending never moves one of them.
-      scene.add(this.#renderObject);
-      scene.add(this.#prepareObject);
-      this.#restoreSceneHooks = this.#countRenders(scene);
-    }
+    this.#placeSceneObjects();
+    if (scene !== undefined) this.#restoreSceneHooks = this.#countRenders(scene);
     this.#membersDirty = membersDirty;
     return scene !== undefined;
+  }
+
+  /**
+   * Puts the publication and preparation objects under the bound Scene. Both are appended, which never moves a child a
+   * traversal has yet to visit. Removing them shortens the list a traversal may be iterating, so during one they stay
+   * where they are, inert because they are no longer under the bound Scene, and leave once it has returned.
+   */
+  #placeSceneObjects(): void {
+    const scene = this.#scene ?? null;
+    let deferred = false;
+    for (const object of [this.#renderObject, this.#prepareObject]) {
+      if (object.parent === scene) continue;
+      if (object.parent !== null) {
+        if (sceneTraversalDepth > 0) {
+          deferred = true;
+          continue;
+        }
+        object.removeFromParent();
+      }
+      scene?.add(object);
+    }
+    if (!deferred || this.#placementPending) {
+      this.#placementPending = deferred;
+      return;
+    }
+    this.#placementPending = true;
+    queueMicrotask(() => {
+      if (!this.#placementPending) return;
+      this.#placementPending = false;
+      this.#placeSceneObjects();
+    });
+  }
+
+  /** Whether the private objects sit under the bound Scene, rather than waiting to leave a Scene the root left. */
+  #placedInScene(): boolean {
+    return this.#scene !== undefined && this.#renderObject.parent === this.#scene;
   }
 
   /** @internal Names the Scene before a traversal discovers it, so the first frame is prepared at its front. */
@@ -1252,7 +1302,7 @@ export class ThreeRootHost {
 
   /** The front of a traversal: prepare every dirty text and run layout callbacks before any matrix is computed. */
   #prepareTraversal(): void {
-    if (this.#disposed) return;
+    if (this.#disposed || !this.#placedInScene()) return;
     // Visited after the publication object, this traversal has already prepared and published its frame.
     if (this.#keepPrepareObjectFirst() || this.#renderDepth > 0) return;
     try {
@@ -1776,7 +1826,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       this.#observedRenderOrder = this.renderOrder;
       root.markReconcileDirty();
     }
-    if (root.reconcileDirty) root.observeHostTree(this);
+    if (root.reconcileDirty) duringSceneTraversal(() => root.observeHostTree(this));
     const visible = this.visible;
     if (observeMatrix(this.matrixWorld.elements, this.#observedWorld) || visible !== this.#observedVisible) {
       this.#observedVisible = visible;
@@ -1982,7 +2032,7 @@ export class TextGroup extends THREE.Object3D {
   override updateMatrixWorld(force?: boolean): void {
     super.updateMatrixWorld(force);
     if (this.#disposed) return;
-    this.#root.observeGroupPresentation(this);
+    duringSceneTraversal(() => this.#root.observeGroupPresentation(this));
   }
 
   dispose(): void {

@@ -359,6 +359,12 @@ The same happens whenever the preparation object is not the first child. An `upd
 Scene therefore runs twice in such a frame. `root.attach(scene)` names the Scene beforehand, so the first frame is
 prepared at the front like every later one and nothing is recomputed. The React and Vue components call it.
 
+A root leaves its Scene when its last text leaves it or the root is disposed. Three counts a parent's children before
+visiting them, so removing a child during a traversal would make it visit `undefined` or skip the objects after the
+root's. When the unbind happens inside a traversal (at the publication object, from a layout callback, or from a text
+or group the traversal visits), the two objects stay in place, inert, and leave once the traversal has returned (in a
+microtask). They neither prepare nor publish meanwhile; if a text returns first, the root keeps them where they are.
+
 A renderer traverses the Scene, calls `scene.onBeforeRender`, runs shadow and pass renders, then calls
 `scene.onAfterRender`. A traversal that starts between those two belongs to a nested render: it synchronizes transforms
 and neither prepares nor publishes.

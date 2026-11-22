@@ -4814,6 +4814,76 @@ test('Three keeps a material across a replaced buffer generation and binds it to
   fontDomain.dispose();
 });
 
+// Three caches a parent's child count before visiting its children, so a root that leaves its Scene mid-traversal must
+// not shorten that list: the traversal would visit `undefined` or skip the objects after the root's.
+for (const attached of [false, true]) {
+  const variant = attached ? 'an attached root' : 'a discovered root';
+  for (const [path, unbind] of [
+    ['before the traversal', (context) => context.group.removeFromParent()],
+    ['from an onLayout callback', (context) => context.duringLayout(() => context.group.removeFromParent())],
+    [
+      'by disposing the root from an onLayout callback',
+      (context) => context.duringLayout(() => context.root.dispose()),
+    ],
+  ]) {
+    test(`Three keeps the Scene traversal intact when ${variant} loses its last text ${path}`, async (t) => {
+      const three = await createThreeTestHandle(t);
+      const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+      t.after(() => font.dispose());
+      const root = three('scene-unbind');
+      const scene = new THREE.Scene();
+      if (attached) root.attach(scene);
+      const group = root.createTextGroup();
+      const label = root.createText({ font, text: 'Leaving' });
+      group.add(label);
+      // Under a holder, a callback that runs before the holder is visited may remove the group: Three's own rule.
+      const holder = new THREE.Object3D();
+      holder.add(group);
+      scene.add(holder);
+      const trailing = new THREE.Object3D();
+      scene.add(trailing);
+      scene.updateMatrixWorld();
+      assert.ok(rootDraws(scene, 'scene-unbind').length > 0, 'the root publishes before it leaves');
+      const context = {
+        group,
+        root,
+        duringLayout(run) {
+          label.onLayout = () => {
+            label.onLayout = undefined;
+            run();
+          };
+          label.text = 'Leaving now';
+        },
+      };
+
+      unbind(context);
+      trailing.position.x = 7;
+      scene.updateMatrixWorld();
+      assert.equal(trailing.matrixWorld.elements[12], 7, 'objects after the root are still traversed');
+      // Until that traversal returns to the event loop, objects left behind stay inert and draw nothing.
+      scene.updateMatrixWorld();
+      assert.deepEqual(rootDraws(scene, 'scene-unbind'), [], 'an unbound root publishes no draw');
+      await Promise.resolve();
+      // An attached root stays at the front of its Scene while empty; a discovered or disposed root leaves it.
+      assert.equal(
+        scene.children.filter((child) => child.name.startsWith('@pmndrs/glyph')).length,
+        attached && !root.disposed ? 2 : 0,
+        'the root leaves the Scene once the traversal that unbound it has returned',
+      );
+      scene.updateMatrixWorld();
+
+      if (!root.disposed) {
+        holder.add(group);
+        scene.updateMatrixWorld();
+        assert.ok(rootDraws(scene, 'scene-unbind').length > 0, 'the root publishes again when its text returns');
+      }
+      label.dispose();
+      group.dispose();
+      root.dispose();
+    });
+  }
+}
+
 // Three r186+ releases the GPU buffer of every attribute still attached to a geometry when it is disposed (#317).
 test('Three retires a removed group draw without releasing storage its sibling still binds', async (t) => {
   const three = await createThreeTestHandle(t);
