@@ -3361,16 +3361,44 @@ impl PlannerState {
                 } else {
                     match candidate.buffers {
                         CandidateBuffers::ExistingPending { .. } => {
-                            let state = &mut paragraph_index
+                            let paragraph = paragraph_index
                                 .and_then(|index| paragraphs.get_mut(index))
-                                .ok_or(EngineError::InvalidRequest)?
-                                .state;
+                                .ok_or(EngineError::InvalidRequest)?;
+                            let created = paragraph.created;
+                            let state = &mut paragraph.state;
                             let candidate_text = state.text.pending().units.as_slice();
-                            state
-                                .unicode
-                                .pending_mut()
-                                .analyze(candidate_text)
-                                .map_err(unicode_error)?;
+                            let (committed, pending) = state.unicode.pair_mut();
+                            // One edit of an analysed text is analysed around the edit alone:
+                            // the one a reconciliation found, or the request's only mutation.
+                            let edit = match *candidate_edits {
+                                [edit] => Some((
+                                    edit.new_start,
+                                    edit.old_end - edit.old_start,
+                                    edit.new_end - edit.new_start,
+                                )),
+                                [] if reconciliation.is_none() && text_mutations.len() == 1 => {
+                                    text_mutations.get(0).and_then(|mutation| {
+                                        Some((
+                                            usize::try_from(mutation.text_start).ok()?,
+                                            usize::try_from(mutation.delete_count).ok()?,
+                                            mutation.insert_utf16_le.len() / 2,
+                                        ))
+                                    })
+                                }
+                                _ => None,
+                            };
+                            match edit {
+                                Some((start, removed, inserted)) if !created => pending
+                                    .analyze_edited(
+                                        committed,
+                                        candidate_text,
+                                        start,
+                                        removed,
+                                        inserted,
+                                    ),
+                                _ => pending.analyze(candidate_text),
+                            }
+                            .map_err(unicode_error)?;
                         }
                         CandidateBuffers::SparePending => {
                             let spare = spare_paragraph
