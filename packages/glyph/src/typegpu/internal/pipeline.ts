@@ -30,7 +30,7 @@ export interface BatchLanes {
  * One bind group and vertex-buffer set shared by every draw over the same lanes and tables. Draws are instance
  * ranges recorded against it; they own nothing.
  */
-export interface BatchBinding {
+export interface BatchDrawBinding {
   /** Lanes whose contents `variant` reads (MSDF effect colors and glyph rows); a write to one re-reads its spans. */
   readonly watchedLanes: readonly Uint8Array[];
   /**
@@ -57,7 +57,7 @@ export interface TypeGpuResource {
     count: number,
   ): Draw;
   /** Indexed transform mode (MSDF, bitmap): bindings that draws of many Texts share. */
-  bind?(lanes: BatchLanes): BatchBinding;
+  bind?(lanes: BatchLanes): BatchDrawBinding;
   dispose(): void;
 }
 export type PipelineOptions = TypeGpuConfigOptions;
