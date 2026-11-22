@@ -428,7 +428,7 @@ e3daff3f4bf9a99a label-thai-256-start
 65f0c095616ed2e5 label-thai-64-start
 22cddf0565a8c723 label-thai-80-center
 76f1c684d8f058fa label-thai-80-end
-de399f9cfa898662 label-thai-80-start
+ff502c4457f412c2 label-thai-80-start
 0254109d98134111 label-thai-ellipsis
 f7c291b94d2167cf mech-bidi-bracket-far
 68191908b910bbef mech-bidi-bracket-far-justify
@@ -593,4 +593,4 @@ b1eb2ffa1b9039bc rg-columns-3-cjk-silent-then-measure
 ce13f154c56854f0 rg-columns-3-justify-latin-silent
 19373280cc43cea2 rg-columns-3-justify-latin-silent-then-measure
 4927fb82d0d212fa rg-columns-3-paragraph-latin-full
-a6d50f2d62eea13d set
+dc07cde01d7a553f set
