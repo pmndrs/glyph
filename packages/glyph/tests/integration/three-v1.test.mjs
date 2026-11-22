@@ -14,6 +14,7 @@ import {
   bitmap,
   msdf,
   slug,
+  span as semanticSpan,
 } from '@pmndrs/glyph';
 import { createFontLibrary, loadFont } from '../../dist/loader.js';
 import { FontFaceHandleStore } from '../../dist/font-face.js';
@@ -38,6 +39,10 @@ import { compileNodeMaterial } from '../support/node-material-shaders.mjs';
 const fontUrl = new URL('../../../../benches/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 const densityFontUrl = new URL('../../../../benches/fixtures/rendering/inter-bitmap-16-32.font.glb', import.meta.url);
 const amiriFontUrl = new URL('../../../../benches/fixtures/rendering/amiri-bitmap-16.font.glb', import.meta.url);
+const crossSpaceFontUrl = new URL(
+  '../../../../benches/fixtures/rendering/cross-space-bitmap-16.font.glb',
+  import.meta.url,
+);
 const sourceSerifFontUrl = new URL(
   '../../../../benches/fixtures/rendering/source-serif-4-bitmap-16.font.glb',
   import.meta.url,
@@ -9329,6 +9334,280 @@ test('repeated layout under changing constraints stays on the paragraph preparat
   font.dispose();
   fontDomain.dispose();
 });
+
+test('measurement and ink line spans agree with independently positioned glyph columns', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const [inter, amiri, crossSpace] = await Promise.all([
+    loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] })),
+    loadFont({ baked: dataUrl(await readFile(amiriFontUrl)) }, bitmap({ strikes: [16] })),
+    loadFont({ baked: dataUrl(await readFile(crossSpaceFontUrl)) }, bitmap({ strikes: [16] })),
+  ]);
+  t.after(() => {
+    inter.dispose();
+    amiri.dispose();
+    crossSpace.dispose();
+  });
+
+  const rtl = semanticSpan({ direction: 'rtl' });
+  const crossSpaceSource =
+    'the apple ate a banana while the eagle and the ape made a cake at the lake; a bee came and ate a pear';
+
+  const cases = [
+    {
+      name: 'UTF-16, missing glyph, and wrapped lines',
+      properties: {
+        font: inter,
+        text: 'alpha 😀 beta\ngamma delta',
+        style: { fontSize: 16 },
+        constraints: { width: { mode: 'exact', size: 90 } },
+        layout: { wrap: 'word' },
+      },
+    },
+    {
+      name: 'RTL ligatures and corrected ellipsis boundary',
+      properties: {
+        font: amiri,
+        text: 'مرحبا بالعالم',
+        style: { fontSize: 16 },
+        constraints: { width: { mode: 'exact', size: 37 } },
+        layout: { maxLines: 1, wrap: 'none', overflow: 'ellipsis' },
+      },
+    },
+    {
+      name: 'Latin standard ligature with absorbed graphemes',
+      properties: {
+        font: amiri,
+        text: 'meet office',
+        style: { fontSize: 20, lineHeight: 1.25 },
+        constraints: { width: { mode: 'exact', size: 150 } },
+        layout: { wrap: 'word' },
+      },
+    },
+    {
+      name: 'CrossSpace RTL corrected line edge',
+      properties: {
+        font: crossSpace,
+        text: txt`${rtl`${crossSpaceSource}`}`,
+        style: { fontSize: 24 },
+        constraints: { width: { mode: 'exact', size: 200 } },
+        layout: { wrap: 'word' },
+      },
+    },
+    {
+      name: 'drop cap and combining mark',
+      properties: {
+        font: inter,
+        text: 'f́ollow brown fox jumps over the lazy dog and keeps running',
+        style: { fontSize: 16, lineHeight: 20 },
+        constraints: { width: { mode: 'exact', size: 150 } },
+        layout: { wrap: 'word', dropCap: { lines: 3, marginInline: 4 } },
+      },
+    },
+  ];
+
+  for (const { name, properties } of cases) {
+    const measuredText = three.createText(properties);
+    const coldText = three.createText(properties);
+    try {
+      const measured = measuredText.measure();
+      const cold = coldText.glyphs();
+      if (name === 'UTF-16, missing glyph, and wrapped lines')
+        assert.ok(measured.missingGlyphCount > 0, 'the fixture reaches the missing-glyph count path');
+      if (name === 'Latin standard ligature with absorbed graphemes')
+        assert.ok(measured.glyphCount < properties.text.length, 'the fixture shapes fewer glyphs than UTF-16 units');
+      assertLineGlyphSpans(measured, cold, `${name} measurement`);
+      measuredText.computeBoundingBox();
+      const withInk = measuredText.measure();
+      assert.notEqual(withInk.inkBounds, undefined, `${name} has positioned ink`);
+      assertLineGlyphSpans(withInk, cold, `${name} ink measurement`);
+      assertLineGlyphSpans(measuredText.glyphs(), cold, `${name} inspection`);
+    } finally {
+      measuredText.dispose();
+      coldText.dispose();
+    }
+  }
+});
+
+test('a measurement publication preserves another paragraph’s inspected line spans', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const target = three.createText({
+    font,
+    text: 'alpha beta gamma delta epsilon zeta eta theta',
+    constraints: { width: { mode: 'exact', size: 160 } },
+    layout: { wrap: 'word' },
+  });
+  group.add(target);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+  const resized = { width: { mode: 'exact', size: 90 } };
+  target.set({ constraints: resized });
+  const inspected = target.glyphs();
+  const cold = three.createText({
+    font,
+    text: target.text,
+    constraints: resized,
+    layout: { wrap: 'word' },
+  });
+  const expected = cold.glyphs();
+  assertLineGlyphSpans(inspected, expected, 'resized inspection');
+
+  const other = three.createText({ font, text: 'a newly published paragraph' });
+  group.add(other);
+  scene.updateMatrixWorld(true);
+  try {
+    assert.equal(group.error, undefined);
+    assertLineGlyphSpans(target.measure(), expected, 'after another paragraph publishes');
+    assertLineGlyphSpans(target.glyphs(), expected, 'inspection retained after publication');
+  } finally {
+    other.dispose();
+    cold.dispose();
+    target.dispose();
+    group.dispose();
+    font.dispose();
+  }
+});
+
+test('measured line spans survive edits, reflow, and publication without glyph inspection', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  t.after(() => font.dispose());
+  const layout = { wrap: 'word' };
+  const wide = { width: { mode: 'exact', size: 160 } };
+  const narrow = { width: { mode: 'exact', size: 90 } };
+  const first = 'alpha beta gamma delta\n\nepsilon zeta eta theta\niota kappa';
+  const edited = 'alpha beta gamma delta\n\nepsilon zeta and more eta theta\niota kappa';
+  const coldSpans = (text, constraints) => {
+    const cold = three.createText({ font, text, constraints, layout });
+    try {
+      return cold.glyphs();
+    } finally {
+      cold.dispose();
+    }
+  };
+
+  // Never inspected and never attached: every read below is a measurement-only preparation.
+  const detached = three.createText({ font, text: first, constraints: wide, layout });
+  t.after(() => detached.dispose());
+  assertLineGlyphSpans(detached.measure(), coldSpans(first, wide), 'multi-paragraph measurement');
+  detached.set({ text: edited });
+  assertLineGlyphSpans(detached.measure(), coldSpans(edited, wide), 'measurement after an edit');
+  detached.set({ constraints: narrow });
+  assertLineGlyphSpans(detached.measure(), coldSpans(edited, narrow), 'measurement after a width change');
+
+  // Attached texts publish through the renderer; the published measurement carries the same spans.
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const published = three.createText({ font, text: first, constraints: wide, layout });
+  const sibling = three.createText({ font, text: 'a second paragraph in the same group', constraints: narrow, layout });
+  t.after(() => {
+    published.dispose();
+    sibling.dispose();
+    group.dispose();
+  });
+  group.add(published, sibling);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+  assert.equal(group.error, undefined);
+  assertLineGlyphSpans(published.measure(), coldSpans(first, wide), 'measurement after publication');
+  assertLineGlyphSpans(
+    sibling.measure(),
+    coldSpans('a second paragraph in the same group', narrow),
+    'sibling measurement after publication',
+  );
+  published.set({ text: edited });
+  scene.updateMatrixWorld(true);
+  assertLineGlyphSpans(published.measure(), coldSpans(edited, wide), 'measurement after a published edit');
+  published.set({ constraints: narrow });
+  assertLineGlyphSpans(published.measure(), coldSpans(edited, narrow), 'measurement before a width change publishes');
+  scene.updateMatrixWorld(true);
+  assertLineGlyphSpans(published.measure(), coldSpans(edited, narrow), 'measurement after a width change publishes');
+});
+
+test('a publication that requests the measurement view reports line glyph spans', async (t) => {
+  // `GlyphShapeOptions.semanticViews` is the integrator's request; the built-in Three root asks for none and
+  // measures on demand, so a root that asks for the summary with its publication is the path under test.
+  const three = await createThreeTestHandle(t, {
+    ...ThreeConfig,
+    root: {
+      create(context) {
+        return ThreeConfig.root.create({
+          ...context,
+          create(extension, options) {
+            const prepare = options.shape?.prepare;
+            return context.create(extension, {
+              ...options,
+              shape: {
+                ...options.shape,
+                prepare() {
+                  const prepared = prepare?.();
+                  return prepared === false || prepared === undefined ? prepared : { semanticViews: 'measurement' };
+                },
+              },
+            });
+          },
+        });
+      },
+    },
+  });
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  t.after(() => font.dispose());
+  const layout = { wrap: 'word' };
+  const wide = { width: { mode: 'exact', size: 160 } };
+  const narrow = { width: { mode: 'exact', size: 90 } };
+  const first = 'alpha beta gamma delta\n\nepsilon zeta eta theta\niota kappa';
+  const edited = 'alpha beta gamma delta\n\nepsilon zeta and more eta theta\niota kappa';
+  const siblingText = 'a second paragraph in the same group';
+  const cold = await createThreeTestHandle(t);
+  const coldSpans = (text, constraints) => {
+    const reference = cold.createText({ font, text, constraints, layout });
+    try {
+      return reference.glyphs();
+    } finally {
+      reference.dispose();
+    }
+  };
+
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const published = three.createText({ font, text: first, constraints: wide, layout });
+  const sibling = three.createText({ font, text: siblingText, constraints: narrow, layout });
+  t.after(() => {
+    published.dispose();
+    sibling.dispose();
+    group.dispose();
+  });
+  group.add(published, sibling);
+  scene.add(group);
+  scene.updateMatrixWorld(true);
+  assert.equal(group.error, undefined);
+  assertLineGlyphSpans(published.measure(), coldSpans(first, wide), 'published measurement');
+  assertLineGlyphSpans(sibling.measure(), coldSpans(siblingText, narrow), 'second paragraph of the publication');
+  published.set({ text: edited });
+  scene.updateMatrixWorld(true);
+  assertLineGlyphSpans(published.measure(), coldSpans(edited, wide), 'published measurement after an edit');
+  published.set({ constraints: narrow });
+  scene.updateMatrixWorld(true);
+  assertLineGlyphSpans(published.measure(), coldSpans(edited, narrow), 'published measurement after a width change');
+  assertLineGlyphSpans(published.glyphs(), coldSpans(edited, narrow), 'inspection after measured publications');
+});
+
+function assertLineGlyphSpans(actual, positioned, context) {
+  assert.equal(actual.lineCount, positioned.lineCount, `${context}: line count`);
+  assert.equal(actual.glyphCount, positioned.glyphCount, `${context}: glyph count`);
+  assert.deepEqual(
+    actual.lines.map(({ glyphStart, glyphCount }) => [glyphStart, glyphCount]),
+    Array.from(positioned.lineGlyphStarts, (glyphStart, index) => [glyphStart, positioned.lineGlyphCounts[index]]),
+    `${context}: line glyph spans`,
+  );
+  assert.equal(
+    actual.lines.reduce((count, line) => count + line.glyphCount, 0),
+    actual.glyphCount,
+    `${context}: all positioned glyphs belong to one line`,
+  );
+}
 
 test('a standard ligature that absorbs a grapheme publishes and keeps typing', async (t) => {
   // A ligature's absorbed grapheme owns no glyph, but the cluster arena still records the

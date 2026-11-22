@@ -95,15 +95,15 @@ export function readPlannerMeasurements(publication: PlanPublication): ReadonlyM
               xHeightSource,
             });
       previousFontMetrics = fontMetrics;
-      // Setter preparation may carry line-local glyph spans without serializing per-glyph
-      // semantic records; owned glyph demand combines these spans with the borrowed arena.
-      const lineGlyphStart = view.u32(line + recordLayout.itemStart);
+      // Every measurement carries line glyph spans based at the index where glyph records would
+      // begin, whether or not the view serialized them; owned glyph demand combines these spans
+      // with the borrowed arena.
       lines.push(
         Object.freeze({
           index: lineIndex,
           textStart: view.u32(line + recordLayout.textStart),
           textEnd: view.u32(line + recordLayout.textEnd),
-          glyphStart: lineGlyphStart === 0 ? 0 : lineGlyphStart - glyphStart,
+          glyphStart: view.u32(line + recordLayout.itemStart) - glyphStart,
           glyphCount: view.u32(line + recordLayout.itemCount),
           baseline,
           alphabeticBaseline: baseline,
