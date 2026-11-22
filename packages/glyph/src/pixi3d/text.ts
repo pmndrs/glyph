@@ -31,6 +31,8 @@ import { msdf } from '../raster/msdf.js';
 import { slug } from '../raster/slug.js';
 import { Box, Container3D, type Destroy3DOptions, Mesh3D } from '@pixi/3d';
 import { createGlyphPlacements } from '../glyph-placement.js';
+import { GlyphInputError } from '../glyph-error.js';
+import { replaceInText } from '../text-editing.js';
 
 import type { Pixi3DBindings, Pixi3DRootBoundary } from './internal/bindings.js';
 import { isPixi3DTextMaterial, type Pixi3DTextMaterial } from './material.js';
@@ -277,6 +279,24 @@ export class Pixi3DText<Selection extends Pixi3DFontSelection = Pixi3DFontSelect
   rangeRects(start: number, end: number): readonly LayoutBox[] {
     this.#assertActive();
     return this.#controller.editing.rangeRects(start, end);
+  }
+  /**
+   * Replaces UTF-16 code units `[start, end)` of the text with `insert`. Both offsets must be grapheme
+   * boundaries of the current text, or `TextOffsetError` is thrown and nothing changes. Spans follow the edit:
+   * inserted text takes the style of the grapheme before it.
+   */
+  replace(start: number, end: number, insert: string): void {
+    this.#assertActive();
+    if (typeof insert !== 'string') throw new GlyphInputError(['insert'], 'replace() insert must be a string');
+    const range = this.#controller.editing.beginReplace(start, end, insert);
+    const current = this.#state.text;
+    const next =
+      typeof current === 'string'
+        ? replaceInText(current, [], range, insert)
+        : replaceInText(current.text, current.spans, range, insert);
+    this.update({
+      text: (next.spans.length === 0 ? next.text : next) as TextInput<FontFaceRasterOf<Selection>>,
+    });
   }
   #placements() {
     const layout = this.glyphs();

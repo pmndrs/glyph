@@ -37,3 +37,6 @@ export {
   slugWgsl,
 } from './pixi3d/generated/shaders.js';
 export { Pixi3DTextSnapshot } from './pixi3d/detached.js';
+export { TextOffsetError } from './text-editing.js';
+// `Pixi3DText`'s editing methods take and return these; the rest of the vocabulary is on the package root.
+export type { TextCaret, TextDirection, TextMovement, TextPosition, TextRange, TextUnit } from './text-editing.js';

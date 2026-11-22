@@ -1509,8 +1509,9 @@ host reaches them through `GlyphTextController.editing` (`src/text-editing.ts`).
 engine's grapheme boundaries and an invalid one throws `TextOffsetError`; a position carries an affinity that tells the
 end of a wrapped line from the start of the next and the two sides of a bidi boundary. `replace(start, end, insert)`
 validates through the same engine call, states its range to the planner so the engine is told exactly that edit, and
-rebases spans by one rule shared with the engine through `tests/fixtures/span-rebase-vectors.json`. Three `Text` and
-TypeGPU text expose the five queries and `replace`.
+rebases spans by one rule shared with the engine through `tests/fixtures/span-rebase-vectors.json`. Three `Text`,
+TypeGPU text and `Pixi3DText` expose the five queries and `replace`; each `replace` is the same host call, and
+the PixiJS 3D entry exports `TextOffsetError` as `/three` does.
 
 A same-build isolation over one 21,805-glyph paragraph measured 0.002 ms for an unchanged publication, 0.174 ms for the
 aggregate measurement sidecar, and 0.582 ms for full glyph inspection. Three requests only aggregate measurement and
