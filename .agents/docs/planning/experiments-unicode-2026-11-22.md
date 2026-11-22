@@ -29,9 +29,22 @@ quoted. A difference under about 1% of a whole step is inside the noise of this 
   the Unicode, bidi and cluster stages clocked inside the step (the first two clocks added here).
 - **Size:** the shipped simd128 shaper built as `scripts/build.mjs` builds it, raw and gzip -9.
 
-The browser headline harness (`glyph-baselines-2026-11-22/profile-harnesses/browser`) was not rerun: it needs a
-packed tarball per arm and a quiet GPU, and four other lanes were using the machine. The engine-step rows above
-are the Wasm share of its edit rows.
+The browser headline harness (`glyph-baselines-2026-11-22/profile-harnesses/browser`, copied to scratch) ran
+once after experiment 5, on a tarball packed from `d0c17d8e3` against the saved `main` consumer: plan
+`headline`, three A/B rounds of the Latin 15k Inter edit rows and the small ASCII frame, one fresh browser per
+load, load average 8–14. Complete frame, per-step median of loads, milliseconds:
+
+| Workload      | Config            | main | this branch | branch/main | Baseline branch/main |
+| ------------- | ----------------- | ---: | ----------: | ----------: | -------------------: |
+| type-end      | latin15k-inter    | 9.81 |        5.33 |        0.54 |                 0.54 |
+| insert-middle | latin15k-inter    | 7.95 |        5.39 |        0.68 |                 0.68 |
+| delete-middle | latin15k-inter    | 8.04 |        5.30 |        0.66 |                 0.67 |
+| paste-middle  | latin15k-inter    | 8.37 |        5.37 |        0.64 |                 0.65 |
+| ascii         | ascii-interbitmap | 6.05 |        5.00 |        0.83 |                 0.84 |
+
+The baseline column is the 2026-11-22 headline report's branch arm. The Wasm saving of 3b and 5 on a Latin
+insert, about 0.2 ms of a 5.4 ms frame, is inside the spread of three loads, so the browser rows show no change
+attributable to this lane; the engine-step rows above are the measurement.
 
 ## Where analysis time was at the start
 
@@ -51,10 +64,11 @@ Devanagari, Thai and emoji text is all kernel residue, so its Unicode stage is t
 
 ## Experiments
 
-| #   | Experiment                                         | Hypothesis                                                                                                              | Isolated result (wasm)                                                                                         | End to end (wasm engine step)                                                                                                     | Size (shipped wasm)       | Verdict    |
-| --- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | ---------- |
-| 3a  | Bidi class lanes for plain paragraphs (first form) | An ASCII table lane beside the per-character trie walk removes most of the scan                                         | Bidi, pure ASCII 119 → 15.6 µs; Latin prose with curly quotes 93 → 44; CJK 84 → 69                             | Bidi stage 94 → 45 µs on Latin 15k                                                                                                | not built                 | superseded |
-| 3b  | The same with a BMP lane and fused paragraph scan  | Classify sixteen units per step (ASCII table or trie), find the paragraph separator in the codes, emit one run if plain | Bidi, ASCII 117 → 6.0 µs (19×); Latin 91 → 11.1 (8.2×); CJK 83 → 20.6; Devanagari 193 → 32.6; Arabic unchanged | `insert_mid` Latin 15k 2,704 → 2,616 (−3.3%), 22k 4,022 → 3,882 (−3.5%), CJK −3.1%, Devanagari −3.3%; `replace_all` −1.3 to −1.9% | +1,377 B raw, +619 B gzip | **landed** |
+| #   | Experiment                                         | Hypothesis                                                                                                              | Isolated result (wasm)                                                                                         | End to end (wasm engine step)                                                                                                     | Size (shipped wasm)         | Verdict    |
+| --- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | ---------- |
+| 3a  | Bidi class lanes for plain paragraphs (first form) | An ASCII table lane beside the per-character trie walk removes most of the scan                                         | Bidi, pure ASCII 119 → 15.6 µs; Latin prose with curly quotes 93 → 44; CJK 84 → 69                             | Bidi stage 94 → 45 µs on Latin 15k                                                                                                | not built                   | superseded |
+| 3b  | The same with a BMP lane and fused paragraph scan  | Classify sixteen units per step (ASCII table or trie), find the paragraph separator in the codes, emit one run if plain | Bidi, ASCII 117 → 6.0 µs (19×); Latin 91 → 11.1 (8.2×); CJK 83 → 20.6; Devanagari 193 → 32.6; Arabic unchanged | `insert_mid` Latin 15k 2,704 → 2,616 (−3.3%), 22k 4,022 → 3,882 (−3.5%), CJK −3.1%, Devanagari −3.3%; `replace_all` −1.3 to −1.9% | +1,377 B raw, +619 B gzip   | **landed** |
+| 5   | Windowed Unicode analysis of one edit              | Restart points bound breaks and graphemes; an explicit-script grapheme on each side bounds scripts                      | Unicode stage of one typed grapheme: Latin 73 → 5.3 µs, CJK 118 → 18, Arabic 266 → 6.6, Devanagari 1,379 → 40  | `insert_mid` Latin 15k −4.5%, Devanagari −24.8%, CJK −1.2%, Arabic in noise; `replace_all`, `three_range` unchanged               | +6,142 B raw, +2,272 B gzip | **landed** |
 
 ### 3b in detail
 
@@ -86,13 +100,48 @@ tip differs from it only by that formatting; the bidi unit tests were rerun on t
   suites among them.
 - `pnpm --filter @pmndrs/glyph test`: passed.
 
-## In progress, not landed
+### 5. Windowed Unicode analysis of one edit (landed)
 
-**Windowed Unicode analysis of one edit.** `resync::restart` and `script_resync_range` already prove where the
-line-break, grapheme and script lanes can restart, but only the word and sentence lanes use them: every text
-edit still analyses the whole paragraph. A spike that analyses only the window around a single edit and joins
-it to the previous lanes passed a fuzz against the cold analysis (60,000 chains of up to twelve edits, ill-formed
-edits included) and takes the Unicode stage of one typed grapheme on Latin 15k from 72 to 6.2 µs. The whole step read
-2,637 against 2,611 µs under a load average above 17, which is not a measurement. Devanagari is unchanged
-(1,353 µs): its letters are kernel residue and carry no script anchor, so the script window is the whole text.
-The spike is kept outside the branch until both are settled.
+`resync::restart` already proved where the line-break and grapheme lanes can restart, but only the word and
+sentence lanes used it: every text edit analysed the whole paragraph. `UnicodeAnalysis::analyze_edited` now
+analyses one window around a single edit (the one a reconciliation found, or the request's only mutation) and
+joins it to the committed lanes; several edits in one request, a new paragraph and a window that reaches both
+ends of the text still take the whole analysis.
+
+- **Breaks and graphemes** change only between the last restart before the edit and the first after it, with
+  two units of margin so no restart predicate reads an edited unit.
+- **Scripts** have no restart points. The first spike widened the edit to `script_resync_range`, whose anchor is
+  a unit with an explicit single kernel script; Devanagari, Thai and emoji letters are kernel residue, so their
+  window was the whole text. The landed form anchors on whole graphemes instead: it walks the committed
+  graphemes outward from the break window to the first grapheme on each side whose preferred script
+  (`grapheme_script_atom`) is explicit. Such a grapheme takes no script from its neighbours, and neutral
+  graphemes beyond it take theirs from it, so the script items inside the window are those of the window
+  analysed alone. One window covers all three lanes.
+
+Proof of equality: chains of up to twelve random edits (60,000 chains in release, ill-formed edits included)
+over the resync alphabet, with letters that restart, residue scripts that do not, and neutrals whose
+Script_Extensions restrict what they join (U+0964, U+0301, U+30FC, U+A8F1); every windowed analysis equals the
+cold one, lane by lane, and fails exactly when the cold one does. The oracle compares the whole engine with
+cold layout (verification below).
+
+Measured interleaved against the integration tip (`75c03af21`), same session, load average 23–38, minimum of
+5 rounds × 30 iterations, wasm, 15,000 graphemes, microseconds:
+
+| Paragraph         | Unicode stage, insert | Whole step, `insert_mid` | `replace_all` whole step |
+| ----------------- | --------------------: | -----------------------: | -----------------------: |
+| Latin, Inter      |            73.4 → 5.3 |    2,748 → 2,623 (−4.5%) |    6,517 → 6,504 (noise) |
+| Latin, Fredoka    |            73.3 → 5.2 |    3,042 → 2,962 (−2.6%) |    4,918 → 4,969 (noise) |
+| CJK, Noto Sans JP |          118.2 → 17.8 |    3,734 → 3,688 (−1.2%) |    5,982 → 5,944 (noise) |
+| Arabic, Amiri     |           266.3 → 6.6 |  14,840 → 14,745 (noise) |  15,029 → 14,994 (noise) |
+| Devanagari        |        1,379.0 → 40.3 |   5,409 → 4,066 (−24.8%) |  14,794 → 14,734 (noise) |
+
+`three_range` (three edits in one request) is unchanged by design. Shipped simd128 shaper: +6,142 B raw, +2,272 B gzip.
+
+Verification of 5, on `d0c17d8e3`:
+
+- Native oracle, full tier: 590 cases equal, 0 differ; 54,240 differential requests, 0 runs with an unlisted
+  divergence (the one listed divergence, `rg-clipped-noop-borrowed-layout` step 03, is unchanged).
+- Wasm oracle, full tier: the same counts, no reference re-frozen.
+- `cargo test --features oracle` in the shaper: every target passed, the UAX #9, #14 and #29 conformance
+  suites among them (569 library tests).
+- `pnpm --filter @pmndrs/glyph test`: passed.
