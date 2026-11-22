@@ -37,6 +37,9 @@ pub(crate) mod clock {
 
     pub(crate) static POSITIONING: Stage = Stage(AtomicU64::new(0));
     pub(crate) static MEASUREMENT: Stage = Stage(AtomicU64::new(0));
+    /// Unicode analysis of a candidate text: classes, line breaks, graphemes and scripts.
+    pub(crate) static UNICODE: Stage = Stage(AtomicU64::new(0));
+    pub(crate) static BIDI: Stage = Stage(AtomicU64::new(0));
 
     pub(crate) struct Guard(&'static Stage, f64);
 
@@ -144,11 +147,71 @@ fn row(report: &mut String, name: &str, samples: &mut [f64], glyphs: usize) {
 fn script(name: &str) -> Result<Script, String> {
     Ok(match name {
         "latin" => Script::Latin,
+        "greek-cyrillic" => Script::GreekCyrillic,
         "arabic" => Script::Arabic,
+        "hebrew" => Script::Hebrew,
         "devanagari" => Script::Devanagari,
+        "thai" => Script::Thai,
+        "hangul" => Script::Hangul,
+        "emoji" => Script::Emoji,
         "cjk" => Script::Cjk,
+        "mixed-bidi" => Script::MixedBidi,
+        "code" => Script::Code,
         _ => return Err(format!("unknown script `{name}`")),
     })
+}
+
+/// `bench analysis <script> <graphemes> <iterations>`: the text analysis kernels alone on one
+/// paragraph, as the engine calls them for a changed text. The per-glyph column is per UTF-16
+/// unit here.
+fn analysis(script: Script, graphemes: usize, iterations: usize) -> Result<String, String> {
+    use crate::{
+        bidi::{BidiAnalysis, DIRECTION_AUTO, DIRECTION_RTL, analyze_into},
+        unicode::UnicodeAnalysis,
+    };
+    let text = corpus::paragraph(script, 7, graphemes);
+    let mut unicode = UnicodeAnalysis::default();
+    let mut bidi = BidiAnalysis::default();
+    let mut report = String::new();
+    let mut time = |name: &str, run: &mut dyn FnMut() -> Result<(), String>| {
+        let mut samples = Vec::new();
+        for _ in 0..iterations {
+            let started = now();
+            run()?;
+            samples.push(now() - started);
+        }
+        row(&mut report, name, &mut samples, text.len());
+        Ok::<(), String>(())
+    };
+    time("kernel.unicode", &mut || {
+        unicode
+            .analyze(&text)
+            .map_err(|error| format!("unicode: {error:?}"))
+    })?;
+    time("kernel.unicode.scalar", &mut || {
+        unicode
+            .analyze_scalar(&text)
+            .map_err(|error| format!("unicode: {error:?}"))
+    })?;
+    for (name, direction) in [
+        ("kernel.bidi.auto", DIRECTION_AUTO),
+        ("kernel.bidi.rtl", DIRECTION_RTL),
+    ] {
+        time(name, &mut || {
+            analyze_into(&text, direction, &mut bidi).map_err(|error| format!("bidi: {error:?}"))
+        })?;
+    }
+    unicode
+        .analyze(&text)
+        .map_err(|error| format!("unicode: {error:?}"))?;
+    let coverage = unicode.kernel_coverage();
+    Ok(format!(
+        "ok\nshape\tunits {}\tresidue units {}\twindows {}\tbidi paragraphs {}\n{report}",
+        coverage.units,
+        coverage.residue_units,
+        coverage.windows,
+        bidi.paragraph_starts.len(),
+    ))
 }
 
 fn paragraph_state(session: &mut Session) -> Result<&mut ParagraphState, String> {
@@ -192,9 +255,14 @@ pub fn command(library: &FontLibrary, fields: &[&str]) -> Result<String, String>
             number(graphemes)?,
             number(iterations)?,
         ),
+        ["analysis", script_name, graphemes, iterations] => analysis(
+            script(script_name)?,
+            number(graphemes)?,
+            number(iterations)?,
+        ),
         _ => Err(
             "usage: bench paragraph|labels <font> <script> <size> <iterations> | bench layout \
-             <fixture> <align> <size> <iterations>"
+             <fixture> <align> <size> <iterations> | bench analysis <script> <size> <iterations>"
                 .to_string(),
         ),
     }
@@ -371,21 +439,28 @@ fn edits(
         }
         let mut whole_step = Vec::new();
         let mut cluster_stage = Vec::new();
+        let mut unicode_stage = Vec::new();
+        let mut bidi_stage = Vec::new();
         for _ in 0..iterations {
             take_cluster_stage();
+            clock::UNICODE.take();
+            clock::BIDI.take();
             let started = now();
             session.step(&edited, &forward, ROUTE)?;
             whole_step.push(now() - started);
             cluster_stage.push(take_cluster_stage());
+            unicode_stage.push(clock::UNICODE.take());
+            bidi_stage.push(clock::BIDI.take());
             session.step(base, &backward, ROUTE)?;
         }
         row(report, &format!("op.{name}"), &mut whole_step, glyphs);
-        row(
-            report,
-            &format!("stage.cluster.{name}"),
-            &mut cluster_stage,
-            glyphs,
-        );
+        for (stage, samples) in [
+            ("cluster", &mut cluster_stage),
+            ("unicode", &mut unicode_stage),
+            ("bidi", &mut bidi_stage),
+        ] {
+            row(report, &format!("stage.{stage}.{name}"), samples, glyphs);
+        }
     }
     Ok(())
 }

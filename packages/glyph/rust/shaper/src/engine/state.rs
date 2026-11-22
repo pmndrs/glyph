@@ -3333,6 +3333,8 @@ impl PlannerState {
                 candidate_text != committed_text
             };
             if text_changed {
+                #[cfg(feature = "stage-bench")]
+                let _clock = oracle::stage_bench::clock::UNICODE.guard();
                 let reused_ascii_facts = paragraph_index
                     .and_then(|index| paragraphs.get(index))
                     .and_then(|paragraph| {
@@ -5241,6 +5243,8 @@ impl ParagraphState {
             .segments()
             .first()
             .map_or(DIRECTION_AUTO, |segment| segment.style.direction);
+        #[cfg(feature = "stage-bench")]
+        let _clock = oracle::stage_bench::clock::BIDI.guard();
         analyze_bidi_into(text, direction, self.bidi.pending_mut()).map_err(bidi_error)?;
         self.bidi.mark_prepared();
         Ok(())
