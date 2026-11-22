@@ -91,3 +91,6 @@ strip = true
 # `aat` and `rand` cargo features; the dependency above leaves both off.
 [patch.crates-io]
 harfrust = { path = "../../../../vendor/harfrust" }
+# unicode-segmentation is vendored (vendor/unicode-segmentation, see GLYPH-FORK.md there) with its
+# category range tables re-encoded as one trie.
+unicode-segmentation = { path = "../../../../vendor/unicode-segmentation" }
