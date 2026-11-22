@@ -3,10 +3,10 @@ import { GlyphEngineStatusError, setGlyphEngineStatusErrorDetails, type GlyphEng
 import type { Font } from '../font.js';
 import type { GlyphOutlineStore, GlyphOutlineView } from '../glyph-outline.js';
 import type { FontHandle } from '../identity.js';
-import { immutableFontStackFonts, type FontStack } from '../loaded-font.js';
+import { compileRasterFont, immutableFontStackFonts, type FontStack } from '../loaded-font.js';
 import type { RasterFormatMetadata } from '../config/raster-format.js';
 import { onRuntimeShaperRestart, runtimeShaperEngineExports, type RuntimeShaper } from '../shaper.js';
-import { compileRasterFont, type CompiledRasterFont } from '../config/raster.js';
+import type { CompiledRasterFont } from '../config/raster.js';
 import type { PortableResource } from '../config/resources.js';
 import {
   createRenderPlanner,

@@ -1,6 +1,4 @@
-import type { Font } from '../font.js';
 import { textShaperAbi } from '../generated/text-shaper-abi.js';
-import { compileImmutableFontRaster, immutableFontResources, immutableFontVariantIdentity } from '../loaded-font.js';
 import type { RasterDataOf, RasterFormatMetadata, RasterResourceId } from './raster-format.js';
 import { isRasterFormat } from '../internal/raster-format-registry.js';
 import type { RasterFontCompileInput, RasterFormatCompilerWitness } from '../internal/raster-format-compiler.js';
@@ -185,20 +183,6 @@ export function registerRasterCodec<
 /** Return whether `value` is the exact immutable RasterCodec produced by registration. */
 export function isRasterCodec(value: unknown): boolean {
   return isRegisteredRasterCodec(value);
-}
-
-/** Compile an immutable font through the registered RasterCodec, if it has one. */
-export function compileRasterFont<Format extends RasterFormatMetadata>(
-  font: Font<Format>,
-  ids: CodecIdFactory = new CodecIdScope(),
-): CompiledRasterFont | undefined {
-  assertCodecIdFactory(ids, 'raster font compiler ids');
-  const resources = immutableFontResources(font);
-  return compileImmutableFontRaster(font, {
-    cacheKey: immutableFontVariantIdentity(font),
-    glyphCount: resources.font.glyphCount,
-    identities: ids,
-  });
 }
 
 /** Reads named binding fields and portable resources without exposing raster-format-owned decoded data. The view borrows `compiled` — mutating its public byte or payload arrays invalidates later reads. */
