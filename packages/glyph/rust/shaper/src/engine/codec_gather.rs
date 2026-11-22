@@ -2248,6 +2248,16 @@ impl CodecGatherWorkspace {
             )?;
             self.retained_source_cursor = old.start.source;
             self.retained_cursor = old.start.record;
+            // The owner's leading rows are compared with its accepted records first, so every
+            // record whose inputs did not change keeps its content revision and only the rows
+            // from the first difference on are gathered again (typing at the end of a paragraph).
+            let stop = self.append_retained_stream(
+                codec,
+                capability_set,
+                core::iter::once(Ok(first.clone())),
+                &mut binding_for_font,
+            )?;
+            let source_start = stop.map_or(first.input.len(), |stop| stop.source_index);
             self.truncate_to_retained_prefix()?;
             #[cfg(test)]
             super::work_attribution::record(|work| work.gather_paragraph_visits += 1);
@@ -2255,7 +2265,7 @@ impl CodecGatherWorkspace {
                 codec,
                 capability_set,
                 first.input(),
-                0,
+                source_start,
                 &mut binding_for_font,
             )?;
             let next = self.range_since(old.start);
