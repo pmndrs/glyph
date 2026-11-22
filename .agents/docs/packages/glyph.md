@@ -228,6 +228,18 @@ four-lane Codec and ordered physical compiler retain ownership. Native deleted-r
 latency gain; the measured whole variant is preserved for combination and remains unaccepted for performance in the
 [frontier](../planning/publication-frontier.md).
 
+A retained owner also declares what its glyph rows can differ in. Preparation records, per paragraph and since its last
+publication, whether a stage that authors what a paragraph-run glyph projects was staged: text, Unicode, bidi, styles,
+shaping runs, shaping or clusters. While none was, as in a width, alignment or flow-geometry change, the retained gather
+pairs each row with the accepted row by stable identity, reads only identity and ink origin, and compares only the
+inputs a placement span decides (font size, placement slot, region, flow thread and transform index). A source row
+remembers whether it was read from the paragraph's runs, because a boundary glyph can carry a run glyph's identity under
+another shape; the first chunk that holds a boundary glyph, a changed identity or a changed clip returns the rest of
+the owner to the full comparison. A test build still projects every input and fails if a skipped one differs. The
+gather reports which Codec inputs changed in any record, and the ordered compiler does not execute or compare a buffer
+that reads none of them where every instance kept its input and physical slot. Records, revisions, change masks and
+published bytes are the same as the full comparison produces.
+
 Count-changing dirty owners now share one appended gather envelope. Dirty rows use the existing Codec-directed writer;
 intervening clean rows extend the already-gathered columns and share source-rope ranges. One frozen old/current
 correspondence ledger separates source and emitted coordinates and identifies dirty owners versus clean gaps.
