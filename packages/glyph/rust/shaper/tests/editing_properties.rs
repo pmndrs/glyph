@@ -704,7 +704,9 @@ fn properties_hold_for_every_oracle_fixture() {
         failures.extend(tally.failures.iter().cloned());
     }
     println!("{} cases skipped for missing fonts", skipped.len());
-    println!(
+    // Positioning places every text glyph at its pen, an ellipsis island's blocks included.
+    assert!(
+        reversed.is_empty(),
         "{} lines draw a glyph left of its pen, in: {}",
         tallies
             .values()
