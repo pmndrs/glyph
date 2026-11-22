@@ -574,6 +574,22 @@ fn shifted_offset(value: u32, delta: i64) -> Result<u32, EngineError> {
 }
 
 impl BoundaryShapeArena {
+    /// Whether the two arenas hold the same records, glyphs and stable ids at the same
+    /// indexes, so either one answers every read the other does.
+    pub(crate) fn same_as(&self, other: &Self) -> bool {
+        let (a, b) = (&self.shape, &other.shape);
+        self.records == other.records
+            && self.stable_ids == other.stable_ids
+            && a.runs == b.runs
+            && a.glyph_ids == b.glyph_ids
+            && a.clusters == b.clusters
+            && a.x_advances == b.x_advances
+            && a.y_advances == b.y_advances
+            && a.x_offsets == b.x_offsets
+            && a.y_offsets == b.y_offsets
+            && a.glyph_flags == b.glyph_flags
+    }
+
     pub(crate) fn clear(&mut self) {
         self.records.clear();
         self.shape.clear();

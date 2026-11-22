@@ -5217,8 +5217,9 @@ pub(crate) fn fragment_pen_origin(
 /// fragment's cluster range, pen origin, and justify distribution once text,
 /// styles, clusters, and bidi are unchanged (the caller's precondition), so
 /// bit-equality of those computed inputs proves output equality without
-/// running the positioning, gather, or publication tail. Boundary-bearing
-/// (ellipsis) flows fall through to the full path.
+/// running the positioning, gather, or publication tail. Edge records and drop
+/// caps are admitted when their records are bit-equal (edges: the same index into
+/// an equal boundary arena); ellipsis flows fall through to the full path.
 pub(crate) fn flow_positioning_equivalent(
     pending: &FlowLayoutArena,
     committed: &FlowLayoutArena,
@@ -5226,15 +5227,37 @@ pub(crate) fn flow_positioning_equivalent(
     bidi: &BidiAnalysis,
     pending_typography: impl Fn(u32) -> ThreadTypography + Copy,
     committed_typography: impl Fn(u32) -> ThreadTypography + Copy,
+    (pending_boundary, committed_boundary): (&BoundaryShapeArena, &BoundaryShapeArena),
 ) -> Result<bool, EngineError> {
     if pending.lines.len() != committed.lines.len()
-        || !pending.drop_caps.is_empty()
-        || !committed.drop_caps.is_empty()
+        || pending.drop_caps.len() != committed.drop_caps.len()
         || !pending.ellipsis_threads().is_empty()
         || !committed.ellipsis_threads().is_empty()
     {
         return Ok(false);
     }
+    // A drop cap is positioned from its own line and fragment alone, like a body fragment
+    // with no indent or justification.
+    for (cap, previous) in pending.drop_caps.iter().zip(&committed.drop_caps) {
+        if cap != previous
+            || !same_line_numbers(cap.line, previous.line)
+            || cap.fragment.slot_start.to_bits() != previous.fragment.slot_start.to_bits()
+            || cap.fragment.slot_end.to_bits() != previous.fragment.slot_end.to_bits()
+            || [
+                cap.fragment.lead_index,
+                cap.fragment.tail_index,
+                cap.fragment.boundary_index,
+            ]
+            .iter()
+            .any(|index| *index != super::flow_composition::NO_BOUNDARY)
+        {
+            return Ok(false);
+        }
+    }
+    // Edge records are positioned from the boundary arena by index. When the new flow's
+    // arena equals the committed one, the same index names the same island, glyphs and
+    // stable ids, so committing either arena leaves the committed positioning true.
+    let mut boundary_compared = None;
     let mut fragment_cursor = pending
         .fragments
         .cursor_from(0)
@@ -5246,16 +5269,7 @@ pub(crate) fn flow_positioning_equivalent(
     let mut lines = pending.lines.iter().zip(committed.lines.iter()).peekable();
     while let Some((line, previous)) = lines.next() {
         let next_line = lines.peek().map(|(line, _)| *line);
-        if line.flow_thread_id != previous.flow_thread_id
-            || line.region_id != previous.region_id
-            || line.transform_index != previous.transform_index
-            || line.clip_id != previous.clip_id
-            || line.fragment_count != previous.fragment_count
-            || line.align != previous.align
-            || line.block_start.to_bits() != previous.block_start.to_bits()
-            || line.baseline.to_bits() != previous.baseline.to_bits()
-            || line.height.to_bits() != previous.height.to_bits()
-        {
+        if !same_line_numbers(*line, *previous) {
             return Ok(false);
         }
         let final_line = next_line.is_none_or(|next| next.flow_thread_id != line.flow_thread_id);
@@ -5270,12 +5284,17 @@ pub(crate) fn flow_positioning_equivalent(
         }
         for (fragment, previous_fragment) in fragments.iter().zip(previous_fragments.iter()) {
             if fragment.line != previous_fragment.line
-                || fragment.boundary_index != super::flow_composition::NO_BOUNDARY
-                || previous_fragment.boundary_index != super::flow_composition::NO_BOUNDARY
-                || fragment.lead_index != super::flow_composition::NO_BOUNDARY
-                || previous_fragment.lead_index != super::flow_composition::NO_BOUNDARY
-                || fragment.tail_index != super::flow_composition::NO_BOUNDARY
-                || previous_fragment.tail_index != super::flow_composition::NO_BOUNDARY
+                || fragment.boundary_index != previous_fragment.boundary_index
+                || fragment.lead_index != previous_fragment.lead_index
+                || fragment.tail_index != previous_fragment.tail_index
+            {
+                return Ok(false);
+            }
+            // `NO_BOUNDARY` is all ones, so the three indexes are absent exactly when their
+            // conjunction is.
+            if fragment.boundary_index & fragment.lead_index & fragment.tail_index
+                != super::flow_composition::NO_BOUNDARY
+                && !same_boundary(pending_boundary, committed_boundary, &mut boundary_compared)
             {
                 return Ok(false);
             }
@@ -5318,6 +5337,30 @@ pub(crate) fn flow_positioning_equivalent(
         return Err(EngineError::InvalidRequest);
     }
     Ok(true)
+}
+
+/// The arena comparison, run at most once per proof and only for a flow with edge records.
+#[cold]
+fn same_boundary(
+    pending: &BoundaryShapeArena,
+    committed: &BoundaryShapeArena,
+    compared: &mut Option<bool>,
+) -> bool {
+    *compared.get_or_insert_with(|| pending.same_as(committed))
+}
+
+/// Whether two lines carry the same numbers positioning reads, bit for bit.
+#[inline(always)]
+fn same_line_numbers(line: FlowLine, previous: FlowLine) -> bool {
+    line.flow_thread_id == previous.flow_thread_id
+        && line.region_id == previous.region_id
+        && line.transform_index == previous.transform_index
+        && line.clip_id == previous.clip_id
+        && line.fragment_count == previous.fragment_count
+        && line.align == previous.align
+        && line.block_start.to_bits() == previous.block_start.to_bits()
+        && line.baseline.to_bits() == previous.baseline.to_bits()
+        && line.height.to_bits() == previous.height.to_bits()
 }
 
 pub(super) fn paragraph_level_at(bidi: &BidiAnalysis, offset: u32) -> u8 {
@@ -6754,7 +6797,16 @@ mod tests {
         };
         let equivalent = |pending: &FlowLayoutArena, committed: &FlowLayoutArena| {
             flow_positioning_equivalent(
-                pending, committed, &clusters, &bidi, typography, typography,
+                pending,
+                committed,
+                &clusters,
+                &bidi,
+                typography,
+                typography,
+                (
+                    &BoundaryShapeArena::default(),
+                    &BoundaryShapeArena::default(),
+                ),
             )
             .unwrap()
         };
@@ -6859,8 +6911,19 @@ mod tests {
             },
         };
         let justified_equivalent = |pending: &FlowLayoutArena, committed: &FlowLayoutArena| {
-            flow_positioning_equivalent(pending, committed, &clusters, &bidi, justified, justified)
-                .unwrap()
+            flow_positioning_equivalent(
+                pending,
+                committed,
+                &clusters,
+                &bidi,
+                justified,
+                justified,
+                (
+                    &BoundaryShapeArena::default(),
+                    &BoundaryShapeArena::default(),
+                ),
+            )
+            .unwrap()
         };
         assert!(!justified_equivalent(
             &arena(ALIGN_JUSTIFY, 17.0),
@@ -6880,17 +6943,79 @@ mod tests {
             None,
             "changed justification controls cannot reuse a prior distribution"
         );
-        // A boundary-bearing fragment always takes the full path.
-        let mut with_boundary = arena(ALIGN_START, 17.0);
-        assert!(
-            with_boundary
-                .fragments
-                .update(0, |fragment| {
-                    fragment.boundary_index = 0;
-                })
+        // An edge record is positioned from the boundary arena by index: the flows are
+        // equivalent only when both name the same index and the arenas hold the same island.
+        let with_edge = |slot_end: f64| {
+            let mut flow = arena(ALIGN_START, slot_end);
+            assert!(
+                flow.fragments
+                    .update(0, |fragment| {
+                        fragment.lead_index = 0;
+                    })
+                    .unwrap()
+            );
+            flow
+        };
+        let island = |glyph: u16| {
+            let mut boundary = BoundaryShapeArena::default();
+            boundary.records.push(BoundaryShape {
+                flow_thread_id: line.flow_thread_id,
+                source_run: 0,
+                cluster_start: 0,
+                cluster_end: 1,
+                text_end: 1,
+                source_binding_handle: 1,
+                source_font_handle: 1,
+                ellipsis_binding_handle: 0,
+                ellipsis_font_handle: 0,
+                source_glyph_start: 0,
+                source_glyph_count: 1,
+                ellipsis_glyph_start: 0,
+                ellipsis_glyph_count: 0,
+                line_start: true,
+            });
+            boundary.shape.glyph_ids.push(glyph);
+            boundary.shape.clusters.push(0);
+            boundary.shape.x_advances.push(640);
+            boundary.shape.y_advances.push(0);
+            boundary.shape.x_offsets.push(0);
+            boundary.shape.y_offsets.push(0);
+            boundary.shape.glyph_flags.push(0);
+            boundary.stable_ids.push(7);
+            boundary
+        };
+        let edge_equivalent =
+            |pending: &FlowLayoutArena,
+             committed: &FlowLayoutArena,
+             boundaries: (&BoundaryShapeArena, &BoundaryShapeArena)| {
+                flow_positioning_equivalent(
+                    pending, committed, &clusters, &bidi, typography, typography, boundaries,
+                )
                 .unwrap()
+            };
+        assert!(edge_equivalent(
+            &with_edge(17.0),
+            &with_edge(25.0),
+            (&island(3), &island(3))
+        ));
+        assert!(
+            !edge_equivalent(&with_edge(17.0), &with_edge(25.0), (&island(3), &island(4))),
+            "a reshaped island must be positioned again"
         );
-        assert!(!equivalent(&with_boundary, &arena(ALIGN_START, 17.0)));
+        assert!(
+            !edge_equivalent(
+                &with_edge(17.0),
+                &arena(ALIGN_START, 17.0),
+                (&island(3), &island(3))
+            ),
+            "a line that gained an edge record must be positioned again"
+        );
+        let mut restamped = island(3);
+        restamped.stable_ids[0] = 8;
+        assert!(
+            !edge_equivalent(&with_edge(17.0), &with_edge(17.0), (&island(3), &restamped)),
+            "an island whose glyphs took other stable ids must be published again"
+        );
     }
 
     #[test]
