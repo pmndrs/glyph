@@ -454,27 +454,47 @@ fn an_empty_line_starts_where_its_alignment_puts_it() {
 }
 
 #[test]
-fn text_with_no_line_has_no_line_box_to_stand_in() {
-    // Layout makes no line for empty text or for text that is only hard breaks, so there is no
-    // line height to give a caret: the rectangle is empty at the origin. Pinned as it is; the
-    // fix is a layout change, not a query change.
+fn empty_and_break_only_text_has_a_line_box_to_stand_in() {
+    // Empty text is one empty line, and every hard break ends a line and opens the next, so a
+    // caret always has a line box: one stop per line, at the line's start.
     for text in ["", "\n", "\n\n"] {
         let session = lay_out(&["inter"], &model(text));
         let queries = editing(&session);
-        assert_eq!(queries.source().line_count(), 0, "{text:?}");
-        for offset in 0..=units(text) {
-            let caret = queries.caret(down(offset)).unwrap();
-            assert_eq!(caret.rect, Rect::default());
-            assert!(!caret.clipped);
-        }
-        assert_eq!(queries.hit_test(10.0, 10.0).unwrap(), down(0));
-        assert_eq!(
-            queries.boundary(down(0), TextUnit::Line).unwrap(),
-            TextRange {
-                start: 0,
-                end: units(text)
+        let source = queries.source();
+        let length = units(text);
+        assert_eq!(source.line_count(), length as usize + 1, "{text:?}");
+        for offset in 0..=length {
+            let facts = source.line(offset as usize).unwrap();
+            assert!(facts.height > 0.0, "{text:?} line {offset}");
+            for position in [down(offset), up(offset)] {
+                let caret = queries.caret(position).unwrap();
+                assert_eq!(caret.line, offset, "{text:?}");
+                assert_eq!(
+                    (caret.rect.x, caret.rect.y, caret.rect.height),
+                    (0.0, facts.top, facts.height),
+                    "{text:?} offset {offset}"
+                );
+                assert!(!caret.clipped);
             }
-        );
+            // Any point in the line's box is its one stop.
+            assert_eq!(
+                queries
+                    .hit_test(10.0, facts.top + facts.height / 2.0)
+                    .unwrap()
+                    .offset,
+                offset,
+                "{text:?}"
+            );
+            // A line owns its break; the last line owns nothing.
+            assert_eq!(
+                queries.boundary(down(offset), TextUnit::Line).unwrap(),
+                TextRange {
+                    start: offset,
+                    end: (offset + 1).min(length)
+                },
+                "{text:?}"
+            );
+        }
     }
 }
 

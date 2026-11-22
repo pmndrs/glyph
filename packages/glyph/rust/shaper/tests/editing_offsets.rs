@@ -288,19 +288,27 @@ fn line_units_tile_the_text() {
             );
         }
     }
-    // Layout makes no line for empty text or for text that is only hard breaks: the one unit
-    // is the whole text.
-    for text in ["", "\n", "\n\n"] {
+    // Empty text is one empty line, and text that is only hard breaks is one line per break and
+    // the empty line after the last: each line owns its break, the last line owns nothing.
+    for (text, expected) in [
+        ("", vec![(0, 0)]),
+        ("\n", vec![(0, 1), (1, 1)]),
+        ("\n\n", vec![(0, 1), (1, 2), (2, 2)]),
+    ] {
         let session = lay_out(&["inter"], &model(text));
         let queries = editing(&session);
-        assert_eq!(queries.source().line_count(), 0, "{text:?}");
-        assert_eq!(
-            queries.boundary(down(0), TextUnit::Line).unwrap(),
-            TextRange {
-                start: 0,
-                end: units(text)
-            }
-        );
+        let lines: Vec<(u32, u32)> = (0..queries.source().line_count())
+            .map(|line| queries.line_range(line).unwrap())
+            .map(|range| (range.start, range.end))
+            .collect();
+        assert_eq!(lines, expected, "{text:?}");
+        for (start, end) in expected {
+            assert_eq!(
+                queries.boundary(down(start), TextUnit::Line).unwrap(),
+                TextRange { start, end },
+                "{text:?}"
+            );
+        }
     }
 }
 
