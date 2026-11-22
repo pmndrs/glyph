@@ -6252,10 +6252,20 @@ impl ParagraphState {
     /// Completes every cluster-producing path through one exact retained-run comparison.
     /// Width-only updates never reach this method because they prepare no cluster stage.
     fn finish_cluster_preparation(&mut self, shaper: &ShaperRegistry) -> Result<(), EngineError> {
-        if let Err(error) = self.clusters.pending_mut().rebuild_run_local_geometry(
+        let general = matches!(self.prepared_layout.committed(), PreparedLayout::General);
+        let committed_styles = self.styles.committed().resolved.segments();
+        let (pending_clusters, committed_clusters) = self.clusters.derive_mut();
+        // The committed arena's geometry is the kernel's output for its own lanes; the rebuild
+        // copies the part it proves it would write again.
+        let previous = general.then_some(super::run_local_paragraph::PreviousGeometry {
+            clusters: committed_clusters,
+            styles: committed_styles,
+        });
+        if let Err(error) = pending_clusters.rebuild_run_local_geometry_from(
             self.shaping_runs.active().runs(),
             self.styles.active().resolved.segments(),
             |handle, glyph| shaper.font_glyph_extents(handle, glyph),
+            previous,
         ) {
             self.discard_clusters_candidate();
             return Err(error);
@@ -22349,6 +22359,7 @@ mod tests {
     }
     include!("state/change_class_tests.rs");
     include!("state/refusal_tests.rs");
+    include!("state/run_local_prefix_tests.rs");
     include!("state_ascii_anchor_runtime_oracle.rs");
     include!("state_ascii_anchor_acceptance_tests.rs");
     include!("state_ascii_anchor_policy_tests.rs");

@@ -1820,11 +1820,24 @@ impl ClusterArena {
         })
     }
 
+    #[cfg(any(test, feature = "stage-bench"))]
     pub(crate) fn rebuild_run_local_geometry(
         &mut self,
         runs: &[ShapingRun],
         styles: &[StyleSegment],
         extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
+    ) -> Result<(), EngineError> {
+        self.rebuild_run_local_geometry_from(runs, styles, extents_for, None)
+    }
+
+    /// `rebuild_run_local_geometry`, starting from what `previous` proves this arena would
+    /// lay out again.
+    pub(crate) fn rebuild_run_local_geometry_from(
+        &mut self,
+        runs: &[ShapingRun],
+        styles: &[StyleSegment],
+        extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
+        previous: Option<super::run_local_paragraph::PreviousGeometry<'_>>,
     ) -> Result<(), EngineError> {
         // The kernel borrows this arena's lanes while it writes these two.
         let mut run_local = core::mem::take(&mut self.run_local);
@@ -1836,6 +1849,7 @@ impl ClusterArena {
             runs,
             styles,
             extents_for,
+            previous,
         );
         self.layout_runs.runs = layout_runs;
         self.run_local = run_local;
