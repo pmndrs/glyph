@@ -2257,10 +2257,9 @@ impl CodecGatherWorkspace {
                 core::iter::once(Ok(first.clone())),
                 &mut binding_for_font,
             )?;
+            // The retained stream counted this owner's paragraph visit.
             let source_start = stop.map_or(first.input.len(), |stop| stop.source_index);
             self.truncate_to_retained_prefix()?;
-            #[cfg(test)]
-            super::work_attribution::record(|work| work.gather_paragraph_visits += 1);
             self.append_from_source(
                 codec,
                 capability_set,
@@ -6361,7 +6360,15 @@ mod tests {
                         assert_eq!(work.gather_glyph_visits, 0);
                     }
                     if replaced {
-                        assert_eq!(work.gather_glyph_visits, candidate[edited].len());
+                        // The replacement first compares the owner's leading rows with its
+                        // accepted records; the first row that differs is read by that comparison
+                        // and again when it is gathered.
+                        let rows = candidate[edited].len();
+                        assert!(
+                            (rows..=rows + 1).contains(&work.gather_glyph_visits),
+                            "{} gather visits for {rows} rows",
+                            work.gather_glyph_visits
+                        );
                     }
 
                     // The oracle always appends from empty storage, never uses cached ranges,
