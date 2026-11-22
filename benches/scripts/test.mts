@@ -14,6 +14,7 @@ export async function runBenchmarkTest(options: { readonly runtimePackagesReady?
     'scripts/archive-benchmark-loader.test.mts',
     'scripts/editorial-capture-identity.test.mts',
     'scripts/editorial-pixel-proof.test.mts',
+    'scripts/browser-import-library.test.mts',
   ]);
   await runNodeScript('scripts/run-headless.mts', [
     '--suite',

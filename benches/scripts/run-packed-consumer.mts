@@ -1,6 +1,6 @@
 /* @workflow {
   "name": "benchmark:packed-consumer",
-  "summary": "Pack Glyph or install a frozen archive and prove runtime font baking from an isolated browser consumer.",
+  "summary": "Pack Glyph or install a frozen archive and prove direct browser ESM import and runtime font baking from an isolated browser consumer.",
   "requirements": "Built Glyph package, pnpm offline cache, and Playwright Chromium. For a frozen archive pass --artifact, --expected-sha256, and --output together.",
   "writes": "Ignored temporary files under benches/.cache, removed before exit; optional JSON receipt at --output."
 } */
@@ -389,6 +389,15 @@ try {
       deliveryErrors.push(`${String(error)}; unmatched Glyph URLs: ${unmatchedGlyphResponses.join(' | ') || 'none'}`);
     }
     if (deliveryErrors.length > 0) throw new Error(`Archive browser delivery failed: ${deliveryErrors.join(' | ')}`);
+  }
+
+  const devSource = await readFile(join(consumerDirectory, 'node_modules/@pmndrs/glyph/dist/internal/dev.js'), 'utf8');
+  const directImport = await page.evaluate(async (source) => {
+    const { DEV } = await import(`data:text/javascript,${encodeURIComponent(source)}`);
+    return { processGlobal: typeof process, dev: DEV };
+  }, devSource);
+  if (directImport.processGlobal !== 'undefined' || directImport.dev !== false) {
+    throw new Error(`packed direct browser module import returned ${JSON.stringify(directImport)}`);
   }
 
   const blocked = await page.evaluate(async () => {
