@@ -395,6 +395,48 @@ impl SubtableInfo {
     }
 }
 
+impl SubtableInfo {
+    /// pmndrs/glyph fork addition: the coverage every `apply` of this subtable consults first,
+    /// the one its digest was built from.
+    pub(crate) fn primary_coverage<'a>(&self, table_data: &'a [u8]) -> Option<CoverageTable<'a>> {
+        let data = FontData::new(table_data.get(self.offset as usize..)?);
+        let coverage = match self.kind {
+            SubtableKind::SingleSubst1 => SingleSubstFormat1::read(data).ok()?.coverage(),
+            SubtableKind::SingleSubst2 => SingleSubstFormat2::read(data).ok()?.coverage(),
+            SubtableKind::MultipleSubst1 => MultipleSubstFormat1::read(data).ok()?.coverage(),
+            SubtableKind::AlternateSubst1 => AlternateSubstFormat1::read(data).ok()?.coverage(),
+            SubtableKind::LigatureSubst1 => LigatureSubstFormat1::read(data).ok()?.coverage(),
+            SubtableKind::SinglePos1 => SinglePosFormat1::read(data).ok()?.coverage(),
+            SubtableKind::SinglePos2 => SinglePosFormat2::read(data).ok()?.coverage(),
+            SubtableKind::PairPos1 => PairPosFormat1::read(data).ok()?.coverage(),
+            SubtableKind::PairPos2 => PairPosFormat2::read(data).ok()?.coverage(),
+            SubtableKind::CursivePos1 => CursivePosFormat1::read(data).ok()?.coverage(),
+            SubtableKind::MarkBasePos1 => MarkBasePosFormat1::read(data).ok()?.mark_coverage(),
+            SubtableKind::MarkMarkPos1 => MarkMarkPosFormat1::read(data).ok()?.mark1_coverage(),
+            SubtableKind::MarkLigPos1 => MarkLigPosFormat1::read(data).ok()?.mark_coverage(),
+            SubtableKind::ContextFormat1 => SequenceContextFormat1::read(data).ok()?.coverage(),
+            SubtableKind::ContextFormat2 => SequenceContextFormat2::read(data).ok()?.coverage(),
+            SubtableKind::ContextFormat3 => {
+                SequenceContextFormat3::read(data).ok()?.coverages().get(0)
+            }
+            SubtableKind::ChainedContextFormat1 => {
+                ChainedSequenceContextFormat1::read(data).ok()?.coverage()
+            }
+            SubtableKind::ChainedContextFormat2 => {
+                ChainedSequenceContextFormat2::read(data).ok()?.coverage()
+            }
+            SubtableKind::ChainedContextFormat3 => ChainedSequenceContextFormat3::read(data)
+                .ok()?
+                .input_coverages()
+                .get(0),
+            SubtableKind::ReverseChainContext => {
+                ReverseChainSingleSubstFormat1::read(data).ok()?.coverage()
+            }
+        };
+        coverage.ok()
+    }
+}
+
 macro_rules! apply_fns {
     ($apply:ident, $apply_cached:ident, $ty:ident) => {
         fn $apply(

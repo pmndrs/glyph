@@ -579,6 +579,9 @@ struct ParagraphState {
     /// mutation batch can skip re-seeding them.
     pending_text_mirrors_committed: bool,
     text_edits: Vec<TextEdit>,
+    /// The request's mutations as separate edits, ascending, when `text_edits` bounds them in
+    /// one: what lets the shape stage reshape several runs alone.
+    text_edit_parts: Vec<TextEdit>,
     styles: Staged<StyleStage>,
     unicode: Staged<UnicodeAnalysis>,
     unicode_reused_for_text_edit: bool,
@@ -596,6 +599,9 @@ struct ParagraphState {
     shape_window_scratch: Vec<ShapeWindow>,
     layout_dirty: LayoutDirtyRanges,
     incremental_shape_source_run: Option<u32>,
+    /// The source runs a multi-run incremental shape reshaped whole, ascending; empty unless
+    /// that path prepared the shape.
+    incremental_shape_source_runs: Vec<u32>,
     clusters: Staged<ClusterArena>,
     glyph_identity_index: IdentityIndex,
     layout_run_identity_index: IdentityIndex,
@@ -4313,6 +4319,7 @@ impl ParagraphState {
         self.fallback_span_scratch.clear();
         self.fallback_cluster_scratch.clear();
         self.incremental_shape_source_run = None;
+        self.incremental_shape_source_runs.clear();
         self.shape.discard_candidate();
         let (candidate, previous_layout) = self.prepared_layout.derive_mut();
         if !matches!(candidate, PreparedLayout::Inline(_)) {
@@ -4551,6 +4558,7 @@ impl ParagraphState {
         }
         self.text.discard_candidate();
         self.text_edits.clear();
+        self.text_edit_parts.clear();
         {
             let (committed, pending) = self.styles.pair_mut();
             committed.arena.clear();
@@ -4598,6 +4606,7 @@ impl ParagraphState {
         self.pending_shape_font_instance = None;
         self.shape_window_scratch.clear();
         self.incremental_shape_source_run = None;
+        self.incremental_shape_source_runs.clear();
         {
             let (committed, pending) = self.clusters.pair_mut();
             committed.clear();
@@ -4975,6 +4984,7 @@ impl ParagraphState {
         self.text.mark_prepared();
         let reconciliation = text_reconciliation(mutations, self.text.committed().units.len());
         self.text_edits.clear();
+        self.text_edit_parts.clear();
         for index in 0..mutations.len() {
             let Some(mutation) = mutations.get(index) else {
                 self.discard_text_candidate();
@@ -5016,6 +5026,15 @@ impl ParagraphState {
                     .try_reserve(1)
                     .map_err(|_| EngineError::ResultTooLarge)?;
                 text_edits.push(edit);
+                if mutations.len() > 1 {
+                    split_identity_edit(
+                        &committed.unit_ids,
+                        &pending.unit_ids,
+                        committed.next_unit_id,
+                        edit,
+                        &mut self.text_edit_parts,
+                    )?;
+                }
             }
             reconcile_text_identities(committed, pending, text_edits, reconciliation)
         })();
@@ -5042,6 +5061,7 @@ impl ParagraphState {
         self.text.pending_mut().next_unit_id = 0;
         self.text.discard_candidate();
         self.text_edits.clear();
+        self.text_edit_parts.clear();
     }
 
     #[inline(never)]
@@ -5352,7 +5372,8 @@ impl ParagraphState {
             return Ok(());
         }
         if self.committed_inline().is_none()
-            && self.try_prepare_incremental_shape(shaper, font_stacks, font_bindings)?
+            && (self.try_prepare_incremental_shape(shaper, font_stacks, font_bindings)?
+                || self.try_prepare_multi_run_shape(shaper)?)
         {
             self.shape.mark_prepared();
             return Ok(());
@@ -5638,6 +5659,7 @@ impl ParagraphState {
                 // None selects the full cluster/RunLocal/layout preparation;
                 // this first candidate credits only full-run HarfRust work.
                 self.incremental_shape_source_run = None;
+                self.incremental_shape_source_runs.clear();
                 return Ok(true);
             }
             set_whole_shape_window(
@@ -5675,6 +5697,12 @@ impl ParagraphState {
         for span in self.fallback_spans.iter().copied() {
             let (text_start, text_end) = if span.source_run == affected_source_run {
                 (new_run.text_start, new_run.text_end)
+            } else if span.source_run > affected_source_run {
+                let delta = edit_delta(edit)?;
+                (
+                    shifted_text_offset(span.text_start, delta)?,
+                    shifted_text_offset(span.text_end, delta)?,
+                )
             } else {
                 (
                     map_old_offset(span.text_start, edit)?,
@@ -5691,6 +5719,207 @@ impl ParagraphState {
         self.incremental_shape_source_run = Some(affected_source_run);
         // The existing sparse/whole-window producer remains authoritative but
         // does not mint this optional registration certificate.
+        self.pending_shape_font_instance = None;
+        Ok(true)
+    }
+
+    /// Edits in several source runs: each edited run is reshaped whole, one shaping call per
+    /// run, and every other run keeps its glyphs, moved by the edited runs before it. Only runs
+    /// whose topology the edits kept, with one first-font fallback span and one shaped run
+    /// each, qualify; a run that needs a fallback font declines the whole request.
+    fn try_prepare_multi_run_shape(
+        &mut self,
+        shaper: &mut ShaperRegistry,
+    ) -> Result<bool, EngineError> {
+        let old_runs = self.shaping_runs.committed().runs();
+        let new_runs = self.shaping_runs.active().runs();
+        if self.text_edit_parts.len() < 2 || old_runs.len() != new_runs.len() || old_runs.is_empty()
+        {
+            return Ok(false);
+        }
+        // The run each edit lies in, before and after it.
+        let mut edited: Vec<u32> = Vec::new();
+        edited
+            .try_reserve(self.text_edit_parts.len())
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        for edit in self.text_edit_parts.iter().copied() {
+            let Some(run) = containing_run(old_runs, edit.old_start, edit.old_end) else {
+                return Ok(false);
+            };
+            if containing_run(new_runs, edit.new_start, edit.new_end) != Some(run) {
+                return Ok(false);
+            }
+            let run = u32::try_from(run).map_err(|_| EngineError::ResultTooLarge)?;
+            match edited.last() {
+                Some(last) if *last == run => {}
+                Some(last) if *last > run => return Ok(false),
+                _ => edited.push(run),
+            }
+        }
+        if edited.len() < 2 {
+            return Ok(false);
+        }
+        // Every run keeps its shaping properties and moves by the edited runs before it; only
+        // an edited run changes length.
+        let languages = self
+            .style_invalidation
+            .shaping
+            .then_some((&self.styles.committed().arena, &self.styles.active().arena));
+        let mut shifts: Vec<i64> = Vec::new();
+        shifts
+            .try_reserve(old_runs.len())
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        let mut delta = 0_i64;
+        for (index, (&old, &new)) in old_runs.iter().zip(new_runs).enumerate() {
+            let grown = i64::from(new.text_end)
+                - i64::from(new.text_start)
+                - (i64::from(old.text_end) - i64::from(old.text_start));
+            if !same_shaping_properties(old, new)
+                || languages.is_some_and(|(previous, next)| {
+                    previous.resolved_language(old.style) != next.resolved_language(new.style)
+                        || previous.resolved_features(old.style)
+                            != next.resolved_features(new.style)
+                })
+                || i64::from(new.text_start) != i64::from(old.text_start) + delta
+                || (grown != 0 && edited.binary_search(&(index as u32)).is_err())
+            {
+                return Ok(false);
+            }
+            shifts.push(delta);
+            delta += grown;
+        }
+        // One first-font fallback span and one shaped run per edited run.
+        for run in edited.iter().copied() {
+            let old = old_runs[run as usize];
+            let mut spans = self
+                .fallback_spans
+                .iter()
+                .filter(|span| span.source_run == run);
+            let (Some(span), None) = (spans.next(), spans.next()) else {
+                return Ok(false);
+            };
+            if span.font_index != 0
+                || span.text_start != old.text_start
+                || span.text_end != old.text_end
+            {
+                return Ok(false);
+            }
+            if self
+                .shape
+                .committed()
+                .runs
+                .iter()
+                .filter(|shaped| shaped.source_run == run)
+                .count()
+                != 1
+            {
+                return Ok(false);
+            }
+        }
+
+        self.shape.pending_mut().clear();
+        let shape_runs = self.shape.committed().runs.len();
+        for shape_index in 0..shape_runs {
+            let shaped_run = self.shape.committed().runs[shape_index];
+            let source = shaped_run.source_run;
+            if edited.binary_search(&source).is_err() {
+                let shift = *shifts
+                    .get(source as usize)
+                    .ok_or(EngineError::InvalidRequest)?;
+                let (pending, committed) = self.shape.derive_mut();
+                pending.append_text_range_from(
+                    committed,
+                    shape_index,
+                    source,
+                    shaped_run.text_start,
+                    shaped_run.text_end,
+                    shift,
+                )?;
+                continue;
+            }
+            let new_run = self.shaping_runs.active().runs()[source as usize];
+            let Some(fallback) = self
+                .fallback_spans
+                .iter()
+                .copied()
+                .find(|span| span.source_run == source)
+            else {
+                return Ok(false);
+            };
+            self.boundary_shape_scratch.clear();
+            let scratch = &mut self.boundary_shape_scratch;
+            let styles = &self.styles.active().arena;
+            let shaped = shaper.with_shaped_range(
+                fallback.font_handle,
+                &self.text.pending().units,
+                ShapeRunRef {
+                    text_start: new_run.text_start,
+                    text_end: new_run.text_end,
+                    script: new_run.script,
+                    language: styles.resolved_language(new_run.style),
+                    features: styles.resolved_features(new_run.style),
+                    direction: new_run.direction,
+                    cluster_level: 0,
+                    flags: 0x40,
+                },
+                ShapeRangeRef {
+                    item_start: new_run.text_start,
+                    item_end: new_run.text_end,
+                    context_start: new_run.text_start,
+                    context_end: new_run.text_end,
+                    flags: 0x40,
+                },
+                |shaped| {
+                    scratch.append(
+                        source as usize,
+                        fallback.font_handle,
+                        fallback.binding_handle,
+                        new_run.text_start,
+                        new_run.text_end,
+                        shaped,
+                    )
+                },
+            );
+            shaped.map_err(shaper_error)?;
+            if self.boundary_shape_scratch.glyph_ids.contains(&0) {
+                // The run needs a fallback font: the full shape decides it.
+                self.shape.pending_mut().clear();
+                self.boundary_shape_scratch.clear();
+                return Ok(false);
+            }
+            let scratch = &self.boundary_shape_scratch;
+            self.shape.pending_mut().append_text_range_from(
+                scratch,
+                0,
+                source,
+                new_run.text_start,
+                new_run.text_end,
+                0,
+            )?;
+        }
+        self.boundary_shape_scratch.clear();
+        self.pending_fallback_spans.clear();
+        for span in self.fallback_spans.iter().copied() {
+            let shift = *shifts
+                .get(span.source_run as usize)
+                .ok_or(EngineError::InvalidRequest)?;
+            let (text_start, text_end) = if edited.binary_search(&span.source_run).is_ok() {
+                let run = self.shaping_runs.active().runs()[span.source_run as usize];
+                (run.text_start, run.text_end)
+            } else {
+                (
+                    shifted_text_offset(span.text_start, shift)?,
+                    shifted_text_offset(span.text_end, shift)?,
+                )
+            };
+            self.pending_fallback_spans.push(FallbackSpan {
+                text_start,
+                text_end,
+                ..span
+            });
+        }
+        self.incremental_shape_source_run = None;
+        self.incremental_shape_source_runs = edited;
         self.pending_shape_font_instance = None;
         Ok(true)
     }
@@ -6156,6 +6385,7 @@ impl ParagraphState {
         self.fallback_span_scratch.clear();
         self.fallback_cluster_scratch.clear();
         self.incremental_shape_source_run = None;
+        self.incremental_shape_source_runs.clear();
         self.shape.discard_candidate();
     }
 
@@ -6261,19 +6491,19 @@ impl ParagraphState {
         }
         // One edit that changed the reshaped run's topology: rebuild that run's clusters
         // between the previous rows. The full build stays the authority for every error.
-        let spliced = match (
-            self.incremental_shape_source_run,
-            self.text_edits.as_slice(),
-            self.prepared_layout.committed(),
-        ) {
-            (Some(source_run), [edit], PreparedLayout::General)
-                if !full_source_run && edit.old_start == edit.new_start =>
-            {
+        // The source runs the shape stage reshaped alone: rebuild their clusters between the
+        // previous rows. The full build stays the authority for every error.
+        let single = self.incremental_shape_source_run.map(|run| [run]);
+        let source_runs: &[u32] = match &single {
+            Some(run) => run,
+            None => &self.incremental_shape_source_runs,
+        };
+        let spliced = !source_runs.is_empty()
+            && !full_source_run
+            && matches!(self.prepared_layout.committed(), PreparedLayout::General)
+            && {
                 let splice = SourceRunSplice {
-                    source_run,
-                    edit_start: edit.old_start,
-                    old_end: edit.old_end,
-                    new_end: edit.new_end,
+                    source_runs,
                     previous_unicode: self.unicode.committed(),
                     previous_styles: self.styles.committed().resolved.segments(),
                     previous_runs: self.shaping_runs.committed().runs(),
@@ -6288,9 +6518,7 @@ impl ParagraphState {
                         |handle| shaper.font_ink_table(handle),
                     )
                     .unwrap_or(false)
-            }
-            _ => false,
-        };
+            };
         #[cfg(test)]
         if spliced {
             self.clusters.pending().assert_splice_equals_full_build(
@@ -7839,6 +8067,67 @@ fn changed_identity_range(previous: &[u32], next: &[u32]) -> Option<TextEdit> {
     })
 }
 
+/// Appends the edits inside `edit`, the range where two identity lanes differ: stretches of
+/// units that kept their ids, in order, separate them. An id at or past `fresh` was minted for
+/// inserted text; any other id the new lane has and the old lane lacks at that point means the
+/// lanes do not pair in order, and the whole range stays one edit.
+fn split_identity_edit(
+    previous: &[u32],
+    next: &[u32],
+    fresh: u32,
+    edit: TextEdit,
+    edits: &mut Vec<TextEdit>,
+) -> Result<(), EngineError> {
+    let first = edits.len();
+    let (mut old, mut new) = (edit.old_start, edit.new_start);
+    let mut open: Option<TextEdit> = None;
+    let mut paired = true;
+    while old < edit.old_end || new < edit.new_end {
+        if old < edit.old_end && new < edit.new_end && previous[old] == next[new] {
+            if let Some(done) = open.take() {
+                edits
+                    .try_reserve(1)
+                    .map_err(|_| EngineError::ResultTooLarge)?;
+                edits.push(done);
+            }
+            old += 1;
+            new += 1;
+            continue;
+        }
+        let span = open.get_or_insert(TextEdit {
+            old_start: old,
+            old_end: old,
+            new_start: new,
+            new_end: new,
+        });
+        if new < edit.new_end && next[new] >= fresh {
+            new += 1;
+            span.new_end = new;
+        } else if old < edit.old_end {
+            old += 1;
+            span.old_end = old;
+        } else {
+            paired = false;
+            break;
+        }
+    }
+    if !paired {
+        edits.truncate(first);
+        edits
+            .try_reserve(1)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        edits.push(edit);
+        return Ok(());
+    }
+    if let Some(done) = open {
+        edits
+            .try_reserve(1)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        edits.push(done);
+    }
+    Ok(())
+}
+
 fn bounding_text_edit(edits: &[TextEdit]) -> Option<TextEdit> {
     let first = edits.first().copied()?;
     let last = edits.last().copied()?;
@@ -8518,8 +8807,20 @@ fn same_edit_run_topology(
         {
             return Ok(false);
         }
-        let expected_start = map_old_offset(old.text_start, edit);
-        let expected_end = map_old_offset(old.text_end, edit);
+        // Runs after the affected one move by the whole edit, even from an insertion point
+        // on their first unit: the inserted units belong to the affected run before them.
+        let (expected_start, expected_end) = if index > affected {
+            let delta = edit_delta(edit)?;
+            (
+                shifted_text_offset(old.text_start, delta),
+                shifted_text_offset(old.text_end, delta),
+            )
+        } else {
+            (
+                map_old_offset(old.text_start, edit),
+                map_old_offset(old.text_end, edit),
+            )
+        };
         if index == affected {
             let delta = edit_delta(edit)?;
             let old_start =
@@ -15821,21 +16122,27 @@ mod tests {
     /// among them, to the full build, and the engine to its cold twin.
     #[test]
     fn a_topology_changing_edit_splices_its_source_run() {
-        let line = "Typography is a moving system; office affine waffle. ";
+        let line = "αβγ δεζ Typography is a moving system; office affine waffle. ";
         let lines: Vec<String> = (0..6).map(|index| line.repeat(3 + index)).collect();
         let text = lines.join("\n");
         let length = |text: &str| text.encode_utf16().count();
         // A typed letter, a deleted word and a pasted phrase, in the fourth line and the last.
         let middle = length(&lines[..3].join("\n")) + 1 + 40;
-        let last = length(&text) - 7;
+        let last = length(&text[..text.rfind("affine").unwrap()]) + 2;
         for (start, delete, insert) in [
             (middle, 0, "x"),
             (middle, 7, ""),
             (middle, 3, "fi ffl, "),
             (last, 0, "ffi"),
-            (length(&lines[0]) + 1, 0, "Wa "),
+            (length(&lines[0]) + 1, 0, "λμ "),
             (length(&text), 0, "x"),
             (length(&lines[0]), 0, "y"),
+            // At the first unit of a Latin run: the typed Greek letter joins the run before it.
+            (
+                length(&lines[0]) + 1 + length(&line[..line.find('T').unwrap()]),
+                0,
+                "λ",
+            ),
         ] {
             let (mut engine, mut shaper) = shaped_inter_engine(&text);
             let replacement = utf16(insert);
@@ -15877,6 +16184,85 @@ mod tests {
                 .first_paragraph_state()
                 .unwrap();
             assert_visible_shape_equal(warm, cold, "spliced source run");
+        }
+    }
+
+    /// Edits in several lines of one request reshape each edited run alone and splice each
+    /// run's clusters; the shadow checks and the cold twin hold the result.
+    #[test]
+    fn edits_in_several_runs_splice_each_run() {
+        let line = "Typography is a moving system; office affine waffle. ";
+        let lines: Vec<String> = (0..7).map(|index| line.repeat(2 + index)).collect();
+        let text = lines.join("\n");
+        let length = |text: &str| text.encode_utf16().count();
+        let line_start = |index: usize| length(&lines[..index].join("\n")) + usize::from(index > 0);
+        // (start in the text as edited so far, deleted units, inserted text), applied in order.
+        let requests: [&[(usize, usize, &str)]; 3] = [
+            &[
+                (line_start(1) + 5, 0, "x"),
+                (line_start(3) + 9, 0, "yz"),
+                (line_start(5) + 12, 0, "w"),
+            ],
+            &[(line_start(2) + 4, 3, ""), (line_start(6) + 20, 1, "fi ")],
+            &[(line_start(0) + 3, 0, "Wa"), (line_start(4) + 2, 2, "ffl")],
+        ];
+        for edits in requests {
+            let (mut engine, mut shaper) = shaped_inter_engine(&text);
+            let mut edited: Vec<u16> = text.encode_utf16().collect();
+            let mut offset = 0_i64;
+            let replacements: Vec<(u32, u32, Vec<u16>)> = edits
+                .iter()
+                .map(|(start, delete, insert)| {
+                    let start = (*start as i64 + offset) as usize;
+                    let units = utf16(insert);
+                    edited.splice(start..start + delete, units.iter().copied());
+                    offset += units.len() as i64 - *delete as i64;
+                    (start as u32, *delete as u32, units)
+                })
+                .collect();
+            let mutations: Vec<(u32, u32, &[u16])> = replacements
+                .iter()
+                .map(|(start, delete, units)| (*start, *delete, units.as_slice()))
+                .collect();
+            let bytes = text_mutation_bytes(&mutations);
+            let mut request = update(1, 1, 1);
+            request.limits.max_clusters = 1 << 14;
+            request.limits.max_lines = 1 << 12;
+            request.limits.max_output_bytes = 1 << 24;
+            request.text_mutations = parse_text_mutations(
+                &bytes,
+                ENGINE_UPDATE_REQUEST_HEADER_SIZE,
+                mutations.len() as u32,
+            )
+            .unwrap();
+            let styles = root_style_bytes_for_text(7, edited.len() as u32);
+            request.style_mutations =
+                parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            super::super::work_attribution::reset();
+            let measured = engine
+                .measure_paragraph_with_shaper(&mut shaper, request, 1)
+                .unwrap();
+            let work = super::super::work_attribution::snapshot();
+            assert_eq!(
+                (work.cluster_source_run_splices, work.cluster_full_builds),
+                (1, 0),
+                "{edits:?}"
+            );
+            engine.commit_measure(measured).unwrap();
+            let (cold_engine, _) = shaped_inter_engine(&String::from_utf16(&edited).unwrap());
+            let warm = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            let cold = cold_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert_visible_shape_equal(warm, cold, "edits in several runs");
         }
     }
 
@@ -18179,8 +18565,20 @@ mod tests {
             warm_engine.commit_update(prepared).unwrap();
             let shaped_units = crate::SHAPED_UNITS.with(core::cell::Cell::get) - before_units;
             if step == 0 {
+                // The two edits lie in the first and last runs: each is reshaped whole, so
+                // the unsafe concat chain around them never shapes in pieces.
+                let runs = warm_engine
+                    .planners
+                    .get(&4)
+                    .unwrap()
+                    .first_paragraph_state()
+                    .unwrap()
+                    .shaping_runs
+                    .committed()
+                    .runs();
+                let length = |run: &ShapingRun| (run.text_end - run.text_start) as usize;
                 assert!(
-                    shaped_units >= text.len(),
+                    shaped_units >= length(&runs[0]) + length(&runs[runs.len() - 1]),
                     "Inter's unsafe concat chain must select broad shaping"
                 );
             }

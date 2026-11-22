@@ -12,6 +12,9 @@ pub(crate) struct CodecRunCountBin {
 pub(crate) struct Work {
     pub harfrust_calls: usize,
     pub harfrust_utf16_units: usize,
+    /// Items the simple-text path shaped without HarfRust, outside the HarfRust meter.
+    pub simple_text_calls: usize,
+    pub simple_text_utf16_units: usize,
     /// Separate first-use, fixed-size HarfRust nominal bootstrap; not a timed item.
     pub ascii_nominal_bootstrap_calls: usize,
     pub ascii_nominal_bootstrap_utf16_units: usize,
@@ -210,6 +213,8 @@ std::thread_local! {
     static WORK: Cell<Work> = const { Cell::new(Work {
         harfrust_calls: 0,
         harfrust_utf16_units: 0,
+        simple_text_calls: 0,
+        simple_text_utf16_units: 0,
         ascii_nominal_bootstrap_calls: 0,
         ascii_nominal_bootstrap_utf16_units: 0,
         ascii_anchor_item_calls: 0,

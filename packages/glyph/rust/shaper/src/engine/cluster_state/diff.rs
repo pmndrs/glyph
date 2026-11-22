@@ -421,9 +421,10 @@ impl ClusterArena {
         if let Some(spliced) = spliced {
             self.changes.reset();
             self.aligned = false;
-            if !spliced.changed.new.is_empty() || !spliced.changed.old.is_empty() {
-                self.changes
-                    .push(spliced.changed.new, spliced.changed.old)?;
+            for range in spliced.changed {
+                if !range.new.is_empty() || !range.old.is_empty() {
+                    self.changes.push(range.new, range.old)?;
+                }
             }
             self.changes.everything = false;
             return Ok(());
@@ -470,10 +471,11 @@ impl ClusterArena {
 }
 
 /// What a splice proved: clusters outside `changed` are the previous arena's, moved by the
-/// edit -- the same text, identity, lanes, glyphs, styles and shaping runs.
+/// edits -- the same text, identity, lanes, glyphs, styles and shaping runs.
 #[derive(Clone, Debug)]
 pub(in crate::engine) struct Spliced {
-    pub changed: ChangedClusters,
+    /// Ascending; a range's old clusters follow from the clusters the ranges before it added.
+    pub changed: Vec<ChangedClusters>,
 }
 
 impl Spliced {
@@ -484,20 +486,19 @@ impl Spliced {
         run: LayoutRun,
         previous: &ClusterArena,
     ) -> Option<RunCanonicalRevision> {
-        let (new, old) = (&self.changed.new, &self.changed.old);
-        let shift = |cluster: u32| {
-            if cluster <= new.start {
-                Some(cluster)
-            } else if cluster >= new.end {
-                (cluster - new.end).checked_add(old.end)
-            } else {
-                None
+        let mut shift = 0_i64;
+        for range in &self.changed {
+            if run.cluster_end <= range.new.start {
+                break;
             }
-        };
-        if run.cluster_end > new.start && run.cluster_start < new.end {
-            return None;
+            if run.cluster_start < range.new.end {
+                return None;
+            }
+            shift += i64::from(range.new.end - range.new.start)
+                - i64::from(range.old.end - range.old.start);
         }
-        let (start, end) = (shift(run.cluster_start)?, shift(run.cluster_end)?);
+        let start = u32::try_from(i64::from(run.cluster_start) - shift).ok()?;
+        let end = u32::try_from(i64::from(run.cluster_end) - shift).ok()?;
         let runs = &previous.layout_runs.runs;
         let candidate = runs.get(runs.partition_point(|old| old.cluster_start < start))?;
         (candidate.cluster_start == start

@@ -1,2 +1,5 @@
 [settings]
 idiomatic_version_file_enable_tools = ["node", "pnpm", "rust"]
+
+[tools]
+"cargo:kimun" = "0.46.1"

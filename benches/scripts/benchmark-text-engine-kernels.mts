@@ -1,12 +1,14 @@
 /* @workflow { "name": "glyph:kernel-lab-browser", "summary": "Runs the scalar, auto-vectorized, and explicit SIMD retained-engine kernel packet in project Chromium.", "requirements": "Built @pmndrs/glyph and package-local kernel-lab artifacts. Accepts --json.", "writes": "stdout only, or the JSON report path passed to --json" } */
 import { readFile, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
+import { pathToFileURL } from 'node:url';
 import type { Browser } from 'playwright';
 
 import { captureKernelWorkloads } from '../../packages/glyph/scripts/support/engine-kernel-fixture.mts';
+import { rustTargetDirectory } from '../../packages/glyph/scripts/support/rust-target.mjs';
 import { launchProjectChromium } from './support/project-chromium.mts';
 
-const artifactRoot = new URL('../../packages/glyph/rust/shaper/target/kernel-lab/', import.meta.url);
+const artifactRoot = pathToFileURL(`${rustTargetDirectory('shaper', 'kernel-lab')}/`);
 const runnerUrl = new URL('../../packages/glyph/scripts/support/engine-kernel-runner.mjs', import.meta.url);
 const variants = ['scalar', 'auto', 'explicit'] as const;
 const warmup = 40;
