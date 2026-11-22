@@ -771,3 +771,7 @@ Updated in place; the history of each change is in the log below.
 - Decision: re-freezes are done on a staging branch, never on the integration branch, until accepted.
 - Disk: 26 GB of session scratch removed from the boot volume; agent output now goes to Depot scratch.
 - Handoff with a plan for every remaining unit: [segment-indexed-layout-handoff.md](segment-indexed-layout-handoff.md).
+
+- **`sil-green-22`: merged.** Justin: "You have to integrate homie no rogue branches." Staging merged into the
+  integration branch, tagged, pushed; `sil-layout-faults`, `sil-editing`, `sil-staging-22` deleted (local, remote,
+  worktrees). Faults and editing are now **merged**. No lane branch is open.

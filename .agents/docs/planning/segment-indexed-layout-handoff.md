@@ -17,11 +17,10 @@ the [build log](segment-indexed-layout-build-log.md), the [branch map](segment-i
 ## 1. Where things stand
 
 - **Integration branch** `experiments/segment-indexed-layout`, worktree `/Volumes/Depot/Developer/glyph-held-rope-wip`,
-  pushed to `origin`. Last verified tag: `sil-green-21`. It sits on `experiments/held-rope-ascii-anchor-wip`
+  pushed to `origin`. Last verified tag: `sil-green-22`. It sits on `experiments/held-rope-ascii-anchor-wip`
   (`8176a24e0a3f`; draft PRs #292 → #301 → #302 → #310).
-- **Staging branch** `experiments/sil-staging-22` (worktree `/Volumes/Depot/Developer/glyph-wt-staging22`): the
-  layout-fault fixes and the editing lane merged together, oracle re-frozen. See section 3 for its state and the
-  one approval it needs before it becomes `sil-green-22`.
+- **`sil-green-22`** merged the layout-fault fixes and the editing lane with the oracle re-frozen (section 3).
+  No lane branch is open.
 - **Oracle**: 588 cases, 54,240 seeded requests, incremental compared against cold in every stage and lane class,
   natively and in wasm. `KNOWN-DIVERGENCES` may only shrink.
 - **No PR is open for this work.** Landing is one draft PR on top of the existing stack, opened at the ship gate.
@@ -67,10 +66,10 @@ the [build log](segment-indexed-layout-build-log.md), the [branch map](segment-i
 - Nothing goes upstream to HarfRust without asking. The private PixiJS 3D beta tarball is never committed.
   `git stash` is not used. Agent build output goes under `/Volumes/Depot/Developer/glyph-scratch/<lane>/`.
 
-## 3. Staging branch: faults plus editing
+## 3. `sil-green-22`: faults plus editing
 
-Tip `495396a3d` on `experiments/sil-staging-22`, pushed as a backup. Both lanes merged cleanly. It is **not** on
-the integration branch: the oracle references were re-frozen there, and that needs Justin's word.
+Merged into the integration branch on Justin's word (2026-11-21), tagged `sil-green-22` and pushed. The lane and
+staging branches and worktrees are deleted. Verification ran on the staging tree; the merge added only docs.
 
 **What the re-freeze changed**
 
@@ -97,7 +96,7 @@ two editing tests that pinned "empty text has no line"; the bidi layout contract
 (17,362 → 17,482 bytes, five empty frames now carrying one line each). `pen_reversals` is 0 across all fixtures
 and was turned from a print into an assertion.
 
-**Loose ends on staging**
+**Loose ends**
 
 - `editing/place.rs:128` keeps a "layout made no line" caret branch that is now probably unreachable. Remove it
   with a test proving so.
@@ -110,7 +109,6 @@ and was turned from a print into an assertion.
 
 ## 4. Decisions waiting on Justin
 
-1. **Accept the staging re-freeze** (section 3), which makes it `sil-green-22`.
 2. **Fetch Hind Madurai** (OFL, from the official google/fonts repository) into the adversarial font set so the
    Tamil conjunct caret test runs instead of skipping.
 3. **Sign off the new `/core` names**: `createDecorationCodecProgram`, `decorationSchema`, `SlugBandResidency`,
@@ -125,11 +123,7 @@ and was turned from a print into an assertion.
 Each unit is one lane, one worktree, one branch (`experiments/sil-<lane>`), merged only after the full oracle
 tier (native and wasm) and the browser verification pass on the integration tree after a clean rebuild.
 
-### S1. Land staging as `sil-green-22` — Sonnet, 30 minutes
-
-After approval: fast-forward the integration branch to the staging tip, tag, push branch and tag, delete
-`experiments/sil-layout-faults`, `experiments/sil-editing`, `experiments/sil-staging-22` and their worktrees,
-update the build log and branch map.
+### S1. Land staging as `sil-green-22` — done
 
 ### S2. PixiJS 3D `replace` — Opus, small
 
@@ -225,6 +219,6 @@ Verification before every tag, on the integration tree: delete `node_modules/.vi
 - `/Volumes/Depot/Developer/glyph-adversarial-fonts/`: fonts with `MANIFEST.md`.
 - `/Volumes/Depot/Developer/glyph-competitor-bench` and `-render`: the ultra-text harness.
 - `/Volumes/Depot/Developer/glyph-scratch/faults/`: per-commit dumps and row-level diffs for the fault fixes
-  (about 8 GB; delete after `sil-green-22`).
+  (about 8 GB; can be deleted now).
 - `/Volumes/Depot/Developer/text` on `feature/pixi3d`: the PixiJS 3D demo work, checkpoint `2ecb36411`, local
   only, with 52 GB of untracked demo assets.

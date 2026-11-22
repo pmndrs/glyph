@@ -76,3 +76,5 @@ comparison).
 | `experiments/sil-staging-22` | Layout-fault fixes + editing, oracle re-frozen | Verified; waiting for acceptance, then becomes `sil-green-22` |
 | `experiments/sil-layout-faults` | Five fault fixes | Contained in staging; delete after `sil-green-22` |
 | `experiments/sil-editing` | Editing queries and `replace` | Contained in staging; delete after `sil-green-22` |
+
+`sil-green-22` (2026-11-21): the three branches above are merged and deleted. No lane branch is open.
