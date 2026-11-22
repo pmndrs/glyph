@@ -569,6 +569,8 @@ pub(crate) struct ClusterArena {
     pub(super) changes: ClusterChanges,
     /// The clusters the last build spliced, until run-local geometry reads it.
     pub(super) run_local_splice: Option<super::run_local_paragraph::RunLocalSplice>,
+    /// What the last build spliced, until the revision pass reads it.
+    pub(super) spliced: Option<diff::Spliced>,
 }
 
 impl CanonicalClusterView for ClusterArena {
@@ -1692,6 +1694,7 @@ impl ClusterArena {
         self.aligned = false;
         self.changes.reset();
         self.run_local_splice = None;
+        self.spliced = None;
         // An arena with no clusters answers like a fresh one, whatever it held before.
         self.ltr = false;
     }

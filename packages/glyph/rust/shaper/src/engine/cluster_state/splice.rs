@@ -302,6 +302,13 @@ impl ClusterArena {
         if ink_is_whole {
             self.run_local.keep_ink();
         }
+        let cluster_delta_u = |cluster: usize| (cluster as i64 - cluster_delta) as u32;
+        self.spliced = Some(super::diff::Spliced {
+            changed: super::diff::ChangedClusters {
+                new: flagged.start as u32..flagged.end as u32,
+                old: flagged.start as u32..cluster_delta_u(flagged.end),
+            },
+        });
         self.run_local_splice = Some(RunLocalSplice {
             start: window.start,
             end: window.end,
