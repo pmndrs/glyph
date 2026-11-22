@@ -5027,6 +5027,27 @@ function compileWith(renderer, scene) {
   renderer._compilationPromises = null;
 }
 
+// Three/text.ts recognizes a compile only by `_compilationPromises`, an array while `compileAsync` runs and `null`
+// otherwise. If an upgrade renames it, a compile is counted as a render that never ends and the root stops
+// publishing; fail here instead.
+test('the installed Three still marks compileAsync the way the root recognizes it', () => {
+  const constructor = THREE.Renderer.toString();
+  const compile = THREE.Renderer.prototype.compileAsync.toString();
+  assert.match(constructor, /this\._compilationPromises\s*=\s*null/, 'a renderer starts with no compilation');
+  assert.match(
+    compile,
+    /this\._compilationPromises\s*=\s*compilationPromises/,
+    'compileAsync holds its compilations in _compilationPromises',
+  );
+  assert.match(compile, /onBeforeRender\(/, 'compileAsync calls Scene.onBeforeRender');
+  assert.doesNotMatch(compile, /onAfterRender\(/, 'compileAsync does not call Scene.onAfterRender');
+  assert.doesNotMatch(
+    THREE.Renderer.prototype.render.toString() + THREE.Renderer.prototype.renderAsync.toString(),
+    /_compilationPromises\s*=\s*\[/,
+    'a render never marks itself as a compile',
+  );
+});
+
 test('a draw compiled and never rendered releases its storage through the compiling renderer', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));

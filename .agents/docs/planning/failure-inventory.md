@@ -67,3 +67,9 @@ the glyphs of a cold text of the same value. It runs 64 seeds of 200 steps by de
 - The frame in which a publication does not fit reports the error on every text of the root, not only on the one
   later withheld.
 - The withheld paragraph is chosen by text length, not by measured contribution to the result.
+- On Three r185/r186, storage is freed only through a renderer that encountered the draw. A root's draws register
+  the renderer when it draws them and when `compileAsync` runs on their Scene. A detached glyph object (`split()`)
+  registers only when drawn, so one compiled and never rendered can keep its storage until that renderer is
+  disposed.
+- A root tells `compileAsync` from a render by Three's private `_compilationPromises`. `three-v1` "the installed Three
+  still marks compileAsync…" fails if an upgrade changes that, before a compile can stop the root publishing.
