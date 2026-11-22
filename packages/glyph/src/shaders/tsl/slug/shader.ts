@@ -1,7 +1,9 @@
 import * as TSL from 'three/tsl';
 import type { DataTexture, Node } from 'three/webgpu';
 
-import { slugDilate, slugDilateMatrix, slugRender, type SlugRenderOptions } from './primitives.js';
+import { slugVertexPosition } from '../../shared/slug-vertex-tsl.js';
+import { slugDilate, slugDilateMatrix } from './slug-dilate.js';
+import { slugRender, type SlugRenderOptions } from './slug-render.js';
 
 /** One glyph instance's canonical Slug fields, resolved to nodes; core owns address/count field meaning, the program owns how it stores them. */
 export interface TslSlugInstanceNodes {
@@ -90,42 +92,9 @@ export interface TslSlugShaderOutput {
 /** Builds the canonical Slug graph; composing over it inherits band walk, quadratic solve, and AA. `position`/`coverage` are two halves of one graph — using `coverage` requires driving material position from `position`. Reads `positionLocal` from a `[0, 1]` unit quad, origin upper-left. */
 export function slugShader(instance: TslSlugInstanceNodes, resources: TslSlugShaderResources): TslSlugShaderOutput {
   const renderCoordinate = TSL.varyingProperty('vec2', 'pmndrsSlugRenderCoordinate');
-  const position = TSL.Fn(() => {
-    const localPosition = TSL.vec2(
-      instance.origin.x.add(TSL.positionLocal.x.mul(instance.size.x)),
-      instance.origin.y.add(TSL.positionLocal.y.mul(instance.size.y)).negate(),
-    );
-    const outwardNormal = TSL.vec2(
-      TSL.positionLocal.x.sub(0.5).mul(instance.size.x),
-      TSL.positionLocal.y.sub(0.5).mul(instance.size.y).negate(),
-    );
-    const emCoordinate = TSL.vec2(
-      instance.emOrigin.x.add(TSL.positionLocal.x.mul(instance.emSize.x)),
-      instance.emOrigin.y.sub(TSL.positionLocal.y.mul(instance.emSize.y)),
-    );
-    const dilated =
-      resources.modelViewProjection === undefined
-        ? slugDilate(
-            localPosition,
-            outwardNormal,
-            emCoordinate,
-            instance.inverseScale,
-            resources.modelViewProjectionRow0,
-            resources.modelViewProjectionRow1,
-            resources.modelViewProjectionRow3,
-            resources.viewport,
-          )
-        : slugDilateMatrix(
-            localPosition,
-            outwardNormal,
-            emCoordinate,
-            instance.inverseScale,
-            resources.modelViewProjection,
-            resources.viewport,
-          );
-    renderCoordinate.assign(dilated.textureCoordinate);
-    return TSL.vec3(dilated.position.x, dilated.position.y, 0);
-  })();
+  const position = TSL.Fn(() =>
+    slugVertexPosition(instance, resources, renderCoordinate, { slugDilate, slugDilateMatrix }),
+  )();
   const coverageAt = (coordinate: Node<'vec2'>): Node<'float'> =>
     TSL.Fn(() =>
       slugRender(

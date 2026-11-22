@@ -500,17 +500,17 @@ class identity 280 b012ff94e422115c
 class repr 984 9245468bbe8399a7
 class wire 1 28cabc547af1be5b
 step 03 paragraph 17: delete 34 at 0 + paragraph 11: add span 0..23
-class value 4113 446b35db5c8cd213
+class value 4113 ed0c74481eed5f8d
 class identity 273 0d9b6912e2c28369
 class repr 944 6567fe2e3ba134db
-class wire 1 3dff92075a1b1f56
+class wire 1 589cb7e062b87c78
 step 04 paragraph 22: insert Bidi (1 units) at 4 + paragraph 23: insert Space (1 units) at 12 + direction 2 + width 7 + metrics size 16 spacing 0 line 1.2 word 0 + paragraph 4: align 4
-class value 4113 f50213421837fa68
+class value 4113 32a39c309054028f
 class identity 273 5f8a3c230502f3e8
 class repr 944 b348406c10ba6508
 class wire 1 ea2cbf4a551608c4
 step 05 paragraph 22: replace 4 at 0 + paragraph 1: add span 4..39 + replace 1 at 22 + replace 1 at 13 + width 0 + paragraph 2: delete 38 at 0 + paragraph 3: add span 33..37 + width 1 + paragraph 4: direction 1 + paragraph 5: insert SpacedWord (11 units) at 30 + paragraph 6: width 0 + paragraph 7: align 4 + paragraph 8: replace 5 at 30 + paragraph 9: insert SpacedWord (2 units) at 19 + paragraph 10: delete 6 at 25 + delete 8 at 10 + insert Word (9 units) at 17 + width 1 + paragraph 11: insert Bidi (1 units) at 15 + replace 1 at 0 + paragraph 12: width 7 + insert Foreign (216 units) at 27 + insert Mark (1 units) at 80 + max lines 12 + paragraph 13: direction 2 + delete 5 at 0 + add span 28..29 + paragraph 14: width 395 + flip case at 24 + width 395.01563 + flip case at 0 + paragraph 15: max lines 12 + paragraph 16: replace 2 at 2 + paragraph 17: width 0.015625 + paragraph 18: add span 0..26 + replace 5 at 22 + paragraph 19: add span 8..19 + paragraph 20: insert SpacedWord (220 units) at 4 + insert Foreign (2 units) at 202 + paragraph 21: replace 2 at 0 + paragraph 22: insert Bidi (238 units) at 15 + paragraph 23: align 2 + width 0 + paragraph 24: delete 1 at 16 + paragraph 14: insert Bidi (1 units) at 33 + replace 1 at 17 + width 402.01563 + delete 41 at 0
-class value 4009 04819dee3edd24c4
+class value 4009 92cbdb6f1cc2c595
 class identity 257 1cca8e2e2cdd9694
 class repr 893 8880b18f37acfa76
-class wire 1 7c7e2ecc50efa70c
+class wire 1 da0ef9dd28f5da92

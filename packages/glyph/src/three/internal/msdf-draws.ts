@@ -20,7 +20,7 @@ export function registerMsdfAtlasUse(material: THREE.NodeMaterial, atlas: Retain
  * The draw therefore renders with the graph that composes exactly the effects present in its instance range, and
  * moves to another graph when an edit or a paint change adds or removes one.
  */
-export interface MsdfEffectVariants {
+interface MsdfEffectVariants {
   material(effects: TslMsdfEffects): THREE.NodeMaterial;
 }
 

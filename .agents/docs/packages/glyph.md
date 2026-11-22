@@ -2313,8 +2313,10 @@ That short-circuit is landed. `flow_positioning_equivalent` proves, per fragment
 range, the computed pen origin (slot start plus indent shift plus alignment offset), and the justify distribution
 against the committed flow — exactly the inputs positioning consumes — and the geometry-only update path then
 aborts the pending flow, retains committed positioning, and commits the new constraint, which the equivalence
-proof is precisely the license for. End alignment, centering, justified spans with changed slot spans, and
-boundary-bearing flows fail the proof and take the full path; a unit matrix pins each discrimination and an
+proof is precisely the license for. End alignment, centering and justified spans with changed slot spans fail the
+proof and take the full path. A flow whose fragments carry boundary records (an ellipsis cut or corrected-break
+edges) or that has a drop cap passes only when it names the same record indexes as the committed flow over an equal
+boundary arena (records, glyph lanes and stable ids) and its drop caps are equal field for field; a unit matrix pins each discrimination and an
 integration sequence drives adopt → relayout → adopt across the equivalence boundary. Measured at the same
 101-rep widening sweep: the zero-publication class (34 of 101 frames) drops from ~3.2 ms to 0.357 ms median
 (−89%), the published classes are unchanged, and every other lane is neutral over two interleaved rounds. The

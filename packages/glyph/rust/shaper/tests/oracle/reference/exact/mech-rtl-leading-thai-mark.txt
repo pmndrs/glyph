@@ -1,0 +1,48 @@
+# glyph layout oracle reference v1
+case mech-rtl-leading-thai-mark
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 77279f214292e87b
+stage text identity 1 78871522f8b3db0f
+stage unicode value 6 82b1685e4c008151
+stage bidi value 8 446984ab434e5df6
+stage style value 26 87c741623946e75f
+stage shaping_run value 5 8b6f8175a39d831f
+stage shape value 14 3c23cbe323b96c45
+stage cluster value 29 704b03d57bc30460
+stage cluster identity 4 64bc14ead8b82e43
+stage cluster repr 8 7999ea5a3927043d
+stage run_local repr 16 5580e6b6a436ab7e
+stage flow value 35 db68b522c75a9f29
+stage positioned identity 3 4eeea13c611f8c55
+stage positioned value 13 cb13181d45b048f2
+stage positioned repr 17 a404ac8c694d5399
+stage public value 13 76fbe25450450ee3
+stage public identity 1 dfd36a3d76d4bec3
+stage view identity 4 cc2bb089c5155899
+stage view value 40 c07ac70a92126ee7
+stage wire wire 1 d9a4930b5651f665
+stage gather identity 7 c7354fac8eba98a2
+stage gather value 36 829aba875a7fafc4
+stage gpu identity 2 6e8ad749cbc1d670
+stage gpu value 3 edadaf627d31200d
+step 01 a base before the marks
+class value 230 8fc24c28d194b204
+class identity 22 45e4754f384ccea0
+class repr 41 ddbd152a7919791e
+class wire 1 118602be720c0f7f
+step 02 width 217.75 + replace 1 at 0 + insert SpacedWord (207 units) at 2
+class value 266 5aca07f5efc71b71
+class identity 24 50c7153bd23228d4
+class repr 64 21d382064b65a8bd
+class wire 1 119def84e204fd72
+step 03 insert HardBreak (1 units) at 191
+class value 266 dd843a1ad55a11b8
+class identity 24 75afcc13dab20735
+class repr 64 467ae92afb329bbf
+class wire 1 f2bbcf088652210f
+step 04 add span 129..177 + insert Foreign (8 units) at 83 + replace 4 at 10
+class value 266 27ef8c46966ff135
+class identity 24 f918390ca645caa4
+class repr 64 d2cd8d647ad26339
+class wire 1 9384546bf74c51c5

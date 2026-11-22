@@ -8,7 +8,7 @@ use core::iter::{Copied, Enumerate};
 
 use super::{
     EngineError,
-    cluster_state::ClusterArena,
+    cluster_state::{CLUSTER_HARD_BREAK, ClusterArena},
     flow_composition::{FlowDropCap, FlowFragment, FlowLayoutArena, FlowLine},
     flow_geometry::FlowGeometryArena,
     frame::{AXIS_AT_MOST, AXIS_EXACT, AXIS_UNCONSTRAINED},
@@ -740,8 +740,20 @@ fn append_measurement_from_occurrences_source(
     let visible_glyph_count = positioned_count;
     // Ink is authoritative exactly when this query positioned the glyphs it measured. A paragraph
     // that positioned zero glyphs still reports authoritatively — its ink box is genuinely empty —
-    // so the bit tracks whether positioning ran, not whether any ink was found.
-    let ink_measured = positioned_count != 0 || (empty_ink_authoritative && line_count == 0);
+    // so the bit tracks whether positioning ran, not whether any ink was found. A paragraph with no
+    // drawable cluster (empty, or hard breaks alone) has no glyph any query could position: its
+    // ink is known to be empty under every view.
+    let nothing_to_draw = || match &source {
+        MeasurementSource::General { clusters, .. } => (0..cluster_count).all(|cluster| {
+            clusters
+                .flags
+                .get(cluster)
+                .is_some_and(|flags| flags & CLUSTER_HARD_BREAK != 0)
+        }),
+        MeasurementSource::Inline { .. } => cluster_count == 0,
+    };
+    let ink_measured =
+        positioned_count != 0 || (empty_ink_authoritative && line_count == 0) || nothing_to_draw();
     target[summary_index] = SemanticRecord {
         id: paragraph_id,
         kind: SEMANTIC_PARAGRAPH_MEASUREMENT,

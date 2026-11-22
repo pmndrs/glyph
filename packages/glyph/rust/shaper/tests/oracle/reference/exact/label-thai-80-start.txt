@@ -37,4 +37,7 @@ class identity 22 6bdbd8e01e8469de
 class repr 44 7bc01f2071734f69
 class wire 1 d68213acca3c8afa
 step 03 insert Word (4 units) at 141 + insert HardBreak (1 units) at 142
-rejected prepare: InvalidRequest
+class value 230 921aee39330b4bef
+class identity 22 59003d63b9c576fc
+class repr 44 f61c3392b38ff6d5
+class wire 1 03caec0652ff0952

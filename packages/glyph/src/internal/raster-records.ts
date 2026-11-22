@@ -1,5 +1,5 @@
 export const DENSE_GLYPH_RECORD_STRIDE = 20 as const;
-export const ABSENT_GLYPH_PAGE = 0xffff as const;
+const ABSENT_GLYPH_PAGE = 0xffff as const;
 
 export interface RasterPageDimensions {
   readonly width: number;

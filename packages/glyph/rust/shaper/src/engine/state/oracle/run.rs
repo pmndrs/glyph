@@ -336,6 +336,9 @@ pub fn command(library: &FontLibrary, files: &dyn Files, line: &str, payload: &s
         }
         #[cfg(feature = "stage-bench")]
         ["bench", rest @ ..] => super::stage_bench::command(library, rest),
+        ["kernels"] => {
+            crate::unicode::kernel::twin_report(200_000).map(|report| format!("ok\n{report}"))
+        }
         _ => Err(format!("unknown command `{line}`")),
     };
     answer.unwrap_or_else(|error| format!("fail\n{error}"))

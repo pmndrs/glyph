@@ -162,6 +162,7 @@ async function runProbe({ tier, cases, set, seeds, steps }) {
   for (const [label, line] of [
     ['references', `references ${tier}`],
     ['differential', `differential ${tier} ${budget}`],
+    ['kernel twins', 'kernels'],
   ]) {
     const started = performance.now();
     const { status, body } = probe.command(line, cases.join('\n'));

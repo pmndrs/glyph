@@ -9,8 +9,6 @@ import { slugPixelsPerEm, slugThickenFactor } from './core/band.js';
 import { calcCoverage } from './core/coverage.js';
 import { evaluateBand, type SlugShaderGlyph } from './slug-band.js';
 
-export { MAX_SAFE_SLUG_BAND_CURVES } from './core/band.js';
-
 /** Pixels the coverage sample sits off the fragment centre, on both axes; mirrored by the TSL graph. */
 const SLUG_TIE_OFFSET = -0.0001;
 export type { SlugShaderPage } from './slug-texture.js';

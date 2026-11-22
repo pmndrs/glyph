@@ -30,7 +30,7 @@ export interface BatchLanes {
  * One bind group and vertex-buffer set shared by every draw over the same lanes and tables. Draws are instance
  * ranges recorded against it; they own nothing.
  */
-export interface BatchBinding {
+export interface BatchDrawBinding {
   /** Lanes whose contents `variant` reads (MSDF effect colors and glyph rows); a write to one re-reads its spans. */
   readonly watchedLanes: readonly Uint8Array[];
   /**
@@ -57,7 +57,7 @@ export interface TypeGpuResource {
     count: number,
   ): Draw;
   /** Indexed transform mode (MSDF, bitmap): bindings that draws of many Texts share. */
-  bind?(lanes: BatchLanes): BatchBinding;
+  bind?(lanes: BatchLanes): BatchDrawBinding;
   dispose(): void;
 }
 export type PipelineOptions = TypeGpuConfigOptions;
@@ -85,7 +85,7 @@ export function corner(index: number): d.v2f {
   const y = index === 2 || index === 3 || index === 5;
   return d.vec2f(std.select(0, 1, x), std.select(0, 1, y));
 }
-export function projectWithScene(position: d.v3f, viewport: d.v2f, offset: d.v2f): d.v4f {
+function projectWithScene(position: d.v3f, viewport: d.v2f, offset: d.v2f): d.v4f {
   'use gpu';
   const pixel = d.vec2f(position.x, -position.y).add(offset);
   return positionTransform.$(d.vec3f(pixel, position.z), viewport);
@@ -161,13 +161,6 @@ export function target(options: PipelineOptions): GPUColorTargetState {
     blend: {
       color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
       alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-    },
-  };
-}
-export function preparedDraw(root: TgpuRoot, pipeline: TgpuRenderPipeline, start: number, count: number): Draw {
-  return {
-    draw(pass, bindGroups) {
-      recordDraw(root, pipeline, pass, bindGroups, start, count);
     },
   };
 }

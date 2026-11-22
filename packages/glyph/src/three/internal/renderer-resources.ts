@@ -155,10 +155,6 @@ export class ThreeRendererResources {
     return acquireRenderResource(this.#msdfAtlases, key, create);
   }
 
-  get sharedRenderResourceCount(): number {
-    return this.#textureArrays.size + this.#slugPages.size + this.#msdfAtlases.size;
-  }
-
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;

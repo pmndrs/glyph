@@ -143,7 +143,7 @@ impl Kernel {
         self.find_windows(text.len());
     }
 
-    fn classify(&mut self, text: &[u16]) {
+    pub(crate) fn classify(&mut self, text: &[u16]) {
         let blocks = text.len() / BLOCK + 1;
         self.classes.clear();
         self.classes.resize(blocks * BLOCK, 0);
@@ -151,24 +151,35 @@ impl Kernel {
         self.scripts.resize(text.len(), 0);
         self.ascii_seen.clear();
         self.ascii_seen.resize(128, 0);
+        let tables = lanes::AsciiTables::new();
         let mut non_ascii = 0u16;
-        for ((unit, class), script) in text
-            .iter()
-            .zip(self.classes.iter_mut())
-            .zip(self.scripts.iter_mut())
-        {
-            let value = unit_value(*unit);
-            *class = (value & 0xff) as u8;
-            *script = (value >> 8) as u8;
-            self.ascii_seen[usize::from(*unit & 0x7f)] = 1;
-            non_ascii |= *unit;
+        let mut start = 0;
+        while start < text.len() {
+            let end = (start + lanes::LANE).min(text.len());
+            let units = &text[start..end];
+            let classes = &mut self.classes[start..end];
+            let scripts = &mut self.scripts[start..end];
+            if !lanes::classify_ascii(units, &tables, classes, scripts) {
+                for ((unit, class), script) in units.iter().zip(classes).zip(scripts) {
+                    let value = unit_value(*unit);
+                    *class = (value & 0xff) as u8;
+                    *script = (value >> 8) as u8;
+                    non_ascii |= *unit;
+                }
+            }
+            start = end;
         }
-        // `ascii_seen` aliases units modulo 128, which only matters when a unit is above 0x7f, and
-        // then the paragraph is not printable ASCII and the mask is unused.
+        // Only a paragraph of ASCII units reads which units it uses; any other is not printable
+        // ASCII, and its mask stays empty.
         self.non_ascii = non_ascii >= 0x80;
+        if !self.non_ascii {
+            for unit in text {
+                self.ascii_seen[usize::from(*unit & 0x7f)] = 1;
+            }
+        }
     }
 
-    fn decide(&mut self, units: usize) {
+    pub(crate) fn decide(&mut self, units: usize) {
         let blocks = units / BLOCK + 1;
         self.allowed.clear();
         self.required.clear();
@@ -212,7 +223,7 @@ impl Kernel {
         }
     }
 
-    fn find_windows(&mut self, units: usize) {
+    pub(crate) fn find_windows(&mut self, units: usize) {
         self.windows.clear();
         let mut covered = 0usize;
         for block in 0..self.dirty.len() {
@@ -231,8 +242,15 @@ impl Kernel {
         }
     }
 
-    /// Calls `emit(position, required)` for every break the kernel decided in `[from, to]`.
-    pub(crate) fn for_each_break(&self, from: usize, to: usize, mut emit: impl FnMut(u32, bool)) {
+    /// Appends every break the kernel decided in `[from, to]`, ascending. Each block's breaks
+    /// are counted first and written into slots already in the lane, so the loop over a block's
+    /// bits neither grows the lane nor checks its capacity.
+    pub(crate) fn append_breaks(
+        &self,
+        from: usize,
+        to: usize,
+        breaks: &mut Vec<crate::line_break::LineBreak>,
+    ) {
         if from > to {
             return;
         }
@@ -247,10 +265,21 @@ impl Kernel {
                 bits &= low_bits(to - block * BLOCK + 1);
             }
             let required = self.required[block];
-            while bits != 0 {
+            let at = breaks.len();
+            breaks.resize(
+                at + bits.count_ones() as usize,
+                crate::line_break::LineBreak {
+                    position: 0,
+                    required: false,
+                },
+            );
+            for slot in &mut breaks[at..] {
                 let bit = bits.trailing_zeros();
                 bits &= bits - 1;
-                emit((block * BLOCK) as u32 + bit, required >> bit & 1 != 0);
+                *slot = crate::line_break::LineBreak {
+                    position: (block * BLOCK) as u32 + bit,
+                    required: required >> bit & 1 != 0,
+                };
             }
         }
     }
@@ -313,24 +342,10 @@ fn first_set_after(words: &[u64], position: usize) -> Option<usize> {
     }
 }
 
-/// Turns 64 class bytes into one bitmap per class id plus the East Asian plane.
-///
-/// Six bit planes are lifted with the SWAR multiply (eight bytes per step), then the five id planes
-/// are decoded into one-hot class masks. simd128 has no gather and gains nothing on 64-bit lanes,
-/// so this scalar form is also the Wasm form.
+/// Turns 64 class bytes into one bitmap per class id plus the East Asian plane: six bit planes,
+/// then the five id planes decoded into one-hot class masks.
 fn decode(classes: &[u8]) -> [u64; MASKS] {
-    const ONES: u64 = 0x0101_0101_0101_0101;
-    const GATHER: u64 = 0x0102_0408_1020_4080;
-    let mut planes = [0u64; 6];
-    for (group, bytes) in classes.chunks_exact(8).enumerate() {
-        let mut word = [0u8; 8];
-        word.copy_from_slice(bytes);
-        let word = u64::from_le_bytes(word);
-        for (bit, plane) in planes.iter_mut().enumerate() {
-            *plane |= (((word >> bit) & ONES).wrapping_mul(GATHER) >> 56) << (group * 8);
-        }
-    }
-    let [b0, b1, b2, b3, b4, east_asian] = planes;
+    let [b0, b1, b2, b3, b4, east_asian] = lanes::planes(classes);
     let low = [
         !b0 & !b1 & !b2,
         b0 & !b1 & !b2,
@@ -348,6 +363,155 @@ fn decode(classes: &[u8]) -> [u64; MASKS] {
     }
     masks[EAST_ASIAN] = east_asian;
     masks
+}
+
+/// The class stage's two data-parallel steps, each with a scalar twin: classifying a lane of
+/// ASCII units, and lifting the six low bit planes of 64 class bytes. On simd128 builds the lane
+/// is two table swizzles per sixteen units and a plane is one byte-shift and bitmask per sixteen
+/// bytes; elsewhere both are the scalar forms, which the oracle's `kernels` command checks the
+/// simd128 forms against on random and adversarial input.
+pub(crate) mod lanes {
+    /// Units per lane.
+    pub(crate) const LANE: usize = 16;
+
+    /// The class and script bytes of every ASCII unit, split from the generated table.
+    pub(crate) struct AsciiTables {
+        pub(crate) classes: [u8; 128],
+        pub(crate) scripts: [u8; 128],
+    }
+
+    impl AsciiTables {
+        pub(crate) fn new() -> Self {
+            let mut tables = Self {
+                classes: [0; 128],
+                scripts: [0; 128],
+            };
+            for (unit, value) in super::generated::KERNEL_ASCII.iter().enumerate() {
+                tables.classes[unit] = (*value & 0xff) as u8;
+                tables.scripts[unit] = (*value >> 8) as u8;
+            }
+            tables
+        }
+    }
+
+    /// Writes the class and script bytes of a lane of up to `LANE` units when every unit is
+    /// ASCII, and returns whether it did; otherwise writes nothing.
+    pub(crate) fn classify_ascii(
+        units: &[u16],
+        tables: &AsciiTables,
+        classes: &mut [u8],
+        scripts: &mut [u8],
+    ) -> bool {
+        #[cfg(all(target_arch = "wasm32", feature = "simd128"))]
+        if units.len() == LANE {
+            return classify_ascii_simd(units, tables, classes, scripts);
+        }
+        classify_ascii_scalar(units, tables, classes, scripts)
+    }
+
+    pub(crate) fn classify_ascii_scalar(
+        units: &[u16],
+        tables: &AsciiTables,
+        classes: &mut [u8],
+        scripts: &mut [u8],
+    ) -> bool {
+        if units.iter().fold(0u16, |all, unit| all | unit) >= 0x80 {
+            return false;
+        }
+        for ((unit, class), script) in units.iter().zip(classes).zip(scripts) {
+            *class = tables.classes[usize::from(*unit)];
+            *script = tables.scripts[usize::from(*unit)];
+        }
+        true
+    }
+
+    #[cfg(all(target_arch = "wasm32", feature = "simd128"))]
+    pub(crate) fn classify_ascii_simd(
+        units: &[u16],
+        tables: &AsciiTables,
+        classes: &mut [u8],
+        scripts: &mut [u8],
+    ) -> bool {
+        use core::arch::wasm32::{
+            i8x16_splat, i8x16_sub, i8x16_swizzle, u8x16_narrow_i16x8, u16x8_splat, v128, v128_and,
+            v128_any_true, v128_load, v128_or, v128_store,
+        };
+        assert!(units.len() == LANE && classes.len() == LANE && scripts.len() == LANE);
+        // SAFETY: the assertion above makes every load and store 16 bytes inside its slice;
+        // wasm loads and stores carry no alignment requirement.
+        unsafe {
+            let low = v128_load(units.as_ptr().cast::<v128>());
+            let high = v128_load(units.as_ptr().add(8).cast::<v128>());
+            if v128_any_true(v128_and(v128_or(low, high), u16x8_splat(0xff80))) {
+                return false;
+            }
+            // Every unit is below 0x80, so narrowing is exact.
+            let index = u8x16_narrow_i16x8(low, high);
+            // A swizzle reads zero for an index of 16 or more, so the eight 16-entry slices of a
+            // 128-entry table each answer only the units in their own slice.
+            let lookup = |table: &[u8; 128]| {
+                let mut found = i8x16_splat(0);
+                for slice in 0..8 {
+                    let entries = v128_load(table.as_ptr().add(slice * 16).cast::<v128>());
+                    let local = i8x16_sub(index, i8x16_splat((slice * 16) as i8));
+                    found = v128_or(found, i8x16_swizzle(entries, local));
+                }
+                found
+            };
+            v128_store(classes.as_mut_ptr().cast::<v128>(), lookup(&tables.classes));
+            v128_store(scripts.as_mut_ptr().cast::<v128>(), lookup(&tables.scripts));
+        }
+        true
+    }
+
+    /// The low six bit planes of 64 class bytes: bit `i` of plane `b` is bit `b` of byte `i`.
+    pub(crate) fn planes(classes: &[u8]) -> [u64; 6] {
+        #[cfg(all(target_arch = "wasm32", feature = "simd128"))]
+        {
+            planes_simd(classes)
+        }
+        #[cfg(not(all(target_arch = "wasm32", feature = "simd128")))]
+        {
+            planes_scalar(classes)
+        }
+    }
+
+    /// Eight bytes per step with the SWAR multiply.
+    #[cfg(any(
+        not(all(target_arch = "wasm32", feature = "simd128")),
+        feature = "oracle"
+    ))]
+    pub(crate) fn planes_scalar(classes: &[u8]) -> [u64; 6] {
+        const ONES: u64 = 0x0101_0101_0101_0101;
+        const GATHER: u64 = 0x0102_0408_1020_4080;
+        let mut planes = [0u64; 6];
+        for (group, bytes) in classes[..64].chunks_exact(8).enumerate() {
+            let mut word = [0u8; 8];
+            word.copy_from_slice(bytes);
+            let word = u64::from_le_bytes(word);
+            for (bit, plane) in planes.iter_mut().enumerate() {
+                *plane |= (((word >> bit) & ONES).wrapping_mul(GATHER) >> 56) << (group * 8);
+            }
+        }
+        planes
+    }
+
+    #[cfg(all(target_arch = "wasm32", feature = "simd128"))]
+    pub(crate) fn planes_simd(classes: &[u8]) -> [u64; 6] {
+        use core::arch::wasm32::{i8x16_bitmask, i8x16_shl, v128, v128_load};
+        let classes = &classes[..64];
+        let mut planes = [0u64; 6];
+        for quarter in 0..4 {
+            // SAFETY: `classes` holds 64 bytes, so each 16-byte load is inside it.
+            let bytes = unsafe { v128_load(classes.as_ptr().add(quarter * 16).cast::<v128>()) };
+            for (bit, plane) in planes.iter_mut().enumerate() {
+                // Bit `bit` of each byte moves to its sign, which the bitmask gathers.
+                let signs = i8x16_bitmask(i8x16_shl(bytes, (7 - bit) as u32));
+                *plane |= u64::from(signs) << (quarter * 16);
+            }
+        }
+        planes
+    }
 }
 
 /// The union of several class masks of one block.
@@ -508,4 +672,92 @@ fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), ()> {
             .map_err(|_| ())?;
     }
     Ok(())
+}
+
+/// The oracle's check of the class stage's data-parallel forms against their scalar twins:
+/// every ASCII unit at every lane position, lanes with one non-ASCII unit anywhere (units whose
+/// low byte is ASCII among them, which narrowing must not mistake for ASCII), short lanes, and
+/// seeded random lanes; the plane lift on random and adversarial bytes. On a build without
+/// simd128 the forms are the twins themselves and the check is trivially equal.
+#[cfg(feature = "oracle")]
+pub(crate) fn twin_report(rounds: usize) -> Result<alloc::string::String, alloc::string::String> {
+    use lanes::{AsciiTables, LANE, classify_ascii, classify_ascii_scalar, planes, planes_scalar};
+    let tables = AsciiTables::new();
+    let checked = core::cell::Cell::new(0usize);
+    let check_lane = |units: &[u16]| -> Result<(), alloc::string::String> {
+        let (mut classes, mut scripts) = ([0xaa_u8; LANE], [0xaa_u8; LANE]);
+        let (mut twin_classes, mut twin_scripts) = ([0xaa_u8; LANE], [0xaa_u8; LANE]);
+        let n = units.len();
+        let fast = classify_ascii(units, &tables, &mut classes[..n], &mut scripts[..n]);
+        let slow = classify_ascii_scalar(
+            units,
+            &tables,
+            &mut twin_classes[..n],
+            &mut twin_scripts[..n],
+        );
+        checked.set(checked.get() + 1);
+        if fast != slow || (fast && (classes != twin_classes || scripts != twin_scripts)) {
+            return Err(alloc::format!(
+                "lane {units:04x?}: {fast} {classes:?} {scripts:?} against {slow} {twin_classes:?} {twin_scripts:?}"
+            ));
+        }
+        Ok(())
+    };
+    let mut state = 0x2545_f491_4f6c_dd1du64;
+    let mut next = move || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        state
+    };
+    for unit in 0..0x80u16 {
+        for position in 0..LANE {
+            let mut lane = [0x61u16; LANE];
+            lane[position] = unit;
+            check_lane(&lane)?;
+        }
+    }
+    for odd in [
+        0x80u16, 0xff, 0x100, 0x141, 0x7f00, 0x8061, 0xd800, 0xdc41, 0xfeff, 0xffff,
+    ] {
+        for position in 0..LANE {
+            let mut lane = [0x20u16; LANE];
+            lane[position] = odd;
+            check_lane(&lane)?;
+        }
+    }
+    for length in 0..LANE {
+        let lane: alloc::vec::Vec<u16> = (0..length).map(|_| (next() % 0x80) as u16).collect();
+        check_lane(&lane)?;
+    }
+    for _ in 0..rounds {
+        let mut lane = [0u16; LANE];
+        let wide = next() % 4 == 0;
+        for unit in &mut lane {
+            let value = next();
+            *unit = if wide && value % 16 == 0 {
+                (value >> 8) as u16
+            } else {
+                (value % 0x80) as u16
+            };
+        }
+        check_lane(&lane)?;
+        let mut bytes = [0u8; 64];
+        for byte in &mut bytes {
+            *byte = next() as u8;
+        }
+        for adversarial in [[0u8; 64], [0xff; 64], [0x80; 64], [0x7f; 64]] {
+            if planes(&adversarial) != planes_scalar(&adversarial) {
+                return Err(alloc::format!("planes of {adversarial:?}"));
+            }
+        }
+        if planes(&bytes) != planes_scalar(&bytes) {
+            return Err(alloc::format!("planes of {bytes:?}"));
+        }
+        checked.set(checked.get() + 1);
+    }
+    Ok(alloc::format!(
+        "kernel twins: {} lanes and plane lifts equal\n",
+        checked.get()
+    ))
 }

@@ -2,7 +2,7 @@ import { RasterKtxValidationError, validateNativeKtx2, type NativeKtx2Format } f
 import { DENSE_GLYPH_RECORD_STRIDE, DenseGlyphRecordError, validateDenseGlyphRecordTable } from './raster-records.js';
 import type { JsonValue, RasterDecodeArtifact } from '../raster.js';
 
-export { ABSENT_GLYPH_PAGE, DENSE_GLYPH_RECORD_STRIDE } from './raster-records.js';
+export { DENSE_GLYPH_RECORD_STRIDE } from './raster-records.js';
 
 export interface RasterAtlasPage {
   readonly width: number;

@@ -6,7 +6,7 @@ const HEADER_REFERENCE_MASK = 0xffff;
 const HEADER_COUNT_SHIFT = 16;
 
 /** Maximum curves one fragment may evaluate from a hostile artifact. */
-export const MAX_SAFE_SLUG_BAND_CURVES = 512;
+const MAX_SAFE_SLUG_BAND_CURVES = 512;
 
 export interface SlugShaderPage {
   readonly headerTexture: DataTexture;

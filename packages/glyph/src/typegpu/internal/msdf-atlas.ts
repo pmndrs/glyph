@@ -76,10 +76,6 @@ export class ResidentMsdfAtlas {
   get generation(): number {
     return this.#generation;
   }
-  /** GPU bytes held: the resident layers and the glyph table. */
-  get byteLength(): number {
-    return this.page * this.page * this.#layers * (this.singleChannel ? 1 : BAKED_TEXEL_BYTES) + this.glyphs.size;
-  }
   /** Makes every glyph that records `[start, start + count)` of an effect lane draw resident. */
   use(effectLane: Uint8Array, start: number, count: number): void {
     const lane = new Float32Array(effectLane.buffer, effectLane.byteOffset, effectLane.byteLength >>> 2);

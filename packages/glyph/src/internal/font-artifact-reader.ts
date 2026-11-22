@@ -19,7 +19,7 @@ export interface RuntimeFontArtifact {
   readonly sourceFingerprint: Fingerprint;
 }
 
-export class RuntimeFontArtifactError extends GlyphError<'artifact-invalid'> {
+class RuntimeFontArtifactError extends GlyphError<'artifact-invalid'> {
   readonly issues: readonly { readonly code: string; readonly message: string }[];
 
   constructor(code: string, message: string) {

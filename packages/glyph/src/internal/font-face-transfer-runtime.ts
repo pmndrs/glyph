@@ -1,16 +1,10 @@
 import type { Font, RegisteredFont } from '../font.js';
 import type { SerializedFontFace, SerializedFontFaceRaster } from '../font-face-transfer.js';
-import { FontRegistry } from '../loader.js';
+import type { FontRegistry } from '../loader.js';
 import { immutableFontResources } from '../loaded-font.js';
 import type { RasterFormatMetadata } from '../config/raster-format.js';
 import { freezeSerializedFontFace } from './font-face-transfer.js';
 import { getRegisteredFontData } from './registered-font.js';
-
-export interface SerializedFontFaceLoadOptions {
-  readonly maxArtifactBytes?: number;
-  readonly maxBufferViews?: number;
-  readonly maxRasters?: number;
-}
 
 /** Copy loaded variants into inert cross-realm data only when clone() explicitly asks for it. */
 export function snapshotSerializedFontFace(
@@ -72,13 +66,12 @@ export function snapshotSerializedFontFace(
   });
 }
 
-/** Reconstruct a transferred source only when a receiving FontFace is actually loaded. */
+/** Reconstruct a transferred source into a fresh `registry` only when a receiving FontFace is actually loaded. */
 export async function loadSerializedFontFaceSource(
   serialized: SerializedFontFace,
-  options: SerializedFontFaceLoadOptions,
+  registry: FontRegistry,
   signal: AbortSignal | undefined,
 ): Promise<RegisteredFont> {
-  const registry = new FontRegistry(options);
   let font: RegisteredFont | undefined;
   try {
     font = await registry._registerAsset(new Uint8Array(serialized.data), {}, 'adopt');
