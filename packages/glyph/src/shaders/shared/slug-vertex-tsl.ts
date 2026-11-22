@@ -1,8 +1,8 @@
 import * as TSL from 'three/tsl';
 import type { Node } from 'three/webgpu';
 
-import type { TslSlugInstanceNodes, TslSlugShaderResources } from '../shader.js';
-import type { slugDilate, slugDilateMatrix } from '../slug-dilate.js';
+import type { TslSlugInstanceNodes, TslSlugShaderResources } from '../tsl/slug/shader.js';
+import type { slugDilate, slugDilateMatrix } from '../tsl/slug/slug-dilate.js';
 
 /** Where one corner of the technique's `[0, 1]` unit quad (origin upper-left) lands for a glyph. */
 interface SlugQuadVertex {

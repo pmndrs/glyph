@@ -21,7 +21,7 @@ import type {
   TslSlugShaderOutput,
   TslSlugShaderResources,
 } from '../../../shaders/tsl/slug/shader.js';
-import { slugVertexPosition } from '../../../shaders/tsl/slug/internal/quad.js';
+import { slugVertexPosition } from '../../../shaders/shared/slug-vertex-tsl.js';
 import { slugDilate, slugDilateMatrix } from './slug/slug-dilate.js';
 
 /**

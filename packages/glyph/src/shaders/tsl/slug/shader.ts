@@ -1,7 +1,7 @@
 import * as TSL from 'three/tsl';
 import type { DataTexture, Node } from 'three/webgpu';
 
-import { slugVertexPosition } from './internal/quad.js';
+import { slugVertexPosition } from '../../shared/slug-vertex-tsl.js';
 import { slugDilate, slugDilateMatrix } from './slug-dilate.js';
 import { slugRender, type SlugRenderOptions } from './slug-render.js';
 
