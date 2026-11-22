@@ -3,7 +3,7 @@ import { GlyphError } from '../glyph-error.js';
 import type { Fingerprint } from '../identity.js';
 import { isFingerprint } from '../internal/content-digest.js';
 
-export { FONT_BAKER_VERSION, FONT_FORMAT_VERSION } from './contract.js';
+export { FONT_BAKER_VERSION } from './contract.js';
 export { fontBakerAbi } from './generated/font-baker-abi.js';
 
 export interface FontBakeDescriptor {
@@ -154,8 +154,6 @@ export interface FontBakeCore {
 }
 
 export type FontBakerWasmSource = BufferSource | WebAssembly.Module;
-
-export type { FontBakerAbi };
 
 interface FontArtifactMetadata {
   readonly role: 'font';

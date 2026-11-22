@@ -37,6 +37,7 @@ import { type FontSelection, type FontStack } from './loaded-font.js';
 import { assertPropertyList, mergePropertyList } from './property-list.js';
 import { applyTextGroupOptions, desiredTextUpdate } from './internal/desired-text.js';
 import { fontResourceKey } from './internal/font-resource-key.js';
+import { declareProviderFontFaces, sameProviderFontFaceTable } from './internal/provider-font-faces.js';
 import {
   type Constraints,
   type ParagraphLayout,
@@ -376,30 +377,7 @@ function providerFontFaces(table: GlyphProviderProps['fontFaces']): ProviderFont
 }
 
 function createProviderFontFaces(table: Readonly<Record<string, GlyphProviderFontFace>>): ProviderFontFaces {
-  const byName = new Map<string, FontFace>();
-  const owned: FontFace[] = [];
-  try {
-    for (const [name, declaration] of Object.entries(table)) {
-      if (name.trim().length === 0) throw new TypeError('GlyphProvider fontFaces keys must be nonempty strings');
-      let face: FontFace;
-      if (isFontFaceSelection(declaration)) {
-        face = declaration.face;
-      } else if (isProviderFontFaceConfig(declaration)) {
-        face =
-          declaration.format === undefined
-            ? glyph.fontFace(declaration.src)
-            : glyph.fontFace(declaration.src, { format: declaration.format });
-        owned.push(face);
-      } else {
-        face = glyph.fontFace(declaration);
-        owned.push(face);
-      }
-      byName.set(name, face);
-    }
-  } catch (error) {
-    for (const face of owned) face.dispose();
-    throw error;
-  }
+  const { byName, owned } = declareProviderFontFaces(table);
   let references = 0;
   let releaseRevision = 0;
   let disposed = false;
@@ -432,47 +410,6 @@ function createProviderFontFaces(table: Readonly<Record<string, GlyphProviderFon
     },
   });
   return resource;
-}
-
-function isProviderFontFaceConfig(value: unknown): value is Readonly<{
-  src: FontFaceSource;
-  format?: FontFaceConfig['format'];
-}> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !(value instanceof URL) &&
-    !(typeof Blob !== 'undefined' && value instanceof Blob) &&
-    Object.hasOwn(value, 'src') &&
-    Object.keys(value).every((key) => key === 'src' || key === 'format')
-  );
-}
-
-function sameProviderFontFaceTable(
-  left: GlyphProviderProps['fontFaces'],
-  right: GlyphProviderProps['fontFaces'],
-): boolean {
-  if (left === right) return true;
-  if (left === undefined || right === undefined) return false;
-  const leftNames = Object.keys(left);
-  const rightNames = Object.keys(right);
-  if (leftNames.length !== rightNames.length) return false;
-  return leftNames.every((name) => {
-    if (!Object.hasOwn(right, name)) return false;
-    return sameProviderFontFaceDeclaration(left[name]!, right[name]!);
-  });
-}
-
-function sameProviderFontFaceDeclaration(left: GlyphProviderFontFace, right: GlyphProviderFontFace): boolean {
-  if (left === right) return true;
-  if (isFontFaceSelection(left) || isFontFaceSelection(right)) return false;
-  const leftKey = isProviderFontFaceConfig(left)
-    ? fontResourceKey(left.src, left.format)
-    : fontResourceKey(left, undefined);
-  const rightKey = isProviderFontFaceConfig(right)
-    ? fontResourceKey(right.src, right.format)
-    : fontResourceKey(right, undefined);
-  return leftKey === rightKey;
 }
 
 interface GlyphFontErrorBoundaryProps {

@@ -45,107 +45,17 @@ export class Pixi3DRenderer implements GlyphRenderer<Pixi3DBindings, void> {
 
   decode(frame: CommandBufferView<Pixi3DBindings>): PreparedRendererCommit<void> {
     this.#assertActive();
-    const buffers = new Map(this.#buffers);
-    const copied = new Set<Pixi3DBufferBinding>();
-    for (const update of frame.updates.buffers) {
-      const previous = buffers.get(update.buffer);
-      const bytes = new Uint8Array(update.byteLength);
-      if (previous !== undefined) bytes.set(previous.bytes.subarray(0, bytes.length));
-      copied.add(update.buffer);
-      buffers.set(update.buffer, {
-        binding: update.buffer,
-        scalarType: update.scalarType,
-        vectorWidth: update.vectorWidth,
-        bytes,
-      });
-    }
-    for (const patch of frame.updates.patches) {
-      const binding = patch.kind === 'copy' ? patch.destination : patch.buffer;
-      const previous = buffers.get(binding);
-      if (previous !== undefined && !copied.has(binding)) {
-        buffers.set(binding, { ...previous, bytes: previous.bytes.slice() });
-        copied.add(binding);
-      }
-      applyPatch(buffers, patch);
-    }
-    for (const retirement of frame.updates.retirements) {
-      if (retirement.kind === 'buffer') buffers.delete(retirement.buffer);
-    }
-    const placementTables = [...buffers.values()].filter(
-      (candidate) => candidate.binding.input.declaration.kind === 'placement',
-    );
-    if (placementTables.length > 1) throw new Error('Pixi3D needs at most one session placement table');
-    const placementTable = placementTables[0]!;
-
-    let spans = this.#spans;
-    if (frame.displayList.kind === 'replace' && frame.displayList.retainedTopology !== true) {
-      const next: Span[] = [];
-      for (const child of frame.displayList.value.children) {
-        if (child.kind !== 'instance') throw new Error('Pixi3D direct Codec emitted a batch');
-        const input = child.value.input;
-        const primitive = input.instance.value.input;
-        if (primitive.kind !== 'glyph' && primitive.kind !== 'decoration')
-          throw new Error(`Pixi3D cannot render ${primitive.kind} primitives`);
-        if (primitive.recordCount === 0) continue;
-        if ((primitive.kind === 'glyph' && primitive.resource === undefined) || child.transform === undefined) {
-          throw new Error('Pixi3D Bitmap draw is missing its resource or transform');
-        }
-        next.push({
-          resource: primitive.resource,
-          kind: primitive.kind,
-          buffers: Array.from(input.buffers),
-          transform: child.transform,
-          start: primitive.recordIndex,
-          count: primitive.recordCount,
-        });
-      }
-      spans = next;
-    }
-
+    const buffers = stageBuffers(this.#buffers, frame.updates);
+    const placementTable = sessionPlacementTable(buffers);
+    const spans = decodeSpans(frame.displayList) ?? this.#spans;
     const changed =
       spans !== this.#spans ||
       frame.updates.buffers.length !== 0 ||
       frame.updates.patches.length !== 0 ||
       frame.updates.retirements.length !== 0;
-    const created: Mesh3D[] = [];
-    const prepared: PreparedDraw[] = [];
-    const candidates = new Map<Pixi3DText, PreparedDraw[]>();
-    for (const draw of this.#draws) {
-      const list = candidates.get(draw.span.transform) ?? [];
-      list.push(draw);
-      candidates.set(draw.span.transform, list);
-    }
-    if (changed) {
-      try {
-        for (const span of spans) {
-          const list = candidates.get(span.transform);
-          const index = list?.findIndex((draw) => reusable(draw.span, span, this.#buffers, buffers)) ?? -1;
-          if (index >= 0) {
-            const previous = list!.splice(index, 1)[0]!;
-            prepared.push({ span, meshes: previous.meshes, offset: previous.offset });
-            continue;
-          }
-          const meshes =
-            span.kind === 'decoration'
-              ? createDecorationMeshes(span.buffers, buffers, span.start, span.count, this.#pool)
-              : createRasterMeshes(
-                  span.resource!,
-                  span.buffers,
-                  buffers,
-                  placementTable,
-                  span.start,
-                  span.count,
-                  span.transform.material,
-                  this.#pool,
-                );
-          created.push(...meshes);
-          prepared.push({ span, meshes, offset: zeroAnchor });
-        }
-      } catch (error) {
-        destroyBitmapMeshes(created);
-        throw error;
-      }
-    }
+    const { prepared, created } = changed
+      ? this.#prepareDraws(spans, buffers, placementTable)
+      : { prepared: [], created: [] };
 
     let active = true;
     return {
@@ -156,15 +66,7 @@ export class Pixi3DRenderer implements GlyphRenderer<Pixi3DBindings, void> {
         this.#assertActive();
         this.#buffers = buffers;
         this.#spans = spans;
-        if (!changed) return;
-        const retained = new Set(prepared.flatMap((draw) => draw.meshes));
-        destroyBitmapMeshes(this.#draws.flatMap((draw) => draw.meshes).filter((mesh) => !retained.has(mesh)));
-        for (const draw of prepared)
-          for (const mesh of draw.meshes)
-            if (mesh.parent !== (this.destination ?? draw.span.transform))
-              (this.destination ?? draw.span.transform).addChild(mesh);
-        this.#draws = prepared;
-        if (this.destination !== undefined) this.syncTransforms();
+        if (changed) this.#commitDraws(prepared);
       },
       discard: () => {
         if (!active) return;
@@ -172,6 +74,64 @@ export class Pixi3DRenderer implements GlyphRenderer<Pixi3DBindings, void> {
         destroyBitmapMeshes(created);
       },
     };
+  }
+
+  /** Reuses each retained draw whose span and bytes are unchanged and builds meshes for the rest; nothing is attached yet. */
+  #prepareDraws(
+    spans: readonly Span[],
+    buffers: ReadonlyMap<Pixi3DBufferBinding, RetainedPixi3DBuffer>,
+    placementTable: RetainedPixi3DBuffer,
+  ): { readonly prepared: PreparedDraw[]; readonly created: Mesh3D[] } {
+    const candidates = new Map<Pixi3DText, PreparedDraw[]>();
+    for (const draw of this.#draws) {
+      const list = candidates.get(draw.span.transform) ?? [];
+      list.push(draw);
+      candidates.set(draw.span.transform, list);
+    }
+    const created: Mesh3D[] = [];
+    const prepared: PreparedDraw[] = [];
+    try {
+      for (const span of spans) {
+        const list = candidates.get(span.transform);
+        const index = list?.findIndex((draw) => reusable(draw.span, span, this.#buffers, buffers)) ?? -1;
+        if (index >= 0) {
+          const previous = list!.splice(index, 1)[0]!;
+          prepared.push({ span, meshes: previous.meshes, offset: previous.offset });
+          continue;
+        }
+        const meshes =
+          span.kind === 'decoration'
+            ? createDecorationMeshes(span.buffers, buffers, span.start, span.count, this.#pool)
+            : createRasterMeshes(
+                span.resource!,
+                span.buffers,
+                buffers,
+                placementTable,
+                span.start,
+                span.count,
+                span.transform.material,
+                this.#pool,
+              );
+        created.push(...meshes);
+        prepared.push({ span, meshes, offset: zeroAnchor });
+      }
+    } catch (error) {
+      destroyBitmapMeshes(created);
+      throw error;
+    }
+    return { prepared, created };
+  }
+
+  /** Destroys the meshes no prepared draw kept and parents the rest under their destination. */
+  #commitDraws(prepared: readonly PreparedDraw[]): void {
+    const retained = new Set(prepared.flatMap((draw) => draw.meshes));
+    destroyBitmapMeshes(this.#draws.flatMap((draw) => draw.meshes).filter((mesh) => !retained.has(mesh)));
+    for (const draw of prepared)
+      for (const mesh of draw.meshes)
+        if (mesh.parent !== (this.destination ?? draw.span.transform))
+          (this.destination ?? draw.span.transform).addChild(mesh);
+    this.#draws = prepared;
+    if (this.destination !== undefined) this.syncTransforms();
   }
 
   syncTransforms(): void {
@@ -196,6 +156,74 @@ export class Pixi3DRenderer implements GlyphRenderer<Pixi3DBindings, void> {
   #assertActive(): void {
     if (this.#disposed) throw new Error('Pixi3D renderer is disposed');
   }
+}
+
+/** Copies the retained buffer map, applying this frame's resizes, patches, and retirements copy-on-write. */
+function stageBuffers(
+  retained: ReadonlyMap<Pixi3DBufferBinding, RetainedPixi3DBuffer>,
+  updates: CommandBufferView<Pixi3DBindings>['updates'],
+): Map<Pixi3DBufferBinding, RetainedPixi3DBuffer> {
+  const buffers = new Map(retained);
+  const copied = new Set<Pixi3DBufferBinding>();
+  for (const update of updates.buffers) {
+    const previous = buffers.get(update.buffer);
+    const bytes = new Uint8Array(update.byteLength);
+    if (previous !== undefined) bytes.set(previous.bytes.subarray(0, bytes.length));
+    copied.add(update.buffer);
+    buffers.set(update.buffer, {
+      binding: update.buffer,
+      scalarType: update.scalarType,
+      vectorWidth: update.vectorWidth,
+      bytes,
+    });
+  }
+  for (const patch of updates.patches) {
+    const binding = patch.kind === 'copy' ? patch.destination : patch.buffer;
+    const previous = buffers.get(binding);
+    if (previous !== undefined && !copied.has(binding)) {
+      buffers.set(binding, { ...previous, bytes: previous.bytes.slice() });
+      copied.add(binding);
+    }
+    applyPatch(buffers, patch);
+  }
+  for (const retirement of updates.retirements) {
+    if (retirement.kind === 'buffer') buffers.delete(retirement.buffer);
+  }
+  return buffers;
+}
+
+function sessionPlacementTable(buffers: ReadonlyMap<Pixi3DBufferBinding, RetainedPixi3DBuffer>): RetainedPixi3DBuffer {
+  const placementTables = [...buffers.values()].filter(
+    (candidate) => candidate.binding.input.declaration.kind === 'placement',
+  );
+  if (placementTables.length > 1) throw new Error('Pixi3D needs at most one session placement table');
+  return placementTables[0]!;
+}
+
+/** The spans a replaced display list names, or `undefined` when the frame keeps the retained topology. */
+function decodeSpans(displayList: CommandBufferView<Pixi3DBindings>['displayList']): Span[] | undefined {
+  if (displayList.kind !== 'replace' || displayList.retainedTopology === true) return undefined;
+  const spans: Span[] = [];
+  for (const child of displayList.value.children) {
+    if (child.kind !== 'instance') throw new Error('Pixi3D direct Codec emitted a batch');
+    const input = child.value.input;
+    const primitive = input.instance.value.input;
+    if (primitive.kind !== 'glyph' && primitive.kind !== 'decoration')
+      throw new Error(`Pixi3D cannot render ${primitive.kind} primitives`);
+    if (primitive.recordCount === 0) continue;
+    if ((primitive.kind === 'glyph' && primitive.resource === undefined) || child.transform === undefined) {
+      throw new Error('Pixi3D Bitmap draw is missing its resource or transform');
+    }
+    spans.push({
+      resource: primitive.resource,
+      kind: primitive.kind,
+      buffers: Array.from(input.buffers),
+      transform: child.transform,
+      start: primitive.recordIndex,
+      count: primitive.recordCount,
+    });
+  }
+  return spans;
 }
 
 function reusable(

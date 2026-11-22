@@ -31,7 +31,7 @@ import {
   type TypeGpuResource,
 } from './pipeline.js';
 
-export type { Draw, TypeGpuResource } from './pipeline.js';
+export type { TypeGpuResource } from './pipeline.js';
 
 /** One row of a Slug page's `glyphs` table: the em quad and band transform, then the table bases and band counts. */
 const SlugGlyphRow = d.struct({ quad: d.vec4f, band: d.vec4f, starts: d.vec4u, counts: d.vec4u });

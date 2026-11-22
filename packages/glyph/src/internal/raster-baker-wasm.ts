@@ -469,6 +469,6 @@ function isFingerprint(value: unknown): value is Fingerprint {
   return isFingerprintValue(value);
 }
 
-export function isNonArrayObject(value: unknown): value is Record<string, unknown> {
+function isNonArrayObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

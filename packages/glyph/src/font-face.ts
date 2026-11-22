@@ -284,7 +284,7 @@ export function resolveFontFace(family: string): FontFace | undefined {
 }
 
 /** Dispose one authentic FontFace declaration or selection's shared owner. */
-export function disposeFontFace(face: FontFace): void {
+function disposeFontFace(face: FontFace): void {
   if ((typeof face !== 'object' && typeof face !== 'function') || face === null) {
     throw new TypeError('FontFace.dispose() requires an authentic FontFace declaration');
   }
@@ -301,7 +301,7 @@ export function disposeFontFace(face: FontFace): void {
 }
 
 /** Authenticate a selection and return its declaration state. */
-export function fontFaceSelectionState(selection: unknown): FontFaceSelectionState {
+function fontFaceSelectionState(selection: unknown): FontFaceSelectionState {
   if ((typeof selection !== 'object' && typeof selection !== 'function') || selection === null) {
     throw new TypeError('font must be a FontFace selection');
   }
@@ -318,23 +318,6 @@ export function isFontFaceSelection(selection: unknown): selection is FontFaceSe
   if ((typeof selection !== 'object' && typeof selection !== 'function') || selection === null) return false;
   const state = faceStates.get(selection);
   return state !== undefined && !state.face.owner.disposed;
-}
-
-/** @internal Acquires an independent immutable Font lease without a configured handle; the selection's format must resolve on its own. The caller owns and must dispose the returned lease. */
-export function acquireLoadedFontFaceSelection<const Selection extends FontFaceSelection>(
-  selection: Selection,
-): Font<FontFaceRasterOf<Selection>>;
-
-export function acquireLoadedFontFaceSelection(selection: FontFaceSelection): Font<RasterFormatMetadata> {
-  const selected = fontFaceSelectionState(selection);
-  if (selected.format === undefined) {
-    throw new GlyphFontError(
-      'FONT_FACE_FORMAT_REQUIRED',
-      `FontFace ${JSON.stringify(selection.family)} requires an explicit format outside a configured handle`,
-    );
-  }
-  const raster = resolveDeclaredFormat(selected.format);
-  return cloneImmutableFont(requiredFontFaceFormat(selection, raster));
 }
 
 interface LoadedFaceRecord {

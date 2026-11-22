@@ -29,7 +29,7 @@ export const SlugShaderGlyph: d.WgslStruct<{
 
 export type SlugShaderGlyph = d.InferGPU<typeof SlugShaderGlyph>;
 
-export const SlugBandEvaluation: d.WgslStruct<{ coverage: d.F32; weight: d.F32 }> = /* @__PURE__ */ d.struct({
+const SlugBandEvaluation: d.WgslStruct<{ coverage: d.F32; weight: d.F32 }> = /* @__PURE__ */ d.struct({
   coverage: d.f32,
   weight: d.f32,
 });

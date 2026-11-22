@@ -7,11 +7,10 @@ export const SLUG_EXTENSION = 'PMNDRS_font_slug' as const;
 export const SLUG_FORMAT_VERSION = 0 as const;
 export const SLUG_GENERATOR_VERSION = '0.0.0' as const;
 export const SLUG_PLANE_UNITS_PER_EM = 2048 as const;
-export const SLUG_DEFAULT_BAND_COUNT = 16 as const;
 export const SLUG_GLYPH_RECORD_STRIDE = 40 as const;
 
 /** Quadratics fitted per CFF cubic. TrueType outlines are already quadratic. */
-export const SLUG_CUBIC_SUBDIVISIONS = 4 as const;
+const SLUG_CUBIC_SUBDIVISIONS = 4 as const;
 /** Most quadratics one cubic may become. */
 export const SLUG_MAX_CUBIC_SUBDIVISIONS = 16 as const;
 

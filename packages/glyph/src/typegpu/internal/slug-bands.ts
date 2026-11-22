@@ -51,10 +51,6 @@ export class ResidentSlugBands {
   get generation(): number {
     return this.#generation;
   }
-  /** GPU bytes held: the band-curve texture and the glyph table. */
-  get byteLength(): number {
-    return this.#residency.entries.byteLength + this.glyphs.size;
-  }
   /** Makes every glyph that records `[start, start + count)` of the glyph lane draw resident. */
   use(glyphLane: Uint8Array, start: number, count: number): void {
     const lane = new Uint32Array(glyphLane.buffer, glyphLane.byteOffset, glyphLane.byteLength >>> 2);

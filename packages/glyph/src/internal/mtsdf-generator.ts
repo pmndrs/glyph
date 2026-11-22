@@ -47,7 +47,7 @@ export interface MtsdfGenerator {
   generate(request: MtsdfGlyphRequest): MtsdfGlyph;
 }
 
-export type MtsdfGeneratorAbi = MtsdfBakerAbi;
+type MtsdfGeneratorAbi = MtsdfBakerAbi;
 
 export type MtsdfGenerationErrorCode = 'INVALID_REQUEST' | 'INVALID_OUTLINE' | 'GENERATION_FAILED';
 

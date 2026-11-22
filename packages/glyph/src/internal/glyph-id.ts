@@ -46,7 +46,6 @@ export type GlyphIdKind =
 declare const glyphIdBrand: unique symbol;
 
 export type GlyphId<Kind extends GlyphIdKind = GlyphIdKind> = number & { readonly [glyphIdBrand]: Kind };
-export type Id = GlyphId<'generic'>;
 export type CodecBufferId = GlyphId<'buffer'>;
 export type CodecHandle = GlyphId<'codec'>;
 export type FontBindingHandle = GlyphId<'font-binding'>;

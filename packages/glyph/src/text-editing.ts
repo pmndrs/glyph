@@ -138,7 +138,7 @@ export function rebaseSpanRange(span: TextRange, start: number, end: number, ins
 }
 
 /** Rebases every span of a text across one replacement, keeping each span's other properties. */
-export function rebaseSpans<Span extends TextRange>(
+function rebaseSpans<Span extends TextRange>(
   spans: readonly Span[],
   start: number,
   end: number,

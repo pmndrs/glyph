@@ -4,7 +4,7 @@ import { d } from 'typegpu';
 import type { CodecBufferId, CommandBufferView, GlyphRenderer, PreparedRendererCommit } from '../../index.js';
 import type { DisplayList } from '../../config/glyph.js';
 import type { Bindings, BufferBinding } from './bindings.js';
-import type { BatchBinding, Draw, TypeGpuResource } from './pipeline.js';
+import type { BatchDrawBinding, Draw, TypeGpuResource } from './pipeline.js';
 import { TYPEGPU_PLACEMENT_SLOT_BUFFER_ID, TYPEGPU_TRANSFORM_INDEX_BUFFER_ID } from './codec.js';
 
 /**
@@ -71,12 +71,12 @@ interface Span {
 }
 /** What a span draws through: shared bindings for an indexed program, or its own draw for a direct one. */
 type SpanTarget =
-  | { readonly kind: 'batch'; readonly binding: BatchBinding }
+  | { readonly kind: 'batch'; readonly binding: BatchDrawBinding }
   | { readonly kind: 'direct'; readonly draw: Draw };
 type Range =
   | {
       readonly kind: 'batch';
-      readonly binding: BatchBinding;
+      readonly binding: BatchDrawBinding;
       readonly variant: number;
       readonly first: number;
       count: number;
@@ -85,7 +85,7 @@ type Range =
 interface BindingEntry {
   /** Everything the bindings captured: lane buffers in order, then the placement and transform tables. */
   readonly key: readonly GPUBuffer[];
-  readonly binding: BatchBinding;
+  readonly binding: BatchDrawBinding;
 }
 interface TransformTable {
   readonly gpu: GPUBuffer;
@@ -273,7 +273,7 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
     named: ReadonlyMap<CodecBufferId, RetainedBuffer>,
     placementTable: RetainedBuffer,
     table: TransformTable,
-  ): BatchBinding {
+  ): BatchDrawBinding {
     const key = [...Array.from(named.values(), (retained) => retained.gpu), placementTable.gpu, table.gpu];
     const matches = (entry: BindingEntry): boolean =>
       entry.key.length === key.length && entry.key.every((gpu, index) => gpu === key[index]);

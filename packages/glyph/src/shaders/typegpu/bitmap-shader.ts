@@ -248,10 +248,3 @@ export const bitmapFragment: TgpuFn<(input: typeof TypeGpuBitmapFragmentInput) =
     const coverage = bitmapCoverageSlot.$(input.atlasUv, input.pageLayer);
     return bitmapPaint(coverage, input.color);
   });
-
-/** Compact bridge result for node systems that cannot carry WGSL structs across their interop boundary. */
-export function bitmapCoverageOpacity(input: TypeGpuBitmapFragmentInput): d.v2f {
-  'use gpu';
-  const output = bitmapFragment(input);
-  return d.vec2f(output.coverage, output.opacity);
-}
