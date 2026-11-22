@@ -490,6 +490,34 @@ interface ParagraphPreparation {
   readonly changed: boolean;
 }
 
+/** The records one shared preparation request accumulates, in ascending paragraph order. */
+interface PreparationRecords {
+  readonly upserts: PlannerParagraphMutation[];
+  readonly textMutations: PlannerTextMutation[];
+  readonly styleMutations: PlannerStyleMutation[];
+  readonly constraints: PlannerConstraint[];
+  readonly regions: PlannerRegion[];
+  readonly exclusions: PlannerExclusion[];
+  readonly inlineObjects: PlannerInlineObject[];
+  readonly paragraphs: ParagraphPreparation[];
+  /** Paragraphs whose summary is serialized when the request does not measure all of them. */
+  readonly measured: number[];
+}
+
+function emptyPreparationRecords(): PreparationRecords {
+  return {
+    upserts: [],
+    textMutations: [],
+    styleMutations: [],
+    constraints: [],
+    regions: [],
+    exclusions: [],
+    inlineObjects: [],
+    paragraphs: [],
+    measured: [],
+  };
+}
+
 interface StagedPreparation {
   readonly paragraphs: readonly ParagraphPreparation[];
   readonly removals: readonly RetainedTextState[];
@@ -1242,91 +1270,82 @@ class RenderPlannerImpl {
       return undefined;
     }
     // The engine routes records by ascending paragraph identity.
-    // After a frame's layout phase, a text whose owner reads every new summary waits for the next frame's phase:
-    // it is published only at a layout its callback has seen. Colour and opacity change no layout, and a drawn
-    // text the engine no longer holds has nothing older to keep drawing, so neither is held.
-    const held = (state: RetainedTextState): boolean =>
-      state.keepMeasured &&
-      (state.prepared
-        ? state.preparedDesired === undefined || changesLayoutInput(state.preparedDesired, state.desired)
-        : !state.published);
     const states = [...this.#unprepared]
-      .filter((state) => !holdObserved || !held(state))
+      .filter((state) => !holdObserved || !heldForObservedLayout(state))
       .sort((left, right) => left.paragraphId - right.paragraphId);
     if (states.length === 0) return undefined;
-    const upserts: PlannerParagraphMutation[] = [];
-    const textMutations: PlannerTextMutation[] = [];
-    const styleMutations: PlannerStyleMutation[] = [];
-    const constraints: PlannerConstraint[] = [];
-    const regions: PlannerRegion[] = [];
-    const exclusions: PlannerExclusion[] = [];
-    const inlineObjects: PlannerInlineObject[] = [];
-    const paragraphs: ParagraphPreparation[] = [];
-    const measured: number[] = [];
-    for (const state of states) {
-      const preparation = this.#paragraphPreparation(state);
-      if (!preparation.changed) {
-        // Setters cancelled out against the prepared value in a way only the derived mutation shows.
-        this.#markPrepared(state);
-        continue;
-      }
-      // One request holds at most `maxClusters` text records and as many style records. Each setter was
-      // validated against that bound alone, so paragraphs past it are prepared by their own request.
-      if (
-        textMutations.length + Number(preparation.text !== undefined) > this.#limits.maxClusters ||
-        styleMutations.length + preparation.styles.length > this.#limits.maxClusters
-      ) {
-        this.#prepareAlone(state, measureAll || wantsMeasurement(state));
-        continue;
-      }
-      paragraphs.push(preparation);
-      // Only a paragraph whose summary someone will read has it serialized; its siblings stay unmeasured.
-      if (!measureAll && wantsMeasurement(state)) measured.push(state.paragraphId);
-      if (!state.created) {
-        upserts.push({ opcode: 'upsert', paragraphId: state.paragraphId, order: state.preparedOrder });
-      }
-      if (preparation.text !== undefined) textMutations.push(preparation.text);
-      for (const style of preparation.styles) styleMutations.push(style);
-      if (preparation.geometryChanged) {
-        const geometry = compileGeometry(
-          this.#handleState,
-          state,
-          regions.length,
-          exclusions.length,
-          preparation.geometryRevision,
-        );
-        constraints.push(geometry.constraint);
-        for (const region of geometry.regions) regions.push(region);
-        for (const exclusion of geometry.exclusions) exclusions.push(exclusion);
-        for (const object of compileInlineObjects(this.#handleState, state, preparation.geometryRevision)) {
-          inlineObjects.push(object);
-        }
-      }
+    const records = emptyPreparationRecords();
+    for (const state of states) this.#collectPreparation(records, state, measureAll);
+    if (records.paragraphs.length === 0) return undefined;
+    this.#stagePreparationRequest(records, measureAll);
+    return this;
+  }
+
+  /** Adds one dirty paragraph's records to the shared request, or prepares it on its own when it cannot share one. */
+  #collectPreparation(records: PreparationRecords, state: RetainedTextState, measureAll: boolean): void {
+    const preparation = this.#paragraphPreparation(state);
+    if (!preparation.changed) {
+      // Setters cancelled out against the prepared value in a way only the derived mutation shows.
+      this.#markPrepared(state);
+      return;
     }
-    if (paragraphs.length === 0) return undefined;
+    // One request holds at most `maxClusters` text records and as many style records. Each setter was
+    // validated against that bound alone, so paragraphs past it are prepared by their own request.
+    if (
+      records.textMutations.length + Number(preparation.text !== undefined) > this.#limits.maxClusters ||
+      records.styleMutations.length + preparation.styles.length > this.#limits.maxClusters
+    ) {
+      this.#prepareAlone(state, measureAll || wantsMeasurement(state));
+      return;
+    }
+    records.paragraphs.push(preparation);
+    // Only a paragraph whose summary someone will read has it serialized; its siblings stay unmeasured.
+    if (!measureAll && wantsMeasurement(state)) records.measured.push(state.paragraphId);
+    if (!state.created) {
+      records.upserts.push({ opcode: 'upsert', paragraphId: state.paragraphId, order: state.preparedOrder });
+    }
+    if (preparation.text !== undefined) records.textMutations.push(preparation.text);
+    for (const style of preparation.styles) records.styleMutations.push(style);
+    if (!preparation.geometryChanged) return;
+    const geometry = compileGeometry(
+      this.#handleState,
+      state,
+      records.regions.length,
+      records.exclusions.length,
+      preparation.geometryRevision,
+    );
+    records.constraints.push(geometry.constraint);
+    for (const region of geometry.regions) records.regions.push(region);
+    for (const exclusion of geometry.exclusions) records.exclusions.push(exclusion);
+    for (const object of compileInlineObjects(this.#handleState, state, preparation.geometryRevision)) {
+      records.inlineObjects.push(object);
+    }
+  }
+
+  /** Writes the collected records, preceded by pending removals, as the staged preparation request. */
+  #stagePreparationRequest(records: PreparationRecords, measureAll: boolean): void {
     const removals = [...this.#preparationRemovals];
     const paragraphMutations: PlannerParagraphMutation[] = removals.map((removed) => ({
       opcode: 'remove',
       paragraphId: removed.paragraphId,
     }));
-    for (const upsert of upserts) paragraphMutations.push(upsert);
-    const includeMeasurement = measureAll || measured.length !== 0;
+    for (const upsert of records.upserts) paragraphMutations.push(upsert);
+    const includeMeasurement = measureAll || records.measured.length !== 0;
     this.#stagedRequestLength = this.#transport.stagePreparation(
       {
         ...this.#preparationRequestHeader(includeMeasurement),
         paragraphMutations,
         paragraphOrderMutations: EMPTY_REQUEST_ITEMS,
-        textMutations,
-        styleMutations,
-        constraints,
-        regions,
-        exclusions,
-        inlineObjects,
+        textMutations: records.textMutations,
+        styleMutations: records.styleMutations,
+        constraints: records.constraints,
+        regions: records.regions,
+        exclusions: records.exclusions,
+        inlineObjects: records.inlineObjects,
       },
-      measureAll ? 'all' : measured,
+      measureAll ? 'all' : records.measured,
     );
-    this.#stagedPreparation = { paragraphs, removals, includeMeasurement };
-    return this;
+    this.#stagedPreparation = { paragraphs: records.paragraphs, removals, includeMeasurement };
   }
 
   adoptPreparation(resultPointer: number, memoryBuffer: ArrayBuffer): void {
@@ -2759,6 +2778,20 @@ function sameEngineInput(previous: ResolvedTextOptions, next: ResolvedTextOption
     previous === next ||
     (previous.source.constraints?.anchor === next.source.constraints?.anchor &&
       sameEngineInputExceptAnchor(previous, next, ordinal))
+  );
+}
+
+/**
+ * After a frame's layout phase, a text whose owner reads every new summary waits for the next frame's phase: it is
+ * published only at a layout its callback has seen. Colour and opacity change no layout, and a drawn text the engine
+ * no longer holds has nothing older to keep drawing, so neither is held.
+ */
+function heldForObservedLayout(state: RetainedTextState): boolean {
+  return (
+    state.keepMeasured &&
+    (state.prepared
+      ? state.preparedDesired === undefined || changesLayoutInput(state.preparedDesired, state.desired)
+      : !state.published)
   );
 }
 
