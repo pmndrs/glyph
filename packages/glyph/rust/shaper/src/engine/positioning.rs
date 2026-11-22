@@ -6715,6 +6715,7 @@ mod tests {
             ellipsis_threads: alloc::vec::Vec::new(),
             recomposed_lines: vec![],
             recomposed_lines_retained: false,
+            fit_witnesses: vec![],
         };
         let equivalent = |pending: &FlowLayoutArena, committed: &FlowLayoutArena| {
             flow_positioning_equivalent(

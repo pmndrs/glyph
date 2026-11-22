@@ -1,3 +1,5 @@
+use core::cell::Cell;
+
 use super::{
     EngineError,
     cluster_state::{
@@ -120,6 +122,76 @@ impl LineCursor {
     pub(crate) const fn is_complete(self, cluster_count: usize) -> bool {
         self.cluster == cluster_count && !self.trailing_empty
     }
+
+    /// Moves past a line ending at cluster boundary `end`, seeding the next line with
+    /// `R(end)` (rule 1).
+    fn advance(
+        &mut self,
+        clusters: &ClusterLineFacts<'_>,
+        word_wrap: bool,
+        corrections: &mut impl BreakCorrections,
+        end: usize,
+        hard_break: bool,
+    ) -> Result<(), EngineError> {
+        self.cluster = end;
+        self.trailing_empty = end == clusters.starts.len() && hard_break;
+        self.start_correction = if is_corrected(clusters, word_wrap, end) {
+            corrections.right(end)?
+        } else {
+            Correction::ZERO
+        };
+        Ok(())
+    }
+}
+
+/// What one fit read beyond the cluster lanes, and the measures over which every width test
+/// it made keeps its outcome. The fit is a deterministic walk whose only reads of the measure
+/// are those tests, so a fit from the same cursor at any measure in that range takes the same
+/// branches and composes the same line: a width change reuses the line instead of fitting.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct FitWitness {
+    seed: Correction,
+    wrap: u8,
+    word_space_shrink: f64,
+    /// The widest width a test admitted.
+    admitted: i64,
+    /// The narrowest width a test refused.
+    refused: i64,
+}
+
+impl FitWitness {
+    /// Whether a fit from `cursor` under these inputs repeats the fit this witness records.
+    pub(crate) fn repeats(
+        &self,
+        cursor: LineCursor,
+        max_width_units: Option<i64>,
+        wrap: u8,
+        word_space_shrink: f64,
+    ) -> bool {
+        max_width_units.is_some_and(|units| self.admitted <= units && units < self.refused)
+            && !cursor.trailing_empty
+            && cursor.start_correction == self.seed
+            && wrap == self.wrap
+            && word_space_shrink.to_bits() == self.word_space_shrink.to_bits()
+    }
+}
+
+/// Moves `cursor` past `line` as the fit that composed it did. `line` is a witnessed fit's
+/// answer from this cursor over the same clusters.
+pub(crate) fn repeat_line(
+    clusters: &ClusterArena,
+    cursor: &mut LineCursor,
+    line: &ComposedLine,
+    wrap: u8,
+    corrections: &mut impl BreakCorrections,
+) -> Result<(), EngineError> {
+    cursor.advance(
+        &ClusterLineFacts::from(clusters),
+        wrap == WRAP_WORD,
+        corrections,
+        usize::try_from(line.cluster_end).map_err(|_| EngineError::InvalidRequest)?,
+        line.hard_break,
+    )
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -235,11 +307,26 @@ struct LineFit<'a, C> {
     word_wrap: bool,
     /// Rule 2 is spent once a corrected candidate has been admitted on this line.
     rescued: bool,
+    /// The widest width a test admitted and the narrowest one refused: see [`FitWitness`].
+    admitted: Cell<i64>,
+    refused: Cell<i64>,
 }
 
 impl<C: BreakCorrections> LineFit<'_, C> {
     fn corrected(&self, boundary: usize) -> bool {
         is_corrected(self.clusters, self.word_wrap, boundary)
+    }
+
+    /// Whether `width` is inside the measure. Every read of the measure goes through here,
+    /// which is what makes the recorded range a proof.
+    fn within(&self, width: i64) -> bool {
+        let fits = self.max_width_units.is_none_or(|units| width <= units);
+        if fits {
+            self.admitted.set(self.admitted.get().max(width));
+        } else {
+            self.refused.set(self.refused.get().min(width));
+        }
+        fits
     }
 
     /// The end of `[line_start, end)` with a trailing hard break skipped.
@@ -284,7 +371,7 @@ impl<C: BreakCorrections> LineFit<'_, C> {
     fn fits_seeded(&self, advance: i64, space: i64) -> bool {
         let credit = apply_ratio(add(space, self.seed.space), self.word_space_shrink);
         let width = add(advance, self.seed.advance).saturating_sub(credit);
-        self.max_width_units.is_none_or(|units| width <= units)
+        self.within(width)
     }
 
     /// Whether `[line_start, end)` fits: base sums (`hanging` the base terminating space
@@ -299,7 +386,7 @@ impl<C: BreakCorrections> LineFit<'_, C> {
             .advance(base.advance)
             .saturating_sub(hung)
             .saturating_sub(credit);
-        self.max_width_units.is_none_or(|units| width <= units)
+        self.within(width)
     }
 
     fn end_charge(&mut self, end: usize) -> Result<Option<EndCharge>, EngineError> {
@@ -406,13 +493,7 @@ impl<C: BreakCorrections> LineFit<'_, C> {
         } else {
             clusters.ends[last]
         };
-        cursor.cluster = end;
-        cursor.trailing_empty = end == count && hard_break;
-        cursor.start_correction = if self.corrected(end) {
-            self.corrections.right(end)?
-        } else {
-            Correction::ZERO
-        };
+        cursor.advance(clusters, self.word_wrap, self.corrections, end, hard_break)?;
         Ok(Some(ComposedLine {
             cluster_start: u32::try_from(self.line_start)
                 .map_err(|_| EngineError::ResultTooLarge)?,
@@ -435,6 +516,14 @@ extern crate std;
 #[cfg(test)]
 std::thread_local! {
     static CHUNK_SKIPS: core::cell::Cell<usize> = const { core::cell::Cell::new(0) };
+    // Counts the fits run on this thread; the reuse tests prove a repeated line runs none.
+    static FITS: core::cell::Cell<usize> = const { core::cell::Cell::new(0) };
+}
+
+/// The fits run on this thread so far.
+#[cfg(test)]
+pub(crate) fn fits_run() -> usize {
+    FITS.with(core::cell::Cell::get)
 }
 
 /// The f64 parity reference for [`layout_next_line_integer`]. The integer fit
@@ -653,6 +742,27 @@ pub(crate) fn layout_next_line_integer_facts(
     word_space_shrink: f64,
     corrections: &mut impl BreakCorrections,
 ) -> Result<Option<ComposedLine>, EngineError> {
+    Ok(layout_next_line_witnessed(
+        clusters,
+        cursor,
+        max_width_units,
+        wrap,
+        word_space_shrink,
+        corrections,
+    )?
+    .map(|(line, _)| line))
+}
+
+/// [`layout_next_line_integer_facts`] with the witness of the fit it ran. The empty line a
+/// final hard break owes is not a fit; its witness admits no measure.
+pub(crate) fn layout_next_line_witnessed(
+    clusters: &ClusterLineFacts<'_>,
+    cursor: &mut LineCursor,
+    max_width_units: Option<i64>,
+    wrap: u8,
+    word_space_shrink: f64,
+    corrections: &mut impl BreakCorrections,
+) -> Result<Option<(ComposedLine, FitWitness)>, EngineError> {
     if max_width_units.is_some_and(|units| units < 0)
         || !(0.0..1.0).contains(&word_space_shrink)
         || !matches!(wrap, WRAP_NONE | WRAP_WORD | WRAP_CHARACTER)
@@ -669,21 +779,32 @@ pub(crate) fn layout_next_line_integer_facts(
         cursor.start_correction = Correction::ZERO;
         let text_end = clusters.ends.last().copied().unwrap_or(0);
         let count = u32::try_from(count).map_err(|_| EngineError::ResultTooLarge)?;
-        return Ok(Some(ComposedLine {
-            cluster_start: count,
-            cluster_end: count,
-            text_start: text_end,
-            text_end,
-            advance: 0.0,
-            hung_advance: 0.0,
-            hard_break: false,
-            start_correction: Correction::ZERO,
-            end_correction: Correction::ZERO,
-        }));
+        return Ok(Some((
+            ComposedLine {
+                cluster_start: count,
+                cluster_end: count,
+                text_start: text_end,
+                text_end,
+                advance: 0.0,
+                hung_advance: 0.0,
+                hard_break: false,
+                start_correction: Correction::ZERO,
+                end_correction: Correction::ZERO,
+            },
+            FitWitness {
+                seed: Correction::ZERO,
+                wrap,
+                word_space_shrink,
+                admitted: i64::MAX,
+                refused: i64::MIN,
+            },
+        )));
     }
     if cursor.cluster == count {
         return Ok(None);
     }
+    #[cfg(test)]
+    FITS.with(|fits| fits.set(fits.get() + 1));
     let mut fit = LineFit {
         clusters,
         corrections,
@@ -693,15 +814,34 @@ pub(crate) fn layout_next_line_integer_facts(
         word_space_shrink,
         word_wrap: wrap == WRAP_WORD,
         rescued: false,
+        admitted: Cell::new(0),
+        refused: Cell::new(i64::MAX),
     };
-    if fit.word_wrap
-        && let Some(line) = layout_next_word_line_indexed(&mut fit, cursor)?
-    {
-        return Ok(Some(line));
-    }
-    // The scalar fit owns the safe and emergency chains and starts rule 2 afresh.
-    fit.rescued = false;
-    layout_next_line_integer_scalar(&mut fit, cursor, wrap)
+    let indexed = if fit.word_wrap {
+        layout_next_word_line_indexed(&mut fit, cursor)?
+    } else {
+        None
+    };
+    let line = match indexed {
+        Some(line) => Some(line),
+        None => {
+            // The scalar fit owns the safe and emergency chains and starts rule 2 afresh.
+            fit.rescued = false;
+            layout_next_line_integer_scalar(&mut fit, cursor, wrap)?
+        }
+    };
+    Ok(line.map(|line| {
+        (
+            line,
+            FitWitness {
+                seed: fit.seed,
+                wrap,
+                word_space_shrink,
+                admitted: fit.admitted.get(),
+                refused: fit.refused.get(),
+            },
+        )
+    }))
 }
 
 fn layout_next_line_integer_scalar<C: BreakCorrections>(
@@ -874,12 +1014,11 @@ fn layout_next_line_integer_scalar<C: BreakCorrections>(
             && if wrap == WRAP_WORD {
                 fit.overflows(index + 1, base, hanging_units)?
             } else {
-                fit.max_width_units.is_some_and(|units| {
+                !fit.within(
                     next_advance
                         .saturating_sub(hanging_units)
-                        .saturating_sub(apply_ratio(next_space_units, fit.word_space_shrink))
-                        > units
-                })
+                        .saturating_sub(apply_ratio(next_space_units, fit.word_space_shrink)),
+                )
             };
         if overflows {
             // A pending chunk candidate is always later than any recorded scalar
@@ -2609,6 +2748,87 @@ mod tests {
                 "{name} unconstrained"
             );
         }
+    }
+
+    /// A witness is a claim about every measure in its range, so each fit is re-run at the
+    /// range's edges, just outside them and at measures near the fitted one. Wherever the
+    /// witness says the fit repeats, the refit must compose the same line and leave the
+    /// same cursor, across the corrected rules, both wraps, shrink and all three kernels.
+    #[test]
+    fn a_witnessed_fit_repeats_at_every_measure_its_witness_admits() {
+        let chunk = super::super::cluster_state::LAYOUT_CHUNK;
+        let (mut repeated, mut changed) = (0_usize, 0_usize);
+        for seed in [1_u64, 2, 3, 5, 8] {
+            let (advances, flags) = corrected_corpus(seed, 14 * chunk);
+            for (clusters, name) in three_kernels(&advances, &flags) {
+                let facts = ClusterLineFacts::from(&clusters);
+                for (wrap, shrink) in [(WRAP_WORD, 0.0), (WRAP_WORD, 0.27), (WRAP_CHARACTER, 0.0)] {
+                    let mut table = random_table(seed * 31 + 11, &clusters);
+                    let mut random = Lcg(seed ^ 0x51ed);
+                    for width in [37.0_f64, 91.7, 150.0, 333.3, 800.0] {
+                        let units = super::super::layout_units::layout_units_from_scaled(width);
+                        let mut cursor = LineCursor::default();
+                        loop {
+                            let start = cursor;
+                            let Some((line, witness)) = layout_next_line_witnessed(
+                                &facts,
+                                &mut cursor,
+                                Some(units),
+                                wrap,
+                                shrink,
+                                &mut table,
+                            )
+                            .unwrap() else {
+                                break;
+                            };
+                            if start.trailing_empty {
+                                assert!(!witness.repeats(start, Some(units), wrap, shrink));
+                                continue;
+                            }
+                            assert!(witness.repeats(start, Some(units), wrap, shrink));
+                            let probes = [
+                                witness.admitted,
+                                witness.admitted - 1,
+                                witness.refused.saturating_sub(1),
+                                witness.refused,
+                                units + i64::from(random.signed(12 * 65_536)),
+                                units + i64::from(random.signed(65_536)),
+                            ];
+                            for probe in probes.into_iter().filter(|probe| *probe >= 0) {
+                                let mut refit_cursor = start;
+                                let refit = layout_next_line_witnessed(
+                                    &facts,
+                                    &mut refit_cursor,
+                                    Some(probe),
+                                    wrap,
+                                    shrink,
+                                    &mut table,
+                                )
+                                .unwrap()
+                                .map(|(line, _)| line);
+                                if !witness.repeats(start, Some(probe), wrap, shrink) {
+                                    changed += usize::from(refit != Some(line));
+                                    continue;
+                                }
+                                assert_eq!(
+                                    refit,
+                                    Some(line),
+                                    "{name} seed {seed} wrap {wrap} shrink {shrink} width \
+                                     {width} probe {probe} from {start:?}"
+                                );
+                                let mut moved = start;
+                                repeat_line(&clusters, &mut moved, &line, wrap, &mut table)
+                                    .unwrap();
+                                assert_eq!(moved, refit_cursor, "{name} seed {seed}");
+                                repeated += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(repeated > 10_000, "few fits repeated: {repeated}");
+        assert!(changed > 1_000, "few probes changed a line: {changed}");
     }
 
     #[test]

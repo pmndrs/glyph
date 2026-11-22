@@ -16,7 +16,8 @@ use super::{
         WRITING_HORIZONTAL_TB,
     },
     line_composition::{
-        BreakCorrections, ComposedLine, Correction, LineCursor, layout_next_line_integer,
+        BreakCorrections, ClusterLineFacts, ComposedLine, Correction, FitWitness, LineCursor,
+        layout_next_line_witnessed, repeat_line,
     },
     positioning::paragraph_level_at,
     retained_rope::{
@@ -487,6 +488,45 @@ pub(crate) struct FlowLayoutArena {
     // Candidate-owned scratch; retained=false revokes authority without dropping capacity.
     pub(crate) recomposed_lines: Vec<Range<usize>>,
     pub(crate) recomposed_lines_retained: bool,
+    /// Every fit this flow ran, in the order it ran them, with the line each composed. They
+    /// are facts about the fitter over this flow's clusters, not about the fragments, which
+    /// later stages may truncate or retarget.
+    pub(crate) fit_witnesses: Vec<(ComposedLine, FitWitness)>,
+}
+
+/// A flow's fits, offered to a new build over the same clusters. The new build asks in
+/// cluster order, as the old one fitted, so one forward walk answers every line.
+struct FitReuse<'a> {
+    witnesses: &'a [(ComposedLine, FitWitness)],
+    next: usize,
+}
+
+impl FitReuse<'_> {
+    /// The line the old flow fitted from `cursor`, when a fit at `max_width_units` repeats it.
+    fn repeated(
+        &mut self,
+        cursor: LineCursor,
+        max_width_units: Option<i64>,
+        wrap: u8,
+        word_space_shrink: f64,
+    ) -> Option<(ComposedLine, FitWitness)> {
+        let start = cursor.cluster();
+        while self
+            .witnesses
+            .get(self.next)
+            .is_some_and(|(line, _)| (line.cluster_start as usize) < start)
+        {
+            self.next += 1;
+        }
+        // The match stays current: a band that retries asks for it again.
+        self.witnesses
+            .get(self.next)
+            .copied()
+            .filter(|(line, witness)| {
+                line.cluster_start as usize == start
+                    && witness.repeats(cursor, max_width_units, wrap, word_space_shrink)
+            })
+    }
 }
 
 impl FlowLayoutArena {
@@ -559,6 +599,7 @@ impl FlowLayoutArena {
         first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
     ) -> Result<(), EngineError> {
         self.build_with_drop_cap_context(
+            None,
             geometry,
             clusters,
             &[],
@@ -574,8 +615,12 @@ impl FlowLayoutArena {
     }
 
     #[allow(clippy::too_many_arguments)]
+    /// Composes every line. `same_clusters` is a flow composed over these same clusters,
+    /// runs and corrections, whatever its geometry: its fits stand for this build's wherever
+    /// the measure stays inside what they tested.
     pub(crate) fn build_with_drop_cap_context(
         &mut self,
+        same_clusters: Option<&Self>,
         geometry: &FlowGeometryArena,
         clusters: &ClusterArena,
         runs: &[ShapingRun],
@@ -598,6 +643,10 @@ impl FlowLayoutArena {
         // least one cluster, and ordinary lines need one fragment. Exceptional flows grow.
         let likely_lines = clusters.starts.len().min(max_lines);
         self.reserve(likely_lines, likely_lines)?;
+        let mut reuse = same_clusters.map(|flow| FitReuse {
+            witnesses: &flow.fit_witnesses,
+            next: 0,
+        });
         for constraint in geometry.constraints.iter().copied() {
             let region_start = usize::try_from(constraint.region_start)
                 .map_err(|_| EngineError::InvalidRequest)?;
@@ -730,6 +779,7 @@ impl FlowLayoutArena {
                         metrics_for,
                         first_font_for_stack,
                         corrections,
+                        reuse.as_mut(),
                     )? {
                         Some(height) => {
                             if self.lines.len() == thread_line_start + 1
@@ -1054,6 +1104,7 @@ impl FlowLayoutArena {
                     metrics_for,
                     first_font_for_stack,
                     corrections,
+                    None,
                 )?
                 else {
                     self.clear();
@@ -1411,6 +1462,7 @@ impl FlowLayoutArena {
                 metrics_for,
                 first_font_for_stack,
                 corrections,
+                None,
             )?
             else {
                 block += estimate.height();
@@ -1547,9 +1599,11 @@ impl FlowLayoutArena {
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
         first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
         corrections: &mut impl BreakCorrections,
+        mut reuse: Option<&mut FitReuse<'_>>,
     ) -> Result<Option<f64>, EngineError> {
         let saved_cursor = *cursor;
         let fragment_start = self.fragments.len();
+        let witness_start = self.fit_witnesses.len();
         let mut extents = initial_extents;
         for attempt in 0..2 {
             let height = extents.height();
@@ -1557,6 +1611,7 @@ impl FlowLayoutArena {
                 self.fragments
                     .truncate(fragment_start)
                     .map_err(|()| EngineError::ResultTooLarge)?;
+                self.fit_witnesses.truncate(witness_start);
                 *cursor = saved_cursor;
                 return Ok(None);
             }
@@ -1580,6 +1635,7 @@ impl FlowLayoutArena {
                 self.fragments
                     .truncate(fragment_start)
                     .map_err(|()| EngineError::ResultTooLarge)?;
+                self.fit_witnesses.truncate(witness_start);
                 *cursor = saved_cursor;
                 return Ok(None);
             }
@@ -1610,19 +1666,31 @@ impl FlowLayoutArena {
                 // Slice 2b of the integer-layout-units plan: the available width
                 // quantizes to F16.16 once at this boundary and the integer fit is
                 // authoritative; the f64 twin remains only as the parity reference.
-                let Some(line) = layout_next_line_integer(
-                    clusters,
-                    cursor,
-                    Some(super::layout_units::layout_units_from_scaled(
-                        (slot.end - slot.start - indent).max(0.0),
-                    )),
-                    wrap,
-                    word_space_shrink,
-                    &mut *corrections,
-                )?
-                else {
+                let measure = Some(super::layout_units::layout_units_from_scaled(
+                    (slot.end - slot.start - indent).max(0.0),
+                ));
+                let fitted = match reuse
+                    .as_deref_mut()
+                    .and_then(|reuse| reuse.repeated(*cursor, measure, wrap, word_space_shrink))
+                {
+                    Some(repeated) => {
+                        repeat_line(clusters, cursor, &repeated.0, wrap, &mut *corrections)?;
+                        Some(repeated)
+                    }
+                    None => layout_next_line_witnessed(
+                        &ClusterLineFacts::from(clusters),
+                        cursor,
+                        measure,
+                        wrap,
+                        word_space_shrink,
+                        &mut *corrections,
+                    )?,
+                };
+                let Some((line, witness)) = fitted else {
                     break;
                 };
+                reserve_amortized(&mut self.fit_witnesses)?;
+                self.fit_witnesses.push((line, witness));
                 include_range_extents(
                     &mut measured,
                     clusters,
@@ -1651,6 +1719,7 @@ impl FlowLayoutArena {
                 self.fragments
                     .truncate(fragment_start)
                     .map_err(|()| EngineError::ResultTooLarge)?;
+                self.fit_witnesses.truncate(witness_start);
                 *cursor = saved_cursor;
                 return Ok(None);
             }
@@ -1658,6 +1727,7 @@ impl FlowLayoutArena {
                 self.fragments
                     .truncate(fragment_start)
                     .map_err(|()| EngineError::ResultTooLarge)?;
+                self.fit_witnesses.truncate(witness_start);
                 *cursor = saved_cursor;
                 extents = measured;
                 continue;
@@ -1793,6 +1863,7 @@ impl FlowLayoutArena {
         self.ellipsis_threads.clear();
         self.recomposed_lines.clear();
         self.recomposed_lines_retained = false;
+        self.fit_witnesses.clear();
     }
 
     pub(crate) fn recomposed_line_ranges(&self) -> Option<&[Range<usize>]> {
@@ -2398,6 +2469,13 @@ fn positive_extents_for_style(
     })
 }
 
+/// Room for one more record, growing geometrically.
+fn reserve_amortized<T>(values: &mut Vec<T>) -> Result<(), EngineError> {
+    values
+        .try_reserve(1)
+        .map_err(|_| EngineError::ResultTooLarge)
+}
+
 fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), EngineError> {
     if values.capacity().saturating_sub(values.len()) < additional {
         values
@@ -2689,6 +2767,7 @@ mod tests {
         let mut layout = FlowLayoutArena::default();
         layout
             .build_with_drop_cap_context(
+                None,
                 &geometry,
                 &clusters,
                 &runs,
@@ -2858,6 +2937,7 @@ mod tests {
         let mut combined = FlowLayoutArena::default();
         combined
             .build_with_drop_cap_context(
+                None,
                 &combined_geometry,
                 &clusters,
                 &runs,
@@ -3145,6 +3225,7 @@ mod tests {
             let mut layout = FlowLayoutArena::default();
             layout
                 .build_with_drop_cap_context(
+                    None,
                     &geometry,
                     &clusters,
                     &[],
@@ -4328,6 +4409,7 @@ mod tests {
             let mut layout = FlowLayoutArena::default();
             layout
                 .build_with_drop_cap_context(
+                    None,
                     &geometry,
                     clusters,
                     &runs,
@@ -4758,6 +4840,7 @@ mod tests {
         let cold = |geometry: &FlowGeometryArena, bidi: &BidiAnalysis| {
             let mut flow = FlowLayoutArena::default();
             flow.build_with_drop_cap_context(
+                None,
                 geometry,
                 &clusters,
                 &[],
@@ -4892,6 +4975,7 @@ mod tests {
         let build = |geometry: &FlowGeometryArena| {
             let mut flow = FlowLayoutArena::default();
             flow.build_with_drop_cap_context(
+                None,
                 geometry,
                 &clusters,
                 &runs,
@@ -5079,6 +5163,101 @@ mod tests {
         assert_eq!(layout.fragments[0].line.cluster_end, 3);
         assert_eq!(layout.lines[0].clip_id, 0);
         assert_eq!(layout.ellipsis_threads(), [constraint.flow_thread_id]);
+    }
+
+    /// One cluster per character at advance 1: a space is a soft break that hangs, a newline
+    /// a hard break.
+    fn prose_clusters(text: &str) -> ClusterArena {
+        use crate::engine::cluster_state::{
+            CLUSTER_ALLOWED_BREAK, CLUSTER_HARD_BREAK, CLUSTER_REQUIRED_BREAK, CLUSTER_SPACE,
+        };
+        let count = text.len();
+        let mut clusters = quantized(ClusterArena {
+            starts: (0..count as u32).collect(),
+            ends: (1..=count as u32).collect(),
+            advances: text
+                .bytes()
+                .map(|byte| if byte == b'\n' { 0.0 } else { 1.0 })
+                .collect(),
+            flags: text
+                .bytes()
+                .map(|byte| match byte {
+                    b' ' => CLUSTER_SAFE_BEFORE | CLUSTER_SPACE | CLUSTER_ALLOWED_BREAK,
+                    b'\n' => CLUSTER_SAFE_BEFORE | CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK,
+                    _ => CLUSTER_SAFE_BEFORE,
+                })
+                .collect(),
+            style_indexes: vec![0; count],
+            source_runs: vec![0; count],
+            font_handles: vec![1; count],
+            index_at: (0..=count as u32).collect(),
+            ..ClusterArena::default()
+        });
+        clusters.ensure_word_breaks().unwrap();
+        clusters
+    }
+
+    /// A width change reuses every line whose fit the new measure cannot change, runs the
+    /// fitter for the rest, and composes exactly the flow a build without the old one does.
+    #[test]
+    fn a_width_change_reuses_the_fits_it_cannot_change_and_matches_a_whole_build() {
+        use crate::engine::{frame::WRAP_WORD, line_composition::fits_run};
+        let text = "aaaa bbb cc dddd eee ff\nggg hhhh ii jjj kkkk l mm\nnnn ooo pppp qq rrr ssss tt uuu\n\nvv wwww xxx yy zzzz\n";
+        let clusters = prose_clusters(text);
+        let styles = [uniform_style(text.len() as u32)];
+        let build = |width: f32, wrap: u8, previous: Option<&FlowLayoutArena>| {
+            let mut geometry = plain_geometry(FlowConstraint {
+                width,
+                height: 1_000.0,
+                viewport_block_end: 1_000.0,
+                max_lines: 0,
+                wrap,
+                ..constraint()
+            });
+            let region = &mut geometry.regions[0].record;
+            (region.inline_end, region.clip_inline_end) = (width, width);
+            (region.block_end, region.clip_block_end) = (1_000.0, 1_000.0);
+            let mut layout = FlowLayoutArena::default();
+            let fits = fits_run();
+            layout
+                .build_with_drop_cap_context(
+                    previous,
+                    &geometry,
+                    &clusters,
+                    &[],
+                    &styles,
+                    &mut InlineSlotArena::default(),
+                    &BidiAnalysis::default(),
+                    64,
+                    4,
+                    fixture_metrics,
+                    |_| Some(1),
+                    &mut NoCorrections,
+                )
+                .unwrap();
+            (layout, fits_run() - fits)
+        };
+        for wrap in [WRAP_WORD, WRAP_CHARACTER] {
+            let (mut previous, _) = build(12.0, wrap, None);
+            let mut reused = 0_usize;
+            for width in [
+                12.5, 12.0, 11.0, 10.5, 7.0, 7.25, 20.0, 19.0, 3.0, 40.0, 12.0,
+            ] {
+                let (whole, whole_fits) = build(width, wrap, None);
+                let (next, fits) = build(width, wrap, Some(&previous));
+                assert_eq!(next.lines, whole.lines, "wrap {wrap} width {width}");
+                assert_eq!(next.fragments, whole.fragments, "wrap {wrap} width {width}");
+                assert_eq!(next.fit_witnesses.len(), whole.fit_witnesses.len());
+                assert!(fits <= whole_fits, "wrap {wrap} width {width}");
+                reused += whole_fits - fits;
+                previous = next;
+            }
+            // 12 to 12.5 moves no break, so no line is fitted at all there; the narrower and
+            // wider steps keep the lines a hard break ends early.
+            let (_, unchanged_fits) = build(12.5, wrap, Some(&build(12.0, wrap, None).0));
+            assert_eq!(unchanged_fits, 0, "wrap {wrap}");
+            assert!(reused > 20, "wrap {wrap} reused {reused}");
+        }
     }
 
     fn constraint() -> FlowConstraint {
