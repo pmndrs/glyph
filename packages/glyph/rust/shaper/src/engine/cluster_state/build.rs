@@ -12,7 +12,6 @@ use crate::{FontInkTable, FontMetrics};
 use super::{
     CLUSTER_HARD_BREAK, CLUSTER_SAFE_BEFORE, CLUSTER_SPACE, ClusterArena, EngineError, FrameFault,
     GLYPH_UNSAFE_TO_BREAK, NO_SOURCE_RUN, ShapeArena, ShapingRun, StyleSegment, reserve,
-    scatter_is_identity,
 };
 use crate::engine::shaping_state::ShapedRun;
 
@@ -47,9 +46,58 @@ fn glyph_range(run: ShapedRun, stream_len: usize) -> Result<core::ops::Range<usi
     Ok(start..end)
 }
 
+/// What part of the shape a build folds into the clusters: every shaped run into every
+/// cluster, or the shaped runs of one source run into the clusters its text covers.
+#[derive(Clone)]
+pub(super) struct ShapeScope {
+    pub clusters: core::ops::Range<usize>,
+    pub source_run: Option<u32>,
+    /// Where the scoped glyphs start in the arena's cluster-ordered glyph stream.
+    pub glyph_base: usize,
+}
+
+impl ShapeScope {
+    fn includes(&self, run: &ShapedRun) -> bool {
+        self.source_run
+            .is_none_or(|source| source == run.source_run)
+    }
+}
+
+/// The glyphs of the scoped runs when they already lie in cluster order: the runs tile one
+/// range of the stream in array order and the clusters never decrease across it. The whole
+/// shape must tile the whole stream from zero.
+pub(super) fn identity_range(
+    shape: &ShapeArena,
+    scope: &ShapeScope,
+) -> Option<core::ops::Range<usize>> {
+    let mut range: Option<core::ops::Range<usize>> = None;
+    for run in shape.runs.iter().filter(|run| scope.includes(run)) {
+        let start = run.glyph_start as usize;
+        let end = start.checked_add(run.glyph_count as usize)?;
+        range = match range {
+            None => Some(start..end),
+            Some(range) if range.end == start => Some(range.start..end),
+            Some(_) => return None,
+        };
+    }
+    let range = range.unwrap_or(0..0);
+    if scope.source_run.is_none() && (range.start != 0 || range.end != shape.glyph_ids.len()) {
+        return None;
+    }
+    shape
+        .clusters
+        .get(range.clone())?
+        .windows(2)
+        .all(|pair| pair[0] <= pair[1])
+        .then_some(range)
+}
+
 impl ClusterArena {
     /// One row per grapheme cluster: text range, identity, style, and the flags and spacing its
     /// first unit decides. A style segment is resolved once for all the clusters inside it.
+    ///
+    /// The rows are appended after the clusters already in the lanes, so a splice can build the
+    /// clusters between `boundaries[0]` and its last entry behind a retained prefix.
     pub(super) fn build_headers(
         &mut self,
         text: &[u16],
@@ -69,25 +117,28 @@ impl ClusterArena {
         if !ordered || boundaries[count] as usize > text.len() {
             return Err(EngineError::InvalidRequest);
         }
+        let base = self.starts.len();
+        let total = base + count;
         self.starts.extend_from_slice(&boundaries[..count]);
         self.ends.extend_from_slice(&boundaries[1..]);
         self.stable_ids.extend(
-            self.starts
+            self.starts[base..]
                 .iter()
                 .map(|start| text_unit_ids[*start as usize]),
         );
-        self.units_per_em.resize(count, 0.0);
-        self.source_runs.resize(count, NO_SOURCE_RUN);
-        self.binding_handles.resize(count, 0);
-        self.font_handles.resize(count, 0);
-        self.glyph_starts.resize(count, 0);
-        self.glyph_counts.resize(count, 0);
-        self.shaped.resize(count, 0);
-        self.unsafe_before.resize(count, 0);
+        self.units_per_em.resize(total, 0.0);
+        self.source_runs.resize(total, NO_SOURCE_RUN);
+        self.binding_handles.resize(total, 0);
+        self.font_handles.resize(total, 0);
+        self.glyph_starts.resize(total, 0);
+        self.glyph_counts.resize(total, 0);
+        self.shaped.resize(total, 0);
+        self.unsafe_before.resize(total, 0);
 
-        let mut style_index = 0usize;
-        let mut cluster = 0usize;
-        while cluster < count {
+        let first = boundaries[0];
+        let mut style_index = styles.partition_point(|style| style.text_end <= first);
+        let mut cluster = base;
+        while cluster < total {
             let start = self.starts[cluster];
             while styles
                 .get(style_index)
@@ -154,9 +205,10 @@ impl ClusterArena {
         &mut self,
         runs: &[ShapingRun],
         shape: &ShapeArena,
+        scope: ShapeScope,
         metrics_for: impl Fn(u32) -> Option<FontMetrics>,
         ink_for: impl Fn(u32) -> Option<FontInkTable<'ink>>,
-    ) -> Result<(), EngineError> {
+    ) -> Result<bool, EngineError> {
         let stream_len = shape.glyph_ids.len();
         if [
             shape.clusters.len(),
@@ -171,29 +223,45 @@ impl ClusterArena {
             return Err(EngineError::InvalidRequest);
         }
         let mut scales = core::mem::take(&mut self.run_scales);
-        let result = self.aggregate_shape_with(runs, shape, &mut scales, metrics_for, ink_for);
+        let result =
+            self.aggregate_shape_with(runs, shape, &scope, &mut scales, metrics_for, ink_for);
         self.run_scales = scales;
         result
     }
 
+    /// Returns whether every owning font supplied its ink table.
     fn aggregate_shape_with<'ink>(
         &mut self,
         runs: &[ShapingRun],
         shape: &ShapeArena,
+        scope: &ShapeScope,
         scales: &mut alloc::vec::Vec<RunScale>,
         metrics_for: impl Fn(u32) -> Option<FontMetrics>,
         ink_for: impl Fn(u32) -> Option<FontInkTable<'ink>>,
-    ) -> Result<(), EngineError> {
+    ) -> Result<bool, EngineError> {
         let stream_len = shape.glyph_ids.len();
+        let window = scope.clusters.clone();
         scales.clear();
         reserve(scales, shape.runs.len())?;
         // The text the clusters cover: a glyph outside it belongs to no cluster.
-        let covered =
-            self.starts.first().copied().unwrap_or(0)..self.ends.last().copied().unwrap_or(0);
+        let covered = if window.is_empty() {
+            0..0
+        } else {
+            self.starts[window.start]..self.ends[window.end - 1]
+        };
         let mut shared = false;
+        let mut scoped_glyphs = 0usize;
         // While the glyphs are counted, `source_runs` holds the shaped run that owns each
         // cluster: the first, in shaping order, with a glyph in it.
         for (index, shaped_run) in shape.runs.iter().enumerate() {
+            if !scope.includes(shaped_run) {
+                // Never indexed: only scoped runs own clusters below.
+                scales.push(RunScale {
+                    scale: 0.0,
+                    units_per_em: 0.0,
+                });
+                continue;
+            }
             let source = usize::try_from(shaped_run.source_run)
                 .ok()
                 .and_then(|source| runs.get(source))
@@ -209,6 +277,7 @@ impl ClusterArena {
                 units_per_em,
             });
             let glyphs = glyph_range(*shaped_run, stream_len)?;
+            scoped_glyphs += glyphs.len();
             let clusters = &shape.clusters[glyphs.clone()];
             let (lowest, highest) = clusters
                 .iter()
@@ -229,13 +298,16 @@ impl ClusterArena {
             }
         }
         if shared {
-            self.check_shared_owners(shape)?;
+            self.check_shared_owners(shape, scope)?;
         }
         // A ligature absorbs its trailing graphemes: `fi` shapes to one glyph reported at the
         // first grapheme, so the second grapheme's cluster has no glyph. Positioning still walks
         // that cluster and derives a scale from the owning font, so the first shaped run whose
         // text covers it owns it.
         for (index, shaped_run) in shape.runs.iter().enumerate() {
+            if !scope.includes(shaped_run) {
+                continue;
+            }
             // `scales` has an entry for this run, so its source run exists.
             let source = runs[shaped_run.source_run as usize];
             if shaped_run.text_start < source.text_start
@@ -245,7 +317,7 @@ impl ClusterArena {
                 return Err(EngineError::InvalidRequest);
             }
             let (start, end) = covered_clusters(self, *shaped_run);
-            if start >= end {
+            if start >= end || start < window.start || end > window.end {
                 return Err(EngineError::InvalidRequest);
             }
             for owner in &mut self.source_runs[start..end] {
@@ -255,34 +327,46 @@ impl ClusterArena {
             }
         }
 
-        let mut glyph_start = 0_u32;
-        for (start, count) in self.glyph_starts.iter_mut().zip(&self.glyph_counts) {
-            *start = glyph_start;
-            glyph_start = glyph_start.wrapping_add(*count);
+        let mut glyph_start = scope.glyph_base;
+        for (start, count) in self.glyph_starts[window.clone()]
+            .iter_mut()
+            .zip(&self.glyph_counts[window.clone()])
+        {
+            *start = glyph_start as u32;
+            glyph_start = glyph_start.wrapping_add(*count as usize);
         }
-        if glyph_start as usize != stream_len {
+        if glyph_start - scope.glyph_base != scoped_glyphs
+            || (scope.source_run.is_none() && scoped_glyphs != stream_len)
+            || u32::try_from(glyph_start).is_err()
+        {
             return Err(EngineError::InvalidRequest);
         }
-        for (((flags, shaped), count), unsafe_before) in self
-            .flags
+        for (((flags, shaped), count), unsafe_before) in self.flags[window.clone()]
             .iter_mut()
-            .zip(&mut self.shaped)
-            .zip(&self.glyph_counts)
-            .zip(&self.unsafe_before)
+            .zip(&mut self.shaped[window.clone()])
+            .zip(&self.glyph_counts[window.clone()])
+            .zip(&self.unsafe_before[window.clone()])
         {
             let has_glyph = *count != 0;
             *shaped = u8::from(has_glyph);
             *flags |= u8::from(has_glyph & (*unsafe_before == 0)) * CLUSTER_SAFE_BEFORE;
         }
-        self.scatter_glyphs(shape)?;
-        self.finish_owned_spans(shape, scales, ink_for)
+        self.scatter_glyphs(shape, scope, scoped_glyphs)?;
+        self.finish_owned_spans(shape, scope, scales, ink_for)
     }
 
     /// Two shaped runs put glyphs in one cluster: that is one owner only when both shaped the
     /// same source run with the same font.
-    fn check_shared_owners(&self, shape: &ShapeArena) -> Result<(), EngineError> {
+    fn check_shared_owners(
+        &self,
+        shape: &ShapeArena,
+        scope: &ShapeScope,
+    ) -> Result<(), EngineError> {
         let owner_of = |run: &ShapedRun| (run.source_run, run.binding_handle, run.font_handle);
         for (index, shaped_run) in shape.runs.iter().enumerate() {
+            if !scope.includes(shaped_run) {
+                continue;
+            }
             let glyphs = glyph_range(*shaped_run, shape.clusters.len())?;
             for cluster in &shape.clusters[glyphs] {
                 let owner = self.source_runs[self.index_at[*cluster as usize] as usize] as usize;
@@ -294,36 +378,55 @@ impl ClusterArena {
         Ok(())
     }
 
-    /// Copies the shaped glyph stream into cluster order: each cluster's glyphs adjacent, in
-    /// shaping order. Reordering scripts report clusters out of order and several glyphs per
-    /// cluster, so each glyph goes to its cluster's next free slot.
-    fn scatter_glyphs(&mut self, shape: &ShapeArena) -> Result<(), EngineError> {
+    /// Appends the scoped glyphs in cluster order: each cluster's glyphs adjacent, in shaping
+    /// order. Reordering scripts report clusters out of order and several glyphs per cluster,
+    /// so each glyph goes to its cluster's next free slot.
+    fn scatter_glyphs(
+        &mut self,
+        shape: &ShapeArena,
+        scope: &ShapeScope,
+        scoped_glyphs: usize,
+    ) -> Result<(), EngineError> {
         let stream_len = shape.glyph_ids.len();
-        reserve(&mut self.glyph_ids, stream_len)?;
-        reserve(&mut self.glyph_clusters, stream_len)?;
-        reserve(&mut self.glyph_x_advances, stream_len)?;
-        reserve(&mut self.glyph_x_offsets, stream_len)?;
-        reserve(&mut self.glyph_y_offsets, stream_len)?;
-        reserve(&mut self.glyph_shape_flags, stream_len)?;
-        if scatter_is_identity(shape) {
+        let base = scope.glyph_base;
+        if self.glyph_ids.len() != base {
+            return Err(EngineError::InvalidRequest);
+        }
+        let end = base + scoped_glyphs;
+        reserve(&mut self.glyph_ids, end)?;
+        reserve(&mut self.glyph_clusters, end)?;
+        reserve(&mut self.glyph_x_advances, end)?;
+        reserve(&mut self.glyph_x_offsets, end)?;
+        reserve(&mut self.glyph_y_offsets, end)?;
+        reserve(&mut self.glyph_shape_flags, end)?;
+        if let Some(glyphs) = identity_range(shape, scope) {
             // Simple-script shaping leaves the glyphs in cluster order already.
-            self.glyph_ids.extend_from_slice(&shape.glyph_ids);
-            self.glyph_clusters.extend_from_slice(&shape.clusters);
-            self.glyph_x_advances.extend_from_slice(&shape.x_advances);
-            self.glyph_x_offsets.extend_from_slice(&shape.x_offsets);
-            self.glyph_y_offsets.extend_from_slice(&shape.y_offsets);
-            self.glyph_shape_flags.extend_from_slice(&shape.glyph_flags);
+            self.glyph_ids
+                .extend_from_slice(&shape.glyph_ids[glyphs.clone()]);
+            self.glyph_clusters
+                .extend_from_slice(&shape.clusters[glyphs.clone()]);
+            self.glyph_x_advances
+                .extend_from_slice(&shape.x_advances[glyphs.clone()]);
+            self.glyph_x_offsets
+                .extend_from_slice(&shape.x_offsets[glyphs.clone()]);
+            self.glyph_y_offsets
+                .extend_from_slice(&shape.y_offsets[glyphs.clone()]);
+            self.glyph_shape_flags
+                .extend_from_slice(&shape.glyph_flags[glyphs]);
             return Ok(());
         }
-        self.glyph_ids.resize(stream_len, 0);
-        self.glyph_clusters.resize(stream_len, 0);
-        self.glyph_x_advances.resize(stream_len, 0);
-        self.glyph_x_offsets.resize(stream_len, 0);
-        self.glyph_y_offsets.resize(stream_len, 0);
-        self.glyph_shape_flags.resize(stream_len, 0);
+        self.glyph_ids.resize(end, 0);
+        self.glyph_clusters.resize(end, 0);
+        self.glyph_x_advances.resize(end, 0);
+        self.glyph_x_offsets.resize(end, 0);
+        self.glyph_y_offsets.resize(end, 0);
+        self.glyph_shape_flags.resize(end, 0);
         // `glyph_starts` is the next free slot of each cluster while the glyphs move, which
         // leaves it one glyph count past where it began.
         for shaped_run in &shape.runs {
+            if !scope.includes(shaped_run) {
+                continue;
+            }
             for glyph in glyph_range(*shaped_run, stream_len)? {
                 let cluster = self.index_at[shape.clusters[glyph] as usize] as usize;
                 let slot = self.glyph_starts[cluster] as usize;
@@ -336,7 +439,10 @@ impl ClusterArena {
                 self.glyph_shape_flags[slot] = shape.glyph_flags[glyph];
             }
         }
-        for (start, count) in self.glyph_starts.iter_mut().zip(&self.glyph_counts) {
+        for (start, count) in self.glyph_starts[scope.clusters.clone()]
+            .iter_mut()
+            .zip(&self.glyph_counts[scope.clusters.clone()])
+        {
             *start -= *count;
         }
         Ok(())
@@ -344,24 +450,26 @@ impl ClusterArena {
 
     /// Writes what a stretch of clusters takes from the one shaped run that owns it: the owner
     /// lanes, the font em, the advances its glyphs add, and the font's ink for those glyphs.
+    /// The ink lanes already span the whole glyph stream. Returns whether every owner's font
+    /// supplied its ink table.
     fn finish_owned_spans<'ink>(
         &mut self,
         shape: &ShapeArena,
+        scope: &ShapeScope,
         scales: &[RunScale],
         ink_for: impl Fn(u32) -> Option<FontInkTable<'ink>>,
-    ) -> Result<(), EngineError> {
-        let count = self.starts.len();
+    ) -> Result<bool, EngineError> {
+        let count = scope.clusters.end;
         let stream_len = self.glyph_ids.len();
-        self.run_local
-            .ink
-            .reset(stream_len)
-            .map_err(|_| EngineError::ResultTooLarge)?;
+        if self.run_local.ink.units().len() < stream_len {
+            return Err(EngineError::InvalidRequest);
+        }
         let mut ink_is_whole = true;
-        let mut start = 0usize;
+        let mut start = scope.clusters.start;
         while start < count {
             let owner = self.source_runs[start];
             let end = start
-                + self.source_runs[start..]
+                + self.source_runs[start..count]
                     .iter()
                     .position(|other| *other != owner)
                     .unwrap_or(count - start);
@@ -381,8 +489,8 @@ impl ClusterArena {
 
             let glyph_start = self.glyph_starts[start] as usize;
             let glyph_end = match self.glyph_starts.get(end) {
-                Some(next) => *next as usize,
-                None => stream_len,
+                Some(next) if end < count => *next as usize,
+                _ => stream_len,
             };
             let glyph_advances = &self.glyph_x_advances[glyph_start..glyph_end];
             let advances = &mut self.advances[start..end];
@@ -410,10 +518,7 @@ impl ClusterArena {
             }
             start = end;
         }
-        if ink_is_whole {
-            self.run_local.keep_ink();
-        }
-        Ok(())
+        Ok(ink_is_whole)
     }
 
     /// The font's ink for the glyphs of clusters `[start, end)`. A hard break is detached: it

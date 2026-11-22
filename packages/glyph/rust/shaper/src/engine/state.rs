@@ -12,7 +12,7 @@ use super::{
     cluster_state::{
         CLUSTER_ALLOWED_BREAK, CLUSTER_BREAK_CORRECTION, CLUSTER_SPACE, CanonicalClusterView,
         ClusterArena, ClusterBuildInput, LayoutDirtyRanges, LayoutRunSourceKind, NO_SOURCE_RUN,
-        RunCanonicalInput, SHAPING_CONTEXT,
+        RunCanonicalInput, SHAPING_CONTEXT, SourceRunSplice,
     },
     codec::{CapabilitySetId, ValidatedCodec},
     codec_gather::{
@@ -6259,11 +6259,53 @@ impl ParagraphState {
             }
             return self.finish_cluster_preparation(shaper).map(|()| true);
         }
-        self.clusters.pending_mut().build_with_ink(
-            build_input(),
-            |handle| shaper.font_metrics(handle),
-            |handle| shaper.font_ink_table(handle),
-        )?;
+        // One edit that changed the reshaped run's topology: rebuild that run's clusters
+        // between the previous rows. The full build stays the authority for every error.
+        let spliced = match (
+            self.incremental_shape_source_run,
+            self.text_edits.as_slice(),
+            self.prepared_layout.committed(),
+        ) {
+            (Some(source_run), [edit], PreparedLayout::General)
+                if !full_source_run && edit.old_start == edit.new_start =>
+            {
+                let splice = SourceRunSplice {
+                    source_run,
+                    edit_start: edit.old_start,
+                    old_end: edit.old_end,
+                    new_end: edit.new_end,
+                    previous_unicode: self.unicode.committed(),
+                    previous_styles: self.styles.committed().resolved.segments(),
+                    previous_runs: self.shaping_runs.committed().runs(),
+                };
+                let (pending_clusters, committed_clusters) = self.clusters.derive_mut();
+                pending_clusters
+                    .splice_source_run(
+                        committed_clusters,
+                        build_input(),
+                        splice,
+                        |handle| shaper.font_metrics(handle),
+                        |handle| shaper.font_ink_table(handle),
+                    )
+                    .unwrap_or(false)
+            }
+            _ => false,
+        };
+        #[cfg(test)]
+        if spliced {
+            self.clusters.pending().assert_splice_equals_full_build(
+                build_input(),
+                |handle| shaper.font_metrics(handle),
+                |handle| shaper.font_ink_table(handle),
+            );
+        }
+        if !spliced {
+            self.clusters.pending_mut().build_with_ink(
+                build_input(),
+                |handle| shaper.font_metrics(handle),
+                |handle| shaper.font_ink_table(handle),
+            )?;
+        }
         let (pending_clusters, committed_clusters) = self.clusters.derive_mut();
         let previous: &dyn CanonicalClusterView = match self.prepared_layout.committed() {
             PreparedLayout::Inline(leaf) => leaf,
@@ -6283,10 +6325,20 @@ impl ParagraphState {
     /// Completes every cluster-producing path through one exact retained-run comparison.
     /// Width-only updates never reach this method because they prepare no cluster stage.
     fn finish_cluster_preparation(&mut self, shaper: &ShaperRegistry) -> Result<(), EngineError> {
-        if let Err(error) = self.clusters.pending_mut().rebuild_run_local_geometry(
+        let general = matches!(self.prepared_layout.committed(), PreparedLayout::General);
+        let committed_styles = self.styles.committed().resolved.segments();
+        let (pending_clusters, committed_clusters) = self.clusters.derive_mut();
+        // The committed arena's geometry is the kernel's output for its own lanes; the rebuild
+        // copies the part it proves it would write again.
+        let previous = general.then_some(super::run_local_paragraph::PreviousGeometry {
+            clusters: committed_clusters,
+            styles: committed_styles,
+        });
+        if let Err(error) = pending_clusters.rebuild_run_local_geometry_from(
             self.shaping_runs.active().runs(),
             self.styles.active().resolved.segments(),
             |handle, glyph| shaper.font_glyph_extents(handle, glyph),
+            previous,
         ) {
             self.discard_clusters_candidate();
             return Err(error);
@@ -15764,6 +15816,68 @@ mod tests {
         }
     }
 
+    /// An edit that changes one line's cluster count rebuilds that line's clusters between the
+    /// previous rows; the shadow checks in test builds hold every lane, the run-local geometry
+    /// among them, to the full build, and the engine to its cold twin.
+    #[test]
+    fn a_topology_changing_edit_splices_its_source_run() {
+        let line = "Typography is a moving system; office affine waffle. ";
+        let lines: Vec<String> = (0..6).map(|index| line.repeat(3 + index)).collect();
+        let text = lines.join("\n");
+        let length = |text: &str| text.encode_utf16().count();
+        // A typed letter, a deleted word and a pasted phrase, in the fourth line and the last.
+        let middle = length(&lines[..3].join("\n")) + 1 + 40;
+        let last = length(&text) - 7;
+        for (start, delete, insert) in [
+            (middle, 0, "x"),
+            (middle, 7, ""),
+            (middle, 3, "fi ffl, "),
+            (last, 0, "ffi"),
+            (length(&lines[0]) + 1, 0, "Wa "),
+        ] {
+            let (mut engine, mut shaper) = shaped_inter_engine(&text);
+            let replacement = utf16(insert);
+            let bytes = text_mutation_bytes(&[(start as u32, delete as u32, &replacement)]);
+            let mut request = update(1, 1, 1);
+            request.limits.max_clusters = 1 << 14;
+            request.limits.max_lines = 1 << 12;
+            request.limits.max_output_bytes = 1 << 24;
+            request.text_mutations =
+                parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            let styles =
+                root_style_bytes_for_text(7, (length(&text) - delete + replacement.len()) as u32);
+            request.style_mutations =
+                parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            super::super::work_attribution::reset();
+            let measured = engine
+                .measure_paragraph_with_shaper(&mut shaper, request, 1)
+                .unwrap();
+            let work = super::super::work_attribution::snapshot();
+            assert_eq!(
+                (work.cluster_source_run_splices, work.cluster_full_builds),
+                (1, 0),
+                "{start} -{delete} +{insert:?}"
+            );
+            engine.commit_measure(measured).unwrap();
+            let mut edited: Vec<u16> = text.encode_utf16().collect();
+            edited.splice(start..start + delete, replacement.iter().copied());
+            let (cold_engine, _) = shaped_inter_engine(&String::from_utf16(&edited).unwrap());
+            let warm = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            let cold = cold_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert_visible_shape_equal(warm, cold, "spliced source run");
+        }
+    }
+
     #[test]
     fn combining_cluster_keeps_retained_cluster_rebuild() {
         let (mut engine, mut shaper) = shaped_inter_engine("a\u{301}bc");
@@ -22400,6 +22514,7 @@ mod tests {
     }
     include!("state/change_class_tests.rs");
     include!("state/refusal_tests.rs");
+    include!("state/run_local_prefix_tests.rs");
     include!("state_ascii_anchor_runtime_oracle.rs");
     include!("state_ascii_anchor_acceptance_tests.rs");
     include!("state_ascii_anchor_policy_tests.rs");

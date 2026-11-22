@@ -184,6 +184,15 @@ impl RowLanes {
         }
     }
 
+    /// Copies `len` rows from `source`, starting at glyph `from` there and `to` here.
+    pub(super) fn copy_rows(&mut self, to: usize, source: &Self, from: usize, len: usize) {
+        for (lane, source) in self.lanes_mut().into_iter().zip(source.lanes()) {
+            lane[to..to + len].copy_from_slice(&source[from..from + len]);
+        }
+        #[cfg(test)]
+        self.pen_inline[to..to + len].copy_from_slice(&source.pen_inline[from..from + len]);
+    }
+
     fn view(&self) -> RunLocalLanes<'_> {
         RunLocalLanes {
             inline_origin: &self.inline_origin,
@@ -275,6 +284,34 @@ impl InkUnitLanes {
         &self.units
     }
 
+    #[cfg(test)]
+    pub(crate) fn outlined(&self, glyph: usize) -> bool {
+        self.outlined[glyph / 64] >> (glyph % 64) & 1 != 0
+    }
+
+    /// Copies `len` glyphs' ink from `source`, starting at `from` there and `to` here, into
+    /// lanes `reset` sized; the outlined bits of other glyphs here are left as they are.
+    pub(crate) fn copy_from(&mut self, source: &Self, from: usize, to: usize, len: usize) {
+        self.units[to..to + len].copy_from_slice(&source.units[from..from + len]);
+        let mut done = 0;
+        while done < len {
+            let (source_bit, target_bit) = (from + done, to + done);
+            // As many bits as fit in both the source word and the target word from here.
+            let take = (64 - source_bit % 64)
+                .min(64 - target_bit % 64)
+                .min(len - done);
+            let mask = if take == 64 {
+                u64::MAX
+            } else {
+                (1 << take) - 1
+            };
+            let bits = (source.outlined[source_bit / 64] >> (source_bit % 64)) & mask;
+            let word = &mut self.outlined[target_bit / 64];
+            *word = (*word & !(mask << (target_bit % 64))) | (bits << (target_bit % 64));
+            done += take;
+        }
+    }
+
     /// The ink lane and the outlined bitset, for a producer that fills whole glyph ranges after
     /// `reset`.
     pub(crate) fn lanes_mut(&mut self) -> (&mut [[i16; 4]], &mut [u64]) {
@@ -299,6 +336,15 @@ pub(crate) enum Inherited {
     Ink,
     /// Every run-local input is the same: the geometry itself is reused.
     Geometry,
+}
+
+/// How much of a previous arena's geometry a rebuild starts from, counted in its emission order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct GeometryPrefix {
+    pub blocks: usize,
+    pub clusters: usize,
+    pub glyphs: usize,
+    pub runs: usize,
 }
 
 /// One laid-out paragraph run: what inherited geometry must still match, and its blocks.
@@ -351,6 +397,56 @@ impl RunLocalArena {
         self.inherited = Some(Inherited::Ink);
     }
 
+    /// Every lane a rebuild writes equals `other`'s.
+    #[cfg(test)]
+    pub(crate) fn assert_geometry_equals(&self, other: &Self) {
+        assert!(self.index.blocks == other.index.blocks, "run-local blocks");
+        assert!(
+            self.index.cluster_blocks == other.index.cluster_blocks,
+            "run-local cluster blocks"
+        );
+        let bits = |lane: &[f64]| lane.iter().map(|value| value.to_bits()).collect::<Vec<_>>();
+        assert_eq!(
+            bits(&self.index.cluster_prefixes),
+            bits(&other.index.cluster_prefixes),
+            "run-local prefixes"
+        );
+        assert_eq!(
+            self.index.row_count, other.index.row_count,
+            "run-local row count"
+        );
+        assert_eq!(
+            self.index.row_order, other.index.row_order,
+            "run-local row order"
+        );
+        for (lane, other) in self.rows.lanes().into_iter().zip(other.rows.lanes()) {
+            let bits = |lane: &[f32]| lane.iter().map(|value| value.to_bits()).collect::<Vec<_>>();
+            assert_eq!(bits(lane), bits(other), "run-local rows");
+        }
+        assert!(self.runs == other.runs, "run-local run records");
+        let words = |arena: &Self| {
+            arena
+                .source_words
+                .iter()
+                .map(|word| (word.covered, word.outlined))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(words(self), words(other), "run-local source words");
+        let prefix = |arena: &Self| {
+            arena
+                .source_prefix
+                .iter()
+                .map(|word| (word.covered, word.outlined))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(prefix(self), prefix(other), "run-local source ranks");
+    }
+
+    /// Whether the next rebuild reads the ink the producer filled and recomputes geometry.
+    pub(super) fn inherits_ink(&self) -> bool {
+        self.inherited == Some(Inherited::Ink)
+    }
+
     /// Takes the inheritance recorded by `inherit`, so it serves exactly one rebuild.
     pub(super) fn take_inherited(&mut self) -> Option<Inherited> {
         self.inherited.take()
@@ -390,6 +486,62 @@ impl RunLocalArena {
         }
         self.inherited = Some(inherited);
         Ok(())
+    }
+
+    /// Starts a cleared arena from the first `prefix.blocks` blocks of `previous`: their cluster
+    /// lanes (`prefix.clusters` of them), the rows of the first `prefix.glyphs` glyphs and the
+    /// first `prefix.runs` run records. The caller proves the kernel would write exactly these
+    /// for the same leading clusters; the rows must already span the glyph index space.
+    pub(super) fn adopt_prefix(
+        &mut self,
+        previous: &Self,
+        prefix: GeometryPrefix,
+    ) -> Result<(), RunLocalBuildError> {
+        let GeometryPrefix {
+            blocks,
+            clusters,
+            glyphs,
+            runs,
+        } = prefix;
+        let index = &previous.index;
+        if blocks > index.blocks.len()
+            || clusters > index.cluster_blocks.len()
+            || clusters > index.cluster_prefixes.len()
+            || glyphs > previous.rows.len()
+            || glyphs > self.rows.len()
+            || runs > previous.runs.len()
+        {
+            return Err(RunLocalBuildError::InvalidSource);
+        }
+        let row_count = blocks.checked_sub(1).map_or(0, |last| {
+            index.blocks[last].row_start + index.blocks[last].row_count
+        });
+        copy_lane(&mut self.index.blocks, &index.blocks[..blocks])?;
+        copy_lane(
+            &mut self.index.cluster_blocks,
+            &index.cluster_blocks[..clusters],
+        )?;
+        copy_lane(
+            &mut self.index.cluster_prefixes,
+            &index.cluster_prefixes[..clusters],
+        )?;
+        self.index.row_count = row_count;
+        #[cfg(any(test, feature = "oracle"))]
+        {
+            let rows = usize::try_from(row_count).map_err(|_| RunLocalBuildError::InvalidSource)?;
+            let order = index
+                .row_order
+                .get(..rows)
+                .ok_or(RunLocalBuildError::InvalidSource)?;
+            copy_lane(&mut self.index.row_order, order)?;
+        }
+        for (lane, from) in self.rows.lanes_mut().into_iter().zip(previous.rows.lanes()) {
+            lane[..glyphs].copy_from_slice(&from[..glyphs]);
+        }
+        #[cfg(test)]
+        self.rows.pen_inline[..glyphs].copy_from_slice(&previous.rows.pen_inline[..glyphs]);
+        copy_lane(&mut self.runs, &previous.runs[..runs])?;
+        self.cover_blocks(0)
     }
 
     /// Drops blocks, rows and the outline index; font-unit ink stays.

@@ -362,8 +362,22 @@ impl ClusterArena {
         let styles_proven = layout_dirty.as_ref().is_some_and(|(_, proven)| *proven);
         let mut layout_dirty = layout_dirty.map(|(dirty, _)| dirty);
         prepare_run_revision_index(previous, index)?;
+        // After a splice, a run outside the clusters it rebuilt is its previous run moved, so
+        // it keeps that run's revision without a comparison; the dirty proof needs every run
+        // compared, so it takes the walk.
+        let spliced = self
+            .spliced
+            .take()
+            .filter(|_| !layout_dirty.as_ref().is_some_and(|dirty| dirty.valid));
         for run_index in 0..self.layout_runs.runs.len() {
             let run = self.layout_runs.runs[run_index];
+            if let Some(revision) = spliced
+                .as_ref()
+                .and_then(|spliced| spliced.kept_revision(run, previous))
+            {
+                self.layout_runs.runs[run_index].canonical_revision = Some(revision);
+                continue;
+            }
             let anchor = self
                 .stable_ids
                 .get(run.cluster_start as usize)
@@ -404,6 +418,16 @@ impl ClusterArena {
             };
             self.layout_runs.runs[run_index].canonical_revision = Some(revision);
         }
+        if let Some(spliced) = spliced {
+            self.changes.reset();
+            self.aligned = false;
+            if !spliced.changed.new.is_empty() || !spliced.changed.old.is_empty() {
+                self.changes
+                    .push(spliced.changed.new, spliced.changed.old)?;
+            }
+            self.changes.everything = false;
+            return Ok(());
+        }
         let mut changes = core::mem::take(&mut self.changes);
         let result = self.changes_from_arena(previous, current, committed, index, &mut changes);
         if result.is_err() {
@@ -442,6 +466,48 @@ impl ClusterArena {
         self.alignment = segments;
         self.aligned = false;
         result
+    }
+}
+
+/// What a splice proved: clusters outside `changed` are the previous arena's, moved by the
+/// edit -- the same text, identity, lanes, glyphs, styles and shaping runs.
+#[derive(Clone, Debug)]
+pub(in crate::engine) struct Spliced {
+    pub changed: ChangedClusters,
+}
+
+impl Spliced {
+    /// The revision of a layout run that lies outside the changed clusters and covers exactly
+    /// the clusters of a previous run, which is then canonically equal to it.
+    fn kept_revision(
+        &self,
+        run: LayoutRun,
+        previous: &ClusterArena,
+    ) -> Option<RunCanonicalRevision> {
+        let (new, old) = (&self.changed.new, &self.changed.old);
+        let shift = |cluster: u32| {
+            if cluster <= new.start {
+                Some(cluster)
+            } else if cluster >= new.end {
+                (cluster - new.end).checked_add(old.end)
+            } else {
+                None
+            }
+        };
+        if run.cluster_end > new.start && run.cluster_start < new.end {
+            return None;
+        }
+        let (start, end) = (shift(run.cluster_start)?, shift(run.cluster_end)?);
+        let runs = &previous.layout_runs.runs;
+        let candidate = runs.get(runs.partition_point(|old| old.cluster_start < start))?;
+        (candidate.cluster_start == start
+            && candidate.cluster_end == end
+            && candidate.glyph_count == run.glyph_count
+            && candidate.font_handle == run.font_handle
+            && candidate.source_run == run.source_run
+            && candidate.source_kind == run.source_kind)
+            .then_some(candidate.canonical_revision)
+            .flatten()
     }
 }
 

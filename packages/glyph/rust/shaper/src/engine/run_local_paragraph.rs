@@ -15,6 +15,10 @@
 //!   same kernel over the same lanes;
 //! - a change that touches no run-local input (line height, span boundaries): the arena
 //!   inherited the geometry itself and nothing runs.
+//!
+//! A new glyph stream that keeps a leading stretch of the previous one (an edit) also starts
+//! from the previous geometry: every block before the first cluster the kernel would read
+//! differently, cut back to a block boundary, is copied, and the kernel resumes there.
 
 use alloc::vec::Vec;
 
@@ -24,13 +28,23 @@ use super::{
     EngineError,
     cluster_state::{CLUSTER_HARD_BREAK, ClusterArena, LayoutRun},
     run_local::{
-        Inherited, InkUnitLanes, LAYOUT_CUT, NumericBlockSpan, RunLocalArena, RunLocalBuildError,
-        RunRecord,
+        GeometryPrefix, Inherited, InkUnitLanes, LAYOUT_CUT, NumericBlockSpan, RunLocalArena,
+        RunLocalBuildError, RunRecord,
     },
-    run_local_kernel::{ClusterEnd, ClusterLanes, GlyphUnits, RunInput, ScaleSpan, layout_run},
+    run_local_kernel::{
+        ClusterEnd, ClusterLanes, GlyphUnits, RunInput, RunResume, ScaleSpan, layout_run_from,
+    },
     shaping_state::ShapingRun,
     style_state::StyleSegment,
 };
+
+/// The arena a rebuild may start from: the committed clusters, their geometry and the styles
+/// they were laid out with.
+#[derive(Clone, Copy)]
+pub(crate) struct PreviousGeometry<'a> {
+    pub clusters: &'a ClusterArena,
+    pub styles: &'a [StyleSegment],
+}
 
 /// Rebuilds `run_local` for `clusters` and records each layout run's block span. On failure
 /// the arena is left empty and no run names a block.
@@ -41,6 +55,7 @@ pub(crate) fn rebuild(
     runs: &[ShapingRun],
     styles: &[StyleSegment],
     extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
+    previous: Option<PreviousGeometry<'_>>,
 ) -> Result<(), EngineError> {
     let glyphs = clusters.glyph_ids.len();
     let inherited = run_local.take_inherited();
@@ -59,8 +74,15 @@ pub(crate) fn rebuild(
             fill_ink(&mut run_local.ink, clusters, extents_for)?;
         }
         run_local.rows.grow(glyphs).map_err(error)?;
-        for run in layout_runs.iter_mut() {
-            run.numeric_blocks = layout(run_local, *run, clusters, runs, styles)?;
+        let start = match previous {
+            Some(previous) => {
+                adopt_prefix(run_local, layout_runs, clusters, runs, styles, previous)?
+            }
+            None => Start::default(),
+        };
+        for (index, run) in layout_runs.iter_mut().enumerate().skip(start.run) {
+            let resume = (index == start.run).then_some(start.resume).flatten();
+            run.numeric_blocks = layout(run_local, *run, clusters, runs, styles, resume)?;
         }
         run_local.finalize_paragraph_ranks().map_err(error)
     })();
@@ -71,6 +93,263 @@ pub(crate) fn rebuild(
         }
     }
     result
+}
+
+/// Where a cluster splice rebuilt clusters: `[start, end)` here, which were the previous
+/// arena's `[start, end - cluster_delta)`. The glyphs after them moved by `glyph_delta`.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct RunLocalSplice {
+    pub start: usize,
+    pub end: usize,
+    pub cluster_delta: i64,
+    pub glyph_delta: i64,
+}
+
+/// `rebuild` after a cluster splice, reusing `previous`'s geometry where its inputs are
+/// unchanged. A block's rows depend only on its own clusters, and blocks are cut at multiples
+/// of the cut rule's cluster count from their run's first cluster, so a run before the rebuilt
+/// clusters keeps its blocks, a run after them keeps its blocks moved, and a left-to-right run
+/// that starts before them keeps the blocks of every whole chunk before them. The rest is laid
+/// out by the kernel, exactly as `rebuild` lays it out.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn rebuild_spliced(
+    run_local: &mut RunLocalArena,
+    layout_runs: &mut [LayoutRun],
+    clusters: &ClusterArena,
+    previous: PreviousGeometry<'_>,
+    splice: RunLocalSplice,
+    runs: &[ShapingRun],
+    styles: &[StyleSegment],
+    extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
+) -> Result<(), EngineError> {
+    let glyphs = clusters.glyph_ids.len();
+    if !run_local.inherits_ink() || run_local.ink.units().len() != glyphs {
+        return rebuild(
+            run_local,
+            layout_runs,
+            clusters,
+            runs,
+            styles,
+            extents_for,
+            Some(previous),
+        );
+    }
+    let previous = &previous.clusters.run_local;
+    run_local.take_inherited();
+    run_local.clear_geometry();
+    for run in layout_runs.iter_mut() {
+        run.numeric_blocks = NumericBlockSpan::default();
+    }
+    let result = (|| {
+        run_local.rows.grow(glyphs).map_err(error)?;
+        for run in layout_runs.iter_mut() {
+            run.numeric_blocks =
+                layout_retained(run_local, *run, clusters, previous, splice, runs, styles)?;
+        }
+        run_local.finalize_paragraph_ranks().map_err(error)
+    })();
+    if result.is_err() {
+        run_local.clear();
+        for run in layout_runs.iter_mut() {
+            run.numeric_blocks = NumericBlockSpan::default();
+        }
+    }
+    result
+}
+
+/// One run of a spliced rebuild: copied, moved, completed after a copied prefix, or laid out.
+fn layout_retained(
+    run_local: &mut RunLocalArena,
+    run: LayoutRun,
+    clusters: &ClusterArena,
+    previous: &RunLocalArena,
+    splice: RunLocalSplice,
+    runs: &[ShapingRun],
+    styles: &[StyleSegment],
+) -> Result<NumericBlockSpan, EngineError> {
+    let reverse = direction(run, runs)? & 1 != 0;
+    let (start, end) = (run.cluster_start as usize, run.cluster_end as usize);
+    let record = |cluster_start: i64| {
+        let at = previous
+            .runs
+            .partition_point(|record| i64::from(record.cluster_start) < cluster_start);
+        previous
+            .runs
+            .get(at)
+            .filter(|record| {
+                i64::from(record.cluster_start) == cluster_start && record.reverse == reverse
+            })
+            .copied()
+    };
+    let moved = if end <= splice.start {
+        record(start as i64)
+            .filter(|record| record.cluster_end as usize == end)
+            .map(|record| (record, 0))
+    } else if start >= splice.end {
+        record(start as i64 - splice.cluster_delta)
+            .filter(|record| i64::from(record.cluster_end) + splice.cluster_delta == end as i64)
+            .map(|record| (record, splice.glyph_delta))
+    } else {
+        None
+    };
+    if let Some((record, glyph_delta)) = moved {
+        let first_block = run_local.blocks().len();
+        let first_cluster = run_local.index.cluster_blocks.len();
+        copy_blocks(
+            run_local,
+            previous,
+            record,
+            record.blocks.cluster_count as usize,
+            glyph_delta,
+        )?;
+        let glyph_start = run.glyph_start as usize;
+        let old_start = (glyph_start as i64 - glyph_delta) as usize;
+        run_local.rows.copy_rows(
+            glyph_start,
+            &previous.rows,
+            old_start,
+            run.glyph_count as usize,
+        );
+        #[cfg(test)]
+        super::work_attribution::record(|work| {
+            if glyph_delta == 0 {
+                work.run_local_adopted_glyphs += run.glyph_count as usize;
+            } else {
+                work.run_local_moved_glyphs += run.glyph_count as usize;
+            }
+        });
+        return push_record(run_local, run, reverse, first_block, first_cluster);
+    }
+    // Whole chunks before the rebuilt clusters, in a left-to-right run that starts before them.
+    let chunk = LAYOUT_CUT.clusters_per_block;
+    let kept = (splice.start.saturating_sub(start) / chunk) * chunk;
+    let Some(record) = record(start as i64).filter(|_| !reverse && kept > 0) else {
+        return layout(run_local, run, clusters, runs, styles, None);
+    };
+    let first_block = run_local.blocks().len();
+    let first_cluster = run_local.index.cluster_blocks.len();
+    copy_blocks(run_local, previous, record, kept, 0)?;
+    let glyph_start = run.glyph_start as usize;
+    let resume_glyph = clusters.glyph_starts[start + kept] as usize;
+    run_local.rows.copy_rows(
+        glyph_start,
+        &previous.rows,
+        glyph_start,
+        resume_glyph - glyph_start,
+    );
+    #[cfg(test)]
+    super::work_attribution::record(|work| {
+        work.run_local_adopted_glyphs += resume_glyph - glyph_start;
+    });
+    let resume = RunResume {
+        ordinal: kept,
+        first_block,
+        first_cluster,
+    };
+    layout(run_local, run, clusters, runs, styles, Some(resume))
+}
+
+/// Appends the blocks and cluster lanes of `record`'s first `cluster_count` clusters from
+/// `previous`, with their glyphs moved by `glyph_delta`. Blocks never cross a chunk, so the
+/// blocks of whole chunks are whole.
+fn copy_blocks(
+    run_local: &mut RunLocalArena,
+    previous: &RunLocalArena,
+    record: RunRecord,
+    cluster_count: usize,
+    glyph_delta: i64,
+) -> Result<(), EngineError> {
+    let old_clusters =
+        record.blocks.cluster_start as usize..record.blocks.cluster_start as usize + cluster_count;
+    let old_first = record.blocks.start;
+    let blocks = previous.index.cluster_blocks[old_clusters.clone()]
+        .iter()
+        .rev()
+        .find(|block| **block != u32::MAX)
+        .map_or(0, |last| (last - old_first + 1) as usize);
+    let old_blocks = &previous.index.blocks[old_first as usize..old_first as usize + blocks];
+    let new_first =
+        u32::try_from(run_local.index.blocks.len()).map_err(|_| EngineError::ResultTooLarge)?;
+    let old_row_base = old_blocks.first().map_or(0, |block| block.row_start);
+    let row_base = run_local.index.row_count;
+    let index = &mut run_local.index;
+    index
+        .blocks
+        .try_reserve(blocks)
+        .map_err(|_| EngineError::ResultTooLarge)?;
+    index
+        .cluster_blocks
+        .try_reserve(cluster_count)
+        .map_err(|_| EngineError::ResultTooLarge)?;
+    index
+        .cluster_prefixes
+        .try_reserve(cluster_count)
+        .map_err(|_| EngineError::ResultTooLarge)?;
+    let shift = |glyph: u32| (i64::from(glyph) + glyph_delta) as u32;
+    for block in old_blocks {
+        index.blocks.push(super::run_local::NumericBlock {
+            source_glyph_start: shift(block.source_glyph_start),
+            row_start: block.row_start - old_row_base + row_base,
+            ..*block
+        });
+    }
+    let rows = old_blocks
+        .last()
+        .map_or(0, |block| block.row_start + block.row_count - old_row_base);
+    index.row_count += rows;
+    index.cluster_blocks.extend(
+        previous.index.cluster_blocks[old_clusters.clone()]
+            .iter()
+            .map(|block| {
+                if *block == u32::MAX {
+                    u32::MAX
+                } else {
+                    block - old_first + new_first
+                }
+            }),
+    );
+    index
+        .cluster_prefixes
+        .extend_from_slice(&previous.index.cluster_prefixes[old_clusters]);
+    #[cfg(any(test, feature = "oracle"))]
+    {
+        let old_rows = old_row_base as usize..(old_row_base + rows) as usize;
+        index.row_order.extend(
+            previous.index.row_order[old_rows]
+                .iter()
+                .map(|glyph| shift(*glyph)),
+        );
+    }
+    run_local.cover_blocks(new_first as usize).map_err(error)
+}
+
+fn push_record(
+    run_local: &mut RunLocalArena,
+    run: LayoutRun,
+    reverse: bool,
+    first_block: usize,
+    first_cluster: usize,
+) -> Result<NumericBlockSpan, EngineError> {
+    let count = |len: usize, first: usize| {
+        u32::try_from(len - first).map_err(|_| EngineError::ResultTooLarge)
+    };
+    let span = NumericBlockSpan {
+        start: u32::try_from(first_block).map_err(|_| EngineError::ResultTooLarge)?,
+        count: count(run_local.index.blocks.len(), first_block)?,
+        cluster_start: u32::try_from(first_cluster).map_err(|_| EngineError::ResultTooLarge)?,
+        cluster_count: count(run_local.index.cluster_blocks.len(), first_cluster)?,
+    };
+    run_local
+        .runs
+        .try_reserve(1)
+        .map_err(|_| EngineError::ResultTooLarge)?;
+    run_local.runs.push(RunRecord {
+        cluster_start: run.cluster_start,
+        cluster_end: run.cluster_end,
+        reverse,
+        blocks: span,
+    });
+    Ok(span)
 }
 
 /// Gives each layout run the blocks of the inherited run it equals. The caller inherits only
@@ -145,6 +424,7 @@ fn layout(
     clusters: &ClusterArena,
     runs: &[ShapingRun],
     styles: &[StyleSegment],
+    resume: Option<RunResume>,
 ) -> Result<NumericBlockSpan, EngineError> {
     let reverse = direction(run, runs)? & 1 != 0;
     let cluster_start = run.cluster_start as usize;
@@ -161,7 +441,12 @@ fn layout(
     let first_block = run_local.blocks().len();
     #[cfg(test)]
     let first_row = run_local.index.row_count;
-    let span = layout_run(
+    let resume = resume.unwrap_or(RunResume {
+        ordinal: 0,
+        first_block,
+        first_cluster: run_local.index.cluster_blocks.len(),
+    });
+    let span = layout_run_from(
         &mut run_local.index,
         &mut run_local.rows,
         &mut run_local.scratch,
@@ -185,6 +470,7 @@ fn layout(
             reverse,
             cut: LAYOUT_CUT,
         },
+        resume,
     )
     .map_err(error)?;
     #[cfg(test)]
@@ -254,6 +540,198 @@ fn scale_spans(
         }
     }
     Ok(())
+}
+
+/// Where layout starts after `adopt_prefix`: the first run still to lay out and, when that run
+/// was partly adopted, where in it.
+#[derive(Clone, Copy, Default)]
+struct Start {
+    run: usize,
+    resume: Option<RunResume>,
+}
+
+/// Copies the geometry of the leading clusters whose run-local inputs equal the previous
+/// arena's, cut back to a block boundary, and says where layout resumes. Copies nothing when
+/// the previous geometry does not describe the previous clusters' runs.
+fn adopt_prefix(
+    run_local: &mut RunLocalArena,
+    layout_runs: &mut [LayoutRun],
+    clusters: &ClusterArena,
+    runs: &[ShapingRun],
+    styles: &[StyleSegment],
+    previous: PreviousGeometry<'_>,
+) -> Result<Start, EngineError> {
+    let old = previous.clusters;
+    let records = &old.run_local.runs;
+    let old_glyphs = old.glyph_ids.len();
+    if records.len() != old.layout_runs().len()
+        || old.run_local.lanes().inline_origin.len() < old_glyphs
+        || old.run_local.ink.units().len() != old_glyphs
+        || run_local.ink.units().len() != clusters.glyph_ids.len()
+        || records.iter().zip(old.layout_runs()).any(|(record, run)| {
+            record.cluster_start != run.cluster_start || record.cluster_end != run.cluster_end
+        })
+    {
+        return Ok(Start::default());
+    }
+    let same = equal_prefix(
+        clusters,
+        styles,
+        run_local.ink.units(),
+        old,
+        previous.styles,
+        old.run_local.ink.units(),
+    );
+    let per_block = LAYOUT_CUT.clusters_per_block;
+    let mut start = Start::default();
+    let mut prefix = GeometryPrefix {
+        blocks: 0,
+        clusters: 0,
+        glyphs: 0,
+        runs: 0,
+    };
+    for (index, run) in layout_runs.iter().enumerate() {
+        let Some(record) = records.get(index) else {
+            break;
+        };
+        let reverse = direction(*run, runs)? & 1 != 0;
+        let (run_start, run_end) = (run.cluster_start as usize, run.cluster_end as usize);
+        if run.cluster_start != record.cluster_start
+            || reverse != record.reverse
+            || same <= run_start
+        {
+            break;
+        }
+        if run.cluster_end == record.cluster_end && run_end <= same {
+            prefix = GeometryPrefix {
+                blocks: (record.blocks.start + record.blocks.count) as usize,
+                clusters: run_end,
+                glyphs: glyph_end(clusters, run_end),
+                runs: index + 1,
+            };
+            start.run = index + 1;
+            continue;
+        }
+        if reverse {
+            break;
+        }
+        let limit = same.min(run_end).min(record.cluster_end as usize);
+        let kept = (limit - run_start) / per_block * per_block;
+        if kept == 0 {
+            break;
+        }
+        let cut = run_start + kept;
+        let glyphs = glyph_end(clusters, cut);
+        let run_blocks = old
+            .run_local
+            .blocks()
+            .get(record.blocks.start as usize..(record.blocks.start + record.blocks.count) as usize)
+            .ok_or(EngineError::InvalidRequest)?;
+        let kept_blocks =
+            run_blocks.partition_point(|block| (block.source_glyph_start as usize) < glyphs);
+        prefix = GeometryPrefix {
+            blocks: record.blocks.start as usize + kept_blocks,
+            clusters: cut,
+            glyphs,
+            runs: index,
+        };
+        start = Start {
+            run: index,
+            resume: Some(RunResume {
+                ordinal: kept,
+                first_block: record.blocks.start as usize,
+                first_cluster: record.blocks.cluster_start as usize,
+            }),
+        };
+        break;
+    }
+    if prefix.clusters == 0 {
+        return Ok(Start::default());
+    }
+    run_local
+        .adopt_prefix(&old.run_local, prefix)
+        .map_err(error)?;
+    for (run, record) in layout_runs.iter_mut().zip(records).take(prefix.runs) {
+        run.numeric_blocks = record.blocks;
+    }
+    #[cfg(test)]
+    super::work_attribution::record(|work| work.run_local_adopted_glyphs += prefix.glyphs);
+    Ok(start)
+}
+
+/// The glyph after the first `clusters` clusters.
+fn glyph_end(clusters: &ClusterArena, count: usize) -> usize {
+    count.checked_sub(1).map_or(0, |last| {
+        (clusters.glyph_starts[last] + clusters.glyph_counts[last]) as usize
+    })
+}
+
+/// How many leading clusters the kernel reads identically in both arenas: the same glyphs at
+/// the same indexes with the same font units and ink, the same cluster advance, detachment,
+/// font em, and the same font size and baseline shift through their style.
+fn equal_prefix(
+    new: &ClusterArena,
+    new_styles: &[StyleSegment],
+    new_ink: &[[i16; 4]],
+    old: &ClusterArena,
+    old_styles: &[StyleSegment],
+    old_ink: &[[i16; 4]],
+) -> usize {
+    let scaled_styles = new_styles
+        .iter()
+        .zip(old_styles)
+        .take_while(|(new, old)| {
+            new.style.font_size.to_bits() == old.style.font_size.to_bits()
+                && new.style.baseline_shift.to_bits() == old.style.baseline_shift.to_bits()
+        })
+        .count();
+    let same = |range: core::ops::Range<usize>| -> bool {
+        let lanes = range.clone();
+        let detached = |flags: &[u8]| -> u64 {
+            flags.iter().enumerate().fold(0, |bits, (at, flags)| {
+                bits | (u64::from(flags & CLUSTER_HARD_BREAK != 0) << (at % 64))
+            })
+        };
+        let equal = new.glyph_starts[lanes.clone()] == old.glyph_starts[lanes.clone()]
+            && new.glyph_counts[lanes.clone()] == old.glyph_counts[lanes.clone()]
+            && new.style_indexes[lanes.clone()] == old.style_indexes[lanes.clone()]
+            && new.style_indexes[lanes.clone()]
+                .iter()
+                .all(|style| (*style as usize) < scaled_styles)
+            && detached(&new.flags[lanes.clone()]) == detached(&old.flags[lanes.clone()])
+            && new.advances[lanes.clone()]
+                .iter()
+                .zip(&old.advances[lanes.clone()])
+                .all(|(new, old)| new.to_bits() == old.to_bits())
+            && new.units_per_em[lanes.clone()]
+                .iter()
+                .zip(&old.units_per_em[lanes.clone()])
+                .all(|(new, old)| new.to_bits() == old.to_bits());
+        if !equal {
+            return false;
+        }
+        // Equal starts and counts give both arenas the same glyph range.
+        let glyphs = new.glyph_starts[range.start] as usize..glyph_end(new, range.end);
+        new.glyph_x_advances[glyphs.clone()] == old.glyph_x_advances[glyphs.clone()]
+            && new.glyph_x_offsets[glyphs.clone()] == old.glyph_x_offsets[glyphs.clone()]
+            && new.glyph_y_offsets[glyphs.clone()] == old.glyph_y_offsets[glyphs.clone()]
+            && new_ink[glyphs.clone()] == old_ink[glyphs]
+    };
+    let count = new.starts.len().min(old.starts.len());
+    let chunk = LAYOUT_CUT.clusters_per_block;
+    let mut at = 0;
+    while at < count {
+        let end = (at + chunk).min(count);
+        if same(at..end) {
+            at = end;
+            continue;
+        }
+        return at
+            + (at..end)
+                .take_while(|cluster| same(*cluster..*cluster + 1))
+                .count();
+    }
+    count
 }
 
 fn error(error: RunLocalBuildError) -> EngineError {
