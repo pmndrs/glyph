@@ -194,13 +194,71 @@ No memory change.
    start, centre or end: segment translations already move as a group, and a line has two or three. It would help
    only if placement slots were made per line, which changes the wire's slot count and every renderer's slot table.
 
+## Experiment 6: resize shortcut for lines with edge records and drop caps — reported, not landed
+
+Run after merging the integration tip `c9ce9ec4b` (`sil-green-36`). Base is that tip.
+
+**Hypothesis.** The geometry-only resize shortcut (`flow_positioning_equivalent`) proves that a new flow
+positions bit-identically to the committed one and then skips positioning, gather and publication. It refused any
+flow with an edge record or a drop cap, so on fonts with corrected breaks (Fredoka, Noto Sans CJK) and on drop-cap
+paragraphs a width change that moves no break ran the whole tail. Positioning reads an edge record by its index
+into the boundary arena, and a drop cap from its own line and fragment. If the new flow names the same record
+indexes and its boundary arena equals the committed one (records, glyph lanes and stable ids), committing either
+arena leaves the committed positioning true; a drop cap equal field for field, with its line numbers and slot
+compared bit for bit, is positioned identically.
+
+**Spike.** About 70 lines of engine code: `BoundaryShapeArena::same_as`, edge and drop-cap admission in the proof (the arena comparison
+runs at most once, and only when a fragment has an edge), and the state caller passing both arenas. A unit test
+admits an edge flow over equal arenas and refuses a reshaped island, a line that gained an edge, and an island
+whose glyphs took other stable ids. The first build cost a plain Inter `width.same` 3–5 µs (2–4%, repeated three
+times); inlining the shared line comparison brought it back to equal.
+
+**Measured** (stage bench, wasm, interleaved, load 6–8). Layout suite at 15k, minimum µs, base / experiment:
+
+| fixture   | width, same breaks | edit                | width, moved breaks | cold                |
+| --------- | ------------------ | ------------------- | ------------------- | ------------------- |
+| Fredoka   | 927.7 / 151.5      | 2,900.1 / 2,961.9   | 1,965.2 / 1,953.0   | 4,957.1 / 5,145.8   |
+| CJK       | 994.3 / 261.7      | 3,444.8 / 3,418.3   | 2,045.3 / 2,021.4   | 6,062.8 / 6,028.9   |
+| drop cap  | 600.2 / 136.1      | 2,591.6 / 2,635.5   | 1,555.7 / 1,562.9   | 6,626.5 / 6,417.4   |
+| Inter     | 132.2 / 133.2      | 2,556.8 / 2,551.0   | 1,537.5 / 1,535.1   | 6,352.5 / 6,296.7   |
+| exclusion | 180.2 / 175.0      | 2,704.1 / 2,738.4   | 1,633.8 / 1,634.8   | 6,551.7 / 6,526.7   |
+| Amiri     | 1,228.8 / 1,231.4  | 14,277.8 / 14,211.5 | 2,303.4 / 2,293.3   | 14,679.1 / 14,474.2 |
+
+A width change that keeps every break is 74–84% cheaper on Fredoka, CJK and drop caps. Edits, moved breaks and
+cold rows never reach the shortcut (the cluster stage is prepared) and stay within ±4% in both directions. Amiri
+and the bidi fixture gain nothing: a right-to-left paragraph's start edge is the slot end, so every line's pen moves
+with the width; that is the numeric repass's job, not this proof's.
+
+Sweep suite, mean step µs: CJK 1,004.3 / 870.0 (−13%), Fredoka 1,299.1 / 1,155.9 (−11%); Latin, bidi and the
+other alignments are equal (within 1%), since their kept breaks rarely leave a whole step unchanged.
+
+**Gate.** Incremental equals cold everywhere (differential: 912 runs, no unlisted divergence) and the glyph
+values are unchanged, but three frozen references move: `font-fredoka-start`, `font-source-serif-start` and
+`label-fredoka-80-start`. `layout-oracle diff` against the base locates every difference in two places, both of
+which exist because the tail no longer runs on a step whose breaks did not move:
+
+- `positioned.replacement_run.canonical_revision` and, from the next edit on, `cluster.layout_run.canonical_revision`
+  (identity class): the skipped positioning no longer mints new revisions for the edge-record replacement runs, so
+  every later revision is lower by the count it skipped (29 against 14 at step 02, 76 against 61 at step 05).
+- `wire.publication` (wire class) at the unchanged step: row 12 is 0 instead of 2, the frame publishing nothing
+  where it republished.
+
+Matching the references would mean minting those revisions and republishing without positioning, which undoes the
+shortcut. The rule for this lane is that an experiment that needs a reference to move is reported, not landed, so
+the code was removed; the patch is kept outside the repository (`glyph-scratch/exp-reflow/exp6-edge-shortcut.patch`,
+about 220 lines with its unit test).
+
+**Verdict.** Faster on corrected-break fonts and drop caps (74–84% on an unchanged-break width change, 11–13% of a
+CJK or Fredoka sweep), equal elsewhere, typographic output unchanged; not landed because it moves three references'
+identity and wire classes. Landing it is an owner decision: re-freeze those three references, accepting that a
+no-op resize keeps run revisions and publishes nothing for edge-record paragraphs as it already does for plain ones.
+
 ## Not yet run
 
 Sizes of prize below are read off the tables above, so they are ceilings, not results.
 
-| experiment                                     | ceiling and constraint                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2. Advance pyramid, fit by search              | Skipped after experiment 4: flow is about 46 µs of a 782 µs Latin step (6%), so a search could save at most that. The fitter is 3.2% of a Latin sweep step before experiment 1 and runs for one line in five after it; cold, it is about 25 µs of a 6.6 ms mount. A search must still consult corrections (the predicate is not monotone), so the spike is a prefix-sum lane over word records with the exact loop resumed at the first overflow. |
-| 3. Integer pen                                 | The plan's model measured it no faster cold and changing f64 outputs, which would move oracle references. To be run as: does any reference lane move; if so it is reported, not landed.                                                                                                                                                                                                                                                           |
-| 5. Content-anchored blocks                     | Targets edits; the plan records that it changes golden bytes.                                                                                                                                                                                                                                                                                                                                                                                     |
-| 6. Resize shortcut for lines with edge records | A width change that moves no break costs 0.13 ms on Inter and 1.0–1.8 ms on Fredoka, CJK and drop caps, because the equivalence proof rejects any line with an edge record or a drop cap and positioning, gather and publication then run in full. Half the steps of the CJK sweep are such steps.                                                                                                                                                |
+| experiment                        | ceiling and constraint                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2. Advance pyramid, fit by search | Skipped after experiment 4: flow is about 46 µs of a 782 µs Latin step (6%), so a search could save at most that. The fitter is 3.2% of a Latin sweep step before experiment 1 and runs for one line in five after it; cold, it is about 25 µs of a 6.6 ms mount. A search must still consult corrections (the predicate is not monotone), so the spike is a prefix-sum lane over word records with the exact loop resumed at the first overflow. |
+| 3. Integer pen                    | The plan's model measured it no faster cold and changing f64 outputs, which would move oracle references. To be run as: does any reference lane move; if so it is reported, not landed.                                                                                                                                                                                                                                                           |
+| 5. Content-anchored blocks        | Targets edits; the plan records that it changes golden bytes.                                                                                                                                                                                                                                                                                                                                                                                     |
