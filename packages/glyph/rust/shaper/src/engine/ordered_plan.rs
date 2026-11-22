@@ -3723,7 +3723,9 @@ mod tests {
                 .plan_view(7, CAPABILITY, codec.fingerprint())
                 .unwrap();
             assert!(
-                plan.patches.iter().all(|patch| patch.opcode != PATCH_ALLOCATE_OR_RESIZE),
+                plan.patches
+                    .iter()
+                    .all(|patch| patch.opcode != PATCH_ALLOCATE_OR_RESIZE),
                 "{name}: the batch keeps its storage"
             );
             assert!(
