@@ -38,6 +38,10 @@ pub(crate) struct Work {
     pub cluster_full_glyph_visits: usize,
     pub cluster_retained_glyph_loop_visits: usize,
     pub run_local_glyph_visits: usize,
+    /// Glyphs whose run-local rows a rebuild copied from the previous geometry.
+    pub run_local_adopted_glyphs: usize,
+    /// Run-local rows a splice kept for runs after the rebuilt clusters, moved.
+    pub run_local_moved_glyphs: usize,
     /// Current clusters entered by the positioned occurrence producer (C).
     pub positioned_cluster_visits: usize,
     /// Current boundary glyphs entered by the occurrence producer (S boundary).
@@ -224,6 +228,8 @@ std::thread_local! {
         cluster_full_glyph_visits: 0,
         cluster_retained_glyph_loop_visits: 0,
         run_local_glyph_visits: 0,
+        run_local_adopted_glyphs: 0,
+        run_local_moved_glyphs: 0,
         positioned_cluster_visits: 0,
         positioned_boundary_glyph_visits: 0,
         occurrence_span_append_attempts: 0,

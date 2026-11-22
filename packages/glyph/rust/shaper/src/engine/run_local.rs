@@ -338,6 +338,15 @@ pub(crate) enum Inherited {
     Geometry,
 }
 
+/// How much of a previous arena's geometry a rebuild starts from, counted in its emission order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct GeometryPrefix {
+    pub blocks: usize,
+    pub clusters: usize,
+    pub glyphs: usize,
+    pub runs: usize,
+}
+
 /// One laid-out paragraph run: what inherited geometry must still match, and its blocks.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) struct RunRecord {
@@ -477,6 +486,62 @@ impl RunLocalArena {
         }
         self.inherited = Some(inherited);
         Ok(())
+    }
+
+    /// Starts a cleared arena from the first `prefix.blocks` blocks of `previous`: their cluster
+    /// lanes (`prefix.clusters` of them), the rows of the first `prefix.glyphs` glyphs and the
+    /// first `prefix.runs` run records. The caller proves the kernel would write exactly these
+    /// for the same leading clusters; the rows must already span the glyph index space.
+    pub(super) fn adopt_prefix(
+        &mut self,
+        previous: &Self,
+        prefix: GeometryPrefix,
+    ) -> Result<(), RunLocalBuildError> {
+        let GeometryPrefix {
+            blocks,
+            clusters,
+            glyphs,
+            runs,
+        } = prefix;
+        let index = &previous.index;
+        if blocks > index.blocks.len()
+            || clusters > index.cluster_blocks.len()
+            || clusters > index.cluster_prefixes.len()
+            || glyphs > previous.rows.len()
+            || glyphs > self.rows.len()
+            || runs > previous.runs.len()
+        {
+            return Err(RunLocalBuildError::InvalidSource);
+        }
+        let row_count = blocks.checked_sub(1).map_or(0, |last| {
+            index.blocks[last].row_start + index.blocks[last].row_count
+        });
+        copy_lane(&mut self.index.blocks, &index.blocks[..blocks])?;
+        copy_lane(
+            &mut self.index.cluster_blocks,
+            &index.cluster_blocks[..clusters],
+        )?;
+        copy_lane(
+            &mut self.index.cluster_prefixes,
+            &index.cluster_prefixes[..clusters],
+        )?;
+        self.index.row_count = row_count;
+        #[cfg(any(test, feature = "oracle"))]
+        {
+            let rows = usize::try_from(row_count).map_err(|_| RunLocalBuildError::InvalidSource)?;
+            let order = index
+                .row_order
+                .get(..rows)
+                .ok_or(RunLocalBuildError::InvalidSource)?;
+            copy_lane(&mut self.index.row_order, order)?;
+        }
+        for (lane, from) in self.rows.lanes_mut().into_iter().zip(previous.rows.lanes()) {
+            lane[..glyphs].copy_from_slice(&from[..glyphs]);
+        }
+        #[cfg(test)]
+        self.rows.pen_inline[..glyphs].copy_from_slice(&previous.rows.pen_inline[..glyphs]);
+        copy_lane(&mut self.runs, &previous.runs[..runs])?;
+        self.cover_blocks(0)
     }
 
     /// Drops blocks, rows and the outline index; font-unit ink stays.

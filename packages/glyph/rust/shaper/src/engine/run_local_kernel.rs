@@ -243,6 +243,33 @@ pub(crate) fn layout_run(
     scratch: &mut KernelScratch,
     input: &RunInput<'_>,
 ) -> Result<NumericBlockSpan, RunLocalBuildError> {
+    let resume = RunResume {
+        ordinal: 0,
+        first_block: index.blocks.len(),
+        first_cluster: index.cluster_blocks.len(),
+    };
+    layout_run_from(index, rows, scratch, input, resume)
+}
+
+/// Where a run's layout picks up: the first ordinal still to lay out, and where the run's
+/// blocks and cluster lanes began. Ordinals before it are already in `index`, exactly as this
+/// kernel wrote them.
+#[derive(Clone, Copy)]
+pub(crate) struct RunResume {
+    pub ordinal: usize,
+    pub first_block: usize,
+    pub first_cluster: usize,
+}
+
+/// `layout_run` from `resume.ordinal`, a multiple of the cut's `clusters_per_block`: no block
+/// crosses such an ordinal, so the blocks before it depend on nothing after it.
+pub(crate) fn layout_run_from(
+    index: &mut BlockIndex,
+    rows: &mut RowLanes,
+    scratch: &mut KernelScratch,
+    input: &RunInput<'_>,
+    resume: RunResume,
+) -> Result<NumericBlockSpan, RunLocalBuildError> {
     let clusters = input.clusters;
     let cluster_count = input
         .cluster_end
@@ -263,14 +290,21 @@ pub(crate) fn layout_run(
         || input.units.ink.len() != glyphs
         || rows.len() < glyphs
         || input.cut.clusters_per_block == 0
+        || resume.ordinal > cluster_count
+        || !resume.ordinal.is_multiple_of(input.cut.clusters_per_block)
+        || resume.first_block > index.blocks.len()
+        || resume.first_cluster.checked_add(resume.ordinal) != Some(index.cluster_blocks.len())
     {
         return Err(RunLocalBuildError::InvalidSource);
     }
-    let first_block = index.blocks.len();
-    let first_cluster = index.cluster_blocks.len();
-    reserve(&mut index.cluster_blocks, cluster_count)?;
-    reserve(&mut index.cluster_prefixes, cluster_count)?;
-    let mut ordinal = 0;
+    let RunResume {
+        first_block,
+        first_cluster,
+        ..
+    } = resume;
+    reserve(&mut index.cluster_blocks, cluster_count - resume.ordinal)?;
+    reserve(&mut index.cluster_prefixes, cluster_count - resume.ordinal)?;
+    let mut ordinal = resume.ordinal;
     while ordinal < cluster_count {
         if input.detached(input.cluster_at(ordinal)) {
             index.cluster_blocks.push(u32::MAX);
