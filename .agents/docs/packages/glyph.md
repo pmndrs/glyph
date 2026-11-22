@@ -888,7 +888,15 @@ The 0.2 release regression source exercises that manual contract with 1,000 reta
 alternating top-level `auto` and explicit `group` row boundaries in indexed and direct transform modes. It checks row
 and ancestor hide/restore after initial acceptance, unrelated-row visibility, zero visibility-only Wasm updates and
 renderer publications, retained mesh and buffer identity, and a hidden row edit/reflow whose current draw output appears
-on restoration. This coverage does not add automatic off-screen culling; that remains deferred.
+on restoration. Off-screen culling is automatic and separate from that manual contract: every built-in Bitmap, MSDF,
+Slug and decoration draw is `frustumCulled`, and its `boundingSphere` is computed lazily from the committed Codec
+records it draws (quad origin and extent, placement table, per-record transform rows, detached glyph matrices), keyed
+by the versions of the attributes it reads, so a static draw does one version comparison per buffer per frustum test
+and the publication path does no bounds work. MSDF quads never leave their cell whatever the outline, shadow or trim;
+pixel snapping cannot move an outside quad inside; Slug quads are padded by their own extent for the screen-space
+fringe. The local radius compensates for Three's `Sphere.applyMatrix4` under sheared draw matrices. Draws of a caller
+material factory and of external raster programs stay unculled, and a batched draw is culled only when the union of
+its members is outside. `benchmark:frustum-culling` proves culled and unculled pixels identical on both backends.
 When a rank-only permutation keeps the committed Codec, capability, one-batch single-aggregate-draw storage topology,
 and renderable stable-ID set, Rust copies the committed physical records into their new order and publishes write patches only. It transactionally
 updates its internal aggregate primitive/draw spans but does not republish unchanged buffers, resources, primitives,

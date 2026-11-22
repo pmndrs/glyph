@@ -1,4 +1,4 @@
-import * as THREE from 'three/webgpu';
+import type * as THREE from 'three/webgpu';
 
 import type { BorrowedCommandSequence, DisplayListBatch, DisplayListRootInstance } from '../../config/glyph.js';
 import type { ThreeRendererResources } from './renderer-resources.js';
@@ -16,6 +16,7 @@ import { glyphOriginBuffer, glyphStorageKey, ThreeMaterialRealizer, transformPro
 import { threeBatchScope } from './batch-scope.js';
 import { attachMsdfDrawState } from './msdf-draws.js';
 import { attachSlugDrawState } from './slug-residency.js';
+import { drawBoundsSource, GlyphDraw } from './draw-bounds.js';
 import type {
   OriginSegment,
   PreparationContext,
@@ -187,7 +188,21 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
             attachSharedStorage(geometry, '_pmndrsGlyphTransforms', context.transformAttribute);
             storage.add(context.transformAttribute);
           }
-          mesh = new THREE.Mesh(geometry, material);
+          mesh = new GlyphDraw(
+            geometry,
+            material,
+            drawBoundsSource({
+              decoration,
+              resource: resolvedResource,
+              geometry: drawGeometry,
+              material: draw.material,
+              buffers: byCodecId,
+              placementTable: context.placementTable,
+              transform,
+              transformTable: context.transformAttribute,
+              glyphStorage,
+            }),
+          );
           trackDrawStorage(mesh, [...storage]);
           attachMsdfDrawState(mesh, material, byCodecId);
           attachSlugDrawState(mesh, material, byCodecId);
@@ -196,7 +211,6 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
           mesh.userData.pmndrsGlyphDepthKey = draw.depthKey;
           mesh.matrixAutoUpdate = transform.kind !== 'direct';
           mesh.visible = visible;
-          mesh.frustumCulled = false;
           mesh.renderOrder = renderOrderBase + drawIndex;
         }
         next.push(mesh);
