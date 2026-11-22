@@ -123,7 +123,7 @@ impl<'a> BuiltinFontFuncs<'a> {
     }
 
     fn coords(&self) -> &[F2Dot14] {
-        self.face.ot_tables.coords
+        self.face.ot_tables.active_coords()
     }
 
     fn charmap(&self) -> &Charmap<'a> {

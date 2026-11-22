@@ -132,6 +132,26 @@ pub struct OtTables<'a> {
 }
 
 impl<'a> OtTables<'a> {
+    /// The normalized coordinates shaping applies; always empty without `variations`.
+    #[inline]
+    pub fn active_coords(&self) -> &'a [F2Dot14] {
+        if cfg!(feature = "variations") {
+            self.coords
+        } else {
+            &[]
+        }
+    }
+
+    /// The GDEF item variation store deltas come from; always `None` without `variations`.
+    #[inline]
+    pub fn active_var_store(&self) -> Option<&ItemVariationStore<'a>> {
+        if cfg!(feature = "variations") {
+            self.var_store.as_ref()
+        } else {
+            None
+        }
+    }
+
     pub fn new(
         font: &FontRef<'a>,
         cache: &'a OtCache,
@@ -153,11 +173,13 @@ impl<'a> OtTables<'a> {
                 table,
                 lookups: &cache.gpos,
             });
-        let coords = if coords.iter().any(|coord| *coord != F2Dot14::ZERO) {
-            coords
-        } else {
-            &[]
-        };
+        // Without `variations` every font shapes at its default instance.
+        let coords =
+            if cfg!(feature = "variations") && coords.iter().any(|coord| *coord != F2Dot14::ZERO) {
+                coords
+            } else {
+                &[]
+            };
         let gdef = if is_gdef_blocklisted(
             table_offsets.gdef.len(),
             table_offsets.gsub.len(),
@@ -186,7 +208,11 @@ impl<'a> OtTables<'a> {
             gdef_mark_set_digests: &cache.gdef_mark_set_digests,
             var_store,
             coords,
-            feature_variations,
+            feature_variations: if cfg!(feature = "variations") {
+                feature_variations
+            } else {
+                [None; 2]
+            },
         }
     }
 
@@ -204,11 +230,13 @@ impl<'a> OtTables<'a> {
             table,
             lookups: &cache.gpos,
         });
-        let coords = if coords.iter().any(|coord| *coord != F2Dot14::ZERO) {
-            coords
-        } else {
-            &[]
-        };
+        // Without `variations` every font shapes at its default instance.
+        let coords =
+            if cfg!(feature = "variations") && coords.iter().any(|coord| *coord != F2Dot14::ZERO) {
+                coords
+            } else {
+                &[]
+            };
         let gdef = if let Ok(gdef) = font.gdef() {
             let gsub_len = gsub
                 .as_ref()
@@ -241,7 +269,11 @@ impl<'a> OtTables<'a> {
             gdef_mark_set_digests: &cache.gdef_mark_set_digests,
             var_store,
             coords,
-            feature_variations,
+            feature_variations: if cfg!(feature = "variations") {
+                feature_variations
+            } else {
+                [None; 2]
+            },
         }
     }
 
@@ -339,7 +371,7 @@ impl<'a> OtTables<'a> {
     pub(super) fn resolve_anchor(&self, anchor: &AnchorTable) -> (f32, f32) {
         let mut x = anchor.x_coordinate() as f32;
         let mut y = anchor.y_coordinate() as f32;
-        if let Some(vs) = self.var_store.as_ref() {
+        if let Some(vs) = self.active_var_store() {
             // Keep the delta fractional; the caller rounds once when scaling,
             // matching HarfBuzz's Anchor::get_anchor.
             let delta = |val: Option<Result<DeviceOrVariationIndex<'_>, ReadError>>| match val {
@@ -349,7 +381,7 @@ impl<'a> OtTables<'a> {
                             outer: varix.delta_set_outer_index(),
                             inner: varix.delta_set_inner_index(),
                         },
-                        self.coords,
+                        self.active_coords(),
                     )
                     .unwrap_or_default()
                     .to_f64() as f32

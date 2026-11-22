@@ -527,7 +527,7 @@ impl<'a> crate::Shaper<'a> {
 
     /// Returns the currently active normalized coordinates.
     pub fn coords(&self) -> &'a [NormalizedCoord] {
-        self.ot_tables.coords
+        self.ot_tables.active_coords()
     }
 
     /// Shapes the buffer content using provided options.

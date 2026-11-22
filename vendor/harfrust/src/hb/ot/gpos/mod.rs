@@ -54,8 +54,8 @@ fn apply_value(
     if !format.intersects(ValueFormat::ANY_DEVICE_OR_VARIDX) {
         return Some(worked);
     }
-    if let Some(vs) = &ctx.face.ot_tables.var_store {
-        let coords = ctx.face.ot_tables.coords;
+    if let Some(vs) = ctx.face.ot_tables.active_var_store() {
+        let coords = ctx.face.ot_tables.active_coords();
         macro_rules! read_delta {
             () => {{
                 let rec_offset = data.read_at::<u16>(offset).ok()? as usize;

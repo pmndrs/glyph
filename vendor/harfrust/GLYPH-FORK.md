@@ -1,6 +1,6 @@
 # HarfRust fork carried by pmndrs/glyph
 
-This directory is the published `harfrust` 0.12.0 crate with three cargo features, one constructor,
+This directory is the published `harfrust` 0.12.0 crate with four cargo features, one constructor,
 one inlining attribute and one additive module (`SimpleTextPlan`) added. It is wired into `packages/glyph/rust/shaper` and `packages/glyph/rust/font-baker`
 with `[patch.crates-io]`, so both manifests still ask for `harfrust = "0.12.0"`.
 
@@ -19,7 +19,7 @@ with `[patch.crates-io]`, so both manifests still ask for `harfrust = "0.12.0"`.
 
 With default features the fork shapes exactly like the release. The features are on by default so
 the same patch can be offered upstream; pmndrs/glyph depends on the crate with
-`default-features = false` and turns all three off in the shipped shaper.
+`default-features = false` and turns all four off in the shipped shaper.
 
 ### `aat` feature (default on)
 
@@ -104,6 +104,21 @@ time with `shape` and compares each glyph, cluster, flag, advance and offset.
 | `src/lib.rs`            | Re-exports `SimpleTextPlan`.                                                                                       |
 | `src/hb/ot/lookup.rs`   | `SubtableInfo::primary_coverage`: re-reads the coverage table a subtable's digest was built from. No other change. |
 
+### `variations` feature (default on)
+
+Off makes every font shape at its default instance: `OtTables::active_coords` is always empty,
+`OtTables::active_var_store` is always `None` and a `ShaperInstance`'s feature-variation indices are
+ignored, so the GDEF/HVAR/VVAR/MVAR and `gvar` delta paths are not linked. `ShaperInstance` still
+exists and still computes its coordinates; they simply have no effect. pmndrs/glyph never passes an
+instance (the shaper shapes baked fonts at their default instance), so its shaping is unchanged.
+
+| File                                     | Change                                                                                                                              |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `Cargo.toml`                             | `variations = []`, added to `default`                                                                                               |
+| `src/hb/ot/mod.rs`                       | Constructors drop coordinates and feature-variation indices without `variations`; `active_coords` and `active_var_store` read them. |
+| `src/hb/ot/gpos/mod.rs`                  | Value-record deltas read `active_var_store` and `active_coords`.                                                                    |
+| `src/hb/font_funcs.rs`, `src/hb/face.rs` | Metrics and `Shaper::coords` read `active_coords`.                                                                                  |
+
 ### Not part of the feature work
 
 `src/hb/face.rs`: `shape` is allowed to be dead without `experimental_font_api`. Upstream has this
@@ -116,7 +131,7 @@ warning too; cargo hides it for registry dependencies and shows it for a path de
 mise exec -- pnpm scripts run glyph:harfrust-fork-tests
 
 # every feature combination builds with no warning
-for features in libm libm,aat libm,rand libm,language-tags std std,aat std,rand std,language-tags std,aat,rand,language-tags,experimental_font_api; do
+for features in libm libm,aat libm,rand libm,language-tags libm,variations std std,aat std,rand std,language-tags std,variations std,aat,rand,language-tags,variations,experimental_font_api; do
   cargo check --locked --manifest-path vendor/harfrust/Cargo.toml --no-default-features --features "$features"
 done
 ```
@@ -130,8 +145,8 @@ the published crate and is not vendored.
 ## Cutting an upstream pull request
 
 1. Check out upstream at the base commit and copy `src/` over `harfrust/src/`.
-2. In `harfrust/Cargo.toml` add `aat = []`, `language-tags = []` and `rand = []` under `[features]`
-   and add all three to `default`.
+2. In `harfrust/Cargo.toml` add `aat = []`, `language-tags = []`, `rand = []` and `variations = []`
+   under `[features]` and add all four to `default`.
 3. Drop this file, `src/hb/simple_text.rs`, its `mod` and re-export lines and
    `SubtableInfo::primary_coverage`. The `shape` dead-code attribute is independent and can be sent
    separately.
