@@ -271,7 +271,7 @@ async function verifyIsolatedPackedConsumers(archive, availableVersions, context
       missingPeerImports: [
         { specifier: '@pmndrs/glyph/three', peer: 'three' },
         { specifier: '@pmndrs/glyph/typegpu', peer: 'typegpu' },
-        { specifier: '@pmndrs/glyph/pixi3d', peer: '@pixi/3d' },
+        { specifier: '@pmndrs/glyph/pixi3d', peer: 'pixi.js' },
       ],
     },
     {
