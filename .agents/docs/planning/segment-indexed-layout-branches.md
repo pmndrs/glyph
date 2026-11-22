@@ -68,3 +68,11 @@ Throwaway, detached, never merged: `glyph-floor-exp`, `glyph-chunk-spike`, `glyp
 `glyph-profile-inspect`, `glyph-profile-manylabel`, `glyph-profile-manylabel-main`, `glyph-profile-size`
 (profiles); `glyph-baseline-main` (main, built, used for interleaved comparisons — keep until the final
 comparison).
+
+## Update 2026-11-21 (late)
+
+| Branch | Holds | State |
+| --- | --- | --- |
+| `experiments/sil-staging-22` | Layout-fault fixes + editing, oracle re-frozen | Verified; waiting for acceptance, then becomes `sil-green-22` |
+| `experiments/sil-layout-faults` | Five fault fixes | Contained in staging; delete after `sil-green-22` |
+| `experiments/sil-editing` | Editing queries and `replace` | Contained in staging; delete after `sil-green-22` |

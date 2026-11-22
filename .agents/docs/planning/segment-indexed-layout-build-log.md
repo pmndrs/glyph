@@ -760,3 +760,14 @@ Updated in place; the history of each change is in the log below.
   the exports (+23 kB word and sentence segmentation, +22 kB queries); size rides until after ship. Integrator
   decision: `replace` carries its explicit range into the engine instead of relying on the whole-string diff,
   because the diff can attribute an ambiguous insert to a different position and so a different style span.
+
+## 2026-11-21 (late): staging merge and handoff
+
+- **Layout faults: tested, staged.** Five fixes (island blocks at their pen, visual-order ellipsis, reading-order
+  exclusion slots, lines for empty text, hung spaces charged to ellipsis lines). 32 oracle cases re-frozen.
+- **Editing: tested, staged.** Six methods plus `TextOffsetError`, ABI 2. `wire` lanes of all 588 cases re-frozen.
+- Both merged on `experiments/sil-staging-22` (`495396a3d`), full oracle native and wasm green, full verification
+  passing. **Held** off the integration branch until Justin accepts the re-freeze.
+- Decision: re-freezes are done on a staging branch, never on the integration branch, until accepted.
+- Disk: 26 GB of session scratch removed from the boot volume; agent output now goes to Depot scratch.
+- Handoff with a plan for every remaining unit: [segment-indexed-layout-handoff.md](segment-indexed-layout-handoff.md).
