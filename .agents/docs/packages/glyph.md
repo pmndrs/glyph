@@ -166,9 +166,12 @@ generated:
 The current WIP ASCII-anchor experiment adds an optional bounded shaping item for screened single-font Latn/LTR printable-ASCII length edits. Actual registered-font lifetime, authoritative prepared text facts and immutable anchors authorize this route; unsupported cases retain the existing producer. The packed raw arena is reconstructed and downstream layout/query/publication stages retain their ownership and work. It changes no public call contract and has no verified complete-operation speed or full-suite parity result. See the [HELD rope ASCII-anchor WIP checkpoint](../log/2026-11-20-held-rope-ascii-anchor-wip.md) in the append-only log.
 
 The accepted [preparation/publication decision](../planning/decisions/retained-prepare-publish.md) is the contract for
-current ropes work. Setter preparation, prepared queries/copies, and renderer publication share one Rust layout
-pipeline. Publication consumes dirty ranges; it does not repeat layout. Old speculative/rollback descriptions below
-are historical evidence superseded by that decision. Main query-first behavior remains the correctness control;
+current ropes work, except for the setter rule, which the [deferred, never-stale preparation
+decision](../planning/decisions/deferred-never-stale-preparation.md) supersedes for 0.2.0: a setter validates and marks
+the paragraph dirty and makes no engine call; a read prepares that paragraph on demand; `glyph.prepare()` or the frame
+prepares every remaining dirty paragraph in one call. Preparation, prepared queries/copies, and renderer publication
+share one Rust layout pipeline. Publication consumes dirty ranges; it does not repeat layout. Old speculative/rollback
+descriptions below, and any text that says a setter prepares, are historical evidence superseded by those decisions. Main query-first behavior remains the correctness control;
 combined performance, size, failure-boundary, and visual gates are open in the [tracker](../planning/publication-frontier.md).
 
 Prepared inspection retains intrinsic flow and, when clipping requires it, positioned glyphs in the existing stage
@@ -272,7 +275,7 @@ The `glyph:shaper-optimizer-ablation` workflow is a frozen local experiment repr
 
 Style-boundary preflight carries the final text length already validated over its immutable committed text and mutation batch; each boundary check no longer replays mutation range/length validation. Interior boundaries still resolve mutation correspondence and classify the actual UTF-16 pair. Authored and effective style coordinates each retain numeric range checks; an effective coordinate reuses its authored counterpart’s boundary result only when equal. Distinct coordinates, features, fonts, root-style requirements and error faults retain their checks. This is private scalar evidence reuse, with no retained cache, Unicode parser, API/ABI or preparation/publication lifetime change.
 
-Paragraph preparation creates a borrowed `PlanPublication` only when its caller supplies a synchronous semantic consumer. Ordinary setters requesting no semantic view still execute Rust preparation, validate result status/extent and adopt capacities, but retain no publication bytes or lease. Demanded summaries use the full decoder synchronously; its bytes expire at the next Wasm call and the summary reader copies owned values. Actual renderer publication and independent copies keep the same full decoder and epoch lifetime checks. The transport owns this distinction through one shared extent/capacity step; the planner controls demand from its existing measurement state.
+Paragraph preparation creates a borrowed `PlanPublication` only when its caller supplies a synchronous semantic consumer. Ordinary preparation requesting no semantic view still executes Rust preparation, validate result status/extent and adopt capacities, but retain no publication bytes or lease. Demanded summaries use the full decoder synchronously; its bytes expire at the next Wasm call and the summary reader copies owned values. Actual renderer publication and independent copies keep the same full decoder and epoch lifetime checks. The transport owns this distinction through one shared extent/capacity step; the planner controls demand from its existing measurement state.
 
 `glyph:shaper-combination-artifacts` owns the diagnostic composition of the preserved preparation/optimizer experiments. It accepts three explicitly pinned package archives and pinned compiler provenance, verifies their full member differences, and derives cleanup-only and combined archives by replacing only the packed Wasm. Both JavaScript states share exact Wasm bytes within each compiler-policy column. It authenticates the archived named executable, reports compression methods separately and writes only ignored outputs; derived experimental archives are not production builds. It changes no runtime compiler policy, semantic executor or public call contract. The [combination receipt](../../../benches/reports/held-ropes-local-2026-10-16/preparation-compiler-combination.json) records correctness, clock-confounded timing and named preservation for future combinations.
 
@@ -630,12 +633,13 @@ A frame the engine refuses names its cause and the input that caused it (D-267).
 `styleRangeInvalid`, `styleSplitsCluster`, `styleNestingInvalid`, `styleRootInvalid`, `fontStackMissing`,
 `fontMetricsMissing` -- are separated from `invalidRequest`, which keeps every internal invariant violation and names
 nothing. Each carries the offending paragraph and style in two u32s of the result header's existing tail padding, so the
-header size and every prior field offset are unchanged. `/three` re-raises them as `TextFrameError`, whose `rejection` is
-a discriminated union over the cause and affected `Text`; span bookkeeping remains private to the structural compiler.
+header size and every prior field offset are unchanged. `/three` exports `TextFrameError`, whose `rejection` is a discriminated union over the cause and affected `Text`, but
+nothing throws it yet (`textFrameError` has no caller; an open question in the API summary), so a frame rejection reaches
+`onError` as the engine's own error. Span bookkeeping remains private to the structural compiler.
 
 Publicly constructible frame inputs are validated where they enter `Text`, `TextGroup`, Codec assembly, or
 font registration; malformed data never waits for scene traversal to fail. A residual engine rejection therefore names an
-internal invariant defect through `TextFrameError` while the last committed draw state remains live. Renderer preparation is
+internal invariant defect, reported on the text and the root, while the last committed draw state remains live. Renderer preparation is
 separate: if an engine-accepted publication cannot realize its resources or material, Three discards the candidate, keeps
 the last accepted draw state and fences, and retains the error. It does not retry unchanged frames. Explicit material or
 other renderer-relevant invalidation requests a checkpoint from the last consumed command revision. A malformed emitted plan
@@ -658,7 +662,7 @@ exact format, while `face.slug.load()` loads only that exact declared format. `f
 main GLB without fetching sidecars and returns its frozen, ordered format keys. Successful calls preserve Promise and
 result identity; rejected calls are evicted for retry. The consuming handle supplies its configured default key when an
 undeclared face is passed to Text; imperative Three rejects an unloaded selected format before creating retained state.
-`Text.measure()` and `Text.glyphs()` answer from the setter-prepared paragraph selected by their handle. Prepared reads
+`Text.measure()` and `Text.glyphs()` prepare the paragraph selected by their handle if a setter left it dirty, then answer. Prepared reads
 look up the current desired revision independently of renderer acceptance and Scene membership; they do not traverse a
 scene, publish commands, realize renderer resources, or initiate another semantic preparation. A first read may establish
 an absent binding through the same preparation producer. Normal rendering publishes dirty roots through `glyph.shape()`.
@@ -1521,8 +1525,8 @@ the 131-test Three lane. Scoped review finds no introduced actionable correctnes
 still show root-size-dependent preparation and publication work; see the [stable checkpoint](../planning/retained-text-assignment.md#stable-checkpoint-and-xi-integration-boundary--2026-10-09).
 Focused Labs remains pending. This does not clear #247 or justify landing the preparation branch.
 
-Publication emits no semantic readback by default. Creation and every changed bound setter synchronously commit the
-current Rust preparation and a fixed-size measurement sidecar before returning; renderer-plan revision, publication
+Publication emits no semantic readback by default. A read or the frame's batch preparation commits the
+current Rust preparation and a fixed-size measurement sidecar (a setter only marks the paragraph dirty); renderer-plan revision, publication
 generation, and acknowledgement do not advance. `Text.measure()` and `measureInk()` read that cache.
 `Text.readGlyphs()` borrows selected records directly from the same prepared positioned arena. Repeated dense demand promotes the existing inspection storage before the next callback; sparse demand remains sparse. `Text.glyphs()` returns independent caller-owned columns from the shared inspection producer. Reads do not reconstruct text/style/geometry input, prepare
 another semantic candidate, traverse matrices, realize renderer resources, or publish.
@@ -1552,6 +1556,11 @@ validates through the same engine call, states its range to the planner so the e
 rebases spans by one rule shared with the engine through `tests/fixtures/span-rebase-vectors.json`. Three `Text`,
 TypeGPU text and `Pixi3DText` expose the five queries and `replace`; each `replace` is the same host call, and
 the PixiJS 3D entry exports `TextOffsetError` as `/three` does.
+
+Layout behaviour fixed for 0.2.0: empty, `"\n"` and `"\n\n"` text have 1, 2 and 3 lines and report a known, empty ink
+box; an ellipsis follows the paragraph direction and its line fits its slot, with hung spaces charged to it; lone
+surrogates draw as U+FFFD, one unit for one unit, with no count and no API. Inline objects are deferred to 0.3.0 and are
+not part of the public surface.
 
 A same-build isolation over one 21,805-glyph paragraph measured 0.002 ms for an unchanged publication, 0.174 ms for the
 aggregate measurement sidecar, and 0.582 ms for full glyph inspection. Three requests only aggregate measurement and
@@ -2907,7 +2916,7 @@ Published distributions include hidden JavaScript source maps and referenced dec
 ## PixiJS 3D integration
 
 `@pmndrs/glyph/pixi3d` adapts the public `GlyphConfig` and portable raster contracts to the official `@pixi/3d` release
-(0.1.0 on npm, MIT, peer `pixi.js` ^8.23.0) with no patch to either PixiJS package. It is a subpath of this package,
+(0.1.x on npm, MIT; optional peers `@pixi/3d` `>=0.1.0 <0.2` and `pixi.js` `>=8.23.0 <9`) with no patch to either PixiJS package. It is a subpath of this package,
 like `/three` and `/typegpu`: the source lives in `src/pixi3d.ts` and `src/pixi3d/`, it imports package modules
 directly, and `@pixi/3d` and `pixi.js` are optional peers that no other entry imports.
 
@@ -2938,7 +2947,7 @@ derives from a fixed 16×9 light grid.
 Root hooks: `prepared()` resolves anchors after core prepared every dirty paragraph; `accepted` and `unchanged` accept
 placement and sync transforms; a rejected publication keeps the accepted meshes, reports once through
 `text.error`/`onError`, and is not retried until an edit. Text provides desired measurements, ink, glyph columns,
-carets, selections and native bounds; `split()` returns independently disposable glyph and decoration snapshots.
+the editing queries (`caret`, `hitTest`, `move`, `boundary`, `rangeRects`, `replace`) and native bounds; `split()` returns independently disposable glyph and decoration snapshots.
 `Pixi3DTextMaterial` appends shader bits, updates material data without reshaping, and may supply a factory for another
 `BaseMaterial3D`.
 
