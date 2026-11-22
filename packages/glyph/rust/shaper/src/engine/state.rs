@@ -1944,11 +1944,12 @@ impl TextEngine {
                     None
                 };
                 let output_scope = if sparse {
-                    gather.changed_output_intervals().map(|ranges| {
+                    gather.changed_output_intervals().map(|records| {
                         super::render_plan_compiler::OwnedOutputScope {
                             previous_revision: planner.revision.root,
                             scope: super::ordered_plan::RetainedOutputScope::ChangedIntervals(
-                                ranges,
+                                records,
+                                gather.changed_inputs(),
                             ),
                         }
                     })
@@ -2737,7 +2738,7 @@ fn append_planner_gather(
             .map_err(gather_error)?;
         if retaining {
             match gather
-                .append_retained_scoped(
+                .append_retained_rows(
                     codec,
                     capability_set,
                     input,
@@ -2750,6 +2751,7 @@ fn append_planner_gather(
                                 && range.source_count() == positioned.outlined_count()
                         })
                         .and_then(|_| positioned.unpublished_source_intervals()),
+                    paragraph.state.row_change_since_publication(),
                     binding_for_font,
                 )
                 .map_err(gather_error)?
@@ -2830,7 +2832,8 @@ fn planner_gather_owners(
             (paragraph.positioned_changed || paragraph.preparation_changed_since_publication)
                 .then(|| positioned.unpublished_source_intervals())
                 .flatten(),
-        ))
+        )
+        .with_row_change(paragraph.state.row_change_since_publication()))
     })
 }
 

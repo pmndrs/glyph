@@ -688,6 +688,7 @@ mod tests {
                         previous_revision: 1,
                         scope: super::super::ordered_plan::RetainedOutputScope::ChangedIntervals(
                             &changed_scope,
+                            super::super::codec_gather::ChangedInputs::ALL,
                         ),
                     }),
                     false,
@@ -738,7 +739,10 @@ mod tests {
                 2,
                 Some(OwnedOutputScope {
                     previous_revision: 2,
-                    scope: super::super::ordered_plan::RetainedOutputScope::ChangedIntervals(&[]),
+                    scope: super::super::ordered_plan::RetainedOutputScope::ChangedIntervals(
+                        &[],
+                        super::super::codec_gather::ChangedInputs::ALL,
+                    ),
                 }),
                 false,
             )

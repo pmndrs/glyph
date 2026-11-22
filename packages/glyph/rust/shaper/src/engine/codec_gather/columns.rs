@@ -113,6 +113,8 @@ pub(super) struct RecordGeometry {
 pub(super) struct SourceChunk {
     pub(super) len: usize,
     pub(super) binding_handle: u32,
+    /// The glyphs whose lanes were read from the paragraph's runs, one bit per source glyph.
+    run_glyphs: u64,
     pub(super) stable_id: [u32; CHUNK],
     glyph_id: [u32; CHUNK],
     semantic_id: [u32; CHUNK],
@@ -133,6 +135,7 @@ impl SourceChunk {
         Self {
             len: 0,
             binding_handle: 0,
+            run_glyphs: 0,
             stable_id: [0; CHUNK],
             glyph_id: [0; CHUNK],
             semantic_id: [0; CHUNK],
@@ -170,8 +173,24 @@ impl SourceChunk {
 
     fn reset(&mut self) {
         self.len = 0;
+        self.run_glyphs = 0;
         self.spans.len = 0;
         self.styles.len = 0;
+    }
+
+    /// Whether the glyph read its lanes from the paragraph's runs. A boundary glyph and the
+    /// rows an Inline leaf projects do not.
+    pub(super) fn paragraph_run(&self, index: usize) -> bool {
+        self.run_glyphs & (1 << (index & LANE)) != 0
+    }
+
+    /// Whether every glyph of the chunk is a [`Self::paragraph_run`].
+    pub(super) fn paragraph_runs_only(&self) -> bool {
+        self.run_glyphs == u64::MAX >> (CHUNK - self.len.clamp(1, CHUNK))
+    }
+
+    pub(super) fn clip_id(&self, index: usize) -> u32 {
+        self.spans.clip_id[usize::from(self.span[index & LANE]) & LANE]
     }
 
     /// A chunk holds the glyphs of one font binding: the first glyph names it.
@@ -338,6 +357,32 @@ impl SourceChunk {
         })
     }
 
+    /// The placed origin of one selected source glyph under the identity and extent of its
+    /// accepted record, for a chunk that read [`Lanes::Placed`].
+    pub(super) fn record_placement(
+        &self,
+        index: usize,
+        accepted: &PlanGlyph,
+    ) -> Result<RecordGeometry, GatherError> {
+        let index = index & LANE;
+        let span = usize::from(self.span[index]) & LANE;
+        let inline_start =
+            self.local[LOCAL_INK_INLINE_START][index] + self.spans.translation_inline[span];
+        let block_start =
+            self.local[LOCAL_INK_BLOCK_START][index] + self.spans.translation_block[span];
+        if !inline_start.is_finite() || !block_start.is_finite() {
+            return Err(GatherError::InvalidSemanticShape);
+        }
+        Ok(RecordGeometry {
+            stable_id: accepted.stable_id,
+            semantic_id: accepted.semantic_id,
+            inline_start,
+            block_start,
+            inline_extent: accepted.inline_extent,
+            block_extent: accepted.block_extent,
+        })
+    }
+
     /// The storage topology of one selected source glyph: everything of its plan record
     /// that decides where the record is stored and drawn.
     pub(super) fn record_topology(
@@ -403,6 +448,16 @@ fn projected_u32(row: &ProjectedSourceRow<'_>, field: u8) -> Result<u32, GatherE
         .ok_or(GatherError::SourceFieldMissing)
 }
 
+/// Which per-glyph lanes a chunk reads.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Lanes {
+    All,
+    /// Identity and ink origin of a paragraph-run glyph, with its placement span: what a
+    /// retained record whose glyph row did not change is paired and re-placed by. A boundary
+    /// glyph still reads every lane.
+    Placed,
+}
+
 /// Streams the outlined source glyphs of one prepared owner into chunks.
 pub(super) enum RowSource<'a> {
     Projected(ProjectedRows<'a>),
@@ -430,11 +485,16 @@ impl<'a> RowSource<'a> {
         chunk: &mut SourceChunk,
         start: usize,
         limit: usize,
+        lanes: Lanes,
     ) -> Result<(), GatherError> {
         chunk.reset();
         let limit = limit.min(CHUNK);
         match self {
-            Self::Projected(rows) => rows.fill(chunk, start, limit),
+            Self::Projected(rows) => {
+                rows.lanes = lanes;
+                rows.fill(chunk, start, limit)
+            }
+            // An Inline leaf projects its own rows and always reads every lane.
             Self::Inline(rows) => rows.fill(chunk, start, limit),
         }
     }
@@ -446,6 +506,7 @@ pub(super) struct ProjectedRows<'a> {
     /// The cursor fell behind a span walk and seeks to `next_index` before its next mark.
     cursor_stale: bool,
     next_index: usize,
+    lanes: Lanes,
     /// A mark read past a binding change; it opens the next chunk.
     pending: Option<OutlinedOccurrenceMark>,
     span: Option<(usize, &'a OccurrenceSpan)>,
@@ -481,6 +542,7 @@ impl<'a> ProjectedRows<'a> {
             }),
             cursor_stale: false,
             next_index: 0,
+            lanes: Lanes::All,
             pending: None,
             span: None,
             walk: None,
@@ -702,8 +764,10 @@ impl<'a> ProjectedRows<'a> {
         let rows = local.lanes();
         let mut source_next = walk.source_next.unwrap_or(cluster.start);
         let mut last_source = None;
-        // One style covers a cluster, so only its first glyph can open a style range.
-        let mut style_open = ranges.style == Some(cluster.style_index);
+        // One style covers a cluster, so only its first glyph can open a style range. A
+        // chunk of placed lanes reads no style.
+        let placed = self.lanes == Lanes::Placed;
+        let mut style_open = placed || ranges.style == Some(cluster.style_index);
         while let Some(source) = local.next_outlined_source(source_next, cluster.end) {
             if chunk.len >= limit || walk.remaining == 0 {
                 // The chunk ends inside this cluster; the next chunk resumes here.
@@ -720,7 +784,11 @@ impl<'a> ProjectedRows<'a> {
                 self.open_ranges(chunk, ranges, walk.span, mark, cluster.style_index)?;
                 style_open = true;
             }
-            push_run_glyph(chunk, clusters, rows, source, cluster.stable_id)?;
+            if placed {
+                push_placed_glyph(chunk, clusters, rows, source)?;
+            } else {
+                push_run_glyph(chunk, clusters, rows, source, cluster.stable_id)?;
+            }
             self.next_index += 1;
             walk.remaining -= 1;
             last_source = Some(source);
@@ -867,6 +935,7 @@ fn push_run_glyph(
     else {
         return Err(GatherError::InvalidSemanticShape);
     };
+    chunk.run_glyphs |= 1 << (chunk.len & LANE);
     chunk.push_glyph(GlyphLanes {
         stable_id,
         glyph_id: u32::from(glyph_id),
@@ -881,6 +950,31 @@ fn push_run_glyph(
             ink_block_extent,
         ],
     });
+    Ok(())
+}
+
+/// The placed lanes of a paragraph-run glyph: its identity and ink origin.
+fn push_placed_glyph(
+    chunk: &mut SourceChunk,
+    clusters: &ClusterArena,
+    rows: RunLocalLanes<'_>,
+    source_glyph: u32,
+) -> Result<(), GatherError> {
+    let source = source_glyph as usize;
+    let (Some(&stable_id), Some(&ink_inline_start), Some(&ink_block_start)) = (
+        clusters.glyph_stable_ids.get(source),
+        rows.ink_inline_start.get(source),
+        rows.ink_block_start.get(source),
+    ) else {
+        return Err(GatherError::InvalidSemanticShape);
+    };
+    let index = chunk.len & LANE;
+    chunk.run_glyphs |= 1 << index;
+    chunk.stable_id[index] = stable_id;
+    chunk.span[index] = chunk.spans.len.wrapping_sub(1) as u8;
+    chunk.local[LOCAL_INK_INLINE_START][index] = ink_inline_start;
+    chunk.local[LOCAL_INK_BLOCK_START][index] = ink_block_start;
+    chunk.len += 1;
     Ok(())
 }
 
@@ -1122,6 +1216,27 @@ impl<'c, 'b> ColumnPlan<'c, 'b> {
 
     pub(super) fn u32_dependency(&self, field: usize) -> u16 {
         self.u32_dependencies[field % MAX_REGISTERS]
+    }
+
+    /// Whether a placement span decides this input, so a glyph that keeps its identity can
+    /// still change it by moving to another line or segment.
+    pub(super) fn f32_follows_placement(&self, field: usize) -> bool {
+        matches!(
+            self.f32_sources[field % MAX_REGISTERS],
+            F32Source::FontSize | F32Source::InverseFontSize | F32Source::Missing
+        )
+    }
+
+    /// The U32 counterpart of [`Self::f32_follows_placement`].
+    pub(super) fn u32_follows_placement(&self, field: usize) -> bool {
+        matches!(
+            self.u32_sources[field % MAX_REGISTERS],
+            U32Source::PlacementSlot
+                | U32Source::RegionId
+                | U32Source::FlowThreadId
+                | U32Source::TransformIndex
+                | U32Source::Missing
+        )
     }
 
     /// Writes one F32 input for the selected rows. `false` means the source is missing.
