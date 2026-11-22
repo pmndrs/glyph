@@ -313,7 +313,6 @@ function uint32(value: number, label: string): number {
   return value;
 }
 
-
 export function shaperStatusError(status: number, action: string): Error {
   const labels: Record<number, string> = {
     1: 'invalid font handle',
