@@ -1,222 +1,160 @@
 ---
 type: Plan
 title: 'Layout refactor: handoff and remaining plans'
-description: 'Where the layout refactor stands at sil-green-22, what is left before ship, and a plan for every remaining unit.'
+description: 'Where the 0.2.0 layout refactor stands at sil-green-49, the decisions in force, the open lanes and how to finish each, the path to a release, and the work after it.'
 status: draft
 generated:
-  by: anthropic/claude-fable-5-2
-  at: '2026-11-21T23:30:00Z'
+  by: anthropic/claude-opus-5-5
+  at: '2026-11-22T23:00:00Z'
 ---
 
 # Layout refactor: handoff and remaining plans
 
-This is the one document to read to pick the work up. Detail lives in the [plan](segment-indexed-layout.md),
-the [build log](segment-indexed-layout-build-log.md), the [branch map](segment-indexed-layout-branches.md), the
-[API summary](api-summary-for-review.md) and the [migration note](migration-from-0.1.0.md).
+Read this first. Detail lives in the [plan](segment-indexed-layout.md), the [build log](segment-indexed-layout-build-log.md)
+(append-only, every decision with its date), the [branch map](segment-indexed-layout-branches.md), the
+[API summary](api-summary-for-review.md), the [migration note](migration-from-0.1.0.md), and the experiment records
+named below.
 
 ## 1. Where things stand
 
 - **Integration branch** `experiments/segment-indexed-layout`, worktree `/Volumes/Depot/Developer/glyph-held-rope-wip`,
-  pushed to `origin`. Last verified tag: `sil-green-26`. It sits on `experiments/held-rope-ascii-anchor-wip`
-  (`8176a24e0a3f`; draft PRs #292 → #301 → #302 → #310).
-- **`sil-green-22`** merged the layout-fault fixes and the editing lane with the oracle re-frozen (section 3).
-  No lane branch is open.
-- **Oracle**: 590 cases (two added for measurement-only publication), incremental compared against cold in every stage and lane class,
-  natively and in wasm. `KNOWN-DIVERGENCES` may only shrink.
-- **No PR is open for this work.** Landing is one draft PR on top of the existing stack, opened at the ship gate.
+  pushed to `origin`. Last verified tag: **`sil-green-49`**. It sits on `experiments/held-rope-ascii-anchor-wip`
+  (`8176a24e0a3f`; draft PRs #292 → #301 → #302 → #310). It ships as **0.2.0**, a breaking release.
+- **Oracle:** 596 frozen cases, 928 differential runs (~55,700 requests) comparing incremental against cold in every
+  stage and lane class, natively and in wasm. 0 unlisted divergences. `KNOWN-DIVERGENCES` may only shrink.
+- **Verification on `sil-green-49`:** clippy `-D warnings`, full native oracle, `pnpm --filter @pmndrs/glyph test`.
+  The full browser set and `pnpm check` last passed at `sil-green-44`/`-47`; run the full set (section 7) before the
+  ship PR.
+- **Core shaper wasm:** 648.3 kB gzip (1,629 kB raw) at `sil-green-49`, down from 687.7 kB at `-43`. v0.1.0 was
+  501 kB, main 541 kB. Only the core shaper's size matters; bakers are dynamically imported.
+- **No PR is open for this work.** Landing is one draft PR on top of the stack, when Justin says so.
 
-### What is merged (tags `sil-green-0` … `-21`)
+### What 0.2.0 contains
 
-| Area                   | What shipped on the integration branch                                                                                                                                                                                        |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Correctness oracle     | `layout-oracle` binary, frozen reference digests, seeded differential driver, wasm probe, coverage for decorations, multi-paragraph, inline objects, multi-region                                                             |
-| Engine size and safety | HarfRust forked in-repo with AAT and `rand` off (legacy `kern` kept), panic paths removed                                                                                                                                     |
-| Dense stages           | Column gather, dense cluster build with change ranges, run-local SoA geometry with one kernel, positioning split into topology and numeric with per-line ink, dense Unicode kernel, per-lane resync, lazy word/sentence lanes |
-| Typography fixes       | UAX #14 opening-quote fix, bidi fixes, seven divergence families, rank-order fix                                                                                                                                              |
-| Preparation model      | Setters validate and mark dirty; reads prepare on demand; the frame batch-prepares then publishes; `glyph.prepare()`; paint-only path; `onLayout`; exact first frame without `root.attach(scene)`                             |
-| Error model            | Paragraph refusal, `maxTextUnits`, trap gateway with `GlyphEngineRestartError`, failed-frame retry, `GlyphInputError`, root `onError`, `<GlyphErrorBoundary>`, sibling-safe publication failure                               |
-| Three MSDF             | Effect-specialised graphs, ink-trimmed quads, per-font glyph tables, on-demand atlas residency, `msdfAtlas: 'sdf'`                                                                                                            |
-| Slug                   | Glyph table, batching, band curves resident on demand, direct-TypeGPU parity                                                                                                                                                  |
-| TypeGPU                | Batching through indexed transforms, atlas residency                                                                                                                                                                          |
-| PixiJS 3D              | `@pmndrs/glyph/pixi3d` subpath export (optional peers `@pixi/3d` 0.1.x and `pixi.js` 8.23+), like `/three` and `/typegpu`; not a separate package                                                                             |
-| First frame            | Font binding compiled at load                                                                                                                                                                                                 |
+| Area | State |
+| --- | --- |
+| Engine | Dense stages (column gather, cluster build with change ranges, run-local SoA geometry, positioning split, dense Unicode kernel with simd128 class stage and bidi class lanes), HarfRust forked in-repo, panic-free |
+| Edits | Every edit type reshapes only its edited runs and splices clusters and geometry (typing at end, mid-paragraph, multi-edit, right-to-left); windowed Unicode re-analysis |
+| Reflow | Width-only changes skip regathering unchanged rows, reuse line fits that still hold, skip unchanged lines and edge-record lines in positioning |
+| Preparation | Setters mark dirty; reads prepare on demand; the frame batch-prepares; `prepare()`, `onLayout`, exact first frame |
+| Error model | Paragraph refusal, `maxTextUnits`, trap gateway, `GlyphInputError`, `onError`, `<GlyphErrorBoundary>` |
+| Editing API | `caret`, `hitTest`, `move`, `boundary`, `rangeRects`, `replace(start, end, insert)`, `TextOffsetError` on Three, TypeGPU and PixiJS 3D |
+| Renderers | Three MSDF/Slug/bitmap, TypeGPU, PixiJS 3D as the `@pmndrs/glyph/pixi3d` subpath |
+| Culling | Automatic bounds for every built-in draw; custom materials culled by default with `defineTextMaterial(create, { boundsPadding, frustumCulled })`; per-text `frustumCulled = false` |
+| Materials | `position` and `paragraphPosition` safe in vertex and fragment stages (PR #311 re-implemented) |
+| Ported PRs | #317 (shared Three storage), #314 (browser import without `process`), #316 (line glyph spans), #311 |
+| Fixes | Layout faults (empty text has a line, ellipsis order, exclusion order, island placement, hung spaces), grapheme split across bidi runs, negative-spacing lone marks, empty-text ink, `compileAsync` stopping publication, codec buffer growth, scene-unbind crash |
+| Size | Language-tag resolution moved into a compact table; HarfRust `variations` and `FontInstance` compiled out; generic duplication cuts; runtime outline decoding moved into `font-baker.wasm` |
 
-### Performance standing (same machine, loose reference, not a quiet run)
+### Performance against main (2026-11-22, loaded machine; ratios, not a quiet run)
 
-- Ahead of ultra-text: edits, steady frame (0.142 ms vs 0.183 ms), draw count, never-drawn letters, GPU memory
-  with on-demand upload.
-- Behind ultra-text: first frame (about 36 ms vs 30 ms), width change, download size.
-- Riding under the aggregate rule (slower than main, under 4 ms, no clear fix left): typing (about 2.0 ms vs
-  1.8 ms), dense rewrite plus frame, `measure()` after a width change on Fredoka and Amiri (about 2× main), bidi
-  on RTL (1–5%).
-- Wasm gzip: v0.1.0 501 kB, main 541 kB, integration about 606 kB, with editing exports about 652 kB. Size rides
-  until after ship by decision.
+| Row | 0.2.0 / main |
+| --- | --- |
+| Type at end, 2,500 words / 22k glyphs | 0.53 / 0.48 |
+| Insert, delete, paste mid, 2,500 words | 0.59–0.62 |
+| Insert, delete, paste mid, 22k | 0.42–0.43 |
+| Width sweep, 2,500 words / 22k / bidi | 0.94 / 0.94 / 0.78 |
+| Small ASCII frame | about 0.83 |
+| **Mixed Arabic/Latin insert and delete mid** | **1.40–1.42 (regression, being fixed)** |
+| `measure()` alone right after a width change | about 2.1 (frame total equal or faster; decision below) |
+
+Not yet re-measured with the typing fix and upload narrowing (section 3), which take type-at-end to about 4.67 ms and
+its upload from 695 kB to 1.7 kB per keystroke.
 
 ## 2. Decisions in force
 
-- Operating mode: get ready to ship; then every commit stays shippable; then hardening and performance. Beating
-  v0.1.0 is the bar. Beating ultra-text is a nice claim. Beating main is not required when the aggregate is better.
-- 0.2.0 is a breaking release. Editing is in the ship gate. PixiJS 3D is in 0.2.0.
-- Editing API is the minimum for an editable field: `caret`, `hitTest`, `move`, `boundary`, `rangeRects`,
-  `replace(start, end, insert)`, `TextOffsetError`. Offsets are UTF-16 code units; bad offsets throw. No session
-  object, IME API, caret rendering, selection state, clipboard or undo.
-- Lone surrogates render as U+FFFD with no public API.
-- `onLayout` re-entrancy throws immediately. No eager per-setter prepare. No rollback copy.
-- Only "compile font binding at load" is approved among first-frame options.
-- Nothing goes upstream to HarfRust without asking. The private PixiJS 3D beta tarball is never committed.
-  `git stash` is not used. Agent build output goes under `/Volumes/Depot/Developer/glyph-scratch/<lane>/`.
+- Operating mode: ship-ready first; every commit after that shippable; then hardening. Beating v0.1.0 is the bar;
+  rows under ~4 ms with no clear fix may ride; performance is judged in aggregate.
+- Correctness is the hard gate: incremental equals cold, typographic output unchanged. Re-freezing oracle references
+  needs Justin's word; he approved the six listed in section 3.
+- Editing API is the minimum six methods plus `TextOffsetError`; lone surrogates render as U+FFFD with no API.
+- Smallest public surface. New `/core` names `createDecorationCodecProgram`, `decorationSchema`, `SlugBandResidency`,
+  `SLUG_RESIDENT_BAND_CURVE_WIDTH` stay public. Caret keeps `secondary` and `clipped`.
+- Renderers are subpath exports of `@pmndrs/glyph`, never separate packages. The private PixiJS 3D beta tarball is
+  never committed. `feature/pixi3d` in `/Volumes/Depot/Developer/text` stays local.
+- **Deferred to 0.3.0:** inline objects (icons go through the font stack, wrap-around through exclusions);
+  frustum-culling PR #319's bench; PR #313; a glyph-owned RTL bidi resolver
+  ([decision](decisions/rtl-bidi-resolver-deferred.md)).
+- **Size:** only the core shaper (and core JS) matters. Tables were organised to gzip well; never undo that; judge
+  every cut by gzip of the whole shipped wasm. Speed beats size. HarfRust's `variations` feature must come back on
+  (about 5 kB gzip) when variable-font shaping is added.
+- No `git stash`. Agent build output goes under `/Volumes/Depot/Developer/glyph-scratch/<lane>/` (builds honour
+  `CARGO_TARGET_DIR`). Nothing goes upstream to HarfRust without asking. Lanes run `km` (kimun, pinned in
+  `mise.toml`) and `fallow` (`pnpm dlx fallow@3.13.0`, config `.fallowrc.jsonc`).
 
-## 3. `sil-green-22`: faults plus editing
+## 3. Open lanes at handoff
 
-Merged into the integration branch on Justin's word (2026-11-21), tagged `sil-green-22` and pushed. The lane and
-branches and worktrees are deleted. There is one branch: the integration branch.
+Three lane branches hold finished or nearly finished work that is **not on the integration branch yet**. None is
+pushed: the lanes' own pushes were refused by the permission system at wrap-up, and they were deliberately not pushed
+on the lanes' behalf. Justin decides whether to push them as backups.
 
-**What the re-freeze changed**
+| Branch (worktree) | Tip | State | To finish |
+| --- | --- | --- | --- |
+| `experiments/sil-refreeze` (`glyph-wt-refreeze`) | `7cfd499a1` | Approved re-freezes. Items 1–2 already landed (`sil-green-46`). **Item 3, typing fix: verified** (120 cases, only `gather.glyph.content_revision` and `wire.publication` moved; typing at end 3.84 vs main 9.63 ms, upload 1.7 vs 27 kB/frame). **Item 4, narrowed writes: re-frozen** (184 cases, `wire.publication` only; insert-mid upload 364→233 kB/frame); oracles, package tests and browser proofs pass, but `cargo test --features oracle` and `pnpm check` were not confirmed at the tip. Item 5 (`measure()`) not built; evidence written. | Run `cargo test --features oracle` (shaper) and `pnpm check` in the worktree; then merge into the integration branch, re-run clippy + native oracle + package tests, tag. `write_changed_ranges` complexity rose 90→96 (cleanup pass). |
+| `experiments/sil-exp-unicode` (`glyph-wt-exp-unicode`) | `e07a29dcb` | Mixed Arabic/Latin edit regression. `2a2fe78f5` (reshape only runs an edit splits or merges) and `f2beb28b1` (splice declines when an edit flips the paragraph's direction flag) are **verified**: oracles, cargo test, package tests, clippy. `e07a29dcb` is **wip**: the confirmed cause is `containing_run` counting a run's end as inside it, so an insert at the first unit of a Latin run after an Arabic run reshaped the whole paragraph (15,131 units, 8.4 ms); the new `edit_run` makes it a 55-unit splice. Only release lib tests ran on it, and it carries an `#[ignore]` diagnostic test `diagnose_bidi_headline_edit` whose second step fails with `RevisionConflict`. | Run the full gates; re-run the browser `bidi15k-amiri-edit` rows (added to the baseline harness `run.mts` outside git, backup in `glyph-scratch/exp-unicode/`); every row must be at or below main; drop or fix the diagnostic test; reword the wip commit; merge and tag. Move the `bidi15k-amiri-edit` scenario into `benches/` so it is tracked. |
+| `experiments/sil-size` (`glyph-wt-size`) | `9b086527d` (or later; see the size doc) | Core cuts after `sil-green-49`: handle registries as one sorted-key `IdMap` (−13.8 kB gzip) and the UAX #29 category trie with unicode-segmentation vendored at `vendor/unicode-segmentation` (−23.5 kB gzip, checked at every scalar, UAX #29 conformance passes). Gates were running at wrap-up. The size doc's 2026-11-22 pass section (variations note, `retained_rope` estimate, generics guideline, read-fonts breakdown) is on this branch. | Confirm gates (clippy, cargo test, both oracles, package tests, fork parity, v1-bitmap, typegpu-parity) and a headline A/B; merge; tag. Core shaper would be about 611 kB gzip. |
 
-- Fault fixes: exactly 32 cases, the same 32 the lane listed. `value`, `identity`, `repr` and `wire` lanes moved;
-  no `cache` lane. Every other case is byte-identical. Reference set `ee09f03d40ee727e`.
-- Editing: all 588 cases, `wire` lanes only (ABI version 1 → 2 in every result header). No layout lane moved.
-  Reference set `52e6502a494f3da2`.
-- Full oracle after both: 588 equal, 0 unlisted divergences, natively and in wasm.
+Merged and deleted at wrap-up: `sil-edit-diff`, `sil-exp-reflow`, `sil-fixes`, `sil-scoped-gather` (every commit is on
+the integration branch or superseded by an equivalent landed commit).
 
-**Verification, all passing:** `@pmndrs/glyph` tests (1,329 integration tests, none skipped),
-the shaper's cargo tests including editing, PixiJS 3D parity, TypeGPU parity, both
-bitmap proofs, the TypeGPU live check, and `pnpm check`. Wasm is 647,666 bytes gzip.
+## 4. Decisions waiting on Justin
 
-**User-visible behaviour changes it carries**
+1. **`measure()` after a width change** ([evidence and designs](measure-after-width-change-2026-11-22.md)): the
+   frame is equal or faster, but the isolated read is about 2× main because 0.2.0 positions on the read. Options:
+   - C now: build placement segments in the frame, not the read (about −0.05 ms, no re-freeze), rest rides.
+   - B + D: keep positioning's predecessor across a read, and make the summary's glyph counts lazy (reaches main).
+   - A: speculative reads like main (reverses durable reads; not recommended).
+   Recommended: C now, B + D after ship.
+2. **When to open the ship PR** (one draft PR on top of #310).
 
-- `""` measures as one line with the font's line height, `"\n"` as two, `"\n\n"` as three (was zero lines).
-- The ellipsis follows paragraph direction, and ellipsis lines fit their slot (a one-line case gains one space of
-  content width; a cut can land one cluster earlier).
-- Right-to-left lines beside exclusions fill slots in reading order.
-- The six editing methods and `TextOffsetError` exist; the old caret methods are gone.
+## 5. Path to release
 
-**Expectations changed during the merge:** the two package tests for empty text and right-to-left ellipsis order;
-two editing tests that pinned "empty text has no line"; the bidi layout contract fixture; one benchmark pin
-(17,362 → 17,482 bytes, five empty frames now carrying one line each). `pen_reversals` is 0 across all fixtures
-and was turned from a print into an assertion.
+1. Land the open lanes (section 3), each re-verified on the integration tree.
+2. **Rust cleanup pass** from the [kimun audit](code-quality-audit-2026-11-22.md): the 5 new or grown Rust functions
+   (`position_fragment`, `reposition_retained_line`, `build_lines`, `position_segment`,
+   `validate_style_topology_for_inputs`), the 2 new duplicate groups, then `screen_font`, `compile_draw_spans` and
+   line-break `decide`. No behaviour change, A/B any hot loop. Held until the lanes above land (Justin's call).
+3. **Docs** (S4): bring `api-summary-for-review.md` and `migration-from-0.1.0.md` in line with everything in section
+   1 (pixi3d subpath, culling options, `position`/`paragraphPosition`, editing on PixiJS 3D, empty-text lines,
+   ellipsis direction, `TextFrameError` below); update `.agents/docs/packages/glyph.md`; run `docs:attest`; public
+   docs for the editing methods with one worked editable-field example.
+4. **Quiet-machine comparison** (S5): all lanes paused; v0.1.0, main (`/Volumes/Depot/Developer/glyph-baseline-main`),
+   the integration tip and ultra-text (`/Volumes/Depot/Developer/glyph-competitor-bench`), interleaved, with the
+   headline harness (`/Volumes/Depot/Developer/glyph-baselines-2026-11-22/profile-harnesses/browser/headline.js`)
+   plus the full suite. Recheck the noisy rows: Latin 15k layout read after the outline move (+3–5%), Latin 15k
+   insert/paste frame totals after the fork cuts (+10–20% total, layout equal).
+5. **Ship PR** (S6): one draft PR on #310 via the `gh-stack` skill; description lists the superseded open PRs
+   (#317, #314, #316, #311, #240), the migration note, the comparison table and the riding rows.
 
-**Loose ends**
+### Known bugs and gaps at handoff
 
-- `editing/place.rs:128` keeps a "layout made no line" caret branch that is now probably unreachable. Remove it
-  with a test proving so.
-- `benches/fixtures/results/advanced-shaping-conformance-chromium149.json` still records 17,362 bytes; nothing
-  gates on it.
-- The pre-commit hook fails when the only staged formattable file is an LFS JSON. Small hook fix.
-- No `docs:attest` for the merged source (covered by S4).
-- The package build writes into in-tree `rust/*/target`; make it honour `CARGO_TARGET_DIR` so agent builds can go
-  to Depot scratch.
+- `TextFrameError` is public but never thrown (`textFrameError` has no caller), although `glyph.md` says `/three`
+  re-raises engine rejections as it. Decide: wire it up or remove it before ship.
+- A draw compiled with `compileAsync` and never rendered, outside the root (a `split()` copy), registers no renderer
+  and can leak its storage on Three r185/r186. The `compileAsync` fix depends on Three's private
+  `_compilationPromises`; a test fails loudly if Three renames it.
+- Reparenting a deeper ancestor of a detached `Glyphs` into an opted-out `TextGroup` is not detected by culling.
+- `typegpu@0.12.5` reads `process.env` unguarded, so the TypeGPU entries need a bundler or a `process` shim as
+  unbundled browser ESM (documented in the migration note).
+- The oracle driver plans column layouts no host can send (6 rejections); see P9.
 
-## 4. Decisions answered by Justin, 2026-11-22
+## 6. After ship
 
-1. Hind Madurai fetched into the adversarial font set (OFL, google/fonts); the Tamil caret test now runs.
-2. All four new `/core` names stay public: `createDecorationCodecProgram`, `decorationSchema`,
-   `SlugBandResidency`, `SLUG_RESIDENT_BAND_CURVE_WIDTH`.
-3. Inline objects: verify that layout reserves space and positions can be read through the public API, add a
-   test, then document as supported.
-4. The caret result keeps `secondary` and `clipped`.
-5. PR #311 (fragment-safe `position`, `paragraphPosition`) is re-implemented in 0.2.0, because paragraph
-   gradients, image fills, reveal wipes and pointer effects need it.
-6. `feature/pixi3d` stays local; not pushed.
-7. Disk: fault dumps and the clean `glyph-profile-manylabel` worktree removed. Five spike worktrees
-   (`glyph-chunk-spike`, `-floor-exp`, `-throughput-spike`, `-profile-inspect`, `-profile-size`) hold uncommitted
-   experiment source and were left in place.
-8. The quiet-machine comparison runs once, after the last code change.
-9. PRs #317, #314, #316, #240 (and #311) stay open until the ship PR, which lists them as superseded.
-
-## 5. Remaining work before ship
-
-Each unit is one lane, one worktree, one branch (`experiments/sil-<lane>`), merged only after the full oracle
-tier (native and wasm) and the browser verification pass on the integration tree after a clean rebuild.
-
-### S2. PixiJS 3D `replace` — Opus, small
-
-The PixiJS 3D text object has the five queries but not `replace`. Add it by delegating to the same host function
-the Three text uses (`src/text-editing.ts`), with the span-rebase rule covered by
-`tests/fixtures/span-rebase-vectors.json`. Done when the package tests pass and a test edits a PixiJS 3D text
-mid-paragraph and reads the same caret as the Three text.
-
-### S3. Two input faults from the faults lane — top model, small to medium
-
-1. `direction: rtl` plus ellipsis over text that starts with U+201D followed by Devanagari returns
-   `InvalidRequest`. Valid input must not be refused. Start by reducing the case with `layout-oracle dump`, then
-   find which validation in the ellipsis path sees an island with an empty or inverted range.
-2. A line cut for an ellipsis may keep a line-edge correction for a tail that was dropped. Build a fixture with a
-   hanging-punctuation or optical-margin tail past the cut; if the correction survives, clear it where the cut is
-   applied. If no fixture shows it, record it as disproved.
-
-Both get an oracle case each. Done when the oracle is green with the new cases and no listed divergence is added.
-
-### S4. Documentation — Opus
-
-- Bring `api-summary-for-review.md` in line with the trimmed editing API and the surrogate decision.
-- Finish `migration-from-0.1.0.md`: setters no longer prepare, `prepare()`, `onLayout`, the error types, empty
-  text now has one line, ellipsis follows paragraph direction, removed caret methods, `replace` with an explicit
-  range.
-- Update the package concepts under `.agents/docs/packages/` that are now wrong, and attest each package once.
-- Public docs for the editing methods with one worked example: an editable field built from the six methods.
-
-### S5. Quiet-machine comparison — Sonnet to run, top model to read
-
-All lanes paused, nothing else running. Compare v0.1.0, main (`/Volumes/Depot/Developer/glyph-baseline-main`,
-`4e25a96a`) and the integration tip, interleaved, plus the ultra-text set in
-`/Volumes/Depot/Developer/glyph-competitor-bench`. Include typing, line-height change and mid-paragraph insert at
-the realistic size (about 2,500 words, about 15k glyphs), not only the 22k stress case. Output one table:
-each row against v0.1.0 (must win or tie in aggregate), against main (riding rows named), against ultra-text
-(claims named). No thresholds or statistical protocol; the table is read in aggregate.
-
-### S6. Ship PR — top model
-
-One draft PR on top of #310 from the integration branch. Description: what changed for users, the migration
-note, the comparison table, the riding rows, the known divergences list, the wasm size with the size plan. Use
-the `gh-stack` skill. Not opened until S1–S5 are done and Justin says so.
-
-## 5a. Open pull requests outside the stack (triaged 2026-11-22)
-
-Ported into 0.2.0 (the original PRs can be closed when the ship PR opens): #317 (shared Three storage destroyed
-when a draw retires), #314 (browser import without `process`), #316 (line glyph spans under
-`semanticViews: 'measurement'`).
-
-| PR                                                                                            | Recommendation                                                                                                                                                                                                                   |
-| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| #319 frustum-culling experiment                                                               | 0.3.0. Bench-only; culling still works after this lands, but automatic bounds (ink plus padding for format and effects) are new work. Its fixture overwrites `scene.onBeforeRender`, which replaces glyph's render-depth wrapper |
-| #311 stage-safe `position` and `paragraphPosition` for custom materials                       | Justin's own PR; undecided. A public contract change, so 0.2.0 is the cheap time; needs rework on the new material realizer                                                                                                      |
-| #313 corrected breaks inside right-to-left runs                                               | 0.3.0                                                                                                                                                                                                                            |
-| #240 publish pending layout on read                                                           | Superseded by read-prepares; close                                                                                                                                                                                               |
-| #312 CFF subsetting error, #303 README paths, #315 Tres playground, #269 variable-font report | Independent; merge any time                                                                                                                                                                                                      |
-| #212 hero demo, #199 benchmark playground, #178 `Intl.Segmenter` spike, #138 docs site        | 0.3.0; rebase or rewrite on 0.2.0                                                                                                                                                                                                |
-
-Found while porting, not fixed:
-
-- A draw compiled with `compileAsync` and never rendered can leak its storage on Three r185/r186; there is no
-  per-object hook that carries the renderer.
-- Each time a root empties and gets text again, nine codec buffers are allocated and the old ones kept until root
-  teardown. Add a memory test that cycles a root and release the old buffers at the swap.
-- `typegpu@0.12.5` reads `process.env` unguarded, so the TypeGPU entries fail as unbundled browser ESM.
-- A measurement-only view of an empty paragraph still withholds its ink box (`empty_ink_authoritative`).
-
-## 6. After ship: hardening and performance
-
-Ordered by expected value. Each starts with a profile spike, not a guess.
-
-| Unit                                 | What                                                                                                                                | Plan                                                                                                                                                                                                                                               | Model |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| P1. Local edits (unit 2)             | Typing is 44% reshaping the whole run                                                                                               | Reshape only a window around the edit bounded by safe-to-break flags; splice clusters through the existing `ClusterChanges` ranges; the oracle already compares incremental against cold. This is the row that turns typing from riding into a win | Top   |
-| P2. Gather by change class           | Gather re-reads columns for paint-only and origin-only changes                                                                      | Key the gather on `change_since_publication` (Paint, Origin, Metric, Content) and copy only the columns that class can move                                                                                                                        | Top   |
-| P3. Width-change `measure()`         | About 2× main on Fredoka and Amiri                                                                                                  | Profile first; the suspect is refitting every line when only lines after the first changed break can move. Reuse the fitter's line-start state up to the first line whose break changes                                                            | Top   |
-| P4. Size recovery                    | 652 kB vs 501 kB at v0.1.0                                                                                                          | Lazy outline decoder; move word/sentence boundary code behind first use; delete retired paths; re-measure each with `twiggy`. Prior research: `wasm-size-reduction.md`                                                                             | Opus  |
-| P5. First frame                      | 36 ms vs 30 ms                                                                                                                      | Profiles say font artifact plus JS set-up. Engine warm-up at init and replacing the font hash were NOT approved; ask before either. Unapproved-free options: defer atlas texture creation to first draw, trim the bake header parse                | Opus  |
-| P6. CPU memory                       | Retained lanes hold both staged copies                                                                                              | Share unchanged lanes between `Staged<T>` sides; measure with the heap probe in `profile-harnesses/`                                                                                                                                               | Top   |
-| P7. Positioning follow-ups           | Numeric pass still touches clean blocks                                                                                             | Skip blocks whose inputs are unchanged using the per-block dirty bits already produced by cluster build                                                                                                                                            | Top   |
-| P8. Discard-free publication failure | Rust still discards the root when publication cannot be delivered                                                                   | Keep the prepared revision and retry delivery; the host half is already sibling-safe                                                                                                                                                               | Top   |
-| P9. Oracle reads like a host         | The oracle driver calls the engine in ways no host does (one listed finding)                                                        | Route the driver through the same call sequence as `src/internal`, then remove the listed contract finding                                                                                                                                         | Opus  |
-| P10. SIMD experiments                | Pyramid, validity interval, integer pen, affine placement, bit-parallel rule matching, shaped-string reuse, content-anchored blocks | Each is tested, and kept if faster or equal. One spike per idea, interleaved against the integration tip                                                                                                                                           | Top   |
-| P11. Device-loss detection           | GPU device loss is not detected                                                                                                     | Listen for loss on each backend, mark residency lost, re-upload on restore                                                                                                                                                                         | Opus  |
-| P12. Deferred typography             | Everything in `decisions/typographic-feature-scope-for-layout-refactor.md`                                                          | Separate plan after 0.2.0                                                                                                                                                                                                                          | —     |
+| Unit | What | Plan |
+| --- | --- | --- |
+| P1. `measure()` B + D | Section 4 | Keep positioning's predecessor across a read; lazy summary glyph counts |
+| P2. Discard-free publication failure | Rust discards the root when publication cannot be delivered | Per-stage rollback across planner and gather, a retry entry point, a new oracle route (fixes lane analysis in the build log) |
+| P3. `retained_rope` type-erased core | ~31 kB raw of duplicate generic copies across five node types | One shared tree core, per-type leaf copy and drop; A/B the edit rows |
+| P4. More core size | See the 2026-11-22 section of [wasm-size-reduction.md](wasm-size-reduction.md) | Remaining duplicate sorts; data-driven syllabic shaper interpreter priced there |
+| P5. Content-anchored blocks | Blocks on a 64-cluster grid shift after an insert | Only if edit profiles still show block shifts after the splice work |
+| P6. Shaping fast path widening | [experiments-shaping](experiments-shaping-2026-11-22.md): `UNSAFE_TO_CONCAT` flags block text fonts | R1/R2 rules priced; not worth it for Inter |
+| P7. First frame, CPU memory, device loss, oracle reading like a host | Carried from the earlier plan | See the plan's "Every axis" |
+| P8. Deferred typography and variable-font shaping | [scope decision](decisions/typographic-feature-scope-for-layout-refactor.md) | Turn `variations` back on in the fork |
+| P9. Inline objects | Deferred by Justin | Design the four public pieces (input, result box, `replace` rebasing, more than one per text) |
 
 ## 7. How to run things
 
-From `packages/glyph/rust/shaper`:
+From `packages/glyph/rust/shaper` (set `CARGO_TARGET_DIR` to a Depot scratch dir):
 
 ```bash
 GLYPH_ADVERSARIAL_FONTS=/Volumes/Depot/Developer/glyph-adversarial-fonts mise exec -- cargo run --release --features oracle --bin layout-oracle -- check --tier full
@@ -225,28 +163,32 @@ GLYPH_ADVERSARIAL_FONTS=/Volumes/Depot/Developer/glyph-adversarial-fonts mise ex
 From `packages/glyph`:
 
 ```bash
-mise exec -- node scripts/layout-oracle.mjs wasm --tier full
+GLYPH_ADVERSARIAL_FONTS=/Volumes/Depot/Developer/glyph-adversarial-fonts mise exec -- node scripts/layout-oracle.mjs wasm --tier full
 ```
 
-Re-freezing references changes what "correct" means, so it needs Justin's word. After a re-freeze, check that
-only the expected line kinds moved (`class` is step digests, `stage` is cold digests):
+Without `GLYPH_ADVERSARIAL_FONTS` the wasm oracle skips 163 cases. After an approved re-freeze, prove what moved by
+dumping every lane of every case before and after (`/Volumes/Depot/Developer/glyph-scratch/refreeze/lanediff.py`)
+and by counting changed reference lines:
 
 ```bash
 git diff -U0 -- tests/oracle/reference/exact ':!tests/oracle/reference/exact/MANIFEST' | grep '^[-+]' | grep -v '^[-+][-+]' | cut -c2- | awk '{print $1}' | sort | uniq -c
 ```
 
-Verification before every tag, on the integration tree: delete `node_modules/.vite`, rebuild `@pmndrs/glyph`, then
-`pnpm --filter @pmndrs/glyph test`,
+Full verification before a release tag: `mise exec -- pnpm install --frozen-lockfile`, delete `node_modules/.vite`,
+rebuild `@pmndrs/glyph`, then `cargo clippy --features oracle --all-targets -- -D warnings`,
+`cargo test --features oracle`, both oracles, `pnpm --filter @pmndrs/glyph test`, and
 `pnpm scripts run benchmark:pixi3d-parity`, `benchmark:typegpu-parity`, `benchmark:v1-bitmap`,
-`benchmark:v1-bitmap -- --typegpu`, `typegpu:live-check`, `pnpm check`. About an hour.
+`benchmark:v1-bitmap -- --typegpu`, `typegpu:live-check`, `benchmark:three-storage-lifetime`,
+`benchmark:material-position`, `benchmark:frustum-culling`, then `pnpm check`. About an hour.
 
 ## 8. Where evidence lives
 
-- `/Volumes/Depot/Developer/glyph-baselines-2026-11-21/`: snapshots, tables, four profiles, the fifth review,
-  profile harnesses, archived scratch.
-- `/Volumes/Depot/Developer/glyph-adversarial-fonts/`: fonts with `MANIFEST.md`.
-- `/Volumes/Depot/Developer/glyph-competitor-bench` and `-render`: the ultra-text harness.
-- `/Volumes/Depot/Developer/glyph-scratch/faults/`: per-commit dumps and row-level diffs for the fault fixes
-  (about 8 GB; can be deleted now).
-- `/Volumes/Depot/Developer/text` on `feature/pixi3d`: the PixiJS 3D demo work, checkpoint `2ecb36411`, local
-  only, with 52 GB of untracked demo assets.
+- `/Volumes/Depot/Developer/glyph-baselines-2026-11-21/` and `-2026-11-22/`: snapshots, headline harness, profiles.
+- `/Volumes/Depot/Developer/glyph-adversarial-fonts/`: fonts with `MANIFEST.md` (Hind Madurai added 2026-11-22).
+- `/Volumes/Depot/Developer/glyph-scratch/<lane>/`: per-lane logs, patches and probes (safe to delete after landing).
+- Experiment records: [reflow](experiments-reflow-2026-11-22.md), [unicode](experiments-unicode-2026-11-22.md),
+  [shaping](experiments-shaping-2026-11-22.md), [benchmark vs main](benchmark-main-vs-0.2.0-2026-11-22.md),
+  [code quality](code-quality-audit-2026-11-22.md), [size](wasm-size-reduction.md).
+- Stale Depot worktrees with uncommitted spike source (keep): `glyph-chunk-spike`, `glyph-floor-exp`,
+  `glyph-throughput-spike`, `glyph-profile-inspect`, `glyph-profile-size`.
+- `/Volumes/Depot/Developer/text` on `feature/pixi3d`: Justin's PixiJS 3D demo checkpoint `2ecb36411`, local only.

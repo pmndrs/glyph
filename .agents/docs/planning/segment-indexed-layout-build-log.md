@@ -809,3 +809,11 @@ Updated in place; the history of each change is in the log below.
 - **Decisions (Justin):** re-freeze and land all six held results (grapheme-run fix, empty-text ink, start/end-correction shortcut, revision-preserving replacement, narrowed writes, `measure()` stopping after flow); keep the fast path and investigate why only pixel fonts qualify; install `kimun` 0.46.1 (pinned in `mise.toml`) and run it with `fallow` as a lane gate.
 - Inline objects: Justin asked what they are for and how they differ from font fallback and exclusions; answered in chat, decision pending.
 - **Decision (Justin, 2026-11-22): inline objects deferred to 0.3.0.** Icons and symbols go through the font stack; wrap-around layouts use exclusions. Meshes, widgets and images inside a sentence need four new public pieces (input, per-object box in the result, offset rebasing in `replace`, lifting the one-object cap) and get their own design.
+
+## 2026-11-22: wrap-up
+
+- Merged through `sil-green-49`: Unicode SIMD class stage (`-47`), size cuts and fork features (`-48`), runtime
+  outline decoding moved into `font-baker.wasm` (`-49`). Core shaper 648.3 kB gzip.
+- Decisions (Justin): only core shaper size matters; one baker, no second baker module; tables stay gzip-tuned; Rust
+  cleanup pass waits until the open lanes land; inline objects deferred to 0.3.0.
+- Wrap-up state of every open lane, and what is left before release: [handoff](segment-indexed-layout-handoff.md).
