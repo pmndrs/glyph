@@ -1879,7 +1879,7 @@ impl ClusterArena {
                     &mut layout_runs,
                     self,
                     previous,
-                    splice,
+                    &splice,
                     runs,
                     styles,
                     extents_for,
