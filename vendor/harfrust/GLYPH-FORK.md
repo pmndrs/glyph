@@ -1,7 +1,7 @@
 # HarfRust fork carried by pmndrs/glyph
 
-This directory is the published `harfrust` 0.12.0 crate with two cargo features, one inlining
-attribute and one additive module (`SimpleTextPlan`) added. It is wired into `packages/glyph/rust/shaper` and `packages/glyph/rust/font-baker`
+This directory is the published `harfrust` 0.12.0 crate with three cargo features, one constructor,
+one inlining attribute and one additive module (`SimpleTextPlan`) added. It is wired into `packages/glyph/rust/shaper` and `packages/glyph/rust/font-baker`
 with `[patch.crates-io]`, so both manifests still ask for `harfrust = "0.12.0"`.
 
 ## Base
@@ -19,7 +19,7 @@ with `[patch.crates-io]`, so both manifests still ask for `harfrust = "0.12.0"`.
 
 With default features the fork shapes exactly like the release. The features are on by default so
 the same patch can be offered upstream; pmndrs/glyph depends on the crate with
-`default-features = false` and turns both off.
+`default-features = false` and turns all three off in the shipped shaper.
 
 ### `aat` feature (default on)
 
@@ -53,11 +53,39 @@ feature shapes as upstream does with `rand=0`.
 | `src/hb/ot_layout_gsubgpos.rs` | `random_state` and `random_number` are gated.                        |
 | `src/hb/ot_map.rs`             | `hb_ot_map_t::MAX_VALUE` is gated; `rand` was its only user.         |
 
-### Language-tag inlining seam
+### `language-tags` feature (default on) and `ShapePlan::new_with_language_tags`
 
-`src/hb/tag.rs`: `tags_from_language` is `#[inline(never)]`. It does not change behaviour. It
-keeps BCP 47 to OpenType language resolution as one function after LTO, which a later change can
-remove once callers resolve language tags themselves and pass `-x-hbot`.
+Off removes BCP 47 to OpenType language-system resolution: the generated `tag_table` module (a
+~150-rule `match` and the 1,433-row `OPEN_TYPE_LANGUAGES` table) and `tags_from_language`. A plan
+then takes language systems only from an `-x-hbot` subtag or from the caller.
+
+`ShapePlan::new_with_language_tags(font, direction, script, language, language_tags, features)`
+exists in every configuration. It builds the plan `new` builds, except that the OpenType language
+systems are `language_tags`, best first, instead of what `language` resolves to; `language` still
+identifies the plan and still supplies an `-x-hbsc` script override. With `language-tags` on,
+`harfrust::opentype_language_tags(&Language)` returns the tags `new` would resolve, which is what a
+caller-side resolver is tested against.
+
+pmndrs/glyph resolves in `packages/glyph/rust/shaper/src/language_tags.rs` from tables generated
+out of this crate's `tag_table.rs`, and its differential test compares it with
+`opentype_language_tags` over every table key, every rule and random tags. `-x-hbot` alone could not
+carry the result: HarfRust resolves up to three candidate tags (`zh-Hant-MO` is `ZHTM`, then `ZHH`)
+and the GSUB and GPOS tables each take the first one the font has, and a three-letter fallback such
+as `i-a` resolves to a tag (`I-A `) that a private-use subtag cannot spell.
+
+| File                      | Change                                                                                                                                                          |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Cargo.toml`              | `language-tags = []`, added to `default`                                                                                                                        |
+| `src/hb/mod.rs`           | `tag_table` compiles only with `language-tags`; `tag` is `pub(crate)` for the re-export.                                                                        |
+| `src/hb/tag.rs`           | `tags_from_script_and_language_with` takes optional caller tags; `tags_from_language` and the `tag_table` helpers are gated; `opentype_language_tags` is added. |
+| `src/hb/ot_map.rs`        | `hb_ot_map_builder_t::new` passes the caller tags through.                                                                                                      |
+| `src/hb/ot_shape.rs`      | `hb_ot_shape_planner_t::new` passes the caller tags through.                                                                                                    |
+| `src/hb/ot_shape_plan.rs` | `new` and `new_with_language_tags` share one private `build`.                                                                                                   |
+| `src/hb/common.rs`        | `TagExt::to_uppercase` may be dead without `language-tags`.                                                                                                     |
+| `src/lib.rs`              | Re-exports `opentype_language_tags` with `language-tags`.                                                                                                       |
+
+`tags_from_language` keeps its `#[inline(never)]` from the earlier seam, so with the feature on it
+stays one function in an optimized binary.
 
 ### `SimpleTextPlan` (additive, not offered upstream)
 
@@ -88,7 +116,7 @@ warning too; cargo hides it for registry dependencies and shows it for a path de
 mise exec -- pnpm scripts run glyph:harfrust-fork-tests
 
 # every feature combination builds with no warning
-for features in libm libm,aat libm,rand std std,aat std,rand std,aat,rand,experimental_font_api; do
+for features in libm libm,aat libm,rand libm,language-tags std std,aat std,rand std,language-tags std,aat,rand,language-tags,experimental_font_api; do
   cargo check --locked --manifest-path vendor/harfrust/Cargo.toml --no-default-features --features "$features"
 done
 ```
@@ -102,8 +130,8 @@ the published crate and is not vendored.
 ## Cutting an upstream pull request
 
 1. Check out upstream at the base commit and copy `src/` over `harfrust/src/`.
-2. In `harfrust/Cargo.toml` add `aat = []` and `rand = []` under `[features]` and add both to
-   `default`.
+2. In `harfrust/Cargo.toml` add `aat = []`, `language-tags = []` and `rand = []` under `[features]`
+   and add all three to `default`.
 3. Drop this file, `src/hb/simple_text.rs`, its `mod` and re-export lines and
    `SubtableInfo::primary_coverage`. The `shape` dead-code attribute is independent and can be sent
    separately.

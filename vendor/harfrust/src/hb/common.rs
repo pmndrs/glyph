@@ -882,6 +882,7 @@ pub trait TagExt {
     fn default_language() -> Self;
     #[cfg(test)]
     fn to_lowercase(&self) -> Self;
+    #[cfg_attr(not(feature = "language-tags"), allow(dead_code))]
     fn to_uppercase(&self) -> Self;
 }
 

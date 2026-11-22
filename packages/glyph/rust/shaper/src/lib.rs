@@ -7,6 +7,7 @@ mod abi_contract;
 pub(crate) mod ascii_anchor_policy;
 pub mod bidi;
 pub mod engine;
+mod language_tags;
 pub mod line_break;
 pub mod outline;
 pub mod unicode;
@@ -651,11 +652,16 @@ fn shape_segment_inner(
     } else {
         let font_ref = FontRef::new(&font.sfnt).map_err(|_| STATUS_INVALID_FONT)?;
         let shaper = font.data.shaper(&font_ref).build();
-        let plan = ShapePlan::new(
+        let language_tags = language
+            .as_ref()
+            .map(|language| language_tags::resolve(language.as_bytes()))
+            .unwrap_or_default();
+        let plan = ShapePlan::new_with_language_tags(
             &shaper,
             direction,
             Some(script),
             language.as_ref(),
+            language_tags.as_slice(),
             features,
         );
         if font.plans.len() == MAX_CACHED_PLANS_PER_FONT {

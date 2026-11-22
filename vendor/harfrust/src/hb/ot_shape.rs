@@ -44,8 +44,9 @@ impl<'a> hb_ot_shape_planner_t<'a> {
         direction: Direction,
         script: Option<Script>,
         language: Option<&Language>,
+        language_tags: Option<&[hb_tag_t]>,
     ) -> Self {
-        let ot_map = hb_ot_map_builder_t::new(face, script, language);
+        let ot_map = hb_ot_map_builder_t::new(face, script, language, language_tags);
         #[cfg(feature = "aat")]
         let aat_map = AatMapBuilder::default();
 

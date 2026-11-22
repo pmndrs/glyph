@@ -69,7 +69,8 @@ mod ot_shaper_vowel_constraints;
 pub(crate) mod set_digest;
 pub mod simple_text;
 mod tables;
-mod tag;
+pub(crate) mod tag;
+#[cfg(feature = "language-tags")]
 #[allow(clippy::collapsible_match)]
 mod tag_table;
 mod text_parser;

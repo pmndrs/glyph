@@ -12,6 +12,7 @@ use super::ot_map::*;
 use super::ot_shape::*;
 use super::ot_shaper::*;
 use super::{hb_font_t, hb_mask_t, Direction, Feature, Language, Script};
+use read_fonts::types::Tag;
 
 /// A reusable plan for shaping a text buffer.
 pub struct hb_ot_shape_plan_t {
@@ -87,6 +88,38 @@ impl hb_ot_shape_plan_t {
         language: Option<&Language>,
         user_features: &[Feature],
     ) -> Self {
+        Self::build(font, direction, script, language, None, user_features)
+    }
+
+    /// Returns a plan like [`new`](Self::new) whose OpenType language systems are chosen from
+    /// `language_tags`, best first, instead of being resolved from `language`. `language` still
+    /// identifies the plan and still supplies an `-x-hbsc` script override.
+    pub fn new_with_language_tags(
+        font: &impl AnyFont,
+        direction: Direction,
+        script: Option<Script>,
+        language: Option<&Language>,
+        language_tags: &[Tag],
+        user_features: &[Feature],
+    ) -> Self {
+        Self::build(
+            font,
+            direction,
+            script,
+            language,
+            Some(language_tags),
+            user_features,
+        )
+    }
+
+    fn build(
+        font: &impl AnyFont,
+        direction: Direction,
+        script: Option<Script>,
+        language: Option<&Language>,
+        language_tags: Option<&[Tag]>,
+        user_features: &[Feature],
+    ) -> Self {
         assert_ne!(
             direction,
             Direction::Invalid,
@@ -94,7 +127,8 @@ impl hb_ot_shape_plan_t {
         );
         font.with_font(|font| {
             let font = font.expect("font should be available for shaping");
-            let mut planner = hb_ot_shape_planner_t::new(font, direction, script, language);
+            let mut planner =
+                hb_ot_shape_planner_t::new(font, direction, script, language, language_tags);
             planner.collect_features(user_features);
             planner.compile(user_features)
         })
