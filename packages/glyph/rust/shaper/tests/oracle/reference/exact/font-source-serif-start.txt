@@ -37,19 +37,19 @@ class cache 5 2e7149c0d9f57cbd
 class wire 1 c7ac5f1d9b8a82f9
 step 02 width 418
 class value 265 84b9f07a571a20ae
-class identity 24 8238fa832f820545
+class identity 24 76b42cf234e91022
 class repr 64 784b8920a783dec3
 class cache 5 2e7149c0d9f57cbd
-class wire 1 975c6b0e8483231a
+class wire 1 b67198a6f7a1c031
 step 03 width 233.5
 class value 265 56a0df9309351792
-class identity 24 0368a150da89acdd
+class identity 24 8ca5606b1aedfd4a
 class repr 64 ed60ba23ab5c8440
 class cache 5 f5d18a5dc33470cd
 class wire 1 07635b054fa2c129
 step 04 width 600
 class value 265 6948cc1247bc25fe
-class identity 24 9c1d9f3969a92918
+class identity 24 310c65cee6cb6896
 class repr 64 d4d679d87ebeda4f
 class cache 5 f5d18a5dc33470cd
 class wire 1 2dd8e8a97ff0df9c
@@ -61,13 +61,13 @@ class cache 5 f5d18a5dc33470cd
 class wire 1 3f6ebe92af6e833c
 step 06 insert Word (8 units) at 467
 class value 230 d0866b046ac253ce
-class identity 22 35e794d6d2ccfce0
+class identity 22 4b282b19aed470dc
 class repr 44 0b2e20e7ce71a7f3
 class cache 3 cf013bde4a940877
 class wire 1 06606f82d9a6bebd
 step 07 insert Space (1 units) at 1030 + insert Bidi (1 units) at 2473
 class value 230 8cfe0716f0ec0787
-class identity 22 945e6561827e9cf7
+class identity 22 0b7285ee25263cb6
 class repr 44 b65bfb7dd812424d
 class cache 3 641691afeaab7de9
 class wire 1 16924aefd664e04e

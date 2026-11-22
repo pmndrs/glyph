@@ -81,7 +81,7 @@ da3bf7dae56d3aef font-fira-code-rand-justify
 a92c2edd70a6ca1c font-fira-code-rand-start
 cfdd64b1bdc2b411 font-fira-code-start
 2c4259cc770c2038 font-fredoka-justify
-b431996cf51dff24 font-fredoka-start
+f76a8d362e51931c font-fredoka-start
 f91b72adc7343201 font-kern-only-justify
 a8a25b0ab571f62b font-kern-only-start
 8a0fc502a08ec50d font-kern-only-synth-justify
@@ -93,7 +93,7 @@ ae48c878e03e3d92 font-kern-only-synth-start
 ccdb6d75fec1b6b7 font-recursive-justify
 eb7444bade995a51 font-recursive-start
 90c286335d3893cb font-source-serif-justify
-a93e66acb5747ddd font-source-serif-start
+9164f2e3df3a3ce7 font-source-serif-start
 80ddd2e365d8acd5 font-synthetic-long-ligature-justify
 700fc1b2c06e25e5 font-synthetic-long-ligature-start
 9d7192fc712222b2 font-synthetic-supported-justify
@@ -314,7 +314,7 @@ eec7a25b054c4a5b label-fredoka-64-center
 85c0dca98d95c500 label-fredoka-64-start
 f4d411be18071afd label-fredoka-80-center
 13e65ace61e42047 label-fredoka-80-end
-03600c47a9a63ede label-fredoka-80-start
+3258024a86d0d8c7 label-fredoka-80-start
 0cca1b324de69303 label-fredoka-ellipsis
 1ae5b2ff8804c464 label-greek-cyrillic-12-center
 b13abbebc0ff07ae label-greek-cyrillic-12-end
@@ -594,4 +594,4 @@ b1eb2ffa1b9039bc rg-columns-3-cjk-silent-then-measure
 ce13f154c56854f0 rg-columns-3-justify-latin-silent
 19373280cc43cea2 rg-columns-3-justify-latin-silent-then-measure
 4927fb82d0d212fa rg-columns-3-paragraph-latin-full
-18b1e5d7de51cf67 set
+30889230c629c1d5 set
