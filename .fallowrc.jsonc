@@ -1,0 +1,34 @@
+{
+  // Fallow sees package.json entries, plugins, and tests, but not every module the package's own tests and scripts
+  // load from dist/ by relative path. D-267 withdrew these from the public exports while keeping them built for that
+  // use, so they are entry points here rather than unused files.
+  "entry": [
+    "packages/glyph/src/bakers/bitmap-validator.ts",
+    "packages/glyph/src/bakers/msdf-validator.ts",
+    "packages/glyph/src/bakers/slug-validator.ts",
+    "packages/glyph/src/mtsdf-baker-abi.ts",
+    "packages/glyph/src/slug-baker-abi.ts",
+    "packages/glyph/src/text-shaper-abi.ts",
+    "packages/glyph/src/internal/raster-baker-profile.ts",
+    "packages/glyph/src/shaders/tsl/slug/internal/reference.ts",
+    "packages/glyph/src/shaders/typegpu/bitmap-reference.ts",
+    "packages/glyph/src/shaders/typegpu/slug/core/index.ts",
+  ],
+  "ignoreExports": [
+    // Loaded through `runtimeBaker: () => import(...)` and consumed as the module's default export.
+    { "file": "packages/glyph/src/runtime-bakers/{bitmap,msdf,slug}.ts", "exports": ["default"] },
+    // One public name per entry by design: React's components and Three's span wrap the root/Three values they share
+    // a name with.
+    { "file": "packages/glyph/src/react.ts", "exports": ["Text", "TextGroup"] },
+    { "file": "packages/glyph/src/three/span.ts", "exports": ["span"] },
+    // The TypeGPU-backed Three config implements the TSL shader contract under the contract's own names.
+    {
+      "file": "packages/glyph/src/three/typegpu/internal/{decoration-shader,slug-shader}.ts",
+      "exports": ["decorationShader", "slugShader"],
+    },
+    {
+      "file": "packages/glyph/src/three/typegpu/internal/slug/slug-dilate.ts",
+      "exports": ["slugDilate", "slugDilateMatrix"],
+    },
+  ],
+}
