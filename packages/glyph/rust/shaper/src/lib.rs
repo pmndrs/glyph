@@ -32,7 +32,7 @@ std::thread_local! {
 }
 use harfrust::{
     BufferClusterLevel, BufferFlags, Direction, Feature, FontRef, GlyphExtents, Language,
-    ShapeOptions, ShapePlan, ShaperData, Tag, UnicodeBuffer,
+    ShapeOptions, ShapePlan, ShaperData, SimpleTextPlan, Tag, UnicodeBuffer,
     font::{BuiltinFontFuncs, FontFuncs},
 };
 use read_fonts::TableProvider;
@@ -157,6 +157,9 @@ pub(crate) struct FontGlyphExtents {
 struct CachedPlan {
     key: PlanKey,
     plan: ShapePlan,
+    /// The characters this plan shapes to their nominal glyphs whatever surrounds them, derived
+    /// once with the plan; `None` when the plan runs a stage that view does not model.
+    simple: Option<SimpleTextPlan>,
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -434,7 +437,7 @@ impl ShaperRegistry {
         }
         let index = self.font_index(font_handle).ok_or(STATUS_FONT_MISSING)?;
         let font = &mut self.fonts[index];
-        let shaped = shape_segment(
+        let (shaped, simple) = shape_segment(
             font,
             text,
             run,
@@ -442,7 +445,40 @@ impl ShaperRegistry {
             &mut self.shape_buffer,
             &mut self.context_codepoints,
             &mut self.shape_features,
+            SimpleText::Allowed,
         )?;
+        #[cfg(test)]
+        if simple {
+            engine::work_attribution::record(|work| {
+                work.simple_text_calls += 1;
+                work.simple_text_utf16_units +=
+                    range.item_end.saturating_sub(range.item_start) as usize;
+            });
+        }
+        // Tests and the layout oracle shape every accepted item a second time with HarfRust and
+        // require the same glyphs, so each run they make proves the simple path on its inputs.
+        #[cfg(any(test, feature = "oracle"))]
+        if simple {
+            let mut reference_buffer = Some(UnicodeBuffer::new());
+            let (reference, _) = shape_segment(
+                font,
+                text,
+                run,
+                range,
+                &mut reference_buffer,
+                &mut self.context_codepoints,
+                &mut self.shape_features,
+                SimpleText::Refused,
+            )?;
+            assert!(
+                same_glyph_buffers(&shaped, &reference),
+                "simple-text shaping differs from HarfRust for units {}..{}",
+                range.item_start,
+                range.item_end,
+            );
+        }
+        #[cfg(not(any(test, feature = "oracle")))]
+        let _ = simple;
         let result = consume(&shaped);
         self.shape_buffer = Some(shaped.clear());
         result
@@ -479,6 +515,40 @@ impl ShaperRegistry {
     }
 }
 
+/// Whether an item may take the simple-text path. The reference shaping that verifies it may not.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SimpleText {
+    Allowed,
+    #[cfg(any(test, feature = "oracle"))]
+    Refused,
+}
+
+/// Every column the engine reads from a shaped item.
+#[cfg(any(test, feature = "oracle"))]
+fn same_glyph_buffers(left: &harfrust::GlyphBuffer, right: &harfrust::GlyphBuffer) -> bool {
+    let rows = |buffer: &harfrust::GlyphBuffer| {
+        buffer
+            .glyph_infos()
+            .iter()
+            .zip(buffer.glyph_positions())
+            .map(|(info, position)| {
+                (
+                    info.glyph_id,
+                    info.cluster,
+                    info.flags().to_bits(),
+                    position.x_advance,
+                    position.y_advance,
+                    position.x_offset,
+                    position.y_offset,
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    rows(left) == rows(right)
+}
+
+/// Shapes one item, and says whether the simple-text path produced it without HarfRust.
+#[allow(clippy::too_many_arguments)]
 fn shape_segment(
     font: &mut RegisteredFont,
     text: &[u16],
@@ -487,7 +557,8 @@ fn shape_segment(
     buffer_slot: &mut Option<UnicodeBuffer>,
     context_codepoints: &mut Vec<u32>,
     features: &mut Vec<Feature>,
-) -> Result<harfrust::GlyphBuffer, u32> {
+    simple_text: SimpleText,
+) -> Result<(harfrust::GlyphBuffer, bool), u32> {
     let mut buffer = buffer_slot.take().ok_or(STATUS_INVALID_REQUEST)?;
     match shape_segment_inner(
         font,
@@ -513,25 +584,39 @@ fn shape_segment(
         }
     };
     let shaper = font.data.shaper(&font_ref).build();
-    let Some(plan) = font.plans.last().map(|cached| &cached.plan) else {
+    let Some(cached) = font.plans.last_mut() else {
         *buffer_slot = Some(buffer);
         return Err(STATUS_INVALID_REQUEST);
     };
+    if simple_text == SimpleText::Allowed
+        && let Some(simple) = cached.simple.as_mut()
+    {
+        match simple.shape(&shaper, &cached.plan, buffer) {
+            Ok(shaped) => return Ok((shaped, true)),
+            Err(unshaped) => buffer = unshaped,
+        }
+    }
     let mut extents = FlatExtents {
         records: &font.extents,
         availability: &font.availability,
     };
+    // The reference shaping that verifies a simple item is not work the product does.
     #[cfg(test)]
-    engine::work_attribution::record(|work| {
-        work.harfrust_calls += 1;
-        work.harfrust_utf16_units += range.item_end.saturating_sub(range.item_start) as usize;
-    });
-    Ok(shaper.shape(
-        buffer,
-        ShapeOptions::new()
-            .features(features)
-            .plan(Some(plan))
-            .font_funcs(Some(&mut extents)),
+    if simple_text == SimpleText::Allowed {
+        engine::work_attribution::record(|work| {
+            work.harfrust_calls += 1;
+            work.harfrust_utf16_units += range.item_end.saturating_sub(range.item_start) as usize;
+        });
+    }
+    Ok((
+        shaper.shape(
+            buffer,
+            ShapeOptions::new()
+                .features(features)
+                .plan(Some(&cached.plan))
+                .font_funcs(Some(&mut extents)),
+        ),
+        false,
     ))
 }
 
@@ -589,7 +674,8 @@ fn shape_segment_inner(
                 })
                 .collect(),
         };
-        font.plans.push(CachedPlan { key, plan });
+        let simple = SimpleTextPlan::new(&shaper, &plan);
+        font.plans.push(CachedPlan { key, plan, simple });
     }
 
     buffer.clear();
@@ -931,6 +1017,9 @@ fn valid_extents(glyph_count: usize, extents: &[u8], availability: &[u8]) -> boo
 pub fn shaper_abi_json() -> alloc::string::String {
     abi_contract::json()
 }
+
+#[cfg(test)]
+mod simple_text_tests;
 
 #[cfg(test)]
 mod tests {

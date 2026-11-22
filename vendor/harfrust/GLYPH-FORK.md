@@ -1,7 +1,7 @@
 # HarfRust fork carried by pmndrs/glyph
 
-This directory is the published `harfrust` 0.12.0 crate with two cargo features and one inlining
-attribute added. It is wired into `packages/glyph/rust/shaper` and `packages/glyph/rust/font-baker`
+This directory is the published `harfrust` 0.12.0 crate with two cargo features, one inlining
+attribute and one additive module (`SimpleTextPlan`) added. It is wired into `packages/glyph/rust/shaper` and `packages/glyph/rust/font-baker`
 with `[patch.crates-io]`, so both manifests still ask for `harfrust = "0.12.0"`.
 
 ## Base
@@ -59,6 +59,23 @@ feature shapes as upstream does with `rand=0`.
 keeps BCP 47 to OpenType language resolution as one function after LTO, which a later change can
 remove once callers resolve language tags themselves and pass `-x-hbot`.
 
+### `SimpleTextPlan` (additive, not offered upstream)
+
+`src/hb/simple_text.rs` is new and nothing in the shaper calls it, so `shape` is unchanged. A
+`SimpleTextPlan` is derived from a `ShapePlan` and holds the glyphs some lookup of that plan can
+start a match on. `SimpleTextPlan::shape` turns a buffer whose characters all avoid that set, and
+avoid every Unicode stage that looks past one character, into the glyph buffer `shape` would
+return, and hands any other buffer back untouched. The module header gives the argument stage by
+stage; `packages/glyph/rust/shaper/src/simple_text_tests.rs` shapes every accepted item a second
+time with `shape` and compares each glyph, cluster, flag, advance and offset.
+
+| File                    | Change                                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `src/hb/simple_text.rs` | New module.                                                                                                        |
+| `src/hb/mod.rs`         | Declares it.                                                                                                       |
+| `src/lib.rs`            | Re-exports `SimpleTextPlan`.                                                                                       |
+| `src/hb/ot/lookup.rs`   | `SubtableInfo::primary_coverage`: re-reads the coverage table a subtable's digest was built from. No other change. |
+
 ### Not part of the feature work
 
 `src/hb/face.rs`: `shape` is allowed to be dead without `experimental_font_api`. Upstream has this
@@ -87,7 +104,9 @@ the published crate and is not vendored.
 1. Check out upstream at the base commit and copy `src/` over `harfrust/src/`.
 2. In `harfrust/Cargo.toml` add `aat = []` and `rand = []` under `[features]` and add both to
    `default`.
-3. Drop this file. The `shape` dead-code attribute is independent and can be sent separately.
+3. Drop this file, `src/hb/simple_text.rs`, its `mod` and re-export lines and
+   `SubtableInfo::primary_coverage`. The `shape` dead-code attribute is independent and can be sent
+   separately.
 
 ## Updating the base
 
