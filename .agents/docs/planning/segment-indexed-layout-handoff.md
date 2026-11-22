@@ -18,14 +18,14 @@ named below.
 ## 1. Where things stand
 
 - **Integration branch** `experiments/segment-indexed-layout`, worktree `/Volumes/Depot/Developer/glyph-held-rope-wip`,
-  pushed to `origin`. Last verified tag: **`sil-green-49`**. It sits on `experiments/held-rope-ascii-anchor-wip`
+  pushed to `origin`. Last verified tag: **`sil-green-50`** (local; push pending Justin's go-ahead). It sits on `experiments/held-rope-ascii-anchor-wip`
   (`8176a24e0a3f`; draft PRs #292 → #301 → #302 → #310). It ships as **0.2.0**, a breaking release.
 - **Oracle:** 596 frozen cases, 928 differential runs (~55,700 requests) comparing incremental against cold in every
   stage and lane class, natively and in wasm. 0 unlisted divergences. `KNOWN-DIVERGENCES` may only shrink.
-- **Verification on `sil-green-49`:** clippy `-D warnings`, full native oracle, `pnpm --filter @pmndrs/glyph test`.
+- **Verification on `sil-green-50`:** clippy `-D warnings`, full native and wasm oracle (596 equal), all shaper tests, `pnpm --filter @pmndrs/glyph test`.
   The full browser set and `pnpm check` last passed at `sil-green-44`/`-47`; run the full set (section 7) before the
   ship PR.
-- **Core shaper wasm:** 648.3 kB gzip (1,629 kB raw) at `sil-green-49`, down from 687.7 kB at `-43`. v0.1.0 was
+- **Core shaper wasm:** 611.0 kB gzip (1,567 kB raw) at `sil-green-50`, down from 687.7 kB at `-43`. v0.1.0 was
   501 kB, main 541 kB. Only the core shaper's size matters; bakers are dynamically imported.
 - **No PR is open for this work.** Landing is one draft PR on top of the stack, when Justin says so.
 
@@ -90,9 +90,9 @@ on the lanes' behalf. Justin decides whether to push them as backups.
 
 | Branch (worktree) | Tip | State | To finish |
 | --- | --- | --- | --- |
-| `experiments/sil-refreeze` (`glyph-wt-refreeze`) | `7cfd499a1` | Approved re-freezes. Items 1–2 already landed (`sil-green-46`). **Item 3, typing fix: verified** (120 cases, only `gather.glyph.content_revision` and `wire.publication` moved; typing at end 3.84 vs main 9.63 ms, upload 1.7 vs 27 kB/frame). **Item 4, narrowed writes: re-frozen** (184 cases, `wire.publication` only; insert-mid upload 364→233 kB/frame); oracles, package tests and browser proofs pass, but `cargo test --features oracle` and `pnpm check` were not confirmed at the tip. Item 5 (`measure()`) not built; evidence written. | Run `cargo test --features oracle` (shaper) and `pnpm check` in the worktree; then merge into the integration branch, re-run clippy + native oracle + package tests, tag. `write_changed_ranges` complexity rose 90→96 (cleanup pass). |
+| `experiments/sil-refreeze` | `7cfd499a1` | **Merged into `sil-green-50`.** Items 1–4 landed: Thai grapheme fix, empty-text ink, start/end-correction shortcut, typing fix (type at end 3.84 vs main 9.63 ms, 1.7 vs 27 kB/frame), narrowed writes. Item 5 (`measure()`) not built; see section 4. | Delete the branch once pushed. |
 | `experiments/sil-exp-unicode` (`glyph-wt-exp-unicode`) | `e07a29dcb` | Mixed Arabic/Latin edit regression. `2a2fe78f5` (reshape only runs an edit splits or merges) and `f2beb28b1` (splice declines when an edit flips the paragraph's direction flag) are **verified**: oracles, cargo test, package tests, clippy. `e07a29dcb` is **wip**: the confirmed cause is `containing_run` counting a run's end as inside it, so an insert at the first unit of a Latin run after an Arabic run reshaped the whole paragraph (15,131 units, 8.4 ms); the new `edit_run` makes it a 55-unit splice. Only release lib tests ran on it, and it carries an `#[ignore]` diagnostic test `diagnose_bidi_headline_edit` whose second step fails with `RevisionConflict`. | Run the full gates; re-run the browser `bidi15k-amiri-edit` rows (added to the baseline harness `run.mts` outside git, backup in `glyph-scratch/exp-unicode/`); every row must be at or below main; drop or fix the diagnostic test; reword the wip commit; merge and tag. Move the `bidi15k-amiri-edit` scenario into `benches/` so it is tracked. |
-| `experiments/sil-size` (`glyph-wt-size`) | `9b086527d` (or later; see the size doc) | Core cuts after `sil-green-49`: handle registries as one sorted-key `IdMap` (−13.8 kB gzip) and the UAX #29 category trie with unicode-segmentation vendored at `vendor/unicode-segmentation` (−23.5 kB gzip, checked at every scalar, UAX #29 conformance passes). Gates were running at wrap-up. The size doc's 2026-11-22 pass section (variations note, `retained_rope` estimate, generics guideline, read-fonts breakdown) is on this branch. | Confirm gates (clippy, cargo test, both oracles, package tests, fork parity, v1-bitmap, typegpu-parity) and a headline A/B; merge; tag. Core shaper would be about 611 kB gzip. |
+| `experiments/sil-size` | `cd7e62bad` | **Merged into `sil-green-50`.** All cuts gated; core shaper 611.0 kB gzip. Remaining cuts priced in the size doc. | Delete the branch once pushed. |
 
 Merged and deleted at wrap-up: `sil-edit-diff`, `sil-exp-reflow`, `sil-fixes`, `sil-scoped-gather` (every commit is on
 the integration branch or superseded by an equivalent landed commit).

@@ -817,3 +817,5 @@ Updated in place; the history of each change is in the log below.
 - Decisions (Justin): only core shaper size matters; one baker, no second baker module; tables stay gzip-tuned; Rust
   cleanup pass waits until the open lanes land; inline objects deferred to 0.3.0.
 - Wrap-up state of every open lane, and what is left before release: [handoff](segment-indexed-layout-handoff.md).
+
+- **`sil-green-50` (local):** re-freeze items 3–4 (typing fix, narrowed writes) and the size lane's last cuts merged; combined tree verified (clippy, both oracles 596 equal, all shaper tests, package tests). Core shaper 611.0 kB gzip. Not pushed: lane pushes were refused by the permission system, so pushing waits for Justin. Open: `experiments/sil-exp-unicode` (mixed-bidi regression, last commit wip).
