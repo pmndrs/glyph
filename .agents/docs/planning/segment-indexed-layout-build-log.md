@@ -790,3 +790,10 @@ Updated in place; the history of each change is in the log below.
 - Held: compile-only storage leak; codec buffer growth across empty/revive cycles.
 
 - **Nine open questions answered (2026-11-22)**; see section 4 of the handoff. New ship-gate units: port #311, PixiJS 3D `replace`, inline-object verification. Then docs, then the quiet comparison.
+
+## 2026-11-22: scope widened, headline evidence, six lanes
+
+- **`sil-green-27`**: #311 ported; PixiJS 3D `replace`; full verification of the combined tree passed (590 oracle cases native and wasm, 1,432 package tests, seven browser proofs, `pnpm check`). Inline objects found to have no public input or result; decision pending.
+- **Headline benchmark vs main** ([record](benchmark-main-vs-0.2.0-2026-11-22.md)): edits 1.5–2.2× faster; width sweep same to 14% slower on Latin, faster on bidi; `measure()` after a width change 2–4× slower; small ASCII frame 1.2× faster with 59% of time in shaping.
+- **Decision (Justin):** local edits, culling, the smaller items and the experiments are resolved in 0.2.0. No ascii.rest grid scenario is built now. For the three headline problems, brainstorm when the fix is not obvious.
+- **Building:** scoped gather, culling, shaping fast path with reshape-only-changed and run cache, two experiment lanes, one fix lane. Each merges as it reports green.

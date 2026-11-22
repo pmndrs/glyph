@@ -82,3 +82,14 @@ comparison).
 `sil-green-23` (2026-11-22): `experiments/sil-pixi3d-subpath` (PixiJS 3D moved to `@pmndrs/glyph/pixi3d`) merged and deleted. No lane branch is open.
 
 `sil-green-24`…`-26` (2026-11-22): `experiments/sil-port-317-314` and `experiments/sil-port-316` merged and deleted. No lane branch is open.
+
+## Open lanes, 2026-11-22 (0.2.0 scope widened by Justin: local edits, culling, small items and the experiments)
+
+| Branch | Holds | Model |
+| --- | --- | --- |
+| `experiments/sil-scoped-gather` | Gather and upload scoped to what changed; `measure()` after a width change | Top |
+| `experiments/sil-culling` | Three frustum culling with automatic bounds | Opus |
+| `experiments/sil-ascii-shaping` | Simple-text fast path, reshape only what changed, shaped-run cache | Top |
+| `experiments/sil-exp-reflow` | Experiments: validity interval, advance pyramid, integer pen, affine placement, content-anchored blocks | Top |
+| `experiments/sil-exp-unicode` | Experiments: SIMD class stage, bit-parallel rule matching, bidi fast outs, cluster build | Top |
+| `experiments/sil-fixes` | Open bugs and held items (handoff sections 5 and 5a) | Opus |
