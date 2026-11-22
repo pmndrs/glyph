@@ -3,7 +3,6 @@ import { DEV } from './internal/dev.js';
 import type { Font, FontMetrics, RegisteredFont } from './font.js';
 import type { RegisteredRaster, RasterKindOf } from './raster.js';
 import type { RasterDataOf, RasterFormatMetadata } from './config/raster-format.js';
-import type { CodecIdFactory } from './config/codec.js';
 import type { CompiledRasterFont } from './config/raster.js';
 import {
   bindRasterFormatCompiler,
@@ -12,7 +11,7 @@ import {
   type RasterFormatCompilerWitness,
 } from './internal/raster-format-compiler.js';
 import { rasterCodecFontCompilerInstalled } from './internal/raster-codec-registry.js';
-import { assertCodecIdFactory, CodecIdScope } from './internal/render-id.js';
+import { CodecIdScope } from './internal/render-id.js';
 
 /** Portable application selection accepted by renderer-neutral text APIs. */
 export type FontSelection<Format extends RasterFormatMetadata> = Font<Format> | FontStack<Format, Font<Format>>;
@@ -316,20 +315,6 @@ export function compileImmutableFontRaster(
   input: RasterFontCompileInput,
 ): CompiledRasterFont | undefined {
   return immutableFontImplementation(font).variant().compileRaster(input);
-}
-
-/** @internal Compile an immutable font through the registered RasterCodec, if it has one. */
-export function compileRasterFont<Format extends RasterFormatMetadata>(
-  font: Font<Format>,
-  ids: CodecIdFactory = new CodecIdScope(),
-): CompiledRasterFont | undefined {
-  assertCodecIdFactory(ids, 'raster font compiler ids');
-  const resources = immutableFontResources(font);
-  return compileImmutableFontRaster(font, {
-    cacheKey: immutableFontVariantIdentity(font),
-    glyphCount: resources.font.glyphCount,
-    identities: ids,
-  });
 }
 
 /** @internal Retain one immutable raster-format variant independently of its user Font wrapper. */

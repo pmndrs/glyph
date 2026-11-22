@@ -3,7 +3,7 @@ import type { Font } from '../font.js';
 import type { RasterFormatMetadata, RasterResourceId } from '../config/raster-format.js';
 import { type CodecIdFactory, type CodecResourceId, type CodecTechniqueId } from '../config/codec.js';
 import { assertCodecIdFactory, CodecIdScope } from './render-id.js';
-import { compileRasterFont } from '../loaded-font.js';
+import { compileRasterFont } from '../config/raster.js';
 const MAX_U32 = 0xffff_ffff;
 const MAX_U16 = 0xffff;
 const MISSING_RESOURCE = 0xffff_ffff;
