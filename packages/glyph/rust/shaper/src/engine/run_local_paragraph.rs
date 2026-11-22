@@ -220,26 +220,41 @@ fn layout_retained(
         });
         return push_record(run_local, run, reverse, first_block, first_cluster);
     }
-    // Whole chunks before the rebuilt clusters, in a left-to-right run that starts before them.
+    // Whole chunks the run visits before it reaches the rebuilt clusters: from its start when
+    // it runs left to right, from its end when it runs right to left. Those clusters are the
+    // previous ones, at their old glyphs before the splice and moved after it.
     let chunk = LAYOUT_CUT.clusters_per_block;
-    let kept = (splice.start.saturating_sub(start) / chunk) * chunk;
-    let Some(record) = record(start as i64).filter(|_| !reverse && kept > 0) else {
+    let (kept, glyph_delta) = if reverse {
+        (
+            end.saturating_sub(splice.end) / chunk * chunk,
+            splice.glyph_delta,
+        )
+    } else {
+        (splice.start.saturating_sub(start) / chunk * chunk, 0)
+    };
+    let Some(record) = record(start as i64).filter(|record| {
+        kept > 0
+            && start <= splice.start
+            && (!reverse || i64::from(record.cluster_end) + splice.cluster_delta == end as i64)
+    }) else {
         return layout(run_local, run, clusters, runs, styles, None);
     };
     let first_block = run_local.blocks().len();
     let first_cluster = run_local.index.cluster_blocks.len();
-    copy_blocks(run_local, previous, record, kept, 0)?;
-    let glyph_start = run.glyph_start as usize;
-    let resume_glyph = clusters.glyph_starts[start + kept] as usize;
-    run_local.rows.copy_rows(
-        glyph_start,
-        &previous.rows,
-        glyph_start,
-        resume_glyph - glyph_start,
-    );
+    copy_blocks(run_local, previous, record, kept, glyph_delta)?;
+    let run_glyph_end = run.glyph_start as usize + run.glyph_count as usize;
+    let glyphs = if reverse {
+        clusters.glyph_starts[end - kept] as usize..run_glyph_end
+    } else {
+        run.glyph_start as usize..clusters.glyph_starts[start + kept] as usize
+    };
+    let old_start = (glyphs.start as i64 - glyph_delta) as usize;
+    run_local
+        .rows
+        .copy_rows(glyphs.start, &previous.rows, old_start, glyphs.len());
     #[cfg(test)]
     super::work_attribution::record(|work| {
-        work.run_local_adopted_glyphs += resume_glyph - glyph_start;
+        work.run_local_adopted_glyphs += glyphs.len();
     });
     let resume = RunResume {
         ordinal: kept,
