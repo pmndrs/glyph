@@ -224,3 +224,34 @@ other target, the conformance suites among them) and `pnpm --filter @pmndrs/glyp
 Verification on `20528e989`: native and wasm oracle, full tier, 592 cases equal, 0 runs with an unlisted
 divergence, no reference re-frozen; `cargo test --features oracle`, `pnpm --filter @pmndrs/glyph test` and
 `cargo clippy --features oracle --all-targets -- -D warnings` passed.
+
+### Several edited runs (landed)
+
+Both remaining full rebuilds were the shape stage's: it reshaped one source run or the whole paragraph.
+
+- **Arabic insert.** The typed letter repeats the one before the caret, which ends a run, so it joins that run; the
+  shape stage expected the next run to stay where it was and declined. Runs after the edited one now move by the
+  whole edit, as their copied glyphs already did.
+- **Several edits.** The request's mutations reached the shape stage as one bounding edit across many runs. They are
+  now also kept as separate edits, split where the unit ids show retained text between them (`text_edit_parts`;
+  `text_edits` keeps the bounding edit for every other consumer). When they lie in several runs, each edited run is
+  reshaped whole, every other run keeps its glyphs moved by the edited runs before it, and a run that needs a
+  fallback font declines the request to the full shape.
+- **The splice** takes the list of edited runs: each stretch between them is the previous rows moved by the runs
+  before it, line breaks are compared per stretch at its own shift, and the changed ranges, revisions and run-local
+  reuse follow each window.
+
+Native, 15k, whole step, microseconds (minimum of 20; "before" is the same bench earlier in this session, not interleaved):
+
+| Paragraph | `insert_mid` before → after | `three_range` before → after |
+| --------- | --------------------------: | ---------------------------: |
+| Latin     |               1,594 → 1,521 |                3,933 → 1,850 |
+| Arabic    |               8,613 → 2,146 |                9,486 → 2,633 |
+| CJK       |               2,205 → 1,887 |                3,916 → 2,070 |
+
+One existing test asserted that a two-edit request across runs reshaped at least the whole text; it now asserts
+that each edited run is reshaped whole, which is what the unsafe concat chain it guards needs.
+
+Verification on `d5d29dcd9`: native and wasm oracle, full tier, 592 cases equal, 0 runs with an unlisted
+divergence, no reference re-frozen; `cargo test --features oracle`, `pnpm --filter @pmndrs/glyph test` and
+`cargo clippy --features oracle --all-targets -- -D warnings` passed.
