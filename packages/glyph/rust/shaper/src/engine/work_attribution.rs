@@ -33,6 +33,8 @@ pub(crate) struct Work {
     pub cluster_full_builds: usize,
     /// Old cluster rows copied by ClusterArena::copy_from, across all callers.
     pub cluster_copied_old_rows: usize,
+    /// Cluster builds that rebuilt one edited source run between the previous rows.
+    pub cluster_source_run_splices: usize,
     pub cluster_full_glyph_visits: usize,
     pub cluster_retained_glyph_loop_visits: usize,
     pub run_local_glyph_visits: usize,
@@ -218,6 +220,7 @@ std::thread_local! {
         shape_range_copied_glyphs: 0,
         cluster_full_builds: 0,
         cluster_copied_old_rows: 0,
+        cluster_source_run_splices: 0,
         cluster_full_glyph_visits: 0,
         cluster_retained_glyph_loop_visits: 0,
         run_local_glyph_visits: 0,

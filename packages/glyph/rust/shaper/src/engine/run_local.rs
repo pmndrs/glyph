@@ -184,6 +184,15 @@ impl RowLanes {
         }
     }
 
+    /// Copies `len` rows from `source`, starting at glyph `from` there and `to` here.
+    pub(super) fn copy_rows(&mut self, to: usize, source: &Self, from: usize, len: usize) {
+        for (lane, source) in self.lanes_mut().into_iter().zip(source.lanes()) {
+            lane[to..to + len].copy_from_slice(&source[from..from + len]);
+        }
+        #[cfg(test)]
+        self.pen_inline[to..to + len].copy_from_slice(&source.pen_inline[from..from + len]);
+    }
+
     fn view(&self) -> RunLocalLanes<'_> {
         RunLocalLanes {
             inline_origin: &self.inline_origin,
@@ -275,6 +284,34 @@ impl InkUnitLanes {
         &self.units
     }
 
+    #[cfg(test)]
+    pub(crate) fn outlined(&self, glyph: usize) -> bool {
+        self.outlined[glyph / 64] >> (glyph % 64) & 1 != 0
+    }
+
+    /// Copies `len` glyphs' ink from `source`, starting at `from` there and `to` here, into
+    /// lanes `reset` sized; the outlined bits of other glyphs here are left as they are.
+    pub(crate) fn copy_from(&mut self, source: &Self, from: usize, to: usize, len: usize) {
+        self.units[to..to + len].copy_from_slice(&source.units[from..from + len]);
+        let mut done = 0;
+        while done < len {
+            let (source_bit, target_bit) = (from + done, to + done);
+            // As many bits as fit in both the source word and the target word from here.
+            let take = (64 - source_bit % 64)
+                .min(64 - target_bit % 64)
+                .min(len - done);
+            let mask = if take == 64 {
+                u64::MAX
+            } else {
+                (1 << take) - 1
+            };
+            let bits = (source.outlined[source_bit / 64] >> (source_bit % 64)) & mask;
+            let word = &mut self.outlined[target_bit / 64];
+            *word = (*word & !(mask << (target_bit % 64))) | (bits << (target_bit % 64));
+            done += take;
+        }
+    }
+
     /// The ink lane and the outlined bitset, for a producer that fills whole glyph ranges after
     /// `reset`.
     pub(crate) fn lanes_mut(&mut self) -> (&mut [[i16; 4]], &mut [u64]) {
@@ -349,6 +386,56 @@ impl RunLocalArena {
     /// reads no font.
     pub(super) fn keep_ink(&mut self) {
         self.inherited = Some(Inherited::Ink);
+    }
+
+    /// Every lane a rebuild writes equals `other`'s.
+    #[cfg(test)]
+    pub(crate) fn assert_geometry_equals(&self, other: &Self) {
+        assert!(self.index.blocks == other.index.blocks, "run-local blocks");
+        assert!(
+            self.index.cluster_blocks == other.index.cluster_blocks,
+            "run-local cluster blocks"
+        );
+        let bits = |lane: &[f64]| lane.iter().map(|value| value.to_bits()).collect::<Vec<_>>();
+        assert_eq!(
+            bits(&self.index.cluster_prefixes),
+            bits(&other.index.cluster_prefixes),
+            "run-local prefixes"
+        );
+        assert_eq!(
+            self.index.row_count, other.index.row_count,
+            "run-local row count"
+        );
+        assert_eq!(
+            self.index.row_order, other.index.row_order,
+            "run-local row order"
+        );
+        for (lane, other) in self.rows.lanes().into_iter().zip(other.rows.lanes()) {
+            let bits = |lane: &[f32]| lane.iter().map(|value| value.to_bits()).collect::<Vec<_>>();
+            assert_eq!(bits(lane), bits(other), "run-local rows");
+        }
+        assert!(self.runs == other.runs, "run-local run records");
+        let words = |arena: &Self| {
+            arena
+                .source_words
+                .iter()
+                .map(|word| (word.covered, word.outlined))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(words(self), words(other), "run-local source words");
+        let prefix = |arena: &Self| {
+            arena
+                .source_prefix
+                .iter()
+                .map(|word| (word.covered, word.outlined))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(prefix(self), prefix(other), "run-local source ranks");
+    }
+
+    /// Whether the next rebuild reads the ink the producer filled and recomputes geometry.
+    pub(super) fn inherits_ink(&self) -> bool {
+        self.inherited == Some(Inherited::Ink)
     }
 
     /// Takes the inheritance recorded by `inherit`, so it serves exactly one rebuild.

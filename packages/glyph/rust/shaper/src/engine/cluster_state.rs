@@ -8,8 +8,10 @@ use crate::{FontGlyphExtents, FontInkTable, FontMetrics, unicode::UnicodeAnalysi
 
 mod build;
 mod diff;
+mod splice;
 
 pub(crate) use diff::ClusterChanges;
+pub(crate) use splice::SourceRunSplice;
 
 use super::{
     EngineError, FrameFault,
@@ -565,6 +567,8 @@ pub(crate) struct ClusterArena {
     pub(super) aligned: bool,
     /// Which clusters differ from the arena this one replaces; see `ClusterChanges`.
     pub(super) changes: ClusterChanges,
+    /// The clusters the last build spliced, until run-local geometry reads it.
+    pub(super) run_local_splice: Option<super::run_local_paragraph::RunLocalSplice>,
 }
 
 impl CanonicalClusterView for ClusterArena {
@@ -813,7 +817,18 @@ impl ClusterArena {
         self.reserve(text.len().max(count))?;
         self.build_headers(text, text_unit_ids, boundaries, styles)?;
         self.build_index(text.len())?;
-        self.aggregate_shape(runs, shape, metrics_for, ink_for)?;
+        self.run_local
+            .ink
+            .reset(shape.glyph_ids.len())
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        let scope = build::ShapeScope {
+            clusters: 0..count,
+            source_run: None,
+            glyph_base: 0,
+        };
+        if self.aggregate_shape(runs, shape, scope, metrics_for, ink_for)? {
+            self.run_local.keep_ink();
+        }
         self.rebuild_layout_runs_for_shaping(runs)?;
         self.apply_break_flags(unicode)?;
         self.refresh_layout_units()?;
@@ -1676,6 +1691,7 @@ impl ClusterArena {
         self.run_local.clear();
         self.aligned = false;
         self.changes.reset();
+        self.run_local_splice = None;
         // An arena with no clusters answers like a fresh one, whatever it held before.
         self.ltr = false;
     }
@@ -1837,6 +1853,59 @@ impl ClusterArena {
             styles,
             extents_for,
         );
+        self.layout_runs.runs = layout_runs;
+        self.run_local = run_local;
+        result
+    }
+
+    /// `rebuild_run_local_geometry` for an arena the last build spliced from `previous`:
+    /// geometry whose inputs the splice kept is `previous`'s.
+    pub(crate) fn rebuild_run_local_geometry_from(
+        &mut self,
+        previous: &Self,
+        runs: &[ShapingRun],
+        styles: &[StyleSegment],
+        extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
+    ) -> Result<(), EngineError> {
+        let Some(splice) = self.run_local_splice.take() else {
+            return self.rebuild_run_local_geometry(runs, styles, extents_for);
+        };
+        let mut run_local = core::mem::take(&mut self.run_local);
+        let mut layout_runs = core::mem::take(&mut self.layout_runs.runs);
+        #[cfg(test)]
+        let mut full = {
+            let mut full = RunLocalArena::default();
+            full.inherit(&run_local, Inherited::Ink)
+                .expect("the spliced ink copies");
+            if !run_local.inherits_ink() {
+                full.take_inherited();
+            }
+            (full, layout_runs.clone())
+        };
+        let result = super::run_local_paragraph::rebuild_spliced(
+            &mut run_local,
+            &mut layout_runs,
+            self,
+            &previous.run_local,
+            splice,
+            runs,
+            styles,
+            extents_for,
+        );
+        #[cfg(test)]
+        if result.is_ok() {
+            super::run_local_paragraph::rebuild(
+                &mut full.0,
+                &mut full.1,
+                self,
+                runs,
+                styles,
+                extents_for,
+            )
+            .expect("the full rebuild of a spliced arena");
+            run_local.assert_geometry_equals(&full.0);
+            assert!(layout_runs == full.1, "spliced layout run blocks");
+        }
         self.layout_runs.runs = layout_runs;
         self.run_local = run_local;
         result
@@ -2084,16 +2153,17 @@ fn is_hard_break(text: &[u16], start: u32) -> Result<bool, EngineError> {
 /// cluster ids never decrease across it, so per-cluster ordinals assign
 /// sequentially. Simple-script LTR shaping satisfies this; any reordering
 /// (RTL, Indic) falls back to the per-glyph scatter.
+#[cfg(test)]
 fn scatter_is_identity(shape: &ShapeArena) -> bool {
-    let mut cursor = 0_u64;
-    for run in &shape.runs {
-        if u64::from(run.glyph_start) != cursor {
-            return false;
-        }
-        cursor += u64::from(run.glyph_count);
-    }
-    cursor == shape.glyph_ids.len() as u64
-        && shape.clusters.windows(2).all(|pair| pair[0] <= pair[1])
+    build::identity_range(
+        shape,
+        &build::ShapeScope {
+            clusters: 0..0,
+            source_run: None,
+            glyph_base: 0,
+        },
+    )
+    .is_some()
 }
 
 pub(crate) fn runs_canonically_equal(

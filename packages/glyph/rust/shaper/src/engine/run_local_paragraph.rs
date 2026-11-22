@@ -73,6 +73,239 @@ pub(crate) fn rebuild(
     result
 }
 
+/// Where a cluster splice rebuilt clusters: `[start, end)` here, which were the previous
+/// arena's `[start, end - cluster_delta)`. The glyphs after them moved by `glyph_delta`.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct RunLocalSplice {
+    pub start: usize,
+    pub end: usize,
+    pub cluster_delta: i64,
+    pub glyph_delta: i64,
+}
+
+/// `rebuild` after a cluster splice, reusing `previous`'s geometry where its inputs are
+/// unchanged. A block's rows depend only on its own clusters, and blocks are cut at multiples
+/// of the cut rule's cluster count from their run's first cluster, so a run before the rebuilt
+/// clusters keeps its blocks, a run after them keeps its blocks moved, and a left-to-right run
+/// that starts before them keeps the blocks of every whole chunk before them. The rest is laid
+/// out by the kernel, exactly as `rebuild` lays it out.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn rebuild_spliced(
+    run_local: &mut RunLocalArena,
+    layout_runs: &mut [LayoutRun],
+    clusters: &ClusterArena,
+    previous: &RunLocalArena,
+    splice: RunLocalSplice,
+    runs: &[ShapingRun],
+    styles: &[StyleSegment],
+    extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
+) -> Result<(), EngineError> {
+    let glyphs = clusters.glyph_ids.len();
+    if !run_local.inherits_ink() || run_local.ink.units().len() != glyphs {
+        return rebuild(run_local, layout_runs, clusters, runs, styles, extents_for);
+    }
+    run_local.take_inherited();
+    run_local.clear_geometry();
+    for run in layout_runs.iter_mut() {
+        run.numeric_blocks = NumericBlockSpan::default();
+    }
+    let result = (|| {
+        run_local.rows.grow(glyphs).map_err(error)?;
+        for run in layout_runs.iter_mut() {
+            run.numeric_blocks =
+                layout_retained(run_local, *run, clusters, previous, splice, runs, styles)?;
+        }
+        run_local.finalize_paragraph_ranks().map_err(error)
+    })();
+    if result.is_err() {
+        run_local.clear();
+        for run in layout_runs.iter_mut() {
+            run.numeric_blocks = NumericBlockSpan::default();
+        }
+    }
+    result
+}
+
+/// One run of a spliced rebuild: copied, moved, completed after a copied prefix, or laid out.
+fn layout_retained(
+    run_local: &mut RunLocalArena,
+    run: LayoutRun,
+    clusters: &ClusterArena,
+    previous: &RunLocalArena,
+    splice: RunLocalSplice,
+    runs: &[ShapingRun],
+    styles: &[StyleSegment],
+) -> Result<NumericBlockSpan, EngineError> {
+    let reverse = direction(run, runs)? & 1 != 0;
+    let (start, end) = (run.cluster_start as usize, run.cluster_end as usize);
+    let record = |cluster_start: i64| {
+        let at = previous
+            .runs
+            .partition_point(|record| i64::from(record.cluster_start) < cluster_start);
+        previous
+            .runs
+            .get(at)
+            .filter(|record| {
+                i64::from(record.cluster_start) == cluster_start && record.reverse == reverse
+            })
+            .copied()
+    };
+    let moved = if end <= splice.start {
+        record(start as i64)
+            .filter(|record| record.cluster_end as usize == end)
+            .map(|record| (record, 0))
+    } else if start >= splice.end {
+        record(start as i64 - splice.cluster_delta)
+            .filter(|record| i64::from(record.cluster_end) + splice.cluster_delta == end as i64)
+            .map(|record| (record, splice.glyph_delta))
+    } else {
+        None
+    };
+    if let Some((record, glyph_delta)) = moved {
+        let first_block = run_local.blocks().len();
+        let first_cluster = run_local.index.cluster_blocks.len();
+        copy_blocks(
+            run_local,
+            previous,
+            record,
+            record.blocks.cluster_count as usize,
+            glyph_delta,
+        )?;
+        let glyph_start = run.glyph_start as usize;
+        let old_start = (glyph_start as i64 - glyph_delta) as usize;
+        run_local.rows.copy_rows(
+            glyph_start,
+            &previous.rows,
+            old_start,
+            run.glyph_count as usize,
+        );
+        return push_record(run_local, run, reverse, first_block, first_cluster);
+    }
+    // Whole chunks before the rebuilt clusters, in a left-to-right run that starts before them.
+    let chunk = LAYOUT_CUT.clusters_per_block;
+    let kept = (splice.start.saturating_sub(start) / chunk) * chunk;
+    let Some(record) = record(start as i64).filter(|_| !reverse && kept > 0) else {
+        return layout(run_local, run, clusters, runs, styles);
+    };
+    let first_block = run_local.blocks().len();
+    let first_cluster = run_local.index.cluster_blocks.len();
+    copy_blocks(run_local, previous, record, kept, 0)?;
+    let resume = start + kept;
+    let glyph_start = run.glyph_start as usize;
+    let resume_glyph = clusters.glyph_starts[resume] as usize;
+    run_local.rows.copy_rows(
+        glyph_start,
+        &previous.rows,
+        glyph_start,
+        resume_glyph - glyph_start,
+    );
+    lay_out_clusters(run_local, clusters, styles, resume..end, reverse)?;
+    push_record(run_local, run, reverse, first_block, first_cluster)
+}
+
+/// Appends the blocks and cluster lanes of `record`'s first `cluster_count` clusters from
+/// `previous`, with their glyphs moved by `glyph_delta`. Blocks never cross a chunk, so the
+/// blocks of whole chunks are whole.
+fn copy_blocks(
+    run_local: &mut RunLocalArena,
+    previous: &RunLocalArena,
+    record: RunRecord,
+    cluster_count: usize,
+    glyph_delta: i64,
+) -> Result<(), EngineError> {
+    let old_clusters =
+        record.blocks.cluster_start as usize..record.blocks.cluster_start as usize + cluster_count;
+    let old_first = record.blocks.start;
+    let blocks = previous.index.cluster_blocks[old_clusters.clone()]
+        .iter()
+        .rev()
+        .find(|block| **block != u32::MAX)
+        .map_or(0, |last| (last - old_first + 1) as usize);
+    let old_blocks = &previous.index.blocks[old_first as usize..old_first as usize + blocks];
+    let new_first =
+        u32::try_from(run_local.index.blocks.len()).map_err(|_| EngineError::ResultTooLarge)?;
+    let old_row_base = old_blocks.first().map_or(0, |block| block.row_start);
+    let row_base = run_local.index.row_count;
+    let index = &mut run_local.index;
+    index
+        .blocks
+        .try_reserve(blocks)
+        .map_err(|_| EngineError::ResultTooLarge)?;
+    index
+        .cluster_blocks
+        .try_reserve(cluster_count)
+        .map_err(|_| EngineError::ResultTooLarge)?;
+    index
+        .cluster_prefixes
+        .try_reserve(cluster_count)
+        .map_err(|_| EngineError::ResultTooLarge)?;
+    let shift = |glyph: u32| (i64::from(glyph) + glyph_delta) as u32;
+    for block in old_blocks {
+        index.blocks.push(super::run_local::NumericBlock {
+            source_glyph_start: shift(block.source_glyph_start),
+            row_start: block.row_start - old_row_base + row_base,
+            ..*block
+        });
+    }
+    let rows = old_blocks
+        .last()
+        .map_or(0, |block| block.row_start + block.row_count - old_row_base);
+    index.row_count += rows;
+    index.cluster_blocks.extend(
+        previous.index.cluster_blocks[old_clusters.clone()]
+            .iter()
+            .map(|block| {
+                if *block == u32::MAX {
+                    u32::MAX
+                } else {
+                    block - old_first + new_first
+                }
+            }),
+    );
+    index
+        .cluster_prefixes
+        .extend_from_slice(&previous.index.cluster_prefixes[old_clusters]);
+    #[cfg(any(test, feature = "oracle"))]
+    {
+        let old_rows = old_row_base as usize..(old_row_base + rows) as usize;
+        index.row_order.extend(
+            previous.index.row_order[old_rows]
+                .iter()
+                .map(|glyph| shift(*glyph)),
+        );
+    }
+    run_local.cover_blocks(new_first as usize).map_err(error)
+}
+
+fn push_record(
+    run_local: &mut RunLocalArena,
+    run: LayoutRun,
+    reverse: bool,
+    first_block: usize,
+    first_cluster: usize,
+) -> Result<NumericBlockSpan, EngineError> {
+    let count = |len: usize, first: usize| {
+        u32::try_from(len - first).map_err(|_| EngineError::ResultTooLarge)
+    };
+    let span = NumericBlockSpan {
+        start: u32::try_from(first_block).map_err(|_| EngineError::ResultTooLarge)?,
+        count: count(run_local.index.blocks.len(), first_block)?,
+        cluster_start: u32::try_from(first_cluster).map_err(|_| EngineError::ResultTooLarge)?,
+        cluster_count: count(run_local.index.cluster_blocks.len(), first_cluster)?,
+    };
+    run_local
+        .runs
+        .try_reserve(1)
+        .map_err(|_| EngineError::ResultTooLarge)?;
+    run_local.runs.push(RunRecord {
+        cluster_start: run.cluster_start,
+        cluster_end: run.cluster_end,
+        reverse,
+        blocks: span,
+    });
+    Ok(span)
+}
+
 /// Gives each layout run the blocks of the inherited run it equals. The caller inherits only
 /// from the arena its lanes were copied from with no run-local input changed, so what can
 /// still differ is how the clusters are cut into runs; any difference declines the geometry.
@@ -149,6 +382,28 @@ fn layout(
     let reverse = direction(run, runs)? & 1 != 0;
     let cluster_start = run.cluster_start as usize;
     let cluster_end = run.cluster_end as usize;
+    let first_block = run_local.blocks().len();
+    let first_cluster = run_local.index.cluster_blocks.len();
+    lay_out_clusters(
+        run_local,
+        clusters,
+        styles,
+        cluster_start..cluster_end,
+        reverse,
+    )?;
+    push_record(run_local, run, reverse, first_block, first_cluster)
+}
+
+/// Runs the kernel over the clusters `range` of one run, appending their blocks, cluster lanes
+/// and rows. The cut counts clusters from `range.start`.
+fn lay_out_clusters(
+    run_local: &mut RunLocalArena,
+    clusters: &ClusterArena,
+    styles: &[StyleSegment],
+    range: core::ops::Range<usize>,
+    reverse: bool,
+) -> Result<(), EngineError> {
+    let (cluster_start, cluster_end) = (range.start, range.end);
     if cluster_start > cluster_end || cluster_end > clusters.glyph_starts.len() {
         return Err(EngineError::InvalidRequest);
     }
@@ -161,7 +416,7 @@ fn layout(
     let first_block = run_local.blocks().len();
     #[cfg(test)]
     let first_row = run_local.index.row_count;
-    let span = layout_run(
+    layout_run(
         &mut run_local.index,
         &mut run_local.rows,
         &mut run_local.scratch,
@@ -191,18 +446,7 @@ fn layout(
     super::work_attribution::record(|work| {
         work.run_local_glyph_visits += (run_local.index.row_count - first_row) as usize;
     });
-    run_local.cover_blocks(first_block).map_err(error)?;
-    run_local
-        .runs
-        .try_reserve(1)
-        .map_err(|_| EngineError::ResultTooLarge)?;
-    run_local.runs.push(RunRecord {
-        cluster_start: run.cluster_start,
-        cluster_end: run.cluster_end,
-        reverse,
-        blocks: span,
-    });
-    Ok(span)
+    run_local.cover_blocks(first_block).map_err(error)
 }
 
 /// One span per stretch of attached clusters that share a style and a font em: the outer loop
