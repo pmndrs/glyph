@@ -109,10 +109,10 @@ const emptySphere = Object.freeze(new THREE.Sphere(new THREE.Vector3(), -Infinit
  * after anything it reads changed: a static draw costs one version comparison per buffer per test.
  */
 export class GlyphDraw extends THREE.Mesh {
-  readonly #bounds: DrawBounds | undefined;
+  #bounds: DrawBounds | undefined;
 
   /** `source` undefined leaves the draw unculled: a caller material may move vertices anywhere. */
-  constructor(geometry: THREE.BufferGeometry, material: THREE.Material, source: DrawBoundsSource | undefined) {
+  constructor(geometry?: THREE.BufferGeometry, material?: THREE.Material, source?: DrawBoundsSource) {
     super(geometry, material);
     this.#bounds = source === undefined ? undefined : new DrawBounds(source);
     this.frustumCulled = source !== undefined;
@@ -121,6 +121,14 @@ export class GlyphDraw extends THREE.Mesh {
   /** Draw-local bound of every quad this draw currently places; read by Three's frustum test. */
   get boundingSphere(): THREE.Sphere | undefined {
     return this.#bounds?.sphere(this);
+  }
+
+  /** A clone draws the same records from the same geometry, so it keeps the bound or stays unculled with it. */
+  override copy(source: this, recursive?: boolean): this {
+    super.copy(source, recursive);
+    if (source instanceof GlyphDraw) this.#bounds = source.#bounds;
+    this.frustumCulled = source.frustumCulled && this.#bounds !== undefined;
+    return this;
   }
 }
 
@@ -199,7 +207,7 @@ class DrawBounds {
    */
   #fitSphere(matrixWorld: THREE.Matrix4): void {
     const box = this.#box;
-    const center = box.getCenter(this.#sphere.center);
+    box.getCenter(this.#sphere.center);
     const scale = matrixWorld.getMaxScaleOnAxis();
     const m = matrixWorld.elements;
     const halfX = (box.max.x - box.min.x) / 2;
@@ -217,7 +225,6 @@ class DrawBounds {
     }
     // A singular draw matrix collapses every corner onto the centre.
     this.#sphere.radius = scale === 0 ? Math.hypot(halfX, halfY, halfZ) : Math.sqrt(furthest) / scale;
-    this.#sphere.center.copy(center);
   }
 
   /** Unions every record's quad, in draw-local space or, when indexed, per transform identity. */
@@ -225,8 +232,10 @@ class DrawBounds {
     const { origin, size, placement, screenFringe, indexed, glyphTransforms } = this.#source;
     const originArray = origin.buffer.array;
     const originStride = origin.buffer.vectorWidth;
+    const originLane = origin.lane;
     const sizeArray = size.buffer.array;
     const sizeStride = size.buffer.vectorWidth;
+    const sizeLane = size.lane;
     const slotArray = placement?.slot.buffer.array;
     const slotStride = placement?.slot.buffer.vectorWidth ?? 0;
     const slotLane = placement?.slot.lane ?? 0;
@@ -235,20 +244,22 @@ class DrawBounds {
     const matrices = glyphTransforms?.array as Float32Array | undefined;
     const boxes = this.#recordBoxes;
     boxes.clear();
-    let current: Float64Array | undefined;
-    let currentTransform = -1;
+    // The extent of the current run of records sharing one transform, in paragraph space (y down).
+    let left = Infinity;
+    let top = Infinity;
+    let right = -Infinity;
+    let bottom = -Infinity;
+    let transform = -1;
     for (let record = start; record < start + count; record += 1) {
-      const transform = indices === undefined ? 0 : indices[record]!;
-      if (transform !== currentTransform) {
-        currentTransform = transform;
-        current = boxes.get(transform);
-        if (current === undefined) {
-          current = new Float64Array([Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]);
-          boxes.set(transform, current);
-        }
+      const recordTransform = indices === undefined ? 0 : indices[record]!;
+      if (recordTransform !== transform) {
+        if (transform !== -1) unionQuadExtent(boxes, transform, left, top, right, bottom);
+        transform = recordTransform;
+        left = top = Infinity;
+        right = bottom = -Infinity;
       }
-      const originOffset = record * originStride + origin.lane;
-      const sizeOffset = record * sizeStride + size.lane;
+      const originOffset = record * originStride + originLane;
+      const sizeOffset = record * sizeStride + sizeLane;
       let x = originArray[originOffset]!;
       let y = originArray[originOffset + 1]!;
       const width = sizeArray[sizeOffset]!;
@@ -258,29 +269,37 @@ class DrawBounds {
         x += tableArray[slot]!;
         y += tableArray[slot + 1]!;
       }
-      const pad = screenFringe ? Math.max(Math.abs(width), Math.abs(height)) : 0;
-      // Shaders place `origin + corner * size` with y down, then negate y.
-      const left = x + Math.min(0, width) - pad;
-      const right = x + Math.max(0, width) + pad;
-      const bottom = -(y + Math.max(0, height)) - pad;
-      const top = -(y + Math.min(0, height)) + pad;
-      if (matrices === undefined) {
-        expandBox(current!, left, bottom, 0);
-        expandBox(current!, right, top, 0);
-      } else {
-        const offset = record * 16;
-        for (let corner = 0; corner < 4; corner += 1) {
-          const cornerX = (corner & 1) === 0 ? left : right;
-          const cornerY = (corner & 2) === 0 ? bottom : top;
-          expandBox(
-            current!,
-            matrices[offset]! * cornerX + matrices[offset + 4]! * cornerY + matrices[offset + 12]!,
-            matrices[offset + 1]! * cornerX + matrices[offset + 5]! * cornerY + matrices[offset + 13]!,
-            matrices[offset + 2]! * cornerX + matrices[offset + 6]! * cornerY + matrices[offset + 14]!,
-          );
-        }
+      // Shaders place `origin + corner * size` for corners in [0, 1].
+      let x0 = x;
+      let x1 = x + width;
+      if (x1 < x0) {
+        x0 = x1;
+        x1 = x;
       }
+      let y0 = y;
+      let y1 = y + height;
+      if (y1 < y0) {
+        y0 = y1;
+        y1 = y;
+      }
+      if (screenFringe) {
+        const pad = Math.max(x1 - x0, y1 - y0);
+        x0 -= pad;
+        x1 += pad;
+        y0 -= pad;
+        y1 += pad;
+      }
+      if (matrices !== undefined) {
+        unionTransformedQuad(boxes, transform, matrices, record * 16, x0, y0, x1, y1);
+        continue;
+      }
+      // Comparisons skip a NaN corner, which the GPU discards with its triangle.
+      if (x0 < left) left = x0;
+      if (y0 < top) top = y0;
+      if (x1 > right) right = x1;
+      if (y1 > bottom) bottom = y1;
     }
+    if (transform !== -1) unionQuadExtent(boxes, transform, left, top, right, bottom);
   }
 
   /** Places each transform identity's box with its current table row; a hidden (zero) row draws nothing. */
@@ -302,6 +321,54 @@ class DrawBounds {
         box.expandByPoint(corner);
       }
     }
+  }
+}
+
+function transformBox(boxes: Map<number, Float64Array>, transform: number): Float64Array {
+  let box = boxes.get(transform);
+  if (box === undefined) {
+    box = new Float64Array([Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]);
+    boxes.set(transform, box);
+  }
+  return box;
+}
+
+/** Unions one paragraph-space extent (y down) into a transform's draw-local box; shaders negate y. */
+function unionQuadExtent(
+  boxes: Map<number, Float64Array>,
+  transform: number,
+  left: number,
+  top: number,
+  right: number,
+  bottom: number,
+): void {
+  if (!(left <= right)) return;
+  const box = transformBox(boxes, transform);
+  expandBox(box, left, -bottom, 0);
+  expandBox(box, right, -top, 0);
+}
+
+/** Unions the four corners of one quad placed by its detached glyph matrix. */
+function unionTransformedQuad(
+  boxes: Map<number, Float64Array>,
+  transform: number,
+  matrices: Float32Array,
+  offset: number,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+): void {
+  const box = transformBox(boxes, transform);
+  for (let corner = 0; corner < 4; corner += 1) {
+    const x = (corner & 1) === 0 ? x0 : x1;
+    const y = -((corner & 2) === 0 ? y0 : y1);
+    expandBox(
+      box,
+      matrices[offset]! * x + matrices[offset + 4]! * y + matrices[offset + 12]!,
+      matrices[offset + 1]! * x + matrices[offset + 5]! * y + matrices[offset + 13]!,
+      matrices[offset + 2]! * x + matrices[offset + 6]! * y + matrices[offset + 14]!,
+    );
   }
 }
 

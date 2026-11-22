@@ -175,6 +175,10 @@ for (const transformMode of ['indexed', 'direct']) {
     const side = new THREE.PerspectiveCamera(60, 2, 0.1, 2_000);
     side.position.set(0, 0, 400);
     side.lookAt(0, 0, 0);
+    const [draw] = glyphDraws(scene);
+    const clone = draw.clone();
+    assert.ok(clone.frustumCulled, 'a cloned draw stays culled');
+    assert.ok(clone.boundingSphere.equals(draw.boundingSphere), 'and reads the bound of the records it shares');
     const wide = submittedDraws(scene, side);
     assert.equal(wide.length, glyphDraws(scene).length, 'a camera that sees every label submits every draw');
     side.position.set(5_000, 0, 400);
