@@ -5,10 +5,11 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { mtsdfBakerAbi as abi } from '../dist/mtsdf-baker-abi.js';
+import { rustTargetDirectory } from './support/rust-target.mjs';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const manifest = 'rust/mtsdf-baker/Cargo.toml';
-const targetDirectory = fileURLToPath(new URL('../rust/mtsdf-baker/target/kernel-only-wasm/', import.meta.url));
+const targetDirectory = rustTargetDirectory('mtsdf-baker', 'kernel-only-wasm');
 execFileSync(
   'cargo',
   [

@@ -9,6 +9,7 @@ import { captureCommand } from './support/capture-command.mjs';
 import { rewritePublishedSourceMaps } from './support/published-source-maps.mjs';
 import { writeGeneratedTypescriptAbi } from './support/generated-typescript-abi.mjs';
 import { reproducibleRustEnvironment } from './support/reproducible-rust-env.mjs';
+import { rustTargetDirectory, withRustTarget } from './support/rust-target.mjs';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 // The distribution is assembled in a staging directory and swapped into place by two
@@ -64,29 +65,22 @@ if (shaperSimdSetting !== undefined && shaperSimdSetting !== '0' && shaperSimdSe
   throw new Error('PMNDRS_GLYPH_SHAPER_SIMD must be 0 or 1');
 }
 const shaperSimd = shaperSimdSetting !== '0';
-const shaperTargetDirectory = fileURLToPath(
-  new URL(`../rust/shaper/target/wasm-${shaperSimd ? 'simd128' : 'scalar'}/`, import.meta.url),
+const shaperTargetDirectory = rustTargetDirectory('shaper', `wasm-${shaperSimd ? 'simd128' : 'scalar'}`);
+const mtsdfArtifactTargetDirectory = rustTargetDirectory('mtsdf-baker', 'artifact-baker-wasm');
+const slugArtifactTargetDirectory = rustTargetDirectory('slug-baker', 'artifact-baker-wasm');
+const bitmapTargetDirectory = rustTargetDirectory('bitmap-baker');
+const fontBakerTargetDirectory = rustTargetDirectory('font-baker');
+const shaperRustEnvironment = withRustTarget(
+  shaperBuildEnvironment(workspaceRoot, shaperTargetDirectory, shaperSimd),
+  shaperTargetDirectory,
 );
-const mtsdfArtifactTargetDirectory = fileURLToPath(
-  new URL('../rust/mtsdf-baker/target/artifact-baker-wasm/', import.meta.url),
-);
-const slugArtifactTargetDirectory = fileURLToPath(
-  new URL('../rust/slug-baker/target/artifact-baker-wasm/', import.meta.url),
-);
-const shaperRustEnvironment = shaperBuildEnvironment(workspaceRoot, shaperTargetDirectory, shaperSimd);
-const mtsdfArtifactRustEnvironment = {
-  ...rustEnvironment,
-  CARGO_TARGET_DIR: mtsdfArtifactTargetDirectory,
-};
-const slugArtifactRustEnvironment = {
-  ...rustEnvironment,
-  CARGO_TARGET_DIR: slugArtifactTargetDirectory,
-};
+const mtsdfArtifactRustEnvironment = withRustTarget(rustEnvironment, mtsdfArtifactTargetDirectory);
+const slugArtifactRustEnvironment = withRustTarget(rustEnvironment, slugArtifactTargetDirectory);
+const bitmapRustEnvironment = withRustTarget(rustEnvironment, bitmapTargetDirectory);
+const fontBakerRustEnvironment = withRustTarget(rustEnvironment, fontBakerTargetDirectory);
 const executable = process.platform === 'win32' ? 'wasm-opt.CMD' : 'wasm-opt';
 const wasmOpt = fileURLToPath(new URL(`../node_modules/.bin/${executable}`, import.meta.url));
-const rustWasm = fileURLToPath(
-  new URL('../rust/bitmap-baker/target/wasm32-unknown-unknown/release/pmndrs_glyph_bitmap_baker.wasm', import.meta.url),
-);
+const rustWasm = join(bitmapTargetDirectory, 'wasm32-unknown-unknown/release/pmndrs_glyph_bitmap_baker.wasm');
 const distributedWasm = fileURLToPath(staged('bitmap-baker.wasm'));
 const shaperWasm = join(shaperTargetDirectory, 'wasm32-unknown-unknown/release/pmndrs_glyph_shaper.wasm');
 const distributedShaperWasm = fileURLToPath(staged('text-shaper.wasm'));
@@ -94,9 +88,7 @@ const mtsdfWasm = join(mtsdfArtifactTargetDirectory, 'wasm32-unknown-unknown/rel
 const distributedMtsdfWasm = fileURLToPath(staged('mtsdf-baker.wasm'));
 const slugWasm = join(slugArtifactTargetDirectory, 'wasm32-unknown-unknown/release/pmndrs_glyph_slug_baker.wasm');
 const distributedSlugWasm = fileURLToPath(staged('slug-baker.wasm'));
-const fontBakerWasm = fileURLToPath(
-  new URL('../rust/font-baker/target/wasm32-unknown-unknown/release/pmndrs_glyph_font_baker.wasm', import.meta.url),
-);
+const fontBakerWasm = join(fontBakerTargetDirectory, 'wasm32-unknown-unknown/release/pmndrs_glyph_font_baker.wasm');
 const distributedFontBakerWasm = fileURLToPath(staged('font-baker.wasm'));
 
 const [bitmapAbiJson, shaperAbiJson, mtsdfAbiJson, slugAbiJson, fontBakerAbiJson] = await Promise.all([
@@ -195,7 +187,7 @@ await run(
     '--locked',
     '--no-default-features',
   ],
-  rustEnvironment,
+  bitmapRustEnvironment,
 );
 await run(
   'cargo',
@@ -244,7 +236,7 @@ await run(
     '--features',
     'subsetting',
   ],
-  rustEnvironment,
+  fontBakerRustEnvironment,
 );
 // The build info has to travel with the outputs it describes. `tsconfig.build.json` points
 // it at `dist/`, and overriding only `--outDir` leaves tsc recording staged emits against a

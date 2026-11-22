@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import test from 'node:test';
 
 import {
@@ -9,15 +10,11 @@ import {
   fontBakerAbi,
 } from '../../../dist/font-baker/index.js';
 import { fingerprint128 } from '../../../dist/internal/content-digest.js';
+import { rustTargetDirectory } from '../../../scripts/support/rust-target.mjs';
 
 const [wasm, rustReleaseWasm] = await Promise.all([
   readFile(new URL('../../../dist/font-baker.wasm', import.meta.url)),
-  readFile(
-    new URL(
-      '../../../rust/font-baker/target/wasm32-unknown-unknown/release/pmndrs_glyph_font_baker.wasm',
-      import.meta.url,
-    ),
-  ),
+  readFile(join(rustTargetDirectory('font-baker'), 'wasm32-unknown-unknown/release/pmndrs_glyph_font_baker.wasm')),
 ]);
 const publishedAbi = fontBakerAbi;
 

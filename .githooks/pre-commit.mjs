@@ -23,7 +23,8 @@ function runHook() {
     );
   }
 
-  if (fixable.length > 0) runPnpm(['exec', 'oxfmt', '--write', ...fixable]);
+  // A staged file the formatter ignores (an LFS fixture, say) is not a failure: it has nothing to format.
+  if (fixable.length > 0) runPnpm(['exec', 'oxfmt', '--write', '--no-error-on-unmatched-pattern', ...fixable]);
 
   let lintStatus = 0;
   if (lintable.length > 0) {

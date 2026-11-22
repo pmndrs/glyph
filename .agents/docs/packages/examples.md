@@ -58,7 +58,10 @@ mise exec -- pnpm --filter @pmndrs/glyph-examples bake:check
 mise exec -- pnpm --filter @pmndrs/glyph-examples check
 ```
 
-The complete check runs typechecking, lint, formatting, deterministic asset verification, a production build, and two
+The complete check runs typechecking, lint, formatting, deterministic asset verification, a production build, and three
 Vitexec browser probes. The R3F probe clicks all three raster-format controls and inspects their committed draws. The Three
 probe verifies that the canvas is connected, the named `Text` belongs to the scene, the `Text` owns its planned mesh, and
 the mesh contains ten visible instances for `Hello world`; the space participates in shaping but emits no draw instance.
+The layout-frame probe (`scripts/layout-frame.probe.ts`) proves the R3F scheduler job on a real canvas: a layout callback
+runs before the renderer traverses the scene, frame 1 draws the text where that callback placed it, and an imperative
+setter draws on `frameloop="demand"`.
