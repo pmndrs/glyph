@@ -1,0 +1,59 @@
+# glyph layout oracle reference v1
+case mech-ellipsis-cut-at-corrected-break
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 daea479540abefa3
+stage text identity 1 a6ab6cd01384ddd6
+stage unicode value 6 2d77f9d242960ae6
+stage bidi value 8 977cd5a75e59221d
+stage style value 26 92308a0c1db38f46
+stage shaping_run value 5 cc761e35222d968e
+stage shape value 14 8c726f4d7ba577c7
+stage cluster value 29 4e8bc870d302a9af
+stage cluster identity 4 4c61029ebf9524fb
+stage cluster repr 8 1415a814ae37cabf
+stage cluster cache 5 1dc29a24a940d5d4
+stage run_local repr 16 a7c45be09a1ec21b
+stage flow value 36 00dcf39c133710a0
+stage boundary value 28 f44902b418ee6a6e
+stage boundary identity 1 1efd7d7e2ddb31dd
+stage positioned identity 4 556233e52aba76e3
+stage positioned value 20 d1491107fccf208a
+stage positioned repr 37 2d89a73cb4578bd1
+stage public value 13 f6936727a5476cb2
+stage public identity 1 de86516903062fc0
+stage view identity 4 74e5d5a7380e3b1f
+stage view value 40 96def9f86cba2b69
+stage wire wire 1 fe039d0871795b93
+stage gather identity 7 1579bb116b336f94
+stage gather value 36 a635b375e10516b3
+stage gpu identity 2 628dd00dea30d688
+stage gpu value 3 427b60b46a8b12b4
+step 01 lift the limit
+class value 265 fa23f57bf8121eae
+class identity 24 8fa553ae6c6453d7
+class repr 61 c5dd1ece493f7d9d
+class cache 5 1dc29a24a940d5d4
+class wire 1 9fdcc69c588e1f2b
+step 02 restore the limit
+class value 266 edcd8c00ae1fd6ad
+class identity 24 cd1c224bb01b055d
+class repr 61 d4100e3e39e9d392
+class cache 5 1dc29a24a940d5d4
+class wire 1 58d506c97976dfe0
+step 03 width 869.75
+class value 230 027e7bd7571e4b4c
+class identity 22 8d04810a67a23cdb
+class repr 41 c4de3c454fd6865b
+class cache 5 1dc29a24a940d5d4
+class wire 1 944ce5839530a729
+step 04 delete 4 at 16 + max lines 3
+class value 230 38de3eb5db8dd020
+class identity 22 aa8b44a1d30e5d77
+class repr 41 aba161df9fb35825
+class wire 1 480a82c8a0b6543b
+step 05 direction 1
+class value 230 26d5e830b747fa67
+class identity 22 68fae32696e19b69
+class repr 41 aba161df9fb35825
+class wire 1 0e0720c606a760ce
