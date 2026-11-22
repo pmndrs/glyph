@@ -34,10 +34,10 @@ class identity 24 a179fe3586a48246
 class repr 61 728321ac03dfbe0b
 class wire 1 9c67b712a5ac6ab7
 step 02 hard breaks alone
-class value 144 69ee0df5e0ad273e
+class value 144 431f7c1e94894ca7
 class identity 11 20a6e697d5127050
 class repr 22 60c452ba402a1277
-class wire 1 9acf23b4fd9d3188
+class wire 1 4b1a0187d13a11a0
 step 03 restore
 class value 266 218b4e3dbaf62c38
 class identity 24 fe95835b66b432a6
