@@ -363,7 +363,7 @@ fn append_measurement(
     clusters: &ClusterArena,
     intrinsic_extents: Option<LayoutExtents>,
     intrinsics: super::cluster_state::IntrinsicWidths,
-    include_glyph_spans: bool,
+    empty_ink_authoritative: bool,
     include_glyphs: bool,
 ) -> Result<(), EngineError> {
     // Flat hand-authored rows are test inputs to the one production serializer.
@@ -397,7 +397,7 @@ fn append_measurement(
         clusters,
         intrinsic_extents,
         intrinsics,
-        include_glyph_spans,
+        empty_ink_authoritative,
         include_glyphs,
     )
 }
@@ -421,7 +421,7 @@ pub(crate) fn append_measurement_from_occurrences(
     clusters: &ClusterArena,
     intrinsic_extents: Option<LayoutExtents>,
     intrinsics: super::cluster_state::IntrinsicWidths,
-    include_glyph_spans: bool,
+    empty_ink_authoritative: bool,
     include_glyphs: bool,
 ) -> Result<(), EngineError> {
     append_measurement_from_occurrences_source(
@@ -440,7 +440,7 @@ pub(crate) fn append_measurement_from_occurrences(
         semantic_line_inline_extents,
         intrinsic_extents,
         intrinsics,
-        include_glyph_spans,
+        empty_ink_authoritative,
         include_glyphs,
     )
 }
@@ -465,7 +465,7 @@ pub(crate) fn append_measurement_from_inline_occurrences(
     semantic_line_glyph_counts: &[u32],
     intrinsic_extents: Option<LayoutExtents>,
     intrinsics: super::cluster_state::IntrinsicWidths,
-    include_glyph_spans: bool,
+    empty_ink_authoritative: bool,
     include_glyphs: bool,
 ) -> Result<(), EngineError> {
     append_measurement_from_occurrences_source(
@@ -488,7 +488,7 @@ pub(crate) fn append_measurement_from_inline_occurrences(
         None,
         intrinsic_extents,
         intrinsics,
-        include_glyph_spans,
+        empty_ink_authoritative,
         include_glyphs,
     )
 }
@@ -511,7 +511,7 @@ fn append_measurement_from_occurrences_source(
     semantic_line_inline_extents: Option<&[f64]>,
     intrinsic_extents: Option<LayoutExtents>,
     intrinsics: super::cluster_state::IntrinsicWidths,
-    include_glyph_spans: bool,
+    empty_ink_authoritative: bool,
     include_glyphs: bool,
 ) -> Result<(), EngineError> {
     #[cfg(feature = "stage-bench")]
@@ -523,9 +523,8 @@ fn append_measurement_from_occurrences_source(
     if constraint.paragraph_id != paragraph_id {
         return Err(EngineError::InvalidRequest);
     }
-    if include_glyph_spans
-        && (semantic_line_glyph_starts.len() != source.line_len()
-            || semantic_line_glyph_counts.len() != source.line_len())
+    if semantic_line_glyph_starts.len() != source.line_len()
+        || semantic_line_glyph_counts.len() != source.line_len()
         || semantic_line_inline_extents.is_some_and(|extents| extents.len() != source.line_len())
     {
         return Err(EngineError::InvalidRequest);
@@ -676,19 +675,13 @@ fn append_measurement_from_occurrences_source(
         }
         consumed_clusters = consumed_clusters
             .max(usize::try_from(last.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?);
-        let item_start = if include_glyph_spans {
-            u32::try_from(glyph_record_start)
-                .map_err(|_| EngineError::ResultTooLarge)?
-                .checked_add(semantic_line_glyph_starts[index])
-                .ok_or(EngineError::ResultTooLarge)?
-        } else {
-            0
-        };
-        let item_count = if include_glyph_spans {
-            semantic_line_glyph_counts[index]
-        } else {
-            0
-        };
+        // Every measurement carries its lines' glyph spans, based at the record index where glyph
+        // records would begin, so a view without glyph records reports the same spans as one with them.
+        let item_start = u32::try_from(glyph_record_start)
+            .map_err(|_| EngineError::ResultTooLarge)?
+            .checked_add(semantic_line_glyph_starts[index])
+            .ok_or(EngineError::ResultTooLarge)?;
+        let item_count = semantic_line_glyph_counts[index];
         target[summary_index + 1 + line_count_emitted] = semantic_line_record(
             paragraph_id,
             index,
@@ -745,7 +738,7 @@ fn append_measurement_from_occurrences_source(
     // Ink is authoritative exactly when this query positioned the glyphs it measured. A paragraph
     // that positioned zero glyphs still reports authoritatively — its ink box is genuinely empty —
     // so the bit tracks whether positioning ran, not whether any ink was found.
-    let ink_measured = positioned_count != 0 || (include_glyph_spans && line_count == 0);
+    let ink_measured = positioned_count != 0 || (empty_ink_authoritative && line_count == 0);
     target[summary_index] = SemanticRecord {
         id: paragraph_id,
         kind: SEMANTIC_PARAGRAPH_MEASUREMENT,
@@ -1125,6 +1118,9 @@ mod tests {
         assert_eq!(records[1].parent_id, 7);
         assert_eq!(records[1].block_start, 4.0);
         assert_eq!(records[1].inline_extent, 7.0);
+        // The line's glyph span is reported without glyph records, based where they would begin.
+        assert_eq!(records[1].item_start, 2);
+        assert_eq!(records[1].item_count, 2);
 
         let mut inspected = vec![];
         append_measurement(

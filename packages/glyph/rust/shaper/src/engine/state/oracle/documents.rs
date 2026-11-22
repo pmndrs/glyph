@@ -9,7 +9,7 @@
 
 use alloc::{format, string::String, vec, vec::Vec};
 
-use crate::engine::frame::{ALIGN_CENTER, ALIGN_JUSTIFY};
+use crate::engine::frame::{ALIGN_CENTER, ALIGN_JUSTIFY, SEMANTIC_VIEW_MEASUREMENT};
 
 use super::{
     corpus::{self, Script},
@@ -21,7 +21,7 @@ use super::{
 const SEED: u64 = 20_261_123;
 
 /// The ways a host with several texts reaches the engine.
-const ROUTES: [(&str, Route); 5] = [
+const ROUTES: [(&str, Route); 6] = [
     // Everything in the publication request.
     ("publish", Route::FULL),
     // The frame: one batch preparation, then a publication that carries only lifecycle.
@@ -61,6 +61,17 @@ const ROUTES: [(&str, Route); 5] = [
             view_mask: 0,
             measure_first: true,
             measure_after: false,
+            split: Split::Batch,
+        },
+    ),
+    // A publication that returns each measurement without its glyphs, then a read of each
+    // paragraph: the two views must name the same glyph span for every line.
+    (
+        "publish-measured",
+        Route {
+            view_mask: SEMANTIC_VIEW_MEASUREMENT,
+            measure_first: false,
+            measure_after: true,
             split: Split::Batch,
         },
     ),
