@@ -438,6 +438,7 @@ f7c291b94d2167cf mech-bidi-bracket-far
 e153f5d009d7ca88 mech-bidi-first-strong-justify
 6eb46dc77630d5a9 mech-bidi-isolate
 4cc2c63768cd704d mech-bidi-isolate-justify
+712fa05332267c9a mech-ellipsis-cut-at-corrected-break
 f027ee120dc5a9fc mech-ellipsis-empty-last-line
 5ac995a378227704 mech-inter-case-chain
 902346a981f11498 mech-inter-case-chain-justify
@@ -589,4 +590,4 @@ b1eb2ffa1b9039bc rg-columns-3-cjk-silent-then-measure
 ce13f154c56854f0 rg-columns-3-justify-latin-silent
 19373280cc43cea2 rg-columns-3-justify-latin-silent-then-measure
 4927fb82d0d212fa rg-columns-3-paragraph-latin-full
-ec1b5ddc08d1605d set
+a21a31c5f38bc21e set

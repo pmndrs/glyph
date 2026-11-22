@@ -383,6 +383,7 @@ pub(super) fn cases(cases: &mut Vec<Case>) {
     cases.push(max_lines_count_change());
     cases.push(style_removal_with_same_length_edit());
     cases.push(ellipsis_on_empty_lines());
+    cases.push(ellipsis_cut_at_corrected_break());
     span_changes(cases);
 }
 
@@ -602,6 +603,46 @@ fn ellipsis_on_empty_lines() -> Case {
         edit("hard breaks alone", 0, 3, ""),
         edit("restore", 0, 0, "one"),
         edit("restore the hidden word", 5, 0, "two"),
+    ];
+    case.fuzz = true;
+    case
+}
+
+/// An end-aligned line limit over Japanese whose first line ends at a break the font corrects
+/// (its last island shaped alone is 0.8 wider). The ellipsis cut drops that end, and with it the
+/// correction: kept, it widened the line by 0.8 and moved every glyph of it 0.8 toward the start.
+fn ellipsis_cut_at_corrected_break() -> Case {
+    let mut case = new_case(
+        "mech-ellipsis-cut-at-corrected-break".into(),
+        Tier::Quick,
+        &["cjk-jp"],
+        Script::Cjk,
+    );
+    case.model.text = utf16(
+        "\u{3057}\u{307e}\u{3059}\u{300c}\u{306e}\u{6771}\u{4eac}\u{304b}\u{306a}\u{ff11}\u{ff12}\u{ff13}\u{ff01}\u{6bb5}\u{843d}\u{3063}\u{3066}\u{3083}\u{300d}\u{5e45}\u{884c}\u{6bb5}\u{843d}\u{6bb5}\u{843d}\u{884c}\u{3057}\u{307e}\u{3059}Glyph",
+    );
+    let limited = Layout {
+        width: 260.0,
+        align: crate::engine::frame::ALIGN_END,
+        max_lines: 1,
+        overflow: OVERFLOW_ELLIPSIS,
+        ..Layout::default()
+    };
+    case.model.layout = limited;
+    case.steps = vec![
+        Step {
+            label: "lift the limit".into(),
+            layout: Some(Layout {
+                max_lines: 0,
+                ..limited
+            }),
+            ..Step::default()
+        },
+        Step {
+            label: "restore the limit".into(),
+            layout: Some(limited),
+            ..Step::default()
+        },
     ];
     case.fuzz = true;
     case

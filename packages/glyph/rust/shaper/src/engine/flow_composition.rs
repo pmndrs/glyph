@@ -15,6 +15,7 @@ use super::{
         EXCLUSION_WRAP_INLINE_START, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, WRAP_WORD,
         WRITING_HORIZONTAL_TB,
     },
+    layout_units::scaled_from_layout_units,
     line_composition::{
         BreakCorrections, ComposedLine, Correction, LineCursor, layout_next_line_integer,
     },
@@ -1909,7 +1910,11 @@ impl FlowLayoutArena {
         // The fitted line does not charge its terminating spaces to `advance`, but they are
         // among its clusters: ahead of the marker they are drawn and take room, and cut
         // away they give back exactly what they are charged here.
-        let mut source_advance = fragment.line.advance + fragment.line.hung_advance;
+        // The marker now ends the line, so the island its fitted end was corrected for is never
+        // drawn alone: the correction goes, and the reshaped run before the marker prices that
+        // end instead.
+        let mut source_advance = fragment.line.advance + fragment.line.hung_advance
+            - scaled_from_layout_units(i64::from(fragment.line.end_correction.advance));
         while cluster_end > cluster_start
             && clusters.flags[cluster_end - 1] & CLUSTER_HARD_BREAK != 0
         {
@@ -1952,6 +1957,7 @@ impl FlowLayoutArena {
                 fragment.line.text_end = text_end;
                 fragment.line.advance = replacement_advance;
                 fragment.line.hung_advance = 0.0;
+                fragment.line.end_correction = Correction::ZERO;
                 fragment.line.hard_break = false;
             })
             .map_err(|()| EngineError::ResultTooLarge)?
