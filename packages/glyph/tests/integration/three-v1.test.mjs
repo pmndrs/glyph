@@ -9795,6 +9795,31 @@ test('measurement and ink line spans agree with independently positioned glyph c
   }
 });
 
+// `inkBounds` is undefined only when this query did not position glyphs, never for empty ink. A paragraph with no
+// drawable cluster has no glyph to position, so its ink is known to be empty whichever view was asked for.
+test('a paragraph with nothing to draw reports an empty ink box, not unknown ink', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  t.after(() => font.dispose());
+  for (const value of ['', '\n', '\n\n']) {
+    const text = three.createText({ font, text: value });
+    try {
+      for (const [view, read] of [
+        ['measurement', () => text.measure()],
+        ['inspection', () => text.glyphs()],
+      ]) {
+        const { inkBounds, lines } = read();
+        assert.notEqual(inkBounds, undefined, `${JSON.stringify(value)} ${view}: the paragraph's ink is known`);
+        assert.equal(inkBounds.width, 0, `${JSON.stringify(value)} ${view}: and empty`);
+        assert.equal(inkBounds.height, 0, `${JSON.stringify(value)} ${view}: and empty`);
+        for (const line of lines) assert.notEqual(line.inkBounds, undefined, `${view}: each empty line's ink is known`);
+      }
+    } finally {
+      text.dispose();
+    }
+  }
+});
+
 test('a measurement publication preserves another paragraph’s inspected line spans', async (t) => {
   const three = await createThreeTestHandle(t);
   const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));

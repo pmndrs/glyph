@@ -194,7 +194,7 @@ No memory change.
    start, centre or end: segment translations already move as a group, and a line has two or three. It would help
    only if placement slots were made per line, which changes the wire's slot count and every renderer's slot table.
 
-## Experiment 6: resize shortcut for lines with edge records and drop caps — reported, not landed
+## Experiment 6: resize shortcut for lines with edge records and drop caps — landed after a re-freeze
 
 Run after merging the integration tip `c9ce9ec4b` (`sil-green-36`). Base is that tip.
 
@@ -252,6 +252,14 @@ about 220 lines with its unit test).
 CJK or Fredoka sweep), equal elsewhere, typographic output unchanged; not landed because it moves three references'
 identity and wire classes. Landing it is an owner decision: re-freeze those three references, accepting that a
 no-op resize keeps run revisions and publishes nothing for edge-record paragraphs as it already does for plain ones.
+
+**Landed (2026-11-22, branch `experiments/sil-refreeze`).** The owner approved the re-freeze. The patch applied
+unchanged on top of `sil-green-42` and the grapheme-run and empty-ink fixes. `layout-oracle diff` against the tree
+before it moved exactly the three references named above, and only in the two places above: 14 identity digests
+(`positioned.replacement_run.canonical_revision` in 12 step captures, `cluster.layout_run.canonical_revision` in 7,
+every changed row lower than before) and 3 wire digests (`wire.publication` row 12, 2 to 0, once per case on the
+width step that kept every break). No value or representation lane moved. Native and wasm oracles equal after the
+re-freeze, with no unlisted divergence.
 
 ## Not yet run
 

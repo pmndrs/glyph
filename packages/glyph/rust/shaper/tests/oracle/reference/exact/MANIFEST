@@ -1,6 +1,6 @@
-13b5e915cf7431c8 degenerate-empty
-506f26e66d7abb0c degenerate-newline
-cb0b80ebce3b83f4 degenerate-newlines
+73afa9b1bbcb7fbc degenerate-empty
+6f02f93b6114ee8a degenerate-newline
+139028e7856a4589 degenerate-newlines
 d7f13317744818bf degenerate-one-letter
 892e352e94af72e3 degenerate-one-space
 b228d0608e3bec3b degenerate-spaces
@@ -20,7 +20,7 @@ b522ed77cdf2be1d doc-four-short-batch
 bf8e0a11411142a4 doc-four-short-read-then-batch
 a476b3a695c888ca doc-four-short-reads
 f75f9a14a1f4f855 doc-mount-labels-24-batch
-524867f888e5e304 doc-mount-labels-24-publish
+f8c2374f50434750 doc-mount-labels-24-publish
 3ae88a5bd22a320b doc-mount-labels-24-reads
 37ee41d9016c7027 doc-mount-labels-64-batch
 7950bba8138ab4a6 doc-mount-labels-64-publish
@@ -81,7 +81,7 @@ da3bf7dae56d3aef font-fira-code-rand-justify
 a92c2edd70a6ca1c font-fira-code-rand-start
 cfdd64b1bdc2b411 font-fira-code-start
 2c4259cc770c2038 font-fredoka-justify
-b431996cf51dff24 font-fredoka-start
+f76a8d362e51931c font-fredoka-start
 f91b72adc7343201 font-kern-only-justify
 a8a25b0ab571f62b font-kern-only-start
 8a0fc502a08ec50d font-kern-only-synth-justify
@@ -93,7 +93,7 @@ ae48c878e03e3d92 font-kern-only-synth-start
 ccdb6d75fec1b6b7 font-recursive-justify
 eb7444bade995a51 font-recursive-start
 90c286335d3893cb font-source-serif-justify
-a93e66acb5747ddd font-source-serif-start
+9164f2e3df3a3ce7 font-source-serif-start
 80ddd2e365d8acd5 font-synthetic-long-ligature-justify
 700fc1b2c06e25e5 font-synthetic-long-ligature-start
 9d7192fc712222b2 font-synthetic-supported-justify
@@ -223,7 +223,7 @@ fa63900400ca478e label-arabic-48-start
 d9035b2898023ae4 label-arabic-ellipsis
 c9a4147b6ad3c355 label-bengali-12-center
 7e7480933d39f9fc label-bengali-12-end
-15966c29716f52d1 label-bengali-12-start
+ae1673ae42d12311 label-bengali-12-start
 548ffd273625844e label-bengali-128-center
 bd98f41e5543ef96 label-bengali-128-end
 c964ee218df24f4f label-bengali-128-start
@@ -305,7 +305,7 @@ c914e3ba8216ba13 label-fredoka-128-end
 7373c2e6deec2f5e label-fredoka-128-start
 88f36f0ddfac01bb label-fredoka-256-center
 ff55551a25edc894 label-fredoka-256-end
-4e2cc0f23cf990fb label-fredoka-256-start
+f8dd41d8856a0dbd label-fredoka-256-start
 1d9e27d790dbcfd4 label-fredoka-48-center
 cb9f3d9b56e77a84 label-fredoka-48-end
 ae5a52d80a70397c label-fredoka-48-start
@@ -314,7 +314,7 @@ eec7a25b054c4a5b label-fredoka-64-center
 85c0dca98d95c500 label-fredoka-64-start
 f4d411be18071afd label-fredoka-80-center
 13e65ace61e42047 label-fredoka-80-end
-03600c47a9a63ede label-fredoka-80-start
+3258024a86d0d8c7 label-fredoka-80-start
 0cca1b324de69303 label-fredoka-ellipsis
 1ae5b2ff8804c464 label-greek-cyrillic-12-center
 b13abbebc0ff07ae label-greek-cyrillic-12-end
@@ -428,7 +428,7 @@ e3daff3f4bf9a99a label-thai-256-start
 65f0c095616ed2e5 label-thai-64-start
 22cddf0565a8c723 label-thai-80-center
 76f1c684d8f058fa label-thai-80-end
-de399f9cfa898662 label-thai-80-start
+ff502c4457f412c2 label-thai-80-start
 0254109d98134111 label-thai-ellipsis
 f7c291b94d2167cf mech-bidi-bracket-far
 68191908b910bbef mech-bidi-bracket-far-justify
@@ -439,7 +439,7 @@ e153f5d009d7ca88 mech-bidi-first-strong-justify
 6eb46dc77630d5a9 mech-bidi-isolate
 4cc2c63768cd704d mech-bidi-isolate-justify
 712fa05332267c9a mech-ellipsis-cut-at-corrected-break
-f027ee120dc5a9fc mech-ellipsis-empty-last-line
+365180ffb0a57613 mech-ellipsis-empty-last-line
 5ac995a378227704 mech-inter-case-chain
 902346a981f11498 mech-inter-case-chain-justify
 f1f969fb05743d38 mech-inter-hyphen-chain
@@ -470,7 +470,9 @@ d9ac9eb8fd6295be mech-regional-indicators-5
 b1ba733b900905b4 mech-regional-indicators-9-justify
 3733d9093a797e9c mech-reshape-window-edge-flags
 127de18ebe21865a mech-reshape-window-edge-flags-justify
+b040911bda3d9ead mech-rtl-ellipsis-grapheme-across-runs
 883574b40f9887a6 mech-rtl-ellipsis-leading-virama
+34927d27fbb27bf3 mech-rtl-leading-thai-mark
 2df59200ac70efc1 mech-rtl-same-length-edit-with-span-removal
 bd6967aaae1f8d0e mech-script-across-break-backward
 526a2db191617cde mech-script-across-break-backward-justify
@@ -592,4 +594,4 @@ b1eb2ffa1b9039bc rg-columns-3-cjk-silent-then-measure
 ce13f154c56854f0 rg-columns-3-justify-latin-silent
 19373280cc43cea2 rg-columns-3-justify-latin-silent-then-measure
 4927fb82d0d212fa rg-columns-3-paragraph-latin-full
-272170702315c1d8 set
+30889230c629c1d5 set

@@ -4821,6 +4821,7 @@ impl ParagraphState {
                         self.bidi.committed(),
                         |thread| thread_typography(self.geometry.pending(), thread),
                         |thread| thread_typography(self.geometry.committed(), thread),
+                        (&self.pending_boundary_shape, &self.boundary_shape),
                     )?
                 {
                     // The composed flow is the layout of the new geometry and commits with it:

@@ -272,19 +272,16 @@ export function copyPreparedLayoutInspection(
   const lines = measurement.lines.map((line) =>
     Object.freeze({
       ...line,
-      inkBounds: glyphInkBounds(
-        glyphInkX,
-        glyphInkY,
-        glyphInkWidths,
-        glyphInkHeights,
-        line.glyphStart,
-        line.glyphCount,
-      ),
+      // A line with no glyph has no glyph ink to union; the measurement already knows its box.
+      inkBounds:
+        glyphInkBounds(glyphInkX, glyphInkY, glyphInkWidths, glyphInkHeights, line.glyphStart, line.glyphCount) ??
+        line.inkBounds,
     }),
   );
   return Object.freeze({
     ...measurement,
-    inkBounds: glyphInkBounds(glyphInkX, glyphInkY, glyphInkWidths, glyphInkHeights, 0, glyphCount),
+    inkBounds:
+      glyphInkBounds(glyphInkX, glyphInkY, glyphInkWidths, glyphInkHeights, 0, glyphCount) ?? measurement.inkBounds,
     lines: Object.freeze(lines),
     fontHandles: Uint32Array.from(fontHandles),
     glyphStableIds,
