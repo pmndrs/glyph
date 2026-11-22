@@ -525,6 +525,14 @@ coverage or a constant atlas range. The real Inter material reconstructs the can
 then uses true distance for a glow that lights pixels beyond the original coverage. These cases run through
 `benchmark:v1-bitmap` on WebGPU and WebGL2, with `--typegpu` selecting the experimental shader bridge.
 
+`benchmark:material-position` is a browser conformance proof for custom Three material coordinates. It draws a
+center-anchored Slug paragraph under a translated, rotated, nonuniformly scaled ancestor with stable TSL and TypeGPU
+shaders, on asserted WebGPU and WebGL2 backends, in direct and indexed transform modes. Its `composed` case reads the
+paragraph and draw-local positions in the fragment stage, with and without a vertex displacement; its
+`fragment-gradient` case maps a paragraph-space (u, v) gradient whose only position reads are fragment reads. The colour
+target is compared with an independent `glyphs().inkBounds` and inverse-world-transform oracle. Page and console errors
+fail the run, and `--case=<name>` selects one case. It measures coordinate correctness, not performance.
+
 The public paragraph-contract target now passes its complete exact matrix through the retained Rust path: two bidi
 layouts, nine line-policy layouts, twelve CJK layouts, and one UIKit-shaped measurement/layout seam. The UIKit fixture
 models the frame ABI's f32 style input rather than the deleted TypeScript engine's JavaScript-double input. Its final-line
