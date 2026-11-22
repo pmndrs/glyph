@@ -96,3 +96,66 @@ edit frame. `prepare_incremental_shape_scope` including its splice is 48.4 ms (3
 window would save at most about 0.08 ms per edit, which is below the harness's 2–8% load spread. The larger edit costs
 are cluster diffing (`RunPair::lanes_equal` 52.8 ms, `ClusterArena::aggregate_shaped` 35.8 ms) and run-local layout
 (`layout_run` 63.7 ms).
+
+## Wider simple-text rules (`experiments/sil-fastpath`, mapped, not built)
+
+Status: stopped after mapping. No rule that stays bit-identical to HarfRust reaches an Inter headline row, so nothing
+was built.
+
+The question was why only pixel fonts take the simple-text path, and whether a sequence-level rule or a pair-kerning rule
+could widen it. The analysis tool is a scratch crate outside the repository,
+`glyph-scratch/fastpath/analysis` (built against the vendored HarfRust fork), and its full per-font report is
+`glyph-scratch/fastpath/report-step1.txt`. The texts are the headline harness's Latin paragraphs, its ASCII frame
+(`.:+*#%@`, 42 phases) and its Japanese line. Noto Sans and Roboto are not in the repository or the adversarial set;
+local copies were used as evidence only.
+
+### Lookups that change nothing still change the output
+
+The engine shapes with `PRODUCE_UNSAFE_TO_CONCAT` (buffer flag `0x40`). HarfRust then sets `UNSAFE_TO_CONCAT` on every
+PairPos match, including a pair whose adjustment is zero, and on every contextual or ligature match that fails after
+looking past the first glyph. Whether a `LigatureSet` sets it also depends on its second-glyph digest. Examples:
+
+- Inter `kern` changes the advance of 12.9% of adjacent prose pairs, and flags another 51.5% of the characters.
+- Inter `ccmp` never substitutes in the prose, but flags 1.2% of the characters.
+- Fira Code `calt` never substitutes in the ASCII frame, but flags every glyph of it.
+
+HarfRust's output equals the nominal glyphs and advances, flags included, for 0% of prose words in Inter, Source Serif 4
+and Noto Sans CJK, and 0.5% in EB Garamond. A sequence-level rule would therefore have to reproduce those flag ranges,
+which means running HarfRust's matcher; it cannot be a cheap acceptance check.
+
+### Two rules that stay exact
+
+- **R1**: ignore lookups reached only through `frac`, `numr` or `dnom`. They run only on glyphs carrying the fraction
+  mask, which only U+2044 sets, and the path already refuses U+2044.
+- **R2**: R1, plus apply x-advance-only PairPos (format 1 or 2, empty second value format, no IgnoreBaseGlyphs or
+  IgnoreLigatures) reached through `kern` directly, reproducing its `UNSAFE_TO_BREAK` and `UNSAFE_TO_CONCAT` flags.
+
+Share of characters / words accepted. Paragraph items stay at 0% under every rule for every font, because each headline
+paragraph holds an `f` ligature candidate, a digit or an `i`.
+
+| font                  |  prose now |   prose R2 | ASCII frame now | ASCII frame R2 | what still blocks under R2                                                  |
+| --------------------- | ---------: | ---------: | --------------: | -------------: | --------------------------------------------------------------------------- |
+| Inter                 |  0.1% / 0% | 20% / 1.5% |              0% |             0% | `ccmp` Ligature 5/8/11 (base + mark, covers every letter and digit), `calt` |
+| Fira Code             |  88% / 50% |  90% / 51% |              0% |             0% | `calt` ChainContext on all seven frame characters                           |
+| EB Garamond           | 16% / 0.5% |  96% / 87% |              0% |             0% | `rlig` Ligature on `*`, `liga`                                              |
+| Noto Sans (local)     | 30% / 0.5% |   69% / 4% |              0% |           100% | `ccmp` Ligature, `liga`                                                     |
+| Roboto (local)        |   48% / 7% |  98% / 89% |            100% |           100% | `liga`                                                                      |
+| Source Serif 4        |  0.5% / 0% |  69% / 16% |              0% |           100% | `ccmp` Ligature and ChainContext, `liga`                                    |
+| Noto Sans CJK (Latin) |    9% / 0% | 80% / 1.5% |              0% |           100% | `calt` on the space, `liga`, `locl` on digits                               |
+| Fredoka               |  0.7% / 0% |  90% / 53% |              0% |           100% | `liga`                                                                      |
+| DotGothic16           |  98% / 89% |  98% / 89% |            100% |           100% | `liga`                                                                      |
+
+R1 alone raises Inter prose characters from 0.1% to 15% and changes no word, item or frame anywhere. On the Japanese
+line Noto Sans CJK goes from 58% to 96% of characters under R2, with `ccmp` blocking the rest. Arabic in Amiri and Noto
+Nastaliq Urdu is refused when the plan is built (right-to-left, complex shaper); their Latin words reach 81% and 70%
+under R2.
+
+The Inter ASCII frame cannot be accepted by any rule: `calt` replaces `@` after `%` with a wider alternate (glyph 1445 to
+1452, advance 1888 to 1978), 14% of the frame's glyphs.
+
+### Recommendation
+
+Do not build either rule now. No Inter headline row moves: the frame is blocked by a real `calt` substitution, prose
+items stay at 0%, and shaping is about 2.7% of an edit frame. R2 would make the ASCII frame skip HarfRust in Fredoka,
+Noto Sans, Source Serif 4 and Noto Sans CJK, at the cost of a PairPos emulator in the HarfRust fork; it is worth
+revisiting only if one of those fonts becomes a headline workload.
