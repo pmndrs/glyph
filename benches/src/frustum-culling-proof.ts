@@ -1,9 +1,16 @@
 import { bitmap, glyph, msdf, slug } from '@pmndrs/glyph';
 import { defineTextMaterial, defineThreeConfig, type Text, type TextGroup, type ThreeRoot } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
-import { vec3 } from 'three/tsl';
+import { uniform, vec3 } from 'three/tsl';
 
-import type { FrustumCullingReport, ParityCase, TimingSample, TimingWorkload } from './frustum-culling-contract';
+import type {
+  FrustumCullingReport,
+  MaterialCullingReport,
+  OptOutReport,
+  ParityCase,
+  TimingSample,
+  TimingWorkload,
+} from './frustum-culling-contract';
 import msdfManifest from '../fixtures/rendering/showcase-mtsdf-fixtures-v0.json' with { type: 'json' };
 import slugManifest from '../fixtures/rendering/showcase-slug-fixtures-v0.json' with { type: 'json' };
 import { fetchAuthenticatedGzipAsset } from './workloads/font-assets/authenticated-gzip';
@@ -156,7 +163,8 @@ async function prove(): Promise<FrustumCullingReport> {
     await memberCases(proof, labels);
     await detachedCases(proof, labels);
     await secondPassCase(proof, labels, passTarget);
-    const unculledCustomMaterial = await customMaterialCase(proof, labels);
+    const materialCulling = await materialCases(proof, labels);
+    const optOut = await optOutCases(proof, labels);
     const negativeControlDetected = await negativeControl(proof, labels);
     for (const label of [...labels.edgeLabels, labels.standalone]) label.dispose();
     const timings = await measure(
@@ -171,7 +179,8 @@ async function prove(): Promise<FrustumCullingReport> {
       threeRevision: THREE.REVISION,
       cases: proof.cases,
       negativeControlDetected,
-      unculledCustomMaterial,
+      materialCulling,
+      optOut,
       timings,
     };
   } finally {
@@ -409,22 +418,127 @@ async function secondPassCase(proof: CullingProof, labels: LabelScene, passTarge
   });
 }
 
-/** A caller material that moves its glyphs 900 units: unboundable, so it is drawn from off-screen. */
-async function customMaterialCase(proof: CullingProof, labels: LabelScene): Promise<boolean> {
-  labels.msdf.material = defineTextMaterial((context) => {
-    const material = context.createDefaultMaterial();
-    material.positionNode = context.position.add(vec3(-900, 0, 0));
-    return material;
-  });
-  labels.msdf.position.x = 840;
-  await proof.parity('displacing caller material');
-  const unculled = drawsOf(proof.scene).some(
+/** The furthest the displacing material below moves a vertex, and so the padding it declares. */
+const DISPLACEMENT = 200;
+/** Just past the right edge: only the displacement brings the label's glyphs into view. */
+const SOURCE_X = WIDTH / 2 + 20;
+
+/**
+ * A caller material that moves every vertex `shift` units left in its draw-local `position`. With `shift` at its
+ * maximum the displaced ink is swept across each edge: declared with that maximum as its padding it is culled with
+ * no change of pixels; declared with half of it, culling must drop on-screen glyphs (the negative control); declared
+ * `frustumCulled: false` it is never culled.
+ */
+async function materialCases(proof: CullingProof, labels: LabelScene): Promise<MaterialCullingReport> {
+  const shift = uniform(DISPLACEMENT);
+  const displacing = (options?: Parameters<typeof defineTextMaterial>[1]) =>
+    defineTextMaterial((context) => {
+      const material = context.createDefaultMaterial();
+      material.positionNode = context.position.sub(vec3(shift, 0, 0));
+      return material;
+    }, options);
+  const label = labels.msdf;
+  place(labels, 600, 0);
+  labels.standalone.position.x = 600;
+  label.material = displacing();
+  label.position.set(SOURCE_X, 0, 0);
+  const sourceCulled = await proof.frame(true);
+  const reference = await proof.frame(false);
+  const undeclaredPops = countChanged(reference.bytes, sourceCulled.bytes) !== 0;
+  if (!undeclaredPops) throw new Error('an undeclared displacement was not culled with its source quads');
+
+  label.material = displacing({ boundsPadding: DISPLACEMENT });
+  const before = proof.cases.length;
+  /** Places the displaced ink `gap` pixels past an edge (negative: overlapping it). */
+  const sides = [
+    ['left of', (gap: number) => -WIDTH / 2 - gap - (inkWorld(proof.scene, label).max.x - shift.value), 'x'],
+    ['right of', (gap: number) => WIDTH / 2 + gap - (inkWorld(proof.scene, label).min.x - shift.value), 'x'],
+    ['above', (gap: number) => HEIGHT / 2 + gap - inkWorld(proof.scene, label).min.y, 'y'],
+  ] as const;
+  for (const amount of [DISPLACEMENT, DISPLACEMENT / 2]) {
+    shift.value = amount;
+    for (const [side, offset, axis] of sides) {
+      for (const gap of [-8, -1, 0.05, 0.3, 1, 4]) {
+        label.position.set(SOURCE_X, 0, 0);
+        label.position[axis] = 0;
+        label.position[axis] = offset(gap);
+        await proof.parity(`displaced ${String(amount)}: ink ${String(gap)}px ${side} the view`, 'any');
+      }
+    }
+  }
+  shift.value = DISPLACEMENT;
+  label.position.set(SOURCE_X, 0, 0);
+  await proof.parity('displaced ink on screen, source off screen', 'visible');
+  label.position.x = 900;
+  await proof.parity('displaced and source both off screen', 'empty', true);
+  const paddedCases = proof.cases.length - before;
+
+  // Half the reach, swept until the padded source bound (a sphere around the padded box) has left the view while
+  // displaced glyphs are still on it: culling must then drop them.
+  label.material = displacing({ boundsPadding: DISPLACEMENT / 2 });
+  let undersizedPops = 0;
+  for (let x = SOURCE_X; x < WIDTH / 2 + DISPLACEMENT && undersizedPops === 0; x += 4) {
+    label.position.set(x, 0, 0);
+    const unculled = await proof.frame(false);
+    if (countLit(unculled.bytes) === 0) break;
+    undersizedPops = countChanged(unculled.bytes, (await proof.frame(true)).bytes);
+  }
+  if (undersizedPops === 0) throw new Error('an undersized padding did not pop the displaced glyphs');
+
+  label.material = displacing({ frustumCulled: false });
+  shift.value = 900;
+  label.position.x = 900 - 40;
+  await proof.parity('frustumCulled: false material', 'visible');
+  const neverCulled = drawsOf(proof.scene).some(
     (draw) => !draw.frustumCulled && draw.userData.pmndrsGlyphPrimitiveKind === 'glyph',
   );
-  if (!unculled) throw new Error('the displacing material draw was culled');
-  labels.msdf.material = undefined;
+  if (!neverCulled) throw new Error('the frustumCulled: false material draw was culled');
+  label.material = undefined;
   place(labels, -80, 20);
-  return unculled;
+  labels.standalone.position.x = -120;
+  return { undeclaredPops, paddedCases, undersizedPaddingChannels: undersizedPops, neverCulled };
+}
+
+/**
+ * Three's own `frustumCulled = false` on a Text, a TextGroup and a detached Glyphs, every label off screen. Draw calls
+ * are the oracle: an opted-out object draws no pixel there, but its draws must still be submitted.
+ */
+async function optOutCases(proof: CullingProof, labels: LabelScene): Promise<OptOutReport> {
+  place(labels, 600, 0);
+  labels.standalone.position.x = 600;
+  const baseline = await proof.frame(true);
+  if (baseline.calls !== 0) throw new Error(`off-screen labels submitted ${String(baseline.calls)} draws`);
+  const submittedFor = async (name: string, object: THREE.Object3D) => {
+    object.frustumCulled = false;
+    const kept = await proof.frame(true);
+    const unculled = await proof.frame(false);
+    object.frustumCulled = true;
+    const restored = await proof.frame(true);
+    if (kept.calls === 0) throw new Error(`${name}: an opted-out object submitted no draw`);
+    if (restored.calls !== 0) throw new Error(`${name}: opting back in left ${String(restored.calls)} draws`);
+    if (countChanged(kept.bytes, unculled.bytes) !== 0) throw new Error(`${name}: opting out changed pixels`);
+    proof.cases.push({
+      name: `${name} with frustumCulled = false, off screen`,
+      litChannels: countLit(kept.bytes),
+      unculledCalls: unculled.calls,
+      culledCalls: kept.calls,
+      culledDraws: kept.culled,
+    });
+    return kept.calls;
+  };
+  // A batched member keeps every draw it shares with the other members, which are drawn with it.
+  const memberCalls = await submittedFor('batched member', labels.msdf);
+  const standaloneCalls = await submittedFor('standalone text', labels.standalone);
+  const groupCalls = await submittedFor('text group', labels.group);
+  const [glyphs, decorations] = labels.slug.split();
+  decorations?.dispose();
+  proof.scene.add(glyphs);
+  glyphs.position.x = 900;
+  const glyphsCalls = await submittedFor('detached glyphs', glyphs);
+  glyphs.dispose();
+  place(labels, -80, 20);
+  labels.standalone.position.x = -120;
+  return { memberCalls, standaloneCalls, groupCalls, glyphsCalls };
 }
 
 /** A bound that excludes visible glyphs must fail the pixel oracle. */

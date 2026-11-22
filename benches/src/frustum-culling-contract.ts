@@ -23,12 +23,33 @@ export interface TimingWorkload {
   readonly samples: readonly TimingSample[];
 }
 
+/** A caller material that displaces its glyphs, declared three ways. */
+export interface MaterialCullingReport {
+  /** With no declared padding the displaced glyphs are culled with their source quads. */
+  readonly undeclaredPops: boolean;
+  /** Pixel-identical cases with the maximum displacement declared as `boundsPadding`. */
+  readonly paddedCases: number;
+  /** Channels culling changed with half the displacement declared (the negative control; nonzero). */
+  readonly undersizedPaddingChannels: number;
+  /** A `frustumCulled: false` material's draws are never culled. */
+  readonly neverCulled: boolean;
+}
+
+/** Draw calls submitted with every label off screen once one object sets `frustumCulled = false`. */
+export interface OptOutReport {
+  readonly memberCalls: number;
+  readonly standaloneCalls: number;
+  readonly groupCalls: number;
+  readonly glyphsCalls: number;
+}
+
 export interface FrustumCullingReport {
   readonly backend: 'webgpu' | 'webgl2';
   readonly transformMode: 'indexed' | 'direct';
   readonly threeRevision: string;
   readonly cases: readonly ParityCase[];
   readonly negativeControlDetected: boolean;
-  readonly unculledCustomMaterial: boolean;
+  readonly materialCulling: MaterialCullingReport;
+  readonly optOut: OptOutReport;
   readonly timings: readonly TimingWorkload[];
 }
