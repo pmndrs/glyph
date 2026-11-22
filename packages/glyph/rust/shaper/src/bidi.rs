@@ -100,17 +100,44 @@ pub fn analyze_into(
     output.clear();
     reserve(&mut output.levels, text.len())?;
     reserve(&mut output.classes, text.len())?;
+    // Level 0 is what a plain paragraph has; a resolved one overwrites its range of both lanes.
+    output.levels.resize(text.len(), 0);
+    output.classes.resize(text.len(), 0);
+    let mut resolved = false;
     let mut start = 0usize;
     while start < text.len() {
-        // Every Bidi_Class B character is a single BMP unit, so the paragraph end needs no table.
-        let end = paragraph_end(text, start);
-        output.finish_paragraph(text, start, end, default_level)?;
+        let scan = if default_level == Some(RTL_LEVEL) {
+            PlainScan::Resolve
+        } else {
+            classify_plain(text, &mut output.classes, start)
+        };
+        let end = match scan {
+            PlainScan::Plain { end } => end,
+            // Every Bidi_Class B character is a single BMP unit, so the end needs no table.
+            PlainScan::Resolve => paragraph_end(text, start),
+        };
+        output.push_paragraph(start, end)?;
+        if matches!(scan, PlainScan::Plain { .. }) {
+            // No R, AL, AN, embedding, isolate or override, and the base level is 0 (P3, or an
+            // explicit LTR direction): every level is 0 and the classes are the original ones.
+            output.paragraph_levels.push(0);
+        } else {
+            resolved = true;
+            output.resolve_paragraph(text, start, end, default_level);
+        }
         start = end;
     }
     if text.is_empty() {
-        output.finish_paragraph(text, 0, 0, default_level)?;
+        output.push_paragraph(0, 0)?;
+        output
+            .paragraph_levels
+            .push(u8::from(default_level == Some(RTL_LEVEL)));
     }
-    output.build_runs()
+    if resolved {
+        output.build_runs()
+    } else {
+        output.build_plain_run()
+    }
 }
 
 /// The whole-text reference: one `unicode-bidi` pass over every paragraph.
@@ -192,28 +219,157 @@ fn is_low_surrogate(unit: u16) -> bool {
     (0xdc00..=0xdfff).contains(&unit)
 }
 
+/// `class_code` of each trie value, so a lookup yields the code with no enum round trip.
+static VALUE_CODES: [u8; 32] = {
+    let mut codes = [0u8; 32];
+    let mut index = 0;
+    while index < generated::BIDI_CLASS_VALUES.len() {
+        codes[index] = class_code(generated::BIDI_CLASS_VALUES[index]);
+        index += 1;
+    }
+    codes
+};
+
+/// The class code of `code_point`, which must be at most U+10FFFF: `trie::lookup` over the class
+/// trie, written out so the ASCII table below is built from the same tables at compile time.
+const fn code_point_class(code_point: u32) -> u8 {
+    const LEAF: u32 = generated::BIDI_CLASS_LEAF_SHIFT;
+    const MIDDLE: u32 = generated::BIDI_CLASS_MIDDLE_SHIFT;
+    let code_point = code_point as usize;
+    let block = generated::BIDI_CLASS_ROOT[code_point >> (LEAF + MIDDLE)] as usize;
+    let middle = (block << MIDDLE) | ((code_point >> LEAF) & ((1 << MIDDLE) - 1));
+    let leaf = generated::BIDI_CLASS_MIDDLE[middle] as usize;
+    let value = generated::BIDI_CLASS_LEAVES[(leaf << LEAF) | (code_point & ((1 << LEAF) - 1))];
+    VALUE_CODES[value as usize]
+}
+
+/// The class code of every ASCII unit. None of them needs the full algorithm.
+static ASCII_CODES: [u8; 128] = {
+    let mut codes = [0u8; 128];
+    let mut unit = 0;
+    while unit < 128 {
+        codes[unit] = code_point_class(unit as u32);
+        unit += 1;
+    }
+    codes
+};
+
+/// The class codes `BidiParagraphCounts::include` counts, one bit per code: R, AL, AN and every
+/// embedding, isolate and override control. A paragraph with none of them at base level 0 is
+/// level 0 throughout.
+const NEEDS_RESOLUTION: u32 = (1 << 1) | (1 << 2) | (1 << 6) | (0x1ff << 14);
+
 /// The class code of the character at `index` and its length in units. An unpaired surrogate is
 /// U+FFFD, as `unicode-bidi` decodes it.
 fn unit_class(text: &[u16], index: usize) -> (u8, usize) {
     let unit = text[index];
-    let (character, length) = if (0xd800..=0xdbff).contains(&unit) {
-        match text.get(index + 1) {
-            Some(low) if is_low_surrogate(*low) => (
-                char::from_u32(
-                    0x1_0000 + (((u32::from(unit) - 0xd800) << 10) | (u32::from(*low) - 0xdc00)),
-                )
-                .unwrap_or(char::REPLACEMENT_CHARACTER),
-                2,
+    if !(0xd800..=0xdfff).contains(&unit) {
+        return (code_point_class(u32::from(unit)), 1);
+    }
+    match text.get(index + 1) {
+        Some(low) if unit <= 0xdbff && is_low_surrogate(*low) => (
+            code_point_class(
+                0x1_0000 + (((u32::from(unit) - 0xd800) << 10) | (u32::from(*low) - 0xdc00)),
             ),
-            _ => (char::REPLACEMENT_CHARACTER, 1),
+            2,
+        ),
+        _ => (code_point_class(char::REPLACEMENT_CHARACTER as u32), 1),
+    }
+}
+
+/// What the plain scan of one bidi paragraph found.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PlainScan {
+    /// No character needs the full algorithm; `end` is one past the paragraph separator, or the
+    /// text length, and every class code before it is written.
+    Plain { end: usize },
+    /// A character needs the full algorithm. The class lane holds nothing to keep from the
+    /// paragraph start on.
+    Resolve,
+}
+
+/// The paragraph ended, needs the full algorithm, or continues at the unit given.
+enum Walk {
+    Ended(usize),
+    Resolve,
+    Continue(usize),
+}
+
+const SEPARATOR: u32 = 1 << CLASS_PARAGRAPH_SEPARATOR;
+
+/// Classifies the bidi paragraph that starts at `start`, writing class codes from there on.
+///
+/// Sixteen units at a time: an all-ASCII lane reads one table entry per unit, a lane of other
+/// BMP units reads the trie, and both fold what they saw into one answer. Only a lane with a
+/// surrogate, a paragraph separator or a character that needs the full algorithm is walked
+/// character by character, as the tail of the text is. A lane may write codes past the
+/// paragraph it ends in; the next paragraph writes them again.
+fn classify_plain(text: &[u16], classes: &mut [u8], start: usize) -> PlainScan {
+    const LANE: usize = 16;
+    let mut index = start;
+    while let (Some(units), Some(codes)) = (
+        text.get(index..index + LANE),
+        classes.get_mut(index..index + LANE),
+    ) {
+        let mut any = 0u16;
+        let mut surrogate = false;
+        for unit in units {
+            any |= *unit;
+            surrogate |= *unit & 0xf800 == 0xd800;
         }
-    } else {
-        (
-            char::from_u32(u32::from(unit)).unwrap_or(char::REPLACEMENT_CHARACTER),
-            1,
-        )
-    };
-    (class_code(Unicode17BidiData.bidi_class(character)), length)
+        let walk = if any < 0x80 {
+            // No ASCII unit needs the full algorithm, so only a separator stops the lane.
+            let mut separator = false;
+            for (code, unit) in codes.iter_mut().zip(units) {
+                *code = ASCII_CODES[usize::from(*unit & 0x7f)];
+                separator |= *code == CLASS_PARAGRAPH_SEPARATOR;
+            }
+            separator
+        } else if surrogate {
+            true
+        } else {
+            let mut seen = 0u32;
+            for (code, unit) in codes.iter_mut().zip(units) {
+                *code = code_point_class(u32::from(*unit));
+                seen |= 1 << *code;
+            }
+            seen & (NEEDS_RESOLUTION | SEPARATOR) != 0
+        };
+        index = if walk {
+            match walk_plain(text, classes, index, index + LANE) {
+                Walk::Ended(end) => return PlainScan::Plain { end },
+                Walk::Resolve => return PlainScan::Resolve,
+                Walk::Continue(next) => next,
+            }
+        } else {
+            index + LANE
+        };
+    }
+    match walk_plain(text, classes, index, text.len()) {
+        Walk::Ended(end) => PlainScan::Plain { end },
+        Walk::Resolve => PlainScan::Resolve,
+        Walk::Continue(_) => PlainScan::Plain { end: text.len() },
+    }
+}
+
+/// `classify_plain` one character at a time over the characters that start in `[index, to)`.
+fn walk_plain(text: &[u16], classes: &mut [u8], mut index: usize, to: usize) -> Walk {
+    while index < to {
+        let (class, length) = unit_class(text, index);
+        if NEEDS_RESOLUTION >> class & 1 != 0 {
+            return Walk::Resolve;
+        }
+        classes[index] = class;
+        if length == 2 {
+            // The low surrogate `unit_class` paired.
+            classes[index + 1] = class;
+        }
+        index += length;
+        if class == CLASS_PARAGRAPH_SEPARATOR {
+            return Walk::Ended(index);
+        }
+    }
+    Walk::Continue(index)
 }
 
 impl BidiAnalysis {
@@ -257,17 +413,7 @@ impl BidiAnalysis {
         self.runs.clear();
     }
 
-    /// Records the paragraph `[start, end)` and resolves its levels.
-    ///
-    /// The class scan stops at the first character that needs the full algorithm, so a paragraph
-    /// with RTL text is classified once, by `unicode-bidi`, as before.
-    fn finish_paragraph(
-        &mut self,
-        text: &[u16],
-        start: usize,
-        end: usize,
-        default_level: Option<unicode_bidi::Level>,
-    ) -> Result<(), BidiError> {
+    fn push_paragraph(&mut self, start: usize, end: usize) -> Result<(), BidiError> {
         grow(&mut self.paragraph_starts)?;
         grow(&mut self.paragraph_ends)?;
         grow(&mut self.paragraph_levels)?;
@@ -275,29 +421,18 @@ impl BidiAnalysis {
             .push(u32::try_from(start).map_err(|_| BidiError::ResultTooLarge)?);
         self.paragraph_ends
             .push(u32::try_from(end).map_err(|_| BidiError::ResultTooLarge)?);
-        let mut plain = default_level != Some(RTL_LEVEL);
-        let mut index = start;
-        while plain && index < end {
-            let (class, length) = unit_class(text, index);
-            let mut counts = BidiParagraphCounts::default();
-            counts.include(class);
-            if counts.is_zero() {
-                for _ in 0..length {
-                    self.classes.push(class);
-                }
-                index += length;
-            } else {
-                plain = false;
-            }
-        }
-        if plain {
-            // No R, AL, AN, embedding, isolate or override, and the base level is 0 (P3, or an
-            // explicit LTR direction): every level is 0 and the classes are the original ones.
-            self.paragraph_levels.push(0);
-            self.levels.resize(end, 0);
-            return Ok(());
-        }
-        self.classes.truncate(start);
+        Ok(())
+    }
+
+    /// Runs the full algorithm on the paragraph `[start, end)`, which `push_paragraph` recorded,
+    /// and writes its level, levels and classes. The lanes already span the text.
+    fn resolve_paragraph(
+        &mut self,
+        text: &[u16],
+        start: usize,
+        end: usize,
+        default_level: Option<unicode_bidi::Level>,
+    ) {
         let info =
             BidiInfo::new_with_data_source(&Unicode17BidiData, &text[start..end], default_level);
         self.paragraph_levels.push(
@@ -308,11 +443,29 @@ impl BidiAnalysis {
                 })
                 .number(),
         );
-        self.levels
-            .extend(info.levels.iter().map(|level| level.number()));
+        for (level, resolved) in self.levels[start..end].iter_mut().zip(&info.levels) {
+            *level = resolved.number();
+        }
         // FSI resolves to LRI or RLI in the original classes (X5c).
-        self.classes
-            .extend(info.original_classes.iter().copied().map(class_code));
+        for (class, original) in self.classes[start..end]
+            .iter_mut()
+            .zip(&info.original_classes)
+        {
+            *class = class_code(*original);
+        }
+    }
+
+    /// The one level run of a text whose paragraphs are all plain.
+    fn build_plain_run(&mut self) -> Result<(), BidiError> {
+        if self.levels.is_empty() {
+            return Ok(());
+        }
+        grow(&mut self.runs)?;
+        self.runs.push(BidiRun {
+            text_start: 0,
+            text_end: u32::try_from(self.levels.len()).map_err(|_| BidiError::ResultTooLarge)?,
+            level: 0,
+        });
         Ok(())
     }
 
@@ -389,7 +542,7 @@ impl BidiDataSource for Unicode17BidiData {
     }
 }
 
-pub fn class_code(class: BidiClass) -> u8 {
+pub const fn class_code(class: BidiClass) -> u8 {
     match class {
         BidiClass::L => 0,
         BidiClass::R => 1,
@@ -499,7 +652,8 @@ mod tests {
             100_000
         };
         for round in 0..rounds {
-            let length = 1 + (next() % 24) as usize;
+            // Every eighth text is long enough to cross several sixteen-unit lanes.
+            let length = 1 + (next() % if round % 8 == 7 { 96 } else { 24 }) as usize;
             let ltr_only = round % 2 == 0;
             let mut text = String::new();
             for _ in 0..length {
@@ -520,6 +674,95 @@ mod tests {
             analyze_whole_into(units, DIRECTION_AUTO, &mut whole).unwrap();
             assert_eq!(dense.levels, whole.levels);
             assert_eq!(dense.classes, whole.classes);
+        }
+    }
+
+    #[test]
+    fn class_code_tables_equal_the_trie_and_the_counts() {
+        for scalar in (0..=0x10_ffffu32).filter_map(char::from_u32) {
+            let code = class_code(Unicode17BidiData.bidi_class(scalar));
+            assert_eq!(
+                code_point_class(scalar as u32),
+                code,
+                "U+{:04X}",
+                scalar as u32
+            );
+            if let Some(ascii) = ASCII_CODES.get(scalar as usize) {
+                assert_eq!(*ascii, code, "U+{:04X}", scalar as u32);
+            }
+        }
+        for code in 0..=22u8 {
+            let mut counts = BidiParagraphCounts::default();
+            counts.include(code);
+            assert_eq!(
+                NEEDS_RESOLUTION >> code & 1 != 0,
+                !counts.is_zero(),
+                "{code}"
+            );
+        }
+        assert!(
+            ASCII_CODES
+                .iter()
+                .all(|code| NEEDS_RESOLUTION >> code & 1 == 0)
+        );
+    }
+
+    /// The ASCII lane is sixteen units wide: every interesting unit lands at every offset of a
+    /// lane, alone and beside a second one, in texts that end inside and on a lane edge.
+    #[test]
+    fn plain_classification_equals_the_reference_at_every_lane_offset() {
+        const UNITS: &[&[u16]] = &[
+            &[0xe9],
+            &[0x5b57],
+            &[0x301],
+            &[0x200d],
+            &[0x2028],
+            &[0x2029],
+            &[0x0a],
+            &[0x85],
+            &[0x5d0],
+            &[0x628],
+            &[0x661],
+            &[0x202a],
+            &[0x202e],
+            &[0x2067],
+            &[0x2069],
+            &[0xd835, 0xdc00],
+            &[0xd83a, 0xdd00],
+            &[0xd800],
+            &[0xdc00],
+            &[0xfffd],
+        ];
+        let filler: Vec<u16> = "The quick (brown) fox, 12.5% + $3 - 4/5: [ok]\t!"
+            .encode_utf16()
+            .collect();
+        for length in [1usize, 15, 16, 17, 31, 32, 33, 48, 50] {
+            for first in UNITS {
+                for offset in 0..length {
+                    for (second, gap) in [(None, 0), (Some(UNITS[1]), 1), (Some(UNITS[8]), 17)] {
+                        let mut units: Vec<u16> = (0..length)
+                            .map(|index| filler[index % filler.len()])
+                            .collect();
+                        units.splice(offset..offset, first.iter().copied());
+                        if let Some(second) = second {
+                            let at = (offset + first.len() + gap).min(units.len());
+                            units.splice(at..at, second.iter().copied());
+                        }
+                        for direction in [DIRECTION_AUTO, DIRECTION_LTR, DIRECTION_RTL] {
+                            let mut dense = BidiAnalysis::default();
+                            let mut whole = BidiAnalysis::default();
+                            analyze_into(&units, direction, &mut dense).unwrap();
+                            analyze_whole_into(&units, direction, &mut whole).unwrap();
+                            assert_eq!(dense.levels, whole.levels, "{units:x?} {direction}");
+                            assert_eq!(dense.classes, whole.classes, "{units:x?} {direction}");
+                            assert_eq!(dense.paragraph_levels, whole.paragraph_levels);
+                            assert_eq!(dense.paragraph_starts, whole.paragraph_starts);
+                            assert_eq!(dense.paragraph_ends, whole.paragraph_ends);
+                            assert_eq!(dense.runs, whole.runs, "{units:x?} {direction}");
+                        }
+                    }
+                }
+            }
         }
     }
 
