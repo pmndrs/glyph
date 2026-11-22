@@ -117,7 +117,7 @@ export function engineStyleId(id: HandleIdFactory, paragraphId: ParagraphId, ind
   return id.style(`paragraph/${paragraphId}/style/${index}`);
 }
 
-export function axis(value: AxisConstraint | undefined): {
+function axis(value: AxisConstraint | undefined): {
   readonly mode: 'unconstrained' | 'at-most' | 'exact';
   readonly size: number;
 } {
@@ -198,7 +198,7 @@ function engineDecoration(decoration: NonNullable<TextStyle['decoration']>, styl
   };
 }
 
-export function packedForeground(style: TextStyle): number {
+function packedForeground(style: TextStyle): number {
   const opacity = style.opacity ?? 1;
   if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) {
     throw new RangeError('opacity must be in [0, 1]');

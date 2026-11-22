@@ -354,7 +354,7 @@ export interface MeasurementPlannerOptions {
 }
 
 /** Thrown when a render planner is used after disposal. */
-export class RenderPlannerDisposedError extends GlyphError<'engine-failed'> {
+class RenderPlannerDisposedError extends GlyphError<'engine-failed'> {
   constructor() {
     super('engine-failed', 'render planner has been disposed');
     this.name = 'RenderPlannerDisposedError';

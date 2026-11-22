@@ -125,7 +125,7 @@ function box(x: number, y: number, width: number, height: number, anchor: Layout
 }
 
 /** The caret of a position, in Text-local coordinates (+X right, +Y down), anchor included. */
-export function queryCaret(host: TextQueryHost, position: TextPosition): TextCaret {
+function queryCaret(host: TextQueryHost, position: TextPosition): TextCaret {
   const [offset, affinity] = positionArguments(position, 'caret');
   const anchor = host.anchorOffset();
   return host.run((exports, root, paragraph) => {
@@ -161,7 +161,7 @@ export function queryCaret(host: TextQueryHost, position: TextPosition): TextCar
 }
 
 /** The caret stop nearest a point in Text-local coordinates; the point may be anywhere. */
-export function queryHitTest(host: TextQueryHost, point: LayoutPoint): TextPosition {
+function queryHitTest(host: TextQueryHost, point: LayoutPoint): TextPosition {
   if (typeof point !== 'object' || point === null) throw new TypeError('hitTest() takes a point: { x, y }');
   const anchor = host.anchorOffset();
   const x = finite(point.x, 'hitTest() point x') - anchor.x;
@@ -174,7 +174,7 @@ export function queryHitTest(host: TextQueryHost, point: LayoutPoint): TextPosit
 }
 
 /** Moves a position one unit. `up` and `down` take `unit: 'line'`. */
-export function queryMove(
+function queryMove(
   host: TextQueryHost,
   position: TextPosition,
   direction: TextDirection,
@@ -204,7 +204,7 @@ export function queryMove(
 }
 
 /** The grapheme, word, sentence or line that contains a position. */
-export function queryBoundary(host: TextQueryHost, position: TextPosition, unit: TextUnit): TextRange {
+function queryBoundary(host: TextQueryHost, position: TextPosition, unit: TextUnit): TextRange {
   const [offset, affinity] = positionArguments(position, 'boundary');
   const unitCode = named(UNITS, unit, 'boundary() unit');
   return host.run((exports, root, paragraph) => {
@@ -221,7 +221,7 @@ export function queryBoundary(host: TextQueryHost, position: TextPosition, unit:
 }
 
 /** The rectangles covering `[start, end)`: one per run of the range that is contiguous on its line. */
-export function queryRangeRects(host: TextQueryHost, start: number, end: number): readonly LayoutBox[] {
+function queryRangeRects(host: TextQueryHost, start: number, end: number): readonly LayoutBox[] {
   const anchor = host.anchorOffset();
   return host.run((exports, root, paragraph) => {
     const view = accept(
@@ -251,7 +251,7 @@ export function queryRangeRects(host: TextQueryHost, start: number, end: number)
 }
 
 /** Checks the range a replacement names against the prepared text; throws {@link TextOffsetError}. */
-export function checkReplaceRange(host: TextQueryHost, start: number, end: number): TextRange {
+function checkReplaceRange(host: TextQueryHost, start: number, end: number): TextRange {
   return host.run((exports, root, paragraph) => {
     const view = accept(
       exports.textCheckRange(root, paragraph, offsetNumber(start), offsetNumber(end)),

@@ -284,7 +284,7 @@ export function resolveFontFace(family: string): FontFace | undefined {
 }
 
 /** Dispose one authentic FontFace declaration or selection's shared owner. */
-export function disposeFontFace(face: FontFace): void {
+function disposeFontFace(face: FontFace): void {
   if ((typeof face !== 'object' && typeof face !== 'function') || face === null) {
     throw new TypeError('FontFace.dispose() requires an authentic FontFace declaration');
   }
@@ -301,7 +301,7 @@ export function disposeFontFace(face: FontFace): void {
 }
 
 /** Authenticate a selection and return its declaration state. */
-export function fontFaceSelectionState(selection: unknown): FontFaceSelectionState {
+function fontFaceSelectionState(selection: unknown): FontFaceSelectionState {
   if ((typeof selection !== 'object' && typeof selection !== 'function') || selection === null) {
     throw new TypeError('font must be a FontFace selection');
   }

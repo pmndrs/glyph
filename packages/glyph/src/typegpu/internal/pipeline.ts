@@ -85,7 +85,7 @@ export function corner(index: number): d.v2f {
   const y = index === 2 || index === 3 || index === 5;
   return d.vec2f(std.select(0, 1, x), std.select(0, 1, y));
 }
-export function projectWithScene(position: d.v3f, viewport: d.v2f, offset: d.v2f): d.v4f {
+function projectWithScene(position: d.v3f, viewport: d.v2f, offset: d.v2f): d.v4f {
   'use gpu';
   const pixel = d.vec2f(position.x, -position.y).add(offset);
   return positionTransform.$(d.vec3f(pixel, position.z), viewport);
