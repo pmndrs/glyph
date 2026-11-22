@@ -385,6 +385,7 @@ pub(super) fn cases(cases: &mut Vec<Case>) {
     cases.push(ellipsis_on_empty_lines());
     cases.push(ellipsis_cut_at_corrected_break());
     cases.push(negative_spacing_on_a_lone_mark());
+    cases.push(rtl_ellipsis_over_a_leading_virama());
     span_changes(cases);
 }
 
@@ -682,6 +683,48 @@ fn negative_spacing_on_a_lone_mark() -> Case {
                 start: 0,
                 delete: 1,
                 insert: Vec::new(),
+            }],
+            ..Step::default()
+        },
+    ];
+    case.fuzz = true;
+    case
+}
+
+/// A right-to-left Devanagari paragraph under a line limit and an ellipsis whose text opens with a
+/// virama and a non-joiner: a grapheme with no base. Found by the differential driver; refused as
+/// an invalid request at sil-green-27, accepted since the empty-last-line ellipsis fix.
+fn rtl_ellipsis_over_a_leading_virama() -> Case {
+    let mut case = new_case(
+        "mech-rtl-ellipsis-leading-virama".into(),
+        Tier::Quick,
+        &["devanagari"],
+        Script::Devanagari,
+    );
+    case.model.text = utf16("\u{94d}\u{200c}");
+    case.model.root.direction = DIRECTION_RTL;
+    case.model.layout = Layout {
+        width: 299.5,
+        max_lines: 3,
+        overflow: OVERFLOW_ELLIPSIS,
+        ..Layout::default()
+    };
+    case.steps = vec![
+        Step {
+            label: "a consonant after the non-joiner".into(),
+            edits: vec![TextEdit {
+                start: 2,
+                delete: 0,
+                insert: utf16("\u{915}"),
+            }],
+            ..Step::default()
+        },
+        Step {
+            label: "a hard break after it".into(),
+            edits: vec![TextEdit {
+                start: 3,
+                delete: 0,
+                insert: utf16("\n\n\n"),
             }],
             ..Step::default()
         },

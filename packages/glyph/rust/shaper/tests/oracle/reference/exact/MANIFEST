@@ -470,6 +470,7 @@ d9ac9eb8fd6295be mech-regional-indicators-5
 b1ba733b900905b4 mech-regional-indicators-9-justify
 3733d9093a797e9c mech-reshape-window-edge-flags
 127de18ebe21865a mech-reshape-window-edge-flags-justify
+883574b40f9887a6 mech-rtl-ellipsis-leading-virama
 2df59200ac70efc1 mech-rtl-same-length-edit-with-span-removal
 bd6967aaae1f8d0e mech-script-across-break-backward
 526a2db191617cde mech-script-across-break-backward-justify
@@ -591,4 +592,4 @@ b1eb2ffa1b9039bc rg-columns-3-cjk-silent-then-measure
 ce13f154c56854f0 rg-columns-3-justify-latin-silent
 19373280cc43cea2 rg-columns-3-justify-latin-silent-then-measure
 4927fb82d0d212fa rg-columns-3-paragraph-latin-full
-9900902a75699762 set
+272170702315c1d8 set
