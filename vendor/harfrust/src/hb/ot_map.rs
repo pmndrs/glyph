@@ -213,10 +213,12 @@ impl<'a> hb_ot_map_builder_t<'a> {
         face: &'a hb_font_t<'a>,
         script: Option<Script>,
         language: Option<&Language>,
+        language_tags: Option<&[hb_tag_t]>,
     ) -> Self {
         // Fetch script/language indices for GSUB/GPOS.  We need these later to skip
         // features not available in either table and not waste precious bits for them.
-        let (script_tags, lang_tags) = tag::tags_from_script_and_language(script, language);
+        let (script_tags, lang_tags) =
+            tag::tags_from_script_and_language_with(script, language, language_tags);
 
         let mut found_script = [false; 2];
         let mut script_index = [None; 2];

@@ -43,9 +43,13 @@ aat = []
 default = [
     "std",
     "aat",
+    "language-tags",
     "rand",
 ]
 experimental_font_api = []
+# BCP 47 to OpenType language-system resolution (`tag_table`). Without it, language systems
+# come only from `-x-hbot` or from `ShapePlan::new_with_language_tags`.
+language-tags = []
 libm = [
     "dep:core_maths",
     "read-fonts/libm",

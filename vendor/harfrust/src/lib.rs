@@ -49,6 +49,8 @@ pub use hb::face::{
 };
 
 pub use hb::ot_shape_plan::{hb_ot_shape_plan_t as ShapePlan, ShapePlanKey};
+#[cfg(feature = "language-tags")]
+pub use hb::tag::opentype_language_tags;
 
 /// Type alias for a normalized variation coordinate.
 pub type NormalizedCoord = read_fonts::types::F2Dot14;

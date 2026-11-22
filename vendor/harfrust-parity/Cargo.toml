@@ -14,7 +14,9 @@ fork-default-features = ["fork/aat", "fork/rand"]
 
 [dependencies]
 # Both sides use the `libm` configuration pmndrs/glyph ships: `no_std`, digest glyph sets.
+# The fork keeps `language-tags` on: pmndrs/glyph resolves language tags in the shaper instead
+# (`rust/shaper/src/language_tags.rs`, proven equal to this resolution by its own differential test).
 upstream = { package = "harfrust", version = "=0.12.0", default-features = false, features = ["libm"] }
-fork = { package = "harfrust", path = "../harfrust", default-features = false, features = ["libm"] }
+fork = { package = "harfrust", path = "../harfrust", default-features = false, features = ["libm", "language-tags"] }
 read-fonts = { version = "=0.41.0", default-features = false, features = ["libm"] }
 serde_json = "1.0.145"

@@ -1,11 +1,16 @@
 use smallvec::SmallVec;
 
 use super::common::TagExt;
-use super::{hb_tag_t, script, tag_table, Language, Script};
+#[cfg(feature = "language-tags")]
+use super::tag_table;
+use super::{hb_tag_t, script, Language, Script};
+#[cfg(feature = "language-tags")]
+use alloc::vec::Vec;
 
 type ThreeTags = SmallVec<[hb_tag_t; 3]>;
 
 trait SmallVecExt {
+    #[cfg_attr(not(feature = "language-tags"), allow(dead_code))]
     fn left(&self) -> usize;
     fn is_full(&self) -> bool;
 }
@@ -21,13 +26,38 @@ impl<A: smallvec::Array> SmallVecExt for SmallVec<A> {
 }
 
 /// Converts an `Script` and an `Language` to script and language tags.
+#[cfg_attr(not(any(test, feature = "language-tags")), allow(dead_code))]
 pub fn tags_from_script_and_language(
     script: Option<Script>,
     language: Option<&Language>,
 ) -> (ThreeTags, ThreeTags) {
+    tags_from_script_and_language_with(script, language, None)
+}
+
+/// The OpenType language-system tags HarfBuzz selects for `language`, best first: the
+/// `-x-hbot` private-use tag when the language carries one, otherwise the BCP 47 resolution
+/// table's candidates. Empty when nothing resolves. A caller that resolves languages itself
+/// passes the result to [`ShapePlan::new_with_language_tags`](crate::ShapePlan::new_with_language_tags).
+#[cfg(feature = "language-tags")]
+pub fn opentype_language_tags(language: &Language) -> Vec<hb_tag_t> {
+    tags_from_script_and_language(None, Some(language))
+        .1
+        .into_vec()
+}
+
+/// `tags_from_script_and_language`, with the language-system tags supplied by the caller when
+/// `language_tags` is `Some`. The script tags still honour an `-x-hbsc` subtag in `language`.
+pub(crate) fn tags_from_script_and_language_with(
+    script: Option<Script>,
+    language: Option<&Language>,
+    language_tags: Option<&[hb_tag_t]>,
+) -> (ThreeTags, ThreeTags) {
     let mut needs_script = true;
     let mut scripts = SmallVec::new();
     let mut languages = SmallVec::new();
+    if let Some(language_tags) = language_tags {
+        languages.extend_from_slice(language_tags);
+    }
 
     let mut private_use_subtag = None;
     let mut prefix = b"" as &[u8];
@@ -66,18 +96,24 @@ pub fn tags_from_script_and_language(
             &mut scripts,
         );
 
-        let needs_language = !parse_private_use_subtag(
-            private_use_subtag,
-            b"-hbot",
-            u8::to_ascii_uppercase,
-            &mut languages,
-        );
+        let needs_language = language_tags.is_none()
+            && !parse_private_use_subtag(
+                private_use_subtag,
+                b"-hbot",
+                u8::to_ascii_uppercase,
+                &mut languages,
+            );
 
+        // Without `language-tags` a language that carries neither `-x-hbot` nor caller-supplied
+        // tags selects no language system, as an unknown BCP 47 tag does.
+        #[cfg(feature = "language-tags")]
         if needs_language {
             if let Some(language) = Language::new(prefix) {
                 tags_from_language(&language, &mut languages);
             }
         }
+        #[cfg(not(feature = "language-tags"))]
+        let _ = (needs_language, prefix);
     }
 
     if needs_script {
@@ -130,6 +166,7 @@ fn parse_private_use_subtag(
     true
 }
 
+#[cfg(feature = "language-tags")]
 fn lang_cmp(s1: &[u8], s2: &[u8]) -> core::cmp::Ordering {
     let da = s1
         .iter()
@@ -145,6 +182,7 @@ fn lang_cmp(s1: &[u8], s2: &[u8]) -> core::cmp::Ordering {
     s1[..ea].cmp(&s2[..eb])
 }
 
+#[cfg(feature = "language-tags")]
 pub(super) fn subtag_matches(language: impl AsRef<[u8]>, subtag: impl AsRef<[u8]>) -> bool {
     let language = language.as_ref();
     let subtag = subtag.as_ref();
@@ -166,6 +204,7 @@ pub(super) fn subtag_matches(language: impl AsRef<[u8]>, subtag: impl AsRef<[u8]
     false
 }
 
+#[cfg(feature = "language-tags")]
 pub(super) fn lang_matches(language: impl AsRef<[u8]>, spec: impl AsRef<[u8]>) -> bool {
     let language = language.as_ref();
     let spec = spec.as_ref();
@@ -177,6 +216,7 @@ pub(super) fn lang_matches(language: impl AsRef<[u8]>, spec: impl AsRef<[u8]>) -
     false
 }
 
+#[cfg(feature = "language-tags")]
 pub(super) fn strncmp(s1: impl AsRef<[u8]>, s2: impl AsRef<[u8]>, n: usize) -> bool {
     let s1 = s1.as_ref();
     let s2 = s2.as_ref();
@@ -186,8 +226,10 @@ pub(super) fn strncmp(s1: impl AsRef<[u8]>, s2: impl AsRef<[u8]>, n: usize) -> b
     s1[..n1] == s2[..n2]
 }
 
-// Kept out of line so BCP 47 to OpenType language resolution stays one function in an
-// optimized binary. A caller that always passes `-x-hbot` tags never reaches it.
+// BCP 47 to OpenType language resolution: the `tag_table` match and binary search. Kept out of
+// line so it stays one function in an optimized binary; without `language-tags` it is not
+// compiled at all.
+#[cfg(feature = "language-tags")]
 #[inline(never)]
 fn tags_from_language(language: &Language, tags: &mut ThreeTags) {
     let language = language.as_bytes();

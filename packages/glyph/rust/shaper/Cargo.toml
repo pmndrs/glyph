@@ -64,7 +64,7 @@ oracle = []
 stage-bench = ["oracle"]
 
 [dependencies]
-harfrust = { version = "0.12.0", default-features = false, features = ["libm"] }
+harfrust = { version = "0.12.0", default-features = false, features = ["libm", "language-tags"] }
 read-fonts = { version = "0.41.0", default-features = false, features = ["libm"] }
 serde_json = { version = "1.0.145", default-features = false, features = ["alloc"] }
 unicode-bidi = { version = "0.3.18", default-features = false }
