@@ -30,6 +30,19 @@ const SILENT_THEN_MEASURE: Route = Route {
     ..Route::FULL
 };
 
+/// A publication that returns the measurement alone, then a read of the same layout.
+const MEASURED_THEN_READ: Route = Route {
+    view_mask: SEMANTIC_VIEW_MEASUREMENT,
+    measure_first: false,
+    measure_after: true,
+    ..Route::FULL
+};
+/// The engine's `SEMANTIC_VIEW_MEASUREMENT`: the summary and its lines, with no glyph view.
+const SEMANTIC_VIEW_MEASUREMENT: u32 = 1;
+/// The engine's `SEMANTIC_LINE` and `SEMANTIC_PARAGRAPH_MEASUREMENT` record kinds.
+const SEMANTIC_LINE: u16 = 1;
+const SEMANTIC_PARAGRAPH_MEASUREMENT: u16 = 8;
+
 fn library(keys: &[&str]) -> FontLibrary {
     let fonts =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../benches/fixtures/fonts");
@@ -541,4 +554,99 @@ fn ranked_scope_members_return_to_their_own_places() {
     let mut reordered = ranked.clone();
     reordered.paragraph_mut(3).expect("paragraph 3").order = 50;
     assert_documents_equal_cold(&start, &[ranked, reordered]);
+}
+
+/// Each line's glyph span in one returned view, relative to where the paragraph's glyph
+/// records begin: the summary names its lines, and glyph records follow them.
+fn line_glyph_spans(capture: &Capture, view: &str) -> Vec<(u32, u32)> {
+    let column = |lane: &str| capture.u32_rows(&format!("{view}.{lane}"));
+    let (kinds, starts, counts) = (column("kind"), column("item_start"), column("item_count"));
+    let summary = kinds
+        .iter()
+        .position(|kind| *kind == u32::from(SEMANTIC_PARAGRAPH_MEASUREMENT))
+        .expect("a paragraph measurement");
+    let (first, lines) = (starts[summary] as usize, counts[summary] as usize);
+    let glyph_base = starts[summary] + counts[summary];
+    (first..first + lines)
+        .map(|line| {
+            assert_eq!(kinds[line], u32::from(SEMANTIC_LINE));
+            (starts[line] - glyph_base, counts[line])
+        })
+        .collect()
+}
+
+/// A publication that asks for the measurement alone reports each line's glyph span: the span
+/// positioning owns and the span a read of the same layout returns, cold and after an edit, a
+/// measure change and a drop cap.
+#[test]
+fn measurement_only_publication_reports_line_glyph_spans() {
+    let text = format!("{}\n\n{}\n{}", prose(3), prose(5), prose(1));
+    let model = Model {
+        text: utf16(&text),
+        layout: Layout {
+            width: 260.0,
+            ..Layout::default()
+        },
+        ..Model::default()
+    };
+    let edits = vec![replace(20, 4, "amber and umber ")];
+    let edited_model = edited(&model, &edits);
+    let mut narrowed = edited_model.clone();
+    narrowed.layout.width = 150.0;
+    let mut capped = narrowed.clone();
+    capped.layout.drop_cap_lines = 3;
+    let changes = [
+        (model.clone(), Vec::new()),
+        (edited_model, edits),
+        (narrowed, Vec::new()),
+        (capped, Vec::new()),
+    ];
+
+    let library = library(&["inter"]);
+    let stacks: [&[&str]; 1] = [&["inter"]];
+    let mut warm = Session::new(&library, &stacks).expect("warm session");
+    for (index, (next, edits)) in changes.iter().enumerate() {
+        let warm_output = warm
+            .step(next, edits, MEASURED_THEN_READ)
+            .unwrap_or_else(|error| panic!("change {index} was rejected incrementally: {error}"));
+        let mut cold = Session::new(&library, &stacks).expect("cold session");
+        let cold_output = cold
+            .step(next, &[], MEASURED_THEN_READ)
+            .expect("cold layout of the changed model");
+        let warm_capture = capture(&warm, &warm_output).expect("capture");
+        let cold_capture = capture(&cold, &cold_output).expect("capture");
+        let (differences, _) = incremental_differences(&warm_capture, &cold_capture);
+        let rendered: Vec<String> = differences.iter().map(|d| d.render()).collect();
+        assert!(
+            rendered.is_empty(),
+            "change {index} differs from cold:\n{}",
+            rendered.join("\n")
+        );
+
+        let published = line_glyph_spans(&warm_capture, "view.published");
+        let positioned: Vec<(u32, u32)> = warm_capture
+            .u32_rows("positioned.line.glyph_start")
+            .into_iter()
+            .zip(warm_capture.u32_rows("positioned.line.glyph_count"))
+            .collect();
+        assert!(published.len() > 3, "change {index} wraps");
+        assert!(
+            published.iter().any(|(_, count)| *count == 0)
+                && published
+                    .iter()
+                    .any(|(start, count)| *start != 0 && *count != 0),
+            "change {index} has an empty line and glyphs beyond the first: {published:?}"
+        );
+        assert_eq!(published, positioned, "change {index}: positioned spans");
+        assert_eq!(
+            published,
+            line_glyph_spans(&warm_capture, "view.measured_after"),
+            "change {index}: the read's spans"
+        );
+        assert_eq!(
+            published,
+            line_glyph_spans(&cold_capture, "view.published"),
+            "change {index}: cold spans"
+        );
+    }
 }

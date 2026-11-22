@@ -10,11 +10,13 @@ b228d0608e3bec3b degenerate-spaces
 3984887591d3bf02 doc-four-long-batch
 375419bc2406aba5 doc-four-long-batch-silent
 02a3d581e2a2acf0 doc-four-long-publish
+c054b07d3b5262fc doc-four-long-publish-measured
 a847e6a4107309ba doc-four-long-read-then-batch
 7b9f463e55cd5e1c doc-four-long-reads
 b522ed77cdf2be1d doc-four-short-batch
 8b52c1c5f15a1605 doc-four-short-batch-silent
 3267707d529849e1 doc-four-short-publish
+1f3e6376e7961997 doc-four-short-publish-measured
 bf8e0a11411142a4 doc-four-short-read-then-batch
 a476b3a695c888ca doc-four-short-reads
 f75f9a14a1f4f855 doc-mount-labels-24-batch
@@ -586,4 +588,4 @@ b1eb2ffa1b9039bc rg-columns-3-cjk-silent-then-measure
 ce13f154c56854f0 rg-columns-3-justify-latin-silent
 19373280cc43cea2 rg-columns-3-justify-latin-silent-then-measure
 4927fb82d0d212fa rg-columns-3-paragraph-latin-full
-52e6502a494f3da2 set
+fa6482732af9a69c set
