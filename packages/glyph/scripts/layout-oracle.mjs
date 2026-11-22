@@ -1,4 +1,4 @@
-/* @workflow { "name": "glyph:layout-oracle", "summary": "Run the layout correctness oracle: frozen stage reference and seeded incremental-versus-cold differential, natively or inside the optimized wasm32+simd128 build.", "requirements": "Pinned Rust through mise; the wasm probe also needs installed package dependencies for wasm-opt. GLYPH_ADVERSARIAL_FONTS names the fetched adversarial font set; cases whose fonts are absent are skipped and reported.", "writes": "packages/glyph/rust/shaper/target (native) and packages/glyph/rust/shaper/target/oracle-wasm (probe); never dist." } */
+/* @workflow { "name": "glyph:layout-oracle", "summary": "Run the layout correctness oracle: frozen stage reference and seeded incremental-versus-cold differential, natively or inside the optimized wasm32+simd128 build.", "requirements": "Pinned Rust through mise; the wasm probe also needs installed package dependencies for wasm-opt. GLYPH_ADVERSARIAL_FONTS names the fetched adversarial font set; cases whose fonts are absent are skipped and reported.", "writes": "packages/glyph/rust/shaper/target (native) and packages/glyph/rust/shaper/target/oracle-wasm (probe), or under CARGO_TARGET_DIR (pmndrs-glyph/shaper/oracle-wasm for the probe) when it is set; never dist." } */
 // Usage:
 //   node scripts/layout-oracle.mjs native <layout-oracle arguments>     e.g. native check --tier quick
 //   node scripts/layout-oracle.mjs wasm [--tier quick|full] [--case NAME]... [--set exact] [--seeds N] [--steps N]
@@ -7,12 +7,13 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { rustTargetDirectory, withRustTarget } from './support/rust-target.mjs';
 import { shaperBuildEnvironment, shaperOptimizationArguments } from './support/shaper-build.mjs';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const workspaceRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const shaperRoot = join(packageRoot, 'rust/shaper');
-const probeTarget = join(shaperRoot, 'target/oracle-wasm');
+const probeTarget = rustTargetDirectory('shaper', 'oracle-wasm');
 const optimizedProbe = join(probeTarget, 'layout-oracle.wasm');
 const fontRoots = {
   repository: join(workspaceRoot, 'benches/fixtures/fonts'),
@@ -94,7 +95,7 @@ async function buildProbe() {
       '--features',
       'simd128,oracle',
     ],
-    shaperBuildEnvironment(workspaceRoot, probeTarget, true),
+    withRustTarget(shaperBuildEnvironment(workspaceRoot, probeTarget, true), probeTarget),
   );
   const wasmOpt = join(packageRoot, 'node_modules/.bin', process.platform === 'win32' ? 'wasm-opt.CMD' : 'wasm-opt');
   await run(wasmOpt, [
