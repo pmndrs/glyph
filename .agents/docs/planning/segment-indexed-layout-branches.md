@@ -78,3 +78,5 @@ comparison).
 | `experiments/sil-editing`       | Editing queries and `replace`                  | Contained in staging; delete after `sil-green-22`             |
 
 `sil-green-22` (2026-11-21): the three branches above are merged and deleted. No lane branch is open.
+
+`sil-green-23` (2026-11-22): `experiments/sil-pixi3d-subpath` (PixiJS 3D moved to `@pmndrs/glyph/pixi3d`) merged and deleted. No lane branch is open.

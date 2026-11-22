@@ -775,3 +775,5 @@ Updated in place; the history of each change is in the log below.
 - **`sil-green-22`: merged.** Justin: "You have to integrate homie no rogue branches." Staging merged into the
   integration branch, tagged, pushed; `sil-layout-faults`, `sil-editing`, `sil-staging-22` deleted (local, remote,
   worktrees). Faults and editing are now **merged**. No lane branch is open.
+
+- **`sil-green-23`: PixiJS 3D is a subpath export.** Justin: "pixi3d is not a separate package it is a subpath export just like three and type gpu." `@pmndrs/glyph-pixi3d` deleted; `@pmndrs/glyph/pixi3d` added with optional peers; a test proves the root, `core`, `three` and `typegpu` entries import no PixiJS. Full verification passed on the lane; merged, pushed, lane deleted. Decision: new renderers are subpath exports.
