@@ -1,4 +1,4 @@
-/* @workflow { "name": "benchmark:frustum-culling", "summary": "Prove automatic Three frustum culling renders identically to unculled draws (Bitmap, MSDF effects, Slug; edges, shear, grazing perspective, edits, removal, detached glyphs, second pass, caller materials) and time many mostly off-screen labels with culling on and off.", "requirements": "Built Glyph, project Chromium with WebGPU and WebGL2, and the Inter Bitmap, MTSDF and Slug fixtures. Optional --labels=<n> and --samples=<n> size the timing scene; --output=<path> saves the raw report; --software-gpu selects SwiftShader (compatibility evidence only).", "writes": "Optional external JSON report; no tracked artifacts." } */
+/* @workflow { "name": "benchmark:frustum-culling", "summary": "Prove automatic Three frustum culling renders identically to unculled draws (Bitmap, MSDF effects, Slug; edges, shear, grazing perspective, edits, removal, detached glyphs, second pass, caller materials culled by declared padding with an undersized-padding negative control, frustumCulled: false materials, and Three's frustumCulled = false on Text, TextGroup and Glyphs) and time many mostly off-screen labels with culling on and off.", "requirements": "Built Glyph, project Chromium with WebGPU and WebGL2, and the Inter Bitmap, MTSDF and Slug fixtures. Optional --labels=<n> and --samples=<n> size the timing scene; --output=<path> saves the raw report; --software-gpu selects SwiftShader (compatibility evidence only).", "writes": "Optional external JSON report; no tracked artifacts." } */
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createServer, type ViteDevServer } from 'vite';
@@ -72,6 +72,16 @@ try {
       const culledCases = report.cases.filter((entry) => entry.culledDraws > 0).length;
       process.stdout.write(
         `${backend}/${transforms}: ${String(report.cases.length)} identical cases (${String(culledCases)} with culled draws); negative control detected\n`,
+      );
+      const { materialCulling: material, optOut } = report;
+      process.stdout.write(
+        `  caller material: undeclared displacement culled with its source ${String(material.undeclaredPops)}; ` +
+          `${String(material.paddedCases)} identical cases with declared padding; half padding changed ` +
+          `${String(material.undersizedPaddingChannels)} channels (negative control); frustumCulled: false never culled ` +
+          `${String(material.neverCulled)}\n` +
+          `  frustumCulled = false off screen, draw calls kept: batched member ${String(optOut.memberCalls)}, ` +
+          `standalone ${String(optOut.standaloneCalls)}, group ${String(optOut.groupCalls)}, ` +
+          `detached glyphs ${String(optOut.glyphsCalls)}\n`,
       );
       for (const workload of report.timings) process.stdout.write(`  ${summarize(workload)}\n`);
     }

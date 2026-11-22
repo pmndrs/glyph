@@ -561,6 +561,38 @@ const material = defineTextMaterial((context) => {
 });
 ```
 
+**Frustum culling.** Every glyph and decoration draw of a built-in raster format is frustum culled against a bound
+Glyph computes from the records it draws, whether or not a factory supplied its material. A factory that moves vertices
+declares how far, and Glyph grows each draw's bound by that much on every side:
+
+```ts
+const amplitude = 0.12;
+const wave = defineTextMaterial(
+  (context) => {
+    const value = context.createDefaultMaterial();
+    value.positionNode = context.position.add(vec3(context.position.y.sin().mul(amplitude), 0, 0));
+    return value;
+  },
+  { boundsPadding: amplitude },
+);
+const unbounded = defineTextMaterial(create, { frustumCulled: false });
+```
+
+`boundsPadding` (default `0`, finite and non-negative) is the furthest the vertex stage moves any vertex along any
+axis, in the units of `context.position`: the largest component of the displacement added to it. That is the space the
+displacement is written in, so the declaration holds in direct and indexed transform mode and under any ancestor
+scale; pixels cannot be bounded in object space for every camera, and an em depends on each glyph's size. A material
+that moves a vertex further than it declares can have that vertex culled while it is on screen.
+`frustumCulled: false` (default `true`) never culls a draw using the material, for a displacement no distance bounds.
+Draws of an external `ThreeRasterProgram` and of supplied glyph geometry are never culled: their record layout is not
+Glyph's to bound.
+
+Three's own `frustumCulled = false` on a `Text`, a `TextGroup` (for every Text and Glyphs inside it) or a detached
+`Glyphs` keeps the draws that render it submitted whatever the camera sees. In indexed transform mode those draws are
+batches shared with other members, so every member of each such batch is drawn too: the cost is the vertex work of the
+whole batch every frame, not a CPU cost. Changing the flag costs one comparison per object per frame and a member
+re-read by each draw on its next frustum test.
+
 **Paragraph texture mapping and inspection bounds.** Normalize `paragraphPosition` against `label.glyphs().inkBounds`,
 which uses the same origin with +Y down. `computeBoundingBox()` and `measureGlyphs()` report Text-local bounds with the
 anchor included; subtract `measure().anchorOffset` (x as is, y negated) to reach paragraph space. Never normalize

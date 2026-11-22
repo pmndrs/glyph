@@ -57,6 +57,7 @@ import { ThreeCommandBufferRenderer } from './command-buffer-renderer.js';
 import type { ThreeRootContext, ThreeTextMaterial } from './material.js';
 import type { ThreeBindings, ThreeMaterialBinding } from './schema.js';
 import { setThreeBatchScope } from './internal/batch-scope.js';
+import { cullingScopeChanged, cullingTreeChanged, registerCullingScope } from './internal/culling-scope.js';
 import { mapTextSpanBindings, ownTextSpanRecords } from '../config/text-span-owner.js';
 import type { ThreePublicationBoundary } from './internal/publication-boundary.js';
 import type { ThreeRendererResources } from './internal/renderer-resources.js';
@@ -438,6 +439,7 @@ export class ThreeRootHost {
   readonly #onTreeChange = (): void => {
     this.#membersDirty = true;
     this.#reconcileDirty = true;
+    cullingTreeChanged();
   };
   readonly #attributedErrorGroups = new Set<TextGroup>();
   #capacity: GlyphBufferCapacity;
@@ -1458,6 +1460,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   #observedVisible = true;
   #observedParent: THREE.Object3D | null = null;
   #observedRenderOrder = 0;
+  #observedFrustumCulled = true;
   #transformQueued = false;
   #onLayout: TextLayoutCallback | undefined;
   onError: ((error: unknown) => void) | undefined;
@@ -1493,6 +1496,7 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     if (token !== threeTextConstructionToken) {
       throw new TypeError('Three Text must be created with handle.createText() or an R3F Text component');
     }
+    registerCullingScope(this);
     const host = threeRootHosts.get(root);
     if (host === undefined) {
       throw new TypeError('Three Text must be created by a Glyph Three root');
@@ -1826,6 +1830,10 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       this.#observedRenderOrder = this.renderOrder;
       root.markReconcileDirty();
     }
+    if (this.frustumCulled !== this.#observedFrustumCulled) {
+      this.#observedFrustumCulled = this.frustumCulled;
+      cullingScopeChanged(this.frustumCulled);
+    }
     if (root.reconcileDirty) duringSceneTraversal(() => root.observeHostTree(this));
     const visible = this.visible;
     if (observeMatrix(this.matrixWorld.elements, this.#observedWorld) || visible !== this.#observedVisible) {
@@ -1941,6 +1949,7 @@ export class TextGroup extends THREE.Object3D {
   readonly #texts: Text<RasterFormatMetadata>[] = [];
   #disposed = false;
   #errorState: AttributedErrorState = noAttributedError;
+  #observedFrustumCulled = true;
   onError: ((error: unknown) => void) | undefined;
 
   /** Ordinary applications construct TextGroup through `handle.createTextGroup()`. */
@@ -1951,6 +1960,7 @@ export class TextGroup extends THREE.Object3D {
         'Three TextGroup must be created with handle.createTextGroup() or an R3F TextGroup component',
       );
     }
+    registerCullingScope(this);
     const host = threeRootHosts.get(root);
     if (host === undefined) {
       throw new TypeError('Three TextGroup must be created by a Glyph Three root');
@@ -2032,6 +2042,10 @@ export class TextGroup extends THREE.Object3D {
   override updateMatrixWorld(force?: boolean): void {
     super.updateMatrixWorld(force);
     if (this.#disposed) return;
+    if (this.frustumCulled !== this.#observedFrustumCulled) {
+      this.#observedFrustumCulled = this.frustumCulled;
+      cullingScopeChanged(this.frustumCulled);
+    }
     duringSceneTraversal(() => this.#root.observeGroupPresentation(this));
   }
 

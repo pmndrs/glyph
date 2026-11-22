@@ -351,6 +351,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
               previousDraws: this.#draws,
               previousKeys: this.#drawKeys,
               bindingId: (value) => this.#bindingId(value),
+              transforms: () => this.#transforms,
             })
           : {
               changed: false,

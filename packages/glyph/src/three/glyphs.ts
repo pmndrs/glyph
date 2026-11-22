@@ -8,6 +8,7 @@ import { createGlyphPlacements, type GlyphPlacement } from '../glyph-placement.j
 import { ThreeCommandBufferRenderer, type ThreeRendererHost } from './command-buffer-renderer.js';
 import type { ThreeGlyphGeometrySource, ThreeGlyphMeasurement } from './glyph-measurement.js';
 import { measureGlyphPlacements } from './glyph-measurement.js';
+import { cullingScopeChanged, cullingTreeChanged, registerCullingScope } from './internal/culling-scope.js';
 import { markStorageAttributeUpdated } from './internal/host-buffer.js';
 import type { ThreePublicationBoundary } from './internal/publication-boundary.js';
 import type { ThreeRendererResources } from './internal/renderer-resources.js';
@@ -114,6 +115,8 @@ export class Glyphs extends THREE.Object3D {
   readonly #worldInverse = new THREE.Matrix4();
   readonly #composed = new THREE.Matrix4();
   readonly #inversePivot = new THREE.Matrix4();
+  #observedFrustumCulled = true;
+  #observedParent: THREE.Object3D | null = null;
   #disposed = false;
 
   static {
@@ -127,6 +130,7 @@ export class Glyphs extends THREE.Object3D {
   private constructor(token: typeof glyphsConstructorToken, options: GlyphsOptions) {
     super();
     if (token !== glyphsConstructorToken) throw new TypeError('Glyphs objects are created by Text.split()');
+    registerCullingScope(this);
     let target: ThreeCommandBufferRenderer | undefined;
     let copy: GlyphCopy<void> | undefined;
     try {
@@ -320,6 +324,20 @@ export class Glyphs extends THREE.Object3D {
   outlineAt(index: number): GlyphOutlineContour[] {
     this.#assertIndex(index);
     return this.#layout.outlineAt(this.#sourceIndices[index]!);
+  }
+
+  /** Reports a changed `frustumCulled` or parent, which decides whether its draws honour an enclosing opt-out. */
+  override updateMatrixWorld(force?: boolean): void {
+    super.updateMatrixWorld(force);
+    if (this.#disposed) return;
+    if (this.frustumCulled !== this.#observedFrustumCulled) {
+      this.#observedFrustumCulled = this.frustumCulled;
+      cullingScopeChanged(this.frustumCulled);
+    }
+    if (this.parent !== this.#observedParent) {
+      this.#observedParent = this.parent;
+      cullingTreeChanged();
+    }
   }
 
   dispose(): void {
