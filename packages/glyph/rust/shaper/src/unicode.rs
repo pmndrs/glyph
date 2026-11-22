@@ -107,11 +107,17 @@ pub struct UnicodeAnalysis {
     deferred_tags: Vec<u32>,
     previous_script: u32,
     previous_script_id: u8,
+    /// What `analyze_edited` analysed around the edit, before it is joined to the kept lanes.
+    window_breaks: Vec<LineBreak>,
+    window_boundaries: Vec<u32>,
+    window_items: Vec<ScriptItem>,
     /// Grapheme, word and sentence bits for editing, computed on first query, never by `analyze`.
     /// Boxed on first use, so an analysis nobody queries carries one null pointer.
     boundaries: Option<Box<BoundaryLanes>>,
     #[cfg(test)]
     analysis_count: usize,
+    #[cfg(test)]
+    windowed_count: usize,
 }
 
 impl UnicodeAnalysis {
@@ -164,6 +170,12 @@ impl UnicodeAnalysis {
         Ok(())
     }
 
+    fn swap_window_lanes(&mut self) {
+        core::mem::swap(&mut self.breaks, &mut self.window_breaks);
+        core::mem::swap(&mut self.grapheme_boundaries, &mut self.window_boundaries);
+        core::mem::swap(&mut self.script_items, &mut self.window_items);
+    }
+
     /// The conformance-tested scalar analysis of the whole text: the reference the kernel equals.
     pub fn analyze_scalar(&mut self, text: &[u16]) -> Result<(), UnicodeError> {
         self.clear();
@@ -178,6 +190,244 @@ impl UnicodeAnalysis {
         self.resolve_neutral_scripts();
         self.itemize_scripts()?;
         Ok(())
+    }
+
+    /// Analyses `text`, which is the text `previous` analysed with units
+    /// `[start, start + removed)` replaced by `inserted` units, by analysing only a window
+    /// around the edit and keeping `previous`'s results outside it. Equal to `analyze(text)`;
+    /// the ASCII mask is as exact as `previous`'s was.
+    ///
+    /// Line breaks and graphemes change only between two restart points that hold in both texts
+    /// (`resync::restart`; the two units of margin keep every unit a restart predicate reads
+    /// outside the edit). Scripts have no restart points: a neutral grapheme takes its script
+    /// from the explicit scripts on either side, however far, and an explicit grapheme takes it
+    /// from nothing. So the analysed window runs from the last grapheme with an explicit script
+    /// that ends at or before the first restart to the first one that starts at or after the
+    /// second; the script items inside it are those of the window alone, and the breaks and
+    /// graphemes between the restarts are too, because the restarts hold inside the window.
+    pub fn analyze_edited(
+        &mut self,
+        previous: &Self,
+        text: &[u16],
+        start: usize,
+        removed: usize,
+        inserted: usize,
+    ) -> Result<(), UnicodeError> {
+        let old_length = previous
+            .grapheme_boundaries
+            .last()
+            .map_or(0, |end| *end as usize);
+        let edited_end = start.saturating_add(inserted);
+        if previous.grapheme_boundaries.is_empty()
+            || start.saturating_add(removed) > old_length
+            || old_length - removed + inserted != text.len()
+            || text.is_empty()
+        {
+            return self.analyze(text);
+        }
+        let (from, to) = resync::resync_window(
+            resync::Lane::LineBreak,
+            text,
+            start.saturating_sub(2),
+            edited_end.saturating_add(2).min(text.len()),
+        );
+        // Old offsets at or after the edit's end are new offsets less `shift`, wrapping.
+        let shift = (inserted as u32).wrapping_sub(removed as u32);
+        let (from, to) = (from as u32, to as u32);
+        let old_to = to.wrapping_sub(shift);
+        let Some((window_from, window_to)) =
+            self.script_window(previous, text, from, old_to, shift)?
+        else {
+            return self.analyze(text);
+        };
+        if window_from == 0 && window_to as usize == text.len() {
+            return self.analyze(text);
+        }
+
+        #[cfg(test)]
+        {
+            self.windowed_count += 1;
+        }
+        // The window is analysed into the small scratch lanes, so the full-length lanes keep
+        // their storage for the joined result.
+        self.swap_window_lanes();
+        let analysed = self.analyze(&text[window_from as usize..window_to as usize]);
+        self.swap_window_lanes();
+        analysed?;
+        self.clear();
+        reserve(&mut self.grapheme_boundaries, text.len().saturating_add(1))?;
+        reserve(&mut self.breaks, text.len().saturating_add(1))?;
+
+        self.printable_ascii = if removed == 0 {
+            let mut facts = previous.printable_ascii;
+            for unit in &text[start..edited_end] {
+                facts.include_unit(*unit);
+            }
+            facts
+        } else {
+            // A removed unit may have been the last of its kind, or the only unprintable one.
+            let mut facts = PrintableAsciiFacts::default();
+            for unit in text {
+                facts.include_unit(*unit);
+                if !facts.printable {
+                    break;
+                }
+            }
+            facts
+        };
+
+        let joint = |position: u32| LineBreak {
+            position,
+            required: resync::restart(resync::Lane::LineBreak, text, position as usize)
+                == Some(resync::Joint::RequiredBreak),
+        };
+        let kept = previous
+            .breaks
+            .partition_point(|line_break| line_break.position < from);
+        self.breaks.extend_from_slice(&previous.breaks[..kept]);
+        if from > 0 {
+            self.breaks.push(joint(from));
+        }
+        let (inner_from, inner_to) = (from - window_from, to - window_from);
+        let first = self
+            .window_breaks
+            .partition_point(|line_break| line_break.position <= inner_from);
+        let last = self
+            .window_breaks
+            .partition_point(|line_break| line_break.position < inner_to);
+        self.breaks.extend(
+            self.window_breaks[first..last]
+                .iter()
+                .map(|line_break| LineBreak {
+                    position: line_break.position + window_from,
+                    required: line_break.required,
+                }),
+        );
+        if to as usize == text.len() {
+            self.breaks.push(LineBreak {
+                position: to,
+                required: true,
+            });
+        } else {
+            self.breaks.push(joint(to));
+        }
+        let resumed = previous
+            .breaks
+            .partition_point(|line_break| line_break.position <= old_to);
+        self.breaks.extend(
+            previous.breaks[resumed..]
+                .iter()
+                .map(|line_break| LineBreak {
+                    position: line_break.position.wrapping_add(shift),
+                    required: line_break.required,
+                }),
+        );
+
+        let kept = previous
+            .grapheme_boundaries
+            .partition_point(|boundary| *boundary <= from);
+        self.grapheme_boundaries
+            .extend_from_slice(&previous.grapheme_boundaries[..kept]);
+        let first = self
+            .window_boundaries
+            .partition_point(|boundary| *boundary <= inner_from);
+        let last = self
+            .window_boundaries
+            .partition_point(|boundary| *boundary <= inner_to);
+        self.grapheme_boundaries.extend(
+            self.window_boundaries[first..last]
+                .iter()
+                .map(|boundary| boundary + window_from),
+        );
+        let resumed = previous
+            .grapheme_boundaries
+            .partition_point(|boundary| *boundary <= old_to);
+        self.grapheme_boundaries.extend(
+            previous.grapheme_boundaries[resumed..]
+                .iter()
+                .map(|boundary| boundary.wrapping_add(shift)),
+        );
+
+        // Script items are the maximal runs of the per-unit script, so clipping the kept items
+        // at the window and merging equal neighbours at the two seams rebuilds them.
+        for item in &previous.script_items {
+            if item.text_start >= window_from {
+                break;
+            }
+            self.push_script_item(item.text_start, item.text_end.min(window_from), item.script);
+        }
+        for index in 0..self.window_items.len() {
+            let item = self.window_items[index];
+            self.push_script_item(
+                item.text_start + window_from,
+                item.text_end + window_from,
+                item.script,
+            );
+        }
+        let old_window_to = window_to.wrapping_sub(shift);
+        let resumed = previous
+            .script_items
+            .partition_point(|item| item.text_end <= old_window_to);
+        for item in &previous.script_items[resumed..] {
+            self.push_script_item(
+                item.text_start.max(old_window_to).wrapping_add(shift),
+                item.text_end.wrapping_add(shift),
+                item.script,
+            );
+        }
+        Ok(())
+    }
+
+    /// The window `analyze_edited` analyses, in offsets of `text`: from the start of the last
+    /// explicit-script grapheme ending at or before `from` (or the text's start) to the end of
+    /// the first one starting at or after the restart that was at `old_to` in `previous` (or
+    /// the text's end). Graphemes outside the restarts are `previous`'s. `None` when `previous`
+    /// has no boundary at a restart, which a consistent analysis always has.
+    fn script_window(
+        &mut self,
+        previous: &Self,
+        text: &[u16],
+        from: u32,
+        old_to: u32,
+        shift: u32,
+    ) -> Result<Option<(u32, u32)>, UnicodeError> {
+        let boundaries = previous.grapheme_boundaries.as_slice();
+        let (Ok(before), Ok(after)) = (
+            boundaries.binary_search(&from),
+            boundaries.binary_search(&old_to),
+        ) else {
+            return Ok(None);
+        };
+        let mut window_from = 0;
+        for index in (1..=before).rev() {
+            let (start, end) = (boundaries[index - 1], boundaries[index]);
+            let (script, _) = grapheme_script_atom(
+                text,
+                start as usize,
+                end as usize,
+                &mut self.candidate_scratch,
+            )?;
+            if !is_neutral_script(script) {
+                window_from = start;
+                break;
+            }
+        }
+        let mut window_to = text.len() as u32;
+        for index in after..boundaries.len() - 1 {
+            let start = boundaries[index].wrapping_add(shift);
+            let end = boundaries[index + 1].wrapping_add(shift);
+            let (script, _) = grapheme_script_atom(
+                text,
+                start as usize,
+                end as usize,
+                &mut self.candidate_scratch,
+            )?;
+            if !is_neutral_script(script) {
+                window_to = end;
+                break;
+            }
+        }
+        Ok(Some((window_from, window_to)))
     }
 
     /// Analyses `text`, the previous text with units `[start, start + removed)` replaced by
@@ -261,7 +511,8 @@ impl UnicodeAnalysis {
         self.boundaries.get_or_insert_default()
     }
 
-    /// How much of the last `analyze` the kernel decided, for measurement.
+    /// How much of the last `analyze` the kernel decided, for measurement. After
+    /// `analyze_edited` the windows and residue are those of the analysed window.
     pub fn kernel_coverage(&self) -> KernelCoverage {
         self.kernel.coverage(
             self.grapheme_boundaries
@@ -903,6 +1154,107 @@ mod tests {
             .unwrap();
         assert_eq!(analysis.grapheme_boundaries.capacity(), boundary_capacity);
         assert_eq!(analysis.analyze(&[0xd800]), Err(UnicodeError::InvalidUtf16));
+    }
+
+    /// Chains of random single edits over the resync alphabet: the windowed analysis of each
+    /// edited text equals its cold analysis, and fails exactly when the cold one does.
+    #[test]
+    fn windowed_analysis_of_an_edit_equals_the_cold_analysis() {
+        use resync::tests::ALPHABET;
+        let mut state = 0x9e37_79b9_7f4a_7c15u64;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state as usize
+        };
+        let mut random = |length: usize, plain: bool| -> Vec<u16> {
+            let mut text = String::new();
+            for _ in 0..length {
+                let pick = next() >> 8;
+                text.push_str(if plain && pick % 4 != 0 {
+                    // Letters with restart points, residue scripts that have none, and
+                    // neutrals whose Script_Extensions limit the scripts they join.
+                    [
+                        "a", "b", " ", " ", "c", ".", "1", "\n", "क", "\u{94d}", "ष", "ก",
+                        "\u{e34}", " ", "\n", "한", "\u{964}", "\u{301}", "ー", "\u{a8f1}",
+                    ][(pick >> 4) % if pick % 3 == 0 { 20 } else { 8 }]
+                } else {
+                    ALPHABET[pick % ALPHABET.len()]
+                });
+            }
+            let mut units: Vec<u16> = text.encode_utf16().collect();
+            units.push((pick_seed(&units) % 7) as u16 + 0x61);
+            units
+        };
+        fn pick_seed(units: &[u16]) -> usize {
+            units.iter().map(|unit| usize::from(*unit)).sum()
+        }
+        let rounds = if cfg!(debug_assertions) {
+            3_000
+        } else {
+            60_000
+        };
+        let (mut windowed, mut failures, mut ascii) = (0usize, 0usize, 0usize);
+        for round in 0..rounds {
+            let plain = round % 3 != 0;
+            let mut text = random(4 + round % 60, plain);
+            let mut previous = UnicodeAnalysis::default();
+            previous.analyze(&text).unwrap();
+            let mut edited = UnicodeAnalysis::default();
+            for step in 0..12 {
+                let insert = random((round + step) % 4, plain || step % 2 == 0);
+                let insert = &insert[..insert.len() - usize::from(step % 3 != 0)];
+                let start = (pick_seed(insert) * 31 + step * 7 + round) % (text.len() + 1);
+                let removed = ((round >> 2) + step) % 4;
+                let removed = removed.min(text.len() - start);
+                let mut new = text[..start].to_vec();
+                new.extend_from_slice(insert);
+                new.extend_from_slice(&text[start + removed..]);
+                let mut cold = UnicodeAnalysis::default();
+                let expected = cold.analyze(&new);
+                let count = edited.windowed_count;
+                let actual = edited.analyze_edited(&previous, &new, start, removed, insert.len());
+                let shown = || {
+                    alloc::format!(
+                        "{} -> {} at {start} -{removed} +{}",
+                        String::from_utf16_lossy(&text).escape_unicode(),
+                        String::from_utf16_lossy(&new).escape_unicode(),
+                        insert.len()
+                    )
+                };
+                assert_eq!(actual, expected, "{}", shown());
+                if expected.is_err() {
+                    failures += 1;
+                    break;
+                }
+                windowed += edited.windowed_count - count;
+                assert_eq!(edited.line_breaks(), cold.line_breaks(), "{}", shown());
+                assert_eq!(
+                    edited.grapheme_boundaries(),
+                    cold.grapheme_boundaries(),
+                    "{}",
+                    shown()
+                );
+                assert_eq!(edited.script_items(), cold.script_items(), "{}", shown());
+                let (facts, exact) = (edited.printable_ascii_facts(), cold.printable_ascii_facts());
+                assert_eq!(facts.printable(), exact.printable(), "{}", shown());
+                if exact.printable() {
+                    ascii += 1;
+                    for (kept, used) in facts.used().iter().zip(exact.used()) {
+                        assert_eq!(kept & used, used, "{}", shown());
+                    }
+                    if removed > 0 {
+                        assert_eq!(facts.used(), exact.used(), "{}", shown());
+                    }
+                }
+                core::mem::swap(&mut previous, &mut edited);
+                text = new;
+            }
+        }
+        assert!(windowed > rounds, "{windowed} windowed edits");
+        assert!(failures > rounds / 200, "{failures} ill-formed edits");
+        assert!(ascii > rounds / 50, "{ascii} printable texts");
     }
 
     #[test]
