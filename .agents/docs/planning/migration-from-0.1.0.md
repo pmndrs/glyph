@@ -196,3 +196,5 @@ draws, before the frame that draws them. MSDF quads are trimmed to the ink.
   MSDF fonts of a config.
 - TypeGPU anchored text: `createText` writes the unanchored `position`; the anchored position is written when
   `glyph.shape()` accepts the text.
+- TypeGPU in a browser without a bundler: the `typegpu` peer (0.12.5) reads `process.env.NODE_ENV` unguarded, so
+  loading `/typegpu` or `/three/typegpu` as direct, unbundled browser ESM needs a bundler or a `process` shim.
