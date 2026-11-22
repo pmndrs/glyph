@@ -547,13 +547,13 @@ with fully overlapping ranges; this is not resolvable on a loaded host and shoul
 After the merge with `sil-green-43` (`86afe793c`, `1,726,075` raw / `682,851` gzip / `522,919` Brotli, of which the
 language cut still accounts for `−17,647` / `−4,816` / `−3,050`), each later cut is measured against the one before it:
 
-| Cut                                                             | Commit        |   Δ raw |  Δ gzip | Δ Brotli |
-| --------------------------------------------------------------- | ------------- | ------: | ------: | -------: |
-| placement run lookup through the shared `u64` sort kernel       | `464e046a3`   |  −6,383 |  −2,048 |   −1,933 |
-| one measurement record writer, glyph source as `&mut dyn FnMut` | `0d589655c`   |  −5,575 |  −2,625 |   −1,620 |
-| fork `variations` feature off (default instance only)           | `7d8ad3bc2`   | −13,165 |  −5,151 |   −4,837 |
-| fork `FontInstance` support only with `experimental_font_api`   | `1faf6a1e4`   | −12,722 |  −2,534 |   −1,317 |
-| glyph-outline decoding moved to the font baker                  | OUTLINECOMMIT | −62,603 | −23,502 |  −17,858 |
+| Cut                                                             | Commit                   |   Δ raw |  Δ gzip | Δ Brotli |
+| --------------------------------------------------------------- | ------------------------ | ------: | ------: | -------: |
+| placement run lookup through the shared `u64` sort kernel       | `464e046a3`              |  −6,383 |  −2,048 |   −1,933 |
+| one measurement record writer, glyph source as `&mut dyn FnMut` | `0d589655c`              |  −5,575 |  −2,625 |   −1,620 |
+| fork `variations` feature off (default instance only)           | `7d8ad3bc2`              | −13,165 |  −5,151 |   −4,837 |
+| fork `FontInstance` support only with `experimental_font_api`   | `1faf6a1e4`              | −12,722 |  −2,534 |   −1,317 |
+| glyph-outline decoding moved to the font baker                  | `05426b7c7`, `54714cd2e` | −62,603 | −23,502 |  −17,858 |
 
 ### Monomorphization (research step 5)
 
