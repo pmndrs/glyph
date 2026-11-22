@@ -5380,6 +5380,13 @@ impl ParagraphState {
         {
             return Ok(());
         }
+        // Empty text has no shape, however an edit emptied it. Its one shaping run is empty,
+        // and an incremental path would shape that run into an empty shaped run, which the
+        // cluster build rejects.
+        if self.text.active().units.is_empty() {
+            self.shape.mark_prepared();
+            return Ok(());
+        }
         if self.committed_inline().is_none()
             && (self.try_prepare_incremental_shape(shaper, font_stacks, font_bindings)?
                 || self.try_prepare_multi_run_shape(shaper)?
@@ -5389,10 +5396,6 @@ impl ParagraphState {
             return Ok(());
         }
         let text = self.text.active().units.as_slice();
-        if text.is_empty() {
-            self.shape.mark_prepared();
-            return Ok(());
-        }
         let styles = &self.styles.active().arena;
         let runs = self.shaping_runs.active().runs();
         let mut max_stack_depth = 0usize;
@@ -16617,6 +16620,45 @@ mod tests {
                 .first_paragraph_state()
                 .unwrap();
             assert_visible_shape_equal(warm, cold, "split or merged runs");
+        }
+    }
+
+    /// Deleting all of a paragraph's text leaves one empty shaping run in place of several or
+    /// of one. No incremental path shapes it: the paragraph has no shape, as when built cold.
+    #[test]
+    fn an_edit_that_empties_the_text_leaves_no_shape() {
+        for text in [
+            "Typography αλφάβητο moving system.",
+            "Typography moving system.",
+        ] {
+            let (mut engine, mut shaper) = shaped_inter_engine(text);
+            let length = text.encode_utf16().count() as u32;
+            let bytes = text_mutation_bytes(&[(0, length, &[])]);
+            let mut request = update(1, 1, 1);
+            request.text_mutations =
+                parse_text_mutations(&bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            let styles = root_style_bytes_for_text(7, 0);
+            request.style_mutations =
+                parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+            let measured = engine
+                .measure_paragraph_with_shaper(&mut shaper, request, 1)
+                .unwrap();
+            engine.commit_measure(measured).unwrap();
+            let warm = engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert!(warm.shape.committed().runs.is_empty(), "{text}");
+            let (cold_engine, _) = shaped_inter_engine("");
+            let cold = cold_engine
+                .planners
+                .get(&4)
+                .unwrap()
+                .first_paragraph_state()
+                .unwrap();
+            assert_visible_shape_equal(warm, cold, "emptied text");
         }
     }
 
