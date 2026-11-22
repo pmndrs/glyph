@@ -28,7 +28,7 @@ import {
   type StagedBufferOperation,
   type StagedBufferUpload,
 } from './internal/host-buffer.js';
-import { updateGeometryInstances } from './internal/geometry.js';
+import { disposeDrawGeometry, updateGeometryInstances } from './internal/geometry.js';
 import { prepareDrawReplacement } from './internal/draw-realizer.js';
 import { visibleBelowRoot } from './internal/scene-tree.js';
 import { GlyphOriginIndex } from './internal/glyph-origin-index.js';
@@ -420,6 +420,8 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       const retainedBuffers = new Set(prepared.context.buffers.values());
       retiredBuffers = [...this.#buffers.values()].filter((buffer) => !retainedBuffers.has(buffer));
     }
+    const retiredStorage = new Set<THREE.BufferAttribute>(retiredBuffers.map(({ attribute }) => attribute));
+    if (retiredTransformAttribute !== undefined) retiredStorage.add(retiredTransformAttribute);
     const attempt = (operation: () => void): void => {
       try {
         operation();
@@ -471,7 +473,7 @@ export class ThreeCommandBufferRenderer implements GlyphRenderer<ThreeBindings, 
       for (const mesh of previousDraws) {
         if (prepared.draws.reused.has(mesh)) continue;
         attempt(() => mesh.removeFromParent());
-        attempt(() => mesh.geometry.dispose());
+        attempt(() => disposeDrawGeometry(mesh.geometry, retiredStorage));
       }
     }
     for (const material of prepared.retiredMaterials) attempt(() => material.dispose());

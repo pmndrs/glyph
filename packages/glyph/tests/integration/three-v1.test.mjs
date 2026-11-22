@@ -4814,6 +4814,203 @@ test('Three keeps a material across a replaced buffer generation and binds it to
   fontDomain.dispose();
 });
 
+// Three r186+ releases the GPU buffer of every attribute still attached to a geometry when it is disposed (#317).
+test('Three retires a removed group draw without releasing storage its sibling still binds', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const fontDomain = createThreeFontDomain();
+  const font = await fontDomain.loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const first = three.createTextGroup();
+  const second = three.createTextGroup();
+  const firstLabel = three.createText({ font, text: 'First label' });
+  const secondLabel = three.createText({ font, text: 'Second label' });
+  first.add(firstLabel);
+  second.add(secondLabel);
+  second.position.y = -1;
+  scene.add(first, second);
+  scene.updateMatrixWorld();
+  const initialDraws = rootDraws(scene);
+  const releases = observeGeometryReleases(initialDraws);
+
+  second.removeFromParent();
+  scene.updateMatrixWorld();
+  const survivors = rootDraws(scene);
+  assert.ok(
+    survivors.length > 0 && survivors.every((draw) => initialDraws.includes(draw)),
+    'the first group keeps its draw',
+  );
+  const retired = initialDraws.filter((draw) => !survivors.includes(draw));
+  assert.ok(retired.length > 0, 'removing the second group retires its draw');
+  const liveStorage = new Set(survivors.flatMap((draw) => Object.values(draw.geometry.attributes)));
+  assert.ok(
+    survivors.every((draw) => liveStorage.has(draw.geometry.getAttribute('_pmndrsGlyphTransforms'))),
+    'the surviving draw binds the shared transform table',
+  );
+  for (const draw of retired) {
+    assert.ok(
+      releases.attachedBefore.get(draw.geometry).some((attribute) => liveStorage.has(attribute)),
+      'the retired draw shared storage with the surviving draw',
+    );
+    const released = releases.atDispose.get(draw.geometry);
+    assert.ok(released, 'the retired draw geometry is disposed');
+    assert.deepEqual(
+      released.filter((attribute) => liveStorage.has(attribute)),
+      [],
+      'disposing the retired geometry must not release storage a surviving draw binds',
+    );
+  }
+
+  first.dispose();
+  second.dispose();
+  firstLabel.dispose();
+  secondLabel.dispose();
+  font.dispose();
+  fontDomain.dispose();
+});
+
+test('Three releases a retired storage generation with the draw geometry that retires it', async (t) => {
+  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 2, policy: 'grow' } }));
+  const fontDomain = createThreeFontDomain();
+  const font = await fontDomain.loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const label = three.createText({ font, text: 'AB' });
+  group.add(label);
+  scene.add(group);
+  scene.updateMatrixWorld();
+  const [initialDraw] = rootDraws(scene);
+  const initialOrigins = initialDraw.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.origin.id));
+  const releases = observeGeometryReleases([initialDraw]);
+
+  label.text = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  scene.updateMatrixWorld();
+  const survivors = rootDraws(scene);
+  assert.ok(!survivors.includes(initialDraw), 'growing physical buffers retires the initial draw');
+  const liveStorage = new Set(survivors.flatMap((draw) => Object.values(draw.geometry.attributes)));
+  assert.ok(!liveStorage.has(initialOrigins), 'growth replaces the origin storage generation');
+  const released = releases.atDispose.get(initialDraw.geometry);
+  assert.ok(released?.includes(initialOrigins), 'the retired generation stays attached so Three releases it');
+  assert.deepEqual(
+    released.filter((attribute) => liveStorage.has(attribute)),
+    [],
+    'disposing the retired geometry must not force Three to destroy and re-upload storage the grown draw binds',
+  );
+
+  group.dispose();
+  label.dispose();
+  font.dispose();
+  fontDomain.dispose();
+});
+
+// Three r185/r186 free storage only through the renderer's attribute manager; BufferAttribute.dispose alone leaks (#317).
+test('Three releases every storage kind a drawn text binds through each renderer, once its last owner retires', async (t) => {
+  assert.ok(['185', '186'].includes(THREE.REVISION), 'the installed Three needs the attribute-manager bridge');
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  t.after(() => font.dispose());
+  const scene = new THREE.Scene();
+  const first = three.createTextGroup();
+  const second = three.createTextGroup();
+  const firstLabel = three.createText({ font, text: 'First label' });
+  const secondLabel = three.createText({ font, text: 'Second label' });
+  first.add(firstLabel);
+  second.add(secondLabel);
+  scene.add(first, second);
+  scene.updateMatrixWorld();
+  const renderers = [storageReleaseRenderer(), storageReleaseRenderer()];
+  const draws = rootDraws(scene);
+  for (const { renderer } of renderers) drawWith(renderer, draws);
+  const geometryStorage = new Set(draws.flatMap((draw) => sharedStorageOf(draw)));
+  assert.ok(geometryStorage.size > 0);
+
+  second.removeFromParent();
+  scene.updateMatrixWorld();
+  for (const { deleted } of renderers) {
+    assert.deepEqual(deleted, [], 'retiring a sibling draw releases no storage the session still owns');
+  }
+
+  const [detached] = firstLabel.split();
+  scene.add(detached);
+  scene.updateMatrixWorld();
+  const detachedDraws = detached.children.filter((child) => child.isMesh);
+  const glyphStorage = detachedDraws.map((draw) => draw.geometry.getAttribute('_pmndrsGlyphInstanceTransforms'));
+  assert.ok(glyphStorage.length > 0 && glyphStorage.every((attribute) => attribute?.isStorageInstancedBufferAttribute));
+  drawWith(renderers[0].renderer, detachedDraws);
+  detached.dispose();
+  assert.deepEqual(
+    renderers[0].deleted.filter((attribute) => glyphStorage.includes(attribute)).length,
+    new Set(glyphStorage).size,
+    'disposing detached Glyphs releases its per-glyph transform storage through the renderer that drew it',
+  );
+  assert.deepEqual(renderers[1].deleted, [], 'a renderer that never drew the detached copy is not asked to release it');
+  renderers[0].deleted.length = 0;
+
+  first.dispose();
+  second.dispose();
+  firstLabel.dispose();
+  secondLabel.dispose();
+  three.dispose();
+  for (const { deleted } of renderers) {
+    assert.equal(new Set(deleted).size, deleted.length, 'each attribute is released once per renderer');
+    for (const attribute of geometryStorage) {
+      assert.ok(deleted.includes(attribute), 'every drawn geometry storage attribute is released with its owner');
+    }
+    const materialOnly = deleted.filter((attribute) => !geometryStorage.has(attribute));
+    assert.equal(materialOnly.length, 1, 'the material-only placement table is released with its owner');
+    assert.ok(materialOnly[0].array instanceof Float32Array && materialOnly[0].itemSize === 2);
+  }
+});
+
+test('Three keeps MSDF and Slug residency textures for a surviving sibling and releases them with their last owner', async (t) => {
+  const fonts = await loadFont({ baked: { bytes: await readFile(multiTechniqueFontUrl) } }, [msdf, slug]);
+  t.after(() => fonts.forEach((font) => font.dispose()));
+  for (const font of fonts) {
+    const three = await createThreeTestHandle(t);
+    const scene = new THREE.Scene();
+    const first = three.createTextGroup();
+    const second = three.createTextGroup();
+    const firstLabel = three.createText({ font, text: 'First label', style: { fontSize: 32 } });
+    const secondLabel = three.createText({ font, text: 'Second words', style: { fontSize: 32 } });
+    first.add(firstLabel);
+    second.add(secondLabel);
+    scene.add(first, second);
+    scene.updateMatrixWorld();
+    const draws = rootDraws(scene);
+    const textures = new Set(draws.flatMap((draw) => residencyTextures(draw)));
+    assert.equal(textures.size, font.raster === msdf ? 2 : 3, `${font.raster.id} draws share one residency set`);
+    const disposals = new Map([...textures].map((texture) => [texture, 0]));
+    for (const texture of textures) {
+      texture.addEventListener('dispose', () => disposals.set(texture, disposals.get(texture) + 1));
+    }
+
+    second.removeFromParent();
+    scene.updateMatrixWorld();
+    assert.ok(rootDraws(scene).length > 0, 'the first group keeps a draw');
+    assert.deepEqual(
+      [...disposals.values()],
+      [...textures].map(() => 0),
+      'sibling retirement keeps residency',
+    );
+    secondLabel.text = 'Second words grown';
+    scene.add(second);
+    scene.updateMatrixWorld();
+    for (const draw of rootDraws(scene)) {
+      for (const texture of residencyTextures(draw)) assert.ok(textures.has(texture), 'the revived sibling reuses it');
+    }
+
+    first.dispose();
+    second.dispose();
+    firstLabel.dispose();
+    secondLabel.dispose();
+    three.dispose();
+    assert.deepEqual(
+      [...disposals.values()],
+      [...textures].map(() => 1),
+      `${font.raster.id} residency is released exactly once with its last owner`,
+    );
+  }
+});
+
 test('throwing Three retirement callbacks preserve the accepted publication', async (t) => {
   const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   t.after(() => font.dispose());
@@ -9432,6 +9629,53 @@ function assertPublicSemanticLayoutEqual(actualText, expectedText, context) {
 function rootDraws(scene, name = undefined) {
   const renderObject = scene.getObjectByName(name === undefined ? '@pmndrs/glyph:anonymous' : `@pmndrs/glyph:${name}`);
   return renderObject?.children.filter((child) => child.isMesh) ?? [];
+}
+
+/** Records each draw geometry's attributes now and at its dispose event, when Three r186+ releases them. */
+function observeGeometryReleases(draws) {
+  const attachedBefore = new Map();
+  const atDispose = new Map();
+  for (const { geometry } of draws) {
+    attachedBefore.set(geometry, Object.values(geometry.attributes));
+    geometry.addEventListener('dispose', () => atDispose.set(geometry, Object.values(geometry.attributes)));
+  }
+  return { attachedBefore, atDispose };
+}
+
+/** A renderer stand-in exposing only the Three r185/r186 attribute manager whose delete path frees GPU storage. */
+function storageReleaseRenderer() {
+  const deleted = [];
+  return {
+    deleted,
+    renderer: {
+      _attributes: {
+        has: () => true,
+        delete: (attribute) => deleted.push(attribute),
+      },
+    },
+  };
+}
+
+/** Invokes the per-object hook Three calls before drawing each mesh. */
+function drawWith(renderer, draws) {
+  for (const draw of draws) {
+    draw.onBeforeRender(renderer, undefined, undefined, draw.geometry, draw.material, null);
+    draw.onBeforeRender(renderer, undefined, undefined, draw.geometry, draw.material, null);
+  }
+}
+
+function sharedStorageOf(draw) {
+  return Object.values(draw.geometry.attributes).filter((attribute) => attribute.isStorageInstancedBufferAttribute);
+}
+
+function residencyTextures(draw) {
+  const msdfState = draw.userData.pmndrsGlyphMsdf;
+  if (msdfState !== undefined) return [msdfState.atlas.texture, msdfState.atlas.glyphs];
+  const slugState = draw.userData.pmndrsGlyphSlug;
+  if (slugState !== undefined) {
+    return [slugState.page.headerTexture, slugState.page.bandCurveTexture, slugState.page.glyphTable.texture];
+  }
+  return [];
 }
 
 function singleDrawAffectedByGroupVisibility(scene, group) {

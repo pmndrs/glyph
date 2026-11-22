@@ -9,7 +9,8 @@ import type {
   ThreeInstanceSpanBinding,
 } from '../schema.js';
 import { threeSystemBuffers } from '../codec.js';
-import { createGeometrySource, realizeGeometry, resolveDrawGeometry } from './geometry.js';
+import { attachSharedStorage, createGeometrySource, realizeGeometry, resolveDrawGeometry } from './geometry.js';
+import { trackStorageRenderer } from './attribute-disposal.js';
 import { transformAttribute, type RetainedBuffer, type ThreeBufferBindingId } from './host-buffer.js';
 import { glyphOriginBuffer, glyphStorageKey, ThreeMaterialRealizer, transformProgramKey } from './material-realizer.js';
 import { threeBatchScope } from './batch-scope.js';
@@ -170,13 +171,24 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
           mesh = reusable;
         } else {
           const geometry = realizeGeometry(drawGeometry, span.recordCount);
-          for (const buffer of byCodecId.values()) geometry.setAttribute(buffer.threeAttributeName, buffer.attribute);
+          const storage = new Set<THREE.BufferAttribute>();
+          for (const buffer of byCodecId.values()) {
+            attachSharedStorage(geometry, buffer.threeAttributeName, buffer.attribute);
+            storage.add(buffer.attribute);
+          }
+          // Every glyph material reads the session placement table; no draw geometry carries it.
+          if (!decoration && context.placementTable !== undefined) storage.add(context.placementTable.attribute);
           const glyphStorage = stableIds === undefined ? undefined : owner.glyphStorage?.(glyphStorageKey(stableIds));
           if (glyphStorage !== undefined) {
-            geometry.setAttribute('_pmndrsGlyphInstanceTransforms', glyphStorage.transforms);
+            attachSharedStorage(geometry, '_pmndrsGlyphInstanceTransforms', glyphStorage.transforms);
+            storage.add(glyphStorage.transforms);
           }
-          if (transform.kind === 'indexed') geometry.setAttribute('_pmndrsGlyphTransforms', context.transformAttribute);
+          if (transform.kind === 'indexed') {
+            attachSharedStorage(geometry, '_pmndrsGlyphTransforms', context.transformAttribute);
+            storage.add(context.transformAttribute);
+          }
           mesh = new THREE.Mesh(geometry, material);
+          trackDrawStorage(mesh, [...storage]);
           attachMsdfDrawState(mesh, material, byCodecId);
           attachSlugDrawState(mesh, material, byCodecId);
           mesh.userData.pmndrsGlyphRunStart = span.recordIndex;
@@ -217,6 +229,16 @@ export function prepareDrawReplacement(options: PrepareDrawReplacementOptions): 
     activeTransformIndices,
     directDrawsByTransform,
     batchDrawsByScope,
+  };
+}
+
+/** Registers each renderer that draws `mesh` as a holder of its storage, once per renderer. */
+function trackDrawStorage(mesh: THREE.Mesh, storage: readonly THREE.BufferAttribute[]): void {
+  const observedRenderers = new WeakSet<object>();
+  mesh.onBeforeRender = (renderer) => {
+    if (observedRenderers.has(renderer)) return;
+    trackStorageRenderer(renderer, storage);
+    observedRenderers.add(renderer);
   };
 }
 
