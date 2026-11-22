@@ -2,11 +2,14 @@
 import { fileURLToPath } from 'node:url';
 import { createServer, type ViteDevServer } from 'vite';
 
-import type {
-  MaterialPositionCase,
-  MaterialPositionResult,
-} from '../src/benchmark/targets/conformance/material-position-probe.ts';
 import { launchProjectChromium } from './support/project-chromium.mts';
+
+/** The browser probe's result shape; kept local so this Node script does not type-load browser modules. */
+type MaterialPositionCase = 'composed' | 'fragment-gradient';
+interface MaterialPositionResult {
+  readonly backend: 'webgpu' | 'webgl2';
+  readonly inkPixels: number;
+}
 
 const port = process.env.PORT === undefined ? 0 : Number(process.env.PORT);
 if (!Number.isSafeInteger(port) || port < 0 || port > 65_535) throw new Error('PORT must be a valid TCP port');
