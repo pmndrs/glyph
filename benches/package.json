@@ -17,7 +17,6 @@
     "@pmndrs/glyph": "workspace:*",
     "@pmndrs/glyph-example-raster": "workspace:*",
     "@pmndrs/glyph-example-renderer": "workspace:*",
-    "@pmndrs/glyph-pixi3d": "workspace:*",
     "@react-three/fiber": "catalog:renderer",
     "@typegpu/gl": "catalog:renderer",
     "@typegpu/three": "catalog:renderer",

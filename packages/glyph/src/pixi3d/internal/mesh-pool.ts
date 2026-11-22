@@ -1,6 +1,6 @@
 import type { BaseMaterial3D, Geometry3D, Mesh3D } from '@pixi/3d';
 import type { Buffer } from 'pixi.js';
-import { detachPixi3DTextMaterial, type Pixi3DTextMaterial, type Pixi3DTextMaterialFormat } from './material.js';
+import { detachPixi3DTextMaterial, type Pixi3DTextMaterial, type Pixi3DTextMaterialFormat } from '../material.js';
 
 interface GeometryEntry {
   readonly geometry: Geometry3D;

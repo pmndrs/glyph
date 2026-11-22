@@ -1,8 +1,8 @@
-// Real-device proof for `@pmndrs/glyph-pixi3d`: the same scenes through PixiJS 3D (WebGPU or WebGL2, from `?backend=`)
+// Real-device proof for `@pmndrs/glyph/pixi3d`: the same scenes through PixiJS 3D (WebGPU or WebGL2, from `?backend=`)
 // and through Glyph's Three renderer on WebGPU, at the same camera, read back as pixels.
 import { Container3D, FlatMaterial, View3D } from '@pixi/3d';
 import { bitmap, glyph, msdf, slug, type FontFace } from '@pmndrs/glyph';
-import { definePixi3DConfig, Pixi3DTextMaterial, type Pixi3DText } from '@pmndrs/glyph-pixi3d';
+import { definePixi3DConfig, Pixi3DTextMaterial, type Pixi3DText } from '@pmndrs/glyph/pixi3d';
 import { defineThreeConfig } from '@pmndrs/glyph/three';
 import { Application } from 'pixi.js';
 import * as THREE from 'three/webgpu';

@@ -280,6 +280,7 @@ const glyphConfig = await measureJavaScript(
       '/packages/glyph/dist/shaders/tsl',
       '/packages/glyph/dist/three/',
       '/packages/glyph/dist/shaders/tsl/',
+      '/packages/glyph/dist/pixi3d',
     ],
   },
 );
@@ -299,6 +300,26 @@ const typegpuIntegration = await measureJavaScript(
       '/packages/glyph/dist/shaders/tsl',
       '/packages/glyph/dist/three/',
       '/packages/glyph/dist/shaders/tsl/',
+      '/packages/glyph/dist/pixi3d',
+    ],
+  },
+);
+const pixi3dIntegration = await measureJavaScript(
+  'pixi3d-renderer-js',
+  'PixiJS 3D renderer JS',
+  new URL('../size-entries/text-pixi3d-integration.ts', import.meta.url),
+  false,
+  true,
+  true,
+  {
+    expectedDynamic: [],
+    excludedInitial: [
+      '/packages/glyph/dist/react',
+      '/packages/glyph/dist/vue',
+      '/packages/glyph/dist/three',
+      '/packages/glyph/dist/typegpu',
+      '/packages/glyph/dist/shaders/',
+      '/packages/glyph/dist/three/',
     ],
   },
 );
@@ -385,6 +406,7 @@ const [interBitmap, interMsdf, interSlug, iconsBitmap, iconsMsdf, iconsSlug] = a
 const entries: SizeEntry[] = [
   glyphConfig,
   typegpuIntegration,
+  pixi3dIntegration,
   coreJavaScript,
   textShaperWasm,
   threeRuntime,

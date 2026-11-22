@@ -42,7 +42,7 @@ Based on `8176a24e0` (tip of `experiments/held-rope-ascii-anchor-wip`).
 | `sil-green-15`      | Positioning topology/numeric split and per-line ink (unit 1b)                                                                                                                                                                 | `experiments/sil-positioning` (deleted)                                                |
 | `sil-green-16`      | Slug on direct TypeGPU matching Three (sub-pixel tie-break in both shaders)                                                                                                                                                   | `experiments/sil-render` (deleted)                                                     |
 | `sil-green-17`      | Error model: paragraph-local failure, trap recovery, text-size limit; linear engine mount                                                                                                                                     | `experiments/sil-prepare` (kept: frame integration is next)                            |
-| `sil-green-18`      | PixiJS 3D renderer package `@pmndrs/glyph-pixi3d` on the official release, with a parity suite                                                                                                                                | `experiments/sil-pixi3d` (deleted)                                                     |
+| `sil-green-18`      | PixiJS 3D renderer on the official release, with a parity suite (now the `@pmndrs/glyph/pixi3d` subpath)                                                                                                                      | `experiments/sil-pixi3d` (deleted)                                                     |
 | `sil-green-19`      | Oracle coverage: decorated text and effects, several paragraphs per root, columns and regions, inline objects                                                                                                                 | `experiments/sil-oracle` (kept: two divergence fixes are next)                         |
 | `sil-green-20`      | Ranked paragraph order fix; frame integration, `onLayout`, error surfaces, migration note (unit 3 stages 5–6)                                                                                                                 | `experiments/sil-oracle` (deleted), `experiments/sil-prepare` (kept)                   |
 | `sil-green-21`      | Exact first frame without `attach`; a publication that does not fit no longer fails siblings; failure inventory and interleaving fuzz                                                                                         | `experiments/sil-prepare` (deleted)                                                    |
@@ -71,10 +71,10 @@ comparison).
 
 ## Update 2026-11-21 (late)
 
-| Branch | Holds | State |
-| --- | --- | --- |
-| `experiments/sil-staging-22` | Layout-fault fixes + editing, oracle re-frozen | Verified; waiting for acceptance, then becomes `sil-green-22` |
-| `experiments/sil-layout-faults` | Five fault fixes | Contained in staging; delete after `sil-green-22` |
-| `experiments/sil-editing` | Editing queries and `replace` | Contained in staging; delete after `sil-green-22` |
+| Branch                          | Holds                                          | State                                                         |
+| ------------------------------- | ---------------------------------------------- | ------------------------------------------------------------- |
+| `experiments/sil-staging-22`    | Layout-fault fixes + editing, oracle re-frozen | Verified; waiting for acceptance, then becomes `sil-green-22` |
+| `experiments/sil-layout-faults` | Five fault fixes                               | Contained in staging; delete after `sil-green-22`             |
+| `experiments/sil-editing`       | Editing queries and `replace`                  | Contained in staging; delete after `sil-green-22`             |
 
 `sil-green-22` (2026-11-21): the three branches above are merged and deleted. No lane branch is open.

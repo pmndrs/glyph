@@ -1,5 +1,5 @@
 import type { ShaderBit } from '@pixi/3d';
-import { decorationGlsl, decorationWgsl } from './generated/shaders.js';
+import { decorationGlsl, decorationWgsl } from '../generated/shaders.js';
 
 /** Resource-free solid decoration paint decoded by Glyph's shared shader authority. */
 export const glyphDecorationBit: ShaderBit = {

@@ -8,7 +8,7 @@ import {
   createPixi3DTextMaterial,
   detachPixi3DTextMaterial,
   Pixi3DTextMaterial,
-} from '../dist/material.js';
+} from '../../dist/pixi3d/material.js';
 
 const pulseBit = {
   name: 'glyphPixi3DTestPulse',

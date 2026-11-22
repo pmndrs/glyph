@@ -1,4 +1,10 @@
-import type { BufferPatch, CommandBufferView, GlyphRenderer, LayoutPoint, PreparedRendererCommit } from '@pmndrs/glyph';
+import type {
+  BufferPatch,
+  CommandBufferView,
+  GlyphRenderer,
+  LayoutPoint,
+  PreparedRendererCommit,
+} from '../../index.js';
 import type { Container3D, Mesh3D } from '@pixi/3d';
 
 import { Pixi3DMeshPool } from './mesh-pool.js';
@@ -6,7 +12,7 @@ import { pixi3dSystemBuffers } from './codec.js';
 import type { Pixi3DBindings, Pixi3DBufferBinding } from './bindings.js';
 import { createDecorationMeshes, createRasterMeshes, destroyBitmapMeshes, type RetainedPixi3DBuffer } from './mesh.js';
 import type { Pixi3DResolvedResource } from './resource.js';
-import type { Pixi3DText } from './text.js';
+import type { Pixi3DText } from '../text.js';
 
 interface Span {
   readonly resource: Pixi3DResolvedResource | undefined;

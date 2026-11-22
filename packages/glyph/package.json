@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "description": "A typography engine for web graphics.",
   "keywords": [
+    "pixi3d",
+    "pixijs",
     "text-rendering",
     "threejs",
     "typegpu",
@@ -191,6 +193,14 @@
       "source": "./src/typegpu.ts",
       "import": "./dist/typegpu.js"
     },
+    "./pixi3d": {
+      "types": {
+        "source": "./src/pixi3d.ts",
+        "default": "./dist/pixi3d.d.ts"
+      },
+      "source": "./src/pixi3d.ts",
+      "import": "./dist/pixi3d.js"
+    },
     "./three/typegpu": {
       "types": {
         "source": "./src/three/typegpu.ts",
@@ -228,6 +238,7 @@
   },
   "devDependencies": {
     "@cto.af/linebreak": "4.0.3",
+    "@pixi/3d": "catalog:pixi3d",
     "@react-three/fiber": "catalog:renderer",
     "@react-three/test-renderer": "catalog:renderer",
     "@tresjs/core": "5.8.3",
@@ -244,6 +255,7 @@
     "ktx-parse": "1.1.0",
     "oxfmt": "0.35.0",
     "oxlint": "1.75.0",
+    "pixi.js": "catalog:pixi3d",
     "react": "catalog:renderer",
     "three": "catalog:renderer",
     "tsdown": "0.22.14",
@@ -256,16 +268,21 @@
     "vue": "3.5.42"
   },
   "peerDependencies": {
+    "@pixi/3d": ">=0.1.0 <0.2",
     "@react-three/fiber": ">=9.7.0 <10 || >=10.0.0-alpha.4 <11",
     "@tresjs/core": ">=5.8.3 <6",
     "@typegpu/gl": ">=0.12.4 <0.13",
     "@typegpu/three": ">=0.12.1 <0.13",
+    "pixi.js": ">=8.23.0 <9",
     "react": ">=19.0.0 <19.3",
     "three": ">=0.185.0",
     "typegpu": ">=0.12.5 <0.13",
     "vue": ">=3.5 <4"
   },
   "peerDependenciesMeta": {
+    "@pixi/3d": {
+      "optional": true
+    },
     "@react-three/fiber": {
       "optional": true
     },
@@ -276,6 +293,9 @@
       "optional": true
     },
     "@typegpu/three": {
+      "optional": true
+    },
+    "pixi.js": {
       "optional": true
     },
     "react": {

@@ -1,4 +1,4 @@
-import { Pixi3DRenderer, zeroAnchor } from './renderer.js';
+import { Pixi3DRenderer, zeroAnchor } from './internal/renderer.js';
 import { Pixi3DTextSnapshot } from './detached.js';
 import type {
   BorrowedGlyphLayout,
@@ -25,12 +25,14 @@ import type {
   TextStyle,
   TextInput,
   TextUnit,
-} from '@pmndrs/glyph';
-import { bitmap, msdf, slug } from '@pmndrs/glyph';
+} from '../index.js';
+import { bitmap } from '../raster/bitmap.js';
+import { msdf } from '../raster/msdf.js';
+import { slug } from '../raster/slug.js';
 import { Box, Container3D, type Destroy3DOptions, Mesh3D } from '@pixi/3d';
-import { createGlyphPlacements } from '@pmndrs/glyph/core';
+import { createGlyphPlacements } from '../glyph-placement.js';
 
-import type { Pixi3DBindings, Pixi3DRootBoundary } from './bindings.js';
+import type { Pixi3DBindings, Pixi3DRootBoundary } from './internal/bindings.js';
 import { isPixi3DTextMaterial, type Pixi3DTextMaterial } from './material.js';
 
 export type Pixi3DFontSelection = FontFaceSelection<
@@ -318,7 +320,7 @@ export class Pixi3DText<Selection extends Pixi3DFontSelection = Pixi3DFontSelect
     }
     const copy = (
       target: Container3D,
-      request: import('@pmndrs/glyph').GlyphCopyRequest,
+      request: import('../index.js').GlyphCopyRequest,
       owner: Pixi3DTextSnapshot,
       offset: LayoutPoint = placements.layout.anchorOffset,
     ) => {

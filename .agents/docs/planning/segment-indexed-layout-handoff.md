@@ -17,7 +17,7 @@ the [build log](segment-indexed-layout-build-log.md), the [branch map](segment-i
 ## 1. Where things stand
 
 - **Integration branch** `experiments/segment-indexed-layout`, worktree `/Volumes/Depot/Developer/glyph-held-rope-wip`,
-  pushed to `origin`. Last verified tag: `sil-green-22`. It sits on `experiments/held-rope-ascii-anchor-wip`
+  pushed to `origin`. Last verified tag: `sil-green-23`. It sits on `experiments/held-rope-ascii-anchor-wip`
   (`8176a24e0a3f`; draft PRs #292 → #301 → #302 → #310).
 - **`sil-green-22`** merged the layout-fault fixes and the editing lane with the oracle re-frozen (section 3).
   No lane branch is open.
@@ -38,7 +38,7 @@ the [build log](segment-indexed-layout-build-log.md), the [branch map](segment-i
 | Three MSDF | Effect-specialised graphs, ink-trimmed quads, per-font glyph tables, on-demand atlas residency, `msdfAtlas: 'sdf'` |
 | Slug | Glyph table, batching, band curves resident on demand, direct-TypeGPU parity |
 | TypeGPU | Batching through indexed transforms, atlas residency |
-| PixiJS 3D | `@pmndrs/glyph-pixi3d` on the official `@pixi/3d` 0.1.0 and `pixi.js` 8.23 |
+| PixiJS 3D | `@pmndrs/glyph/pixi3d` subpath export (optional peers `@pixi/3d` 0.1.x and `pixi.js` 8.23+), like `/three` and `/typegpu`; not a separate package |
 | First frame | Font binding compiled at load |
 
 ### Performance standing (same machine, loose reference, not a quiet run)
@@ -80,7 +80,7 @@ branches and worktrees are deleted. There is one branch: the integration branch.
 - Full oracle after both: 588 equal, 0 unlisted divergences, natively and in wasm.
 
 **Verification, all passing:** `@pmndrs/glyph` tests (1,329 integration tests, none skipped),
-the shaper's cargo tests including editing, `@pmndrs/glyph-pixi3d` check, PixiJS 3D parity, TypeGPU parity, both
+the shaper's cargo tests including editing, PixiJS 3D parity, TypeGPU parity, both
 bitmap proofs, the TypeGPU live check, and `pnpm check`. Wasm is 647,666 bytes gzip.
 
 **User-visible behaviour changes it carries**
@@ -127,7 +127,7 @@ tier (native and wasm) and the browser verification pass on the integration tree
 
 The PixiJS 3D text object has the five queries but not `replace`. Add it by delegating to the same host function
 the Three text uses (`src/text-editing.ts`), with the span-rebase rule covered by
-`tests/fixtures/span-rebase-vectors.json`. Done when the package check passes and a test edits a PixiJS 3D text
+`tests/fixtures/span-rebase-vectors.json`. Done when the package tests pass and a test edits a PixiJS 3D text
 mid-paragraph and reads the same caret as the Three text.
 
 ### S3. Two input faults from the faults lane — top model, small to medium
@@ -205,8 +205,8 @@ only the expected line kinds moved (`class` is step digests, `stage` is cold dig
 git diff -U0 -- tests/oracle/reference/exact ':!tests/oracle/reference/exact/MANIFEST' | grep '^[-+][^-+]' | cut -c2- | awk '{print $1}' | sort | uniq -c
 ```
 
-Verification before every tag, on the integration tree: delete `node_modules/.vite`, rebuild `@pmndrs/glyph` and
-`@pmndrs/glyph-pixi3d`, then `pnpm --filter @pmndrs/glyph test`, `pnpm --filter @pmndrs/glyph-pixi3d check`,
+Verification before every tag, on the integration tree: delete `node_modules/.vite`, rebuild `@pmndrs/glyph`, then
+`pnpm --filter @pmndrs/glyph test`,
 `pnpm scripts run benchmark:pixi3d-parity`, `benchmark:typegpu-parity`, `benchmark:v1-bitmap`,
 `benchmark:v1-bitmap -- --typegpu`, `typegpu:live-check`, `pnpm check`. About an hour.
 

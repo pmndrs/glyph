@@ -1,7 +1,7 @@
 import { Box, Geometry3D, Mesh3D, type BaseMaterial3D, type ShaderBit } from '@pixi/3d';
 import { Buffer, BufferUsage } from 'pixi.js';
 import { Pixi3DMeshPool } from './mesh-pool.js';
-import { detachPixi3DTextMaterial } from './material.js';
+import { detachPixi3DTextMaterial } from '../material.js';
 
 /** One Codec record is one native instance: its lanes live in Pixi's indexed material store. */
 export interface NativeGlyphField {

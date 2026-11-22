@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFile } from 'node:fs/promises';
 
 import {
   bitmapGlsl,
@@ -15,7 +14,9 @@ import {
   slugFragmentGlsl,
   slugGlsl,
   slugWgsl,
-} from '../dist/index.js';
+} from '@pmndrs/glyph/pixi3d';
+
+import { readJavaScriptModuleClosure } from '../support/javascript-module-closure.mjs';
 
 test('generated Bitmap helpers cover both Pixi3D backends', () => {
   assert.match(bitmapWgsl, /fn glyphBitmapQuadPosition\(/);
@@ -116,12 +117,13 @@ function testSlugPage() {
 }
 
 test('the shipped entry has no TypeGPU runtime import', async () => {
-  const source = await readFile(new URL('../dist/index.js', import.meta.url), 'utf8');
-  const bit = await readFile(new URL('../dist/bitmap-bit.js', import.meta.url), 'utf8');
-  const msdfBit = await readFile(new URL('../dist/msdf-bit.js', import.meta.url), 'utf8');
-  const slugBit = await readFile(new URL('../dist/slug-bit.js', import.meta.url), 'utf8');
-  const generated = await readFile(new URL('../dist/generated/shaders.js', import.meta.url), 'utf8');
-  const shipped = `${source}\n${bit}\n${msdfBit}\n${slugBit}\n${generated}`;
-  assert.doesNotMatch(shipped, /from\s+["'](?:typegpu|@typegpu\/)/);
-  assert.doesNotMatch(shipped, /__TYPEGPU_META__|use gpu/);
+  const shipped = await readJavaScriptModuleClosure([new URL('../../dist/pixi3d.js', import.meta.url)]);
+  for (const specifier of shipped.staticImports) {
+    assert.doesNotMatch(specifier, /^(?:typegpu|@typegpu\/)/);
+  }
+  assert.ok(
+    shipped.paths.every((path) => !path.includes('/dist/shaders/')),
+    'the PixiJS 3D entry ships resolved shader strings, not the TypeGPU shader library',
+  );
+  assert.doesNotMatch(shipped.source, /__TYPEGPU_META__|use gpu/);
 });

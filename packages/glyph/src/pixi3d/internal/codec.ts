@@ -1,17 +1,11 @@
-import type { CodecBufferId, CodecCapabilitySet, CodecDescriptor, CodecIdFactory } from '@pmndrs/glyph';
-import {
-  createDecorationCodecProgram,
-  decorationSchema,
-  bitmapCodec,
-  bitmapSchema,
-  createRasterCodecProgram,
-  defineCodecBuffers,
-  id,
-  msdfCodec,
-  msdfSchema,
-  slugCodec,
-  slugSchema,
-} from '@pmndrs/glyph/core';
+import type { CodecBufferId, CodecCapabilitySet, CodecDescriptor, CodecIdFactory } from '../../index.js';
+import { id } from '../../config/codec.js';
+import { createDecorationCodecProgram, decorationSchema } from '../../config/decoration.js';
+import { createRasterCodecProgram } from '../../config/raster.js';
+import { defineCodecBuffers } from '../../config/schema.js';
+import { bitmapCodec, bitmapSchema } from '../../raster/bitmap.js';
+import { msdfCodec, msdfSchema } from '../../raster/msdf.js';
+import { slugCodec, slugSchema } from '../../raster/slug.js';
 
 const PIXI3D_STABLE_GLYPH_BUFFER_ID: CodecBufferId = id.buffer('glyph-pixi3d/stable-glyph');
 const PIXI3D_PLACEMENT_SLOT_BUFFER_ID: CodecBufferId = id.buffer('glyph-pixi3d/placement-slot');

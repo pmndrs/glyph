@@ -123,6 +123,38 @@ handle.draw(pass, { width: canvas.clientWidth, height: canvas.clientHeight });
 
 See the [TypeGPU hello world](apps/typegpu-hello-world/README.md) example for more details.
 
+## PixiJS 3D
+
+Use `@pmndrs/glyph/pixi3d` with [PixiJS 3D](https://github.com/pixijs/3d) (`@pixi/3d` 0.1 and `pixi.js` 8.23 or later,
+installed alongside Glyph). Bitmap, MSDF and Slug draw on PixiJS 3D's WebGPU and WebGL2 backends.
+
+```ts
+import { View3D } from '@pixi/3d';
+import { glyph, slug } from '@pmndrs/glyph';
+import { Pixi3DConfig } from '@pmndrs/glyph/pixi3d';
+import { Application } from 'pixi.js';
+
+const app = new Application();
+await app.init({ preference: 'webgpu', resizeTo: window });
+const view = new View3D({ autoResize: true });
+app.stage.addChild(view);
+
+await glyph.init();
+const handle = glyph.handle('scene', Pixi3DConfig);
+const font = glyph.fontFace('/fonts/inter.font.glb', { format: slug });
+await font.load();
+
+const text = handle.createText({ font, text: 'Hello, PixiJS 3D', style: { fontSize: 0.5, color: '#ffffff' } });
+view.root.addChild(text);
+app.ticker.add(() => glyph.shape());
+```
+
+A text is a `Container3D`: position, rotate and parent it like any other node. Text uses PixiJS 3D's lit `Material3D` by
+default; `Pixi3DTextMaterial` appends shader bits and may supply a factory for another material, such as an unlit
+`FlatMaterial`. Shader math is Glyph's TypeGPU library resolved at build time to WGSL and GLSL, so this entry has no
+TypeGPU runtime dependency. Known differences from the Three renderer: MSDF keeps every baked atlas page resident and
+draws untrimmed quads, Bitmap quads are not snapped to the pixel grid, and overlapping texts follow PixiJS 3D's own sort.
+
 ## TresJS (Vue)
 
 Use `@pmndrs/glyph/vue` for [TresJS](https://tresjs.org) integration.

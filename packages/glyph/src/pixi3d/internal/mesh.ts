@@ -1,17 +1,14 @@
 import type { BaseMaterial3D, ShaderBit } from '@pixi/3d';
 import { Box, FlatMaterial, Geometry3D, Mesh3D } from '@pixi/3d';
-import type { CodecBufferId } from '@pmndrs/glyph';
-import {
-  decorationSchema,
-  MSDF_GLYPH_TABLE_LAYER_STEP,
-  MSDF_GLYPH_TABLE_STRIDE,
-  SLUG_GLYPH_TABLE_STRIDE,
-} from '@pmndrs/glyph/core';
+import type { CodecBufferId } from '../../index.js';
+import { decorationSchema } from '../../config/decoration.js';
+import { MSDF_GLYPH_TABLE_LAYER_STEP, MSDF_GLYPH_TABLE_STRIDE } from '../../raster/msdf.js';
+import { SLUG_GLYPH_TABLE_STRIDE } from '../../raster/slug.js';
 import type { Texture } from 'pixi.js';
 import { Buffer, BufferUsage } from 'pixi.js';
 
 import type { Pixi3DBufferBinding } from './bindings.js';
-import { glyphBitmapBit } from './bitmap-bit.js';
+import { glyphBitmapBit } from '../bitmap-bit.js';
 import { pixi3dBitmapBuffers, pixi3dMsdfBuffers, pixi3dSlugBuffers, pixi3dSystemBuffers } from './codec.js';
 import { glyphDecorationBit } from './decoration-bit.js';
 import {
@@ -19,9 +16,9 @@ import {
   detachPixi3DTextMaterial,
   type Pixi3DTextMaterial,
   type Pixi3DTextMaterialFormat,
-} from './material.js';
+} from '../material.js';
 import { Pixi3DMeshPool, releasePooledMesh } from './mesh-pool.js';
-import { glyphMsdfBit } from './msdf-bit.js';
+import { glyphMsdfBit } from '../msdf-bit.js';
 import {
   createNativeGlyphMesh,
   glyphSeed,
@@ -35,7 +32,7 @@ import type {
   Pixi3DResolvedResource,
   Pixi3DSlugResource,
 } from './resource.js';
-import { createGlyphSlugBits } from './slug-bit.js';
+import { createGlyphSlugBits } from '../slug-bit.js';
 
 export interface RetainedPixi3DBuffer {
   readonly binding: Pixi3DBufferBinding;
@@ -453,7 +450,7 @@ function words(
   const start = index * width * 4;
   if (start + width * 4 > bytes.byteLength) throw new RangeError('Pixi3D Codec record is out of range');
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  return Array.from({ length: width }, (_, lane) => read(view, start + lane * 4));
+  return Array.from({ length: width }, (_, laneIndex) => read(view, start + laneIndex * 4));
 }
 
 function createMesh(geometry: Geometry3D, createMaterial: () => BaseMaterial3D, pool: Pixi3DMeshPool): Mesh3D {

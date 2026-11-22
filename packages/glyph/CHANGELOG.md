@@ -16,6 +16,7 @@ See the [0.2 migration guide](./MIGRATION-0.2.md) for before/after examples and 
 
 ### Added
 
+- Added `@pmndrs/glyph/pixi3d`, a renderer for the official PixiJS 3D release (`@pixi/3d` 0.1, `pixi.js` 8.23). Bitmap, MSDF and Slug text draw as `Container3D` nodes on WebGPU and WebGL2. `@pixi/3d` and `pixi.js` are optional peers; no other entry imports them.
 - Added optional static-font glyph outlines for any raster format. Bake with `glyph bake --outlines`, then use borrowed `readGlyphs((glyphs) => glyphs.outlineAt(...))`, owned `glyphs().outlineAt()`, or dense detached `Glyphs.outlineAt()` reads. Outline-format metadata and variable-font axes are deferred and are not 0.2 support.
 - Added `batching="auto" | "shared" | "group"` to Three, React, and Vue `TextGroup`s. `auto` creates a boundary for a top-level authored group and inherits that boundary through nested automatic groups; `group` forces a nested boundary; `shared` joins the nearest enclosing authored boundary or the implicit root pool.
 - Exported `TextGroupBatching` from `@pmndrs/glyph/three`.
