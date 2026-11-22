@@ -133,47 +133,66 @@ impl ShapingRunArena {
         let mut style_index = 0usize;
         let mut script_index = 0usize;
         let mut bidi_index = 0usize;
-        while style_index < styles.len()
-            && script_index < scripts.len()
-            && bidi_index < bidi.runs.len()
-        {
-            let style = styles[style_index];
-            let script = scripts[script_index];
-            let bidi_run = bidi.runs[bidi_index];
-            let start = style
-                .text_start
-                .max(script.text_start)
-                .max(bidi_run.text_start);
-            let end = style.text_end.min(script.text_end).min(bidi_run.text_end);
-            if start < end {
-                self.push_drawable_fragments(
-                    text,
-                    start,
-                    end,
-                    ShapingRun {
-                        text_start: start,
-                        text_end: end,
-                        script: script.script,
-                        direction: direction(style.style, bidi_run.level),
-                        bidi_level: forced_level(style.style, bidi_run.level),
-                        style: style.style,
-                    },
-                    style_storage,
-                )?;
-            }
-            let boundary = style.text_end.min(script.text_end).min(bidi_run.text_end);
-            if boundary <= start {
-                return Err(EngineError::InvalidRequest);
-            }
-            if style.text_end == boundary {
+        let graphemes = unicode.grapheme_boundaries();
+        // Where the previous run ended. A script item or a bidi run can end inside a grapheme --
+        // a spacing mark has its own script and bidi class -- but a cluster is a grapheme and
+        // has one run, so that run reaches the grapheme's end and the items it overlaps start
+        // there. Style boundaries are on graphemes already.
+        let mut cursor = 0_u32;
+        loop {
+            while styles
+                .get(style_index)
+                .is_some_and(|style| style.text_end <= cursor)
+            {
                 style_index += 1;
             }
-            if script.text_end == boundary {
+            while scripts
+                .get(script_index)
+                .is_some_and(|script| script.text_end <= cursor)
+            {
                 script_index += 1;
             }
-            if bidi_run.text_end == boundary {
+            while bidi
+                .runs
+                .get(bidi_index)
+                .is_some_and(|run| run.text_end <= cursor)
+            {
                 bidi_index += 1;
             }
+            let (Some(&style), Some(&script), Some(&bidi_run)) = (
+                styles.get(style_index),
+                scripts.get(script_index),
+                bidi.runs.get(bidi_index),
+            ) else {
+                break;
+            };
+            let start = cursor
+                .max(style.text_start)
+                .max(script.text_start)
+                .max(bidi_run.text_start);
+            let item_end = style.text_end.min(script.text_end).min(bidi_run.text_end);
+            let end = graphemes
+                .get(graphemes.partition_point(|boundary| *boundary < item_end))
+                .copied()
+                .unwrap_or(item_end);
+            if end <= start {
+                return Err(EngineError::InvalidRequest);
+            }
+            self.push_drawable_fragments(
+                text,
+                start,
+                end,
+                ShapingRun {
+                    text_start: start,
+                    text_end: end,
+                    script: script.script,
+                    direction: direction(style.style, bidi_run.level),
+                    bidi_level: forced_level(style.style, bidi_run.level),
+                    style: style.style,
+                },
+                style_storage,
+            )?;
+            cursor = end;
         }
         if style_index != styles.len()
             || script_index != scripts.len()
@@ -698,6 +717,44 @@ mod tests {
             .unwrap();
 
         assert_eq!(runs.runs().len(), 2);
+    }
+
+    /// A spacing mark is its own script and bidi class, so a script item or a bidi run can end
+    /// between it and its base. The cluster is the grapheme, so the run its base starts owns it.
+    #[test]
+    fn a_grapheme_split_by_script_or_bidi_stays_in_its_base_run() {
+        use crate::bidi::DIRECTION_RTL;
+        for (text, direction, level) in [
+            // U+201D is a neutral at the paragraph's level; U+0940 is a left-to-right
+            // Devanagari vowel sign.
+            ("\u{201d}\u{940} \u{915}", DIRECTION_RTL, 1),
+            // A Hebrew letter: script and level both change inside the grapheme.
+            ("\u{5d0}\u{940} \u{5d1}", DIRECTION_LTR, 1),
+        ] {
+            let text: Vec<u16> = text.encode_utf16().collect();
+            let mut unicode = UnicodeAnalysis::default();
+            unicode.analyze(&text).unwrap();
+            assert_eq!(unicode.grapheme_boundaries()[..2], [0, 2]);
+            let bidi = analyze(&text, direction).unwrap();
+            let styles = [StyleSegment {
+                text_start: 0,
+                text_end: text.len() as u32,
+                style: ResolvedStyle::default(),
+            }];
+            let mut runs = ShapingRunArena::default();
+            runs.build(&text, &styles, &StyleArena::default(), &unicode, &bidi)
+                .unwrap();
+            let first = runs.runs()[0];
+            assert_eq!((first.text_start, first.bidi_level), (0, level));
+            assert!(first.text_end >= 2, "the vowel sign left its base's run");
+            assert!(
+                runs.runs().iter().all(|run| unicode
+                    .grapheme_boundaries()
+                    .contains(&run.text_start)
+                    && unicode.grapheme_boundaries().contains(&run.text_end)),
+                "every run starts and ends on a grapheme boundary"
+            );
+        }
     }
 
     /// The published names are HarfRust's bits, not a parallel table. If a HarfRust upgrade moves a

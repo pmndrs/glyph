@@ -10,7 +10,7 @@ use alloc::{format, string::String, vec, vec::Vec};
 
 use crate::{
     bidi::DIRECTION_RTL,
-    engine::frame::{ALIGN_JUSTIFY, OVERFLOW_ELLIPSIS},
+    engine::frame::{ALIGN_JUSTIFY, OVERFLOW_ELLIPSIS, WRAP_NONE},
 };
 
 use super::{
@@ -382,6 +382,7 @@ pub(super) fn cases(cases: &mut Vec<Case>) {
     }
     cases.push(max_lines_count_change());
     cases.push(style_removal_with_same_length_edit());
+    cases.push(grapheme_across_runs());
     cases.push(ellipsis_on_empty_lines());
     cases.push(ellipsis_cut_at_corrected_break());
     cases.push(negative_spacing_on_a_lone_mark());
@@ -569,6 +570,52 @@ fn style_removal_with_same_length_edit() -> Case {
         spans: Some(Vec::new()),
         ..Step::default()
     }];
+    case
+}
+
+/// A right-to-left label cut by an ellipsis whose first grapheme is a closing quote and a
+/// Devanagari vowel sign. The sign is left-to-right and Devanagari, the quote neutral at the
+/// paragraph's level, so a bidi run ends inside the grapheme; the edit makes the base a Hebrew
+/// letter, which ends a script item there as well. Found by the faults lane: the engine at the
+/// reference commit refuses every step as an invalid request.
+fn grapheme_across_runs() -> Case {
+    let mut case = new_case(
+        "mech-rtl-ellipsis-grapheme-across-runs".into(),
+        Tier::Quick,
+        &["devanagari"],
+        Script::Devanagari,
+    );
+    case.model.text = utf16(
+        "\u{201d}\u{940}\u{939}\u{93f}\u{928}\u{94d}\u{926}\u{940} \u{92a}\u{93e}\u{920} \u{905}\u{915}\u{94d}\u{937}\u{930} \u{932}\u{93f}\u{92a}\u{93f} \u{915}\u{93e} \u{939}\u{948} \u{914}\u{930}",
+    );
+    case.model.root.direction = DIRECTION_RTL;
+    case.model.layout = Layout {
+        width: 120.0,
+        wrap: WRAP_NONE,
+        overflow: OVERFLOW_ELLIPSIS,
+        ..Layout::default()
+    };
+    case.steps = vec![
+        Step {
+            label: "quote to Hebrew letter".into(),
+            edits: vec![TextEdit {
+                start: 0,
+                delete: 1,
+                insert: utf16("\u{5d0}"),
+            }],
+            ..Step::default()
+        },
+        Step {
+            label: "restore".into(),
+            edits: vec![TextEdit {
+                start: 0,
+                delete: 1,
+                insert: utf16("\u{201d}"),
+            }],
+            ..Step::default()
+        },
+    ];
+    case.fuzz = true;
     case
 }
 
