@@ -17,6 +17,7 @@ impl<'a> GlyphNames<'a> {
     pub fn new(font: &FontKind<'a>) -> Self {
         match font {
             FontKind::FontRef(font) => Self::from_tables(&font.font),
+            #[cfg(feature = "experimental_font_api")]
             FontKind::FontInstance(instance, _) => Self::from_tables(&instance.tables()),
         }
     }
