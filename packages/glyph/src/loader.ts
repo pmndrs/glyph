@@ -961,7 +961,7 @@ class FontLibraryImpl implements FontLibrary {
     const existing = this.#fontFaceContent.get(serialized.artifactFingerprint);
     if (existing !== undefined && existing.contains(serialized)) return existing.acquire();
     const { loadSerializedFontFaceSource } = await import('./internal/font-face-transfer-runtime.js');
-    const candidate = await loadSerializedFontFaceSource(serialized, this.#config, signal);
+    const candidate = await loadSerializedFontFaceSource(serialized, new FontRegistry(this.#config), signal);
     try {
       signal?.throwIfAborted();
       this.#assertActive();
