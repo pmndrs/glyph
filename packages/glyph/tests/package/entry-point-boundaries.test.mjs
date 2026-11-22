@@ -1,4 +1,4 @@
-/** A name has exactly one home: `.` for the application vocabulary, `./core` for renderer-neutral integration helpers, `./three` for the Three.js integration. An integration re-exports a root name only when it appears in its own signatures. */
+/** A name has exactly one home: `.` for the application vocabulary, `./core` for renderer-neutral integration helpers, `./three`, `./typegpu` and `./pixi3d` for one renderer integration each. An integration re-exports a root name only when it appears in its own signatures. */
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
@@ -171,6 +171,23 @@ test('integrations re-export root names only when their own signatures use them'
             'three/glyph-measurement.d.ts',
             'three/material.d.ts',
             'three/frame-error.d.ts',
+          ].map(declaration),
+        )
+      ).join('\n'),
+    },
+    {
+      name: './pixi3d',
+      entry: await declaration('pixi3d.d.ts'),
+      body: (
+        await Promise.all(
+          [
+            'pixi3d/config.d.ts',
+            'pixi3d/text.d.ts',
+            'pixi3d/material.d.ts',
+            'pixi3d/bitmap-bit.d.ts',
+            'pixi3d/msdf-bit.d.ts',
+            'pixi3d/slug-bit.d.ts',
+            'pixi3d/detached.d.ts',
           ].map(declaration),
         )
       ).join('\n'),

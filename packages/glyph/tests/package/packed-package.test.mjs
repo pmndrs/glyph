@@ -93,7 +93,7 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
       assert.ok((await stat(sourcePath)).isFile(), `${path} must resolve to a packed source: ${source}`);
     }
   }
-  for (const peer of ['typegpu', '@typegpu/gl', '@typegpu/three']) {
+  for (const peer of ['typegpu', '@typegpu/gl', '@typegpu/three', '@pixi/3d', 'pixi.js']) {
     assert.ok(manifest.peerDependencies[peer], `${peer} must be a declared peer`);
     assert.equal(manifest.peerDependenciesMeta[peer]?.optional, true, `${peer} must remain optional`);
   }
@@ -266,24 +266,25 @@ async function verifyIsolatedPackedConsumers(archive, availableVersions, context
     {
       name: 'core',
       dependencies: [],
-      absentPeers: ['three', 'typegpu', '@typegpu/gl', '@typegpu/three'],
+      absentPeers: ['three', 'typegpu', '@typegpu/gl', '@typegpu/three', '@pixi/3d', 'pixi.js'],
       entry: publicSurfaceEntry(['@pmndrs/glyph', '@pmndrs/glyph/core']),
       missingPeerImports: [
         { specifier: '@pmndrs/glyph/three', peer: 'three' },
         { specifier: '@pmndrs/glyph/typegpu', peer: 'typegpu' },
+        { specifier: '@pmndrs/glyph/pixi3d', peer: '@pixi/3d' },
       ],
     },
     {
       name: 'three',
       dependencies: ['three', '@types/three'],
-      absentPeers: ['typegpu', '@typegpu/gl', '@typegpu/three'],
+      absentPeers: ['typegpu', '@typegpu/gl', '@typegpu/three', '@pixi/3d', 'pixi.js'],
       entry: publicSurfaceEntry(['@pmndrs/glyph', '@pmndrs/glyph/three', '@pmndrs/glyph/shaders/tsl']),
       missingPeerImports: [{ specifier: '@pmndrs/glyph/three/typegpu', peer: 'typegpu' }],
     },
     {
       name: 'typegpu',
       dependencies: ['typegpu', '@webgpu/types'],
-      absentPeers: ['three', '@typegpu/gl', '@typegpu/three'],
+      absentPeers: ['three', '@typegpu/gl', '@typegpu/three', '@pixi/3d', 'pixi.js'],
       entry: publicSurfaceEntry(['@pmndrs/glyph', '@pmndrs/glyph/typegpu', '@pmndrs/glyph/shaders/typegpu']),
       missingPeerImports: [{ specifier: '@pmndrs/glyph/three/typegpu', peer: 'three' }],
     },
@@ -294,6 +295,16 @@ async function verifyIsolatedPackedConsumers(archive, availableVersions, context
       entry: publicSurfaceEntry(['@pmndrs/glyph', '@pmndrs/glyph/three/typegpu', '@pmndrs/glyph/shaders/typegpu']),
       missingPeerImports: [],
       runtimePeers: ['@typegpu/gl', '@typegpu/three'],
+    },
+    {
+      name: 'pixi3d',
+      dependencies: ['@pixi/3d', 'pixi.js'],
+      absentPeers: ['three', 'typegpu', '@typegpu/gl', '@typegpu/three'],
+      entry: publicSurfaceEntry(['@pmndrs/glyph', '@pmndrs/glyph/pixi3d']),
+      missingPeerImports: [
+        { specifier: '@pmndrs/glyph/three', peer: 'three' },
+        { specifier: '@pmndrs/glyph/typegpu', peer: 'typegpu' },
+      ],
     },
   ];
 

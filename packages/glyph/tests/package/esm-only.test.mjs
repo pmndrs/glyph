@@ -48,6 +48,8 @@ test('the published contract is ESM-only', async () => {
     './shaders/typegpu',
     './three',
     './three/typegpu',
+    './typegpu',
+    './pixi3d',
     './react',
     './core',
     './vue',
@@ -218,4 +220,31 @@ test('stable Three and TSL imports do not load the experimental TypeGPU bridge',
     experimental.paths.every((path) => !path.includes('/dist/shaders/tsl/')),
     'the TypeGPU-backed Three entry must not load the native TSL shader realization',
   );
+});
+
+test('only the PixiJS 3D entry loads PixiJS', async () => {
+  const pixi = /^(?:pixi\.js|@pixi\/)/;
+  for (const entry of [
+    'index.js',
+    'core.js',
+    'three.js',
+    'three/typegpu.js',
+    'typegpu.js',
+    'shaders/typegpu/index.js',
+  ]) {
+    const graph = await readJavaScriptModuleClosure([new URL(`../../dist/${entry}`, import.meta.url)]);
+    for (const specifier of [...graph.staticImports, ...graph.dynamicImports]) {
+      assert.doesNotMatch(specifier, pixi, `${entry} must not import ${specifier}`);
+    }
+    assert.ok(
+      graph.paths.every((path) => !path.includes('/dist/pixi3d')),
+      `${entry} must not load the PixiJS 3D integration`,
+    );
+  }
+  const integration = await readJavaScriptModuleClosure([new URL('../../dist/pixi3d.js', import.meta.url)]);
+  assert.ok(integration.staticImports.has('@pixi/3d'));
+  assert.ok(integration.staticImports.has('pixi.js'));
+  for (const specifier of integration.staticImports) {
+    assert.doesNotMatch(specifier, /^(?:three(?:\/|$)|typegpu(?:\/|$)|@typegpu\/)/);
+  }
 });

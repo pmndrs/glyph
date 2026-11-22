@@ -9,6 +9,7 @@
     "types": ["node"]
   },
   "files": [
+    "tests/types/pixi3d-api.test.ts",
     "tests/types/r3f-v1-api.test.ts",
     "tests/types/subpath-exports.test.ts",
     "tests/types/tsl-api.test.ts",
