@@ -355,6 +355,15 @@ config helpers.
 
 Browser ESM delivery uses the private `content-digest` module filename to avoid URL filters matching `fingerprint`. Public fingerprint names, hash vectors, cache headers and artifact identities remain unchanged. The installed-package browser consumer rejects matching requests and proves both Worker baking and font loading, with an explicit blocking negative control. This models a filename filter; it does not claim coverage of every browser extension.
 
+Browser-targeted ESM imports of every browser entry (`.`, `/core`, `/three`, `/typegpu`, `/three/typegpu`, `/pixi3d`)
+evaluate Glyph's own modules without a Node `process` global. The private development-diagnostics gate reads
+`process.env.NODE_ENV` when Node supplies it and remains off in untransformed browser modules without `process`. Vite's
+development server injects `import.meta.hot` and replaces `NODE_ENV`, retaining diagnostics even with custom modes.
+Library builds leave `hot` undefined; when they do not replace `NODE_ENV`, process-free browser imports keep
+diagnostics off. Production builds eliminate teardown diagnostics through Vite's `DEV` flag or the literal `NODE_ENV`
+comparisons at the guarded call sites. The `typegpu` peer itself reads `process.env.NODE_ENV` unguarded, so the
+TypeGPU entries still need a bundler or a `process` shim for that peer.
+
 | Subpath                         | Purpose                                                                                                          |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `@pmndrs/glyph`                 | Root runtime, built-in format selection, font/raster types, fallback stacks, text authoring, and layout results. |
