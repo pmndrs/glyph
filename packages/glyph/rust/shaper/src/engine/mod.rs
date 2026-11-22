@@ -17,6 +17,7 @@ pub(crate) mod font_binding_wire;
 pub(crate) mod frame;
 #[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
 pub(crate) mod frame_wire;
+pub(crate) mod id_map;
 mod identity_index;
 #[cfg_attr(not(test), allow(dead_code))]
 mod inline_leaf;
