@@ -95,14 +95,30 @@ pub(crate) fn rebuild(
     result
 }
 
-/// Where a cluster splice rebuilt clusters: `[start, end)` here, which were the previous
-/// arena's `[start, end - cluster_delta)`. The glyphs after them moved by `glyph_delta`.
+/// Clusters a cluster splice rebuilt: `[start, end)` here. The clusters and glyphs after it,
+/// up to the next window, moved by `cluster_delta` and `glyph_delta` from the previous arena.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct RunLocalSplice {
+pub(crate) struct RunLocalWindow {
     pub start: usize,
     pub end: usize,
     pub cluster_delta: i64,
     pub glyph_delta: i64,
+}
+
+/// The windows of a cluster splice, ascending.
+#[derive(Clone, Debug)]
+pub(crate) struct RunLocalSplice {
+    pub windows: Vec<RunLocalWindow>,
+}
+
+impl RunLocalSplice {
+    /// How far the clusters and glyphs before window `index` moved.
+    fn shift_before(&self, index: usize) -> (i64, i64) {
+        index
+            .checked_sub(1)
+            .and_then(|before| self.windows.get(before))
+            .map_or((0, 0), |window| (window.cluster_delta, window.glyph_delta))
+    }
 }
 
 /// `rebuild` after a cluster splice, reusing `previous`'s geometry where its inputs are
@@ -117,7 +133,7 @@ pub(crate) fn rebuild_spliced(
     layout_runs: &mut [LayoutRun],
     clusters: &ClusterArena,
     previous: PreviousGeometry<'_>,
-    splice: RunLocalSplice,
+    splice: &RunLocalSplice,
     runs: &[ShapingRun],
     styles: &[StyleSegment],
     extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
@@ -163,7 +179,7 @@ fn layout_retained(
     run: LayoutRun,
     clusters: &ClusterArena,
     previous: &RunLocalArena,
-    splice: RunLocalSplice,
+    splice: &RunLocalSplice,
     runs: &[ShapingRun],
     styles: &[StyleSegment],
 ) -> Result<NumericBlockSpan, EngineError> {
@@ -181,74 +197,77 @@ fn layout_retained(
             })
             .copied()
     };
-    let moved = if end <= splice.start {
-        record(start as i64)
-            .filter(|record| record.cluster_end as usize == end)
-            .map(|record| (record, 0))
-    } else if start >= splice.end {
-        record(start as i64 - splice.cluster_delta)
-            .filter(|record| i64::from(record.cluster_end) + splice.cluster_delta == end as i64)
-            .map(|record| (record, splice.glyph_delta))
-    } else {
-        None
-    };
-    if let Some((record, glyph_delta)) = moved {
-        let first_block = run_local.blocks().len();
-        let first_cluster = run_local.index.cluster_blocks.len();
-        copy_blocks(
-            run_local,
-            previous,
-            record,
-            record.blocks.cluster_count as usize,
-            glyph_delta,
-        )?;
-        let glyph_start = run.glyph_start as usize;
-        let old_start = (glyph_start as i64 - glyph_delta) as usize;
-        run_local.rows.copy_rows(
-            glyph_start,
-            &previous.rows,
-            old_start,
-            run.glyph_count as usize,
-        );
-        #[cfg(test)]
-        super::work_attribution::record(|work| {
-            if glyph_delta == 0 {
-                work.run_local_adopted_glyphs += run.glyph_count as usize;
-            } else {
-                work.run_local_moved_glyphs += run.glyph_count as usize;
-            }
-        });
-        return push_record(run_local, run, reverse, first_block, first_cluster);
+    // The first window the run reaches, and the last one it touches.
+    let first = splice.windows.partition_point(|window| window.end <= start);
+    let last = splice.windows.partition_point(|window| window.start < end);
+    let (cluster_delta, glyph_delta) = splice.shift_before(first);
+    if first >= last {
+        // Between two windows: the previous run, moved.
+        let moved = record(start as i64 - cluster_delta)
+            .filter(|record| i64::from(record.cluster_end) + cluster_delta == end as i64);
+        if let Some(record) = moved {
+            let first_block = run_local.blocks().len();
+            let first_cluster = run_local.index.cluster_blocks.len();
+            copy_blocks(
+                run_local,
+                previous,
+                record,
+                record.blocks.cluster_count as usize,
+                glyph_delta,
+            )?;
+            let glyph_start = run.glyph_start as usize;
+            let old_start = (glyph_start as i64 - glyph_delta) as usize;
+            run_local.rows.copy_rows(
+                glyph_start,
+                &previous.rows,
+                old_start,
+                run.glyph_count as usize,
+            );
+            #[cfg(test)]
+            super::work_attribution::record(|work| {
+                if glyph_delta == 0 {
+                    work.run_local_adopted_glyphs += run.glyph_count as usize;
+                } else {
+                    work.run_local_moved_glyphs += run.glyph_count as usize;
+                }
+            });
+            return push_record(run_local, run, reverse, first_block, first_cluster);
+        }
+        return layout(run_local, run, clusters, runs, styles, None);
     }
-    // Whole chunks the run visits before it reaches the rebuilt clusters: from its start when
-    // it runs left to right, from its end when it runs right to left. Those clusters are the
-    // previous ones, at their old glyphs before the splice and moved after it.
+    // Whole chunks the run visits before it reaches a rebuilt cluster: from its start when it
+    // runs left to right, from its end when it runs right to left. Those clusters are the
+    // previous ones, moved by the windows before them.
     let chunk = LAYOUT_CUT.clusters_per_block;
-    let (kept, glyph_delta) = if reverse {
+    let (after_clusters, after_glyphs) = splice.shift_before(last);
+    let (kept, kept_glyph_delta) = if reverse {
         (
-            end.saturating_sub(splice.end) / chunk * chunk,
-            splice.glyph_delta,
+            end.saturating_sub(splice.windows[last - 1].end) / chunk * chunk,
+            after_glyphs,
         )
     } else {
-        (splice.start.saturating_sub(start) / chunk * chunk, 0)
+        (
+            splice.windows[first].start.saturating_sub(start) / chunk * chunk,
+            glyph_delta,
+        )
     };
-    let Some(record) = record(start as i64).filter(|record| {
+    let Some(record) = record(start as i64 - cluster_delta).filter(|record| {
         kept > 0
-            && start <= splice.start
-            && (!reverse || i64::from(record.cluster_end) + splice.cluster_delta == end as i64)
+            && start <= splice.windows[first].start
+            && (!reverse || i64::from(record.cluster_end) + after_clusters == end as i64)
     }) else {
         return layout(run_local, run, clusters, runs, styles, None);
     };
     let first_block = run_local.blocks().len();
     let first_cluster = run_local.index.cluster_blocks.len();
-    copy_blocks(run_local, previous, record, kept, glyph_delta)?;
+    copy_blocks(run_local, previous, record, kept, kept_glyph_delta)?;
     let run_glyph_end = run.glyph_start as usize + run.glyph_count as usize;
     let glyphs = if reverse {
         clusters.glyph_starts[end - kept] as usize..run_glyph_end
     } else {
         run.glyph_start as usize..clusters.glyph_starts[start + kept] as usize
     };
-    let old_start = (glyphs.start as i64 - glyph_delta) as usize;
+    let old_start = (glyphs.start as i64 - kept_glyph_delta) as usize;
     run_local
         .rows
         .copy_rows(glyphs.start, &previous.rows, old_start, glyphs.len());

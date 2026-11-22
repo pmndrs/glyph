@@ -1,27 +1,28 @@
-//! The cluster build of one edited source run, spliced between the previous arena's clusters.
+//! The cluster build of edited source runs, spliced between the previous arena's clusters.
 //!
 //! An edit that changes how many clusters or glyphs a source run has cannot keep the previous
-//! arena's topology, but the incremental shape stage still reshaped that one source run alone:
-//! every other source run's glyphs are the previous ones, moved by the edit. So the clusters
-//! before the run and after it are the previous arena's rows, renumbered, and only the run's
-//! own clusters are built, by the same passes the full build runs. What a row reads from
-//! outside its run is checked rather than assumed:
+//! arena's topology, but the incremental shape stage still reshaped the edited source runs
+//! alone: every other source run's glyphs are the previous ones, moved by the edits before
+//! them. So the clusters between the edited runs are the previous arena's rows, renumbered,
+//! and only the edited runs' own clusters are built, by the same passes the full build runs.
+//! What a row reads from outside its run is checked rather than assumed:
 //!
-//! - grapheme boundaries after the run, which a run can share context with (a regional
-//!   indicator pair, for one); those before it depend only on unchanged text before them;
-//! - the style segments and shaping runs, which must be the previous ones moved by the edit;
-//! - line breaks, which UAX #14 can move outside the run: the clusters a changed break
-//!   touches, and the cluster before the run whose break reads the run's first cluster, are
-//!   flagged again.
+//! - grapheme boundaries after an edited run, which a run can share context with (a regional
+//!   indicator pair, for one); those before the first depend only on unchanged text;
+//! - the style segments and shaping runs, which must be the previous ones moved by the edits;
+//! - line breaks, which UAX #14 can move outside a run: the clusters a changed break touches,
+//!   and the cluster before each run whose break reads the run's first cluster, are flagged
+//!   again.
 //!
 //! The result equals the full build of the same inputs, lane for lane; anything the splice
 //! cannot prove declines it, and the caller builds in full.
 
+use alloc::vec::Vec;
 use core::ops::Range;
 
 use crate::{FontInkTable, FontMetrics, unicode::UnicodeAnalysis};
 
-use super::super::run_local_paragraph::RunLocalSplice;
+use super::super::run_local_paragraph::{RunLocalSplice, RunLocalWindow};
 
 use super::{
     CLUSTER_ALLOWED_BREAK, CLUSTER_BREAK_CORRECTION, CLUSTER_REQUIRED_BREAK, ClusterArena,
@@ -29,15 +30,12 @@ use super::{
     build::ShapeScope, reserve, summarize_unit_chunks,
 };
 
-/// The one text edit of a request and what the previous arena was built from.
+/// The source runs the incremental shape stage reshaped, and what the previous arena was
+/// built from.
 #[derive(Clone, Copy)]
 pub(crate) struct SourceRunSplice<'a> {
-    /// The shaping run the incremental shape stage reshaped; it contains the edit.
-    pub source_run: u32,
-    /// Units `[edit_start, old_end)` of the previous text became `[edit_start, new_end)`.
-    pub edit_start: usize,
-    pub old_end: usize,
-    pub new_end: usize,
+    /// Ascending; every edit of the request lies in one of them.
+    pub source_runs: &'a [u32],
     pub previous_unicode: &'a UnicodeAnalysis,
     pub previous_styles: &'a [StyleSegment],
     pub previous_runs: &'a [ShapingRun],
@@ -45,34 +43,76 @@ pub(crate) struct SourceRunSplice<'a> {
 
 const BREAK_BITS: u8 = CLUSTER_REQUIRED_BREAK | CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION;
 
-impl SourceRunSplice<'_> {
-    /// Whether previous text offset `old` became `new`: offsets before the replaced units
-    /// stay, offsets after them move by `delta`, and an insertion point (an edit that removed
-    /// nothing) is both, since the inserted units join the segment on either side of it.
-    fn moved(&self, old: u32, new: u32, delta: i64) -> bool {
-        let old_usize = old as usize;
-        let after = i64::from(old) + delta == i64::from(new);
-        (old_usize <= self.edit_start && old == new) || (old_usize >= self.old_end && after)
-    }
-}
-
-/// Where the edited run's clusters and glyphs sit in the previous arena and in this one.
+/// Where one edited run's clusters and glyphs sit in the previous arena and in this one.
 struct Window {
-    /// Clusters of the run: `[start, end)` here, `[start, old_end)` in the previous arena.
-    start: usize,
-    end: usize,
-    old_end: usize,
+    source_run: u32,
+    /// Clusters of the run here and in the previous arena.
+    clusters: Range<usize>,
+    old_clusters: Range<usize>,
     /// Text of the run here and in the previous text.
     text: Range<usize>,
-    old_text_end: usize,
-    /// Glyphs before the run, the run's previous glyphs end, and its glyph count here.
-    glyph_start: usize,
-    old_glyph_end: usize,
+    old_text: Range<usize>,
+    /// Glyphs of the run in the previous arena, and how many it has here.
+    old_glyphs: Range<usize>,
     glyphs: usize,
 }
 
+/// The edited runs and, for the stretch before each and after the last, how far it moved.
+struct Plan {
+    windows: Vec<Window>,
+}
+
+impl Plan {
+    /// How far the stretch before window `index` (or after the last, at `windows.len()`)
+    /// moved: in text units, clusters and glyphs.
+    fn shift(&self, index: usize) -> (i64, i64, i64) {
+        self.windows[..index]
+            .iter()
+            .fold((0, 0, 0), |(text, clusters, glyphs), window| {
+                (
+                    text + window.text.len() as i64 - window.old_text.len() as i64,
+                    clusters + window.clusters.len() as i64 - window.old_clusters.len() as i64,
+                    glyphs + window.glyphs as i64 - window.old_glyphs.len() as i64,
+                )
+            })
+    }
+
+    /// The previous arena's stretch of clusters before window `index`, and of glyphs and text.
+    fn old_gap(
+        &self,
+        index: usize,
+        previous: &ClusterArena,
+    ) -> (Range<usize>, Range<usize>, Range<usize>) {
+        let (clusters, glyphs, text) =
+            match index.checked_sub(1).map(|before| &self.windows[before]) {
+                Some(window) => (
+                    window.old_clusters.end,
+                    window.old_glyphs.end,
+                    window.old_text.end,
+                ),
+                None => (0, 0, 0),
+            };
+        match self.windows.get(index) {
+            Some(window) => (
+                clusters..window.old_clusters.start,
+                glyphs..window.old_glyphs.start,
+                text..window.old_text.start,
+            ),
+            None => (
+                clusters..previous.starts.len(),
+                glyphs..previous.glyph_ids.len(),
+                text..previous.index_at.len() - 1,
+            ),
+        }
+    }
+}
+
+fn moved(value: u32, delta: i64) -> u32 {
+    (i64::from(value) + delta) as u32
+}
+
 impl ClusterArena {
-    /// Builds this arena as `previous` with the edited source run's clusters rebuilt. Returns
+    /// Builds this arena as `previous` with the edited source runs' clusters rebuilt. Returns
     /// `false`, with this arena in no defined state, when the splice does not apply; the
     /// caller then runs the full build, which also reports any error of the inputs.
     pub(crate) fn splice_source_run<'ink>(
@@ -84,7 +124,7 @@ impl ClusterArena {
         ink_for: impl Fn(u32) -> Option<FontInkTable<'ink>>,
     ) -> Result<bool, EngineError> {
         let _clock = super::StageClock::start();
-        let Some(window) = self.splice_window(previous, &input, &splice) else {
+        let Some(plan) = self.splice_plan(previous, &input, &splice) else {
             return Ok(false);
         };
         let ClusterBuildInput {
@@ -97,11 +137,7 @@ impl ClusterArena {
         } = input;
         let boundaries = unicode.grapheme_boundaries();
         let count = boundaries.len() - 1;
-        let text_delta = text.len() as i64 - (previous.index_at.len() as i64 - 1);
-        let cluster_delta = count as i64 - previous.starts.len() as i64;
-        let old_glyphs = previous.glyph_ids.len();
-        let glyph_count = window.glyph_start + window.glyphs + (old_glyphs - window.old_glyph_end);
-        let glyph_delta = glyph_count as i64 - old_glyphs as i64;
+        let glyph_count = shape.glyph_ids.len();
 
         self.clear();
         self.ltr = all_ltr(runs);
@@ -117,148 +153,65 @@ impl ClusterArena {
             lane.reserve_to(glyph_count)?;
         }
         reserve(&mut self.index_at, text.len() + 1)?;
-
-        // The clusters before the run, as they were.
-        let before = ..window.start;
-        self.starts.extend_from_slice(&previous.starts[before]);
-        self.ends.extend_from_slice(&previous.ends[before]);
-        self.advances.extend_from_slice(&previous.advances[before]);
-        self.units_per_em
-            .extend_from_slice(&previous.units_per_em[before]);
-        self.flags.extend_from_slice(&previous.flags[before]);
-        self.style_indexes
-            .extend_from_slice(&previous.style_indexes[before]);
-        self.source_runs
-            .extend_from_slice(&previous.source_runs[before]);
-        self.binding_handles
-            .extend_from_slice(&previous.binding_handles[before]);
-        self.font_handles
-            .extend_from_slice(&previous.font_handles[before]);
-        self.stable_ids
-            .extend_from_slice(&previous.stable_ids[before]);
-        self.glyph_starts
-            .extend_from_slice(&previous.glyph_starts[before]);
-        self.glyph_counts
-            .extend_from_slice(&previous.glyph_counts[before]);
-        self.shaped.extend_from_slice(&previous.shaped[before]);
-        self.unsafe_before
-            .extend_from_slice(&previous.unsafe_before[before]);
-        let glyphs_before = ..window.glyph_start;
-        self.glyph_ids
-            .extend_from_slice(&previous.glyph_ids[glyphs_before]);
-        self.glyph_clusters
-            .extend_from_slice(&previous.glyph_clusters[glyphs_before]);
-        self.glyph_x_advances
-            .extend_from_slice(&previous.glyph_x_advances[glyphs_before]);
-        self.glyph_x_offsets
-            .extend_from_slice(&previous.glyph_x_offsets[glyphs_before]);
-        self.glyph_y_offsets
-            .extend_from_slice(&previous.glyph_y_offsets[glyphs_before]);
-        self.glyph_shape_flags
-            .extend_from_slice(&previous.glyph_shape_flags[glyphs_before]);
-        self.index_at
-            .extend_from_slice(&previous.index_at[..window.text.start]);
-
-        // The previous ink of the glyphs outside the run, at their new indices.
-        let ink = &mut self.run_local.ink;
-        ink.reset(glyph_count)
+        self.run_local
+            .ink
+            .reset(glyph_count)
             .map_err(|_| EngineError::ResultTooLarge)?;
-        ink.copy_from(&previous.run_local.ink, 0, 0, window.glyph_start);
-        ink.copy_from(
-            &previous.run_local.ink,
-            window.old_glyph_end,
-            window.glyph_start + window.glyphs,
-            old_glyphs - window.old_glyph_end,
-        );
 
-        // The run's clusters, by the full build's passes.
-        self.build_headers(
-            text,
-            text_unit_ids,
-            &boundaries[window.start..=window.end],
-            styles,
-        )?;
-        if text_unit_ids[window.text.clone()].contains(&0) {
+        let mut ink_is_whole = true;
+        for index in 0..=plan.windows.len() {
+            // The previous clusters before this window (or after the last), moved.
+            let (text_delta, cluster_delta, glyph_delta) = plan.shift(index);
+            let (clusters, glyphs, old_text) = plan.old_gap(index, previous);
+            self.copy_clusters(previous, clusters, glyphs, text_delta, glyph_delta);
+            let last = index == plan.windows.len();
+            let text_end = if last { old_text.end + 1 } else { old_text.end };
+            self.index_at.extend(
+                previous.index_at[old_text.start..text_end]
+                    .iter()
+                    .map(|cluster| moved(*cluster, cluster_delta)),
+            );
+            let Some(window) = plan.windows.get(index) else {
+                break;
+            };
+            // The run's clusters, by the full build's passes.
+            self.build_headers(
+                text,
+                text_unit_ids,
+                &boundaries[window.clusters.start..=window.clusters.end],
+                styles,
+            )?;
+            if text_unit_ids[window.text.clone()].contains(&0) {
+                return Err(EngineError::InvalidRequest);
+            }
+            if self.index_at.len() != window.text.start {
+                return Err(EngineError::InvalidRequest);
+            }
+            for cluster in window.clusters.clone() {
+                let (start, end) = (self.starts[cluster] as usize, self.ends[cluster] as usize);
+                self.index_at.resize(start, 0);
+                self.index_at.resize(end, cluster as u32);
+            }
+            let glyph_base = self.glyph_ids.len();
+            let scope = ShapeScope {
+                clusters: window.clusters.clone(),
+                source_run: Some(window.source_run),
+                glyph_base,
+            };
+            ink_is_whole &= self.aggregate_shape(runs, shape, scope, &metrics_for, &ink_for)?;
+            if self.glyph_ids.len() != glyph_base + window.glyphs {
+                return Err(EngineError::InvalidRequest);
+            }
+        }
+        if self.starts.len() != count
+            || self.glyph_ids.len() != glyph_count
+            || self.index_at.len() != text.len() + 1
+        {
             return Err(EngineError::InvalidRequest);
         }
-        self.index_at.resize(window.text.end, 0);
-        for cluster in window.start..window.end {
-            let (start, end) = (self.starts[cluster] as usize, self.ends[cluster] as usize);
-            self.index_at[start..end].fill(cluster as u32);
-        }
-        let scope = ShapeScope {
-            clusters: window.start..window.end,
-            source_run: Some(splice.source_run),
-            glyph_base: window.glyph_start,
-        };
-        let ink_is_whole = self.aggregate_shape(runs, shape, scope, metrics_for, ink_for)?;
-        if self.glyph_ids.len() != window.glyph_start + window.glyphs {
-            return Err(EngineError::InvalidRequest);
-        }
-
-        // The clusters after the run, moved by the edit.
-        let after = window.old_end..;
-        let shift = |value: u32, delta: i64| (i64::from(value) + delta) as u32;
-        self.starts.extend(
-            previous.starts[after.clone()]
-                .iter()
-                .map(|start| shift(*start, text_delta)),
-        );
-        self.ends.extend(
-            previous.ends[after.clone()]
-                .iter()
-                .map(|end| shift(*end, text_delta)),
-        );
-        self.advances
-            .extend_from_slice(&previous.advances[after.clone()]);
-        self.units_per_em
-            .extend_from_slice(&previous.units_per_em[after.clone()]);
-        self.flags.extend_from_slice(&previous.flags[after.clone()]);
-        self.style_indexes
-            .extend_from_slice(&previous.style_indexes[after.clone()]);
-        self.source_runs
-            .extend_from_slice(&previous.source_runs[after.clone()]);
-        self.binding_handles
-            .extend_from_slice(&previous.binding_handles[after.clone()]);
-        self.font_handles
-            .extend_from_slice(&previous.font_handles[after.clone()]);
-        self.stable_ids
-            .extend_from_slice(&previous.stable_ids[after.clone()]);
-        self.glyph_starts.extend(
-            previous.glyph_starts[after.clone()]
-                .iter()
-                .map(|start| shift(*start, glyph_delta)),
-        );
-        self.glyph_counts
-            .extend_from_slice(&previous.glyph_counts[after.clone()]);
-        self.shaped
-            .extend_from_slice(&previous.shaped[after.clone()]);
-        self.unsafe_before
-            .extend_from_slice(&previous.unsafe_before[after]);
-        let glyphs_after = window.old_glyph_end..;
-        self.glyph_ids
-            .extend_from_slice(&previous.glyph_ids[glyphs_after.clone()]);
-        self.glyph_clusters.extend(
-            previous.glyph_clusters[glyphs_after.clone()]
-                .iter()
-                .map(|cluster| shift(*cluster, text_delta)),
-        );
-        self.glyph_x_advances
-            .extend_from_slice(&previous.glyph_x_advances[glyphs_after.clone()]);
-        self.glyph_x_offsets
-            .extend_from_slice(&previous.glyph_x_offsets[glyphs_after.clone()]);
-        self.glyph_y_offsets
-            .extend_from_slice(&previous.glyph_y_offsets[glyphs_after.clone()]);
-        self.glyph_shape_flags
-            .extend_from_slice(&previous.glyph_shape_flags[glyphs_after]);
-        self.index_at.extend(
-            previous.index_at[window.old_text_end..]
-                .iter()
-                .map(|cluster| shift(*cluster, cluster_delta)),
-        );
 
         self.rebuild_layout_runs_for_shaping(runs)?;
-        let flagged = self.reflag_breaks(&window, unicode, &splice, text_delta);
+        let flagged = self.reflag_breaks(&plan, previous, unicode, &splice);
         if self
             .flags
             .iter()
@@ -269,16 +222,20 @@ impl ClusterArena {
 
         // Layout units are per cluster; the chunk summaries from the first changed cluster's
         // chunk on, because the clusters after it moved between chunks.
-        self.advance_units
-            .extend_from_slice(&previous.advance_units[before]);
-        self.advance_units.extend(
-            self.advances[window.start..window.end]
-                .iter()
-                .map(|advance| crate::engine::layout_units::layout_units_from_scaled(*advance)),
-        );
-        self.advance_units
-            .extend_from_slice(&previous.advance_units[window.old_end..]);
-        let first_chunk = flagged.start / LAYOUT_CHUNK;
+        for index in 0..=plan.windows.len() {
+            let (clusters, _, _) = plan.old_gap(index, previous);
+            self.advance_units
+                .extend_from_slice(&previous.advance_units[clusters]);
+            let Some(window) = plan.windows.get(index) else {
+                break;
+            };
+            self.advance_units.extend(
+                self.advances[window.clusters.clone()]
+                    .iter()
+                    .map(|advance| crate::engine::layout_units::layout_units_from_scaled(*advance)),
+            );
+        }
+        let first_chunk = flagged.first().map_or(0, |range| range.start) / LAYOUT_CHUNK;
         let chunk_count = count.div_ceil(LAYOUT_CHUNK);
         reserve(&mut self.chunk_advance_sums, chunk_count)?;
         reserve(&mut self.chunk_auxiliary_sums, chunk_count)?;
@@ -299,215 +256,388 @@ impl ClusterArena {
         if ink_is_whole {
             self.run_local.keep_ink();
         }
-        let cluster_delta_u = |cluster: usize| (cluster as i64 - cluster_delta) as u32;
-        self.spliced = Some(super::diff::Spliced {
-            changed: super::diff::ChangedClusters {
-                new: flagged.start as u32..flagged.end as u32,
-                old: flagged.start as u32..cluster_delta_u(flagged.end),
-            },
-        });
-        self.run_local_splice = Some(RunLocalSplice {
-            start: window.start,
-            end: window.end,
-            cluster_delta,
-            glyph_delta,
-        });
+        // What the revision pass and later caches may keep: everything outside the flagged
+        // clusters, which map back through the clusters the windows before them added.
+        let mut changed = Vec::new();
+        changed
+            .try_reserve(flagged.len())
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        for range in &flagged {
+            let old = |cluster: usize| moved(cluster as u32, -plan.cluster_shift_at(cluster));
+            changed.push(super::diff::ChangedClusters {
+                new: range.start as u32..range.end as u32,
+                old: old(range.start)..old(range.end),
+            });
+        }
+        self.spliced = Some(super::diff::Spliced { changed });
+        let mut windows = Vec::new();
+        windows
+            .try_reserve(plan.windows.len())
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        for (index, window) in plan.windows.iter().enumerate() {
+            let (_, cluster_delta, glyph_delta) = plan.shift(index + 1);
+            windows.push(RunLocalWindow {
+                start: window.clusters.start,
+                end: window.clusters.end,
+                cluster_delta,
+                glyph_delta,
+            });
+        }
+        self.run_local_splice = Some(RunLocalSplice { windows });
         #[cfg(test)]
         super::super::work_attribution::record(|work| work.cluster_source_run_splices += 1);
         Ok(true)
     }
 
-    /// The edited run's clusters and glyphs here and in `previous`, or `None` when the clusters
-    /// outside the run are not the previous ones moved by the edit.
-    fn splice_window(
+    /// Appends the previous clusters `clusters`, which own glyphs `glyphs`, moved by
+    /// `text_delta` units and `glyph_delta` glyphs.
+    fn copy_clusters(
+        &mut self,
+        previous: &Self,
+        clusters: Range<usize>,
+        glyphs: Range<usize>,
+        text_delta: i64,
+        glyph_delta: i64,
+    ) {
+        let c = clusters;
+        self.starts.extend(
+            previous.starts[c.clone()]
+                .iter()
+                .map(|start| moved(*start, text_delta)),
+        );
+        self.ends.extend(
+            previous.ends[c.clone()]
+                .iter()
+                .map(|end| moved(*end, text_delta)),
+        );
+        self.advances
+            .extend_from_slice(&previous.advances[c.clone()]);
+        self.units_per_em
+            .extend_from_slice(&previous.units_per_em[c.clone()]);
+        self.flags.extend_from_slice(&previous.flags[c.clone()]);
+        self.style_indexes
+            .extend_from_slice(&previous.style_indexes[c.clone()]);
+        self.source_runs
+            .extend_from_slice(&previous.source_runs[c.clone()]);
+        self.binding_handles
+            .extend_from_slice(&previous.binding_handles[c.clone()]);
+        self.font_handles
+            .extend_from_slice(&previous.font_handles[c.clone()]);
+        self.stable_ids
+            .extend_from_slice(&previous.stable_ids[c.clone()]);
+        self.glyph_starts.extend(
+            previous.glyph_starts[c.clone()]
+                .iter()
+                .map(|start| moved(*start, glyph_delta)),
+        );
+        self.glyph_counts
+            .extend_from_slice(&previous.glyph_counts[c.clone()]);
+        self.shaped.extend_from_slice(&previous.shaped[c.clone()]);
+        self.unsafe_before
+            .extend_from_slice(&previous.unsafe_before[c]);
+        let to = self.glyph_ids.len();
+        let g = glyphs;
+        self.glyph_ids
+            .extend_from_slice(&previous.glyph_ids[g.clone()]);
+        self.glyph_clusters.extend(
+            previous.glyph_clusters[g.clone()]
+                .iter()
+                .map(|cluster| moved(*cluster, text_delta)),
+        );
+        self.glyph_x_advances
+            .extend_from_slice(&previous.glyph_x_advances[g.clone()]);
+        self.glyph_x_offsets
+            .extend_from_slice(&previous.glyph_x_offsets[g.clone()]);
+        self.glyph_y_offsets
+            .extend_from_slice(&previous.glyph_y_offsets[g.clone()]);
+        self.glyph_shape_flags
+            .extend_from_slice(&previous.glyph_shape_flags[g.clone()]);
+        self.run_local
+            .ink
+            .copy_from(&previous.run_local.ink, g.start, to, g.len());
+    }
+
+    /// The edited runs' clusters and glyphs here and in `previous`, or `None` when the
+    /// clusters between them are not the previous ones moved by the edits.
+    fn splice_plan(
         &self,
         previous: &Self,
         input: &ClusterBuildInput<'_>,
         splice: &SourceRunSplice<'_>,
-    ) -> Option<Window> {
+    ) -> Option<Plan> {
         let text = input.text;
         let old_length = previous.index_at.len().checked_sub(1)?;
-        let text_delta = text.len() as i64 - old_length as i64;
-        let SourceRunSplice {
-            edit_start,
-            old_end,
-            new_end,
-            ..
-        } = *splice;
-        if edit_start > old_end
-            || old_end > old_length
-            || edit_start > new_end
-            || new_end as i64 - old_end as i64 != text_delta
+        if splice.source_runs.is_empty()
             || input.text_unit_ids.len() != text.len()
             || previous.run_local.ink.units().len() != previous.glyph_ids.len()
             || previous.chunk_advance_sums.len() != previous.starts.len().div_ceil(LAYOUT_CHUNK)
             || previous.advance_units.len() != previous.starts.len()
-        {
-            return None;
-        }
-        let moved = |old: u32, new: u32| splice.moved(old, new, text_delta);
-        // Styles and shaping runs outside the edit are the previous ones, moved.
-        let segments_moved = |new: &[StyleSegment], old: &[StyleSegment]| {
-            new.len() == old.len()
-                && new.iter().zip(old).all(|(new, old)| {
-                    new.style == old.style
-                        && moved(old.text_start, new.text_start)
-                        && moved(old.text_end, new.text_end)
-                })
-        };
-        if !segments_moved(input.styles, splice.previous_styles)
+            || splice.previous_unicode.grapheme_boundaries().len() != previous.starts.len() + 1
             || input.runs.len() != splice.previous_runs.len()
-            || !input
-                .runs
+            || !splice.source_runs.windows(2).all(|pair| pair[0] < pair[1])
+        {
+            return None;
+        }
+        let edited = |run: usize| splice.source_runs.binary_search(&(run as u32)).is_ok();
+        // Every shaping run is the previous one moved by the edited runs before it; only an
+        // edited run changes length.
+        let mut delta = 0_i64;
+        let mut offsets = Vec::new();
+        offsets.try_reserve(input.runs.len()).ok()?;
+        for (index, (new, old)) in input.runs.iter().zip(splice.previous_runs).enumerate() {
+            let grown = new.text_end as i64
+                - new.text_start as i64
+                - (old.text_end as i64 - old.text_start as i64);
+            if (ShapingRun {
+                text_start: new.text_start,
+                text_end: new.text_end,
+                ..*old
+            }) != *new
+                || i64::from(new.text_start) != i64::from(old.text_start) + delta
+                || (!edited(index) && grown != 0)
+            {
+                return None;
+            }
+            offsets.push((old.text_start, old.text_end, delta, delta + grown));
+            delta += grown;
+        }
+        if text.len() as i64 != old_length as i64 + delta {
+            return None;
+        }
+        // A previous offset moves by the edited runs wholly before it when it starts a stretch,
+        // and by those that started before it when it ends one.
+        let shift_start = |offset: u32| {
+            offsets
                 .iter()
-                .zip(splice.previous_runs)
+                .take_while(|run| run.1 <= offset)
+                .last()
+                .map_or(0, |run| run.3)
+        };
+        let shift_end = |offset: u32| {
+            offsets
+                .iter()
+                .take_while(|run| run.0 < offset)
+                .last()
+                .map_or(0, |run| run.3)
+        };
+        if input.styles.len() != splice.previous_styles.len()
+            || !input
+                .styles
+                .iter()
+                .zip(splice.previous_styles)
                 .all(|(new, old)| {
-                    ShapingRun {
-                        text_start: new.text_start,
-                        text_end: new.text_end,
-                        ..*old
-                    } == *new
-                        && moved(old.text_start, new.text_start)
-                        && moved(old.text_end, new.text_end)
+                    new.style == old.style
+                        && moved(old.text_start, shift_start(old.text_start)) == new.text_start
+                        && moved(old.text_end, shift_end(old.text_end)) == new.text_end
                 })
         {
             return None;
         }
-        let run = *input.runs.get(splice.source_run as usize)?;
-        let (run_start, run_end) = (run.text_start as usize, run.text_end as usize);
-        if edit_start < run_start || new_end > run_end || run_start >= run_end {
-            return None;
-        }
-        let old_run_end = (run_end as i64 - text_delta) as usize;
 
         let boundaries = input.unicode.grapheme_boundaries();
-        let start = boundaries.binary_search(&run.text_start).ok()?;
-        let end = boundaries.binary_search(&run.text_end).ok()?;
-        let old_end_cluster = match previous.ends.binary_search(&(old_run_end as u32)) {
-            Ok(index) => index + 1,
-            Err(_) => return None,
-        };
         let old_count = previous.starts.len();
-        // The clusters before the run end where it starts in both texts; those after it start
-        // where the previous ones did, moved.
-        if previous.starts.get(start).copied() != Some(run.text_start)
-            || end - start == 0
-            || boundaries.len() - 1 - end != old_count - old_end_cluster
-            || !boundaries[end..boundaries.len() - 1]
+        let mut windows: Vec<Window> = Vec::new();
+        windows.try_reserve(splice.source_runs.len()).ok()?;
+        for source_run in splice.source_runs.iter().copied() {
+            let run = *input.runs.get(source_run as usize)?;
+            let old_run = *splice.previous_runs.get(source_run as usize)?;
+            if run.text_start >= run.text_end {
+                return None;
+            }
+            let start = boundaries.binary_search(&run.text_start).ok()?;
+            let end = boundaries.binary_search(&run.text_end).ok()?;
+            let old_start = match previous.starts.binary_search(&old_run.text_start) {
+                Ok(index) => index,
+                Err(index) if index == old_count && old_run.text_start as usize == old_length => {
+                    index
+                }
+                Err(_) => return None,
+            };
+            let old_end = if old_run.text_end == old_run.text_start {
+                old_start
+            } else {
+                previous.ends.binary_search(&old_run.text_end).ok()? + 1
+            };
+            // The clusters since the previous window are as many as before.
+            let (gap_start, old_gap_start) = windows.last().map_or((0, 0), |window| {
+                (window.clusters.end, window.old_clusters.end)
+            });
+            if start - gap_start != old_start.checked_sub(old_gap_start)? || end == start {
+                return None;
+            }
+            let old_glyph = |cluster: usize| {
+                previous
+                    .glyph_starts
+                    .get(cluster)
+                    .map_or(previous.glyph_ids.len(), |start| *start as usize)
+            };
+            let glyphs = input
+                .shape
+                .runs
                 .iter()
-                .zip(&previous.starts[old_end_cluster..])
+                .filter(|shaped| shaped.source_run == source_run)
+                .map(|shaped| shaped.glyph_count as usize)
+                .sum();
+            windows.push(Window {
+                source_run,
+                clusters: start..end,
+                old_clusters: old_start..old_end,
+                text: run.text_start as usize..run.text_end as usize,
+                old_text: old_run.text_start as usize..old_run.text_end as usize,
+                old_glyphs: old_glyph(old_start)..old_glyph(old_end),
+                glyphs,
+            });
+        }
+        let plan = Plan { windows };
+        // Grapheme boundaries after each edited run are the previous ones, moved: a run can
+        // change the segmentation of the text after it.
+        for index in 1..=plan.windows.len() {
+            let (text_delta, _, _) = plan.shift(index);
+            let (old_clusters, _, _) = plan.old_gap(index, previous);
+            let start = plan.windows[index - 1].clusters.end;
+            if !boundaries[start..start + old_clusters.len()]
+                .iter()
+                .zip(&previous.starts[old_clusters.clone()])
                 .all(|(new, old)| i64::from(*old) + text_delta == i64::from(*new))
-        {
+            {
+                return None;
+            }
+            if index == plan.windows.len() && start + old_clusters.len() != boundaries.len() - 1 {
+                return None;
+            }
+        }
+        let (_, _, glyph_delta) = plan.shift(plan.windows.len());
+        if previous.glyph_ids.len() as i64 + glyph_delta != input.shape.glyph_ids.len() as i64 {
             return None;
         }
-        let glyph_start = *previous.glyph_starts.get(start)? as usize;
-        let old_glyph_end = previous
-            .glyph_starts
-            .get(old_end_cluster)
-            .map_or(previous.glyph_ids.len(), |start| *start as usize);
-        let glyphs = input
-            .shape
-            .runs
-            .iter()
-            .filter(|shaped| shaped.source_run == splice.source_run)
-            .map(|shaped| shaped.glyph_count as usize)
-            .sum();
-        let glyph_count = glyph_start + glyphs + (previous.glyph_ids.len() - old_glyph_end);
-        if glyph_count != input.shape.glyph_ids.len() {
-            return None;
-        }
-        // The line breaks the splice compares were the previous arena's.
-        if splice.previous_unicode.grapheme_boundaries().len() != old_count + 1 {
-            return None;
-        }
-        Some(Window {
-            start,
-            end,
-            old_end: old_end_cluster,
-            text: run_start..run_end,
-            old_text_end: old_run_end,
-            glyph_start,
-            old_glyph_end,
-            glyphs,
-        })
+        Some(plan)
     }
 
-    /// Recomputes the break flags of every cluster a changed line break or the rebuilt run can
-    /// change, and returns those clusters. The flags outside them are the previous ones.
+    /// Recomputes the break flags of every cluster a changed line break or a rebuilt run can
+    /// change, and returns those clusters, ascending. The flags outside them are the previous
+    /// ones.
     fn reflag_breaks(
         &mut self,
-        window: &Window,
+        plan: &Plan,
+        previous: &Self,
         unicode: &UnicodeAnalysis,
         splice: &SourceRunSplice<'_>,
-        text_delta: i64,
-    ) -> Range<usize> {
+    ) -> Vec<Range<usize>> {
         let new = unicode.line_breaks();
         let old = splice.previous_unicode.line_breaks();
-        let same_before = new
+        // Each run's clusters, and the cluster before it, whose break reads the run's first.
+        let mut dirty: Vec<Range<usize>> = plan
+            .windows
             .iter()
-            .zip(old)
-            .take_while(|(new, old)| new == old)
-            .count();
-        let same_after = new
+            .map(|window| window.clusters.start.saturating_sub(1)..window.clusters.end)
+            .collect();
+        // Breaks outside the runs, compared at the shift of the stretch they are in.
+        for index in 0..=plan.windows.len() {
+            let (text_delta, _, _) = plan.shift(index);
+            let (_, _, old_text) = plan.old_gap(index, previous);
+            let new_text =
+                moved(old_text.start as u32, text_delta)..moved(old_text.end as u32, text_delta);
+            // Breaks at a run's own edges belong to its clusters or the one before it; the
+            // text's own end belongs to the stretch after the last run.
+            let last = index == plan.windows.len();
+            let inside = |range: &Range<u32>, position: u32| {
+                range.start < position && (position < range.end || (last && position == range.end))
+            };
+            let new_breaks = new
+                .iter()
+                .filter(|line_break| inside(&new_text, line_break.position));
+            let old_range = old_text.start as u32..old_text.end as u32;
+            let mut old_breaks = old
+                .iter()
+                .filter(|line_break| inside(&old_range, line_break.position))
+                .peekable();
+            let mut new_breaks = new_breaks.peekable();
+            let mark = |dirty: &mut Vec<Range<usize>>, position: u32, required: bool| {
+                if let Some(target) = self.break_target(position, required) {
+                    dirty.push(target..target + 1);
+                }
+            };
+            loop {
+                let new_at = new_breaks
+                    .peek()
+                    .map(|line_break| (i64::from(line_break.position), line_break.required));
+                let old_at = old_breaks.peek().map(|line_break| {
+                    (
+                        i64::from(line_break.position) + text_delta,
+                        line_break.required,
+                    )
+                });
+                match (new_at, old_at) {
+                    (None, None) => break,
+                    (Some(new), Some(old)) if new.0 == old.0 => {
+                        if new.1 != old.1 {
+                            mark(&mut dirty, new.0 as u32, true);
+                        }
+                        new_breaks.next();
+                        old_breaks.next();
+                    }
+                    (Some(new), None) => {
+                        mark(&mut dirty, new.0 as u32, new.1);
+                        new_breaks.next();
+                    }
+                    (Some(new), Some(old)) if new.0 < old.0 => {
+                        mark(&mut dirty, new.0 as u32, new.1);
+                        new_breaks.next();
+                    }
+                    (_, Some(old)) => {
+                        mark(&mut dirty, old.0 as u32, true);
+                        old_breaks.next();
+                    }
+                }
+            }
+        }
+        dirty.sort_unstable_by_key(|range| range.start);
+        let mut merged: Vec<Range<usize>> = Vec::new();
+        for range in dirty {
+            match merged.last_mut() {
+                Some(last) if range.start <= last.end => last.end = last.end.max(range.end),
+                _ => merged.push(range),
+            }
+        }
+        for range in &merged {
+            for flags in &mut self.flags[range.clone()] {
+                *flags &= !BREAK_BITS;
+            }
+            let text_from = if range.start == 0 {
+                0
+            } else {
+                self.starts[range.start]
+            };
+            let text_to = self.ends[range.end - 1];
+            let from = new.partition_point(|line_break| line_break.position < text_from);
+            let to = new.partition_point(|line_break| line_break.position <= text_to);
+            for line_break in &new[from..to] {
+                let Some(preceding) = self.break_target(line_break.position, line_break.required)
+                else {
+                    continue;
+                };
+                if !range.contains(&preceding) {
+                    continue;
+                }
+                if line_break.required {
+                    self.flags[preceding] |= CLUSTER_REQUIRED_BREAK;
+                } else {
+                    self.mark_optional_break(preceding);
+                }
+            }
+        }
+        merged
+    }
+}
+
+impl Plan {
+    /// How many clusters the windows wholly before `cluster` added.
+    fn cluster_shift_at(&self, cluster: usize) -> i64 {
+        self.windows
             .iter()
-            .rev()
-            .zip(old.iter().rev())
-            .take_while(|(new, old)| {
-                new.required == old.required
-                    && i64::from(new.position) == i64::from(old.position) + text_delta
-            })
-            .count()
-            .min(new.len() - same_before)
-            .min(old.len() - same_before);
-        // The cluster before the run reads the run's first cluster.
-        let mut first = window.start.saturating_sub(1);
-        let mut last = window.end;
-        for line_break in &new[same_before..new.len() - same_after] {
-            if let Some(target) = self.break_target(line_break.position, line_break.required) {
-                first = first.min(target);
-                last = last.max(target + 1);
-            }
-        }
-        for line_break in &old[same_before..old.len() - same_after] {
-            // Where the previous arena held that break's flags, renumbered.
-            let position = line_break.position as usize;
-            let target = if position <= window.text.start {
-                position.saturating_sub(1)
-            } else if position >= window.old_text_end {
-                (position as i64 + text_delta - 1) as usize
-            } else {
-                continue;
-            };
-            let cluster = self.index_at[target] as usize;
-            first = first.min(cluster);
-            last = last.max(cluster + 1);
-        }
-        let last = last.min(self.starts.len());
-        for flags in &mut self.flags[first..last] {
-            *flags &= !BREAK_BITS;
-        }
-        let text_from = if first == 0 { 0 } else { self.starts[first] };
-        let text_to = if last == 0 { 0 } else { self.ends[last - 1] };
-        let from = new.partition_point(|line_break| line_break.position < text_from);
-        let to = new.partition_point(|line_break| line_break.position <= text_to);
-        for line_break in &new[from..to] {
-            let end = line_break.position;
-            if self.ends.is_empty() && end == 0 {
-                continue;
-            }
-            let Some(preceding) = self.break_target(end, line_break.required) else {
-                continue;
-            };
-            if preceding < first || preceding >= last {
-                continue;
-            }
-            if line_break.required {
-                self.flags[preceding] |= CLUSTER_REQUIRED_BREAK;
-            } else {
-                self.mark_optional_break(preceding);
-            }
-        }
-        first..last
+            .take_while(|window| window.clusters.end <= cluster)
+            .map(|window| window.clusters.len() as i64 - window.old_clusters.len() as i64)
+            .sum()
     }
 }
 
