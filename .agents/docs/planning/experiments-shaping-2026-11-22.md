@@ -64,3 +64,35 @@ Headline harness, complete frame, median ms of 3 loads. The machine load average
 The path matches the merged base on every row. `text-shaper.wasm` grows by 4,552 bytes (2,495 gzip).
 
 Raw runs are in `glyph-scratch/ascii/runs/{base-tip,main-tip}`.
+
+## Local reshape map (`experiments/sil-local-reshape`, not built)
+
+Status: stopped after mapping. An edit already reshapes only the shaping run that contains it, and that costs about
+2.7% of edit-frame Wasm time, so a narrower window has nothing measurable to win.
+
+`try_prepare_incremental_shape` in `state.rs` reshapes locally when an edit stays inside one shaping run whose run
+topology, styles and single primary-font fallback span are unchanged:
+
+- A same-length edit gets sparse windows between unsafe-to-concat boundaries (`build_sparse_shape_windows`).
+- A length-changing edit (insert, delete, paste, or a text set reduced to one edit by its common prefix and suffix)
+  first tries the ASCII anchor window. When that refuses, it reshapes the whole run (`set_whole_shape_window`). Every
+  other run is spliced through unchanged.
+- An edit that changes the run topology (crossing a style, script or bidi run boundary) or the fallback spans falls
+  back to the ordinary cold path.
+
+What a headline edit shapes, on Inter with the headline text (scratch probe at `9a426e705`, native release):
+
+| text                              | type-end | insert-middle | delete-middle | paste-middle |
+| --------------------------------- | -------: | ------------: | ------------: | -----------: |
+| Latin 15k, units shaped per edit  |      279 |           176 |           164 |          364 |
+| stress 22k, units shaped per edit |      279 |           279 |           267 |          467 |
+
+In every case that is one HarfRust call, and no edit takes the ASCII anchor window. Native HarfRust costs 0.14 µs per
+unit on this text, so each edit spends 0.02–0.07 ms shaping.
+
+The Latin 15k edit profile in the browser (`headprof`, one load) puts `shape_segment`, which is all of the HarfRust work, at
+35.7 ms of 1,329 ms Wasm self time (2.7%). That is about 0.09 ms for each of about 413 edits, roughly 1.6% of a 5.3 ms
+edit frame. `prepare_incremental_shape_scope` including its splice is 48.4 ms (3.6%). Cutting each run down to a word
+window would save at most about 0.08 ms per edit, which is below the harness's 2–8% load spread. The larger edit costs
+are cluster diffing (`RunPair::lanes_equal` 52.8 ms, `ClusterArena::aggregate_shaped` 35.8 ms) and run-local layout
+(`layout_run` 63.7 ms).
