@@ -155,8 +155,6 @@ export interface FontBakeCore {
 
 export type FontBakerWasmSource = BufferSource | WebAssembly.Module;
 
-export type { FontBakerAbi };
-
 interface FontArtifactMetadata {
   readonly role: 'font';
   readonly id: string;

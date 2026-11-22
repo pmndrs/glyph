@@ -1,9 +1,9 @@
 import { GlyphError } from './glyph-error.js';
 
-export const MAX_RASTER_COVERAGE_RANGES = 1_024 as const;
-export const MAX_RASTER_COVERAGE_SCALARS = 65_536 as const;
-export const MAX_RASTER_COVERAGE_TEXT_CODE_POINTS = 65_536 as const;
-export const MAX_RASTER_COVERAGE_GLYPH_IDS = 65_535 as const;
+const MAX_RASTER_COVERAGE_RANGES = 1_024 as const;
+const MAX_RASTER_COVERAGE_SCALARS = 65_536 as const;
+const MAX_RASTER_COVERAGE_TEXT_CODE_POINTS = 65_536 as const;
+const MAX_RASTER_COVERAGE_GLYPH_IDS = 65_535 as const;
 
 export type RasterUnicodeRange = {
   /** Inclusive Unicode scalar value. */
