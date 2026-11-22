@@ -655,6 +655,27 @@ public change if the font-baker binding moves out of the public entry into an in
 could then bind a subsetting-free build whenever a request has no `unicodeRanges` (the only caller of `prepare`), which
 measured `456,403` raw / `179,716` gzip against the full baker and baked every fixture face to identical bytes.
 
+### Unicode tables (research step 4): no change
+
+The kernel's three-stage tries replaced the flat `u32` boundary arrays this note priced in August, and they already
+compress well: about 90 kB raw but about 11 kB gzip together. Standalone gzip -9 of each table, as shipped and in the
+re-encodings that would shrink it raw:
+
+| Table      | Leaves raw / gzip | Leaves bit-packed raw / gzip | Middle `u16` gzip | Middle as two byte planes gzip |
+| ---------- | ----------------: | ---------------------------: | ----------------: | -----------------------------: |
+| script     |    25,920 / 2,199 |               (8-bit values) |               850 |                            703 |
+| line break |    20,032 / 2,134 |       15,024 / 2,601 (6 bit) |               700 |                            581 |
+| bidi class |    16,832 / 1,269 |       10,520 / 1,651 (5 bit) |               607 |                            503 |
+| kernel     |     7,136 / 1,918 |               (8-bit values) |               988 |                            837 |
+
+Bit-packing the leaves makes gzip worse by 380 to 470 bytes per table, which is the owner's point about layouts chosen
+for gzip. Splitting each middle stage into low and high byte planes would save about 520 gzip bytes in all, but turns
+one `u16` load into two byte loads on the per-code-point lookup that every paragraph runs; it is not worth a hot-path
+change. HarfRust's `ucd_table` comes from HarfBuzz's packtab, already a multi-stage byte encoding. The
+`unicode-segmentation` range tables (word 29,940, grapheme 19,416, sentence 13,200 raw; `(char, char, u8)` rows padded
+to 12 bytes) belong to a pinned third-party crate; their padding is zeros that gzip absorbs, and replacing them means
+owning a UAX #29 implementation, which the engineering standard argues against.
+
 ### Not now: estimates
 
 - **Data-driven syllabic interpreter (research step 7).** The Indic, Khmer, Myanmar and USE shapers plus vowel constraints
