@@ -70,14 +70,15 @@ fn edits_copy_leading_run_local_geometry_and_equal_a_cold_build() {
     let paragraph = "Typography is a moving system. AVATAR To Wa Yo repeat familiar kerning pairs \
                      while a responsive panel changes the space around them; office, affine, \
                      difficult and shuffle keep their ligatures.";
-    let source = vec![paragraph; 12].join("\n");
+    let source = [paragraph; 12].join("\n");
     let (mut engine, mut shaper) = shaped_inter_engine(&source);
     let mut current = utf16(&source);
     let middle = current.len() / 2;
     let paste = current[..200].to_vec();
     let x = utf16("x");
     // (label, range, insert, whether a leading block survives)
-    let edits: Vec<(&str, (usize, usize), Vec<u16>, bool)> = vec![
+    type Edit<'a> = (&'a str, (usize, usize), Vec<u16>, bool);
+    let edits: Vec<Edit<'_>> = vec![
         ("type at the end", (current.len(), current.len()), x.clone(), true),
         ("insert mid", (middle, middle), x.clone(), true),
         ("delete mid", (middle, middle + 1), Vec::new(), true),
