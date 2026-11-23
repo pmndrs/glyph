@@ -101,20 +101,40 @@ function isDeferredLine(line: MeasuredLineFields | ParagraphLineMetrics): line i
   return deferredLines.has(line as ParagraphLineMetrics);
 }
 
+/** Line facts share one accessor shape: the getters read the line's facts through `this`. */
+const lineFactsOwner = new WeakMap<object, DeferredGlyphFacts>();
+
+function lineFacts(line: object): LineGlyphFacts {
+  const facts = lineFactsOwner.get(line)!;
+  return facts.resolve().lines[(line as ParagraphLineMetrics).index]!;
+}
+
+const lineFactDescriptors: PropertyDescriptorMap = {
+  glyphStart: {
+    enumerable: true,
+    get(this: object) {
+      return lineFacts(this).glyphStart;
+    },
+  },
+  glyphCount: {
+    enumerable: true,
+    get(this: object) {
+      return lineFacts(this).glyphCount;
+    },
+  },
+  inkBounds: {
+    enumerable: true,
+    get(this: object) {
+      return lineFacts(this).inkBounds;
+    },
+  },
+};
+
 function deferredLine(fields: MeasuredLineFields, facts: DeferredGlyphFacts): ParagraphLineMetrics {
-  const index = fields.index;
-  const line: ParagraphLineMetrics = Object.freeze({
-    ...fields,
-    get glyphStart(): number {
-      return facts.resolve().lines[index]!.glyphStart;
-    },
-    get glyphCount(): number {
-      return facts.resolve().lines[index]!.glyphCount;
-    },
-    get inkBounds(): LayoutBox | undefined {
-      return facts.resolve().lines[index]!.inkBounds;
-    },
-  });
+  // The eager fields are the reader's own object; the deferred ones are shared accessors on it.
+  const line = Object.defineProperties(fields, lineFactDescriptors) as ParagraphLineMetrics;
+  lineFactsOwner.set(line, facts);
+  Object.freeze(line);
   deferredLines.add(line);
   return line;
 }
