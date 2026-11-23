@@ -1040,6 +1040,70 @@ struct ActiveFallbackPlacement {
     occurrence: PlacementOccurrence,
 }
 
+impl ActiveFallbackPlacement {
+    /// Whether `next` continues this placement's segment: the adjacent cluster of the same
+    /// run in its direction, in the same block and anchor, publishing the same translation.
+    fn continues_with(&self, next: &Self) -> bool {
+        self.layout_run_index == next.layout_run_index
+            && if next.direction & 1 == 0 {
+                self.cluster.checked_add(1) == Some(next.cluster)
+            } else {
+                next.cluster.checked_add(1) == Some(self.cluster)
+            }
+            && self.direction == next.direction
+            && self.placement_cluster.segment_anchor == next.placement_cluster.segment_anchor
+            && self.placement_cluster.dense == next.placement_cluster.dense
+            && self.placement_cluster.numeric_block_ordinal
+                == next.placement_cluster.numeric_block_ordinal
+            && self.occurrence.translation_inline.to_bits()
+                == next.occurrence.translation_inline.to_bits()
+            && self.occurrence.translation_block.to_bits()
+                == next.occurrence.translation_block.to_bits()
+    }
+}
+
+/// Where a line's cut units are drawn among its visual clusters, and the next one to draw.
+struct CutStops {
+    stops: [Option<(usize, CutUnit)>; 2],
+    next: usize,
+}
+
+impl CutStops {
+    /// The cut's island and marker follow the retained clusters in logical order. Where
+    /// they are drawn is the line's visual order: the island is one unit at its run's
+    /// level, and the marker ends the line at the paragraph's level, so it sits at the
+    /// line's end edge -- the right of a left-to-right paragraph, the left of a
+    /// right-to-left one -- whatever the direction of the text it follows.
+    fn logical(has_cut: bool, paragraph_level: u8) -> Self {
+        let stops = match (has_cut, paragraph_level & 1 == 0) {
+            (false, _) => [None; 2],
+            (true, true) => [
+                Some((usize::MAX, CutUnit::Island)),
+                Some((usize::MAX, CutUnit::Marker)),
+            ],
+            (true, false) => [
+                Some((0, CutUnit::Marker)),
+                Some((usize::MAX, CutUnit::Island)),
+            ],
+        };
+        Self { stops, next: 0 }
+    }
+
+    fn peek(&self) -> Option<(usize, CutUnit)> {
+        self.stops.get(self.next).copied().flatten()
+    }
+}
+
+/// A fragment body walked in visual order: `count` clusters from `body_start` when the
+/// line is visually left-to-right, otherwise the reordered clusters from `visual_start`.
+#[derive(Clone, Copy)]
+struct VisualSpan {
+    visually_ltr: bool,
+    body_start: usize,
+    visual_start: usize,
+    count: usize,
+}
+
 struct PositionedCluster {
     style: ResolvedStyle,
     font_handle: u32,
@@ -3115,21 +3179,7 @@ impl PositionedGlyphArena {
             .map_err(|_| EngineError::InvalidRequest)?;
         let cluster_end =
             usize::try_from(fragment.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?;
-        // An ellipsis cut or a corrected line end: either way the paragraph's clusters stop at the record.
-        let cut_index = if fragment.boundary_index == super::flow_composition::NO_BOUNDARY {
-            fragment.tail_index
-        } else {
-            fragment.boundary_index
-        };
-        let boundary = if cut_index == super::flow_composition::NO_BOUNDARY {
-            None
-        } else {
-            Some(
-                boundary_shape
-                    .record(cut_index)
-                    .ok_or(EngineError::InvalidRequest)?,
-            )
-        };
+        let (cut_index, boundary) = fragment_cut(fragment, boundary_shape)?;
         let retained_cluster_end = boundary.map_or(cluster_end, |boundary| {
             usize::try_from(boundary.cluster_start).unwrap_or(usize::MAX)
         });
@@ -3146,87 +3196,29 @@ impl PositionedGlyphArena {
         let step_start = self.pen_steps.len();
         let visual_start = self.visual_clusters.len();
         let paragraph_level = paragraph_level_at(bidi, fragment.line.text_start);
-        // The cut's island and marker follow the retained clusters in logical order. Where
-        // they are drawn is the line's visual order: the island is one unit at its run's
-        // level, and the marker ends the line at the paragraph's level, so it sits at the
-        // line's end edge -- the right of a left-to-right paragraph, the left of a
-        // right-to-left one -- whatever the direction of the text it follows.
-        let mut cut_stops = match boundary {
-            None => [None; 2],
-            Some(_) if paragraph_level & 1 == 0 => [
-                Some((usize::MAX, CutUnit::Island)),
-                Some((usize::MAX, CutUnit::Marker)),
-            ],
-            Some(_) => [
-                Some((0, CutUnit::Marker)),
-                Some((usize::MAX, CutUnit::Island)),
-            ],
-        };
+        let mut cut_stops = CutStops::logical(boundary.is_some(), paragraph_level);
         if !visually_ltr {
-            for cluster in cluster_start..retained_cluster_end {
-                if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
-                    continue;
-                }
-                self.visual_clusters
-                    .push(u32::try_from(cluster).map_err(|_| EngineError::ResultTooLarge)?);
-                self.visual_levels.push(cluster_level(
-                    cluster,
-                    fragment.line.text_start,
-                    clusters,
-                    runs,
-                    &self.line_levels,
-                )?);
-            }
-            if let Some(boundary) = boundary {
-                let island_level = if boundary.cluster_start < boundary.cluster_end {
-                    cluster_level(
-                        retained_cluster_end,
-                        fragment.line.text_start,
-                        clusters,
-                        runs,
-                        &self.line_levels,
-                    )?
-                } else {
-                    paragraph_level
-                };
-                self.visual_clusters.push(CutUnit::Island.sentinel());
-                self.visual_levels.push(island_level);
-                self.visual_clusters.push(CutUnit::Marker.sentinel());
-                self.visual_levels.push(paragraph_level);
-            }
-            reorder_l2(
-                &mut self.visual_clusters,
-                &mut self.visual_levels,
-                visual_start,
-            );
+            self.reorder_fragment_clusters(
+                fragment.line.text_start,
+                cluster_start..retained_cluster_end,
+                boundary,
+                paragraph_level,
+                clusters,
+                runs,
+            )?;
             if boundary.is_some() {
-                cut_stops = self.take_cut_stops(visual_start)?;
+                cut_stops.stops = self.take_cut_stops(visual_start)?;
             }
         }
 
-        let hung_leads = if fragment.line.hung_advance == 0.0 {
-            false
-        } else {
-            let hanging_end = if cluster_end > cluster_start
-                && clusters.flags[cluster_end - 1] & CLUSTER_HARD_BREAK != 0
-            {
-                cluster_end - 1
-            } else {
-                cluster_end
-            };
-            let terminating = hanging_end
-                .checked_sub(1)
-                .filter(|cluster| *cluster >= cluster_start)
-                .ok_or(EngineError::InvalidRequest)?;
-            cluster_level(
-                terminating,
-                fragment.line.text_start,
+        let hung_leads = fragment.line.hung_advance != 0.0
+            && self.terminating_cluster_is_rtl(
+                fragment,
                 clusters,
                 runs,
-                &self.line_levels,
-            )? & 1
-                != 0
-        };
+                cluster_start,
+                cluster_end,
+            )?;
         let (justify, pen_origin) = fragment_pen(
             line,
             fragment,
@@ -3240,18 +3232,7 @@ impl PositionedGlyphArena {
             hung_leads,
         );
         let baseline = line.block_start + line.baseline;
-        // The adjacency-order glyph stream is one equal-length column family, admitted once
-        // per fragment so every segment indexes the columns directly.
-        let stream_len = clusters.glyph_ids.len();
-        if clusters.glyph_clusters.len() != stream_len
-            || clusters.glyph_x_advances.len() != stream_len
-            || clusters.glyph_x_offsets.len() != stream_len
-            || clusters.glyph_y_offsets.len() != stream_len
-            || clusters.glyph_shape_flags.len() != stream_len
-            || clusters.glyph_stable_ids.len() != stream_len
-        {
-            return Err(EngineError::InvalidRequest);
-        }
+        admit_glyph_stream(clusters)?;
         let mut state = FragmentPositionState {
             cursor: pen_origin,
             baseline,
@@ -3273,11 +3254,9 @@ impl PositionedGlyphArena {
         // A unit that precedes every retained cluster precedes the lead island too: the lead is
         // the line's first clusters, and exists only where every cluster is left-to-right, so
         // this is the marker of a right-to-left paragraph.
-        let mut next_stop = 0;
-        while let (Some(cut), Some((0, unit))) = (cut, cut_stops.get(next_stop).copied().flatten())
-        {
+        while let (Some(cut), Some((0, unit))) = (cut, cut_stops.peek()) {
             self.position_cut_unit(cut, unit, &mut state, metrics_for)?;
-            next_stop += 1;
+            cut_stops.next += 1;
         }
         if let Some(lead) = lead {
             state.cursor = self.position_boundary_source(
@@ -3310,15 +3289,22 @@ impl PositionedGlyphArena {
                 &mut state,
                 metrics_for,
             )?;
+            if let Some(cut) = cut {
+                for (_, unit) in cut_stops.stops.into_iter().skip(cut_stops.next).flatten() {
+                    self.position_cut_unit(cut, unit, &mut state, metrics_for)?;
+                }
+            }
         } else {
-            let visual_count = if visually_ltr {
-                retained_cluster_end.saturating_sub(body_start)
-            } else {
-                self.visual_clusters.len().saturating_sub(visual_start)
+            let span = VisualSpan {
+                visually_ltr,
+                body_start,
+                visual_start,
+                count: if visually_ltr {
+                    retained_cluster_end.saturating_sub(body_start)
+                } else {
+                    self.visual_clusters.len().saturating_sub(visual_start)
+                },
             };
-            let mut layout_run_cache = None;
-            let mut geometry_cache = None;
-            let mut active_placement = None;
             let body = BodyLine {
                 line,
                 text_start: fragment.line.text_start,
@@ -3327,245 +3313,371 @@ impl PositionedGlyphArena {
                 styles,
                 justify,
             };
-            let visual_cluster = |arena: &Self, ordinal: usize| {
-                if visually_ltr {
-                    Ok(body_start + ordinal)
-                } else {
-                    usize::try_from(arena.visual_clusters[visual_start + ordinal])
-                        .map_err(|_| EngineError::InvalidRequest)
-                }
-            };
-            let mut ordinal = 0;
-            loop {
-                while let Some((at, unit)) = cut_stops.get(next_stop).copied().flatten()
-                    && at.min(visual_count) == ordinal
-                {
-                    let cut = cut.ok_or(EngineError::InvalidRequest)?;
-                    self.position_cut_unit(cut, unit, &mut state, metrics_for)?;
-                    // The unit moved the pen, so the cluster after it opens its own segment.
-                    active_placement = None;
-                    next_stop += 1;
-                }
-                if ordinal >= visual_count {
-                    break;
-                }
-                // Clusters join a segment only up to the next unit drawn between them.
-                let stretch_end = cut_stops
-                    .get(next_stop)
-                    .copied()
-                    .flatten()
-                    .map_or(visual_count, |(at, _)| at.min(visual_count));
-                let cluster = visual_cluster(self, ordinal)?;
-                let (run_index, layout_run) =
-                    layout_run_for_cluster(clusters, cluster, &mut layout_run_cache)?;
-                let direction = layout_run_direction(layout_run, runs)?;
-                let placement_cluster =
-                    clusters.placement_cluster(layout_run, direction, cluster)?;
-                let translation_inline = finite_f32(
-                    state.cursor - placement_cluster.block_local_prefix
-                        + placement_cluster.block_anchor_inline,
-                )?;
-                let translation_block =
-                    finite_f32(state.baseline + placement_cluster.block_anchor_block)?;
-                let adjacent = active_placement.is_some_and(|active: ActiveFallbackPlacement| {
-                    active.layout_run_index == run_index
-                        && if direction & 1 == 0 {
-                            active.cluster.checked_add(1) == Some(cluster)
-                        } else {
-                            cluster.checked_add(1) == Some(active.cluster)
-                        }
-                        && active.direction == direction
-                        && active.placement_cluster.segment_anchor
-                            == placement_cluster.segment_anchor
-                        && active.placement_cluster.dense == placement_cluster.dense
-                        && active.placement_cluster.numeric_block_ordinal
-                            == placement_cluster.numeric_block_ordinal
-                        && active.occurrence.translation_inline.to_bits()
-                            == translation_inline.to_bits()
-                        && active.occurrence.translation_block.to_bits()
-                            == translation_block.to_bits()
-                });
-                let occurrence = if justify.is_zero() && adjacent {
-                    let occurrence = active_placement
-                        .ok_or(EngineError::InvalidRequest)?
-                        .occurrence;
-                    self.extend_layout_run_segment(
-                        occurrence.segment_index,
-                        &layout_run,
-                        cluster,
-                        1,
-                        clusters,
-                    )?;
-                    self.push_pen_step(
-                        &layout_run,
-                        direction,
-                        cluster..cluster + 1,
-                        placement_cluster,
-                        STEP_MERGEABLE | STEP_JOINED,
-                    )?;
-                    occurrence
-                } else {
-                    self.record_layout_run_segment(
-                        self.placement_fragment_index,
-                        run_index,
-                        &layout_run,
-                        cluster,
-                        cluster + 1,
-                        clusters,
-                        placement_cluster,
-                        (false, direction),
-                        state.cursor,
-                        state.baseline,
-                    )?
-                };
-                active_placement = Some(ActiveFallbackPlacement {
-                    layout_run_index: run_index,
-                    cluster,
-                    direction,
-                    placement_cluster,
-                    occurrence,
-                });
-                ordinal += 1;
-                if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
-                    continue;
-                }
-                let geometry = match geometry_cache {
-                    Some((cached_run, geometry)) if cached_run == run_index => geometry,
-                    _ => {
-                        let style_index = usize::try_from(clusters.style_indexes[cluster])
-                            .map_err(|_| EngineError::InvalidRequest)?;
-                        let style = styles
-                            .get(style_index)
-                            .ok_or(EngineError::InvalidRequest)?
-                            .style;
-                        let geometry = RunGeometry::for_values(
-                            clusters.font_handles[cluster],
-                            clusters.units_per_em[cluster],
-                            style.font_size,
-                        )?;
-                        geometry_cache = Some((run_index, geometry));
-                        geometry
-                    }
-                };
-                // The clusters that follow in visual order join this segment while they stay in
-                // its run, block and anchor and their own translation publishes the same f32:
-                // the test the per-cluster walk applied to each of them in turn.
-                let count = self.visual_segment_reach(
-                    clusters,
-                    layout_run,
-                    direction,
-                    cluster,
-                    (visually_ltr, visual_start + ordinal, stretch_end - ordinal),
-                    occurrence.translation_inline,
-                    placement_cluster,
-                    justify,
-                    &state,
-                );
-                if count > 1 {
-                    let reverse = direction & 1 != 0;
-                    let step = self
-                        .pen_steps
-                        .last_mut()
-                        .ok_or(EngineError::InvalidRequest)?;
-                    step.count = u32::try_from(count).map_err(|_| EngineError::ResultTooLarge)?;
-                    step.flags |= STEP_CHECKED | if reverse { STEP_REVERSE } else { 0 };
-                    let joined = if reverse {
-                        cluster + 1 - count
-                    } else {
-                        cluster + 1
-                    };
-                    self.extend_layout_run_segment(
-                        occurrence.segment_index,
-                        &layout_run,
-                        joined,
-                        count - 1,
-                        clusters,
-                    )?;
-                    active_placement = Some(ActiveFallbackPlacement {
-                        layout_run_index: run_index,
-                        cluster: if reverse {
-                            cluster + 1 - count
-                        } else {
-                            cluster + count - 1
-                        },
-                        direction,
-                        placement_cluster,
-                        occurrence,
-                    });
-                }
-                self.position_segment(
-                    body,
-                    SegmentWalk {
-                        segment_index: occurrence.segment_index,
-                        first: cluster,
-                        count,
-                        reverse: direction & 1 != 0,
-                        levels: (!visually_ltr).then_some(visual_start + ordinal - 1),
-                    },
-                    geometry,
-                    true,
-                    &mut state,
-                    metrics_for,
-                )?;
-                ordinal += count - 1;
-            }
+            let mut layout_run_cache = None;
+            self.position_visual_body(
+                body,
+                span,
+                cut,
+                &mut cut_stops,
+                &mut layout_run_cache,
+                &mut state,
+                metrics_for,
+            )?;
             if !visually_ltr {
-                for cluster in cluster_start..retained_cluster_end {
-                    if clusters.flags[cluster] & CLUSTER_HARD_BREAK == 0 {
-                        continue;
-                    }
-                    let (run_index, layout_run) =
-                        layout_run_for_cluster(clusters, cluster, &mut layout_run_cache)?;
-                    let direction = layout_run_direction(layout_run, runs)?;
-                    let placement_cluster =
-                        clusters.placement_cluster(layout_run, direction, cluster)?;
-                    self.record_layout_run_segment(
-                        self.placement_fragment_index,
-                        run_index,
-                        &layout_run,
-                        cluster,
-                        cluster + 1,
-                        clusters,
-                        placement_cluster,
-                        (false, direction),
-                        state.cursor,
-                        state.baseline,
-                    )?;
-                }
-            }
-        }
-        if layout_run_order && let Some(cut) = cut {
-            for (_, unit) in cut_stops.into_iter().skip(next_stop).flatten() {
-                self.position_cut_unit(cut, unit, &mut state, metrics_for)?;
+                self.record_hard_break_segments(
+                    body,
+                    cluster_start..retained_cluster_end,
+                    &mut layout_run_cache,
+                    &state,
+                )?;
             }
         }
         if state.decorated_run.is_some() {
             self.flush_decorated_run(&mut state.decorated_run, line, metrics_for)?;
         }
         if matches!(self.current_source_line, SourceLine::Body(_)) {
-            let adjusts_spaces = justify.per_space_units != 0 || justify.extra_space_units != 0;
-            let adjusts_gaps = justify.per_gap_units != 0 || justify.extra_gap_units != 0;
             self.fragment_topology.push(FragmentTopology {
                 steps: u32::try_from(self.pen_steps.len() - step_start)
                     .map_err(|_| EngineError::ResultTooLarge)?,
-                flags: if layout_run_order {
-                    0
-                } else {
-                    FRAGMENT_VISUAL_ORDER
-                } | if adjusts_spaces {
-                    FRAGMENT_ADJUSTS_SPACES
-                } else {
-                    0
-                } | if adjusts_gaps {
-                    FRAGMENT_ADJUSTS_GAPS
-                } else {
-                    0
-                } | if hung_leads { FRAGMENT_HUNG_LEADS } else { 0 },
+                flags: fragment_topology_flags(layout_run_order, justify, hung_leads),
             });
         }
         Ok(indent
             + fragment.line.advance
             + super::layout_units::scaled_from_layout_units(justify.total_units()))
+    }
+
+    /// Appends the fragment's retained clusters (hard breaks excluded) and, after a cut, its
+    /// island and marker stand-ins to the visual order with their levels, then reorders them
+    /// (UAX #9 L2).
+    fn reorder_fragment_clusters(
+        &mut self,
+        text_start: u32,
+        retained: core::ops::Range<usize>,
+        boundary: Option<BoundaryShape>,
+        paragraph_level: u8,
+        clusters: &ClusterArena,
+        runs: &[ShapingRun],
+    ) -> Result<(), EngineError> {
+        let visual_start = self.visual_clusters.len();
+        let retained_cluster_end = retained.end;
+        for cluster in retained {
+            if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
+                continue;
+            }
+            self.visual_clusters
+                .push(u32::try_from(cluster).map_err(|_| EngineError::ResultTooLarge)?);
+            self.visual_levels.push(cluster_level(
+                cluster,
+                text_start,
+                clusters,
+                runs,
+                &self.line_levels,
+            )?);
+        }
+        if let Some(boundary) = boundary {
+            let island_level = if boundary.cluster_start < boundary.cluster_end {
+                cluster_level(
+                    retained_cluster_end,
+                    text_start,
+                    clusters,
+                    runs,
+                    &self.line_levels,
+                )?
+            } else {
+                paragraph_level
+            };
+            self.visual_clusters.push(CutUnit::Island.sentinel());
+            self.visual_levels.push(island_level);
+            self.visual_clusters.push(CutUnit::Marker.sentinel());
+            self.visual_levels.push(paragraph_level);
+        }
+        reorder_l2(
+            &mut self.visual_clusters,
+            &mut self.visual_levels,
+            visual_start,
+        );
+        Ok(())
+    }
+
+    /// Whether the line's last content cluster (before a hard break) is right-to-left, which
+    /// is when its hung advance leads the line.
+    fn terminating_cluster_is_rtl(
+        &self,
+        fragment: FlowFragment,
+        clusters: &ClusterArena,
+        runs: &[ShapingRun],
+        cluster_start: usize,
+        cluster_end: usize,
+    ) -> Result<bool, EngineError> {
+        let hanging_end = if cluster_end > cluster_start
+            && clusters.flags[cluster_end - 1] & CLUSTER_HARD_BREAK != 0
+        {
+            cluster_end - 1
+        } else {
+            cluster_end
+        };
+        let terminating = hanging_end
+            .checked_sub(1)
+            .filter(|cluster| *cluster >= cluster_start)
+            .ok_or(EngineError::InvalidRequest)?;
+        Ok(cluster_level(
+            terminating,
+            fragment.line.text_start,
+            clusters,
+            runs,
+            &self.line_levels,
+        )? & 1
+            != 0)
+    }
+
+    /// Positions a fragment body cluster by cluster in visual order, drawing the cut's units
+    /// at their stops and joining each cluster's segment with the clusters that follow it.
+    #[allow(clippy::too_many_arguments)]
+    fn position_visual_body(
+        &mut self,
+        body: BodyLine<'_>,
+        span: VisualSpan,
+        cut: Option<CutRecord<'_>>,
+        cut_stops: &mut CutStops,
+        layout_run_cache: &mut Option<(usize, LayoutRun)>,
+        state: &mut FragmentPositionState,
+        metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
+    ) -> Result<(), EngineError> {
+        let mut geometry_cache = None;
+        let mut active_placement = None;
+        let mut ordinal = 0;
+        loop {
+            while let Some((at, unit)) = cut_stops.peek()
+                && at.min(span.count) == ordinal
+            {
+                let cut = cut.ok_or(EngineError::InvalidRequest)?;
+                self.position_cut_unit(cut, unit, state, metrics_for)?;
+                // The unit moved the pen, so the cluster after it opens its own segment.
+                active_placement = None;
+                cut_stops.next += 1;
+            }
+            if ordinal >= span.count {
+                break;
+            }
+            // Clusters join a segment only up to the next unit drawn between them.
+            let stretch_end = cut_stops
+                .peek()
+                .map_or(span.count, |(at, _)| at.min(span.count));
+            let cluster = self.visual_cluster(span, ordinal)?;
+            let (layout_run, active) = self.open_or_join_cluster_segment(
+                body,
+                cluster,
+                active_placement,
+                layout_run_cache,
+                state,
+            )?;
+            active_placement = Some(active);
+            ordinal += 1;
+            if body.clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
+                continue;
+            }
+            let geometry = cached_run_geometry(
+                &mut geometry_cache,
+                active.layout_run_index,
+                body.clusters,
+                body.styles,
+                cluster,
+            )?;
+            // The clusters that follow in visual order join this segment while they stay in
+            // its run, block and anchor and their own translation publishes the same f32:
+            // the test the per-cluster walk applied to each of them in turn.
+            let count = self.visual_segment_reach(
+                body.clusters,
+                layout_run,
+                active.direction,
+                cluster,
+                (
+                    span.visually_ltr,
+                    span.visual_start + ordinal,
+                    stretch_end - ordinal,
+                ),
+                active.occurrence.translation_inline,
+                active.placement_cluster,
+                body.justify,
+                state,
+            );
+            if count > 1 {
+                active_placement =
+                    Some(self.join_visual_reach(body.clusters, layout_run, active, count)?);
+            }
+            self.position_segment(
+                body,
+                SegmentWalk {
+                    segment_index: active.occurrence.segment_index,
+                    first: cluster,
+                    count,
+                    reverse: active.direction & 1 != 0,
+                    levels: (!span.visually_ltr).then_some(span.visual_start + ordinal - 1),
+                },
+                geometry,
+                true,
+                state,
+                metrics_for,
+            )?;
+            ordinal += count - 1;
+        }
+        Ok(())
+    }
+
+    fn visual_cluster(&self, span: VisualSpan, ordinal: usize) -> Result<usize, EngineError> {
+        if span.visually_ltr {
+            Ok(span.body_start + ordinal)
+        } else {
+            usize::try_from(self.visual_clusters[span.visual_start + ordinal])
+                .map_err(|_| EngineError::InvalidRequest)
+        }
+    }
+
+    /// Places `cluster` and either joins it to the active segment (same run, block, anchor
+    /// and published translation, with no justification) or opens a new segment for it.
+    fn open_or_join_cluster_segment(
+        &mut self,
+        body: BodyLine<'_>,
+        cluster: usize,
+        active_placement: Option<ActiveFallbackPlacement>,
+        layout_run_cache: &mut Option<(usize, LayoutRun)>,
+        state: &FragmentPositionState,
+    ) -> Result<(LayoutRun, ActiveFallbackPlacement), EngineError> {
+        let clusters = body.clusters;
+        let (run_index, layout_run) = layout_run_for_cluster(clusters, cluster, layout_run_cache)?;
+        let direction = layout_run_direction(layout_run, body.runs)?;
+        let placement_cluster = clusters.placement_cluster(layout_run, direction, cluster)?;
+        let translation_inline = finite_f32(
+            state.cursor - placement_cluster.block_local_prefix
+                + placement_cluster.block_anchor_inline,
+        )?;
+        let translation_block = finite_f32(state.baseline + placement_cluster.block_anchor_block)?;
+        let candidate = ActiveFallbackPlacement {
+            layout_run_index: run_index,
+            cluster,
+            direction,
+            placement_cluster,
+            occurrence: PlacementOccurrence {
+                segment_index: 0,
+                translation_inline,
+                translation_block,
+            },
+        };
+        let adjacent = active_placement.is_some_and(|active| active.continues_with(&candidate));
+        let occurrence = if body.justify.is_zero() && adjacent {
+            let occurrence = active_placement
+                .ok_or(EngineError::InvalidRequest)?
+                .occurrence;
+            self.extend_layout_run_segment(
+                occurrence.segment_index,
+                &layout_run,
+                cluster,
+                1,
+                clusters,
+            )?;
+            self.push_pen_step(
+                &layout_run,
+                direction,
+                cluster..cluster + 1,
+                placement_cluster,
+                STEP_MERGEABLE | STEP_JOINED,
+            )?;
+            occurrence
+        } else {
+            self.record_layout_run_segment(
+                self.placement_fragment_index,
+                run_index,
+                &layout_run,
+                cluster,
+                cluster + 1,
+                clusters,
+                placement_cluster,
+                (false, direction),
+                state.cursor,
+                state.baseline,
+            )?
+        };
+        Ok((
+            layout_run,
+            ActiveFallbackPlacement {
+                occurrence,
+                ..candidate
+            },
+        ))
+    }
+
+    /// Joins the `count - 1` clusters after `active.cluster` in visual order to its segment
+    /// and pen step, returning the placement that ends at the last joined cluster.
+    fn join_visual_reach(
+        &mut self,
+        clusters: &ClusterArena,
+        layout_run: LayoutRun,
+        active: ActiveFallbackPlacement,
+        count: usize,
+    ) -> Result<ActiveFallbackPlacement, EngineError> {
+        let cluster = active.cluster;
+        let reverse = active.direction & 1 != 0;
+        let step = self
+            .pen_steps
+            .last_mut()
+            .ok_or(EngineError::InvalidRequest)?;
+        step.count = u32::try_from(count).map_err(|_| EngineError::ResultTooLarge)?;
+        step.flags |= STEP_CHECKED | if reverse { STEP_REVERSE } else { 0 };
+        let joined = if reverse {
+            cluster + 1 - count
+        } else {
+            cluster + 1
+        };
+        self.extend_layout_run_segment(
+            active.occurrence.segment_index,
+            &layout_run,
+            joined,
+            count - 1,
+            clusters,
+        )?;
+        Ok(ActiveFallbackPlacement {
+            cluster: if reverse {
+                cluster + 1 - count
+            } else {
+                cluster + count - 1
+            },
+            ..active
+        })
+    }
+
+    /// A reordered line leaves its hard breaks out of the visual order; each still records
+    /// its own glyphless segment at the final pen.
+    fn record_hard_break_segments(
+        &mut self,
+        body: BodyLine<'_>,
+        retained: core::ops::Range<usize>,
+        layout_run_cache: &mut Option<(usize, LayoutRun)>,
+        state: &FragmentPositionState,
+    ) -> Result<(), EngineError> {
+        let clusters = body.clusters;
+        for cluster in retained {
+            if clusters.flags[cluster] & CLUSTER_HARD_BREAK == 0 {
+                continue;
+            }
+            let (run_index, layout_run) =
+                layout_run_for_cluster(clusters, cluster, layout_run_cache)?;
+            let direction = layout_run_direction(layout_run, body.runs)?;
+            let placement_cluster = clusters.placement_cluster(layout_run, direction, cluster)?;
+            self.record_layout_run_segment(
+                self.placement_fragment_index,
+                run_index,
+                &layout_run,
+                cluster,
+                cluster + 1,
+                clusters,
+                placement_cluster,
+                (false, direction),
+                state.cursor,
+                state.baseline,
+            )?;
+        }
+        Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -5076,6 +5188,93 @@ fn layout_run_direction(run: LayoutRun, runs: &[ShapingRun]) -> Result<u8, Engin
         .map(|run| run.direction)
         .or_else(|| (run.glyph_count == 0).then_some(0))
         .ok_or(EngineError::InvalidRequest)
+}
+
+/// The fragment's cut record, an ellipsis cut or a corrected line end: either way the
+/// paragraph's clusters stop at the record.
+fn fragment_cut(
+    fragment: FlowFragment,
+    boundary_shape: &BoundaryShapeArena,
+) -> Result<(u32, Option<BoundaryShape>), EngineError> {
+    let cut_index = if fragment.boundary_index == super::flow_composition::NO_BOUNDARY {
+        fragment.tail_index
+    } else {
+        fragment.boundary_index
+    };
+    if cut_index == super::flow_composition::NO_BOUNDARY {
+        return Ok((cut_index, None));
+    }
+    let boundary = boundary_shape
+        .record(cut_index)
+        .ok_or(EngineError::InvalidRequest)?;
+    Ok((cut_index, Some(boundary)))
+}
+
+/// The adjacency-order glyph stream is one equal-length column family, admitted once
+/// per fragment so every segment indexes the columns directly.
+fn admit_glyph_stream(clusters: &ClusterArena) -> Result<(), EngineError> {
+    let stream_len = clusters.glyph_ids.len();
+    if clusters.glyph_clusters.len() != stream_len
+        || clusters.glyph_x_advances.len() != stream_len
+        || clusters.glyph_x_offsets.len() != stream_len
+        || clusters.glyph_y_offsets.len() != stream_len
+        || clusters.glyph_shape_flags.len() != stream_len
+        || clusters.glyph_stable_ids.len() != stream_len
+    {
+        return Err(EngineError::InvalidRequest);
+    }
+    Ok(())
+}
+
+/// The run geometry of `cluster`, cached for the layout run that last asked.
+fn cached_run_geometry(
+    cache: &mut Option<(usize, RunGeometry)>,
+    run_index: usize,
+    clusters: &ClusterArena,
+    styles: &[StyleSegment],
+    cluster: usize,
+) -> Result<RunGeometry, EngineError> {
+    if let Some((cached_run, geometry)) = *cache
+        && cached_run == run_index
+    {
+        return Ok(geometry);
+    }
+    let style_index = usize::try_from(clusters.style_indexes[cluster])
+        .map_err(|_| EngineError::InvalidRequest)?;
+    let style = styles
+        .get(style_index)
+        .ok_or(EngineError::InvalidRequest)?
+        .style;
+    let geometry = RunGeometry::for_values(
+        clusters.font_handles[cluster],
+        clusters.units_per_em[cluster],
+        style.font_size,
+    )?;
+    *cache = Some((run_index, geometry));
+    Ok(geometry)
+}
+
+fn fragment_topology_flags(
+    layout_run_order: bool,
+    justify: JustifyDistribution,
+    hung_leads: bool,
+) -> u8 {
+    let adjusts_spaces = justify.per_space_units != 0 || justify.extra_space_units != 0;
+    let adjusts_gaps = justify.per_gap_units != 0 || justify.extra_gap_units != 0;
+    let mut flags = 0;
+    if !layout_run_order {
+        flags |= FRAGMENT_VISUAL_ORDER;
+    }
+    if adjusts_spaces {
+        flags |= FRAGMENT_ADJUSTS_SPACES;
+    }
+    if adjusts_gaps {
+        flags |= FRAGMENT_ADJUSTS_GAPS;
+    }
+    if hung_leads {
+        flags |= FRAGMENT_HUNG_LEADS;
+    }
+    flags
 }
 
 fn layout_run_for_cluster(
