@@ -1,9 +1,13 @@
 #[cfg(feature = "artifact-baker")]
 use alloc::string::ToString;
-use alloc::{boxed::Box, vec::Vec};
+#[cfg(feature = "artifact-baker")]
+use alloc::vec::Vec;
+
 #[cfg(feature = "allocation-evidence")]
-use core::alloc::{GlobalAlloc, Layout};
-use core::sync::atomic::{AtomicUsize, Ordering};
+use pmndrs_glyph_wasm_abi::CountingAllocator;
+#[cfg(feature = "artifact-baker")]
+use pmndrs_glyph_wasm_abi::write_u32_le as write_u32;
+use pmndrs_glyph_wasm_abi::{AllocationTable, WasmSingleton};
 
 use pmndrs_glyph_mtsdf_core::{AtlasRegion, Bounds, MtsdfGenerator, OutlineSink, OutlineSource};
 #[cfg(feature = "artifact-baker")]
@@ -28,42 +32,9 @@ use crate::{MtsdfBakeArtifactV0, MtsdfBakeRequestV0, MtsdfBakeResultV0, bake_mts
 static ALLOCATOR: talc::wasm::WasmDynamicTalc = talc::wasm::new_wasm_dynamic_allocator();
 
 #[cfg(feature = "allocation-evidence")]
-static BACKING_ALLOCATOR: talc::wasm::WasmDynamicTalc = talc::wasm::new_wasm_dynamic_allocator();
-
-#[cfg(feature = "allocation-evidence")]
-static ALLOCATION_CALLS: AtomicUsize = AtomicUsize::new(0);
-#[cfg(feature = "allocation-evidence")]
-static REALLOCATION_CALLS: AtomicUsize = AtomicUsize::new(0);
-#[cfg(feature = "allocation-evidence")]
-static DEALLOCATION_CALLS: AtomicUsize = AtomicUsize::new(0);
-
-#[cfg(feature = "allocation-evidence")]
-struct CountingAllocator;
-
-#[cfg(feature = "allocation-evidence")]
 #[global_allocator]
-static ALLOCATOR: CountingAllocator = CountingAllocator;
-
-#[cfg(feature = "allocation-evidence")]
-unsafe impl GlobalAlloc for CountingAllocator {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        ALLOCATION_CALLS.fetch_add(1, Ordering::Relaxed);
-        // SAFETY: this wrapper forwards the allocator contract and exact layout unchanged.
-        unsafe { GlobalAlloc::alloc(&BACKING_ALLOCATOR, layout) }
-    }
-
-    unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
-        DEALLOCATION_CALLS.fetch_add(1, Ordering::Relaxed);
-        // SAFETY: the pointer and layout came from this wrapper's Talc allocation domain.
-        unsafe { GlobalAlloc::dealloc(&BACKING_ALLOCATOR, pointer, layout) };
-    }
-
-    unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        REALLOCATION_CALLS.fetch_add(1, Ordering::Relaxed);
-        // SAFETY: the pointer and layout came from this wrapper and new_size is forwarded unchanged.
-        unsafe { GlobalAlloc::realloc(&BACKING_ALLOCATOR, pointer, layout, new_size) }
-    }
-}
+static ALLOCATOR: CountingAllocator<talc::wasm::WasmDynamicTalc> =
+    CountingAllocator::new(talc::wasm::new_wasm_dynamic_allocator());
 
 const MAX_REQUEST_BYTES: u32 = 64 * 1024 * 1024;
 #[cfg(feature = "artifact-baker")]
@@ -75,7 +46,7 @@ const STATUS_INVALID_REQUEST: u32 = 1;
 const STATUS_INVALID_OUTLINE: u32 = 2;
 const STATUS_GENERATION_FAILED: u32 = 3;
 
-static STATE: AtomicUsize = AtomicUsize::new(0);
+static STATE: WasmSingleton<WasmState> = WasmSingleton::new();
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo<'_>) -> ! {
@@ -84,12 +55,12 @@ fn panic(_info: &core::panic::PanicInfo<'_>) -> ! {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_glyph_mtsdf_alloc(length: u32) -> u32 {
-    with_state(|state| state.allocate(length))
+    with_state(|state| state.table.allocate(length, MAX_REQUEST_BYTES))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_glyph_mtsdf_dealloc(pointer: u32, length: u32) {
-    with_state(|state| state.deallocate(pointer, length));
+    with_state(|state| state.table.deallocate(pointer, length));
 }
 
 #[unsafe(no_mangle)]
@@ -99,12 +70,12 @@ pub extern "C" fn pmndrs_glyph_mtsdf_generate(pointer: u32, length: u32) -> u32 
         state.result_length = 0;
         let WasmState {
             generator,
-            allocations,
+            table,
             result_pointer,
             result_length,
             ..
         } = state;
-        let Some(bytes) = owned_bytes(allocations, pointer, length) else {
+        let Some(bytes) = table.owned_bytes(pointer, length) else {
             return STATUS_INVALID_REQUEST;
         };
         let Some(request) = WireRequest::parse(bytes) else {
@@ -150,14 +121,13 @@ pub extern "C" fn pmndrs_glyph_mtsdf_bake(
         state.segmented_response = None;
     });
     let result = with_state(|state| {
-        let Some(source) = owned_bytes(&state.allocations, source_pointer, source_length) else {
+        let Some(source) = state.table.owned_bytes(source_pointer, source_length) else {
             return Err(crate::MtsdfBakeError::new(
                 crate::MtsdfBakeErrorCode::InvalidDescriptor,
                 "MTSDF baker source range is not an active module allocation",
             ));
         };
-        let Some(request_bytes) = owned_bytes(&state.allocations, request_pointer, request_length)
-        else {
+        let Some(request_bytes) = state.table.owned_bytes(request_pointer, request_length) else {
             return Err(crate::MtsdfBakeError::new(
                 crate::MtsdfBakeErrorCode::InvalidDescriptor,
                 "MTSDF baker request range is not an active module allocation",
@@ -186,7 +156,7 @@ pub extern "C" fn pmndrs_glyph_mtsdf_bake(
 #[cfg(feature = "artifact-baker")]
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_glyph_mtsdf_bake_result_len() -> u32 {
-    with_state(|state| state.artifact_result_length)
+    with_state(|state| state.table.result_length())
 }
 
 #[cfg(feature = "artifact-baker")]
@@ -287,98 +257,36 @@ pub extern "C" fn pmndrs_glyph_mtsdf_segmented_release() {
 #[cfg(feature = "allocation-evidence")]
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_glyph_mtsdf_reset_allocation_counts() {
-    ALLOCATION_CALLS.store(0, Ordering::Relaxed);
-    REALLOCATION_CALLS.store(0, Ordering::Relaxed);
-    DEALLOCATION_CALLS.store(0, Ordering::Relaxed);
+    ALLOCATOR.reset();
 }
 
 #[cfg(feature = "allocation-evidence")]
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_glyph_mtsdf_allocation_calls() -> u32 {
-    u32::try_from(ALLOCATION_CALLS.load(Ordering::Relaxed)).unwrap_or(u32::MAX)
+    u32::try_from(ALLOCATOR.allocations()).unwrap_or(u32::MAX)
 }
 
 #[cfg(feature = "allocation-evidence")]
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_glyph_mtsdf_reallocation_calls() -> u32 {
-    u32::try_from(REALLOCATION_CALLS.load(Ordering::Relaxed)).unwrap_or(u32::MAX)
+    u32::try_from(ALLOCATOR.reallocations()).unwrap_or(u32::MAX)
 }
 
 #[cfg(feature = "allocation-evidence")]
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_glyph_mtsdf_deallocation_calls() -> u32 {
-    u32::try_from(DEALLOCATION_CALLS.load(Ordering::Relaxed)).unwrap_or(u32::MAX)
+    u32::try_from(ALLOCATOR.deallocations()).unwrap_or(u32::MAX)
 }
 
 #[derive(Default)]
 struct WasmState {
     generator: MtsdfGenerator,
-    allocations: Vec<Allocation>,
+    table: AllocationTable,
+    /// The last generated atlas region; it stays owned by the generator.
     result_pointer: u32,
     result_length: u32,
     #[cfg(feature = "artifact-baker")]
-    artifact_result_pointer: u32,
-    #[cfg(feature = "artifact-baker")]
-    artifact_result_length: u32,
-    #[cfg(feature = "artifact-baker")]
     segmented_response: Option<PreparedArtifactResponse>,
-}
-
-struct Allocation {
-    pointer: u32,
-    length: u32,
-    bytes: Vec<u8>,
-}
-
-impl WasmState {
-    fn allocate(&mut self, length: u32) -> u32 {
-        if length == 0 || length > MAX_REQUEST_BYTES || self.allocations.try_reserve(1).is_err() {
-            return 0;
-        }
-        let mut bytes = Vec::new();
-        if bytes.try_reserve_exact(length as usize).is_err() {
-            return 0;
-        }
-        bytes.resize(length as usize, 0);
-        self.adopt(bytes).map_or(0, |(pointer, _)| pointer)
-    }
-
-    fn adopt(&mut self, mut bytes: Vec<u8>) -> Option<(u32, u32)> {
-        let length = u32::try_from(bytes.len()).ok()?;
-        if length == 0 || self.allocations.try_reserve(1).is_err() {
-            return None;
-        }
-        let pointer = u32::try_from(bytes.as_mut_ptr() as usize).ok()?;
-        if pointer == 0
-            || self
-                .allocations
-                .iter()
-                .any(|allocation| allocation.pointer == pointer)
-        {
-            return None;
-        }
-        self.allocations.push(Allocation {
-            pointer,
-            length,
-            bytes,
-        });
-        Some((pointer, length))
-    }
-
-    fn deallocate(&mut self, pointer: u32, length: u32) {
-        if let Some(index) = self
-            .allocations
-            .iter()
-            .position(|allocation| allocation.pointer == pointer && allocation.length == length)
-        {
-            self.allocations.swap_remove(index);
-            #[cfg(feature = "artifact-baker")]
-            if self.artifact_result_pointer == pointer {
-                self.artifact_result_pointer = 0;
-                self.artifact_result_length = 0;
-            }
-        }
-    }
 }
 
 #[cfg(feature = "artifact-baker")]
@@ -537,23 +445,13 @@ fn serialization_error() -> Vec<u8> {
 
 #[cfg(feature = "artifact-baker")]
 fn leak_artifact_response(bytes: Vec<u8>) -> u32 {
-    with_state(|state| {
-        state.artifact_result_pointer = 0;
-        state.artifact_result_length = 0;
-        let Some((pointer, length)) = state.adopt(bytes) else {
-            return 0;
-        };
-        state.artifact_result_pointer = pointer;
-        state.artifact_result_length = length;
-        pointer
-    })
+    with_state(|state| state.table.publish(bytes))
 }
 
 #[cfg(feature = "artifact-baker")]
 fn retain_segmented_response(prepared: PreparedArtifactResponse) -> u32 {
     with_state(|state| {
-        state.artifact_result_pointer = 0;
-        state.artifact_result_length = 0;
+        state.table.unpublish();
         state.segmented_response = Some(prepared);
     });
     0
@@ -567,13 +465,6 @@ fn segmented_artifact(state: &WasmState, index: u32) -> Option<&[u8]> {
         .artifacts
         .get(index as usize)
         .map(|artifact| artifact.bytes.as_slice())
-}
-
-fn owned_bytes(allocations: &[Allocation], pointer: u32, length: u32) -> Option<&[u8]> {
-    allocations
-        .iter()
-        .find(|allocation| allocation.pointer == pointer && allocation.length == length)
-        .map(|allocation| allocation.bytes.as_slice())
 }
 
 struct WireRequest<'a> {
@@ -672,25 +563,6 @@ fn read_f32(bytes: &[u8], offset: usize) -> Option<f32> {
     Some(f32::from_bits(read_u32(bytes, offset)?))
 }
 
-#[cfg(feature = "artifact-baker")]
-fn write_u32(bytes: &mut [u8], offset: usize, value: u32) {
-    let encoded = value.to_le_bytes();
-    bytes[offset..offset + encoded.len()].copy_from_slice(&encoded);
-}
-
 fn with_state<Result>(operation: impl FnOnce(&mut WasmState) -> Result) -> Result {
-    let mut pointer = STATE.load(Ordering::Acquire);
-    if pointer == 0 {
-        let candidate = Box::into_raw(Box::new(WasmState::default())) as usize;
-        match STATE.compare_exchange(0, candidate, Ordering::AcqRel, Ordering::Acquire) {
-            Ok(_) => pointer = candidate,
-            Err(existing) => {
-                // SAFETY: this allocation was never published because another caller won initialization.
-                drop(unsafe { Box::from_raw(candidate as *mut WasmState) });
-                pointer = existing;
-            }
-        }
-    }
-    // SAFETY: the V0 Wasm host is single-threaded; this pointer is initialized once and never freed.
-    operation(unsafe { &mut *(pointer as *mut WasmState) })
+    STATE.with(operation)
 }

@@ -33,6 +33,7 @@ zeno = { version = "0.3.3", default-features = false, features = ["eval", "libm"
 serde_json = "1.0.145"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+pmndrs-glyph-wasm-abi = { path = "../wasm-abi" }
 talc = "=5.0.4"
 
 [profile.release]

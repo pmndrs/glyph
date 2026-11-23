@@ -204,6 +204,7 @@ dependencies = [
  "harfrust",
  "pmndrs-glyph-outline",
  "pmndrs-glyph-raster-artifact",
+ "pmndrs-glyph-wasm-abi",
  "read-fonts 0.42.1",
  "serde",
  "serde_json",
@@ -236,6 +237,10 @@ version = "0.0.0"
 dependencies = [
  "core_maths",
 ]
+
+[[package]]
+name = "pmndrs-glyph-wasm-abi"
+version = "0.0.0"
 
 [[package]]
 name = "proc-macro2"

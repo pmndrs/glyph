@@ -20,6 +20,7 @@ const libraryRustManifests = [
   'rust/mtsdf-admission/Cargo.toml',
   'rust/slug-core/Cargo.toml',
   'rust/slug-fontations/Cargo.toml',
+  'rust/wasm-abi/Cargo.toml',
 ] as const;
 
 export async function runGlyphTest(): Promise<void> {

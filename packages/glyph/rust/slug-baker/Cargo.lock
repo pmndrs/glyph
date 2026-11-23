@@ -111,6 +111,7 @@ dependencies = [
  "pmndrs-glyph-raster-artifact",
  "pmndrs-glyph-slug-core",
  "pmndrs-glyph-slug-fontations",
+ "pmndrs-glyph-wasm-abi",
  "serde",
  "serde_json",
  "skrifa",
@@ -132,6 +133,10 @@ dependencies = [
  "pmndrs-glyph-slug-core",
  "skrifa",
 ]
+
+[[package]]
+name = "pmndrs-glyph-wasm-abi"
+version = "0.0.0"
 
 [[package]]
 name = "proc-macro2"

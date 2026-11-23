@@ -1,0 +1,17 @@
+[package]
+name = "pmndrs-glyph-wasm-abi"
+description = "Shared Wasm host-ownership primitives for pmndrs/glyph bakers"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97.1"
+license = "MIT"
+repository = "https://github.com/pmndrs/glyph"
+publish = false
+
+[dependencies]
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

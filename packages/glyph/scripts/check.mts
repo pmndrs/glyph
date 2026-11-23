@@ -14,6 +14,7 @@ const rustCrates = [
   'slug-baker',
   'slug-core',
   'slug-fontations',
+  'wasm-abi',
 ] as const;
 
 // The parity crate is repository-owned code beside the vendored HarfRust fork. The fork itself keeps upstream's

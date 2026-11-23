@@ -186,6 +186,7 @@ jobs:
             packages/glyph/rust/slug-baker -> target
             packages/glyph/rust/slug-core -> target
             packages/glyph/rust/slug-fontations -> target
+            packages/glyph/rust/wasm-abi -> target
           cache-bin: false
           cache-workspace-crates: false
           cache-on-failure: false
@@ -336,6 +337,7 @@ jobs:
             packages/glyph/rust/slug-baker -> target
             packages/glyph/rust/slug-core -> target
             packages/glyph/rust/slug-fontations -> target
+            packages/glyph/rust/wasm-abi -> target
           cache-bin: false
           cache-workspace-crates: false
           cache-on-failure: false

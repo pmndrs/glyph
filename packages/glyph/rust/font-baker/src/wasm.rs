@@ -1,5 +1,5 @@
-use core::sync::atomic::{AtomicUsize, Ordering};
-use std::{boxed::Box, string::ToString, vec::Vec};
+use pmndrs_glyph_wasm_abi::{AllocationTable, WasmSingleton, write_u32_le};
+use std::{string::ToString, vec::Vec};
 
 use serde::Serialize;
 
@@ -10,7 +10,7 @@ use crate::{FontSelectionV0, inspect_font, prepare_font};
 const MAX_REQUEST_ALLOCATION_BYTES: u32 = 64 * 1024 * 1024;
 const MAX_RESPONSE_BYTES: usize = MAX_REQUEST_ALLOCATION_BYTES as usize;
 
-static STATE: AtomicUsize = AtomicUsize::new(0);
+static STATE: WasmSingleton<WasmState> = WasmSingleton::new();
 
 #[global_allocator]
 static ALLOCATOR: talc::wasm::WasmDynamicTalc = talc::wasm::new_wasm_dynamic_allocator();
@@ -38,12 +38,12 @@ struct WasmArtifactMetadata<'a> {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_font_baker_alloc(len: u32) -> u32 {
-    with_state(|state| state.allocate(len))
+    with_state(|state| state.table.allocate(len, MAX_REQUEST_ALLOCATION_BYTES))
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pmndrs_font_baker_dealloc(pointer: u32, len: u32) {
-    with_state(|state| state.deallocate(pointer, len));
+    with_state(|state| state.table.deallocate(pointer, len));
 }
 
 #[unsafe(no_mangle)]
@@ -54,13 +54,16 @@ pub unsafe extern "C" fn pmndrs_font_baker_bake(
     descriptor_len: u32,
 ) -> u32 {
     let result = with_state(|state| {
-        let Some(source) = state.owned_bytes(source_pointer, source_len) else {
+        let Some(source) = state.table.owned_bytes_or_empty(source_pointer, source_len) else {
             return Err(crate::BakeError::new(
                 crate::BakeErrorCode::InvalidDescriptor,
                 "font baker source range is not an active module allocation",
             ));
         };
-        let Some(descriptor_bytes) = state.owned_bytes(descriptor_pointer, descriptor_len) else {
+        let Some(descriptor_bytes) = state
+            .table
+            .owned_bytes_or_empty(descriptor_pointer, descriptor_len)
+        else {
             return Err(crate::BakeError::new(
                 crate::BakeErrorCode::InvalidDescriptor,
                 "font baker descriptor range is not an active module allocation",
@@ -84,13 +87,16 @@ pub unsafe extern "C" fn pmndrs_font_baker_prepare(
     selection_len: u32,
 ) -> u32 {
     let result = with_state(|state| {
-        let Some(source) = state.owned_bytes(source_pointer, source_len) else {
+        let Some(source) = state.table.owned_bytes_or_empty(source_pointer, source_len) else {
             return Err(crate::BakeError::new(
                 crate::BakeErrorCode::InvalidSelection,
                 "font preparation source range is not an active module allocation",
             ));
         };
-        let Some(selection_bytes) = state.owned_bytes(selection_pointer, selection_len) else {
+        let Some(selection_bytes) = state
+            .table
+            .owned_bytes_or_empty(selection_pointer, selection_len)
+        else {
             return Err(crate::BakeError::new(
                 crate::BakeErrorCode::InvalidSelection,
                 "font selection range is not an active module allocation",
@@ -116,13 +122,16 @@ pub unsafe extern "C" fn pmndrs_font_baker_inspect(
     descriptor_len: u32,
 ) -> u32 {
     let result = with_state(|state| {
-        let Some(source) = state.owned_bytes(source_pointer, source_len) else {
+        let Some(source) = state.table.owned_bytes_or_empty(source_pointer, source_len) else {
             return Err(crate::BakeError::new(
                 crate::BakeErrorCode::InvalidDescriptor,
                 "font inspection source range is not an active module allocation",
             ));
         };
-        let Some(descriptor_bytes) = state.owned_bytes(descriptor_pointer, descriptor_len) else {
+        let Some(descriptor_bytes) = state
+            .table
+            .owned_bytes_or_empty(descriptor_pointer, descriptor_len)
+        else {
             return Err(crate::BakeError::new(
                 crate::BakeErrorCode::InvalidDescriptor,
                 "font inspection descriptor range is not an active module allocation",
@@ -155,13 +164,12 @@ pub extern "C" fn pmndrs_font_baker_glyph_outline(
     use pmndrs_glyph_outline::OutlineError;
     with_state(|state| {
         let WasmState {
-            allocations,
+            table,
             outline,
             outline_result,
-            ..
         } = state;
         outline_result.clear();
-        let Some(sfnt) = owned_allocation(allocations, sfnt_pointer, sfnt_length) else {
+        let Some(sfnt) = table.owned_bytes_or_empty(sfnt_pointer, sfnt_length) else {
             return GLYPH_OUTLINE_STATUS_INVALID_REQUEST;
         };
         match outline
@@ -191,7 +199,7 @@ pub extern "C" fn pmndrs_font_baker_glyph_outline_len() -> u32 {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_font_baker_result_len() -> u32 {
-    with_state(|state| state.result_len)
+    with_state(|state| state.table.result_length())
 }
 
 fn encode_response(result: Result<BakeResultV0, crate::BakeError>) -> Vec<u8> {
@@ -274,8 +282,12 @@ fn encode_envelope(status: u32, metadata: Vec<u8>, artifact: Vec<u8>) -> Vec<u8>
             "font baker response artifact exceeds the ABI address space",
         )));
     };
-    let Some(total_length) = response_total_length(header_len, metadata.len(), artifact.len())
-    else {
+    let Some(total_length) = pmndrs_glyph_wasm_abi::response_total_length(
+        MAX_RESPONSE_BYTES,
+        header_len,
+        metadata.len(),
+        artifact.len(),
+    ) else {
         return encode_response(Err(crate::BakeError::new(
             crate::BakeErrorCode::IntegerOverflow,
             "font baker response length exceeds the ABI address space",
@@ -313,134 +325,21 @@ fn encode_envelope(status: u32, metadata: Vec<u8>, artifact: Vec<u8>) -> Vec<u8>
     response
 }
 
-fn response_total_length(header: usize, metadata: usize, artifact: usize) -> Option<usize> {
-    let total = header.checked_add(metadata)?.checked_add(artifact)?;
-    (total <= MAX_RESPONSE_BYTES && u32::try_from(total).is_ok()).then_some(total)
-}
-
 fn write_header_u32(response: &mut [u8], offset: u32, value: u32) {
-    let Ok(offset) = usize::try_from(offset) else {
-        return;
-    };
-    response[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+    write_u32_le(response, offset as usize, value);
 }
 
 fn leak_response(bytes: Vec<u8>) -> u32 {
-    with_state(|state| {
-        state.result_pointer = 0;
-        state.result_len = 0;
-        let Some((pointer, length)) = state.adopt(bytes) else {
-            return 0;
-        };
-        state.result_pointer = pointer;
-        state.result_len = length;
-        pointer
-    })
+    with_state(|state| state.table.publish(bytes))
 }
 
+#[derive(Default)]
 struct WasmState {
-    allocations: Vec<Allocation>,
-    result_pointer: u32,
-    result_len: u32,
+    table: AllocationTable,
     outline: pmndrs_glyph_outline::GlyphOutline,
     outline_result: Vec<u32>,
 }
 
-struct Allocation {
-    pointer: u32,
-    requested_length: u32,
-    bytes: Vec<u8>,
-}
-
-impl WasmState {
-    fn allocate(&mut self, length: u32) -> u32 {
-        if length == 0 {
-            return 0;
-        }
-        if length > MAX_REQUEST_ALLOCATION_BYTES {
-            return 0;
-        }
-        if self.allocations.try_reserve(1).is_err() {
-            return 0;
-        }
-        let mut bytes = Vec::<u8>::new();
-        if bytes.try_reserve_exact(length as usize).is_err() {
-            return 0;
-        }
-        bytes.resize(length as usize, 0);
-        self.adopt(bytes).map_or(0, |(pointer, _)| pointer)
-    }
-
-    fn adopt(&mut self, mut bytes: Vec<u8>) -> Option<(u32, u32)> {
-        let length = u32::try_from(bytes.len()).ok()?;
-        if length == 0 || self.allocations.try_reserve(1).is_err() {
-            return None;
-        }
-        let pointer = u32::try_from(bytes.as_mut_ptr() as usize).ok()?;
-        if pointer == 0
-            || self
-                .allocations
-                .iter()
-                .any(|entry| entry.pointer == pointer)
-        {
-            return None;
-        }
-        self.allocations.push(Allocation {
-            pointer,
-            requested_length: length,
-            bytes,
-        });
-        Some((pointer, length))
-    }
-
-    fn deallocate(&mut self, pointer: u32, length: u32) {
-        if let Some(index) = self
-            .allocations
-            .iter()
-            .position(|entry| entry.pointer == pointer && entry.requested_length == length)
-        {
-            self.allocations.swap_remove(index);
-            if self.result_pointer == pointer {
-                self.result_pointer = 0;
-                self.result_len = 0;
-            }
-        }
-    }
-
-    fn owned_bytes(&self, pointer: u32, length: u32) -> Option<&[u8]> {
-        owned_allocation(&self.allocations, pointer, length)
-    }
-}
-
-fn owned_allocation(allocations: &[Allocation], pointer: u32, length: u32) -> Option<&[u8]> {
-    if length == 0 {
-        return (pointer == 0).then_some(&[]);
-    }
-    allocations
-        .iter()
-        .find(|entry| entry.pointer == pointer && entry.requested_length == length)
-        .map(|entry| entry.bytes.as_slice())
-}
-
 fn with_state<Result>(operation: impl FnOnce(&mut WasmState) -> Result) -> Result {
-    let mut pointer = STATE.load(Ordering::Acquire);
-    if pointer == 0 {
-        let candidate = Box::into_raw(Box::new(WasmState {
-            allocations: Vec::new(),
-            result_pointer: 0,
-            result_len: 0,
-            outline: pmndrs_glyph_outline::GlyphOutline::default(),
-            outline_result: Vec::new(),
-        })) as usize;
-        match STATE.compare_exchange(0, candidate, Ordering::AcqRel, Ordering::Acquire) {
-            Ok(_) => pointer = candidate,
-            Err(existing) => {
-                // SAFETY: this allocation was not published because another invocation won.
-                drop(unsafe { Box::from_raw(candidate as *mut WasmState) });
-                pointer = existing;
-            }
-        }
-    }
-    // SAFETY: V0 Wasm is single-threaded; state is initialized once and never freed.
-    operation(unsafe { &mut *(pointer as *mut WasmState) })
+    STATE.with(operation)
 }
