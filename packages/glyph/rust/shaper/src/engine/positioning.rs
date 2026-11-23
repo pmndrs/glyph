@@ -2024,504 +2024,592 @@ impl PositionedGlyphArena {
         let metrics_for: &dyn Fn(u32) -> Option<FontMetrics> = &metrics_for;
         let extents_for: &dyn Fn(u32, u32) -> Option<FontGlyphExtents> = &extents_for;
         self.build_lines(
-            previous,
-            flow,
-            retained_flow,
-            recomposed_lines,
-            text,
-            clusters,
-            previous_clusters,
-            runs,
-            previous_runs,
-            boundary_shape,
-            previous_boundary_shape,
-            styles,
-            bidi,
+            PositioningSource {
+                previous,
+                flow,
+                retained_flow,
+                recomposed_lines,
+                text,
+                clusters,
+                previous_clusters,
+                runs,
+                previous_runs,
+                boundary_shape,
+                previous_boundary_shape,
+                styles,
+                bidi,
+                typography_for,
+                retained_typography_for,
+                metrics_for,
+                extents_for,
+            },
             next_run_canonical_revision,
-            typography_for,
-            retained_typography_for,
-            metrics_for,
-            extents_for,
         )
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn build_lines(
         &mut self,
-        previous: &Self,
-        flow: &FlowLayoutArena,
-        retained_flow: Option<&FlowLayoutArena>,
-        recomposed_lines: Option<&[core::ops::Range<usize>]>,
-        text: &[u16],
-        clusters: &ClusterArena,
-        previous_clusters: &ClusterArena,
-        runs: &[ShapingRun],
-        previous_runs: &[ShapingRun],
-        boundary_shape: &BoundaryShapeArena,
-        previous_boundary_shape: &BoundaryShapeArena,
-        styles: &[StyleSegment],
-        bidi: &BidiAnalysis,
+        src: PositioningSource<'_>,
         next_run_canonical_revision: &mut u32,
-        typography_for: impl Fn(u32) -> ThreadTypography + Copy,
-        retained_typography_for: impl Fn(u32) -> ThreadTypography + Copy,
-        metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
-        extents_for: impl Fn(u32, u32) -> Option<FontGlyphExtents> + Copy,
     ) -> Result<(), EngineError> {
-        self.clear();
-        self.rebuild_replacement_runs(
-            previous,
-            boundary_shape,
-            previous_boundary_shape,
-            runs,
-            previous_runs,
-            next_run_canonical_revision,
-        )?;
-        self.rebuild_replacement_run_local(
-            boundary_shape,
-            text,
-            clusters,
-            runs,
-            styles,
-            metrics_for,
-            extents_for,
-        )?;
-        self.text_effects = styles
-            .iter()
-            .any(|segment| style_has_text_effects(segment.style));
-        self.decorated = styles
-            .iter()
-            .any(|segment| segment.style.decoration_flags != 0);
-        let glyph_capacity = clusters
-            .glyph_ids
-            .len()
-            .checked_add(boundary_shape.shape.glyph_ids.len())
-            .ok_or(EngineError::ResultTooLarge)?;
-        self.reserve(glyph_capacity)?;
-        reserve(&mut self.line_glyph_starts, flow.lines.len())?;
-        reserve(&mut self.line_glyph_counts, flow.lines.len())?;
-        reserve(&mut self.line_decoration_starts, flow.lines.len())?;
-        reserve(&mut self.line_decoration_counts, flow.lines.len())?;
-        reserve(&mut self.semantic_line_glyph_starts, flow.lines.len())?;
-        reserve(&mut self.semantic_line_glyph_counts, flow.lines.len())?;
-        reserve(&mut self.semantic_line_inline_extents, flow.lines.len())?;
-        reserve(&mut self.line_step_starts, flow.lines.len())?;
-        reserve(&mut self.line_span_starts, flow.lines.len())?;
-        reserve(&mut self.line_repositionable, flow.lines.len())?;
-        reserve(&mut self.fragment_topology, flow.fragments.len())?;
-        reserve(&mut self.line_ink, flow.lines.len())?;
-        reserve(&mut self.line_missing_glyphs, flow.lines.len())?;
-        if recomposed_lines.is_some() {
-            reserve(&mut self.recomposed_glyphs, flow.lines.len())?;
-        }
+        self.prepare_build(src, next_run_canonical_revision)?;
+        let flow = src.flow;
         // Flow admission authorizes reuse, but the actual positioning executor owns dirt:
         // numeric correspondence can reject an otherwise unchanged flow line.
-        let mut source_coordinates_retained = recomposed_lines.is_some();
-        let visually_ltr = is_trivially_ltr(bidi, runs);
-        // The canonical span stream is the only source representation. Static
-        // geometry reuses clean lines through the placement/occurrence proof;
-        // dirty lines are emitted from their current run-local rows.
-        let mut retained_cursor = retained_flow.and_then(RetainedFlowLineCursor::new);
-        let mut recomposed_line_index = 0usize;
-        let mut drop_cap_cursor = 0usize;
-        let mut fragment_cursor = 0usize;
+        let mut walk = LineBuildWalk {
+            source_coordinates_retained: src.recomposed_lines.is_some(),
+            // The canonical span stream is the only source representation. Static
+            // geometry reuses clean lines through the placement/occurrence proof;
+            // dirty lines are emitted from their current run-local rows.
+            retained_cursor: src.retained_flow.and_then(RetainedFlowLineCursor::new),
+            recomposed_line_index: 0,
+            drop_cap_cursor: 0,
+            fragment_cursor: 0,
+            previous_flow_thread_id: None,
+        };
+        let visually_ltr = is_trivially_ltr(src.bidi, src.runs);
         let mut fragment_ranges = flow
             .fragments
             .cursor_from(0)
             .ok_or(EngineError::InvalidRequest)?;
         let mut lines = flow.lines.iter().copied().enumerate().peekable();
-        let mut previous_flow_thread_id = None;
         while let Some((line_index, line)) = lines.next() {
-            let next_line = lines.peek().map(|(_, line)| line);
-            let first_thread_line = previous_flow_thread_id != Some(line.flow_thread_id);
-            previous_flow_thread_id = Some(line.flow_thread_id);
-            let fragment_start_usize = fragment_cursor;
-            fragment_cursor = fragment_cursor
-                .checked_add(usize::from(line.fragment_count))
-                .ok_or(EngineError::ResultTooLarge)?;
-            let fragment_start =
-                u32::try_from(fragment_start_usize).map_err(|_| EngineError::ResultTooLarge)?;
+            let next_line = lines.peek().map(|(_, line)| *line);
+            let mut head = walk.line_head(line_index, line, next_line)?;
             let fragments = fragment_ranges
                 .take(usize::from(line.fragment_count))
                 .ok_or(EngineError::InvalidRequest)?;
-            let drop_cap = first_thread_line
-                .then(|| flow.drop_caps.get(drop_cap_cursor).copied())
-                .flatten()
-                .filter(|cap| cap.line.flow_thread_id == line.flow_thread_id);
-            let previous_drop_cap = first_thread_line
-                .then(|| {
-                    retained_flow
-                        .and_then(|previous| previous.drop_caps.get(drop_cap_cursor).copied())
-                })
-                .flatten()
-                .filter(|cap| cap.line.flow_thread_id == line.flow_thread_id);
+            head.drop_cap = walk.drop_cap(flow, line, head.first_thread_line);
+            head.previous_drop_cap = src
+                .retained_flow
+                .and_then(|previous| walk.drop_cap(previous, line, head.first_thread_line));
             let placement_line_start = Some(self.placement.begin_line());
-            let line_span_start = self.occurrence_spans.len();
-            let line_step_start = self.pen_steps.len();
-            let retained_line = recomposed_lines.is_some_and(|ranges| {
-                while ranges
-                    .get(recomposed_line_index)
-                    .is_some_and(|range| range.end <= line_index)
-                {
-                    recomposed_line_index += 1;
-                }
-                ranges
-                    .get(recomposed_line_index)
-                    .is_none_or(|range| !range.contains(&line_index))
-            });
-            if previous_drop_cap == drop_cap && retained_line {
-                let previous_glyph_count = *previous
-                    .line_glyph_counts
-                    .get(line_index)
-                    .ok_or(EngineError::InvalidRequest)?;
-                let target = RetainedLineTarget {
-                    body: RetainedSourceLine {
-                        index: line_index,
-                        line,
-                    },
-                    drop_cap: drop_cap.map(|cap| RetainedSourceLine {
-                        index: drop_cap_cursor,
-                        line: cap.line,
-                    }),
-                };
-                let proof = RetainedOccurrenceProof {
-                    previous,
-                    clusters,
-                    previous_clusters,
-                    boundary: boundary_shape,
-                    previous_boundary: previous_boundary_shape,
-                    replacement_runs: &self.replacement_runs,
-                    replacement_run_boundary_indices: &self.replacement_run_boundary_indices,
-                    replacement_local: &self.replacement_run_local,
-                    line_index,
-                    target,
-                    clean_line: true,
-                    spans: &mut self.occurrence_spans,
-                    semantic_count: &mut self.occurrence_semantic_count,
-                    outlined_count: &mut self.occurrence_outlined_count,
-                };
-                match self.placement.append_retained_line_validated(
-                    &previous.placement,
-                    RetainedLinePlacement {
-                        line_index,
-                        old_fragment_start: previous.placement.line_fragment_start(line_index)?,
-                        new_fragment_start: fragment_start,
-                        instance_count: previous_glyph_count,
-                    },
-                    clusters.layout_runs(),
-                    &self.replacement_runs,
-                    Some(RetainedRunCorrespondence {
-                        previous_clusters,
-                        clusters,
-                        previous_runs,
-                        runs,
-                    }),
-                    |placement, remap| proof.append(placement, remap),
-                ) {
-                    Ok((remap, ())) => {
-                        source_coordinates_retained &= previous.line_glyph_starts[line_index]
-                            as usize
-                            == self
-                                .outlined_count()
-                                .saturating_sub(previous_glyph_count as usize);
-                        self.append_retained_line(previous, line_index, target, Some(remap))?;
-                        // An edit moved cluster indexes under the retained steps.
-                        self.push_line_topology(
-                            (line_span_start, line_step_start),
-                            usize::from(line.fragment_count),
-                            false,
-                        )?;
-                        if drop_cap.is_some() {
-                            drop_cap_cursor += 1;
-                        }
-                        continue;
-                    }
-                    Err(EngineError::InvalidRequest) => {}
-                    Err(error) => return Err(error),
-                }
-            }
-            let mut numeric_source = None;
-            // The line that owns a drop cap is positioned in full; the lines beside it are not
-            // special, since the cap reaches them only through their slots.
-            if drop_cap.is_none()
-                && let Some(retained_cursor) = retained_cursor.as_mut()
-                && let Some(matched) = matching_retained_line(
-                    line,
-                    &fragments,
-                    next_line.is_none_or(|next| next.flow_thread_id != line.flow_thread_id),
-                    retained_cursor,
-                    clusters,
-                    bidi,
-                    typography_for(line.flow_thread_id),
-                    retained_typography_for(line.flow_thread_id),
-                    (
-                        boundary_shape,
-                        previous_boundary_shape,
-                        &mut self.edge_pairs,
-                    ),
-                )?
+            head.line_span_start = self.occurrence_spans.len();
+            head.line_step_start = self.pen_steps.len();
+            let retained_line = walk.is_retained_line(src.recomposed_lines, line_index);
+            if head.previous_drop_cap == head.drop_cap
+                && retained_line
+                && self.append_clean_retained_line(src, &head, &mut walk)?
             {
-                let (previous_line_index, previous_line) = (matched.index, matched.line);
-                let previous_fragment_start = retained_cursor
-                    .fragment_index
-                    .checked_sub(usize::from(previous_line.fragment_count))
-                    .ok_or(EngineError::InvalidRequest)?;
-                if !matched.exact || matched.edges {
-                    numeric_source =
-                        Some((previous_line_index, previous_fragment_start, matched.edges));
-                } else {
-                    let previous_glyph_count = *previous
-                        .line_glyph_counts
-                        .get(previous_line_index)
-                        .ok_or(EngineError::InvalidRequest)?;
-                    let target = RetainedLineTarget {
-                        body: RetainedSourceLine {
-                            index: line_index,
-                            line,
-                        },
-                        drop_cap: None,
-                    };
-                    let proof = RetainedOccurrenceProof {
-                        previous,
-                        clusters,
-                        previous_clusters,
-                        boundary: boundary_shape,
-                        previous_boundary: previous_boundary_shape,
-                        replacement_runs: &self.replacement_runs,
-                        replacement_run_boundary_indices: &self.replacement_run_boundary_indices,
-                        replacement_local: &self.replacement_run_local,
-                        line_index: previous_line_index,
-                        target,
-                        clean_line: false,
-                        spans: &mut self.occurrence_spans,
-                        semantic_count: &mut self.occurrence_semantic_count,
-                        outlined_count: &mut self.occurrence_outlined_count,
-                    };
-                    match self.placement.append_retained_line_validated(
-                        &previous.placement,
-                        RetainedLinePlacement {
-                            line_index: previous_line_index,
-                            old_fragment_start: u32::try_from(previous_fragment_start)
-                                .map_err(|_| EngineError::ResultTooLarge)?,
-                            new_fragment_start: fragment_start,
-                            instance_count: previous_glyph_count,
-                        },
-                        clusters.layout_runs(),
-                        &self.replacement_runs,
-                        None,
-                        |placement, remap| proof.append(placement, remap),
-                    ) {
-                        Ok((remap, ())) => {
-                            source_coordinates_retained &=
-                                previous.line_glyph_starts[previous_line_index] as usize
-                                    == self
-                                        .outlined_count()
-                                        .saturating_sub(previous_glyph_count as usize);
-                            self.append_retained_line(
-                                previous,
-                                previous_line_index,
-                                target,
-                                Some(remap),
-                            )?;
-                            self.copy_line_topology(
-                                previous,
-                                (previous_line_index, previous_fragment_start),
-                                (line_span_start, line_step_start),
-                                usize::from(line.fragment_count),
-                            )?;
-                            continue;
-                        }
-                        Err(EngineError::InvalidRequest) => {}
-                        Err(error) => return Err(error),
-                    }
-                }
-            }
-            let line_glyph_start = self.outlined_count();
-            let line_decoration_start = self.decorations.len();
-            let semantic_line_start = self.occurrence_count();
-            if fragments.is_empty() {
-                self.line_glyph_starts.push(
-                    u32::try_from(line_glyph_start).map_err(|_| EngineError::ResultTooLarge)?,
-                );
-                self.line_glyph_counts.push(0);
-                self.line_decoration_starts.push(
-                    u32::try_from(line_decoration_start)
-                        .map_err(|_| EngineError::ResultTooLarge)?,
-                );
-                self.line_decoration_counts.push(0);
-                self.semantic_line_glyph_starts.push(
-                    u32::try_from(semantic_line_start).map_err(|_| EngineError::ResultTooLarge)?,
-                );
-                self.semantic_line_glyph_counts.push(0);
-                self.semantic_line_inline_extents.push(0.0);
-                self.push_line_topology((line_span_start, line_step_start), 0, false)?;
-                self.push_line_ink(line_span_start, clusters, boundary_shape);
-                if let Some(placement_line_start) = placement_line_start {
-                    self.placement.finish_line(placement_line_start)?;
-                }
                 continue;
             }
-            let first = fragments.first().ok_or(EngineError::InvalidRequest)?;
-            let last = fragments.last().ok_or(EngineError::InvalidRequest)?;
-            if drop_cap.is_some() {
-                drop_cap_cursor += 1;
-            }
-            let mut inline_start = fragments
-                .iter()
-                .map(|fragment| fragment.slot_start)
-                .fold(f64::INFINITY, f64::min);
-            let mut inline_end = f64::NEG_INFINITY;
-            if let Some(cap) = drop_cap {
-                self.current_source_line = SourceLine::DropCap(
-                    u32::try_from(drop_cap_cursor - 1).map_err(|_| EngineError::ResultTooLarge)?,
-                );
-                self.placement_fragment_index = fragment_start;
-                let cap_advance = self.position_drop_cap(
-                    cap,
-                    text,
-                    clusters,
-                    runs,
-                    boundary_shape,
-                    styles,
-                    bidi,
-                    visually_ltr,
-                    metrics_for,
-                )?;
-                inline_start = inline_start.min(cap.fragment.slot_start);
-                inline_end = inline_end.max(cap.fragment.slot_start + cap_advance);
-            }
-            let final_line =
-                next_line.is_none_or(|next| next.flow_thread_id != line.flow_thread_id);
-            let typography = typography_for(line.flow_thread_id);
-            self.current_source_line = SourceLine::Body(
-                u32::try_from(line_index).map_err(|_| EngineError::ResultTooLarge)?,
-            );
-            self.placement_fragment_index = fragment_start;
-            // A line holding the clusters it held before repeats only its arithmetic.
-            let repositioned = match numeric_source {
-                Some((previous_line, previous_fragment_start, false)) => self
-                    .reposition_retained_line(
-                        previous,
-                        (previous_line, previous_fragment_start),
-                        (line_index, line),
+            // The line that owns a drop cap is positioned in full; the lines beside it are not
+            // special, since the cap reaches them only through their slots.
+            let numeric_source = match walk.retained_cursor.as_mut() {
+                Some(retained_cursor) if head.drop_cap.is_none() => {
+                    match self.retain_matched_line(
+                        src,
+                        &head,
                         &fragments,
-                        final_line,
-                        typography,
-                        clusters,
-                        bidi,
-                        fragment_start,
-                    )?,
-                Some((previous_line, previous_fragment_start, true)) => self.retain_edge_line(
-                    previous,
-                    (previous_line, previous_fragment_start),
-                    (line_index, line),
-                    &fragments,
-                    final_line,
-                    typography,
-                    clusters,
-                    fragment_start,
-                )?,
-                None => None,
+                        retained_cursor,
+                        &mut walk.source_coordinates_retained,
+                    )? {
+                        MatchedLine::Appended => continue,
+                        MatchedLine::Reposition(source) => source,
+                    }
+                }
+                _ => None,
             };
-            if let Some(end) = repositioned {
-                inline_end = end;
-                let edges = numeric_source.is_some_and(|(_, _, edges)| edges);
-                self.push_line_topology(
-                    (line_span_start, line_step_start),
-                    if edges {
-                        usize::from(line.fragment_count)
-                    } else {
-                        0
-                    },
-                    !edges,
-                )?;
+            let starts = LineGlyphStarts {
+                glyph: self.outlined_count(),
+                decoration: self.decorations.len(),
+                semantic: self.occurrence_count(),
+            };
+            if fragments.is_empty() {
+                self.push_empty_line(src, &head, starts)?;
             } else {
-                if !visually_ltr {
-                    prepare_line_levels(
-                        &mut self.line_levels,
-                        bidi,
-                        first.line.text_start,
-                        last.line.text_end,
-                    )?;
+                if head.drop_cap.is_some() {
+                    walk.drop_cap_cursor += 1;
                 }
-                for fragment in fragments.iter().copied() {
-                    let indent = if fragment.line.cluster_start == 0 {
-                        typography.first_line_indent
-                    } else {
-                        0.0
-                    };
-                    let fragment_advance = self.position_fragment(
-                        line,
-                        fragment,
-                        final_line,
-                        text,
-                        clusters,
-                        runs,
-                        boundary_shape,
-                        styles,
-                        bidi,
-                        visually_ltr,
-                        indent,
-                        typography.justify,
-                        metrics_for,
-                    )?;
-                    inline_end = inline_end.max(fragment.slot_start + fragment_advance);
-                    self.placement_fragment_index = self
-                        .placement_fragment_index
-                        .checked_add(1)
-                        .ok_or(EngineError::ResultTooLarge)?;
-                }
-                let repositionable = drop_cap.is_none()
-                    && !self.decorated
-                    && fragments.iter().all(|fragment| {
-                        fragment.boundary_index == super::flow_composition::NO_BOUNDARY
-                            && fragment.lead_index == super::flow_composition::NO_BOUNDARY
-                            && fragment.tail_index == super::flow_composition::NO_BOUNDARY
-                    });
-                self.push_line_topology((line_span_start, line_step_start), 0, repositionable)?;
+                let inline_extent = self.position_line(
+                    src,
+                    &head,
+                    &fragments,
+                    numeric_source,
+                    visually_ltr,
+                    walk.drop_cap_cursor,
+                )?;
+                self.finish_positioned_line(
+                    src,
+                    &head,
+                    starts,
+                    inline_extent,
+                    walk.source_coordinates_retained,
+                )?;
             }
-            self.semantic_line_glyph_starts
-                .push(u32::try_from(semantic_line_start).map_err(|_| EngineError::ResultTooLarge)?);
-            self.semantic_line_glyph_counts.push(
-                u32::try_from(self.occurrence_count().saturating_sub(semantic_line_start))
-                    .map_err(|_| EngineError::ResultTooLarge)?,
-            );
-            self.semantic_line_inline_extents
-                .push((inline_end - inline_start).max(0.0));
-            self.line_glyph_starts
-                .push(u32::try_from(line_glyph_start).map_err(|_| EngineError::ResultTooLarge)?);
-            self.line_glyph_counts.push(
-                u32::try_from(self.outlined_count().saturating_sub(line_glyph_start))
-                    .map_err(|_| EngineError::ResultTooLarge)?,
-            );
-            self.push_line_ink(line_span_start, clusters, boundary_shape);
-            let line_glyph_end = self.outlined_count();
-            if source_coordinates_retained && line_glyph_start != line_glyph_end {
-                if let Some(last) = self.recomposed_glyphs.last_mut()
-                    && last.end == line_glyph_start
-                {
-                    last.end = line_glyph_end;
-                } else {
-                    self.recomposed_glyphs
-                        .push(line_glyph_start..line_glyph_end);
-                }
-            }
-            self.line_decoration_starts.push(
-                u32::try_from(line_decoration_start).map_err(|_| EngineError::ResultTooLarge)?,
-            );
-            self.line_decoration_counts.push(
-                u32::try_from(self.decorations.len().saturating_sub(line_decoration_start))
-                    .map_err(|_| EngineError::ResultTooLarge)?,
-            );
             if let Some(placement_line_start) = placement_line_start {
                 self.placement.finish_line(placement_line_start)?;
             }
         }
-        if drop_cap_cursor != flow.drop_caps.len() {
+        if walk.drop_cap_cursor != flow.drop_caps.len() {
             return Err(EngineError::InvalidRequest);
         }
-        if fragment_cursor != flow.fragments.len() || !fragment_ranges.is_empty() {
+        if walk.fragment_cursor != flow.fragments.len() || !fragment_ranges.is_empty() {
             return Err(EngineError::InvalidRequest);
         }
+        self.finish_build(src.previous, walk.source_coordinates_retained)
+    }
+
+    /// Clears the arena, rebuilds the replacement runs the boundary shapes need, and reserves
+    /// every per-line table for the flow.
+    fn prepare_build(
+        &mut self,
+        src: PositioningSource<'_>,
+        next_run_canonical_revision: &mut u32,
+    ) -> Result<(), EngineError> {
+        self.clear();
+        self.rebuild_replacement_runs(
+            src.previous,
+            src.boundary_shape,
+            src.previous_boundary_shape,
+            src.runs,
+            src.previous_runs,
+            next_run_canonical_revision,
+        )?;
+        self.rebuild_replacement_run_local(
+            src.boundary_shape,
+            src.text,
+            src.clusters,
+            src.runs,
+            src.styles,
+            src.metrics_for,
+            src.extents_for,
+        )?;
+        self.text_effects = src
+            .styles
+            .iter()
+            .any(|segment| style_has_text_effects(segment.style));
+        self.decorated = src
+            .styles
+            .iter()
+            .any(|segment| segment.style.decoration_flags != 0);
+        let glyph_capacity = src
+            .clusters
+            .glyph_ids
+            .len()
+            .checked_add(src.boundary_shape.shape.glyph_ids.len())
+            .ok_or(EngineError::ResultTooLarge)?;
+        self.reserve(glyph_capacity)?;
+        let line_count = src.flow.lines.len();
+        reserve(&mut self.line_glyph_starts, line_count)?;
+        reserve(&mut self.line_glyph_counts, line_count)?;
+        reserve(&mut self.line_decoration_starts, line_count)?;
+        reserve(&mut self.line_decoration_counts, line_count)?;
+        reserve(&mut self.semantic_line_glyph_starts, line_count)?;
+        reserve(&mut self.semantic_line_glyph_counts, line_count)?;
+        reserve(&mut self.semantic_line_inline_extents, line_count)?;
+        reserve(&mut self.line_step_starts, line_count)?;
+        reserve(&mut self.line_span_starts, line_count)?;
+        reserve(&mut self.line_repositionable, line_count)?;
+        reserve(&mut self.fragment_topology, src.flow.fragments.len())?;
+        reserve(&mut self.line_ink, line_count)?;
+        reserve(&mut self.line_missing_glyphs, line_count)?;
+        if src.recomposed_lines.is_some() {
+            reserve(&mut self.recomposed_glyphs, line_count)?;
+        }
+        Ok(())
+    }
+
+    /// Appends a line whose flow and drop cap are unchanged from the previous build, when its
+    /// placement and occurrences still prove out; `false` sends it to repositioning.
+    fn append_clean_retained_line(
+        &mut self,
+        src: PositioningSource<'_>,
+        head: &LineBuildHead,
+        walk: &mut LineBuildWalk<'_>,
+    ) -> Result<bool, EngineError> {
+        let previous = src.previous;
+        let line_index = head.line_index;
+        let previous_glyph_count = *previous
+            .line_glyph_counts
+            .get(line_index)
+            .ok_or(EngineError::InvalidRequest)?;
+        let target = RetainedLineTarget {
+            body: RetainedSourceLine {
+                index: line_index,
+                line: head.line,
+            },
+            drop_cap: head.drop_cap.map(|cap| RetainedSourceLine {
+                index: walk.drop_cap_cursor,
+                line: cap.line,
+            }),
+        };
+        let proof = RetainedOccurrenceProof {
+            previous,
+            clusters: src.clusters,
+            previous_clusters: src.previous_clusters,
+            boundary: src.boundary_shape,
+            previous_boundary: src.previous_boundary_shape,
+            replacement_runs: &self.replacement_runs,
+            replacement_run_boundary_indices: &self.replacement_run_boundary_indices,
+            replacement_local: &self.replacement_run_local,
+            line_index,
+            target,
+            clean_line: true,
+            spans: &mut self.occurrence_spans,
+            semantic_count: &mut self.occurrence_semantic_count,
+            outlined_count: &mut self.occurrence_outlined_count,
+        };
+        let remap = match self.placement.append_retained_line_validated(
+            &previous.placement,
+            RetainedLinePlacement {
+                line_index,
+                old_fragment_start: previous.placement.line_fragment_start(line_index)?,
+                new_fragment_start: head.fragment_start,
+                instance_count: previous_glyph_count,
+            },
+            src.clusters.layout_runs(),
+            &self.replacement_runs,
+            Some(RetainedRunCorrespondence {
+                previous_clusters: src.previous_clusters,
+                clusters: src.clusters,
+                previous_runs: src.previous_runs,
+                runs: src.runs,
+            }),
+            |placement, remap| proof.append(placement, remap),
+        ) {
+            Ok((remap, ())) => remap,
+            Err(EngineError::InvalidRequest) => return Ok(false),
+            Err(error) => return Err(error),
+        };
+        walk.source_coordinates_retained &= previous.line_glyph_starts[line_index] as usize
+            == self
+                .outlined_count()
+                .saturating_sub(previous_glyph_count as usize);
+        self.append_retained_line(previous, line_index, target, Some(remap))?;
+        // An edit moved cluster indexes under the retained steps.
+        self.push_line_topology(
+            (head.line_span_start, head.line_step_start),
+            usize::from(head.line.fragment_count),
+            false,
+        )?;
+        if head.drop_cap.is_some() {
+            walk.drop_cap_cursor += 1;
+        }
+        Ok(true)
+    }
+
+    /// Finds the previous build's line holding this line's clusters. An exact match without
+    /// edge pairs is appended whole when its occurrences prove out; any other match is the
+    /// numeric source repositioning repeats.
+    fn retain_matched_line(
+        &mut self,
+        src: PositioningSource<'_>,
+        head: &LineBuildHead,
+        fragments: &RopeCursorRange<'_, FlowFragment>,
+        retained_cursor: &mut RetainedFlowLineCursor<'_>,
+        source_coordinates_retained: &mut bool,
+    ) -> Result<MatchedLine, EngineError> {
+        let line = head.line;
+        let Some(matched) = matching_retained_line(
+            line,
+            fragments,
+            head.final_line,
+            retained_cursor,
+            src.clusters,
+            src.bidi,
+            (src.typography_for)(line.flow_thread_id),
+            (src.retained_typography_for)(line.flow_thread_id),
+            (
+                src.boundary_shape,
+                src.previous_boundary_shape,
+                &mut self.edge_pairs,
+            ),
+        )?
+        else {
+            return Ok(MatchedLine::Reposition(None));
+        };
+        let (previous_line_index, previous_line) = (matched.index, matched.line);
+        let previous_fragment_start = retained_cursor
+            .fragment_index
+            .checked_sub(usize::from(previous_line.fragment_count))
+            .ok_or(EngineError::InvalidRequest)?;
+        if !matched.exact || matched.edges {
+            return Ok(MatchedLine::Reposition(Some((
+                previous_line_index,
+                previous_fragment_start,
+                matched.edges,
+            ))));
+        }
+        let previous = src.previous;
+        let previous_glyph_count = *previous
+            .line_glyph_counts
+            .get(previous_line_index)
+            .ok_or(EngineError::InvalidRequest)?;
+        let target = RetainedLineTarget {
+            body: RetainedSourceLine {
+                index: head.line_index,
+                line,
+            },
+            drop_cap: None,
+        };
+        let proof = RetainedOccurrenceProof {
+            previous,
+            clusters: src.clusters,
+            previous_clusters: src.previous_clusters,
+            boundary: src.boundary_shape,
+            previous_boundary: src.previous_boundary_shape,
+            replacement_runs: &self.replacement_runs,
+            replacement_run_boundary_indices: &self.replacement_run_boundary_indices,
+            replacement_local: &self.replacement_run_local,
+            line_index: previous_line_index,
+            target,
+            clean_line: false,
+            spans: &mut self.occurrence_spans,
+            semantic_count: &mut self.occurrence_semantic_count,
+            outlined_count: &mut self.occurrence_outlined_count,
+        };
+        let remap = match self.placement.append_retained_line_validated(
+            &previous.placement,
+            RetainedLinePlacement {
+                line_index: previous_line_index,
+                old_fragment_start: u32::try_from(previous_fragment_start)
+                    .map_err(|_| EngineError::ResultTooLarge)?,
+                new_fragment_start: head.fragment_start,
+                instance_count: previous_glyph_count,
+            },
+            src.clusters.layout_runs(),
+            &self.replacement_runs,
+            None,
+            |placement, remap| proof.append(placement, remap),
+        ) {
+            Ok((remap, ())) => remap,
+            Err(EngineError::InvalidRequest) => return Ok(MatchedLine::Reposition(None)),
+            Err(error) => return Err(error),
+        };
+        *source_coordinates_retained &= previous.line_glyph_starts[previous_line_index] as usize
+            == self
+                .outlined_count()
+                .saturating_sub(previous_glyph_count as usize);
+        self.append_retained_line(previous, previous_line_index, target, Some(remap))?;
+        self.copy_line_topology(
+            previous,
+            (previous_line_index, previous_fragment_start),
+            (head.line_span_start, head.line_step_start),
+            usize::from(line.fragment_count),
+        )?;
+        Ok(MatchedLine::Appended)
+    }
+
+    fn push_empty_line(
+        &mut self,
+        src: PositioningSource<'_>,
+        head: &LineBuildHead,
+        starts: LineGlyphStarts,
+    ) -> Result<(), EngineError> {
+        self.line_glyph_starts
+            .push(u32::try_from(starts.glyph).map_err(|_| EngineError::ResultTooLarge)?);
+        self.line_glyph_counts.push(0);
+        self.line_decoration_starts
+            .push(u32::try_from(starts.decoration).map_err(|_| EngineError::ResultTooLarge)?);
+        self.line_decoration_counts.push(0);
+        self.semantic_line_glyph_starts
+            .push(u32::try_from(starts.semantic).map_err(|_| EngineError::ResultTooLarge)?);
+        self.semantic_line_glyph_counts.push(0);
+        self.semantic_line_inline_extents.push(0.0);
+        self.push_line_topology((head.line_span_start, head.line_step_start), 0, false)?;
+        self.push_line_ink(head.line_span_start, src.clusters, src.boundary_shape);
+        Ok(())
+    }
+
+    /// Positions one line with fragments: its drop cap, then either the numeric repeat of a
+    /// retained line or every fragment in full. Returns the line's inline extent.
+    fn position_line(
+        &mut self,
+        src: PositioningSource<'_>,
+        head: &LineBuildHead,
+        fragments: &RopeCursorRange<'_, FlowFragment>,
+        numeric_source: Option<(usize, usize, bool)>,
+        visually_ltr: bool,
+        drop_cap_cursor: usize,
+    ) -> Result<f64, EngineError> {
+        let (line_index, line) = (head.line_index, head.line);
+        let mut inline_start = fragments
+            .iter()
+            .map(|fragment| fragment.slot_start)
+            .fold(f64::INFINITY, f64::min);
+        let mut inline_end = f64::NEG_INFINITY;
+        if let Some(cap) = head.drop_cap {
+            self.current_source_line = SourceLine::DropCap(
+                u32::try_from(drop_cap_cursor - 1).map_err(|_| EngineError::ResultTooLarge)?,
+            );
+            self.placement_fragment_index = head.fragment_start;
+            let cap_advance = self.position_drop_cap(
+                cap,
+                src.text,
+                src.clusters,
+                src.runs,
+                src.boundary_shape,
+                src.styles,
+                src.bidi,
+                visually_ltr,
+                src.metrics_for,
+            )?;
+            inline_start = inline_start.min(cap.fragment.slot_start);
+            inline_end = inline_end.max(cap.fragment.slot_start + cap_advance);
+        }
+        let typography = (src.typography_for)(line.flow_thread_id);
+        self.current_source_line =
+            SourceLine::Body(u32::try_from(line_index).map_err(|_| EngineError::ResultTooLarge)?);
+        self.placement_fragment_index = head.fragment_start;
+        // A line holding the clusters it held before repeats only its arithmetic.
+        let repositioned = match numeric_source {
+            Some((previous_line, previous_fragment_start, false)) => self
+                .reposition_retained_line(
+                    src.previous,
+                    (previous_line, previous_fragment_start),
+                    (line_index, line),
+                    fragments,
+                    head.final_line,
+                    typography,
+                    src.clusters,
+                    src.bidi,
+                    head.fragment_start,
+                )?,
+            Some((previous_line, previous_fragment_start, true)) => self.retain_edge_line(
+                src.previous,
+                (previous_line, previous_fragment_start),
+                (line_index, line),
+                fragments,
+                head.final_line,
+                typography,
+                src.clusters,
+                head.fragment_start,
+            )?,
+            None => None,
+        };
+        let line_steps = (head.line_span_start, head.line_step_start);
+        if let Some(end) = repositioned {
+            inline_end = end;
+            let edges = numeric_source.is_some_and(|(_, _, edges)| edges);
+            let copied_fragments = if edges {
+                usize::from(line.fragment_count)
+            } else {
+                0
+            };
+            self.push_line_topology(line_steps, copied_fragments, !edges)?;
+        } else {
+            inline_end = self.position_line_fragments(
+                src,
+                head,
+                fragments,
+                typography,
+                visually_ltr,
+                inline_end,
+            )?;
+            let repositionable = head.drop_cap.is_none()
+                && !self.decorated
+                && fragments.iter().all(|fragment| {
+                    fragment.boundary_index == super::flow_composition::NO_BOUNDARY
+                        && fragment.lead_index == super::flow_composition::NO_BOUNDARY
+                        && fragment.tail_index == super::flow_composition::NO_BOUNDARY
+                });
+            self.push_line_topology(line_steps, 0, repositionable)?;
+        }
+        Ok((inline_end - inline_start).max(0.0))
+    }
+
+    /// Positions every fragment of a line in full and returns the furthest end reached, from
+    /// `inline_end` on.
+    fn position_line_fragments(
+        &mut self,
+        src: PositioningSource<'_>,
+        head: &LineBuildHead,
+        fragments: &RopeCursorRange<'_, FlowFragment>,
+        typography: ThreadTypography,
+        visually_ltr: bool,
+        mut inline_end: f64,
+    ) -> Result<f64, EngineError> {
+        let first = fragments.first().ok_or(EngineError::InvalidRequest)?;
+        let last = fragments.last().ok_or(EngineError::InvalidRequest)?;
+        if !visually_ltr {
+            prepare_line_levels(
+                &mut self.line_levels,
+                src.bidi,
+                first.line.text_start,
+                last.line.text_end,
+            )?;
+        }
+        for fragment in fragments.iter().copied() {
+            let indent = if fragment.line.cluster_start == 0 {
+                typography.first_line_indent
+            } else {
+                0.0
+            };
+            let fragment_advance = self.position_fragment(
+                head.line,
+                fragment,
+                head.final_line,
+                src.text,
+                src.clusters,
+                src.runs,
+                src.boundary_shape,
+                src.styles,
+                src.bidi,
+                visually_ltr,
+                indent,
+                typography.justify,
+                src.metrics_for,
+            )?;
+            inline_end = inline_end.max(fragment.slot_start + fragment_advance);
+            self.placement_fragment_index = self
+                .placement_fragment_index
+                .checked_add(1)
+                .ok_or(EngineError::ResultTooLarge)?;
+        }
+        Ok(inline_end)
+    }
+
+    /// Records a positioned line's glyph, occurrence and decoration ranges, its ink, and
+    /// its glyphs as recomposed when source coordinates are still retained.
+    fn finish_positioned_line(
+        &mut self,
+        src: PositioningSource<'_>,
+        head: &LineBuildHead,
+        starts: LineGlyphStarts,
+        inline_extent: f64,
+        source_coordinates_retained: bool,
+    ) -> Result<(), EngineError> {
+        self.semantic_line_glyph_starts
+            .push(u32::try_from(starts.semantic).map_err(|_| EngineError::ResultTooLarge)?);
+        self.semantic_line_glyph_counts.push(
+            u32::try_from(self.occurrence_count().saturating_sub(starts.semantic))
+                .map_err(|_| EngineError::ResultTooLarge)?,
+        );
+        self.semantic_line_inline_extents.push(inline_extent);
+        self.line_glyph_starts
+            .push(u32::try_from(starts.glyph).map_err(|_| EngineError::ResultTooLarge)?);
+        self.line_glyph_counts.push(
+            u32::try_from(self.outlined_count().saturating_sub(starts.glyph))
+                .map_err(|_| EngineError::ResultTooLarge)?,
+        );
+        self.push_line_ink(head.line_span_start, src.clusters, src.boundary_shape);
+        let line_glyph_end = self.outlined_count();
+        if source_coordinates_retained && starts.glyph != line_glyph_end {
+            if let Some(last) = self.recomposed_glyphs.last_mut()
+                && last.end == starts.glyph
+            {
+                last.end = line_glyph_end;
+            } else {
+                self.recomposed_glyphs.push(starts.glyph..line_glyph_end);
+            }
+        }
+        self.line_decoration_starts
+            .push(u32::try_from(starts.decoration).map_err(|_| EngineError::ResultTooLarge)?);
+        self.line_decoration_counts.push(
+            u32::try_from(self.decorations.len().saturating_sub(starts.decoration))
+                .map_err(|_| EngineError::ResultTooLarge)?,
+        );
+        Ok(())
+    }
+
+    /// Validates the built occurrences and carries forward the unpublished recomposition
+    /// windows when every glyph kept its source coordinates.
+    fn finish_build(
+        &mut self,
+        previous: &Self,
+        source_coordinates_retained: bool,
+    ) -> Result<(), EngineError> {
         self.recomposed_glyphs_retained = source_coordinates_retained
             && previous.outlined_count() == self.outlined_count()
             && previous.line_glyph_counts.len() == self.line_glyph_counts.len();
@@ -4844,6 +4932,133 @@ pub(crate) fn style_has_text_effects(style: ResolvedStyle) -> bool {
         || style.shadow_rgba != 0
         || style.shadow_offset_x != 0.0
         || style.shadow_offset_y != 0.0
+}
+
+/// What one positioning build reads. The callbacks are read per line, per decoration and per
+/// island glyph, never per body glyph, so every caller shares one build behind trait objects.
+#[derive(Clone, Copy)]
+struct PositioningSource<'a> {
+    previous: &'a PositionedGlyphArena,
+    flow: &'a FlowLayoutArena,
+    retained_flow: Option<&'a FlowLayoutArena>,
+    recomposed_lines: Option<&'a [core::ops::Range<usize>]>,
+    text: &'a [u16],
+    clusters: &'a ClusterArena,
+    previous_clusters: &'a ClusterArena,
+    runs: &'a [ShapingRun],
+    previous_runs: &'a [ShapingRun],
+    boundary_shape: &'a BoundaryShapeArena,
+    previous_boundary_shape: &'a BoundaryShapeArena,
+    styles: &'a [StyleSegment],
+    bidi: &'a BidiAnalysis,
+    typography_for: &'a dyn Fn(u32) -> ThreadTypography,
+    retained_typography_for: &'a dyn Fn(u32) -> ThreadTypography,
+    metrics_for: &'a dyn Fn(u32) -> Option<FontMetrics>,
+    extents_for: &'a dyn Fn(u32, u32) -> Option<FontGlyphExtents>,
+}
+
+/// The cursors a positioning build advances line by line.
+struct LineBuildWalk<'a> {
+    source_coordinates_retained: bool,
+    retained_cursor: Option<RetainedFlowLineCursor<'a>>,
+    recomposed_line_index: usize,
+    drop_cap_cursor: usize,
+    fragment_cursor: usize,
+    previous_flow_thread_id: Option<u32>,
+}
+
+/// One flow line's position in the build before it is retained or positioned.
+#[derive(Clone, Copy)]
+struct LineBuildHead {
+    line_index: usize,
+    line: FlowLine,
+    fragment_start: u32,
+    first_thread_line: bool,
+    final_line: bool,
+    drop_cap: Option<FlowDropCap>,
+    previous_drop_cap: Option<FlowDropCap>,
+    line_span_start: usize,
+    line_step_start: usize,
+}
+
+/// Where a line's glyphs, decorations and occurrences begin.
+#[derive(Clone, Copy)]
+struct LineGlyphStarts {
+    glyph: usize,
+    decoration: usize,
+    semantic: usize,
+}
+
+/// A line matched against the previous build.
+enum MatchedLine {
+    /// The previous line was appended whole.
+    Appended,
+    /// The previous line `(index, fragment start, edges)` to repeat numerically, if any.
+    Reposition(Option<(usize, usize, bool)>),
+}
+
+impl LineBuildWalk<'_> {
+    fn line_head(
+        &mut self,
+        line_index: usize,
+        line: FlowLine,
+        next_line: Option<FlowLine>,
+    ) -> Result<LineBuildHead, EngineError> {
+        let first_thread_line = self.previous_flow_thread_id != Some(line.flow_thread_id);
+        self.previous_flow_thread_id = Some(line.flow_thread_id);
+        let fragment_start_usize = self.fragment_cursor;
+        self.fragment_cursor = self
+            .fragment_cursor
+            .checked_add(usize::from(line.fragment_count))
+            .ok_or(EngineError::ResultTooLarge)?;
+        let fragment_start =
+            u32::try_from(fragment_start_usize).map_err(|_| EngineError::ResultTooLarge)?;
+        Ok(LineBuildHead {
+            line_index,
+            line,
+            fragment_start,
+            first_thread_line,
+            final_line: next_line.is_none_or(|next| next.flow_thread_id != line.flow_thread_id),
+            drop_cap: None,
+            previous_drop_cap: None,
+            line_span_start: 0,
+            line_step_start: 0,
+        })
+    }
+
+    /// The flow's next drop cap when this is its thread's first line and the cap is that
+    /// thread's.
+    fn drop_cap(
+        &self,
+        flow: &FlowLayoutArena,
+        line: FlowLine,
+        first_thread_line: bool,
+    ) -> Option<FlowDropCap> {
+        first_thread_line
+            .then(|| flow.drop_caps.get(self.drop_cap_cursor).copied())
+            .flatten()
+            .filter(|cap| cap.line.flow_thread_id == line.flow_thread_id)
+    }
+
+    /// Whether `line_index` lies outside every recomposed range, advancing past ranges that
+    /// end before it.
+    fn is_retained_line(
+        &mut self,
+        recomposed_lines: Option<&[core::ops::Range<usize>]>,
+        line_index: usize,
+    ) -> bool {
+        recomposed_lines.is_some_and(|ranges| {
+            while ranges
+                .get(self.recomposed_line_index)
+                .is_some_and(|range| range.end <= line_index)
+            {
+                self.recomposed_line_index += 1;
+            }
+            ranges
+                .get(self.recomposed_line_index)
+                .is_none_or(|range| !range.contains(&line_index))
+        })
+    }
 }
 
 struct RetainedFlowLineCursor<'a> {
