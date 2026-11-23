@@ -341,6 +341,19 @@ impl<'a> MeasurementSource<'a> {
         }
     }
 
+    /// No drawable cluster (empty, or hard breaks alone): no glyph any query could position.
+    fn nothing_to_draw(self, cluster_count: usize) -> bool {
+        match self {
+            MeasurementSource::General { clusters, .. } => (0..cluster_count).all(|cluster| {
+                clusters
+                    .flags
+                    .get(cluster)
+                    .is_some_and(|flags| flags & CLUSTER_HARD_BREAK != 0)
+            }),
+            MeasurementSource::Inline { .. } => cluster_count == 0,
+        }
+    }
+
     fn drop_cap(self, flow_thread_id: u32) -> Option<&'a FlowDropCap> {
         match self {
             Self::General { flow, .. } => flow
@@ -578,17 +591,7 @@ fn append_measurement_from_occurrences_source(
     let line_ink_lanes = line_ink.filter(|(ink, missing)| {
         !include_glyphs && ink.len() == source.line_len() && missing.len() == source.line_len()
     });
-    let mut line_count = 0_usize;
-    let mut fragment_cursor = source.fragment_cursor()?;
-    for (_, line) in source.lines() {
-        let fragments = fragment_cursor.take(line)?;
-        if line.flow_thread_id == constraint.flow_thread_id && !fragments.is_empty() {
-            line_count = line_count
-                .checked_add(1)
-                .ok_or(EngineError::ResultTooLarge)?;
-        }
-    }
-    fragment_cursor.require_complete()?;
+    let line_count = count_measured_lines(source, constraint)?;
     let reserve = line_count
         .checked_add(1)
         .and_then(|count| count.checked_add(if include_glyphs { positioned_count } else { 0 }))
@@ -609,17 +612,25 @@ fn append_measurement_from_occurrences_source(
         .and_then(|value| value.checked_add(line_count))
         .ok_or(EngineError::ResultTooLarge)?;
     target.resize(glyph_record_start, SemanticRecord::default());
-    let mut glyph_cursor = 0_usize;
-    let mut missing_glyph_count = 0_usize;
-    let mut content_width = 0.0_f64;
-    let mut content_height = 0.0_f64;
-    let mut paragraph_ink = InkBounds::default();
-    let mut first_ascent = 0.0_f64;
-    let mut line_count_emitted = 0_usize;
-    let mut consumed_clusters =
-        usize::try_from(constraint.resume_cluster).map_err(|_| EngineError::InvalidRequest)?;
+    let mut totals = MeasurementTotals {
+        glyph_cursor: 0,
+        missing_glyph_count: 0,
+        content_width: 0.0,
+        content_height: 0.0,
+        paragraph_ink: InkBounds::default(),
+        first_ascent: 0.0,
+        line_count_emitted: 0,
+        consumed_clusters: usize::try_from(constraint.resume_cluster)
+            .map_err(|_| EngineError::InvalidRequest)?,
+    };
+    let mut glyphs = GlyphMeasurement {
+        paragraph_id,
+        next_glyph,
+        placement_translations,
+        include_glyphs,
+    };
 
-    fragment_cursor = source.fragment_cursor()?;
+    let mut fragment_cursor = source.fragment_cursor()?;
     let mut lines = source.lines().peekable();
     let mut previous_flow_thread_id = None;
     while let Some((index, line)) = lines.next() {
@@ -638,57 +649,22 @@ fn append_measurement_from_occurrences_source(
             usize::try_from(line_glyph_start).map_err(|_| EngineError::InvalidRequest)?;
         let span_count =
             usize::try_from(line_glyph_count).map_err(|_| EngineError::InvalidRequest)?;
-        if span_start != glyph_cursor {
+        if span_start != totals.glyph_cursor {
             return Err(EngineError::InvalidRequest);
         }
-        let mut line_ink = InkBounds::default();
-        if let Some((ink, missing)) = line_ink_lanes {
-            missing_glyph_count += missing[index] as usize;
-            if line.flow_thread_id == constraint.flow_thread_id && !fragments.is_empty() {
-                line_ink = InkBounds::from_line(ink[index]);
+        let measured_line =
+            line.flow_thread_id == constraint.flow_thread_id && !fragments.is_empty();
+        let line_ink = if let Some((ink, missing)) = line_ink_lanes {
+            totals.missing_glyph_count += missing[index] as usize;
+            totals.glyph_cursor += span_count;
+            if measured_line {
+                InkBounds::from_line(ink[index])
+            } else {
+                InkBounds::default()
             }
-            glyph_cursor += span_count;
-        }
-        for _ in 0..if line_ink_lanes.is_some() {
-            0
         } else {
-            span_count
-        } {
-            let glyph = next_glyph()?;
-            missing_glyph_count += usize::from(glyph.glyph_id == 0);
-            let translation = *placement_translations
-                .get(
-                    usize::try_from(glyph.placement_segment)
-                        .map_err(|_| EngineError::InvalidRequest)?,
-                )
-                .ok_or(EngineError::InvalidRequest)?;
-            if line.flow_thread_id == constraint.flow_thread_id && !fragments.is_empty() {
-                line_ink.join_glyph(glyph, translation)?;
-            }
-            if include_glyphs {
-                let glyph = glyph.placed(translation)?;
-                target.push(SemanticRecord {
-                    id: glyph.stable_id,
-                    kind: SEMANTIC_GLYPH,
-                    flags: glyph.flags,
-                    parent_id: paragraph_id,
-                    text_start: glyph.cluster,
-                    text_end: glyph.font_handle,
-                    item_start: u32::from(glyph.glyph_id),
-                    item_count: u32::from(glyph.bidi_level),
-                    inline_start: glyph.inline_origin,
-                    block_start: glyph.block_origin,
-                    inline_extent: glyph.font_size,
-                    inline_advance: glyph.inline_advance,
-                    ink_inline_start: glyph.ink_inline_start,
-                    ink_block_start: glyph.ink_block_start,
-                    ink_inline_extent: glyph.ink_inline_extent,
-                    ink_block_extent: glyph.ink_block_extent,
-                    ..SemanticRecord::default()
-                });
-            }
-            glyph_cursor += 1;
-        }
+            glyphs.measure_line(target, span_count, measured_line, &mut totals)?
+        };
         if line.flow_thread_id != constraint.flow_thread_id {
             continue;
         }
@@ -709,15 +685,18 @@ fn append_measurement_from_occurrences_source(
                 constraint,
             )?
         };
-        content_width = content_width.max(advance);
-        content_height = content_height.max(line.block_start + line.height);
+        totals.content_width = totals.content_width.max(advance);
+        totals.content_height = totals.content_height.max(line.block_start + line.height);
         let drop_cap = first_thread_line
             .then(|| source.drop_cap(line.flow_thread_id))
             .flatten();
         if let Some(cap) = drop_cap {
-            content_height = content_height.max(cap.line.block_start + cap.line.height);
+            totals.content_height = totals
+                .content_height
+                .max(cap.line.block_start + cap.line.height);
         }
-        consumed_clusters = consumed_clusters
+        totals.consumed_clusters = totals
+            .consumed_clusters
             .max(usize::try_from(last.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?);
         // Every measurement carries its lines' glyph spans, based at the record index where glyph
         // records would begin, so a view without glyph records reports the same spans as one with them.
@@ -725,14 +704,13 @@ fn append_measurement_from_occurrences_source(
             .map_err(|_| EngineError::ResultTooLarge)?
             .checked_add(line_glyph_start)
             .ok_or(EngineError::ResultTooLarge)?;
-        let item_count = line_glyph_count;
-        target[summary_index + 1 + line_count_emitted] = semantic_line_record(
+        target[summary_index + 1 + totals.line_count_emitted] = semantic_line_record(
             paragraph_id,
             index,
             drop_cap.map_or(first.line.text_start, |cap| cap.fragment.line.text_start),
             last.line.text_end,
             item_start,
-            item_count,
+            line_glyph_count,
             line,
             drop_cap,
             advance,
@@ -740,95 +718,218 @@ fn append_measurement_from_occurrences_source(
         )?;
         // The paragraph's ascent is the distance from its box top to the FIRST baseline, which is
         // the first emitted line's absolute baseline, not that line's own ascent.
-        if line_count_emitted == 0 {
-            first_ascent = line.block_start + line.baseline;
+        if totals.line_count_emitted == 0 {
+            totals.first_ascent = line.block_start + line.baseline;
         }
-        line_count_emitted += 1;
-        paragraph_ink.join(line_ink);
+        totals.line_count_emitted += 1;
+        totals.paragraph_ink.join(line_ink);
     }
     fragment_cursor.require_complete()?;
 
     let expected_record_count = glyph_record_start
         .checked_add(if include_glyphs { positioned_count } else { 0 })
         .ok_or(EngineError::ResultTooLarge)?;
-    if glyph_cursor != positioned_count || target.len() != expected_record_count {
+    if totals.glyph_cursor != positioned_count || target.len() != expected_record_count {
         return Err(EngineError::InvalidRequest);
     }
 
     // A composed paragraph carries its trailing space-after in every block
     // measurement, so consumers stack paragraphs from the reported extents.
     if line_count > 0 {
-        content_height += f64::from(constraint.space_after);
+        totals.content_height += f64::from(constraint.space_after);
     }
-    let intrinsic = intrinsic_extents.unwrap_or(LayoutExtents {
+    // Ink is authoritative exactly when this query positioned the glyphs it measured. A paragraph
+    // that positioned zero glyphs still reports authoritatively — its ink box is genuinely empty —
+    // so the bit tracks whether positioning ran, not whether any ink was found. A paragraph with no
+    // drawable cluster (empty, or hard breaks alone) has no glyph any query could position: its
+    // ink is known to be empty under every view.
+    let ink_measured = !glyphs_deferred
+        && (positioned_count != 0
+            || (empty_ink_authoritative && line_count == 0)
+            || source.nothing_to_draw(cluster_count));
+    target[summary_index] = paragraph_measurement_record(
+        constraint,
+        &totals,
+        MeasurementSummary {
+            paragraph_id,
+            text_length,
+            cluster_count,
+            line_start,
+            line_count,
+            // Totals and ink derive from the same positioned result supplied by preparation.
+            visible_glyph_count: positioned_count,
+            ink_measured,
+            glyphs_deferred,
+            intrinsic_extents,
+            intrinsics,
+        },
+    )?;
+    totals.paragraph_ink.write(&mut target[summary_index])?;
+    Ok(())
+}
+
+/// Lines of the measured thread that hold fragments; the fragment cursor must end exactly.
+fn count_measured_lines(
+    source: MeasurementSource<'_>,
+    constraint: &super::semantic_wire::FlowConstraint,
+) -> Result<usize, EngineError> {
+    let mut line_count = 0_usize;
+    let mut fragment_cursor = source.fragment_cursor()?;
+    for (_, line) in source.lines() {
+        let fragments = fragment_cursor.take(line)?;
+        if line.flow_thread_id == constraint.flow_thread_id && !fragments.is_empty() {
+            line_count = line_count
+                .checked_add(1)
+                .ok_or(EngineError::ResultTooLarge)?;
+        }
+    }
+    fragment_cursor.require_complete()?;
+    Ok(line_count)
+}
+
+/// What a measurement accumulates over its lines.
+struct MeasurementTotals {
+    glyph_cursor: usize,
+    missing_glyph_count: usize,
+    content_width: f64,
+    content_height: f64,
+    paragraph_ink: InkBounds,
+    first_ascent: f64,
+    line_count_emitted: usize,
+    consumed_clusters: usize,
+}
+
+/// The per-glyph half of a measurement: one positioned glyph at a time from the source.
+struct GlyphMeasurement<'a> {
+    paragraph_id: u32,
+    next_glyph: &'a mut dyn FnMut() -> Result<PositionedSemanticGlyph, EngineError>,
+    placement_translations: &'a [SegmentTranslation],
+    include_glyphs: bool,
+}
+
+impl GlyphMeasurement<'_> {
+    /// Reads one line's `count` glyphs, counting missing ones, joining their ink when the line
+    /// is measured, and appending a glyph record each when glyphs are included. Returns the
+    /// line's ink.
+    fn measure_line(
+        &mut self,
+        target: &mut Vec<SemanticRecord>,
+        count: usize,
+        measured_line: bool,
+        totals: &mut MeasurementTotals,
+    ) -> Result<InkBounds, EngineError> {
+        let mut line_ink = InkBounds::default();
+        for _ in 0..count {
+            let glyph = (self.next_glyph)()?;
+            totals.missing_glyph_count += usize::from(glyph.glyph_id == 0);
+            let translation = *self
+                .placement_translations
+                .get(
+                    usize::try_from(glyph.placement_segment)
+                        .map_err(|_| EngineError::InvalidRequest)?,
+                )
+                .ok_or(EngineError::InvalidRequest)?;
+            if measured_line {
+                line_ink.join_glyph(glyph, translation)?;
+            }
+            if self.include_glyphs {
+                target.push(glyph_record(self.paragraph_id, glyph.placed(translation)?));
+            }
+            totals.glyph_cursor += 1;
+        }
+        Ok(line_ink)
+    }
+}
+
+fn glyph_record(paragraph_id: u32, glyph: super::positioning::SemanticGlyph) -> SemanticRecord {
+    SemanticRecord {
+        id: glyph.stable_id,
+        kind: SEMANTIC_GLYPH,
+        flags: glyph.flags,
+        parent_id: paragraph_id,
+        text_start: glyph.cluster,
+        text_end: glyph.font_handle,
+        item_start: u32::from(glyph.glyph_id),
+        item_count: u32::from(glyph.bidi_level),
+        inline_start: glyph.inline_origin,
+        block_start: glyph.block_origin,
+        inline_extent: glyph.font_size,
+        inline_advance: glyph.inline_advance,
+        ink_inline_start: glyph.ink_inline_start,
+        ink_block_start: glyph.ink_block_start,
+        ink_inline_extent: glyph.ink_inline_extent,
+        ink_block_extent: glyph.ink_block_extent,
+        ..SemanticRecord::default()
+    }
+}
+
+/// The paragraph facts a measurement record states besides its accumulated totals.
+struct MeasurementSummary {
+    paragraph_id: u32,
+    text_length: usize,
+    cluster_count: usize,
+    line_start: u32,
+    line_count: usize,
+    visible_glyph_count: usize,
+    ink_measured: bool,
+    glyphs_deferred: bool,
+    intrinsic_extents: Option<LayoutExtents>,
+    intrinsics: super::cluster_state::IntrinsicWidths,
+}
+
+fn paragraph_measurement_record(
+    constraint: &super::semantic_wire::FlowConstraint,
+    totals: &MeasurementTotals,
+    summary: MeasurementSummary,
+) -> Result<SemanticRecord, EngineError> {
+    let (content_width, content_height) = (totals.content_width, totals.content_height);
+    let intrinsic = summary.intrinsic_extents.unwrap_or(LayoutExtents {
         width: content_width,
         height: content_height,
-        consumed_clusters,
+        consumed_clusters: totals.consumed_clusters,
     });
     let full_content_width = content_width.max(intrinsic.width);
     let full_content_height = content_height.max(intrinsic.height);
     let width = resolve_axis(constraint.width_mode, constraint.width, content_width)?;
     let height = resolve_axis(constraint.height_mode, constraint.height, content_height)?;
-    let overflowed = consumed_clusters < cluster_count
-        || intrinsic.consumed_clusters < cluster_count
+    let overflowed = totals.consumed_clusters < summary.cluster_count
+        || intrinsic.consumed_clusters < summary.cluster_count
         || axis_overflowed(constraint.width_mode, constraint.width, full_content_width)?
         || axis_overflowed(
             constraint.height_mode,
             constraint.height,
             full_content_height,
         )?;
-    // Totals and ink derive from the same positioned result supplied by preparation.
-    let visible_glyph_count = positioned_count;
-    // Ink is authoritative exactly when this query positioned the glyphs it measured. A paragraph
-    // that positioned zero glyphs still reports authoritatively — its ink box is genuinely empty —
-    // so the bit tracks whether positioning ran, not whether any ink was found. A paragraph with no
-    // drawable cluster (empty, or hard breaks alone) has no glyph any query could position: its
-    // ink is known to be empty under every view.
-    let nothing_to_draw = || match &source {
-        MeasurementSource::General { clusters, .. } => (0..cluster_count).all(|cluster| {
-            clusters
-                .flags
-                .get(cluster)
-                .is_some_and(|flags| flags & CLUSTER_HARD_BREAK != 0)
-        }),
-        MeasurementSource::Inline { .. } => cluster_count == 0,
-    };
-    let ink_measured = !glyphs_deferred
-        && (positioned_count != 0
-            || (empty_ink_authoritative && line_count == 0)
-            || nothing_to_draw());
-    target[summary_index] = SemanticRecord {
-        id: paragraph_id,
+    let mut flags = 0;
+    if overflowed {
+        flags |= MEASUREMENT_FLAG_OVERFLOWED;
+    }
+    if summary.ink_measured {
+        flags |= MEASUREMENT_FLAG_INK_BOUNDS;
+    }
+    if summary.glyphs_deferred {
+        flags |= MEASUREMENT_FLAG_GLYPHS_DEFERRED;
+    }
+    Ok(SemanticRecord {
+        id: summary.paragraph_id,
         kind: SEMANTIC_PARAGRAPH_MEASUREMENT,
-        flags: if overflowed {
-            MEASUREMENT_FLAG_OVERFLOWED
-        } else {
-            0
-        } | if ink_measured {
-            MEASUREMENT_FLAG_INK_BOUNDS
-        } else {
-            0
-        } | if glyphs_deferred {
-            MEASUREMENT_FLAG_GLYPHS_DEFERRED
-        } else {
-            0
-        },
-        parent_id: u32::try_from(visible_glyph_count).map_err(|_| EngineError::ResultTooLarge)?,
-        text_start: u32::try_from(missing_glyph_count).map_err(|_| EngineError::ResultTooLarge)?,
-        text_end: u32::try_from(text_length).map_err(|_| EngineError::ResultTooLarge)?,
-        item_start: line_start,
-        item_count: u32::try_from(line_count).map_err(|_| EngineError::ResultTooLarge)?,
+        flags,
+        parent_id: u32::try_from(summary.visible_glyph_count)
+            .map_err(|_| EngineError::ResultTooLarge)?,
+        text_start: u32::try_from(totals.missing_glyph_count)
+            .map_err(|_| EngineError::ResultTooLarge)?,
+        text_end: u32::try_from(summary.text_length).map_err(|_| EngineError::ResultTooLarge)?,
+        item_start: summary.line_start,
+        item_count: u32::try_from(summary.line_count).map_err(|_| EngineError::ResultTooLarge)?,
         inline_start: width,
         block_start: height,
         inline_extent: finite_nonnegative_measure_f32(full_content_width)?,
         block_extent: finite_nonnegative_measure_f32(full_content_height)?,
-        ascent: finite_nonnegative_f32(first_ascent)?,
-        min_content_width: finite_nonnegative_measure_f32(intrinsics.min_content_width)?,
-        max_content_width: finite_nonnegative_measure_f32(intrinsics.max_content_width)?,
+        ascent: finite_nonnegative_f32(totals.first_ascent)?,
+        min_content_width: finite_nonnegative_measure_f32(summary.intrinsics.min_content_width)?,
+        max_content_width: finite_nonnegative_measure_f32(summary.intrinsics.max_content_width)?,
         ..SemanticRecord::default()
-    };
-    paragraph_ink.write(&mut target[summary_index])?;
-    Ok(())
+    })
 }
 
 pub(crate) fn flow_extents(
