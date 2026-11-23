@@ -1,6 +1,7 @@
 // UAX #14 rule behavior is ported from @cto.af/linebreak 4.0.3. Its MIT license is retained in
 // LICENSES/cto-af-linebreak-MIT.txt; the implementation is specialized to retained no_std Rust storage.
 use alloc::vec::Vec;
+use core::ops::ControlFlow::{self, Break, Continue};
 
 use crate::unicode::UnicodeError;
 
@@ -11,6 +12,9 @@ mod generated {
 
 const SOT: i16 = -1;
 const EOT: i16 = -2;
+
+/// A rule decided that no break occurs here.
+const KEEP: ControlFlow<Option<LineBreak>> = Break(None);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LineBreak {
@@ -139,38 +143,62 @@ impl<'a> BreakState<'a> {
         self.next = character;
     }
 
-    #[allow(clippy::too_many_lines)]
+    /// The UAX #14 decision between `current` and `next`, in rule order; LB31
+    /// breaks everywhere no earlier rule decided.
     fn decide(&mut self) -> Option<LineBreak> {
+        match self.decide_by_rule() {
+            Break(decision) => decision,
+            Continue(()) => self.emit(false),
+        }
+    }
+
+    fn decide_by_rule(&mut self) -> ControlFlow<Option<LineBreak>> {
+        self.mandatory_breaks()?;
+        self.space_and_joiner_rules()?;
+        self.opening_and_closing_rules()?;
+        self.space_run_and_quote_rules()?;
+        self.break_before_after_rules()?;
+        self.numeric_rules()?;
+        self.script_rules()
+    }
+
+    /// LB2-LB6: text boundaries and hard line breaks.
+    fn mandatory_breaks(&mut self) -> ControlFlow<Option<LineBreak>> {
         use generated::*;
         let cur = self.current.class;
         let next = self.next.class;
-
-        // LB2-LB6.
         if cur == SOT && next != EOT {
-            return None;
+            return KEEP;
         }
         if next == EOT && (self.current.end == 0 || self.current.end != self.previous_chunk) {
-            return self.emit(true);
+            return Break(self.emit(true));
         }
         if cur == i16::from(BK) {
-            return self.emit(true);
+            return Break(self.emit(true));
         }
         if cur == i16::from(CR) {
             return if next == i16::from(LF) {
-                None
+                KEEP
             } else {
-                self.emit(true)
+                Break(self.emit(true))
             };
         }
         if matches!(cur, value if value == i16::from(LF) || value == i16::from(NL)) {
-            return self.emit(true);
+            return Break(self.emit(true));
         }
         if matches!(next, value if value == i16::from(BK) || value == i16::from(CR) || value == i16::from(LF) || value == i16::from(NL))
         {
-            return None;
+            return KEEP;
         }
+        Continue(())
+    }
 
-        // Shared state before LB7.
+    /// Shared `SP*` state, then LB7-LB10: spaces, ZW, ZWJ, and combining marks.
+    /// Ends by folding combining marks into the class they attach to (LB10).
+    fn space_and_joiner_rules(&mut self) -> ControlFlow<Option<LineBreak>> {
+        use generated::*;
+        let cur = self.current.class;
+        let next = self.next.class;
         if cur != i16::from(RI) {
             self.regional_indicators = 0;
         }
@@ -178,37 +206,37 @@ impl<'a> BreakState<'a> {
             if next != i16::from(SP) {
                 self.spaces = false;
             }
-            return None;
+            return KEEP;
         }
 
         // LB7-LB10.
         if next == i16::from(ZW) {
-            return None;
+            return KEEP;
         }
         if next == i16::from(SP)
             && !matches!(cur, value if value == i16::from(ZW) || value == i16::from(OP) || value == i16::from(QU) || value == i16::from(CL) || value == i16::from(CP) || value == i16::from(B2))
         {
-            return None;
+            return KEEP;
         }
         if self.lb8 {
             self.lb8 = false;
-            return self.emit(false);
+            return Break(self.emit(false));
         }
         if cur == i16::from(ZW) {
             if next == i16::from(SP) {
                 self.lb8 = true;
-                return None;
+                return KEEP;
             }
-            return self.emit(false);
+            return Break(self.emit(false));
         }
         if cur == i16::from(ZWJ) {
-            return None;
+            return KEEP;
         }
         if !is_one_of(cur, &[BK, CR, LF, NL, SP, ZW])
             && matches!(next, value if value == i16::from(CM) || value == i16::from(ZWJ))
         {
             self.next.ignored = true;
-            return None;
+            return KEEP;
         }
         if self.current.class == i16::from(CM) {
             self.current.class = i16::from(AL);
@@ -216,22 +244,26 @@ impl<'a> BreakState<'a> {
         if self.next.class == i16::from(CM) {
             self.next.class = i16::from(AL);
         }
+        Continue(())
+    }
+
+    /// LB11-LB15d: glue, closing punctuation, openers, and quotation marks.
+    fn opening_and_closing_rules(&mut self) -> ControlFlow<Option<LineBreak>> {
+        use generated::*;
         let cur = self.current.class;
         let next = self.next.class;
-
-        // LB11-LB15d.
         if cur == i16::from(WJ) || next == i16::from(WJ) || cur == i16::from(GL) {
-            return None;
+            return KEEP;
         }
         if next == i16::from(GL) && !is_one_of(cur, &[SP, BA, HY, HH]) {
-            return None;
+            return KEEP;
         }
         if is_one_of(next, &[CL, CP, EX, SY]) {
-            return None;
+            return KEEP;
         }
         if cur == i16::from(OP) {
             self.spaces = next == i16::from(SP);
-            return None;
+            return KEEP;
         }
         if (is_one_of(self.previous.class, &[BK, CR, LF, NL, OP, QU, GL, SP, ZW])
             || self.previous.class == SOT)
@@ -241,7 +273,7 @@ impl<'a> BreakState<'a> {
             // LB15a forbids a break after the quote and after the spaces that follow it, and
             // nothing more: the flag is set only when a space run starts here.
             self.spaces = next == i16::from(SP);
-            return None;
+            return KEEP;
         }
         if self.next.has(FINAL_PUNCTUATION) && next == i16::from(QU) {
             let after = self.after_next(1);
@@ -251,7 +283,7 @@ impl<'a> BreakState<'a> {
                     &[SP, GL, WJ, CL, QU, CP, EX, IS, SY, BK, CR, LF, NL, ZW],
                 )
             }) {
-                return None;
+                return KEEP;
             }
         }
         if cur == i16::from(SP)
@@ -260,100 +292,118 @@ impl<'a> BreakState<'a> {
                 .after_next(1)
                 .is_some_and(|after| after.class == i16::from(NU))
         {
-            return self.emit(false);
+            return Break(self.emit(false));
         }
         if next == i16::from(IS) {
-            return None;
+            return KEEP;
         }
+        Continue(())
+    }
 
-        // LB16-LB20a.
+    /// LB16-LB20a: closers and B2 across spaces, LB19 quotation marks, CB, and hyphens.
+    fn space_run_and_quote_rules(&mut self) -> ControlFlow<Option<LineBreak>> {
+        use generated::*;
+        let cur = self.current.class;
+        let next = self.next.class;
         if is_one_of(cur, &[CL, CP]) {
             if self.class_after_spaces(self.current.end) == i16::from(NS) {
                 self.spaces = next == i16::from(SP);
-                return None;
+                return KEEP;
             }
             if next == i16::from(SP) {
-                return None;
+                return KEEP;
             }
         }
         if cur == i16::from(B2) {
             if self.class_after_spaces(self.current.end) == i16::from(B2) {
                 self.spaces = next == i16::from(SP);
-                return None;
+                return KEEP;
             }
             if next == i16::from(SP) {
-                return None;
+                return KEEP;
             }
         }
         if cur == i16::from(SP) {
-            return self.emit(false);
+            return Break(self.emit(false));
         }
         if next == i16::from(QU) && !self.next.has(INITIAL_PUNCTUATION) {
-            return None;
+            return KEEP;
         }
         if cur == i16::from(QU) && !self.current.has(FINAL_PUNCTUATION) {
-            return None;
+            return KEEP;
         }
         if !self.current.has(EAST_ASIAN) && next == i16::from(QU) {
-            return None;
+            return KEEP;
         }
         if next == i16::from(QU)
             && self
                 .after_next(1)
                 .is_none_or(|after| !after.has(EAST_ASIAN))
         {
-            return None;
+            return KEEP;
         }
         if cur == i16::from(QU) && !self.next.has(EAST_ASIAN) {
-            return None;
+            return KEEP;
         }
         if cur == i16::from(QU) && (self.previous.class == SOT || !self.previous.has(EAST_ASIAN)) {
-            return None;
+            return KEEP;
         }
         if cur == i16::from(CB) || next == i16::from(CB) {
-            return self.emit(false);
+            return Break(self.emit(false));
         }
         if (self.previous.class == SOT
             || is_one_of(self.previous.class, &[BK, CR, LF, NL, SP, ZW, CB, GL]))
             && is_one_of(cur, &[HY, HH])
             && is_one_of(next, &[AL, HL])
         {
-            return None;
+            return KEEP;
         }
+        Continue(())
+    }
 
-        // LB21-LB24.
+    /// LB21-LB24: BA/BB/HY/NS, Hebrew, inseparables, and letters with numbers or affixes.
+    fn break_before_after_rules(&mut self) -> ControlFlow<Option<LineBreak>> {
+        use generated::*;
+        let cur = self.current.class;
+        let next = self.next.class;
         if cur == i16::from(BB) || is_one_of(next, &[BA, HH, HY, NS]) {
-            return None;
+            return KEEP;
         }
         if self.previous.class == i16::from(HL)
             && is_one_of(cur, &[HY, HH])
             && next != i16::from(HL)
         {
-            return None;
+            return KEEP;
         }
         if cur == i16::from(SY) && next == i16::from(HL) {
-            return None;
+            return KEEP;
         }
         if next == i16::from(IN) {
-            return None;
+            return KEEP;
         }
         if (is_one_of(cur, &[AL, HL]) && next == i16::from(NU))
             || (cur == i16::from(NU) && is_one_of(next, &[AL, HL]))
         {
-            return None;
+            return KEEP;
         }
         if (cur == i16::from(PR) && is_one_of(next, &[ID, EB, EM]))
             || (next == i16::from(PO) && is_one_of(cur, &[ID, EB, EM]))
         {
-            return None;
+            return KEEP;
         }
         if (is_one_of(cur, &[PR, PO]) && is_one_of(next, &[AL, HL]))
             || (is_one_of(cur, &[AL, HL]) && is_one_of(next, &[PR, PO]))
         {
-            return None;
+            return KEEP;
         }
+        Continue(())
+    }
 
-        // LB25.
+    /// LB25: numeric expressions.
+    fn numeric_rules(&mut self) -> ControlFlow<Option<LineBreak>> {
+        use generated::*;
+        let cur = self.current.class;
+        let next = self.next.class;
         if is_one_of(next, &[PO, PR, NU]) {
             let before = if is_one_of(next, &[PO, PR]) && is_one_of(cur, &[CL, CP]) {
                 self.previous.end
@@ -361,7 +411,7 @@ impl<'a> BreakState<'a> {
                 self.current.end
             };
             if self.numeric_prefix_before(before) {
-                return None;
+                return KEEP;
             }
         }
         if is_one_of(cur, &[PO, PR]) {
@@ -373,30 +423,36 @@ impl<'a> BreakState<'a> {
                                 .after_next(2)
                                 .is_some_and(|value| value.class == i16::from(NU))))
                 {
-                    return None;
+                    return KEEP;
                 }
             } else if next == i16::from(NU) {
-                return None;
+                return KEEP;
             }
         }
         if is_one_of(cur, &[HY, IS]) && next == i16::from(NU) {
-            return None;
+            return KEEP;
         }
+        Continue(())
+    }
 
-        // LB26-LB30b.
+    /// LB26-LB30b: Hangul, Aksara, letters with openers and closers, regional indicators, and emoji modifiers.
+    fn script_rules(&mut self) -> ControlFlow<Option<LineBreak>> {
+        use generated::*;
+        let cur = self.current.class;
+        let next = self.next.class;
         if (cur == i16::from(JL) && is_one_of(next, &[JL, JV, H2, H3]))
             || (is_one_of(cur, &[JV, H2]) && is_one_of(next, &[JV, JT]))
             || (is_one_of(cur, &[JT, H3]) && next == i16::from(JT))
         {
-            return None;
+            return KEEP;
         }
         if (is_one_of(cur, &[JL, JV, JT, H2, H3]) && next == i16::from(PO))
             || (cur == i16::from(PR) && is_one_of(next, &[JL, JV, JT, H2, H3]))
         {
-            return None;
+            return KEEP;
         }
         if is_one_of(cur, &[AL, HL]) && is_one_of(next, &[AL, HL]) {
-            return None;
+            return KEEP;
         }
         let dotted_circle = 0x25cc;
         let current_ak = is_one_of(cur, &[AK, AS]) || self.current.code_point == dotted_circle;
@@ -414,34 +470,32 @@ impl<'a> BreakState<'a> {
                     .after_next(1)
                     .is_some_and(|after| after.class == i16::from(VF)))
         {
-            return None;
+            return KEEP;
         }
         if cur == i16::from(IS) && is_one_of(next, &[AL, HL]) {
-            return None;
+            return KEEP;
         }
         if is_one_of(cur, &[AL, HL, NU]) && next == i16::from(OP) && !self.next.has(EAST_ASIAN) {
-            return None;
+            return KEEP;
         }
         if cur == i16::from(CP) && !self.current.has(EAST_ASIAN) && is_one_of(next, &[AL, HL, NU]) {
-            return None;
+            return KEEP;
         }
         if cur == i16::from(RI) && next == i16::from(RI) {
             self.regional_indicators += 1;
             if !self.regional_indicators.is_multiple_of(2) {
-                return None;
+                return KEEP;
             }
         } else if cur != i16::from(RI) {
             self.regional_indicators = 0;
         }
         if cur == i16::from(EB) && next == i16::from(EM) {
-            return None;
+            return KEEP;
         }
         if next == i16::from(EM) && self.current.has(UNASSIGNED_EXTENDED_PICTOGRAPHIC) {
-            return None;
+            return KEEP;
         }
-
-        // LB31.
-        self.emit(false)
+        Continue(())
     }
 
     fn emit(&mut self, required: bool) -> Option<LineBreak> {
