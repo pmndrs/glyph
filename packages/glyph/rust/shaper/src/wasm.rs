@@ -1677,6 +1677,9 @@ fn detached_plan_error(error: RenderPlanCompilerError) -> EngineError {
     }
 }
 
+/// Every rejection funnels through here; it is off the success path of every export.
+#[cold]
+#[inline(never)]
 fn publish_attributed_failure(
     state: &mut WasmState,
     root_id: u32,
