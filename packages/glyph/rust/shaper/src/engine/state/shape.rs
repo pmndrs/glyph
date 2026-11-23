@@ -29,22 +29,7 @@ impl ParagraphState {
         font_bindings: &[RegisteredFontBinding],
     ) -> Result<(), EngineError> {
         self.discard_shape_candidate();
-        // Metric-only styles must refresh the retained run values consumed by cluster aggregation, but the underlying
-        // HarfRust result remains valid. Keeping those two invalidations distinct avoids reshaping on size, tracking,
-        // word-spacing, line-height, or baseline changes while still rebuilding advances from the new run styles.
-        // One exception: a metric change can MERGE adjacent runs whose layout styles became identical, and the
-        // retained shaped runs then index a run list that no longer exists — the shape must re-run whenever the
-        // rebuilt run list breaks positional topology with the committed one.
-        if !self.text.is_prepared()
-            && !self.style_invalidation.shaping
-            && !self.bidi.is_prepared()
-            && self.committed_inline().is_none()
-            && (!self.shaping_runs.is_prepared()
-                || shaping_run_topology_stable(
-                    self.shaping_runs.committed().runs(),
-                    self.shaping_runs.pending().runs(),
-                ))
-        {
+        if self.shape_still_valid() {
             return Ok(());
         }
         // Empty text has no shape, however an edit emptied it. Its one shaping run is empty,
@@ -65,172 +50,44 @@ impl ParagraphState {
         let text = self.text.active().units.as_slice();
         let styles = &self.styles.active().arena;
         let runs = self.shaping_runs.active().runs();
-        let mut max_stack_depth = 0usize;
-        for (index, run) in runs.iter().copied().enumerate() {
-            let stack = find_font_stack(font_stacks, run.style.font_stack_handle)?;
-            let binding_handle = *stack.fonts.first().ok_or(EngineError::FontStackMissing)?;
-            let font_handle = find_font_binding(font_bindings, binding_handle)?.shaping_handle;
-            max_stack_depth = max_stack_depth.max(stack.fonts.len());
-            push_fallback_span(
-                &mut self.pending_fallback_spans,
-                FallbackSpan {
-                    source_run: u32::try_from(index).map_err(|_| EngineError::ResultTooLarge)?,
-                    text_start: run.text_start,
-                    text_end: run.text_end,
-                    font_index: 0,
-                    binding_handle,
-                    font_handle,
-                },
-            )?;
-        }
+        let max_stack_depth = seed_fallback_spans(
+            &mut self.pending_fallback_spans,
+            runs,
+            font_stacks,
+            font_bindings,
+        )?;
+        // Each pass shapes every span with its current font, then hands each missing cluster
+        // to the next font of its stack; a pass that hands nothing on is the shape.
         for _ in 0..max_stack_depth.max(1) {
-            self.shape.pending_mut().clear();
-            for span in self.pending_fallback_spans.iter().copied() {
-                let source_index =
-                    usize::try_from(span.source_run).map_err(|_| EngineError::InvalidRequest)?;
-                let run = *runs.get(source_index).ok_or(EngineError::InvalidRequest)?;
-                let output = self.shape.pending_mut();
-                #[cfg(test)]
-                crate::engine::work_attribution::record(|work| {
-                    work.main_full_run_shape_calls += 1;
-                    work.main_full_run_shape_utf16_units +=
-                        span.text_end.saturating_sub(span.text_start) as usize;
-                });
-                shaper
-                    .with_shaped_run(
-                        span.font_handle,
-                        text,
-                        ShapeRunRef {
-                            text_start: span.text_start,
-                            text_end: span.text_end,
-                            script: run.script,
-                            language: styles.resolved_language(run.style),
-                            features: styles.resolved_features(run.style),
-                            direction: run.direction,
-                            cluster_level: 0,
-                            flags: 0x40,
-                        },
-                        |shaped| {
-                            output.append(
-                                source_index,
-                                span.font_handle,
-                                span.binding_handle,
-                                span.text_start,
-                                span.text_end,
-                                shaped,
-                            )
-                        },
-                    )
-                    .map_err(shaper_error)?;
-            }
+            shape_fallback_spans(
+                shaper,
+                self.shape.pending_mut(),
+                &self.pending_fallback_spans,
+                text,
+                styles,
+                runs,
+            )?;
             collect_cluster_records(
                 self.shape.pending_mut(),
                 &mut self.fallback_cluster_scratch,
                 &mut self.sort_pair_scratch,
             )?;
             self.fallback_span_scratch.clear();
-            let mut changed = false;
-            let mut cluster_index = 0usize;
-            for span in self.pending_fallback_spans.iter().copied() {
-                while self
-                    .fallback_cluster_scratch
-                    .get(cluster_index)
-                    .is_some_and(|record| {
-                        record.source_run < span.source_run
-                            || (record.source_run == span.source_run
-                                && record.cluster < span.text_start)
-                    })
-                {
-                    cluster_index += 1;
-                }
-                let stack_handle = runs
-                    .get(span.source_run as usize)
-                    .ok_or(EngineError::InvalidRequest)?
-                    .style
-                    .font_stack_handle;
-                let stack = find_font_stack(font_stacks, stack_handle)?;
-                let next_font_index = span.font_index.checked_add(1);
-                let next_binding =
-                    next_font_index.and_then(|index| stack.fonts.get(usize::from(index)).copied());
-                let mut cursor = span.text_start;
-                let mut record_index = cluster_index;
-                while let Some(record) = self.fallback_cluster_scratch.get(record_index).copied() {
-                    if record.source_run != span.source_run || record.cluster >= span.text_end {
-                        break;
-                    }
-                    if record.missing
-                        && let (Some(font_index), Some(binding_handle)) =
-                            (next_font_index, next_binding)
-                    {
-                        let font_handle =
-                            find_font_binding(font_bindings, binding_handle)?.shaping_handle;
-                        let cluster_start = record.cluster.max(cursor);
-                        let cluster_end = self
-                            .fallback_cluster_scratch
-                            .get(record_index + 1)
-                            .filter(|next| next.source_run == span.source_run)
-                            .map_or_else(
-                                || {
-                                    runs.get(span.source_run as usize)
-                                        .map_or(span.text_end, |run| run.text_end)
-                                },
-                                |next| next.cluster,
-                            )
-                            .min(span.text_end);
-                        if cursor < cluster_start {
-                            push_fallback_span(
-                                &mut self.fallback_span_scratch,
-                                FallbackSpan {
-                                    text_start: cursor,
-                                    text_end: cluster_start,
-                                    ..span
-                                },
-                            )?;
-                        }
-                        if cluster_start < cluster_end {
-                            push_fallback_span(
-                                &mut self.fallback_span_scratch,
-                                FallbackSpan {
-                                    text_start: cluster_start,
-                                    text_end: cluster_end,
-                                    font_index,
-                                    binding_handle,
-                                    font_handle,
-                                    ..span
-                                },
-                            )?;
-                            cursor = cluster_end;
-                            changed = true;
-                        }
-                    }
-                    record_index += 1;
-                }
-                if cursor < span.text_end || span.text_start == span.text_end {
-                    push_fallback_span(
-                        &mut self.fallback_span_scratch,
-                        FallbackSpan {
-                            text_start: cursor,
-                            ..span
-                        },
-                    )?;
-                }
-            }
+            let changed = split_missing_clusters(
+                &self.pending_fallback_spans,
+                &self.fallback_cluster_scratch,
+                runs,
+                font_stacks,
+                font_bindings,
+                &mut self.fallback_span_scratch,
+            )?;
             if !changed {
                 // The raw owner about to be accepted was produced with this
                 // registry's exact current font instance. A later dispose and
                 // same-handle registration cannot reuse this serial.
-                self.pending_shape_font_instance = if runs.len() == 1
-                    && self.shape.pending().runs.len() == 1
-                    && self.pending_fallback_spans.len() == 1
-                    && self.pending_fallback_spans[0].source_run == 0
-                    && self.pending_fallback_spans[0].text_start == 0
-                    && self.pending_fallback_spans[0].text_end == runs[0].text_end
-                    && self.pending_fallback_spans[0].font_index == 0
-                {
-                    shaper.font_instance(self.pending_fallback_spans[0].font_handle)
-                } else {
-                    None
-                };
+                self.pending_shape_font_instance =
+                    whole_run_font_handle(runs, self.shape.pending(), &self.pending_fallback_spans)
+                        .and_then(|handle| shaper.font_instance(handle));
                 self.shape.mark_prepared();
                 return Ok(());
             }
@@ -240,6 +97,26 @@ impl ParagraphState {
             );
         }
         Err(EngineError::InvalidRequest)
+    }
+
+    /// Whether the committed shape still holds for the pending stages.
+    ///
+    /// Metric-only styles must refresh the retained run values consumed by cluster aggregation, but the underlying
+    /// HarfRust result remains valid. Keeping those two invalidations distinct avoids reshaping on size, tracking,
+    /// word-spacing, line-height, or baseline changes while still rebuilding advances from the new run styles.
+    /// One exception: a metric change can MERGE adjacent runs whose layout styles became identical, and the
+    /// retained shaped runs then index a run list that no longer exists — the shape must re-run whenever the
+    /// rebuilt run list breaks positional topology with the committed one.
+    fn shape_still_valid(&self) -> bool {
+        !self.text.is_prepared()
+            && !self.style_invalidation.shaping
+            && !self.bidi.is_prepared()
+            && self.committed_inline().is_none()
+            && (!self.shaping_runs.is_prepared()
+                || shaping_run_topology_stable(
+                    self.shaping_runs.committed().runs(),
+                    self.shaping_runs.pending().runs(),
+                ))
     }
 
     pub(super) fn try_prepare_incremental_shape(
@@ -814,4 +691,213 @@ pub(super) fn push_fallback_span(
         .map_err(|_| EngineError::ResultTooLarge)?;
     spans.push(span);
     Ok(())
+}
+
+/// One span per shaping run, in the first font of its stack. Returns the deepest stack.
+fn seed_fallback_spans(
+    spans: &mut Vec<FallbackSpan>,
+    runs: &[ShapingRun],
+    font_stacks: &[RegisteredFontStack],
+    font_bindings: &[RegisteredFontBinding],
+) -> Result<usize, EngineError> {
+    let mut max_stack_depth = 0usize;
+    for (index, run) in runs.iter().copied().enumerate() {
+        let stack = find_font_stack(font_stacks, run.style.font_stack_handle)?;
+        let binding_handle = *stack.fonts.first().ok_or(EngineError::FontStackMissing)?;
+        let font_handle = find_font_binding(font_bindings, binding_handle)?.shaping_handle;
+        max_stack_depth = max_stack_depth.max(stack.fonts.len());
+        push_fallback_span(
+            spans,
+            FallbackSpan {
+                source_run: u32::try_from(index).map_err(|_| EngineError::ResultTooLarge)?,
+                text_start: run.text_start,
+                text_end: run.text_end,
+                font_index: 0,
+                binding_handle,
+                font_handle,
+            },
+        )?;
+    }
+    Ok(max_stack_depth)
+}
+
+/// Shapes every span with its font into a cleared `output`.
+fn shape_fallback_spans(
+    shaper: &mut ShaperRegistry,
+    output: &mut ShapeArena,
+    spans: &[FallbackSpan],
+    text: &[u16],
+    styles: &crate::engine::style_state::StyleArena,
+    runs: &[ShapingRun],
+) -> Result<(), EngineError> {
+    output.clear();
+    for span in spans.iter().copied() {
+        let source_index =
+            usize::try_from(span.source_run).map_err(|_| EngineError::InvalidRequest)?;
+        let run = *runs.get(source_index).ok_or(EngineError::InvalidRequest)?;
+        #[cfg(test)]
+        crate::engine::work_attribution::record(|work| {
+            work.main_full_run_shape_calls += 1;
+            work.main_full_run_shape_utf16_units +=
+                span.text_end.saturating_sub(span.text_start) as usize;
+        });
+        shaper
+            .with_shaped_run(
+                span.font_handle,
+                text,
+                ShapeRunRef {
+                    text_start: span.text_start,
+                    text_end: span.text_end,
+                    script: run.script,
+                    language: styles.resolved_language(run.style),
+                    features: styles.resolved_features(run.style),
+                    direction: run.direction,
+                    cluster_level: 0,
+                    flags: 0x40,
+                },
+                |shaped| {
+                    output.append(
+                        source_index,
+                        span.font_handle,
+                        span.binding_handle,
+                        span.text_start,
+                        span.text_end,
+                        shaped,
+                    )
+                },
+            )
+            .map_err(shaper_error)?;
+    }
+    Ok(())
+}
+
+/// Splits every span at its missing clusters, handing those to the next font of the span's
+/// stack, into `next`. Returns whether any cluster moved to a next font.
+fn split_missing_clusters(
+    spans: &[FallbackSpan],
+    records: &[ClusterRecord],
+    runs: &[ShapingRun],
+    font_stacks: &[RegisteredFontStack],
+    font_bindings: &[RegisteredFontBinding],
+    next: &mut Vec<FallbackSpan>,
+) -> Result<bool, EngineError> {
+    let mut changed = false;
+    let mut cluster_index = 0usize;
+    for span in spans.iter().copied() {
+        while records.get(cluster_index).is_some_and(|record| {
+            record.source_run < span.source_run
+                || (record.source_run == span.source_run && record.cluster < span.text_start)
+        }) {
+            cluster_index += 1;
+        }
+        changed |= split_span_at_missing_clusters(
+            span,
+            &records[cluster_index..],
+            runs,
+            font_stacks,
+            font_bindings,
+            next,
+        )?;
+    }
+    Ok(changed)
+}
+
+/// Splits one span at the missing clusters among `records` (which start at the span's first
+/// cluster). Returns whether any cluster moved to the next font.
+fn split_span_at_missing_clusters(
+    span: FallbackSpan,
+    records: &[ClusterRecord],
+    runs: &[ShapingRun],
+    font_stacks: &[RegisteredFontStack],
+    font_bindings: &[RegisteredFontBinding],
+    next: &mut Vec<FallbackSpan>,
+) -> Result<bool, EngineError> {
+    let stack_handle = runs
+        .get(span.source_run as usize)
+        .ok_or(EngineError::InvalidRequest)?
+        .style
+        .font_stack_handle;
+    let stack = find_font_stack(font_stacks, stack_handle)?;
+    let next_font_index = span.font_index.checked_add(1);
+    let next_binding =
+        next_font_index.and_then(|index| stack.fonts.get(usize::from(index)).copied());
+    let mut changed = false;
+    let mut cursor = span.text_start;
+    for (record_index, record) in records.iter().copied().enumerate() {
+        if record.source_run != span.source_run || record.cluster >= span.text_end {
+            break;
+        }
+        let (true, Some(font_index), Some(binding_handle)) =
+            (record.missing, next_font_index, next_binding)
+        else {
+            continue;
+        };
+        let font_handle = find_font_binding(font_bindings, binding_handle)?.shaping_handle;
+        let cluster_start = record.cluster.max(cursor);
+        let cluster_end = records
+            .get(record_index + 1)
+            .filter(|next| next.source_run == span.source_run)
+            .map_or_else(
+                || {
+                    runs.get(span.source_run as usize)
+                        .map_or(span.text_end, |run| run.text_end)
+                },
+                |next| next.cluster,
+            )
+            .min(span.text_end);
+        if cursor < cluster_start {
+            push_fallback_span(
+                next,
+                FallbackSpan {
+                    text_start: cursor,
+                    text_end: cluster_start,
+                    ..span
+                },
+            )?;
+        }
+        if cluster_start < cluster_end {
+            push_fallback_span(
+                next,
+                FallbackSpan {
+                    text_start: cluster_start,
+                    text_end: cluster_end,
+                    font_index,
+                    binding_handle,
+                    font_handle,
+                    ..span
+                },
+            )?;
+            cursor = cluster_end;
+            changed = true;
+        }
+    }
+    if cursor < span.text_end || span.text_start == span.text_end {
+        push_fallback_span(
+            next,
+            FallbackSpan {
+                text_start: cursor,
+                ..span
+            },
+        )?;
+    }
+    Ok(changed)
+}
+
+/// The font of a shape that is one run shaped whole in its first font, whose instance the
+/// committed shape can then be keyed by.
+fn whole_run_font_handle(
+    runs: &[ShapingRun],
+    shape: &ShapeArena,
+    spans: &[FallbackSpan],
+) -> Option<u32> {
+    let [span] = spans else {
+        return None;
+    };
+    (runs.len() == 1
+        && shape.runs.len() == 1
+        && span.source_run == 0
+        && span.text_start == 0
+        && span.text_end == runs[0].text_end
+        && span.font_index == 0)
+        .then_some(span.font_handle)
 }
