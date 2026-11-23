@@ -24,3 +24,14 @@ Fix ([glyph concept](../packages/glyph.md)): `flow_consumed_clusters`; a TypeScr
 that carries facts when positioning is current after preparation; a text whose caller read its last summary's facts
 asks for them up front on its next read and keeps observing whether they are read; deferred summaries decode their
 lines on first read of `lines`; prior and resolved facts decode only the facts. No oracle reference moved.
+
+Evidence (machine load 3–8, paired within rounds; tip/g51 medians):
+
+- Headline harness, 6 rounds: `measure()` after a width change reading `glyphCount` 1.01 Latin, 0.91 22k, 0.95 bidi;
+  edit `:layout` 0.97–1.02 (Latin, 22k, bidi); 22k edit frames 0.97–0.99; size-only `measure()` 0.26 (bidi), 0.44
+  (22k), 0.49 (Latin), frames 0.99–1.00.
+- Labs full suite, 3 rounds: measurement after width change 0.62, measurement then publication 0.66, long unsafe-line-break
+  reflows 0.69 and 0.78; every `[setter + read]` row in batching, stress, edit and lifecycle 0.65–1.01 except
+  "10/100 labels last color-only" (1.08–1.10, already noisy in the sweep); sparse-assignment split-move 0.86 and 0.91.
+- `benchmark:headline-bidi-edit` g51 against this tip, 5 rounds: 0.97–1.01.
+- Native and wasm oracle full tier: 596 references equal, 0 unlisted divergences; nothing re-frozen.
