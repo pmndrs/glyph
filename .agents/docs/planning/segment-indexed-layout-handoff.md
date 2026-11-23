@@ -1,7 +1,7 @@
 ---
 type: Plan
 title: 'Layout refactor: handoff and remaining plans'
-description: 'Where the 0.2.0 layout refactor stands at sil-green-49, the decisions in force, the open lanes and how to finish each, the path to a release, and the work after it.'
+description: 'Where the 0.2.0 layout refactor stands at sil-green-58, the decisions in force, the open lanes and how to finish each, the path to a release, and the work after it.'
 status: draft
 generated:
   by: anthropic/claude-opus-5-5
@@ -22,41 +22,44 @@ named below.
   (`8176a24e0a3f`; draft PRs #292 → #301 → #302 → #310). It ships as **0.2.0**, a breaking release.
 - **Oracle:** 596 frozen cases, 928 differential runs (~55,700 requests) comparing incremental against cold in every
   stage and lane class, natively and in wasm. 0 unlisted divergences. `KNOWN-DIVERGENCES` may only shrink.
-- **Verification on `sil-green-50`:** clippy `-D warnings`, full native and wasm oracle (596 equal), all shaper tests, `pnpm --filter @pmndrs/glyph test`.
-  The full browser set and `pnpm check` last passed at `sil-green-44`/`-47`; run the full set (section 7) before the
-  ship PR.
-- **Core shaper wasm:** 611.0 kB gzip (1,567 kB raw) at `sil-green-50`, down from 687.7 kB at `-43`. v0.1.0 was
-  501 kB, main 541 kB. Only the core shaper's size matters; bakers are dynamically imported.
+- **Verification on `sil-green-58`:** clippy `-D warnings`, full native and wasm oracle (596 equal), all shaper
+  tests, `pnpm --filter @pmndrs/glyph test`, `pnpm check`. Run the full browser set (section 7) before the ship PR.
+- **Core shaper wasm:** 563.1 kB gzip at `sil-green-58`, down from 687.7 kB at `-43`. v0.1.0 was 501 kB, main
+  541 kB. Only the core shaper's size matters; bakers are dynamically imported.
+- **Rust quality (kimun):** C+ 76.1 at `sil-green-58`, up from D+ 65.4; `engine/state.rs` split into 25 modules.
+- **Since `-51`:** `-52` `measure()` lane (summary reads stop after flow; positioning deferred against a kept
+  predecessor; lazy glyph facts answer for the measured text); `-54` lazy-fact regressions fixed; `-55`/`-56`
+  monomorph collapse and lifecycle fixes; `-57` engine::state size pass; `-58` structural split.
 - **No PR is open for this work.** Landing is one draft PR on top of the stack, when Justin says so.
 
 ### What 0.2.0 contains
 
-| Area | State |
-| --- | --- |
-| Engine | Dense stages (column gather, cluster build with change ranges, run-local SoA geometry, positioning split, dense Unicode kernel with simd128 class stage and bidi class lanes), HarfRust forked in-repo, panic-free |
-| Edits | Every edit type reshapes only its edited runs and splices clusters and geometry (typing at end, mid-paragraph, multi-edit, right-to-left); windowed Unicode re-analysis |
-| Reflow | Width-only changes skip regathering unchanged rows, reuse line fits that still hold, skip unchanged lines and edge-record lines in positioning |
-| Preparation | Setters mark dirty; reads prepare on demand; the frame batch-prepares; `prepare()`, `onLayout`, exact first frame |
-| Error model | Paragraph refusal, `maxTextUnits`, trap gateway, `GlyphInputError`, `onError`, `<GlyphErrorBoundary>` |
-| Editing API | `caret`, `hitTest`, `move`, `boundary`, `rangeRects`, `replace(start, end, insert)`, `TextOffsetError` on Three, TypeGPU and PixiJS 3D |
-| Renderers | Three MSDF/Slug/bitmap, TypeGPU, PixiJS 3D as the `@pmndrs/glyph/pixi3d` subpath |
-| Culling | Automatic bounds for every built-in draw; custom materials culled by default with `defineTextMaterial(create, { boundsPadding, frustumCulled })`; per-text `frustumCulled = false` |
-| Materials | `position` and `paragraphPosition` safe in vertex and fragment stages (PR #311 re-implemented) |
-| Ported PRs | #317 (shared Three storage), #314 (browser import without `process`), #316 (line glyph spans), #311 |
-| Fixes | Layout faults (empty text has a line, ellipsis order, exclusion order, island placement, hung spaces), grapheme split across bidi runs, negative-spacing lone marks, empty-text ink, `compileAsync` stopping publication, codec buffer growth, scene-unbind crash |
-| Size | Language-tag resolution moved into a compact table; HarfRust `variations` and `FontInstance` compiled out; generic duplication cuts; runtime outline decoding moved into `font-baker.wasm` |
+| Area        | State                                                                                                                                                                                                                                                             |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Engine      | Dense stages (column gather, cluster build with change ranges, run-local SoA geometry, positioning split, dense Unicode kernel with simd128 class stage and bidi class lanes), HarfRust forked in-repo, panic-free                                                |
+| Edits       | Every edit type reshapes only its edited runs and splices clusters and geometry (typing at end, mid-paragraph, multi-edit, right-to-left); windowed Unicode re-analysis                                                                                           |
+| Reflow      | Width-only changes skip regathering unchanged rows, reuse line fits that still hold, skip unchanged lines and edge-record lines in positioning                                                                                                                    |
+| Preparation | Setters mark dirty; reads prepare on demand; the frame batch-prepares; `prepare()`, `onLayout`, exact first frame                                                                                                                                                 |
+| Error model | Paragraph refusal, `maxTextUnits`, trap gateway, `GlyphInputError`, `onError`, `<GlyphErrorBoundary>`                                                                                                                                                             |
+| Editing API | `caret`, `hitTest`, `move`, `boundary`, `rangeRects`, `replace(start, end, insert)`, `TextOffsetError` on Three, TypeGPU and PixiJS 3D                                                                                                                            |
+| Renderers   | Three MSDF/Slug/bitmap, TypeGPU, PixiJS 3D as the `@pmndrs/glyph/pixi3d` subpath                                                                                                                                                                                  |
+| Culling     | Automatic bounds for every built-in draw; custom materials culled by default with `defineTextMaterial(create, { boundsPadding, frustumCulled })`; per-text `frustumCulled = false`                                                                                |
+| Materials   | `position` and `paragraphPosition` safe in vertex and fragment stages (PR #311 re-implemented)                                                                                                                                                                    |
+| Ported PRs  | #317 (shared Three storage), #314 (browser import without `process`), #316 (line glyph spans), #311                                                                                                                                                               |
+| Fixes       | Layout faults (empty text has a line, ellipsis order, exclusion order, island placement, hung spaces), grapheme split across bidi runs, negative-spacing lone marks, empty-text ink, `compileAsync` stopping publication, codec buffer growth, scene-unbind crash |
+| Size        | Language-tag resolution moved into a compact table; HarfRust `variations` and `FontInstance` compiled out; generic duplication cuts; runtime outline decoding moved into `font-baker.wasm`                                                                        |
 
 ### Performance against main (2026-11-22, loaded machine; ratios, not a quiet run)
 
-| Row | 0.2.0 / main |
-| --- | --- |
-| Type at end, 2,500 words / 22k glyphs | 0.53 / 0.48 |
-| Insert, delete, paste mid, 2,500 words | 0.59–0.62 |
-| Insert, delete, paste mid, 22k | 0.42–0.43 |
-| Width sweep, 2,500 words / 22k / bidi | 0.94 / 0.94 / 0.78 |
-| Small ASCII frame | about 0.83 |
-| Mixed Arabic/Latin edits (type end / insert / delete / paste) | 0.52 / 0.77 / 0.76 / 0.81 |
-| `measure()` alone right after a width change | about 2.1 (frame total equal or faster; decision below) |
+| Row                                                           | 0.2.0 / main                                            |
+| ------------------------------------------------------------- | ------------------------------------------------------- |
+| Type at end, 2,500 words / 22k glyphs                         | 0.53 / 0.48                                             |
+| Insert, delete, paste mid, 2,500 words                        | 0.59–0.62                                               |
+| Insert, delete, paste mid, 22k                                | 0.42–0.43                                               |
+| Width sweep, 2,500 words / 22k / bidi                         | 0.94 / 0.94 / 0.78                                      |
+| Small ASCII frame                                             | about 0.83                                              |
+| Mixed Arabic/Latin edits (type end / insert / delete / paste) | 0.52 / 0.77 / 0.76 / 0.81                               |
+| `measure()` alone right after a width change                  | about 2.1 (frame total equal or faster; decision below) |
 
 Not yet re-measured with the typing fix and upload narrowing (section 3), which take type-at-end to about 4.67 ms and
 its upload from 695 kB to 1.7 kB per keystroke.
@@ -84,67 +87,52 @@ its upload from 695 kB to 1.7 kB per keystroke.
 
 ## 3. Open lanes at handoff
 
-None. Every lane is merged into `sil-green-51` and its branch deleted. `sil-green-51` passed, on its own tip: clippy
-`-D warnings`, native and wasm oracle (596 equal, 0 unlisted divergences), `cargo test --features oracle`, the
-package tests, `pnpm check`, and the pixi3d-parity, typegpu-parity, v1-bitmap, three-storage-lifetime,
-frustum-culling and material-position proofs. The mixed-bidi lane's last fix: an edit that empties a paragraph now
-takes the empty-text path before any incremental shaping path. Mixed Arabic/Latin edit rows are tracked by
-`pnpm scripts run benchmark:headline-bidi-edit`.
+| Lane             | Branch                    | Model | What                                                                                                                                                                                           |
+| ---------------- | ------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frame regression | `experiments/sil-frame8`  | Fable | Two frame rows read ~+8% once each after the structural split (22k type-end, bidi paste-middle): A/B `-57` vs `-58`, find the mechanism, fix while keeping the split                           |
+| Pre-ship bugs    | `experiments/sil-preship` | Opus  | Deferred facts after an engine restart with changed text; `compileAsync` leak for `split()` copies; culling reparent detection; the 6 oracle driver rejections; recheck the `-54` package bugs |
 
 ## 4. Decisions waiting on Justin
 
-1. **`measure()` after a width change** ([evidence and designs](measure-after-width-change-2026-11-22.md)): the
-   frame is equal or faster, but the isolated read is about 2× main because 0.2.0 positions on the read. Options:
-   - C now: build placement segments in the frame, not the read (about −0.05 ms, no re-freeze), rest rides.
-   - B + D: keep positioning's predecessor across a read, and make the summary's glyph counts lazy (reaches main).
-   - A: speculative reads like main (reverses durable reads; not recommended).
-   Recommended: C now, B + D after ship.
-2. **When to open the ship PR** (one draft PR on top of #310).
+1. **`TextFrameError`:** public, never thrown. Wire it up (`/three` re-raises engine rejections as it) or remove it.
+2. **`TypeGpuResource.bind`:** optional in the type, but indexed spans throw "missing its Text transform" without it.
+   Make it required in the type, or validate with a clear error.
+3. **When to open the ship PR** (one draft PR on top of #310).
 
 ## 5. Path to release
 
 1. Land the open lanes (section 3), each re-verified on the integration tree.
-2. **Rust cleanup pass** from the [kimun audit](code-quality-audit-2026-11-22.md): the 5 new or grown Rust functions
-   (`position_fragment`, `reposition_retained_line`, `build_lines`, `position_segment`,
-   `validate_style_topology_for_inputs`), the 2 new duplicate groups, then `screen_font`, `compile_draw_spans` and
-   line-break `decide`. No behaviour change, A/B any hot loop. Held until the lanes above land (Justin's call).
-3. **Docs** (S4): bring `api-summary-for-review.md` and `migration-from-0.1.0.md` in line with everything in section
-   1 (pixi3d subpath, culling options, `position`/`paragraphPosition`, editing on PixiJS 3D, empty-text lines,
-   ellipsis direction, `TextFrameError` below); update `.agents/docs/packages/glyph.md`; run `docs:attest`; public
-   docs for the editing methods with one worked editable-field example.
+2. Apply Justin's answers to section 4 items 1–2.
+3. **Public docs** for the editing methods with one worked editable-field example (the API summary, migration note
+   and `glyph.md` were reconciled at `-51`; recheck them after step 2).
 4. **Quiet-machine comparison** (S5): all lanes paused; v0.1.0, main (`/Volumes/Depot/Developer/glyph-baseline-main`),
    the integration tip and ultra-text (`/Volumes/Depot/Developer/glyph-competitor-bench`), interleaved, with the
    headline harness (`/Volumes/Depot/Developer/glyph-baselines-2026-11-22/profile-harnesses/browser/headline.js`)
    plus the full suite. Recheck the noisy rows: Latin 15k layout read after the outline move (+3–5%), Latin 15k
-   insert/paste frame totals after the fork cuts (+10–20% total, layout equal).
+   insert/paste frame totals after the fork cuts (+10–20% total, layout equal), and whatever the frame-regression
+   lane leaves.
 5. **Ship PR** (S6): one draft PR on #310 via the `gh-stack` skill; description lists the superseded open PRs
    (#317, #314, #316, #311, #240), the migration note, the comparison table and the riding rows.
 
 ### Known bugs and gaps at handoff
 
-- `TextFrameError` is public but never thrown (`textFrameError` has no caller), although `glyph.md` says `/three`
-  re-raises engine rejections as it. Decide: wire it up or remove it before ship.
-- A draw compiled with `compileAsync` and never rendered, outside the root (a `split()` copy), registers no renderer
-  and can leak its storage on Three r185/r186. The `compileAsync` fix depends on Three's private
-  `_compilationPromises`; a test fails loudly if Three renames it.
-- Reparenting a deeper ancestor of a detached `Glyphs` into an opted-out `TextGroup` is not detected by culling.
 - `typegpu@0.12.5` reads `process.env` unguarded, so the TypeGPU entries need a bundler or a `process` shim as
   unbundled browser ESM (documented in the migration note).
-- The oracle driver plans column layouts no host can send (6 rejections); see P9.
+- The rest are assigned to the pre-ship lane (section 3).
 
 ## 6. After ship
 
-| Unit | What | Plan |
-| --- | --- | --- |
-| P1. `measure()` B + D | Section 4 | Keep positioning's predecessor across a read; lazy summary glyph counts |
-| P2. Discard-free publication failure | Rust discards the root when publication cannot be delivered | Per-stage rollback across planner and gather, a retry entry point, a new oracle route (fixes lane analysis in the build log) |
-| P3. `retained_rope` type-erased core | ~31 kB raw of duplicate generic copies across five node types | One shared tree core, per-type leaf copy and drop; A/B the edit rows |
-| P4. More core size | See the 2026-11-22 section of [wasm-size-reduction.md](wasm-size-reduction.md) | Remaining duplicate sorts; data-driven syllabic shaper interpreter priced there |
-| P5. Content-anchored blocks | Blocks on a 64-cluster grid shift after an insert | Only if edit profiles still show block shifts after the splice work |
-| P6. Shaping fast path widening | [experiments-shaping](experiments-shaping-2026-11-22.md): `UNSAFE_TO_CONCAT` flags block text fonts | R1/R2 rules priced; not worth it for Inter |
-| P7. First frame, CPU memory, device loss, oracle reading like a host | Carried from the earlier plan | See the plan's "Every axis" |
-| P8. Deferred typography and variable-font shaping | [scope decision](decisions/typographic-feature-scope-for-layout-refactor.md) | Turn `variations` back on in the fork |
-| P9. Inline objects | Deferred by Justin | Design the four public pieces (input, result box, `replace` rebasing, more than one per text) |
+| Unit                                                                 | What                                                                                                | Plan                                                                                                                         |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| P1. `measure()` grind                                                | B + D landed at `-52`; isolated `glyphCount` read still above main                                  | Dedicated glyph-facts export                                                                                                 |
+| P2. Discard-free publication failure                                 | Rust discards the root when publication cannot be delivered                                         | Per-stage rollback across planner and gather, a retry entry point, a new oracle route (fixes lane analysis in the build log) |
+| P3. Cold code built for size                                         | Measured ceiling ~0.9 kB gzip via `#[optimize(size)]` on 57 cold functions                          | Only if size matters again                                                                                                   |
+| P4. More core size                                                   | See the 2026-11-22 section of [wasm-size-reduction.md](wasm-size-reduction.md)                      | Remaining duplicate sorts; data-driven syllabic shaper interpreter priced there                                              |
+| P5. Content-anchored blocks                                          | Blocks on a 64-cluster grid shift after an insert                                                   | Only if edit profiles still show block shifts after the splice work                                                          |
+| P6. Shaping fast path widening                                       | [experiments-shaping](experiments-shaping-2026-11-22.md): `UNSAFE_TO_CONCAT` flags block text fonts | R1/R2 rules priced; not worth it for Inter                                                                                   |
+| P7. First frame, CPU memory, device loss, oracle reading like a host | Carried from the earlier plan                                                                       | See the plan's "Every axis"                                                                                                  |
+| P8. Deferred typography and variable-font shaping                    | [scope decision](decisions/typographic-feature-scope-for-layout-refactor.md)                        | Turn `variations` back on in the fork                                                                                        |
+| P9. Inline objects                                                   | Deferred by Justin                                                                                  | Design the four public pieces (input, result box, `replace` rebasing, more than one per text)                                |
 
 ## 7. How to run things
 
