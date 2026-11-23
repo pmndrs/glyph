@@ -225,6 +225,16 @@ impl Leaf {
         Ok(())
     }
 
+    /// Overwrites record `index` with `record`; a copy of statically known size.
+    fn set_record<T: RopeRecord>(&mut self, index: usize, record: &T) -> Option<()> {
+        debug_assert_eq!(self.kind.size, size_of::<T>());
+        let start = index.checked_mul(size_of::<T>())?;
+        self.bytes_mut()
+            .get_mut(start..start.checked_add(size_of::<T>())?)?
+            .copy_from_slice(record_bytes(core::slice::from_ref(record)));
+        Some(())
+    }
+
     fn record_mut(&mut self, index: usize) -> Option<&mut [Byte]> {
         let size = self.kind.size;
         self.bytes_mut()
@@ -503,18 +513,15 @@ impl<T: RopeRecord> RetainedRope<T> {
                     range_failure = Some(error);
                 }))
             },
-            &mut |index, leaf, offset, candidate| match update(index, &leaf.records::<T>()[offset])
-            {
-                Ok(RopeUpdate::Keep) => Ok(Visit::Keep),
-                Ok(RopeUpdate::Replace(next)) => {
-                    candidate.copy_from_slice(record_bytes(core::slice::from_ref(&next)));
-                    Ok(Visit::Replace)
-                }
-                Ok(RopeUpdate::Stop) => Ok(Visit::Stop),
-                Err(error) => {
-                    update_failure = Some(error);
-                    Err(())
-                }
+            &mut |leaf, record_start, ranges, stopped| {
+                update_leaf_records(
+                    leaf,
+                    record_start,
+                    ranges,
+                    stopped,
+                    &mut update,
+                    &mut update_failure,
+                )
             },
         );
         result.map_err(|failure| failure.into_edit_error(range_failure.or(update_failure)))
@@ -1632,17 +1639,11 @@ fn replace_record(node: &Arc<Node>, index: usize, candidate: &[Byte]) -> Result<
 /// The next requested range, or `Err` when the caller's range source failed.
 type NextRange<'a> = dyn FnMut() -> Option<Result<Range<usize>, ()>> + 'a;
 
-/// An ordered update's decision for one record. `Replace` means the visitor wrote the
-/// replacement record's bytes into the candidate buffer.
-enum Visit {
-    Keep,
-    Replace,
-    Stop,
-}
-
-/// Visits `(record index, leaf, offset in leaf, candidate buffer)`; `Err` when the caller's
-/// update failed.
-type VisitRecord<'a> = dyn FnMut(usize, &Leaf, usize, &mut [Byte]) -> Result<Visit, ()> + 'a;
+/// Visits one leaf `(leaf, index of its first record, ranges, stopped)` and returns its
+/// replacement when a record changed. One indirect call per leaf; the per-record loop inside
+/// is `update_leaf_records`, monomorphised for each record type and update.
+type VisitLeaf<'a> = dyn FnMut(&Leaf, usize, &mut OrderedRanges<'_, '_>, &mut bool) -> Result<Option<Leaf>, Failure>
+    + 'a;
 
 struct OrderedRanges<'a, 'b> {
     ranges: &'a mut NextRange<'b>,
@@ -1679,7 +1680,7 @@ impl OrderedRanges<'_, '_> {
 fn update_ordered(
     root: &mut Root,
     ranges: &mut NextRange<'_>,
-    visit: &mut VisitRecord<'_>,
+    visit: &mut VisitLeaf<'_>,
 ) -> Result<bool, Failure> {
     let Some(node) = root.as_ref() else {
         return Ok(false);
@@ -1699,10 +1700,8 @@ fn update_ordered(
         return Ok(false);
     }
     record_ordered_traversal();
-    let mut candidate = [Byte::uninit(); MAX_RECORD_BYTES];
     let mut stopped = false;
-    let replacement =
-        update_ordered_node(node, 0, &mut ranges, visit, &mut candidate, &mut stopped)?;
+    let replacement = update_ordered_node(node, 0, &mut ranges, visit, &mut stopped)?;
     if !stopped {
         ranges.advance_to(len)?;
     }
@@ -1718,8 +1717,7 @@ fn update_ordered_node(
     node: &Arc<Node>,
     record_start: usize,
     ranges: &mut OrderedRanges<'_, '_>,
-    visit: &mut VisitRecord<'_>,
-    candidate: &mut [Byte; MAX_RECORD_BYTES],
+    visit: &mut VisitLeaf<'_>,
     stopped: &mut bool,
 ) -> Result<Option<Arc<Node>>, Failure> {
     if *stopped {
@@ -1739,53 +1737,9 @@ fn update_ordered_node(
     match node.as_ref() {
         Node::Leaf { leaf, .. } => {
             record_ordered_leaf_visit();
-            let candidate = &mut candidate[..leaf.kind.size];
-            // The first replacement copies the whole leaf; later replacements overwrite
-            // their record in that copy.
-            let mut replacement: Option<Leaf> = None;
-            let mut replaced = 0;
-            let mut item_index = 0;
-            while item_index < leaf.len() {
-                let global_index = record_start + item_index;
-                ranges.advance_to(global_index)?;
-                let Some(range) = ranges.current.as_ref() else {
-                    break;
-                };
-                if range.start >= record_end {
-                    break;
-                }
-                item_index = item_index.max(range.start.saturating_sub(record_start));
-                let visited_index = item_index;
-                item_index += 1;
-                record_ordered_record_visit();
-                let global_index = record_start
-                    .checked_add(visited_index)
-                    .ok_or(Failure::Storage)?;
-                match visit(global_index, leaf, visited_index, candidate)
-                    .map_err(|()| Failure::Callback)?
-                {
-                    Visit::Keep => continue,
-                    Visit::Replace => {}
-                    Visit::Stop => {
-                        *stopped = true;
-                        break;
-                    }
-                }
-                let next = match replacement.as_mut() {
-                    Some(next) => next,
-                    None => replacement.insert(
-                        Leaf::copy_of(leaf.kind, leaf.bytes()).map_err(|()| Failure::Storage)?,
-                    ),
-                };
-                next.record_mut(visited_index)
-                    .ok_or(Failure::Storage)?
-                    .copy_from_slice(candidate);
-                replaced += 1;
-            }
-            let Some(replacement) = replacement else {
+            let Some(replacement) = visit(leaf, record_start, ranges, stopped)? else {
                 return Ok(None);
             };
-            record_copies(leaf.len() - replaced);
             leaf_node(replacement)
                 .map(Some)
                 .map_err(|()| Failure::Storage)
@@ -1794,10 +1748,8 @@ fn update_ordered_node(
             let right_start = record_start
                 .checked_add(left.summary().records)
                 .ok_or(Failure::Storage)?;
-            let next_left =
-                update_ordered_node(left, record_start, ranges, visit, candidate, stopped)?;
-            let next_right =
-                update_ordered_node(right, right_start, ranges, visit, candidate, stopped)?;
+            let next_left = update_ordered_node(left, record_start, ranges, visit, stopped)?;
+            let next_right = update_ordered_node(right, right_start, ranges, visit, stopped)?;
             let replacement = match (next_left, next_right) {
                 (None, None) => return Ok(None),
                 (Some(next_left), None) => branch(next_left, Arc::clone(right)),
@@ -1808,6 +1760,76 @@ fn update_ordered_node(
             Ok(Some(replacement))
         }
     }
+}
+
+/// The per-record step of an ordered update over one leaf. Generic over the record type and the
+/// caller's update so the record read, the update call and the replacement write are static and
+/// inline; the tree walk around it stays type-erased.
+#[inline(always)]
+fn update_leaf_records<T: RopeRecord, E>(
+    leaf: &Leaf,
+    record_start: usize,
+    ranges: &mut OrderedRanges<'_, '_>,
+    stopped: &mut bool,
+    update: &mut impl FnMut(usize, &T) -> Result<RopeUpdate<T>, E>,
+    update_failure: &mut Option<E>,
+) -> Result<Option<Leaf>, Failure> {
+    let records = leaf.records::<T>();
+    let record_end = record_start
+        .checked_add(records.len())
+        .ok_or(Failure::Storage)?;
+    // The first replacement copies the whole leaf; later replacements overwrite their record in
+    // that copy.
+    let mut replacement: Option<Leaf> = None;
+    let mut replaced = 0;
+    let mut item_index = 0;
+    while item_index < records.len() {
+        let global_index = record_start + item_index;
+        if ranges
+            .current
+            .as_ref()
+            .is_none_or(|range| range.end <= global_index)
+        {
+            ranges.advance_to(global_index)?;
+        }
+        let Some(range) = ranges.current.as_ref() else {
+            break;
+        };
+        if range.start >= record_end {
+            break;
+        }
+        item_index = item_index.max(range.start.saturating_sub(record_start));
+        let visited_index = item_index;
+        item_index += 1;
+        record_ordered_record_visit();
+        let global_index = record_start
+            .checked_add(visited_index)
+            .ok_or(Failure::Storage)?;
+        let next = match update(global_index, &records[visited_index]) {
+            Ok(RopeUpdate::Keep) => continue,
+            Ok(RopeUpdate::Replace(next)) => next,
+            Ok(RopeUpdate::Stop) => {
+                *stopped = true;
+                break;
+            }
+            Err(error) => {
+                *update_failure = Some(error);
+                return Err(Failure::Callback);
+            }
+        };
+        let copy = match replacement.as_mut() {
+            Some(copy) => copy,
+            None => replacement
+                .insert(Leaf::copy_of(leaf.kind, leaf.bytes()).map_err(|()| Failure::Storage)?),
+        };
+        copy.set_record(visited_index, &next)
+            .ok_or(Failure::Storage)?;
+        replaced += 1;
+    }
+    if replacement.is_some() {
+        record_copies(records.len() - replaced);
+    }
+    Ok(replacement)
 }
 
 fn make_node_mut(node: &mut Arc<Node>) -> Result<&mut Node, ()> {
