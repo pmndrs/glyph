@@ -630,6 +630,13 @@ fn append_measurement_from_occurrences_source(
         include_glyphs,
     };
 
+    let lines_writer = LineRecordWriter {
+        source,
+        constraint,
+        paragraph_id,
+        semantic_line_inline_extents,
+        glyph_record_start,
+    };
     let mut fragment_cursor = source.fragment_cursor()?;
     let mut lines = source.lines().peekable();
     let mut previous_flow_thread_id = None;
@@ -668,54 +675,19 @@ fn append_measurement_from_occurrences_source(
         if line.flow_thread_id != constraint.flow_thread_id {
             continue;
         }
-        let Some(first) = fragments.first() else {
-            continue;
-        };
-        let Some(last) = fragments.last() else {
-            continue;
-        };
-        let advance = if let Some(extents) = semantic_line_inline_extents {
-            extents[index]
-        } else {
-            source.line_advance(
-                line,
-                &fragments,
-                first_thread_line,
-                next_line.is_none_or(|next| next.flow_thread_id != line.flow_thread_id),
-                constraint,
-            )?
-        };
-        totals.content_width = totals.content_width.max(advance);
-        totals.content_height = totals.content_height.max(line.block_start + line.height);
-        let drop_cap = first_thread_line
-            .then(|| source.drop_cap(line.flow_thread_id))
-            .flatten();
-        if let Some(cap) = drop_cap {
-            totals.content_height = totals
-                .content_height
-                .max(cap.line.block_start + cap.line.height);
-        }
-        totals.consumed_clusters = totals
-            .consumed_clusters
-            .max(usize::try_from(last.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?);
-        // Every measurement carries its lines' glyph spans, based at the record index where glyph
-        // records would begin, so a view without glyph records reports the same spans as one with them.
-        let item_start = u32::try_from(glyph_record_start)
-            .map_err(|_| EngineError::ResultTooLarge)?
-            .checked_add(line_glyph_start)
-            .ok_or(EngineError::ResultTooLarge)?;
-        target[summary_index + 1 + totals.line_count_emitted] = semantic_line_record(
-            paragraph_id,
+        let record = MeasuredLine {
             index,
-            drop_cap.map_or(first.line.text_start, |cap| cap.fragment.line.text_start),
-            last.line.text_end,
-            item_start,
-            line_glyph_count,
             line,
-            drop_cap,
-            advance,
-            line_ink,
-        )?;
+            first_thread_line,
+            final_thread_line: next_line
+                .is_none_or(|next| next.flow_thread_id != line.flow_thread_id),
+            glyph_span: (line_glyph_start, line_glyph_count),
+            ink: line_ink,
+        };
+        let Some(record) = lines_writer.line_record(record, &fragments, &mut totals)? else {
+            continue;
+        };
+        target[summary_index + 1 + totals.line_count_emitted] = record;
         // The paragraph's ascent is the distance from its box top to the FIRST baseline, which is
         // the first emitted line's absolute baseline, not that line's own ascent.
         if totals.line_count_emitted == 0 {
@@ -766,6 +738,95 @@ fn append_measurement_from_occurrences_source(
     )?;
     totals.paragraph_ink.write(&mut target[summary_index])?;
     Ok(())
+}
+
+/// One measured-thread line as the measurement walk reached it.
+struct MeasuredLine {
+    index: usize,
+    line: FlowLine,
+    first_thread_line: bool,
+    final_thread_line: bool,
+    /// The line's glyphs: first index and count.
+    glyph_span: (u32, u32),
+    ink: InkBounds,
+}
+
+/// What every line record of one measurement shares.
+struct LineRecordWriter<'a> {
+    source: MeasurementSource<'a>,
+    constraint: &'a super::semantic_wire::FlowConstraint,
+    paragraph_id: u32,
+    semantic_line_inline_extents: Option<&'a [f64]>,
+    glyph_record_start: usize,
+}
+
+impl LineRecordWriter<'_> {
+    /// The line's record, folding its extent into `totals`; `None` for a line without
+    /// fragments.
+    fn line_record(
+        &self,
+        measured: MeasuredLine,
+        fragments: &MeasurementFragments<'_>,
+        totals: &mut MeasurementTotals,
+    ) -> Result<Option<SemanticRecord>, EngineError> {
+        let MeasuredLine {
+            index,
+            line,
+            first_thread_line,
+            final_thread_line,
+            glyph_span: (line_glyph_start, line_glyph_count),
+            ink,
+        } = measured;
+        let Some(first) = fragments.first() else {
+            return Ok(None);
+        };
+        let Some(last) = fragments.last() else {
+            return Ok(None);
+        };
+        let advance = if let Some(extents) = self.semantic_line_inline_extents {
+            extents[index]
+        } else {
+            self.source.line_advance(
+                line,
+                fragments,
+                first_thread_line,
+                final_thread_line,
+                self.constraint,
+            )?
+        };
+        totals.content_width = totals.content_width.max(advance);
+        totals.content_height = totals.content_height.max(line.block_start + line.height);
+        let drop_cap = first_thread_line
+            .then(|| self.source.drop_cap(line.flow_thread_id))
+            .flatten();
+        if let Some(cap) = drop_cap {
+            totals.content_height = totals
+                .content_height
+                .max(cap.line.block_start + cap.line.height);
+        }
+        totals.consumed_clusters = totals
+            .consumed_clusters
+            .max(usize::try_from(last.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?);
+        // Every measurement carries its lines' glyph spans, based at the record index where glyph
+        // records would begin, so a view without glyph records reports the same spans as one with them.
+        let item_start = u32::try_from(self.glyph_record_start)
+            .map_err(|_| EngineError::ResultTooLarge)?
+            .checked_add(line_glyph_start)
+            .ok_or(EngineError::ResultTooLarge)?;
+        semantic_line_record(
+            self.paragraph_id,
+            index,
+            drop_cap.map_or(first.line.text_start, |cap| cap.fragment.line.text_start),
+            last.line.text_end,
+            item_start,
+            line_glyph_count,
+            line,
+            drop_cap,
+            advance,
+            ink,
+        )
+        .map(Some)
+    }
 }
 
 /// Lines of the measured thread that hold fragments; the fragment cursor must end exactly.
