@@ -190,64 +190,9 @@ impl PlannerState {
 
     pub(super) fn commit_paragraphs(&mut self, publishing: bool) {
         if publishing {
-            for id in &self.pending_preparation_ids {
-                let Ok(index) = self
-                    .paragraphs
-                    .binary_search_by_key(id, |paragraph| paragraph.id)
-                else {
-                    continue;
-                };
-                let paragraph = &mut self.paragraphs[index];
-                #[cfg(test)]
-                crate::engine::work_attribution::record(|work| work.publication_commit_visits += 1);
-                paragraph.commit_preparation(true);
-            }
-            for id in &self.unpublished_preparation_ids {
-                // The pending frontier settled this owner, including a newer candidate.
-                if self.pending_preparation_ids.binary_search(id).is_ok() {
-                    continue;
-                }
-                if let Ok(index) = self
-                    .paragraphs
-                    .binary_search_by_key(id, |paragraph| paragraph.id)
-                {
-                    #[cfg(test)]
-                    crate::engine::work_attribution::record(|work| {
-                        work.publication_commit_visits += 1
-                    });
-                    let paragraph = &mut self.paragraphs[index];
-                    if !paragraph.state.has_pending_preparation()
-                        && !paragraph.state.clipped_inspection.is_prepared()
-                        && !paragraph.positioned_changed
-                    {
-                        #[cfg(test)]
-                        crate::engine::work_attribution::record(|work| {
-                            work.publication_ack_only_visits += 1
-                        });
-                        paragraph.acknowledge_committed_preparation();
-                    } else {
-                        paragraph.commit_preparation(true);
-                    }
-                }
-            }
-            self.unpublished_preparation_ids.clear();
+            self.commit_published_preparations();
         } else {
-            // Paragraph IDs survive lifecycle ordering changes. Resolve only the prepared nodes;
-            // lifecycle adoption below independently owns creation, removal and ordering.
-            for id in &self.pending_preparation_ids {
-                if let Ok(index) = self
-                    .paragraphs
-                    .binary_search_by_key(id, |paragraph| paragraph.id)
-                {
-                    let paragraph = &mut self.paragraphs[index];
-                    let was_unpublished = paragraph.preparation_changed_since_publication;
-                    paragraph.commit_preparation(false);
-                    if !was_unpublished && paragraph.preparation_changed_since_publication {
-                        // Admission reserved the worst-case union before any pending state changed.
-                        self.unpublished_preparation_ids.push(*id);
-                    }
-                }
-            }
+            self.commit_measured_preparations();
         }
         self.pending_preparation_ids.clear();
         if !self.lifecycle_prepared {
@@ -259,6 +204,79 @@ impl PlannerState {
             self.gathered_source_count = None;
             self.placement_ranges_current = false;
         }
+        self.adopt_lifecycle();
+    }
+
+    /// A publication commits every paragraph it prepared and settles every one a read prepared
+    /// since the last publication.
+    fn commit_published_preparations(&mut self) {
+        for id in &self.pending_preparation_ids {
+            let Ok(index) = self
+                .paragraphs
+                .binary_search_by_key(id, |paragraph| paragraph.id)
+            else {
+                continue;
+            };
+            let paragraph = &mut self.paragraphs[index];
+            #[cfg(test)]
+            crate::engine::work_attribution::record(|work| work.publication_commit_visits += 1);
+            paragraph.commit_preparation(true);
+        }
+        for id in &self.unpublished_preparation_ids {
+            // The pending frontier settled this owner, including a newer candidate.
+            if self.pending_preparation_ids.binary_search(id).is_ok() {
+                continue;
+            }
+            let Ok(index) = self
+                .paragraphs
+                .binary_search_by_key(id, |paragraph| paragraph.id)
+            else {
+                continue;
+            };
+            #[cfg(test)]
+            crate::engine::work_attribution::record(|work| work.publication_commit_visits += 1);
+            let paragraph = &mut self.paragraphs[index];
+            if !paragraph.state.has_pending_preparation()
+                && !paragraph.state.clipped_inspection.is_prepared()
+                && !paragraph.positioned_changed
+            {
+                #[cfg(test)]
+                crate::engine::work_attribution::record(|work| {
+                    work.publication_ack_only_visits += 1
+                });
+                paragraph.acknowledge_committed_preparation();
+            } else {
+                paragraph.commit_preparation(true);
+            }
+        }
+        self.unpublished_preparation_ids.clear();
+    }
+
+    /// A read commits the paragraphs it prepared and remembers the ones its commit left
+    /// unpublished.
+    fn commit_measured_preparations(&mut self) {
+        // Paragraph IDs survive lifecycle ordering changes. Resolve only the prepared nodes;
+        // lifecycle adoption below independently owns creation, removal and ordering.
+        for id in &self.pending_preparation_ids {
+            let Ok(index) = self
+                .paragraphs
+                .binary_search_by_key(id, |paragraph| paragraph.id)
+            else {
+                continue;
+            };
+            let paragraph = &mut self.paragraphs[index];
+            let was_unpublished = paragraph.preparation_changed_since_publication;
+            paragraph.commit_preparation(false);
+            if !was_unpublished && paragraph.preparation_changed_since_publication {
+                // Admission reserved the worst-case union before any pending state changed.
+                self.unpublished_preparation_ids.push(*id);
+            }
+        }
+    }
+
+    /// Adopts the prepared lifecycle: removes retired paragraphs, adopts pending placements and
+    /// the pending renderer order.
+    fn adopt_lifecycle(&mut self) {
         let mut index = 0;
         while index < self.paragraphs.len() {
             if self.paragraphs[index].pending_remove {
