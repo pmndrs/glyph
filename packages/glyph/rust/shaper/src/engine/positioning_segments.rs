@@ -11,12 +11,142 @@ use super::{
     BodyLine, CLUSTER_HARD_BREAK, ClusterArena, ClusterOrder, EngineError, FRAGMENT_ADJUSTS_GAPS,
     FRAGMENT_ADJUSTS_SPACES, FRAGMENT_HUNG_LEADS, FRAGMENT_VISUAL_ORDER, FlowFragment, FlowLine,
     FragmentPositionState, GlyphSource, JustifyDistribution, LayoutRun, LayoutRunOwner,
-    LayoutRunSourceKind, NO_LANE, OccurrenceSpan, PlacementCluster, PositionedCluster,
+    LayoutRunSourceKind, NO_LANE, OccurrenceSpan, PenStep, PlacementCluster, PositionedCluster,
     PositionedGlyphArena, RopeCursorRange, RunGeometry, STEP_CHECKED, STEP_JOINED, STEP_MERGEABLE,
     STEP_REVERSE, SegmentTranslation, SegmentWalk, SourceLine, SourceLineFacts, ThreadTypography,
     apply_justification, boundary_role_index, cluster_level, finite_f32, fragment_pen,
     paragraph_level_at, positioned_fragment_advance, reserve,
 };
+
+/// Whether a retained fragment's steps still cut where its justification now does, and if so
+/// whether its pen must adjust per cluster. Layout-run order cuts its steps by what is
+/// justified; visual order always steps cluster by cluster.
+fn step_adjustment(flags: u8, justify: JustifyDistribution) -> Option<bool> {
+    let adjusts_spaces = justify.per_space_units != 0 || justify.extra_space_units != 0;
+    let adjusts_gaps = justify.per_gap_units != 0 || justify.extra_gap_units != 0;
+    let visual_order = flags & FRAGMENT_VISUAL_ORDER != 0;
+    if !visual_order
+        && ((flags & FRAGMENT_ADJUSTS_SPACES != 0) != adjusts_spaces
+            || (flags & FRAGMENT_ADJUSTS_GAPS != 0) != adjusts_gaps)
+    {
+        return None;
+    }
+    Some(visual_order || adjusts_spaces || adjusts_gaps)
+}
+
+/// The run-local columns a retained line's numeric pen chain reads.
+#[derive(Clone, Copy)]
+struct NumericChain<'a> {
+    clusters: &'a ClusterArena,
+    prefixes: &'a [f64],
+    blocks: &'a [super::super::run_local::NumericBlock],
+    advances: &'a [f64],
+    flags: &'a [u8],
+    baseline: f64,
+}
+
+/// The serial pen of one retained fragment.
+struct NumericPen {
+    cursor: f64,
+    space_ordinal: i64,
+    gap_ordinal: i64,
+    justify: JustifyDistribution,
+    /// Justification applies per cluster.
+    adjust: bool,
+}
+
+impl NumericPen {
+    #[inline(always)]
+    fn advance(&mut self, chain: NumericChain<'_>, cluster: usize, advance: f64, adjust: bool) {
+        self.cursor += advance;
+        if adjust {
+            apply_justification(
+                cluster,
+                chain.clusters,
+                self.justify,
+                &mut self.cursor,
+                &mut self.space_ordinal,
+                &mut self.gap_ordinal,
+            );
+        }
+    }
+}
+
+impl NumericChain<'_> {
+    /// A step's lane prefix and block anchor; a glyphless break has neither.
+    fn step_anchor(self, step: PenStep) -> Result<(f64, f64, f64), EngineError> {
+        if step.lane == NO_LANE {
+            return Ok((0.0, 0.0, 0.0));
+        }
+        let block = self
+            .blocks
+            .get(step.block as usize)
+            .ok_or(EngineError::InvalidRequest)?;
+        Ok((
+            *self
+                .prefixes
+                .get(step.lane as usize)
+                .ok_or(EngineError::InvalidRequest)?,
+            block.anchor_inline,
+            block.anchor_block,
+        ))
+    }
+
+    /// Runs the pen over one step's clusters. A checked step re-tests that every cluster after
+    /// its first still publishes `segment_inline`; `false` when one no longer does.
+    fn advance_step(
+        self,
+        step: PenStep,
+        anchor_inline: f64,
+        segment_inline: u32,
+        pen: &mut NumericPen,
+    ) -> Result<bool, EngineError> {
+        let first = step.first as usize;
+        let count = step.count as usize;
+        if step.flags & STEP_CHECKED == 0 {
+            let step_advances = self
+                .advances
+                .get(first..first + count)
+                .ok_or(EngineError::InvalidRequest)?;
+            let step_flags = self
+                .flags
+                .get(first..first + count)
+                .ok_or(EngineError::InvalidRequest)?;
+            let adjust = pen.adjust;
+            for (offset, (advance, flags)) in step_advances.iter().zip(step_flags).enumerate() {
+                if flags & CLUSTER_HARD_BREAK == 0 {
+                    pen.advance(self, first + offset, *advance, adjust);
+                }
+            }
+            return Ok(true);
+        }
+        let lane = step.lane as usize;
+        let step_prefixes = self
+            .prefixes
+            .get(lane..lane + count)
+            .ok_or(EngineError::InvalidRequest)?;
+        let reverse = step.flags & STEP_REVERSE != 0;
+        if (reverse && first + 1 < count) || (!reverse && first + count > self.flags.len()) {
+            return Err(EngineError::InvalidRequest);
+        }
+        for (offset, prefix) in step_prefixes.iter().enumerate() {
+            let cluster = if reverse {
+                first - offset
+            } else {
+                first + offset
+            };
+            if offset != 0
+                && ((pen.cursor - prefix + anchor_inline) as f32).to_bits() != segment_inline
+            {
+                return Ok(false);
+            }
+            if self.flags[cluster] & CLUSTER_HARD_BREAK == 0 {
+                pen.advance(self, cluster, self.advances[cluster], true);
+            }
+        }
+        Ok(true)
+    }
+}
 
 /// The span being grown over visually consecutive clusters of one segment.
 #[derive(Clone, Copy)]
@@ -28,6 +158,85 @@ struct OpenSpan {
     glyph_count: u32,
     binding: u32,
     level: u8,
+}
+
+impl OpenSpan {
+    /// The merge rule of `append_occurrence_span`, applied to neighbours: `next` (one cluster)
+    /// joins when it shares binding and level and its cluster and glyphs are adjacent in the
+    /// level's direction.
+    #[inline]
+    fn absorb(&mut self, next: OpenSpan) -> bool {
+        if self.binding != next.binding || self.level != next.level {
+            return false;
+        }
+        if next.level & 1 == 0 {
+            if self.owner.checked_add(self.clusters) == Some(next.owner)
+                && self.glyph_start.checked_add(self.glyph_count) == Some(next.glyph_start)
+            {
+                self.clusters += 1;
+                self.glyph_count += next.glyph_count;
+                return true;
+            }
+        } else if next.owner.checked_add(self.clusters) == Some(self.owner)
+            && next.glyph_start.checked_add(next.glyph_count) == Some(self.glyph_start)
+        {
+            self.clusters += 1;
+            self.glyph_start = next.glyph_start;
+            self.glyph_count += next.glyph_count;
+            return true;
+        }
+        false
+    }
+}
+
+/// The pen: one f64 add per cluster in visual order, then its justification adds.
+fn advance_segment_pen(
+    body: BodyLine<'_>,
+    walk: SegmentWalk,
+    adjust: bool,
+    state: &mut FragmentPositionState,
+) {
+    let clusters = body.clusters;
+    let mut cursor = state.cursor;
+    if adjust {
+        for offset in 0..walk.count {
+            let cluster = walk.cluster(offset);
+            if clusters.flags[cluster] & CLUSTER_HARD_BREAK == 0 {
+                cursor += clusters.advances[cluster];
+                apply_justification(
+                    cluster,
+                    clusters,
+                    body.justify,
+                    &mut cursor,
+                    &mut state.space_ordinal,
+                    &mut state.gap_ordinal,
+                );
+            }
+        }
+        state.cursor = cursor;
+        return;
+    }
+    let first = if walk.reverse {
+        walk.first + 1 - walk.count
+    } else {
+        walk.first
+    };
+    let advances = &clusters.advances[first..first + walk.count];
+    let flags = &clusters.flags[first..first + walk.count];
+    if walk.reverse {
+        for (advance, flags) in advances.iter().zip(flags).rev() {
+            if flags & CLUSTER_HARD_BREAK == 0 {
+                cursor += advance;
+            }
+        }
+    } else {
+        for (advance, flags) in advances.iter().zip(flags) {
+            if flags & CLUSTER_HARD_BREAK == 0 {
+                cursor += advance;
+            }
+        }
+    }
+    state.cursor = cursor;
 }
 
 impl PositionedGlyphArena {
@@ -145,11 +354,14 @@ impl PositionedGlyphArena {
             .fragment_topology
             .get(previous_fragment_start..previous_fragment_start + fragments.len())
             .ok_or(EngineError::InvalidRequest)?;
-        let prefixes = clusters.run_local().cluster_prefixes();
-        let blocks = clusters.run_local().blocks();
-        let advances = clusters.advances.as_slice();
-        let flags = clusters.flags.as_slice();
-        let baseline = line.block_start + line.baseline;
+        let chain = NumericChain {
+            clusters,
+            prefixes: clusters.run_local().cluster_prefixes(),
+            blocks: clusters.run_local().blocks(),
+            advances: clusters.advances.as_slice(),
+            flags: clusters.flags.as_slice(),
+            baseline: line.block_start + line.baseline,
+        };
         self.numeric_translations.clear();
         reserve(&mut self.numeric_translations, steps.len())?;
         let mut inline_end = f64::NEG_INFINITY;
@@ -176,124 +388,29 @@ impl PositionedGlyphArena {
                 paragraph_level_at(bidi, fragment.line.text_start),
                 topology.flags & FRAGMENT_HUNG_LEADS != 0,
             );
-            let adjusts_spaces = justify.per_space_units != 0 || justify.extra_space_units != 0;
-            let adjusts_gaps = justify.per_gap_units != 0 || justify.extra_gap_units != 0;
-            let visual_order = topology.flags & FRAGMENT_VISUAL_ORDER != 0;
-            // Layout-run order cuts its steps by what is justified; visual order always
-            // steps cluster by cluster.
-            if !visual_order
-                && ((topology.flags & FRAGMENT_ADJUSTS_SPACES != 0) != adjusts_spaces
-                    || (topology.flags & FRAGMENT_ADJUSTS_GAPS != 0) != adjusts_gaps)
-            {
+            let Some(adjust) = step_adjustment(topology.flags, justify) else {
                 return Ok(None);
-            }
-            let adjust = visual_order || adjusts_spaces || adjusts_gaps;
+            };
             let step_end = step_cursor + topology.steps as usize;
             let fragment_steps = steps
                 .get(step_cursor..step_end)
                 .ok_or(EngineError::InvalidRequest)?;
             step_cursor = step_end;
-            let mut cursor = origin;
-            let mut space_ordinal = 0_i64;
-            let mut gap_ordinal = 0_i64;
+            let mut pen = NumericPen {
+                cursor: origin,
+                space_ordinal: 0,
+                gap_ordinal: 0,
+                justify,
+                adjust,
+            };
             for step in fragment_steps {
-                let (prefix, anchor_inline, anchor_block) = if step.lane == NO_LANE {
-                    (0.0, 0.0, 0.0)
-                } else {
-                    let block = blocks
-                        .get(step.block as usize)
-                        .ok_or(EngineError::InvalidRequest)?;
-                    (
-                        *prefixes
-                            .get(step.lane as usize)
-                            .ok_or(EngineError::InvalidRequest)?,
-                        block.anchor_inline,
-                        block.anchor_block,
-                    )
+                let Some(anchor_inline) =
+                    self.retranslate_step(chain, *step, pen.cursor, &mut segment)?
+                else {
+                    return Ok(None);
                 };
-                let translation = SegmentTranslation {
-                    translation_inline: cursor - prefix + anchor_inline,
-                    translation_block: baseline + anchor_block,
-                };
-                let published = (
-                    finite_f32(translation.translation_inline)?.to_bits(),
-                    finite_f32(translation.translation_block)?.to_bits(),
-                );
-                if step.flags & STEP_JOINED != 0 {
-                    if published != segment {
-                        return Ok(None);
-                    }
-                } else {
-                    if step.flags & STEP_MERGEABLE != 0 && published == segment {
-                        return Ok(None);
-                    }
-                    self.numeric_translations.push(translation);
-                    segment = published;
-                }
-                let first = step.first as usize;
-                let count = step.count as usize;
-                if step.flags & STEP_CHECKED != 0 {
-                    let lane = step.lane as usize;
-                    let step_prefixes = prefixes
-                        .get(lane..lane + count)
-                        .ok_or(EngineError::InvalidRequest)?;
-                    let reverse = step.flags & STEP_REVERSE != 0;
-                    if (reverse && first + 1 < count) || (!reverse && first + count > flags.len()) {
-                        return Err(EngineError::InvalidRequest);
-                    }
-                    for (offset, prefix) in step_prefixes.iter().enumerate() {
-                        let cluster = if reverse {
-                            first - offset
-                        } else {
-                            first + offset
-                        };
-                        if offset != 0
-                            && ((cursor - prefix + anchor_inline) as f32).to_bits() != segment.0
-                        {
-                            return Ok(None);
-                        }
-                        if flags[cluster] & CLUSTER_HARD_BREAK == 0 {
-                            cursor += advances[cluster];
-                            apply_justification(
-                                cluster,
-                                clusters,
-                                justify,
-                                &mut cursor,
-                                &mut space_ordinal,
-                                &mut gap_ordinal,
-                            );
-                        }
-                    }
-                } else {
-                    let step_advances = advances
-                        .get(first..first + count)
-                        .ok_or(EngineError::InvalidRequest)?;
-                    let step_flags = flags
-                        .get(first..first + count)
-                        .ok_or(EngineError::InvalidRequest)?;
-                    if adjust {
-                        for (offset, (advance, flags)) in
-                            step_advances.iter().zip(step_flags).enumerate()
-                        {
-                            if flags & CLUSTER_HARD_BREAK == 0 {
-                                cursor += advance;
-                                apply_justification(
-                                    first + offset,
-                                    clusters,
-                                    justify,
-                                    &mut cursor,
-                                    &mut space_ordinal,
-                                    &mut gap_ordinal,
-                                );
-                            }
-                        }
-                    } else {
-                        for (advance, flags) in step_advances.iter().zip(step_flags) {
-                            if flags & CLUSTER_HARD_BREAK == 0 {
-                                cursor += advance;
-                            }
-                        }
-                    }
+                if !chain.advance_step(*step, anchor_inline, segment.0, &mut pen)? {
+                    return Ok(None);
                 }
             }
             inline_end = inline_end.max(
@@ -321,6 +438,57 @@ impl PositionedGlyphArena {
         );
         self.numeric_translations = translations;
         let remap = remap?;
+        self.append_remapped_spans(previous, previous_line, remap, (line_index, line))?;
+        reserve(&mut self.pen_steps, steps.len())?;
+        self.pen_steps.extend_from_slice(steps);
+        reserve(&mut self.fragment_topology, topology.len())?;
+        self.fragment_topology.extend_from_slice(topology);
+        Ok(Some(inline_end))
+    }
+
+    /// Recomputes one step's translation at `cursor`. A step that joined its segment must
+    /// still publish the segment's f32 pair, and one that opened a segment must still differ
+    /// from it when it could have merged; otherwise `None`. An opening step records its
+    /// translation and becomes the segment. Returns the step's block anchor on success.
+    fn retranslate_step(
+        &mut self,
+        chain: NumericChain<'_>,
+        step: PenStep,
+        cursor: f64,
+        segment: &mut (u32, u32),
+    ) -> Result<Option<f64>, EngineError> {
+        let (prefix, anchor_inline, anchor_block) = chain.step_anchor(step)?;
+        let translation = SegmentTranslation {
+            translation_inline: cursor - prefix + anchor_inline,
+            translation_block: chain.baseline + anchor_block,
+        };
+        let published = (
+            finite_f32(translation.translation_inline)?.to_bits(),
+            finite_f32(translation.translation_block)?.to_bits(),
+        );
+        if step.flags & STEP_JOINED != 0 {
+            if published != *segment {
+                return Ok(None);
+            }
+        } else {
+            if step.flags & STEP_MERGEABLE != 0 && published == *segment {
+                return Ok(None);
+            }
+            self.numeric_translations.push(translation);
+            *segment = published;
+        }
+        Ok(Some(anchor_inline))
+    }
+
+    /// Copies `previous_line`'s occurrence spans onto the remapped placement segments of
+    /// body line `line_index`.
+    fn append_remapped_spans(
+        &mut self,
+        previous: &Self,
+        previous_line: usize,
+        remap: super::RetainedSegmentRemap,
+        (line_index, line): (usize, FlowLine),
+    ) -> Result<(), EngineError> {
         let spans = previous.line_spans(previous_line)?;
         reserve(&mut self.occurrence_spans, spans.len())?;
         let source_line =
@@ -353,11 +521,7 @@ impl PositionedGlyphArena {
                 .checked_add(old.outlined_count)
                 .ok_or(EngineError::ResultTooLarge)?;
         }
-        reserve(&mut self.pen_steps, steps.len())?;
-        self.pen_steps.extend_from_slice(steps);
-        reserve(&mut self.fragment_topology, topology.len())?;
-        self.fragment_topology.extend_from_slice(topology);
-        Ok(Some(inline_end))
+        Ok(())
     }
 
     /// Retains a line with edge records whose every positioning input and every edge record's
@@ -538,13 +702,38 @@ impl PositionedGlyphArena {
         state: &mut FragmentPositionState,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
     ) -> Result<(), EngineError> {
-        let clusters = body.clusters;
         #[cfg(test)]
         super::super::work_attribution::record(|work| {
             work.positioned_cluster_visits += (0..walk.count)
-                .filter(|offset| clusters.flags[walk.cluster(*offset)] & CLUSTER_HARD_BREAK == 0)
+                .filter(|offset| {
+                    body.clusters.flags[walk.cluster(*offset)] & CLUSTER_HARD_BREAK == 0
+                })
                 .count();
         });
+        self.emit_segment_spans(body, walk, geometry)?;
+        if self.decorated {
+            return self.position_decorated_segment(
+                body,
+                walk,
+                geometry,
+                adjust,
+                state,
+                metrics_for,
+            );
+        }
+        advance_segment_pen(body, walk, adjust, state);
+        Ok(())
+    }
+
+    /// Cuts the segment's glyph-bearing clusters into occurrence spans where the binding,
+    /// bidi level or glyph adjacency changes.
+    fn emit_segment_spans(
+        &mut self,
+        body: BodyLine<'_>,
+        walk: SegmentWalk,
+        geometry: RunGeometry,
+    ) -> Result<(), EngineError> {
+        let clusters = body.clusters;
         let mut open: Option<OpenSpan> = None;
         let mut level = 0_u8;
         let mut level_source = None;
@@ -568,119 +757,70 @@ impl PositionedGlyphArena {
                 )?;
                 level_source = Some(clusters.source_runs[cluster]);
             }
-            let glyph_start = clusters.glyph_starts[cluster];
-            let binding = clusters.binding_handles[cluster];
-            let cluster = u32::try_from(cluster).map_err(|_| EngineError::ResultTooLarge)?;
+            let next = OpenSpan {
+                owner: u32::try_from(cluster).map_err(|_| EngineError::ResultTooLarge)?,
+                clusters: 1,
+                glyph_start: clusters.glyph_starts[cluster],
+                glyph_count,
+                binding: clusters.binding_handles[cluster],
+                level,
+            };
             if let Some(span) = &mut open
-                && span.binding == binding
-                && span.level == level
+                && span.absorb(next)
             {
-                // The merge rule of `append_occurrence_span`, applied to neighbours.
-                if level & 1 == 0 {
-                    if span.owner.checked_add(span.clusters) == Some(cluster)
-                        && span.glyph_start.checked_add(span.glyph_count) == Some(glyph_start)
-                    {
-                        span.clusters += 1;
-                        span.glyph_count += glyph_count;
-                        continue;
-                    }
-                } else if cluster.checked_add(span.clusters) == Some(span.owner)
-                    && glyph_start.checked_add(glyph_count) == Some(span.glyph_start)
-                {
-                    span.clusters += 1;
-                    span.glyph_start = glyph_start;
-                    span.glyph_count += glyph_count;
-                    continue;
-                }
+                continue;
             }
             if let Some(span) = open.take() {
                 self.push_segment_span(body, walk.segment_index, geometry, span)?;
             }
-            open = Some(OpenSpan {
-                owner: cluster,
-                clusters: 1,
-                glyph_start,
-                glyph_count,
-                binding,
-                level,
-            });
+            open = Some(next);
         }
         if let Some(span) = open {
             self.push_segment_span(body, walk.segment_index, geometry, span)?;
         }
+        Ok(())
+    }
 
-        if self.decorated {
-            for offset in 0..walk.count {
-                let cluster = walk.cluster(offset);
-                if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
-                    continue;
-                }
-                let style_index = usize::try_from(clusters.style_indexes[cluster])
-                    .map_err(|_| EngineError::InvalidRequest)?;
-                let style = body
-                    .styles
-                    .get(style_index)
-                    .ok_or(EngineError::InvalidRequest)?
-                    .style;
-                let cluster_origin = state.cursor;
-                state.cursor = cluster_origin + clusters.advances[cluster];
-                self.finish_positioned_cluster(
-                    body.line,
-                    cluster,
-                    clusters,
-                    PositionedCluster {
-                        style,
-                        font_handle: geometry.font_handle,
-                        cluster_origin,
-                    },
-                    body.justify,
-                    adjust,
-                    state,
-                    metrics_for,
-                )?;
+    /// A decorated line finishes each cluster on its own: decorations follow the pen.
+    fn position_decorated_segment(
+        &mut self,
+        body: BodyLine<'_>,
+        walk: SegmentWalk,
+        geometry: RunGeometry,
+        adjust: bool,
+        state: &mut FragmentPositionState,
+        metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
+    ) -> Result<(), EngineError> {
+        let clusters = body.clusters;
+        for offset in 0..walk.count {
+            let cluster = walk.cluster(offset);
+            if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
+                continue;
             }
-            return Ok(());
+            let style_index = usize::try_from(clusters.style_indexes[cluster])
+                .map_err(|_| EngineError::InvalidRequest)?;
+            let style = body
+                .styles
+                .get(style_index)
+                .ok_or(EngineError::InvalidRequest)?
+                .style;
+            let cluster_origin = state.cursor;
+            state.cursor = cluster_origin + clusters.advances[cluster];
+            self.finish_positioned_cluster(
+                body.line,
+                cluster,
+                clusters,
+                PositionedCluster {
+                    style,
+                    font_handle: geometry.font_handle,
+                    cluster_origin,
+                },
+                body.justify,
+                adjust,
+                state,
+                metrics_for,
+            )?;
         }
-        // The pen: one f64 add per cluster in visual order, then its justification adds.
-        let mut cursor = state.cursor;
-        if adjust {
-            for offset in 0..walk.count {
-                let cluster = walk.cluster(offset);
-                if clusters.flags[cluster] & CLUSTER_HARD_BREAK == 0 {
-                    cursor += clusters.advances[cluster];
-                    apply_justification(
-                        cluster,
-                        clusters,
-                        body.justify,
-                        &mut cursor,
-                        &mut state.space_ordinal,
-                        &mut state.gap_ordinal,
-                    );
-                }
-            }
-        } else {
-            let first = if walk.reverse {
-                walk.first + 1 - walk.count
-            } else {
-                walk.first
-            };
-            let advances = &clusters.advances[first..first + walk.count];
-            let flags = &clusters.flags[first..first + walk.count];
-            if walk.reverse {
-                for (advance, flags) in advances.iter().zip(flags).rev() {
-                    if flags & CLUSTER_HARD_BREAK == 0 {
-                        cursor += advance;
-                    }
-                }
-            } else {
-                for (advance, flags) in advances.iter().zip(flags) {
-                    if flags & CLUSTER_HARD_BREAK == 0 {
-                        cursor += advance;
-                    }
-                }
-            }
-        }
-        state.cursor = cursor;
         Ok(())
     }
 
