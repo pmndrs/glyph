@@ -1678,6 +1678,15 @@ fn publish_attributed_failure(
 }
 
 fn with_state<Result>(operation: impl FnOnce(&mut WasmState) -> Result) -> Result {
+    // SAFETY: Wasm V0 is single-threaded. The pointer is initialized once, never freed, and every
+    // exported operation completes synchronously before another operation can enter.
+    operation(unsafe { &mut *state_pointer() })
+}
+
+/// The one-time state initialization, kept out of `with_state` so the dozens of exports that
+/// instantiate it share one copy of `WasmState::default()`.
+#[inline(never)]
+fn state_pointer() -> *mut WasmState {
     let mut pointer = STATE.load(Ordering::Acquire);
     if pointer == 0 {
         let candidate = Box::into_raw(Box::new(WasmState::default())) as usize;
@@ -1691,7 +1700,5 @@ fn with_state<Result>(operation: impl FnOnce(&mut WasmState) -> Result) -> Resul
             }
         }
     }
-    // SAFETY: Wasm V0 is single-threaded. The pointer is initialized once, never freed, and every
-    // exported operation completes synchronously before another operation can enter.
-    operation(unsafe { &mut *(pointer as *mut WasmState) })
+    pointer as *mut WasmState
 }
