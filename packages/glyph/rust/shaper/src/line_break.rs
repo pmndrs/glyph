@@ -156,10 +156,14 @@ impl<'a> BreakState<'a> {
         self.mandatory_breaks()?;
         self.space_and_joiner_rules()?;
         self.opening_and_closing_rules()?;
-        self.space_run_and_quote_rules()?;
+        self.space_run_rules()?;
+        self.quotation_rules()?;
+        self.contingent_and_hyphen_rules()?;
         self.break_before_after_rules()?;
         self.numeric_rules()?;
-        self.script_rules()
+        self.hangul_and_letter_rules()?;
+        self.aksara_rules()?;
+        self.letter_and_emoji_rules()
     }
 
     /// LB2-LB6: text boundaries and hard line breaks.
@@ -300,8 +304,8 @@ impl<'a> BreakState<'a> {
         Continue(())
     }
 
-    /// LB16-LB20a: closers and B2 across spaces, LB19 quotation marks, CB, and hyphens.
-    fn space_run_and_quote_rules(&mut self) -> ControlFlow<Option<LineBreak>> {
+    /// LB16-LB17: closers and B2 across spaces.
+    fn space_run_rules(&mut self) -> ControlFlow<Option<LineBreak>> {
         use generated::*;
         let cur = self.current.class;
         let next = self.next.class;
@@ -323,6 +327,14 @@ impl<'a> BreakState<'a> {
                 return KEEP;
             }
         }
+        Continue(())
+    }
+
+    /// LB18-LB19a: break after spaces, and quotation marks.
+    fn quotation_rules(&mut self) -> ControlFlow<Option<LineBreak>> {
+        use generated::*;
+        let cur = self.current.class;
+        let next = self.next.class;
         if cur == i16::from(SP) {
             return Break(self.emit(false));
         }
@@ -348,6 +360,14 @@ impl<'a> BreakState<'a> {
         if cur == i16::from(QU) && (self.previous.class == SOT || !self.previous.has(EAST_ASIAN)) {
             return KEEP;
         }
+        Continue(())
+    }
+
+    /// LB20-LB20a: contingent breaks and word-initial hyphens.
+    fn contingent_and_hyphen_rules(&mut self) -> ControlFlow<Option<LineBreak>> {
+        use generated::*;
+        let cur = self.current.class;
+        let next = self.next.class;
         if cur == i16::from(CB) || next == i16::from(CB) {
             return Break(self.emit(false));
         }
@@ -435,8 +455,8 @@ impl<'a> BreakState<'a> {
         Continue(())
     }
 
-    /// LB26-LB30b: Hangul, Aksara, letters with openers and closers, regional indicators, and emoji modifiers.
-    fn script_rules(&mut self) -> ControlFlow<Option<LineBreak>> {
+    /// LB26-LB28: Hangul syllables and letters.
+    fn hangul_and_letter_rules(&mut self) -> ControlFlow<Option<LineBreak>> {
         use generated::*;
         let cur = self.current.class;
         let next = self.next.class;
@@ -454,6 +474,14 @@ impl<'a> BreakState<'a> {
         if is_one_of(cur, &[AL, HL]) && is_one_of(next, &[AL, HL]) {
             return KEEP;
         }
+        Continue(())
+    }
+
+    /// LB28a: Brahmic orthographic syllables (Aksara).
+    fn aksara_rules(&mut self) -> ControlFlow<Option<LineBreak>> {
+        use generated::*;
+        let cur = self.current.class;
+        let next = self.next.class;
         let dotted_circle = 0x25cc;
         let current_ak = is_one_of(cur, &[AK, AS]) || self.current.code_point == dotted_circle;
         let next_ak = is_one_of(next, &[AK, AS]) || self.next.code_point == dotted_circle;
@@ -472,6 +500,14 @@ impl<'a> BreakState<'a> {
         {
             return KEEP;
         }
+        Continue(())
+    }
+
+    /// LB29-LB30b: letters with openers and closers, regional indicators, and emoji modifiers.
+    fn letter_and_emoji_rules(&mut self) -> ControlFlow<Option<LineBreak>> {
+        use generated::*;
+        let cur = self.current.class;
+        let next = self.next.class;
         if cur == i16::from(IS) && is_one_of(next, &[AL, HL]) {
             return KEEP;
         }
