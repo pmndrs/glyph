@@ -20,7 +20,7 @@
 use alloc::vec::Vec;
 use core::ops::Range;
 
-use crate::{FontInkTable, FontMetrics, unicode::UnicodeAnalysis};
+use crate::{FontInkTable, FontMetrics, line_break::LineBreak, unicode::UnicodeAnalysis};
 
 use super::super::run_local_paragraph::{RunLocalSplice, RunLocalWindow};
 use super::super::sort;
@@ -642,110 +642,127 @@ impl ClusterArena {
             .collect();
         // Breaks outside the runs, compared at the shift of the stretch they are in.
         for index in 0..=plan.windows.len() {
-            let (text_delta, _, _) = plan.shift(index);
-            let (_, _, old_text) = plan.old_gap(index, previous);
-            let new_text =
-                moved(old_text.start as u32, text_delta)..moved(old_text.end as u32, text_delta);
-            // Breaks at a run's own edges belong to its clusters or the one before it; the
-            // text's own end belongs to the stretch after the last run.
-            let last = index == plan.windows.len();
-            let inside = |range: &Range<u32>, position: u32| {
-                range.start < position && (position < range.end || (last && position == range.end))
-            };
-            let new_breaks = new
-                .iter()
-                .filter(|line_break| inside(&new_text, line_break.position));
-            let old_range = old_text.start as u32..old_text.end as u32;
-            let mut old_breaks = old
-                .iter()
-                .filter(|line_break| inside(&old_range, line_break.position))
-                .peekable();
-            let mut new_breaks = new_breaks.peekable();
-            let mark = |dirty: &mut Vec<Range<usize>>, position: u32, required: bool| {
-                if let Some(target) = self.break_target(position, required) {
-                    dirty.push(target..target + 1);
-                }
-            };
-            loop {
-                let new_at = new_breaks
-                    .peek()
-                    .map(|line_break| (i64::from(line_break.position), line_break.required));
-                let old_at = old_breaks.peek().map(|line_break| {
-                    (
-                        i64::from(line_break.position) + text_delta,
-                        line_break.required,
-                    )
-                });
-                match (new_at, old_at) {
-                    (None, None) => break,
-                    (Some(new), Some(old)) if new.0 == old.0 => {
-                        if new.1 != old.1 {
-                            mark(&mut dirty, new.0 as u32, true);
-                        }
-                        new_breaks.next();
-                        old_breaks.next();
-                    }
-                    (Some(new), None) => {
-                        mark(&mut dirty, new.0 as u32, new.1);
-                        new_breaks.next();
-                    }
-                    (Some(new), Some(old)) if new.0 < old.0 => {
-                        mark(&mut dirty, new.0 as u32, new.1);
-                        new_breaks.next();
-                    }
-                    (_, Some(old)) => {
-                        mark(&mut dirty, old.0 as u32, true);
-                        old_breaks.next();
-                    }
-                }
-            }
+            self.mark_changed_gap_breaks(&mut dirty, plan, previous, index, new, old);
         }
-        // Cluster indices are `u32` in the arena (`index_at`), so each range packs into one
-        // key for the shared sort kernel; `(start, end)` order merges to the same union as
-        // start order.
-        let mut keys: Vec<u64> = dirty
-            .iter()
-            .map(|range| sort::pack2(range.start as u32, range.end as u32))
-            .collect();
-        sort::sort_keys(&mut keys);
-        let mut merged: Vec<Range<usize>> = Vec::new();
-        for range in keys
-            .into_iter()
-            .map(|key| (key >> 32) as usize..(key as u32) as usize)
-        {
-            match merged.last_mut() {
-                Some(last) if range.start <= last.end => last.end = last.end.max(range.end),
-                _ => merged.push(range),
-            }
-        }
+        let merged = merged_cluster_ranges(&dirty);
         for range in &merged {
-            for flags in &mut self.flags[range.clone()] {
-                *flags &= !BREAK_BITS;
-            }
-            let text_from = if range.start == 0 {
-                0
-            } else {
-                self.starts[range.start]
-            };
-            let text_to = self.ends[range.end - 1];
-            let from = new.partition_point(|line_break| line_break.position < text_from);
-            let to = new.partition_point(|line_break| line_break.position <= text_to);
-            for line_break in &new[from..to] {
-                let Some(preceding) = self.break_target(line_break.position, line_break.required)
-                else {
-                    continue;
-                };
-                if !range.contains(&preceding) {
-                    continue;
-                }
-                if line_break.required {
-                    self.flags[preceding] |= CLUSTER_REQUIRED_BREAK;
-                } else {
-                    self.mark_optional_break(preceding);
-                }
-            }
+            self.reflag_range(range.clone(), new);
         }
         merged
+    }
+
+    /// Marks the clusters whose break changed in the stretch between runs `index - 1` and
+    /// `index`, comparing new breaks with old ones moved by the stretch's text shift.
+    #[inline(always)]
+    fn mark_changed_gap_breaks(
+        &self,
+        dirty: &mut Vec<Range<usize>>,
+        plan: &Plan,
+        previous: &Self,
+        index: usize,
+        new: &[LineBreak],
+        old: &[LineBreak],
+    ) {
+        let (text_delta, _, _) = plan.shift(index);
+        let (_, _, old_text) = plan.old_gap(index, previous);
+        let new_text =
+            moved(old_text.start as u32, text_delta)..moved(old_text.end as u32, text_delta);
+        // Breaks at a run's own edges belong to its clusters or the one before it; the
+        // text's own end belongs to the stretch after the last run.
+        let last = index == plan.windows.len();
+        let inside = |range: &Range<u32>, position: u32| {
+            range.start < position && (position < range.end || (last && position == range.end))
+        };
+        let new_breaks = new
+            .iter()
+            .filter(|line_break| inside(&new_text, line_break.position));
+        let old_range = old_text.start as u32..old_text.end as u32;
+        let old_breaks = old
+            .iter()
+            .filter(|line_break| inside(&old_range, line_break.position));
+        self.mark_break_differences(dirty, new_breaks, old_breaks, text_delta);
+    }
+
+    /// Walks new and shifted old breaks in position order and marks the cluster of every break
+    /// that appears, disappears or changes kind.
+    #[inline(always)]
+    fn mark_break_differences<'b>(
+        &self,
+        dirty: &mut Vec<Range<usize>>,
+        new_breaks: impl Iterator<Item = &'b LineBreak>,
+        old_breaks: impl Iterator<Item = &'b LineBreak>,
+        text_delta: i64,
+    ) {
+        let mut new_breaks = new_breaks.peekable();
+        let mut old_breaks = old_breaks.peekable();
+        let mark = |dirty: &mut Vec<Range<usize>>, position: u32, required: bool| {
+            if let Some(target) = self.break_target(position, required) {
+                dirty.push(target..target + 1);
+            }
+        };
+        loop {
+            let new_at = new_breaks
+                .peek()
+                .map(|line_break| (i64::from(line_break.position), line_break.required));
+            let old_at = old_breaks.peek().map(|line_break| {
+                (
+                    i64::from(line_break.position) + text_delta,
+                    line_break.required,
+                )
+            });
+            match (new_at, old_at) {
+                (None, None) => break,
+                (Some(new), Some(old)) if new.0 == old.0 => {
+                    if new.1 != old.1 {
+                        mark(dirty, new.0 as u32, true);
+                    }
+                    new_breaks.next();
+                    old_breaks.next();
+                }
+                (Some(new), None) => {
+                    mark(dirty, new.0 as u32, new.1);
+                    new_breaks.next();
+                }
+                (Some(new), Some(old)) if new.0 < old.0 => {
+                    mark(dirty, new.0 as u32, new.1);
+                    new_breaks.next();
+                }
+                (_, Some(old)) => {
+                    mark(dirty, old.0 as u32, true);
+                    old_breaks.next();
+                }
+            }
+        }
+    }
+
+    /// Clears the break flags of `range` and sets them again from the new line breaks.
+    #[inline(always)]
+    fn reflag_range(&mut self, range: Range<usize>, new: &[LineBreak]) {
+        for flags in &mut self.flags[range.clone()] {
+            *flags &= !BREAK_BITS;
+        }
+        let text_from = if range.start == 0 {
+            0
+        } else {
+            self.starts[range.start]
+        };
+        let text_to = self.ends[range.end - 1];
+        let from = new.partition_point(|line_break| line_break.position < text_from);
+        let to = new.partition_point(|line_break| line_break.position <= text_to);
+        for line_break in &new[from..to] {
+            let Some(preceding) = self.break_target(line_break.position, line_break.required)
+            else {
+                continue;
+            };
+            if !range.contains(&preceding) {
+                continue;
+            }
+            if line_break.required {
+                self.flags[preceding] |= CLUSTER_REQUIRED_BREAK;
+            } else {
+                self.mark_optional_break(preceding);
+            }
+        }
     }
 }
 
@@ -852,4 +869,28 @@ impl<T> GlyphLane for alloc::vec::Vec<T> {
     fn reserve_to(&mut self, len: usize) -> Result<(), EngineError> {
         reserve(self, len)
     }
+}
+
+/// The union of cluster ranges, in order.
+#[inline(always)]
+fn merged_cluster_ranges(dirty: &[Range<usize>]) -> Vec<Range<usize>> {
+    // Cluster indices are `u32` in the arena (`index_at`), so each range packs into one
+    // key for the shared sort kernel; `(start, end)` order merges to the same union as
+    // start order.
+    let mut keys: Vec<u64> = dirty
+        .iter()
+        .map(|range| sort::pack2(range.start as u32, range.end as u32))
+        .collect();
+    sort::sort_keys(&mut keys);
+    let mut merged: Vec<Range<usize>> = Vec::new();
+    for range in keys
+        .into_iter()
+        .map(|key| (key >> 32) as usize..(key as u32) as usize)
+    {
+        match merged.last_mut() {
+            Some(last) if range.start <= last.end => last.end = last.end.max(range.end),
+            _ => merged.push(range),
+        }
+    }
+    merged
 }

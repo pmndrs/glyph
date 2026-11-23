@@ -852,20 +852,7 @@ fn layout_next_line_integer_scalar<C: BreakCorrections>(
     let clusters = fit.clusters;
     let count = clusters.starts.len();
     let line_start = fit.line_start;
-    let mut advance = 0_i64;
-    // The shrinkable space sum accumulates in raw layout units WITHOUT
-    // per-space rounding — a review counterexample showed per-space truncation
-    // selecting earlier breaks than the f64 semantics — and the ratio applies
-    // to the cumulative sum once per overfull test.
-    let mut space_units = 0_i64;
-    let mut last_allowed = None;
-    let mut last_allowed_base = Base::default();
-    // The advance of the space run currently sitting at the end of the accumulated line.
-    let mut trailing_space_units = 0_i64;
-    let mut last_safe = None;
-    let mut last_safe_advance = 0_i64;
-    let mut first_safe = None;
-    let mut first_safe_advance = 0_i64;
+    let mut scan = ScalarScan::default();
     let mut selected_end = count;
     let mut selected_advance = 0_i64;
     let mut charge = EndCharge::NONE;
@@ -879,101 +866,185 @@ fn layout_next_line_integer_scalar<C: BreakCorrections>(
     let chunk_summaries = wrap == WRAP_WORD
         && clusters.chunk_flags_or.len() == count.div_ceil(super::cluster_state::LAYOUT_CHUNK)
         && clusters.chunk_auxiliary_sums.len() == clusters.chunk_flags_or.len();
-    let mut pending_allowed: Option<(usize, Base)> = None;
-    let mut pending_safe: Option<(usize, Base)> = None;
-    // Rule 3 retracts a selection cluster by cluster to the previous allowed boundary.
-    let step_back = |(mut end, mut base): (usize, Base)| {
-        while end > line_start + 1 {
-            end -= 1;
-            let cluster_advance = clusters.advance_units[end];
-            base.advance = base.advance.saturating_sub(cluster_advance);
-            if clusters.flags[end] & CLUSTER_SPACE != 0 {
-                base.space = base.space.saturating_sub(cluster_advance);
-            }
-            if clusters.flags[end - 1] & CLUSTER_ALLOWED_BREAK != 0 {
-                return Some((end, base));
-            }
-        }
-        None
-    };
 
     let mut index = line_start;
     while index < count {
-        if chunk_summaries
-            && index.is_multiple_of(super::cluster_state::LAYOUT_CHUNK)
-            && index + super::cluster_state::LAYOUT_CHUNK <= count
+        if chunk_summaries && scan.skip_chunk(fit, index) {
+            index += super::cluster_state::LAYOUT_CHUNK;
+            continue;
+        }
+        match scan.cluster(fit, index, wrap)? {
+            ClusterOutcome::Next => index += 1,
+            ClusterOutcome::Break(end, break_advance, break_charge) => {
+                selected_end = end;
+                selected_advance = break_advance;
+                charge = break_charge;
+                break;
+            }
+        }
+    }
+    // A line that runs off the end of the text — including through a final chunk
+    // skip, which never executes the per-cluster tail — selects the full advance.
+    if index >= count && selected_end == count {
+        selected_advance = scan.advance;
+    }
+
+    if selected_end <= line_start {
+        selected_end = line_start + 1;
+        selected_advance = clusters.advance_units[line_start];
+    }
+    fit.compose(cursor, selected_end, selected_advance, charge)
+}
+
+/// The running sums and break candidates of one scalar line fit.
+#[derive(Default)]
+struct ScalarScan {
+    advance: i64,
+    /// The shrinkable space sum accumulates in raw layout units WITHOUT
+    /// per-space rounding — a review counterexample showed per-space truncation
+    /// selecting earlier breaks than the f64 semantics — and the ratio applies
+    /// to the cumulative sum once per overfull test.
+    space_units: i64,
+    /// The advance of the space run currently sitting at the end of the accumulated line.
+    trailing_space_units: i64,
+    last_allowed: Option<usize>,
+    last_allowed_base: Base,
+    last_safe: Option<usize>,
+    last_safe_advance: i64,
+    first_safe: Option<usize>,
+    first_safe_advance: i64,
+    /// The last candidate inside a skipped chunk, resolved only if a break is needed.
+    pending_allowed: Option<(usize, Base)>,
+    pending_safe: Option<(usize, Base)>,
+}
+
+/// One cluster's contribution to the scan, before the scan adopts it.
+struct ClusterStep {
+    required_break: bool,
+    next_advance: i64,
+    next_space_units: i64,
+    next_trailing_space_units: i64,
+    word_segment_end: bool,
+    hanging_units: i64,
+    tests_overflow: bool,
+    base: Base,
+}
+
+/// What one cluster does to the scan.
+enum ClusterOutcome {
+    /// The line continues past the cluster (an overflowing first word keeps only its advance).
+    Next,
+    /// The line ends here.
+    Break(usize, i64, EndCharge),
+}
+
+/// What an overflowing cluster decides.
+enum OverflowBreak {
+    /// Break at this end, with this advance and end charge.
+    At(usize, i64, EndCharge),
+    /// No legal break yet: keep the first word intact and move to the next cluster.
+    Continue,
+}
+
+impl ScalarScan {
+    /// Consumes the whole chunk starting at `index` when its summary fits, deferring the last
+    /// break candidates inside it. Returns whether it did.
+    #[inline(always)]
+    fn skip_chunk<C: BreakCorrections>(&mut self, fit: &LineFit<'_, C>, index: usize) -> bool {
+        let clusters = fit.clusters;
+        if !index.is_multiple_of(super::cluster_state::LAYOUT_CHUNK)
+            || index + super::cluster_state::LAYOUT_CHUNK > clusters.starts.len()
         {
-            let chunk = index / super::cluster_state::LAYOUT_CHUNK;
-            let flags_or = clusters.chunk_flags_or[chunk];
-            if flags_or & (CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK) == 0 {
-                let next_advance = advance.saturating_add(clusters.chunk_advance_sums[chunk]);
-                let has_spaces = flags_or & CLUSTER_SPACE != 0;
-                let next_space_units = if has_spaces {
-                    space_units.saturating_add(clusters.chunk_auxiliary_sums[chunk])
-                } else {
-                    space_units
-                };
-                let fits = if flags_or & CHUNK_NEGATIVE_ADVANCE == 0 {
-                    fit.fits_seeded(next_advance, next_space_units)
-                } else if !has_spaces {
-                    // The tagged auxiliary is this chunk's maximum advance prefix; preceding
-                    // spaces contribute constant shrink credit across every local prefix.
-                    fit.fits_seeded(
-                        advance.saturating_add(clusters.chunk_auxiliary_sums[chunk]),
-                        space_units,
-                    )
-                } else {
-                    // Spaces plus a negative advance make hanging-space shrink non-monotonic,
-                    // so this rare mixed chunk uses the exact scalar path.
-                    false
-                };
-                if fits {
-                    #[cfg(test)]
-                    CHUNK_SKIPS.with(|skips| skips.set(skips.get() + 1));
-                    let entry = Base::new(advance, space_units);
-                    if flags_or & CLUSTER_ALLOWED_BREAK != 0 {
-                        pending_allowed = Some((chunk, entry));
-                    }
-                    if flags_or & CLUSTER_SAFE_BEFORE != 0 {
-                        pending_safe = Some((chunk, entry));
-                    }
-                    trailing_space_units = if has_spaces {
-                        trailing_space_units_after_chunk(
-                            clusters,
-                            index,
-                            index + super::cluster_state::LAYOUT_CHUNK,
-                            trailing_space_units,
-                        )
-                    } else {
-                        0
-                    };
-                    advance = next_advance;
-                    space_units = next_space_units;
-                    index += super::cluster_state::LAYOUT_CHUNK;
-                    continue;
-                }
-            }
+            return false;
         }
+        let chunk = index / super::cluster_state::LAYOUT_CHUNK;
+        let flags_or = clusters.chunk_flags_or[chunk];
+        if flags_or & (CLUSTER_REQUIRED_BREAK | CLUSTER_HARD_BREAK) != 0 {
+            return false;
+        }
+        let next_advance = self
+            .advance
+            .saturating_add(clusters.chunk_advance_sums[chunk]);
+        let has_spaces = flags_or & CLUSTER_SPACE != 0;
+        let next_space_units = if has_spaces {
+            self.space_units
+                .saturating_add(clusters.chunk_auxiliary_sums[chunk])
+        } else {
+            self.space_units
+        };
+        let fits = if flags_or & CHUNK_NEGATIVE_ADVANCE == 0 {
+            fit.fits_seeded(next_advance, next_space_units)
+        } else if !has_spaces {
+            // The tagged auxiliary is this chunk's maximum advance prefix; preceding
+            // spaces contribute constant shrink credit across every local prefix.
+            fit.fits_seeded(
+                self.advance
+                    .saturating_add(clusters.chunk_auxiliary_sums[chunk]),
+                self.space_units,
+            )
+        } else {
+            // Spaces plus a negative advance make hanging-space shrink non-monotonic,
+            // so this rare mixed chunk uses the exact scalar path.
+            false
+        };
+        if !fits {
+            return false;
+        }
+        #[cfg(test)]
+        CHUNK_SKIPS.with(|skips| skips.set(skips.get() + 1));
+        let entry = Base::new(self.advance, self.space_units);
+        if flags_or & CLUSTER_ALLOWED_BREAK != 0 {
+            self.pending_allowed = Some((chunk, entry));
+        }
+        if flags_or & CLUSTER_SAFE_BEFORE != 0 {
+            self.pending_safe = Some((chunk, entry));
+        }
+        self.trailing_space_units = if has_spaces {
+            trailing_space_units_after_chunk(
+                clusters,
+                index,
+                index + super::cluster_state::LAYOUT_CHUNK,
+                self.trailing_space_units,
+            )
+        } else {
+            0
+        };
+        self.advance = next_advance;
+        self.space_units = next_space_units;
+        true
+    }
+
+    /// Records a shaping-safe boundary before `index`: the first one, and the last that fits.
+    #[inline(always)]
+    fn record_safe_before<C: BreakCorrections>(
+        &mut self,
+        fit: &LineFit<'_, C>,
+        index: usize,
+        wrap: u8,
+    ) {
+        if self.first_safe.is_none() {
+            self.first_safe = Some(index);
+            self.first_safe_advance = self.advance;
+        }
+        let fits = wrap != WRAP_WORD || fit.fits_seeded(self.advance, self.space_units);
+        if fits {
+            self.last_safe = Some(index);
+            self.last_safe_advance = self.advance;
+            self.pending_safe = None;
+        }
+    }
+
+    #[inline(always)]
+    fn step(&self, clusters: &ClusterLineFacts<'_>, index: usize, wrap: u8) -> ClusterStep {
+        let count = clusters.starts.len();
         let flags = clusters.flags[index];
-        if index > line_start && flags & CLUSTER_SAFE_BEFORE != 0 {
-            if first_safe.is_none() {
-                first_safe = Some(index);
-                first_safe_advance = advance;
-            }
-            let fits = wrap != WRAP_WORD || fit.fits_seeded(advance, space_units);
-            if fits {
-                last_safe = Some(index);
-                last_safe_advance = advance;
-                pending_safe = None;
-            }
-        }
         let required_break = flags & CLUSTER_REQUIRED_BREAK != 0;
         let cluster_advance = clusters.advance_units[index];
-        let next_advance = advance.saturating_add(cluster_advance);
+        let next_advance = self.advance.saturating_add(cluster_advance);
         let next_space_units = if flags & CLUSTER_SPACE != 0 {
-            space_units.saturating_add(cluster_advance)
+            self.space_units.saturating_add(cluster_advance)
         } else {
-            space_units
+            self.space_units
         };
         // A word space at a soft wrap hangs: CSS Text 3 removes it from the line it
         // terminates, and this engine's justification pass already trims it before
@@ -983,11 +1054,11 @@ fn layout_next_line_integer_scalar<C: BreakCorrections>(
         // Testing it would refuse words the line has room for, and did.
         let cluster_is_space = flags & CLUSTER_SPACE != 0;
         let next_trailing_space_units = if cluster_is_space {
-            trailing_space_units.saturating_add(cluster_advance)
+            self.trailing_space_units.saturating_add(cluster_advance)
         } else if required_break {
             // A hard-break control does not make the spaces immediately before it
             // interior. They still terminate this line and hang from its measure.
-            trailing_space_units
+            self.trailing_space_units
         } else {
             0
         };
@@ -998,7 +1069,7 @@ fn layout_next_line_integer_scalar<C: BreakCorrections>(
         let hanging_units = if wrap == WRAP_WORD && word_segment_end {
             next_trailing_space_units
         } else if required_break {
-            trailing_space_units
+            self.trailing_space_units
         } else {
             0
         };
@@ -1008,96 +1079,182 @@ fn layout_next_line_integer_scalar<C: BreakCorrections>(
             WRAP_NONE => false,
             _ => unreachable!(),
         };
-        let base = Base::new(next_advance, next_space_units);
-        let overflows = tests_overflow
-            && index > line_start
-            && if wrap == WRAP_WORD {
-                fit.overflows(index + 1, base, hanging_units)?
-            } else {
-                !fit.within(
-                    next_advance
-                        .saturating_sub(hanging_units)
-                        .saturating_sub(apply_ratio(next_space_units, fit.word_space_shrink)),
-                )
-            };
-        if overflows {
-            // A pending chunk candidate is always later than any recorded scalar
-            // candidate, so it resolves first; the safe chain answers when nothing settles.
-            let settled = pending_allowed
-                .and_then(|(chunk, entry)| {
-                    resolve_last_flagged(clusters, chunk, entry, CLUSTER_ALLOWED_BREAK, line_start)
-                })
-                .or(last_allowed
-                    .filter(|end| *end > line_start)
-                    .map(|end| (end, last_allowed_base)))
-                .map(|first| fit.settle(first, step_back))
-                .transpose()?
-                .flatten();
-            let (end, break_advance, break_charge) =
-                if let Some((end, break_advance, break_charge, true)) = settled {
-                    (end, break_advance, break_charge)
-                } else if let Some((end, entry)) = pending_safe.and_then(|(chunk, entry)| {
-                    resolve_last_flagged(clusters, chunk, entry, CLUSTER_SAFE_BEFORE, line_start)
-                }) {
-                    (end, entry.advance, EndCharge::NONE)
-                } else if let Some(end) = last_safe.filter(|end| *end > line_start) {
-                    (end, last_safe_advance, EndCharge::NONE)
-                } else if let Some(end) = first_safe.filter(|end| *end > line_start) {
-                    // If no shaping-safe boundary fits, break at the first one to minimize overflow.
-                    (end, first_safe_advance, EndCharge::NONE)
-                } else if let Some((end, break_advance, break_charge, false)) = settled {
-                    (end, break_advance, break_charge)
-                } else {
-                    advance = next_advance;
-                    if !(word_segment_end || required_break || index + 1 == count) {
-                        index += 1;
-                        continue;
-                    }
-                    // With no earlier legal fallback, keep the first complete word intact.
-                    let (end, break_advance, break_charge, _) = fit
-                        .settle((index + 1, base), |_| None)?
-                        .ok_or(EngineError::InvalidRequest)?;
-                    (end, break_advance, break_charge)
-                };
-            selected_end = end;
-            selected_advance = break_advance;
-            charge = break_charge;
-            break;
+        ClusterStep {
+            required_break,
+            next_advance,
+            next_space_units,
+            next_trailing_space_units,
+            word_segment_end,
+            hanging_units,
+            tests_overflow,
+            base: Base::new(next_advance, next_space_units),
         }
-        advance = next_advance;
-        space_units = next_space_units;
-        trailing_space_units = next_trailing_space_units;
-        if required_break {
-            selected_end = index + 1;
-            selected_advance = advance;
-            break;
-        }
-        let allowed = match wrap {
-            WRAP_WORD => flags & CLUSTER_ALLOWED_BREAK != 0,
-            WRAP_CHARACTER => {
-                index + 1 == count || clusters.flags[index + 1] & CLUSTER_SAFE_BEFORE != 0
-            }
-            WRAP_NONE => false,
-            _ => unreachable!(),
-        };
-        if allowed {
-            last_allowed = Some(index + 1);
-            last_allowed_base = Base::new(advance, space_units);
-            pending_allowed = None;
-        }
-        index += 1;
-    }
-    // A line that runs off the end of the text — including through a final chunk
-    // skip, which never executes the per-cluster tail — selects the full advance.
-    if index >= count && selected_end == count {
-        selected_advance = advance;
     }
 
-    if selected_end <= line_start {
-        selected_end = line_start + 1;
-        selected_advance = clusters.advance_units[line_start];
+    /// Scans the cluster at `index`: its safe boundary, its overflow test and its break.
+    #[inline(always)]
+    fn cluster<C: BreakCorrections>(
+        &mut self,
+        fit: &mut LineFit<'_, C>,
+        index: usize,
+        wrap: u8,
+    ) -> Result<ClusterOutcome, EngineError> {
+        let clusters = fit.clusters;
+        let line_start = fit.line_start;
+        if index > line_start && clusters.flags[index] & CLUSTER_SAFE_BEFORE != 0 {
+            self.record_safe_before(fit, index, wrap);
+        }
+        let step = self.step(clusters, index, wrap);
+        if step.tests_overflow && index > line_start && step.overflows(fit, index, wrap)? {
+            return match self.overflow_break(fit, index, &step)? {
+                OverflowBreak::At(end, advance, charge) => {
+                    Ok(ClusterOutcome::Break(end, advance, charge))
+                }
+                OverflowBreak::Continue => {
+                    self.advance = step.next_advance;
+                    Ok(ClusterOutcome::Next)
+                }
+            };
+        }
+        self.adopt(&step);
+        if step.required_break {
+            return Ok(ClusterOutcome::Break(
+                index + 1,
+                self.advance,
+                EndCharge::NONE,
+            ));
+        }
+        if break_allowed_after(clusters, index, wrap) {
+            self.record_allowed_after(index);
+        }
+        Ok(ClusterOutcome::Next)
     }
-    fit.compose(cursor, selected_end, selected_advance, charge)
+
+    /// Takes a cluster that did not overflow into the line.
+    #[inline(always)]
+    fn adopt(&mut self, step: &ClusterStep) {
+        self.advance = step.next_advance;
+        self.space_units = step.next_space_units;
+        self.trailing_space_units = step.next_trailing_space_units;
+    }
+
+    /// Records the allowed break after `index`, superseding any deferred chunk candidate.
+    #[inline(always)]
+    fn record_allowed_after(&mut self, index: usize) {
+        self.last_allowed = Some(index + 1);
+        self.last_allowed_base = Base::new(self.advance, self.space_units);
+        self.pending_allowed = None;
+    }
+
+    /// Chooses the break for a line that overflows at `index`: the last allowed break that
+    /// settles, then the safe chain, then the first complete word.
+    #[inline(always)]
+    fn overflow_break<C: BreakCorrections>(
+        &self,
+        fit: &mut LineFit<'_, C>,
+        index: usize,
+        step: &ClusterStep,
+    ) -> Result<OverflowBreak, EngineError> {
+        let clusters = fit.clusters;
+        let line_start = fit.line_start;
+        // Rule 3 retracts a selection cluster by cluster to the previous allowed boundary.
+        let step_back = |(mut end, mut base): (usize, Base)| {
+            while end > line_start + 1 {
+                end -= 1;
+                let cluster_advance = clusters.advance_units[end];
+                base.advance = base.advance.saturating_sub(cluster_advance);
+                if clusters.flags[end] & CLUSTER_SPACE != 0 {
+                    base.space = base.space.saturating_sub(cluster_advance);
+                }
+                if clusters.flags[end - 1] & CLUSTER_ALLOWED_BREAK != 0 {
+                    return Some((end, base));
+                }
+            }
+            None
+        };
+        // A pending chunk candidate is always later than any recorded scalar
+        // candidate, so it resolves first; the safe chain answers when nothing settles.
+        let settled = self
+            .pending_allowed
+            .and_then(|(chunk, entry)| {
+                resolve_last_flagged(clusters, chunk, entry, CLUSTER_ALLOWED_BREAK, line_start)
+            })
+            .or(self
+                .last_allowed
+                .filter(|end| *end > line_start)
+                .map(|end| (end, self.last_allowed_base)))
+            .map(|first| fit.settle(first, step_back))
+            .transpose()?
+            .flatten();
+        if let Some((end, break_advance, break_charge, true)) = settled {
+            return Ok(OverflowBreak::At(end, break_advance, break_charge));
+        }
+        if let Some((end, entry)) = self.pending_safe.and_then(|(chunk, entry)| {
+            resolve_last_flagged(clusters, chunk, entry, CLUSTER_SAFE_BEFORE, line_start)
+        }) {
+            return Ok(OverflowBreak::At(end, entry.advance, EndCharge::NONE));
+        }
+        if let Some(end) = self.last_safe.filter(|end| *end > line_start) {
+            return Ok(OverflowBreak::At(
+                end,
+                self.last_safe_advance,
+                EndCharge::NONE,
+            ));
+        }
+        if let Some(end) = self.first_safe.filter(|end| *end > line_start) {
+            // If no shaping-safe boundary fits, break at the first one to minimize overflow.
+            return Ok(OverflowBreak::At(
+                end,
+                self.first_safe_advance,
+                EndCharge::NONE,
+            ));
+        }
+        if let Some((end, break_advance, break_charge, false)) = settled {
+            return Ok(OverflowBreak::At(end, break_advance, break_charge));
+        }
+        if !(step.word_segment_end || step.required_break || index + 1 == clusters.starts.len()) {
+            return Ok(OverflowBreak::Continue);
+        }
+        // With no earlier legal fallback, keep the first complete word intact.
+        let (end, break_advance, break_charge, _) = fit
+            .settle((index + 1, step.base), |_| None)?
+            .ok_or(EngineError::InvalidRequest)?;
+        Ok(OverflowBreak::At(end, break_advance, break_charge))
+    }
+}
+
+impl ClusterStep {
+    /// Whether the line through this cluster overflows the measure.
+    #[inline(always)]
+    fn overflows<C: BreakCorrections>(
+        &self,
+        fit: &mut LineFit<'_, C>,
+        index: usize,
+        wrap: u8,
+    ) -> Result<bool, EngineError> {
+        if wrap == WRAP_WORD {
+            return fit.overflows(index + 1, self.base, self.hanging_units);
+        }
+        Ok(!fit.within(
+            self.next_advance
+                .saturating_sub(self.hanging_units)
+                .saturating_sub(apply_ratio(self.next_space_units, fit.word_space_shrink)),
+        ))
+    }
+}
+
+/// Whether a line may break after the cluster at `index` under `wrap`.
+#[inline(always)]
+fn break_allowed_after(clusters: &ClusterLineFacts<'_>, index: usize, wrap: u8) -> bool {
+    match wrap {
+        WRAP_WORD => clusters.flags[index] & CLUSTER_ALLOWED_BREAK != 0,
+        WRAP_CHARACTER => {
+            index + 1 == clusters.starts.len()
+                || clusters.flags[index + 1] & CLUSTER_SAFE_BEFORE != 0
+        }
+        WRAP_NONE => false,
+        _ => unreachable!(),
+    }
 }
 
 /// The sparse word-index twin of the scalar word fit. `None` hands the line to the scalar
