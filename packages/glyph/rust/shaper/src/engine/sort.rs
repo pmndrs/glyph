@@ -17,6 +17,25 @@ pub(crate) fn sort_pairs(pairs: &mut [(u64, u32)]) {
     pairs.sort_unstable();
 }
 
+/// Largest slice `apply_pair_order` can permute: source indices keep their top bit free.
+pub(crate) const MAX_PAIRS: usize = PERMUTATION_VISITED as usize;
+
+/// The one comparator-ordered instantiation, for keys that do not lower to `u64`: pairs are
+/// `(prefix key, source index)`, ordered by prefix, then by `tie` over the two source
+/// indices, then by index. `tie` crosses as `&mut dyn FnMut`, so every such ordering shares
+/// one copy of the sort; one indirect call per comparison is the price.
+pub(crate) fn sort_pairs_by(
+    pairs: &mut [(u64, u32)],
+    tie: &mut dyn FnMut(u32, u32) -> core::cmp::Ordering,
+) {
+    pairs.sort_unstable_by(|left, right| {
+        left.0
+            .cmp(&right.0)
+            .then_with(|| tie(left.1, right.1))
+            .then(left.1.cmp(&right.1))
+    });
+}
+
 /// The one raw-key instantiation.
 pub(crate) fn sort_keys(keys: &mut [u64]) {
     keys.sort_unstable();
