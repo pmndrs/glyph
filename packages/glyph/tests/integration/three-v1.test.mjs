@@ -8393,8 +8393,8 @@ test('unqueried text omits summary records and the first query materializes a re
   assert.equal(instrumentedGlyph.prepareBatchCrossings, batchesBeforeEdit + 1, 'the frame prepares the unread edit');
   assert.equal(
     instrumentedGlyph.latestPreparationRequestSemanticViewMask,
-    summaryMask,
-    'a previously requested summary stays current: the batch requests it for the caller that read the last one',
+    summaryMask | textShaperAbi.engine.semanticViewMasks.availableGlyphFacts,
+    'a previously requested summary stays current: the batch requests it, with any glyph facts that cost nothing, for the caller that read the last one',
   );
   const crossingsAfterEdit = instrumentedGlyph.measureCrossings;
   assert.equal(crossingsAfterEdit, crossingsAfterQuery, 'the frame makes no read crossing');
@@ -8416,7 +8416,11 @@ test('unqueried text omits summary records and the first query materializes a re
     crossingsAfterEdit + 1,
     'a read of an unprepared edit prepares it and returns its summary in one crossing',
   );
-  assert.equal(instrumentedGlyph.latestMeasurementRequestSemanticViewMask, summaryMask);
+  // The caller read the last summary's glyph facts, so this read answers them up front.
+  assert.equal(
+    instrumentedGlyph.latestMeasurementRequestSemanticViewMask,
+    summaryMask | textShaperAbi.engine.semanticViewMasks.glyphFacts,
+  );
   assert.notEqual(rereadMeasurement.glyphCount, editedGlyphCount, 'the read answers for the new value');
   const batchesBeforePublication = instrumentedGlyph.prepareBatchCrossings;
   scene.updateMatrixWorld(true);
@@ -8428,7 +8432,7 @@ test('unqueried text omits summary records and the first query materializes a re
   );
   assert.strictEqual(label.measure(), rereadMeasurement, 'publication reuses the current requested summary');
   assert.equal(label.boundingBox.isEmpty(), false, 'publication preserves requested ink bounds');
-  assert.equal(instrumentedGlyph.measureCrossings, crossingsAfterEdit + 2, 'accepted bounds are already current');
+  assert.equal(instrumentedGlyph.measureCrossings, crossingsAfterEdit + 1, 'accepted bounds are already current');
 
   group.dispose();
   label.dispose();
@@ -8477,8 +8481,8 @@ test('Text.measure retains unpublished lifecycle but skips published paragraph u
   assert.equal(instrumentedGlyph.crossings, 0, 'preparation and reads do not publish a full frame');
   assert.equal(
     instrumentedGlyph.measureCrossings,
-    4,
-    'each changed Text is prepared by its own read, once, and positioned once for its glyph count',
+    3,
+    'each changed Text is prepared by its own read, once; only the first, a General paragraph, positions once more for its glyph count',
   );
 
   const unpublished = three.createText({ font, text: 'unpublished preparation' });
@@ -8486,7 +8490,7 @@ test('Text.measure retains unpublished lifecycle but skips published paragraph u
   const unpublishedMeasurement = unpublished.measure();
   const unpublishedCounts = instrumentedGlyph.latestMeasurementRequestCounts();
   assert.ok(unpublishedMeasurement.glyphCount > 0);
-  assert.equal(instrumentedGlyph.measureCrossings, 6);
+  assert.equal(instrumentedGlyph.measureCrossings, 5, 'a one-line leaf answers its glyph count with the read');
   assert.equal(
     unpublishedCounts.paragraph,
     1,
@@ -8496,7 +8500,7 @@ test('Text.measure retains unpublished lifecycle but skips published paragraph u
   const editedMeasurement = unpublished.measure();
   const editedCounts = instrumentedGlyph.latestMeasurementRequestCounts();
   assert.ok(editedMeasurement.glyphCount > 0);
-  assert.equal(instrumentedGlyph.measureCrossings, 8);
+  assert.equal(instrumentedGlyph.measureCrossings, 6);
   assert.equal(editedCounts.paragraph, 0, 'a prepared paragraph is not upserted again before it is published');
 
   scene.updateMatrixWorld(true);
@@ -8830,8 +8834,8 @@ test('a setter crosses into the engine once and reuses its request arena views',
     }
     assert.equal(
       instrumentedGlyph.measureCrossings,
-      8,
-      'each setter prepares in one crossing, its glyph count in one more',
+      5,
+      'each setter prepares in one crossing; only the first glyph count read takes one more, then reads answer it',
     );
     assert.equal(instrumentedGlyph.arenaQueries, 0, 'a request that fits the arena asks the engine nothing first');
 
@@ -8879,8 +8883,8 @@ test('a frame keeps the summary current only for a caller that read the previous
     }
     assert.equal(
       instrumentedGlyph.measureCrossings,
-      6,
-      'alternating edits and reads cross once per edit, and once per glyph count read',
+      4,
+      'alternating edits and reads cross once per edit; only the first glyph count read takes one more',
     );
 
     instrumentedGlyph.reset();
@@ -8889,14 +8893,14 @@ test('a frame keeps the summary current only for a caller that read the previous
     const final = label.measure();
     const finalMutations = instrumentedGlyph.latestPreparationTextMutations();
     assert.equal(final.glyphCount, 5, 'the read prepares the final value');
-    assert.equal(instrumentedGlyph.measureCrossings, 2);
+    assert.equal(instrumentedGlyph.measureCrossings, 1, 'the read answers the glyph count its caller reads');
     assert.deepEqual(
       finalMutations,
       [{ start: 0, deleteCount: 5, insert: 'seven' }],
       'the overwritten values never reach the engine',
     );
     assert.equal(label.measure().glyphCount, 5);
-    assert.equal(instrumentedGlyph.measureCrossings, 2, 'the produced summary is cached');
+    assert.equal(instrumentedGlyph.measureCrossings, 1, 'the produced summary is cached');
 
     scene.add(label);
     scene.updateMatrixWorld(true);
@@ -8907,7 +8911,7 @@ test('a frame keeps the summary current only for a caller that read the previous
     assert.deepEqual([instrumentedGlyph.prepareBatchCrossings, instrumentedGlyph.crossings], [1, 1]);
     assert.equal(
       instrumentedGlyph.latestPreparationRequestSemanticViewMask,
-      summaryMask,
+      summaryMask | textShaperAbi.engine.semanticViewMasks.availableGlyphFacts,
       'the batch returns the summary of a text whose previous summary was read',
     );
     label.text = 'nine';
@@ -9320,8 +9324,8 @@ test('alternating detached measurements retain one bounded prepared lifecycle', 
   assert.equal(first.measure().glyphCount, 28, 'a semantic mutation invalidates the controller measurement');
   assert.equal(
     instrumentedGlyph.measureCrossings,
-    warmedSummaryCrossings + 2,
-    'the changed paragraph incurs exactly one new preparation, and one read for its glyph count',
+    warmedSummaryCrossings + 1,
+    'the changed paragraph incurs exactly one new preparation, which answers the glyph count its caller reads',
   );
   assert.equal(second.bound, true);
 
@@ -9329,8 +9333,8 @@ test('alternating detached measurements retain one bounded prepared lifecycle', 
   assert.equal(first.measure().glyphCount, 28, 'a style mutation invalidates the controller measurement');
   assert.equal(
     instrumentedGlyph.measureCrossings,
-    warmedSummaryCrossings + 4,
-    'the changed style incurs exactly one new preparation, and one read for its glyph count',
+    warmedSummaryCrossings + 2,
+    'the changed style incurs exactly one new preparation, which answers the glyph count its caller reads',
   );
 
   const styledMeasurement = first.measure();
@@ -9338,7 +9342,7 @@ test('alternating detached measurements retain one bounded prepared lifecycle', 
   assert.equal(first.measure(), styledMeasurement, 'an equal font selection retains the prepared measurement');
   assert.equal(
     instrumentedGlyph.measureCrossings,
-    warmedSummaryCrossings + 4,
+    warmedSummaryCrossings + 2,
     'an equal font selection reuses its prepared revision',
   );
   scene.add(first);
@@ -9346,7 +9350,7 @@ test('alternating detached measurements retain one bounded prepared lifecycle', 
   assert.equal(instrumentedGlyph.crossings, 1, 'an explicit equal font selection still publishes its accepted update');
   assert.equal(
     instrumentedGlyph.measureCrossings,
-    warmedSummaryCrossings + 4,
+    warmedSummaryCrossings + 2,
     'publishing an equal font selection does not prepare layout',
   );
   assert.equal(first.commitState().status, 'committed');
@@ -9355,8 +9359,8 @@ test('alternating detached measurements retain one bounded prepared lifecycle', 
   assert.ok(first.measure().glyphCount > 0, 'a distinct font selection keeps the paragraph measurable');
   assert.equal(
     instrumentedGlyph.measureCrossings,
-    warmedSummaryCrossings + 6,
-    'a changed font binding incurs exactly one new preparation, and one read for its glyph count',
+    warmedSummaryCrossings + 3,
+    'a changed font binding incurs exactly one new preparation, which answers the glyph count its caller reads',
   );
 
   const coldThree = await createThreeTestHandle(t);

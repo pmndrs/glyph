@@ -1046,6 +1046,33 @@ pub(crate) fn flow_extents(
     Ok(extents)
 }
 
+/// The clusters the lines of `flow_thread_id` consume: the `consumed_clusters` of
+/// [`flow_extents`] alone, without measuring a line. A measurement needs it to decide whether the
+/// visible layout fell short of the text before it measures the lines it writes.
+pub(crate) fn flow_consumed_clusters(
+    flow_thread_id: u32,
+    flow: &FlowLayoutArena,
+) -> Result<usize, EngineError> {
+    let mut consumed = 0_usize;
+    let mut fragment_cursor = flow
+        .fragments
+        .cursor_from(0)
+        .ok_or(EngineError::InvalidRequest)?;
+    for line in flow.lines.iter().copied() {
+        let fragments = next_line_fragments(line, &mut fragment_cursor)?;
+        if line.flow_thread_id != flow_thread_id {
+            continue;
+        }
+        let Some(last) = fragments.last() else {
+            continue;
+        };
+        consumed = consumed
+            .max(usize::try_from(last.line.cluster_end).map_err(|_| EngineError::InvalidRequest)?);
+    }
+    require_complete_fragment_traversal(&fragment_cursor)?;
+    Ok(consumed)
+}
+
 fn line_inline_extent(
     flow: &FlowLayoutArena,
     line: FlowLine,
@@ -1257,6 +1284,21 @@ mod tests {
             super::super::work_attribution::snapshot().rope_iterator_starts,
             4,
             "one line traversal, one fragment cursor, and two fragment extent scans",
+        );
+        super::super::work_attribution::reset();
+        assert_eq!(
+            flow_consumed_clusters(11, &flow).unwrap(),
+            extents.consumed_clusters
+        );
+        assert_eq!(
+            super::super::work_attribution::snapshot().rope_iterator_starts,
+            2,
+            "the consumed clusters need one line traversal and one fragment cursor, no extent scan",
+        );
+        assert_eq!(
+            flow_consumed_clusters(12, &flow).unwrap(),
+            0,
+            "another thread consumes none"
         );
     }
 

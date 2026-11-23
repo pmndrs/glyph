@@ -119,8 +119,9 @@ repairing the cause, assign material or other renderer-relevant state to request
 `measure()` returns the same `ParagraphLayoutSummary` fields as before. A read that only needs the paragraph's box,
 lines and baselines no longer positions glyphs: `glyphCount`, `missingGlyphCount`, `inkBounds` and each line's
 `glyphStart`, `glyphCount` and `inkBounds` are computed the first time you read one of them. They describe the text as
-it was when `measure()` returned, even if you edit it before reading them. Reading them right after `measure()` costs a
-second engine call; read only the fields you use in hot paths such as a resize loop.
+it was when `measure()` returned, even if you edit it before reading them. Reading them right after `measure()` can cost
+a second engine call the first time; once a text's caller reads them, its next `measure()` answers them in the same call,
+and a short single-line label always does. Read only the fields you use in hot paths such as a resize loop.
 
 ## Verify the migration
 

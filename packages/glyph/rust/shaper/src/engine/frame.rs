@@ -15,11 +15,16 @@ pub(crate) const SEMANTIC_VIEW_GLYPH_FACTS: u32 = 1 << 3;
 /// a host still holding a summary of that preparation whose facts were deferred. The record is
 /// flagged `MEASUREMENT_FLAG_PRIOR_GLYPH_FACTS`. A batch names those paragraphs in its trailer.
 pub(crate) const SEMANTIC_VIEW_PRIOR_GLYPH_FACTS: u32 = 1 << 4;
+/// A summary-only read's measurement carries glyph facts whenever they cost nothing more: its
+/// paragraph is positioned once preparation ends (an inline leaf, or layout that positioning
+/// already describes). Otherwise positioning stays owed and the facts deferred, as without it.
+pub(crate) const SEMANTIC_VIEW_AVAILABLE_GLYPH_FACTS: u32 = 1 << 5;
 pub(crate) const SEMANTIC_VIEW_MASK: u32 = SEMANTIC_VIEW_MEASUREMENT
     | SEMANTIC_VIEW_LAYOUT_INSPECTION
     | SEMANTIC_VIEW_BORROWED_LAYOUT
     | SEMANTIC_VIEW_GLYPH_FACTS
-    | SEMANTIC_VIEW_PRIOR_GLYPH_FACTS;
+    | SEMANTIC_VIEW_PRIOR_GLYPH_FACTS
+    | SEMANTIC_VIEW_AVAILABLE_GLYPH_FACTS;
 
 pub(crate) const TEXT_MUTATION_REPLACE_UTF16: u8 = 1;
 pub(crate) const TEXT_ENCODING_UTF16_LE: u8 = 1;
