@@ -3233,7 +3233,8 @@ impl PlannerState {
     }
 
     fn paragraph(&self, id: u32) -> Option<&RetainedParagraph> {
-        self.paragraph_index(id).map(|index| &*self.paragraphs[index])
+        self.paragraph_index(id)
+            .map(|index| &*self.paragraphs[index])
     }
 
     fn paragraph_mut(&mut self, id: u32) -> Option<&mut RetainedParagraph> {
